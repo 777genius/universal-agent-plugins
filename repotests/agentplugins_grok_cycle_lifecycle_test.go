@@ -99,7 +99,9 @@ func (c *grokProjectCycle) inspect(t *testing.T, stage, scope string) {
 		cwd = c.recipes[scope].Project
 	}
 	result := c.execute(t, "grok-cycle-inspect.jsonl", stage, cwd, []string{c.f.client, "inspect", "--json"})
-	if len(result.Stderr) != 0 || grokCycleInspect(result.Stdout, cwd, scope != "outside", c.expectedInspection(scope, stage == "damaged-a")) != nil {
+	// A/B have exact recorded grants; outside has the pinned native gate's
+	// provisional no-repository-config allow, without a stored trust grant.
+	if len(result.Stderr) != 0 || grokCycleInspect(result.Stdout, cwd, true, c.expectedInspection(scope, stage == "damaged-a")) != nil {
 		t.Fatal("Grok exact fresh skill/source inspection differs")
 	}
 }

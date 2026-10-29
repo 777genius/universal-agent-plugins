@@ -10,18 +10,22 @@ import (
 	"testing"
 )
 
-func TestGrokCycleInspectRequiresExactNativeDotSkillSource(t *testing.T) {
-	want := []grokCycleNativePlugin{{Name: "user", Scope: "user", Path: "/owned/home/plugin", Description: "Original marker", Skills: 1, Loaded: true}}
-	for _, path := range []string{"/owned/home/plugin/./skills/user/SKILL.md", "/owned/home/plugin/skills/user/SKILL.md", "/owned/home/plugin/../plugin/skills/user/SKILL.md", "/owned/home/plugin/././skills/user/SKILL.md", "/foreign/./skills/user/SKILL.md"} {
-		row := map[string]any{"grokVersion": "1.0.70", "cwd": "/owned/A", "projectRoot": "/owned/A/", "projectTrusted": true, "mcpServers": []any{},
-			"plugins": []any{map[string]any{"name": "user", "scope": "user", "path": want[0].Path, "enabled": true, "provides": map[string]any{"skills": 1, "agents": 0, "hooks": false, "mcpServers": 0}}},
-			"skills":  []any{map[string]any{"name": "user", "description": "Original marker", "userInvocable": true, "source": map[string]any{"type": "plugin", "plugin_name": "user", "path": path}}}}
-		raw, err := json.Marshal(row)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := grokCycleInspect(raw, "/owned/A", true, want); (err == nil) != (path == "/owned/home/plugin/./skills/user/SKILL.md") {
-			t.Fatal("native literal skill source comparison differs", path, err)
+func TestGrokCycleInspectRequiresExactProducerSkillSource(t *testing.T) {
+	for _, want := range []grokCycleNativePlugin{
+		{Name: "user", Scope: "user", Path: "/owned/home/plugin", SkillPath: "/owned/home/plugin/./skills/user/SKILL.md", Description: "Original marker", Skills: 1, Loaded: true},
+		{Name: "project", Scope: "project", Path: "/owned/A/plugin", SkillPath: "/owned/A/plugin/skills/project/SKILL.md", Description: "Owned marker", Skills: 1, Loaded: true},
+	} {
+		for _, path := range []string{want.Path + "/./skills/" + want.Name + "/SKILL.md", want.Path + "/skills/" + want.Name + "/SKILL.md", want.Path + "/../plugin/skills/" + want.Name + "/SKILL.md", want.Path + "/././skills/" + want.Name + "/SKILL.md", "/foreign/skills/" + want.Name + "/SKILL.md"} {
+			row := map[string]any{"grokVersion": "1.0.70", "cwd": "/owned/A", "projectRoot": "/owned/A/", "projectTrusted": true, "mcpServers": []any{},
+				"plugins": []any{map[string]any{"name": want.Name, "scope": want.Scope, "path": want.Path, "enabled": true, "provides": map[string]any{"skills": 1, "agents": 0, "hooks": false, "mcpServers": 0}}},
+				"skills":  []any{map[string]any{"name": want.Name, "description": want.Description, "userInvocable": true, "source": map[string]any{"type": "plugin", "plugin_name": want.Name, "path": path}}}}
+			raw, err := json.Marshal(row)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := grokCycleInspect(raw, "/owned/A", true, []grokCycleNativePlugin{want}); (err == nil) != (path == want.SkillPath) {
+				t.Fatal("native producer skill source comparison differs", want.Name, path, err)
+			}
 		}
 	}
 }

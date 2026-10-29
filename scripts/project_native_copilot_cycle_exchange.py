@@ -187,11 +187,12 @@ def probe(value, prefix, expected, start, end, native_ids, probe_ids, call):
     require(facts["pid"] > 0 and type(session) is str and re.fullmatch(r"[1-9][0-9]{0,9}-[1-9][0-9]{0,19}", session)
             and session not in native_ids and session not in probe_ids and session != call and delta.endswith(b"\n"))
     lines = delta[:-1].split(b"\n")
-    require(len(lines) == 3)
+    require(len(lines) >= 3)
     last = start
-    for i, method in enumerate(("initialize", "tools/list", "tools/call")):
-        row = obj(load(lines[i]), "method pid session nonce timestamp facts")
-        values(row, {"method": method, "pid": facts["pid"], "session": session, "nonce": n, "facts": facts if i == 2 else None})
+    for i, line in enumerate(lines):
+        method = "initialize" if i == 0 else "tools/call" if i == len(lines) - 1 else "tools/list"
+        row = obj(load(line), "method pid session nonce timestamp facts")
+        values(row, {"method": method, "pid": facts["pid"], "session": session, "nonce": n, "facts": facts if i == len(lines) - 1 else None})
         when = instant(row["timestamp"])
         require(last <= when <= end)
         last = when

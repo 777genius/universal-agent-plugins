@@ -6,10 +6,12 @@ The [official Cursor installer](https://cursor.com/install) still names the
 reviewed `2026.10.22-27dcf5f` Linux x64 archive. Historical HTTP403 acquisition
 captures remain failed. Ordinary publisher curl subsequently obtained and
 independently inventoried that same archive in this session's supplied network
-environment. Published PR521 now pins the complete runtime and registers only
-read-only help and empty MCP captures; genuine hosted acquisition and observation
-are still pending. No replacement pin, bypass header or local vendor execution
-is introduced.
+environment. Genuine hosted run `40884877528` on `1eb5be73` subsequently
+confirmed acquisition, the exact version, help and empty MCP listings. Published
+PR521 now includes the reviewed project-only Agent selection and the first
+public installed-MCP capture at `bd2a8375`; that capture remains pending and all
+runtime qualification flags remain false. No replacement pin, bypass header or
+local vendor execution is introduced.
 
 Kiro's [authentication](https://kiro.dev/docs/getting-started/authentication/)
 and [headless](https://kiro.dev/docs/cli/headless/) documentation support
@@ -4546,3 +4548,140 @@ startup/cache effects remain unqualified and are not adopted as trusted config.
 All five project/MCP flags stay false, with scope, authentication and real-model
 work explicitly unobserved. Independent actual hosted raw review must establish
 the next supported component contract before additional qualification work.
+
+### Cursor first public project MCP capture, 2026-10-29
+
+The genuine seven-probe hosted help capture on `1eb5be73` confirms the pinned
+Agent wrapper, version and ordinary `mcp list` surface. The project-only Agent
+selection amendment is published at `e231c9e5`; User/editor selection is unchanged.
+This next slice reuses the existing runtime acquisition/build/scanner path and
+adds one bounded Cursor test. It runs two Git initializations, exact version,
+empty A/B/outside MCP listings, one real public project-A MCP-only add with
+`--no-save --format json`, then installed-A and B/outside control listings.
+There is no credential, approval, trust, provider or private configuration seed.
+
+The fixture holds all 445 runtime files and the exact public installer, scanner,
+probe and Git identities. The current-source add must produce a Prepared/installed
+project binding, owned MCP receipt and exact managed stdio recipe. Authored and
+selected installed bytes/config/state remain held; original-HOME/B/outside MCP
+sources remain absent. Raw MCP output and any harmless owned-probe event bytes
+are retained without guessing an installed-list parser or inferring that an
+unapproved entry cannot start a process. Unknown native HOME/cache effects are
+unqualified and are never adopted as trusted configuration.
+
+The first installed capture intentionally fails for independent raw review and
+keeps every lifecycle, restart/removal and MCP qualification false. It does not
+attempt skills discovery, User/B lifecycle, native enable, authentication or
+model use. Both independent plan reviews approved the ten literal commands,
+Cursor-only reader labels and unchanged descendant supervision/bounds. Local
+validation is inert; actual vendor execution remains hosted-only.
+
+### Copilot observed repeated list requests in one probe session (2026-10-29)
+
+Actual1f01bdd8 attempt2 run40878246362 reaches stable-A after the startup fix.
+Native artifact12903145008 is76835bytes/SHA256
+`830b9c13a9ec8d5dd2ecc785c5a6db3b4845375bc52f9f788e0c6219d8dafe1a`;
+frontend12901458402 is3423bytes/SHA256
+`7f71efdcf76465aca02d6a2bdf02fb179347d328fd9f98d2c9916eed5b9ef0dc`.
+Both closed archives/CRCs,36native and25frontend members, source/build identity
+and24frontend stream joins are verified. Whole-byte offline review joins six
+native envelopes, nine exact scripted-provider exchanges/ordinary closures and
+three observed probe processes. The final5846-byte append prefix SHA256 is
+`e8c01b4711bd51764a329b27065769f629f66b4409c77e79e9ded0d01ce69627`.
+
+Installed A/B each emit initialize/list/call. Stable A emits exactly
+initialize/list/list/list/call within one fresh PID/session/nonce and command
+interval; all four pre-call records have null facts, and the sole final call
+matches native/provider returned facts. Accept only those two exact measured
+method tuples in the existing stage-independent Go/Python probe verifier. Keep
+empty no-call deltas, closed schemas, identity isolation/freshness, monotonic
+bounded timestamps, append-prefix receipts and exact final facts unchanged.
+Do not accept an arbitrary list-count range, another initialization or another
+call. Literal positive and hostile contracts cover both forms and retained guards.
+
+The recorded run remains failed with every qualification flag false. Its summary
+still reports only five validated native/two validated probe sessions; no
+post-stable state snapshot exists. The intact-repair pre-call authority supports
+only offline stream/catalog/facts joins. This correction changes no production
+code, provider, native argv, pin, environment, authority, deadline or completion
+gate; a fresh full genuine lifecycle and independent raw reviews remain required.
+
+### Copilot semantic repeated-discovery sequence (2026-10-29)
+
+The next pinned1.0.103 run40890660942 reports initialize/list/list/call at stable-A;
+the prior run had three lists, while installed A/B have one. Complete offline
+native/provider/probe joins pass against the held pre-call recipe, without a
+post-stable state claim. The harmless probe's `tools/list` handler is stateless.
+The primary [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
+requires initialization before operations, and [tool discovery](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)
+defines listing without a fixed request count. Scheduling is an inference; count
+variation is directly observed. Both independent plan reviews approve replacing
+count enumeration with exactly initialize, one-or-more tools/list, and one final
+tools/call. Retain closed row schemas, one fresh PID/session/nonce, null pre-call
+facts, exact final facts, monotonic command timestamps, append-prefix joins and
+empty no-call deltas. Enforce the existing1MiB delta bound explicitly at the Go
+helper boundary; Python already enforces it. Add repeated-list positives and
+zero-list/reinitialization/post-call/extra-call/oversize/identity/facts controls.
+No native argv, provider, pin, environment, time budget or completion gate changes;
+all three failed captures remain failed/all-false pending fresh full lifecycle.
+
+### Windsurf exact native telemetry timestamp rewrite (2026-10-29)
+
+Current-source run40878254890 attempt2 still stops after the first successful
+skills read. Its27-to29 profile delta contains the expected new log/maintenance
+pair and log-directory metadata, plus a changed record for the exact seeded
+`xdg-cache/devin/telemetry_state.json`: both sides remain16 bytes with SHA256
+`7445ff8769cba2e1b004c754a770a85293e7548228e4fa3d363263c96c9b6290`.
+The pinned binary's2e37ca0 helper joins XDG_CACHE_HOME, `devin` and
+`telemetry_state.json`; its2e34180 serializer uses the `is_zdr` field.
+Permit only Modified/Changed timestamp variation for that exact cache file,
+requiring unchanged device/inode/kind/mode0644/owner/group/single-link authority,
+size16 and exact fixed bytes before and after. Copy only its accepted frame record
+into the existing cache expectation; never reread or replace a protected digest.
+Keep original config/UUID/other-cache/old-log and late-write guards unchanged.
+The raw diagnostic omits inode/owner details, so it does not itself establish
+these predicates: the next genuine hosted capture must satisfy them or fail.
+Both independent plan reviews approve this limited correction; the historical
+failed capture remains failed with every qualification flag false.
+Both independent code reviews also approve the exact predicate and accepted-frame
+copy. Six focused startup/runtime controls pass in0.100s; affected all-enabled
+lint and the unfiltered six-linter architecture/size gate report0issues.
+
+### Windsurf empty native MCP storage directories (2026-10-29)
+
+Actual07756a69 run40888304062 passes the telemetry guard and reaches a successful
+account-free `mcp list`, then refuses two new ordinary0755 directories:
+`xdg-data/devin/mcp` and its empty `oauth` child. The complete seven-entry delta
+contains only those directories, the expected log/maintenance changes and fixed
+telemetry timestamps; original config is unchanged. Pinned path joins at638e237,
+638e279 and638e29e build XDG_DATA_HOME/devin/mcp/oauth; constructor7e73880 uses
+recursive0777 directory creation, yielding the observed0755 under the held umask.
+Both independent plan reviews approve adding only this empty directory chain to
+the existing initial pre-child seed. Freeze it before any vendor command, with
+no later-write exception, OAuth file, credential, approval or config mutation.
+The existing complete profile closure must reject later file/mode/identity drift;
+this failed capture and every qualification flag remain unchanged/all-false.
+
+### Windsurf exact empty native plugin lock seed (2026-10-29)
+
+The genuine e9448dd6 capture (run 40894288914) completed six native commands,
+then refused the first project-A skills read because the native client created
+`xdg-data/devin/cli/plugins/lock.json`: ordinary 0644, 57 bytes, SHA-256
+`cbce3a5464482eb4cfb7b152ad15183bcb5db5c5557c625ee0cec1edb582aa88`.
+Its failed frame and all five false qualification flags remain unchanged.
+
+One bounded reacquisition verified the exact original archive and the entire
+217494824-byte executable against the existing pins, without executing it.
+Independent static reviews confirmed the loader accepts the native serializer's
+empty `requirements`, `resolved`, and `edges` arrays, in that order, with two-space
+indentation and no trailing newline. The empty optional `resolve_failures` field
+is omitted; these source-derived bytes hash exactly to the captured file.
+
+Author only those exact 57 bytes as an ordinary 0644 file before any native child
+and the initial baseline. Preserve the existing protected digest and complete
+profile identity, content, metadata, and membership freeze without an exception.
+Static inspection does not establish that every startup path skips a rewrite:
+the next genuine capture must satisfy every unchanged predicate or still fail.
+No temporary file, same-byte rewrite, replacement, credential, approval, config,
+command, deadline, or qualification allowance is introduced. Both independent
+reviewers approved this bounded plan before implementation.

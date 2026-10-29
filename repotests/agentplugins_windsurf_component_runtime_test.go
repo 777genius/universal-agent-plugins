@@ -18,6 +18,8 @@ import (
 
 const windRuntimeLogs = "xdg-data\x00devin/cli/logs"
 const windRuntimeLock = windRuntimeLogs + "/.log-maintenance.lock"
+const windRuntimeTelemetry = "xdg-cache\x00devin/telemetry_state.json"
+const windRuntimeTelemetryBody = `{"is_zdr":false}`
 
 var windRuntimeLogName = regexp.MustCompile(`^devin_(\d{8}-\d{6})_([1-9]\d{0,9})\.log$`)
 
@@ -41,7 +43,7 @@ func (w *windComponentFixture) prepareRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, relative := range []string{"xdg-config/devin/cli", "xdg-cache/devin/cli", "xdg-data/devin/cli/logs", "xdg-data/devin/cli/plugins"} {
+	for _, relative := range []string{"xdg-config/devin/cli", "xdg-cache/devin/cli", "xdg-data/devin/cli/logs", "xdg-data/devin/cli/plugins", "xdg-data/devin/mcp/oauth"} {
 		if err := os.MkdirAll(filepath.Join(f.base.Root, relative), 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -49,7 +51,12 @@ func (w *windComponentFixture) prepareRuntime(t *testing.T) {
 	for relative, raw := range map[string][]byte{
 		"xdg-data/devin/cli/installation_id":        []byte(id),
 		"xdg-data/devin/cli/plugins/lock.json.lock": {},
-		"xdg-cache/devin/telemetry_state.json":      []byte(`{"is_zdr":false}`),
+		"xdg-cache/devin/telemetry_state.json":      []byte(windRuntimeTelemetryBody),
+		"xdg-data/devin/cli/plugins/lock.json": []byte(`{
+  "requirements": [],
+  "resolved": [],
+  "edges": []
+}`),
 	} {
 		path := filepath.Join(f.base.Root, relative)
 		projectNativeRuntimeWrite(t, path, raw, 0644)
@@ -73,6 +80,7 @@ func (w *windComponentFixture) freezeRuntime(frame map[string]windProfileRecord)
 		}
 	}
 	w.trees[filepath.Join(w.f.base.Root, "xdg-data", "devin")] = tree
+	w.trees[filepath.Join(w.f.base.Root, "xdg-cache", "devin")]["telemetry_state.json"] = frame[windRuntimeTelemetry]
 }
 
 func windRuntimeAuthority(a, b windProfileRecord) bool {
@@ -105,6 +113,9 @@ func (w *windComponentFixture) runtimeClosure(before, after map[string]windProfi
 		}
 		if old == now {
 			continue
+		}
+		if key == windRuntimeTelemetry && windRuntimeAuthority(old, now) && windRuntimeFile(now, 16) && old.Size == 16 && now.Size == 16 && old.SHA256 == windsurfConfigDigest([]byte(windRuntimeTelemetryBody)) && now.SHA256 == old.SHA256 {
+			continue // The pinned native cache writer may refresh only its timestamps.
 		}
 		if key != windRuntimeLogs && key != windRuntimeLock || !windRuntimeAuthority(old, now) {
 			return fmt.Errorf("Windsurf native changed original profile authority")
