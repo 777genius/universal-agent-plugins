@@ -320,10 +320,10 @@ def inspect(raw, cwd, trusted, expected):
     require(type(row) is dict and row.get("grokVersion") == "1.0.70" and row.get("cwd") == cwd
             and row.get("projectRoot") in (cwd, cwd + "/") and row.get("projectTrusted") is trusted and same(row.get("mcpServers"), []))
     wanted_plugins, wanted_skills = {}, {}
-    for name, scope, path, description, count, loaded in expected:
+    for name, scope, path, description, count, loaded, skill_path in expected:
         wanted_plugins[name] = {"name": name, "scope": scope, "path": path, "enabled": True, "provides": {"skills": count, "agents": 0, "hooks": False, "mcpServers": 0}}
         if loaded:
-            wanted_skills[name] = {"name": name, "description": description, "source": {"type": "plugin", "plugin_name": name, "path": path + "/./skills/" + name + "/SKILL.md"}, "userInvocable": True}
+            wanted_skills[name] = {"name": name, "description": description, "source": {"type": "plugin", "plugin_name": name, "path": skill_path}, "userInvocable": True}
     for key, wanted in (("plugins", wanted_plugins), ("skills", wanted_skills)):
         actual = row.get(key)
         require(type(actual) is list and len(actual) == len(wanted))
@@ -449,15 +449,18 @@ def complete(public, inspections, proof_rows):
         raw, err = command(row)
         require(err == b"")
         name = "uap-grok-original-user"
-        expected = [(name, "user", paths["home"] + "/.grok/plugins/" + name, "Original user " + nonce, 1, True)]
+        user = paths["home"] + "/.grok/plugins/" + name
+        # Each producer has one held source spelling; raw aliases are not normalized.
+        expected = [(name, "user", user, "Original user " + nonce, 1, True, user + "/./skills/" + name + "/SKILL.md")]
         if scope != "outside":
             foreign = "uap-grok-foreign-" + scope
-            expected.append((foreign, "project", cwd + "/.grok/plugins/" + foreign, "Foreign inert marker", 1, False))
+            expected.append((foreign, "project", cwd + "/.grok/plugins/" + foreign, "Foreign inert marker", 1, False, ""))
             owned = stage in ("installed-a", "installed-b", "stable-a", "updated-a", "updated-b", "repaired-a", "remaining-b")
             if owned:
                 key = "add-b" if scope == "b" else "update-a" if stage in ("updated-a", "damaged-a", "repaired-a") else "add-a"
                 selected = proof[key]
-                expected.append(("uap-grok-cycle-" + scope, "project", selected["binding"]["target_locator"], selected["revision"] + " " + nonce, 1, True))
+                name, active = "uap-grok-cycle-" + scope, selected["binding"]["target_locator"]
+                expected.append((name, "project", active, selected["revision"] + " " + nonce, 1, True, active + "/skills/" + name + "/SKILL.md"))
         # Empty outside reports the native provisional no-config allow; the
         # separately validated durable trust-store recipe still contains A/B only.
         inspect(raw, cwd, True, expected)

@@ -168,16 +168,18 @@ def container():
     for stage in cycle.INSPECT:
         who = "outside" if stage.endswith("outside") else stage[-1]
         cwd = paths["outside"] if who == "outside" else paths["project_" + who]
-        selected = [("uap-grok-original-user", "user", paths["home"] + "/.grok/plugins/uap-grok-original-user", "Original user " + NONCE, True)]
+        user = paths["home"] + "/.grok/plugins/uap-grok-original-user"
+        selected = [("uap-grok-original-user", "user", user, "Original user " + NONCE, True, user + "/./skills/uap-grok-original-user/SKILL.md")]
         if who != "outside":
             name = "uap-grok-foreign-" + who
-            selected.append((name, "project", cwd + "/.grok/plugins/" + name, "Foreign inert marker", False))
+            selected.append((name, "project", cwd + "/.grok/plugins/" + name, "Foreign inert marker", False, ""))
             if stage in ("installed-a", "installed-b", "stable-a", "updated-a", "updated-b", "repaired-a", "remaining-b"):
                 key = "add-b" if who == "b" else "update-a" if stage in ("updated-a", "repaired-a") else "add-a"
                 p = proof[key]
-                selected.append(("uap-grok-cycle-" + who, "project", p["binding"]["target_locator"], p["revision"] + " " + NONCE, True))
-        plugins = [{"name": name, "scope": scope, "path": path, "enabled": True, "provides": {"skills": 1, "agents": 0, "hooks": False, "mcpServers": 0}} for name, scope, path, _, _ in selected]
-        skills = [{"name": name, "description": desc, "source": {"type": "plugin", "plugin_name": name, "path": path + "/./skills/" + name + "/SKILL.md"}, "userInvocable": True} for name, _, path, desc, enabled in selected if enabled]
+                name, active = "uap-grok-cycle-" + who, p["binding"]["target_locator"]
+                selected.append((name, "project", active, p["revision"] + " " + NONCE, True, active + "/skills/" + name + "/SKILL.md"))
+        plugins = [{"name": name, "scope": scope, "path": path, "enabled": True, "provides": {"skills": 1, "agents": 0, "hooks": False, "mcpServers": 0}} for name, scope, path, _, _, _ in selected]
+        skills = [{"name": name, "description": desc, "source": {"type": "plugin", "plugin_name": name, "path": skill_path}, "userInvocable": True} for name, _, _, desc, enabled, skill_path in selected if enabled]
         out = raw({"grokVersion": "1.0.70", "cwd": cwd, "projectRoot": cwd + "/", "projectTrusted": True, "mcpServers": [], "plugins": plugins, "skills": skills})
         inspections.append({"stage": stage, "value": command(["/held/grok", "inspect", "--json"], cwd, out)})
     result = {"client": "grok", "version": "1.0.70", "capture_mode": cycle.MODE, "attempt_stage": "complete-cycle", "runtime_attempt_complete": True,
@@ -368,15 +370,19 @@ class GrokCycleContracts(unittest.TestCase):
             with self.assertRaises(ValueError): cycle.stream(altered)
 
     def test_whole_native_catalog_joins_and_disabled_foreign_not_trust_bit(self):
-        expected = [("user", "user", "/owned/home/plugin", "Original marker", 1, True), ("foreign", "project", "/owned/A/foreign", "Foreign inert marker", 1, False)]
+        expected = [("user", "user", "/owned/home/plugin", "Original marker", 1, True, "/owned/home/plugin/./skills/user/SKILL.md"),
+                    ("owned", "project", "/owned/A/owned", "Owned marker", 1, True, "/owned/A/owned/skills/owned/SKILL.md"),
+                    ("foreign", "project", "/owned/A/foreign", "Foreign inert marker", 1, False, "")]
         row = {"grokVersion": "1.0.70", "cwd": "/owned/A", "projectRoot": "/owned/A/", "projectTrusted": True, "mcpServers": [],
-               "plugins": [{"name": name, "scope": scope, "path": path, "enabled": True, "provides": {"skills": count, "agents": 0, "hooks": False, "mcpServers": 0}} for name, scope, path, _, count, _ in expected],
-               "skills": [{"name": "user", "description": "Original marker", "userInvocable": True, "source": {"type": "plugin", "plugin_name": "user", "path": "/owned/home/plugin/./skills/user/SKILL.md"}}]}
+               "plugins": [{"name": name, "scope": scope, "path": path, "enabled": True, "provides": {"skills": count, "agents": 0, "hooks": False, "mcpServers": 0}} for name, scope, path, _, count, _, _ in expected],
+               "skills": [{"name": name, "description": desc, "userInvocable": True, "source": {"type": "plugin", "plugin_name": name, "path": skill_path}} for name, _, _, desc, _, loaded, skill_path in expected if loaded]}
         cycle.inspect(raw(row), "/owned/A", True, expected)
-        for path in ("/owned/home/plugin/skills/user/SKILL.md", "/owned/home/plugin/../plugin/skills/user/SKILL.md", "/owned/home/plugin/././skills/user/SKILL.md", "/foreign/./skills/user/SKILL.md"):
-            bad = copy.deepcopy(row)
-            bad["skills"][0]["source"]["path"] = path
-            with self.subTest(path=path), self.assertRaises(ValueError): cycle.inspect(raw(bad), "/owned/A", True, expected)
+        for index, paths in enumerate((("/owned/home/plugin/skills/user/SKILL.md", "/owned/home/plugin/../plugin/skills/user/SKILL.md", "/owned/home/plugin/././skills/user/SKILL.md", "/foreign/./skills/user/SKILL.md"),
+                                       ("/owned/A/owned/./skills/owned/SKILL.md", "/owned/A/owned/../owned/skills/owned/SKILL.md", "/owned/A/owned/././skills/owned/SKILL.md", "/foreign/skills/owned/SKILL.md"))):
+            for path in paths:
+                bad = copy.deepcopy(row)
+                bad["skills"][index]["source"]["path"] = path
+                with self.subTest(index=index, path=path), self.assertRaises(ValueError): cycle.inspect(raw(bad), "/owned/A", True, expected)
         for fault in ("foreign-loaded", "source", "alias", "duplicate", "count", "trusted", "disabled"):
             bad = copy.deepcopy(row)
             if fault == "foreign-loaded": bad["skills"].append({**bad["skills"][0], "name": "foreign"})

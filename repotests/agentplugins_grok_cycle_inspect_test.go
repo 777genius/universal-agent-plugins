@@ -11,14 +11,17 @@ import (
 )
 
 type grokCycleNativePlugin struct {
-	Name, Scope, Path, Description string
-	Skills                         int
-	Loaded                         bool
+	Name, Scope, Path, SkillPath, Description string
+	Skills                                    int
+	Loaded                                    bool
 }
 
 func (c *grokProjectCycle) expectedInspection(scope string, damaged bool) []grokCycleNativePlugin {
 	name := "uap-grok-original-user"
-	result := []grokCycleNativePlugin{{Name: name, Scope: "user", Path: filepath.Join(c.f.base.Home, ".grok", "plugins", name), Description: "Original user " + c.f.base.Nonce, Skills: 1, Loaded: true}}
+	user := filepath.Join(c.f.base.Home, ".grok", "plugins", name)
+	// The retained User producer preserves /./; the owned producer reports the
+	// exact installed skill path. Neither spelling is an interchangeable alias.
+	result := []grokCycleNativePlugin{{Name: name, Scope: "user", Path: user, SkillPath: user + "/./skills/" + name + "/SKILL.md", Description: "Original user " + c.f.base.Nonce, Skills: 1, Loaded: true}}
 	if scope == "outside" {
 		return result
 	}
@@ -26,7 +29,7 @@ func (c *grokProjectCycle) expectedInspection(scope string, damaged bool) []grok
 	foreign := "uap-grok-foreign-" + scope
 	result = append(result, grokCycleNativePlugin{Name: foreign, Scope: "project", Path: filepath.Join(r.Project, ".grok", "plugins", foreign), Description: "Foreign inert marker", Skills: 1})
 	if r.Active != "" && !r.Removed && !damaged {
-		result = append(result, grokCycleNativePlugin{Name: r.Name, Scope: "project", Path: r.Active, Description: r.Revision + " " + c.f.base.Nonce, Skills: 1, Loaded: true})
+		result = append(result, grokCycleNativePlugin{Name: r.Name, Scope: "project", Path: r.Active, SkillPath: filepath.Join(r.Active, "skills", r.Name, "SKILL.md"), Description: r.Revision + " " + c.f.base.Nonce, Skills: 1, Loaded: true})
 	}
 	return result
 }
@@ -79,7 +82,7 @@ func grokCycleInspect(raw []byte, cwd string, trusted bool, expected []grokCycle
 		if !ok || !named || !found || !want.Loaded || seen[name] || strings.TrimSpace(name) == "" {
 			return fmt.Errorf("Grok cycle foreign/duplicate/disabled skill loaded")
 		}
-		expectedSkill := map[string]any{"name": name, "description": want.Description, "source": map[string]any{"type": "plugin", "plugin_name": name, "path": want.Path + "/./skills/" + name + "/SKILL.md"}, "userInvocable": true}
+		expectedSkill := map[string]any{"name": name, "description": want.Description, "source": map[string]any{"type": "plugin", "plugin_name": name, "path": want.SkillPath}, "userInvocable": true}
 		if disabled, exists := entry["disabled"]; exists {
 			if disabled != false {
 				return fmt.Errorf("Grok cycle loaded skill is disabled")
