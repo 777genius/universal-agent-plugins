@@ -38,7 +38,7 @@ Define la identidad del paquete en `plugin.json`:
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "review-helper",
   "version": "0.1.0",
-  "description": "Review documentation changes for clarity and evidence"
+  "description": "Revisar la claridad y el respaldo de los cambios de documentación"
 }
 ```
 
@@ -69,7 +69,7 @@ Revisa el plan y consulta [Usar plugins](../use/install) cuando quieras aplicarl
 
 ## Prepara las herramientas de creación desde el código fuente {#build-from-source}
 
-Esta preparación para desarrolladores compila el contrato público de creación del código fuente actual. Necesitas Git y la versión de Go declarada por el repositorio, actualmente Go 1.26.10. Anota el commit que hayas descargado cuando compartas resultados.
+Los siguientes comandos compilan el CLI actual con las herramientas de creación habilitadas. Necesitas Git y la versión de Go declarada por el repositorio, actualmente Go 1.26.10. Anota el commit que hayas descargado cuando compartas resultados.
 
 ```bash
 git clone https://github.com/777genius/universal-agent-plugins.git

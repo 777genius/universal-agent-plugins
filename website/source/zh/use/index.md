@@ -48,7 +48,7 @@ brew install 777genius/agentplugins/agentplugins
 5. 需要时从 `uap.toml` 和 `uap.lock` 恢复共享依赖集合。
 
 [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)支持显式项目范围，
-并让无参数 `install` 在当前目录存在普通 `uap.toml` 时自动选择项目范围，不搜索父目录。
+并让未指定来源参数的 `install` 在当前目录存在普通 `uap.toml` 时自动选择项目范围，不搜索父目录。
 显式范围优先。add、技能安装和其他维护命令仍默认用户范围；针对项目应明确指定 `--scope project`。
 已有锁文件会在安装或修复前严格验证；缺少锁文件时才允许首次解析并创建。各客户端的项目组件和激活要求不同。
 

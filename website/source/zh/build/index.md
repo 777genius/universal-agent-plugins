@@ -42,7 +42,7 @@ review-helper/
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "review-helper",
   "version": "0.1.0",
-  "description": "Review documentation changes for clarity and evidence"
+  "description": "审查文档变更的清晰度和证据"
 }
 ```
 
@@ -73,7 +73,7 @@ agentplugins add ./review-helper --target codex --dry-run
 
 ## 从源码构建 {#build-from-source}
 
-以下开发者步骤构建当前创作约定。需要 Git 和仓库声明的 Go 工具链（当前为 Go 1.26.10）。
+以下命令从当前源码构建启用了创作功能的 CLI。需要 Git 和仓库声明的 Go 工具链（当前为 Go 1.26.10）。
 共享结果时请记录检出的提交。
 
 ```bash

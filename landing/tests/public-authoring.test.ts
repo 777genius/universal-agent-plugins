@@ -51,7 +51,7 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
   assert.ok(page.includes("robots: 'noindex, follow'"));
   assert.ok(page.includes('npx -y universal-agent-plugins add context7'));
   const keys = [...page.matchAll(/(?:t|usePageSeo)\('publicAuthoring\.([^']+)'/g)].map((m) => m[1]);
-  for (const locale of ['en', 'ru', 'uk', 'es', 'fr', 'zh'] as const) {
+  for (const locale of locales) {
     const copy = renderedCopy(locale);
     for (const key of [...keys, 'intro', 'availability', 'releaseScope', 'buildGuideLink'])
       assert.equal(typeof copy[key], 'string', `${locale}:${key}`);
@@ -69,10 +69,10 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
     assert.doesNotMatch(copy.releaseScope, /(?:0\.1\.61|2\.0\.1)/);
     assert.ok(copy.limitations.includes('SSE'));
   }
-  for (const locale of ['en', 'ru', 'uk', 'es', 'fr', 'zh']) {
+  for (const locale of locales) {
     assert.equal(
       resolveDocsLink('quickstart', locale).url,
-      `https://777genius.github.io/universal-agent-plugins/docs/${locale === 'uk' ? 'en' : locale}/guide/quickstart.html`,
+      `https://777genius.github.io/universal-agent-plugins/docs/${locale}/guide/quickstart.html`,
     );
   }
 });
@@ -93,7 +93,7 @@ test('landing FAQ translated copy avoids retired public docs', () => {
 });
 
 test('quickstarts use released installer commands and link source authoring separately', () => {
-  for (const locale of ['en', 'ru', 'es', 'fr', 'zh'] as const) {
+  for (const locale of locales) {
     const text = read(`website/source/${locale}/guide/quickstart.md`);
     const preservation = text.indexOf('<!-- locale-historical-source:start');
     const publishedText = preservation === -1 ? text : text.slice(0, preservation);
@@ -116,7 +116,7 @@ test('quickstarts use released installer commands and link source authoring sepa
     // Installer onboarding must not run commands omitted from the released binary.
     assert.ok(commands.every((block) => !/agentplugins author/.test(block)), locale);
     assert.doesNotMatch(publishedText, /npm install[^\n]*universal-agent-plugins[\s\S]{0,80}agentplugins author init/);
-    for (const match of publishedText.matchAll(/\]\(\/(en|ru|es|fr|zh)\/([^#)]+)(?:#[^)]*)?\)/g)) {
+    for (const match of publishedText.matchAll(/\]\(\/(en|ru|uk|zh|es|hi|ar|pt|fr)\/([^#)]+)(?:#[^)]*)?\)/g)) {
       const target = `website/source/${match[1]}/${match[2]}`.replace(/\/$/, '');
       assert.ok(
         existsSync(fileURLToPath(new URL(`${target}.md`, root))) ||

@@ -1,6 +1,6 @@
 ---
 title: "Use plugins"
-description: "Choose installation or authoring, then follow the appropriate journey."
+description: "Install packages for your agents and keep project dependencies separate."
 canonicalId: "page:use:index"
 section: "use"
 locale: "en"

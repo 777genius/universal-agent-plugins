@@ -136,13 +136,13 @@ agentplugins repair review --target cursor --scope project --project-root /path/
 agentplugins deps recover --scope project --project-root /path/to/project
 ```
 
-名称有歧义时使用 list 中的安装标识。add 和维护命令默认使用用户范围。CLI 0.1.94 的无参数 `install` 会识别当前目录的项目清单；
+名称有歧义时使用 list 中的安装标识。add 和维护命令默认使用用户范围。在 CLI 0.1.94 中，未指定来源参数的 `install` 会识别当前目录的项目清单；
 显式范围优先。明确项目范围但省略 `--project-root` 时只使用调用目录。将 `.uap/` 中的收据、恢复记录和保留数据留在本机，
 从可移植清单重建原生组件，再完成客户端信任与激活。来源和私有来源访问权限仍须可用。
 
 ## 当前目录的安装与严格锁定
 
-**CLI 0.1.94 已发布：** 无参数 `agentplugins install` 在当前目录存在普通 `uap.toml` 文件时自动选择项目范围，
+**CLI 0.1.94 已发布：** 未指定来源参数的 `agentplugins install` 在当前目录存在普通 `uap.toml` 文件时自动选择项目范围，
 不搜索父目录。符号链接或同名目录会被拒绝；显式 `--scope` 优先。没有本地清单时选择用户环境。
 有源参数的 install 与 add 相同，仍默认用户范围。
 

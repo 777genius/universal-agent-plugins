@@ -43,7 +43,7 @@ Examinez la source, la version et les destinations choisies. Omettez `--dry-run`
 agentplugins update context7 --target codex,cursor
 ```
 
-`update --all` couvre tous les candidats de mise à jour gérés. Utilisez-le lorsque vous souhaitez traiter cet ensemble complet. Une source fixée à un commit exact reste immuable : une mise à jour ne lui fait pas suivre une branche. Les plages de dépendances enregistrées et les références mobiles avancent via l’opération explicite de mise à jour appropriée.
+`update --all` couvre tous les candidats de mise à jour gérés. Utilisez-le lorsque vous souhaitez traiter cet ensemble complet. Une source fixée à un commit exact reste immuable : une mise à jour ne lui fait pas suivre une branche. Les plages de dépendances enregistrées et les références évolutives avancent via l’opération explicite de mise à jour appropriée.
 
 ## Réparez l’état enregistré
 
@@ -128,7 +128,7 @@ agentplugins repair review --target cursor --scope project --project-root /path/
 agentplugins deps recover --scope project --project-root /path/to/project
 ```
 
-Si un nom est ambigu, utilisez l’identité d’installation renvoyée par `list`. `add` et les commandes de maintenance utilisent par défaut la portée utilisateur ; sélectionnez le projet explicitement. Depuis 0.1.94, `install` sans argument peut le sélectionner automatiquement, comme expliqué ci-dessous. `--scope project` explicite, sans `--project-root`, utilise uniquement le dossier d’invocation.
+Si un nom est ambigu, utilisez l’identité d’installation renvoyée par `list`. `add` et les commandes de maintenance utilisent par défaut la portée utilisateur ; sélectionnez le projet explicitement. Depuis 0.1.94, `install` sans argument de source peut le sélectionner automatiquement, comme expliqué ci-dessous. `--scope project` explicite, sans `--project-root`, utilise uniquement le dossier d’invocation.
 
 Gardez les reçus, journaux de récupération et données de `.uap/` en local. Restaurez les composants natifs depuis l’accord portable et suivez les instructions du client pour la confiance ou l’activation. Les sources et l’accès aux sources privées doivent rester disponibles. Consultez [l’installation par projet](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) et les [limites par client](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md).
 
@@ -142,7 +142,7 @@ agentplugins version
 
 Ce comportement nécessite 0.1.94 ou une version ultérieure. Les canaux peuvent être mis à jour à des moments différents ; si le vôtre fournit encore une version antérieure, utilisez [l’installateur natif](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) ou Homebrew. Les exemples précédents avec portée explicite restent compatibles avec 0.1.93.
 
-`agentplugins install` sans argument sélectionne la portée projet si un fichier `uap.toml` ordinaire existe dans le dossier courant exact. Il ne recherche pas les parents. Une portée explicite reste prioritaire ; sans ce manifeste local, l’environnement utilisateur est sélectionné.
+`agentplugins install` sans argument de source sélectionne la portée projet si un fichier `uap.toml` ordinaire existe dans le dossier courant exact. Il ne recherche pas les parents. Lors de la sélection automatique, un dossier ou un lien symbolique nommé `uap.toml` est refusé ; précisez la portée pour lever l’ambiguïté. Une portée explicite reste prioritaire ; sans ce manifeste local, l’environnement utilisateur est sélectionné.
 
 Un `uap.lock` existant est strictement validé avant tout changement, même sans `--locked` : ses révisions épinglées ne sont pas résolues à nouveau. Seule l’absence du verrouillage permet la résolution initiale des dépendances et sa création. `--locked` exige un verrouillage valide existant. Utilisez `update` pour avancer les révisions épinglées ; une installation ordinaire ne sert pas à les modifier. Les exemples précédents avec portée explicite et `--locked` restent une restauration reproductible du projet.
 

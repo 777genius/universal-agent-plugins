@@ -47,7 +47,7 @@ UAP 是独立社区工具；这些是维护者进行的有限观察，不是厂�
 | 2026-09-07 源码构建快照 | Linux arm64，以及独立的 macOS/Windows 源码检查点；不是当时公开 0.1.51 二进制的运行结果。 | [身份记录](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/client-compatibility-2026-09-07.json)、[macOS/Windows 运行](https://github.com/777genius/universal-agent-plugins/actions/runs/34158664586) |
 
 0.1.55 的历史运行使用固定生产者的原始 npm 包、禁用安装脚本的离线 npm 安装、固定原生二进制冷启动，
-以及没有证明源码的热启动。离线归档一致性复核不是新的原生运行、实时草稿检查或新的证明验证。
+以及在不提供验证用源码的情况下再次启动。离线归档一致性复核不是新的原生运行、实时草稿检查或新的证明验证。
 原始日志和归档在披露审核前保持私有；公共元数据不能当作完整可重放日志。
 
 ## 固定客户端的原生观察
@@ -56,7 +56,7 @@ UAP 是独立社区工具；这些是维护者进行的有限观察，不是厂�
 
 | 客户端 | 记录中的通过范围 | 关键限制 |
 | --- | --- | --- |
-| Codex 0.153.4 | stdio/HTTP、生命周期和脚本化技能上下文。 | Git 获取接缝不等于新的公共 Git MCP 运行证明；SSE 不支持。 |
+| Codex 0.153.4 | stdio/HTTP、生命周期和脚本化技能上下文。 | Git 获取环节的测试不代表已验证通过公共 Git 安装的 MCP 在原生客户端中运行；SSE 不支持。 |
 | Claude Code 2.1.263 | Linux/macOS 的 stdio/HTTP/技能生命周期；Windows 的 HTTP 和已安装技能生命周期。 | Windows 返回 `managed_stdio_platform_unsupported`；未建立 stdio 的 cwd/argv/env/data 行为。 |
 | OpenCode 1.18.29 | 生命周期、独立的扩展 stdio/技能和工具名称冲突观察。 | 观察到的工具名碰撞仍未解决；`opencode_tool_namespace_not_evaluated` 是警告，不是唯一性证明。 |
 
@@ -74,7 +74,7 @@ OpenCode 的 JSON/JSONC 生命周期与全局 JSON stdio/技能正文测试是�
 测试不证明真实模型质量、OAuth/登录、桌面应用、实际线上服务、独立采用或厂商认可。
 六平台二进制构建或启动器检查也不能扩大原生客户端矩阵。
 
-历史源码检查点与公开版本必须保持区分。源树、测试接缝或归档哈希不能替代不同提交的重新运行。
+历史源码检查点与公开版本必须保持区分。源代码树、测试中的局部验证或归档哈希不能替代不同提交的重新运行。
 旧失败记录仍是失败；后续通过可更新平台摘要，不能将旧记录改写为通过。
 
 ## 已发布项目范围与版本化观察

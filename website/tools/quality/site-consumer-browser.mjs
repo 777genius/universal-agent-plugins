@@ -1,3 +1,4 @@
+import { docsLocales } from "../config/locales.mjs";
 import { runLocaleSmoke } from "./locale-browser.mjs";
 import { journeyNav } from "../lib/journeys.mjs";
 import assert from "node:assert/strict";
@@ -24,7 +25,7 @@ export async function runSiteConsumerSmoke(browser, base, artifactsRoot) {
   const page = await context.newPage();
   page.on("pageerror", (error) => failures.push(error.message));
   try {
-    for (const locale of ["en", "ru", "es", "fr", "zh"]) {
+    for (const locale of docsLocales) {
       await page.goto(`${base}/${locale}/`, { waitUntil: "networkidle" });
       for (const { text: label, link: route } of journeyNav(locale)) {
         const link = page.locator(".VPNavBarMenu").getByRole("link", { name: new RegExp(`^${label}`) });

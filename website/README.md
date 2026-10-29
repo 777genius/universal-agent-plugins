@@ -5,8 +5,9 @@ This workspace builds the VitePress 2 documentation published at
 
 ## Source and publication boundary
 
-- `source/`: hand-authored documentation in English, Russian, Spanish, French
-  and Simplified Chinese (`en`, `ru`, `es`, `fr`, `zh`).
+- `source/`: current hand-authored documentation in English, Russian, Ukrainian,
+  Simplified Chinese, Spanish, Hindi, Arabic, Portuguese and French
+  (`en`, `ru`, `uk`, `zh`, `es`, `hi`, `ar`, `pt`, `fr`), plus preserved earlier pages.
 - `generated/`: committed generated API references and registries.
 - `.site/`: assembled runtime source tree for VitePress.
 - `tools/`: extractors, normalizers, assembly and quality checks.
@@ -18,11 +19,24 @@ pages preserve earlier documentation and remain outside the public build.
 The publication model and quality checks define the exact routes; a Markdown
 file's presence in `source/` does not publish it.
 
-The five maintained locales must give the same release availability and
+All nine maintained locales must give the same release availability and
 functional guidance. Translate prose and keep command names, flags, paths,
 manifest keys and evidence identities exact. Preserve historical-source blocks
 and the locale disposition registry when updating active pages. An English
 fallback must be identified as a fallback; it is not a completed translation.
+The immutable authoring CLI reference remains canonical English. Language
+switches keep a fragment only when the destination source explicitly declares
+that anchor; automatically generated heading slugs are not guessed.
+
+`tools/config/locales.mjs` owns the published locale order, language tags and
+text direction used by assembly, navigation, SEO and browser checks. Arabic
+uses RTL document layout while code and commands retain LTR reading order.
+New locales need the approved public source set, their VitePress locale config,
+localized navigation/search labels and production browser coverage. Archived
+pages do not need newly invented translations and remain unpublished.
+After changing translations, regenerate the landing link inventory with
+`node landing/scripts/generate-docs-locale-availability.mjs` from the repository
+root and include its diff with the source change.
 
 ## Build and checks
 

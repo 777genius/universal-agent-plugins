@@ -1,43 +1,16 @@
 <script setup lang="ts">
 import { withBase } from "vitepress";
 
+import { docsLocaleEntries } from "../../../tools/config/locales.mjs";
 const links = [
-  {
-    title: "Language Gateway",
-    description: "Return to the entry page and choose a locale again.",
-    href: withBase("/")
-  },
-  {
-    title: "English Docs",
-    description: "Jump into the English public docs root.",
-    href: withBase("/en/")
-  },
-  {
-    title: "Русская документация",
-    description: "Откройте русскоязычный корень публичной документации.",
-    href: withBase("/ru/")
-  },
-  {
-    title: "Documentación en español",
-    description: "Abra la raíz pública de la documentación en español.",
-    href: withBase("/es/")
-  },
-  {
-    title: "Documentation française",
-    description: "Ouvrez la racine publique de la documentation en français.",
-    href: withBase("/fr/")
-  },
-  {
-    title: "简体中文文档",
-    description: "打开简体中文公共文档首页。",
-    href: withBase("/zh/")
-  }
+  { title: "Choose a language", description: "Open the documentation language guide.", href: withBase("/?gateway=manual"), lang: "en-US", dir: "ltr" },
+  ...docsLocaleEntries.map(({ label, description, lang, dir, code }) => ({ title: label, description, lang, dir, href: withBase(`/${code}/`) }))
 ];
 </script>
 
 <template>
   <div class="docs-grid">
-    <a v-for="link in links" :key="link.href" class="docs-card" :href="link.href">
+    <a v-for="link in links" :key="link.href" class="docs-card" :href="link.href" :lang="link.lang" :dir="link.dir">
       <h2>{{ link.title }}</h2>
       <p>{{ link.description }}</p>
     </a>

@@ -385,6 +385,7 @@
       "commit": "Commit uap.toml + uap.lock"
     },
     "docs": {
+      "navLabel": "Docs",
       "englishLabel": "{label} (documentation in English)"
     },
     "logo": {

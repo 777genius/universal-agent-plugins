@@ -114,7 +114,7 @@ test('owned docs routes preserve extensions and fragments with explicit fallback
   for (const id of Object.keys(docsAvailability) as Array<keyof typeof docsAvailability>) {
     for (const locale of ['en', 'ru', 'es', 'fr', 'zh', 'uk', 'hi', 'ar', 'pt']) {
       const resolved = resolveDocsLink(id, locale);
-      const language = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
+      const language = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
       assert.equal(resolved.url, `${ownedDocsRoot}${language}/${docsAvailability[id]}`);
       assert.equal(resolved.englishFallback, locale !== language);
       assert.equal(isRetiredArchive(`${language}/${docsAvailability[id]}`), false, resolved.url);
@@ -132,7 +132,7 @@ test('owned docs routes preserve extensions and fragments with explicit fallback
       `${ownedDocsRoot}en/guide/quickstart.html?source=x#build-plugins`,
     );
     assert.ok(result.url.endsWith('.html?source=x#build-plugins'));
-    const language = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
+    const language = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
     assert.ok(
       readFileSync(
         new URL(`../../website/source/${language}/guide/quickstart.md`, import.meta.url),
@@ -152,7 +152,7 @@ test('owned docs routes preserve extensions and fragments with explicit fallback
 test('custom domain docs preserve locale, query, fragment and English fallback', () => {
   const root = 'https://universal-agent-plugins.com/docs/';
   for (const locale of ['en', 'ru', 'es', 'fr', 'zh', 'uk', 'hi', 'ar', 'pt']) {
-    const language = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
+    const language = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
     const result = resolveDocsLink(
       'quickstart',
       locale,
@@ -212,7 +212,7 @@ test('docs links and FAQ retain every owned base across all landing locales and 
     ) as { faqQuickLinks: ComputedRef<Array<{ title: string; body: string; href: string }>> };
     for (const locale of publishedLocales) {
       composer.locale.value = locale;
-      const language = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
+      const language = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
       const fallback = language !== locale;
       assert.equal(links.docsUrl.value, `${root}${language}/`);
       assert.equal(links.quickstartUrl.value, `${root}${language}/guide/quickstart.html`);
@@ -250,7 +250,7 @@ test('docs links and FAQ retain every owned base across all landing locales and 
   const customLinks = createLinks();
   for (const locale of publishedLocales) {
     composer.locale.value = locale;
-    const language = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
+    const language = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
     assert.equal(customLinks.docsUrl.value, 'https://example.test/custom/en/');
     assert.equal(customLinks.quickstartUrl.value, 'https://example.test/start?keep=yes#section');
     assert.equal(customLinks.quickstartEnglishFallback.value, false);

@@ -80,8 +80,8 @@ See [package layout](./layout) for the responsibility of each file.
 
 ## Build from source {#build-from-source}
 
-The following developer setup builds the current public authoring contract from
-source. It requires Git and the Go toolchain declared by the repository
+The following commands build the current CLI from source with authoring enabled.
+They require Git and the Go toolchain declared by the repository
 (currently Go 1.26.10). Record the checked-out commit when sharing results.
 
 ```bash

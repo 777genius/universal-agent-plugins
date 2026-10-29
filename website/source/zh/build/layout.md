@@ -47,7 +47,7 @@ stdio 包还包含运行时源码和依赖清单。文件是后续执行的输�
 | --- | --- |
 | `plugin.json` | 标准包身份和元数据。 |
 | `mcp.json` | 提供工具时的 MCP 服务器配置。 |
-| `skills/<name>/SKILL.md` | 一项直接子技能的身份、描述和说明。 |
+| `skills/<name>/SKILL.md` | 直接位于 `skills/` 下的一个 Skill 的身份、描述和说明。 |
 | `README.md` | 用途、前提条件、验证和剩余限制。 |
 | `package.json`、`package-lock.json`、`src/server.mjs` | Node stdio 骨架及独立运行工作的输入。 |
 | `LICENSE` | init 时明确选择的许可证。 |

@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { docsLocaleEntries, docsLocales } from "../config/locales.mjs";
 import { docsBaseUrl } from "../config/site.mjs";
 
 export async function runLocaleSmoke(browser, base, artifactsRoot) {
   const evidence = [];
-  const languageTags = { en: "en-US", ru: "ru-RU", es: "es-ES", fr: "fr-FR", zh: "zh-CN" };
-  const locales = ["en", "ru", "es", "fr", "zh"];
+  const languageTags = Object.fromEntries(docsLocaleEntries.map(({ code, lang }) => [code, lang]));
+  const locales = docsLocales;
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.route("**/*", route => new URL(route.request().url()).origin === new URL(base).origin ? route.continue() : route.abort());
   const page = await context.newPage();
@@ -28,6 +29,10 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
       const route = `/${locale}/guide/quickstart`;
       await goto(route);
       const quickstartIdentity = {
+        uk: /^Використання плагінів \/ Створення плагінів/,
+        hi: /^प्लगइन इस्तेमाल करें \/ प्लगइन बनाएँ/,
+        ar: /^استخدام الإضافات \/ بناء الإضافات/,
+        pt: /^Usar plugins \/ Criar plugins/,
         ru: /^Используйте плагины \/ Создавайте плагины/,
         es: /^Usar plugins \/ Crear plugins/,
         fr: /^Utiliser des plugins \/ Créer des plugins/,
@@ -79,10 +84,10 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
       await inspectSwitcher("/?gateway=manual", code => `/${code}/`, code => code, false, true);
       const referenceRoute = "/en/api/cli/prepared-authoring-v2-agentplugins-author";
       await inspectSwitcher(referenceRoute, () => referenceRoute, () => "en", true, false, "agentplugins author");
-      evidence.push({ variant, fiveCounterparts: true, gatewayHomes: true, versionedEnglishFallback: true });
+      evidence.push({ variant, nineCounterparts: true, gatewayHomes: true, versionedEnglishFallback: true });
       async function inspectSwitcher(label, destination, language, fallback, home = false, identityOverride = "") {
-        const homeIdentities = { en: "Agent Plugins", ru: "Agent Plugins", es: "Agent Plugins", fr: "Agent Plugins", zh: "Agent Plugins" };
-        const useIdentities = { en: "Use plugins", ru: "Использовать плагины", es: "Usar plugins", fr: "Utiliser des plugins", zh: "使用插件" };
+        const homeIdentities = Object.fromEntries(locales.map(code => [code, "Agent Plugins"]));
+        const useIdentities = { uk: "Використання плагінів", hi: "प्लगइन इस्तेमाल करें", ar: "استخدام الإضافات", pt: "Usar plugins", en: "Use plugins", ru: "Использовать плагины", es: "Usar plugins", fr: "Utiliser des plugins", zh: "使用插件" };
         for (const [index, code] of locales.entries()) {
           // Every activation starts at its own origin, including same-route
           // English fallbacks; no previous selection supplies the next menu.
@@ -109,7 +114,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
             await button.click();
           }
           const links = widget.locator("a");
-          assert.equal(await links.count(), 5, label);
+          assert.equal(await links.count(), locales.length, label);
           await links.first().waitFor({ state: "visible" });
           for (const [linkIndex, requested] of locales.entries()) {
             const link = links.nth(linkIndex);
@@ -118,7 +123,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
             assert.equal(await link.getAttribute("lang"), language(requested));
             assert.equal(await link.getAttribute("hreflang"), language(requested));
             if (fallback && requested !== "en") assert.match(await link.innerText(), /English/);
-            if (home) assert.match(await link.innerText(), /Home/);
+            if (home) assert.ok((await link.innerText()).includes(docsLocaleEntries.find(locale => locale.code === requested).home));
             if (variant === "navbar") await inViewport(link, `${label}: ${requested} navbar link`);
           }
           const expectedPath = new URL(`${base}${destination(code)}`).pathname;
@@ -151,6 +156,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
         return box;
       }
     }
+    await runNativeSearchAndNavigation(page, goto, evidence);
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
   for (const scenario of [
@@ -158,6 +164,10 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
     { saved: "invalid", languages: ["es-MX", "en"], expected: "es" },
     { saved: "", languages: ["en-GB", "ru"], expected: "en" },
     { blocked: true, languages: ["zh-CN", "fr"], expected: "zh" },
+    { saved: "AR", languages: ["en"], expected: "ar" },
+    { saved: "invalid", languages: ["uk-UA", "en"], expected: "uk" },
+    { saved: "", languages: ["hi-IN", "en"], expected: "hi" },
+    { saved: "", languages: ["pt-PT", "en"], expected: "pt" },
     { saved: "ru", languages: ["en"], manual: true }
   ]) {
     const ctx = await browser.newContext();
@@ -170,7 +180,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
     const p = await ctx.newPage();
     try {
       await p.goto(`${base}/${scenario.manual ? "?gateway=manual" : ""}`, { waitUntil: "networkidle" });
-      if (scenario.manual) { assert.ok(await p.locator(".language-gateway").isVisible()); assert.equal(await p.locator(".language-gateway__card").count(), 5); }
+      if (scenario.manual) { assert.ok(await p.locator(".language-gateway").isVisible()); assert.equal(await p.locator(".language-gateway__card").count(), locales.length); }
       else { await p.waitForURL(`${base}/${scenario.expected}/`); if (!scenario.blocked) assert.equal(await p.evaluate(() => localStorage.getItem("plugin-kit-ai-docs-locale")), scenario.expected); }
       evidence.push(scenario);
     } finally { await ctx.close(); }
@@ -181,6 +191,30 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
 
 async function runLocalizedBuildChecks(page, goto, evidence, artifactsRoot) {
   const copy = {
+    uk: {
+      headings: ["Створення плагінів", "Перевірка пакета та його доказів", "Створення пакета stdio MCP"],
+      exclusion: /не (?:містить|включає)\s*agentplugins author/i,
+      currentSource: /(?:поточн|вихідн)/i,
+      sourceNotice: /Розробка у збірці з вихідного коду/i,
+    },
+    hi: {
+      headings: ["प्लगइन बनाएँ", "पैकेज और उसके प्रमाण जाँचें", "Stdio MCP पैकेज बनाएँ"],
+      exclusion: /agentplugins author\s*शामिल नहीं है/,
+      currentSource: /सोर्स/,
+      sourceNotice: /सोर्स बिल्ड में पैकेज निर्माण/,
+    },
+    ar: {
+      headings: ["بناء الإضافات", "فحص الحزمة وأدلتها", "بناء حزمة MCP عبر stdio"],
+      exclusion: /لا يتضمن إصدار المثبّت الحالي\s*agentplugins author/,
+      currentSource: /المصدر/,
+      sourceNotice: /التأليف من المصدر/,
+    },
+    pt: {
+      headings: ["Criar plugins", "Verificar um pacote e suas evidências", "Criar um pacote MCP stdio"],
+      exclusion: /não inclui\s*agentplugins author/i,
+      currentSource: /código.fonte atual/i,
+      sourceNotice: /Criação a partir do código-fonte/i,
+    },
     en: {
       headings: ["Build plugins", "Check a package and its evidence", "Build a stdio MCP package"],
       exclusion: /does not include\s*agentplugins author/i,
@@ -259,4 +293,97 @@ async function runLocalizedBuildChecks(page, goto, evidence, artifactsRoot) {
         visibleBuildBoundary: true, runtimePrerequisites: index > 0, mobile: index === 2 });
     }
   }
+}
+
+
+async function runNativeSearchAndNavigation(page, goto, evidence) {
+  const queries = { en: "plugins", ru: "плагины", uk: "плагінів", zh: "插件", es: "plugins", hi: "प्लगइन", ar: "الإضافات", pt: "plugins", fr: "plugins" };
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const { code, dir } of docsLocaleEntries) {
+    await goto(`/${code}/use/`);
+    assert.equal(await page.locator("html").getAttribute("dir"), dir, `${code}: document direction`);
+    const skip = page.locator(".VPSkipLink");
+    await skip.focus();
+    assert.ok(await skip.isVisible(), `${code}: skip link visible on focus`);
+    if (code !== "en") assert.notEqual((await skip.innerText()).trim(), "Skip to content", `${code}: localized skip link`);
+    const appearance = page.locator(".VPNavBarAppearance .VPSwitchAppearance");
+    await page.waitForFunction(() => !!document.querySelector(".VPNavBarAppearance .VPSwitchAppearance")?.getAttribute("title"));
+    const themeTitles = [await appearance.getAttribute("title")];
+    await appearance.click();
+    await page.waitForFunction(previous => document.querySelector(".VPNavBarAppearance .VPSwitchAppearance")?.getAttribute("title") !== previous, themeTitles[0]);
+    themeTitles.push(await appearance.getAttribute("title"));
+    if (code !== "en") for (const title of themeTitles) assert.ok(title && !/^Switch to (?:dark|light) theme$/.test(title), `${code}: localized appearance title`);
+    await page.locator(".VPNavBarSearchButton").click();
+    const input = page.locator("#localsearch-input");
+    await input.waitFor({ state: "visible" });
+    await input.fill(queries[code]);
+    const result = page.locator(`.VPLocalSearchBox a[href*="/${code}/"]`).first();
+    await result.waitFor({ state: "visible" });
+    assert.ok((await result.getAttribute("href")).includes(`/${code}/`), `${code}: native result destination`);
+    await page.keyboard.press("Escape");
+    await input.waitFor({ state: "hidden" });
+    evidence.push({ locale: code, query: queries[code], nativeSearch: true });
+  }
+  for (const width of [1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const { code } of docsLocaleEntries) {
+      await goto(`/${code}/build/`);
+      const bounds = await page.locator(".locale-switcher--navbar button").boundingBox();
+      assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= width, `${code}/${width}: language control fits`);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${code}/${width}: page overflow`);
+      if (code === "ar" && width === 1024) {
+        const padding = await page.locator(".VPLocalNav.has-sidebar").evaluate(el => ({ left: getComputedStyle(el).paddingLeft, right: getComputedStyle(el).paddingRight }));
+        assert.equal(padding.left, "0px", "Arabic tablet local navigation has no left sidebar offset");
+        assert.ok(parseFloat(padding.right) > 0, "Arabic tablet local navigation follows the right sidebar");
+      }
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await goto("/en/use/");
+  const pointerWidget = page.locator(".locale-switcher--navbar");
+  const pointerButton = await pointerWidget.locator("button").boundingBox();
+  assert.ok(pointerButton, "Pointer language button has geometry");
+  await page.mouse.move(pointerButton.x + pointerButton.width / 2, pointerButton.y + pointerButton.height / 2);
+  await page.waitForFunction(() => document.querySelector(".locale-switcher--navbar button")?.getAttribute("aria-expanded") === "true");
+  const pointerTarget = await pointerWidget.locator("a").first().boundingBox();
+  assert.ok(pointerTarget, "Pointer language target has geometry");
+  await page.mouse.move(pointerTarget.x + pointerTarget.width / 2, pointerTarget.y + pointerTarget.height / 2, { steps: 24 });
+  assert.equal(await pointerWidget.locator("button").getAttribute("aria-expanded"), "true", "Language menu stays open along the actual pointer path");
+  assert.ok(await pointerWidget.locator("a").first().isVisible(), "Language menu remains usable after pointer travel");
+  await page.mouse.move(0, 0);
+  evidence.push({ humanPointerLanguageMenu: true });
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await goto("/uk/build/");
+  await page.locator(".VPNavBarHamburger").click();
+  assert.ok(await page.locator('.VPNavScreen a[href$="/uk/use/"]').isVisible(), "Tablet navigation exposes the localized use journey");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await goto("/en/build/#build-from-source");
+  const widget = page.locator(".locale-switcher--navbar");
+  const button = widget.locator("button");
+  await button.focus();
+  await button.press("Enter");
+  assert.equal(await button.getAttribute("aria-expanded"), "true");
+  for (const { code } of docsLocaleEntries) assert.ok((await widget.locator(`a[hreflang="${code}"]`).getAttribute("href")).endsWith(`#build-from-source`));
+  await button.press("Tab");
+  assert.ok(await widget.locator("a").first().evaluate(el => el === document.activeElement));
+  await page.keyboard.press("Escape");
+  assert.equal(await button.getAttribute("aria-expanded"), "false");
+  await button.focus();
+  await button.press("Enter");
+  const arabic = widget.locator('a[hreflang="ar"]');
+  await arabic.focus();
+  await arabic.press("Enter");
+  await page.waitForURL(url => url.pathname.endsWith("/ar/build/") && url.hash === "#build-from-source");
+  await page.locator("#build-from-source").waitFor({ state: "visible" });
+  await page.waitForFunction(() => document.documentElement.dir === "rtl");
+  assert.equal(await page.locator("pre").first().evaluate(el => getComputedStyle(el).direction), "ltr");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await goto("/ar/use/manage");
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Arabic mobile page overflow");
+  await page.locator(".VPLocalNav .menu").click();
+  const sidebar = page.locator(".VPSidebar.open");
+  await sidebar.waitFor({ state: "visible" });
+  const sideBounds = await sidebar.boundingBox();
+  assert.ok(sideBounds && sideBounds.x >= 0 && sideBounds.x + sideBounds.width <= 390, "Arabic mobile sidebar fits");
+  evidence.push({ keyboardLanguageMenu: true, attestedFragment: true, rtlClientNavigation: true, arabicMobileSidebar: true });
 }

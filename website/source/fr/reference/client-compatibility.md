@@ -13,7 +13,7 @@ localeDisposition: "current-translation"
 
 ## Version actuelle et portée
 
-[CLI natif 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), publié le 28 octobre 2026, comprend la sélection automatique de projet pour `install` sans argument et la validation stricte d’un verrouillage existant. L’installation de projet explicite était déjà disponible dans 0.1.93. La référence native et Homebrew est 0.1.94 ; les canaux peuvent être mis à jour à des moments différents. Vérifiez la version de l’exécutable avant de suivre des instructions propres à 0.1.94. Les preuves de sa publication comme installateur ne qualifient ni l’exécution de tous les clients natifs ni l’exécutable standard de création. L’installateur actuel npm ou natif n’inclut pas `agentplugins author` ; consultez [Créer des plugins](../build/) pour les outils source.
+[CLI natif 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), publié le 28 octobre 2026, comprend la sélection automatique de projet pour `install` sans argument de source et la validation stricte d’un verrouillage existant. L’installation de projet explicite était déjà disponible dans 0.1.93. La référence native et Homebrew est 0.1.94 ; les canaux peuvent être mis à jour à des moments différents. Vérifiez la version de l’exécutable avant de suivre des instructions propres à 0.1.94. Les preuves de sa publication comme installateur ne qualifient ni l’exécution de tous les clients natifs ni l’exécutable standard de création. L’installateur actuel npm ou natif n’inclut pas `agentplugins author` ; consultez [Créer des plugins](../build/) pour les outils source.
 
 Interprétez la compatibilité comme des vérifications distinctes :
 

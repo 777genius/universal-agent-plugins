@@ -38,7 +38,7 @@ Définissez l’identité du paquet dans `plugin.json` :
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "review-helper",
   "version": "0.1.0",
-  "description": "Review documentation changes for clarity and evidence"
+  "description": "Vérifier la clarté et les éléments justificatifs des modifications de documentation"
 }
 ```
 
@@ -69,7 +69,7 @@ Examinez le plan et consultez [Utiliser des plugins](../use/install) pour l’ap
 
 ## Préparez les outils de création depuis le code source {#build-from-source}
 
-Cette préparation pour développeurs compile le contrat public de création du code source actuel. Elle nécessite Git et la version de Go déclarée par le dépôt, actuellement Go 1.26.10. Notez le commit extrait lorsque vous partagez des résultats.
+Les commandes suivantes compilent la CLI actuelle avec les outils de création activés. Elle nécessite Git et la version de Go déclarée par le dépôt, actuellement Go 1.26.10. Notez le commit extrait lorsque vous partagez des résultats.
 
 ```bash
 git clone https://github.com/777genius/universal-agent-plugins.git
