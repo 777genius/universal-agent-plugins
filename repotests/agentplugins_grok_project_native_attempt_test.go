@@ -161,10 +161,6 @@ func projectGrokPreparedAuthority(f *projectNativeCLIAttempt) (func() error, err
 	}, nil
 }
 
-func (f *projectNativeCLIAttempt) inspectGrokPrepared(t *testing.T) {
-	f.inspectGrok(t, false)
-}
-
 func (f *projectNativeCLIAttempt) inspectGrokSelected(t *testing.T) {
 	f.evidence["fixture_selection"] = "owned-project-trust-and-selected-plugin-name"
 	f.inspectGrok(t, true)

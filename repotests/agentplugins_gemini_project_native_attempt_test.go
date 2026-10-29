@@ -150,7 +150,7 @@ func newGeminiProjectAttempt(t *testing.T) *geminiProjectAttempt {
 	if err != nil || len(entries) != 0 {
 		t.Fatal("attempt output must be an existing empty ordinary directory")
 	}
-	f.client = nativeBinary(t, "AGENTPLUGINS_GEMINI_BIN")
+	f.client = nativeBinary(t, "AGENTPLUGINS_PROJECT_NATIVE_GEMINI_EXECUTABLE")
 	f.node = nativeBinary(t, "AGENTPLUGINS_NODE_BIN")
 	var secret [24]byte
 	if _, err := rand.Read(secret[:]); err != nil {
