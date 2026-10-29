@@ -98,16 +98,7 @@ type savedUpdateCheck struct {
 // checkSavedUpdates resolves one complete candidate graph and exposes both root
 // source facts and closure changes. It does not approve any installer effects.
 func checkSavedUpdates(ctx context.Context, app App, snapshot environmentSnapshot, aliases []string) (savedUpdateCheck, error) {
-	out := savedUpdateCheck{Entries: []savedUpdateFact{}}
-	for _, alias := range aliases {
-		req := snapshot.Requirements.Dependencies[alias]
-		pin, _ := snapshot.Lock.PackageForRequirement(req)
-		status, reason := "check_unavailable", "the source has not been checked"
-		if savedRequirementPinned(req) {
-			status, reason = "pinned", "exact intent is retained; change the declaration to select a new pin"
-		}
-		out.Entries = append(out.Entries, savedUpdateFact{Alias: pin.Alias, Declared: true, Selected: true, Source: pin.SourceKey, Requested: req.RequestedSelector(), Status: status, Reason: reason, Installed: savedPinIdentity(pin), RequiredBy: pin.RequiredBy})
-	}
+	out := initialSavedUpdateCheck(snapshot, aliases)
 	// A fresh cache belongs exclusively to this read-only request.
 	app.dependencySnapshots = nil
 	preview, cleanup, err := dependencyPreviewApp(app, &options{dryRun: true})
@@ -120,71 +111,103 @@ func checkSavedUpdates(ctx context.Context, app App, snapshot environmentSnapsho
 		return out, ctx.Err()
 	}
 	if err != nil {
-		out.Reason = "The complete update graph could not be checked; inspect source access and dependency constraints"
-		status := "check_unavailable"
-		if savedUpdateBlocked(err) {
-			status = "blocked"
-			out.Reason = "No permitted complete update graph is available; inspect dependency constraints and release eligibility"
-		}
-		for i := range out.Entries {
-			if out.Entries[i].Status != "pinned" {
-				out.Entries[i].Status = status
-				out.Entries[i].Reason = out.Reason
-			}
-		}
+		out.recordUnavailable(err)
 		return out, nil
 	}
 	out.Complete = true
+	selected := out.recordRootCandidates(snapshot.Lock, next)
+	closure := savedClosureAliases(snapshot.Lock, next, declaredNodeAliases(snapshot.Requirements, snapshot.Lock, aliases))
+	out.recordClosureCandidates(snapshot.Lock, next, closure, selected)
+	sort.Slice(out.Entries, func(i, j int) bool { return out.Entries[i].Alias < out.Entries[j].Alias })
+	return out, nil
+}
+
+func initialSavedUpdateCheck(snapshot environmentSnapshot, aliases []string) savedUpdateCheck {
+	out := savedUpdateCheck{Entries: []savedUpdateFact{}}
+	for _, alias := range aliases {
+		req := snapshot.Requirements.Dependencies[alias]
+		pin, _ := snapshot.Lock.PackageForRequirement(req)
+		status, reason := "check_unavailable", "the source has not been checked"
+		if savedRequirementPinned(req) {
+			status, reason = "pinned", "exact intent is retained; change the declaration to select a new pin"
+		}
+		out.Entries = append(out.Entries, savedUpdateFact{Alias: pin.Alias, Declared: true, Selected: true, Source: pin.SourceKey, Requested: req.RequestedSelector(), Status: status, Reason: reason, Installed: savedPinIdentity(pin), RequiredBy: pin.RequiredBy})
+	}
+	return out
+}
+
+func (check *savedUpdateCheck) recordUnavailable(err error) {
+	check.Reason = "The complete update graph could not be checked; inspect source access and dependency constraints"
+	status := "check_unavailable"
+	if savedUpdateBlocked(err) {
+		status = "blocked"
+		check.Reason = "No permitted complete update graph is available; inspect dependency constraints and release eligibility"
+	}
+	for i := range check.Entries {
+		if check.Entries[i].Status != "pinned" {
+			check.Entries[i].Status = status
+			check.Entries[i].Reason = check.Reason
+		}
+	}
+}
+
+func (check *savedUpdateCheck) recordRootCandidates(previous, next environment.Lock) map[string]bool {
 	selected := map[string]bool{}
-	for i := range out.Entries {
-		item := &out.Entries[i]
+	for i := range check.Entries {
+		item := &check.Entries[i]
 		selected[item.Alias] = true
 		if item.Status == "pinned" {
 			continue
 		}
-		old, _ := snapshot.Lock.Package(item.Alias)
+		old, _ := previous.Package(item.Alias)
 		pkg, exists := next.Package(item.Alias)
 		if !exists {
 			item.Status = "blocked"
 			item.Reason = "selected dependency has no candidate identity"
-			out.Complete = false
+			check.Complete = false
 			continue
 		}
 		item.Status, item.Reason = "current", "the requested source and permitted immutable identity are current"
 		if !sameSavedIdentity(old, pkg) {
 			item.Status, item.Reason = "available", "a different permitted immutable source identity is available"
 			item.Available = savedPinIdentity(pkg)
-			out.Changed = true
+			check.Changed = true
 		}
 	}
-	closure := savedClosureAliases(snapshot.Lock, next, declaredNodeAliases(snapshot.Requirements, snapshot.Lock, aliases))
+	return selected
+}
+
+func (check *savedUpdateCheck) recordClosureCandidates(previous, next environment.Lock, closure []string, selected map[string]bool) {
 	for _, alias := range closure {
 		if selected[alias] {
 			continue
 		}
-		old, oldOK := snapshot.Lock.Package(alias)
+		old, oldOK := previous.Package(alias)
 		pkg, nextOK := next.Package(alias)
 		if oldOK && nextOK && sameSavedIdentity(old, pkg) && slices.Equal(old.RequiredBy, pkg.RequiredBy) && slices.Equal(old.Targets, pkg.Targets) {
 			continue
 		}
-		fact := savedUpdateFact{Alias: alias, Source: pkg.SourceKey, Status: "available", Reason: "the selected update changes this shared dependency closure", RequiredBy: pkg.RequiredBy}
-		if oldOK {
-			fact.Installed = savedPinIdentity(old)
-			if !nextOK {
-				fact.Source = old.SourceKey
-				fact.RequiredBy = old.RequiredBy
-				fact.Reason = "the selected graph no longer requires this dependency"
-			}
-		}
-		if nextOK {
-			fact.Available = savedPinIdentity(pkg)
-		}
-		out.Entries = append(out.Entries, fact)
-		out.Changed = true
+		check.Entries = append(check.Entries, savedClosureCandidate(alias, old, pkg, oldOK, nextOK))
+		check.Changed = true
 	}
-	sort.Slice(out.Entries, func(i, j int) bool { return out.Entries[i].Alias < out.Entries[j].Alias })
-	return out, nil
 }
+
+func savedClosureCandidate(alias string, old, pkg environment.LockedPackage, oldOK, nextOK bool) savedUpdateFact {
+	fact := savedUpdateFact{Alias: alias, Source: pkg.SourceKey, Status: "available", Reason: "the selected update changes this shared dependency closure", RequiredBy: pkg.RequiredBy}
+	if oldOK {
+		fact.Installed = savedPinIdentity(old)
+		if !nextOK {
+			fact.Source = old.SourceKey
+			fact.RequiredBy = old.RequiredBy
+			fact.Reason = "the selected graph no longer requires this dependency"
+		}
+	}
+	if nextOK {
+		fact.Available = savedPinIdentity(pkg)
+	}
+	return fact
+}
+
 func declaredNodeAliases(requirements environment.Requirements, locked environment.Lock, aliases []string) []string {
 	out := make([]string, 0, len(aliases))
 	for _, alias := range aliases {

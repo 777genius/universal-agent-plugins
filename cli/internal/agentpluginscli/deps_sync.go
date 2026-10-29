@@ -130,7 +130,6 @@ func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, acti
 }
 
 func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstaller, actions []dependencyAction) ([]dependencyAction, error) {
-	opts := adapter.opts
 	state, err := adapter.app.StateStore.Load()
 	if err != nil {
 		return nil, err
@@ -162,14 +161,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		if adapter.previewPaths != nil {
 			adapter.previewPaths[action.Alias+"\x00"+action.ClientID] = plan.TargetPath
 		}
-		if opts.dependencyComponents == nil {
-			opts.dependencyComponents = map[string][]domain.ComponentDecision{}
-		}
-		components := make([]domain.ComponentDecision, 0, len(plan.Delivery.Components))
-		for _, component := range plan.Delivery.Components {
-			components = append(components, domain.ComponentDecision{Kind: domain.ComponentKind(component.Kind), Name: component.Name, Support: domain.SupportLevel(component.Support), Reason: component.Reason, Source: component.Source, SourceName: component.SourceName})
-		}
-		opts.dependencyComponents[action.Alias+"\x00"+action.ClientID] = components
+		adapter.recordDependencyComponents(action, plan)
 
 		if action.Action == environment.ActionUpdate && updates[action.Alias] == nil {
 			updates[action.Alias] = prepared
@@ -183,6 +175,18 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		claims[key] = action.Alias
 	}
 	return actions, nil
+}
+
+func (adapter *dependencyInstaller) recordDependencyComponents(action dependencyAction, plan installer.Plan) {
+	opts := adapter.opts
+	if opts.dependencyComponents == nil {
+		opts.dependencyComponents = map[string][]domain.ComponentDecision{}
+	}
+	components := make([]domain.ComponentDecision, 0, len(plan.Delivery.Components))
+	for _, component := range plan.Delivery.Components {
+		components = append(components, domain.ComponentDecision{Kind: domain.ComponentKind(component.Kind), Name: component.Name, Support: domain.SupportLevel(component.Support), Reason: component.Reason, Source: component.Source, SourceName: component.SourceName})
+	}
+	opts.dependencyComponents[action.Alias+"\x00"+action.ClientID] = components
 }
 
 type dependencyInstaller struct {

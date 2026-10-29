@@ -42,37 +42,45 @@ func (session *updateAllSession) prepareSaved() error {
 	if err != nil {
 		return err
 	}
+	request, aliases, err := session.prepareSavedGraph(preview, snapshot)
+	if err != nil {
+		return err
+	}
+	if len(aliases) == 0 {
+		return nil
+	}
+	session.saved = &preparedSavedUpdateAll{app: preview, request: request, cleanup: cleanup, rows: map[string]int{}}
+	owned = true
+	session.appendSavedRows(request, aliases)
+	return nil
+}
+
+func (session *updateAllSession) prepareSavedGraph(preview App, snapshot environmentSnapshot) (dependencySyncRequest, []string, error) {
 	aliases := []string{}
 	for alias := range snapshot.Requirements.Dependencies {
 		aliases = append(aliases, alias)
 	}
 	sort.Strings(aliases)
 	if len(aliases) == 0 {
-		return nil
+		return dependencySyncRequest{}, aliases, nil
 	}
 	requirements, locked, err := prepareSavedUpdates(session.ctx, preview, snapshot, aliases, nil)
 	if err != nil {
-		return err
+		return dependencySyncRequest{}, aliases, err
 	}
 	body, err := editEnvironmentIntent(snapshot, requirements)
 	if err != nil {
-		return err
+		return dependencySyncRequest{}, aliases, err
 	}
 	request, err := prepareSavedSync(session.cmd, preview, session.opts, snapshot, requirements, locked, body, declaredNodeAliases(requirements, locked, aliases), nil, nil)
-	if err != nil {
-		return err
-	}
-	session.saved = &preparedSavedUpdateAll{app: preview, request: request, cleanup: cleanup, rows: map[string]int{}}
-	owned = true
+	return request, aliases, err
+}
+
+func (session *updateAllSession) appendSavedRows(request dependencySyncRequest, aliases []string) {
 	for _, action := range request.prepared {
 		row, exists := session.saved.rows[action.Alias]
 		if !exists {
-			item := updateAllInstallation{InstallationID: action.InstallationID, Name: action.Alias, Saved: true, Status: "skipped", Reason: "saved dependency is current"}
-			for _, alias := range aliases {
-				if dependencyNodeAlias(requirements, locked, alias) == action.Alias && savedRequirementPinned(requirements.Dependencies[alias]) {
-					item.Reason = "exact intent retained"
-				}
-			}
+			item := savedUpdateAllRow(action, request, aliases)
 			row = len(session.result.Installations)
 			session.saved.rows[action.Alias] = row
 			session.result.Installations = append(session.result.Installations, item)
@@ -85,15 +93,24 @@ func (session *updateAllSession) prepareSaved() error {
 		}
 	}
 	for _, row := range session.saved.rows {
-		item := session.result.Installations[row]
-		if item.Status == "planned" {
+		if session.result.Installations[row].Status == "planned" {
 			session.result.Planned++
 		} else {
 			session.result.Skipped++
 		}
 	}
-	return nil
 }
+
+func savedUpdateAllRow(action dependencyAction, request dependencySyncRequest, aliases []string) updateAllInstallation {
+	item := updateAllInstallation{InstallationID: action.InstallationID, Name: action.Alias, Saved: true, Status: "skipped", Reason: "saved dependency is current"}
+	for _, alias := range aliases {
+		if dependencyNodeAlias(request.requirements, request.lock, alias) == action.Alias && savedRequirementPinned(request.requirements.Dependencies[alias]) {
+			item.Reason = "exact intent retained"
+		}
+	}
+	return item
+}
+
 func (session *updateAllSession) savedContains(id string) bool {
 	if session.saved == nil || id == "" {
 		return false
