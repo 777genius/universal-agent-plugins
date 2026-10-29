@@ -206,10 +206,13 @@ func (solver *graphSolver) chooseCandidates(ctx context.Context, key string, nod
 	}
 	sort.Slice(candidates, func(i, j int) bool {
 		c := CompareVersions(candidates[i].Version, candidates[j].Version)
+		if solver.update[key] {
+			return c > 0 || c == 0 && candidates[i].ReleaseSequence > candidates[j].ReleaseSequence
+		}
 		return c < 0 || c == 0 && candidates[i].ReleaseSequence < candidates[j].ReleaseSequence
 	})
 	for _, candidate := range candidates {
-		if !candidateAccepts(node, candidate) {
+		if !candidateAccepts(node, candidate) || solver.downgrades(key, candidate.Version) {
 			continue
 		}
 		selected, err := solver.graph.AcquireCandidate(ctx, node.requirement, candidate, node.targets)
@@ -256,12 +259,20 @@ func (solver *graphSolver) chooseExact(ctx context.Context, key string, node gra
 }
 
 func (solver *graphSolver) try(ctx context.Context, key string, selected ResolvedPackage, choices map[string]ResolvedPackage) (map[string]ResolvedPackage, map[string]graphNode, error) {
+	if solver.downgrades(key, selected.Package.Version) {
+		return nil, nil, graphConflict{message: fmt.Sprintf("update would downgrade %s from %s to %s; change the declared intent explicitly", key, solver.pins[key].Version, selected.Package.Version)}
+	}
 	cloned := make(map[string]ResolvedPackage, len(choices)+1)
 	for key, value := range choices {
 		cloned[key] = value
 	}
 	cloned[key] = selected
 	return solver.search(ctx, cloned)
+}
+
+func (solver *graphSolver) downgrades(key, version string) bool {
+	previous, exists := solver.pins[key]
+	return len(solver.update) > 0 && exists && stableVersion.MatchString(previous.Version) && stableVersion.MatchString(version) && CompareVersions(version, previous.Version) < 0
 }
 
 func nodeAccepts(node graphNode, pkg LockedPackage) bool {
