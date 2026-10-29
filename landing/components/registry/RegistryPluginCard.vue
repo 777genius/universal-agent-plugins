@@ -348,7 +348,6 @@ function updateAutoDetect(value: boolean) {
     </details>
     <div class="plugin-card__bottom">
       <div class="plugin-card__actions">
-        <AuthenticationIndicator :indicator="authentication" />
         <button
           v-if="canInstall"
           type="button"
@@ -369,6 +368,7 @@ function updateAutoDetect(value: boolean) {
                 ? t('registryUi.card.commandsDisabledInPreview')
                 : diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason)
         }}</span>
+        <AuthenticationIndicator :indicator="authentication" />
       </div>
       <template v-if="!canInstall && vendorInstall">
         <p class="plugin-card__unavailable">

@@ -2128,7 +2128,8 @@ img {
     inset 0 0 0 1px rgba(255, 255, 255, 0.24),
     0 8px 22px color-mix(in srgb, var(--primary) 20%, transparent);
 }
-:root[data-theme='light'] .plugin-card__install-toggle {
+:root:has(.v-theme--light) .hero__actions .button--primary,
+:root:has(.v-theme--light) .plugin-card__install-toggle {
   color: #fff;
 }
 .plugin-card__unavailable {
