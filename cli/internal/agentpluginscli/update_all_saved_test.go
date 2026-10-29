@@ -166,16 +166,40 @@ func TestUpdateAllRechecksImperativeManagedDriftBeforeSavedPublication(t *testin
 	if err := session.preflightAll(); err != nil {
 		t.Fatal(err)
 	}
+	changed := false
 	for _, installation := range j.state(t).Installations {
-		if installation.DeclaredName == "imperative" {
-			dependencyWrite(t, filepath.Join(installation.Clients[0].TargetLocator, "manual-edit.txt"), "keep this edit")
+		if installation.DeclaredName != "imperative" {
+			continue
+		}
+		for _, binding := range installation.Clients {
+			if binding.ClientID != "claude" {
+				continue
+			}
+			if binding.TargetLocator == "" {
+				t.Fatal("missing bound path")
+			}
+			if err := os.RemoveAll(binding.TargetLocator); err != nil {
+				t.Fatal(err)
+			}
+			changed = true
 		}
 	}
+	if !changed {
+		t.Fatal("imperative binding not selected")
+	}
+
 	before := savedCheckFiles(t, j.cli.root)
 	if err := session.applyAll(); err == nil {
 		t.Fatal("late managed drift was accepted")
 	}
-	if !reflect.DeepEqual(before, savedCheckFiles(t, j.cli.root)) {
+	after := savedCheckFiles(t, j.cli.root)
+	// The existing process lock refreshes its coordination metadata even on a
+	// refused operation; it is not installed state, intent, package store or data.
+	coordination, _ := filepath.Rel(j.cli.root, j.cli.app.EnvironmentLockPath)
+	delete(before, coordination)
+	delete(after, coordination)
+	if !reflect.DeepEqual(before, after) {
 		t.Fatal("saved graph or store changed before imperative drift refusal")
 	}
+
 }

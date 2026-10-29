@@ -561,8 +561,7 @@ export interface components {
         /** @description Select unique declared aliases or all; both and empty selection are invalid. */
         UpdateCheckRequest: {
             aliases?: string[];
-            /** @default false */
-            all: boolean;
+            all?: boolean;
         };
         UpdateIdentity: {
             version: string;

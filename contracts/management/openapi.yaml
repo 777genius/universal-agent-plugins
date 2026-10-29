@@ -1478,7 +1478,6 @@ components:
             maxLength: 256
         all:
           type: boolean
-          default: false
           x-go-type-skip-optional-pointer: true
     UpdateIdentity:
       type: object

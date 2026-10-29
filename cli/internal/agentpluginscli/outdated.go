@@ -61,7 +61,7 @@ func newOutdatedCommand(app App, opts *options) *cobra.Command {
 	var all bool
 	command := &cobra.Command{
 		Use:   "outdated [name-or-installation-id]",
-		Short: "Check immutable release identities without changing installations",
+		Short: "Check saved sources and tracked release identities without changing installations",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app, scopeErr := app.forOptions(opts)
@@ -81,7 +81,7 @@ func newOutdatedCommand(app App, opts *options) *cobra.Command {
 			return runOutdated(cmd.Context(), cmd, app, opts, selector)
 		},
 	}
-	command.Flags().BoolVar(&all, "all", false, "check every tracked installation")
+	command.Flags().BoolVar(&all, "all", false, "check saved dependencies and tracked installations")
 	return command
 }
 
