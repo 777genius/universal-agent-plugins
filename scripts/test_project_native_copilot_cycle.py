@@ -53,7 +53,7 @@ def probe_capture(methods):
              "plugin_root": active, "plugin_data": data, "literal": "literal ${UNKNOWN} " + home,
              "once": active + "/${UNKNOWN}", "marker": "retained-" + n, "pid": 123, "session": "123-456"}
     rows = [{"method": method, "pid": 123, "session": "123-456", "nonce": n,
-             "timestamp": "2026-10-29T13:51:30.00" + str(i + 1) + "Z", "facts": facts if i == len(methods) - 1 else None}
+             "timestamp": f"2026-10-29T13:51:30.{i + 1:03d}Z", "facts": facts if i == len(methods) - 1 else None}
             for i, method in enumerate(methods)]
     held = {"active": active, "data_path": data, "nonce": n, "revision": "a-one"}
     return rows, (encoded(facts).decode(), held, home), events.instant("2026-10-29T13:51:30Z"), events.instant("2026-10-29T13:51:31Z")
@@ -135,15 +135,18 @@ class CopilotCycleContracts(unittest.TestCase):
             with self.assertRaises(ValueError):
                 exchange.probe({**probe, key: wrong}, b"", None, 0, 1, set(), set(), "id")
 
-    def test_probe_accepts_only_exact_measured_one_or_three_list_graphs(self):
-        for methods in (("initialize", "tools/list", "tools/call"),
-                        ("initialize", "tools/list", "tools/list", "tools/list", "tools/call"),
-                        ("initialize", "tools/list", "tools/list", "tools/call"),
-                        ("initialize", "tools/list", "tools/list", "tools/list", "tools/list", "tools/call")):
+    def test_probe_accepts_repeated_discovery_before_one_final_call(self):
+        for methods, valid in ((("initialize", "tools/list", "tools/call"), True),
+                               (("initialize", "tools/list", "tools/list", "tools/call"), True),
+                               (("initialize", "tools/list", "tools/list", "tools/list", "tools/call"), True),
+                               (("initialize", "tools/list", "tools/list", "tools/list", "tools/list", "tools/list", "tools/list", "tools/list", "tools/list", "tools/call"), True),
+                               (("initialize", "tools/call"), False),
+                               (("tools/list", "tools/list", "tools/call"), False),
+                               (("initialize", "tools/list", "tools/call", "tools/list"), False)):
             rows, expected, start, end = probe_capture(methods)
             value, ids = probe_frame(rows), set()
             with self.subTest(methods=methods):
-                if len(methods) in (3, 5):
+                if valid:
                     self.assertEqual(exchange.probe(value, b"held-prefix\n", expected, start, end, {"native"}, ids, "provider"), b"held-prefix\n" + cycle.stream(value["delta"]))
                     self.assertEqual(ids, {"123-456"})
                     with self.assertRaises(ValueError):
@@ -151,6 +154,17 @@ class CopilotCycleContracts(unittest.TestCase):
                 else:
                     with self.assertRaises(ValueError):
                         exchange.probe(value, b"held-prefix\n", expected, start, end, {"native"}, ids, "provider")
+
+    def test_repeated_probe_discovery_preserves_existing_stream_byte_bound(self):
+        rows, expected, start, end = probe_capture(("initialize", "tools/list", "tools/call"))
+        listing = encoded(rows[1]) + b"\n"
+        delta = encoded(rows[0]) + b"\n" + listing * ((1 << 20) // len(listing) + 1) + encoded(rows[2]) + b"\n"
+        prefix = b"held-prefix\n"
+        value = {"before_bytes": len(prefix), "before_sha256": cycle.sha(prefix), "after_bytes": len(prefix + delta),
+                 "after_sha256": cycle.sha(prefix + delta), "delta": stream(delta)}
+        self.assertGreater(len(delta), 1 << 20)
+        with self.assertRaises(ValueError):
+            exchange.probe(value, prefix, expected, start, end, {"native"}, set(), "provider")
 
     def test_extra_probe_lists_preserve_method_identity_time_facts_and_no_call_guards(self):
         faults = {"initialize": (3, "method", "initialize"), "call": (3, "method", "tools/call"),

@@ -3,6 +3,7 @@
 package pluginkitairepo_test
 
 import (
+	"bytes"
 	"testing"
 	"time"
 )
@@ -26,18 +27,35 @@ func copilotCycleProbeInert(methods []string) (*copilotProjectCycle, *copilotCyc
 	return c, r, facts, rows, start
 }
 
-func TestCopilotCycleProbeAcceptsOnlyMeasuredMethodCounts(t *testing.T) {
-	for _, methods := range [][]string{
-		{"initialize", "tools/list", "tools/call"},
-		{"initialize", "tools/list", "tools/list", "tools/list", "tools/call"},
-		{"initialize", "tools/list", "tools/list", "tools/call"},
-		{"initialize", "tools/list", "tools/list", "tools/list", "tools/list", "tools/call"},
+func TestCopilotCycleProbeAcceptsRepeatedDiscoveryBeforeOneCall(t *testing.T) {
+	for _, row := range []struct {
+		methods []string
+		valid   bool
+	}{
+		{[]string{"initialize", "tools/list", "tools/call"}, true},
+		{[]string{"initialize", "tools/list", "tools/list", "tools/call"}, true},
+		{[]string{"initialize", "tools/list", "tools/list", "tools/list", "tools/call"}, true},
+		{[]string{"initialize", "tools/list", "tools/list", "tools/list", "tools/list", "tools/list", "tools/list", "tools/list", "tools/list", "tools/call"}, true},
+		{[]string{"initialize", "tools/call"}, false},
+		{[]string{"tools/list", "tools/list", "tools/call"}, false},
+		{[]string{"initialize", "tools/list", "tools/call", "tools/list"}, false},
 	} {
-		c, r, facts, rows, start := copilotCycleProbeInert(methods)
+		c, r, facts, rows, start := copilotCycleProbeInert(row.methods)
 		err := c.probe(copilotReadinessEncode(t, rows), r, facts, start, start.Add(time.Second), "native", "provider")
-		if (err == nil) != (len(methods) == 3 || len(methods) == 5) {
-			t.Fatal("unmeasured probe graph count accepted or measured graph refused", methods, err)
+		if (err == nil) != row.valid {
+			t.Fatal("probe initialization/discovery/final call sequence differs", row.methods, err)
 		}
+	}
+}
+
+func TestCopilotCycleProbeRepeatedDiscoveryKeepsExistingByteBound(t *testing.T) {
+	c, r, facts, rows, start := copilotCycleProbeInert([]string{"initialize", "tools/list", "tools/call"})
+	listing := copilotReadinessEncode(t, rows[1:2])
+	body := copilotReadinessEncode(t, rows[:1])
+	body = append(body, bytes.Repeat(listing, (1<<20)/len(listing)+1)...)
+	body = append(body, copilotReadinessEncode(t, rows[2:])...)
+	if len(body) <= 1<<20 || c.probe(body, r, facts, start, start.Add(time.Second), "native", "provider") == nil {
+		t.Fatal("semantically ordered discovery exceeded the existing1MiB event-file bound")
 	}
 }
 

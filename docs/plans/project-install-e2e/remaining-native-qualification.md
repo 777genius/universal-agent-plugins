@@ -3094,3 +3094,22 @@ post-stable state snapshot exists. The intact-repair pre-call authority supports
 only offline stream/catalog/facts joins. This correction changes no production
 code, provider, native argv, pin, environment, authority, deadline or completion
 gate; a fresh full genuine lifecycle and independent raw reviews remain required.
+
+### Copilot semantic repeated-discovery sequence (2026-10-29)
+
+The next pinned1.0.103 run40890660942 reports initialize/list/list/call at stable-A;
+the prior run had three lists, while installed A/B have one. Complete offline
+native/provider/probe joins pass against the held pre-call recipe, without a
+post-stable state claim. The harmless probe's `tools/list` handler is stateless.
+The primary [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
+requires initialization before operations, and [tool discovery](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)
+defines listing without a fixed request count. Scheduling is an inference; count
+variation is directly observed. Both independent plan reviews approve replacing
+count enumeration with exactly initialize, one-or-more tools/list, and one final
+tools/call. Retain closed row schemas, one fresh PID/session/nonce, null pre-call
+facts, exact final facts, monotonic command timestamps, append-prefix joins and
+empty no-call deltas. Enforce the existing1MiB delta bound explicitly at the Go
+helper boundary; Python already enforces it. Add repeated-list positives and
+zero-list/reinitialization/post-call/extra-call/oversize/identity/facts controls.
+No native argv, provider, pin, environment, time budget or completion gate changes;
+all three failed captures remain failed/all-false pending fresh full lifecycle.

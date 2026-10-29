@@ -45,20 +45,25 @@ func (c *copilotProjectCycle) probe(delta []byte, r *copilotCycleRecipe, facts n
 		}
 		return nil
 	}
+	if len(delta) > 1<<20 {
+		return fmt.Errorf("Copilot cycle probe exceeds existing event-file bound")
+	}
 	if !bytes.HasSuffix(delta, []byte{'\n'}) || c.probeIDs[facts.Session] || session == facts.Session || call == facts.Session || c.nativeIDs[facts.Session] {
 		return fmt.Errorf("Copilot cycle probe is stale or shares native/provider identity")
 	}
 	lines := bytes.Split(bytes.TrimSuffix(delta, []byte{'\n'}), []byte{'\n'})
-	methods := []string{"initialize", "tools/list", "tools/call"}
-	if len(lines) == 5 {
-		methods = []string{"initialize", "tools/list", "tools/list", "tools/list", "tools/call"}
-	}
-	if len(lines) != len(methods) {
-		return fmt.Errorf("Copilot cycle exact observed initialize/list/call graph")
+	if len(lines) < 3 {
+		return fmt.Errorf("Copilot cycle initialize/list/call sequence")
 	}
 	last := start
-	for i, method := range methods {
-		value, err := projectNativeRuntimeJSON(lines[i])
+	for i, line := range lines {
+		method := "tools/list"
+		if i == 0 {
+			method = "initialize"
+		} else if i == len(lines)-1 {
+			method = "tools/call"
+		}
+		value, err := projectNativeRuntimeJSON(line)
 		row, ok := value.(map[string]any)
 		if err != nil || !ok || projectNativeRuntimeKeys(row, "method pid session nonce timestamp facts", "") != nil || row["method"] != method || row["pid"] != json.Number(fmt.Sprint(facts.PID)) || row["session"] != facts.Session || row["nonce"] != r.Nonce {
 			return fmt.Errorf("Copilot cycle probe method/session/scope")
@@ -69,7 +74,7 @@ func (c *copilotProjectCycle) probe(delta []byte, r *copilotCycleRecipe, facts n
 			return fmt.Errorf("Copilot cycle probe interval")
 		}
 		last = when
-		if i < len(methods)-1 {
+		if i < len(lines)-1 {
 			if row["facts"] != nil {
 				return fmt.Errorf("Copilot cycle startup has returned facts")
 			}
