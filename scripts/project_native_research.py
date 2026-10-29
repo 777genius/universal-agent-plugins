@@ -146,27 +146,35 @@ def acquire(spec, budget, *, node=False):
     maximum = spec["max_bytes"]
     if type(maximum) is not int or not 1 <= maximum <= 512 << 20:
         raise ValueError("compressed archive cap refused")
-    # No ambient proxy or credential handlers; HTTPS redirects are checked before
-    # reading and TLS verification remains the Python default.
-    class HTTPSRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, request, fp, code, message, headers, newurl):
-            target = urllib.parse.urlsplit(newurl)
-            if target.scheme != "https" or target.username or target.password:
-                raise ValueError("unsafe acquisition redirect refused")
-            return super().redirect_request(request, fp, code, message, headers, newurl)
+    transport = spec.get("transport")
+    if transport is not None:
+        if node or transport != "cursor-publisher-curl":
+            raise ValueError("unregistered acquisition transport")
+        from project_native_cursor_acquisition import download
+        body, resolved_url = download(spec, budget)
+    else:
+        # No ambient proxy or credential handlers; HTTPS redirects are checked before
+        # reading and TLS verification remains the Python default.
+        class HTTPSRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, request, fp, code, message, headers, newurl):
+                target = urllib.parse.urlsplit(newurl)
+                if target.scheme != "https" or target.username or target.password:
+                    raise ValueError("unsafe acquisition redirect refused")
+                return super().redirect_request(request, fp, code, message, headers, newurl)
 
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), HTTPSRedirect())
-    with opener.open(spec["url"], timeout=min(90, budget.check())) as response:
-        if urllib.parse.urlsplit(response.url).scheme != "https":
-            raise ValueError("non-HTTPS acquisition redirect refused")
-        body = bounded_read(BudgetReader(response, budget), maximum)
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), HTTPSRedirect())
+        with opener.open(spec["url"], timeout=min(90, budget.check())) as response:
+            if urllib.parse.urlsplit(response.url).scheme != "https":
+                raise ValueError("non-HTTPS acquisition redirect refused")
+            body = bounded_read(BudgetReader(response, budget), maximum)
+        resolved_url = response.url
     if spec.get("expected_bytes") is not None and len(body) != spec["expected_bytes"]:
         raise ValueError("archive size differs from reviewed pin")
     pin = spec.get("integrity")
     if pin is not None:
         native.verify_digest(body, pin)
     entries, contents = inventory_archive(body, spec, budget)
-    resolved = urllib.parse.urlsplit(response.url)
+    resolved = urllib.parse.urlsplit(resolved_url)
     return {"url": spec["url"], "resolved_origin": resolved.scheme + "://" + resolved.netloc, "bytes": len(body),
             "sha256": hashlib.sha256(body).hexdigest(), "integrity": pin,
             "pin_verified": pin is not None, "members": entries, "installer_executed": False}, contents
