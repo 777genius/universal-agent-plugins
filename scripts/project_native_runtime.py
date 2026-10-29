@@ -1541,7 +1541,7 @@ def prepare(selector, ctx):
                          "AGENTPLUGINS_LINTAI_BIN": str(scanner),
                          "AGENTPLUGINS_LINTAI_SHA256": scanner_ids[scanner],
                          "AGENTPLUGINS_LINTAI_ARCHIVE_SHA256": scanner_receipt["sha256"],
-                         "AGENTPLUGINS_" + client.upper() + "_BIN": str(binary),
+                         ("AGENTPLUGINS_PROJECT_NATIVE_GEMINI_EXECUTABLE" if client == "gemini" else "AGENTPLUGINS_" + client.upper() + "_BIN"): str(binary),
                          "AGENTPLUGINS_PROJECT_NATIVE_IDENTITY": str(identity_path),
                          "AGENTPLUGINS_PROJECT_NATIVE_OUTPUT": str(native_output), case["optin"]: "1"})
     selected_env["PLUGIN_KIT_AI_REPO_ROOT"] = str(SOURCE)
