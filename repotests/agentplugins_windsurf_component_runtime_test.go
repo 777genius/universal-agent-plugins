@@ -43,7 +43,7 @@ func (w *windComponentFixture) prepareRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, relative := range []string{"xdg-config/devin/cli", "xdg-cache/devin/cli", "xdg-data/devin/cli/logs", "xdg-data/devin/cli/plugins"} {
+	for _, relative := range []string{"xdg-config/devin/cli", "xdg-cache/devin/cli", "xdg-data/devin/cli/logs", "xdg-data/devin/cli/plugins", "xdg-data/devin/mcp/oauth"} {
 		if err := os.MkdirAll(filepath.Join(f.base.Root, relative), 0755); err != nil {
 			t.Fatal(err)
 		}

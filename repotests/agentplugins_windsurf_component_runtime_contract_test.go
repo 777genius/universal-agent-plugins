@@ -48,6 +48,10 @@ func TestWindsurfComponentStartupSeedsBeforeBaselinePreserveSafetyAndSharedRecip
 	if nativeSHA(t, cache) != "7445ff8769cba2e1b004c754a770a85293e7548228e4fa3d363263c96c9b6290" {
 		t.Fatal("fixed source telemetry seed differs from captured bytes")
 	}
+	mcp, err := windOwnedTree(w.f.ctx, filepath.Join(w.f.base.Root, "xdg-data", "devin", "mcp"))
+	if err != nil || len(mcp) != 2 || mcp["."].Kind != "directory" || mcp["oauth"].Kind != "directory" || mcp["."].Mode != 040755 || mcp["oauth"].Mode != 040755 {
+		t.Fatal("source-defined MCP storage must begin as only two empty ordinary0755 directories")
+	}
 	w.check(t)
 }
 
@@ -69,7 +73,7 @@ func TestWindsurfComponentRuntimeClosureFreezesPreviousLogsAndSeeds(t *testing.T
 	if err := w.runtimeClosure(before, after, start, end); err != nil {
 		t.Fatal("source-backed repeated inert log/maintenance pair refused", err)
 	}
-	for _, fault := range []string{"config", "cache", "uuid", "old-log", "old-log-mode", "log-dir", "unknown", "missing-old", "second-log", "size", "owner", "links", "lock-pid", "lock-mode", "lock-inode"} {
+	for _, fault := range []string{"config", "cache", "uuid", "oauth-file", "oauth-mode", "oauth-inode", "old-log", "old-log-mode", "log-dir", "unknown", "missing-old", "second-log", "size", "owner", "links", "lock-pid", "lock-mode", "lock-inode"} {
 		bad := make(map[string]windProfileRecord, len(after))
 		for key, record := range after {
 			bad[key] = record
@@ -80,6 +84,8 @@ func TestWindsurfComponentRuntimeClosureFreezesPreviousLogsAndSeeds(t *testing.T
 			key = "xdg-cache\x00devin/telemetry_state.json"
 		case "uuid":
 			key = "xdg-data\x00devin/cli/installation_id"
+		case "oauth-file", "oauth-mode", "oauth-inode":
+			key = "xdg-data\x00devin/mcp/oauth"
 		case "old-log", "old-log-mode", "missing-old":
 			key = windRuntimeLogs + "/devin_20261028-195926_5805.log"
 		case "log-dir":
@@ -93,6 +99,10 @@ func TestWindsurfComponentRuntimeClosureFreezesPreviousLogsAndSeeds(t *testing.T
 		switch fault {
 		case "unknown":
 			bad["xdg-data\x00devin/cli/foreign"] = r
+		case "oauth-file":
+			bad[key+"/unexpected.json"] = bad[windRuntimeLogs+"/devin_20261028-195926_5806.log"]
+		case "oauth-mode":
+			r.Mode = 040700
 		case "second-log":
 			bad[windRuntimeLogs+"/devin_20261028-195926_5807.log"] = bad[windRuntimeLogs+"/devin_20261028-195926_5806.log"]
 		case "missing-old":
@@ -105,7 +115,7 @@ func TestWindsurfComponentRuntimeClosureFreezesPreviousLogsAndSeeds(t *testing.T
 			r.Links = 2
 		case "old-log-mode", "lock-mode":
 			r.Mode = 0100600
-		case "log-dir", "lock-inode":
+		case "log-dir", "lock-inode", "oauth-inode":
 			r.Inode++
 		default:
 			r.SHA256 = strings.Repeat("0", 64)
@@ -180,7 +190,7 @@ func TestWindsurfComponentRuntimeTelemetryRewritePreservesExactAuthorityAndBytes
 }
 
 func TestWindsurfComponentRuntimeDoesNotAdoptMutationAfterValidatedFrame(t *testing.T) {
-	for _, fault := range []string{"log", "uuid", "cache", "cache-timestamp", "unknown"} {
+	for _, fault := range []string{"log", "uuid", "cache", "cache-timestamp", "oauth-file", "unknown"} {
 		w := windComponentInert(t)
 		start := time.Date(2026, 10, 28, 19, 59, 26, 0, time.UTC)
 		before := w.profile(t)
@@ -196,6 +206,8 @@ func TestWindsurfComponentRuntimeDoesNotAdoptMutationAfterValidatedFrame(t *test
 			path = filepath.Join(root, "installation_id")
 		case "cache", "cache-timestamp":
 			path = filepath.Join(w.f.base.Root, "xdg-cache", "devin", "telemetry_state.json")
+		case "oauth-file":
+			path = filepath.Join(w.f.base.Root, "xdg-data", "devin", "mcp", "oauth", "late.json")
 		case "unknown":
 			path = filepath.Join(root, "unknown")
 		}

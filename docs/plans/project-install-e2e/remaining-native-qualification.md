@@ -2088,3 +2088,18 @@ failed capture remains failed with every qualification flag false.
 Both independent code reviews also approve the exact predicate and accepted-frame
 copy. Six focused startup/runtime controls pass in0.100s; affected all-enabled
 lint and the unfiltered six-linter architecture/size gate report0issues.
+
+### Windsurf empty native MCP storage directories (2026-10-29)
+
+Actual07756a69 run40888304062 passes the telemetry guard and reaches a successful
+account-free `mcp list`, then refuses two new ordinary0755 directories:
+`xdg-data/devin/mcp` and its empty `oauth` child. The complete seven-entry delta
+contains only those directories, the expected log/maintenance changes and fixed
+telemetry timestamps; original config is unchanged. Pinned path joins at638e237,
+638e279 and638e29e build XDG_DATA_HOME/devin/mcp/oauth; constructor7e73880 uses
+recursive0777 directory creation, yielding the observed0755 under the held umask.
+Both independent plan reviews approve adding only this empty directory chain to
+the existing initial pre-child seed. Freeze it before any vendor command, with
+no later-write exception, OAuth file, credential, approval or config mutation.
+The existing complete profile closure must reject later file/mode/identity drift;
+this failed capture and every qualification flag remain unchanged/all-false.
