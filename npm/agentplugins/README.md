@@ -171,7 +171,8 @@ and install the package. The verified 0.1.94 installer does not expose
 `agentplugins author`. Some examples in the
 [Build guide](https://universal-agent-plugins.com/docs/en/build/) require a
 qualified authoring build or a source build. The TypeScript Management SDK is
-a source development package, not a public npm release.
+the separate npm package `universal-agent-plugins-management-sdk`; it drives
+the `manage` commands of CLI 0.1.95 and newer.
 
 ## Safety and verification
 

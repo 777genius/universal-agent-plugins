@@ -343,8 +343,9 @@ behavior](docs/CODEX_TRANSPORT_EVIDENCE.md).
 ## Already built with UAP SDK
 
 Build with reusable Go installer components and typed runtime hooks. The
-[TypeScript Management SDK](sdks/typescript/README.md) is available in source as
-a development package; it has no public npm release.
+[TypeScript Management SDK](sdks/typescript/README.md) is published on npm as
+`universal-agent-plugins-management-sdk` and drives the `agentplugins` 0.1.95+
+management engine.
 
 <table>
   <tr>

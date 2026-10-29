@@ -2,7 +2,7 @@
 
 This is the Go runtime SDK for typed client hooks. For embedding installation
 and dependency management, use the [Go installer facade](../install/integrationctl/agentplugins/installer/README.md);
-for the separate source development package, see the
+for the separate npm package `universal-agent-plugins-management-sdk`, see the
 [TypeScript Management SDK](../sdks/typescript/README.md). These APIs have
 different responsibilities and release versions.
 
