@@ -114,6 +114,8 @@
 }
 @media (max-width: 640px) {
   .unified-catalog__heading .unified-catalog__title {
+    min-width: 0;
+    max-width: 100%;
     font-size: 1.55rem;
   }
   .catalog-mode {

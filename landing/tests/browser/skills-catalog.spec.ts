@@ -75,7 +75,7 @@ test('Skills search reveals install choices, copies the exact command and surviv
   await expect(page.getByRole('checkbox', { name: /ChatGPT|VS Code/ })).toHaveCount(0);
   await page.getByRole('checkbox', { name: /Codex/ }).click();
   await page.keyboard.press('Escape');
-  await expect(card.locator('pre')).toContainText('--target codex');
+  await expect(card.locator('.plugin-card__install-panel pre')).toContainText('--target codex');
   await card.getByRole('button', { name: 'Copy command', exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
@@ -94,9 +94,9 @@ test('Skills search reveals install choices, copies the exact command and surviv
   await expect(catalog.getByRole('searchbox', { name: 'Search Skills', exact: true })).toHaveValue(
     'frontend',
   );
-  await expect(catalog.locator('.skill-card').first().locator('pre')).toContainText(
-    '--target codex',
-  );
+  await expect(
+    catalog.locator('.skill-card').first().locator('.plugin-card__install-panel pre'),
+  ).toContainText('--target codex');
   await page.goto('./?tab=skills');
   await expect(
     page.getByRole('heading', { level: 2, name: 'Find your Skills', exact: true }),
@@ -147,4 +147,36 @@ test('Skills renders in 48-item increments and requests the next upstream page o
     .click();
   await expect(catalog.locator('.skill-card')).toHaveCount(248);
   expect(pages).toEqual([0, 1]);
+});
+
+test('unsupported standalone source is explicit and never requests a report', async ({ page }) => {
+  const reportRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/reports/skillspector/')) reportRequests.push(request.url());
+  });
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            ...skill(),
+            source: { kind: 'external', url: 'https://skills.sh/example/external' },
+            availability: 'unsupported-source',
+          },
+        ],
+        page: 0,
+        total: 1,
+        hasMore: false,
+        view: 'popular',
+        cache: { status: 'fresh', fetchedAt: '2026-10-28T10:00:00Z' },
+      },
+    }),
+  );
+  await page.goto('plugins/?tab=skills');
+  const assessment = page.locator('.skill-card .skillspector');
+  await expect(assessment).toHaveClass(/skillspector--unsupported/);
+  await assessment.locator(':scope > summary').click();
+  await expect(assessment).toContainText('This source type is not supported');
+  await expect(assessment).not.toContainText('other plugin components');
+  expect(reportRequests).toEqual([]);
 });

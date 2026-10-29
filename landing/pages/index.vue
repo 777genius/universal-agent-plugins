@@ -68,6 +68,7 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
     <PageBackground />
     <RegistryHero :registry="registry" />
     <RegistryRestore />
+    <RegistryDependencies />
     <RegistryDirectory :registry="registry" />
     <RegistryWhy />
     <BuiltWithSection v-if="showcaseAvailable" />

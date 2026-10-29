@@ -2,14 +2,15 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { test } from 'node:test';
 import { stripTypeScriptTypes } from 'node:module';
-import { createI18n } from 'vue-i18n';
-import { computed, ref, watch, effectScope, nextTick } from 'vue';
+import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
+import { computed, reactive, ref, watch, effectScope, nextTick, type ComputedRef } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { assembleDownloadContent, downloadTechnical } from '../data/download.ts';
 import { docsAvailability, resolveDocsLink, ownedDocsRoot } from '../data/docsAvailability.ts';
+import { isRetiredArchive } from '../../website/tools/lib/public-routes.mjs';
 import { registryFaqItems } from '../data/registryFaq.ts';
 import { clientLandingPages } from '../data/clients.ts';
-import { isKnownLocale } from '../data/i18n.ts';
+import { isKnownLocale, publishedLocales, type PublishedLocale } from '../data/i18n.ts';
 import { localizedPath } from '../utils/localizedRoutes.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { normalizeInstallPlatform, recommendedInstallChannelId } from '../utils/installPlatform.ts';
@@ -109,13 +110,14 @@ test('narrow overlay preserves every active English field and technical byte', (
   }
 });
 
-test('owned docs routes preserve extensions and current fragments; UK is explicitly English', () => {
+test('owned docs routes preserve extensions and fragments with explicit fallback for all landing locales', () => {
   for (const id of Object.keys(docsAvailability) as Array<keyof typeof docsAvailability>) {
-    for (const locale of ['en', 'ru', 'uk']) {
+    for (const locale of ['en', 'ru', 'es', 'fr', 'zh', 'uk', 'hi', 'ar', 'pt']) {
       const resolved = resolveDocsLink(id, locale);
-      const language = locale === 'ru' ? 'ru' : 'en';
+      const language = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
       assert.equal(resolved.url, `${ownedDocsRoot}${language}/${docsAvailability[id]}`);
-      assert.equal(resolved.englishFallback, locale === 'uk');
+      assert.equal(resolved.englishFallback, locale !== language);
+      assert.equal(isRetiredArchive(`${language}/${docsAvailability[id]}`), false, resolved.url);
       const path = docsAvailability[id].replace(/\.html$/, '.md') || 'index.md';
       assert.ok(
         existsSync(new URL(`../../website/source/${language}/${path}`, import.meta.url)),
@@ -123,14 +125,14 @@ test('owned docs routes preserve extensions and current fragments; UK is explici
       );
     }
   }
-  for (const locale of ['en', 'ru', 'uk']) {
+  for (const locale of ['en', 'ru', 'es', 'fr', 'zh', 'uk', 'hi', 'ar', 'pt']) {
     const result = resolveDocsLink(
       'quickstart',
       locale,
       `${ownedDocsRoot}en/guide/quickstart.html?source=x#build-plugins`,
     );
     assert.ok(result.url.endsWith('.html?source=x#build-plugins'));
-    const language = locale === 'ru' ? 'ru' : 'en';
+    const language = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
     assert.ok(
       readFileSync(
         new URL(`../../website/source/${language}/guide/quickstart.md`, import.meta.url),
@@ -149,8 +151,8 @@ test('owned docs routes preserve extensions and current fragments; UK is explici
 
 test('custom domain docs preserve locale, query, fragment and English fallback', () => {
   const root = 'https://universal-agent-plugins.com/docs/';
-  for (const locale of ['en', 'ru', 'uk', 'es', 'fr', 'zh']) {
-    const language = locale === 'uk' ? 'en' : locale;
+  for (const locale of ['en', 'ru', 'es', 'fr', 'zh', 'uk', 'hi', 'ar', 'pt']) {
+    const language = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
     const result = resolveDocsLink(
       'quickstart',
       locale,
@@ -159,8 +161,105 @@ test('custom domain docs preserve locale, query, fragment and English fallback',
     assert.deepEqual(result, {
       url: `${root}${language}/guide/quickstart.html?source=x#build-plugins`,
       language,
-      englishFallback: locale === 'uk',
+      englishFallback: locale !== language,
     });
+  }
+});
+
+test('docs links and FAQ retain every owned base across all landing locales and preserve external overrides', () => {
+  const source = read('composables/useDocsLinks.ts')
+    .replace(/import[\s\S]*?from\s*['"][^'"]+['"];\n/g, '')
+    .replace('export const useDocsLinks', 'const useDocsLinks');
+  const localeMessages = Object.fromEntries(
+    publishedLocales.map((locale) => [locale, JSON.parse(read(`locales/${locale}.json`))]),
+  ) as Record<PublishedLocale, LocaleMessageDictionary<VueMessageType>>;
+  const composer = createI18n<[LocaleMessageDictionary<VueMessageType>], PublishedLocale, false>({
+    legacy: false,
+    locale: 'en',
+    messages: localeMessages,
+  }).global;
+  const config = reactive({
+    public: { docsUrl: `${ownedDocsRoot}en/`, quickstartUrl: '' },
+  });
+  const factory = new Function(
+    'computed', 'docsAvailability', 'resolveDocsLink', 'useI18n', 'useRuntimeConfig',
+    `${stripTypeScriptTypes(source)}\nreturn useDocsLinks;`,
+  );
+  const createLinks = () => factory(
+    computed, docsAvailability, resolveDocsLink, () => composer, () => config,
+  )();
+  const faqSource = read('components/sections/FAQSection.vue')
+    .match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1]!
+    .replace(/import[\s\S]*?from\s*['"][^'"]+['"];\n/g, '')
+    .replace(/\bmdi[A-Za-z]+\b/g, "'icon'");
+  const faqFactory = new Function(
+    'computed', 'ref', 'watch', 'useLandingContent', 'useI18n', 'useAnalytics', 'useDocsLinks',
+    `${stripTypeScriptTypes(faqSource)}\nreturn { faqQuickLinks };`,
+  );
+  for (const root of [
+    ownedDocsRoot,
+    'https://777genius.github.io/docs/',
+    'https://universal-agent-plugins.com/docs/',
+  ]) {
+    config.public.docsUrl = `${root}en/`;
+    const links = createLinks();
+    const faq = faqFactory(
+      computed, ref, watch,
+      () => ({ content: ref({ faq: [] }) }),
+      () => composer,
+      () => ({ trackFaqExpand: () => {} }),
+      () => links,
+    ) as { faqQuickLinks: ComputedRef<Array<{ title: string; body: string; href: string }>> };
+    for (const locale of publishedLocales) {
+      composer.locale.value = locale;
+      const language = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
+      const fallback = language !== locale;
+      assert.equal(links.docsUrl.value, `${root}${language}/`);
+      assert.equal(links.quickstartUrl.value, `${root}${language}/guide/quickstart.html`);
+      assert.equal(links.useGuideUrl.value, `${root}${language}/use/`);
+      assert.equal(links.buildGuideUrl.value, `${root}${language}/build/`);
+      assert.equal(links.supportBoundaryUrl.value, `${root}${language}/build/`);
+      assert.equal(links.customLogicGuideUrl.value, `${root}${language}/build/checks.html`);
+      assert.equal(
+        links.restoreGuideUrl.value,
+        `${root}${language}/use/manage.html#restore-project-dependencies`,
+      );
+      const faqDestinations = ['guide/quickstart.html', 'build/', 'use/'];
+      const faqTitles = ['quickstartTitle', 'buildTitle', 'useTitle'];
+      assert.equal(faq.faqQuickLinks.value.length, faqDestinations.length);
+      for (const [index, item] of faq.faqQuickLinks.value.entries()) {
+        assert.equal(item.href, `${root}${language}/${faqDestinations[index]}`);
+        const title = composer.t(`faq.quickLinks.${faqTitles[index]}`);
+        assert.equal(
+          item.title,
+          fallback ? composer.t('shell.docs.englishLabel', { label: title }) : title,
+        );
+      }
+      assert.equal(links.restoreGuideEnglishFallback.value, fallback);
+      assert.equal(links.quickstartEnglishFallback.value, fallback);
+      assert.equal(links.useGuideEnglishFallback.value, fallback);
+      assert.equal(links.buildGuideEnglishFallback.value, fallback);
+      assert.equal(
+        links.docsLabel('Restore', links.restoreGuideEnglishFallback.value),
+        fallback ? composer.t('shell.docs.englishLabel', { label: 'Restore' }) : 'Restore',
+      );
+    }
+  }
+  config.public.docsUrl = 'https://example.test/custom/en/';
+  config.public.quickstartUrl = 'https://example.test/start?keep=yes#section';
+  const customLinks = createLinks();
+  for (const locale of publishedLocales) {
+    composer.locale.value = locale;
+    const language = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
+    assert.equal(customLinks.docsUrl.value, 'https://example.test/custom/en/');
+    assert.equal(customLinks.quickstartUrl.value, 'https://example.test/start?keep=yes#section');
+    assert.equal(customLinks.quickstartEnglishFallback.value, false);
+    assert.equal(
+      customLinks.restoreGuideUrl.value,
+      'https://example.test/custom/en/use/manage.html#restore-project-dependencies',
+    );
+    assert.equal(customLinks.restoreGuideEnglishFallback.value, false);
+    assert.equal(customLinks.buildGuideUrl.value, `${ownedDocsRoot}${language}/build/`);
   }
 });
 
@@ -269,7 +368,7 @@ test('download and client strip retain every original support qualification', ()
   }
   const source = read('components/sections/DownloadSection.vue');
   for (const field of ['note', 'activation']) assert.ok(source.includes(`registryUi.clients.${'${client.id}'}.${field}`));
-  assert.equal(clientLandingPages.length, 14);
+  assert.equal(clientLandingPages.length, 15);
 });
 
 test('shell agent links keep language prefixes and canonical trailing slashes', () => {

@@ -96,8 +96,10 @@ def _probe(ctx, owned, label, arguments, project="a"):
     directory = _runtime_bin(ctx)
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
         raise ValueError("Kiro acquired companion PATH changed")
+    key = getattr(ctx, "kiro_api_key", "")
+    private_env = {"KIRO_API_KEY": key} if key and label.endswith("raw-list") else None
     try:
-        record, stdout, stderr = ctx.probe(label, list(arguments), project=project, timeout=30)
+        record, stdout, stderr = ctx.probe(label, list(arguments), project=project, extra_env=private_env, timeout=30)
     finally:
         _runtime_bin(ctx)
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":

@@ -1,12 +1,12 @@
 # plugin-kit-ai
 
-> **Historical v1 reference — baseline 1.2.4.** The commands and capabilities
-> below describe the preserved YAML v1 workflow. Released Milestone A static
-> authoring is available from npm as `universal-agent-plugins` or `plugin-kit-ai@2.0.5`;
-> see the [current Build guide](../website/source/en/build/index.md). Runtime/dev/bootstrap, migration,
-> export and publication remain deferred from v2. Use `plugin-kit-ai@1.2.4`
-> explicitly for the historical instructions below. npm, PyPI, Homebrew,
-> GitHub Releases and public-channel E2E have been verified for Milestone A.
+> **Historical YAML CLI reference — baseline 1.2.4.** The instructions below
+> preserve the retired `plugin-kit-ai` workflow. For the current public CLI,
+> install `universal-agent-plugins` and read the [Use guide](../website/source/en/use/index.md).
+> The [Build guide](../website/source/en/build/index.md) explains standard
+> `plugin.json` authoring and identifies commands that need a qualified/source
+> build. Existing `plugin-kit-ai` artifacts remain immutable history; this
+> page does not qualify their old commands for the current installer.
 
 [![Required](https://github.com/777genius/plugin-kit-ai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/777genius/plugin-kit-ai/actions/workflows/ci.yml)
 [![Docs](https://github.com/777genius/plugin-kit-ai/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/777genius/plugin-kit-ai/actions/workflows/docs.yml)
@@ -187,10 +187,10 @@ Docs site:
 
 Project policies:
 
-- support boundary: [docs/SUPPORT.md](docs/SUPPORT.md)
-- contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
-- security: [SECURITY.md](SECURITY.md)
-- code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- support boundary: [docs/SUPPORT.md](SUPPORT.md)
+- contributing: [CONTRIBUTING.md](../CONTRIBUTING.md)
+- security: [SECURITY.md](../SECURITY.md)
+- code of conduct: [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md)
 
 ## Choose What You Are Building
 
@@ -345,9 +345,9 @@ Use the starter templates for Codex and Claude across Go, Python, and Node/TypeS
 
 Start here:
 
-- [examples/starters/README.md](examples/starters/README.md)
-- [examples/local/README.md](examples/local/README.md)
-- [docs/CHOOSING_HELPER_DELIVERY_MODE.md](docs/CHOOSING_HELPER_DELIVERY_MODE.md)
+- [examples/starters/README.md](../examples/starters/README.md)
+- [examples/local/README.md](../examples/local/README.md)
+- [docs/CHOOSING_HELPER_DELIVERY_MODE.md](CHOOSING_HELPER_DELIVERY_MODE.md)
 
 ### Production-Ready Plugin Repo
 
@@ -388,9 +388,9 @@ Use carefully:
 
 For the precise contract:
 
-- [docs/generated/target_support_matrix.md](docs/generated/target_support_matrix.md)
-- [docs/generated/support_matrix.md](docs/generated/support_matrix.md)
-- [docs/SUPPORT.md](docs/SUPPORT.md)
+- [docs/generated/target_support_matrix.md](generated/target_support_matrix.md)
+- [docs/generated/support_matrix.md](generated/support_matrix.md)
+- [docs/SUPPORT.md](SUPPORT.md)
 
 ## Path Summary
 
@@ -410,9 +410,9 @@ Go SDK packages:
 
 Useful starting points:
 
-- [sdk/README.md](sdk/README.md)
-- [docs/generated/support_matrix.md](docs/generated/support_matrix.md)
-- [docs/SUPPORT.md](docs/SUPPORT.md)
+- [sdk/README.md](../sdk/README.md)
+- [docs/generated/support_matrix.md](generated/support_matrix.md)
+- [docs/SUPPORT.md](SUPPORT.md)
 
 Common CLI commands:
 
@@ -429,7 +429,7 @@ Common CLI commands:
 `plugin-kit-ai install` stays intentionally narrow: it installs third-party plugin binaries from GitHub Releases, verifies `checksums.txt`, and does not act as a self-update path for the CLI itself.
 
 For automation, `plugin-kit-ai validate --format json` now emits the versioned `plugin-kit-ai/validate-report` contract with `schema_version: 1` and explicit outcomes `passed`, `failed`, or `failed_strict_warnings`.
-For Codex lane selection, use [docs/CODEX_TARGET_BOUNDARY.md](docs/CODEX_TARGET_BOUNDARY.md). For the validation ABI itself, use [docs/VALIDATE_JSON_CONTRACT.md](docs/VALIDATE_JSON_CONTRACT.md).
+For Codex lane selection, use [docs/CODEX_TARGET_BOUNDARY.md](CODEX_TARGET_BOUNDARY.md). For the validation ABI itself, use [docs/VALIDATE_JSON_CONTRACT.md](VALIDATE_JSON_CONTRACT.md).
 
 ## Build And Test
 
@@ -463,17 +463,17 @@ Main repo areas:
 
 Canonical docs:
 
-- [docs/generated/support_matrix.md](docs/generated/support_matrix.md)
-- [docs/generated/target_support_matrix.md](docs/generated/target_support_matrix.md)
-- [docs/SUPPORT.md](docs/SUPPORT.md)
-- [docs/CODEX_TARGET_BOUNDARY.md](docs/CODEX_TARGET_BOUNDARY.md)
-- [docs/VALIDATE_JSON_CONTRACT.md](docs/VALIDATE_JSON_CONTRACT.md)
-- [docs/PRODUCTION.md](docs/PRODUCTION.md)
-- [docs/INSTALL_COMPATIBILITY.md](docs/INSTALL_COMPATIBILITY.md)
-- [docs/STATUS.md](docs/STATUS.md)
+- [docs/generated/support_matrix.md](generated/support_matrix.md)
+- [docs/generated/target_support_matrix.md](generated/target_support_matrix.md)
+- [docs/SUPPORT.md](SUPPORT.md)
+- [docs/CODEX_TARGET_BOUNDARY.md](CODEX_TARGET_BOUNDARY.md)
+- [docs/VALIDATE_JSON_CONTRACT.md](VALIDATE_JSON_CONTRACT.md)
+- [docs/PRODUCTION.md](PRODUCTION.md)
+- [docs/INSTALL_COMPATIBILITY.md](INSTALL_COMPATIBILITY.md)
+- [docs/STATUS.md](STATUS.md)
 
 Maintainer-only historical context:
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [docs/FOUNDATION_REWRITE_VNEXT.md](docs/FOUNDATION_REWRITE_VNEXT.md)
-- [docs/adr/README.md](docs/adr/README.md)
+- [docs/ARCHITECTURE.md](ARCHITECTURE.md)
+- [docs/FOUNDATION_REWRITE_VNEXT.md](FOUNDATION_REWRITE_VNEXT.md)
+- [docs/adr/README.md](adr/README.md)

@@ -20,6 +20,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kimi"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/pi"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/qoder"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/vscode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
@@ -48,6 +49,7 @@ func buildRegistry(project bool) *clients.Registry {
 		workspace = vscode.NewProject()
 	}
 	registry, err := clients.NewRegistry(
+		pi.New(),
 		codex.New(),
 		chatgpt.New(),
 		cursor.New(),

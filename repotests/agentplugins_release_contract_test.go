@@ -3,6 +3,7 @@ package pluginkitairepo_test
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -138,8 +139,16 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustAppearBefore(t, releaseWorkflow, "uses: ./.github/workflows/agentplugins-platform-proof.yml", "gh api -X PATCH")
 	mustContain(t, releaseWorkflow, "uses: ./.github/workflows/agentplugins-platform-proof.yml")
 	mustContain(t, releaseWorkflow, "expected_commit: ${{ needs.validate.outputs.commit }}")
-	mustContain(t, releaseWorkflow, `test "${WORKFLOW_REF}" = "refs/heads/main"`)
-	mustContain(t, releaseWorkflow, "release workflow source does not match the exact tagged main commit")
+	mustContain(t, releaseWorkflow, `refs/heads/main|"refs/tags/${TAG}")`)
+	mustContain(t, releaseWorkflow, `git merge-base --is-ancestor "${head_commit}" refs/remotes/origin/main`)
+	mustContain(t, releaseDraftJob, "needs: [validate, qualify-go, qualify-npm, build]")
+	for _, name := range []string{"qualify-go", "qualify-npm", "build"} {
+		mustContain(t, yamlJob(t, releaseWorkflow, name), "needs: validate")
+	}
+	mustContain(t, draftReceiptJob, `--npm-tarball-file "${NPM_TARBALL_FILE}"`)
+	mustContain(t, reuseJob, `gh run watch "${QUALIFIED_RUN_ID}"`)
+	mustContain(t, yamlJob(t, releaseWorkflow, "dispatch-promotion"), "inputs.auto_publish == true")
+	mustContain(t, releaseWorkflow, "release workflow source does not match the exact tagged commit")
 	mustContain(t, releaseWorkflow, "commits/${COMMIT}/pulls")
 	mustContain(t, releaseWorkflow, "release commit must come from a merged pull request into main")
 	mustContain(t, releaseWorkflow, "check-runs?filter=latest&per_page=100")
@@ -170,8 +179,8 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"agentplugins-v[0-9]+",
 		"Verify exact public release identity and attestations",
 		"release-assets.js verify",
-		"stage-release.js",
-		"npm-public-contract.js stage-outputs",
+		"scripts/reuse-agentplugins-npm-artifact.py",
+		"qualified_run_id:",
 		"agentplugins-npm-${{ steps.stage.outputs.version }}",
 	} {
 		mustContain(t, npmWorkflow, want)
@@ -180,15 +189,17 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	for _, want := range []string{
 		"Verify exact public release identity and attestations",
 		"release-assets.js verify",
-		"stage-release.js",
-		"AGENTPLUGINS_STAGED_TEST_CHILD=1",
-		`AGENTPLUGINS_DETACHED_ASSERT_ROOT="${stage}"`,
-		"npm-public-contract.js stage-outputs",
+		"scripts/reuse-agentplugins-npm-artifact.py",
+		`--run-id "${QUALIFIED_RUN_ID}" --run-attempt "${QUALIFIED_RUN_ATTEMPT}"`,
+		"npm-package.json",
 	} {
 		mustContain(t, npmPrepareJob, want)
 	}
-	mustAppearBefore(t, npmPrepareJob, "stage-release.js", "AGENTPLUGINS_STAGED_TEST_CHILD=1")
-	mustAppearBefore(t, npmPrepareJob, "AGENTPLUGINS_STAGED_TEST_CHILD=1", "npm pack --ignore-scripts")
+	mustAppearBefore(t, npmPrepareJob, "release-assets.js verify", "scripts/reuse-agentplugins-npm-artifact.py")
+	if regexp.MustCompile(`(?m)^\s*(?:run:\s*)?npm\s+(?:test|pack)(?:\s|$)`).MatchString(npmPrepareJob) {
+		t.Fatal("npm publication preparation must reuse the qualified archive without testing or repacking")
+	}
+	mustNotContain(t, npmPrepareJob, "stage-release.js")
 	for _, want := range []string{
 		"needs: prepare",
 		"environment: npm-agentplugins",
@@ -229,7 +240,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	} {
 		mustNotContain(t, npmWorkflow, unwanted)
 	}
-	mustAppearBefore(t, npmWorkflow, "release-assets.js verify", "stage-release.js")
+	mustAppearBefore(t, npmWorkflow, "release-assets.js verify", "scripts/reuse-agentplugins-npm-artifact.py")
 	mustAppearBefore(t, npmWorkflow, "npm publish", "Verify metadata, signatures, provenance, and isolated lifecycle")
 	mustNotContain(t, npmPublicVerifyJob, "NPM_TOKEN")
 	mustNotContain(t, npmPublicVerifyJob, "NODE_AUTH_TOKEN")
@@ -326,7 +337,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"When the owner request authorizes publication",
 		"dispatch the existing producer with `publish_release=true`",
 		"all six native platform proofs, its verified",
-		"Every dispatch still requires the exact current `main`/tag/workflow-source gate",
+		"Every dispatch still requires the exact frozen tag/workflow-source gate",
 		"This runbook does not establish that any new draft has already qualified",
 		"requires a merged pull request into",
 		"Repository settings are not treated as the release proof",

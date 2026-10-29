@@ -270,19 +270,19 @@
     "customLogicDescription": "Choose this when your code, hooks, or runtime behavior define the product."
   },
   "pluginAuthoring": {
-    "eyebrow": "Standard-first authoring",
-    "title": "Use plugins. Build plugins.",
-    "subtitle": "Install and manage Agent Plugins 1.0 packages, or build a portable plugin.json package with the standard authoring flow.",
+    "eyebrow": "Build plugins",
+    "title": "Use plugins / Build plugins",
+    "subtitle": "Install and manage standard packages, or write your own plugin.json package and check it with the appropriate tools.",
     "use": {
-      "badge": "Available now",
+      "badge": "CLI 0.1.94",
       "title": "Use plugins",
-      "description": "Install, inspect, update, repair, and remove packages with the existing installer.",
-      "cta": "Open the Use guide"
+      "description": "Find, preview, install and maintain packages with the released installer.",
+      "cta": "Open Use guide"
     },
     "build": {
-      "badge": "Available now",
+      "badge": "Manual or source build",
       "title": "Build plugins",
-      "description": "Build a portable Agent Plugins 1.0 package: root plugin.json with optional skills/ and mcp.json, then use the offline init → validate → inspect → static test loop. Static authoring is available in universal-agent-plugins; runtime execution, export and publication are not included.",
+      "description": "Write a standard package with root plugin.json and optional skills/ and mcp.json. The released installer validates and installs it. Scaffolding and authoring checks require the source build described in the Build guide; static checks do not prove runtime or activation.",
       "cta": "Open the Build guide"
     }
   },
@@ -305,7 +305,7 @@
       "quickstartTitle": "Open quickstart",
       "quickstartBody": "The shortest supported path from install to a validated repo.",
       "buildTitle": "Open Build guide",
-      "buildBody": "Create and check plugin.json packages with agentplugins author.",
+      "buildBody": "Write plugin.json packages by hand or use source-build authoring tools, then validate and install them with the released manager.",
       "useTitle": "Open Use guide",
       "useBody": "Find, preview, install, and maintain plugins with agentplugins."
     }
@@ -356,20 +356,33 @@
     "specLink": "Read the Agent Plugins 1.0 specification",
     "compatibilityLink": "Client compatibility (English)",
     "limitations": "Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.",
-    "versions": "Agent Plugins authoring available: universal-agent-plugins; GitHub: agentplugins-v*.",
-    "availability": "Agent Plugins authoring available",
-    "releaseScope": "Agent Plugins authoring is available in universal-agent-plugins; GitHub: agentplugins-v*. npm, Homebrew, native archives, GitHub Releases and public-channel E2E are verified. The release provides static authoring; runtime execution, development servers, dependency bootstrap, export and publication are not included.",
+    "versions": "Verified native installer: CLI 0.1.94; npm package name: universal-agent-plugins; GitHub release tags: agentplugins-v*.",
+    "availability": "Manual packages and source-build authoring",
+    "releaseScope": "GitHub Releases and Homebrew provide the CLI 0.1.94 installer, which does not include agentplugins author. npm is another installation channel; versions can differ, so check your CLI version before using 0.1.94-only behavior. Use an authoring-enabled source build for the author commands in the Build guide. The generated API reference retains its historical 0.1.65 provenance; it does not describe the current installer download.",
     "buildGuideLink": "Open the Build guide"
   },
   "shell": {
+    "dependencies": {
+      "eyebrow": "Dependencies, connected",
+      "title": "Two plugins. One shared dependency.",
+      "description": "Install a plugin with its dependencies. Shared dependencies at the same compatible version are installed once.",
+      "demoPackage": "Demonstration package",
+      "installed": "Installed",
+      "alreadyInstalled": "Already installed",
+      "shared": "shared",
+      "caption": "Illustrative packages and dependency graph. Playwright is shared by both packages; Context7 is already installed.",
+      "graphDescription": "marketing-kit depends on Playwright, HubSpot and Notion. Web Design Kit depends on the same Playwright package, Figma and Context7. All packages are installed; Context7 was already installed."
+    },
     "restore": {
-      "title": "Same plugin versions on your next machine",
+      "title": "Same plugin versions. Across your team.",
       "guide": "Guide",
-      "from": "On this computer",
-      "to": "On your next computer",
-      "transfer": "Copy {manifest} and {lockfile} to the other computer between these commands.",
+      "from": "In your project",
+      "to": "Your teammate",
+      "transfer": "Commit {manifest} and {lockfile} with your project so teammates can restore the same versions.",
       "requirements": "Restoration requires the recorded sources to remain available and clients supported by dependency management.",
-      "excludes": "Sign-ins, secrets, settings and plugin data are not transferred."
+      "excludes": "Sign-ins, secrets, settings and plugin data are not transferred.",
+      "subtitle": "Install for a project. Commit the lockfile. Let teammates restore the same versions.",
+      "commit": "Commit uap.toml + uap.lock"
     },
     "docs": {
       "englishLabel": "{label} (documentation in English)"
@@ -409,7 +422,7 @@
       "items": {
         "0": {
           "question": "Which AI agents are supported?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, and Kimi Code are supported or prepared through an explicit client-specific path."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: each has a client-specific installation or preparation path. Package components, scope and activation requirements determine compatibility."
         },
         "1": {
           "question": "Does one command install into every agent?",
@@ -421,7 +434,7 @@
         },
         "3": {
           "question": "Can I install a plugin outside this directory?",
-          "answer": "Yes. Use a pinned GitHub source that contains a valid Agent Plugins 1.0 plugin.json package."
+          "answer": "Yes. Install a complete plugin.json package from a local folder, Git over HTTPS or SSH, supported provider links, or a ready archive. The CLI records exact source pins for eligible saved dependencies."
         },
         "4": {
           "question": "Are all discovered plugins reviewed?",
@@ -581,6 +594,7 @@
       "explorePlugins": "Explore plugins",
       "searchByCapabilityComponentOrSource": "Search by capability, component, or source.",
       "allCategories": "All categories",
+      "marketingCategory": "Marketing",
       "allComponents": "All components",
       "allSources": "All sources",
       "upstreamPackages": "Upstream packages",
@@ -646,7 +660,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "Unavailable at its indexed source; no install command is generated.",
       "unavailableAtItsIndexedSource": "Unavailable at its indexed source",
       "checkedAgainBeforeInstallation": "Checked again before installation",
-      "reviewedListing": "Reviewed",
+      "reviewedListing": "Listing reviewed",
       "notAvailableForChatgpt": "Not available for ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Verified connection; finish setup in ChatGPT",
       "allInstalledAgents": "Choose agents in terminal",
@@ -677,7 +691,8 @@
       "publisher": "By {publisher}",
       "upstream": "upstream",
       "installable": "installable",
-      "unavailable": "unavailable"
+      "unavailable": "unavailable",
+      "reviewedListingTooltip": "The listing and metadata were reviewed. This does not certify the plugin’s code, behavior, or safety."
     },
     "install": {
       "allInstalledAgentsRecommended": "Choose agents in terminal",
@@ -783,7 +798,7 @@
         "note": "Native Agent Plugin package",
         "status": "Supported",
         "intro": "Install Agent Plugins 1.0 into Cursor projects without translating each plugin by hand. The CLI plans the native package before changing files.",
-        "delivery": "The CLI writes the supported Cursor plugin, skill, and MCP projections for the selected project.",
+        "delivery": "The CLI prepares supported Cursor plugin, skill and MCP components for the selected scope. The add command defaults to user scope; select project scope explicitly for add.",
         "activation": "Reload Cursor when requested, then verify that the plugin is discovered."
       },
       "copilot": {
@@ -862,6 +877,13 @@
         "intro": "Install portable Agent Plugins 1.0 skills and MCP servers for Qoder from the same CLI used for other clients.",
         "delivery": "The CLI writes a native .qoder-plugin manifest and registers the managed package through the Qoder CLI when available.",
         "activation": "Reload Qoder plugins or restart Qoder after installation. Runtime MCP connections and provider authentication still need confirmation in Qoder."
+      },
+      "pi": {
+        "note": "Managed native Pi extensions only",
+        "status": "Supported",
+        "intro": "Install Agent Plugins 1.0 packages that declare a native Pi extension. Portable skills and MCP projection are outside this adapter’s current scope.",
+        "delivery": "The CLI installs the declared Pi extension in your Pi agent directory and tracks the managed package for update, repair, and removal.",
+        "activation": "Reload resources or restart Pi after installation to load the managed extension."
       }
     },
     "directoryPage": {
@@ -881,7 +903,7 @@
       "components": "Components",
       "package": "Package",
       "pluginNotFound": "Plugin not found",
-      "reviewedListing": "Reviewed",
+      "reviewedListing": "Listing reviewed",
       "licenseNotSpecified": "License not specified",
       "managedByCli": "Managed by CLI",
       "requiresAFinalStepInTheApp": "Requires a final step in the app",
@@ -890,7 +912,8 @@
       "title": "{name} Agent Plugin {'|'} Universal Agent Plugins",
       "schemaName": "{name} Agent Plugin",
       "directory": "Plugin directory",
-      "version": "Version {version}"
+      "version": "Version {version}",
+      "reviewedListingTooltip": "The listing and metadata were reviewed. This does not certify the plugin’s code, behavior, or safety."
     },
     "community": {
       "breadcrumb": "Breadcrumb",
@@ -938,7 +961,7 @@
       "vendorDocs": "Read {name} documentation",
       "availableFor": "Plugins available for {name}",
       "count": "{count} reviewed package supports this client. | {count} reviewed packages support this client.",
-      "tryPlugin": "Try Context7, or replace {source} with another compatible plugin's reviewed short name or pinned GitHub package source.",
+      "tryPlugin": "Try Context7, or replace {source} with another compatible plugin’s reviewed short name or complete package source.",
       "localPackageHint": "Replace ./my-plugin with the path to a valid Agent Plugins 1.0 package."
     },
     "components": {

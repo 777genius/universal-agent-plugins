@@ -51,6 +51,15 @@ class KiroCollectorTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         return FakeContext(directory.name)
 
+    def test_dedicated_key_enters_only_read_only_list_children(self):
+        ctx = self.context()
+        ctx.kiro_api_key = "ksk_inert_private_key_12345"
+        result = kiro.collect(ctx)
+        for label, _, _, extra, _ in ctx.calls:
+            self.assertEqual(extra, {"KIRO_API_KEY": ctx.kiro_api_key} if label.endswith("raw-list") else None)
+        self.assertNotIn("KIRO_API_KEY", ctx.env)
+        self.assertFalse(any(value for key, value in result["observations"].items() if key.endswith("_qualified")))
+
     def test_only_help_is_passed_and_source_text_never_qualifies(self):
         ctx = self.context()
         result = kiro.collect(ctx)

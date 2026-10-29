@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/workflows/project-native-research.yml'
       - 'scripts/project_native_research.py'
+      - 'scripts/project_native_kiro_auth.py'
       - 'scripts/project_native_service.py'
       - 'scripts/project_native_collectors/**'
       - 'scripts/test_project_native_*.py'
@@ -70,6 +71,7 @@ jobs:
         env:
           AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          KIRO_API_KEY: ${{ matrix.client == 'kiro' && secrets.KIRO_API_KEY || '' }}
         run: python3 scripts/project_native_research.py --client '${{ matrix.client }}' --phase '${{ matrix.phase }}' --output '${{ runner.temp }}/project-native-${{ matrix.client }}'
       - name: Admit the exact bounded evidence ZIP
         id: admission

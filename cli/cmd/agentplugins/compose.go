@@ -146,6 +146,7 @@ func newScopedAgentpluginsCLIApp(home, cacheRoot, projectRoot string, directoryC
 	}
 	app := assembleAgentpluginsApp(home, dataRoot, cacheRoot, v2Store, mutationLock, lifecycle, directoryClient, discoveryClient, securityClient, packageLoader, clientRegistry, planner)
 	app.Installer = facade
+	app.ManagementFactory = managementAppFactory(home, dataRoot)
 	setAgentpluginsProjectContext(&app, projectRoot)
 	app.ForScope = func(scope domain.InstallScope, root string) (agentpluginscli.App, error) {
 		if scope != domain.ScopeProject {

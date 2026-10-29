@@ -93,10 +93,12 @@ type projectNativeCLIAttempt struct {
 	used                                                                         map[string]bool
 	evidence                                                                     map[string]any
 	binding                                                                      domain.ClientBinding
+	kiroAuth                                                                     kiroAttemptAuth
 }
 
 func (f *projectNativeCLIAttempt) keep(t *testing.T, name string, body []byte) {
 	t.Helper()
+	body = f.kiroAuth.redact(body)
 	total := len(body)
 	for _, b := range f.files {
 		total += len(b)
@@ -175,7 +177,7 @@ func (f *projectNativeCLIAttempt) command(t *testing.T, label, cwd string, argv 
 	ctx, cancel := context.WithTimeout(f.ctx, timeout)
 	defer cancel()
 	start := time.Now()
-	r, err := (process.OS{}).RunWithDescendantExitGrace(ctx, ports.Command{Argv: argv, Env: f.env(), Dir: cwd, StdoutLimitBytes: 1 << 20}, 5*time.Second)
+	r, err := (process.OS{}).RunWithDescendantExitGrace(ctx, ports.Command{Argv: argv, Env: f.kiroAuth.commandEnv(f.spec.client, label, f.env()), Dir: cwd, StdoutLimitBytes: 1 << 20}, 5*time.Second)
 	f.keep(t, label+".stdout.log", r.Stdout)
 	f.keep(t, label+".stderr.log", r.Stderr)
 	meta, _ := json.Marshal(map[string]any{"argv": argv, "cwd": cwd, "exit": r.ExitCode, "error": err != nil, "deadline": ctx.Err() != nil, "elapsed_ms": time.Since(start).Milliseconds(), "cleanup": "full descendant supervision; forced cleanup fails"})
@@ -196,6 +198,13 @@ func newProjectNativeCLIAttempt(t *testing.T, spec projectNativeCLISpec) *projec
 		t.Fatal("native CLI attempts require actual opted-in GitHub-hosted Linux amd64")
 	}
 	f := &projectNativeCLIAttempt{spec: spec, started: started, files: map[string][]byte{}, immutable: map[string]string{}, protected: map[string]string{}, used: map[string]bool{}, evidence: map[string]any{"client": spec.client, "version": spec.version, "runtime_attempt_complete": false, "activation": "prepared", "vendor_authentication_qualified": false, "real_model_qualified": false, "qualification": map[string]bool{"project-lifecycle": false, "native-restart-removal": false, "mcp-initialize": false, "mcp-tools-list": false, "mcp-tools-call": false}}}
+	if spec.client == "kiro" {
+		var err error
+		f.kiroAuth, err = newKiroAttemptAuth(os.Getenv("KIRO_API_KEY"))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	f.ctx, f.cancel = context.WithDeadline(context.Background(), started.Add(150*time.Second))
 	f.output = os.Getenv("AGENTPLUGINS_PROJECT_NATIVE_OUTPUT")
 	if err := projectNativeRuntimeParents(filepath.Join(f.output, "leaf")); err != nil {

@@ -35,9 +35,9 @@ const registryPagesOrigin =
 const discoveryKeyID = process.env.NUXT_PUBLIC_DISCOVERY_KEY_ID || 'uap-discovery-2026-01';
 const discoveryPublicKey =
   process.env.NUXT_PUBLIC_DISCOVERY_PUBLIC_KEY || 'IxWvGuscXR9crlCrGyBQZNqroYNVPbBA1B3pnjSffhc=';
-// Public playback ID for the owner-uploaded product film; an empty override disables it.
+// Public playback ID for the verified v29 product film; an empty override disables it.
 const muxPlaybackId =
-  process.env.NUXT_PUBLIC_MUX_PLAYBACK_ID ?? 'AAEIkquATGMB02se3H3vqNSS9esJeVbfdJHCT00Ciekl00';
+  process.env.NUXT_PUBLIC_MUX_PLAYBACK_ID ?? 'hq9E01xwa01Mxgz101B02wdKbjOV700GGpSUGjo8ehi0001cQU';
 
 function resolveRegistrySnapshot(): string {
   const explicit = process.env.UAP_SIGNED_SNAPSHOT_PATH;
@@ -67,6 +67,18 @@ const sitemapRoutes = localizedRoutes.filter((route) => route.indexable);
 export default defineNuxtConfig({
   compatibilityDate: '2026-01-19',
   ssr: true,
+  features: {
+    // These shared styles already have cacheable stylesheet links. Avoid
+    // repeating the same CSS in every localized detail page's HTML payload.
+    inlineStyles: (id) => {
+      const moduleId = id?.replaceAll('\\', '/');
+      return ![
+        '/components/registry/SkillSpectorAssessment.vue',
+        '/components/PageBackground.vue',
+        '/components/registry/InstallPanel.vue',
+      ].some((component) => moduleId?.includes(component));
+    },
+  },
   experimental: {
     // Work around the current Nuxt dev-time #app-manifest regression.
     appManifest: false,
@@ -191,6 +203,15 @@ export default defineNuxtConfig({
       discoveryKeyID,
       discoveryPublicKey,
       muxPlaybackId,
+      skillspectorV3ManifestUrl:
+        process.env.NUXT_PUBLIC_SKILLSPECTOR_V3_MANIFEST_URL ||
+        'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-reports/reports/skillspector/v3/index.json',
+      skillspectorManifestUrl:
+        process.env.NUXT_PUBLIC_SKILLSPECTOR_MANIFEST_URL ||
+        'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-reports/reports/skillspector/v2/index.json',
+      skillspectorReportsUrl:
+        process.env.NUXT_PUBLIC_SKILLSPECTOR_REPORTS_URL ||
+        'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-reports/reports/skillspector/v1/index.json',
       skillsCatalogEndpoint:
         process.env.NUXT_PUBLIC_SKILLS_CATALOG_ENDPOINT ||
         'https://api.universal-agent-plugins.com/v1/skills',

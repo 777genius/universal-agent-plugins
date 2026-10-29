@@ -14,6 +14,10 @@ ExecStart=/srv/platform/projects/universal-agent-plugins/current/skills-catalog-
 Environment=SKILLS_CATALOG_LISTEN=127.0.0.1:13120
 Environment=SKILLS_CATALOG_CACHE_DIR=/var/lib/uap-skills-catalog
 Environment=SKILLS_CATALOG_ORIGINS=https://universal-agent-plugins.com,https://www.universal-agent-plugins.com
+Environment=SKILLS_RESOLVER_TEMP_DIR=/run/uap-skills-resolver
+# Optional root-owned 0600 file containing SKILLS_RESOLVER_SERVICE_TOKEN.
+# Without the capability, only the existing anonymous catalog is enabled.
+EnvironmentFile=-/etc/uap-skills-catalog/resolver.env
 Environment=GOMEMLIMIT=192MiB
 Environment=GOMAXPROCS=2
 StateDirectory=uap-skills-catalog
@@ -29,7 +33,9 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 ProtectSystem=strict
 ProtectHome=yes
-PrivateTmp=yes
+# DynamicUser implies PrivateTmp, which owns /tmp on systemd 255.
+# Keep bounded resolver scratch on its own mount instead of shadowing it.
+TemporaryFileSystem=/run/uap-skills-resolver:rw,nosuid,nodev,noexec,size=256M,mode=1777
 PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
@@ -41,8 +47,9 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
-MemoryHigh=192M
-MemoryMax=256M
+MemoryHigh=384M
+MemoryMax=512M
+CPUQuota=100%
 TasksMax=64
 LimitNOFILE=1024
 StandardOutput=journal

@@ -50,11 +50,12 @@ const initialTarget =
 const targets = ref<ClientID[]>(initialTarget ? [initialTarget] : []);
 const autoDetect = ref(true);
 const trustLabel = computed(() => t('registryUi.detail.reviewedListing'));
-const siteUrl = productRootUrl(
-  String(config.public.siteUrl),
-  String(config.app.baseURL),
-).replace(/\/+$/, '');
-const localizedUrl = (path: string) => `${siteUrl}${localizedPath(path, locale.value as KnownLocale)}`;
+const siteUrl = productRootUrl(String(config.public.siteUrl), String(config.app.baseURL)).replace(
+  /\/+$/,
+  '',
+);
+const localizedUrl = (path: string) =>
+  `${siteUrl}${localizedPath(path, locale.value as KnownLocale)}`;
 const pluginUrl = computed(() => localizedUrl(`/plugins/${plugin.name}/`));
 const pluginSchemaId = computed(() => `${pluginUrl.value}#plugin`);
 const breadcrumbId = computed(() => `${pluginUrl.value}#breadcrumb`);
@@ -163,7 +164,16 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 
             <div class="plugin-detail__chips">
               <span class="plugin-detail__type"> {{ t('registryUi.detail.agentPlugins10') }} </span>
-              <span class="plugin-detail__status">{{ trustLabel }}</span>
+              <AppTooltip above-header>
+                <template #trigger
+                  ><span class="plugin-detail__status" tabindex="0">{{
+                    trustLabel
+                  }}</span></template
+                >
+                <p class="app-tooltip__compact">
+                  {{ t('registryUi.detail.reviewedListingTooltip') }}
+                </p>
+              </AppTooltip>
               <span
                 v-for="category in plugin.categories"
                 :key="category"
@@ -255,6 +265,22 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
       </v-container>
     </section>
 
+    <section class="plugin-detail__installer section">
+      <v-container>
+        <SkillSpectorAssessment
+          :applicable="plugin.components.includes('skills')"
+          :subject="{
+            kind: 'plugin',
+            repository: plugin.source.repository,
+            path: plugin.source.path,
+            revision: plugin.source.revision,
+          }"
+          :name="plugin.display_name"
+          scope="plugin"
+          expanded
+        />
+      </v-container>
+    </section>
     <section id="plugin-install" class="plugin-detail__installer section">
       <v-container
         ><InstallPanel v-model:targets="targets" v-model:auto-detect="autoDetect" :plugin="plugin"

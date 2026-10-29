@@ -290,7 +290,7 @@ class ProducerPermissionTests(unittest.TestCase):
         permissions, steps = job.split("    steps:\n", 1)
         self.assertIn("    permissions:\n", permissions)
         grants = re.findall(r"^      ([\w-]+): (read|write)$", permissions, re.M)
-        self.assertEqual(grants, [("contents", "write"), ("attestations", "read")])
+        self.assertEqual(grants, [("contents", "write"), ("actions", "read"), ("attestations", "read")])
         self.assertNotIn("env:", permissions)
         self.assertEqual(job.count("GH_TOKEN:"), 1)
         self.assertIn("        env:\n          GH_TOKEN: ${{ github.token }}", steps)
@@ -308,9 +308,9 @@ class ProducerPermissionTests(unittest.TestCase):
     def test_producer_trust_and_promotion_defaults_remain_fail_closed(self):
         self.assertRegex(self.workflow, r"publish_release:\n(?:        .*\n)*?        type: boolean\n        default: false\n")
         validate = self.job("validate")
-        for guard in ('test "${WORKFLOW_REF}" = "refs/heads/main"',
+        for guard in ('refs/heads/main|"refs/tags/${TAG}") ;;',
                       '"${WORKFLOW_COMMIT}" != "${head_commit}"',
-                      'test "${head_commit}" = "$(git rev-parse refs/remotes/origin/main)"',
+                      'git merge-base --is-ancestor "${head_commit}" refs/remotes/origin/main',
                       'test "${head_commit}" = "$(git rev-list -n 1 "refs/tags/${TAG}")"',
                       '.merged_at != null and .base.ref == "main"',
                       'require_check dependency-review', 'require_check "${name}"'):

@@ -210,26 +210,28 @@ onBeforeUnmount(() => clearTimeout(leaveTimer));
 }
 .authentication-indicator__groups {
   display: grid;
-  gap: 6px;
+  gap: 12px;
   margin: 8px 0 0;
   padding: 0;
   list-style: none;
 }
 .authentication-indicator__groups li {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: start;
+  gap: 2px 8px;
 }
 .authentication-indicator__groups svg {
-  flex-shrink: 0;
-  align-self: center;
+  margin-top: 2px;
   color: var(--muted);
 }
 .authentication-indicator__policy {
-  flex-shrink: 0;
+  min-width: 0;
   font-weight: 600;
 }
 .authentication-indicator__clients {
+  grid-column: 2;
+  min-width: 0;
   color: var(--muted);
 }
 .authentication-indicator__summary,
