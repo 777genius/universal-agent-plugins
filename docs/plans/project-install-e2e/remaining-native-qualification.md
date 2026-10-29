@@ -1636,6 +1636,115 @@ not qualify the observed macOS race; the original hosted macOS contract remains
 required. Two independent plan rounds precede implementation, followed by
 independent code review and exact-source validation.
 
+# Copilot failed-attempt evidence and original-config diagnostics amendment
+
+## Observed evidence and limits
+
+Genuine runtime run `40363828314`, job `121755712251`, at published
+`4566b551b7c225a30b40c149a44f69d96cc2d0ce`, tree
+`aeaf19c4a30668f17f83a111ac362c70ed6f95d1`, built and selected the current
+Copilot test, then failed at the `native-attempt` command boundary with
+`original authority changed: .../home/.copilot/config.json (<nil>)`.
+Frontend artifact `12678603433`, ZIP SHA256
+`1020004a73f256b40287914bdb3925f0899997f7226cfbac72c80f6613ee96a4`,
+records `runtime_artifact_admitted=false` and
+`runtime_admission_error="ValueError"`. No native archive was uploaded.
+The config digest differed after a successful strict read. Its actual changed
+bytes/fields, cause and exact pre/post boundary are not available from that
+frontend. No migration, authentication or native tool outcome is inferred.
+
+Local source `6fb04dc10b3e48ade631c4d65433c39afd5a9f60` has the exact
+published tree above. Its fixture necessarily stores the installed project MCP
+snapshot under `.github-mcp.json.installed`, because setup derives a name from
+the parent `.github` plus basename `mcp.json`. The unchanged frontend accepts
+only `mcp.json.installed` for that snapshot. Setup returned before the reported
+line 406, so this unexpected member had already been held. An inert invocation
+of the exact `attempt_members` function reproduces `ValueError: unrecorded
+native artifact member`; changing only the inert member name to the existing
+allowed name admits the same failed/unqualified envelope. This proves a
+deterministic source contract defect. Because the historical raw archive was
+not exported and only the exception class survives, the exact historical
+admission branch cannot be inspected directly; an earlier ZIP check is not
+independently excluded by the available bytes.
+
+## Correct only the fixture's emitted snapshot name
+
+In the Copilot Go fixture, give the two installed public snapshots explicit
+existing names: `mcp.json.installed` for the selected project `.github/mcp.json`,
+and `uapcopilota-SKILL.md.installed` for its selected installed skill. Retain
+the same held bytes, receipt-selected paths, ordinary-file reader, content
+checks and capture bounds. Do not broaden or change `attempt_members`,
+`admit_runtime`, the allowed member set or shared Python parser. This snapshot
+is installed project configuration, not the original private user profile.
+Add an inert contract for actual fixture-emitted names and preserve unknown,
+duplicate, partial-command, non-UTF8 and oversized member refusal.
+
+## Use existing evidence to locate the failure boundary
+
+`command` already checks protected authority before execution, then holds its
+stdout/stderr/command triple before checking authority again. With the naming
+defect corrected, a complete `native-attempt` triple in an admitted failed
+archive proves the command returned before the failed post-command check; its
+absence together with the boundary failure identifies the pre-command check.
+Do not add a duplicate phase field or alter the exact command receipt schema.
+Retain failed captures and the deferred existing `finish` behavior even when
+the original-profile guard fails. An incomplete triple still refuses admission.
+
+## Minimum bounded original-config change facts
+
+Keep the original authored config bytes/digest frozen before version/native
+startup. On a mismatch of exactly the fixture's original
+`<original HOME>/.copilot/config.json`, keep the existing fatal refusal and
+record one optional, bounded `original_config_change` object inside the existing
+`runtime-attempt.json`. There is no new artifact member or private-profile ZIP.
+
+The diagnostic may contain only: expected and observed SHA256 digests; baseline
+and observed byte counts; a fixed snapshot status; whether strict parsed JSON
+is semantically equal to the original authored object; whether the
+`trustedFolders` value still exactly equals the original two selected project
+folders; and a bounded structural summary of changed top-level members. For
+each changed member export only its key SHA256 and before/after JSON type
+(`absent`, `null`, `boolean`, `number`, `string`, `array`, `object`). Do not
+export raw unknown key names, any member values, absolute trust-folder values,
+credentials, tokens, raw config text or a recursively copied profile. A
+semantically equal object can identify a byte-format change without accepting
+that change or adopting a new baseline.
+
+Use the existing no-follow ordinary held-file reader, cap this diagnostic read
+at 16 KiB and the structural summary at 32 changed top-level keys. Exceeding a
+bound records a fixed bounded status, with no partial structural summary.
+Compare the
+diagnostic bytes' digest to the digest observed by the failed guard; if it
+differs, record only a fixed unstable status and no JSON-derived conclusions.
+Missing, aliased, special, oversized, malformed/non-object or unreadable input
+records a fixed status without error text or content. Unknown/missing nodes do
+not broaden the original guard's acceptance. Produce a finite object no larger
+than 16 KiB, within existing total/work/cleanup budgets, with no retries,
+native child or filesystem writes during diagnosis. The snapshot remains in
+private memory only; do not reread or publish unknown profile files.
+
+## Verification and unchanged scope
+
+Two independent plan approvals precede code. Expected edits are the Copilot
+fixture and focused inert contract tests, plus its consolidated plan; shared
+frontend/parser/allowlist and native provider behavior remain unchanged.
+Contracts must prove correct snapshot naming, pre/post distinction through
+the existing triple, semantically equal-but-byte-changed refusal, exact trusted
+folder preservation checks, hashed/type-only changed-member summaries and
+absence of canary key names/values/secrets in exported diagnostics. Cover alias,
+read failure, malformed JSON, size/key-count bounds and a changed snapshot.
+Every mismatch still fails the test; diagnostics can never promote a failed
+attempt or any qualification flag.
+
+Preserve all pinned acquisition/runtime hashes, native argv/environment,
+loopback provider route/identity, permission restrictions, process supervision,
+original-user/A/B ownership, state Prepared, deadlines, no extra native calls
+and closed artifact limits. Run only focused inert contracts/lint locally.
+Inspect a fresh genuine hosted failed capture before proposing any source,
+product or runtime behavior amendment for the config mutation. Vendor
+authentication, model use, native session grammar and all five lifecycle/MCP
+qualification flags remain false.
+
 ## Observed Gemini wait-for-previous description correction
 
 Genuine [runtime run 40367376528](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376528),
@@ -2165,6 +2274,852 @@ commands are grouped. Repair/removal report source `local`; add/update report
 Go and the independent reader close those measured forms without accepting a
 cross-stage union. Original profile and lifecycle authority remain unchanged.
 
+
+# Copilot: fixed empty native registry first capture
+
+PRE-CODE proposal. Root authors implementation only after two independent plan
+GOs. Read AGENTS.md, PROJECT_INSTALL_OWNER_SCOPE.md and capability preservation.
+No VS Code changes, release, native local execution or classifier widening.
+
+## Exact new actual evidence
+
+Published PR527 source922b705222927897fe54bb45e8665d8873fd790d,
+treebceb65e8cb04029e48012742a6975a22c6431481. Hosted runtime40584763860,
+job122484811964 failed on the public add-user command at22:17:09Z.
+Native12774483132 outer3232B SHA256
+2fbdecf541f20a9f4584485a91268859b368194fc5d636c99c2cafe321f4c3bb,
+inner46faf1136207357b8172fb73bcdad59a645ba7917b8d277adf550ddbef967506,
+14ordinary closed members. Frontend12774782735 outer3456B SHA256
+7b546cd3c597ff72b4184f8dbc0900454a1213865253ca6a4f021fe2b2ec256d,
+25members. Exact clean source/tree/build,24frontend stream joins, actual pins and
+unchanged exact-source failed-envelope Python admission pass. Independent audit
+/tmp/uap-copilot-922-current-40584763860/independent-raw-audit.json SHA256
+f7056506d11f174c91a4211c47855b4b540e3f3a62c8c3f56291239aa65d1cca.
+
+Actual prefix is git-A,git-B,version,add-user. Public add exits1 in1248ms with
+error=false,context_error=false and ordinary full-descendant closure. Strict JSON
+reports preflight_failed,0success/1failed,mutated=false; the ordinary scanner has
+3files and0findings. Exact stderr records target copilot identity preflight:
+native identity ownership is indeterminate; refusing mutation. No fixture native
+catalog, prompt or probe is reached. All5/runtime/auth/model flags remain false.
+Read-only metadata is observed2before/4after,3changed/0omitted. The two new opaque
+records are a0700directory and0600file; the third is the same originally owned
+0700root directory identity with bookkeeping changed. Hashes do not authorize a
+path/role/content inference or a profile allowance.
+
+## Existing source and uncertainty
+
+Current user-scope copilot.Adapter.InspectNativeRegistry delegates to
+shared.InspectCopilotRegistry. With held native executable and runner, the source
+calls exactly `copilot plugin list` through RunNativeRegistry and strict current
+listing classification. Provider combinedIdentityState also refuses an
+indeterminate prepared finding, so do not state the final public refusal alone
+proves the specific internal classifier branch. Its internal raw stdout/stderr,
+exit and cause are not exported by this artifact. No native registry absence,
+known empty grammar, successful public registration or permission is established.
+
+Relevant exact922 source files are
+install/integrationctl/agentplugins/clients/copilot/identity.go,
+install/integrationctl/agentplugins/clients/shared/copilot_identity.go (SHA256
+d784b9e56c45e72f95deac76ae1a5e9b7930673b50979959e3a4523c056ad6e3),
+install/integrationctl/agentplugins/providers/native_identity.go and
+install/integrationctl/agentplugins/usecase/identity.go.
+
+## Proposed smallest new observation
+
+Preserve the entire existing922 first-public-add observation and controls; do not
+change its fatal process guard or run a child after fatal failure. Add a distinct
+failed-only opt-in `copilot-empty-registry-first-capture` observation using the
+existing bounded collector, original HOME fixture, immutable executable/pin and
+full-descendant supervisor. It runs only fixed git-A,git-B,version then one exact
+`[held-copilot,"plugin","list"]` command from the existing fixed outside cwd.
+Every command retains30seconds; total work150/overall180seconds remains fixed.
+No public add, install, remove, provider, prompt or probe starts in this mode.
+Use the already authored firstLaunchAt/trustedFolders recipe and frozen original
+config, with all normal source/file/owner/no-follow/auth/probe guards intact.
+The new mode never accepts a returned path or creates a replacement user profile.
+
+Capture native-list raw stdout/stderr and normal command receipt under the existing
+bounded member/byte/omission controls. The same held-metadata capture/projection
+may describe this one command with a truthful fixed native-list stage. Preserve
+its1024inventory cap,16detail cap,whole-object2048byte cap and existing private
+path/content exclusions; never renew before/after values. Existing add-user
+metadata bytes/stage and contracts remain byte-identical. If projection is shared,
+accept only the two fixed stages add-user/native-list; retain1024entries,depth32,
+16details and the2048whole-object bound for both, including refusal envelopes.
+A new-stage byte-length increase must not bypass the existing whole-object bound. Snapshot before this one
+command, with read-only deferred projection only; deferred work never launches a
+child. A nonzero exit/capture/context/cleanup error remains fatal through the
+original command guard. If command exits0, retain bytes as opaque evidence and
+unconditionally t.Fatal at a review barrier. Listing interpretation and all5/
+runtime/auth/model flags remain false regardless of returned text or parseability.
+
+The new mode permits at most14total archive members (four command triples,
+one metadata projection and one summary), forbids every provider/probe member,
+and uses only prepare,before-list,native-list,review-barrier stages with matching
+complete command prefixes. A zero exit never authorizes a positive flag.
+
+Add the new mode to exact-prefix/closed-file admission and current source selector
+without deleting earlier modes or changing old failed-envelope acceptance. Keep
+workflow event/routing/admission, official source/runtime pins, real-host opt-in,
+credentials, commands for other modes and all production adapter/classifier code
+byte-identical. No automatic retry at unchanged source. Only root publishes.
+
+## Meaningful verification and review
+
+Before code, freeze exact source/head after two independent plan GOs. Inert
+controls must establish fixed complete/prefix argv,cwd,timeout and member closure;
+reject wrong/unrecorded/extra command,provider/probe,unknown mode/stage,oversized
+stream/metadata and false success/qualification. Exercise one normal inert child
+with output and one failed inert child to prove the original fatal behavior and
+that no subsequent command runs. Verify config/source/metadata canaries and no
+profile/map adoption. Historical922 source exact admission and the new reader's
+unchanged922 replay must return the same original raw summary/member bytes; keep
+previous189e success separate and readable. Existing source selectors retain
+exact old guards and new mode selects only the new named opted-in test.
+
+Run focused Copilot/shared inert Go contracts, affected Python contracts, actual
+affected all-enabled and unfiltered six-linter gates, gofmt and whitespace under
+the serialized slots. Do not execute any native/vendor, scanner or public installer
+binary locally. Obtain two exact code critics and executed receipts before root's
+normal expected-head fast-forward. Only a new genuine hosted capture can establish
+what this fixed direct listing actually prints. Later grammar, registration,
+profile allowances and full-cycle claims require separate evidence and review.
+
+## Accepted empty-registry plan before implementation
+
+Exact draft SHA256 `30858baf6e6d894641c59650d117e5f95672aaaa58b7bf2f2edf4712f8e7bc0e`
+received independent GPT-6.1 Sol xhigh PLAN GOs from `kimi_e2e_finish` and
+`gemini_qoder_finish` before code edits. Receipt SHA256s are
+`7fb5c7f31e1246af7d89d020e0bbe53cd16c676c9ced5919e037d7a8386f26bc`
+and `f2b5a84d34b44acb73f44757f9fb7e37bd91befe1ff92a38bac9da4903e900d4`.
+Both checked the actual unknown internal refusal boundary and current source,
+including fixed source/pin/profile/process gates and1024/depth32/16/2048 bounds.
+Root implements this isolated diagnostic; all existing production and previous
+observations remain preserved.
+
+
+## Copilot unchanged inert process contracts: hosted execution amendment (2026-10-27)
+
+Accepted exact pre-code plan SHA256 `435f0ff8fe6240e00497329e1e4068258f208fc7d0651f282afc4ad4c081de1c`. Independent plan GOs: native reviewer `091a987f16bcb3357e3a8988587850e8249cf142be8318198419223db5c47a73`, Gemini reviewer `eb8150f5ccc4b9aefb278b531e6433e434d0522684700bdda706e7c79145d16d`. The full local process gate remains failed on its recorded environment prerequisite; the proposed real hosted execution remains pending.
+
+### Accepted execution amendment
+
+PRE-CODE execution amendment to the accepted empty-registry diagnostic plan
+30858baf6e6d894641c59650d117e5f95672aaaa58b7bf2f2edf4712f8e7bc0e.
+Two independent plan reviews precede the workflow edit. No native capability,
+profile authority, test assertion, containment prerequisite or release changes.
+
+## Observed local gate limitation
+
+Frozen diagnostic source 7e193758d73c5ab8a374ffdabc1ad27aa941c348,
+tree 6740f5640cd45584054c7938e22006a889610ca0, has two exact independent code
+GOs. Its full focused Go command actually failed. The two failures are
+TestCopilotEmptyRegistryActualInertCommandKeepsOpaqueBytes and
+TestCopilotEmptyRegistryOriginalFatalGuardCannotContinue. The unchanged ordinary
+process supervisor refuses before running either owned inert child because this
+environment lacks /proc/<pid>/task/<tid>/children. A separate diagnostic using
+the unchanged supervisor reproduced the same refusal for immediate and naturally
+delayed inert children, including outside the ordinary execution sandbox.
+The original failed log is retained at
+/tmp/uap-copilot-empty-registry-gates/focused-go.log, SHA256
+0c5547b83c3eb0daffffe0a42e75d13c4142aefbc79edc581e2467e642ae4bec.
+This is not a successful process gate. Neither test nor the supervisor may be
+skipped inside source, relaxed, replaced with a fake process or labelled passed.
+
+The existing Project Native Runtime admission job only runs Python selection
+contracts; the native job compiles the Go test binary and selects the opted-in
+native test. It does not execute the new inert Go tests. The Required workflow's
+full Go lane only triggers on PRs to main/master, not this stacked draft leaf.
+Therefore merely pushing the existing source would not resolve this gate.
+
+## Smallest additional gate
+
+Change only .github/workflows/project-native-runtime.yml: after the existing
+selection step, add the already pinned actions/setup-go revision with Go1.26.10,
+cache false, and a focused inert contract command. Both steps are conditional on
+the actual selected matrix containing client copilot. Use the existing finite
+matrix output, not a user-controlled command or new flag. The command is exactly:
+
+    go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime)'
+
+The existing contracts job remains on ubuntu-24.04 with its existing five-minute
+deadline, exact head checkout and contents-read permissions. Do not add native
+opt-in, vendor acquisition, installer/scanner execution, credentials, environmental
+eligibility overrides, shell eval, retries or fallbacks. These tests execute only
+owned inert children, fixture HTTP/JSON and local source contracts. Preserve the
+two process tests byte-for-byte and execute both without an exclusion in CI.
+The complete native matrix still depends on successful contracts, so no native
+observation starts if this gate fails. Existing native host admission, selection,
+limits, pinned actions, workflow events/concurrency and native commands remain
+unchanged. Other client-only matrices do not incur this additional Go step.
+
+Add a small source contract to the existing runtime Python tests which verifies
+the conditional two steps, exact pinned toolchain and full focused invocation,
+and that native remains dependent on contracts. Use existing test conventions;
+do not add a YAML library or general workflow parser.
+
+## Honest execution and publication order
+
+Preserve the original full local failure. A separately named local subset may
+exclude only the two identified OSRunner process contracts, with the exact
+exclusion recorded; this establishes only the remaining inert contracts. Execute
+all affected Python contracts, affected all-enabled lint and unfiltered six-linter
+gate. Fix only the two already measured QF1003 dispatch style findings through
+equivalent tagged switches; preserve old mode behavior and command body guards.
+Re-run gates and obtain two code critics for the exact final source, including
+the workflow amendment and lint fix. Replay the previous922 failed and189e
+readiness raw evidence with both old and new readers as already required.
+
+After those gates and reviews, root may normally fast-forward the existing draft
+PR527 source solely to obtain the missing hosted execution, after confirming the
+old actual run has fully completed and the expected branch head is unchanged.
+Record both process tests as pending, never local-pass. Do not merge, qualify or
+claim the full gate until the actual exact-source GitHub run shows each process
+test executed and passed. Obtain source/job identity and raw job log proof, then
+audit the new bounded native diagnostic artifact normally. A CI process test
+failure stays blocking and is diagnosed from its real result. A successful inert
+gate proves its contract only; this new native observation still stops at the
+unconditional failed-only review barrier with all qualification flags false.
+
+
+## Copilot empty registry capture: local validation and pending hosted process gate (2026-10-27)
+
+Final code source `c80e34bc9097397ec15e3b9f741b39c449157ddf`, tree `653e9b7abbb08ab6f23ad0b660bf69b7ea21f799`, implements the accepted failed-only diagnostic and the separately reviewed hosted execution amendment. Two final independent GPT-6.1 Sol xhigh code critics approved the exact source: Gemini receipt `afc3518eb9c95d61cc99e018bc9c86df0ca33ca5385d52dbe195fe3d0c28890f` and native reviewer receipt `f7b14a15a01c4bf153dfd8f5ababb454c30f5cdf16946445937c841ddc0777e0`. Removing the two added conditional workflow steps restores the complete previous workflow; the existing native job still depends on contracts. The two process-test bodies are unchanged (whole file SHA256 `d328951b55a897eeb81783216a80d6f7f8d2fbcee3328b9f491d2d6dab210b6c`).
+
+The original full local focused Go gate FAILED because the real process supervisor could not obtain this host's `/proc/<pid>/task/<tid>/children` prerequisite. This failure is retained and is not a process-pass claim. The explicitly named local subset excluded only `TestCopilotEmptyRegistryActualInertCommandKeepsOpaqueBytes` and `TestCopilotEmptyRegistryOriginalFatalGuardCannotContinue`; its43 top-level tests /129 case-pass events passed. Actual affected all-enabled lint against `a412ba5e137fdcb7e004393229b323211ed746e1` and unfiltered six-linter gates each reported zero issues; all61 affected Python contracts passed. Executed local receipt SHA256 `a49225f173891a77f1d84121f59cf30786fca465876cab52bb10fccdd0df54e1`.
+
+Original922 failed registration and189e successful installed-tool readiness archives re-admit under their exact old readers and the new reader with all14/21 original member bytes and summary semantics unchanged. Current-reader replay receipt SHA256 `9162f0c5a2de82123286d936767196af66b50887cec66461f149c37681bb9563`; exact historical-reader replay receipt `3c9d6bdb9fd3013f4d92535f72d19d4f5807a7a294d4ee4f647caadafb9b2e52`. The readiness result remains separate from the five broader qualification flags, which remain false.
+
+This draft source is published solely to obtain actual hosted execution of the full focused Go command, with no exclusions, before native observation. Both strict process tests must have actual RUN and PASS records at the new source before the full gate or a merge can be claimed. No supervisor prerequisite, original profile guard, native opt-in or actual-host requirement is relaxed. No vendor client, public installer or scanner ran locally. The new native catalog capture retains its unconditional failed-only review barrier regardless of returned bytes; no registry grammar, registration, lifecycle, authentication or real-model success follows from publication.
+
+
+## Accepted Copilot post-add registry observation amendment, 2026-10-28
+
+Exact pre-code plan SHA256: `11faf859755a001ceb888f05ff3b071a0dbd9807b59618307168ac21ac191b4c`. Independent PLAN R1 root and PLAN R2 Kimi both GO before implementation. This is failed-only observation, not native activation or runtime qualification.
+
+# Copilot: one failed-only direct registry observation after public user add
+
+PRE-CODE observation plan. Two independent exact-plan GOs (root and Kimi) and root's accepted plan commit must precede implementation. Root alone performs Git/GitHub mutations and publication. Draft author performs source/raw reads and writes this scratch proposal only. No native/acquired client, public installer, scanner or vendor executable runs locally. Native owns the current serialized test/lint slot.
+
+## 1. Source-bound measured reason
+
+Plan base remains source `5781ef431714a1fb00dfa7a1c502e181699c9b54`, tree `19af10e298bdc10fe43c1392999a03cd5f2e47c2`, checkout `/tmp/uap-copilot-disabled-builtin-empty-current`. Later integration of other client tracks does not change this plan base. Root will separately reconcile composition/current remote state before publication.
+
+Hosted run40604771816 admission122541415832 passed the actual full unexcluded Copilot inert gate with Go1.26.10. Native122544613268 completed failed at the intended public-first-add review barrier. Inherited Cline122544613212 completed success and its independent full raw audit is preserved; no pending capture needs supersession or cancellation.
+
+Original actual artifacts are retained under `/tmp/uap-copilot-5781-independent-40604771816`:
+
+| Artifact | ID | Outer SHA256 | Inner SHA256 | Members |
+| --- | --- | --- | --- | --- |
+| Native | 12781916168 | a966373206c3ee5a216ababd3ff7b3754cf8f50d9ca7334fda9da7664a2039cc | b901d186c3ec043619a8af486930d36172136bb9cd4508e6927d50183766b04d | 14 |
+| Frontend | 12782145914 | da6d336af2e831d1ad992ddd277a2a15401720554e0d482589b73c3d8e896ebd | 064d5210d90862be0cb8b4381eb6cee59777e90715a4cd0b2411edb915149ca7 | 25 |
+
+Two independent actual raw reviews are complete:
+
+* Peer `/tmp/uap-copilot-5781-independent-40604771816/copilot-independent-raw-audit.json`, SHA256 `6ba02a976bd2db0bde65331033962fc6416af74ea0ed98869df2868c44150e73`.
+* Root `/tmp/uap-copilot-5781-root-40604771816/root-raw-audit.json`, SHA256 `30562fe7a660c705cabeb120ad68faa6ad4d7b1df2109f10038133f6f41e6efd`.
+
+All four commands git-A/git-B/version/add-user exit0 with error=false/context_error=false and ordinary full-descendant supervision. Public add takes2488ms; total4497ms. Its2831byte stdout SHA256 is `c14ba62e7310fc9f31b5aee315e02cbcf42c6c1c7fd0a0431d385abdb4da0185`. The versioned public result is add/success for native-proof1.0.0, one Copilot user target, installation `6dd5f5ca-4c29-4bd9-b5a7-c96b9444b586`, physical ID derived from that installation, and a matching public operation/security subject. It reports manual_activation_required, authentication not_checked and package_validated. The sole failure is the intentional review barrier reported at `agentplugins_copilot_user_registration_attempt_test.go:172`. Stage=review-barrier, all five qualifications/runtime/authentication/real-model remain false. No probe/provider exists.
+
+The1928byte metadata projection reports before2/after12/changed11/omitted5. It exposes path hashes and finite metadata comparisons only. Neither names nor contents of omitted entries are known. No ownership, permission, profile exception or new baseline follows from this observation.
+
+Current production source gives a concrete reason to capture the missing bytes: `CompleteCopilotActivation` returns `ManualCopilotVerification` for `ErrCopilotListContractUnknown`; the unattested fallback produces this manual-activation result. The post-install native list document is not exported. The public success therefore supports a new direct observation, but supplies no exact installed-list grammar, native enabled identity, ownership or runtime proof. Do not guess a builtin suffix, change a parser or activate the plugin from this result.
+
+Pins remain Copilot1.0.103 archive `9aeb4430e9ac9523546db07b227c7aba179a4710a55f9ac29ad143b0f9e1b325` / executable `f19b3554a6b62605db3a26d5255ebe2a3ee39fcd6a357edb18301ea5037f6f0d`, and the existing scanner pins. The exact production disabled-builtin empty preflight and all generic/VS Code registry behavior remain unchanged.
+
+## 2. One new observation mode and exact sequence
+
+Add exactly one new failed-only mode/test. Preserve old user-registration, empty-registry and readiness entrypoints/readers/helpers so their historical artifacts remain readable under their original source identities.
+
+| Field | Exact new value |
+| --- | --- |
+| mode | copilot-post-add-registry-first-capture |
+| selected test | TestAgentpluginsCopilotNativePostAddRegistryFirstObservation |
+| selected file | repotests/agentplugins_copilot_post_add_registry_attempt_test.go |
+| opt-in | AGENTPLUGINS_COPILOT_POST_ADD_REGISTRY_FIRST_CAPTURE |
+| CASES seconds / phase | 180 / runtime-attempt |
+
+The fixed command sequence is exactly:
+
+1. git-A: original held Git, `-c core.hooksPath=/dev/null init --quiet`, original projectA.
+2. git-B: the same held Git/flags, original projectB.
+3. version: `[heldCopilot, --version]`, original outside cwd, exact existing1.0.103 version check.
+4. add-user: `[heldInstaller, add, heldPackage, --no-save, --scope, user, --target, copilot, --format, json]`, original outside cwd.
+5. native-list: `[heldCopilot, plugin, list]`, the same original outside cwd and original HOME/environment.
+
+Every command receives exactly30seconds through the unchanged command path. This is one added direct diagnostic invocation after the ordinary public add; the public installer's own internal native operations remain unchanged and are not counted as this new direct invocation. There is no direct pre-add warmup, second add, retry, pre-registration, profile adoption, project list, prompt, tool, provider, activation, enable, trust or inspection command.
+
+Use the unchanged `newCopilotProjectAttempt`, `preparePackage`, authored original config, f.env, f.check and `f.command` process/receipt/guard path. The work context remains the same origin+150seconds, total remains the same origin+180seconds. The original30second command context and five-second descendant-exit grace remain exact; captured elapsed_ms can include that existing grace, so its finite receipt cap remains35000ms. Never renew/rebase an origin or replace an error with a later successful observation.
+
+## 3. New flow, existing guards, and two metadata observations
+
+The old `observeUserRegistration` cannot be called and then continued: its intentional t.Fatal is the old mode's boundary. Preserve its complete bytes. A new mode-local public phase repeats only that existing pre-barrier body: same original .copilot metadata capture, same exact public command through f.command, same strict bounded JSON and successful versioned-envelope validation. Require command=add/result=success/schema_version integer1/data object before the new mode can advance toward the direct list. Do not weaken or modify the existing common JSON helpers.
+
+Keep the public phase in its own ordinary function scope. Its deferred callback performs metadata capture/projection and f.keep only. It never runs a command, schedules the direct list, rebases a guard or changes a failure stage. Thus a t.Fatal in the unchanged public process/config/pin/cleanup guard exits before any fifth command. A public JSON validation failure also stops before the fifth command.
+
+Export the public phase metadata as `user-profile-metadata.json`, using unchanged `copilotUserMetadataAfter` / `copilotUserMetadataDelta` and stage add-user. When this phase returns normally, its deferred metadata projection has already settled. If it refused, set the finite after-user-metadata failure stage and stop; do not launch a new child after a refused diagnostic snapshot.
+
+Only after the ordinary public phase and its metadata complete, enter a second ordinary function for the direct list. Capture immediately-before-list metadata from the same original `.copilot` root. This is a read-only observation snapshot: never assign it to `originalConfigBaseline`, f.protected, immutable pins or any authorization map. A before-list metadata refusal records the finite native-list refusal projection and fails without launching the fifth command.
+
+Register a list-phase metadata-only deferred callback, then execute the exact native-list command through the unchanged command path. Its raw stdout/stderr and original command receipt are retained unchanged. The deferred callback uses the already-existing `copilotEmptyRegistryMetadataAfter` or the unchanged capture+`copilotMetadataDeltaAtStage(...,"native-list")` primitives and writes `native-list-profile-metadata.json`. It never starts a child or retries capture. After a normal return from this phase, refused metadata causes the finite after-list-metadata failure and no further action.
+
+Each metadata file is independently bounded by the unchanged2048byte projection, maximum1024 inventory entries, depth32, sixteen displayed changed entries before byte-bound truncation, strict no-follow held metadata/parent identity checks, and the original context. No raw path, unknown file body, native registry/config body or arbitrary error string is added to either projection. The five omitted entries in5781 remain unknown and create no exception.
+
+On ordinary fifth-command and metadata completion, set review-barrier and deliberately t.Fatal with a new precise raw-review message. Native list bytes stay opaque: no trim/ANSI removal/CRLF rewrite/section skipping/JSON parsing/absence classification or activation decision is made from them. Empty, unfamiliar or diagnostic stdout/stderr are retained as data under the original bounds. The unchanged outer artifact reader's UTF8 requirement still applies; invalid UTF8 cannot be admitted by inventing a new encoding allowance.
+
+## 4. Exact finite stages and artifacts
+
+Use the existing summary field set and optional finite `original_config_change` projection, with the new exact mode. Do not add provider_kind, inherited project activation, new success proof or inferred registry status. The new finalizer resets runtime_attempt_complete=false, all five qualification values=false, vendor_authentication_qualified=false and real_model_qualified=false, and calls t.Error if the test has not already failed. The unchanged outer finish therefore serializes the actual t.Failed() as true; it never fabricates a failed flag for a passing test. The admitted lane has probe_status=absent and no probe/provider member. If original finish encounters unexpected probe state, keep its truthful failure/refusal; do not normalize it to absent or admit it as this closed lane.
+
+All commands form an exact prefix of the five labels; every present command has its complete `.command.json`/`.stdout.log`/`.stderr.log` triple. A label not in the recorded prefix has no triple. Previously completed commands must be clean0/errorfalse/contextfalse before continuation. Only the last current command in prepare/public-user/native-list can carry the actual captured failure. Never accept a later stage or command after an earlier failed receipt.
+
+| Summary stage | Command-prefix length | Required metadata / truthful boundary |
+| --- | --- | --- |
+| prepare | 0..3 | No metadata; original Git/version/package preparation may fail. |
+| before-user | 3 | user metadata is the add-user refusal; no public child started. |
+| public-user | 3 or4 | user metadata required; original pre/post command fatal may occur before or after its complete captured triple. |
+| public-result | 4 | Public command clean; raw public JSON validation may fail; user metadata required. |
+| after-user-metadata | 4 | Public successful envelope verified, user metadata refused; no list metadata/triple. |
+| before-list | 4 | Public successful envelope and observed user metadata; native-list metadata refusal, no fifth child. |
+| native-list | 4 or5 | Earlier four clean/validated, observed user metadata; list metadata required, original pre/post list guard may fail. |
+| after-list-metadata | 5 | All commands clean, valid public result, observed user metadata; native-list metadata refused. |
+| review-barrier | 5 | All commands clean, valid public result, both metadata observed; intentional final t.Fatal. |
+
+For every stage beyond public-result, independently verify the retained successful public add envelope. For public-result itself preserve invalid/malformed raw stdout as truthful failed evidence; do not mislabel validation as completed. `original_config_change` remains allowed only at a stage where the original config guard can actually fail (prepare/public-user/native-list), with the existing finite projection validator. Successful continuation stages cannot carry it.
+
+Allowed files are only runtime-attempt.json, the exact prefix triples, `user-profile-metadata.json` when required above, and `native-list-profile-metadata.json` when required above. Full capture is exactly18members: one summary +15command files +two metadata files. The live Go prefix check runs before summary is added and therefore caps f.files at17; Python full admission caps18. No probe, provider, installed snapshot, second native-list slot or arbitrary diagnostic file is admitted. Do not raise generic ZIP/member/aggregate limits. Retain existing1MiB command capture/per-member mode bound, metadata2KiB each, archive32MiB and aggregate16MiB/ordinary-flat-member checks.
+
+Both stage/member guards and the new Python reader validate exact prefix/closure, typed receipt fields, argv/cwd/deadline/cleanup, previous clean commands, metadata stage/status/bounds, source/pins/scanner/layout and all-false tuple. A captured process error stays an admitted failed prefix only at its actual current boundary. Unknown stages, malformed metadata, false progress and extra authority are refused.
+
+## 5. Scoped source changes and whole-byte preservation
+
+Expected implementation paths are exactly:
+
+* Existing `repotests/agentplugins_copilot_project_native_attempt_test.go`: three finite new-mode hooks only—command guard switch case, command-prefix append eligibility, finish dispatch case. Keep every other byte of the command/check/environment/constructor/config/preparation/supervisor/finish serialization bodies unchanged. No generalized unknown-mode fallthrough or permissive mode-name prefix.
+* New `repotests/agentplugins_copilot_post_add_registry_attempt_test.go`: exact new mode/sequence/entrypoint, separate ordinary public/list phases, metadata-only defers, truthful stages, closed prefix/finalizer. Reuse existing pure helpers without modifying them.
+* New `repotests/agentplugins_copilot_post_add_registry_contract_test.go`: meaningful fixed command/stage/member/metadata/progression contracts.
+* New `repotests/agentplugins_copilot_post_add_registry_process_contract_test.go`: authored inert scripts and the same Go test child to exercise the actual original OSRunner/fatal guard. No vendor/public installer/scanner process.
+* New `scripts/project_native_copilot_post_add_registry.py` and `scripts/test_project_native_copilot_post_add_registry.py`: separate closed failed-only reader and independently authored synthetic contract envelopes. Reuse unchanged user authority/metadata/config-facts and typed pure primitives, without rewriting evidence into an old mode.
+* Existing `scripts/project_native_runtime.py`: exact Copilot CASES test/file/optin selection above (seconds/phase unchanged), and one exact new-mode dispatch to the new reader. Old dispatches/functions stay complete-byte exact otherwise.
+* Existing `scripts/test_project_native_copilot_user.py`: only the literal current-selection expectation changes to the new test/file/optin. This is the explicit root-accepted selection exception; preserve every old fixture/helper/outcome assertion, all other complete methods and the remainder of that selection method. Add new-mode selection controls in the new test file.
+* Accepted plan and concise factual validation documentation, naming historical/fresh gates accurately.
+
+The old user/empty/readiness Go entrypoint/helper/contract files, metadata capture/projection helpers/contracts, Python readers and old empty/readiness tests remain whole-byte exact. In particular, preserve both strict empty-registry actual process test functions and their whole file. Preserve all production Copilot/shared/VS Code parser/status/lifecycle/registry runner/adapter code, workflow, other clients/CASES, collectors, pins, security scanner and process/environment/authority code. No production or native activation/registry parser fix belongs to this amendment. No new CLI flags, native profile/registry seeding, config allowance, baseline adoption, acquired executable/log fixture or scanner execution is added.
+
+## 6. Meaningful inert and independent-reader controls
+
+Under the explicitly serialized slot, Go pure contracts exercise all five exact argv/cwd/30second labels, every allowed finite stage/prefix and required file set, refusal of skips/repeats/reordering/extra commands/flags/wrong executable/project cwd and60second substitutions. Check18total/17pre-summary caps and both independent2KiB metadata bounds; wrong metadata stage, missing/duplicate/unknown metadata, forged status/type/omission arithmetic and unexpected provider/probe/member refuse. No scalar bool may satisfy integer counts.
+
+New inert actual-process contracts use authored local scripts and the same Go test executable child, never an acquired/native/public installer/scanner or spoofed hosted eligibility. Exercise a clean inert add and one opaque list retaining exact stdout/stderr, including unfamiliar/non-JSON output, while original config bytes/digest/pin maps remain unchanged. Test an add exit7 and an add-time original-config mutation: original f.command must fatally stop and the list marker must be absent. Test list exit7 and list-time original-config mutation: preserve that actual failed prefix and prove no after-guard marker or later command executes. Metadata-only defers must still run and may record finite refused status; they cannot start a child or change the current failure stage. Metadata before/after refusal controls prove no fifth command after public-phase metadata refusal, and no list command after pre-list metadata refusal. Preserve the existing actual /proc capability guard and both original strict process tests unchanged; do not skip or spoof it.
+
+Independent Python synthetic positives cover all finite failed prefixes, both metadata observations and the full18member intentional-barrier envelope, always all-false. Use independently authored inert public JSON and opaque list bytes, not modified captured logs. Coherent negative controls update related lengths/hashes where applicable and exercise missing/partial/extra triples, sixth/repeated command, stage/prefix contradiction, prior failed add followed by list, list claimed completed on error/context/forced cleanup, wrong public schema/command/result at continuation stages, source/layout/pin/scanner drift, all success/auth/model/qualification mutations, count/bool/elapsed bounds, metadata omissions/stages/duplicate path hashes/whole byte caps, invalid UTF8/duplicate JSON and unexpected probe/provider/authority fields. Old mode plus new-only members and new final barrier over the old four-command capture must refuse; do not normalize it into a full new capture.
+
+Source preservation checks compare complete old files/functions, not merely named assertions. Record actual output/exits/source hashes for all checks. Pure synthetic acceptance proves the closed diagnostic schema only, never native registry interpretation or qualification.
+
+## 7. Gates, historical replay, publication and next raw review
+
+Execute locally available new pure Go contracts, the affected runtime/new-mode/old user/empty/readiness Python contracts and exact selector checks under root's serialized slot. Run gofmt/diff checks and affected all-enabled lint against `a412ba5e137fdcb7e004393229b323211ed746e1`, plus whole unfiltered revive/funlen/gocyclo/gocognit/dupl/depguard. Broaden only for a concrete remaining risk. Record the actual commands, source, exits and log digests; do not predict counts or transfer a historical pass as a new execution.
+
+The actual local platform previously lacks the /proc task/children interface required by unchanged OSRunner guards, even unsandboxed. Do not repeatedly run known-incapable local strict process tests, add exclusions to the required hosted command, weaken assertions, introduce skips or impersonate a hosted environment. Compile/pure local checks and historical failures remain accurately labeled. The unchanged workflow supplies the genuine hosted full gate after source publication and before native execution:
+
+```text
+go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime)'
+```
+
+Its conditional pinned Go1.26.10 setup, no-exclusion command, original two strict process cases and the new TestCopilot process contracts must actually RUN/PASS with no skips on the exact new source. Native already depends on admission. No workflow change is needed. Root publication records this fresh hosted gate as pending until measured; neither the old5781 admission nor a local synthetic pass is described as a new hosted pass. The historical5781 receipt is `/tmp/uap-copilot-5781-independent-40604771816/admission-hosted-inert-proof.json`, SHA256 `2133ee2348716dd8c0152d3524bf8beea559b581d954c5f52c96de525cb70f63`, original raw log SHA256 `c58702fbb238d4d4af49981a529ca27e656b9047254af4524a85e5ea660a3f89` (131RUN/131PASS, zero skip/fail, unchanged process file d328951b…).
+
+Scratch pure readers replay original189e readiness,922 failed user add,2c2 empty-registry barrier and5781 successful-public-add barrier artifacts under their original exact source identities. Verify archive/member/summary/raw bytes and hashes unchanged, original failed/pass distinctions and all-false outcomes preserved. The new mode neither retargets nor promotes an old capture. Preserve the already-audited inherited Cline results. No old capture/log/binary enters Git.
+
+Freeze exact source and obtain root plus independent Kimi CODE reviews before root publication; critics verify finite mode hooks, old whole-byte preservation, callback/late-failure behavior, metadata opacity, no rebaseline and no production/VS Code change. Root alone composes current remote state and normal-FF publication; do not retry unchanged or supersede any pending genuine capture.
+
+Only a fresh source-pinned hosted run may supply the post-add listing. Independently audit API/source/tree/build/pins/closed ZIPs, exact public and native argv/cwd/raw streams/receipts, both opaque metadata observations, original process/config/pin guard and intentional or earlier fatal boundary. A clean native list plus review barrier still has all flags/runtime/auth/model false. If the original guard or metadata fails, retain that failure and stop; do not introduce a profile exception. Any eventual parser/activation proposal requires the actual new raw bytes, source-backed diagnosis and its own two pre-code critics. No such product change or registry grammar is authorized here.
+
+## Baseline preservation hashes
+
+The following table is generated from the exact5781 source. Existing mode files/readers/contracts and production/metadata/workflow helpers are whole-byte preservation anchors; the shared attempt/runtime and selector test have only the explicit new-mode/selection exceptions above.
+
+| Path | SHA256 |
+| --- | --- |
+| `install/integrationctl/agentplugins/clients/shared/copilot_identity.go` | 8344e9718dd9ce9fa21d7a09316ec23620f7350cb742a5ff5cfdab79c9849331 |
+| `install/integrationctl/agentplugins/clients/shared/copilot_lifecycle.go` | 1c9d61deffedc62d558d17b0ee27e9b947589b79b53fadfd8b1a12993110ee4b |
+| `install/integrationctl/agentplugins/clients/shared/copilot_status.go` | 7fb2f5f03491f036d613217284c830a87efebfe15827038fa43401417be69ec4 |
+| `install/integrationctl/agentplugins/clients/shared/native_registry.go` | 9be2175d88e1ab6eeee8d1f0b812fafee5d43a5a67fc039abfd675cef2caa115 |
+| `repotests/agentplugins_copilot_project_native_attempt_test.go` | 8cc6cfdc416259c09852873274b07098c9f6ccd43e6b7f919a5f0b4afcad7be0 |
+| `repotests/agentplugins_copilot_user_registration_attempt_test.go` | 45447d0a35f8dede1f95d505f098c4485f3695402f76ccdfabd0e4100a8cb36d |
+| `repotests/agentplugins_copilot_user_registration_contract_test.go` | ca23e14493bf907f20a2e2af2b5d9cde1f6b32f961719add33805b804a3e14d1 |
+| `repotests/agentplugins_copilot_empty_registry_attempt_test.go` | 9e78c5fb43db2ecf4007e9dd271a4aa26010f75b96879cb30633e4419e8e3caa |
+| `repotests/agentplugins_copilot_empty_registry_contract_test.go` | ac7cba746373eaf9ecc0993db4959d93919775beaa079877e48678eba285e08d |
+| `repotests/agentplugins_copilot_empty_registry_process_contract_test.go` | d328951b55a897eeb81783216a80d6f7f8d2fbcee3328b9f491d2d6dab210b6c |
+| `repotests/agentplugins_copilot_user_metadata_test.go` | db5f1d60f4c1e0934ab32e90c39e654a1368beb90b0c63c462f7908a559c0b15 |
+| `repotests/agentplugins_copilot_user_metadata_projection_test.go` | 7f298659c71a0c4b529840380920a1b5ee333628158479967c6c2766feaea689 |
+| `repotests/agentplugins_copilot_readiness_completion_test.go` | 9df4e392cb97e3365374201f44163552c9b99f60c9f5f54cb8f8891b09abdea8 |
+| `repotests/agentplugins_copilot_readiness_contract_test.go` | 57f2bf81b41627ed342a8efc00f634c3e36bf19cc4c7f16897da88bd66a7d795 |
+| `repotests/agentplugins_copilot_readiness_events_test.go` | 2a4683b6bded2ccad5f30b883f3800af84c0284e5ddaab4ab5d969a6007d2d47 |
+| `repotests/agentplugins_copilot_readiness_exchange_test.go` | c641a4881f6393176a70f5c53388ed7ea9143f78b28faa7dbe885895ac6b7c1b |
+| `repotests/agentplugins_copilot_readiness_identity_contract_test.go` | f51bc243f72be24e4615348fe2156be4759b9e00a1df265a3403ac57f9ded6a6 |
+| `repotests/agentplugins_copilot_readiness_installed_test.go` | e478d85a649aedd6af7106079aeebf7724d5f810cff0a8e13b114faa3b7999a9 |
+| `repotests/agentplugins_copilot_readiness_metadata_test.go` | 1a7a184227f50d575d61499acd52c9dbeb17e70efee4281f3ce27ef774ea7a72 |
+| `scripts/project_native_runtime.py` | 0be88d5590ac950a64903ad22adc3b3b12624c9bd4341f0c5340beeac8674984 |
+| `scripts/project_native_copilot_user.py` | fe75f19d141b755bf19c1ee7605963fa2f045bdcbca5690b38ea044609bb42c5 |
+| `scripts/project_native_copilot_empty_registry.py` | 4bbf4e5e34ff8e908a867744beb14228fadfc5e91d8aacc60b242a8f96f1922e |
+| `scripts/project_native_copilot_readiness.py` | 98cb758e0b6b1dcfe4953c8032e51f67fb2afe974e6887ca862c3c70de518cc6 |
+| `scripts/test_project_native_copilot_user.py` | 299e89a5d0138a5e4e43cae955b03d704c627502ca02d2fe67ec8971581a610a |
+| `scripts/test_project_native_copilot_empty_registry.py` | 48ea493b5c1d177183d39b6f5a08196bf8a3940695d76b820ccab5127dee1f3f |
+| `scripts/test_project_native_copilot_readiness.py` | f339b7703c2d2358f953bd040285e242c1aef0db9bf4a73a3f1c41b1fd54dbdd |
+| `.github/workflows/project-native-runtime.yml` | 6d50637892ee2a387052b42d5d9a53a8db68e7a54aa2d04272f49425cb17e3df |
+
+Draft work performed source and already-audited raw reads only. No implementation, tests/lint/native execution, Git/GitHub mutation or publication has occurred for this proposal.
+
+
+## Accepted pre-code plan: Copilot exact user mixed live listing (2026-10-28)
+
+The following frozen proposal is accepted for its four code paths and two existing documentation paths. Its retained draft label records the original reviewable proposal; this acceptance authorizes implementation only after this root-owned pre-code commit.
+
+Base source: `85dfdaeaa217cf74f5c5a6464426cd1b67c2f069`; frozen draft SHA256 `061e3db491efc478921c130f22ae1888638d6936ba61b3095ce5c7aa41c760df`. Independent PLAN GOs: root `790e496e8d7ad30f862ae60fa627308c900cb40a19def7664ec811afae44ea90`, Kimi `16d1a95b203da5210edb53873e77896fd118d7ef77af9b7b93b64e4dc83413f3`. Both critics verified all 27 source files, 206 declaration anchors and five evidence receipts. The new-only strict recognition, exact old fallback semantics, and internal-verification observability limit are required. No qualification or release is authorized.
+
+# Copilot: exact disabled-builtin plus managed live-entry recognition
+
+Status: **PRE-CODE DRAFT ONLY**. No implementation, parser change, native retry,
+test or lint execution is authorized by this document. Root and a second
+independent critic must approve this exact draft; root must commit the accepted
+plan before any source edit. Root owns all Git/GitHub writes and publication.
+
+## 1. Exact source, actual evidence, and decision
+
+Plan base is clean source `85dfdaeaa217cf74f5c5a6464426cd1b67c2f069`, tree
+`10d2b3810d11b8e8fe984f0ab19d28bab4317faa`, already available at
+`/tmp/uap-copilot-post-add-registry-current`. Do not retarget that evidence to a
+future source identity. No new checkout or acquired executable is needed locally.
+
+Actual run40613833246, attempt1, native job122571919197 completed with the
+intended failed-only review barrier. Admission job122571555875 passed; inherited
+Cline job122571919162 also passed. These are separate outcomes. This plan does
+not turn the native diagnostic job into a passed runtime test.
+
+Both independent fresh whole RAW reviews are complete:
+
+| Reviewer | Receipt | SHA256 |
+|---|---|---|
+| Root R1 | `/tmp/uap-copilot-85df-root-40613833246/root-raw-audit.json` | `d54a31c9bb6d772e7793ece8877eb9305bfc027cd24643ca99ea8e5ea0dbabf1` |
+| Independent R2 | `/tmp/uap-copilot-85df-independent-40613833246/copilot-independent-raw-r2.json` | `c0b45dcf49faf16452d20b8cfbd1fbbcaadfa32ae80a8b6e7b2cb54692f066ef` |
+
+Both reviews bind own original ZIP/API identities and all raw/member/stream,
+source, build, compiler, pin, public result, direct-list and metadata joins.
+
+| Original artifact | Outer SHA256 | Inner SHA256 | Members |
+|---|---|---|---:|
+| Native12784890825 | `f07b24bf429c1623e0825ba0dd7e46924914c2f284bcef61a194c48cbbfcf57b` | `1c6df23cc53a8028f18923382edcaec40e8834789a9b6ec1e9c394575634ff06` | 18 |
+| Frontend12784436728 | `017d43a3c46d84eb04b2bbc4647fc2d18512a922ceaefb900bcbcbdc3493124e` | `9f189986f8c015fd5f83d878734091ac223b51c90fa0af66844801ed0287f938` | 25 |
+
+The actual five commands were git-A, git-B, version, public add-user, and one
+direct native-list in the same original HOME/outside directory. All had exit0,
+error=false, context_error=false and ordinary descendant cleanup. Add took3509ms;
+list524ms; total7088ms. Sole failure was the deliberate review barrier at
+`agentplugins_copilot_post_add_registry_attempt_test.go:346`. No probe/provider
+evidence exists; all five qualifications and runtime/account/model flags are
+false.
+
+The 396-byte LF stdout, SHA256
+`eb239f40f75369e78916a00e3700e3a75b695d35cd0e48a52b4ce531690a1373`, has:
+
+1. the exact 56-byte fixed prefix `Built-in plugins:` plus one disabled
+   `browser-use (v0.0.4)` line;
+2. the existing exact `CopilotLiveHeader`;
+3. one `native-proof@agentplugins-71b878b366b9 (v1.0.0) (enabled)` entry;
+4. one six-space `from ` line at the independently derived managed physical
+   path `.../installer-state/managed/clients/copilot/native-proof-024a9ef8a9f0`;
+5. exactly one final LF and no other bytes.
+
+The fixed-prefix SHA256 is
+`e83a8da5c004a1bfd6aa6645aacbe882ff506bf311b6a6c8c34833533e25caa2`.
+The direct stderr is exactly empty. Dynamic path/marketplace/physical identity
+were independently recalculated from public installation UUID
+`5cfee740-c7d0-4cee-83d1-b23f462a6e63`; no raw string was adopted as ownership.
+Raw logs and original captures remain scratch evidence, not repository fixtures.
+
+Public add emitted successful mutation, but its activation is still
+`manual_activation_required`, authentication `not_checked`, policy `allowed`,
+verification `package_validated`. The generic live parser requires
+`CopilotLiveHeader` as the first line; the captured later direct document begins
+with the builtin section and has no independently valid legacy Installed
+section. Applying the current verifier to these exact captured bytes therefore
+gives Unknown. The observed public manual result and reviewed source identify
+the existing `ErrCopilotListContractUnknown` fallback as the repair boundary.
+The installer's internal verification stdout is not exported, so matching that
+internal stdout or its precise parser branch to the later direct document is a
+source-supported inference, not a separately captured branch trace.
+
+**Selected candidate:** add exact recognition only for this measured whole
+shape in eligible Copilot user requests, route both registry preflight and
+activation verification through it, and reuse the current failed-only18-member
+post-add capture unchanged to verify the real repaired public activation.
+No new mode, selector, evidence format or metadata rule is needed.
+
+## 2. Source trace and preservation boundary
+
+Source and evidence hash inventory:
+`/tmp/uap-copilot-user-live-builtin-source-context.json`, SHA256
+`96c01f919aa21ef4c7acd2ada44c6b91f78f01b15b807c4dc1e841b6ef3b9da1`.
+It contains exact source commit/tree, 27 whole-file hashes and declaration-line
+anchors, the measured prefix hash, and the relevant original review receipts.
+
+Important call sites and invariants:
+
+| Source anchor | Current behavior / requirement |
+|---|---|
+| shared/copilot_status.go:40 `CopilotLivePluginStatus` | Header-first shared Copilot/VS Code parser. Preserve this entire file byte-for-byte. |
+| shared/copilot_identity.go:39 `inspectCopilotCLI` | Runs the held `plan.NativeRegistryExecutable plugin list` via existing tree-aware registry runner; handles errors/nonzero before classification. Add only one eligible positive branch after expectedPath selection. |
+| shared/copilot_identity.go:69 `copilotUserEmptyWithDisabledBuiltin` | Existing exact empty+disabled builtin admission. Preserve function and tests whole-byte exact. |
+| shared/copilot_identity.go `CopilotRegistryFindingAt` | Shared generic grammar and owned/unowned mapping. Preserve function and all scanner helpers byte-for-byte. |
+| shared/copilot_lifecycle.go:127 `VerifyCopilotPlugin` | Executes existing read-only listing. Add eligible exact recognition before its unchanged generic status switch. |
+| shared/copilot_lifecycle.go:19 `CompleteCopilotActivation` | Existing Active/Installed success, unknown/manual, and error/failure handling. Preserve this whole function. |
+| clients/copilot/lifecycle.go `Adapter.Activate` | Checks client identity; dispatches project requests separately; user requests call shared completion. Preserve entire adapter. |
+| clients/copilot/identity.go `InspectNativeRegistry` | Dispatches project observations to component-specific inspection; user to shared inspector. Preserve entire adapter. |
+| clients/vscode/lifecycle.go / identity.go | VS Code uses the same shared completion/inspector. Preserve all dedicated source and behavior; exact new branch must be unreachable for ClientVSCode. |
+| shared/marketplace.go:13 `ManagedMarketplaceName` | `agentplugins-` + first12 hex SHA256 of trimmed physical ID. Reuse existing function; do not change derivation. |
+| shared/command.go / native_registry.go | Original command/error and tree-grace behavior. Preserve whole files; no extra command, version probe, environment gate, or wrapper. |
+| planner/planner.go | Holds detected executable in NativeRegistryExecutable. Preserve planner and all profile/ownership machinery. |
+| post_add_registry_attempt_test.go:335 exact test | Existing ordinary public phase, metadata-only defer, ordinary list phase, final barrier and prefix/member guards. Preserve entire file. |
+| readiness_completion_test.go:98 | Original readiness may complete but all five qualification flags remain false. Preserve finalization and every old reader. |
+
+Whole-file hashes most useful for final review:
+
+| Preserved file | SHA256 |
+|---|---|
+| shared/copilot_status.go | `7fb2f5f03491f036d613217284c830a87efebfe15827038fa43401417be69ec4` |
+| shared/copilot_empty_builtin_test.go | `fc746bb5b7df509c4ac931982c17d019da53cbf8e6c52c69e66e9cebfe5d1d0b` |
+| shared/copilot_identity_test.go | `aea80041bc701a5813a3be96773a7ef849701ad3ca39ee10bfa66ecdfa00005c` |
+| clients/copilot/lifecycle.go | `75aa0d8a7863d463e6c77e276084682f69e3802acb7679da8d7d5cbbeddedd72` |
+| clients/vscode/lifecycle.go | `433edd4b7b41608a90c0737d3331b39b6785cc1d4ec51a613672031316b50ff2` |
+| repotests/agentplugins_copilot_project_native_attempt_test.go | `645e31328ee73f708a45f91e891c5c3031a947c972937fa8fec04be2b1b3f14d` |
+| repotests/agentplugins_copilot_post_add_registry_attempt_test.go | `405863943f307505d90e0c91856e26e60436b486fd19d00336d49f9f6152ac9b` |
+| original empty-registry strict process contracts | `d328951b55a897eeb81783216a80d6f7f8d2fbcee3328b9f491d2d6dab210b6c` |
+| new post-add strict process contracts | `0177b11697e3a2c2e655dd7165576be564e0a2f42bd4b767e41515e646474b75` |
+| scripts/project_native_runtime.py | `2327a1f1948566ca1d3296444943d15b6d2ee0303520da823fdec6b6b0c3a0e7` |
+| scripts/project_native_copilot_post_add_registry.py | `4996d333006a3bfc4aeae8f0ead56d8c7b0953ef45844a822150ed2d4bec9666` |
+| scripts/project_native_copilot_user.py | `fe75f19d141b755bf19c1ee7605963fa2f045bdcbca5690b38ea044609bb42c5` |
+| scripts/project_native_copilot_empty_registry.py | `4bbf4e5e34ff8e908a867744beb14228fadfc5e91d8aacc60b242a8f96f1922e` |
+| scripts/project_native_copilot_readiness.py | `98cb758e0b6b1dcfe4953c8032e51f67fb2afe974e6887ca862c3c70de518cc6` |
+| .github/workflows/project-native-runtime.yml | `6d50637892ee2a387052b42d5d9a53a8db68e7a54aa2d04272f49425cb17e3df` |
+
+Do not edit old generic, VS Code, user/empty/post-add/readiness readers or
+contracts, runtime selector, production profile/ownership code, workflow or
+capability implementation. AGENTS.md, the owner scope clarification and the
+capability-preservation contract remain controlling. No legacy deletion,
+implicit YAML fallback, release or VS Code qualification is in scope.
+
+## 3. Exact new recognition and eligible routing
+
+Add a private, small Copilot-only helper in a new shared-package file. This is
+an exact positive observation; it is not a replacement generic listing parser.
+
+### Held caller and identity prerequisites
+
+The plan has ClientCopilot and explicit ScopeUser. TargetContext.Scope is user
+or the existing unspecified default, never project/local; ProjectRoot is empty.
+The held registry executable is nonempty absolute clean, NUL/CR/LF-free and
+equals the executable actually used for this existing command. No new process
+or filesystem acquisition is performed to establish that equality.
+
+The declared name is nonempty, trimmed, valid for the existing ASCII live-entry
+identity grammar, and is not case-insensitively `browser-use`. The physical ID
+is nonempty, trimmed and valid as an existing namespace identity. The expected
+marketplace comes only from `ManagedMarketplaceName(plan.PhysicalArtifactID)`;
+the expected version is the exact `MarketplaceVersion(plan.DeclaredVersion)`
+value validated by the existing live-entry version grammar. There is no version
+wildcard, environment-spoof gate, or vendor-version command.
+
+The expected managed path is an absolute clean non-root NUL/CR/LF-free path,
+equals the held plan.ActivePath, and has basename plan.PhysicalArtifactID. Bind
+the exact path; do not normalize a received path. Bound dynamic identity strings
+to256 UTF8 bytes and path/executable strings to4096 bytes; bound this new whole
+document comparison to8KiB. These are new-only refusal caps and do not modify
+any generic parser or process capture bound.
+
+For inspection with a managed binding, additionally require that this existing
+binding is Copilot/user and its physical ID and target locator equal those held
+plan values. This branch never creates ownership. The same exact expected entry
+without an owned binding is Collision, not Expected or Clear.
+
+For activation verification, require the request's Client.ClientID and
+Delivery.ClientID also equal ClientCopilot; request.DeclaredName equals the held
+plan name; request.BackendExecutable equals both the plan's held registry
+executable and request.Client.ExecutablePath; Delivery.ActivePath equals the
+held expected path. Existing identity mismatch and project dispatch stay exact.
+These checks apply to the new branch only; legacy generic behavior stays intact.
+
+### Exact whole bytes
+
+For admission through the NEW helper, require existing command success with no
+runner error/nonzero exit, a live original context at admission, and exactly
+empty stderr. Its strict identity, context, byte-cap and stream requirements
+apply only to this new branch. Accept stdout through that branch only when it
+equals the constructed whole document:
+
+```
+Built-in plugins:
+  • browser-use (v0.0.4) [disabled]
+Live Plugins (loaded from a local marketplace directory, never copied):
+  • <held name>@<derived marketplace> (v<exact held version>) (enabled)
+      from <exact held managed path>
+```
+
+There is exactly one final LF. Do not strip a prefix, split away an unknown
+section, normalize line endings, trim incoming bytes, accept another builtin,
+ignore arbitrary suffixes, accept multiple live entries, or infer absence from
+an unrelated entry. Reject empty/extra/duplicate/reordered headings or entries,
+unknown status/version/path/name/marketplace, enabled builtin, missing builtin
+state, ANSI/NUL bytes, whitespace variation, CRLF, missing final LF or extra LF.
+All such documents fail the NEW helper and continue through each old unchanged
+classifier/fallback with its exact prior result. The new helper itself grants
+neither absence nor Clear on a mismatch. Do not strengthen or broaden legacy
+behavior while adding this branch.
+
+In particular, the generic verification function CopilotPluginStatus deliberately
+skips a preamble while scanning an old `Installed plugins:` section. Appending
+an independently valid exact expected Installed entry to the measured mixed
+document can therefore still return Installed through that OLD grammar, although
+the NEW helper refuses the extra bytes. The old generic inspection function
+CopilotRegistryFindingAt instead rejects this preamble and remains Indeterminate.
+Those two historical results must stay different and unchanged. Similarly, old
+recognized verification grammar keeps its prior stderr/context/size handling;
+the new branch's empty-stderr/live-context/8KiB rules do not rewrite it. Finite
+malformed-new-shape fixtures with no independently recognized legacy section
+continue to produce their original Unknown/manual result. No new legacy
+allowance is introduced by preserving an existing positive result.
+
+### The two edits to existing production functions
+
+1. In `inspectCopilotCLI`, preserve the exact existing command and all original
+   error/exit handling. After existing expectedPath selection and before the
+   unchanged generic return, apply the new eligible exact positive check. Recheck
+   ctx.Err before a positive result. Return Expected only for the matching held
+   owned binding; otherwise Collision. Existing exact empty+builtin admission
+   and all generic classifiers/scanners remain byte-for-byte unchanged.
+2. In `VerifyCopilotPlugin`, preserve its command and all runner/exit failures.
+   Before the original generic status switch, accept the exact eligible user
+   observation above, with empty stderr and ctx.Err rechecked. Otherwise use the
+   original switch unchanged. Do not change CompleteCopilotActivation,
+   ManualCopilotVerification, install/register/update/uninstall behavior,
+   attestation, recognized-negative errors or compensation.
+
+VS Code requests fail the new branch's ClientCopilot guard before recognition.
+Direct shared generic functions still return their old results on exactly the
+same prefixed input. All existing legacy Installed and header-first live forms
+continue through their old paths and tests. Project Copilot remains the original
+component/native-config adapter, not this user marketplace route.
+
+## 4. Concrete allowed files
+
+Only these four code paths are proposed:
+
+1. NEW `install/integrationctl/agentplugins/clients/shared/copilot_user_live_builtin.go`
+   — private exact helper and small caller-context predicates.
+2. NEW `install/integrationctl/agentplugins/clients/shared/copilot_user_live_builtin_test.go`
+   — independently authored synthetic whole documents and inert runner contracts.
+3. EXISTING `.../shared/copilot_identity.go` — only the explicit positive hook in
+   `inspectCopilotCLI`; every other function remains exact.
+4. EXISTING `.../shared/copilot_lifecycle.go` — only the exact eligible check in
+   `VerifyCopilotPlugin`; every other function remains exact.
+
+Root may append the accepted plan and final measured validation to the existing
+`docs/COPILOT_POST_ADD_REGISTRY_VALIDATION.md` and the governing consolidated plan
+`docs/plans/project-install-e2e/remaining-native-qualification.md`, following the
+established precode-plan workflow. These are the two allowed existing docs paths.
+No Python, runtime selector, mode, workflow, Go process-contract, production
+adapter, VS Code, old test or raw fixture path is authorized to change. If an
+unexpected need arises, stop and report the concrete dependency before editing.
+
+## 5. Meaningful independently authored contracts
+
+Use a new pure inert runner: no native executable, installer or scanner process.
+Inputs use new `/inert/...` paths/IDs, not copied hosted captures. Keep the exact
+public fixed prefix; derive its expected test identity independently. Cover:
+
+- exact measured shape / exact name-version-marketplace-path;
+- owned inspection Expected, unowned inspection Collision, wrong owned binding
+  Indeterminate, and no Clear granted by the new branch for
+  unrelated/missing/wrong live identities;
+- one read-only verification call returns recognized success through the NEW
+  helper only in eligible Copilot/user context; shared completion then returns
+  Active/Installed while preserving authentication policy. Independent old
+  recognized-grammar success remains unchanged for its original callers;
+- both initial activation and VerifyOnly use the same exact recognition; initial
+  inert transcript keeps existing marketplace-add/install/list commands and
+  ordering, with no extra command or version probe;
+- ClientVSCode/other/empty IDs, project/local/unspecified plan scope, conflicting
+  TargetContext, executable/client/delivery/name/path mismatch, same browser-use
+  name including case variants, invalid/canonicality/byte-bound identities;
+- each finite NEW-helper whole-byte refusal in section3, disabled expected live entry,
+  builtin version0.0.5/enabled/missing state, second unrelated/duplicate entry,
+  unexpected stderr and command error/nonzero/canceled-context behavior; these
+  are new-branch admission controls, not changes to old recognized grammar;
+- malformed/unknown prefixed input retains each original fallback result and
+  explicit attestation behavior. Add the concrete measured-document-plus-valid
+  Installed-section counterexample: NEW helper=false,
+  CopilotPluginStatus=Installed, CopilotRegistryFindingAt=Indeterminate.
+  Also cover old recognized verification with nonempty stderr: the new helper
+  refuses it while the old entrypoint keeps its prior result. Cases without an
+  independently valid old section must still exercise Unknown/manual/failure;
+- direct generic CopilotLivePluginStatus, CopilotPluginStatus,
+  CopilotRegistryFindingAt still refuse the unmodified measured prefixed input
+  exactly as before, while the independently valid legacy-section counterexample
+  preserves each function's distinct prior result. All old
+  empty/Installed/header-first live tests stay unchanged;
+- inspection preserves RunNativeRegistry's existing TreeCommandRunner selection
+  and one-second grace; verification preserves RunClientCommand's existing Run
+  path and original errors. Do not silently change one runner route to another.
+
+The unit contracts must test outcomes through both affected production entry
+points, not only mirror the new helper. There is no reason to alter any Python
+grammar: run all existing affected Python contracts and historical raw readers
+unchanged. A NEW-helper positive must never be inferred from a failed command or
+nonempty diagnostic stream. Do not extend this guarantee into a change to the
+preserved old verification entrypoint's recognized-grammar stream handling.
+
+## 6. Gates on the final immutable candidate
+
+After two PLAN GOs/root precode commit, implement only the allowed paths. Freeze
+and hash source; root commits. Two independent CODE critics read the exact
+commit/tree and compare unchanged functions/files. Do not rely on author review.
+
+Run only with the parent-owned serialized slot and sufficient disk. Record every
+actual command, exit and full log hash. No native/acquired client/public installer
+or scanner may be executed locally. Never spoof a hosted environment, weaken a
+process assertion, skip a required contract or claim a local full process pass.
+
+Required checks:
+
+1. Full affected production Go package tests (shared, Copilot, providers and
+   usecase, plus the existing provider/generic regression coverage). Newly
+   authored tests are pure inert contracts; any concrete local process-interface
+   limitation must remain an actual failure and be handled through genuine
+   hosted coverage, never an exclusion disguised as a full pass.
+2. Existing repotest pure4/package compilation and all67 affected Python
+   contracts, with their source whole-byte unchanged.
+3. Affected all-enabled lint with the unchanged project policy/base revision,
+   and whole unfiltered six `revive,funlen,gocyclo,gocognit,dupl,depguard`, zero
+   issues required. Actual lint findings may justify only reviewed equivalent
+   fixes; do not weaken lint policy.
+4. Full current-module immutable original-source raw replays for189e,922,2c2,
+   5781 and85df. Preserve ZIP/CRC/member hashes and original tuples.189e remains
+   readiness-complete/test_failed=false with all5 qualifications false;922,2c2,
+   5781 and85df remain failed/runtime-incomplete/all5false. Never rewrite them as
+   repaired Active evidence. Keep actual source/tree identities from each raw.
+5. Verify all old Python reader/test files and all repotest/process files,
+   workflow, shared generic parser, dedicated adapters and owner-scope anchors
+   byte-for-byte. In the two modified production files verify all non-target
+   functions byte-for-byte. No selector literal exception is needed this time.
+6. Fresh genuine hosted full unexcluded process gate on the published candidate:
+   `go test -json -p=1 -count=1 -timeout=120s ./repotests -run
+   '^(TestCopilot|TestProjectNativeRuntime)'`, actual Go1.26.10, every original
+   and new strict phase/fatal parent RUN/PASS, zero skip/fail.137 prior passes
+   are historical, not a substitute for the fresh candidate gate. Existing
+   normal CI must also cover the changed production package tests.
+
+Actual85df hosted process proof has137RUN/137PASS/0skip/0fail and raw job log
+178857bytes SHA256
+`3cb0300849cdade6bab99db0e39c00d5b08c405b6ee95f063a54dd3605d05a76`.
+Root receipt `/tmp/uap-copilot-85df-hosted-process-gate/root-process-gate-audit.json`
+SHA256 `fb89aa706559d5163e96c741ef4b4acd82cd935dd54f7ad48145636c0273fd14`;
+independent RAW R2 re-downloaded and verified the same complete hosted log.
+
+## 7. Actual native follow-up and repair acceptance
+
+After all source/CODE/local/hosted gates and root publication, make one genuine
+current-source run of the **unchanged existing post-add selected test**. Keep the
+same Copilot1.0.103 binary/archive and scanner pins; original HOME/outside;
+30-second command bounds; original150/180-second origins; descendant/config/
+immutable/profile guards; two separate metadata-only ordinary phase defers; five
+commands;18-member maximum; and all failed-only flags. Do not schedule an
+unchanged retry or supersede an active capture.
+
+Repair acceptance is concrete and stronger than merely reaching the barrier:
+
+- all five command receipts clean and exact original argv/cwd;
+- public result successful mutation, same ordinary schema/operation/UUID/physical
+  derivations, authentication `not_checked` and policy `allowed`, but activation
+  now **Active** and verification **installation_verified** through the existing
+  recognized-success path, without activation/user attestation;
+- no observed manual-contract fallback, FailedActivation or attestation in the
+  fresh public result; the reviewed source and inert production-entrypoint
+  contracts must support the candidate recognition path;
+- native list retains the exact independently bound expected live entry and
+  fixed disabled builtin tuple, stderr empty; both opaque metadata observations
+  valid within original bounds; no config-change diagnostic or unexpected probe;
+- sole final test failure remains the deliberate review barrier; runtime and all
+  five qualifications/account/model flags remain false.
+
+The unchanged18-member capture exports the public add result and the later
+direct native listing. It does NOT export the installer's internal
+VerifyCopilotPlugin stdout. Fresh public Active/installation_verified without
+attestation, the independently bound direct listing, reviewed source and inert
+entrypoint contracts together establish the observed repair behavior. A claim
+that the internal NEW helper, rather than another preserved recognized grammar,
+handled that unexported internal document remains a source-supported inference;
+it is not an independently captured branch trace. No instrumentation, new
+capture member or evidence-format change is authorized or needed for this slice.
+
+The unchanged capture/reader intentionally permits historical manual public
+responses as diagnostic evidence. Therefore `runtime_artifact_admitted=true` or
+the barrier alone is not repair proof. Two independent fresh whole RAW reviewers
+must explicitly compare the observed public activation/verification and later
+direct listing with the reviewed source/contracts, while retaining the internal
+stdout observability limit above. A still-manual result, a new unknown document
+or an earlier fatal is a preserved new failure, not a reason to broaden this
+parser speculatively.
+
+## 8. Finite continuation toward full project E2E: deliberate tradeoff
+
+The existing189e source `189e00d364ccde805c9ffc6738e61fc58ae277fc`, tree
+`3f6dd05e28e7c6ab009c37d41cf804d6c3907743`, already has a genuine successful
+21-member installed-tool-readiness capture. It proves one project component
+installation and one fresh native27-frame/2-provider-request exchange with one
+owned write call and3probe events. Its reader/finalizer explicitly keeps all five
+project/native lifecycle qualification flags false. That useful proof stays
+preserved and replayed.
+
+Current project setup dispatches independently to repository `.github` skill/MCP
+components and Prepared activation; it does not use the user marketplace
+verification being repaired here. The current readiness test has no native
+User/A/B isolation matrix, repeat-add/unchanged-update/intact-repair/update/
+missing-repair/default-remove/repeat-remove lifecycle, fresh-session retained
+marker reads after transitions, or native post-removal absence. Its single
+observed27-frame grammar is not evidence for unseen empty/removed catalogs or
+read/update/restart wire sequences. A same-mode rerun cannot fill those gaps.
+
+Reusing the current18-member post-add mode first is the smallest candidate that
+actually tests this user registration repair. Restoring the old readiness
+selector now would exercise the separate project component path and would not
+show whether the actual manual fallback was fixed. Combining both tests under a
+regex would also collide with their exclusive output ZIP and alter the bounded
+single-test frontend contract. Adding another alias/mode or combining HOME/
+fixture authorities is unnecessary for this repair.
+
+After the repaired user capture has its own two RAW GOs, the next reviewed slice
+should construct a **proper finite project lifecycle** using the existing
+transaction/state/data/source and measured readiness seams, while retaining
+Prepared/auth-not-checked production wording. An eventual lifecycle candidate
+must author independent Go/Python semantics, exact per-phase source/binding/data
+and catalog joins, fresh native sessions for installed/updated/repaired/restarted
+and removed states, honest retained-data/marker behavior and ordinary final
+cleanup. Any newly encountered native document must first remain a bounded
+failed observation; no unseen wire shape is invented or qualified by this plan.
+The exact lifecycle sequence, budgets and new evidence schema require their own
+two source-backed precode reviews before implementation. This plan authorizes
+neither that larger implementation nor early promotion of any qualification.
+
+## 9. Exit conditions
+
+Return this frozen draft and source-context hash for two independent PLAN
+critics. Keep source clean and do not run tests/lints while another worker owns
+the gate slot. After acceptance, root commits the plan, author implements the
+four allowed paths, both CODE critics review, actual gates are recorded and root
+publishes. Fresh native review establishes whether the repair occurred. Keep all
+prior raw outcomes and every limitation visible until the later full project
+E2E evidence is actually complete.
+
 ## Gemini owned-MCP listing diagnostic amendment
 
 Accepted plan SHA256 `6c696cd8309f6da3ee9059ef887b14bb8358ed5e4fd57afe199a69b2655b3d5d`
@@ -2332,3 +3287,200 @@ qualify. Current9e failed native history remains refused. A reader mutation that
 places success flags/proof over failed raw must fail; late failures clear staged
 flags. Only future same-source actual component and single-call success may be
 combined. Root freshly checked PR524 remains9e before this isolated checkout.
+
+## Copilot architecture ratchet amendment before project lifecycle (2026-10-28)
+
+Genuine current-source run40624054507 at838c3e19/tree0aa6dadd reaches only
+the existing post-add review barrier. Public user add now reports Active and
+installation_verified without attestation/manual fallback; its later direct
+listing retains the exact disabled builtin and enabled managed entry. This is
+user repair evidence, not project lifecycle qualification. All five/runtime/
+account/model flags remain false. Independent whole RAW review remains required.
+
+Core40624054521 exposed TestClientIDBudgetDoesNotGrow: five ClientCopilot
+references in clients/shared violate the unchanged architecture ratchet. Root and
+independent other_clients reviewed and approved this narrow amendment before
+implementation. Move the two exact user builtin recognizers and their complete
+strict contracts into clients/copilot, where client identity policy belongs.
+Shared orchestration receives explicit optional recognition callbacks after its
+original successful command admission. Existing exported APIs pass nil, and the
+Copilot adapter alone supplies its own recognizers on the existing user path.
+Keep the same single registry/final verification command and unchanged generic
+fallback. Positive recognition retains its original postrecognition context
+check; preserve the older generic fallback's existing cancellation behavior.
+Reuse the shared live grammar only after whole-byte exact tuple equality.
+No budget increase, VS Code source change, new native command, evidence/schema/
+reader/workflow/fixture change or broader lifecycle implementation is authorized
+by this amendment.
+
+Candidate validation must cover the moved strict scope/identity/ownership/path/
+version/byte/context suites, nil callback legacy behavior, refusal to invoke
+recognition after command error/nonzero exit and the original one-list install/
+VerifyOnly sequence. Run the architecture package and full test-core plus
+affected package/lint gates when execution is available. Remote-object preparation
+does not execute these tests and must not be represented as passing them.
+
+The implemented callback/matcher move received independent GPT-6.1 Sol/xhigh
+CODE GOs from both client reviewers and a separate root source review. The
+unchanged focused shared/Copilot/VS Code and architecture selection passed
+157 cases with no skips or failures. Two independent original-byte audits of
+run40624054507 verified both API-bound archives, 18 native and 25 frontend
+members, all 24 frontend stream joins and the original failed-only reader.
+They confirm the user repair result above, while every lifecycle/MCP flag
+remains false. Full core, lint and fresh hosted checks remain required.
+
+## Accepted Copilot complete User/A/B lifecycle plan (2026-10-28)
+
+Final precode draft:24,324bytes, SHA256
+`7f80f6896eece51b58c84b90b4f76535ce665b1784c648c3c9960a73a6b58438`.
+Independent other_clients and Grok reviewers rehashed/read this exact revision
+and returned renewed GO. It supersedes the earlier4a draft: source inspection
+found Copilot user projection preserves portable MCP/data semantics, while only
+project scope binds UAP managed-stdio/data. Do not assume native User PLUGIN_DATA
+equals a UAP receipt or survives native uninstall. The goal-correct User fixture
+is skill-only, matching the existing Cline control. A/B retain actual MCP/data
+qualification; no User-MCP claim, production change or artificial second server.
+
+Implement one complete bounded cycle with original HOME, separate A/B Git roots,
+immutable Copilot1.0.103/scanner/build pins and original150/180-second origins.
+17 public commands cover Git/version, user/A/B add, repeat add A, unchanged
+update A, intact repair A, A-two update, exact missing-component repair A and
+remove/repeat-remove A/B/User. Intact repair truthfully mutates; repeated removal
+retains exact supported exit1/unchanged state. Keep direct-local A-two source
+frozen: repair joins its recorded digest and restored bytes, without a moving
+source/store-fallback claim. Installed skill-only User has no active DataReceipt;
+default removal's real retained-owner allocation is verified from prior absence.
+
+15 direct native lists preserve the exact measured managed User tuple until its
+removal, then the exact empty/disabled-builtin tuple.14 fresh native sessions
+include6 project one-call/two-turn sessions (2 writes/4 reads) and8 no-call
+catalog sessions, with20 provider exchanges and6 initialize/list/call triples
+(18 probe events). User plugin skill is visible until its removal; User supplies
+no MCP tool. A/B independently join source, installation/binding/native/data
+receipt identities, fresh sessions, retained markers, update/repair and removal.
+
+Preserve two exact original native skills: HOME
+`.copilot/skills/uap-foreign-user/SKILL.md` and B
+`.github/skills/uap-foreign-b/SKILL.md`, with declared descriptions/frontmatter/
+nonce bodies and exact source/path/enabled/userInvocable/commandName catalog
+rows plus ordinary inode/owner/mode/byte checks. User foreign is always visible;
+B foreign only in B, including final absence. Neither may be invoked. Use
+supported `--excluded-tools` for19 observed builtin tools and omit
+`--available-tools`; unknown MCP tools remain visible. Require whole catalogs
+of2 measured builtin skills, applicable original foreign/phase-owned skills and
+5 disabled builtin servers plus the phase-owned A/B connected server. No-call
+phases have zero fixture MCP entries/declarations/probe activity, with exact
+phase-owned User skill presence before User removal and none finally.
+
+Reuse finite known event families/one-server call graph and their no-call
+one-turn projection, not a new event framework. SDKRPC blob
+`d269c4626b83c444a06bd14bf4c6ea77fe734a5a` supports array/provenance
+semantics; shipping equivalence is unclaimed and unknown actual output fails.
+Complete evidence has60 ordinary members:17 public triples, eight closed
+stage/value JSONL aggregates for native events/commands/registry/provider
+requests/responses/receipts/probe/proof and one runtime summary. Raw streams
+retain exact bytes/SHA256/base64 joins. Preserve1MiB aggregate/16MiB total and
+old ZIP bounds/modes. Go/Python independently validate every phase/source/
+receipt/catalog/call/result/data/absence join. Only full ordinary descendant/
+provider closure, original-authority checks and complete capture can set all
+five project/MCP flags. Project Prepared wording, vendor-authentication=false
+and real-model=false remain truthful. Two exact CODE reviews, inert gates,
+original/current RAW replay and fresh actual hosted whole-evidence review remain
+mandatory. No artificial review barrier, local vendor run, production/VS Code/
+pin/workflow change or unchanged-source retry is introduced.
+
+### Measured Copilot User command name correction (2026-10-28)
+
+Actual d32d8fd6 run40734424271 completes the first installed-User native process
+with15 exact events, one provider exchange, ordinary shutdown and zero probe
+bytes, but fails the whole catalog check. Two independent full raw audits bind
+both API artifacts,21 native/25 frontend members,24 frontend stream joins,
+source/build/pins and exact User source/state/native/no-data receipts. The sole
+catalog mismatch is the plugin skill commandName: actual
+`native-proof:uapcopilotuser`, while the original prediction was `uapcopilotuser`.
+The independently authored manifest declares exactly `native-proof`; all other
+foreign/builtin metadata matches. No project session ran in this failed prefix.
+
+Two independent plan and exact code reviews accept only that fixed User plugin
+spelling in the Go/Python expectations. Literal positive catalogs and seven
+negative namespace/name controls preserve plain project/foreign/builtin names
+and reject bare, wrong or doubled User prefixes. The four-file reviewed
+manifest is57a5ffd6e528ac5a5f7a4d23a6810d5eaa6c0b8b7480889965c0969586eba82a.
+Both focused Go catalog contracts pass without skips;39 focused Python
+contracts pass; affected all-enabled and whole-root six-linter gates report
+zero issues. The original full archive still replays byte-for-byte to its
+failed/all-false result. A fresh complete-cycle hosted run and two full raw
+audits remain required. No native vendor executable ran locally.
+
+### Copilot observed cached startup and public DTO correction (2026-10-29)
+
+Exact59c1cf29 run40741435108 reaches five validated native sessions and two
+MCP sessions, then stable-A emits tools-loaded before pending/connected. Admit
+that observed order by removing only pending-before-tools; retain pending before
+connected and both completion facts before the server summary, seven unique
+closed event kinds and the original parent/identity/catalog checks. The legacy
+readiness reader keeps its exact order. The same capture proves repeat-add's
+singleton public DTO and repair's literal `local` source; removal uses the same
+existing installed-source formatter. The Python reader selects the singleton
+only for repeat-add-A and retains exact batch/target and shared identity checks.
+
+Grok/Qoder and integration independently approved the plan and exact five-file
+code.38 focused Python contracts pass; six actual public DTOs and all27 stable-A
+events pass the corrected pure readers. Native artifact12844837031 SHA256
+`3f9ed2784825ffffa708778d1e93f0a2af9440721fc7d5449aeccbb6ca4024a3`
+and frontend12844687177 SHA256
+`a65e54f115985db183c6138a1dd55fddc96b76b2b8d80f46af3af3572fe4d444`
+match API sizes/hashes and closed36/25-member CRCs. The original failed archive
+replays unchanged with all flags false. Targeted startup/runtime contracts pass
+in0.033s. Broader unchanged inert-process tests still fail local process
+containment admission; this is not a vendor result or a full-suite pass. Fresh
+hosted complete-cycle evidence and independent raw audits remain required.
+
+### Copilot observed repeated list requests in one probe session (2026-10-29)
+
+Actual1f01bdd8 attempt2 run40878246362 reaches stable-A after the startup fix.
+Native artifact12903145008 is76835bytes/SHA256
+`830b9c13a9ec8d5dd2ecc785c5a6db3b4845375bc52f9f788e0c6219d8dafe1a`;
+frontend12901458402 is3423bytes/SHA256
+`7f71efdcf76465aca02d6a2bdf02fb179347d328fd9f98d2c9916eed5b9ef0dc`.
+Both closed archives/CRCs,36native and25frontend members, source/build identity
+and24frontend stream joins are verified. Whole-byte offline review joins six
+native envelopes, nine exact scripted-provider exchanges/ordinary closures and
+three observed probe processes. The final5846-byte append prefix SHA256 is
+`e8c01b4711bd51764a329b27065769f629f66b4409c77e79e9ded0d01ce69627`.
+
+Installed A/B each emit initialize/list/call. Stable A emits exactly
+initialize/list/list/list/call within one fresh PID/session/nonce and command
+interval; all four pre-call records have null facts, and the sole final call
+matches native/provider returned facts. Accept only those two exact measured
+method tuples in the existing stage-independent Go/Python probe verifier. Keep
+empty no-call deltas, closed schemas, identity isolation/freshness, monotonic
+bounded timestamps, append-prefix receipts and exact final facts unchanged.
+Do not accept an arbitrary list-count range, another initialization or another
+call. Literal positive and hostile contracts cover both forms and retained guards.
+
+The recorded run remains failed with every qualification flag false. Its summary
+still reports only five validated native/two validated probe sessions; no
+post-stable state snapshot exists. The intact-repair pre-call authority supports
+only offline stream/catalog/facts joins. This correction changes no production
+code, provider, native argv, pin, environment, authority, deadline or completion
+gate; a fresh full genuine lifecycle and independent raw reviews remain required.
+
+### Copilot semantic repeated-discovery sequence (2026-10-29)
+
+The next pinned1.0.103 run40890660942 reports initialize/list/list/call at stable-A;
+the prior run had three lists, while installed A/B have one. Complete offline
+native/provider/probe joins pass against the held pre-call recipe, without a
+post-stable state claim. The harmless probe's `tools/list` handler is stateless.
+The primary [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
+requires initialization before operations, and [tool discovery](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)
+defines listing without a fixed request count. Scheduling is an inference; count
+variation is directly observed. Both independent plan reviews approve replacing
+count enumeration with exactly initialize, one-or-more tools/list, and one final
+tools/call. Retain closed row schemas, one fresh PID/session/nonce, null pre-call
+facts, exact final facts, monotonic command timestamps, append-prefix joins and
+empty no-call deltas. Enforce the existing1MiB delta bound explicitly at the Go
+helper boundary; Python already enforces it. Add repeated-list positives and
+zero-list/reinitialization/post-call/extra-call/oversize/identity/facts controls.
+No native argv, provider, pin, environment, time budget or completion gate changes;
+all three failed captures remain failed/all-false pending fresh full lifecycle.
