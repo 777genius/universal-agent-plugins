@@ -11,7 +11,7 @@
       "partial": "تم الفحص مع قيود",
       "error": "تعذر الفحص",
       "detailsFor": "تفاصيل SkillSpector لـ {name}",
-      "pluginScope": "المهارات المحددة في هذه الإضافة",
+      "pluginScope": "نطاق الفحص: ملفات المهارات في هذه الإضافة. لا يفحص SkillSpector مكونات الإضافة الأخرى.",
       "skillScope": "تقرير تاريخي للمهارة",
       "absent": "لا يوجد تقييم منشور يطابق هذا العنصر.",
       "checked": "تاريخ الفحص: {date}",
@@ -39,7 +39,7 @@
       "confirmedMaterialIssue": "مشكلة جوهرية مؤكدة",
       "stale": "تقرير قديم",
       "unsupported": "الفحص الثابت غير قابل للتطبيق",
-      "fullyChecked": "تم فحص {checked} من {total} مهارات بالكامل",
+      "fullyChecked": "المهارات المفحوصة بالكامل: {checked} من {total}",
       "installAdvice": "قبل التثبيت",
       "adviceConfirmed": "تم تأكيد مشكلة جوهرية. راجع الأدلة والمعالجة قبل التثبيت.",
       "adviceReview": "راجع الإشارات وسياقها قبل التثبيت. لم يؤكد مراجع النتائج الآلية بعد.",
@@ -68,7 +68,7 @@
       "acceptedSignal": "إشارة مقبولة",
       "classificationExplanation": "يستند هذا التصنيف إلى قاعدة مطابقة دقيقة في السجل ولا يمثل تدقيقا أمنيا بشريا.",
       "limitedGroups": "يحتوي التقرير المنشور على المجموعات المعروضة فقط. العدد الإجمالي للنتائج المختلفة غير معروف.",
-      "selectedFullyChecked": "تم فحص {checked} من {total} مهارات محددة بالكامل",
+      "selectedFullyChecked": "المهارات المحددة المفحوصة بالكامل: {checked} من {total}",
       "skillRemoved": "تم حذف ملف المهارة المفحوص سابقا في مراجعة المصدر الجديدة التي جرى فحصها. يبقى التقرير القديم كسجل تاريخي؛ ولم يتم فحص أي محتوى حالي.",
       "acquisitionTransferLimit": "بلغ جلب المصدر حد النقل لملف الفحص هذا. لم يتم فحص الملفات التي لم يتم جلبها.",
       "loadingAdvice": "جارٍ تحميل SkillSpector. التغطية غير معروفة؛ راجع المصدر قبل التثبيت.",
@@ -81,7 +81,9 @@
       "contextTruncated": "السياق محدود: يظهر {references} من {referencesTotal} مراجع و{diagnostics} من {diagnosticsTotal} تشخيصات.",
       "unsupportedSourceDetails": "لا تدعم فحوص SkillSpector الثابتة هذا النوع من المصادر. لم تُفحص ملفاته.",
       "checkUnavailableDetails": "تعذر فحص المصدر. التغطية غير معروفة؛ راجع السبب المذكور قبل التثبيت.",
-      "reasonContexts": "{count} سياقات أصلية"
+      "reasonContexts": "{count} سياقات أصلية",
+      "noSkills": "لا توجد مهارات للفحص",
+      "noSkillsDetails": "لا تتضمن هذه الإضافة مهارات. يفحص SkillSpector ملفات المهارات فقط؛ أما مكونات الإضافة الأخرى فهي خارج نطاق فحصه."
     }
   }
 }

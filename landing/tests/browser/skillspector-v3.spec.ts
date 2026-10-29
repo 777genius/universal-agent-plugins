@@ -1,8 +1,16 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { deferred, navigate, offline, projections, registryFixture } from './i18n-state.helpers';
+import {
+  deferred,
+  navigate,
+  offline,
+  projections,
+  registryFixture,
+  setSignedMirrorTestTime,
+} from './i18n-state.helpers';
 import type { SkillSpectorManifestV3 } from '../../types/skillSpector';
+import type { DiscoverySnapshot } from '../../types/discovery';
 const fixtureRoot = new URL('../fixtures/skillspector-v3/', import.meta.url);
 const fixture = JSON.parse(
   readFileSync(new URL('index.json', fixtureRoot), 'utf8'),
@@ -35,7 +43,8 @@ async function setup(
     | 'references'
     | 'failed'
     | 'completeExternal'
-    | 'completeResolved' = 'mixed',
+    | 'completeResolved'
+    | 'unsupportedSource' = 'mixed',
   reportGate?: Promise<void>,
 ) {
   const errors = await offline(page);
@@ -115,7 +124,8 @@ async function setup(
     };
     manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
   }
-  const complete = mode === 'completeExternal' || mode === 'completeResolved';
+  const standalone = mode === 'completeResolved' || mode === 'unsupportedSource';
+  const complete = mode === 'completeExternal' || standalone;
   if (complete) {
     const record = structuredClone(
       completeContextFixture.records[mode === 'completeExternal' ? 'external' : 'resolved'],
@@ -132,7 +142,7 @@ async function setup(
       error: 0,
       stale: 0,
     };
-    if (mode === 'completeResolved') {
+    if (standalone) {
       manifest.plugin_coverage = [];
       manifest.plugin_states = [];
       manifest.source_states = [
@@ -217,6 +227,23 @@ async function setup(
       },
     ];
   }
+  if (mode === 'unsupportedSource') {
+    manifest.shards = [];
+    manifest.coverage = {
+      selected: 0,
+      reported: 0,
+      pending: 0,
+      complete: 0,
+      partial: 0,
+      error: 0,
+      stale: 0,
+    };
+    Object.assign(manifest.source_states[0]!, {
+      state: 'unsupported',
+      reason: 'unsupported_source_type',
+      selected_ids: [],
+    });
+  }
   await page.route('**/reports/skillspector/v3/**', async (route) => {
     if (reportGate) await reportGate;
     if (mode === 'unavailable') return route.fulfill({ status: 503 });
@@ -229,15 +256,10 @@ async function setup(
       : route.fulfill({ body, contentType: 'application/json' });
   });
   await projections(page, index);
-  await navigate(
-    page,
-    '/plugins/',
-    'en',
-    mode === 'completeResolved' ? '?tab=skills' : '?q=i18n-state-00',
-  );
+  await navigate(page, '/plugins/', 'en', standalone ? '?tab=skills' : '?q=i18n-state-00');
   return {
     assessment: page.locator(
-      mode === 'completeResolved'
+      standalone
         ? '.skill-card .skillspector'
         : '.plugin-card[data-install-source="i18n-state-00"] .skillspector',
     ),
@@ -253,7 +275,7 @@ for (const width of [1280, 390]) {
     const { assessment, errors } = await setup(page);
     await expect(assessment).toHaveClass(/skillspector--incomplete/);
     await expect(assessment.locator(':scope > summary')).toContainText(
-      '3 of 13 skills fully checked',
+      'Skills fully checked: 3 of 13',
     );
     await expect(assessment.locator(':scope > summary')).not.toContainText('Findings:');
     await assessment.locator(':scope > summary').click();
@@ -329,7 +351,7 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
     await expect(assessment.locator(':scope > summary')).not.toContainText('No static findings');
     if (mode === 'stale')
       await expect(assessment.locator(':scope > summary')).toContainText(
-        '0 of 13 selected skills fully checked',
+        'Selected Skills fully checked: 0 of 13',
       );
     await assessment.locator(':scope > summary').click();
     if (mode === 'stale' || mode === 'unsupported') {
@@ -354,9 +376,12 @@ test('v3 detail page opens install advice before installation and explains the m
   const assessment = page.locator('.plugin-detail .skillspector');
   await expect(assessment).toHaveAttribute('open', '');
   await expect(assessment.locator(':scope > summary')).toContainText(
-    '3 of 13 skills fully checked',
+    'Skills fully checked: 3 of 13',
   );
   await expect(assessment.locator('.skillspector__advice')).toContainText('Before installing');
+  await expect(assessment.locator('.skillspector__advice')).toContainText(
+    'Other plugin components are not checked by SkillSpector.',
+  );
   expect(
     await assessment.evaluate((element) =>
       Boolean(
@@ -376,29 +401,120 @@ test('v3 detail page opens install advice before installation and explains the m
 test('v3 distinguishes selected roots from known complete plugin inventory', async ({ page }) => {
   const { assessment, errors } = await setup(page, 'selected');
   await expect(assessment.locator(':scope > summary')).toContainText(
-    '3 of 13 selected skills fully checked',
+    'Selected Skills fully checked: 3 of 13',
   );
   expect(errors).toEqual([]);
 });
 
-test('v3 Russian wording identifies the listing review and exact known skill coverage', async ({
+for (const width of [1280, 390]) {
+  test(`v3 Russian wording identifies the listing review, scan scope and known Skill coverage (${width})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const { errors } = await setup(page);
+    await navigate(page, '/plugins/', 'ru', '?q=i18n-state-00');
+    const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
+    await expect(card.locator('.skillspector > summary')).toContainText(
+      'Скиллы проверены полностью: 3 из 13',
+    );
+    await card.locator('.skillspector > summary').focus();
+    await page.keyboard.press('Enter');
+    await expect(card.locator('.skillspector__advice')).toContainText(
+      'SkillSpector не проверяет другие компоненты плагина.',
+    );
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    const screenshots = process.env.UAP_LANDING_SCREENSHOT_DIR;
+    if (screenshots) {
+      mkdirSync(screenshots, { recursive: true });
+      await card
+        .locator('.skillspector')
+        .screenshot({ path: `${screenshots}/report-ru-${width}.png` });
+    }
+    await expect(card.locator('.plugin-card__ribbon')).toHaveText('Карточка проверена');
+    await card.locator('.plugin-card__ribbon').focus();
+    await expect(
+      page.locator('.app-tooltip').filter({ hasText: 'Проверены карточка и метаданные.' }),
+    ).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+}
+
+for (const locale of ['en', 'ru'] as const) {
+  for (const width of [1280, 390]) {
+    test(`known MCP-only metadata omits card checks and explains detail scope without report requests (${locale}, ${width})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const errors = await offline(page);
+      const requests: string[] = [];
+      page.on('request', (request) => {
+        if (request.url().includes('/reports/skillspector/')) requests.push(request.url());
+      });
+      const index = registryFixture();
+      const plugin = index.plugins[0]!;
+      index.plugins = [plugin];
+      plugin.components = ['mcp'];
+      for (const distribution of plugin.distributions) {
+        distribution.components = ['mcp'];
+        for (const release of distribution.releases) release.components = ['mcp'];
+      }
+      await projections(page, index);
+      await navigate(page, '/plugins/', locale, '?q=i18n-state-00');
+      const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
+      await expect(card).toBeVisible();
+      await expect(card.locator('.skillspector')).toHaveCount(0);
+      await expect(card).not.toContainText('SkillSpector');
+      const title = card.getByRole('link', { name: plugin.display_name, exact: true });
+      await title.focus();
+      await expect(title).toBeFocused();
+      await page.keyboard.press('Enter');
+      const explanation = page.locator('.plugin-detail .skillspector--noSkills');
+      await expect(explanation.locator('strong')).toHaveText(
+        `SkillSpector · ${locale === 'en' ? 'No Skills to check' : 'Нет скиллов для проверки'}`,
+      );
+      await expect(explanation).toContainText(
+        locale === 'en' ? 'This plugin does not include Skills.' : 'В этом плагине нет скиллов.',
+      );
+      await expect(explanation).toContainText(
+        locale === 'en'
+          ? 'other plugin components are outside its scope.'
+          : 'другие компоненты плагина не входят в область проверки.',
+      );
+      await expect(explanation.locator('summary, .skillspector__advice')).toHaveCount(0);
+      await expect(page.locator('#plugin-install')).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      const screenshots = process.env.UAP_LANDING_SCREENSHOT_DIR;
+      if (screenshots) {
+        mkdirSync(screenshots, { recursive: true });
+        await explanation.screenshot({ path: `${screenshots}/no-skills-${locale}-${width}.png` });
+      }
+      expect(requests).toEqual([]);
+      expect(errors).toEqual([]);
+    });
+  }
+}
+
+test('unsupported standalone sources retain their explanation and do not imply an empty completed check', async ({
   page,
 }) => {
-  const { errors } = await setup(page);
-  await navigate(page, '/plugins/', 'ru', '?q=i18n-state-00');
-  const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
-  await expect(card.locator('.skillspector > summary')).toContainText(
-    'Полностью проверено 3 из 13 скиллов',
+  const { assessment, errors } = await setup(page, 'unsupportedSource');
+  await expect(assessment).toHaveClass(/skillspector--unsupported/);
+  await expect(assessment.locator(':scope > summary')).toContainText('Static check not applicable');
+  await expect(assessment.locator('.skillspector__summary-coverage')).toHaveCount(0);
+  await assessment.locator(':scope > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(assessment).toContainText(
+    'This source type is not supported by static SkillSpector checks. Its files have not been checked.',
   );
-  await expect(card.locator('.plugin-card__ribbon')).toHaveText('Карточка проверена');
-  await card.locator('.plugin-card__ribbon').focus();
-  await expect(
-    page.locator('.app-tooltip').filter({ hasText: 'Проверены карточка и метаданные.' }),
-  ).toBeVisible();
+  await expect(assessment.locator('.skillspector--noSkills')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
-test('known MCP-only metadata shows not applicable on card and detail without report requests', async ({
+test('external standalone Skills remain unsupported without fetching a report or claiming there are no Skills', async ({
   page,
 }) => {
   const errors = await offline(page);
@@ -406,30 +522,108 @@ test('known MCP-only metadata shows not applicable on card and detail without re
   page.on('request', (request) => {
     if (request.url().includes('/reports/skillspector/')) requests.push(request.url());
   });
-  const index = registryFixture();
-  const plugin = index.plugins[0]!;
-  index.plugins = [plugin];
-  plugin.components = ['mcp'];
-  for (const distribution of plugin.distributions) {
-    distribution.components = ['mcp'];
-    for (const release of distribution.releases) release.components = ['mcp'];
-  }
-  await projections(page, index);
-  await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
-  const assessment = page.locator(
-    '.plugin-card[data-install-source="i18n-state-00"] .skillspector',
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: 'external-source',
+            providerId: 'skills-sh',
+            providerUrl: 'https://skills.sh/example/external',
+            title: 'External Skill',
+            skillNameHint: 'external',
+            source: { kind: 'external', url: 'https://skills.sh/example/external' },
+            metrics: { installs: 1, window: 'all-time' },
+            availability: 'unsupported-source',
+          },
+        ],
+        page: 0,
+        total: 1,
+        hasMore: false,
+        view: 'popular',
+        cache: { status: 'fresh', fetchedAt: fixture.generated_at },
+      },
+    }),
   );
+  await projections(page, registryFixture());
+  await navigate(page, '/plugins/', 'en', '?tab=skills');
+  const assessment = page.locator('.skill-card .skillspector');
   await expect(assessment).toHaveClass(/skillspector--unsupported/);
-  await assessment.locator(':scope > summary').click();
-  await expect(assessment).toContainText('No supported Skill files');
-  await navigate(page, `/plugins/${plugin.name}/`, 'en');
-  await expect(page.locator('.plugin-detail .skillspector')).toHaveClass(
-    /skillspector--unsupported/,
+  await assessment.locator(':scope > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(assessment).toContainText(
+    'This source type is not supported by static SkillSpector checks. Its files have not been checked.',
   );
-  await expect(page.locator('.plugin-detail .skillspector')).toContainText(
-    'No supported Skill files',
-  );
+  await expect(page.locator('.skillspector--noSkills')).toHaveCount(0);
   expect(requests).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test('community card navigation preserves the source-bound pending Skill report on detail', async ({
+  page,
+}) => {
+  const errors = await offline(page);
+  await setSignedMirrorTestTime(page);
+  const pointer = await (await page.request.get('./discovery/latest.json')).json();
+  const snapshot = (await (
+    await page.request.get(`./discovery/${pointer.snapshot_path}`)
+  ).json()) as DiscoverySnapshot;
+  const plugin = snapshot.records.find(
+    (record) => record.components.skills > 0 && record.availability === 'available',
+  )!;
+  expect(plugin).toBeDefined();
+  const coverage = {
+    selected: plugin.components.skills,
+    reported: 0,
+    pending: plugin.components.skills,
+    complete: 0,
+    partial: 0,
+    error: 0,
+    stale: 0,
+  };
+  const manifest = {
+    ...structuredClone(fixture),
+    coverage,
+    shards: [],
+    source_states: [],
+    repository_aliases: [],
+    plugin_coverage: [
+      { ...coverage, repository: plugin.repository, plugin_path: plugin.package_path },
+    ],
+    plugin_states: [
+      {
+        id: plugin.slug,
+        repository: plugin.repository,
+        plugin_path: plugin.package_path,
+        revision: plugin.revision,
+        state: 'resolved',
+        reason: null,
+        skills_total: plugin.components.skills,
+        selected_ids: [],
+      },
+    ],
+  };
+  let requests = 0;
+  await page.route('**/reports/skillspector/v3/index.json', (route) => {
+    requests++;
+    return route.fulfill({ json: manifest });
+  });
+  await page.goto(`./plugins/?q=${encodeURIComponent(plugin.repository)}`);
+  const card = page.locator(`.plugin-card[data-install-source=${JSON.stringify(plugin.slug)}]`);
+  const cardReport = card.locator('.skillspector');
+  await expect(cardReport).toHaveClass(/skillspector--pending/);
+  const summary = await cardReport.locator(':scope > summary').innerText();
+  await card.locator('.plugin-card__title-link').click();
+  const detailReport = page.locator('.community-plugin-page .skillspector');
+  await expect(detailReport).toHaveClass(/skillspector--pending/);
+  await expect(detailReport).toHaveAttribute('open', '');
+  await expect(detailReport.locator(':scope > summary')).toHaveText(summary);
+  await expect(detailReport).toContainText('A current check is pending.');
+  await expect(detailReport).toContainText(
+    'Other plugin components are not checked by SkillSpector.',
+  );
+  await expect(page.locator('.install-panel')).toBeVisible();
+  expect(requests).toBe(1);
   expect(errors).toEqual([]);
 });
 

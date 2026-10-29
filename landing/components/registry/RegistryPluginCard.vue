@@ -298,7 +298,7 @@ function updateAutoDetect(value: boolean) {
         :details-to="securityDetailURL"
       />
       <SkillSpectorAssessment
-        :applicable="plugin.components.includes('skills')"
+        v-if="plugin.components.includes('skills')"
         :subject="{
           kind: 'plugin',
           repository: plugin.source.repository,

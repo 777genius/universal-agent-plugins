@@ -68,7 +68,9 @@ const label = computed(() =>
     `registryUi.skillSpector.${reportStatus.value === 'ready' && displayStatus.value === 'unavailable' ? 'error' : displayStatus.value}`,
   ),
 );
-const fullyChecked = computed(() => assessment.value.fullyChecked);
+const fullyChecked = computed(() =>
+  assessment.value.selected ? assessment.value.fullyChecked : undefined,
+);
 const advice = computed(() => {
   if (displayStatus.value === 'confirmedMaterialIssue') return 'adviceConfirmed';
   if (
@@ -131,8 +133,15 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
 </script>
 
 <template>
+  <section
+    v-if="scope === 'plugin' && applicable === false"
+    class="skillspector skillspector--noSkills"
+  >
+    <strong>SkillSpector · {{ t('registryUi.skillSpector.noSkills') }}</strong>
+    <p>{{ t('registryUi.skillSpector.noSkillsDetails') }}</p>
+  </section>
   <p
-    v-if="expanded && reportStatus === 'loading'"
+    v-else-if="expanded && reportStatus === 'loading'"
     class="skillspector skillspector--loading"
     role="status"
     aria-busy="true"
