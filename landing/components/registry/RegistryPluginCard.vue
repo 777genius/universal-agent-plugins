@@ -347,8 +347,10 @@ function updateAutoDetect(value: boolean) {
       </ul>
     </details>
     <div class="plugin-card__bottom">
+      <p v-if="!canInstall && vendorInstall" class="plugin-card__unavailable">
+        {{ t('registryUi.install.vendorInstallerHeading') }}
+      </p>
       <div class="plugin-card__actions">
-        <AuthenticationIndicator :indicator="authentication" />
         <button
           v-if="canInstall"
           type="button"
@@ -360,7 +362,15 @@ function updateAutoDetect(value: boolean) {
         >
           {{ t('registryUi.card.install') }}
         </button>
-        <span v-else-if="!vendorInstall" class="plugin-card__unavailable">{{
+        <a
+          v-else-if="vendorInstall"
+          class="plugin-card__vendor-install"
+          :href="vendorInstall.url"
+          target="_blank"
+          rel="noreferrer"
+          >{{ t('registryUi.install.vendorInstallerCta') }} ↗</a
+        >
+        <span v-else class="plugin-card__unavailable">{{
           isDiscovered
             ? t('registryUi.card.unavailableAtItsIndexedSourceNoInstallCommandIsGenerated')
             : expired
@@ -369,19 +379,8 @@ function updateAutoDetect(value: boolean) {
                 ? t('registryUi.card.commandsDisabledInPreview')
                 : diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason)
         }}</span>
+        <AuthenticationIndicator :indicator="authentication" />
       </div>
-      <template v-if="!canInstall && vendorInstall">
-        <p class="plugin-card__unavailable">
-          {{ t('registryUi.install.vendorInstallerHeading') }}
-        </p>
-        <a
-          class="plugin-card__vendor-install"
-          :href="vendorInstall.url"
-          target="_blank"
-          rel="noreferrer"
-          >{{ t('registryUi.install.vendorInstallerCta') }} ↗</a
-        >
-      </template>
       <Transition name="plugin-install">
         <div
           v-if="installExpanded && canInstall"
@@ -456,7 +455,7 @@ function updateAutoDetect(value: boolean) {
   align-items: center;
   gap: 8px;
 }
-.plugin-card__actions > .plugin-card__install-toggle {
+.plugin-card__actions > :is(.plugin-card__install-toggle, .plugin-card__vendor-install) {
   flex: 1;
   width: auto;
 }
