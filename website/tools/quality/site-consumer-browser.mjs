@@ -37,7 +37,7 @@ export async function runSiteConsumerSmoke(browser, base, artifactsRoot) {
     const reference = await page.locator(".vp-doc").innerText();
     assert.match(reference, /released Agent Plugins CLI reference/i);
     assert.match(reference, /Versioned authoring reference: CLI 0\.1\.65/);
-    assert.match(reference, /current native installer, CLI 0\.1\.94, does not include agentplugins author/);
+    assert.match(reference, /current native installer, CLI 0\.1\.95, does not include agentplugins author/);
     assert.ok(await page.locator('.vp-doc a[href$="/en/build/"]').count() > 0);
     assert.doesNotMatch(reference, /not released|not a public release/i);
     await page.screenshot({ path: path.join(artifactsRoot, "d2b-agentplugins-author.png"), fullPage: true });

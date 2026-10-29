@@ -188,7 +188,7 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
     assert.match(page.content, /Released Agent Plugins CLI reference/);
     assert.match(page.content, /::: warning Versioned authoring reference: CLI 0\.1\.65/);
     assert.match(page.content, /immutable `agentplugins-v0\.1\.65` source/);
-    assert.match(page.content, /current native installer, CLI 0\.1\.94, does not include `agentplugins author`/);
+    assert.match(page.content, /current native installer, CLI 0\.1\.95, does not include `agentplugins author`/);
     assert.match(page.content, /current source-build setup[\s\S]*\[Build guide\]\(\/en\/build\/\)/);
     assert.match(page.content, /does not describe current-source runtime or development commands/);
     assert.doesNotMatch(page.content, /Milestone A/);

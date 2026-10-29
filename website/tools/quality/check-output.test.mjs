@@ -78,6 +78,12 @@ test("actual rendered home and quickstart preserve the released installer and so
   const quickstart = await render("guide/quickstart.md");
   assert.deepEqual(homeErrors(home), []);
   assert.deepEqual(quickstartErrors(quickstart), []);
+  // The 0.1.94 project-selection minimum remains valid, but cannot satisfy
+  // the separate current-release assertion after the installer advances.
+  assert.ok(homeErrors(home.replaceAll("CLI 0.1.95", "CLI 0.1.94"))
+    .some((error) => error.includes("current installer guidance: CLI 0.1.95")));
+  assert.ok(quickstartErrors(quickstart.replaceAll("CLI 0.1.95", "CLI 0.1.94"))
+    .some((error) => error.includes("current installer/source guidance: CLI 0.1.95")));
   assert.ok(homeErrors(home.replace("does not include", "includes")).some((error) => error.includes("excludes agentplugins author")));
   assert.ok(homeErrors(home.replace("npx", "not-a-command")).some((error) => error.includes("released installer command")));
 });

@@ -19,7 +19,7 @@ const blockTags = new Set([
 ]);
 
 export const quickstartClaims = [
-  "Use plugins", "Build plugins", "CLI 0.1.94", "explicit project scope",
+  "Use plugins", "Build plugins", "CLI 0.1.95", "explicit project scope",
   "source-build setup", "universal-agent-plugins", "plugin.json", "agentplugins author"
 ];
 
@@ -117,7 +117,7 @@ function staleAvailabilityErrors(text, label) {
 export function homeErrors(html) {
   const { text, commands, links, parseErrors } = documentContent(html);
   const errors = parseErrors.map((error) => `EN home page has invalid HTML: ${error}`);
-  for (const claim of ["Use plugins", "Build plugins", "Agent Plugins", "plugin.json", "CLI 0.1.94", "explicit project scope", "locked restoration"]) {
+  for (const claim of ["Use plugins", "Build plugins", "Agent Plugins", "plugin.json", "CLI 0.1.95", "explicit project scope", "locked restoration"]) {
     if (!text.includes(claim)) errors.push(`EN home page is missing its current installer guidance: ${claim}`);
   }
   if (!/current installer does not include agentplugins author/i.test(text)) {
