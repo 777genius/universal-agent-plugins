@@ -360,28 +360,31 @@ workflow with `publish=false`, then publish that run's attested tarball once.
 Take the expected commit from your own up-to-date clone, not from the artifact:
 
 ```sh
-version=<version>
-run=<successful publish=false run id>
-git fetch origin main "refs/tags/management-sdk-v${version}:refs/tags/management-sdk-v${version}"
-commit=$(git rev-parse "management-sdk-v${version}^{commit}")
-git merge-base --is-ancestor "$commit" origin/main
-gh run view "$run" --repo 777genius/universal-agent-plugins --json headSha,conclusion,event \
-  --jq "select(.headSha == \"$commit\" and .conclusion == \"success\" and .event == \"workflow_dispatch\") | .headSha"
-gh run download "$run" --repo 777genius/universal-agent-plugins \
-  -n "management-sdk-${version}" -D "management-sdk-${version}"
-cd "management-sdk-${version}"
-sha256sum --check checksums.txt
-test "$(cat source-commit.txt)" = "$commit"
-gh attestation verify "universal-agent-plugins-management-sdk-${version}.tgz" \
-  --repo 777genius/universal-agent-plugins \
-  --signer-workflow github.com/777genius/universal-agent-plugins/.github/workflows/management-sdk-release.yml \
-  --source-ref "refs/tags/management-sdk-v${version}" --source-digest "$commit" --deny-self-hosted-runners
-npm publish "./universal-agent-plugins-management-sdk-${version}.tgz" \
-  --access public --tag latest --provenance=false
+(
+  set -euo pipefail
+  version=<version>
+  run=<successful publish=false run id>
+  git fetch origin main "refs/tags/management-sdk-v${version}:refs/tags/management-sdk-v${version}"
+  commit=$(git rev-parse "management-sdk-v${version}^{commit}")
+  git merge-base --is-ancestor "$commit" origin/main
+  test "$(gh run view "$run" --repo 777genius/universal-agent-plugins --json headSha,conclusion,event \
+    --jq 'select(.conclusion == "success" and .event == "workflow_dispatch") | .headSha')" = "$commit"
+  gh run download "$run" --repo 777genius/universal-agent-plugins \
+    -n "management-sdk-${version}" -D "management-sdk-${version}"
+  cd "management-sdk-${version}"
+  sha256sum --check checksums.txt
+  test "$(cat source-commit.txt)" = "$commit"
+  gh attestation verify "universal-agent-plugins-management-sdk-${version}.tgz" \
+    --repo 777genius/universal-agent-plugins \
+    --signer-workflow github.com/777genius/universal-agent-plugins/.github/workflows/management-sdk-release.yml \
+    --source-ref "refs/tags/management-sdk-v${version}" --source-digest "$commit" --deny-self-hosted-runners
+  npm publish "./universal-agent-plugins-management-sdk-${version}.tgz" \
+    --access public --tag latest --provenance=false
+)
 ```
 
-The `gh run view` command must print the commit; empty output means the run
-does not match. On macOS, use `shasum -a 256 --check checksums.txt`.
+The subshell stops at the first failed check, before `npm publish`. On macOS,
+replace `sha256sum --check` with `shasum -a 256 --check`.
 
 npm provenance can only be generated on a supported CI provider, so this one
 local publication passes `--provenance=false`; the GitHub attestation still
