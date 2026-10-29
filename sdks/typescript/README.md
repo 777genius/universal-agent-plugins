@@ -4,21 +4,60 @@ A typed client for the existing Go installer. Plugin resolution, ownership,
 prepared authority, manifest/lock publication and recovery stay in Go.
 The package's pure entry point has no filesystem, process, Electron or UI dependency.
 The separate `/node` entry point owns an explicitly provisioned Go process.
-
-This source package has the development version `0.0.0-development`. It is consumed
-as a built, integrity-pinned tarball until separately authorized public publication.
 The SDK never downloads or updates an engine executable.
 
-## Provision a management-enabled source engine
+## Install
 
-The SDK needs the **current management-enabled source engine** as well as its
-own development tarball. The published CLI 0.1.94 does not expose `manage` and
-cannot run these examples. A generic pinned installer download is insufficient.
-Pin a reviewed source commit and the SHA-256 of the resulting executable in the
-consuming application's build evidence; provision that exact executable yourself.
+```sh
+npm install --save-exact universal-agent-plugins-management-sdk
+```
 
-From a clean, reviewed repository checkout, use Git and the repository's Go
-1.26.10 toolchain. The following Unix-shell example starts at the repository root:
+Releases are published to npm from immutable `management-sdk-vX.Y.Z` tags with
+npm trusted publishing and provenance. See the
+[changelog](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/CHANGELOG.md)
+for release notes and migration from the earlier `@uap/management-sdk`
+development tarball.
+
+## Compatibility
+
+| SDK | Engine (`agentplugins` CLI) | Management API | Node.js |
+| --- | --- | --- | --- |
+| 0.1.x | 0.1.95 or newer | v1 | 22.18 or newer |
+
+CLI 0.1.95 is the first published release with `manage serve` and
+`manage discover`; CLI 0.1.94 and older do not have `manage`. The management API
+version is independent of the engine and package versions. Startup and discovery
+refuse an engine that does not report management API v1
+(`UNSUPPORTED_API_VERSION`); the SDK does not compare engine version strings.
+Use `requiredCapabilities` to refuse an engine without a feature your host needs.
+
+## Provision the engine
+
+Provision an exact released engine and pin it in the consuming application's
+build evidence. The repository installer accepts an explicit version, verifies
+the release asset against the release `checksums.txt` and can record the
+verified SHA-256 (see [native installation](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)).
+A Unix-shell example:
+
+```sh
+curl -fsSLo ./agentplugins-install.sh \
+  https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.sh
+AGENTPLUGINS_VERSION=0.1.95 AGENTPLUGINS_BIN_DIR="$PWD/bin" \
+  AGENTPLUGINS_OUTPUT_FILE="$PWD/agentplugins-engine.env" sh ./agentplugins-install.sh
+./bin/agentplugins version
+./bin/agentplugins manage serve --help
+./bin/agentplugins manage discover --help
+```
+
+`agentplugins-engine.env` records the exact version, release tag, asset and
+verified SHA-256. Keep it with the SDK version and its lockfile integrity. On
+Windows, `install.ps1` accepts `-Version` and `-BinDir`. Both help checks must
+succeed before supplying the executable to `startUap` or `discoverTargets`.
+They establish command availability, not installation or native runtime success.
+
+To use engine changes that are not released yet, build the CLI from a clean,
+reviewed repository checkout with the repository's Go 1.26.10 toolchain and pin
+the source revision and executable digest instead:
 
 ```sh
 uap_engine_revision=$(git rev-parse HEAD)
@@ -29,15 +68,12 @@ mkdir -p bin
 sha256sum ./bin/agentplugins-management
 ```
 
-Record `uap_engine_revision` alongside that digest and the SDK tarball digest.
 On macOS, use `shasum -a 256` for the executable digest. On Windows, build an
-`.exe` output and use `Get-FileHash -Algorithm SHA256`. Both help checks must
-succeed before supplying the executable to `startUap` or `discoverTargets`.
-They establish command availability, not installation or native runtime success.
+`.exe` output and use `Get-FileHash -Algorithm SHA256`.
 
-The current development CLI root registers `manage` directly; this build needs
-no authoring linker flag. Its management startup captures profile authority and
-uses the shared installer composition. The [wire contract](../../contracts/management/README.md)
+The CLI root registers `manage` directly; no authoring linker flag is needed.
+Its management startup captures profile authority and uses the shared installer
+composition. The [wire contract](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md)
 defines that protocol and its independent capability versioning.
 
 ## Discover private user-profile facts
@@ -63,10 +99,10 @@ merge additional discovered profiles into the captured startup context.
 
 ## Start an owned engine
 
-Use the management-enabled source executable verified above in `executable`.
+Use the engine executable verified above in `executable`.
 
 ```ts
-import { startUap } from '@uap/management-sdk/node';
+import { startUap } from 'universal-agent-plugins-management-sdk/node';
 
 const host = await startUap({
   executable: '/absolute/path/to/pinned/agentplugins-management',
@@ -230,7 +266,7 @@ refuses new work when full rather than discarding unresolved identity.
 ## Use an existing endpoint
 
 ```ts
-import { createClient } from '@uap/management-sdk';
+import { createClient } from 'universal-agent-plugins-management-sdk';
 const client = createClient({ baseUrl, origin, token, fetch: customFetch });
 ```
 
@@ -255,10 +291,12 @@ New code is checked with pinned TypeScript 7.0.2. Node 22.18 or newer is require
 The child-process tests compile a tiny Go transport fixture using the repository's
 Go toolchain. These tests prove SDK protocol/lifetime behavior, **not installation**.
 Separate integration/Electron tests run the real Go engine and inspect native output.
-The clean packed-consumer check installs the actual `.tgz`, checks browser-safe
-public types, both export entry points and runtime imports without monorepo aliases.
-Required CI runs the build, typecheck, lifecycle tests and packed-consumer check on
-Linux, macOS and Windows. Generated-contract drift is checked on Linux.
+The clean packed-consumer check installs the actual `.tgz`, checks that it ships
+only `package.json`, `README.md`, `LICENSE` and compiled `dist` files, and checks
+browser-safe public types, both export entry points and runtime imports without
+monorepo aliases. Required CI runs the build, typecheck, lifecycle tests and
+packed-consumer check on Linux, macOS and Windows through the shared
+`management-sdk.yml` workflow. Generated-contract drift is checked on Linux.
 
 Regenerate wire types from the repository root:
 
@@ -267,9 +305,47 @@ node contracts/management/generate.ts
 node contracts/management/generate.ts --check
 ```
 
-Never edit `src/generated/schema.d.ts` directly. A source pin, SDK tarball digest and
-engine digest belong in the consuming app's build evidence; public npm or binary
-release publication is a separate authorized action.
+Never edit `src/generated/schema.d.ts` directly. The SDK version with its lockfile
+integrity and the engine digest belong in the consuming app's build evidence.
+
+## Release
+
+Maintainers release from an immutable tag on a `main` commit whose `package.json`
+already has the release version, and add the release notes to `CHANGELOG.md`
+in the same change:
+
+```sh
+git tag -a management-sdk-v0.1.0 -m "Management SDK 0.1.0" <main-commit>
+git push origin management-sdk-v0.1.0
+gh workflow run management-sdk-release.yml --repo 777genius/universal-agent-plugins \
+  --ref management-sdk-v0.1.0 -f version=0.1.0 -f publish=false
+```
+
+The [release workflow](https://github.com/777genius/universal-agent-plugins/blob/main/.github/workflows/management-sdk-release.yml)
+refuses a ref that is not that tag, a tag that is not on `main`, a package name
+or version that differs, a version that already exists on npm, and a version
+lower than the current `latest`. It runs the same qualification as required CI
+on Linux, macOS and Windows. A build job without signing or publishing
+credentials then packs and checks one tarball and uploads it as an artifact; a
+separate job that runs no repository code attests those exact bytes. Only
+stable `X.Y.Z` versions are accepted; they are published with the `latest`
+dist-tag.
+
+`publish=true` additionally publishes those exact bytes through npm trusted
+publishing after the `npm-management-sdk` environment approves the job. Before
+publishing, the job verifies the tarball digest and its GitHub attestation and
+refuses an OIDC identity that is not this repository, workflow, tag and
+environment. Afterwards it checks the registry metadata, `latest` tag,
+provenance (tag, commit and workflow), `npm audit signatures`, the downloaded
+bytes, and a clean registry install with both entry points. The same consumer
+check is available locally after a release:
+`npm run test:consumer -- --registry-version=<version>`.
+
+The npm trusted publisher for this package must name GitHub Actions,
+`777genius` / `universal-agent-plugins`, the workflow filename
+`management-sdk-release.yml` and the environment `npm-management-sdk`, with
+direct `npm publish` allowed. The GitHub environment `npm-management-sdk` must
+exist with required reviewers before the first `publish=true` run.
 
 ## Real engine qualification
 
