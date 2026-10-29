@@ -337,3 +337,72 @@ gh workflow run agentplugins-native-clients.yml \
 If Linux runners are queued, select `-f sdk_target=darwin-arm64` to run the same
 two isolated SDK journeys on macOS 15. The default remains `linux-amd64`; the
 receipt and uploaded source identity record the selected platform.
+
+### Additional user-scope clients and local execution
+
+The same real-engine journey also supports Cline 3.0.73, Gemini 0.65.0,
+GitHub Copilot CLI 1.0.103, Grok 1.0.67 and Qoder 1.1.78. Cline's own
+`config skills --json` and Gemini's `skills list` must observe the exact installed
+Skill bytes. Copilot, Grok and Qoder are checked through fresh native plugin and
+Skill inventories. Their version, enabled state, identity and owned package/cache
+paths must agree. When removal requires external uninstall, the example performs
+the exact native uninstall, verifies fresh absence, then prepares a new SDK review
+with the explicit attestation.
+
+Cline and Gemini use the separate-projection repair journey: edits are preserved,
+partial failure remains visible, and recovery follows explicit manual preservation.
+The OpenCode-specific typed preservation diagnostic is not asserted for other
+clients. All five additional clients retain the accepted-response loss, owned-engine
+termination, restart, idempotent replay and local Skill undo checks.
+
+From the repository root, the local runner creates a deterministic fixture archive,
+serves it over owned loopback HTTPS, and pins its SHA-256. This exercises the normal
+HTTPS source acquirer without requiring a Git subprocess. The certificate is trusted
+only in the child test environment. It neither changes the engine's source policy
+nor relaxes native process containment.
+
+```sh
+(cd cli && go build -trimpath -o /absolute/tools/agentplugins ./cmd/agentplugins)
+(cd sdks/typescript && npm ci --ignore-scripts && npm run build)
+python3 scripts/run-sdk-native-local.py --client cline \
+  --executable /absolute/tools/agentplugins \
+  --client-executable /absolute/tools/cline \
+  --output /absolute/new-evidence-directory
+```
+
+Provide a new output directory for each attempt. It contains the incremental SDK
+receipt, bounded process logs and a source identity record with the commit, dirty
+worktree flag, fixture hashes and executable hashes. Qualification requires both
+a successful complete receipt and clean process termination. A dirty worktree run
+is preliminary evidence, not a published-source qualification.
+
+For Gemini, supply `--client-archive /absolute/gemini-cli-bundle.zip` with the
+official 0.65.0 ZIP. The launcher must contain exactly `#!/bin/sh` and
+`exec /absolute/node /absolute/gemini.js "$@"`. The runner verifies the archive,
+every extracted bundle file, entrypoint and Node identity; a launcher hash alone
+does not identify the executed JavaScript.
+
+| Client route | Example selected by the local runner | Qualification boundary |
+| --- | --- | --- |
+| Cline, Gemini, Copilot, Grok, Qoder | `real-engine-smoke.ts` | Actual SDK lifecycle and fresh native plugin/Skill discovery; no model or login. |
+| Pi 1.4.0 | `real-pi-engine-smoke.ts` | Actual SDK extension lifecycle, native auto-discovery and inert registered RPC command; Pi Skills/MCP are not claimed. |
+| Kimi 2.3.1, Kiro 2.33.1 | `real-engine-policy-smoke.ts` | SDK install/update/repair/restart/removal only; authenticated native acceptance remains unverified. |
+| Windsurf user MCP | `real-engine-policy-smoke.ts` | Owned MCP configuration lifecycle and refresh guidance; editor loading remains unverified. No client executable is required for this existing configuration route. |
+| Cursor user editor | Not qualified by these examples | Existing manual activation route; a CLI/project observation does not qualify the editor's user package. |
+
+Pi runs offline without a model, session, tools or MCP. Its fresh process must
+load the installed extension automatically, execute the fixture's registered
+command, and stop discovering it after removal. The journey also checks exact
+fixture bytes and locked package digest, missing-package repair, edited-package
+refusal, manual preservation, fresh repair and durable accepted-operation replay.
+
+Kimi, Kiro and Windsurf receipts explicitly use `qualification: sdk-lifecycle-only`
+and `nativeLoaded: false`. Native journeys use `sdk-native-lifecycle`. Configuration
+success must not be relabeled as native loading.
+
+The **Management SDK Native Packages** workflow runs only the Copilot, Grok and
+Qoder journeys on Linux. These three need the process observation interface absent
+from some local containers. It checks out the exact PR head, provisions pinned
+native bytes, builds that engine/SDK, and uploads receipts bound to the source and
+executable hashes. Existing required checks remain authoritative; this focused
+workflow does not run the full native platform matrix.

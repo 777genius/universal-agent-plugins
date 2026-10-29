@@ -155,7 +155,7 @@ async function preserveEditedNativeSkill() {
   const refused = await apply({ action: 'repair', aliases: ['sdk-fixture'] }, false, 'partial');
   assert.deepEqual(await readFile(guidePath), edited, 'Refused repair must preserve the edited native bytes');
   if (nativeClient === 'opencode') assert.ok(refused.operation.diagnostics.some((diagnostic) => diagnostic.code === 'OWNED_SKILL_CHANGED'));
-  assert.ok(refused.operation.result?.nextActions.some((action) => action.kind === 'preserve_changes'));
+  assert.ok(refused.operation.result?.nextActions.some((action) => action.kind === (nativeClient === 'opencode' ? 'preserve_changes' : 'inspect')));
   assert.ok((await client().environment()).pendingOperations?.some((operation) => operation.operationId === refused.operation.operationId));
   assert.equal((await client().operation(refused.operation.operationId)).resolvedBy, undefined);
   // Explicit manual remediation belongs to this disposable test, not automatic
