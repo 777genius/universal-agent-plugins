@@ -49,8 +49,8 @@ CASES = {
     "qoder": {"test": "TestAgentpluginsQoderNativeProjectCompleteSkillsCycle",
               "file": "repotests/agentplugins_qoder_cycle_lifecycle_test.go",
               "optin": "AGENTPLUGINS_QODER_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
-    "grok": {"test": "TestAgentpluginsGrokNativeProjectRuntimeAttempt",
-             "file": "repotests/agentplugins_grok_project_native_attempt_test.go",
+    "grok": {"test": "TestAgentpluginsGrokNativeProjectCompleteCycle",
+             "file": "repotests/agentplugins_grok_cycle_lifecycle_test.go",
              "optin": "AGENTPLUGINS_GROK_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
     "kiro": {"test": "TestAgentpluginsKiroNativeProjectRuntimeAttempt",
              "file": "repotests/agentplugins_kiro_project_native_attempt_test.go",
@@ -303,6 +303,401 @@ def qoder_log_run_observation(result, client):
         raise ValueError("Qoder manifest-only run identity join contradicts its projection")
     if len(json.dumps(observation, separators=(",", ":"), ensure_ascii=False).encode("utf-8")) > 2048:
         raise ValueError("Qoder log projection bound exceeded")
+def grok_private_credential(body):
+    if len(body) > 1 << 20 or b"uap-grok-private-" in body:
+        return True
+    budget = [4 * len(body), 16384]
+
+    def numeric_refusal(raw, error):
+        if str(error) != "nonfinite JSON" or len(raw) > budget[0]:
+            return True
+        budget[0] -= len(raw)
+        try:
+            json.loads(raw.decode("utf-8", errors="strict"), parse_int=lambda _: None, parse_float=lambda _: None,
+                       parse_constant=lambda _: (_ for _ in ()).throw(json.JSONDecodeError("Non-JSON constant", "", 0)))
+        except json.JSONDecodeError:
+            return False
+        except (UnicodeError, RecursionError, ValueError):
+            return True
+        return True
+
+    def encoded(raw, depth):
+        if depth > 64 or len(raw) > budget[0]:
+            return True
+        budget[0] -= len(raw)
+        try:
+            value = strict_json(raw)
+        except (UnicodeError, RecursionError):
+            return True
+        except ValueError as error:
+            if not isinstance(error, json.JSONDecodeError) and numeric_refusal(raw, error):
+                return True
+            if b"\n" not in raw:
+                return False
+            for line in io.BytesIO(raw):
+                line = line.removesuffix(b"\n")
+                if len(line) > budget[0]:
+                    return True
+                budget[0] -= len(line)
+                try:
+                    value = strict_json(line)
+                except (UnicodeError, RecursionError):
+                    return True
+                except ValueError as line_error:
+                    if not isinstance(line_error, json.JSONDecodeError) and numeric_refusal(line, line_error):
+                        return True
+                    continue
+                if visit(value, depth):
+                    return True
+            return False
+        return visit(value, depth)
+
+    def visit(value, depth, structure=0):
+        budget[1] -= 1
+        if depth > 64 or structure > 32 or budget[1] < 0:
+            return True
+        if type(value) is str:
+            try:
+                raw = value.encode("utf-8", errors="strict")
+            except UnicodeError:
+                return True
+            return b"uap-grok-private-" in raw or encoded(raw, depth + 1)
+        if type(value) is dict:
+            for key, item in value.items():
+                try:
+                    if len(key.encode("utf-8", errors="strict")) > 4096:
+                        return True
+                except UnicodeError:
+                    return True
+                if visit(key, depth + 1, structure + 1) or visit(item, depth + 1, structure + 1):
+                    return True
+        elif type(value) is list:
+            return any(visit(item, depth + 1, structure + 1) for item in value)
+        return False
+
+    return encoded(body, 0)
+
+
+def grok_provider_route_observation(row):
+    if "route_observation" not in row:
+        return
+    observation = row["route_observation"]
+    flags = {"peer_loopback", "host_matches", "relative_url", "empty_url_host", "empty_raw_path", "content_type_exact"}
+    fields = flags | {"method", "uri", "content_type_count", "content_type_kind"}
+    uris = {"/", "/v1/chat/completions", "/chat/completions", "/v1/models", "/models", "/v1/responses", "/responses", "other"}
+    if (row["failure"] != "route" or not row["started"] or type(observation) is not dict or set(observation) != fields
+            or any(type(observation[key]) is not bool for key in flags)
+            or type(observation["method"]) is not str or observation["method"] not in {"POST", "GET", "other"}
+            or type(observation["uri"]) is not str or observation["uri"] not in uris
+            or type(observation["content_type_count"]) is not str
+            or observation["content_type_count"] not in {"none", "one", "multiple"}
+            or type(observation["content_type_kind"]) is not str
+            or observation["content_type_kind"] not in {"missing", "json-bare", "json-utf8", "other"}):
+        raise ValueError("finite Grok route observation differs")
+    count, kind = observation["content_type_count"], observation["content_type_kind"]
+    if ((count == "none") != (kind == "missing") or (count == "multiple" and kind != "other")
+            or (kind in {"json-bare", "json-utf8"} and count != "one")
+            or (observation["content_type_exact"] and (count != "one" or kind != "json-bare"))
+            or (observation["method"] == "POST" and observation["uri"] == "/v1/chat/completions"
+                and all(observation[key] for key in flags))):
+        raise ValueError("contradictory Grok route observation")
+
+
+def grok_provider_members(bodies, client):
+    if client == "grok" and any(grok_private_credential(body) for body in bodies.values()):
+        raise ValueError("unredacted Grok fixture credential refused")
+    members = {"grok-provider.json", "grok-provider.request.json", "grok-provider.response.sse"}
+    present = set(bodies) & members
+    if not present:
+        return set()
+    if client != "grok" or "grok-provider.json" not in present:
+        raise ValueError("Grok-only provider receipt required")
+    if len(bodies["grok-provider.json"]) > 2048:
+        raise ValueError("Grok provider receipt bound exceeded")
+    row = strict_json(bodies["grok-provider.json"])
+    fields = {"transport", "model", "started", "requests", "responses", "credential_matched",
+              "failure", "shutdown_complete", "forced_close"}
+    failures = {"none", "listen", "serve", "deadline", "route", "credential", "duplicate",
+                "body", "request-shape", "response-write", "cleanup"}
+    if (type(row) is not dict or set(row) not in (fields, fields | {"route_observation"})
+            or row["transport"] != "scripted loopback OpenAI chat-completions SSE; no real model"
+            or row["model"] != "uap-grok-fixture"
+            or type(row["failure"]) is not str or row["failure"] not in failures
+            or any(type(row[key]) is not bool for key in ("started", "credential_matched", "shutdown_complete", "forced_close"))
+            or any(type(row[key]) is not int or not 0 <= row[key] <= 1 for key in ("requests", "responses"))
+            or row["responses"] > row["requests"]):
+        raise ValueError("finite Grok provider receipt differs")
+    if ((not row["started"] and (row["failure"] != "listen" or row["requests"] or row["responses"]
+                                 or row["credential_matched"] or row["shutdown_complete"] or row["forced_close"]))
+            or (row["requests"] and (not row["started"] or not row["credential_matched"]))
+            or (row["failure"] == "none" and (row["requests"] != row["responses"]
+                                               or row["forced_close"] or not row["shutdown_complete"]))):
+        raise ValueError("Grok partial capture or cleanup state differs")
+    grok_provider_route_observation(row)
+    required = {"grok-provider.json"}
+    if row["requests"]:
+        required.add("grok-provider.request.json")
+    if row["responses"]:
+        required.add("grok-provider.response.sse")
+    if present != required or any(not bodies[name].strip() for name in present):
+        raise ValueError("Grok provider member counts differ")
+    if row["requests"]:
+        request = strict_json(bodies["grok-provider.request.json"])
+        if type(request) is not dict:
+            raise ValueError("Grok opaque captured request must be a JSON object")
+        if "uap-grok-private-" in json.dumps(request):
+            raise ValueError("encoded Grok fixture credential refused")
+    return members
+
+
+GROK_TITLE_SYSTEM = (
+    "You are tasked with generating the session title. The user is asking almost always software engineering related questions on their codebase.\n"
+    "We describe the session title below\n# Session Title\n"
+    "A short and distinctive 5-10 word descriptive title for the session. Super info dense, no filler.\n\n"
+    "You will be given the user query below encapsulated in <user_query></user_query>.\n\n"
+    "Just generate the session_title and nothing else")
+EXPECTED_TITLE_REQUEST = {
+    "model": "uap-grok-title-fixture", "stream": True, "stream_options": {"include_usage": True},
+    "temperature": 1.0, "max_tokens": 100,
+    "messages": [{"role": "system", "content": GROK_TITLE_SYSTEM},
+                 {"role": "user", "content": "<user_query>\nDescribe only the installed uap-grok-attempt skill marker. Do not run any tool or change any file.\n</user_query>"}],
+    "tools": [{"type": "function", "function": {
+        "name": "session_title", "description": "Generate the session_title which we use for the user_message",
+        "parameters": {"type": "object", "required": ["session_title"], "additionalProperties": False,
+                       "properties": {"session_title": {"type": "string", "description": "Final session title, just 5-10 word descriptive title for the session. Super info dense, no filler."}}}}}],
+    "tool_choice": {"type": "function", "function": {"name": "session_title"}}}
+
+
+def grok_title_provider_members(bodies, client):
+    names = {"grok-title-provider.json", "grok-title-provider.request.json", "grok-title-provider.response.sse"}
+    present = set(bodies) & names
+    if not present:
+        return set()
+    if client != "grok" or "grok-provider.json" not in bodies or "grok-title-provider.json" not in present:
+        raise ValueError("separate Grok title/main receipts required")
+    if len(bodies["grok-title-provider.json"]) > 2048:
+        raise ValueError("Grok title receipt bound")
+    row = strict_json(bodies["grok-title-provider.json"])
+    fields = {"role", "transport", "model", "started", "requests", "responses", "credential_matched",
+              "failure", "shutdown_complete", "forced_close"}
+    failures = {"none", "listen", "serve", "deadline", "route", "credential", "duplicate",
+                "body", "request-shape", "privacy", "response-write", "cleanup"}
+    if (type(row) is not dict or set(row) not in (fields, fields | {"route_observation"})
+            or row["role"] != "session-title"
+            or row["transport"] != "scripted loopback OpenAI session-title SSE; no real model"
+            or row["model"] != "uap-grok-title-fixture"
+            or type(row["failure"]) is not str or row["failure"] not in failures
+            or any(type(row[key]) is not bool for key in ("started", "credential_matched", "shutdown_complete", "forced_close"))
+            or any(type(row[key]) is not int or not 0 <= row[key] <= 1 for key in ("requests", "responses"))
+            or row["responses"] > row["requests"]):
+        raise ValueError("finite Grok title receipt differs")
+    if ((not row["started"] and (row["failure"] != "listen" or row["requests"] or row["responses"]
+                                 or row["credential_matched"] or row["shutdown_complete"] or row["forced_close"]))
+            or (row["requests"] and (not row["started"] or not row["credential_matched"]))
+            or (row["failure"] == "none" and (row["requests"] != row["responses"]
+                                               or row["forced_close"] or not row["shutdown_complete"]))
+            or (row["started"] and row["failure"] == "listen")
+            or (row["failure"] in {"body", "privacy"} and row["requests"])
+            or (row["failure"] in {"request-shape", "privacy", "body", "response-write"} and row["responses"])):
+        raise ValueError("Grok title partial capture or cleanup differs")
+    grok_provider_route_observation(row)
+    required = {"grok-title-provider.json"}
+    if row["requests"]:
+        required.add("grok-title-provider.request.json")
+    if row["responses"]:
+        required.add("grok-title-provider.response.sse")
+    if present != required or any(not bodies[name].strip() for name in present):
+        raise ValueError("Grok title member counts differ")
+    request = None
+    if row["requests"]:
+        raw = bodies["grok-title-provider.request.json"]
+        request = strict_json(raw)
+        if len(raw) > 1 << 20 or type(request) is not dict or grok_private_credential(raw):
+            raise ValueError("Grok title safe captured object required")
+    if row["responses"]:
+        expected = EXPECTED_TITLE_REQUEST
+        response = bodies["grok-title-provider.response.sse"]
+        if (request != expected or type(request["stream"]) is not bool
+                or request["stream_options"]["include_usage"] is not True
+                or request["tools"][0]["function"]["parameters"]["additionalProperties"] is not False
+                or type(request["temperature"]) not in (int, float) or len(response) != 570
+                or hashlib.sha256(response).hexdigest() != "eea6c4c389c7e27cf0e6d1cc9e705bc84a4d77ae8c5afddaa846ec8255e6ed68"):
+            raise ValueError("Grok title fixed request/response differs")
+    return names
+
+
+def grok_duplicate_object(raw):
+    """Finite refused JSON data only; never a provider/model request grammar."""
+    if type(raw) is not bytes or not 0 < len(raw) <= 1 << 20:
+        raise ValueError("Grok duplicate raw body bound")
+    value = strict_json(raw)
+    if type(value) is not dict:
+        raise ValueError("Grok duplicate raw object required")
+    nodes = 0
+    def visit(item, depth):
+        nonlocal nodes
+        nodes += 1
+        if depth > 32 or nodes > 16384:
+            raise ValueError("Grok duplicate JSON structure bound")
+        if type(item) is dict:
+            for key, child in item.items():
+                if len(key.encode("utf-8", errors="strict")) > 4096:
+                    raise ValueError("Grok duplicate JSON key bound")
+                visit(child, depth + 1)
+        elif type(item) is list:
+            for child in item: visit(child, depth + 1)
+        elif type(item) in (int, float):
+            try:
+                finite = math.isfinite(float(item))
+            except OverflowError:
+                finite = False
+            if not finite:
+                raise ValueError("Grok duplicate nonfinite JSON number")
+    visit(value, 0)
+    decoded = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8", errors="strict")
+    if grok_private_credential(raw) or grok_private_credential(decoded):
+        raise ValueError("Grok duplicate privacy refusal")
+    return value
+
+
+def grok_duplicate_members(bodies, client):
+    names = {"grok-provider.duplicate.json", "grok-provider.duplicate-request.json"}
+    present = set(bodies) & names
+    if not present:
+        return set()
+    receipt = bodies.get("grok-provider.duplicate.json")
+    if client != "grok" or type(receipt) is not bytes or not 0 < len(receipt) <= 2048:
+        raise ValueError("Grok-only duplicate receipt required")
+    row = strict_json(receipt)
+    fields = {"schema_version", "role", "attempt_index", "status", "original_failure", "response_issued", "captured_bytes", "captured_sha256"}
+    if (type(row) is not dict or set(row) != fields or type(row["schema_version"]) is not int or row["schema_version"] != 1
+            or row["role"] != "main-duplicate-diagnostic" or type(row["attempt_index"]) is not int or row["attempt_index"] != 2
+            or row["original_failure"] != "duplicate" or row["response_issued"] is not False
+            or type(row["captured_bytes"]) is not int or type(row["captured_sha256"]) is not str
+            or type(row["status"]) is not str or row["status"] not in {"captured", "body-refused", "json-refused", "privacy-refused", "context-refused"}):
+        raise ValueError("Grok duplicate finite receipt differs")
+    # Old main/title validators remain the canonical closed parent schemas.
+    grok_provider_members(bodies, client)
+    grok_title_provider_members(bodies, client)
+    main = strict_json(bodies.get("grok-provider.json", b"null"))
+    title = strict_json(bodies.get("grok-title-provider.json", b"null"))
+    if (type(main) is not dict or main.get("requests") != 1 or main.get("responses") != 1 or main.get("failure") != "duplicate"
+            or main.get("started") is not True or main.get("credential_matched") is not True
+            or type(title) is not dict or title.get("role") != "session-title" or title.get("started") is not True):
+        raise ValueError("Grok duplicate completed first main/title join absent")
+    request = grok_duplicate_object(bodies["grok-provider.request.json"])
+    if (request.get("model") != "uap-grok-fixture" or request.get("stream") is not True
+            or type(request.get("messages")) is not list or not 1 <= len(request["messages"]) <= 128
+            or hashlib.sha256(bodies["grok-provider.response.sse"]).hexdigest() != "f2c19ea9dbc0ddbf7cc2facaa5d2d01877897afa0f6fea33cc5651c0ecc9f7b9"):
+        raise ValueError("Grok duplicate unchanged first exchange differs")
+    result = strict_json(bodies.get("runtime-attempt.json", b"null"))
+    if (type(result) is not dict or result.get("client") != "grok" or result.get("runtime_attempt_complete") is not False
+            or result.get("test_failed") is not True or result.get("vendor_authentication_qualified") is not False
+            or result.get("real_model_qualified") is not False or type(result.get("qualification")) is not dict
+            or set(result["qualification"]) != set(shared.QUALIFICATION_CASES) or any(value is not False for value in result["qualification"].values())):
+        raise ValueError("Grok duplicate remains failed and unqualified")
+    if row["status"] == "captured":
+        raw = bodies.get("grok-provider.duplicate-request.json")
+        if (type(raw) is not bytes or not 0 < len(raw) <= 1 << 20 or row["captured_bytes"] != len(raw)
+                or row["captured_sha256"] != hashlib.sha256(raw).hexdigest()):
+            raise ValueError("Grok duplicate raw byte/hash join differs")
+        grok_duplicate_object(raw)
+    elif present != {"grok-provider.duplicate.json"} or row["captured_bytes"] != 0 or row["captured_sha256"] != "":
+        raise ValueError("Grok duplicate refusal retained raw")
+    return names
+
+
+def grok_selection_identity_keys(row, fields):
+    return type(row) is dict and all(key == expected or key.casefold() != expected.casefold()
+                                   for key in row for expected in fields.split())
+
+
+def grok_selected_skill(skills, name, path):
+    if type(skills) is not list:
+        raise ValueError("Grok selected skills must be an array")
+    found = False
+    for row in skills:
+        if (not grok_selection_identity_keys(row, "name description source userInvocable disabled")
+                or type(row.get("name")) is not str or not row["name"]
+                or not grok_selection_identity_keys(row.get("source"), "type plugin_name path")):
+            raise ValueError("Grok selected skill identity differs")
+        origin = row["source"]
+        plugin = origin.get("plugin_name", "")
+        if row["name"].casefold() != name.casefold() and (type(plugin) is not str or plugin.casefold() != name.casefold()):
+            continue
+        if (found or row["name"] != name or row.get("description") != "Harmless installed startup marker"
+                or row.get("userInvocable") is not True or row.get("disabled", False) is not False
+                or origin != {"type": "plugin", "plugin_name": name, "path": path}):
+            raise ValueError("Grok selected skill source is not the owned installation")
+        found = True
+    if not found:
+        raise ValueError("Grok selected loaded skill is absent")
+
+
+def grok_selected_inspection(bodies, result, client):
+    if client != "grok":
+        if "fixture_selection" in result:
+            raise ValueError("Grok fixture selection cannot apply to another client")
+        return
+    marker, observation = result.get("fixture_selection"), result.get("native_inspection")
+    if "fixture_selection" not in result:
+        if type(observation) is dict and (observation.get("enabled") is True or observation.get("project_trusted") is True):
+            raise ValueError("Grok selected observation requires its fixture marker")
+        return
+    if marker != "owned-project-trust-and-selected-plugin-name":
+        raise ValueError("unregistered Grok fixture selection")
+    # Authored intent is not a completed observation. Preserve failed/unknown
+    # raw inspect attempts without inventing a successful selected skill.
+    if "native_inspection" not in result:
+        return
+    binding = result.get("binding")
+    if type(binding) is not dict:
+        raise ValueError("Grok selected inspection requires its project binding")
+    profile, target, physical = (binding.get(key) for key in ("native_profile_root", "target_locator", "physical_artifact_id"))
+    if (any(type(value) is not str or not value or not os.path.isabs(value) or os.path.normpath(value) != value for value in (profile, target))
+            or type(physical) is not str or re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,63}", physical) is None
+            or binding.get("client_id") != "grok" or binding.get("scope") != "project"
+            or binding.get("activation") != "prepared" or binding.get("verification") != "package_validated"
+            or Path(profile).name != ".grok" or target != str(Path(profile) / "plugins" / physical)):
+        raise ValueError("Grok selected binding identity differs")
+    project, name = str(Path(profile).parent), "uap-grok-attempt"
+    skill = str(Path(target) / "skills" / name / "SKILL.md")
+    expected = {"name": name, "scope": "project", "path": target, "enabled": True, "project_trusted": True,
+                "installed_skill": skill, "interpretation": "exact selected plugin skill listed; no skill execution or lifecycle/runtime qualification"}
+    if (type(observation) is not dict or observation != expected or observation.get("enabled") is not True
+            or observation.get("project_trusted") is not True or result.get("installed_skill") != skill):
+        raise ValueError("Grok completed selected observation differs")
+    raw = bodies.get("native-inspect.stdout.log")
+    command = strict_json(bodies.get("native-inspect.command.json", b"null"))
+    version = strict_json(bodies.get("version.command.json", b"null"))
+    if (type(command) is not dict or type(version) is not dict or type(version.get("argv")) is not list
+            or len(version["argv"]) != 2 or version["argv"][1] != "--version"
+            or command.get("argv") != [version["argv"][0], "inspect", "--json"] or command.get("cwd") != project
+            or command.get("exit") != 0 or command.get("error") is not False or command.get("deadline") is not False
+            or bodies.get("native-inspect.stderr.log") != b"" or type(raw) is not bytes):
+        raise ValueError("Grok selected observation lacks its successful exact command")
+    inspect = strict_json(raw)
+    if (not grok_selection_identity_keys(inspect, "grokVersion cwd projectRoot projectTrusted skills plugins")
+            or inspect.get("grokVersion") != "1.0.70" or inspect.get("cwd") != project
+            or inspect.get("projectRoot") not in (project, project + "/") or inspect.get("projectTrusted") is not True
+            or type(inspect.get("plugins")) is not list):
+        raise ValueError("Grok selected raw project inspection differs")
+    seen, found = set(), False
+    for plugin in inspect["plugins"]:
+        if (not grok_selection_identity_keys(plugin, "name scope path enabled") or type(plugin.get("name")) is not str
+                or not plugin["name"].strip() or plugin["name"].casefold() in seen
+                or plugin.get("scope") not in ("project", "user") or type(plugin.get("path")) is not str
+                or not os.path.isabs(plugin["path"]) or os.path.normpath(plugin["path"]) != plugin["path"]
+                or type(plugin.get("enabled")) is not bool):
+            raise ValueError("Grok selected raw plugin identity differs")
+        seen.add(plugin["name"].casefold())
+        if plugin["name"].casefold() == name.casefold():
+            if plugin["name"] != name or plugin["scope"] != "project" or plugin["path"] != target or plugin["enabled"] is not True:
+                raise ValueError("Grok selected raw plugin differs")
+            found = True
+    if not found:
+        raise ValueError("Grok selected raw plugin is absent")
+    grok_selected_skill(inspect.get("skills"), name, skill)
 
 
 def cli_attempt_members(bodies, source, client):
@@ -310,12 +705,22 @@ def cli_attempt_members(bodies, source, client):
         raise ValueError("unknown fixed native CLI attempt")
     summary = strict_json(bodies.get("runtime-attempt.json", b"{}"))
     if isinstance(summary, dict) and "capture_mode" in summary:
-        if client != "qoder" or summary["capture_mode"] != "qoder-complete-skills-cycle":
+        if (client, summary["capture_mode"]) == ("grok", "grok-complete-skills-cycle"):
+            from project_native_grok_cycle import members
+        elif (client, summary["capture_mode"]) == ("qoder", "qoder-complete-skills-cycle"):
+            from project_native_qoder_cycle import members
+        else:
             raise ValueError("unknown fixed native CLI capture mode")
-        from project_native_qoder_cycle import members
         return members(bodies, source)
     allowed = {"runtime-attempt.json", "probe-events.jsonl"}
-    commands = CLI_COMMANDS + (("native-catalog",) if client == "qoder" else ())
+    allowed |= grok_provider_members(bodies, client)
+    allowed |= grok_title_provider_members(bodies, client)
+    allowed |= grok_duplicate_members(bodies, client)
+    commands = CLI_COMMANDS
+    if client == "qoder":
+        commands += ("native-catalog",)
+    elif client == "grok":
+        commands += ("native-inspect",)
     for label in commands:
         triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
         allowed |= triple
@@ -347,6 +752,7 @@ def cli_attempt_members(bodies, source, client):
                                         "installer_source_state": "committed", "installer_patch_sha256": []}:
         raise ValueError("native CLI evidence source differs")
     qoder_log_run_observation(result, client)
+    grok_selected_inspection(bodies, result, client)
     return result
 
 

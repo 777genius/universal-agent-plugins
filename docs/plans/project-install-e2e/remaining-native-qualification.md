@@ -837,6 +837,46 @@ State stays Prepared. Label `provider_kind=scripted_loopback`, vendor
 authentication false and real-model use false. Raw bounded evidence stays in
 closed CI artifacts, not Git or recursively uploaded native profiles.
 
+## Grok opaque catalog research amendment
+
+Genuine help run 40240232499/artifact 12616383397 confirms the frozen 1.0.70
+archive/executable and `inspect --json`, `plugin list --json`, and `mcp list
+--json` help. After two independent plan rounds, admit explicit `observe`
+research only. Keep the nine fixed version/help probes unchanged. Require six
+empty baseline catalog operations in A/outside, then author distinct text-only
+user/A/B `.grok/plugins/<marker>/.grok-plugin/plugin.json` and
+`skills/<marker>/SKILL.md`, and require nine populated catalog operations in
+A/B/outside. No executable payload, hooks, commands, MCP definition, native
+trust, provider, SDK or account mutation is introduced. Outside remains a
+separate cwd, never HOME.
+
+Each operation uses existing hosted admission, immutable runtime checks and
+`Context.probe`, with max 30 seconds capped by the original shared 360-second
+remaining deadline. Every required operation must return exact integer zero,
+error None, empty stderr and strict UTF-8 whole duplicate-free finite JSON
+object/list, bounded to one MiB, 32 levels and 8,192 nodes. Preserve raw streams.
+The schema remains opaque; root kind, digest and marker-token occurrences are
+research observations, never selected source/loading evidence. Owned ordinary
+single-link UID files retain exact mode, bytes and original identity across each
+probe, using descriptor-relative no-follow parent/file opens and held reads.
+
+Only completed fixed observations may pass `grok.scope-observation` research;
+all product lifecycle, native restart/removal, MCP initialize/list/call,
+authentication and model qualification flags remain false. Failures, malformed
+JSON, alias/replacement/mutation, timeout or missing operations fail the research
+slice. Freeze genuine observed source schemas and native modes with a new
+separate reviewed amendment before real UAP lifecycle implementation or a
+native-source qualification claim. Existing skills-only project MCP refusal
+remains intact.
+
+Every native child, including version/help and all catalogs, receives literal
+`GROK_DISABLE_AUTOUPDATER=1` through the existing environment allowlist. This is
+the documented suppression control in the official
+[settings reference](https://docs.x.ai/build/settings/reference); it does not
+claim network isolation or supply vendor authentication. Immutable runtime
+identities remain checked before and after every child. Inert contracts assert
+the exact supplied environment on every help/catalog call.
+
 ## Kimi installed local lifecycle amendment
 
 Genuine Kimi API run 40238495966 at `ac3a7e5da565590fd85c4ff9795cae6b312ed6b1`,
@@ -976,6 +1016,36 @@ remain false. A bounded retained failure cannot become a passing E2E gate.
 Further source/provider/permission/lifecycle changes require their own observed
 contract and independent review; legacy user and baseline gates remain required.
 
+## Observed Grok 1.0.70 project inspection admission
+
+Genuine runtime [40353442588](https://github.com/777genius/universal-agent-plugins/actions/runs/40353442588)
+stopped before public `add-a` mutation because the existing project inspector
+accepted only the previously measured 1.0.67 version. The follow-up genuine
+read-only [observe run 40353442581](https://github.com/777genius/universal-agent-plugins/actions/runs/40353442581)
+succeeded at source `3234be86f0a3217ebd2371dc5e8fa0b26d3dcd26`, tree
+`74490cebf339e8538b1f237b478aceeb58667e3d`. Native artifact `12670385326`
+(SHA256 `a0d9c2e0858b5bbb2297f4d6f6f99aa71a57cfbc3d9ba5ec908434dfe14db957`)
+retains the actual bounded 1.0.70 inspection responses.
+
+The measured empty A and populated A/B responses contain the existing identity
+subset: exact `grokVersion`, canonical `cwd`, same `projectRoot` with an optional
+trailing separator, boolean `projectTrusted`, and `skills`/`plugins` arrays.
+Populated A/B each identify their own project plugin by exact name/scope/path
+with `enabled=false`, plus the independent original-user plugin. Outside cwd
+lists only the user plugin and has no project root. The separate plugin-list
+command returned empty arrays even for these candidates; it is not a substitute
+for project inspection. Native trust and MCP execution remain unqualified.
+
+Admit exactly the measured 1.0.70 version alongside 1.0.67 in the existing
+project-inspection parser. Retain strict duplicate/case-fold handling, exact
+cwd/root, typed trust and collections, unique plugin names, canonical absolute
+paths, scope checks, ownership and namespace collision rules. All other versions
+remain closed. Update only the corresponding version-specific user guidance;
+project activation remains Prepared and MCP qualification remains unchanged.
+Add focused tests for both admitted versions and unchanged refusals, then rerun
+the existing genuine Grok startup capture. No new command, alternate catalog,
+trust grant, provider, permission mode, deadline or cleanup policy is introduced.
+Two independent plan reviews precede this product correction.
 | Client | Pinned native version | Fixed restricted startup |
 | --- | --- | --- |
 | Qoder | 1.1.78 | `--print --output-format stream-json --no-session-persistence --permission-mode default --tools "" --plugin-dir <receipt-selected-view> <prompt>` |
@@ -1744,6 +1814,114 @@ Inspect a fresh genuine hosted failed capture before proposing any source,
 product or runtime behavior amendment for the config mutation. Vendor
 authentication, model use, native session grammar and all five lifecycle/MCP
 qualification flags remain false.
+## Draft Grok installed prepared-candidate visibility capture
+
+This proposed narrow follow-through awaits scope assessment and two independent
+plan approvals before code. It adds one visibility stage to the existing Grok
+installed-startup attempt, not another collector, lifecycle case or capability.
+
+The concrete gap is the join between existing evidence sets. Genuine observe
+run `40353442581`, source `3234be86f0a3217ebd2371dc5e8fa0b26d3dcd26`,
+tree `74490cebf339e8538b1f237b478aceeb58667e3d`, artifact `12670385326`
+(ZIP SHA256 `a0d9c2e0858b5bbb2297f4d6f6f99aa71a57cfbc3d9ba5ec908434dfe14db957`)
+measured project candidate name/scope/path and disabled status, but those native
+directories were authored directly by research. The composed saved lifecycle
+test exercises the public installer with an inert native runner. The real
+installed-startup fixture validates public add and installed skill/receipts,
+but retains no independent raw `inspect --json` output after that add.
+Production `inspectProject` deliberately permits file-valid Prepared output
+when its native list lacks the candidate, so successful public add alone does
+not establish candidate visibility. This is a missing research observation,
+not evidence of a production bug or a reason to tighten preparation behavior.
+
+After the existing `f.setup`, run exactly one Grok-only command, label
+`native-inspect`, argv `<pinned-grok> inspect --json`, cwd selected project A,
+timeout 30 seconds. Reuse the same command supervisor, original HOME, literal
+updater suppression, immutable/protected checks, bounded streams and original
+150-second work / 180-second total deadline. Other clients' command tables and
+all existing native-startup argv remain unchanged. There is no additional
+provider, login, trust grant, plugin enable, permissions change or native tool.
+
+Parse only the already measured identity subset using the existing strict JSON
+and key-folding helpers: exact `grokVersion=1.0.70`, cwd A, projectRoot A with
+the measured optional trailing separator, boolean projectTrusted and typed
+skills/plugins arrays. Require projectTrusted=false and exactly one selected
+name in the complete plugins array, scope=project, path equal to the already
+validated selected binding locator and enabled=false. Refuse ambiguous names,
+wrong types, aliased/noncanonical paths, duplicate or case-folded identity
+fields, missing candidate or changed version/scope/path/status. Preserve and
+recheck authored and delivered skill bytes around this read-only command.
+Require the selected locator to be a canonical direct child of A's exact
+`.grok/plugins`, with the validated physical-artifact basename. Require its
+ordinary owned directory ancestry and held native manifest/skill paths without
+aliases or extra links before and after inspection; string equality alone
+cannot establish this path authority. Reuse existing bounded no-follow readers.
+Capture the full raw command triple; summarize only visible disabled Prepared
+candidate identity. Do not treat counts, labels or retained files as skill
+loading, active discovery or source revision/runtime proof.
+
+Admit the new complete triple only for Grok in the existing closed frontend;
+partial/unknown members and every other client's admission remain unchanged.
+Root owns this minimal shared frontend change. Add focused inert native-JSON,
+fixed command/cwd/deadline, wrong-client and artifact-triple contracts, using
+the held genuine inspection bytes as the positive schema reference. Then run
+the existing restricted startup attempt unchanged. The whole initial attempt
+still deliberately fails; all five qualification, vendor-authentication and
+real-model flags remain false. This stage does not establish B/outside
+isolation, full lifecycle, restart/removal or a new supported native surface.
+Further lifecycle/qualification work requires its own reviewed evidence and
+definition. Independent code review and a fresh genuine hosted capture remain
+mandatory; no vendor process may run locally.
+
+## Grok empty-profile migration sentinel amendment
+
+The genuine PR522 source `753936db2e50613c2a4310848a262ec4f25dea87`,
+run `40553581491` / native artifact `12759346679` (outer SHA256
+`f90a4502e5e0bac54dfbb37372a29916431a2c0b4fc7aedb0afed6fa5832531a`),
+fails the original config digest guard. All eight model facts remain equal;
+the sole added table has key SHA256
+`dfd76b3ecbefe4606d9cbfa7e7c41884b22d214a0c13560bb7eb10e65c11851f`.
+Independently verified public snapshot
+`xai-org/grok-build@2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8` identifies
+the exact source-defined table as
+`marketplace = { default_skills_installs_purged = true }`.
+Its canonical JSON value SHA256 is
+`292bc27c01bd4c8e2df64aacd7e75d92db6d9e3f446970ea2d7d97f011250093`.
+
+The primary shell `extensions/marketplace.rs` blob
+`ea896d05e4471573974e273049d6deb868e92cd6` lines963–1082 reads a typed
+boolean, returns before migration when true and sets it even for an empty
+legacy registry. Shell `plugin/mod.rs` blob
+`60d0d7fba53875e2456b6ebef0fc0744f4fe35ac` lines1346–1390 writes the
+literal boolean into that table. These exact Git blob identities were
+independently reconstructed. This does not resolve shipping build
+`f50904eaee6c` to the public snapshot or export the changed raw TOML.
+
+Root R1 and independent CLI R2 approved the exact plan SHA256
+`30a05da404dc1de8103c030510aff5c34daf2d128f5ad6ea462c8a488e986e77`
+before implementation. The disposable original HOME has no legacy installs.
+Author only `[marketplace] default_skills_installs_purged = true` in the
+initial provider recipe before its first write/vendor child. Freeze all bytes
+and the original digest as before; any later format/removal/false-toggle
+continues to fail the original protected guard. Preserve the eight model
+fields, environment, commands, provider route guard, diagnostic limits,
+process/deadline/admission and all false qualification flags. This grants no
+marketplace source, trust, permission, account or plugin activation.
+
+Inert contracts assert the complete three-table recipe, independently fixed
+semantic hash and initial held bytes/digest. Actual inert test children prove
+the original fatal for formatting, removing or toggling the flag. Existing
+diagnostic count assertions retain one changed member against the new third
+authored table. Focused `^(TestGrok|TestProjectNativeCLI)` contracts passed
+in 1.161s with Go 1.26.10 and approved inert loopback access; the first restricted
+invocation could not bind sockets. Actual all-enabled root lint versus the
+PR520 base and unfiltered whole-root six-linter gate both reported zero issues.
+Gofmt/diff checks are clean; the actual twenty-member native archive still
+replays as failed/incomplete with all five qualifications false. No vendor or
+public installer ran locally. Independent exact-code review precedes root
+publication. A fresh genuine run must establish preservation;
+the existing rejected GET remains `uri=other`, and this amendment accepts no
+new HTTP route or final capture/qualification boundary.
 
 ## Observed Gemini wait-for-previous description correction
 
@@ -3119,6 +3297,647 @@ four allowed paths, both CODE critics review, actual gates are recorded and root
 publishes. Fresh native review establishes whether the repair occurred. Keep all
 prior raw outcomes and every limitation visible until the later full project
 E2E evidence is actually complete.
+
+# Grok: isolate the measured initial-title side call in a fixed fixture
+
+PRE-CODE proposal. Two independent exact-plan GOs before implementation. Read
+AGENTS.md, PROJECT_INSTALL_OWNER_SCOPE.md and capability preservation. No release,
+VS Code, trust widening, real account/model, local native execution or generic
+provider/model acceptance. Root alone publishes to existing PR522.
+
+## New source-bound actual evidence
+
+Current611f7dd79a923a3b8e445222cde8395bd1af1062,
+treee2b94d93297bbbf9ef316af922a87c426ac083d7. Runtime40586113413,
+job122486692802 fails after3.68seconds. Native12775012222 outer5333B SHA256
+d1aa56111ae7e3270069b47abcc9a022dfdd7e3fa0ee444ccd43e1f70701c7d3,
+inner e4869bdb8bd69c35a21090d7bd0fb441d4930f2b6358992e6a7707dd6fcfc3a9,
+21ordinary closed members. Frontend12774612789 outer3395B SHA256
+0a2b462b88809e6dcc861e8123a00d929e48709d9130c5b6aa70b6a0f645e32d,
+25members. Exact source/tree/cleanbuild,24stream joins, official archive/executable
+pins, public add/source/package/physical/binding/receipt joins and exact-source
+failed-envelope reader replay pass independent audit
+/tmp/uap-grok-611-current-40586113413/independent-raw-audit.json SHA256
+f36b98f1cb8585efce2cdfd616557cabe4f3b0132aafb26e4b2ee1da7ed2f45c.
+
+Public add exits0 Prepared. Actual inspect exits0 in68ms and selects exactly the
+receipt-owned project plugin,enabled=false,projectTrusted=false,one provided
+skill,zero loaded skills and no MCP. Native startup is canceled after364ms by
+provider request-shape refusal: one captured authenticated literal-loopback POST,
+zero responses,ordinary provider shutdown,forced_close=false. The body is an
+initial-title call with model=grok-4.6,two messages,stream=true,temperature1,
+max_tokens100 and forced session_title function schema. It is not the main
+uap-grok-fixture request. The main provider correctly refuses it; no completed
+native output or loaded skill is proved. Every5/runtime/auth/model flag is false.
+
+## Exact publisher source and limits
+
+Official xai-org/grok-build snapshot2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8
+contains independently Git-blob/SHA-verified source retained in
+/tmp/uap-grok-title-source, research /tmp/uap-grok-title-source-research.json.
+Shipping buildf50904eaee6c is unresolved in that public Git snapshot; neither the
+request's agreement with source nor the earlier optout proves binary equivalence.
+
+- config/mod.rs blob568b51d0631e3fb2f1331b107501a5f9b1b72ea3,
+  SHA256a84e2c680ec3ef795d2847c7b1832247e797392d7e9f7f2d17b410585c936f63,
+  lines500-625: `[models] session_summary` / GROK_SESSION_SUMMARY_MODEL resolves
+  the auxiliary title model; empty values fall back to compiled grok-4.6.
+- session/summary.rs blobf0c3ae859ffb6ffe3f891fca4f2b458cca601209,
+  SHA2568d9dafb70d64704c48d1b27330af4218b8ba5a51cb8b20814557f974d06d7806:
+  SummaryGenerator starts an initial title task on first nonempty content.
+- session/helpers/session_summary.rs blob0f2af81e78701043b8446a8bffb2272921f3802c,
+  SHA256fde704829e87366b93280fe031e01aaaca2d5bd169a67d0bc777f3013f7f8837,
+  lines188-244 constructs the measured two-message session_title request and
+  reads a title from returned function-call arguments.
+- agent/mvp_agent/agent_ops.rs blobfa77f1ec809cf3c944ba91895a73ba422a24054a,
+  SHA256399735fd57b748735efaaef3f956c6b428af60bbe436754031e91a9342e776bd,
+  lines85-135 resolves the configured auxiliary model's sampler; missing model
+  resolution falls back to the primary sampler with the auxiliary model slug.
+- agent/config.rs bloba430462ad3b8e0611368ad2051f093827d7babee,
+  SHA25651eadad05c42e19954fe0822dd187dc59694252bec34d513cc329a05394b47a2,
+  lines4489-4515 returns a catalogued custom auxiliary model's own endpoint/key;
+  lines4597-4612 preserves them while stamping local context/max_retries.
+
+The examined CLI/summary/persistence source has no verified initial-title disable
+setting. GROK_TITLE_REFRESH controls later turn-checkpoint refresh and does not
+suppress the initial SummaryGenerator. Do not add it as an assumed solution.
+
+## Proposed narrow fixture boundary
+
+Preserve the original main provider's literal authenticated POST route, loopback,
+Host,MIME,credential,body/model,one-request/response,count,failure,cancellation and
+cleanup predicates. Main provider admission/capture/serve/response functions and
+the shared native command fatal/review-barrier path remain byte-identical. Do not
+let the main provider accept grok-4.6,a title request,unknown models or a second
+request. Original Prepared/untrusted/disabled inspection remains unchanged.
+
+Only for the existing Grok attempt with its held main provider, start one separate
+fixed loopback title fixture before configuring children. Generate its own fresh
+private128bit fixture key,distinct from the main key. Author the original HOME's
+already frozen config before startup with `[models] session_summary =
+"uap-grok-title-fixture"` and a separate `[model.uap-grok-title-fixture]` entry:
+that exact model, its held127.0.0.1:random/v1 endpoint, its dedicated env_key,
+chat_completions backend,unsupported search/reasoning and max_retries0, matching
+the established custom-model recipe. Keep default/main model,original HOME,
+marketplace sentinel,existing shared-client optout and all other config unchanged.
+Add exactly the held title key to the existing closed child environment; do not
+import ambient GROK/session-summary/title keys or alter global environment.
+
+The title fixture is a bounded one-exchange sibling with its own count, raw
+request/response and finite receipt. Reuse only existing strict route/ordinary
+transport cleanup helpers where this does not alter the main model boundary.
+Require exact POST /v1/chat/completions,loopback peer,matching Host,relative URL,
+empty URL host/raw path,one application/json and one exact Bearer dedicated key.
+Reject redirects,GET/prewarm,missing/wrong/multiple credential or MIME and second
+attempts immediately. Original context origins150/180seconds and native60seconds
+are unchanged; listener limits/deadlines are no larger than existing provider.
+
+Require whole strict duplicate-free bounded JSON with the exact source-derived
+current schema: model uap-grok-title-fixture; stream true; stream_options exactly
+include_usage true; temperature1;max_tokens100; exactly the measured system text
+and current fixed harmless prompt wrapped in user_query; exactly one session_title
+function with measured description,strict single-string field schema and exact
+forced tool_choice. Reject extra/missing fields,wrong text/model/schema,tool calls,
+NaN/trailing data and body>1MiB. Do not interpret or forward returned native paths.
+After exact route/authentication and the1MiB read bound, require a whole strict
+JSON object before retention. Check both original held fixture keys against raw
+bytes and recursively decoded JSON strings/keys (including JSON-escaped spellings)
+before any body capture. Any privacy match fails/cancels without retaining body.
+Malformed/nonJSON/trailing/duplicate/nonfinite/oversized bodies and all credential
+failures likewise retain no raw body. Only a safe bounded strict JSON object is
+captured, with requests=1, before the full fixed title-schema check; a schema
+refusal retains that safe request,records0responses,cancels and stays allfalse.
+No response or raw capture follows malformed/oversize/privacy refusal.
+
+Return exactly one deterministic OpenAI chat-completions SSE tool-call result for
+session_title with fixed harmless title `Disposable plugin startup observation`,
+finish_reason=tool_calls and one[DONE]. No generic text fallback or model request
+forwarding. This synthetic title function is internal title metadata,never native
+MCP,installation,skill loading,authentication or real model evidence. Main provider
+continues its existing one fixed response only for its original fixture model.
+Add a finite privacy refusal only to the new title receipt/validator; original
+main provider failure grammar stays byte-identical. Both fixture listeners must
+shut down ordinarily with descendants/connection
+closure; either failure or forced close remains failure. Keep the original main admission/handler functions byte-identical. Extend only
+the existing retention redaction hook to redact both held private keys from every
+retained child/provider stream; no raw headers/key values. Its decoded/raw privacy
+checks must refuse an unsafe title body before retention rather than rewriting
+that raw request. Original main body/model/count/route predicates are untouched.
+
+Export only three new finite names grok-title-provider.json,
+grok-title-provider.request.json and grok-title-provider.response.sse with receipt/
+request/response presence matching actual0/1counts. Receipt<=2048bytes,ordinary
+closed output membership and existing stream/aggregate bounds remain unchanged.
+Extend Python admission in a separate explicit title-member validator; do not
+relax the original main receipt validator. Require exact fixed title role/model/
+transport,finite failures,booleans/counts,coherent response and closure and private
+key refusal. Old611/a1af/c6 failed archives must re-admit unchanged byte-for-byte.
+The existing unconditional final review-barrier failure stays intact even if both
+responses and native exit0 are observed. Every qualification flag stays false.
+
+## Meaningful verification, review and publication
+
+New inert controls independently build literal measured-title requests and assert
+one exact response/count/receipt/membership. Reject main model/title mixups,
+unknown/extra/missing fields,changed system/prompt/schema,wrong endpoint/credential/
+MIME,oversized/duplicate/trailing bodies,second call,context failure,write failure
+and nonordinary closure. Verify exact SSE tool-call name/id/argument/title/DONE
+with independently stated literals/digests. Test both key canaries in retained raw
+and encoded JSON and closed child env with conflicting ambient values. Exercise
+configuration parsing for exactly two held distinct model endpoints/keys and
+unchanged default/main/sentinel; no vendor process. Preserve all existing main
+provider negative cases and exact old-source failed-reader replays. Verify the
+main handler functions and original unconditional native fatal/review barrier
+are unchanged by hashes/diff,not renamed or bypassed.
+
+Freeze the reviewed plan in existing consolidated remaining-native-qualification
+before code; create isolated checkout from fresh agreed current611 and preserve
+concurrent work. Two independent exact code critics follow implementation. Run
+focused Grok/shared inert Go,affected runtime Python,actual affected full-root
+all-enabled and unfiltered six-linter gates,gofmt,whitespace under serialized slots.
+No native/vendor,scanner or public installer binary runs locally. Root publishes
+normal expected-head fast-forward only after gates and critics; then audit the
+new genuine hosted capture. If shipping ignores the auxiliary model setting or
+emits a different request,retain the refusal and plan from that evidence. No
+broad fallback,changed trust,parser assumption or completed-cycle claim follows.
+
+## Accepted dedicated-title amendment before implementation
+
+Exact plan SHA256 `72cc3bcbe925d310806833836d6fa97d65dd1693ad0bcaaf9069e7939f8da07b`
+received independent PLAN GOs from root and GPT-6.1 Sol xhigh
+`gemini_qoder_finish` before any code edit. Receipt SHA256s are
+`13a6e861fa554a9e106bdf9cde5711e4136a45b140086eab64c310068dbdc3bd` and
+`134bb3ba23b7cd1ccbc553faa2f18a2d68a50df859ed6c82c469a157168ab614`.
+Both rehashed all18 pinned primary files and reviewed separate auxiliary model
+resolution and exact measured title schema. The original title config recipe
+is authored before the existing initial baseline freeze; no later baseline
+adoption is allowed. Safe bounded route/auth/strict-JSON/raw-and-decoded-key
+privacy precede request retention; schema refusal sends no response. Main
+provider handlers and existing fatal/review barrier remain unchanged.
+Root freshly checked PR522 remains611 before this isolated checkout.
+
+
+## Grok dedicated title fixture: final reviewed validation (2026-10-27)
+
+The accepted separate-title plan `72cc3bcbe925d310806833836d6fa97d65dd1693ad0bcaaf9069e7939f8da07b` is implemented by code source `3c38d0d5143b4490ff67822954fe9794e55498a8`, tree `28bfe97d594d45a0a7d59767dd427c218d8889fe`. Two exact independent code critics approved the final source: root receipt `ddd9a66d794faf55fd350248f13a1e212a1c7092421670d455fa12401ede980d` and GPT-6.1 Sol xhigh Gemini reviewer `3e7beb62d23ea66ba1f262f87c367448be475e431bb03d03e0a7a6fada93204b`.
+
+The held original HOME is authored once with separate main and initial-title loopback endpoints and private keys. The title handler admits one exact source-defined request and fixed internal session-title SSE response. Both literal and recursively encoded fixture keys are refused before raw request retention. The original main provider route/model/count/authentication functions, shared native process guard and unconditional final failed-only review barrier are unchanged. Three closed title evidence names have a separate bounded validator; all five qualification flags, native completion, vendor authentication and real-model qualification stay false.
+
+Actual final focused inert Go contracts passed (package 2.150s); affected all-enabled lint against program base `a412ba5e137fdcb7e004393229b323211ed746e1` and unfiltered revive/funlen/gocyclo/gocognit/dupl/depguard each reported zero issues. The 41 Python contracts passed in 8.678s on preceding source `3edd581c5b9e3c39b7089dd4d9a5c78233d86b81`; the entire scripts tree is identical through final source (`2d4ac1a96e1f5ccf3a0d6ca7af546d4a39753406`). Original611 and a1af failed archives retain all21/20 member bytes and summaries with all flags false under original and current readers. Gate and transfer receipt SHA256 `954aba61be3972a92fb6a551e7e144b7b655e7a7e0ac58d11999e249b3fd296e`.
+
+Two measured inert-test lint issues were corrected without changing the module version or any guard: context propagation and Go1.22-compatible HTTP request construction. Earlier failed logs remain in scratch audit evidence. No vendor client, public installer or scanner executed locally. Publication only schedules a fresh genuine hosted diagnostic; public-source/shipping equivalence, completed startup, loaded skills, user/project lifecycle and authentication remain unproved.
+
+
+---
+
+# Grok: bounded capture of the already-refused second main request
+
+PRE-CODE diagnostic amendment. Two independent exact-plan GOs and root's accepted plan commit before source changes. Root alone performs Git/GitHub mutations/publication. No local native/acquired client/public installer/scanner execution. No production adapter, provider acceptance, trust/profile authority, native pin, workflow/selection, model, tool, permission or qualification expansion. VS Code and releases remain deferred.
+
+## 1. Measured source-bound need
+
+Current PR522 source `348e2ce8b3bca4f117673a3b6bf80bedf8a64975`, tree `b12330110d2dea50e613bf36ac3b3485c4cd2f1c`, checkout `/tmp/uap-grok-dedicated-title-current`. Hosted run40599296059 native122524071409 failed23:25:43 UTC. Inherited Cline122524071582 completed success23:28:09; all current captures are completed, preserved and independently audited. Do not rerun unchanged source.
+
+Actual evidence is preserved under `/tmp/uap-grok-348-current-40599296059`:
+
+| Artifact | ID | Outer SHA256 | Inner SHA256 | Members |
+| --- | --- | --- | --- | --- |
+| Native | 12778988075 | 6629d43cc1a3d835d95949afb06b279334f158cc166e847bfe9d949da30b3e86 | 96fd685041010dbf1d9bcfc7f11eb7680f145cf3160608a1ed5898bfad33e153 | 25 |
+| Frontend | 12778368337 | 066b0b7fc95d8819779838b46df0b24add56bf6a8bceac148180be270ef67d60 | 9ee9b68f7c5317b1c2677584eec9077ca4a62b66504a1124cb7371fa9a64c915 | 25 |
+
+Independent raw/source receipt `/tmp/uap-grok-348-current-40599296059/independent-raw-audit.json`, SHA256 `95a89455a84656cac9b6122258a54579ea8d1a45e3e780888cf2ca8934313fb1`, verifies API/ZIP/CRC,24 frontend streams, exact current source/build/pins/scanner and public installation/source/physical/binding/committed receipt joins. Root's second detailed raw review is pending when this draft is written; do not count the peer receipt as two completed raw reviews.
+
+Public add exits0 Prepared. Actual native inspection exits0 and retains projectTrusted=false, plugin enabled=false, zero loaded skills and no MCP. No native skill execution or lifecycle proof follows.
+
+The separately configured title fixture now succeeds exactly once:1220byte strict request SHA256 `6310901ba3d8138dbf06eb01e447139f815a42424513ed048263f39b1ced658a`;570byte exact SSE SHA256 `eea6c4c389c7e27cf0e6d1cc9e705bc84a4d77ae8c5afddaa846ec8255e6ed68`; correct credential, failure none, ordinary shutdown, no forced close. The original main fixture retains one42233byte request SHA256 `001a585d3fc552ec983c8b996b0b4fd0acc719cb1759710a6534cd4d481affff` and one394byte original response SHA256 `f2c19ea9dbc0ddbf7cc2facaa5d2d01877897afa0f6fea33cc5651c0ecc9f7b9`.
+
+Native stdout1476bytes SHA256 `2cefc7bfe383c0a900df87811d4e0dacc14dccc34ae7c97e30960d70ef0ef562` has two available_commands frames, the main sentinel text, usage and a successful end_turn. This is followed by an actual second main HTTP attempt that hits the unchanged provider's duplicate guard. Main receipt remains requests1/responses1/credential_matched true/failure duplicate/shutdown_complete true/forced_close false. The native command is cancelled after369ms, exit-1/errortrue/deadline=true; total fixture3549ms. The deadline field is ctx.Err()!=nil, not evidence of an elapsed60second timeout. Its original child/capture/cleanup guard remains fatal. No probe or tool exchange exists; allfive/runtime/auth/model flags remain false.
+
+### What source establishes, and what it does not
+
+`grokProjectProvider.admit` checks the original context, literal loopback POST route, matching Host/relative URL/no raw path, exact single application/json and one matching Bearer key before assigning duplicate when attempted is already true. It calls failWithRequest and returns before serve reaches body read. failWithRequest cancels the original context. Therefore the second attempt passed these route/header/auth predicates, but its body/model/purpose was neither read nor retained. The requests counter counts retained requests, not HTTP attempts.
+
+No current raw evidence establishes a retry, second auxiliary role, equivalent body, additional prompt or new valid model grammar. Public publisher source may inform future analysis but cannot reconstruct an uncaptured actual request. No new response/admission is justified. A bounded failure-only observation of the already-refused request is the smallest concrete next step.
+
+Pins remain1.0.70 archive11d27a30adfb75c4b9b180072ab27412a1916f054ff5497ab70fb9a77d304bcc / executable22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9; shipping buildf50904eaee6c. Public source snapshot2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8 is not claimed equivalent to that unresolved shipping build. This amendment changes no native configuration or source-guided protocol.
+
+## 2. Exact diagnostic eligibility and refusal
+
+Instrument only the original main provider's duplicate refusal in the existing canonical main+title Grok fixture. The title transport remains a distinct one-call fixture and is never eligible. A duplicate body may be observed only when all original route/header/auth/context checks already passed, and under the existing provider lock:
+
+* This is the held main provider, with its distinct held title fixture/keys configured.
+* The first original main exchange has already retained exactly1 request and written exactly1 response.
+* No earlier duplicate diagnostic has been claimed.
+
+Claim this diagnostic once, atomically. Do not increment original Requests/Responses, reset attempted/failure, start another model/HTTP request, change model admission, or grant a response. Concurrent duplicates, third/further attempts and all other original refusal reasons retain their original immediate refusal/cancellation with no additional body capture. Do not record a second refused-body slot or retry a refused/partial capture.
+
+### Explicit ordering and unchanged origins
+
+The diagnostic must read a body before invoking the original duplicate cancellation, because that cancellation tears down the handler's BaseContext and native child. This is an explicit narrow timing change for the one eligible already-refused request. It is not described as byte-identical immediate cancellation.
+
+After the original duplicate decision/one-shot claim, read at most1MiB+1 through the existing request body under the original unrenewed5second HTTP ReadTimeout and the unchanged original work/total contexts. Do not set a new read deadline, extend a server deadline, sleep, rebase an origin or add a new context budget. Check the original context before and after observation; a cancelled/expired origin refuses raw retention. The pre-existing native60second/work150second/total180second limits remain fatal. If the original work context expires during a partial body, existing final cleanup may abort the read; retain a finite refusal, not partial raw bytes.
+
+Regardless of capture result, the existing closed-provider HTTP400 refusal and failure=duplicate/cancellation path execute. Use an unconditional deferred failure/cancellation safeguard for the diagnostic branch so read/parse/privacy errors cannot return as accepted. No SSE/content response is sent for the second request, and no provider acceptance or counter increase follows. Any cleanup failure remains failure evidence. All other rejection paths remain immediate.
+
+## 3. Raw privacy/structure gate before retention
+
+A complete body must be nonempty, at most1MiB, UTF8 and one whole strict JSON object through the existing duplicate-rejecting finite Go decoder: depth32,16384nodes,4096byte keys, finite numbers, no trailing document. Reject array/scalar/null/malformed/duplicate/nonfinite/deep/oversized/truncated/invalidUTF8 without keeping raw bytes.
+
+Before retaining the object, check both original held main/title keys against raw bytes and the fully decoded/re-encoded object. Reuse the existing recursive Grok credential/privacy scanner on raw and decoded representations to catch JSON-escaped/nested strings and keys under its existing shared resource budgets. Any credential/private-namespace or privacy resource refusal retains no body. No file/profile/header/URL/private key or untrusted field is copied into diagnostic metadata. Do not redact a failing body into apparent safe evidence; raw retention occurs only after strict structure and privacy pass.
+
+A safe bounded strict object is retained opaquely even if its model/messages/other semantics are unfamiliar. That retention is diagnostic evidence of refused input; it is not a new provider schema. Do not classify the body as a retry/auxiliary/tool/result or act on its content. Keep the first original request/response and title request/response unmodified.
+
+## 4. Finite additional artifacts
+
+Add at most these two fixed Grok-only members, exported from the actual held main duplicate observation during existing finish:
+
+| Member | Bound | Purpose |
+| --- | --- | --- |
+| grok-provider.duplicate.json | 2048bytes | Closed diagnostic receipt, never successful provider evidence. |
+| grok-provider.duplicate-request.json | 1MiB | Optional complete raw refused JSON object after privacy gate. |
+
+The receipt has exactly schema_version(integer1), role(`main-duplicate-diagnostic`), attempt_index(integer2), status, original_failure(`duplicate`), response_issued(booleanfalse), captured_bytes(integer) and captured_sha256(string). Status is exactly one of captured/body-refused/json-refused/privacy-refused/context-refused. Captured requires the raw member, exact positive byte length<=1MiB and recomputed lowercase64hex SHA256. Every refused status requires no raw member, captured_bytes=0 and captured_sha256 empty. No inferred cause/model, raw headers, profile content or arbitrary error string is serialized. No receipt is present when no eligible diagnostic was claimed.
+
+The original main receipt remains the original schema and failure duplicate with Requests/Responses1. The title receipt remains unchanged. New artifacts cannot coexist with another client, missing main/title fixture evidence, nonduplicate main failure, incomplete first exchange, unknown receipt fields/statuses or a successful runtime tuple. No raw member may appear without its receipt; no captured receipt may omit/mismatch raw. Existing historical failures without these members remain accepted unchanged.
+
+At the measured25member full capture, this adds at most2 members (27total); original per-member/archive aggregate/privacy bounds remain unchanged. Do not raise generic archive limits, admit arbitrary new member names or alter frontend evidence. The unchanged shared final privacy/secret-free checks must recheck exported bytes before persistence.
+
+## 5. Implementation boundaries
+
+Expected source edits are only:
+
+* Existing `agentplugins_grok_project_native_provider_test.go`: small private one-shot observation state, exact duplicate-only hook and finish export. The original context/route/auth guards, first request capture/model predicate, fixed response bytes, original refusal message/failure value, counters, transport configuration and stop/cleanup body remain unchanged except the explicit bounded-before-cancel diagnostic ordering above.
+* New small dedicated Grok refused-duplicate helper and inert contract files for bounded capture/privacy/schema and actual HTTP refusal behavior.
+* Existing `scripts/project_native_runtime.py`: one exact Grok duplicate-member validator and narrow allowed-member union. Existing main/title receipt/response validators stay byte-identical.
+* A focused Python contract addition covering only the closed new diagnostic; preserve all old tests/outcomes and exact selectors. Add no workflow/new native lane.
+* Accepted plan and concise factual validation documentation.
+
+Keep main/title model configuration, environment, title handler/schema/SSE, original user HOME/profile freeze, Prepared/untrusted/disabled inspection, public installation, command fatal barrier, all process/supervisor/environment/authority guards and other clients byte-identical. No change to the original number of accepted main/title exchanges or any qualification field. If implementation needs another path/behavior or privacy/budget exception, stop for exact amended review before editing it.
+
+## 6. Meaningful checks and next actual evidence
+
+Under root's serialized test slot, inert HTTP contracts perform the actual first accepted main request/response and one eligible second request to the held loopback fixture, with an independently authored harmless JSON object and separate held title key. Assert first response bytes/counters unchanged; second is HTTP400, never SSE/200, original context cancels, Failure duplicate remains, accepted counts1/1 remain, only one diagnostic retained, and ordinary existing stop behavior or truthful forced failure. Synthetic capture is not native evidence.
+
+Exercise malformed/duplicate/trailing/nonfinite/null/array/deep/node/key/UTF8/oversize/partial bodies and raw/escaped/nested main/title credential strings and keys. Check zero raw retention on every refusal. Wrong/multiple auth, route/query/method/host/MIME/loopback/context, incomplete first exchange, title-provider duplicate and third/concurrent attempt cannot acquire another capture. Partial-body cancellation stays within existing server/original origins, fails truthfully, renews no context and sends no accepted response. A new synthetic raw object must remain ordinary data; no real tool/model is invoked.
+
+Both Go artifact helper and independent Python reader contracts enforce exact member/receipt relation, status typing, byte/hash/privacy revalidation, fixed role/index/failure/false response flag, first-exchange receipt joins and client isolation. Coherent hash-updated malicious objects must fail privacy/structure, not only mismatch hashes. Unknown/extra receipt fields, altered counters, forged success flags, missing title/main evidence, raw without receipt, duplicate raw slot, unknown files and refused status with a body refuse. Existing failed-only runtime boundary/allfivefalse remains mandatory.
+
+Execute focused inert Grok provider/title/project/native-runtime contracts plus affected Python runtime contracts, gofmt/whitespace, affected all-enabled lint againsta412ba5e137fdcb7e004393229b323211ed746e1 and whole unfiltered revive/funlen/gocyclo/gocognit/dupl/depguard. Record actual command/source/exits/log hashes; no skipped predicate or revised production assertion. No native/vendor/client/public installer/scanner execution locally. Broaden only for concrete remaining risk.
+
+Scratch pure readers replay unchanged34825member capture and prior61121member/representative earlier captures with their original exact source identities; original bytes/hashes/outcomes remain unchanged. Preserve inherited current Cline success independently. No old capture is relabeled or promoted. Obtain two full exact-source CODE critics and measured gates before root normal-FF publication.
+
+Only a fresh genuine current-source hosted capture may provide the actual second raw object or precise refusal metadata. Audit its exact source/tree/pins/public/inspection/first/title/duplicate evidence and full fatal/cleanup boundary independently before any new proposal. Even an observed safe second JSON body grants no response or completion; this lane remains failed/allfivefalse/runtimefalse/authfalse/modelfalse. No speculative second-auxiliary response, retry allowance, trust change or generic provider admission follows.
+
+## Baseline preservation anchors
+
+| Path | SHA256 |
+| --- | --- |
+| `repotests/agentplugins_grok_project_native_provider_test.go` | 6cb8f0f06e3e8a5ffec6dfb654e1566000ac9ca8dec1d450c4aa0d27a2421c65 |
+| `repotests/agentplugins_grok_project_native_route_test.go` | e41da580ebea3277d155e6a443149bb4463b65cc40fcf3fa3fa6d6f7ba78ccf7 |
+| `repotests/agentplugins_grok_project_native_title_test.go` | 76d595042a2fc2d3639cb4dad0568b8691485f342101689a76a97d844cf27658 |
+| `repotests/agentplugins_grok_project_native_privacy_test.go` | 4df4765a0caec14e4aa55963cb3000e1204ed0a9c1d1afe122d46cf6210c5164 |
+| `repotests/agentplugins_project_native_cli_attempt_test.go` | 07f40ed4e0def62f58698cd6d8ce839d407e6bc751e952680460affe39670791 |
+| `repotests/agentplugins_grok_project_native_attempt_test.go` | ee4f42b4574190e5350a1dde9f0bc4f90517bd5d1da70d27d78916e317f1aea4 |
+| `repotests/agentplugins_grok_project_native_environment_test.go` | dbbae16a28cfe9e893c30475ba8bfac343b41b06c3c264ad7dc0d2965b69cdb4 |
+| `scripts/project_native_runtime.py` | 24f39c61856d689535ac2fea81e01890caa780f4b74630b78c12c0df39cd6aee |
+
+This draft author read source/raw and wrote this scratch proposal only. No implementation, tests/gates/native execution or Git/GitHub mutations occurred for this plan.
+
+
+## Accepted refused-duplicate diagnostic plan before implementation
+
+Root R1 GO receipt SHA256 `089275e9328eff1c195bbc1915d56391868c0de6c7c4c7ba48c95aaab2f62969` and independent Kimi R2 GO receipt SHA256 `60d45fb3f2056ac8bfa2d9f0a8809efd9b372dbe7c720fc8c4097c9558aad4df` approve the exact draft above, SHA256 `670b875b7f2283058fcf3220a5cc3b222831e368c72b95bc10392e8bb233c0db`, before any implementation.
+
+The draft-time pending root RAW review is now complete: root receipt SHA256 `32168fb35ff64fedba411599187159a3090a4556ccc4ce101a937549019ee423`, alongside independent peer receipt `95a89455a84656cac9b6122258a54579ea8d1a45e3e780888cf2ca8934313fb1`. Both preserve actual348 failed-only source-bound evidence; no qualification follows. Current native and inherited Cline jobs are complete and retained.
+
+Both critics require the one eligible duplicate/first-failure decision to be atomic with no earlier failure overwrite, with no provider mutex held during bounded body/privacy work. Every path must execute original HTTP400 and duplicate cancellation, keep accepted counters1/1 and original read/work/total origins, and export only a settled finite receipt with no partial or private body. Independent Python finite byte/number validation and concurrent/partial-read controls are required by the accepted plan. Root alone owns commits/publication after two CODE GOs and measured gates.
+
+
+# Grok: supported suppression of the measured post-turn dashboard summary
+
+PRE-CODE PLAN DRAFT. Root and Native must independently approve this exact plan SHA256, and root must commit the accepted plan before implementation. This author performed source/raw reads and wrote scratch research/this proposal only. No implementation, test, native/acquired executable, public installer or scanner runs locally for this plan. Root alone owns Git/GitHub mutations and publication.
+
+## 1. Exact source and measured reason
+
+Plan base is published Grok source `b40da640c388d807cc3dc1fbb36c38e0d1b411ef`, tree `71b98e819bdd555154096c9c75850b9b40d3f54c`. Run `40610932429`, native job `122562097571`, has completed. Its actual evidence received two independent RAW GOs for failed diagnostic evidence only:
+
+- Root `/tmp/uap-grok-b40-current-40610932429/root-raw-audit.json`, SHA256 `6fb432088fa50f3093c7240911be9695186fb3c077f3bdb96c1b28fcf464785c`.
+- Peer `/tmp/uap-grok-b40-independent-40610932429/independent-raw-audit.json`, SHA256 `88c920ace4af34d476cdf133ea769751c136503e9149673718dfa48e3075fd9e`.
+
+| Artifact | ID | Outer SHA256 | Inner SHA256 | Members |
+| --- | --- | --- | --- | --- |
+| Grok native | 12782438155 | 9cf3260936143bed9bf9bc53fe29fe67db8fe4ffa01ae720e45ecbfe691141a2 | 86ed0632dd8345b0a224d77563ca5f44708e69a35829524076d668ffd7946f16 | 27 |
+| Grok frontend | 12782527675 | 8d331a482694e89814f8e6e7ff875d3f836ce86ad95ac98a5a9eac7c41e5deb0 | ee229372d55c8e33c1aec9379734ec695e26d5d106f62acde0a8566ce59a1ce8 | 25 |
+
+The diagnostic retained the complete second main-route body: 1,424 bytes, SHA256 `303ad4817a23b68aa02717ecedb70404362cf1397324da5a4d25d12f60a86bb5`. Its receipt is index2, role main-duplicate-diagnostic, captured, original_failure duplicate, response_issued false. Original first main and separate title counters/responses remain untouched. This is a measured dashboard summary request over the completed reply, rather than an assumed retry.
+
+Its system message is exactly the pinned `TURN_SUMMARY_SYSTEM`: 1,022 UTF8 bytes, SHA256 `9411e91b009d5f6672caa80f5aa9fa2eadbf4d1aa12d0b1488238afa64f58103`. Its user message exactly equals the source wrapper around the actual first main request's final user content and the fixed `UAP_GROK_PROVIDER_CAPTURE` reply. The model is the original main fixture, with streaming and include_usage true. The provider correctly refused this additional request and kept original cancellation.
+
+Public add and Prepared ownership checks do not establish native activation. The measured project remains untrusted; the selected plugin is disabled and skills/MCP inventories are empty. Runtime and all five qualification flags, authentication and real-model qualification remain false. No old capture is upgraded by this proposal.
+
+## 2. Pinned primary source and lineage limits
+
+All cited files belong to public `xai-org/grok-build` tree `2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`. Its complete 5,102-entry tree is non-truncated. This author independently recomputed Git blob SHA1, SHA256 and lengths for all eighteen previously retained title/source files and thirteen additional turn-summary files, and verified their paths/blob identities against that exact tree. Both actual ZIPs above were independently rehashed and every closed member's size/SHA/CRC checked.
+
+Primary research receipt: `/tmp/uap-grok-turn-summary-kimi-primary-research.json`, SHA256 `3de4e360348bd3188ea35f584fb48538f3dba89245f78801d0ed3e0d8daae930`. Native independently researched the same source: `/tmp/uap-grok-turn-summary-native-research/independent-source-research.json`, SHA256 `5e72513507b8d734cd87aade73afc448dec03c2b2f88cc99f5fb0feea9d6ca74`.
+
+| Source path under `crates/codegen/` | Exact Git blob | Source fact |
+| --- | --- | --- |
+| xai-grok-config-types/src/registry.rs | 645a34036de2a83981f8f90ba0e2cf0d7a334a40 | Lines229-236 define TurnSummary, key turn_summary, path features.turn_summary, env GROK_TURN_SUMMARY, default true. Feature::resolve uses requirements/environment/config/remote/default. |
+| xai-grok-config/src/resolved.rs | 7ee2b55aa5d44dd399579b8eac7250173f28b35e | BoolFlag resolve around95-134 chooses requirement, CLI, environment, configuration, managed, remote, default in order, preserving explicit false. |
+| xai-grok-shell/src/agent/config.rs | a430462ad3b8e0611368ad2051f093827d7babee | FeatureEntries around4224-4271 reads native TOML booleans;1492 maps them into feature_values. is_turn_summary_enabled1846 resolves Feature::TurnSummary; feature_sources2033 supplies the actual config tier. |
+| xai-grok-shell/src/session/acp_session_impl/spawn.rs | 323fe32f305231bfac22aa60d43f3123efd1c38e | Actor captures effective_config.is_turn_summary_enabled() at2077; title_refresh is resolved separately around1778. |
+| xai-grok-shell/src/session/acp_session_impl/turn_summary.rs | 84915ba9062b6fd394382e334cd35340133ad08e | restart_turn_summary returns before work if its gate is false or subagent. The helper is display-only and builds a tool-free request from the exact system/user source below. |
+| xai-grok-shell/src/session/helpers/turn_summary.rs | 382718b80599b54c0bd985eb819a044ced13b8b3 | TURN_SUMMARY_SYSTEM and turn_summary_user_message match the measured second request byte-for-byte. last_turn keeps the actual last prompt and visible reply, excluding reasoning/tools/results. |
+| xai-grok-shell/src/session/acp_session_impl/title_refresh.rs | e67a787a99e94cdc448276beba6018409158f45a | Later whole-conversation title refresh checks its own resolved title_refresh_enabled before starting. |
+| xai-grok-shell/src/session/helpers/session_summary.rs | 0f2af81e78701043b8446a8bffb2272921f3802c | Initial session-title fast path starts around188 and is distinct from per-turn dashboard summary and later title refresh. |
+| xai-grok-pager/docs/user-guide/26-config-reference.md | f5aa92e8599e821d81ca73b39049513bab4be2c0 | Row233 documents features.turn_summary boolean, default true, and GROK_TURN_SUMMARY. |
+
+The public tree is not proven equivalent to shipping Grok1.0.70/f50904eaee6c. Existing source research explicitly retains that limit. Exact prompt correspondence establishes the observed request's specific source match; it does not prove every config path in the binary. The setting below is a supported-source candidate requiring a fresh genuine hosted observation. Unsupported/ignored/overridden settings must remain a truthful failed observation; do not add a fallback or reinterpret the response.
+
+## 3. One fixed configuration change before original freeze
+
+Append exactly this native TOML suffix to the existing complete two-model configuration during `configureGrokTitleProvider`, before its only original HOME config write, authoredConfig clone and protected digest freeze:
+
+```toml
+[features]
+turn_summary = false
+```
+
+The exact appended bytes are one separating LF, `[features]`, LF, `turn_summary = false`, LF. The existing recipe already ends in LF. No dynamically discovered section/key, parser rewrite, config migration or file adoption is involved. This is a real TOML boolean, not the string false and not a `[turn_summary]` sampling-settings table.
+
+Keep the same `f.base.Home/.grok/config.toml`, ordinary0600 write, original parents, original HOME/CWD and both fixed model endpoint/key references. Author the complete recipe once; only then write, clone and hash it. Do not edit config after the native client starts, renew a baseline from native output, change originalConfig/protected/immutable maps after execution or introduce another HOME/profile.
+
+The existing child environment is constructed from a closed fixture environment and contains no GROK_TURN_SUMMARY or GROK_TITLE_REFRESH. Leave it byte-for-byte unchanged; do not add environment overrides as a second mechanism. Test that ambient true values remain excluded. No requirement/managed config override, remote fetch, credentials, trust, plugin enablement, tools or permission setting is introduced.
+
+### Acknowledge the later-title-refresh effect
+
+`Config::resolve_title_refresh` around2055 defaults to the current TurnSummary result when title_refresh is unset. Therefore false also makes later whole-conversation title refresh default false in this recipe. This incidental suppression is explicitly intended and bounded to optional post-turn display work. Do not claim that turn_summary exclusively controls one request.
+
+Keep the existing initial session-title route/model (`models.session_summary = uap-grok-title-fixture`) and all its request validation/response/counter/cleanup unchanged. Its independently observed first-title request remains expected; the setting must not be used to remove that fixture or admit a different title shape. Do not add features.title_refresh as a separate setting. Shipping behavior is measured by the next raw capture, including truthful partial/failure outcomes if it differs.
+
+## 4. Preserve every existing native/protocol authority
+
+There is no new native/public command, argument, retry, model, endpoint, request grammar, response, counter or artifact slot. Preserve all original main/title route/auth/type/body bounds and exact fixed first SSE bytes. Preserve the new refused-duplicate one-shot claim, original first-failure reservation, unlocked bounded read/privacy, done handoff/export race checks, HTTP400 and unconditional original cancellation. If any second main request still arrives, the existing diagnostic must refuse it and retain only its already-admitted bounded opaque evidence; no successful summary response is added.
+
+Keep original work origin150seconds, final origin180seconds, provider read/write5seconds, command contexts and ordinary full-descendant process supervision, original config/pin checks, raw privacy/resource bounds, no-follow filesystem/Prepared ownership checks, source/version/scanner pins, inspect command, no-probe/no-provider-qualification semantics and final all-false barrier. In particular, native exit0 still leads to the unchanged intentional raw-review fatal barrier; a clean startup does not activate or qualify anything.
+
+The current 27-member capture reflects a reached duplicate. The existing reader already permits its actual finite optional duplicate presence/absence. Do not require a fabricated duplicate when suppression works, or remove a real duplicate when it fails. Keep exact existing allowed member unions, summary and failed-only modes. No Python reader or contract is changed by this configuration amendment.
+
+## 5. Exact implementation surface and preservation exceptions
+
+After two exact-plan GOs and root's accepted pre-code commit, implementation is limited to:
+
+1. `repotests/agentplugins_grok_project_native_title_test.go`: append the fixed suffix to the complete original recipe at the existing configureGrokTitleProvider construction point, before the existing sole write/clone/hash. Preserve every other function in the file whole-byte, including title.configuration, all title request/response/serve/stop handlers and credential/listener setup. The minimal implementation can append the suffix directly to the existing returned recipe; no generalized configuration framework is warranted.
+2. `repotests/agentplugins_grok_project_native_title_configuration_test.go`: add only `features: {turn_summary: false}` to the existing independently stated expected TOML map. This explicit one-literal expectation exception is necessary because the fixture recipe changes. Preserve the remainder of that test and every existing assertion; do not rename, skip or weaken it.
+3. A new `repotests/agentplugins_grok_project_native_turn_summary_contract_test.go`: narrowly focused inert contracts for the fixed supported suffix, original freeze and ambient isolation described below. It may use the existing owned in-process fixture providers; it must not run acquired/native/public installer/scanner executables or impersonate a hosted environment.
+4. Append concise factual plan/validation to the existing Grok validation record and accepted plan to `docs/plans/project-install-e2e/remaining-native-qualification.md`. Distinguish old failed evidence, local inert checks and future hosted results accurately. No raw capture/log/source vendor payload is committed.
+
+Everything else is whole-byte preserved: all main provider, title handlers/configuration helper, duplicate/privacy/route diagnostics and existing contracts, selected project/Prepared authority, shared command/environment/process functions, collectors, Python runtime/Grok readers/contracts, production adapters/shared/VSCode, workflow/selection/pins and all other client files. New feature data is authored before the old guard's original freeze; no guard predicate or exception changes.
+
+## 6. Meaningful inert controls and exact-source gates
+
+The existing independent whole-map configuration contract must pass with its one extra boolean subtree. New inert contracts should demonstrate these concrete boundaries:
+
+- Raw authored TOML equals the unchanged complete two-model recipe plus the one fixed suffix, and parses to the complete independently stated map with exactly one features table containing only boolean turn_summary=false. Preserve every original models/model/marketplace field, both distinct held listeners/keys, max_retries0 and env-key names. Reject accidental string false, true, duplicate section/key, extra feature or sampling-table substitution through the expected-recipe contract; do not make a new native parser.
+- The same original HOME config is written and captured once with ordinary0600 metadata and protected digest covering the complete bytes; no project config is created. Keep every prior original-route/config-freeze assertion. Existing actual protected-config fatal-child controls remain unchanged and run in the focused gate; do not add a redundant new guard implementation or weaken fatal behavior.
+- With ambient GROK_TURN_SUMMARY=true, GROK_TITLE_REFRESH=true and foreign HOME/model settings, the constructed child env still contains neither flag and keeps the original held HOME, both keys and existing shared-client optout. Parent process environment remains unchanged; other clients receive no Grok feature/env authority. Add these controls in the new file rather than changing old environment contracts.
+- Existing strict first-main/title and refused-duplicate positive, malformed/privacy/Unicode/resource, partial/concurrent/third-request and closure tests run unchanged. A feature setting is not authority to alter provider behavior. No synthetic test claims that the vendor binary actually consumes the setting.
+
+Root owns the serialized gate slot. Execute meaningful focused `TestGrok`/`TestProjectNativeCLI`/`TestProjectNativeRuntime` contracts and affected Go package checks with no vendor/native/public installer/scanner, plus affected Python runtime/Grok contracts or precisely recorded whole-tree transfer if every relevant Python byte is unchanged. Run gofmt/diff, affected all-enabled lint against `a412ba5e137fdcb7e004393229b323211ed746e1`, and whole unfiltered revive/funlen/gocyclo/gocognit/dupl/depguard. Record actual exact source/tree/commands/exits/log SHAs and real test counts/skips; do not predict them or transfer an old pass as a new run.
+
+Verify whole-file/function preservation against the actual accepted pre-code base, including all Python modules/contracts and every protected handler/duplicate file. Replay actual b40/348 failed archives through original and candidate full readers with original source identities; raw ZIP/member/result hashes and all-false outcomes must remain identical. If root transfers a prior replay on a byte-identical complete Python tree, document that exact tree and receipt explicitly. No AST-extracted substitute reader or relabeled capture is allowed.
+
+Freeze the exact source manifest and get two independent full/delta CODE reviews before root publication. The author does not approve their own implementation.
+
+## 7. Composition, hosted observation and remaining qualification
+
+This plan's evidence/recipe base is exact b40. Root separately owns program-parent composition. The read-only composition receipt `/tmp/uap-grok-parent888-readonly-composition-kimi.json`, SHA256 `eae34e2d1eb5d25c4b3e0286226fcb4380ee5caf291de33229090e214758bff7`, identifies three documentation insertion conflicts and clean disjoint Python composition. If root composes qualified Kimi parent before this amendment, preserve both full leaf readers/tests and record the actual new pre-code base/tree; these b40 hashes remain historical anchors, not permission to replace combined files with the Grok side. No unpublished stale083b or named1109 baseline path is changed or discarded. Other clients' completed/in-flight evidence remains preserved.
+
+After reviews and measured gates, root alone publishes by the normal reviewed route and dispatches the unchanged genuine hosted workflow on the exact published source. Do not retry unchanged, supersede/cancel another pending capture, run the vendor locally or forge hosted eligibility. The next run must retain source/build/pin/API/closedZIP, public add and inspect raw, exact first main/title exchanges and ordinary cleanup. Independently audit whether a second main request exists and its truthful receipt/status. Absence after this supported setting is a new measured fact only on that fresh source; old b40/348 remain failed duplicate observations.
+
+If the setting is consumed and native exits cleanly, the existing intentional barrier still fails with every flag/runtime/auth/model false. If summary or any other unexpected request persists, existing refusal/cancellation/diagnostic applies and no fallback is authorized. If config or original process/authority guards fail, stop and retain that failure. No new request shape, title response, trust/enable transition, registry admission or runtime qualification follows from this amendment. Any later activation/tool/lifecycle success path requires its own actual evidence and two pre-code reviews.
+
+## Baseline preservation anchors
+
+Hashes below are from exact b40. The first two files have only the narrow recipe/expected-map exceptions above; remaining files are whole-byte anchors. A separately reviewed parent composition must establish its own complete combined pre-code anchors before implementation.
+
+| Path | SHA256 |
+| --- | --- |
+| `repotests/agentplugins_grok_project_native_title_test.go` | 76d595042a2fc2d3639cb4dad0568b8691485f342101689a76a97d844cf27658 |
+| `repotests/agentplugins_grok_project_native_title_configuration_test.go` | 788c9ecd7c818f5477eff713960f3710d8d435d3e53b89e01af74ef1c16b0f87 |
+| `repotests/agentplugins_grok_project_native_provider_test.go` | 90012dcf96cdfb882470e31a3feb52688d570ae64d9f356410ad7910c944e950 |
+| `repotests/agentplugins_grok_project_native_provider_contract_test.go` | 6aeaf8af3953324b28075e042835b4875e3e66e2c780b831c4fb30bc93bba801 |
+| `repotests/agentplugins_grok_project_native_privacy_test.go` | 4df4765a0caec14e4aa55963cb3000e1204ed0a9c1d1afe122d46cf6210c5164 |
+| `repotests/agentplugins_grok_project_native_duplicate_test.go` | 53a29267624dd1e308f7a3fce50499c87308fec08581c9b1f7bbe807f7b91be3 |
+| `repotests/agentplugins_grok_project_native_duplicate_evidence_test.go` | b2bcab1adcb962055232a72884505add1e8effdc32aaaf729cc0d3a608f91ea6 |
+| `repotests/agentplugins_grok_project_native_duplicate_contract_test.go` | c81bc20643000614d26ef0c021b75bee56b4a7e6648325c9c91068f0420a98ff |
+| `repotests/agentplugins_grok_project_native_title_contract_test.go` | f86600f85c5c24b7c7c08b10d6694d163b71aad092c3f3860c951a859a229b83 |
+| `repotests/agentplugins_grok_project_native_environment_test.go` | dbbae16a28cfe9e893c30475ba8bfac343b41b06c3c264ad7dc0d2965b69cdb4 |
+| `repotests/agentplugins_project_native_cli_attempt_test.go` | 07f40ed4e0def62f58698cd6d8ce839d407e6bc751e952680460affe39670791 |
+| `repotests/agentplugins_grok_project_native_attempt_test.go` | ee4f42b4574190e5350a1dde9f0bc4f90517bd5d1da70d27d78916e317f1aea4 |
+| `repotests/agentplugins_grok_config_contract_test.go` | 3153076a942ec8baf01c9b9d6e9ce328594e6dcbaa9f88f8e7eb25a2fd20ad47 |
+| `repotests/agentplugins_grok_config_diagnostic_test.go` | 8c23fe40cf5fcddad742ae325f8c3cca5032dc00a88d2deaf278944e03fa5fc8 |
+| `repotests/agentplugins_grok_config_refusal_test.go` | f32c416faeb9027bbed958317b563a23aff32a570e4170e2eea5dd24668139d4 |
+| `scripts/project_native_runtime.py` | b8ab281512d562903f90a44fca1765a5d05b55bc977e9f0e71fd6c53de4f2d19 |
+| `scripts/test_project_native_runtime.py` | d0ee55f930ed8ff790beb1b8a67baca894c7ee422f7b646949559a6c5136f82f |
+| `scripts/project_native_collectors/grok.py` | 95ef4b4f3bad0c4dfbb82c652f834660ee0d994899ab0059a772d848517af56c |
+| `scripts/test_project_native_grok.py` | 8e1d3c3267b55cfa29446a9d0509799fc9ff84d24256d1879d449e86b9d31fea |
+| `.github/workflows/project-native-runtime.yml` | 11140878d0b2ca882a76b0a5830b25a1c5763247d76fec2c3dea9b22ba8096a1 |
+
+This draft author performed pure source/ZIP/hash/JSON reads and wrote scratch research/plan files only. No source implementation, Go/unittest/lint/vendor/native/public installer/scanner execution, Git/GitHub mutation or publication occurred for this proposal.
+
+
+## Accepted measured turn-summary suppression plan before implementation
+
+Root R1 GO receipt SHA256 `a71549915420aa61f90a7ab05586e1e2280a516fa0b78eb3a0cfb2f48d45fd69` and independent Native R2 GO receipt SHA256 `a29a83c1a3b8fdf2ea5d70bc3e9e009ef88e58e974cc170d89b40ef07e90332d` approve the exact draft above, SHA256 `3bc56715f4b326634f99210fc7bde69a711c2edbe7c2880fece74ec950c4593e`, before implementation. Both independently reconstructed the captured summary messages from pinned primary source and verified all historical baseline anchors.
+
+This pre-code commit retains original published b40 as its code base; parent composition is separate. Only the fixed supported TOML feature suffix before the original configuration freeze, one complete-map expected literal, inert contracts and validation documentation are authorized. Original initial-title/main/duplicate handlers, environment, deadlines, config/pin guards, readers, privacy, workflow and failed-only review barrier remain unchanged. Fresh hosted evidence must establish behavior of the pinned shipping binary. Root alone commits and publishes after exact CODE reviews and measured gates.
+
+
+## Accepted Grok exact project trust and selected skill diagnostic
+
+Pre-code base: `91402cd32f39342aaac9175c9e76bddbd360f2df`, tree
+`c2f198f3ccf2bd8abfc4675c01cb2f153c1ad444`. Root and independent
+other_clients PLAN GO were received before implementation, with the conditions
+below. Publication still requires independent CODE reviews and actual gates.
+
+The genuine run40615904857 observed clean native exit with one strict main and
+one initial-title fixture exchange, while the project remained untrusted and
+the selected skill absent. This amendment only captures the next boundary.
+All five qualifications, runtime completion, vendor authentication and real
+model qualification remain false; the intentional raw-review failure remains.
+Grok project MCP is unsupported. Full installed lifecycle is separate work.
+
+### Exact supported fixture setup
+
+Before any child, append `[plugins] enabled = ["uap-grok-attempt"]` to the
+complete existing original-HOME two-model recipe, before its existing final
+`[features] turn_summary = false` table and sole config write/clone/hash.
+This is a supported name selector, not path-specific activation. The selected
+physical ID depends on the subsequently generated installation UUID. The
+existing manifest, binding, source and delivered-byte checks must still join
+the single selected ordinary project package.
+
+Author original-HOME `.grok/trusted_folders.toml` once, exclusively, mode0600,
+with only `[folders."<exact canonical owned project A>"] trusted = true`.
+Check the ordinary canonical project and original HOME, refuse HOME/root/B,
+overlap and aliases, and freeze the complete trust bytes under the existing
+protected digest before any child. Refuse existing trust/config entries rather
+than replacing or adopting them. No timestamp is needed; the publisher makes
+`decided_at` optional. No `--trust`, trust feature optout, environment override,
+`plugin-dir`, `[plugins].paths`, registry mutation or native tool is added.
+
+### Measured selection and failed-only admission
+
+Preserve the old disabled/untrusted Prepared checker and its negative tests.
+Share its identity checks through an explicit expected-selection boolean; the
+new selected branch requires exact canonical project/plugin identity and both
+trust booleans true. It additionally requires exactly one selected skill with
+the authored name/description, `userInvocable=true`, disabled absent or literal
+false, and exact source `{type: "plugin", plugin_name: <name>, path:
+<receipt-selected installed SKILL.md>}`. Reject folded identity aliases,
+duplicates, foreign paths and a trust-only plugin entry without that skill.
+
+Use the same real `native-inspect` command, cwd, deadline and held source
+authority, with an explicit selected-mode call. Add one finite Grok-only
+`fixture_selection` marker before inspection. Record completed selected
+`native_inspection` only after the exact raw check passes. The existing Python
+reader gains only a strict optional marker branch: join completed observation
+to raw inspection, successful exact inspect command/cwd, binding/profile/target
+and installed skill. Preserve failure-before-inspection capture and old
+unmarked archives, the closed members and every failed/all-false predicate.
+Do not add an artifact slot or infer load from plugin `enabled` alone.
+
+The strict provider is unchanged. Loaded skills may change its next request;
+an unrecognized shape is refused and captured under existing failed-only
+diagnostics. No success shape, extra response, retry or protocol allowance is
+introduced before genuine fresh raw review.
+
+### Bounded code and validation surface
+
+Change only Grok title recipe/whole-map expectation, Grok inspection helpers,
+the shared attempt's Grok-only call, new focused Grok selection contracts,
+the runtime reader and focused reader contracts. Existing turn-summary
+contracts need only the complete raw recipe and protected count2 expectations,
+plus creation of the now-required ordinary project in their inert constructors.
+Putting `[plugins]` before `[features]` preserves their duplicate-key and
+extra-feature negative controls. Preserve provider/title handlers, duplicate,
+privacy, environment, production adapters, workflow, pins and all deadlines.
+
+Run meaningful inert Grok/shared Go and Python runtime contracts, gofmt,
+affected all-enabled and complete six-linter gates. Replay actual old archives
+through complete old/current readers with original source identities. Obtain
+two independent exact CODE reviews before root publication and the next genuine
+disposable hosted run. No vendor, public installer or scanner runs locally.
+
+### Pinned primary source guidance
+
+All publisher paths below are under `xai-org/grok-build` tree
+`2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`, prefix `crates/codegen/`.
+The snapshot is not proven equivalent to shipping1.0.70/f50904eaee6c.
+
+| Path | Git blob | Relevant contract |
+| --- | --- | --- |
+| `xai-grok-permission-rules/src/trust.rs` | `9411e22ab04953bee3d9d68558e6b1bf0d896ab5` | Original-HOME exact folder TOML; optional timestamp; broad-root refusal |
+| `xai-grok-workspace/src/plugins.rs` | `9cd0d8aef4b2336635db5627b3e77431b5378c45` | User config enabled names or IDs |
+| `xai-grok-agent/src/plugins/discovery.rs` | `96b8caae336c6ae7a210141922e1454dacec7817` | Project trust; unlisted plugins disabled |
+| `xai-grok-agent/src/plugins/registry.rs` | `31112af7aac163927f63e6c61f2e21268e5359f8` | Active requires enabled and trusted |
+| `xai-grok-shell/src/inspect/mod.rs` | `bbbe3da44a5c73046ac0b514e3c124283f865afa` | Plugin enabled means trust; separate loaded skill source; camelCase userInvocable; false disabled omitted |
+| `xai-grok-agent/src/prompt/skills.rs` | `d70dcb18f5845ced0d1129d490773703bcf0eac1` | Only active plugin skills get exact source stamp |
+| `xai-grok-tools/src/types/config_source.rs` | `11f16ad8aee5243aa71c1697ac9c0f2a1645463a` | Plugin source serializes plugin_name and path |
+
+The separate native `plugin enable` command is unsuitable for this prepared
+directory: `xai-grok-pager/src/plugin_cmd.rs` blob
+`36b53be9bc0e22eed45bc437573595072289548a`, lines610-622, requires native
+install-registry membership. No such registration is invented.
+
+### Implemented selection diagnostic validation
+
+Two independent Sol/xhigh CODE reviews and the root review accepted the frozen
+nine-file candidate. Focused Go contracts passed (62 top-level runs, 271 pass
+events; one existing child-only helper skip), all 61 Python contracts passed,
+and affected all-enabled plus complete six-linter gates reported zero issues.
+The full original 91402 runtime archive replays identically through the original
+and current readers (25 members and the complete failed/all-false result).
+The Grok-only reader branch also has explicit unchanged-result coverage for
+Qoder, Kiro and Windsurf. No vendor executable ran locally. These are source
+and inert-contract results; fresh genuine hosted evidence remains required for
+selected-skill observation and subsequent complete lifecycle qualification.
+
+### Grok complete supported skills lifecycle (2026-10-28)
+
+Real hosted run40717447621 at f794d6d1 now confirms the exact selected loaded
+skill/source/description/userInvocable serialization and canonical path; native
+inspect/startup exit0, main/title each1request/response and ordinary shutdown.
+Its only test failure is the existing independent-raw-review barrier; all
+qualification flags remain false. Native artifact12834025060 outerSHA256
+bfdef920511b1c1c6200a349b2c4d86cbca85c053ccdbf203400b2010150e658 and inner
+49fee32d67edd1f59297025f96a0bcfc6928abc3a03660ce775adbda2fd48b00 retain
+the exact source/pins and25closed members. Two independent full raw audits
+confirm this failed capture and its unchanged all-false result.
+
+Two independent pre-code reviews accepted one bounded skills-only
+cycle: qualify only project-lifecycle/native-restart-removal; project MCP,
+vendor authentication, real models and skill execution stay unsupported or
+unclaimed. Persisted Grok bindings stay Prepared/package_validated. Reuse the
+existing hosted admission, original HOME, pins/scanner/process supervision,
+150s work/180s total origins,30s commands and closed archive bounds.
+
+Before any child, author/freeze original HOME config with supported exact
+A/B/user enabled names and disabled foreign A/B names; trust only canonical
+owned A+B. Hold independent original-user and foreign A/B native plugin/skill
+bytes, inode/owner/mode/membership and caller data through every operation.
+Distinct local A/B skills carry nonce/revisions; A-one updates to A-two at the
+same version. Direct local repair keeps A-two frozen and requires its recorded
+digest (repair_multi.go and installer/package.go), never invented remote pins.
+
+Exactly14 public commands cover3Git roots/version, addA/B, repeatadd,
+unchangedupdate, intactrepair, same-versionupdate, missingpackagerepair, removeA,
+repeatremoveA and removeB. The public CLI repair_many/RepairGroup route restages intact repair
+(mutated=true: lifecycle.go75-105, repair_multi.go321-328 and group_plan.go162);
+missing exact owned-package repair restores the recorded bytes (mutated=true).
+Actual public inert execution confirms partial-leaf absence refuses unchanged,
+while whole package absence repairs. Validate the sole managed_package_directory
+receipt and derived A/.grok/plugins/<physicalID> plus closed source/native bytes.
+Nonrecursively remove only plugin.json, skills/<name>/SKILL.md,
+.grok-plugin/plugin.json and their known empty directories, ending at that exact
+active root; refuse any extra entry, never RemoveAll. Keep state/source and
+parent/foreign/User/config/data authority, then require exact active-path absence.
+Installed skill-only packages have zero data receipts; default final-binding
+removal creates real retained owned data/marker/receipt, validated from
+remove_prepare.go and PluginDataManager and preserved afterward.
+
+Exactly20 fresh `inspect --json` processes cover outside/A/B initial, installed,
+stable, updated, damaged, repaired and removed/repeated/final states. Require
+whole exact plugin/skill catalogs, authored description plus exact source path,
+invocable/disabled semantics and unchanged User/foreign controls. Plugin.enabled
+means trust only. Damaged A lacks its selected plugin and skill; final A/B/outside lack both
+managed sources. No provider or extra native activation command is needed.
+
+Exactly4members contain summary/public/inspect/proof JSONL with bounded raw
+bytes/hash/base64 records and source/state/binding/ownership/removal joins.
+Apply the existing Grok privacy scanner before encoding and after strict
+decoding (no provider exists to trigger the old conditional keep scanner).
+Failed actual prefixes and every late failure keep all flagsfalse; only full
+closure plus ordinary cleanup/preservation and actual test exit0 can qualify
+the two applicable flags. Retain old diagnostic evidence/readers unchanged;
+no artificial transition review fatal, new framework, workflow or client pin.
+Obtain exact independent CODE reviews and focused inert Go/Python plus affected
+and complete six-linter gates, then one genuine hosted full-cycle capture and
+independent raw audit. No vendor executable runs locally.
+
+The implemented leaf24dcb5f0 has two independent exact-source CODE GOs and
+preserves every existing failure/ownership gate. Its composition with qualified
+program parent73208da2 has two independent reviews: all owned Go bytes remain
+identical, and the two shared Python files retain each reviewed client branch.
+On the composed source,64 focused top-level Go contracts pass (274 pass events;
+one unchanged child-only helper skip), the real inert public CLI repair contract
+passes,82 Python contracts pass, and affected all-enabled plus complete six-linter
+gates for both Go modules report zero issues. The original f794 native25-member
+and frontend25-member captures still replay to the identical failed/all-false
+result. These local gates do not qualify native behavior; the published complete
+cycle requires one fresh genuine hosted capture and two independent raw audits.
 
 ## Gemini owned-MCP listing diagnostic amendment
 
