@@ -9,13 +9,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: agentplugins-npm-drift
+  # Manual audits are independent; scheduled latest-state audits retain their queue.
+  group: agentplugins-npm-drift-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
   cancel-in-progress: false
 
 jobs:
   npm-drift:
     name: Verify npm latest tracks the newest public release
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 10
     steps:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

@@ -1,6 +1,7 @@
 # Qoder project skill bundle preparation
 
-Current source; this page is not a release or native runtime qualification.
+Explicit project preparation ships in CLI 0.1.93. The observations below do not
+qualify arbitrary native runtime behavior.
 Project installation prepares a selected skill bundle in the project's UAP
 namespace. It preserves the original user's Qoder profile and does not register
 a native plugin, rewrite Qoder's registry, redirect HOME or delete native caches.

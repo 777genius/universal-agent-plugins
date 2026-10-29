@@ -1,12 +1,17 @@
 # Contributing
 
-Thanks for contributing to `plugin-kit-ai`.
+Thanks for contributing to Universal Agent Plugins. The public CLI is
+`agentplugins`; preserved Go module paths and historical package names still
+contain `plugin-kit-ai`.
 
 ## Before You Start
 
 - read [docs/SUPPORT.md](./docs/SUPPORT.md) to understand stable vs beta boundaries
 - read [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
-- keep user-facing claims aligned with generated contracts and release docs
+- keep user-facing claims aligned with the verified public release, generated
+  contracts and client-specific evidence
+- read [AGENTS.md](./AGENTS.md) before implementation work; VS Code remains
+  frozen under the recorded owner decision
 
 ## Local Setup
 
@@ -25,13 +30,23 @@ make test-install-compat
 make test-polyglot-smoke
 ```
 
-If your change touches docs or the docs toolchain:
+If your change touches public docs or the docs toolchain, follow the complete
+[website build setup](./website/README.md#build-and-checks), which mirrors
+[the Docs workflow](./.github/workflows/docs.yml). Full checks need the exact
+Node/pnpm/Go versions, pinned Python and gomarkdoc generators, a separate immutable
+0.1.65 authoring checkout, warmed Go caches and the offline generation environment.
+A standalone `pnpm install` does not provision these prerequisites. Keep private
+`TMPDIR` outside `DOCS_TOOLS_ROOT`; overlapping paths fail the source preflight.
 
-```bash
-cd website
-pnpm install --frozen-lockfile
-pnpm run docs:check
-```
+After provisioning, run `pnpm run docs:check` from `website/`, followed by
+`pnpm run docs:smoke-ui` against the built site with Chromium installed. Use the
+same explicit environment and private test HOME described in the setup.
+
+Maintain published journeys in all five documentation locales: `en`, `ru`,
+`es`, `fr` and `zh`. Keep release/source availability consistent, preserve
+embedded historical-source blocks, and regenerate references from their source
+inputs. The website README defines the publication boundary. Landing locales
+have a separate nine-language catalog.
 
 ## Lint Gate and Size Limits
 
@@ -175,5 +190,7 @@ Treat these as release-sensitive and verify them explicitly:
 - support matrix, support policy, or release docs
 - npm, PyPI, Homebrew, or release asset workflows
 
-The canonical maintainer playbook lives in [docs/RELEASE.md](./docs/RELEASE.md)
-and [docs/RELEASE_CHECKLIST.md](./docs/RELEASE_CHECKLIST.md).
+The current CLI release procedure is [docs/agentplugins-release.md](./docs/agentplugins-release.md),
+with [quality-gate policy](./docs/RELEASE.md) and the
+[release checklist](./docs/RELEASE_CHECKLIST.md). Documentation work does not
+authorize publishing a new CLI or package release.

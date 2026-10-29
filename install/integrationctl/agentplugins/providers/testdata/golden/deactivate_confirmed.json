@@ -158,10 +158,23 @@
       "UserActions": null
     }
   },
+  "pi": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": true,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
   "qoder": {
     "Commands": [
       [
         "\u003croot\u003e/bin/qoder",
+        "--config-dir",
+        "\u003croot\u003e/qoder/config",
         "plugins",
         "list",
         "--json"

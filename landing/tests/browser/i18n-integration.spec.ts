@@ -31,24 +31,32 @@ for (const locale of publishedLocales) {
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await expect(page.locator('h1')).toBeVisible();
       if (family === '/') {
-        const copy = JSON.parse(
+        const messages = JSON.parse(
           readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'),
-        ).shell.restore as Record<string, string>;
+        ).shell;
+        const copy = messages.restore as Record<string, string>;
         const restore = page.locator('#restore-environment');
         await expect(restore.getByRole('heading', { level: 2 })).toHaveText(copy.title!);
         await expect(restore.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(1);
         await expect(restore.locator('.command-snippet pre code')).toHaveText([
-          'agentplugins deps export',
-          'agentplugins deps import --install',
+          'agentplugins add <git-url> --scope project',
+          'agentplugins install',
         ]);
-        await expect(restore.getByRole('link', { name: copy.guide! })).toHaveAttribute(
+        const docsLocale = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
+        const guideLabel =
+          docsLocale === locale
+            ? copy.guide!
+            : messages.docs.englishLabel.replace('{label}', copy.guide!);
+        await expect(restore.getByRole('link', { name: guideLabel })).toHaveAttribute(
           'href',
-          /\/docs\/en\/use\/manage\.html#restore-on-another-machine$/,
+          new RegExp(`/docs/${docsLocale}/use/manage\\.html#restore-project-dependencies$`),
         );
         if (locale === 'en' || locale === 'ar') {
           await page.setViewportSize({ width: locale === 'ar' ? 390 : 1440, height: 1000 });
           await restore.scrollIntoViewIfNeeded();
-          expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+          ).toBe(true);
           await expect(restore).toHaveCSS('direction', locale === 'ar' ? 'rtl' : 'ltr');
           await expect(restore.locator('pre').first()).toHaveCSS('direction', 'ltr');
           const screenshots = process.env.UAP_LANDING_SCREENSHOT_DIR;
@@ -102,9 +110,12 @@ for (const target of ['ru', 'uk'] as const)
       });
       await expect(choice).toBeVisible();
       if (width < 768) {
-        await expect(page.getByRole('dialog').getByRole('menuitemradio', {
-          name: localeMetadata[target].name, exact: true,
-        })).toBeVisible();
+        await expect(
+          page.getByRole('dialog').getByRole('menuitemradio', {
+            name: localeMetadata[target].name,
+            exact: true,
+          }),
+        ).toBeVisible();
       }
       await choice.focus();
       await page.keyboard.press('Escape');
@@ -124,7 +135,7 @@ for (const target of ['ru', 'uk'] as const)
       await outsideInput.click();
       await expect(choice).not.toBeVisible();
       await expect(outsideInput).toBeFocused();
-      await outsideInput.evaluate(input => input.remove());
+      await outsideInput.evaluate((input) => input.remove());
       await switcher.press('Enter');
       await choice.focus();
       await choice.press('Enter');
@@ -136,7 +147,9 @@ for (const target of ['ru', 'uk'] as const)
       await expect(switcher).toBeFocused();
       await expect(page.locator('html')).toHaveAttribute('lang', target);
       expect(await page.evaluate(() => history.length)).toBe(initialHistoryLength + 1);
-      expect((await page.context().cookies()).find(cookie => cookie.name === 'uap_locale')?.value).toBe(target);
+      expect(
+        (await page.context().cookies()).find((cookie) => cookie.name === 'uap_locale')?.value,
+      ).toBe(target);
       const url = new URL(page.url());
       expect(url.searchParams.get('q')).toBe('context7');
       expect(url.searchParams.getAll('tag')).toEqual(['one', 'two']);
@@ -146,7 +159,9 @@ for (const target of ['ru', 'uk'] as const)
       await expect(page).toHaveURL(initialUrl);
       await expect(page.locator('html')).toHaveAttribute('lang', 'en');
       await expect(page.locator('h1')).toBeVisible();
-      expect((await page.context().cookies()).find(cookie => cookie.name === 'uap_locale')?.value).toBe(target);
+      expect(
+        (await page.context().cookies()).find((cookie) => cookie.name === 'uap_locale')?.value,
+      ).toBe(target);
       await page.goForward();
       await expect(page).toHaveURL(targetUrl);
       await expect(page.locator('html')).toHaveAttribute('lang', target);

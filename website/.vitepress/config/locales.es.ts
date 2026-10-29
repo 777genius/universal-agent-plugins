@@ -28,12 +28,12 @@ export const esLocaleConfig = {
     },
     footer: {
       message: "Documentación pública para autores de plugins e integradores.",
-      copyright: "Licencia MIT"
+      copyright: "Licencia Apache 2.0"
     },
     nav: [
       ...journeyNav("es"),
       { text: "Inicio rápido", link: "/es/guide/quickstart" },
-      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
+      { text: "API 0.1.65 (inglés)", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.es.json"),
     editLink: {

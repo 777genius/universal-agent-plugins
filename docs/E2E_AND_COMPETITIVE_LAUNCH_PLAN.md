@@ -1,7 +1,12 @@
 # E2E and competitive launch plan
 
-This document records the current launch closure for the Universal Agent
-Plugins CLI. Implementation details belong in the workflows and test suites;
+This is the historical 0.1.51 launch record. Its exact versions, feed
+sequences, run IDs and observations are preserved below. They are not current
+`latest` values or proof of later releases. For current availability, use the
+[public compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
+and the [release runbook](agentplugins-release.md).
+
+The record below captures the launch closure at that historical checkpoint. Implementation details belong in the workflows and test suites;
 this page keeps the user-visible evidence and honest limits in one place.
 
 ## Current closure

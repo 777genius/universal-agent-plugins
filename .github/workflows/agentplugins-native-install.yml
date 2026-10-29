@@ -26,9 +26,10 @@ on:
 permissions:
   contents: read
 
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:
-  group: agentplugins-native-installer-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: agentplugins-native-install-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   unix:
@@ -45,7 +46,7 @@ jobs:
             runner: ubuntu-24.04
           - target: linux-arm64
             runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.runner || matrix.runner == 'ubuntu-24.04-arm' && (vars.CI_LINUX_ARM_RUNNER || matrix.runner) || startsWith(matrix.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.runner) || matrix.runner }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

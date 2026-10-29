@@ -47,13 +47,17 @@ def check(text, runner):
     matrix = re.findall(r'- \{runner: ([\w.-]+), os: (\w+), arch: (\w+)\}', native)
     require(set(matrix) == {('ubuntu-24.04', 'linux', 'amd64'), ('ubuntu-24.04-arm', 'linux', 'arm64'),
         ('windows-2022', 'windows', 'amd64'), ('windows-11-arm', 'windows', 'arm64')} and len(matrix) == 4, 'four native lanes required')
-    require('    needs: [native, packed]\n    if: always()\n' in aggregate, 'aggregate must always need native+packed')
+    require('    needs: [native, packed]\n    if: always() && !cancelled()\n' in aggregate,
+            'aggregate must need native+packed and aggregate failures without running after cancellation')
     require('      REQUIRED_RESULTS: ${{ toJSON(needs) }}\n' in aggregate, 'actual needs results required')
     for body in (packed, aggregate):
         require('          ref: ${{ github.event.pull_request.head.sha || github.sha }}\n' in body and
                 '          persist-credentials: false\n' in body, 'exact clean checkout')
         require(not re.search(r'\|\|\s*(?:true|:)|exit 0|set \+e', body), 'masked failure')
-        require(all(line.strip() == 'if: always()' for line in body.splitlines() if re.match(r'\s*if:', line)), 'skipped step')
+        # The status-only aggregate skips cancelled runs; its individual steps
+        # still run after failure, as do the packed evidence checker and upload.
+        step_body = body.replace('    if: always() && !cancelled()\n', '', 1) if body == aggregate else body
+        require(all(line.strip() == 'if: always()' for line in step_body.splitlines() if re.match(r'\s*if:', line)), 'skipped step')
     require('          go-version: \'1.26.10\'' in packed and "          node-version: '22.23.2'" in packed, 'tool pins')
     require('        run: python3 -B scripts/run-packed-ci.py "$PACKED_ROOT" "$EXPECTED_HEAD"\n' in packed and
         '        run: python3 -B scripts/check-packed-ci.py "$PACKED_ROOT" "$EXPECTED_HEAD"\n' in packed, 'runner/checker required')

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "marketing-kit",
+  "version": "0.1.0",
+  "description": "Plan marketing campaigns using your Notion content, HubSpot CRM context and browser-based landing-page checks.",
+  "author": {"name": "777genius", "url": "https://github.com/777genius"},
+  "repository": "https://github.com/777genius/universal-agent-plugins",
+  "license": "Apache-2.0",
+  "keywords": ["marketing", "campaigns", "content", "crm", "skills"]
+}

@@ -1,6 +1,12 @@
 <script setup lang="ts">
 const { t } = useI18n();
-const { quickstartUrl, buildGuideUrl } = useDocsLinks();
+const {
+  quickstartUrl,
+  buildGuideUrl,
+  quickstartEnglishFallback,
+  buildGuideEnglishFallback,
+  docsLabel,
+} = useDocsLinks();
 // This checkpoint preserves the existing route and indexing policy.
 // Availability is stated in visible copy, independently of robots metadata.
 usePageSeo('publicAuthoring.title', 'publicAuthoring.intro', {
@@ -23,7 +29,7 @@ usePageSeo('publicAuthoring.title', 'publicAuthoring.intro', {
         <pre><code>npx -y universal-agent-plugins add context7</code></pre>
         <p>{{ t('publicAuthoring.installHelp') }}</p>
         <a :href="quickstartUrl">
-          {{ t('publicAuthoring.installLink') }}
+          {{ docsLabel(t('publicAuthoring.installLink'), quickstartEnglishFallback) }}
         </a>
         <p>{{ t('publicAuthoring.versions') }}</p>
       </section>
@@ -36,7 +42,7 @@ usePageSeo('publicAuthoring.title', 'publicAuthoring.intro', {
         </p>
         <p>{{ t('publicAuthoring.releaseScope') }}</p>
         <a :href="buildGuideUrl">
-          {{ t('publicAuthoring.buildGuideLink') }}
+          {{ docsLabel(t('publicAuthoring.buildGuideLink'), buildGuideEnglishFallback) }}
         </a>
         <a href="https://agent-plugins.org/specification">
           {{ t('publicAuthoring.specLink') }}

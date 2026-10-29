@@ -307,15 +307,23 @@ func TestSupervisorEmptyBoundaryRequiresQuiescentErrorFreePasses(t *testing.T) {
 
 func TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage(t *testing.T) {
 	for _, test := range []struct {
-		name     string
-		identity linuxProcessIdentity
-		want     string
+		name       string
+		identity   linuxProcessIdentity
+		recheck    *linuxProcessIdentity
+		recheckErr error
+		want       string
 	}{
+		{name: "exiting child zero parent", identity: linuxProcessIdentity{pid: 41, ppid: 0, startTime: 101}, recheck: &linuxProcessIdentity{pid: 41, ppid: 0, startTime: 101, zombie: true}},
+		{name: "disappeared child zero parent", identity: linuxProcessIdentity{pid: 41, ppid: 0, startTime: 101}, recheckErr: os.ErrNotExist},
+		{name: "live child zero parent", identity: linuxProcessIdentity{pid: 41, ppid: 0, startTime: 101}, want: "live parent changed from 7 to 0"},
+		{name: "reused child after zero parent", identity: linuxProcessIdentity{pid: 41, ppid: 0, startTime: 101}, recheck: &linuxProcessIdentity{pid: 41, ppid: 0, startTime: 102, zombie: true}, want: "live parent changed from 7 to 0"},
+		{name: "uncertain child after zero parent", identity: linuxProcessIdentity{pid: 41, ppid: 0, startTime: 101}, recheckErr: os.ErrPermission, want: "live parent changed from 7 to 0"},
 		{name: "reused PID", identity: linuxProcessIdentity{pid: 41, ppid: 7, startTime: 102}, want: "start time changed"},
 		{name: "changed parent", identity: linuxProcessIdentity{pid: 41, ppid: 8, startTime: 101}, want: "live parent changed from 7 to 8"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			closed := 0
+			childReads := 0
 			ops := linuxDescendantTraversalOps{
 				directChildren: func(pid int, _ time.Time, _ int) (map[int]uint64, error) {
 					if pid != 7 {
@@ -329,6 +337,15 @@ func TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage(t *test
 					}
 					if pid != 41 {
 						t.Fatalf("unexpected identity read for process %d", pid)
+					}
+					childReads++
+					if childReads > 1 {
+						if test.recheck != nil {
+							return *test.recheck, nil
+						}
+						if test.recheckErr != nil {
+							return linuxProcessIdentity{}, test.recheckErr
+						}
 					}
 					return test.identity, nil
 				},
@@ -347,7 +364,11 @@ func TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage(t *test
 				},
 			}
 			descendants, err := linuxDescendantIdentitiesWith(7, time.Now().Add(time.Second), 4, ops)
-			if err == nil || !strings.Contains(err.Error(), test.want) {
+			if test.want == "" {
+				if err != nil {
+					t.Fatalf("naturally exited child refused: %v", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("identity revalidation error = %v, want %q", err, test.want)
 			}
 			if len(descendants) != 0 || closed != 1 {

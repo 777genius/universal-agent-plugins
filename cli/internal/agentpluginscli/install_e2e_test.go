@@ -94,7 +94,16 @@ func TestInstallConvergesDependencyEnvironment(t *testing.T) {
 	// re-acquires and never rewrites state or environment bytes.
 	downloads, lookups := source.downloads, source.lookups
 	beforeState, beforeLock, beforeManifest := dependencyRead(t, f.store.Path), dependencyRead(t, lp), dependencyRead(t, mp)
-	run("install", "--format", "json")
+	repeat := run("install", "--format", "json")
+	var output struct {
+		Selection installSelection `json:"selection"`
+	}
+	if err := json.Unmarshal([]byte(repeat), &output); err != nil {
+		t.Fatal(err)
+	}
+	if output.Selection.Scope != "user" || output.Selection.ManifestPath != mp || output.Selection.LockPath != lp {
+		t.Fatalf("selection missing from install output: %s", repeat)
+	}
 	if source.downloads != downloads || source.lookups != lookups {
 		t.Fatal("repeat install acquired source")
 	}
@@ -144,11 +153,17 @@ func TestInstallConvergesDependencyEnvironment(t *testing.T) {
 	if _, _, err := f.execute(false, "install", "--locked", "--yes", "--format", "json"); err == nil {
 		t.Fatal("--locked accepted a changed manifest")
 	}
+	if _, _, err := f.execute(false, "install", "--locked=false", "--yes", "--format", "json"); err == nil {
+		t.Fatal("default install accepted a changed manifest with an existing lock")
+	}
 	dependencyWrite(t, mp, manifest)
 	tampered := strings.ReplaceAll(savedLock, lock.ManifestDigest, strings.Replace(lock.ManifestDigest, "sha256:", "sha256:0", 1))
 	dependencyWrite(t, lp, tampered)
 	if _, _, err := f.execute(false, "install", "--locked", "--yes", "--format", "json"); err == nil {
 		t.Fatal("--locked accepted a changed lock")
+	}
+	if _, _, err := f.execute(false, "install", "--yes", "--format", "json"); err == nil {
+		t.Fatal("default install accepted a changed lock")
 	}
 	if source.downloads != downloads || source.lookups != lookups {
 		t.Fatal("--locked refusals acquired source")

@@ -1,6 +1,12 @@
 # Changelog
 
-All notable changes to this repository are documented here. **CLI releases** (`plugin-kit-ai` binary built from `cli`) are versioned together with the monorepo for now; SDK history remains in [sdk/CHANGELOG.md](sdk/CHANGELOG.md).
+This log preserves repository changes across the earlier `plugin-kit-ai`
+product and the current `agentplugins` installer. The accumulated Unreleased
+section contains historical entries that have since shipped; its wording is not
+the current availability contract. Use the versioned
+[Agentplugins release notes](https://github.com/777genius/universal-agent-plugins/releases)
+and [current documentation](https://universal-agent-plugins.com/docs/en/) for
+published commands. Runtime SDK history remains in [sdk/CHANGELOG.md](sdk/CHANGELOG.md).
 
 ## [Unreleased]
 
