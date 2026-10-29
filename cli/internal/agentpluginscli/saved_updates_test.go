@@ -2,6 +2,9 @@ package agentpluginscli
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -101,5 +104,21 @@ func TestOutdatedIncludesSavedArchiveInsteadOfUnmanaged(t *testing.T) {
 	}
 	if strings.Contains(output, `"status":"unmanaged"`) {
 		t.Fatal(output)
+	}
+}
+
+func TestSavedCheckClassifiesTypedRefusalsIndependentlyOfWording(t *testing.T) {
+	for _, tc := range []struct {
+		err     error
+		blocked bool
+	}{
+		{fmt.Errorf("source: %w", environment.ErrDependencyConflict), true},
+		{fmt.Errorf("source: %w", errSavedUpdateDowngrade), true},
+		{fmt.Errorf("source: %w", domain.ErrDirectoryIneligible), true},
+		{errors.New("network endpoint includes dependency conflict or downgrade"), false},
+	} {
+		if got := savedUpdateBlocked(tc.err); got != tc.blocked {
+			t.Fatal(tc.err, got)
+		}
 	}
 }

@@ -22,6 +22,9 @@ type ResolvedPackage struct {
 // package declarations, including when all previous pins are present.
 var ErrDependencyFactsUnavailable = errors.New("dependency_facts_unavailable")
 
+// ErrDependencyConflict identifies a graph constraint/eligibility refusal independently of wording.
+var ErrDependencyConflict = errors.New("dependency conflict")
+
 // ErrCandidateIneligible rejects one candidate on source policy discovered
 // during acquisition. Other acquisition errors abort resolution.
 var ErrCandidateIneligible = errors.New("dependency candidate is ineligible")
@@ -56,7 +59,8 @@ type graphSolver struct {
 
 type graphConflict struct{ message string }
 
-func (err graphConflict) Error() string { return err.message }
+func (err graphConflict) Error() string        { return err.message }
+func (err graphConflict) Is(target error) bool { return target == ErrDependencyConflict }
 
 func newGraphSolver(resolver Resolver, requirements Requirements, previous Lock, update map[string]bool) *graphSolver {
 	solver := &graphSolver{resolver: resolver, requirements: requirements, update: map[string]bool{}, roots: map[string]graphNode{}, pins: map[string]LockedPackage{}, descriptions: map[string]ResolvedPackage{}}

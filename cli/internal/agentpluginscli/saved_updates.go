@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
@@ -58,11 +57,13 @@ func prepareSavedUpdates(ctx context.Context, app App, snapshot environmentSnaps
 	return requirements, next, err
 }
 
+var errSavedUpdateDowngrade = errors.New("saved update would downgrade a stable package")
+
 func refuseSavedDowngrades(previous, next environment.Lock) error {
 	for _, old := range previous.Packages {
 		for _, pkg := range next.Packages {
 			if old.SourceKey == pkg.SourceKey && stablePackageVersion(old.Version) && stablePackageVersion(pkg.Version) && environment.CompareVersions(pkg.Version, old.Version) < 0 {
-				return fmt.Errorf("update would downgrade %s from %s to %s; change the declared intent explicitly", old.Alias, old.Version, pkg.Version)
+				return fmt.Errorf("%w: %s from %s to %s; change the declared intent explicitly", errSavedUpdateDowngrade, old.Alias, old.Version, pkg.Version)
 			}
 		}
 	}
@@ -121,7 +122,7 @@ func checkSavedUpdates(ctx context.Context, app App, snapshot environmentSnapsho
 	if err != nil {
 		out.Reason = "The complete update graph could not be checked; inspect source access and dependency constraints"
 		status := "check_unavailable"
-		if strings.Contains(err.Error(), "dependency conflict") || strings.Contains(err.Error(), "downgrade") || errors.Is(err, domain.ErrDirectoryIneligible) {
+		if savedUpdateBlocked(err) {
 			status = "blocked"
 			out.Reason = "No permitted complete update graph is available; inspect dependency constraints and release eligibility"
 		}
@@ -220,4 +221,8 @@ func sameSavedIdentity(previous, next environment.LockedPackage) bool {
 		next.ExecutableFiles = nil
 	}
 	return environment.SamePin(previous, next)
+}
+
+func savedUpdateBlocked(err error) bool {
+	return errors.Is(err, environment.ErrDependencyConflict) || errors.Is(err, errSavedUpdateDowngrade) || errors.Is(err, domain.ErrDirectoryIneligible)
 }

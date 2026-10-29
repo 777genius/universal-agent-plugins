@@ -1,6 +1,7 @@
 package environment
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -96,7 +97,7 @@ func TestSelectedUpdateRefusesOnlyLowerCandidates(t *testing.T) {
 		t.Fatal(err)
 	}
 	resolver.packages["acme/a"] = []ResolvedPackage{conflictPackage("a", "1.1.0", 2, nil)}
-	if next, err := coordinator.ResolveSelected(t.Context(), req, old, []string{"a"}); err == nil {
-		t.Fatal("downgrade admitted", next)
+	if next, err := coordinator.ResolveSelected(t.Context(), req, old, []string{"a"}); !errors.Is(err, ErrDependencyConflict) {
+		t.Fatal("downgrade did not retain typed conflict", next, err)
 	}
 }
