@@ -95,13 +95,13 @@ func (r *treeListingRunner) RunWithTreeExitGrace(_ context.Context, command lega
 }
 
 func TestListingRunnerPreservesCapabilitiesAndFailures(t *testing.T) {
-	if _, ok := listingEnv(clients.Env{Runner: listingRunner{}}).Runner.(ports.TreeCommandRunner); ok {
+	if _, ok := listingEnv(clients.Env{Runner: listingRunner{}}, "").Runner.(ports.TreeCommandRunner); ok {
 		t.Fatal("advertised unsupported tree capability")
 	}
 	sentinel := errors.New("containment failure")
 	original := legacyports.CommandResult{Stdout: []byte(emptyBuiltinListing), Stderr: []byte("diagnostic"), ExitCode: 7, NoChildStarted: true, CleanupComplete: true}
 	runner := &treeListingRunner{result: original, err: sentinel}
-	env := listingEnv(clients.Env{Runner: runner})
+	env := listingEnv(clients.Env{Runner: runner}, "")
 	_, err := New().InspectNativeRegistry(context.Background(), env, domain.DetectedClient{}, domain.DeliveryPlan{NativeRegistryExecutable: "copilot"}, nil)
 	if !errors.Is(err, sentinel) || !runner.called || runner.grace != time.Second || !reflect.DeepEqual(runner.command.Argv, []string{"copilot", "plugin", "list"}) {
 		t.Fatalf("lost tree invocation: runner=%+v err=%v", runner, err)

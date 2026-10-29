@@ -2,6 +2,8 @@ package copilot
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -15,11 +17,25 @@ import (
 // still validates the complete identity, version, enablement and install path.
 const builtinListingSection = "Built-in plugins:\n  • browser-use (v0.0.4) [disabled]\n"
 
-func listingEnv(env clients.Env) clients.Env {
+func userProfileEnv(env clients.Env, roots ...string) (clients.Env, error) {
+	root := ""
+	for _, selected := range roots {
+		if selected == "" {
+			continue
+		}
+		if root != "" && root != selected {
+			return env, fmt.Errorf("copilot selected user profile differs from native registry root")
+		}
+		root = selected
+	}
+	return listingEnv(env, root), nil
+}
+
+func listingEnv(env clients.Env, root string) clients.Env {
 	if env.Runner == nil {
 		return env
 	}
-	runner := listingCommandRunner{env.Runner}
+	runner := listingCommandRunner{CommandRunner: env.Runner, root: root}
 	if tree, ok := env.Runner.(ports.TreeCommandRunner); ok {
 		env.Runner = listingTreeRunner{runner, tree}
 	} else {
@@ -28,10 +44,32 @@ func listingEnv(env clients.Env) clients.Env {
 	return env
 }
 
-type listingCommandRunner struct{ ports.CommandRunner }
+type listingCommandRunner struct {
+	ports.CommandRunner
+	root string
+}
+
+func (r listingCommandRunner) command(command legacyports.Command) legacyports.Command {
+	if r.root == "" {
+		return command
+	}
+	base := command.Env
+	if base == nil {
+		base = os.Environ()
+	}
+	command.Env = make([]string, 0, len(base)+1)
+	for _, entry := range base {
+		key, _, _ := strings.Cut(entry, "=")
+		if !strings.EqualFold(key, "COPILOT_HOME") {
+			command.Env = append(command.Env, entry)
+		}
+	}
+	command.Env = append(command.Env, "COPILOT_HOME="+r.root)
+	return command
+}
 
 func (r listingCommandRunner) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
-	result, err := r.CommandRunner.Run(ctx, command)
+	result, err := r.CommandRunner.Run(ctx, r.command(command))
 	return normalizeListing(command, result, err), err
 }
 
@@ -41,7 +79,7 @@ type listingTreeRunner struct {
 }
 
 func (r listingTreeRunner) RunWithTreeExitGrace(ctx context.Context, command legacyports.Command, grace time.Duration) (legacyports.CommandResult, error) {
-	result, err := r.tree.RunWithTreeExitGrace(ctx, command, grace)
+	result, err := r.tree.RunWithTreeExitGrace(ctx, r.command(command), grace)
 	return normalizeListing(command, result, err), err
 }
 

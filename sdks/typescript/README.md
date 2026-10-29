@@ -349,6 +349,10 @@ paths must agree. Copilot's admitted route supports Skills while portable comman
 remain unsupported: the journey verifies the exact fixture Skill and absence of
 both fixture commands. Other clients also verify the exact rendered portable
 command bytes and withhold the explicit-only command.
+Copilot also uses a captured profile that differs from the engine's inherited
+`COPILOT_HOME` and `HOME/.copilot`. Native inspection and the full lifecycle must
+use the captured profile; the unselected ambient profile and its sentinel must
+remain unchanged through repair, restart, recovery, removal and local Skill undo.
 When removal requires external uninstall, the example performs
 the exact native uninstall, verifies fresh absence, then prepares a new SDK review
 with the explicit attestation.

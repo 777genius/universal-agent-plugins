@@ -2,7 +2,7 @@
 // No native installation is simulated. Only one accepted HTTP response is dropped.
 import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -25,7 +25,10 @@ const nativeExecutable = resolve(values['client-executable']);
 const root = await mkdtemp(join(tmpdir(), 'uap-real-sdk-'));
 const outputPath = values.output ? resolve(values.output) : join(root, 'evidence.json');
 const separateSkills = ['opencode', 'cline', 'gemini'].includes(nativeClient);
-const nativeRoot = ['cline', 'gemini', 'copilot', 'grok', 'qoder'].includes(nativeClient) ? join(root, 'home', `.${nativeClient}`) : join(root, 'config', nativeClient);
+const nativeRoot = nativeClient === 'copilot' ? join(root, 'selected-copilot-profile')
+  : ['cline', 'gemini', 'grok', 'qoder'].includes(nativeClient) ? join(root, 'home', `.${nativeClient}`) : join(root, 'config', nativeClient);
+const ambientCopilotRoot = nativeClient === 'copilot' ? join(root, 'home', '.copilot') : undefined;
+const ambientSentinel = 'Unselected ambient Copilot profile must remain unchanged.\n';
 const skillsRoot = join(nativeRoot, 'skills');
 const project = join(root, 'project');
 const config: StartupConfiguration = {
@@ -41,6 +44,13 @@ if (nativeClient === 'claude') Object.assign(smokeEnvironment, { CLAUDE_CONFIG_D
 if (nativeClient === 'cline') smokeEnvironment.CLINE_NO_AUTO_UPDATE = '1';
 if (nativeClient === 'gemini') smokeEnvironment.GEMINI_CLI_HOME = isolated.HOME;
 if (nativeClient === 'qoder') smokeEnvironment.QODER_CONFIG_DIR = nativeRoot;
+if (ambientCopilotRoot) {
+  // The engine must bind every native command to captured configRoot, even
+  // when both the inherited override and HOME select another native profile.
+  smokeEnvironment.COPILOT_HOME = ambientCopilotRoot;
+  await mkdir(ambientCopilotRoot);
+  await writeFile(join(ambientCopilotRoot, 'sdk-profile-sentinel.txt'), ambientSentinel);
+}
 if (nativeClient === 'codex') {
   smokeEnvironment.CODEX_HOME = nativeRoot;
   await assert.rejects(stat('/etc/codex'), { code: 'ENOENT' }, 'Codex native qualification requires an isolated host without /etc/codex configuration');
@@ -56,6 +66,7 @@ const evidence = {
   root, client: nativeClient, platform: process.platform, architecture: process.arch, source: values.source, engineVersion: '', environmentId: '',
   engineSHA256: sha256(await readFile(executable)), nativeSHA256: sha256(await readFile(nativeExecutable)),
   status: 'running', stage: 'startup', error: '', checks: [] as string[],
+  ...(ambientCopilotRoot ? { selectedNativeProfile: nativeRoot, ambientNativeProfile: ambientCopilotRoot } : {}),
   failureEnvironment: undefined as unknown,
   operations: [] as { action: string; operationId: string; state: string }[],
   nativeObservations: [] as { stage: string; pluginId?: string; skills: { name: string; path: string; sha256: string }[] }[],
@@ -110,13 +121,20 @@ async function apply(change: ChangeRequest | LocalSkillRequest, local = false, e
   return { operation, planId: plan.planId, requestId };
 }
 function observationOptions() {
-  return { client: nativeClient, executable: nativeExecutable, root, nativeRoot, project, env: smokeEnvironment, ...(managedArtifact ? { managedArtifact } : {}), ...(pluginId ? { expectedPluginId: pluginId } : {}) };
+  const env = nativeClient === 'copilot' ? { ...smokeEnvironment, COPILOT_HOME: nativeRoot } : smokeEnvironment;
+  return { client: nativeClient, executable: nativeExecutable, root, nativeRoot, project, env, ...(managedArtifact ? { managedArtifact } : {}), ...(pluginId ? { expectedPluginId: pluginId } : {}) };
+}
+async function verifyAmbientCopilotProfile() {
+  if (!ambientCopilotRoot) return;
+  assert.deepEqual(await readdir(ambientCopilotRoot), ['sdk-profile-sentinel.txt'], 'SDK native commands modified the unselected ambient Copilot profile');
+  assert.equal(await readFile(join(ambientCopilotRoot, 'sdk-profile-sentinel.txt'), 'utf8'), ambientSentinel);
 }
 async function nativeObservation(): Promise<NativeObservation> {
   const observed = await inspectNative(observationOptions());
   pluginId ??= observed.pluginId;
   const skills = await Promise.all([...observed.skills].map(async ([name, path]) => ({ name, path, sha256: sha256(await readFile(path)) })));
   evidence.nativeObservations.push({ stage: evidence.stage, ...(observed.pluginId ? { pluginId: observed.pluginId } : {}), skills });
+  await verifyAmbientCopilotProfile();
   return observed;
 }
 async function verifyNativeGuide() {
@@ -239,7 +257,7 @@ async function interruptedRepair() {
 }
 try {
   await checkpoint('startup');
-  const versionOutput = (await promisify(execFile)(nativeExecutable, nativeClient === 'qoder' ? ['--config-dir', nativeRoot, '--version'] : ['--version'], { cwd: project, env: smokeEnvironment, timeout: 30_000, maxBuffer: 4 * 1024 * 1024 })).stdout;
+  const versionOutput = (await promisify(execFile)(nativeExecutable, nativeClient === 'qoder' ? ['--config-dir', nativeRoot, '--version'] : ['--version'], { cwd: project, env: observationOptions().env, timeout: 30_000, maxBuffer: 4 * 1024 * 1024 })).stdout;
   const versions = [...versionOutput.matchAll(/\b\d+\.\d+\.\d+\b/g)].map((match) => match[0]);
   assert.equal(new Set(versions).size, 1, `Ambiguous native version: ${versionOutput}`);
   evidence.nativeVersion = versions[0]!;
@@ -320,6 +338,8 @@ try {
   await apply({ action: 'restore', rootId: 'local-skills', skillName: 'sdk-local', restoreOperationId: deleted.operation.operationId }, true);
   assert.equal(await readFile(localPath, 'utf8'), revised);
   assert.equal((await client().environment()).pendingOperations?.length ?? 0, 0);
+  await verifyAmbientCopilotProfile();
+  if (ambientCopilotRoot) await checkpoint('native profile isolation verified', 'every native lifecycle command uses the captured Copilot profile while the conflicting ambient profile and its sentinel remain unchanged');
   evidence.status = 'passed';
   await checkpoint('complete', 'local create/edit/delete and restart-visible exact backup restoration use the same real Go lifecycle');
   process.stdout.write(JSON.stringify(evidence, null, 2) + '\n');

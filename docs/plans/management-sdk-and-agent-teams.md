@@ -24,11 +24,17 @@ legacy user native-config attempts remain inspectable; read-only Cline preparati
 refusals report unchanged native state; owned Windsurf MCP entries prove the captured
 Management profile; Copilot's actual built-in plugin section no longer makes its
 user plugin inventory unrecognizable; new Copilot user bindings retain their
-captured native profile so subsequent SDK operations can prove that same context.
+captured native profile and native commands use that profile explicitly so
+subsequent SDK operations can prove that same context.
 The inventory correction is confined to Copilot's adapter and retains the native
 runner's tree containment and error evidence. Profile recording applies only to
 a missing Copilot user binding; existing legacy or shared sibling bindings never
-acquire new proof. Management's foreign/missing-profile refusal remains unchanged.
+acquire new proof. The Copilot-only native runner binds `COPILOT_HOME` for
+inspection, activation, verification and removal, preserving its process-tree
+capability and complete command/error evidence. Management's foreign/missing-profile
+refusal remains unchanged. The strengthened real native journey deliberately
+conflicts ambient and selected profiles and requires the ambient tree to stay
+unchanged; matching HOME and selected roots alone do not qualify this boundary.
 Selected/project recovery authority and later mutation failure semantics remain
 unchanged.
 
