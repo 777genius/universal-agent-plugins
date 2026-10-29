@@ -383,7 +383,11 @@ async function runNativeSearchAndNavigation(page, goto, evidence) {
   await page.locator(".VPLocalNav .menu").click();
   const sidebar = page.locator(".VPSidebar.open");
   await sidebar.waitFor({ state: "visible" });
+  // Visibility begins while the opening slide transition is still running.
+  await sidebar.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished));
+  });
   const sideBounds = await sidebar.boundingBox();
   assert.ok(sideBounds && sideBounds.x >= 0 && sideBounds.x + sideBounds.width <= 390, "Arabic mobile sidebar fits");
-  evidence.push({ keyboardLanguageMenu: true, attestedFragment: true, rtlClientNavigation: true, arabicMobileSidebar: true });
+  evidence.push({ keyboardLanguageMenu: true, attestedFragment: true, rtlClientNavigation: true, arabicMobileSidebar: true, arabicMobileSidebarBounds: sideBounds });
 }
