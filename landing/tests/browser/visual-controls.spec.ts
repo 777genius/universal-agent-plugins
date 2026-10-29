@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { hydrated } from './i18n-state.helpers';
 
 test('flat filters retain keyboard selection, category search, and reset', async ({ page }) => {
   await page.goto('./');
+  await hydrated(page);
   await expect(page.locator('.hero-quick-start__label').filter({ hasText: 'Copy and run' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Other installation methods' })).toHaveAttribute(
     'href',
@@ -48,6 +50,7 @@ test('numbered benefits remain readable in both themes and responsive layouts', 
   page,
 }) => {
   await page.goto('./');
+  await hydrated(page);
   const cards = page.locator('.registry-benefits__card');
   await expect(cards).toHaveCount(4);
   await expect(page.locator('.registry-benefits__signature svg')).toHaveCount(4);

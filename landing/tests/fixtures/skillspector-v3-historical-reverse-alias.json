@@ -1,0 +1,422 @@
+{
+  "attempt_history": [
+    {
+      "acquisition_seconds": 0.887319,
+      "analysis_seconds": 2.328486,
+      "at": "2026-10-28T12:35:22Z",
+      "fingerprint": "sha256:25f0d590f5daf8b87aa55b9a2431fc7161d5de21b6d3086e3ba1b02084fdaf44",
+      "profile": {
+        "digest": "sha256:a73e7c4a9fa0ac563a885c541d207e90dde2e248ca426f7824cf429d725db921",
+        "id": "static-standard-v3"
+      },
+      "reason": "reference_missing",
+      "status": "partial"
+    }
+  ],
+  "coverage": {
+    "analyzers": [
+      {
+        "analyzer_id": "artifact_integrity",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "behavioral_ast",
+        "completed": 0,
+        "failed": 0,
+        "message": "No files matched this analyzer's applicability contract.",
+        "partial": 0,
+        "planned_work": 0,
+        "reason_code": "no_applicable_files",
+        "skipped": 0,
+        "status": "not_applicable",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "behavioral_taint_tracking",
+        "completed": 0,
+        "failed": 0,
+        "message": "No files matched this analyzer's applicability contract.",
+        "partial": 0,
+        "planned_work": 0,
+        "reason_code": "no_applicable_files",
+        "skipped": 0,
+        "status": "not_applicable",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "bundled_execution_surface",
+        "completed": 0,
+        "failed": 0,
+        "message": "No files matched this analyzer's applicability contract.",
+        "partial": 0,
+        "planned_work": 0,
+        "reason_code": "no_applicable_files",
+        "skipped": 0,
+        "status": "not_applicable",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "mcp_least_privilege",
+        "completed": 0,
+        "failed": 0,
+        "message": "No files matched this analyzer's applicability contract.",
+        "partial": 0,
+        "planned_work": 0,
+        "reason_code": "no_applicable_files",
+        "skipped": 0,
+        "status": "not_applicable",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "mcp_rug_pull",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "mcp_tool_poisoning",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "meta_analyzer",
+        "completed": 0,
+        "failed": 0,
+        "message": "No files matched this analyzer's applicability contract.",
+        "partial": 0,
+        "planned_work": 0,
+        "reason_code": "no_applicable_files",
+        "skipped": 0,
+        "status": "not_applicable",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "semantic_developer_intent",
+        "completed": 0,
+        "failed": 0,
+        "message": "Analyzer was disabled by the requested configuration.",
+        "partial": 0,
+        "planned_work": 0,
+        "reason_code": "disabled_by_configuration",
+        "skipped": 0,
+        "status": "disabled",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "semantic_quality_policy",
+        "completed": 0,
+        "failed": 0,
+        "message": "Analyzer was disabled by the requested configuration.",
+        "partial": 0,
+        "planned_work": 0,
+        "reason_code": "disabled_by_configuration",
+        "skipped": 0,
+        "status": "disabled",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "semantic_security_discovery",
+        "completed": 0,
+        "failed": 0,
+        "message": "Analyzer was disabled by the requested configuration.",
+        "partial": 0,
+        "planned_work": 0,
+        "reason_code": "disabled_by_configuration",
+        "skipped": 0,
+        "status": "disabled",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_agent_snooping",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_anti_refusal",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_data_exfiltration",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_deserialization",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_excessive_agency",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_harmful_content",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_memory_poisoning",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_output_handling",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_privilege_escalation",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_prompt_injection",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_rogue_agent",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_ssrf",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_supply_chain",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_system_prompt_leakage",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_patterns_tool_misuse",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      },
+      {
+        "analyzer_id": "static_yara",
+        "completed": 1,
+        "failed": 0,
+        "partial": 0,
+        "planned_work": 1,
+        "skipped": 0,
+        "status": "completed",
+        "unaccounted": 0
+      }
+    ],
+    "entirely_uninspected_files": 0,
+    "fully_inspected_files": 1,
+    "grouping_complete": true,
+    "ledger_exceptions": [
+      {
+        "end_line": 57,
+        "fatal": false,
+        "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime.",
+        "outcome": "partial",
+        "path": "SKILL.md",
+        "phase": "reference_resolution",
+        "reason_code": "reference_missing",
+        "start_line": 57
+      },
+      {
+        "end_line": 71,
+        "fatal": false,
+        "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime.",
+        "outcome": "partial",
+        "path": "SKILL.md",
+        "phase": "reference_resolution",
+        "reason_code": "reference_missing",
+        "start_line": 71
+      }
+    ],
+    "ledger_exceptions_total": 2,
+    "original_findings": [],
+    "partially_inspected_files": 0,
+    "reasons": [
+      {
+        "code": "reference_missing",
+        "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime.",
+        "path": "SKILL.md",
+        "retryable": false
+      }
+    ],
+    "reference_evidence_truncated": false,
+    "references": [
+      {
+        "column": 298,
+        "disposition": "partial",
+        "evidence": " client (e.g. with `useChat`). Consuming an agent is framework-specific: check `package.json` to detect the stack, then follow the matching quickstart.",
+        "line": 57,
+        "reference_kind": "quoted_or_code",
+        "source_path": "SKILL.md",
+        "status": "missing",
+        "target_path": null
+      },
+      {
+        "column": 42,
+        "disposition": "partial",
+        "evidence": "- **Installed:** the `version` field in `node_modules/ai/package.json`.",
+        "line": 71,
+        "reference_kind": "quoted_or_code",
+        "source_path": "SKILL.md",
+        "status": "missing",
+        "target_path": null
+      }
+    ],
+    "references_total": 2,
+    "status": "partial"
+  },
+  "errors": [
+    {
+      "code": "reference_missing",
+      "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime."
+    },
+    {
+      "code": "reference_missing",
+      "message": "A local path-like reference does not match any bundled artifact, such as a file the skill writes at runtime."
+    }
+  ],
+  "execution": {
+    "acquisition_seconds": 0.887319,
+    "analysis_seconds": 2.328486,
+    "exit_code": 1,
+    "finished_at": "2026-10-28T12:35:22Z",
+    "started_at": "2026-10-28T12:35:20Z",
+    "state": "completed"
+  },
+  "finding_count": 0,
+  "finding_group_count": 0,
+  "findings": [],
+  "findings_truncated": false,
+  "freshness": "historical",
+  "id": "vercel-labs/ai/ai-sdk",
+  "kind": "standalone_skill",
+  "plugin_path": null,
+  "profile": {
+    "digest": "sha256:a73e7c4a9fa0ac563a885c541d207e90dde2e248ca426f7824cf429d725db921",
+    "id": "static-standard-v3"
+  },
+  "raw_finding_count": 0,
+  "report_digest": "sha256:251e9ced7d4558d9e060586075f2c1e9e7a89ea1ca85289c06f14c26dd047857",
+  "retry": {
+    "attempt_count": 0,
+    "disposition": "none",
+    "latest_status": "partial",
+    "next_attempt_at": null,
+    "next_profile": null,
+    "reason": "source_or_profile_changed"
+  },
+  "scanned_at": "2026-10-28T12:35:20Z",
+  "scanner": {
+    "id": "skillspector",
+    "revision": "f3b25697d76256998ca9d42c198d256258d4c035",
+    "version": "2.13.1"
+  },
+  "skill_name": "ai-sdk",
+  "source": {
+    "content_digest": "sha256:9cba7f498df3cecac47bf7fc69d60975816e13e6b478a42d37178f1fca9d4bc0",
+    "path": "skills/use-ai-sdk",
+    "repository": "vercel/ai",
+    "revision": "3216f06d0d892b03ad607b4716bbf04056cbfe3d"
+  },
+  "status": "partial",
+  "target_revision": "3216f06d0d892b03ad607b4716bbf04056cbfe3d"
+}

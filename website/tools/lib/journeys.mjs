@@ -94,9 +94,9 @@ export const journeyPageLabels = {
   }
 };
 
-const releaseLabels = {
-  en: "available now", ru: "доступно сейчас", es: "disponible ahora",
-  fr: "disponible maintenant", zh: "现已发布"
+const referenceLabels = {
+  en: "0.1.65 reference", ru: "справочник 0.1.65", es: "referencia 0.1.65",
+  fr: "référence 0.1.65", zh: "0.1.65 版本参考"
 };
 
 export function journeySidebar(locale, entities) {
@@ -111,7 +111,7 @@ export function journeySidebar(locale, entities) {
       link: entityPath(entity, locale) };
   }) }));
   groups.push(...["agentplugins author"].map((surface) => ({
-    text: `${surface} · ${releaseLabels[locale]}`,
+    text: `${surface} · ${referenceLabels[locale]}`,
     items: entities.filter((entry) => entry.surface === "authoring-cli" &&
       (entry.title === surface || entry.title.startsWith(`${surface} `)))
       .map((entry) => ({ text: entry.title + (locale === "en" || entry[localePathField(locale)] ? "" : ` (${journeyLabels[locale][2]})`), link: entityPath(entry, locale) }))

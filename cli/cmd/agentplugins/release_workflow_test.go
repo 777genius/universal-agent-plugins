@@ -28,9 +28,9 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 		t.Fatal(err)
 	}
 	workflow := string(body)
-	gateIndex, buildIndex := strings.Index(workflow, "Verify exact release-bound Directory bootstrap"), strings.Index(workflow, "\n  build:\n")
-	if gateIndex < 0 || buildIndex < 0 || gateIndex > buildIndex {
-		t.Fatal("Directory bootstrap gate must be in validate before build")
+	gateIndex, stageIndex := strings.Index(workflow, "Verify exact release-bound Directory bootstrap"), strings.Index(workflow, "\n  stage-draft:\n")
+	if gateIndex < 0 || stageIndex < 0 || gateIndex > stageIndex {
+		t.Fatal("Directory bootstrap gate must run in qualify-go before draft mutation")
 	}
 	for _, required := range []string{
 		"go-version: 1.26.10",
@@ -39,9 +39,9 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 		"GOTOOLCHAIN: local",
 		"GOFLAGS: -buildvcs=false -p=1",
 		"go run ./cmd/agentplugins/bootstrapgen",
-		"(cd install/integrationctl/agentplugins && go test ./...)",
-		"(cd install/integrationctl && go test ./adapters/dirswap ./adapters/source)",
-		"(cd cli && go test ./internal/agentpluginscli ./cmd/agentplugins/...)",
+		"(cd install/integrationctl/agentplugins && go test -count=1 ./...)",
+		"(cd install/integrationctl && go test -count=1 ./adapters/dirswap ./adapters/source)",
+		"(cd cli && go test -count=1 ./internal/agentpluginscli ./cmd/agentplugins/...)",
 		"Prove production binary excludes Directory conformance overrides",
 		"go test ./cmd/agentplugins -run '^TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride$' -count=1",
 		"-snapshot cmd/agentplugins/directory_bootstrap_inputs/snapshot.json",
@@ -58,17 +58,17 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 		}
 	}
 	if strings.Count(workflow, "node-version: \"22.21.1\"") != 4 {
-		t.Fatal("agentplugins stable release must pin Node 22.21.1 on validate, verified-draft, reuse-verified-draft, and promote")
+		t.Fatal("agentplugins stable release must pin Node 22.21.1 on qualify-npm, verified-draft, reuse-verified-draft, and promote")
 	}
 	if strings.Contains(workflow, "node-version: 22\n") || strings.Contains(workflow, "node-version: 22\r") {
 		t.Fatal("agentplugins stable release must not use an unpinned Node 22")
 	}
 	negativeTestIndex := strings.Index(workflow, "TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride")
-	if negativeTestIndex < 0 || negativeTestIndex > buildIndex {
-		t.Fatal("negative release-binary conformance test must run in validate before release builds")
+	if negativeTestIndex < 0 || negativeTestIndex > stageIndex {
+		t.Fatal("negative release-binary conformance test must run in qualify-go before draft mutation")
 	}
 	parsed := parseReleaseWorkflow(t, "agentplugins-release.yml")
-	for _, name := range []string{"validate", "verified-draft", "reuse-verified-draft", "promote-release"} {
+	for _, name := range []string{"qualify-npm", "verified-draft", "reuse-verified-draft", "promote-release"} {
 		setupNode := 0
 		for _, step := range parsed.Jobs[name].Steps {
 			if strings.HasPrefix(step.Uses, "actions/setup-node@") {
@@ -162,14 +162,24 @@ func TestNPMPublishRunsHermeticStagedPackageTests(t *testing.T) {
 			break
 		}
 	}
-	stagedTest := regexp.MustCompile(`(?m)AGENTPLUGINS_STAGED_TEST_CHILD=1\s*\\\s*\n\s*AGENTPLUGINS_DETACHED_ASSERT_ROOT="\$\{stage\}"\s*\\\s*\n\s*npm test`)
-	match := stagedTest.FindStringIndex(stageRun)
-	if match == nil {
-		t.Fatal("npm publish prepare step must apply both detached-package variables to staged npm test")
+	for _, required := range []string{
+		"python3 scripts/reuse-agentplugins-npm-artifact.py",
+		`--repository "${GITHUB_REPOSITORY}" --tag "${TAG}" --commit "$(git rev-parse HEAD)"`,
+		`--run-id "${QUALIFIED_RUN_ID}" --run-attempt "${QUALIFIED_RUN_ATTEMPT}"`,
+		`--source "${GITHUB_WORKSPACE}" --output-dir "${RUNNER_TEMP}/npm-tarball"`,
+		"npm-package.json", "tarball_integrity", "tarball_shasum",
+	} {
+		if !strings.Contains(stageRun, required) {
+			t.Fatalf("npm prepare must reuse the exact qualified tarball: missing %q", required)
+		}
 	}
-	packIndex := strings.Index(stageRun, "npm pack --ignore-scripts")
-	if packIndex < match[1] {
-		t.Fatal("npm publish prepare step must test the detached staged package before packing it")
+	for _, step := range prepare.Steps {
+		if strings.Contains(step.Run, "npm test") || strings.Contains(step.Run, "npm pack") || strings.Contains(step.Run, "stage-package") {
+			t.Fatal("npm prepare must preserve qualified bytes without staging, retesting or repacking")
+		}
+		if step.ID == "stage" && (step.Env["QUALIFIED_RUN_ID"] != "${{ inputs.qualified_run_id }}" || step.Env["QUALIFIED_RUN_ATTEMPT"] != "${{ inputs.qualified_run_attempt }}" || step.Env["TAG"] != "${{ inputs.tag }}") {
+			t.Fatal("npm reuse must bind the exact qualification run, attempt and tag")
+		}
 	}
 
 	var publicVerificationRun string
@@ -288,8 +298,8 @@ func TestCurrentReleaseGraphsAndConcurrency(t *testing.T) {
 	if !reflect.DeepEqual(releaseNeeds(release.Jobs["build"].Needs), []string{"validate"}) {
 		t.Fatal("build must depend on validate")
 	}
-	if !reflect.DeepEqual(releaseNeeds(release.Jobs["stage-draft"].Needs), []string{"validate", "build"}) {
-		t.Fatal("stage-draft must retain validate and build dependencies")
+	if !reflect.DeepEqual(releaseNeeds(release.Jobs["stage-draft"].Needs), []string{"validate", "qualify-go", "qualify-npm", "build"}) {
+		t.Fatal("stage-draft must require validate, both qualifications and all builds")
 	}
 	if release.Concurrency.Group != "agentplugins-release-${{ inputs.tag }}" || release.Concurrency.Cancel {
 		t.Fatal("agentplugins release concurrency must be tag-keyed and non-cancelling")
@@ -308,7 +318,9 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 	expectedNeeds := map[string][]string{
 		"validate":             nil,
 		"build":                {"validate"},
-		"stage-draft":          {"validate", "build"},
+		"qualify-go":           {"validate"},
+		"qualify-npm":          {"validate"},
+		"stage-draft":          {"validate", "qualify-go", "qualify-npm", "build"},
 		"platform-proof":       {"validate", "stage-draft"},
 		"verified-draft":       {"validate", "stage-draft", "platform-proof"},
 		"reuse-verified-draft": {"validate"},
@@ -317,15 +329,19 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 	expectedPermissions := map[string]map[string]string{
 		"validate":             {"checks": "read", "contents": "read", "pull-requests": "read"},
 		"build":                {"contents": "read"},
+		"qualify-go":           {"contents": "read"},
+		"qualify-npm":          {"contents": "read"},
 		"stage-draft":          {"contents": "write", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
 		"platform-proof":       {"contents": "read", "attestations": "read"},
-		"verified-draft":       {"contents": "write", "attestations": "read"},
+		"verified-draft":       {"contents": "write", "actions": "read", "attestations": "read"},
 		"reuse-verified-draft": {"contents": "write", "actions": "read", "attestations": "read"},
 		"promote-release":      {"contents": "write", "actions": "write", "attestations": "read"},
 	}
 	expectedConditions := map[string]string{
 		"validate":             "",
 		"build":                "${{ inputs.publish_release != true }}",
+		"qualify-go":           "${{ inputs.publish_release != true }}",
+		"qualify-npm":          "${{ inputs.publish_release != true }}",
 		"stage-draft":          "${{ inputs.publish_release != true }}",
 		"platform-proof":       "${{ inputs.publish_release != true }}",
 		"verified-draft":       "${{ inputs.publish_release != true }}",
@@ -362,26 +378,31 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 			if !strings.Contains(step.Run, "gh workflow run agentplugins-npm-publish.yml") ||
 				!strings.Contains(step.Run, `--ref "${TAG}"`) ||
 				!strings.Contains(step.Run, `-f "tag=${TAG}"`) ||
-				!strings.Contains(step.Run, "-f publish=true") {
+				!strings.Contains(step.Run, "-f publish=true") ||
+				!strings.Contains(step.Run, `-f "qualified_run_id=${QUALIFIED_RUN_ID}"`) ||
+				!strings.Contains(step.Run, `-f "qualified_run_attempt=${QUALIFIED_RUN_ATTEMPT}"`) {
 				return fmt.Errorf("npm dispatch step must run agentplugins-npm-publish.yml from the exact tag with publish=true")
 			}
-			if step.Env["TAG"] != "${{ inputs.tag }}" {
-				return fmt.Errorf("npm dispatch step must bind TAG to the exact release tag input")
+			if step.Env["TAG"] != "${{ inputs.tag }}" || step.Env["QUALIFIED_RUN_ID"] != "${{ inputs.qualified_run_id }}" || step.Env["QUALIFIED_RUN_ATTEMPT"] != "${{ inputs.qualified_run_attempt }}" {
+				return fmt.Errorf("npm dispatch must bind the exact release tag, qualification run and attempt")
 			}
 		}
 	}
 	if promoteIndex < 0 || dispatchIndex <= promoteIndex {
 		return fmt.Errorf("promote-release must dispatch the trusted npm publish after the release goes public")
 	}
-	for _, step := range workflow.Jobs["validate"].Steps {
-		if strings.HasPrefix(step.Uses, "actions/setup-go@") || strings.HasPrefix(step.Uses, "actions/setup-node@") ||
-			step.Name == "Verify exact release-bound Directory bootstrap" || step.Name == "Test standard-first engine and CLI" ||
-			step.Name == "Prove production binary excludes Directory conformance overrides" || step.Name == "Test npm bootstrap without install scripts" {
-			if step.If != "${{ inputs.publish_release != true }}" {
-				return fmt.Errorf("validate qualification step must not rerun on promotion: %s", step.Name)
+	for _, name := range []string{"qualify-go", "qualify-npm"} {
+		checkoutBound := false
+		for _, step := range workflow.Jobs[name].Steps {
+			if strings.HasPrefix(step.Uses, "actions/checkout@") && step.With["ref"] == "${{ needs.validate.outputs.commit }}" && step.With["persist-credentials"] == false {
+				checkoutBound = true
 			}
 		}
+		if !checkoutBound {
+			return fmt.Errorf("%s must qualify the frozen validated commit without persisted credentials", name)
+		}
 	}
+
 	stageDownload, stageUpload := false, false
 	for _, step := range workflow.Jobs["stage-draft"].Steps {
 		if strings.HasPrefix(step.Uses, "actions/download-artifact@") && step.With["pattern"] == "agentplugins-*" && step.With["merge-multiple"] == true {
@@ -403,7 +424,7 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, status := range []string{"failure", "cancelled", "skipped", ""} {
-		for _, name := range []string{"build", "stage-draft", "platform-proof", "verified-draft", "reuse-verified-draft", "promote-release"} {
+		for _, name := range []string{"qualify-go", "qualify-npm", "build", "stage-draft", "platform-proof", "verified-draft", "reuse-verified-draft", "promote-release"} {
 			// None of these jobs has a status override. GitHub prepends implicit
 			// success(), so any non-success prerequisite keeps it unreachable.
 			job := workflow.Jobs[name]
@@ -418,6 +439,16 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 			job := w.Jobs["stage-draft"]
 			job.Needs = []any{"build"}
 			w.Jobs["stage-draft"] = job
+		},
+		"stage qualification bypass": func(w *releaseWorkflow) {
+			job := w.Jobs["stage-draft"]
+			job.Needs = []any{"validate", "build"}
+			w.Jobs["stage-draft"] = job
+		},
+		"qualification promotion bypass": func(w *releaseWorkflow) {
+			job := w.Jobs["qualify-go"]
+			job.If = ""
+			w.Jobs["qualify-go"] = job
 		},
 		"status override": func(w *releaseWorkflow) {
 			job := w.Jobs["verified-draft"]
@@ -484,7 +515,7 @@ func validateNPMReleaseBoundary(workflow releaseWorkflow) error {
 		"prepare": nil, "publish": {"prepare"}, "verify-public": {"prepare", "publish"},
 	}
 	expectedPermissions := map[string]map[string]string{
-		"prepare":       {"contents": "read", "attestations": "read"},
+		"prepare":       {"contents": "read", "attestations": "read", "actions": "read"},
 		"publish":       {"contents": "read", "id-token": "write"},
 		"verify-public": {"contents": "read", "attestations": "read"},
 	}

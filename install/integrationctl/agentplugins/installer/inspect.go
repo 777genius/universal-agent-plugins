@@ -127,6 +127,7 @@ func inspectInstallations(state domain.StateFileV2) ([]InspectedInstallation, ma
 				LifecycleConverged: binding.LifecycleConverged(), ClientID: binding.ClientID, BindingID: binding.ClientBindingID, Scope: binding.Scope,
 				TargetPath: binding.TargetLocator, DataRoot: receipt.Locator,
 				TreeDigest: digest, Materialization: string(binding.Materialization), Activation: string(binding.Activation),
+				Policy: string(binding.Policy), ManagedPaths: inspectedManagedPaths(binding),
 				Authentication: string(binding.Authentication), Verification: string(binding.Verification),
 			})
 			inspected := &item.Bindings[len(item.Bindings)-1]

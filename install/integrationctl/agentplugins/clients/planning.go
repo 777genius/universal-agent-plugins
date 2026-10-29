@@ -2,9 +2,16 @@ package clients
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+// ExtensionInterpreter is a read-only namespace admission contract. It must not
+// perform I/O or execute package content; projection validates source files later.
+type ExtensionInterpreter interface {
+	InterpretExtension(namespace string, value json.RawMessage) (domain.SupportLevel, string)
+}
 
 // The planner is a fixed generic pipeline with a few named places where a
 // client may speak. Each hook below names the stage it runs in, because the

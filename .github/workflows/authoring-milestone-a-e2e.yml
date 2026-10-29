@@ -7,14 +7,15 @@ on:
 permissions:
   contents: read
 
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:
-  group: authoring-milestone-a-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: authoring-milestone-a-e2e-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   prepare:
     name: Exact candidate package
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 20
     outputs:
       artifact-id: ${{ steps.upload.outputs.artifact-id }}
@@ -83,7 +84,7 @@ jobs:
           - {runner: ubuntu-24.04, platform: linux, arch: amd64}
           - {runner: windows-2022, platform: windows, arch: amd64}
           - {runner: macos-14, platform: darwin, arch: arm64}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.runner || startsWith(matrix.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.runner) || matrix.runner }}
     timeout-minutes: 12
     env:
       NODE_OPTIONS: --max-old-space-size=384

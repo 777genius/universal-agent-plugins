@@ -84,7 +84,15 @@ func qoderCycleArgvForm(actual, expected []string) string {
 	if reflect.DeepEqual(actual, expected) {
 		return "direct"
 	}
-	if len(actual) != len(expected)+1 || actual[0] != expected[0] || !reflect.DeepEqual(actual[2:], expected[1:]) {
+	if len(actual) != len(expected)+1 || !reflect.DeepEqual(actual[2:], expected[1:]) {
+		return "refused"
+	}
+	// The pinned compiled binary records Bun's own process.argv, rather than
+	// the executable path passed to the supervisor.
+	if actual[0] == "bun" && actual[1] == "/$bunfs/root/qodercli" {
+		return "compiled-embedded"
+	}
+	if actual[0] != expected[0] {
 		return "refused"
 	}
 	embedded := actual[1]

@@ -2,6 +2,7 @@ package installer
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -81,4 +82,26 @@ func (e *Engine) detectedClients(req Request) (map[domain.ClientID]domain.Detect
 		}
 	}
 	return detected, nil
+}
+
+// inspectedManagedPaths projects existing native ownership receipts for hosts
+// protecting local editors. The lock-owning mutation path must still recheck.
+func inspectedManagedPaths(binding domain.ClientBinding) []string {
+	paths := []string{}
+	if binding.TargetLocator != "" {
+		paths = append(paths, binding.TargetLocator)
+	}
+	for _, object := range binding.NativeObjects {
+		if object.Path != "" && object.ProtectionClass == "managed" {
+			paths = append(paths, object.Path)
+		}
+	}
+	sort.Strings(paths)
+	out := paths[:0]
+	for _, path := range paths {
+		if len(out) == 0 || out[len(out)-1] != path {
+			out = append(out, path)
+		}
+	}
+	return out
 }

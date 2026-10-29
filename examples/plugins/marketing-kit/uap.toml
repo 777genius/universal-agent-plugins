@@ -1,0 +1,8 @@
+schema_version = 1
+
+# Exact package versions from canonical Directory distributions.
+# The installing environment creates the lock and selects target clients.
+[dependencies]
+"777genius/notion" = "0.1.0"
+"777genius/hubspot-crm" = "0.1.0"
+"777genius/playwright-bridge" = "0.0.80"

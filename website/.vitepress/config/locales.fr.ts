@@ -28,12 +28,12 @@ export const frLocaleConfig = {
     },
     footer: {
       message: "Documentation publique pour les auteurs de plugins et les intégrateurs.",
-      copyright: "Sous licence MIT"
+      copyright: "Sous licence Apache 2.0"
     },
     nav: [
       ...journeyNav("fr"),
       { text: "Démarrage rapide", link: "/fr/guide/quickstart" },
-      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
+      { text: "API 0.1.65 (anglais)", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.fr.json"),
     editLink: {

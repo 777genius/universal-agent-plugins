@@ -69,6 +69,16 @@ function updateTerminal(value: boolean) {
         </p>
       </div>
     </div>
+    <SkillSpectorAssessment
+      :subject="
+        skill.source.kind === 'github' && skill.source.repository
+          ? { kind: 'skill', repository: skill.source.repository, name: skill.skillNameHint }
+          : undefined
+      "
+      :applicable="skill.source.kind === 'github' && Boolean(skill.source.repository)"
+      :name="skill.title"
+      scope="skill"
+    />
     <p class="skill-card__metric">
       {{
         t(`registryUi.skills.metric.${skill.metrics.window}`, { count: n(skill.metrics.installs) })

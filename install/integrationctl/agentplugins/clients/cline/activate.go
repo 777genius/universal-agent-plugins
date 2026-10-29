@@ -49,12 +49,12 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 }
 
 // Deactivate removes managed Cline native objects.
-func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	if request.TargetContext.Scope == domain.ScopeProject || request.TargetContext.ProjectRoot != "" {
 		return deactivateClineProject(ctx, env, request)
 	}
 	outcome := shared.StartedDeactivation()
-	if len(ClineObjects(request.NativeObjects)) == 0 {
+	if adapter.RequiresExternalUninstalled(env, request) {
 		action := "remove any Cline skills and MCP entries for this plugin, " +
 			"then rerun remove with `--external-uninstalled` " +
 			"(also use the flag if it was never activated)"

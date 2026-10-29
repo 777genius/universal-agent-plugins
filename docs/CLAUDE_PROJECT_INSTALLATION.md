@@ -1,8 +1,8 @@
-# Claude Code project installation in current source
+# Claude Code project installation
 
 Use `agentplugins add <source> --target claude --scope project --project-root <directory>`
 to select an existing project explicitly. Default installation scope remains
-user. This document describes current source; historical released binaries and
+user. Explicit project scope ships in CLI 0.1.93. Historical released binaries and
 their qualification do not change when newer source is merged.
 
 UAP projects selected portable skills, supported commands and MCP declarations

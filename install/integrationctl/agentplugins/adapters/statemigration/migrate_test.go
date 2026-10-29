@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -409,6 +410,109 @@ type migrationTestLock struct{ acquired int }
 func (lock *migrationTestLock) Acquire(context.Context) (ports.UnlockFunc, error) {
 	lock.acquired++
 	return func() error { return nil }, nil
+}
+
+type migrationHookLock struct{ acquired func() }
+
+func (lock migrationHookLock) Acquire(context.Context) (ports.UnlockFunc, error) {
+	lock.acquired()
+	return func() error { return nil }, nil
+}
+
+func TestMigrateCurrentV2RechecksDigestAndPendingOperationsUnderLock(t *testing.T) {
+	for _, change := range []string{"digest", "pending"} {
+		t.Run(change, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "state-v2.json")
+			original := []byte(`{"schema_version":4,"installations":[]}`)
+			if err := os.WriteFile(path, original, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			pending := false
+			migrator := Migrator{V2Store: statev2.Store{Path: path},
+				Lock: migrationHookLock{acquired: func() {
+					if change == "pending" {
+						pending = true
+					} else if err := os.WriteFile(path, append(original, '\n'), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}},
+				PendingCheck: func(context.Context) error {
+					if pending {
+						return fmt.Errorf("pending operation appeared while acquiring mutation lock")
+					}
+					return nil
+				},
+			}
+			plan, err := migrator.PlanCurrentV2()
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = migrator.MigrateCurrentV2(t.Context(), plan.LegacyDigest)
+			if change == "digest" && !errors.Is(err, ErrPlanChanged) {
+				t.Fatalf("digest changed under lock but migration continued: %v", err)
+			}
+			if change == "pending" && (err == nil || !strings.Contains(err.Error(), "pending operation appeared")) {
+				t.Fatalf("pending operation appeared under lock but migration continued: %v", err)
+			}
+			backups, _ := filepath.Glob(path + ".schema*.backup-agentplugins-*")
+			if len(backups) != 0 {
+				t.Fatalf("refused migration created backup: %v", backups)
+			}
+			version, err := migrator.V2Store.SchemaVersion()
+			if err != nil || version != 4 {
+				t.Fatalf("refused migration rewrote schema: %d %v", version, err)
+			}
+		})
+	}
+}
+
+func TestMigrateCurrentV2BackupFailureLeavesStateUntouched(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state-v2.json")
+	original := []byte(`{"schema_version":3,"installations":[]}`)
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 27, 0, 0, 0, 0, time.UTC)
+	backupPath := fmt.Sprintf("%s.schema3.backup-agentplugins-%s-%s", path, now.Format("20060102T150405.000000000Z"), strings.TrimPrefix(digest(original), "sha256:")[:12])
+	if err := os.Mkdir(backupPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	migrator := Migrator{V2Store: statev2.Store{Path: path}, Lock: &migrationTestLock{}, Now: func() time.Time { return now }, PendingCheck: func(context.Context) error { return nil }}
+	if _, err := migrator.MigrateCurrentV2(t.Context(), digest(original)); err == nil {
+		t.Fatal("unavailable backup did not refuse migration")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(after, original) {
+		t.Fatalf("backup failure changed state: %v %q", err, after)
+	}
+}
+
+func TestMigrateCurrentV2SaveFailureRetainsExactBackupAndOriginal(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "state-v2.json")
+	target := filepath.Join(root, "original.json")
+	original := []byte(`{"schema_version":4,"installations":[]}`)
+	if err := os.WriteFile(target, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Loading follows the existing file; atomic publication refuses to replace
+	// a symlink. This causes a deterministic save failure after a real backup.
+	if err := os.Symlink(target, path); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	migrator := Migrator{V2Store: statev2.Store{Path: path}, Lock: &migrationTestLock{}, PendingCheck: func(context.Context) error { return nil }}
+	report, err := migrator.MigrateCurrentV2(t.Context(), digest(original))
+	if err == nil || !strings.Contains(err.Error(), "commit migrated state") || report.BackupPath == "" {
+		t.Fatalf("expected commit failure with recoverable backup: %+v %v", report, err)
+	}
+	backup, err := os.ReadFile(report.BackupPath)
+	if err != nil || !bytes.Equal(backup, original) {
+		t.Fatalf("save failure lost backup: %v %q", err, backup)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(after, original) {
+		t.Fatalf("save failure changed original: %v %q", err, after)
+	}
 }
 
 func TestMigrateMarksAmbiguousSourceForRebind(t *testing.T) {

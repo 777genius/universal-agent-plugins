@@ -67,10 +67,11 @@ def authenticate(args):
     require(run.get("id") == args.run_id and run.get("run_attempt") == args.run_attempt
             and run.get("repository", {}).get("full_name") == REPOSITORY
             and run.get("head_repository", {}).get("full_name") == REPOSITORY
-            and run.get("head_sha") == args.commit and run.get("head_branch") == "main"
+            and run.get("head_sha") == args.commit
+            and run.get("head_branch") in ("main", args.tag)
             and run.get("path") == WORKFLOW and run.get("event") == "workflow_dispatch"
             and run.get("status") == "completed" and run.get("conclusion") == "success",
-            "qualification run is not successful on the exact tagged main commit")
+            "qualification run is not successful on the exact frozen main or tag commit")
     workflow = api(f"{prefix}/workflows/{run['workflow_id']}")
     require(workflow.get("id") == run["workflow_id"] and workflow.get("path") == WORKFLOW,
             "qualification workflow identity changed")
@@ -113,7 +114,8 @@ def authenticate(args):
         require(member.file_size <= 1 << 20 and (member.external_attr >> 16) & 0o170000 in (0, 0o100000),
                 "invalid receipt member")
         receipt = json.loads(archive.read(member))
-    require(receipt.get("schema_version") == 1
+    require(type(receipt.get("schema_version")) is int
+            and receipt["schema_version"] in (1, 2)
             and receipt.get("release_state") == "verified-draft"
             and receipt.get("repository") == REPOSITORY
             and receipt.get("producer_commit") == args.commit
@@ -127,17 +129,24 @@ def authenticate(args):
             and type(receipt.get("release", {}).get("id")) is int
             and re.fullmatch(r"[0-9a-f]{64}", receipt.get("asset_set_digest", "")),
             "verified draft receipt identity mismatch")
+    if receipt["schema_version"] == 2:
+        for name in ("qualify-go", "qualify-npm"):
+            one_job(jobs, name, args.run_id, "success")
     return receipt
 
 
 def require_current_source(source, tag, commit):
     output(["git", "-C", str(source), "fetch", "--force", "origin",
             "main:refs/remotes/origin/main", f"refs/tags/{tag}:refs/tags/{tag}"])
-    require(output(["git", "-C", str(source), "rev-parse",
-                    "refs/remotes/origin/main"]).decode().strip() == commit
-            and output(["git", "-C", str(source), "rev-list", "-n", "1",
-                        f"refs/tags/{tag}"]).decode().strip() == commit,
-            "tag or current main moved since qualification")
+    require(output(["git", "-C", str(source), "rev-list", "-n", "1",
+                    f"refs/tags/{tag}"]).decode().strip() == commit,
+            "tag moved since qualification")
+    ancestry = subprocess.run(["git", "-C", str(source), "merge-base", "--is-ancestor",
+                               commit, "refs/remotes/origin/main"],
+                              check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              timeout=300)
+    require(ancestry.returncode in (0, 1), "could not verify frozen commit ancestry")
+    require(ancestry.returncode == 0, "frozen commit is not an ancestor of current main")
 
 
 def verify(args):

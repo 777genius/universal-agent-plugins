@@ -23,7 +23,13 @@ func TestQoderCycleArgvAcceptsOnlyExactHeldOrOneSourceEmbeddedEntrypoint(t *test
 	}{
 		{append([]string{}, expected...), "direct"},
 		{append([]string{expected[0], "/$bunfs/root/qodercli.js"}, expected[1:]...), "compiled-embedded"},
+		{append([]string{"bun", "/$bunfs/root/qodercli"}, expected[1:]...), "compiled-embedded"},
 		{nil, "refused"},
+		{append([]string{"/usr/bin/bun", "/$bunfs/root/qodercli"}, expected[1:]...), "refused"},
+		{append([]string{"bun", "/$bunfs/root/qodercli.js"}, expected[1:]...), "refused"},
+		{append([]string{"bun", "/$bunfs/root/./qodercli"}, expected[1:]...), "refused"},
+		{append([]string{"bun", "/$bunfs/root/qodercli", "foreign"}, expected[1:]...), "refused"},
+		{[]string{"bun", "/$bunfs/root/qodercli"}, "refused"},
 		{append([]string{"/foreign/qodercli", "/$bunfs/root/qodercli.js"}, expected[1:]...), "refused"},
 		{append([]string{expected[0], "/private/build/entry.js"}, expected[1:]...), "refused"},
 		{append([]string{expected[0], "/$bunfs/root/../entry.js"}, expected[1:]...), "refused"},
@@ -86,6 +92,9 @@ func TestQoderCycleLogLedgerDerivesFirstAndAccumulatedRunsWithoutBaselineAdoptio
 	args := append([]string{expected[0], "/$bunfs/root/qodercli.js"}, expected[1:]...)
 	before, _ := json.Marshal(l.original)
 	for number := 1; number <= 2; number++ {
+		if number == 2 {
+			args = append([]string{"bun", "/$bunfs/root/qodercli"}, expected[1:]...)
+		}
 		start, end, _ := qoderCycleLogAuthor(t, l, args, number)
 		transition, err := l.native(l.root, expected, start, end)
 		if err != nil {

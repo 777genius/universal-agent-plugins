@@ -45,10 +45,10 @@ func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation
 	var err error
 	// Preserve the prepared root-identity refusal before the stored journal
 	// scanner touches a root that may have been replaced by a symlink.
-	if host := prepared.openCodeHost; host != nil && openCodeRootIdentity(prepared.client.ConfigRoot) != host.Root() {
+	if err := checkOpenCodeHostRoots(prepared); err != nil {
 		result = Result{Operation: op, Outcome: OutcomeConflict, Reason: "plan_changed"}
 		attachNextActions(&result)
-		return result, ErrPlanChanged
+		return result, err
 	}
 	if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
 		return Result{Operation: op, Outcome: OutcomeConflict, Reason: "profile_changed"}, err

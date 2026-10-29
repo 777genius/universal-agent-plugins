@@ -15,6 +15,9 @@ func (session *repairSession) repairPackage() (AddResult, error) {
 	if !ok {
 		return session.result, fmt.Errorf("managed package integrity could not be determined; refusing repair: %w", session.verifyErr)
 	}
+	if verification.Kind == ports.VerificationDigestMismatch && domain.ClientTraitsFor(session.input.Client.ClientID).ProtectsModifiedPackage {
+		return session.result, fmt.Errorf("managed native extension was edited; preserve the changes before repair: %w", session.verifyErr)
+	}
 	beforeDigest, err := repairBeforeDigest(verification)
 	if err != nil {
 		return session.result, err

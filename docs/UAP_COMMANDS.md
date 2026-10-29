@@ -1,11 +1,13 @@
 # Portable commands
 
-**Unreleased:** commands are available in current source and have not been
-qualified as a published CLI release.
+**Released in CLI 0.1.93:** the installer reads and validates portable commands
+and delivers eligible command skills according to each client's support rules.
+This release availability is separate from native runtime qualification; the
+withholding and client limitations below still apply.
 
 A portable command is a Markdown prompt the user starts by hand. The package
 author writes it once, and the `agentplugins` installer delivers it to every
-client as a skill. The package stays an Agent Plugins 1.0 package: commands
+compatible client as a skill. The package stays an Agent Plugins 1.0 package: commands
 live in the installer's own extension directory, which other tools ignore.
 
 ## Where commands live
