@@ -12,8 +12,10 @@ The SDK never downloads or updates an engine executable.
 npm install --save-exact universal-agent-plugins-management-sdk
 ```
 
-Releases are published to npm from immutable `management-sdk-vX.Y.Z` tags with
-npm trusted publishing and provenance. See the
+Every version is built from an immutable `management-sdk-vX.Y.Z` tag, and its
+exact tarball carries a GitHub artifact attestation. Versions after the first
+are published by the release workflow through npm trusted publishing with npm
+provenance. See the
 [changelog](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/CHANGELOG.md)
 for release notes and migration from the earlier `@uap/management-sdk`
 development tarball.
@@ -41,7 +43,7 @@ A Unix-shell example:
 
 ```sh
 curl -fsSLo ./agentplugins-install.sh \
-  https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.sh
+  https://raw.githubusercontent.com/777genius/universal-agent-plugins/agentplugins-v0.1.95/install.sh
 AGENTPLUGINS_VERSION=0.1.95 AGENTPLUGINS_BIN_DIR="$PWD/bin" \
   AGENTPLUGINS_OUTPUT_FILE="$PWD/agentplugins-engine.env" sh ./agentplugins-install.sh
 ./bin/agentplugins version
@@ -315,10 +317,10 @@ already has the release version, and add the release notes to `CHANGELOG.md`
 in the same change:
 
 ```sh
-git tag -a management-sdk-v0.1.0 -m "Management SDK 0.1.0" <main-commit>
-git push origin management-sdk-v0.1.0
+git tag -a management-sdk-v0.1.1 -m "Management SDK 0.1.1" <main-commit>
+git push origin management-sdk-v0.1.1
 gh workflow run management-sdk-release.yml --repo 777genius/universal-agent-plugins \
-  --ref management-sdk-v0.1.0 -f version=0.1.0 -f publish=false
+  --ref management-sdk-v0.1.1 -f version=0.1.1 -f publish=false
 ```
 
 The [release workflow](https://github.com/777genius/universal-agent-plugins/blob/main/.github/workflows/management-sdk-release.yml)
@@ -341,11 +343,42 @@ bytes, and a clean registry install with both entry points. The same consumer
 check is available locally after a release:
 `npm run test:consumer -- --registry-version=<version>`.
 
-The npm trusted publisher for this package must name GitHub Actions,
-`777genius` / `universal-agent-plugins`, the workflow filename
-`management-sdk-release.yml` and the environment `npm-management-sdk`, with
-direct `npm publish` allowed. The GitHub environment `npm-management-sdk` must
-exist with required reviewers before the first `publish=true` run.
+Preconditions for `publish=true`, checked by the workflow where possible:
+
+- The GitHub environment `npm-management-sdk` exists with required reviewers,
+  no administrator bypass and a deployment policy that allows only the tag
+  pattern `management-sdk-v*`. Without it the workflow refuses to publish.
+- A tag ruleset protects `management-sdk-v*` from updates and deletion.
+- The package already exists on npm, and its trusted publisher names GitHub
+  Actions, `777genius` / `universal-agent-plugins`, the workflow filename
+  `management-sdk-release.yml` and the environment `npm-management-sdk`, with
+  direct `npm publish` allowed.
+
+npm can configure a trusted publisher only for an existing package, so the
+first version is a one-time bootstrap by the npm package owner. Run the
+workflow with `publish=false`, then publish that run's attested tarball once:
+
+```sh
+gh run download <run-id> --repo 777genius/universal-agent-plugins \
+  -n management-sdk-<version> -D management-sdk-<version>
+cd management-sdk-<version>
+sha256sum --check checksums.txt
+gh attestation verify universal-agent-plugins-management-sdk-<version>.tgz \
+  --repo 777genius/universal-agent-plugins \
+  --signer-workflow github.com/777genius/universal-agent-plugins/.github/workflows/management-sdk-release.yml \
+  --source-digest "$(cat source-commit.txt)"
+npm publish ./universal-agent-plugins-management-sdk-<version>.tgz \
+  --access public --tag latest --provenance=false
+```
+
+npm provenance can only be generated on a supported CI provider, so this one
+local publication passes `--provenance=false`; the GitHub attestation still
+binds its bytes to the tag commit. Configure the trusted publisher when the
+next version is ready: a new configuration expires unless a publication through
+it succeeds within two days. After that publication succeeds, set the package's
+publishing access to "Require two-factor authentication and disallow tokens".
+The workflow never creates the package or uses a token; if the package is
+missing it fails closed.
 
 ## Real engine qualification
 

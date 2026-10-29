@@ -12,9 +12,11 @@ First public npm release.
 
 ### Added
 
-- Public npm package `universal-agent-plugins-management-sdk`, published with
-  npm trusted publishing and provenance. The release workflow also uploads the
-  same tarball with a GitHub artifact attestation.
+- Public npm package `universal-agent-plugins-management-sdk`. This version is
+  the one-time bootstrap publication of the tarball that the release workflow
+  built and attested from the `management-sdk-v0.1.0` tag. npm trusted
+  publishing with npm provenance applies from the next version, because npm
+  can configure it only for an existing package.
 - Pure entry point: `createClient`, `ManagementError`, `isTerminal` and the
   generated management API v1 types. It has no filesystem, process, Electron
   or UI dependency.
@@ -47,5 +49,6 @@ the `@uap` npm scope is not available to this project.
    unless you need unreleased engine changes. Keep recording the engine digest
    in your build evidence.
 
-Compared with a development tarball built from the same source commit, only the
-package name and version changed; the public API and wire protocol are the same.
+Compared with a development tarball built from the same source commit, the
+public API and wire protocol are the same; the package name, version and npm
+metadata changed.
