@@ -103,7 +103,7 @@ test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ pa
       error: element.error?.code ?? null,
       paused: element.paused,
     }));
-    expect(Math.abs(media.duration - 2484 / 30)).toBeLessThan(0.25);
+    expect(Math.abs(media.duration - 2638 / 30)).toBeLessThan(0.25);
     expect(media.error).toBeNull();
     expect(media.paused).toBe(false);
     if (directory)
