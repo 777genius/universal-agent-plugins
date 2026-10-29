@@ -34,14 +34,16 @@ const {
   toggleInstall,
 } = selection;
 const deliverySummary = computed(() => {
-  const delivery = props.plugin.client_support.delivery;
-  const managed = availableClients.value.filter(
-    (client) => delivery[client.id] === 'managed',
+  const delivery = autoDetect.value
+    ? availableClients.value.map((client) => props.plugin.client_support.delivery[client.id])
+    : (selection.resolution.value.distribution?.targets
+        .filter((target) => targets.value.includes(target.client))
+        .map((target) => target.delivery) ?? []);
+  const managed = delivery.filter((mode) => mode === 'managed').length;
+  const prepared = delivery.filter(
+    (mode) => mode === 'prepared' || mode === 'manual_activation',
   ).length;
-  const prepared = availableClients.value.filter((client) =>
-    ['prepared', 'manual_activation'].includes(delivery[client.id] ?? ''),
-  ).length;
-  if (managed + prepared < availableClients.value.length || !availableClients.value.length)
+  if (managed + prepared < delivery.length || !delivery.length)
     return t('registryUi.card.agentCompatibilityCheckedWhenYouRunTheCommand');
   return t('registryUi.card.deliverySummary', { managed: n(managed), prepared: n(prepared) });
 });
@@ -369,15 +371,6 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
             {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
           </p>
           <p v-if="showAuthentication" class="plugin-card__auth">{{ authentication.label }}</p>
-          <ul
-            v-if="!autoDetect && selectedDistribution"
-            class="badge-list"
-            :aria-label="t('registryUi.card.installCandidateComponents')"
-          >
-            <li v-for="component in selectedDistribution.components" :key="component">
-              {{ t(`registryUi.components.${component}`) }}
-            </li>
-          </ul>
           <InstallScopeSelect
             :model-value="scope"
             :project-available="projectAvailable"

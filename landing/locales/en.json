@@ -741,7 +741,8 @@
         "noSave": "This target selection uses --no-save and does not record a dependency.",
         "local": "Local packages are not saved as portable dependencies.",
         "discovery": "Discovery selectors are not saved as dependencies.",
-        "chatgpt": "ChatGPT preparation does not save a dependency."
+        "chatgpt": "ChatGPT preparation does not save a dependency.",
+        "projectSaved": "Saved in this project’s uap.toml and uap.lock. Check with npx -y universal-agent-plugins deps status --scope project from this folder. Remove affects all saved targets in this project."
       },
       "scope": {
         "label": "Install for",

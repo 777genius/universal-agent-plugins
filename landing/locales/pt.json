@@ -724,7 +724,8 @@
         "noSave": "Esta seleção usa --no-save e não registra uma dependência.",
         "local": "Pacotes locais não são salvos como dependências portáteis.",
         "discovery": "Seletores discovery não são salvos como dependências.",
-        "chatgpt": "A preparação do ChatGPT não salva uma dependência."
+        "chatgpt": "A preparação do ChatGPT não salva uma dependência.",
+        "projectSaved": "Salvo nos arquivos uap.toml e uap.lock deste projeto. Confira com npx -y universal-agent-plugins deps status --scope project nesta pasta. A remoção afeta todos os agentes salvos neste projeto."
       },
       "scope": {
         "label": "Instalar para",

@@ -724,7 +724,8 @@
         "noSave": "Esta selección usa --no-save y no registra una dependencia.",
         "local": "Los paquetes locales no se guardan como dependencias portátiles.",
         "discovery": "Los selectores discovery no se guardan como dependencias.",
-        "chatgpt": "La preparación de ChatGPT no guarda una dependencia."
+        "chatgpt": "La preparación de ChatGPT no guarda una dependencia.",
+        "projectSaved": "Se guarda en uap.toml y uap.lock de este proyecto. Compruébalo con npx -y universal-agent-plugins deps status --scope project desde esta carpeta. La eliminación afecta a todos los agentes guardados de este proyecto."
       },
       "scope": {
         "label": "Instalar para",

@@ -724,7 +724,8 @@
         "noSave": "يستخدم هذا الاختيار --no-save ولا يسجل تبعية.",
         "local": "لا تُحفظ الحزم المحلية كتبعيات قابلة للنقل.",
         "discovery": "لا تُحفظ محددات discovery كتبعيات.",
-        "chatgpt": "لا يحفظ إعداد ChatGPT تبعية."
+        "chatgpt": "لا يحفظ إعداد ChatGPT تبعية.",
+        "projectSaved": "حُفظ في ملفي uap.toml وuap.lock لهذا المشروع. للتحقق، شغّل npx -y universal-agent-plugins deps status --scope project من هذا المجلد. تؤثر الإزالة على جميع الوكلاء المحفوظين في هذا المشروع."
       },
       "scope": {
         "label": "التثبيت من أجل",

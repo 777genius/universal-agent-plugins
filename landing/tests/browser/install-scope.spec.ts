@@ -70,6 +70,9 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.install-outcome')).toContainText('Skills');
     await expect(card.locator('.install-outcome')).not.toContainText('MCP tools');
     await expect(card.locator('.install-outcome')).toContainText('Sign-in or credentials');
+    await expect(card.locator('.plugin-card__source-label')).toContainText(
+      '0 installed automatically · 1 require one final step',
+    );
     await card.locator('.command-snippet button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expectedAdd);
 
@@ -79,6 +82,9 @@ for (const width of [1440, 390]) {
       'aria-pressed',
       'true',
     );
+    await expect(panel).toContainText('Saved in this project’s uap.toml and uap.lock');
+    await expect(panel).toContainText('deps status --scope project');
+    await expect(panel).not.toContainText('Saved for your user account');
     for (const action of ['add', 'update', 'repair', 'remove']) {
       const snippet = panel.locator(`.command-snippet--${action}`);
       const target = action === 'add' || action === 'repair' ? ' --target codex' : '';
@@ -93,10 +99,16 @@ for (const width of [1440, 390]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    await panel.screenshot({ path: testInfo.outputPath(`project-detail-${width}.png`) });
+    await panel.screenshot({
+      path: testInfo.outputPath(`project-detail-${width}.png`),
+      animations: 'disabled',
+    });
     await page.goBack();
     await expect(card.locator('.command-snippet code')).toHaveText(expectedAdd);
-    await card.screenshot({ path: testInfo.outputPath(`project-card-${width}.png`) });
+    await card.screenshot({
+      path: testInfo.outputPath(`project-card-${width}.png`),
+      animations: 'disabled',
+    });
     await navigate(page, '/', 'ru', '?q=i18n-state-00');
     await expect(
       card.getByRole('button', {

@@ -200,7 +200,11 @@ const vendorInstall = computed(() =>
         :targets="targets"
       />
       <p v-if="commands?.saveMode" class="install-panel__notice">
-        {{ t(`registryUi.install.dependencySaving.${commands.saveMode}`) }}
+        {{
+          t(
+            `registryUi.install.dependencySaving.${scope === 'project' && commands.saveMode === 'saved' ? 'projectSaved' : commands.saveMode}`,
+          )
+        }}
       </p>
       <CommandSnippet
         v-if="commands"
