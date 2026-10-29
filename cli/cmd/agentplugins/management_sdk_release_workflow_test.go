@@ -18,6 +18,7 @@ const (
 	managementSDKReleaseWorkflow = "management-sdk-release.yml"
 	managementSDKQualification   = "./.github/workflows/management-sdk.yml"
 	managementSDKPackage         = "universal-agent-plugins-management-sdk"
+	managementSDKPublishCommand  = `npm publish "${dir}/${TARBALL}" --registry=https://registry.npmjs.org/ --access public --provenance --tag latest`
 )
 
 // The SDK release publishes to npm with an OIDC token. These are the boundaries
@@ -39,11 +40,12 @@ func validateManagementSDKJobGraph(workflow releaseWorkflow) error {
 		condition   string
 		permissions map[string]string
 	}{
-		"verify-source":    {nil, "${{ github.event_name == 'workflow_dispatch' }}", map[string]string{"contents": "read"}},
-		"qualify":          {[]string{"verify-source"}, "${{ " + dispatch + "needs.verify-source.result == 'success' }}", map[string]string{"contents": "read"}},
-		"release-artifact": {[]string{"verify-source", "qualify"}, "${{ " + dispatch + "needs.verify-source.result == 'success' && needs.qualify.result == 'success' }}", map[string]string{"contents": "read", "id-token": "write", "attestations": "write"}},
-		"publish":          {[]string{"release-artifact"}, "${{ " + dispatch + "inputs.publish == true && needs.release-artifact.result == 'success' }}", map[string]string{"contents": "read", "id-token": "write"}},
-		"verify-public":    {[]string{"release-artifact", "publish"}, "${{ " + dispatch + "inputs.publish == true && needs.publish.result == 'success' }}", map[string]string{"contents": "read"}},
+		"verify-source": {nil, "${{ github.event_name == 'workflow_dispatch' }}", map[string]string{"contents": "read"}},
+		"qualify":       {[]string{"verify-source"}, "${{ " + dispatch + "needs.verify-source.result == 'success' }}", map[string]string{"contents": "read"}},
+		"build":         {[]string{"verify-source", "qualify"}, "${{ " + dispatch + "needs.verify-source.result == 'success' && needs.qualify.result == 'success' }}", map[string]string{"contents": "read"}},
+		"attest":        {[]string{"build"}, "${{ " + dispatch + "needs.build.result == 'success' }}", map[string]string{"contents": "read", "id-token": "write", "attestations": "write"}},
+		"publish":       {[]string{"build", "attest"}, "${{ " + dispatch + "inputs.publish == true && needs.build.result == 'success' && needs.attest.result == 'success' }}", map[string]string{"contents": "read", "id-token": "write", "attestations": "read"}},
+		"verify-public": {[]string{"build", "publish"}, "${{ " + dispatch + "inputs.publish == true && needs.publish.result == 'success' }}", map[string]string{"contents": "read"}},
 	}
 	if len(workflow.Jobs) != len(expected) || !reflect.DeepEqual(workflow.Permissions, map[string]string{"contents": "read"}) {
 		return fmt.Errorf("job set or workflow permissions")
@@ -79,25 +81,37 @@ func validateManagementSDKJobGraph(workflow releaseWorkflow) error {
 }
 
 func validateManagementSDKArtifactHandoff(workflow releaseWorkflow) error {
-	attested, uploaded, downloaded := false, false, false
-	for _, step := range workflow.Jobs["release-artifact"].Steps {
-		attested = attested || strings.HasPrefix(step.Uses, "actions/attest@") && step.With["subject-path"] == "${{ runner.temp }}/management-sdk/*.tgz"
+	const artifact = "management-sdk-${{ needs.build.outputs.version }}"
+	uploaded, attested := false, false
+	for _, step := range workflow.Jobs["build"].Steps {
 		uploaded = uploaded || strings.HasPrefix(step.Uses, "actions/upload-artifact@") &&
 			step.With["name"] == "management-sdk-${{ steps.pack.outputs.version }}" && step.With["if-no-files-found"] == "error"
 	}
-	for _, step := range workflow.Jobs["publish"].Steps {
-		if strings.HasPrefix(step.Uses, "actions/checkout@") {
-			return fmt.Errorf("publish must handle only the attested bytes, not a source checkout")
+	// Jobs that can mint an OIDC token handle only the built bytes: no source
+	// checkout, and the signing job runs nothing besides download and attest.
+	for _, name := range []string{"attest", "publish"} {
+		downloaded := false
+		for _, step := range workflow.Jobs[name].Steps {
+			if strings.HasPrefix(step.Uses, "actions/checkout@") {
+				return fmt.Errorf("%s must handle only the built bytes, not a source checkout", name)
+			}
+			if name == "attest" && step.Uses != "" && !strings.HasPrefix(step.Uses, "actions/download-artifact@") && !strings.HasPrefix(step.Uses, "actions/attest@") {
+				return fmt.Errorf("attest runs an unexpected action %s", step.Uses)
+			}
+			downloaded = downloaded || strings.HasPrefix(step.Uses, "actions/download-artifact@") && step.With["name"] == artifact
+			attested = attested || name == "attest" && strings.HasPrefix(step.Uses, "actions/attest@") &&
+				step.With["subject-path"] == "${{ runner.temp }}/management-sdk/*.tgz"
 		}
-		downloaded = downloaded || strings.HasPrefix(step.Uses, "actions/download-artifact@") &&
-			step.With["name"] == "management-sdk-${{ needs.release-artifact.outputs.version }}"
+		if !downloaded {
+			return fmt.Errorf("%s must use the build artifact", name)
+		}
 	}
-	if !attested || !uploaded || !downloaded {
-		return fmt.Errorf("attested release-artifact to publish handoff")
+	if !uploaded || !attested {
+		return fmt.Errorf("build to attest artifact handoff")
 	}
 	for _, output := range []string{"version", "commit", "package_name", "tarball_file", "tarball_sha256", "tarball_integrity", "tarball_shasum"} {
-		if workflow.Jobs["release-artifact"].Outputs[output] != "${{ steps.pack.outputs."+output+" }}" {
-			return fmt.Errorf("release-artifact output %s", output)
+		if workflow.Jobs["build"].Outputs[output] != "${{ steps.pack.outputs."+output+" }}" {
+			return fmt.Errorf("build output %s", output)
 		}
 	}
 	return nil
@@ -110,11 +124,14 @@ func validateManagementSDKCommands(workflow releaseWorkflow) error {
 			`git merge-base --is-ancestor "${commit}" refs/remotes/origin/main`,
 			`test "${package_name}" = ` + managementSDKPackage, `grep -q 'E404'`, `sort -V`,
 		},
-		"release-artifact": {`npm run test:consumer -- "--tarball=${out}/${tarball}"`, `sha256sum "${tarball}" > checksums.txt`},
+		"build":  {`npm run test:consumer -- "--tarball=${out}/${tarball}"`, `sha256sum "${tarball}" > checksums.txt`},
+		"attest": {`sha256sum --check --strict`},
 		"publish": {
-			`test -z "${NPM_TOKEN:-}"`, `test -z "${NODE_AUTH_TOKEN:-}"`, `test "${PACKAGE_NAME}" = ` + managementSDKPackage,
-			`sha256sum --check --strict`, `grep -q 'E404'`,
-			`npm publish "${dir}/${TARBALL}" --registry=https://registry.npmjs.org/ --access public --provenance --tag latest`,
+			`environment: "npm-management-sdk"`, `ref: tag, sha: env.COMMIT`, `/.github/workflows/` + managementSDKReleaseWorkflow + `@${tag}`,
+			`gh attestation verify "${dir}/${TARBALL}"`, `--signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/` + managementSDKReleaseWorkflow + `"`,
+			`--source-digest "${COMMIT}"`, `test -z "${NPM_TOKEN:-}"`, `test -z "${NODE_AUTH_TOKEN:-}"`,
+			`test "${PACKAGE_NAME}" = ` + managementSDKPackage, `sha256sum --check --strict`, `grep -q 'E404'`,
+			managementSDKPublishCommand,
 		},
 		"verify-public": {
 			`npm run test:consumer -- "--registry-version=${VERSION}"`, `node scripts/verify-registry.ts`,
@@ -130,6 +147,30 @@ func validateManagementSDKCommands(workflow releaseWorkflow) error {
 			if !strings.Contains(scripts.String(), command) {
 				return fmt.Errorf("%s lacks %q", name, command)
 			}
+		}
+	}
+	return validateManagementSDKPublishOrder(workflow)
+}
+
+// npm publish must be the last step, after the OIDC identity and attestation checks.
+func validateManagementSDKPublishOrder(workflow releaseWorkflow) error {
+	steps := workflow.Jobs["publish"].Steps
+	identity, attestation := -1, -1
+	for i, step := range steps {
+		if strings.Contains(step.Run, `environment: "npm-management-sdk"`) {
+			identity = i
+		}
+		if strings.Contains(step.Run, "gh attestation verify") {
+			attestation = i
+		}
+	}
+	last := len(steps) - 1
+	if last < 0 || !strings.Contains(steps[last].Run, managementSDKPublishCommand) || identity < 0 || identity >= last || attestation < 0 || attestation >= last {
+		return fmt.Errorf("publish must verify the OIDC identity and attestation before npm publish")
+	}
+	for _, step := range steps[:last] {
+		if strings.Contains(step.Run, "npm publish") {
+			return fmt.Errorf("npm publish before the identity and attestation checks")
 		}
 	}
 	return nil
@@ -154,7 +195,7 @@ func TestManagementSDKReleaseBoundary(t *testing.T) {
 	for _, status := range []string{"failure", "cancelled", "skipped", ""} {
 		values := map[string]any{
 			"github.event_name": "workflow_dispatch", "inputs.publish": true,
-			"needs.release-artifact.result": status, "needs.publish.result": status,
+			"needs.build.result": status, "needs.attest.result": status, "needs.publish.result": status,
 			//nolint:misspell // GitHub reports the double-l job result spelling
 			"success": false, "failure": status == "failure", "cancelled": status == "cancelled", "always": true,
 		}
@@ -166,7 +207,7 @@ func TestManagementSDKReleaseBoundary(t *testing.T) {
 	}
 	qualified := map[string]any{
 		"github.event_name": "workflow_dispatch", "inputs.publish": false,
-		"needs.release-artifact.result": "success", "needs.publish.result": "success", "success": true,
+		"needs.build.result": "success", "needs.attest.result": "success", "needs.publish.result": "success", "success": true,
 	}
 	for _, name := range []string{"publish", "verify-public"} {
 		if evaluateReleaseCondition(t, workflow.Jobs[name].If, qualified) {
@@ -190,10 +231,36 @@ func TestManagementSDKReleaseBoundary(t *testing.T) {
 func TestManagementSDKReleaseMutationNegativeControls(t *testing.T) {
 	mutations := map[string]func(*releaseWorkflow){
 		"publish needs": func(w *releaseWorkflow) { job := w.Jobs["publish"]; job.Needs = nil; w.Jobs["publish"] = job },
-		"artifact needs": func(w *releaseWorkflow) {
-			job := w.Jobs["release-artifact"]
+		"build needs": func(w *releaseWorkflow) {
+			job := w.Jobs["build"]
 			job.Needs = []any{"verify-source"}
-			w.Jobs["release-artifact"] = job
+			w.Jobs["build"] = job
+		},
+		"publish without attest": func(w *releaseWorkflow) {
+			job := w.Jobs["publish"]
+			job.Needs = []any{"build"}
+			w.Jobs["publish"] = job
+		},
+		"build signing": func(w *releaseWorkflow) {
+			job := w.Jobs["build"]
+			job.Permissions = map[string]string{"contents": "read", "id-token": "write"}
+			w.Jobs["build"] = job
+		},
+		"attest checkout": func(w *releaseWorkflow) {
+			job := w.Jobs["attest"]
+			job.Steps = append(job.Steps, job.Steps[0])
+			job.Steps[len(job.Steps)-1].Uses = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+			w.Jobs["attest"] = job
+		},
+		"environment claim": func(w *releaseWorkflow) {
+			replaceManagementSDKRun(w, "publish", `environment: "npm-management-sdk"`, `environment: claims.environment`)
+		},
+		"attestation check": func(w *releaseWorkflow) { replaceManagementSDKRun(w, "publish", "gh attestation verify", "true") },
+		"publish order": func(w *releaseWorkflow) {
+			job := w.Jobs["publish"]
+			last := len(job.Steps) - 1
+			job.Steps[last-1], job.Steps[last] = job.Steps[last], job.Steps[last-1]
+			w.Jobs["publish"] = job
 		},
 		"status bypass": func(w *releaseWorkflow) {
 			job := w.Jobs["publish"]

@@ -6,6 +6,13 @@ name: Management SDK Release
 # publish=false qualifies the tagged commit and uploads the attested tarball.
 # publish=true additionally publishes those exact bytes through npm trusted
 # publishing after the npm-management-sdk environment approves the job.
+#
+# npm trusted publisher for universal-agent-plugins-management-sdk: GitHub
+# Actions, 777genius / universal-agent-plugins, workflow filename
+# management-sdk-release.yml, environment npm-management-sdk (required), direct
+# `npm publish` allowed. The publish job refuses an OIDC identity without that
+# environment, tag and workflow. Create the npm-management-sdk GitHub
+# environment with required reviewers before the first publish=true run.
 on:
   workflow_dispatch:
     inputs:
@@ -100,16 +107,15 @@ jobs:
       contents: read
     uses: ./.github/workflows/management-sdk.yml
 
-  release-artifact:
-    name: Build and attest the exact npm tarball
+  # Package code runs here without any signing or publishing credential.
+  build:
+    name: Build, pack and qualify the exact tarball
     needs: [verify-source, qualify]
     if: ${{ success() && github.event_name == 'workflow_dispatch' && needs.verify-source.result == 'success' && needs.qualify.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
-      id-token: write
-      attestations: write
     outputs:
       version: ${{ steps.pack.outputs.version }}
       commit: ${{ steps.pack.outputs.commit }}
@@ -166,9 +172,6 @@ jobs:
             echo "tarball_integrity=${integrity}"
             echo "tarball_shasum=${shasum}"
           } >> "${GITHUB_OUTPUT}"
-      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        with:
-          subject-path: ${{ runner.temp }}/management-sdk/*.tgz
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: management-sdk-${{ steps.pack.outputs.version }}
@@ -176,16 +179,48 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # Signs the built bytes only: no checkout and no package or repository code.
+  attest:
+    name: Attest the exact tarball
+    needs: build
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && needs.build.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: management-sdk-${{ needs.build.outputs.version }}
+          path: ${{ runner.temp }}/management-sdk
+      - name: Bind the downloaded tarball to the build output
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball_file }}
+          TARBALL_SHA256: ${{ needs.build.outputs.tarball_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/management-sdk"
+          test "$(find "${dir}" -maxdepth 1 -name '*.tgz' -type f | wc -l | tr -d ' ')" = 1
+          printf '%s  %s\n' "${TARBALL_SHA256}" "${dir}/${TARBALL}" | sha256sum --check --strict
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/management-sdk/*.tgz
+
+  # The only job with an npm-usable OIDC identity; see the header comment.
   publish:
     name: Publish npm package with trusted provenance
-    needs: release-artifact
-    if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.publish == true && needs.release-artifact.result == 'success' }}
+    needs: [build, attest]
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.publish == true && needs.build.result == 'success' && needs.attest.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: npm-management-sdk
     permissions:
       contents: read
       id-token: write
+      attestations: read
     steps:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -205,14 +240,60 @@ jobs:
           test "$(npm --version)" = "12.0.2"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: management-sdk-${{ needs.release-artifact.outputs.version }}
+          name: management-sdk-${{ needs.build.outputs.version }}
           path: ${{ runner.temp }}/management-sdk
+      - name: Require the protected environment and exact tag in the OIDC identity
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          COMMIT: ${{ needs.build.outputs.commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # npm matches these claims against the trusted publisher. The token
+          # requested here has a non-npm audience and is never printed.
+          node --input-type=module <<'JS'
+          const env = process.env;
+          const url = new URL(env.ACTIONS_ID_TOKEN_REQUEST_URL);
+          url.searchParams.set("audience", "management-sdk-release-identity-check");
+          const response = await fetch(url, { headers: { authorization: `bearer ${env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` } });
+          if (!response.ok) throw new Error(`OIDC token request failed with HTTP ${response.status}`);
+          const claims = JSON.parse(Buffer.from((await response.json()).value.split(".")[1], "base64url").toString("utf8"));
+          const tag = `refs/tags/management-sdk-v${env.VERSION}`;
+          const expected = {
+            environment: "npm-management-sdk", repository: env.GITHUB_REPOSITORY, ref: tag, sha: env.COMMIT,
+            workflow_ref: `${env.GITHUB_REPOSITORY}/.github/workflows/management-sdk-release.yml@${tag}`,
+            runner_environment: "github-hosted",
+          };
+          for (const [claim, value] of Object.entries(expected)) {
+            if (claims[claim] !== value) throw new Error(`OIDC claim ${claim} is ${JSON.stringify(claims[claim])}, expected ${JSON.stringify(value)}`);
+          }
+          JS
+      - name: Verify the exact bytes and their attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_NAME: ${{ needs.build.outputs.package_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+          COMMIT: ${{ needs.build.outputs.commit }}
+          TARBALL: ${{ needs.build.outputs.tarball_file }}
+          TARBALL_SHA256: ${{ needs.build.outputs.tarball_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${PACKAGE_NAME}" = universal-agent-plugins-management-sdk
+          dir="${RUNNER_TEMP}/management-sdk"
+          test "$(find "${dir}" -maxdepth 1 -name '*.tgz' -type f | wc -l | tr -d ' ')" = 1
+          test "${TARBALL}" = "${PACKAGE_NAME}-${VERSION}.tgz"
+          printf '%s  %s\n' "${TARBALL_SHA256}" "${dir}/${TARBALL}" | sha256sum --check --strict
+          # Publish only bytes attested by this workflow for the tagged commit.
+          gh attestation verify "${dir}/${TARBALL}" --repo "${GITHUB_REPOSITORY}" \
+            --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/management-sdk-release.yml" \
+            --source-digest "${COMMIT}"
       - name: Refuse overwrite and publish the exact attested bytes
         env:
-          PACKAGE_NAME: ${{ needs.release-artifact.outputs.package_name }}
-          VERSION: ${{ needs.release-artifact.outputs.version }}
-          TARBALL: ${{ needs.release-artifact.outputs.tarball_file }}
-          TARBALL_SHA256: ${{ needs.release-artifact.outputs.tarball_sha256 }}
+          PACKAGE_NAME: ${{ needs.build.outputs.package_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+          TARBALL: ${{ needs.build.outputs.tarball_file }}
+          TARBALL_SHA256: ${{ needs.build.outputs.tarball_sha256 }}
         shell: bash
         run: |
           set -euo pipefail
@@ -222,8 +303,6 @@ jobs:
           grep -Fx 'registry=https://registry.npmjs.org/' "${NPM_CONFIG_USERCONFIG}"
           test "${PACKAGE_NAME}" = universal-agent-plugins-management-sdk
           dir="${RUNNER_TEMP}/management-sdk"
-          test "$(find "${dir}" -maxdepth 1 -name '*.tgz' -type f | wc -l | tr -d ' ')" = 1
-          test "${TARBALL}" = "${PACKAGE_NAME}-${VERSION}.tgz"
           printf '%s  %s\n' "${TARBALL_SHA256}" "${dir}/${TARBALL}" | sha256sum --check --strict
           err="${RUNNER_TEMP}/npm-view.err"
           if view="$(npm view "${PACKAGE_NAME}@${VERSION}" version --registry=https://registry.npmjs.org/ 2>"${err}")"; then
@@ -239,7 +318,7 @@ jobs:
 
   verify-public:
     name: Verify public npm package, provenance and clean install
-    needs: [release-artifact, publish]
+    needs: [build, publish]
     if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.publish == true && needs.publish.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -248,7 +327,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.release-artifact.outputs.commit }}
+          ref: ${{ needs.build.outputs.commit }}
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -256,12 +335,12 @@ jobs:
           package-manager-cache: false
       - name: Verify registry metadata, signatures, provenance and an isolated consumer
         env:
-          PACKAGE_NAME: ${{ needs.release-artifact.outputs.package_name }}
-          VERSION: ${{ needs.release-artifact.outputs.version }}
-          COMMIT: ${{ needs.release-artifact.outputs.commit }}
-          TARBALL_SHA256: ${{ needs.release-artifact.outputs.tarball_sha256 }}
-          TARBALL_INTEGRITY: ${{ needs.release-artifact.outputs.tarball_integrity }}
-          TARBALL_SHASUM: ${{ needs.release-artifact.outputs.tarball_shasum }}
+          PACKAGE_NAME: ${{ needs.build.outputs.package_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+          COMMIT: ${{ needs.build.outputs.commit }}
+          TARBALL_SHA256: ${{ needs.build.outputs.tarball_sha256 }}
+          TARBALL_INTEGRITY: ${{ needs.build.outputs.tarball_integrity }}
+          TARBALL_SHASUM: ${{ needs.build.outputs.tarball_shasum }}
         working-directory: sdks/typescript
         shell: bash
         run: |
