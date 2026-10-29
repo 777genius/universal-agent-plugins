@@ -3,6 +3,7 @@ import { readFileSync, mkdirSync } from 'node:fs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
   deferred,
+  hydrated,
   navigate,
   offline,
   projections,
@@ -629,6 +630,7 @@ test('community card navigation preserves the source-bound pending Skill report 
     return route.fulfill({ json: manifest });
   });
   await page.goto('./plugins/?component=skills&trust=conformant_unreviewed');
+  await hydrated(page);
   // The prerendered reviewed catalog precedes authenticated community-feed acquisition.
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
     timeout: 15_000,
@@ -641,7 +643,16 @@ test('community card navigation preserves the source-bound pending Skill report 
   const cardReport = card.locator('.skillspector');
   await expect(cardReport).toHaveClass(/skillspector--pending/);
   const summary = await cardReport.locator(':scope > summary').textContent();
-  await card.locator('.plugin-card__title-link').click();
+  const titleLink = card.locator('.plugin-card__title-link');
+  const destination = new URL((await titleLink.getAttribute('href'))!, page.url());
+  expect(destination.pathname).toMatch(/\/plugins\/community\/$/);
+  expect(destination.searchParams.get('source')).toBe(plugin.slug);
+  await titleLink.click();
+  await page.waitForURL(destination.href, { timeout: 15_000 });
+  // The detail page authenticates its own discovery projection before rendering this source.
+  await expect(page.locator('.community-plugin-page .plugin-profile h1')).toHaveText(plugin.name, {
+    timeout: 15_000,
+  });
   const detailReport = page.locator('.community-plugin-page .skillspector');
   await expect(detailReport).toHaveClass(/skillspector--pending/);
   await expect(detailReport).toHaveAttribute('open', '');
