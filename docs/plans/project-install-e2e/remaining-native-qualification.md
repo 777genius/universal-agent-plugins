@@ -3064,3 +3064,33 @@ replays unchanged with all flags false. Targeted startup/runtime contracts pass
 in0.033s. Broader unchanged inert-process tests still fail local process
 containment admission; this is not a vendor result or a full-suite pass. Fresh
 hosted complete-cycle evidence and independent raw audits remain required.
+
+### Copilot observed repeated list requests in one probe session (2026-10-29)
+
+Actual1f01bdd8 attempt2 run40878246362 reaches stable-A after the startup fix.
+Native artifact12903145008 is76835bytes/SHA256
+`830b9c13a9ec8d5dd2ecc785c5a6db3b4845375bc52f9f788e0c6219d8dafe1a`;
+frontend12901458402 is3423bytes/SHA256
+`7f71efdcf76465aca02d6a2bdf02fb179347d328fd9f98d2c9916eed5b9ef0dc`.
+Both closed archives/CRCs,36native and25frontend members, source/build identity
+and24frontend stream joins are verified. Whole-byte offline review joins six
+native envelopes, nine exact scripted-provider exchanges/ordinary closures and
+three observed probe processes. The final5846-byte append prefix SHA256 is
+`e8c01b4711bd51764a329b27065769f629f66b4409c77e79e9ded0d01ce69627`.
+
+Installed A/B each emit initialize/list/call. Stable A emits exactly
+initialize/list/list/list/call within one fresh PID/session/nonce and command
+interval; all four pre-call records have null facts, and the sole final call
+matches native/provider returned facts. Accept only those two exact measured
+method tuples in the existing stage-independent Go/Python probe verifier. Keep
+empty no-call deltas, closed schemas, identity isolation/freshness, monotonic
+bounded timestamps, append-prefix receipts and exact final facts unchanged.
+Do not accept an arbitrary list-count range, another initialization or another
+call. Literal positive and hostile contracts cover both forms and retained guards.
+
+The recorded run remains failed with every qualification flag false. Its summary
+still reports only five validated native/two validated probe sessions; no
+post-stable state snapshot exists. The intact-repair pre-call authority supports
+only offline stream/catalog/facts joins. This correction changes no production
+code, provider, native argv, pin, environment, authority, deadline or completion
+gate; a fresh full genuine lifecycle and independent raw reviews remain required.

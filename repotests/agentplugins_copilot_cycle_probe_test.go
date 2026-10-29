@@ -49,11 +49,15 @@ func (c *copilotProjectCycle) probe(delta []byte, r *copilotCycleRecipe, facts n
 		return fmt.Errorf("Copilot cycle probe is stale or shares native/provider identity")
 	}
 	lines := bytes.Split(bytes.TrimSuffix(delta, []byte{'\n'}), []byte{'\n'})
-	if len(lines) != 3 {
-		return fmt.Errorf("Copilot cycle exact initialize/list/call triple")
+	methods := []string{"initialize", "tools/list", "tools/call"}
+	if len(lines) == 5 {
+		methods = []string{"initialize", "tools/list", "tools/list", "tools/list", "tools/call"}
+	}
+	if len(lines) != len(methods) {
+		return fmt.Errorf("Copilot cycle exact observed initialize/list/call graph")
 	}
 	last := start
-	for i, method := range []string{"initialize", "tools/list", "tools/call"} {
+	for i, method := range methods {
 		value, err := projectNativeRuntimeJSON(lines[i])
 		row, ok := value.(map[string]any)
 		if err != nil || !ok || projectNativeRuntimeKeys(row, "method pid session nonce timestamp facts", "") != nil || row["method"] != method || row["pid"] != json.Number(fmt.Sprint(facts.PID)) || row["session"] != facts.Session || row["nonce"] != r.Nonce {
@@ -65,7 +69,7 @@ func (c *copilotProjectCycle) probe(delta []byte, r *copilotCycleRecipe, facts n
 			return fmt.Errorf("Copilot cycle probe interval")
 		}
 		last = when
-		if i < 2 {
+		if i < len(methods)-1 {
 			if row["facts"] != nil {
 				return fmt.Errorf("Copilot cycle startup has returned facts")
 			}
