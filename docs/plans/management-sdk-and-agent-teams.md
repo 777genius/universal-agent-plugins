@@ -25,21 +25,31 @@ refusals report unchanged native state; owned Windsurf MCP entries prove the cap
 Management profile. Selected/project recovery authority and later mutation failure
 semantics remain unchanged.
 
-Preliminary local runs passed for Cline 3.0.73, Gemini 0.65.0 and Pi 1.4.0. The
-source is being reconciled with main `60967b8b6ca79245a61caf28895aa09c2c9d74a2`;
-fresh committed-source receipts are required before calling this continuation
-qualified. Pi proves its admitted extension lifecycle and inert command, not Skills
-or MCP. Kimi 2.3.1 and Kiro 2.33.1 require native authentication; Windsurf's user
-adapter requires an editor refresh. Their SDK-only checks explicitly record
-`nativeLoaded: false`. Cursor's existing user editor route remains manual, and
-provisioning the pinned CLI was refused by the official endpoint (HTTP 403).
+After reconciliation with main `60967b8b6ca79245a61caf28895aa09c2c9d74a2`,
+all six local journeys passed on clean published source
+`f5b6ed9f409c5c1b1748b7625db5076cba944a80`, using an engine rebuilt from that
+commit. The [committed receipt](../evidence/management-sdk/remaining-local-linux-f5b6ed9f409c.json)
+records executable/fixture identities, actual native observations, operation states,
+process termination and the full Gemini bundle identity. It qualifies those exact
+bytes; later documentation or CI wiring commits are not relabeled as that run.
+
+Cline 3.0.73 and Gemini 0.65.0 each passed eleven lifecycle operations, including
+an expected edited-projection `partial` result followed by successful recovery.
+Pi 1.4.0 passed five operations and fresh extension discovery/command observations;
+it qualifies the admitted extension lifecycle, not Skills or MCP. Kimi 2.3.1,
+Kiro 2.33.1 and Windsurf each passed four SDK configuration lifecycle operations.
+Kimi/Kiro require native authentication and Windsurf requires an editor refresh;
+their receipts explicitly record `nativeLoaded: false`. Cursor's existing user
+editor route remains manual, and provisioning the pinned CLI was refused by the
+official endpoint (HTTP 403).
 
 Copilot 1.0.103, Grok 1.0.67 and Qoder 1.1.78 need Go-managed native processes.
 This local container lacks the required `/proc/<pid>/task/<tid>/children` interface;
 no production process guard is relaxed. A focused three-client Linux workflow
 qualifies only these SDK journeys and binds receipts to the checkout and executable
-hashes. Its results are pending. Required repository checks and independent review
-remain merge gates. No App/runtime architecture, S25/S26 project support, VS Code
+hashes. [PR #566](https://github.com/777genius/universal-agent-plugins/pull/566)
+records the current three-client results and required repository checks. Independent
+review reported no remaining P1/P2 finding; execution gates remain authoritative. No App/runtime architecture, S25/S26 project support, VS Code
 changes or public SDK release is included.
 
 ## Continuation checkpoint — v11 (2026-10-28)
