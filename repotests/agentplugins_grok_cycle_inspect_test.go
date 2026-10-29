@@ -79,7 +79,7 @@ func grokCycleInspect(raw []byte, cwd string, trusted bool, expected []grokCycle
 		if !ok || !named || !found || !want.Loaded || seen[name] || strings.TrimSpace(name) == "" {
 			return fmt.Errorf("Grok cycle foreign/duplicate/disabled skill loaded")
 		}
-		expectedSkill := map[string]any{"name": name, "description": want.Description, "source": map[string]any{"type": "plugin", "plugin_name": name, "path": filepath.Join(want.Path, "skills", name, "SKILL.md")}, "userInvocable": true}
+		expectedSkill := map[string]any{"name": name, "description": want.Description, "source": map[string]any{"type": "plugin", "plugin_name": name, "path": want.Path + "/./skills/" + name + "/SKILL.md"}, "userInvocable": true}
 		if disabled, exists := entry["disabled"]; exists {
 			if disabled != false {
 				return fmt.Errorf("Grok cycle loaded skill is disabled")

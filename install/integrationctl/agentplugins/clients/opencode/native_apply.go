@@ -190,7 +190,9 @@ func confirmOpenCodeConfigSelection(configRoot string, projection OpenCodeProjec
 }
 
 func expectedOpenCodeConfig(projection OpenCodeProjection, previous []domain.NativeObjectOwnership) string {
-	if projection.ConfigPath != "" {
+	// Skills-only effects do not own the client's config selection. OpenCode
+	// may create its schema-only JSONC file while reading those Skills.
+	if len(projection.MCPServers) > 0 && projection.ConfigPath != "" {
 		return projection.ConfigPath
 	}
 	for _, object := range previous {

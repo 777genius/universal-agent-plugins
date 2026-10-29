@@ -9,6 +9,11 @@ on:
         type: boolean
         default: false
 
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
+concurrency:
+  group: authoring-native-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 permissions:
   contents: read
 
@@ -28,7 +33,7 @@ jobs:
           # data/reusables/actions/supported-github-runners.md (standard public runners).
           - {runner: ubuntu-24.04-arm, os: linux, arch: arm64}
           - {runner: windows-11-arm, os: windows, arch: arm64}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.runner || matrix.runner == 'ubuntu-24.04-arm' && (vars.CI_LINUX_ARM_RUNNER || matrix.runner) || startsWith(matrix.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.runner) || matrix.runner }}
     timeout-minutes: 25
     defaults:
       run:
@@ -187,7 +192,7 @@ jobs:
 
   packed:
     name: Authoring / packed Linux amd64
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 45
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -237,9 +242,10 @@ jobs:
 
   acceptance:
     name: Authoring / required native and packed
+    # Status aggregation must not queue a runner for an obsolete cancelled run.
     needs: [native, packed]
-    if: always()
-    runs-on: ubuntu-24.04
+    if: always() && !cancelled()
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     env:
       REQUIRED_RESULTS: ${{ toJSON(needs) }}

@@ -87,7 +87,10 @@ function stableOptions(next: FilterOption[], previous: FilterOption[]) {
 const stableCategoryOptions = computed(() => {
   const next = [
     { value: 'all', label: t('registryUi.catalog.allCategories') },
-    ...filters.value.categories.map((item) => ({ value: item, label: item })),
+    ...filters.value.categories.map((item) => ({
+      value: item,
+      label: item === 'marketing' ? t('registryUi.catalog.marketingCategory') : item,
+    })),
   ];
   previousCategoryOptions = stableOptions(next, previousCategoryOptions);
   return previousCategoryOptions;
@@ -226,7 +229,7 @@ async function syncCatalogQuery() {
       const failure = await router.replace({
         path: canonicalPath(route.path),
         query: catalogQuery(values, route.query) as LocationQueryRaw,
-        hash: route.hash,
+        hash: '',
       });
       if (failure) {
         pendingFilterValues = undefined;

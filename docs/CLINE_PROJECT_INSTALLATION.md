@@ -1,6 +1,7 @@
 # Cline project component preparation
 
-Current source; not a released or native-runtime qualification statement.
+Explicit project preparation ships in CLI 0.1.93. The observations below do not
+qualify arbitrary native runtime behavior.
 Project installation writes owned skill directories to `.cline/skills/` and
 prepares selected MCP registrations in `.uap/clients/cline/mcp.json`. The managed
 package, state, data and receipts belong to the selected project's `.uap`

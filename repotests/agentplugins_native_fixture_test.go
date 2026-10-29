@@ -400,6 +400,50 @@ func TestAgentpluginsNativeFixtureHTTP(t *testing.T) {
 	}
 }
 
+func TestAgentpluginsNativeFixtureHTTPRequestEvidence(t *testing.T) {
+	valid := map[string]string{"origin": "declared-source", "method": "POST", "uri": "/mcp?literal=%24%7BUNKNOWN%7D", "rpc_method": "initialize", "probe_header": "nonce", "literal_header": "${UNKNOWN}"}
+	variant := func(key, value string) map[string]string {
+		event := map[string]string{}
+		for k, v := range valid {
+			event[k] = v
+		}
+		event[key] = value
+		return event
+	}
+	get := variant("method", "GET")
+	get["rpc_method"] = ""
+	for _, tc := range []struct {
+		name   string
+		events []map[string]string
+		want   string
+	}{
+		{"GET before POST", []map[string]string{get, valid}, "passed"},
+		{"GET only", []map[string]string{get}, "failed"},
+		{"wrong origin only", []map[string]string{variant("origin", "redirect-destination")}, "failed"},
+		{"wrong origin before POST", []map[string]string{variant("origin", "redirect-destination"), valid}, "passed"},
+		{"bad nonce stays failed", []map[string]string{variant("probe_header", "wrong"), valid}, "failed"},
+		{"bad literal stays failed", []map[string]string{variant("literal_header", "expanded"), valid}, "failed"},
+		{"bad URI stays failed", []map[string]string{variant("uri", "/mcp?literal=expanded"), valid}, "failed"},
+		{"missing RPC stays failed", []map[string]string{variant("rpc_method", ""), valid}, "failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &nativeFixture{Root: t.TempDir(), Nonce: "nonce"}
+			var body bytes.Buffer
+			for _, event := range tc.events {
+				if err := json.NewEncoder(&body).Encode(event); err != nil {
+					t.Fatal(err)
+				}
+			}
+			nativeWrite(t, filepath.Join(f.Root, "http-events.jsonl"), body.Bytes(), 0600)
+			stages := map[string]nativeStage{}
+			nativeCheckHTTP(t, f, stages)
+			if got := stages["http_request_contract"].Status; got != tc.want {
+				t.Fatalf("HTTP request evidence=%s, want %s: %+v", got, tc.want, stages)
+			}
+		})
+	}
+}
+
 func TestAgentpluginsNativeFixtureEvidenceOutcomes(t *testing.T) {
 	for _, tc := range []struct{ name, requestHeader, negotiated, want string }{
 		{"missing", "", "2025-06-18", "not_evaluated"},

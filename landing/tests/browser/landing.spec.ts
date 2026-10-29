@@ -1,9 +1,19 @@
 import { publishedLocales, localeMetadata } from '../../data/i18n';
 import { clientLandingPages } from '../../data/clients';
 import { expect, test } from '@playwright/test';
-import { hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
+import { emptySkillSpectorManifest, hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
 
-test.beforeEach(async ({ page }) => setSignedMirrorTestTime(page));
+test.beforeEach(async ({ page }) => {
+  await setSignedMirrorTestTime(page);
+  // Keep the catalog independent of optional report publication and remote availability.
+  // Dedicated SkillSpector tests exercise checked, partial and unavailable reports.
+  await page.route('**/reports/skillspector/v3/index.json', (route) =>
+    route.fulfill({ status: 404 }),
+  );
+  await page.route('**/reports/skillspector/v2/index.json', (route) =>
+    route.fulfill({ json: emptySkillSpectorManifest() }),
+  );
+});
 
 async function waitForFullDirectory(page: import('@playwright/test').Page) {
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
@@ -24,6 +34,8 @@ async function waitForFullDirectory(page: import('@playwright/test').Page) {
     .toBe(true);
 }
 
+const optionalManifest = (url: string) => url.endsWith('/reports/skillspector/v3/index.json');
+
 const parseJsonLd = async (page: import('@playwright/test').Page) => {
   const values = await page.locator('script[type="application/ld+json"]').allTextContents();
   return values.flatMap((value) => {
@@ -43,10 +55,14 @@ test('homepage installs with auto-detection and exposes the full directory', asy
     await route.continue();
   });
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
+    const expectedFallback =
+      optionalManifest(message.location().url) && /status of 404/.test(message.text());
+    if (message.type() === 'error' && !expectedFallback) errors.push(message.text());
   });
   page.on('response', (response) => {
-    if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);
+    const expectedFallback = response.status() === 404 && optionalManifest(response.url());
+    if (response.status() >= 400 && !expectedFallback)
+      errors.push(`${response.status()} ${response.url()}`);
   });
 
   await page.goto('./');
@@ -84,9 +100,25 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await securityBadge.scrollIntoViewIfNeeded();
   await securityBadge.focus();
   const securityTooltip = page.locator('.app-tooltip');
-  await expect(securityTooltip).toBeVisible();
-  // Snapshot once: the tooltip can dismiss between per-pattern re-queries.
-  const tooltipText = await securityTooltip.innerText();
+  // Capture visibility and text in one browser turn: tooltip dismissal
+  // can unmount the tooltip between separate visibility and text queries.
+  let tooltipText: string | undefined;
+  await expect
+    .poll(
+      async () => {
+        tooltipText = await securityTooltip.evaluateAll((elements) => {
+          if (elements.length !== 1) return;
+          const element = elements[0] as HTMLElement;
+          const rect = element.getBoundingClientRect();
+          if (!rect.width || !rect.height || getComputedStyle(element).visibility !== 'visible')
+            return;
+          return element.innerText;
+        });
+        return tooltipText !== undefined;
+      },
+      { timeout: 5_000 },
+    )
+    .toBe(true);
   expect(tooltipText).toMatch(/exact indexed revision [0-9a-f]{12}/);
   expect(tooltipText).toMatch(/does not run the plugin or guarantee safety/i);
   await expect(page.getByText(/guarantee of safety/i)).toHaveCount(0);
@@ -387,6 +419,7 @@ test('security badges explain the exact checked revision and open full findings'
   page,
 }) => {
   await page.goto('./');
+  await hydrated(page);
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
     timeout: 15_000,
   });
@@ -394,11 +427,28 @@ test('security badges explain the exact checked revision and open full findings'
   await expect(badge).toBeVisible({ timeout: 15_000 });
   await expect(badge).not.toHaveAttribute('title');
   await badge.scrollIntoViewIfNeeded();
+  // Smooth scrolling can dismiss a focused tooltip. Wait for the badge's actual
+  // position to settle before opening it, rather than accepting its exit animation.
+  await badge.evaluate(async (element) => {
+    let previous = element.getBoundingClientRect().top;
+    let stableFrames = 0;
+    while (stableFrames < 3) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const current = element.getBoundingClientRect().top;
+      stableFrames = current === previous ? stableFrames + 1 : 0;
+      previous = current;
+    }
+  });
   await badge.focus();
-  const tooltip = page.locator('.app-tooltip');
+  const tooltip = page.locator(
+    '.app-tooltip[data-state="instant-open"], .app-tooltip[data-state="delayed-open"]',
+  );
   await expect(tooltip).toBeVisible();
-  await expect(tooltip).toContainText(/SEC\d+/);
-  await expect(tooltip).toContainText(/exact indexed revision [0-9a-f]{12}/);
+  // Read once while visible: the tooltip's exit transition can finish between
+  // separate browser queries, even though both strings are already present.
+  const tooltipText = await tooltip.innerText();
+  expect(tooltipText).toMatch(/SEC\d+/);
+  expect(tooltipText).toMatch(/exact indexed revision [0-9a-f]{12}/);
   await expect(badge).toHaveAttribute('href', /plugins\/community.*#security-review/);
 
   await badge.click();
@@ -603,13 +653,15 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
     'npx -y universal-agent-plugins add context7',
   );
   await expect(page.locator('#build-plugins')).toContainText(
-    'Agent Plugins authoring is available',
+    'CLI 0.1.94 installer, which does not include agentplugins author',
   );
-  await expect(page.locator('#build-plugins')).toContainText('public-channel E2E are verified');
+  await expect(page.locator('#build-plugins')).toContainText('authoring-enabled source build');
+  await expect(page.locator('#build-plugins')).toContainText('historical 0.1.65 provenance');
+  await expect(page.locator('#build-plugins')).not.toContainText('public-channel E2E are verified');
   await expect(page.locator('#historical-v1')).toHaveCount(0);
 });
 
-test('the authoring frontdoor distinguishes Use from released Build and links to real docs journeys', async ({
+test('the authoring frontdoor distinguishes the released installer from source authoring and links to real docs journeys', async ({
   page,
 }) => {
   await page.goto('./create-plugin');
@@ -630,7 +682,9 @@ test('the authoring frontdoor distinguishes Use from released Build and links to
     'href',
     'https://github.com/777genius/universal-agent-plugins#supported-clients',
   );
-  await expect(page.locator('#build-plugins')).toContainText('public-channel E2E are verified');
+  await expect(page.locator('#build-plugins')).toContainText('authoring-enabled source build');
+  await expect(page.locator('#build-plugins')).toContainText('historical 0.1.65 provenance');
+  await expect(page.locator('#build-plugins')).not.toContainText('public-channel E2E are verified');
 
   await expect(page.locator('#historical-v1')).toHaveCount(0);
 });

@@ -323,7 +323,7 @@ def inspect(raw, cwd, trusted, expected):
     for name, scope, path, description, count, loaded in expected:
         wanted_plugins[name] = {"name": name, "scope": scope, "path": path, "enabled": True, "provides": {"skills": count, "agents": 0, "hooks": False, "mcpServers": 0}}
         if loaded:
-            wanted_skills[name] = {"name": name, "description": description, "source": {"type": "plugin", "plugin_name": name, "path": path + "/skills/" + name + "/SKILL.md"}, "userInvocable": True}
+            wanted_skills[name] = {"name": name, "description": description, "source": {"type": "plugin", "plugin_name": name, "path": path + "/./skills/" + name + "/SKILL.md"}, "userInvocable": True}
     for key, wanted in (("plugins", wanted_plugins), ("skills", wanted_skills)):
         actual = row.get(key)
         require(type(actual) is list and len(actual) == len(wanted))
@@ -347,22 +347,27 @@ def public_result(raw, stage, verb, selected):
     scope, binding_row = selected["scope"], selected["binding"]
     name, digest = "uap-grok-cycle-" + scope, selected["source_digest"]
     data = row["data"]
-    required = {"batch", "status", "succeeded", "failed", "plugin", "dry_run", "targets"}
-    require(type(data) is dict and required <= set(data))
-    require(all(same(data[key], value) for key, value in {"batch": True, "succeeded": 1, "failed": 0, "plugin": name, "dry_run": False}.items()))
-    require(data["status"] == ("data_retained" if verb == "remove" else "completed") and type(data["targets"]) is list and len(data["targets"]) == 1)
-    target = data["targets"][0]
-    require(type(target) is dict and target.get("target") == "grok" and target.get("status") == "external_completed")
-    if verb == "update":
-        require(target.get("selected") is True)
-    output = target["output"]
-    expected = {"plugin": name, "version": "1.0.0", "source": "direct local source", "tree_digest": digest, "manifest_digest": installation["package"]["manifest_digest"], "dry_run": False}
+    if stage == "repeat-add-a":
+        required = {"plugin", "version", "source", "tree_digest", "manifest_digest", "dry_run", "result"}
+        require(verb == "add" and type(data) is dict and required <= set(data) <= required | {"security", "next_action"})
+        output, group = data, ""
+    else:
+        required = {"batch", "status", "succeeded", "failed", "plugin", "dry_run", "targets"}
+        require(type(data) is dict and required <= set(data))
+        require(all(same(data[key], value) for key, value in {"batch": True, "succeeded": 1, "failed": 0, "plugin": name, "dry_run": False}.items()))
+        require(data["status"] == ("data_retained" if verb == "remove" else "completed") and type(data["targets"]) is list and len(data["targets"]) == 1)
+        target = data["targets"][0]
+        require(type(target) is dict and target.get("target") == "grok" and target.get("status") == "external_completed")
+        if verb == "update":
+            require(target.get("selected") is True)
+        output, group = target["output"], data.get("operation_id")
+    expected = {"plugin": name, "version": "1.0.0", "source": "local" if verb in ("repair", "remove") else "direct local source", "tree_digest": digest, "manifest_digest": installation["package"]["manifest_digest"], "dry_run": False}
     require(type(output) is dict and all(same(output.get(key), value) for key, value in expected.items()))
     outcome, changed = output["result"], stage not in ("repeat-add-a", "unchanged-update-a")
-    group = data.get("operation_id")
-    require(type(group) is str and re.fullmatch(r"op-[0-9a-f]{32}", group) and output.get("operation_id") == group)
-    if changed:
-        require(group == installation["operation_group_id"])
+    if stage != "repeat-add-a":
+        require(type(group) is str and re.fullmatch(r"op-[0-9a-f]{32}", group) and output.get("operation_id") == group)
+        if changed:
+            require(group == installation["operation_group_id"])
     require(type(outcome) is dict and outcome.get("installation_id") == installation["installation_id"]
             and outcome.get("requires_confirmation") is False and outcome.get("mutated") is changed)
     found = []
@@ -418,8 +423,9 @@ def complete(public, inspections, proof_rows):
                 require(out == b"" and err == b'agentplugins: plugin is not installed for target "grok" in project scope; no target was changed\n')
             else:
                 group = public_result(out, stage, verb, selected)
-                require(group not in groups)
-                groups.add(group)
+                if group:
+                    require(group not in groups)
+                    groups.add(group)
                 if stage.startswith("add-"):
                     expected_progress = "Resolving and validating one Agent Plugin package for every selected target...\nInstalling " + name + " for 1 selected clients...\n"
                 elif stage == "repeat-add-a":

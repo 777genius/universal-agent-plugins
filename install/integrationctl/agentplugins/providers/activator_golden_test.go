@@ -41,13 +41,16 @@ func TestActivateGoldenAcrossClients(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			root := t.TempDir()
+			root := tempRoot(t)
 			records := make(map[string]activationRecord, len(domain.ClientDefinitions()))
 			for _, definition := range domain.ClientDefinitions() {
 				runner := &recordingRunner{}
 				request := goldenActivationRequest(t, definition.ID, root)
 				request.VerifyOnly = verifyOnly
 				outcome, err := testActivator(Activator{Runner: runner}).Activate(context.Background(), request)
+				if domain.ClientTraitsFor(definition.ID).VerifiesNativeDirectory {
+					outcome = piGoldenActivationOutcome(outcome)
+				}
 				records[string(definition.ID)] = activationRecord{
 					Outcome: outcome, Error: errorText(err), Commands: commandArgv(runner.commands),
 				}
@@ -70,13 +73,16 @@ func TestActivateGoldenWhenClientsRespond(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			root := t.TempDir()
+			root := tempRoot(t)
 			records := make(map[string]activationRecord, len(domain.ClientDefinitions()))
 			for _, definition := range domain.ClientDefinitions() {
 				request := goldenActivationRequest(t, definition.ID, root)
 				request.VerifyOnly = verifyOnly
 				runner := goldenRespondingRunner(definition.ID, request)
 				outcome, err := testActivator(Activator{Runner: runner}).Activate(context.Background(), request)
+				if domain.ClientTraitsFor(definition.ID).VerifiesNativeDirectory {
+					outcome = piGoldenActivationOutcome(outcome)
+				}
 				records[string(definition.ID)] = activationRecord{
 					Outcome: outcome, Error: errorText(err), Commands: commandArgv(runner.commands),
 				}
@@ -97,7 +103,7 @@ func TestDeactivateGoldenAcrossClients(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			root := t.TempDir()
+			root := tempRoot(t)
 			records := make(map[string]deactivationRecord, len(domain.ClientDefinitions()))
 			for _, definition := range domain.ClientDefinitions() {
 				runner := &recordingRunner{}
@@ -118,7 +124,7 @@ func TestDeactivateGoldenAcrossClients(t *testing.T) {
 // reaches its removal instead of stopping at the missing-ownership guard.
 // Not parallel: the Cline settings location is read from the environment.
 func TestDeactivateGoldenWhenOwnershipIsRecorded(t *testing.T) {
-	root := t.TempDir()
+	root := tempRoot(t)
 	t.Setenv("CLINE_MCP_SETTINGS_PATH", filepath.Join(root, "cline", "cline_mcp_settings.json"))
 	records := make(map[string]deactivationRecord, len(domain.ClientDefinitions()))
 	for _, definition := range domain.ClientDefinitions() {
@@ -187,6 +193,9 @@ func goldenNativeObjects(t *testing.T, id domain.ClientID, root string) []domain
 // this client, so the activator sees the same invariants it sees in production.
 func goldenActivationRequest(t *testing.T, id domain.ClientID, root string) domain.ActivationRequest {
 	t.Helper()
+	if domain.ClientTraitsFor(id).VerifiesNativeDirectory {
+		return piGoldenActivationRequest(t, root)
+	}
 	configRoot := filepath.Join(root, string(id), "config")
 	anchor, targetRoot := goldenTargetRoot(id, root, configRoot)
 	activePath := filepath.Join(targetRoot, "demo-0123456789ab")
@@ -227,7 +236,7 @@ func goldenActivationRequest(t *testing.T, id domain.ClientID, root string) doma
 func goldenDeactivationRequest(t *testing.T, id domain.ClientID, root string) domain.DeactivationRequest {
 	t.Helper()
 	request := goldenActivationRequest(t, id, root)
-	return domain.DeactivationRequest{
+	requestRemoval := domain.DeactivationRequest{
 		Client:              request.Client,
 		DeclaredName:        request.DeclaredName,
 		CurrentActivation:   domain.ActivationActive,
@@ -235,6 +244,10 @@ func goldenDeactivationRequest(t *testing.T, id domain.ClientID, root string) do
 		BackendExecutable:   request.BackendExecutable,
 		ManagedArtifactPath: request.Delivery.ActivePath,
 	}
+	if domain.ClientTraitsFor(id).VerifiesNativeDirectory {
+		requestRemoval.NativeRegistryRoot = request.Plan.NativeRegistryRoot
+	}
+	return requestRemoval
 }
 
 // goldenTargetRoot mirrors planner.targetRoot: Claude and Cursor deliver into

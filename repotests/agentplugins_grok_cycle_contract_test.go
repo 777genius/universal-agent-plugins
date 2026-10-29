@@ -3,11 +3,28 @@
 package pluginkitairepo_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 )
+
+func TestGrokCycleInspectRequiresExactNativeDotSkillSource(t *testing.T) {
+	want := []grokCycleNativePlugin{{Name: "user", Scope: "user", Path: "/owned/home/plugin", Description: "Original marker", Skills: 1, Loaded: true}}
+	for _, path := range []string{"/owned/home/plugin/./skills/user/SKILL.md", "/owned/home/plugin/skills/user/SKILL.md", "/owned/home/plugin/../plugin/skills/user/SKILL.md", "/owned/home/plugin/././skills/user/SKILL.md", "/foreign/./skills/user/SKILL.md"} {
+		row := map[string]any{"grokVersion": "1.0.70", "cwd": "/owned/A", "projectRoot": "/owned/A/", "projectTrusted": true, "mcpServers": []any{},
+			"plugins": []any{map[string]any{"name": "user", "scope": "user", "path": want[0].Path, "enabled": true, "provides": map[string]any{"skills": 1, "agents": 0, "hooks": false, "mcpServers": 0}}},
+			"skills":  []any{map[string]any{"name": "user", "description": "Original marker", "userInvocable": true, "source": map[string]any{"type": "plugin", "plugin_name": "user", "path": path}}}}
+		raw, err := json.Marshal(row)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := grokCycleInspect(raw, "/owned/A", true, want); (err == nil) != (path == "/owned/home/plugin/./skills/user/SKILL.md") {
+			t.Fatal("native literal skill source comparison differs", path, err)
+		}
+	}
+}
 
 func TestGrokCycleRawPrivacyDoesNotRequireProvider(t *testing.T) {
 	for _, raw := range [][]byte{[]byte("uap-grok-private-inert"), []byte(`{"value":"\u0075ap-grok-private-inert"}`), []byte("{}\n{\"value\":\"\\u0075ap-grok-private-inert\"}\n")} {

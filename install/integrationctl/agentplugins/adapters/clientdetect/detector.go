@@ -235,7 +235,7 @@ func environmentSnapshot() map[string]string {
 	for _, name := range []string{
 		"APPDATA", "LOCALAPPDATA", "ProgramFiles", "ProgramW6432", "ProgramFiles(x86)",
 		"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
-		"CODEX_HOME", "CLAUDE_CONFIG_DIR", "GEMINI_CLI_HOME", "CLINE_DATA_DIR", "CLINE_MCP_SETTINGS_PATH",
+		"CODEX_HOME", "CLAUDE_CONFIG_DIR", "GEMINI_CLI_HOME", "QODER_CONFIG_DIR", "CLINE_DATA_DIR", "CLINE_MCP_SETTINGS_PATH", "PI_CODING_AGENT_DIR",
 	} {
 		if value, ok := os.LookupEnv(name); ok {
 			values[name] = value

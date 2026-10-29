@@ -10,10 +10,9 @@ translationRequired: true
 
 # Find and install a plugin
 
-
-These are **existing installer commands**, sourced from the frozen installer
-README and contract. They are separate from the Build examples.
-Choose a package because it solves your task and its source is acceptable to you.
+Choose a package whose source and purpose you understand. The commands below
+use the released installer; see [CLI installation](./) if `agentplugins` is not
+available yet. Use `--dry-run` to review a plan before applying changes.
 
 ## Discover the package
 
@@ -22,13 +21,10 @@ agentplugins search docs
 agentplugins info context7
 ```
 
-Search finds candidates; info lets you inspect a candidate before installation.
-A registry short name such as `context7` comes from the signed Universal Agent
-Plugins Registry. Discovery is not execution of the package or proof that its
-remote service is available.
-
-Read what the package exposes and which agents can consume its components.
-Do not substitute a similarly named package when the source is ambiguous.
+A short name such as `context7` comes from the signed Universal Agent Plugins
+Registry. Search and package information help you choose a candidate; they do
+not execute it or prove that its service is available. Review the exposed tools,
+Skills, runtime requirements and account access before installation.
 
 ## Preview one explicit selection
 
@@ -36,132 +32,145 @@ Do not substitute a similarly named package when the source is ambiguous.
 agentplugins add context7 --target codex,cursor --dry-run
 ```
 
-This asks the installer for a plan for Codex and Cursor. `--dry-run` belongs to
-installation policy; it does not add an authoring mode or test an MCP server.
-Review the selected package, destinations, compatibility findings, and remaining
-activation work. A plan is not an installed-state receipt.
+Review the source, selected targets, destinations, security findings and
+remaining activation work. This command prints a plan without applying the
+installation. It does not test an MCP server.
 
 ## Install after reviewing the plan
-
-For an intentional installation, the existing installer command is:
 
 ```bash
 agentplugins add context7 --target codex,cursor
 ```
 
-For interactive use, omit `--target` and choose among detected agents. One
-detected agent is selected automatically; several produce a multi-select prompt.
-Use explicit targets when you need a reproducible selection.
+For interactive selection, omit `--target`. The CLI can select one detected
+agent automatically or offer a picker when several are available. Use explicit
+targets for a reproducible selection and in automation.
 
-The installer preflights selected agents before changing managed files. If a
-multi-agent operation cannot finish, follow its rollback or repair instruction.
-Do not manually delete unrelated client configuration to clear an error.
+The installer preflights the selected clients and protects files it does not
+own. If an operation reports a failed rollback or pending recovery, keep that
+report and follow its recovery guidance before retrying.
 
 ## Finish activation
 
-Read the per-client result. Complete any sign-in or manual activation it names,
-then start the session requested by that client. Installation and activation
-are distinct: writing native configuration does not prove OAuth succeeded or
-that a client loaded every component.
-
-If the plugin is missing in the client, use [managed-state diagnostics](./manage)
-and retain the activation instructions. Re-running authoring validation cannot
-finish a client login.
+Complete the client-specific steps in the result: a reload, fresh session,
+workspace trust, sign-in or explicit activation may remain. Prepared files and
+successful native registration do not establish OAuth or successful tool calls.
+Use [managed-state diagnostics](./manage) if installation is missing or drifted;
+check client-side authentication when the package is present but unavailable.
 
 ## Use a local package
 
-For a directory supplied by an author, select the actual package root:
+Select the directory containing root `plugin.json`:
 
 ```bash
 agentplugins validate ./my-plugin
 agentplugins add ./my-plugin --target codex --dry-run
 ```
 
-The first command is installer validation. The second previews installation;
-it deliberately stops short of applying it. See the author's
-[handoff checklist](/en/build/handoff) for the static evidence to request.
-`plugin.json` is the installation authority and defines the package identity.
+Installer validation and planning still apply security policy. They can fetch
+security metadata or a pinned scanner even for a local package; `--dry-run`
+avoids managed installation changes, and does not promise an offline operation.
 
-## Use an exact remote source
+After reviewing the plan, omit `--dry-run` to install. A local directory stays a
+local installation; it is not a portable dependency that another machine can
+fetch. Ask the author for the [package handoff evidence](../build/handoff).
 
-The installer accepts a full commit SHA, with an explicit package path when
-needed. This is a **syntax example**: replace the owner, repository, full SHA,
-and path with a real source you reviewed before invoking it.
+## Select an exact GitHub source
+
+The established immutable GitHub syntax requires a full 40-character commit
+SHA. Replace this example with a real repository, reviewed revision and package
+path:
 
 ```text
 agentplugins add owner/repository@0123456789abcdef0123456789abcdef01234567//path/to/plugin --target codex --dry-run
 ```
 
-Branches, tags, and abbreviated SHAs are rejected. Without a package path, the
-installer uses a valid root package or the only valid nested candidate. Multiple
-candidates require an explicit path; more than 16 possible packages require it
-before candidate fetching. An exact source is immutable: repair replays recorded
-source, while moving to another exact source is a separate switch decision.
+This `owner/repository@...` form rejects branches, tags and abbreviated SHAs.
+Without a path, the installer selects a valid root package or the only valid
+nested candidate. Multiple candidates require an explicit path; more than 16
+possible packages require it before candidate fetching. Repair replays the
+recorded source. Moving an immutable installation to another source is a
+separate source-selection operation.
+
+CLI 0.1.93 also accepts direct HTTPS Git, SSH, supported provider browser URLs,
+and complete HTTPS/local archives. For example, replace these placeholders with
+reviewed package sources:
+
+```text
+agentplugins add 'https://git.example.com/team/tools.git#refs/heads/main//plugins/demo' --target codex --dry-run
+agentplugins add 'ssh://git@git.example.com/team/tools.git#main//plugins/demo' --target codex --dry-run
+agentplugins add 'https://downloads.example.com/plugin.tar.gz' --target codex --dry-run
+```
+
+Git uses existing native credentials and SSH host trust. HTTPS archives are
+credential-free and must contain a complete standard package. The lock pins
+exact Git revisions or original archive bytes, plus package digests. A moving
+source can advance through an explicit update; locked restore retains the pin.
+These complete-package sources differ from standalone Skill acquisition.
+Read [direct complete package sources](https://github.com/777genius/universal-agent-plugins/blob/main/docs/DIRECT_PACKAGE_SOURCES.md)
+for provider syntax, package selection, checksums and extraction limits.
 
 ## Install Agent Skills
 
-Agent Skills use the same CLI through the `skills` command group. Its `add`
-subcommand selects Skills from a public GitHub repository, a folder inside it,
-a `SKILL.md` URL, or an HTTPS publisher that serves a complete `.well-known`
-Skills index:
+Use the `skills` command group for standalone Skills from a public GitHub
+repository, a folder or `SKILL.md` URL, or an HTTPS publisher with a complete
+`.well-known` Skills index:
 
 ```bash
 agentplugins skills add owner/repository --ui
 ```
 
-`--ui` opens the bundled browser picker and needs an interactive terminal. The
-terminal picker is `--no-ui`. Explicit selections skip the picker:
+Replace `owner/repository` with a real source. `--ui` opens the bundled browser
+picker and requires an interactive terminal. Use `--no-ui` for terminal selection.
+For an explicit selection:
 
 ```bash
-agentplugins skills add owner/repository --skill review --skill pdf --target codex,claude --no-ui --yes
+agentplugins skills add owner/repository --skill review --skill pdf \
+  --target codex,claude --no-ui --yes
 ```
 
-- `--skill` takes an exact Skill name and can repeat. If the name is ambiguous,
-  add `--path`.
-- `--path` selects one exact repository-relative Skill folder. Without it, the
-  repository root is used.
-- `--ref` names an exact Git ref when a URL boundary is ambiguous.
-- `--dry-run` shows the exact plan without changes.
-- JSON and non-interactive use require explicit `--skill` or `--path`, `--target`,
-  and `--yes`, except with `--dry-run`.
-- `--ui` cannot be combined with `--skill`, `--target`, or `--dry-run`.
-- For an HTTPS publisher, pass the publisher URL and an exact `--skill` name.
-  The publisher's index must list every file of the Skill.
-- The installation scope is `user` only in this release.
+- Repeat `--skill` for exact names. Use `--path` for an exact repository-relative
+  Skill folder when the name is ambiguous.
+- `--ref` selects an exact Git ref when a URL boundary is ambiguous.
+- `--dry-run` previews the selected installation.
+- JSON and non-interactive use require explicit Skill selection, targets and
+  `--yes`, except when previewing with `--dry-run`.
+- `--ui` cannot be combined with `--skill`, `--target` or `--dry-run`.
+- HTTPS publishers require an exact `--skill` name and an index listing every
+  file in that Skill.
 
-Automated security findings can block an install. `--security-details` shows
-every finding in human output. `--accept-security-risk` continues past blocking
-findings and should be used only after review.
+Automated security findings can block installation. `--security-details` shows
+the findings in human output; review them before deciding whether an explicit
+`--accept-security-risk` is appropriate. Installed Skills appear in
+`agentplugins list` and use the ordinary maintenance commands.
 
-Installed Skills are saved like other packages. They show up in
-`agentplugins list`, and you maintain them with `agentplugins update`,
-`agentplugins repair`, and `agentplugins remove`. See
-[maintaining installed plugins](./manage).
+## Install for one project
 
-Continue with [maintaining installed plugins](./manage).
+Explicit project scope is available in
+[CLI 0.1.93 and later](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
+Choose an existing directory and select scope on each command:
 
-## Project installation in the current source
-
-**Source only / unreleased.** A compatible source build supports explicit
-project selection for packages and Agent Skills:
-
-```sh
-agentplugins add owner/repo --alias review --target cursor \
-  --scope project --project-root /path/to/project
-agentplugins skills add owner/repository --ui \
-  --scope project --project-root /path/to/project
+```bash
+agentplugins add context7 --target cursor --scope project \
+  --project-root /path/to/project --dry-run
+agentplugins skills add owner/repository --ui --scope project \
+  --project-root /path/to/project
 ```
 
-The directory must already exist. The default remains `user`; project scope
-without `--project-root` selects the invocation directory without searching
-parents. Browser and terminal selection use the same scope. Only admitted
-targets can be selected; the picker can keep unavailable targets visible with a
-reason. The selected client can require reload, trust or explicit
-session configuration after its files are prepared.
+The first command previews; omit `--dry-run` when ready to apply it. The second
+opens a scoped picker and can apply the user's selection. Without
+`--project-root`, explicit project scope uses the invocation directory. It does
+not search parent folders. Add and maintenance commands otherwise default to
+user scope. In CLI 0.1.94, `install` without a source argument selects project
+scope when a regular `uap.toml` exists in the exact current folder; explicit
+scope wins. See [restoration rules](./manage) for strict lock behavior.
 
-For VS Code, project scope prepares `.github/skills` and owned `servers` members
-in `.vscode/mcp.json`. The result remains Prepared: open the selected local
-folder, review workspace/server trust, and inspect its skills and MCP settings.
-Remote and multi-root workspaces are outside this adapter's scope.
+The target must support the requested project components. ChatGPT project
+installation is explicitly unsupported. VS Code prepares `.github/skills` and
+owned `servers` members in `.vscode/mcp.json` for one local folder. Its result
+remains Prepared: review workspace/server trust and inspect the client settings.
+That metadata observation does not prove MCP startup, tool calls or model use.
 
-[Project installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Current project support and limitations](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
+Read the [project installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md)
+and [per-client project boundaries](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
+for paths and activation limits. Continue with [maintenance and restoration](./manage).

@@ -44,3 +44,4 @@ This generated table is the canonical per-event runtime reference for shipped su
 | qoder | user_prompt_submit | runtime_supported | stable | production-ready | true | argv_command | stdin_json | process | true | true | qoder_user_prompt_submit | qoder_plugin | Qoder UserPromptSubmit plugin hook |
 | qoder | post_tool_use | runtime_supported | stable | production-ready | true | argv_command | stdin_json | process | true | true | qoder_post_tool_use | qoder_plugin | Qoder PostToolUse plugin hook |
 | qoder | stop | runtime_supported | stable | production-ready | true | argv_command | stdin_json | process | true | true | qoder_stop | qoder_plugin | Qoder Stop plugin hook |
+| pi | observation | runtime_supported | stable | production-ready | false | argv_command | stdin_json | process | false | false | pi_observation |  | Pi settled and UI prompt notification observations (neutral output) |

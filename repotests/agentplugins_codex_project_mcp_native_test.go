@@ -2,11 +2,13 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -166,15 +168,15 @@ func codexProjectMCPSession(t *testing.T, f *codexProjectNativeFixture, project,
 	if err := json.Unmarshal(r.must(t, "thread/start", map[string]any{"cwd": project, "ephemeral": true, "approvalPolicy": "never", "sandbox": "read-only", "model": "fixture-model", "modelProvider": "fixture"}), &thread); err != nil || thread.Thread.ID == "" {
 		t.Fatal("native project thread missing")
 	}
-	var inventory struct {
-		Data []struct {
-			Name, PluginID, RuntimeStatus string
-			Tools                         map[string]json.RawMessage
-		} `json:"data"`
-		NextCursor *string `json:"nextCursor"`
-	}
-	if err := json.Unmarshal(r.must(t, "mcpServerStatus/list", map[string]any{"threadId": thread.Thread.ID, "limit": 100}), &inventory); err != nil || inventory.NextCursor != nil {
-		t.Fatal("incomplete native MCP inventory")
+	// Native thread startup is asynchronous. Keep all inventory reads within the
+	// original request budget, itself bounded by this session's existing deadline.
+	ctx, cancel := context.WithTimeout(r.ctx, 35*time.Second)
+	defer cancel()
+	inventory, err := codexProjectMCPReady(ctx, func(ctx context.Context) (json.RawMessage, error) {
+		return r.requestContext(ctx, "mcpServerStatus/list", map[string]any{"threadId": thread.Thread.ID, "limit": 100})
+	}, present)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if present {
 		seen := map[string]bool{}

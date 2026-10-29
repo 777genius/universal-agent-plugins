@@ -1,0 +1,39 @@
+{
+  "reference": {
+    "path": "docs/design/restore-team/approved-reference.png",
+    "sha256": "2d66c1490682f8518dc868cbbcd81fdf5f414c0d4466f30353412f475f2c6625",
+    "role": "Owner-approved visual reference; preserve original bytes."
+  },
+  "asset": {
+    "path": "landing/assets/images/restore-monitor.png",
+    "sha256": "e7519553af351146950eb16772c819df9a2fb469381116c22220c382bb10f652",
+    "size": [
+      1577,
+      997
+    ],
+    "tool": "built-in image_gen",
+    "transparent_background": true,
+    "usage": "One shared decorative image for both monitors; labels, commands, copy buttons and handoff icons are HTML/SVG. Keep the site background."
+  },
+  "prompt": "Use case: precise-object-edit. Extract and faithfully recreate ONE empty monitor asset from the LEFT monitor in the approved reference. This is a production website UI asset, not a new design. Match EXACTLY the monitor's straight-on orthographic front view, wide rectangular 1.93:1 display housing, thin rounded pale blue outer rim, dark navy slightly dimensional bezel, pinhole camera centered along top rim, small bright cyan LED in bottom bezel, blue metallic trapezoid pedestal foot and short tapered neck. Entire monitor including stand aspect about 1.58:1. Match the reference geometry, material, lighting and colors precisely. The display must be a completely EMPTY dark navy gradient, remove ALL text and numbers. No text, labels, icons, commands, files, arrows or background. Transparent alpha around the complete silhouette including under/around stand. Screen itself remains opaque navy. Monitor fills canvas with only minimal margin, no floor, no background, no cast shadow extending across the canvas. Sharp clean edges at high resolution. One monitor only. Do not include the rest of the reference webpage.",
+  "qa": {
+    "widths": [
+      1440,
+      1024,
+      768,
+      390
+    ],
+    "themes": [
+      "dark",
+      "light"
+    ],
+    "requirements": [
+      "Compare silhouettes and text alignment against approved-reference.png after visual changes.",
+      "No text or controls outside the monitor display.",
+      "Both commands selectable and copy complete flags.",
+      "Keep Guide link and existing page background.",
+      "Check all maintained locales, including RTL and long translations."
+    ],
+    "release_boundary": "Keep explicit --locked --scope project in public copy until simplified install is released."
+  }
+}

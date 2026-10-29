@@ -92,7 +92,7 @@ func snapshotEnvironmentContext(ctx context.Context, app App, verifyPrevious ...
 
 // runSavedEnvironment shares preflight, confirmation and publication with deps sync.
 // The candidate is fully validated before either intent file is published.
-func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, requirements environment.Requirements, locked environment.Lock, manifest []byte, aliases []string, attest *environment.Attestation) error {
+func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, requirements environment.Requirements, locked environment.Lock, manifest []byte, aliases []string, attest *environment.Attestation, targets []string) error {
 	if err := validateDependencyTargets(app, requirements); err != nil {
 		return err
 	}
@@ -114,7 +114,10 @@ func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot en
 	if err != nil {
 		return err
 	}
-	prepared, err := (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncFor(requirements, locked, observed, aliases, attest)
+	if err := renderSavedTargetNotice(cmd, opts, locked, aliases, targets); err != nil {
+		return err
+	}
+	prepared, err := (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncForTargets(requirements, locked, observed, aliases, attest, targets)
 	if err != nil {
 		return err
 	}
@@ -139,7 +142,7 @@ func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot en
 	if equalDependencyLock(snapshot.Lock, locked) || (snapshot.Lock.LockVersion == 0 && len(requirements.Dependencies) == 0) {
 		body = snapshot.LockBytes
 	}
-	request := dependencySyncRequest{requirements: requirements, lock: locked, manifestPath: snapshot.ManifestPath, lockPath: snapshot.LockPath, manifestBytes: snapshot.ManifestBytes, lockBytes: snapshot.LockBytes, prepared: actions, detected: detected, consent: consent, candidateManifest: manifest, candidateLock: body, aliases: aliases, attestation: attest}
+	request := dependencySyncRequest{targets: targets, requirements: requirements, lock: locked, manifestPath: snapshot.ManifestPath, lockPath: snapshot.LockPath, manifestBytes: snapshot.ManifestBytes, lockBytes: snapshot.LockBytes, prepared: actions, detected: detected, consent: consent, candidateManifest: manifest, candidateLock: body, aliases: aliases, attestation: attest}
 	return applyDependencySync(cmd, app, opts, request, mutationConfirmed(app, opts))
 }
 

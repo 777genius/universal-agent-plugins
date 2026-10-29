@@ -18,6 +18,7 @@ import (
 type fakeQoder struct {
 	entries       []pluginEntry
 	commands      [][]string
+	requests      []legacyports.Command
 	failUninstall bool
 	failInstall   bool
 	unknownList   bool
@@ -25,7 +26,11 @@ type fakeQoder struct {
 
 func (f *fakeQoder) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	f.commands = append(f.commands, append([]string(nil), command.Argv...))
-	args := command.Argv
+	f.requests = append(f.requests, command)
+	if len(command.Argv) < 5 || command.Argv[1] != "--config-dir" {
+		return legacyports.CommandResult{}, errors.New("profile-bound command required")
+	}
+	args := append([]string{command.Argv[0]}, command.Argv[3:]...)
 	if len(args) < 3 || args[1] != "plugins" {
 		return legacyports.CommandResult{}, errors.New("unexpected command")
 	}
@@ -64,6 +69,10 @@ func (f *fakeQoder) Run(_ context.Context, command legacyports.Command) (legacyp
 func qoderRequest(t *testing.T) domain.ActivationRequest {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), ".qoder")
+	root, err := New().ResolveProfileRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	active := filepath.Join(t.TempDir(), "managed", "clients", "qoder", "demo")
 	if err := os.MkdirAll(active, 0o755); err != nil {
 		t.Fatal(err)
@@ -79,8 +88,8 @@ func qoderRequest(t *testing.T) domain.ActivationRequest {
 func argv(t *testing.T, commands [][]string, verb string) []string {
 	t.Helper()
 	for _, command := range commands {
-		if len(command) > 2 && command[2] == verb {
-			return command[1:]
+		if len(command) > 4 && command[4] == verb {
+			return command[3:]
 		}
 	}
 	t.Fatalf("no %q command in %v", verb, commands)
@@ -136,7 +145,7 @@ func TestQoderActivationUpdateAndReadOnlyVerification(t *testing.T) {
 	if out, err := New().Activate(context.Background(), env, r); err != nil || out.Activation != domain.ActivationActive {
 		t.Fatalf("verify: %+v %v", out, err)
 	}
-	if got := f.commands[before:]; len(got) != 1 || !reflect.DeepEqual(got[0][1:], []string{"plugins", "list", "--json"}) {
+	if got := f.commands[before:]; len(got) != 1 || !reflect.DeepEqual(got[0][3:], []string{"plugins", "list", "--json"}) {
 		t.Fatalf("verify mutated Qoder: %v", got)
 	}
 	r.VerifyOnly = false
@@ -172,7 +181,7 @@ func TestQoderVerifyKnownAndUnknownListJSON(t *testing.T) {
 		t.Fatalf("attested unknown listing: %+v %v", out, err)
 	}
 	for _, command := range unknown.commands {
-		if !reflect.DeepEqual(command[1:], []string{"plugins", "list", "--json"}) {
+		if !reflect.DeepEqual(command[3:], []string{"plugins", "list", "--json"}) {
 			t.Fatalf("unknown listing caused mutation: %v", unknown.commands)
 		}
 	}
@@ -283,7 +292,7 @@ func TestQoderDeactivation(t *testing.T) {
 	if out, err := New().Deactivate(context.Background(), clients.Env{Runner: f}, request); err != nil || !out.ExternalRemovalComplete {
 		t.Fatalf("remove: %+v %v", out, err)
 	}
-	if got := f.commands[before+1]; !reflect.DeepEqual(got[1:], []string{"plugins", "uninstall", "demo"}) {
+	if got := f.commands[before+1]; !reflect.DeepEqual(got[3:], []string{"plugins", "uninstall", "demo", "--scope", "user"}) {
 		t.Fatalf("uninstall argv = %v", got)
 	}
 }
@@ -298,7 +307,7 @@ func TestQoderInspectNativeRegistryFindings(t *testing.T) {
 		}
 		return finding
 	}
-	managed := &domain.ClientBinding{ClientID: string(domain.ClientQoder)}
+	managed := &domain.ClientBinding{ClientID: string(domain.ClientQoder), NativeProfileRoot: r.Client.ConfigRoot}
 	if finding := inspect(nil, nil); finding != clients.RegistryClear {
 		t.Fatalf("absent = %v", finding)
 	}
@@ -324,6 +333,10 @@ func TestQoderInspectNativeRegistryFindings(t *testing.T) {
 
 func TestQoderDetectSurfaces(t *testing.T) {
 	home := t.TempDir()
+	home, err := filepath.EvalSymlinks(home)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.MkdirAll(filepath.Join(home, ".qoder"), 0o755); err != nil {
 		t.Fatal(err)
 	}

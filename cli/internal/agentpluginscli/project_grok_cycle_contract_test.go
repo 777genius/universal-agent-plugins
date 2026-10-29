@@ -82,6 +82,7 @@ func TestProjectGrokPublicGroupedRepairRestagesIntactAndMissingPackage(t *testin
 	f.app.Lifecycle.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Runner: runner, Stager: f.app.Lifecycle.Stager})
 	f.app.Lifecycle.Lock = processlock.Lock{Path: filepath.Join(stateRoot, "mutation.lock")}
 	f.app.Lifecycle.Kernel = transaction.Kernel{StateStore: f.store, Directory: dirswap.Manager{JournalDir: filepath.Join(stateRoot, "operations")}}
+	f.app.Lifecycle.PluginData = providers.PluginDataManager{Base: filepath.Join(stateRoot, "plugin-data")}
 	var err error
 	f.app.Installer, err = installer.New(installer.Config{ProjectRoot: project, StateRoot: stateRoot, Registry: f.app.ClientRegistry, Runner: runner, HelperExecutable: client.ExecutablePath, EnableNativeObserver: true, TrustedLocalPackages: true})
 	if err != nil {
@@ -111,7 +112,25 @@ func TestProjectGrokPublicGroupedRepairRestagesIntactAndMissingPackage(t *testin
 			t.Fatal(err)
 		}
 		data := result["data"].(map[string]any)
-		out := data["targets"].([]any)[0].(map[string]any)["output"].(map[string]any)["result"].(map[string]any)
+		output := data
+		if verb == "add" && !mutated {
+			if _, exists := data["targets"]; exists || data["operation_id"] != nil {
+				t.Fatal("actual repeat add invented a batch/group", stdout)
+			}
+		} else {
+			if data["batch"] != true {
+				t.Fatal("actual grouped lifecycle lost batch output", stdout)
+			}
+			output = data["targets"].([]any)[0].(map[string]any)["output"].(map[string]any)
+		}
+		expectedSource := "direct local source"
+		if verb == "repair" || verb == "remove" {
+			expectedSource = "local"
+		}
+		if output["source"] != expectedSource {
+			t.Fatal("actual public source differs", verb, stdout)
+		}
+		out := output["result"].(map[string]any)
 		if out["mutated"] != mutated {
 			t.Fatalf("actual public %s mutated=%v want%t", verb, out["mutated"], mutated)
 		}
@@ -122,6 +141,16 @@ func TestProjectGrokPublicGroupedRepairRestagesIntactAndMissingPackage(t *testin
 		t.Fatal(err)
 	}
 	i := state.Installations[0]
+	beforeNoop, err := os.ReadFile(f.store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run("add", source, false)
+	run("update", i.DeclaredName, false)
+	afterNoop, err := os.ReadFile(f.store.Path)
+	if err != nil || string(beforeNoop) != string(afterNoop) {
+		t.Fatal("actual public no-op changed installed state", err)
+	}
 	var binding domain.ClientBinding
 	for _, b := range i.Clients {
 		binding = b
@@ -154,4 +183,5 @@ func TestProjectGrokPublicGroupedRepairRestagesIntactAndMissingPackage(t *testin
 	if err != nil || string(restored) != string(skill) {
 		t.Fatal("public grouped repair did not restore exact missing leaf", err)
 	}
+	run("remove", i.DeclaredName, true)
 }

@@ -27,10 +27,21 @@ func TestStagerGoldenTreesAcrossClients(t *testing.T) {
 			t.Parallel()
 			envelope := stagingEnvelope(t)
 			plan := stagingPlan(t, definition.ID, domain.PackageProjection)
+			dataRoot := ""
+			if domain.ClientTraitsFor(definition.ID).VerifiesNativeDirectory {
+				envelope, plan, dataRoot = piGoldenStagingFixture(t, envelope, plan)
+			}
 			if definition.ID == domain.ClientOpenCode {
 				plan.OpenCodeHost = openCodeV1FixtureProfile{}
 			}
-			delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "golden", domain.CompatibilityHints{})
+			stager := testStager(Stager{})
+			var delivery domain.StagedDelivery
+			var err error
+			if dataRoot != "" {
+				delivery, err = stager.StageWithPluginData(context.Background(), envelope, plan, "golden", domain.CompatibilityHints{}, dataRoot)
+			} else {
+				delivery, err = stager.Stage(context.Background(), envelope, plan, "golden", domain.CompatibilityHints{})
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -40,6 +51,9 @@ func TestStagerGoldenTreesAcrossClients(t *testing.T) {
 				{From: delivery.StagingPath, To: "${STAGING}"},
 				{From: plan.TargetRoot, To: "${TARGET}"},
 				{From: plan.TargetAnchor, To: "${ANCHOR}"},
+			}
+			if dataRoot != "" {
+				replace = append(replace, goldentest.Replacement{From: dataRoot, To: "${DATA}"})
 			}
 			files, err := digestTree(delivery.StagingPath, replace)
 			if err != nil {

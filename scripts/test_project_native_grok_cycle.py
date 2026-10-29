@@ -147,11 +147,15 @@ def container():
                 exit_code, err = 1, b'agentplugins: plugin is not installed for target "grok" in project scope; no target was changed\n'
             else:
                 group = "op-" + cycle.sha(stage.encode())[:32]
-                output = {"operation_id": group, "plugin": name, "version": "1.0.0", "source": "direct local source", "tree_digest": p["source_digest"], "manifest_digest": ins["package"]["manifest_digest"], "dry_run": False,
+                output = {"operation_id": group, "plugin": name, "version": "1.0.0", "source": "local" if verb in ("repair", "remove") else "direct local source", "tree_digest": p["source_digest"], "manifest_digest": ins["package"]["manifest_digest"], "dry_run": False,
                           "result": {"installation_id": ins["installation_id"], "requires_confirmation": False, "mutated": stage not in ("repeat-add-a", "unchanged-update-a")}}
                 target = {"target": "grok", "status": "external_completed", "output": output}
                 if verb == "update": target["selected"] = True
                 data = {"operation_id": group, "batch": True, "status": "data_retained" if verb == "remove" else "completed", "succeeded": 1, "failed": 0, "plugin": name, "dry_run": False, "targets": [target]}
+                if stage == "repeat-add-a":
+                    del output["operation_id"]
+                    output["result"]["no_change"] = True
+                    data = output
                 if verb == "remove":
                     receipt = next(iter(ins["data_receipts"].values()))
                     data.update(plugin_data_preserved=True, data_retained=True, retained_data=[{key: receipt[key] for key in ("data_receipt_id", "physical_backend_id", "scope", "state")}])
@@ -173,7 +177,7 @@ def container():
                 p = proof[key]
                 selected.append(("uap-grok-cycle-" + who, "project", p["binding"]["target_locator"], p["revision"] + " " + NONCE, True))
         plugins = [{"name": name, "scope": scope, "path": path, "enabled": True, "provides": {"skills": 1, "agents": 0, "hooks": False, "mcpServers": 0}} for name, scope, path, _, _ in selected]
-        skills = [{"name": name, "description": desc, "source": {"type": "plugin", "plugin_name": name, "path": path + "/skills/" + name + "/SKILL.md"}, "userInvocable": True} for name, _, path, desc, enabled in selected if enabled]
+        skills = [{"name": name, "description": desc, "source": {"type": "plugin", "plugin_name": name, "path": path + "/./skills/" + name + "/SKILL.md"}, "userInvocable": True} for name, _, path, desc, enabled in selected if enabled]
         out = raw({"grokVersion": "1.0.70", "cwd": cwd, "projectRoot": cwd + "/", "projectTrusted": who != "outside", "mcpServers": [], "plugins": plugins, "skills": skills})
         inspections.append({"stage": stage, "value": command(["/held/grok", "inspect", "--json"], cwd, out)})
     result = {"client": "grok", "version": "1.0.70", "capture_mode": cycle.MODE, "attempt_stage": "complete-cycle", "runtime_attempt_complete": True,
@@ -286,7 +290,7 @@ class GrokCycleContracts(unittest.TestCase):
         for fault in ("missing", "foreign", "output", "reuse"):
             bodies = container()
             rows = [cycle.load(line) for line in bodies[cycle.MEMBERS[0]].splitlines()]
-            row = rows[6 if fault == "reuse" else 4]["value"]
+            row = rows[7 if fault == "reuse" else 4]["value"]
             document = cycle.load(cycle.stream(row["stdout"]))
             if fault == "missing": del document["data"]["operation_id"]
             elif fault == "foreign": document["data"]["operation_id"] = "op-" + "0" * 32
@@ -298,6 +302,27 @@ class GrokCycleContracts(unittest.TestCase):
             row["stdout"] = stream(raw(document))
             bodies[cycle.MEMBERS[0]] = b"".join(raw(item) + b"\n" for item in rows)
             with self.subTest(fault=fault), self.assertRaises(ValueError): cycle.members(bodies, SOURCE)
+
+    def test_public_singleton_and_installed_source_remain_stage_bound(self):
+        bodies = container()
+        rows = {row["stage"]: row["value"] for row in map(cycle.load, bodies[cycle.MEMBERS[0]].splitlines())}
+        _, proof = inputs()
+        for stage in ("repeat-add-a", "intact-repair-a", "missing-repair-a", "remove-a", "remove-b"):
+            verb = "add" if stage == "repeat-add-a" else "repair" if "repair" in stage else "remove"
+            document = cycle.load(cycle.stream(rows[stage]["stdout"]))
+            cycle.public_result(raw(document), stage, verb, proof[stage])
+            for fault in ("source", "digest", "scope", "mutated", "group"):
+                bad = copy.deepcopy(document)
+                output = bad["data"] if stage == "repeat-add-a" else bad["data"]["targets"][0]["output"]
+                if fault == "source": output["source"] = "local" if stage == "repeat-add-a" else "direct local source"
+                elif fault == "digest": output["tree_digest"] = "sha256:" + "0" * 64
+                elif fault == "scope": output["result"]["scope"] = "user"
+                elif fault == "mutated": output["result"]["mutated"] = stage == "repeat-add-a"
+                else: output["operation_id"] = "op-" + "0" * 32
+                with self.subTest(stage=stage, fault=fault), self.assertRaises(ValueError):
+                    cycle.public_result(raw(bad), stage, verb, proof[stage])
+        singleton = cycle.stream(rows["repeat-add-a"]["stdout"])
+        with self.assertRaises(ValueError): cycle.public_result(singleton, "add-a", "add", proof["add-a"])
 
     def test_failed_prefix_retains_unknown_native_output_without_qualification(self):
         bodies = container()
@@ -327,8 +352,12 @@ class GrokCycleContracts(unittest.TestCase):
         expected = [("user", "user", "/owned/home/plugin", "Original marker", 1, True), ("foreign", "project", "/owned/A/foreign", "Foreign inert marker", 1, False)]
         row = {"grokVersion": "1.0.70", "cwd": "/owned/A", "projectRoot": "/owned/A/", "projectTrusted": True, "mcpServers": [],
                "plugins": [{"name": name, "scope": scope, "path": path, "enabled": True, "provides": {"skills": count, "agents": 0, "hooks": False, "mcpServers": 0}} for name, scope, path, _, count, _ in expected],
-               "skills": [{"name": "user", "description": "Original marker", "userInvocable": True, "source": {"type": "plugin", "plugin_name": "user", "path": "/owned/home/plugin/skills/user/SKILL.md"}}]}
+               "skills": [{"name": "user", "description": "Original marker", "userInvocable": True, "source": {"type": "plugin", "plugin_name": "user", "path": "/owned/home/plugin/./skills/user/SKILL.md"}}]}
         cycle.inspect(raw(row), "/owned/A", True, expected)
+        for path in ("/owned/home/plugin/skills/user/SKILL.md", "/owned/home/plugin/../plugin/skills/user/SKILL.md", "/owned/home/plugin/././skills/user/SKILL.md", "/foreign/./skills/user/SKILL.md"):
+            bad = copy.deepcopy(row)
+            bad["skills"][0]["source"]["path"] = path
+            with self.subTest(path=path), self.assertRaises(ValueError): cycle.inspect(raw(bad), "/owned/A", True, expected)
         for fault in ("foreign-loaded", "source", "alias", "duplicate", "count", "trusted", "disabled"):
             bad = copy.deepcopy(row)
             if fault == "foreign-loaded": bad["skills"].append({**bad["skills"][0], "name": "foreign"})
