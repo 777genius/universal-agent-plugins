@@ -11,8 +11,11 @@ name: Management SDK Release
 # Actions, 777genius / universal-agent-plugins, workflow filename
 # management-sdk-release.yml, environment npm-management-sdk (required), direct
 # `npm publish` allowed. The publish job refuses an OIDC identity without that
-# environment, tag and workflow. Create the npm-management-sdk GitHub
-# environment with required reviewers before the first publish=true run.
+# environment, tag and workflow. publish=true requires the npm-management-sdk
+# GitHub environment with required reviewers and a management-sdk-v* tag
+# policy. npm cannot configure a trusted publisher for a missing package, so the
+# first version is a one-time owner bootstrap of the attested publish=false
+# tarball (sdks/typescript/README.md); this workflow never creates the package.
 on:
   workflow_dispatch:
     inputs:
@@ -29,7 +32,7 @@ on:
 permissions:
   contents: read
 
-# Release runs are never cancelled; one run per version at a time.
+# Runs for one version are serialized; a running release is never cancelled.
 concurrency:
   group: management-sdk-release-${{ inputs.version }}
   cancel-in-progress: false
@@ -41,6 +44,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
+      actions: read
       contents: read
     outputs:
       version: ${{ steps.source.outputs.version }}
@@ -59,6 +63,8 @@ jobs:
         id: source
         env:
           VERSION: ${{ inputs.version }}
+          PUBLISH: ${{ inputs.publish }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -93,6 +99,21 @@ jobs:
           elif ! grep -q 'E404' "${err}"; then
             cat "${err}" >&2
             exit 1
+          fi
+          # A missing environment would be created on demand without any
+          # protection, so publishing requires the reviewed configuration.
+          if [[ "${PUBLISH}" == true ]]; then
+            protected=false
+            if environment="$(gh api "repos/${GITHUB_REPOSITORY}/environments/npm-management-sdk")" &&
+              policies="$(gh api "repos/${GITHUB_REPOSITORY}/environments/npm-management-sdk/deployment-branch-policies")" &&
+              jq -e '.can_admins_bypass == false and .deployment_branch_policy.custom_branch_policies == true and ([.protection_rules[] | select(.type == "required_reviewers" and (.reviewers | length) > 0)] | length) == 1' <<<"${environment}" >/dev/null &&
+              jq -e '[.branch_policies[] | {name, type}] == [{"name": "management-sdk-v*", "type": "tag"}]' <<<"${policies}" >/dev/null; then
+              protected=true
+            fi
+            if [[ "${protected}" != true ]]; then
+              echo "npm-management-sdk must exist with required reviewers, no admin bypass and only the management-sdk-v* tag policy" >&2
+              exit 1
+            fi
           fi
           {
             echo "version=${VERSION}"
@@ -304,6 +325,13 @@ jobs:
           test "${PACKAGE_NAME}" = universal-agent-plugins-management-sdk
           dir="${RUNNER_TEMP}/management-sdk"
           printf '%s  %s\n' "${TARBALL_SHA256}" "${dir}/${TARBALL}" | sha256sum --check --strict
+          # Trusted publishing cannot create a package. The first version is a
+          # one-time bootstrap by the npm owner (sdks/typescript/README.md); a
+          # missing package afterwards fails closed instead of being recreated.
+          if ! existing="$(npm view "${PACKAGE_NAME}" name --registry=https://registry.npmjs.org/)" || [[ "${existing}" != "${PACKAGE_NAME}" ]]; then
+            echo "${PACKAGE_NAME} must already exist on npm before trusted publishing" >&2
+            exit 1
+          fi
           err="${RUNNER_TEMP}/npm-view.err"
           if view="$(npm view "${PACKAGE_NAME}@${VERSION}" version --registry=https://registry.npmjs.org/ 2>"${err}")"; then
             if [[ -n "${view}" ]]; then
@@ -313,6 +341,10 @@ jobs:
           elif ! grep -q 'E404' "${err}"; then
             cat "${err}" >&2
             exit 1
+          fi
+          latest="$(npm view "${PACKAGE_NAME}" dist-tags.latest --registry=https://registry.npmjs.org/)"
+          if [[ -n "${latest}" ]]; then
+            test "$(printf '%s\n%s\n' "${latest}" "${VERSION}" | sort -V | tail -n 1)" = "${VERSION}"
           fi
           npm publish "${dir}/${TARBALL}" --registry=https://registry.npmjs.org/ --access public --provenance --tag latest
 
@@ -341,23 +373,31 @@ jobs:
           TARBALL_SHA256: ${{ needs.build.outputs.tarball_sha256 }}
           TARBALL_INTEGRITY: ${{ needs.build.outputs.tarball_integrity }}
           TARBALL_SHASUM: ${{ needs.build.outputs.tarball_shasum }}
-        working-directory: sdks/typescript
         shell: bash
         run: |
           set -euo pipefail
           npm install --global npm@12.0.2
           test "$(npm --version)" = "12.0.2"
+          contract="${GITHUB_WORKSPACE}/npm/agentplugins/scripts/npm-public-contract.js"
           root="${RUNNER_TEMP}/management-sdk-public"
-          mkdir -p "${root}/home" "${root}/tmp"
+          mkdir -p "${root}/home" "${root}/tmp" "${root}/project" "${root}/packed"
           export HOME="${root}/home" TMPDIR="${root}/tmp" NPM_CONFIG_CACHE="${root}/npm-cache" NPM_CONFIG_USERCONFIG="${root}/home/.npmrc"
           printf '%s\n' 'registry=https://registry.npmjs.org/' > "${NPM_CONFIG_USERCONFIG}"
-          npm ci --ignore-scripts --no-audit --no-fund
           # Clean registry install with bounded propagation retries, exact file
           # list, public types and runtime imports of both entry points.
-          npm run test:consumer -- "--registry-version=${VERSION}"
-          node scripts/verify-registry.ts \
-            --package-name "${PACKAGE_NAME}" --version "${VERSION}" \
-            --tag "management-sdk-v${VERSION}" --commit "${COMMIT}" \
-            --workflow .github/workflows/management-sdk-release.yml --directory sdks/typescript \
-            --sha256 "${TARBALL_SHA256}" --integrity "${TARBALL_INTEGRITY}" --shasum "${TARBALL_SHASUM}" \
-            --workdir "${root}/registry"
+          npm ci --prefix sdks/typescript --ignore-scripts --no-audit --no-fund
+          npm --prefix sdks/typescript run test:consumer -- "--registry-version=${VERSION}"
+          # The same public contract as the CLI package, for the SDK product.
+          npm view "${PACKAGE_NAME}@${VERSION}" --json > "${root}/metadata.json"
+          node "${contract}" metadata "${root}/metadata.json" "${VERSION}" "${TARBALL_INTEGRITY}" "${TARBALL_SHASUM}" management-sdk
+          test "$(npm view "${PACKAGE_NAME}" dist-tags.latest)" = "${VERSION}"
+          cd "${root}/project"
+          printf '%s\n' '{"name":"management-sdk-public-proof","version":"1.0.0","private":true}' > package.json
+          npm install --ignore-scripts --no-audit --no-fund --save-exact "${PACKAGE_NAME}@${VERSION}"
+          npm audit signatures --json --include-attestations > "${root}/audit.json"
+          jq --arg package "${PACKAGE_NAME}" '{attestations: ([.verified[] | select(.name == $package)] | if length == 1 then .[0].attestationBundles else error("expected one verified SDK record") end)}' "${root}/audit.json" > "${root}/attestation.json"
+          node "${contract}" audit "${root}/audit.json" "${root}/attestation.json" "${VERSION}" management-sdk
+          node "${contract}" attestation "${root}/attestation.json" "${VERSION}" "${TARBALL_INTEGRITY}" "management-sdk-v${VERSION}" "${COMMIT}" management-sdk
+          npm pack --ignore-scripts --json --pack-destination "${root}/packed" "${PACKAGE_NAME}@${VERSION}" > "${root}/pack.json"
+          node "${contract}" download "${root}/pack.json" "${root}/packed" "${VERSION}" "${TARBALL_INTEGRITY}" "${TARBALL_SHASUM}" management-sdk
+          printf '%s  %s\n' "${TARBALL_SHA256}" "${root}/packed/${PACKAGE_NAME}-${VERSION}.tgz" | sha256sum --check --strict

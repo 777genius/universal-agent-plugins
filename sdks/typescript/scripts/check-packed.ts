@@ -70,10 +70,13 @@ try {
     let tarball: string;
     if (source.kind === 'tarball') tarball = source.path;
     else {
-      const packed: Array<{ filename: string }> = JSON.parse(npm(['pack', '--ignore-scripts', '--json', '--pack-destination', workspace], root));
-      assert.equal(packed.length, 1);
-      assert.equal(packed[0]!.filename, `${name}-${manifest.version}.tgz`);
-      tarball = join(workspace, packed[0]!.filename);
+      // npm 10/11 print an array of records; npm 12 prints an object keyed by package name.
+      const packed: unknown = JSON.parse(npm(['pack', '--ignore-scripts', '--json', '--pack-destination', workspace], root));
+      const records = Array.isArray(packed) ? packed : Object.entries(packed as Record<string, unknown>).filter(([key]) => key === name).map(([, record]) => record);
+      assert.ok(records.length === 1 && (Array.isArray(packed) || Object.keys(packed as object).length === 1), 'npm pack must report exactly one package');
+      const { filename } = records[0] as { filename: string };
+      assert.equal(filename, `${name}-${manifest.version}.tgz`);
+      tarball = join(workspace, filename);
     }
     npm([...install, tarball], workspace);
   }

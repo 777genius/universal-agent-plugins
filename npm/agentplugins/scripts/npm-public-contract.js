@@ -14,10 +14,36 @@ const VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
 const INTEGRITY = /^sha512-([A-Za-z0-9+/]{86}==)$/;
 const SHASUM = /^[0-9a-f]{40}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
+// Every npm package this repository publishes, with the only workflow that may
+// publish it through trusted publishing.
+const NPM_PRODUCTS = Object.freeze({
+  agentplugins: Object.freeze({ name: PACKAGE_NAME, workflow: UAP_WORKFLOW }),
+  "plugin-kit-ai": Object.freeze({ name: "plugin-kit-ai", workflow: UAP_WORKFLOW }),
+  "management-sdk": Object.freeze({
+    name: "universal-agent-plugins-management-sdk",
+    workflow: ".github/workflows/management-sdk-release.yml"
+  })
+});
+// The Management SDK registry metadata must match sdks/typescript/package.json.
+const MANAGEMENT_SDK_METADATA = Object.freeze({
+  repository: Object.freeze({
+    type: "git",
+    url: "git+https://github.com/777genius/universal-agent-plugins.git",
+    directory: "sdks/typescript"
+  }),
+  homepage: "https://github.com/777genius/universal-agent-plugins/tree/main/sdks/typescript#readme",
+  engines: Object.freeze({ node: ">=22.18" })
+});
+const INSTALL_HOOKS = ["preinstall", "install", "postinstall", "prepare", "preprepare", "postprepare"];
+
+function npmProduct(product) {
+  return typeof product === "string" && Object.hasOwn(NPM_PRODUCTS, product) ? NPM_PRODUCTS[product] : null;
+}
 
 function productName(product) {
-  if (!["agentplugins", "plugin-kit-ai"].includes(product)) fail("unknown paired product");
-  return product === "agentplugins" ? PACKAGE_NAME : "plugin-kit-ai";
+  const known = npmProduct(product);
+  if (!known) fail("unknown npm product");
+  return known.name;
 }
 
 function fail(message) {
@@ -48,8 +74,7 @@ function validateExpected(version, integrity, shasum) {
 
 // Fixed packing identities only; registry/provenance policy remains agent-only.
 function validateProductPackJSON(value, product, version) {
-  const name = product === "agentplugins" ? PACKAGE_NAME :
-    product === "plugin-kit-ai" ? "plugin-kit-ai" : null;
+  const name = npmProduct(product)?.name;
   if (!name) fail("unknown fixed npm product");
   if (typeof version !== "string" || version.match(VERSION)?.[0] !== version) {
     fail("version must be an exact stable semantic version");
@@ -111,6 +136,14 @@ function validatePublicMetadata(metadata, version, integrity, shasum, product = 
     exactObject(metadata.engines, { node: ">=22" }, "public npm engines");
     exactObject(metadata.bin, { agentplugins: "bin/agentplugins.js" }, "public npm bin");
     exactObject(metadata.scripts, { test: "node --test" }, "public npm scripts/lifecycle hooks");
+  } else if (product === "management-sdk") {
+    exactObject(metadata.repository, MANAGEMENT_SDK_METADATA.repository, "SDK repository");
+    if (metadata.homepage !== MANAGEMENT_SDK_METADATA.homepage) fail("SDK homepage mismatch");
+    exactObject(metadata.engines, MANAGEMENT_SDK_METADATA.engines, "SDK engines");
+    if (metadata.bin !== undefined) fail("SDK must not install executables");
+    if (INSTALL_HOOKS.some((hook) => metadata.scripts?.[hook] !== undefined)) {
+      fail("SDK must not run install lifecycle hooks");
+    }
   } else {
     exactObject(metadata.repository, { type: "git", url: "git+https://github.com/777genius/universal-agent-plugins.git" }, "kit repository");
     if (metadata.homepage !== "https://github.com/777genius/universal-agent-plugins") fail("kit homepage mismatch");
@@ -156,6 +189,7 @@ function validatePublicMetadata(metadata, version, integrity, shasum, product = 
 // metadata/notices contract. The descriptor is also compared byte-for-byte
 // against the authenticated publication tarball by the consumer.
 function validatePairedSource(metadata, descriptor, source, promotionSha256, product = "agentplugins") {
+  if (product !== "agentplugins" && product !== "plugin-kit-ai") fail("unknown paired product");
   const PACKAGE_NAME = productName(product);
   const version = product === "agentplugins" ? "0.1.65" : "2.0.5";
   if (metadata?.name !== PACKAGE_NAME || metadata.version !== version ||
@@ -191,7 +225,9 @@ function decodeBase64JSON(encoded, label) {
 function validateSLSAAttestation(response, version, integrity, uapTag, uapCommit, product = "agentplugins") {
   const PACKAGE_NAME = productName(product);
   validateExpected(version, integrity, "0".repeat(40));
-  if (uapTag !== `agentplugins-v${product === "agentplugins" ? version : "0.1.65"}` || (product === "plugin-kit-ai" && version !== "2.0.5")) fail("UAP tag does not match the package version");
+  const expectedTag = product === "management-sdk" ? `management-sdk-v${version}` :
+    `agentplugins-v${product === "agentplugins" ? version : "0.1.65"}`;
+  if (uapTag !== expectedTag || (product === "plugin-kit-ai" && version !== "2.0.5")) fail("UAP tag does not match the package version");
   if (!COMMIT.test(uapCommit)) fail("UAP commit must be an exact lowercase commit");
   if (!response || !Array.isArray(response.attestations)) fail("npm attestation response is invalid");
   const provenance = response.attestations.filter((item) => item?.predicateType === SLSA_PREDICATE);
@@ -223,7 +259,7 @@ function validateSLSAAttestation(response, version, integrity, uapTag, uapCommit
   exactObject(build.externalParameters?.workflow, {
     ref: `refs/tags/${uapTag}`,
     repository: UAP_REPOSITORY,
-    path: UAP_WORKFLOW
+    path: npmProduct(product).workflow
   }, "npm SLSA GitHub Actions workflow identity");
   exactObject(build.resolvedDependencies, [{
     uri: `git+${UAP_REPOSITORY}@refs/tags/${uapTag}`,
@@ -243,12 +279,16 @@ function validateSLSAAttestation(response, version, integrity, uapTag, uapCommit
 
 function validateAuditSignatures(audit, response, version, product = "agentplugins") {
   const PACKAGE_NAME = productName(product);
+  // The SDK is audited together with its runtime dependencies; the other
+  // products have none, so their audit covers exactly one package.
+  const records = Array.isArray(audit?.verified) ? audit.verified.filter((item) => item?.name === PACKAGE_NAME) : [];
   if (!VERSION.test(version) || !audit || !Array.isArray(audit.invalid) || audit.invalid.length !== 0 ||
       !Array.isArray(audit.missing) || audit.missing.length !== 0 ||
-      !Array.isArray(audit.verified) || audit.verified.length !== 1) {
+      !Array.isArray(audit.verified) || records.length !== 1 ||
+      (product !== "management-sdk" && audit.verified.length !== 1)) {
     fail("npm audit signatures did not cryptographically verify exactly one package");
   }
-  const verified = audit.verified[0];
+  const verified = records[0];
   const expectedAttestation = `https://registry.npmjs.org/-/npm/v1/attestations/${PACKAGE_NAME}@${version}`;
   if (verified.name !== PACKAGE_NAME || verified.version !== version ||
       verified.location !== `node_modules/${PACKAGE_NAME}` ||
@@ -264,9 +304,9 @@ function validateAuditSignatures(audit, response, version, product = "agentplugi
   return verified;
 }
 
-function validateDownloadedTarball(packJSON, tarballRoot, version, integrity, shasum) {
+function validateDownloadedTarball(packJSON, tarballRoot, version, integrity, shasum, product = "agentplugins") {
   validateExpected(version, integrity, shasum);
-  const record = validatePackJSON(packJSON, version);
+  const record = validateProductPackJSON(packJSON, product, version);
   if (record.integrity !== integrity || record.shasum !== shasum) {
     fail("downloaded public npm pack identity does not match the staged tarball");
   }
@@ -293,16 +333,16 @@ function main() {
     const [packFile, outputFile, version] = args;
     const record = validatePackJSON(readJSON(packFile), version);
     fs.appendFileSync(outputFile, `tarball_integrity=${record.integrity}\ntarball_shasum=${record.shasum}\n`);
-  } else if (command === "metadata" && args.length === 4) {
-    validatePublicMetadata(readJSON(args[0]), args[1], args[2], args[3]);
-  } else if (command === "attestation" && args.length === 5) {
-    validateSLSAAttestation(readJSON(args[0]), args[1], args[2], args[3], args[4]);
-  } else if (command === "audit" && args.length === 3) {
-    validateAuditSignatures(readJSON(args[0]), readJSON(args[1]), args[2]);
-  } else if (command === "download" && args.length === 5) {
-    validateDownloadedTarball(readJSON(args[0]), args[1], args[2], args[3], args[4]);
+  } else if (command === "metadata" && (args.length === 4 || args.length === 5)) {
+    validatePublicMetadata(readJSON(args[0]), args[1], args[2], args[3], args[4]);
+  } else if (command === "attestation" && (args.length === 5 || args.length === 6)) {
+    validateSLSAAttestation(readJSON(args[0]), args[1], args[2], args[3], args[4], args[5]);
+  } else if (command === "audit" && (args.length === 3 || args.length === 4)) {
+    validateAuditSignatures(readJSON(args[0]), readJSON(args[1]), args[2], args[3]);
+  } else if (command === "download" && (args.length === 5 || args.length === 6)) {
+    validateDownloadedTarball(readJSON(args[0]), args[1], args[2], args[3], args[4], args[5]);
   } else {
-    fail("usage: npm-public-contract.js stage-outputs <pack-json> <github-output> <version> | metadata <metadata-json> <version> <integrity> <shasum> | attestation <attestation-json> <version> <integrity> <uap-tag> <uap-commit> | audit <npm-audit-json> <attestation-json> <version> | download <pack-json> <tarball-root> <version> <integrity> <shasum>");
+    fail("usage: npm-public-contract.js stage-outputs <pack-json> <github-output> <version> | metadata <metadata-json> <version> <integrity> <shasum> [product] | attestation <attestation-json> <version> <integrity> <uap-tag> <uap-commit> [product] | audit <npm-audit-json> <attestation-json> <version> [product] | download <pack-json> <tarball-root> <version> <integrity> <shasum> [product]; product defaults to agentplugins");
   }
 }
 
@@ -316,6 +356,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  MANAGEMENT_SDK_METADATA,
   validatePairedSource,
   validateDownloadedTarball,
   validateAuditSignatures,
