@@ -38,7 +38,6 @@ jobs:
     env:
       SDK_CLIENT: ${{ matrix.client }}
       EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-      PROOF_ROOT: ${{ runner.temp }}/sdk-package-proof
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,6 +55,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export PROOF_ROOT="$RUNNER_TEMP/sdk-package-proof"
+          echo "PROOF_ROOT=$PROOF_ROOT" >> "$GITHUB_ENV"
           test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
           test "$(go env GOVERSION)" = go1.26.10
           test "$(node --version)" = v22.21.1
