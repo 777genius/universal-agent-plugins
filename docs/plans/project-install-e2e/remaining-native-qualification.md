@@ -1998,3 +1998,30 @@ runtime-file guards. Other clients retain their original urllib transport. The
 collector remains acquisition-only and refuses native context access even after
 its pin is frozen. All project/MCP/authentication/model flags remain false; actual
 hosted acquisition and a separately reviewed read-only collector remain required.
+
+### Cursor first read-only help and empty-component capture (2026-10-29)
+
+After reviewed acquisition publicationfd1df496, enable only acquire/help research
+phases with the same exact archive, native shell launcher, bundled Node and full
+445-file support closure. The pinned index version callback writes exactly
+`2026.10.22-27dcf5f` plus LF. Its command table defines top-level help, MCP help,
+plugin help and MCP list; it does not define a skills-list command. The exact
+2297-byte2601.index.js MCP list module SHA256 is
+`6635570334069b0ff14fc4b4e9d629f16478f1a9e8b13c626182874437eaf850`.
+
+Run the fixed version/top-help/MCP-help/plugin-help table in A, then read-only
+empty MCP lists in A, B and the outside directory. Reuse existing30-second
+supervised probes, the original shared360-second budget, closed environment,
+full runtime identity guards and bounded original stdout/stderr capture. Seed
+no native configuration, disabled store, approval, credential or provider. Add
+no environment override, updater assumption, login, model, installation, plugin
+marketplace mutation, skills command or production detection change.
+
+Only the exact version, ordinary successful processes and nonempty strict-UTF8
+help can support cursor.help. Retain all three component streams as opaque first
+captures; do not infer an empty-catalog grammar, configuration preservation,
+server initialization or scope/lifecycle from them. Private disposable-HOME
+startup/cache effects remain unqualified and are not adopted as trusted config.
+All five project/MCP flags stay false, with scope, authentication and real-model
+work explicitly unobserved. Independent actual hosted raw review must establish
+the next supported component contract before additional qualification work.
