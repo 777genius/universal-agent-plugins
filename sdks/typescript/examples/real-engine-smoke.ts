@@ -9,18 +9,23 @@ import { parseArgs } from 'node:util';
 import { startUap, type StartupConfiguration, type UapHost } from '../dist/node.js';
 import type { ChangeRequest, LocalSkillRequest, Operation } from '../dist/index.js';
 import { actualuninstallCodex, inspectNative, type NativeClient, type NativeObservation } from './native-client-observation.ts';
+import { actualUninstallPackageNative } from './package-client-observation.ts';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const { values } = parseArgs({ options: { client: { type: 'string', default: 'opencode' }, executable: { type: 'string' }, 'client-executable': { type: 'string' }, source: { type: 'string' }, output: { type: 'string' } } });
 if (!values.executable || !values['client-executable'] || !values.source) throw new Error('--executable, --client-executable and --source are required; use a real pinned client and the immutable public commands fixture.');
-assert.ok(['opencode', 'claude', 'codex'].includes(values.client));
+assert.ok(['opencode', 'claude', 'codex', 'cline', 'gemini', 'copilot', 'grok', 'qoder'].includes(values.client));
 const nativeClient = values.client as NativeClient;
 const targetId = `${nativeClient}-test`;
-assert.match(values.source, /^[\w-]+\/[\w.-]+@[a-f0-9]{40}\/\/repotests\/testdata\/agentplugins_commands_fixture$/);
+const archiveSource = /^https:\/\/[^#]+#sha256=[a-f0-9]{64}$/.test(values.source);
+if (!archiveSource) assert.match(values.source, /^[\w-]+\/[\w.-]+@[a-f0-9]{40}\/\/repotests\/testdata\/agentplugins_commands_fixture$/);
 const executable = resolve(values.executable);
 const nativeExecutable = resolve(values['client-executable']);
 const root = await mkdtemp(join(tmpdir(), 'uap-real-sdk-'));
 const outputPath = values.output ? resolve(values.output) : join(root, 'evidence.json');
-const nativeRoot = join(root, 'config', nativeClient);
+const separateSkills = ['opencode', 'cline', 'gemini'].includes(nativeClient);
+const nativeRoot = ['cline', 'gemini', 'copilot', 'grok', 'qoder'].includes(nativeClient) ? join(root, 'home', `.${nativeClient}`) : join(root, 'config', nativeClient);
 const skillsRoot = join(nativeRoot, 'skills');
 const project = join(root, 'project');
 const config: StartupConfiguration = {
@@ -33,6 +38,9 @@ await Promise.all([...Object.values(isolated), project, nativeRoot].map((directo
 const smokeEnvironment: NodeJS.ProcessEnv = { ...isolated, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', NO_COLOR: '1' };
 if (nativeClient === 'opencode') Object.assign(smokeEnvironment, { OPENCODE_PURE: '1', OPENCODE_DISABLE_MODELS_FETCH: '1', OPENCODE_DISABLE_AUTOUPDATE: '1' });
 if (nativeClient === 'claude') Object.assign(smokeEnvironment, { CLAUDE_CONFIG_DIR: nativeRoot, DISABLE_AUTOUPDATER: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' });
+if (nativeClient === 'cline') smokeEnvironment.CLINE_NO_AUTO_UPDATE = '1';
+if (nativeClient === 'gemini') smokeEnvironment.GEMINI_CLI_HOME = isolated.HOME;
+if (nativeClient === 'qoder') smokeEnvironment.QODER_CONFIG_DIR = nativeRoot;
 if (nativeClient === 'codex') {
   smokeEnvironment.CODEX_HOME = nativeRoot;
   await assert.rejects(stat('/etc/codex'), { code: 'ENOENT' }, 'Codex native qualification requires an isolated host without /etc/codex configuration');
@@ -44,6 +52,7 @@ for (const name of ['PATH', 'Path', 'SystemRoot', 'WINDIR', 'LANG', 'LC_ALL', 'H
 }
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const evidence = {
+  qualification: 'sdk-native-lifecycle', nativeVersion: '', sourceKind: archiveSource ? 'pinned-https-archive' : 'pinned-git',
   root, client: nativeClient, platform: process.platform, architecture: process.arch, source: values.source, engineVersion: '', environmentId: '',
   engineSHA256: sha256(await readFile(executable)), nativeSHA256: sha256(await readFile(nativeExecutable)),
   status: 'running', stage: 'startup', error: '', checks: [] as string[],
@@ -101,7 +110,7 @@ async function apply(change: ChangeRequest | LocalSkillRequest, local = false, e
   return { operation, planId: plan.planId, requestId };
 }
 function observationOptions() {
-  return { client: nativeClient, executable: nativeExecutable, root, nativeRoot, project, env: smokeEnvironment, ...(pluginId ? { expectedPluginId: pluginId } : {}) };
+  return { client: nativeClient, executable: nativeExecutable, root, nativeRoot, project, env: smokeEnvironment, ...(managedArtifact ? { managedArtifact } : {}), ...(pluginId ? { expectedPluginId: pluginId } : {}) };
 }
 async function nativeObservation(): Promise<NativeObservation> {
   const observed = await inspectNative(observationOptions());
@@ -118,9 +127,16 @@ async function verifyNativeGuide() {
   assert.equal(found.has('uap-commands-fixture-wizard'), false, 'Explicit-only command leaked into native automatic Skills');
   const fixture = await readFile(new URL('../../../repotests/testdata/agentplugins_commands_fixture/skills/fixture-guide/SKILL.md', import.meta.url));
   assert.deepEqual(await readFile(guide), fixture, 'Native consumer location must contain the pinned fixture bytes');
+  const command = await readFile(new URL('../../../repotests/testdata/agentplugins_commands_fixture/io.github.777genius.agentplugins/commands/echo.md', import.meta.url), 'utf8');
+  const header = /^---\n([\s\S]*?)\n---\n/.exec(command);
+  assert.ok(header);
+  const description = /^description: (.+)$/m.exec(header[1]!);
+  assert.ok(description);
+  const echo = `---\nname: "uap-commands-fixture-echo"\ndescription: ${JSON.stringify(description[1])}\n---\n${command.slice(header[0].length)}`;
+  assert.equal(await readFile(found.get('uap-commands-fixture-echo')!, 'utf8'), echo, 'Native portable command Skill must contain the exact pinned rendered bytes');
 }
 async function ownedArtifact(paths: string[]): Promise<string> {
-  const prefix = (nativeClient === 'claude' ? skillsRoot : join(root, 'state', 'managed', 'clients', nativeClient)) + sep;
+  const prefix = (nativeClient === 'claude' ? skillsRoot : nativeClient === 'grok' ? join(nativeRoot, 'plugins') : join(root, 'state', 'managed', 'clients', nativeClient)) + sep;
   const candidates = [...new Set(paths.filter((path) => resolve(path).startsWith(prefix)))];
   assert.equal(candidates.length, 1, `Expected one owned managed plugin artifact: ${JSON.stringify(paths)}`);
   const artifact = await realpath(candidates[0]!);
@@ -130,7 +146,7 @@ async function ownedArtifact(paths: string[]): Promise<string> {
   return artifact;
 }
 async function preserveEditedNativeSkill() {
-  assert.equal(nativeClient, 'opencode');
+  assert.ok(separateSkills);
   const guideDirectory = join(skillsRoot, 'fixture-guide');
   const guidePath = join(guideDirectory, 'SKILL.md');
   const original = await readFile(guidePath);
@@ -138,7 +154,7 @@ async function preserveEditedNativeSkill() {
   await writeFile(guidePath, edited);
   const refused = await apply({ action: 'repair', aliases: ['sdk-fixture'] }, false, 'partial');
   assert.deepEqual(await readFile(guidePath), edited, 'Refused repair must preserve the edited native bytes');
-  assert.ok(refused.operation.diagnostics.some((diagnostic) => diagnostic.code === 'OWNED_SKILL_CHANGED'));
+  if (nativeClient === 'opencode') assert.ok(refused.operation.diagnostics.some((diagnostic) => diagnostic.code === 'OWNED_SKILL_CHANGED'));
   assert.ok(refused.operation.result?.nextActions.some((action) => action.kind === 'preserve_changes'));
   assert.ok((await client().environment()).pendingOperations?.some((operation) => operation.operationId === refused.operation.operationId));
   assert.equal((await client().operation(refused.operation.operationId)).resolvedBy, undefined);
@@ -185,7 +201,7 @@ async function interruptedRepair() {
   // OpenCode's separate native Skill can be reconstructed during convergence.
   // Missing Claude/Codex managed packages require explicit Repair (tested above),
   // rather than the Sync used by generic recovery after durable acceptance.
-  if (nativeClient === 'opencode') await rm(join(skillsRoot, 'fixture-guide'), { recursive: true });
+  if (separateSkills) await rm(join(skillsRoot, 'fixture-guide'), { recursive: true });
   const plan = await client().prepare({ action: 'repair', aliases: ['sdk-fixture'] });
   assert.ok(plan.confirmable);
   const requestId = randomUUID();
@@ -217,6 +233,13 @@ async function interruptedRepair() {
 }
 try {
   await checkpoint('startup');
+  const versionOutput = (await promisify(execFile)(nativeExecutable, nativeClient === 'qoder' ? ['--config-dir', nativeRoot, '--version'] : ['--version'], { cwd: project, env: smokeEnvironment, timeout: 30_000, maxBuffer: 4 * 1024 * 1024 })).stdout;
+  const versions = [...versionOutput.matchAll(/\b\d+\.\d+\.\d+\b/g)].map((match) => match[0]);
+  assert.equal(new Set(versions).size, 1, `Ambiguous native version: ${versionOutput}`);
+  evidence.nativeVersion = versions[0]!;
+  const requiredVersions: Partial<Record<NativeClient, string>> = { cline: '3.0.73', gemini: '0.65.0', copilot: '1.0.103', grok: '1.0.67', qoder: '1.1.78' };
+  const requiredVersion = requiredVersions[nativeClient];
+  if (requiredVersion) assert.equal(evidence.nativeVersion, requiredVersion);
   host = await launch();
   evidence.engineVersion = host.session.engineVersion;
   evidence.environmentId = host.session.environmentId;
@@ -231,7 +254,7 @@ try {
   const ownedPaths = entry.bindings.flatMap((binding) => binding.managedPaths);
   assert.ok(ownedPaths.length > 0);
   for (const filename of ownedPaths) await stat(filename);
-  if (nativeClient !== 'opencode') managedArtifact = await ownedArtifact(ownedPaths);
+  if (!separateSkills) managedArtifact = await ownedArtifact(ownedPaths);
   await verifyNativeGuide();
   await checkpoint('native consumer verified', `real ${nativeClient} native discovery loads exact pinned Skill bytes and portable command; explicit-only command remains withheld`);
   const manifestPath = join(root, 'dependencies', 'uap.toml');
@@ -240,9 +263,9 @@ try {
   assert.ok(manifestBefore.length > 0 && lockBefore.length > 0);
   await apply({ action: 'update', aliases: ['sdk-fixture'] });
   assert.deepEqual(await readFile(lockPath), lockBefore);
-  await checkpoint('pinned update verified', 'targeted exact-commit update preserves the lock');
+  await checkpoint('pinned update verified', 'targeted immutable-source update preserves the lock');
   await apply({ action: 'repair', aliases: ['sdk-fixture'] });
-  if (nativeClient === 'opencode') await preserveEditedNativeSkill();
+  if (separateSkills) await preserveEditedNativeSkill();
   else {
     await repairModifiedArtifact();
     await repairAbsentArtifact();
@@ -256,15 +279,17 @@ try {
   assert.equal(host.session.environmentId, evidence.environmentId);
   await checkpoint('retained history verified', 'accepted successful operation survives engine restart without replay');
   const removal: ChangeRequest = { action: 'remove', aliases: ['sdk-fixture'], targetIds: [targetId] };
-  if (nativeClient === 'codex') {
+  {
     const review = await client().prepare(removal);
-    assert.equal(review.confirmable, false);
-    assert.ok(review.conflicts.some((conflict) => conflict.code === 'EXTERNAL_UNINSTALL_REQUIRED'));
-    await client().plans.discard(review.planId);
-    assert.ok(pluginId);
-    await actualuninstallCodex({ ...observationOptions(), expectedPluginId: pluginId });
-    removal.externalUninstalled = true;
-    await checkpoint('native external uninstall verified', 'real Codex plugin remove settles the exact native identity before an explicit fresh SDK removal attestation');
+    if (!review.confirmable) {
+      assert.ok(review.conflicts.some((conflict) => conflict.code === 'EXTERNAL_UNINSTALL_REQUIRED'));
+      await client().plans.discard(review.planId);
+      assert.ok(pluginId);
+      if (nativeClient === 'codex') await actualuninstallCodex({ ...observationOptions(), expectedPluginId: pluginId });
+      else await actualUninstallPackageNative({ ...observationOptions(), expectedPluginId: pluginId });
+      removal.externalUninstalled = true;
+      await checkpoint('native external uninstall verified', 'real native plugin uninstall settles the exact native identity before an explicit fresh SDK removal attestation');
+    } else await client().plans.discard(review.planId);
   }
   await apply(removal);
   assert.equal((await client().environment()).entries.length, 0);

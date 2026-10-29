@@ -1,0 +1,111 @@
+name: Management SDK Native Packages
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'sdks/typescript/**'
+      - 'scripts/run-sdk-native-local.py'
+      - 'scripts/provision-sdk-package-client.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'scripts/native_client_draft.py'
+      - 'scripts/research-grok-native.py'
+      - 'scripts/research-qoder-native.py'
+      - 'repotests/testdata/agentplugins_commands_fixture/**'
+      - 'cli/internal/agentpluginscli/management_scope*'
+      - 'install/integrationctl/agentplugins/clients/cline/lifecycle.go'
+      - 'install/integrationctl/agentplugins/installer/native_recovery*'
+      - '.github/workflows/management-sdk-packages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: management-sdk-packages-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: ${{ matrix.client }} SDK lifecycle (linux-amd64)
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [copilot, grok, qoder]
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    env:
+      SDK_CLIENT: ${{ matrix.client }}
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      PROOF_ROOT: ${{ runner.temp }}/sdk-package-proof
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.21.1'
+          package-manager-cache: false
+      - name: Build the exact source engine and SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test "$(go env GOVERSION)" = go1.26.10
+          test "$(node --version)" = v22.21.1
+          mkdir -p "$PROOF_ROOT"
+          git rev-parse HEAD > "$PROOF_ROOT/source-head.txt"
+          (cd cli && go build -trimpath -o "$PROOF_ROOT/agentplugins" ./cmd/agentplugins)
+          (cd sdks/typescript && npm ci --ignore-scripts --no-audit --no-fund && npm run build && npm run typecheck)
+      - name: Provision the pinned Copilot release
+        if: matrix.client == 'copilot'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/provision-sdk-package-client.py --client "$SDK_CLIENT" --output "$PROOF_ROOT/bin"
+      - name: Provision the pinned official native binary
+        if: matrix.client != 'copilot'
+        run: python3 scripts/provision-sdk-package-client.py --client "$SDK_CLIENT" --output "$PROOF_ROOT/bin"
+      - name: Exercise the actual SDK and native client
+        run: >-
+          python3 scripts/run-sdk-native-local.py
+          --client "$SDK_CLIENT"
+          --executable "$PROOF_ROOT/agentplugins"
+          --client-executable "$PROOF_ROOT/bin/$SDK_CLIENT"
+          --node "$(command -v node)"
+          --output "$PROOF_ROOT/evidence"
+      - name: Verify source and executable identity
+        shell: python
+        run: |
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ['PROOF_ROOT'])
+          source = json.loads((root / 'evidence/source-identity.json').read_text())
+          receipt = json.loads((root / 'evidence/sdk-native-evidence.json').read_text())
+          process = json.loads((root / 'evidence/sdk-native-process.json').read_text())
+          provision = json.loads((root / 'bin/provision.json').read_text())
+          assert source['source_commit'] == os.environ['EXPECTED_COMMIT']
+          assert source['source_dirty'] is False
+          assert source['qualification'] == receipt['qualification'] == 'sdk-native-lifecycle'
+          assert source['client'] == receipt['client'] == provision['client'] == os.environ['SDK_CLIENT']
+          assert source['native_launcher']['sha256'] == receipt['nativeSHA256'] == provision['binary_sha256']
+          assert receipt['nativeSHA256'] == hashlib.sha256(Path(provision['path']).read_bytes()).hexdigest()
+          assert receipt['engineSHA256'] == hashlib.sha256((root / 'agentplugins').read_bytes()).hexdigest()
+          assert receipt['status'] == 'passed' and receipt['stage'] == 'complete' and not receipt['error']
+          assert process['exit'] == 0 and not process['error'] and source['https_requests'] > 0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        if: always()
+        with:
+          name: sdk-package-${{ matrix.client }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/sdk-package-proof/source-head.txt
+            ${{ runner.temp }}/sdk-package-proof/bin/provision.json
+            ${{ runner.temp }}/sdk-package-proof/evidence/*.json
+            ${{ runner.temp }}/sdk-package-proof/evidence/*.log
+          if-no-files-found: error
+          retention-days: 14

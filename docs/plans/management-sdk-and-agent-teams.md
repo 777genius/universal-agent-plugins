@@ -1,11 +1,46 @@
 # UAP Management API, language clients, and Agent Teams integration
 
-Status: implementation plan v11 — scoped E2E completion and current-main reconciliation.
+Status: implementation plan v12 — remaining user-scope SDK client qualification.
 Owner authorization: 2026-10-24. Implement end to end, open draft PRs early, publish
 every commit immediately, review plan revisions and implementation independently,
 verify actual Electron interaction, merge only after required gates and resolved
 review findings. This is not authorization to bypass repository protections or
 publish a new public release.
+
+## Continuation checkpoint — v12 (2026-10-29)
+
+The owner requested local Linux verification of the remaining admitted user-scope
+Management SDK clients and merge of the resulting E2E work. PR #500 and the
+Claude/Codex continuation [PR #558](https://github.com/777genius/universal-agent-plugins/pull/558)
+are merged. The latter qualified Claude 2.1.263 and Codex 0.153.4 through the actual
+SDK and Go engine on source `d52f2248fbb4817e46927d914fee343ca1ccf4a3`
+([native run 40754108543](https://github.com/777genius/universal-agent-plugins/actions/runs/40754108543)).
+Those receipts remain tied to their original source.
+
+This continuation adds local pinned HTTPS fixture journeys for Cline and Gemini
+native Skills, Pi native extension auto-discovery, and the existing Kimi/Kiro/
+Windsurf SDK configuration lifecycles. Three real regressions are repaired:
+legacy user native-config attempts remain inspectable; read-only Cline preparation
+refusals report unchanged native state; owned Windsurf MCP entries prove the captured
+Management profile. Selected/project recovery authority and later mutation failure
+semantics remain unchanged.
+
+Preliminary local runs passed for Cline 3.0.73, Gemini 0.65.0 and Pi 1.4.0. The
+source is being reconciled with main `60967b8b6ca79245a61caf28895aa09c2c9d74a2`;
+fresh committed-source receipts are required before calling this continuation
+qualified. Pi proves its admitted extension lifecycle and inert command, not Skills
+or MCP. Kimi 2.3.1 and Kiro 2.33.1 require native authentication; Windsurf's user
+adapter requires an editor refresh. Their SDK-only checks explicitly record
+`nativeLoaded: false`. Cursor's existing user editor route remains manual, and
+provisioning the pinned CLI was refused by the official endpoint (HTTP 403).
+
+Copilot 1.0.103, Grok 1.0.67 and Qoder 1.1.78 need Go-managed native processes.
+This local container lacks the required `/proc/<pid>/task/<tid>/children` interface;
+no production process guard is relaxed. A focused three-client Linux workflow
+qualifies only these SDK journeys and binds receipts to the checkout and executable
+hashes. Its results are pending. Required repository checks and independent review
+remain merge gates. No App/runtime architecture, S25/S26 project support, VS Code
+changes or public SDK release is included.
 
 ## Continuation checkpoint — v11 (2026-10-28)
 

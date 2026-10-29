@@ -48,3 +48,33 @@ func TestManagementRequiresDeclaredRootSelection(t *testing.T) {
 		}
 	}
 }
+
+func TestManagementNativeProjectionAcceptsOwnedWindsurfMCPEntry(t *testing.T) {
+	profile, err := managementAbsolute(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact := filepath.Join(t.TempDir(), "private-package")
+	binding := domain.ClientBinding{ClientID: "windsurf", Scope: "user", TargetLocator: artifact, NativeObjects: []domain.NativeObjectOwnership{
+		{Kind: "managed_package_directory", Path: artifact, ProtectionClass: "managed"},
+		{Kind: "windsurf_global_mcp_server", Path: filepath.Join(profile, "mcp_config.json"), ProtectionClass: "managed_entry"},
+	}}
+	if !managementBindingInProfile(binding, profile) {
+		t.Fatal("owned MCP entry did not prove profile")
+	}
+	if managementBindingInProfile(binding, t.TempDir()) {
+		t.Fatal("alternate profile inherited binding")
+	}
+	binding.NativeObjects = append(binding.NativeObjects, domain.NativeObjectOwnership{Kind: "windsurf_global_mcp_server", Path: filepath.Join(t.TempDir(), "mcp_config.json"), ProtectionClass: "managed_entry"})
+	if managementBindingInProfile(binding, profile) {
+		t.Fatal("mixed profile accepted")
+	}
+	binding.NativeObjects = binding.NativeObjects[2:]
+	if managementBindingInProfile(binding, profile) {
+		t.Fatal("foreign profile accepted")
+	}
+	binding.NativeObjects = []domain.NativeObjectOwnership{{Kind: "managed_package_directory", Path: artifact, ProtectionClass: "managed"}}
+	if managementBindingInProfile(binding, profile) {
+		t.Fatal("private artifact alone proved profile")
+	}
+}
