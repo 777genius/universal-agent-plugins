@@ -47,21 +47,25 @@ func (f *cursorProjectAttempt) freezeAcquisition(t *testing.T) {
 		t.Fatal("Cursor exact acquisition identity differs")
 	}
 	f.runtimeRoot = filepath.Dir(filepath.Dir(f.client))
-	f.runtimeMembers = map[string]string{}
+	archiveMembers := map[string]string{}
 	expected := map[string]string{}
 	for _, member := range identity.Acquisition.Members {
 		name := member.Name
-		if name == "" || filepath.IsAbs(name) || filepath.Clean(name) != name || strings.Contains(name, "\\") || strings.HasPrefix(name, "../") || (member.Kind != "file" && member.Kind != "directory") {
+		if name == "" || name == "." || name == ".." || filepath.IsAbs(name) || filepath.Clean(name) != name || strings.Contains(name, "\\") || strings.HasPrefix(name, "../") || (member.Kind != "file" && member.Kind != "directory") {
 			t.Fatal("Cursor acquisition member differs")
 		}
 		path := filepath.Join(f.runtimeRoot, name)
-		if f.runtimeMembers[path] != "" {
+		if archiveMembers[path] != "" {
 			t.Fatal("Cursor duplicate acquisition member")
 		}
-		f.runtimeMembers[path] = member.Kind
+		archiveMembers[path] = member.Kind
 		if member.Kind == "file" {
 			expected[path] = member.SHA
 		}
+	}
+	f.runtimeMembers, err = cursorProjectMaterializedMembers(f.runtimeRoot, archiveMembers)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if len(expected) != 445 || expected[f.client] != "2ccc9a8e167797641448b5e5c936f006ba137a2555f117f38c5eb76a5238a233" || expected[filepath.Join(filepath.Dir(f.client), "node")] != "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb" || expected[filepath.Join(filepath.Dir(f.client), "index.js")] != "7b4bb3badb36cff7b6cee7996d61bd3c32866cf354214374b77f5a5d33a0b3f2" {
 		t.Fatal("Cursor launcher/bundled Node/index closure differs")
@@ -78,6 +82,28 @@ func (f *cursorProjectAttempt) freezeAcquisition(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.evidence["acquisition"] = json.RawMessage(body)
+}
+
+// The existing materializer writes regular files and creates only their parent
+// chains. Empty archive directories are inventoried, but are not materialized.
+func cursorProjectMaterializedMembers(root string, archive map[string]string) (map[string]string, error) {
+	result := map[string]string{}
+	for path, kind := range archive {
+		if !strings.HasPrefix(path, root+string(filepath.Separator)) {
+			return nil, fmt.Errorf("Cursor archive member is outside materialized root")
+		}
+		if kind != "file" {
+			continue
+		}
+		result[path] = "file"
+		for parent := filepath.Dir(path); parent != root; parent = filepath.Dir(parent) {
+			if archive[parent] != "directory" || parent == filepath.Dir(parent) {
+				return nil, fmt.Errorf("Cursor materialized parent is absent from trusted archive directories")
+			}
+			result[parent] = "directory"
+		}
+	}
+	return result, nil
 }
 func (f *cursorProjectAttempt) runtimeClosure() error {
 	seen := 0

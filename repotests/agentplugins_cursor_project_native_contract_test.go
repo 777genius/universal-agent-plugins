@@ -93,3 +93,46 @@ func TestCursorProjectCaptureRuntimeClosure(t *testing.T) {
 		t.Fatal("aliased runtime member accepted")
 	}
 }
+
+func TestCursorProjectCaptureMaterializedDirectoryAuthority(t *testing.T) {
+	root := t.TempDir()
+	bundle, leaf := filepath.Join(root, "bundle"), filepath.Join(root, "bundle", "client")
+	empty := filepath.Join(root, "bundle", "empty")
+	archive := map[string]string{bundle: "directory", leaf: "file", empty: "directory", filepath.Join(empty, "nested"): "directory"}
+	expected := map[string]string{bundle: "directory", leaf: "file"}
+	members, err := cursorProjectMaterializedMembers(root, archive)
+	if err != nil || !reflect.DeepEqual(members, expected) {
+		t.Fatal("materialized authority differs from literal file/parent set", err)
+	}
+	projectNativeRuntimeWrite(t, leaf, []byte("inert runtime"), 0600)
+	f := &cursorProjectAttempt{runtimeRoot: root, runtimeMembers: members}
+	if err := f.runtimeClosure(); err != nil {
+		t.Fatal("unmaterialized empty archive directories were required", err)
+	}
+	if err := os.Mkdir(empty, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if f.runtimeClosure() == nil {
+		t.Fatal("observed empty archive directory was adopted into authority")
+	}
+	if err := os.Remove(empty); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(leaf); err != nil {
+		t.Fatal(err)
+	}
+	if f.runtimeClosure() == nil {
+		t.Fatal("removed required runtime file accepted")
+	}
+	for _, unsafe := range []string{root, filepath.Dir(root)} {
+		if _, err := cursorProjectMaterializedMembers(root, map[string]string{unsafe: "directory"}); err == nil {
+			t.Fatal("root or parent archive directory was silently ignored")
+		}
+	}
+	for _, kind := range []string{"", "file"} {
+		archive[bundle] = kind
+		if _, err := cursorProjectMaterializedMembers(root, archive); err == nil {
+			t.Fatal("missing/non-directory trusted parent accepted")
+		}
+	}
+}
