@@ -1,0 +1,284 @@
+name: Management SDK Release
+
+# Run from the immutable management-sdk-vX.Y.Z tag:
+#   gh workflow run management-sdk-release.yml --ref management-sdk-vX.Y.Z \
+#     -f version=X.Y.Z -f publish=false
+# publish=false qualifies the tagged commit and uploads the attested tarball.
+# publish=true additionally publishes those exact bytes through npm trusted
+# publishing after the npm-management-sdk environment approves the job.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact X.Y.Z of the management-sdk-vX.Y.Z tag selected as the workflow ref
+        required: true
+        type: string
+      publish:
+        description: Publish the attested tarball to npm with trusted provenance
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+# Release runs are never cancelled; one run per version at a time.
+concurrency:
+  group: management-sdk-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  verify-source:
+    name: Verify immutable tag and unpublished version
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.source.outputs.version }}
+      commit: ${{ steps.source.outputs.commit }}
+      package_name: ${{ steps.source.outputs.package_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          package-manager-cache: false
+      - name: Bind tag, main ancestry, package identity and registry state
+        id: source
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${VERSION}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          tag="management-sdk-v${VERSION}"
+          test "${GITHUB_REF}" = "refs/tags/${tag}"
+          commit="$(git rev-parse HEAD)"
+          test "${GITHUB_SHA}" = "${commit}"
+          test "$(git rev-list -n 1 "refs/tags/${tag}")" = "${commit}"
+          git fetch --no-tags --force origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "${commit}" refs/remotes/origin/main
+          package_name="$(node -p 'require("./sdks/typescript/package.json").name')"
+          test "${package_name}" = universal-agent-plugins-management-sdk
+          test "$(node -p 'require("./sdks/typescript/package.json").version')" = "${VERSION}"
+          # E404 is the only accepted proof of absence; any other registry
+          # failure stops the release instead of being read as "unpublished".
+          err="${RUNNER_TEMP}/npm-view.err"
+          if view="$(npm view "${package_name}@${VERSION}" version --registry=https://registry.npmjs.org/ 2>"${err}")"; then
+            if [[ -n "${view}" ]]; then
+              echo "npm version already exists and is immutable: ${package_name}@${VERSION}" >&2
+              exit 1
+            fi
+          elif ! grep -q 'E404' "${err}"; then
+            cat "${err}" >&2
+            exit 1
+          fi
+          if latest="$(npm view "${package_name}" dist-tags.latest --registry=https://registry.npmjs.org/ 2>"${err}")"; then
+            if [[ -n "${latest}" ]]; then
+              # latest only moves forward; an older line needs its own dist-tag.
+              test "$(printf '%s\n%s\n' "${latest}" "${VERSION}" | sort -V | tail -n 1)" = "${VERSION}"
+            fi
+          elif ! grep -q 'E404' "${err}"; then
+            cat "${err}" >&2
+            exit 1
+          fi
+          {
+            echo "version=${VERSION}"
+            echo "commit=${commit}"
+            echo "package_name=${package_name}"
+          } >> "${GITHUB_OUTPUT}"
+
+  qualify:
+    needs: verify-source
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && needs.verify-source.result == 'success' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/management-sdk.yml
+
+  release-artifact:
+    name: Build and attest the exact npm tarball
+    needs: [verify-source, qualify]
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && needs.verify-source.result == 'success' && needs.qualify.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    outputs:
+      version: ${{ steps.pack.outputs.version }}
+      commit: ${{ steps.pack.outputs.commit }}
+      package_name: ${{ steps.pack.outputs.package_name }}
+      tarball_file: ${{ steps.pack.outputs.tarball_file }}
+      tarball_sha256: ${{ steps.pack.outputs.tarball_sha256 }}
+      tarball_integrity: ${{ steps.pack.outputs.tarball_integrity }}
+      tarball_shasum: ${{ steps.pack.outputs.tarball_shasum }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify-source.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          package-manager-cache: false
+      - name: Build, pack and qualify the exact tarball
+        id: pack
+        env:
+          VERSION: ${{ needs.verify-source.outputs.version }}
+          COMMIT: ${{ needs.verify-source.outputs.commit }}
+          PACKAGE_NAME: ${{ needs.verify-source.outputs.package_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${COMMIT}"
+          test "$(git rev-list -n 1 "refs/tags/management-sdk-v${VERSION}")" = "${COMMIT}"
+          out="${RUNNER_TEMP}/management-sdk"
+          mkdir -p "${out}"
+          cd sdks/typescript
+          test "$(node -p 'require("./package.json").name')" = "${PACKAGE_NAME}"
+          test "$(node -p 'require("./package.json").version')" = "${VERSION}"
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+          npm pack --ignore-scripts --json --pack-destination "${out}" > "${out}/pack.json"
+          tarball="$(jq -er 'if length == 1 then .[0].filename else error("expected one packed package") end' "${out}/pack.json")"
+          test "${tarball}" = "${PACKAGE_NAME}-${VERSION}.tgz"
+          jq -e --arg name "${PACKAGE_NAME}" --arg version "${VERSION}" '.[0].name == $name and .[0].version == $version' "${out}/pack.json" >/dev/null
+          # The same packed-consumer contract as CI, applied to these exact bytes.
+          npm run test:consumer -- "--tarball=${out}/${tarball}"
+          integrity="$(jq -er '.[0].integrity' "${out}/pack.json")"
+          shasum="$(jq -er '.[0].shasum' "${out}/pack.json")"
+          cd "${out}"
+          sha256sum "${tarball}" > checksums.txt
+          printf '%s\n' "${COMMIT}" > source-commit.txt
+          {
+            echo "version=${VERSION}"
+            echo "commit=${COMMIT}"
+            echo "package_name=${PACKAGE_NAME}"
+            echo "tarball_file=${tarball}"
+            echo "tarball_sha256=$(cut -d' ' -f1 checksums.txt)"
+            echo "tarball_integrity=${integrity}"
+            echo "tarball_shasum=${shasum}"
+          } >> "${GITHUB_OUTPUT}"
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/management-sdk/*.tgz
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: management-sdk-${{ steps.pack.outputs.version }}
+          path: ${{ runner.temp }}/management-sdk/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish npm package with trusted provenance
+    needs: release-artifact
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.publish == true && needs.release-artifact.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: npm-management-sdk
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.23.2"
+          package-manager-cache: false
+      - name: Use an empty npm config for OIDC publish
+        run: |
+          set -euo pipefail
+          config="${RUNNER_TEMP}/management-sdk-publish.npmrc"
+          printf '%s\n' 'registry=https://registry.npmjs.org/' > "${config}"
+          chmod 600 "${config}"
+          echo "NPM_CONFIG_USERCONFIG=${config}" >> "${GITHUB_ENV}"
+      - name: Install the pinned npm trusted-publisher client
+        run: |
+          set -euo pipefail
+          npm install --global npm@12.0.2
+          test "$(npm --version)" = "12.0.2"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: management-sdk-${{ needs.release-artifact.outputs.version }}
+          path: ${{ runner.temp }}/management-sdk
+      - name: Refuse overwrite and publish the exact attested bytes
+        env:
+          PACKAGE_NAME: ${{ needs.release-artifact.outputs.package_name }}
+          VERSION: ${{ needs.release-artifact.outputs.version }}
+          TARBALL: ${{ needs.release-artifact.outputs.tarball_file }}
+          TARBALL_SHA256: ${{ needs.release-artifact.outputs.tarball_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${NPM_TOKEN:-}"
+          test -z "${NODE_AUTH_TOKEN:-}"
+          test -s "${NPM_CONFIG_USERCONFIG}"
+          grep -Fx 'registry=https://registry.npmjs.org/' "${NPM_CONFIG_USERCONFIG}"
+          test "${PACKAGE_NAME}" = universal-agent-plugins-management-sdk
+          dir="${RUNNER_TEMP}/management-sdk"
+          test "$(find "${dir}" -maxdepth 1 -name '*.tgz' -type f | wc -l | tr -d ' ')" = 1
+          test "${TARBALL}" = "${PACKAGE_NAME}-${VERSION}.tgz"
+          printf '%s  %s\n' "${TARBALL_SHA256}" "${dir}/${TARBALL}" | sha256sum --check --strict
+          err="${RUNNER_TEMP}/npm-view.err"
+          if view="$(npm view "${PACKAGE_NAME}@${VERSION}" version --registry=https://registry.npmjs.org/ 2>"${err}")"; then
+            if [[ -n "${view}" ]]; then
+              echo "npm version already exists and is immutable: ${PACKAGE_NAME}@${VERSION}" >&2
+              exit 1
+            fi
+          elif ! grep -q 'E404' "${err}"; then
+            cat "${err}" >&2
+            exit 1
+          fi
+          npm publish "${dir}/${TARBALL}" --registry=https://registry.npmjs.org/ --access public --provenance --tag latest
+
+  verify-public:
+    name: Verify public npm package, provenance and clean install
+    needs: [release-artifact, publish]
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.publish == true && needs.publish.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-artifact.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.23.2"
+          package-manager-cache: false
+      - name: Verify registry metadata, signatures, provenance and an isolated consumer
+        env:
+          PACKAGE_NAME: ${{ needs.release-artifact.outputs.package_name }}
+          VERSION: ${{ needs.release-artifact.outputs.version }}
+          COMMIT: ${{ needs.release-artifact.outputs.commit }}
+          TARBALL_SHA256: ${{ needs.release-artifact.outputs.tarball_sha256 }}
+          TARBALL_INTEGRITY: ${{ needs.release-artifact.outputs.tarball_integrity }}
+          TARBALL_SHASUM: ${{ needs.release-artifact.outputs.tarball_shasum }}
+        working-directory: sdks/typescript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global npm@12.0.2
+          test "$(npm --version)" = "12.0.2"
+          root="${RUNNER_TEMP}/management-sdk-public"
+          mkdir -p "${root}/home" "${root}/tmp"
+          export HOME="${root}/home" TMPDIR="${root}/tmp" NPM_CONFIG_CACHE="${root}/npm-cache" NPM_CONFIG_USERCONFIG="${root}/home/.npmrc"
+          printf '%s\n' 'registry=https://registry.npmjs.org/' > "${NPM_CONFIG_USERCONFIG}"
+          npm ci --ignore-scripts --no-audit --no-fund
+          # Clean registry install with bounded propagation retries, exact file
+          # list, public types and runtime imports of both entry points.
+          npm run test:consumer -- "--registry-version=${VERSION}"
+          node scripts/verify-registry.ts \
+            --package-name "${PACKAGE_NAME}" --version "${VERSION}" \
+            --tag "management-sdk-v${VERSION}" --commit "${COMMIT}" \
+            --workflow .github/workflows/management-sdk-release.yml --directory sdks/typescript \
+            --sha256 "${TARBALL_SHA256}" --integrity "${TARBALL_INTEGRITY}" --shasum "${TARBALL_SHASUM}" \
+            --workdir "${root}/registry"
