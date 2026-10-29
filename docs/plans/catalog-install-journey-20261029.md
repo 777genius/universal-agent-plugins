@@ -2,8 +2,8 @@
 
 Date: 2026-10-29. Branch: `feat/catalog-install-journey-20261029`.
 Base: `ec85ee7d759944b9799e451c96bfc1859f9d5533`.
-Status: corrected reconnaissance checkpoint; implementation waits for two
-independent review rounds and disposition of their findings.
+Status: two independent critique-and-correction rounds completed; implementation
+waits for the parent's publication and gate accounting.
 
 ## Outcome and boundaries
 
@@ -194,7 +194,7 @@ the separate early draft PR. Do not touch other worktrees or remote refs.
 | Initial plan | This commit | Bounded scope, ownership, source rules, release authority, validation | Ready for draft PR |
 | Reconnaissance correction | Follow-up plan commit | Active homepage shares registry cards; legacy install section is unreachable; no generator changes; explicit project/auto transition and all-release target availability | Before independent review |
 | Independent plan round 1 | `/root/versions_owner`, current plan `2f8ddcf` | Required: exact project scope on every lifecycle command; preserve whole-alias target semantics; explicit same-package invalidation must never fall back to user commands. Nonblocking: preserve third Boolean API argument. All accepted and specified above in this correction. Parent coordinates gate accounting. | Review received and corrections committed; no source edits |
-| Independent plan round 2 | Parent assigns independent critic | Pending; amend and commit before source edits | Required before implementation |
+| Independent plan round 2 | `/root/versions_owner`, corrected plan `35cc888` | Rechecked resolver/release scope facts and active card/detail consumers. All R1 corrections reflected; no remaining material plan defect. No generator/native/API expansion justified. Approved subject to parent publication/gate accounting; no further correction required. | Approved; no source edits before parent gate |
 | Early draft PR | Parent publishes initial plan commit | Separate from versions/outdated PR | Pending |
 | Implementation commits | Parent publishes each checkpoint | Preserve overlap boundaries | Pending |
 | Independent code review | Parent assigns reviewer | Resolve correctness, UX, architecture, and test findings | Pending |
