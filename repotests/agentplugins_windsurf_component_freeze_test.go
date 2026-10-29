@@ -4,10 +4,12 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -91,5 +93,88 @@ func TestWindsurfComponentFreezeUsesOnlyProvenFramesAndRefusesLaterMutation(t *t
 	r.proven[r.StateRoot]["plugin-data/caller-owned/keep.txt"] = windProfileRecord{}
 	if !reflect.DeepEqual(expected, w.trees[r.StateRoot]["plugin-data/caller-owned/keep.txt"]) {
 		t.Fatal("retained proof frame aliases frozen authority")
+	}
+}
+
+func TestWindsurfComponentFrozenRefusalIdentifiesActualFileBeforeParentMetadata(t *testing.T) {
+	for _, operation := range []string{"changed", "added", "missing", "metadata"} {
+		t.Run(operation, func(t *testing.T) {
+			root := t.TempDir()
+			name := "private-name\nDO_NOT_DISCLOSE"
+			path := filepath.Join(root, name)
+			projectNativeRuntimeWrite(t, path, []byte("PRIVATE ORIGINAL CONTENT"), 0600)
+			before, err := windOwnedTree(context.Background(), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch operation {
+			case "changed":
+				err = os.WriteFile(path, []byte("PRIVATE CHANGED CONTENT"), 0600)
+			case "added":
+				name += "-added"
+				err = os.WriteFile(filepath.Join(root, name), []byte("PRIVATE ADDED CONTENT"), 0600)
+			case "missing":
+				err = os.Remove(path)
+			case "metadata":
+				err = os.Chmod(path, 0400)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = windFrozenTrees(context.Background(), map[string]map[string]windProfileRecord{root: before})
+			if err == nil {
+				t.Fatal("frozen mutation accepted")
+			}
+			message := err.Error()
+			wantOperation := operation
+			if operation == "metadata" {
+				wantOperation = "changed"
+			}
+			for _, wanted := range []string{"root_sha256=" + windsurfConfigDigest([]byte(root)), "key_sha256=" + windsurfConfigDigest([]byte(name)), "operation=" + wantOperation, "remaining_in_root="} {
+				if !strings.Contains(message, wanted) {
+					t.Fatal("frozen refusal lost actual file boundary", message)
+				}
+			}
+			if len(message) > 2<<10 || strings.Contains(message, root) || strings.Contains(message, "PRIVATE") || strings.Contains(message, "DO_NOT_DISCLOSE") || strings.ContainsRune(message, '\n') {
+				t.Fatal("frozen refusal leaked unknown path/content or exceeded bound")
+			}
+			if operation == "metadata" && (!strings.Contains(message, "mode=false") || !strings.Contains(message, "sha256=true")) {
+				t.Fatal("frozen metadata/content distinction lost")
+			}
+		})
+	}
+}
+
+func TestWindsurfComponentFrozenRefusalOrderingFallbackAndOpaqueInventory(t *testing.T) {
+	root := t.TempDir()
+	first, second := filepath.Join(root, "a"), filepath.Join(root, "z")
+	projectNativeRuntimeWrite(t, filepath.Join(first, "held"), []byte("old"), 0600)
+	projectNativeRuntimeWrite(t, filepath.Join(second, "held"), []byte("old"), 0600)
+	trees := map[string]map[string]windProfileRecord{}
+	for _, path := range []string{second, first} {
+		tree, err := windOwnedTree(context.Background(), path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		trees[path] = tree
+		if err := os.WriteFile(filepath.Join(path, "held"), []byte("new"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := windFrozenTrees(context.Background(), trees)
+	if err == nil || !strings.Contains(err.Error(), "root_sha256="+windsurfConfigDigest([]byte(first))) {
+		t.Fatal("frozen root ordering changed")
+	}
+	before := map[string]windProfileRecord{".": {Kind: "directory", Mode: 040755}}
+	after := map[string]windProfileRecord{".": {Kind: "directory", Mode: 040700}}
+	if message := windFrozenTreeRefusal(strings.Repeat("private", 4096), before, after).Error(); !strings.Contains(message, "key_sha256="+windsurfConfigDigest([]byte("."))) || len(message) > 2<<10 || strings.Contains(message, "private") {
+		t.Fatal("directory-only fallback/path hashing failed")
+	}
+	if err := os.RemoveAll(first); err != nil {
+		t.Fatal(err)
+	}
+	err = windFrozenTrees(context.Background(), trees)
+	if err == nil || !strings.Contains(err.Error(), "inventory=refused") || strings.Contains(err.Error(), first) {
+		t.Fatal("frozen inventory failure became content-bearing or accepted")
 	}
 }

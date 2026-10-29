@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -91,13 +92,75 @@ func (w *windComponentFixture) check(t *testing.T) {
 	}
 }
 func windFrozenTrees(ctx context.Context, trees map[string]map[string]windProfileRecord) error {
-	for path, want := range trees {
+	paths := make([]string, 0, len(trees))
+	for path := range trees {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		want := trees[path]
 		actual, err := windOwnedTree(ctx, path)
-		if err != nil || !reflect.DeepEqual(actual, want) {
-			return fmt.Errorf("Windsurf frozen source/state/native/data/cwd tree changed")
+		if err != nil {
+			return fmt.Errorf("Windsurf frozen source/state/native/data/cwd tree changed: root_role=owned-tree root_sha256=%s inventory=refused", windsurfConfigDigest([]byte(path)))
+		}
+		if !reflect.DeepEqual(actual, want) {
+			return windFrozenTreeRefusal(path, want, actual)
 		}
 	}
 	return nil
+}
+
+// Failure-only facts from the exact comparison frame. Unknown names and file
+// contents never enter the fatal output, and no observed record becomes trusted.
+func windFrozenTreeRefusal(path string, want, actual map[string]windProfileRecord) error {
+	keys := map[string]bool{}
+	for key := range want {
+		keys[key] = true
+	}
+	for key := range actual {
+		keys[key] = true
+	}
+	changed, files := []string{}, []string{}
+	for key := range keys {
+		old, before := want[key]
+		now, after := actual[key]
+		if before == after && old == now {
+			continue
+		}
+		changed = append(changed, key)
+		if old.Kind == "file" || now.Kind == "file" {
+			files = append(files, key)
+		}
+	}
+	if len(changed) == 0 {
+		return fmt.Errorf("Windsurf frozen source/state/native/data/cwd tree changed: diagnostic=refused")
+	}
+	sort.Strings(changed)
+	sort.Strings(files)
+	key := changed[0]
+	if len(files) != 0 {
+		key = files[0]
+	}
+	old, before := want[key]
+	now, after := actual[key]
+	operation := "changed"
+	if !before {
+		operation = "added"
+	} else if !after {
+		operation = "missing"
+	}
+	oldValue, oldOK := windProjectRecord(old, before)
+	nowValue, nowOK := windProjectRecord(now, after)
+	if !oldOK || !nowOK {
+		return fmt.Errorf("Windsurf frozen source/state/native/data/cwd tree changed: diagnostic=refused")
+	}
+	message := fmt.Sprintf("Windsurf frozen source/state/native/data/cwd tree changed: root_role=owned-tree root_sha256=%s key_sha256=%s operation=%s remaining_in_root=%d before=%t after=%t before_record_sha256=%s after_record_sha256=%s equal(kind=%t mode=%t device=%t inode=%t uid=%t gid=%t links=%t size=%t modified=%t changed=%t sha256=%t)",
+		windsurfConfigDigest([]byte(path)), windsurfConfigDigest([]byte(key)), operation, len(changed)-1, before, after, oldValue.RecordSHA256, nowValue.RecordSHA256,
+		old.Kind == now.Kind, old.Mode == now.Mode, old.Device == now.Device, old.Inode == now.Inode, old.UID == now.UID, old.GID == now.GID, old.Links == now.Links, old.Size == now.Size, old.Modified == now.Modified, old.Changed == now.Changed, old.SHA256 == now.SHA256)
+	if len(message) > 2<<10 {
+		return fmt.Errorf("Windsurf frozen source/state/native/data/cwd tree changed: diagnostic=bound")
+	}
+	return fmt.Errorf("%s", message)
 }
 func (w *windComponentFixture) prepare(t *testing.T) {
 	t.Helper()
