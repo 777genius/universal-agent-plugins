@@ -5,6 +5,8 @@ package pluginkitairepo_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -121,6 +123,50 @@ func grokCycleProgress(stage, name string) string {
 	}
 }
 
+// The existing single-target repeated add returns the direct public DTO. Its
+// authority is the earlier held installation, never an identity learned here.
+func grokCycleRepeatAdd(stage, scope string, mutated bool, document map[string]any, r *grokCycleRecipe) error {
+	refused := fmt.Errorf("Grok repeated add differs from held direct result")
+	if stage != "repeat-add-a" || scope != "a" || mutated || r == nil || r.Scope != "a" || r.Name == "" || r.Source == "" || r.Digest == "" || r.Installation.InstallationID == "" || r.Binding.PhysicalArtifact == "" || r.Installation.Source.CanonicalSource != r.Source || r.Installation.Source.TreeDigest != r.Digest {
+		return refused
+	}
+	if projectNativeRuntimeKeys(document, "schema_version command result data", "") != nil || document["schema_version"] != json.Number("1") || document["command"] != "add" || document["result"] != "success" {
+		return refused
+	}
+	data, ok := document["data"].(map[string]any)
+	if !ok || projectNativeRuntimeKeys(data, "plugin version source tree_digest manifest_digest dry_run result", "security next_action") != nil {
+		return refused
+	}
+	for key, value := range map[string]any{"plugin": r.Name, "version": "1.0.0", "source": "direct local source", "tree_digest": r.Digest, "manifest_digest": r.Installation.Package.ManifestDigest, "dry_run": false} {
+		if data[key] != value {
+			return refused
+		}
+	}
+	outcome, ok := data["result"].(map[string]any)
+	if !ok || projectNativeRuntimeKeys(outcome, "installation_id plan activation requires_confirmation mutated", "") != nil || outcome["installation_id"] != r.Installation.InstallationID || outcome["requires_confirmation"] != false || outcome["mutated"] != false {
+		return refused
+	}
+	plan, p := outcome["plan"].(map[string]any)
+	activation, a := outcome["activation"].(map[string]any)
+	if !p || !a || projectNativeRuntimeKeys(plan, "client_id scope status package_mode activation authentication policy verification physical_artifact_id components", "user_actions warnings") != nil || projectNativeRuntimeKeys(activation, "activation authentication policy verification", "user_actions") != nil {
+		return refused
+	}
+	for key, value := range map[string]any{"client_id": "grok", "scope": "project", "status": "ready", "package_mode": "native", "physical_artifact_id": r.Binding.PhysicalArtifact} {
+		if plan[key] != value {
+			return refused
+		}
+	}
+	for key, value := range map[string]any{"activation": "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "package_validated"} {
+		if plan[key] != value || activation[key] != value {
+			return refused
+		}
+	}
+	if !reflect.DeepEqual(plan["components"], []any{map[string]any{"kind": "skill", "name": r.Name, "support": "native"}}) {
+		return refused
+	}
+	return nil
+}
+
 func (c *grokProjectCycle) apply(t *testing.T, stage, scope string, mutated bool) {
 	t.Helper()
 	r := c.recipes[scope]
@@ -145,7 +191,13 @@ func (c *grokProjectCycle) apply(t *testing.T, stage, scope string, mutated bool
 		if err != nil || !ok || nativeValidateInstallerJSON(result.Stdout) != nil || string(result.Stderr) != grokCycleProgress(stage, r.Name) {
 			t.Fatal("Grok exact public success/progress differs")
 		}
-		commandsRequireMutated(t, stage, document, mutated)
+		if stage == "repeat-add-a" {
+			if err := grokCycleRepeatAdd(stage, scope, mutated, document, r); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			commandsRequireMutated(t, stage, document, mutated)
+		}
 	}
 	if strings.HasPrefix(stage, "remove-") {
 		r.Removed = true
