@@ -962,6 +962,12 @@ export function defaultDistribution(plugin: RegistryPlugin): DistributionView {
   return distribution;
 }
 
+function supportsInstallScope(target: ReleaseTarget | undefined, scope: InstallScope): boolean {
+  // A remote app connection has no project filesystem installation. Missing
+  // scope facts cannot authorize a project command on older projections.
+  return Boolean(target?.scopes?.includes(scope) && (scope !== 'project' || !target.app_binding));
+}
+
 function eligibleRelease(
   distribution: DistributionView,
   targets: ReadonlySet<ClientID>,
@@ -998,12 +1004,15 @@ function eligibleRelease(
         params: { sequence: release.release_sequence, targets: missing.join(',') },
       });
     } else {
-      const missingScope = [...targets].filter(
-        (client) =>
-          !release.targets
-            .find((target) => target.client === client)
-            ?.scopes.includes(scope ?? 'user'),
-      );
+      const missingScope = scope
+        ? [...targets].filter(
+            (client) =>
+              !supportsInstallScope(
+                release.targets.find((target) => target.client === client),
+                scope,
+              ),
+          )
+        : [];
       if (scope && missingScope.length) {
         reasons.push(
           `release ${release.release_sequence} does not support ${scope} scope for ${missingScope.sort().join(',')}`,
@@ -1166,7 +1175,7 @@ export function reachableTargetPolicies(
     for (const release of distribution.releases) {
       if (release.release_status !== 'active' || !release.meets_minimum_capabilities) continue;
       for (const target of eligibleTargetPolicies(distribution.kind, release)) {
-        if (scope && !target.scopes.includes(scope)) continue;
+        if (scope && !supportsInstallScope(target, scope)) continue;
         if (
           !policies.some(
             (item) =>

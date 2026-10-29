@@ -166,4 +166,14 @@ test('multiple clients and scope must coexist in the same active release', () =>
     resolveDistribution(plugin(chatgpt), ['chatgpt'], 'project').distribution,
     undefined,
   );
+  const remote = chatgpt.releases[0]!.targets[0]!;
+  remote.scopes = ['user', 'project'];
+  remote.app_binding = { app_key: 'remote', id: 'connection', mcp_server: 'remote' };
+  assert.equal(
+    resolveDistribution(plugin(chatgpt), ['chatgpt'], 'project').distribution,
+    undefined,
+  );
+  const missing = distribution('default', ['project']);
+  Reflect.deleteProperty(missing.releases[0]!.targets[0]!, 'scopes');
+  assert.equal(resolveDistribution(plugin(missing), ['codex'], 'project').distribution, undefined);
 });
