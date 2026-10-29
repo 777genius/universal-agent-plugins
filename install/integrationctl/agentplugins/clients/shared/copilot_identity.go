@@ -15,11 +15,17 @@ import (
 // share a backend, so this helper is the one place that knows the listing
 // contract.
 func InspectCopilotRegistry(ctx context.Context, env clients.Env, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+	return InspectCopilotRegistryWithListingRecognition(ctx, env, plan, managed, nil)
+}
+
+// InspectCopilotRegistryWithListingRecognition preserves the shared command and
+// fallback while allowing an adapter to recognize its own exact native listing.
+func InspectCopilotRegistryWithListingRecognition(ctx context.Context, env clients.Env, plan domain.DeliveryPlan, managed *domain.ClientBinding, recognize func(legacyports.CommandResult, domain.DeliveryPlan, *domain.ClientBinding) (clients.RegistryFinding, bool)) (clients.RegistryFinding, error) {
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
 	}
 	if strings.TrimSpace(plan.NativeRegistryExecutable) != "" {
-		return inspectCopilotCLI(ctx, env, plan, managed)
+		return inspectCopilotCLI(ctx, env, plan, managed, recognize)
 	}
 	root := strings.TrimSpace(plan.NativeRegistryRoot)
 	if root == "" {
@@ -36,7 +42,7 @@ func InspectCopilotRegistry(ctx context.Context, env clients.Env, plan domain.De
 	return clients.RegistryIndeterminate, nil
 }
 
-func inspectCopilotCLI(ctx context.Context, env clients.Env, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+func inspectCopilotCLI(ctx context.Context, env clients.Env, plan domain.DeliveryPlan, managed *domain.ClientBinding, recognize func(legacyports.CommandResult, domain.DeliveryPlan, *domain.ClientBinding) (clients.RegistryFinding, bool)) (clients.RegistryFinding, error) {
 	if env.Runner == nil {
 		return clients.RegistryIndeterminate, nil
 	}
@@ -53,6 +59,14 @@ func inspectCopilotCLI(ctx context.Context, env clients.Env, plan domain.Deliver
 	expectedPath := plan.ActivePath
 	if managed != nil && strings.TrimSpace(managed.TargetLocator) != "" {
 		expectedPath = managed.TargetLocator
+	}
+	if recognize != nil {
+		if finding, recognized := recognize(result, plan, managed); recognized {
+			if err := ctx.Err(); err != nil {
+				return clients.RegistryIndeterminate, err
+			}
+			return finding, nil
+		}
 	}
 	return CopilotRegistryFindingAt(result.Stdout, plan.DeclaredName, ManagedMarketplaceName(plan.PhysicalArtifactID), MarketplaceVersion(plan.DeclaredVersion), expectedPath, managed != nil), nil
 }

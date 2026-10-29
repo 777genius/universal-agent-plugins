@@ -1,0 +1,142 @@
+{
+  "acquisition": {
+    "client": "copilot",
+    "acquisition": {
+      "sha256": "9aeb4430e9ac9523546db07b227c7aba179a4710a55f9ac29ad143b0f9e1b325",
+      "pin_verified": true,
+      "members": [
+        {
+          "name": "copilot",
+          "kind": "file",
+          "bytes": 198445888,
+          "sha256": "f19b3554a6b62605db3a26d5255ebe2a3ee39fcd6a357edb18301ea5037f6f0d"
+        }
+      ]
+    },
+    "runtime_files": [
+      {
+        "path": "/home/runner/work/_temp/project-runtime-copilot/client/copilot",
+        "sha256": "f19b3554a6b62605db3a26d5255ebe2a3ee39fcd6a357edb18301ea5037f6f0d"
+      }
+    ]
+  },
+  "activation": "prepared",
+  "binding": {
+    "client_binding_id": "client_15510ae591955e3fac3bf86a",
+    "client_id": "copilot",
+    "scope": "project",
+    "target_locator": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.uap/managed/clients/copilot/native-proof-ac613ed30810",
+    "physical_artifact_id": "native-proof-ac613ed30810",
+    "materialization": "materialized",
+    "activation": "prepared",
+    "authentication": "not_checked",
+    "policy": "allowed",
+    "verification": "installation_verified",
+    "package_revision": {
+      "version": "1.0.0",
+      "tree_digest": "sha256:1a3021952eff56149ee701b25a98c9c408c2fd2c8c37f3ace00746b6631263dc",
+      "manifest_digest": "sha256:135a3db1f8febc821471268cb5b784349ecfc2a2e9015d218dda2e36b902cc4d"
+    },
+    "data_receipt_id": "data_4c8ad55a543d213ce962f6c9",
+    "affected_surfaces": [
+      "copilot"
+    ],
+    "native_profile_root": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project",
+    "native_objects": [
+      {
+        "object_id": "package:copilot:native-proof-ac613ed30810",
+        "kind": "managed_package_directory",
+        "logical_name": "native-proof",
+        "path": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.uap/managed/clients/copilot/native-proof-ac613ed30810",
+        "managed_digest": "sha256:3048afaa6a14e752c09f872f7323526294e7c8e3b02af1c27bc8d7a10cf17fcd",
+        "protection_class": "managed"
+      },
+      {
+        "object_id": "copilot_project_mcp_server:uapcopilota",
+        "kind": "copilot_project_mcp_server",
+        "logical_name": "uapcopilota",
+        "path": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.github/mcp.json",
+        "managed_digest": "sha256:cf35360150119fe765a7b8e6bf24babb883f08ff0336dae5dcf7a9ac0597e833",
+        "protection_class": "managed"
+      },
+      {
+        "object_id": "copilot_project_skill_directory:uapcopilota",
+        "kind": "copilot_project_skill_directory",
+        "logical_name": "uapcopilota",
+        "path": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.github/skills/uapcopilota",
+        "source_relative": "skills/uapcopilota",
+        "managed_digest": "sha256:fbd12fe6fa822edd96282152f8192a61624c1020f99f06800b6722950d72df0d",
+        "protection_class": "managed"
+      }
+    ],
+    "receipts": [
+      {
+        "operation_id": "op-c45d05663098393cb9408e4e139919ae-001",
+        "operation_group_id": "op-c45d05663098393cb9408e4e139919ae",
+        "sequence": 1,
+        "mutation_type": "directory_swap",
+        "client_binding_id": "client_15510ae591955e3fac3bf86a",
+        "active_path": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.uap/managed/clients/copilot/native-proof-ac613ed30810",
+        "staging_path": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.uap/managed/clients/copilot/.agentplugins-staging-2d2cb7a3daad553b",
+        "backup_path": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.uap/managed/clients/copilot/.agentplugins-backup-2d2cb7a3daad553b",
+        "after_digest": "sha256:3048afaa6a14e752c09f872f7323526294e7c8e3b02af1c27bc8d7a10cf17fcd",
+        "phase": "committed"
+      }
+    ],
+    "updated_at": "2026-10-27T18:31:20.78239504Z"
+  },
+  "client": "copilot",
+  "data_locator": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.uap/plugin-data/native-proof-ac613ed30810",
+  "elapsed_ms": 3841,
+  "installation_source": {
+    "source_binding_id": "src_d2fd9b12f5f4c3d2ac153344",
+    "requested_source": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/package",
+    "canonical_source": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/package",
+    "resolved_revision": "",
+    "tree_digest": "sha256:1a3021952eff56149ee701b25a98c9c408c2fd2c8c37f3ace00746b6631263dc"
+  },
+  "probe_facts": {
+    "nonce": "fb6cd26aaf0bd16f7f5e5dfb7be2efd7",
+    "revision": "A-one",
+    "cwd": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.uap/managed/clients/copilot/native-proof-ac613ed30810",
+    "argv": [
+      "argument with spaces",
+      "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.uap/managed/clients/copilot/native-proof-ac613ed30810/argument",
+      "${UNKNOWN}"
+    ],
+    "plugin_root": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.uap/managed/clients/copilot/native-proof-ac613ed30810",
+    "plugin_data": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.uap/plugin-data/native-proof-ac613ed30810",
+    "literal": "literal ${UNKNOWN} /home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/home",
+    "once": "/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project/.uap/managed/clients/copilot/native-proof-ac613ed30810/${UNKNOWN}",
+    "marker": "retained-fb6cd26aaf0bd16f7f5e5dfb7be2efd7",
+    "pid": 5913,
+    "session": "5913-1793125881785659195"
+  },
+  "provider_kind": "scripted_loopback",
+  "provider_returned": true,
+  "qualification": {
+    "mcp-initialize": false,
+    "mcp-tools-call": false,
+    "mcp-tools-list": false,
+    "native-restart-removal": false,
+    "project-lifecycle": false
+  },
+  "real_model_qualified": false,
+  "runtime_attempt_complete": false,
+  "scanner": {
+    "archive_sha256": "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da",
+    "binary_sha256": "b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba",
+    "platform": "linux-amd64",
+    "route": "prepopulated supported scanner cache; ordinary CLI security assessment",
+    "source_tag": "v0.1.3",
+    "version": "0.1.3"
+  },
+  "source_identity": {
+    "installer_base_commit": "9b8ddc5332d70ca0c8d39c41c5ce60f3bba1c6e7",
+    "installer_patch_sha256": [],
+    "installer_source_state": "committed",
+    "installer_tree": "8386a313607a2d1acfd5583bd9335d9ce7af1340"
+  },
+  "test_failed": true,
+  "vendor_authentication_qualified": false
+}

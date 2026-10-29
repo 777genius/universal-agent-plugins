@@ -25,6 +25,7 @@ import zipfile
 from native_client_research import bounded_read, run_probe
 from project_native_service import Service
 import native_client_project_artifacts as artifacts
+import project_native_kiro_auth as kiro_auth
 
 
 def adjacent(name, filename):
@@ -493,6 +494,7 @@ def publish(summary, ctx, output):
 
 def run(client, phase, output):
     native.require_hosted("linux-amd64")
+    kiro_key = kiro_auth.snapshot(client)
     if output.resolve() != output or output.exists() or SOURCE == output or SOURCE in output.parents:
         raise ValueError("fresh ordinary output outside source required")
     output.mkdir(mode=0o700, parents=True)
@@ -503,6 +505,8 @@ def run(client, phase, output):
     try:
         with Budget(360) as budget:
             ctx = Context(output, summary, budget)
+            if client == "kiro":
+                kiro_auth.register(ctx, kiro_key)
             ctx.source_and_projects()
             leaf = adjacent("project_native_leaf_" + client, "project_native_collectors/" + client + ".py")
             phases = getattr(leaf, "AVAILABLE_PHASES", ("acquire",) if getattr(leaf, "ACQUISITION_ONLY", False) else ())

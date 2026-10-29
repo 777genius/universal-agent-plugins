@@ -1,5 +1,37 @@
 # Remaining native project qualification
 
+## Cursor acquisition and optional Kiro CI authentication, 2026-10-29
+
+The [official Cursor installer](https://cursor.com/install) still names the
+reviewed `2026.10.22-27dcf5f` Linux x64 archive. A bounded plain request again
+returned HTTP403 before executable bytes; no replacement pin, bypass header or
+local vendor execution is introduced. Cursor remains acquisition-blocked.
+
+Kiro's [authentication](https://kiro.dev/docs/getting-started/authentication/)
+and [headless](https://kiro.dev/docs/cli/headless/) documentation support
+`KIRO_API_KEY` for noninteractive CLI automation. Static inspection of the exact
+132018592-byte pinned2.34.0 archive, SHA256
+`11dce9286cf7401079cf4eac02a3d5982daac16a346d880109ec7b4a0b941040`,
+verified all three already-recorded companion digests and the chat executable's
+embedded API-key documentation. No native executable ran during inspection.
+
+Independent Grok-owner R1 and Copilot-owner R2 plan reviews approved a narrow
+optional dedicated-key path. The workflow supplies only the selected Kiro step;
+the runner validates its private capture bounds before any child and registers
+plain, JSON-escaped and base64 forms with the existing redactor. The key enters
+only read-only Kiro list probes or the exact installed native-attempt child;
+source queries, builds, public UAP commands and other clients retain their closed
+environments. Go evidence is redacted before retention, and outer admission
+refuses residual private forms in the inner native ZIP. No key, profile or token
+is placed in argv, receipts or uploaded configuration.
+
+Absent-key behavior, immutable pins, fixed prompts/arguments, original deadlines,
+no automatic trust, failed first-capture review and all-false qualification remain
+unchanged. No dedicated key is available in this session. Supplying a valid CI
+secret permits a fresh genuine hosted attempt; it does not establish that Kiro's
+read-only account commands accept API keys, that authentication succeeds, or any
+lifecycle/MCP/model qualification. Those outcomes require their own raw review.
+
 ## Owner reprioritization, 2026-10-27
 
 The owner explicitly deferred VS Code: it is not a priority and is skipped in
@@ -837,6 +869,46 @@ State stays Prepared. Label `provider_kind=scripted_loopback`, vendor
 authentication false and real-model use false. Raw bounded evidence stays in
 closed CI artifacts, not Git or recursively uploaded native profiles.
 
+## Grok opaque catalog research amendment
+
+Genuine help run 40240232499/artifact 12616383397 confirms the frozen 1.0.70
+archive/executable and `inspect --json`, `plugin list --json`, and `mcp list
+--json` help. After two independent plan rounds, admit explicit `observe`
+research only. Keep the nine fixed version/help probes unchanged. Require six
+empty baseline catalog operations in A/outside, then author distinct text-only
+user/A/B `.grok/plugins/<marker>/.grok-plugin/plugin.json` and
+`skills/<marker>/SKILL.md`, and require nine populated catalog operations in
+A/B/outside. No executable payload, hooks, commands, MCP definition, native
+trust, provider, SDK or account mutation is introduced. Outside remains a
+separate cwd, never HOME.
+
+Each operation uses existing hosted admission, immutable runtime checks and
+`Context.probe`, with max 30 seconds capped by the original shared 360-second
+remaining deadline. Every required operation must return exact integer zero,
+error None, empty stderr and strict UTF-8 whole duplicate-free finite JSON
+object/list, bounded to one MiB, 32 levels and 8,192 nodes. Preserve raw streams.
+The schema remains opaque; root kind, digest and marker-token occurrences are
+research observations, never selected source/loading evidence. Owned ordinary
+single-link UID files retain exact mode, bytes and original identity across each
+probe, using descriptor-relative no-follow parent/file opens and held reads.
+
+Only completed fixed observations may pass `grok.scope-observation` research;
+all product lifecycle, native restart/removal, MCP initialize/list/call,
+authentication and model qualification flags remain false. Failures, malformed
+JSON, alias/replacement/mutation, timeout or missing operations fail the research
+slice. Freeze genuine observed source schemas and native modes with a new
+separate reviewed amendment before real UAP lifecycle implementation or a
+native-source qualification claim. Existing skills-only project MCP refusal
+remains intact.
+
+Every native child, including version/help and all catalogs, receives literal
+`GROK_DISABLE_AUTOUPDATER=1` through the existing environment allowlist. This is
+the documented suppression control in the official
+[settings reference](https://docs.x.ai/build/settings/reference); it does not
+claim network isolation or supply vendor authentication. Immutable runtime
+identities remain checked before and after every child. Inert contracts assert
+the exact supplied environment on every help/catalog call.
+
 ## Kimi installed local lifecycle amendment
 
 Genuine Kimi API run 40238495966 at `ac3a7e5da565590fd85c4ff9795cae6b312ed6b1`,
@@ -976,6 +1048,36 @@ remain false. A bounded retained failure cannot become a passing E2E gate.
 Further source/provider/permission/lifecycle changes require their own observed
 contract and independent review; legacy user and baseline gates remain required.
 
+## Observed Grok 1.0.70 project inspection admission
+
+Genuine runtime [40353442588](https://github.com/777genius/universal-agent-plugins/actions/runs/40353442588)
+stopped before public `add-a` mutation because the existing project inspector
+accepted only the previously measured 1.0.67 version. The follow-up genuine
+read-only [observe run 40353442581](https://github.com/777genius/universal-agent-plugins/actions/runs/40353442581)
+succeeded at source `3234be86f0a3217ebd2371dc5e8fa0b26d3dcd26`, tree
+`74490cebf339e8538b1f237b478aceeb58667e3d`. Native artifact `12670385326`
+(SHA256 `a0d9c2e0858b5bbb2297f4d6f6f99aa71a57cfbc3d9ba5ec908434dfe14db957`)
+retains the actual bounded 1.0.70 inspection responses.
+
+The measured empty A and populated A/B responses contain the existing identity
+subset: exact `grokVersion`, canonical `cwd`, same `projectRoot` with an optional
+trailing separator, boolean `projectTrusted`, and `skills`/`plugins` arrays.
+Populated A/B each identify their own project plugin by exact name/scope/path
+with `enabled=false`, plus the independent original-user plugin. Outside cwd
+lists only the user plugin and has no project root. The separate plugin-list
+command returned empty arrays even for these candidates; it is not a substitute
+for project inspection. Native trust and MCP execution remain unqualified.
+
+Admit exactly the measured 1.0.70 version alongside 1.0.67 in the existing
+project-inspection parser. Retain strict duplicate/case-fold handling, exact
+cwd/root, typed trust and collections, unique plugin names, canonical absolute
+paths, scope checks, ownership and namespace collision rules. All other versions
+remain closed. Update only the corresponding version-specific user guidance;
+project activation remains Prepared and MCP qualification remains unchanged.
+Add focused tests for both admitted versions and unchanged refusals, then rerun
+the existing genuine Grok startup capture. No new command, alternate catalog,
+trust grant, provider, permission mode, deadline or cleanup policy is introduced.
+Two independent plan reviews precede this product correction.
 | Client | Pinned native version | Fixed restricted startup |
 | --- | --- | --- |
 | Qoder | 1.1.78 | `--print --output-format stream-json --no-session-persistence --permission-mode default --tools "" --plugin-dir <receipt-selected-view> <prompt>` |
@@ -1636,6 +1738,310 @@ not qualify the observed macOS race; the original hosted macOS contract remains
 required. Two independent plan rounds precede implementation, followed by
 independent code review and exact-source validation.
 
+## Draft Grok installed prepared-candidate visibility capture
+
+This proposed narrow follow-through awaits scope assessment and two independent
+plan approvals before code. It adds one visibility stage to the existing Grok
+installed-startup attempt, not another collector, lifecycle case or capability.
+
+The concrete gap is the join between existing evidence sets. Genuine observe
+run `40353442581`, source `3234be86f0a3217ebd2371dc5e8fa0b26d3dcd26`,
+tree `74490cebf339e8538b1f237b478aceeb58667e3d`, artifact `12670385326`
+(ZIP SHA256 `a0d9c2e0858b5bbb2297f4d6f6f99aa71a57cfbc3d9ba5ec908434dfe14db957`)
+measured project candidate name/scope/path and disabled status, but those native
+directories were authored directly by research. The composed saved lifecycle
+test exercises the public installer with an inert native runner. The real
+installed-startup fixture validates public add and installed skill/receipts,
+but retains no independent raw `inspect --json` output after that add.
+Production `inspectProject` deliberately permits file-valid Prepared output
+when its native list lacks the candidate, so successful public add alone does
+not establish candidate visibility. This is a missing research observation,
+not evidence of a production bug or a reason to tighten preparation behavior.
+
+After the existing `f.setup`, run exactly one Grok-only command, label
+`native-inspect`, argv `<pinned-grok> inspect --json`, cwd selected project A,
+timeout 30 seconds. Reuse the same command supervisor, original HOME, literal
+updater suppression, immutable/protected checks, bounded streams and original
+150-second work / 180-second total deadline. Other clients' command tables and
+all existing native-startup argv remain unchanged. There is no additional
+provider, login, trust grant, plugin enable, permissions change or native tool.
+
+Parse only the already measured identity subset using the existing strict JSON
+and key-folding helpers: exact `grokVersion=1.0.70`, cwd A, projectRoot A with
+the measured optional trailing separator, boolean projectTrusted and typed
+skills/plugins arrays. Require projectTrusted=false and exactly one selected
+name in the complete plugins array, scope=project, path equal to the already
+validated selected binding locator and enabled=false. Refuse ambiguous names,
+wrong types, aliased/noncanonical paths, duplicate or case-folded identity
+fields, missing candidate or changed version/scope/path/status. Preserve and
+recheck authored and delivered skill bytes around this read-only command.
+Require the selected locator to be a canonical direct child of A's exact
+`.grok/plugins`, with the validated physical-artifact basename. Require its
+ordinary owned directory ancestry and held native manifest/skill paths without
+aliases or extra links before and after inspection; string equality alone
+cannot establish this path authority. Reuse existing bounded no-follow readers.
+Capture the full raw command triple; summarize only visible disabled Prepared
+candidate identity. Do not treat counts, labels or retained files as skill
+loading, active discovery or source revision/runtime proof.
+
+Admit the new complete triple only for Grok in the existing closed frontend;
+partial/unknown members and every other client's admission remain unchanged.
+Root owns this minimal shared frontend change. Add focused inert native-JSON,
+fixed command/cwd/deadline, wrong-client and artifact-triple contracts, using
+the held genuine inspection bytes as the positive schema reference. Then run
+the existing restricted startup attempt unchanged. The whole initial attempt
+still deliberately fails; all five qualification, vendor-authentication and
+real-model flags remain false. This stage does not establish B/outside
+isolation, full lifecycle, restart/removal or a new supported native surface.
+Further lifecycle/qualification work requires its own reviewed evidence and
+definition. Independent code review and a fresh genuine hosted capture remain
+mandatory; no vendor process may run locally.
+
+## Grok empty-profile migration sentinel amendment
+
+The genuine PR522 source `753936db2e50613c2a4310848a262ec4f25dea87`,
+run `40553581491` / native artifact `12759346679` (outer SHA256
+`f90a4502e5e0bac54dfbb37372a29916431a2c0b4fc7aedb0afed6fa5832531a`),
+fails the original config digest guard. All eight model facts remain equal;
+the sole added table has key SHA256
+`dfd76b3ecbefe4606d9cbfa7e7c41884b22d214a0c13560bb7eb10e65c11851f`.
+Independently verified public snapshot
+`xai-org/grok-build@2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8` identifies
+the exact source-defined table as
+`marketplace = { default_skills_installs_purged = true }`.
+Its canonical JSON value SHA256 is
+`292bc27c01bd4c8e2df64aacd7e75d92db6d9e3f446970ea2d7d97f011250093`.
+
+The primary shell `extensions/marketplace.rs` blob
+`ea896d05e4471573974e273049d6deb868e92cd6` lines963–1082 reads a typed
+boolean, returns before migration when true and sets it even for an empty
+legacy registry. Shell `plugin/mod.rs` blob
+`60d0d7fba53875e2456b6ebef0fc0744f4fe35ac` lines1346–1390 writes the
+literal boolean into that table. These exact Git blob identities were
+independently reconstructed. This does not resolve shipping build
+`f50904eaee6c` to the public snapshot or export the changed raw TOML.
+
+Root R1 and independent CLI R2 approved the exact plan SHA256
+`30a05da404dc1de8103c030510aff5c34daf2d128f5ad6ea462c8a488e986e77`
+before implementation. The disposable original HOME has no legacy installs.
+Author only `[marketplace] default_skills_installs_purged = true` in the
+initial provider recipe before its first write/vendor child. Freeze all bytes
+and the original digest as before; any later format/removal/false-toggle
+continues to fail the original protected guard. Preserve the eight model
+fields, environment, commands, provider route guard, diagnostic limits,
+process/deadline/admission and all false qualification flags. This grants no
+marketplace source, trust, permission, account or plugin activation.
+
+Inert contracts assert the complete three-table recipe, independently fixed
+semantic hash and initial held bytes/digest. Actual inert test children prove
+the original fatal for formatting, removing or toggling the flag. Existing
+diagnostic count assertions retain one changed member against the new third
+authored table. Focused `^(TestGrok|TestProjectNativeCLI)` contracts passed
+in 1.161s with Go 1.26.10 and approved inert loopback access; the first restricted
+invocation could not bind sockets. Actual all-enabled root lint versus the
+PR520 base and unfiltered whole-root six-linter gate both reported zero issues.
+Gofmt/diff checks are clean; the actual twenty-member native archive still
+replays as failed/incomplete with all five qualifications false. No vendor or
+public installer ran locally. Independent exact-code review precedes root
+publication. A fresh genuine run must establish preservation;
+the existing rejected GET remains `uri=other`, and this amendment accepts no
+new HTTP route or final capture/qualification boundary.
+
+# Copilot failed-attempt evidence and original-config diagnostics amendment
+
+## Observed evidence and limits
+
+Genuine runtime run `40363828314`, job `121755712251`, at published
+`4566b551b7c225a30b40c149a44f69d96cc2d0ce`, tree
+`aeaf19c4a30668f17f83a111ac362c70ed6f95d1`, built and selected the current
+Copilot test, then failed at the `native-attempt` command boundary with
+`original authority changed: .../home/.copilot/config.json (<nil>)`.
+Frontend artifact `12678603433`, ZIP SHA256
+`1020004a73f256b40287914bdb3925f0899997f7226cfbac72c80f6613ee96a4`,
+records `runtime_artifact_admitted=false` and
+`runtime_admission_error="ValueError"`. No native archive was uploaded.
+The config digest differed after a successful strict read. Its actual changed
+bytes/fields, cause and exact pre/post boundary are not available from that
+frontend. No migration, authentication or native tool outcome is inferred.
+
+Local source `6fb04dc10b3e48ade631c4d65433c39afd5a9f60` has the exact
+published tree above. Its fixture necessarily stores the installed project MCP
+snapshot under `.github-mcp.json.installed`, because setup derives a name from
+the parent `.github` plus basename `mcp.json`. The unchanged frontend accepts
+only `mcp.json.installed` for that snapshot. Setup returned before the reported
+line 406, so this unexpected member had already been held. An inert invocation
+of the exact `attempt_members` function reproduces `ValueError: unrecorded
+native artifact member`; changing only the inert member name to the existing
+allowed name admits the same failed/unqualified envelope. This proves a
+deterministic source contract defect. Because the historical raw archive was
+not exported and only the exception class survives, the exact historical
+admission branch cannot be inspected directly; an earlier ZIP check is not
+independently excluded by the available bytes.
+
+## Correct only the fixture's emitted snapshot name
+
+In the Copilot Go fixture, give the two installed public snapshots explicit
+existing names: `mcp.json.installed` for the selected project `.github/mcp.json`,
+and `uapcopilota-SKILL.md.installed` for its selected installed skill. Retain
+the same held bytes, receipt-selected paths, ordinary-file reader, content
+checks and capture bounds. Do not broaden or change `attempt_members`,
+`admit_runtime`, the allowed member set or shared Python parser. This snapshot
+is installed project configuration, not the original private user profile.
+Add an inert contract for actual fixture-emitted names and preserve unknown,
+duplicate, partial-command, non-UTF8 and oversized member refusal.
+
+## Use existing evidence to locate the failure boundary
+
+`command` already checks protected authority before execution, then holds its
+stdout/stderr/command triple before checking authority again. With the naming
+defect corrected, a complete `native-attempt` triple in an admitted failed
+archive proves the command returned before the failed post-command check; its
+absence together with the boundary failure identifies the pre-command check.
+Do not add a duplicate phase field or alter the exact command receipt schema.
+Retain failed captures and the deferred existing `finish` behavior even when
+the original-profile guard fails. An incomplete triple still refuses admission.
+
+## Minimum bounded original-config change facts
+
+Keep the original authored config bytes/digest frozen before version/native
+startup. On a mismatch of exactly the fixture's original
+`<original HOME>/.copilot/config.json`, keep the existing fatal refusal and
+record one optional, bounded `original_config_change` object inside the existing
+`runtime-attempt.json`. There is no new artifact member or private-profile ZIP.
+
+The diagnostic may contain only: expected and observed SHA256 digests; baseline
+and observed byte counts; a fixed snapshot status; whether strict parsed JSON
+is semantically equal to the original authored object; whether the
+`trustedFolders` value still exactly equals the original two selected project
+folders; and a bounded structural summary of changed top-level members. For
+each changed member export only its key SHA256 and before/after JSON type
+(`absent`, `null`, `boolean`, `number`, `string`, `array`, `object`). Do not
+export raw unknown key names, any member values, absolute trust-folder values,
+credentials, tokens, raw config text or a recursively copied profile. A
+semantically equal object can identify a byte-format change without accepting
+that change or adopting a new baseline.
+
+Use the existing no-follow ordinary held-file reader, cap this diagnostic read
+at 16 KiB and the structural summary at 32 changed top-level keys. Exceeding a
+bound records a fixed bounded status, with no partial structural summary.
+Compare the
+diagnostic bytes' digest to the digest observed by the failed guard; if it
+differs, record only a fixed unstable status and no JSON-derived conclusions.
+Missing, aliased, special, oversized, malformed/non-object or unreadable input
+records a fixed status without error text or content. Unknown/missing nodes do
+not broaden the original guard's acceptance. Produce a finite object no larger
+than 16 KiB, within existing total/work/cleanup budgets, with no retries,
+native child or filesystem writes during diagnosis. The snapshot remains in
+private memory only; do not reread or publish unknown profile files.
+
+## Verification and unchanged scope
+
+Two independent plan approvals precede code. Expected edits are the Copilot
+fixture and focused inert contract tests, plus its consolidated plan; shared
+frontend/parser/allowlist and native provider behavior remain unchanged.
+Contracts must prove correct snapshot naming, pre/post distinction through
+the existing triple, semantically equal-but-byte-changed refusal, exact trusted
+folder preservation checks, hashed/type-only changed-member summaries and
+absence of canary key names/values/secrets in exported diagnostics. Cover alias,
+read failure, malformed JSON, size/key-count bounds and a changed snapshot.
+Every mismatch still fails the test; diagnostics can never promote a failed
+attempt or any qualification flag.
+
+Preserve all pinned acquisition/runtime hashes, native argv/environment,
+loopback provider route/identity, permission restrictions, process supervision,
+original-user/A/B ownership, state Prepared, deadlines, no extra native calls
+and closed artifact limits. Run only focused inert contracts/lint locally.
+Inspect a fresh genuine hosted failed capture before proposing any source,
+product or runtime behavior amendment for the config mutation. Vendor
+authentication, model use, native session grammar and all five lifecycle/MCP
+qualification flags remain false.
+
+## Observed Kiro read-only authentication boundary
+
+Genuine research run `40354148442`, job `121719233213`, at source
+`d650ef37ff5cd2f38f6b784ebcd9723c47e62cf7`, tree
+`6b2be08d15092de328f2644478036f8c751e2b94`, reached the first selected
+`mcp list workspace` operation in A after all eight fixed version/help probes
+completed. Artifact `12673026085` has ZIP SHA256
+`8187c2423340174d86c70a21480139f6a9a1f2999d5437a4ef82092dbb82d068`.
+Its exact command receipt records exit `1`, no capture error, empty stdout and
+64 stderr bytes: `error: You are not logged in, please log in with kiro-cli login`
+followed by one LF. This is an observed authentication refusal for that read-only
+operation; it does not establish the outcome of native chat, ACP, discovery,
+trust, MCP startup or any later command. The archive was independently hashed
+and the held raw streams inspected; no credentials were available or used.
+
+Keep the immutable 2.34.0 archive, full closure, verified companions, fixed
+version/help commands, original HOME, disabled inert marker configurations,
+closed PATH, before/after fixture checks and all existing process/capture
+bounds. In the Kiro leaf only, recognize this exact receipt/stream tuple solely
+for label `a-workspace-raw-list`, arguments `mcp list workspace`, project `a`
+and the existing 30-second deadline. Require the explicit integer exit `1`,
+an explicit null capture error, empty byte stdout and exactly the measured
+stderr bytes. Any changed message, whitespace, additional diagnostic, stdout,
+status, missing field, capture failure, wrong label/argv/project/deadline or
+unsafe fixture still fails. Existing version/help stderr exceptions stay
+separate and cannot accept the authentication tuple.
+
+After this exact measured refusal, stop the list table without attempting its
+five unobserved remaining commands. Retain the raw failed command in the shared
+closed capture, and record one finite structured observation identifying this
+command's authentication-required boundary. Leave the opaque-list observation
+table empty; do not synthesize absent catalogs or source/marker results. The
+already completed fixed version/help probes may satisfy only `kiro.help`.
+The source scope observation and all project lifecycle/restart/MCP, vendor
+authentication and real-model qualifications remain false and explicitly
+unobserved. A successful help research collection cannot satisfy or replace
+the separate required installed runtime attempt, which remains fail-closed.
+
+Change only `scripts/project_native_collectors/kiro.py`, its inert contract
+test, and this consolidated plan. Do not change shared case selection, artifact
+admission, qualification schema, runtime fixtures or native behavior. Add inert
+contracts for the exact observed tuple and stop point, all changed/missing or
+misrouted tuples above, companion/config preservation after the refusal, the
+unchanged six-successful-list path and zero positive qualification. No vendor
+execution is permitted locally. Obtain two independent plan approvals before
+code, then independent implementation review and a fresh genuine hosted
+capture before claiming that the amended research path completed.
+
+## Kiro opaque agent-list first-capture amendment
+
+The genuine PR529 source `d5d7b2186d873b097677e1b4e52bfcd2097a007a`,
+help run `40553356151` / artifact `12760035043` (outer SHA256
+`311c206bbe8ec0038afcaf7b634a6f2eaa24c8f4586d0e45144dc663fa6a2830`),
+exports exact pinned `agent --help`: 1172 bytes, SHA256
+`8d44a934188eebb8c0ac9d70b5d77166b1ca1443ffda2f1931fde6564d72ff4d`.
+It documents `agent list` and containing-cwd local-agent discovery. This
+advertisement is command authority, not observed UAP skill/MCP discovery.
+Current native chat and the exclusive first MCP list remain auth-blocked.
+
+Root R1 and independent desktop R2 approved the exact plan SHA256
+`223d58fe3a1c9b4f806c697a1e587ed1faee5ea2e8a2fbb436f407aa23d6a227`
+before implementation. Add only `a-agent-raw-list`, exact `agent list` from
+project A, after all eight help commands and before authored MCP markers.
+The original 30-second probe/aggregate bounds, exact launcher/three-companion
+identity and sealed PATH checks remain unchanged. The new label rejects any
+other argv/project before a child. Strict clean exit/stream/safe-text checks
+apply; no authentication exception, retry or later operation after failure.
+
+Keep raw streams through the existing probe capture and one fixed hash-only
+`raw_agent_list_observation`. The text stays opaque; no agent names, schema,
+skill selection, trust, account/model or runtime qualification is inferred.
+Only the existing help case passes, with the same six unobserved IDs and all
+false qualification flags. Full collector calls become 16 and the current
+first-MCP-auth path becomes 11; its archive becomes 35 members within existing
+bounds. The old 33-member source capture receives no invented observation.
+
+All 23 Kiro Python contracts passed in 0.417s. They cover exact pre-marker
+order/route/hash projection, wrong typed process/streams and unsafe/error text,
+exclusive old-auth-tuple behavior, companion/PATH mutation and refusal to
+adopt preexisting authored marker bytes. Both changed ASTs and whitespace
+checks pass. Actual old 33-member research and 16-member native archives replay
+unchanged: help observation remains source-bound, native failed/incomplete
+with all five qualifications false. No Go, vendor, public installer or hosted
+guard ran locally. Independent exact-code review precedes root publication;
+the new actual command requires fresh genuine capture and raw interpretation.
+
 ## Observed Gemini wait-for-previous description correction
 
 Genuine [runtime run 40367376528](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376528),
@@ -1793,6 +2199,1864 @@ then review and validate the combined source before merging the base PR.
 
 Update current-source support guidance only to the actually observed level.
 Do not publish a release or claim real-model/OAuth qualification from a fixture.
+
+
+# Grok: isolate the measured initial-title side call in a fixed fixture
+
+PRE-CODE proposal. Two independent exact-plan GOs before implementation. Read
+AGENTS.md, PROJECT_INSTALL_OWNER_SCOPE.md and capability preservation. No release,
+VS Code, trust widening, real account/model, local native execution or generic
+provider/model acceptance. Root alone publishes to existing PR522.
+
+## New source-bound actual evidence
+
+Current611f7dd79a923a3b8e445222cde8395bd1af1062,
+treee2b94d93297bbbf9ef316af922a87c426ac083d7. Runtime40586113413,
+job122486692802 fails after3.68seconds. Native12775012222 outer5333B SHA256
+d1aa56111ae7e3270069b47abcc9a022dfdd7e3fa0ee444ccd43e1f70701c7d3,
+inner e4869bdb8bd69c35a21090d7bd0fb441d4930f2b6358992e6a7707dd6fcfc3a9,
+21ordinary closed members. Frontend12774612789 outer3395B SHA256
+0a2b462b88809e6dcc861e8123a00d929e48709d9130c5b6aa70b6a0f645e32d,
+25members. Exact source/tree/cleanbuild,24stream joins, official archive/executable
+pins, public add/source/package/physical/binding/receipt joins and exact-source
+failed-envelope reader replay pass independent audit
+/tmp/uap-grok-611-current-40586113413/independent-raw-audit.json SHA256
+f36b98f1cb8585efce2cdfd616557cabe4f3b0132aafb26e4b2ee1da7ed2f45c.
+
+Public add exits0 Prepared. Actual inspect exits0 in68ms and selects exactly the
+receipt-owned project plugin,enabled=false,projectTrusted=false,one provided
+skill,zero loaded skills and no MCP. Native startup is canceled after364ms by
+provider request-shape refusal: one captured authenticated literal-loopback POST,
+zero responses,ordinary provider shutdown,forced_close=false. The body is an
+initial-title call with model=grok-4.6,two messages,stream=true,temperature1,
+max_tokens100 and forced session_title function schema. It is not the main
+uap-grok-fixture request. The main provider correctly refuses it; no completed
+native output or loaded skill is proved. Every5/runtime/auth/model flag is false.
+
+## Exact publisher source and limits
+
+Official xai-org/grok-build snapshot2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8
+contains independently Git-blob/SHA-verified source retained in
+/tmp/uap-grok-title-source, research /tmp/uap-grok-title-source-research.json.
+Shipping buildf50904eaee6c is unresolved in that public Git snapshot; neither the
+request's agreement with source nor the earlier optout proves binary equivalence.
+
+- config/mod.rs blob568b51d0631e3fb2f1331b107501a5f9b1b72ea3,
+  SHA256a84e2c680ec3ef795d2847c7b1832247e797392d7e9f7f2d17b410585c936f63,
+  lines500-625: `[models] session_summary` / GROK_SESSION_SUMMARY_MODEL resolves
+  the auxiliary title model; empty values fall back to compiled grok-4.6.
+- session/summary.rs blobf0c3ae859ffb6ffe3f891fca4f2b458cca601209,
+  SHA2568d9dafb70d64704c48d1b27330af4218b8ba5a51cb8b20814557f974d06d7806:
+  SummaryGenerator starts an initial title task on first nonempty content.
+- session/helpers/session_summary.rs blob0f2af81e78701043b8446a8bffb2272921f3802c,
+  SHA256fde704829e87366b93280fe031e01aaaca2d5bd169a67d0bc777f3013f7f8837,
+  lines188-244 constructs the measured two-message session_title request and
+  reads a title from returned function-call arguments.
+- agent/mvp_agent/agent_ops.rs blobfa77f1ec809cf3c944ba91895a73ba422a24054a,
+  SHA256399735fd57b748735efaaef3f956c6b428af60bbe436754031e91a9342e776bd,
+  lines85-135 resolves the configured auxiliary model's sampler; missing model
+  resolution falls back to the primary sampler with the auxiliary model slug.
+- agent/config.rs bloba430462ad3b8e0611368ad2051f093827d7babee,
+  SHA25651eadad05c42e19954fe0822dd187dc59694252bec34d513cc329a05394b47a2,
+  lines4489-4515 returns a catalogued custom auxiliary model's own endpoint/key;
+  lines4597-4612 preserves them while stamping local context/max_retries.
+
+The examined CLI/summary/persistence source has no verified initial-title disable
+setting. GROK_TITLE_REFRESH controls later turn-checkpoint refresh and does not
+suppress the initial SummaryGenerator. Do not add it as an assumed solution.
+
+## Proposed narrow fixture boundary
+
+Preserve the original main provider's literal authenticated POST route, loopback,
+Host,MIME,credential,body/model,one-request/response,count,failure,cancellation and
+cleanup predicates. Main provider admission/capture/serve/response functions and
+the shared native command fatal/review-barrier path remain byte-identical. Do not
+let the main provider accept grok-4.6,a title request,unknown models or a second
+request. Original Prepared/untrusted/disabled inspection remains unchanged.
+
+Only for the existing Grok attempt with its held main provider, start one separate
+fixed loopback title fixture before configuring children. Generate its own fresh
+private128bit fixture key,distinct from the main key. Author the original HOME's
+already frozen config before startup with `[models] session_summary =
+"uap-grok-title-fixture"` and a separate `[model.uap-grok-title-fixture]` entry:
+that exact model, its held127.0.0.1:random/v1 endpoint, its dedicated env_key,
+chat_completions backend,unsupported search/reasoning and max_retries0, matching
+the established custom-model recipe. Keep default/main model,original HOME,
+marketplace sentinel,existing shared-client optout and all other config unchanged.
+Add exactly the held title key to the existing closed child environment; do not
+import ambient GROK/session-summary/title keys or alter global environment.
+
+The title fixture is a bounded one-exchange sibling with its own count, raw
+request/response and finite receipt. Reuse only existing strict route/ordinary
+transport cleanup helpers where this does not alter the main model boundary.
+Require exact POST /v1/chat/completions,loopback peer,matching Host,relative URL,
+empty URL host/raw path,one application/json and one exact Bearer dedicated key.
+Reject redirects,GET/prewarm,missing/wrong/multiple credential or MIME and second
+attempts immediately. Original context origins150/180seconds and native60seconds
+are unchanged; listener limits/deadlines are no larger than existing provider.
+
+Require whole strict duplicate-free bounded JSON with the exact source-derived
+current schema: model uap-grok-title-fixture; stream true; stream_options exactly
+include_usage true; temperature1;max_tokens100; exactly the measured system text
+and current fixed harmless prompt wrapped in user_query; exactly one session_title
+function with measured description,strict single-string field schema and exact
+forced tool_choice. Reject extra/missing fields,wrong text/model/schema,tool calls,
+NaN/trailing data and body>1MiB. Do not interpret or forward returned native paths.
+After exact route/authentication and the1MiB read bound, require a whole strict
+JSON object before retention. Check both original held fixture keys against raw
+bytes and recursively decoded JSON strings/keys (including JSON-escaped spellings)
+before any body capture. Any privacy match fails/cancels without retaining body.
+Malformed/nonJSON/trailing/duplicate/nonfinite/oversized bodies and all credential
+failures likewise retain no raw body. Only a safe bounded strict JSON object is
+captured, with requests=1, before the full fixed title-schema check; a schema
+refusal retains that safe request,records0responses,cancels and stays allfalse.
+No response or raw capture follows malformed/oversize/privacy refusal.
+
+Return exactly one deterministic OpenAI chat-completions SSE tool-call result for
+session_title with fixed harmless title `Disposable plugin startup observation`,
+finish_reason=tool_calls and one[DONE]. No generic text fallback or model request
+forwarding. This synthetic title function is internal title metadata,never native
+MCP,installation,skill loading,authentication or real model evidence. Main provider
+continues its existing one fixed response only for its original fixture model.
+Add a finite privacy refusal only to the new title receipt/validator; original
+main provider failure grammar stays byte-identical. Both fixture listeners must
+shut down ordinarily with descendants/connection
+closure; either failure or forced close remains failure. Keep the original main admission/handler functions byte-identical. Extend only
+the existing retention redaction hook to redact both held private keys from every
+retained child/provider stream; no raw headers/key values. Its decoded/raw privacy
+checks must refuse an unsafe title body before retention rather than rewriting
+that raw request. Original main body/model/count/route predicates are untouched.
+
+Export only three new finite names grok-title-provider.json,
+grok-title-provider.request.json and grok-title-provider.response.sse with receipt/
+request/response presence matching actual0/1counts. Receipt<=2048bytes,ordinary
+closed output membership and existing stream/aggregate bounds remain unchanged.
+Extend Python admission in a separate explicit title-member validator; do not
+relax the original main receipt validator. Require exact fixed title role/model/
+transport,finite failures,booleans/counts,coherent response and closure and private
+key refusal. Old611/a1af/c6 failed archives must re-admit unchanged byte-for-byte.
+The existing unconditional final review-barrier failure stays intact even if both
+responses and native exit0 are observed. Every qualification flag stays false.
+
+## Meaningful verification, review and publication
+
+New inert controls independently build literal measured-title requests and assert
+one exact response/count/receipt/membership. Reject main model/title mixups,
+unknown/extra/missing fields,changed system/prompt/schema,wrong endpoint/credential/
+MIME,oversized/duplicate/trailing bodies,second call,context failure,write failure
+and nonordinary closure. Verify exact SSE tool-call name/id/argument/title/DONE
+with independently stated literals/digests. Test both key canaries in retained raw
+and encoded JSON and closed child env with conflicting ambient values. Exercise
+configuration parsing for exactly two held distinct model endpoints/keys and
+unchanged default/main/sentinel; no vendor process. Preserve all existing main
+provider negative cases and exact old-source failed-reader replays. Verify the
+main handler functions and original unconditional native fatal/review barrier
+are unchanged by hashes/diff,not renamed or bypassed.
+
+Freeze the reviewed plan in existing consolidated remaining-native-qualification
+before code; create isolated checkout from fresh agreed current611 and preserve
+concurrent work. Two independent exact code critics follow implementation. Run
+focused Grok/shared inert Go,affected runtime Python,actual affected full-root
+all-enabled and unfiltered six-linter gates,gofmt,whitespace under serialized slots.
+No native/vendor,scanner or public installer binary runs locally. Root publishes
+normal expected-head fast-forward only after gates and critics; then audit the
+new genuine hosted capture. If shipping ignores the auxiliary model setting or
+emits a different request,retain the refusal and plan from that evidence. No
+broad fallback,changed trust,parser assumption or completed-cycle claim follows.
+
+## Accepted dedicated-title amendment before implementation
+
+Exact plan SHA256 `72cc3bcbe925d310806833836d6fa97d65dd1693ad0bcaaf9069e7939f8da07b`
+received independent PLAN GOs from root and GPT-6.1 Sol xhigh
+`gemini_qoder_finish` before any code edit. Receipt SHA256s are
+`13a6e861fa554a9e106bdf9cde5711e4136a45b140086eab64c310068dbdc3bd` and
+`134bb3ba23b7cd1ccbc553faa2f18a2d68a50df859ed6c82c469a157168ab614`.
+Both rehashed all18 pinned primary files and reviewed separate auxiliary model
+resolution and exact measured title schema. The original title config recipe
+is authored before the existing initial baseline freeze; no later baseline
+adoption is allowed. Safe bounded route/auth/strict-JSON/raw-and-decoded-key
+privacy precede request retention; schema refusal sends no response. Main
+provider handlers and existing fatal/review barrier remain unchanged.
+Root freshly checked PR522 remains611 before this isolated checkout.
+
+
+## Grok dedicated title fixture: final reviewed validation (2026-10-27)
+
+The accepted separate-title plan `72cc3bcbe925d310806833836d6fa97d65dd1693ad0bcaaf9069e7939f8da07b` is implemented by code source `3c38d0d5143b4490ff67822954fe9794e55498a8`, tree `28bfe97d594d45a0a7d59767dd427c218d8889fe`. Two exact independent code critics approved the final source: root receipt `ddd9a66d794faf55fd350248f13a1e212a1c7092421670d455fa12401ede980d` and GPT-6.1 Sol xhigh Gemini reviewer `3e7beb62d23ea66ba1f262f87c367448be475e431bb03d03e0a7a6fada93204b`.
+
+The held original HOME is authored once with separate main and initial-title loopback endpoints and private keys. The title handler admits one exact source-defined request and fixed internal session-title SSE response. Both literal and recursively encoded fixture keys are refused before raw request retention. The original main provider route/model/count/authentication functions, shared native process guard and unconditional final failed-only review barrier are unchanged. Three closed title evidence names have a separate bounded validator; all five qualification flags, native completion, vendor authentication and real-model qualification stay false.
+
+Actual final focused inert Go contracts passed (package 2.150s); affected all-enabled lint against program base `a412ba5e137fdcb7e004393229b323211ed746e1` and unfiltered revive/funlen/gocyclo/gocognit/dupl/depguard each reported zero issues. The 41 Python contracts passed in 8.678s on preceding source `3edd581c5b9e3c39b7089dd4d9a5c78233d86b81`; the entire scripts tree is identical through final source (`2d4ac1a96e1f5ccf3a0d6ca7af546d4a39753406`). Original611 and a1af failed archives retain all21/20 member bytes and summaries with all flags false under original and current readers. Gate and transfer receipt SHA256 `954aba61be3972a92fb6a551e7e144b7b655e7a7e0ac58d11999e249b3fd296e`.
+
+Two measured inert-test lint issues were corrected without changing the module version or any guard: context propagation and Go1.22-compatible HTTP request construction. Earlier failed logs remain in scratch audit evidence. No vendor client, public installer or scanner executed locally. Publication only schedules a fresh genuine hosted diagnostic; public-source/shipping equivalence, completed startup, loaded skills, user/project lifecycle and authentication remain unproved.
+
+
+---
+
+# Grok: bounded capture of the already-refused second main request
+
+PRE-CODE diagnostic amendment. Two independent exact-plan GOs and root's accepted plan commit before source changes. Root alone performs Git/GitHub mutations/publication. No local native/acquired client/public installer/scanner execution. No production adapter, provider acceptance, trust/profile authority, native pin, workflow/selection, model, tool, permission or qualification expansion. VS Code and releases remain deferred.
+
+## 1. Measured source-bound need
+
+Current PR522 source `348e2ce8b3bca4f117673a3b6bf80bedf8a64975`, tree `b12330110d2dea50e613bf36ac3b3485c4cd2f1c`, checkout `/tmp/uap-grok-dedicated-title-current`. Hosted run40599296059 native122524071409 failed23:25:43 UTC. Inherited Cline122524071582 completed success23:28:09; all current captures are completed, preserved and independently audited. Do not rerun unchanged source.
+
+Actual evidence is preserved under `/tmp/uap-grok-348-current-40599296059`:
+
+| Artifact | ID | Outer SHA256 | Inner SHA256 | Members |
+| --- | --- | --- | --- | --- |
+| Native | 12778988075 | 6629d43cc1a3d835d95949afb06b279334f158cc166e847bfe9d949da30b3e86 | 96fd685041010dbf1d9bcfc7f11eb7680f145cf3160608a1ed5898bfad33e153 | 25 |
+| Frontend | 12778368337 | 066b0b7fc95d8819779838b46df0b24add56bf6a8bceac148180be270ef67d60 | 9ee9b68f7c5317b1c2677584eec9077ca4a62b66504a1124cb7371fa9a64c915 | 25 |
+
+Independent raw/source receipt `/tmp/uap-grok-348-current-40599296059/independent-raw-audit.json`, SHA256 `95a89455a84656cac9b6122258a54579ea8d1a45e3e780888cf2ca8934313fb1`, verifies API/ZIP/CRC,24 frontend streams, exact current source/build/pins/scanner and public installation/source/physical/binding/committed receipt joins. Root's second detailed raw review is pending when this draft is written; do not count the peer receipt as two completed raw reviews.
+
+Public add exits0 Prepared. Actual native inspection exits0 and retains projectTrusted=false, plugin enabled=false, zero loaded skills and no MCP. No native skill execution or lifecycle proof follows.
+
+The separately configured title fixture now succeeds exactly once:1220byte strict request SHA256 `6310901ba3d8138dbf06eb01e447139f815a42424513ed048263f39b1ced658a`;570byte exact SSE SHA256 `eea6c4c389c7e27cf0e6d1cc9e705bc84a4d77ae8c5afddaa846ec8255e6ed68`; correct credential, failure none, ordinary shutdown, no forced close. The original main fixture retains one42233byte request SHA256 `001a585d3fc552ec983c8b996b0b4fd0acc719cb1759710a6534cd4d481affff` and one394byte original response SHA256 `f2c19ea9dbc0ddbf7cc2facaa5d2d01877897afa0f6fea33cc5651c0ecc9f7b9`.
+
+Native stdout1476bytes SHA256 `2cefc7bfe383c0a900df87811d4e0dacc14dccc34ae7c97e30960d70ef0ef562` has two available_commands frames, the main sentinel text, usage and a successful end_turn. This is followed by an actual second main HTTP attempt that hits the unchanged provider's duplicate guard. Main receipt remains requests1/responses1/credential_matched true/failure duplicate/shutdown_complete true/forced_close false. The native command is cancelled after369ms, exit-1/errortrue/deadline=true; total fixture3549ms. The deadline field is ctx.Err()!=nil, not evidence of an elapsed60second timeout. Its original child/capture/cleanup guard remains fatal. No probe or tool exchange exists; allfive/runtime/auth/model flags remain false.
+
+### What source establishes, and what it does not
+
+`grokProjectProvider.admit` checks the original context, literal loopback POST route, matching Host/relative URL/no raw path, exact single application/json and one matching Bearer key before assigning duplicate when attempted is already true. It calls failWithRequest and returns before serve reaches body read. failWithRequest cancels the original context. Therefore the second attempt passed these route/header/auth predicates, but its body/model/purpose was neither read nor retained. The requests counter counts retained requests, not HTTP attempts.
+
+No current raw evidence establishes a retry, second auxiliary role, equivalent body, additional prompt or new valid model grammar. Public publisher source may inform future analysis but cannot reconstruct an uncaptured actual request. No new response/admission is justified. A bounded failure-only observation of the already-refused request is the smallest concrete next step.
+
+Pins remain1.0.70 archive11d27a30adfb75c4b9b180072ab27412a1916f054ff5497ab70fb9a77d304bcc / executable22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9; shipping buildf50904eaee6c. Public source snapshot2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8 is not claimed equivalent to that unresolved shipping build. This amendment changes no native configuration or source-guided protocol.
+
+## 2. Exact diagnostic eligibility and refusal
+
+Instrument only the original main provider's duplicate refusal in the existing canonical main+title Grok fixture. The title transport remains a distinct one-call fixture and is never eligible. A duplicate body may be observed only when all original route/header/auth/context checks already passed, and under the existing provider lock:
+
+* This is the held main provider, with its distinct held title fixture/keys configured.
+* The first original main exchange has already retained exactly1 request and written exactly1 response.
+* No earlier duplicate diagnostic has been claimed.
+
+Claim this diagnostic once, atomically. Do not increment original Requests/Responses, reset attempted/failure, start another model/HTTP request, change model admission, or grant a response. Concurrent duplicates, third/further attempts and all other original refusal reasons retain their original immediate refusal/cancellation with no additional body capture. Do not record a second refused-body slot or retry a refused/partial capture.
+
+### Explicit ordering and unchanged origins
+
+The diagnostic must read a body before invoking the original duplicate cancellation, because that cancellation tears down the handler's BaseContext and native child. This is an explicit narrow timing change for the one eligible already-refused request. It is not described as byte-identical immediate cancellation.
+
+After the original duplicate decision/one-shot claim, read at most1MiB+1 through the existing request body under the original unrenewed5second HTTP ReadTimeout and the unchanged original work/total contexts. Do not set a new read deadline, extend a server deadline, sleep, rebase an origin or add a new context budget. Check the original context before and after observation; a cancelled/expired origin refuses raw retention. The pre-existing native60second/work150second/total180second limits remain fatal. If the original work context expires during a partial body, existing final cleanup may abort the read; retain a finite refusal, not partial raw bytes.
+
+Regardless of capture result, the existing closed-provider HTTP400 refusal and failure=duplicate/cancellation path execute. Use an unconditional deferred failure/cancellation safeguard for the diagnostic branch so read/parse/privacy errors cannot return as accepted. No SSE/content response is sent for the second request, and no provider acceptance or counter increase follows. Any cleanup failure remains failure evidence. All other rejection paths remain immediate.
+
+## 3. Raw privacy/structure gate before retention
+
+A complete body must be nonempty, at most1MiB, UTF8 and one whole strict JSON object through the existing duplicate-rejecting finite Go decoder: depth32,16384nodes,4096byte keys, finite numbers, no trailing document. Reject array/scalar/null/malformed/duplicate/nonfinite/deep/oversized/truncated/invalidUTF8 without keeping raw bytes.
+
+Before retaining the object, check both original held main/title keys against raw bytes and the fully decoded/re-encoded object. Reuse the existing recursive Grok credential/privacy scanner on raw and decoded representations to catch JSON-escaped/nested strings and keys under its existing shared resource budgets. Any credential/private-namespace or privacy resource refusal retains no body. No file/profile/header/URL/private key or untrusted field is copied into diagnostic metadata. Do not redact a failing body into apparent safe evidence; raw retention occurs only after strict structure and privacy pass.
+
+A safe bounded strict object is retained opaquely even if its model/messages/other semantics are unfamiliar. That retention is diagnostic evidence of refused input; it is not a new provider schema. Do not classify the body as a retry/auxiliary/tool/result or act on its content. Keep the first original request/response and title request/response unmodified.
+
+## 4. Finite additional artifacts
+
+Add at most these two fixed Grok-only members, exported from the actual held main duplicate observation during existing finish:
+
+| Member | Bound | Purpose |
+| --- | --- | --- |
+| grok-provider.duplicate.json | 2048bytes | Closed diagnostic receipt, never successful provider evidence. |
+| grok-provider.duplicate-request.json | 1MiB | Optional complete raw refused JSON object after privacy gate. |
+
+The receipt has exactly schema_version(integer1), role(`main-duplicate-diagnostic`), attempt_index(integer2), status, original_failure(`duplicate`), response_issued(booleanfalse), captured_bytes(integer) and captured_sha256(string). Status is exactly one of captured/body-refused/json-refused/privacy-refused/context-refused. Captured requires the raw member, exact positive byte length<=1MiB and recomputed lowercase64hex SHA256. Every refused status requires no raw member, captured_bytes=0 and captured_sha256 empty. No inferred cause/model, raw headers, profile content or arbitrary error string is serialized. No receipt is present when no eligible diagnostic was claimed.
+
+The original main receipt remains the original schema and failure duplicate with Requests/Responses1. The title receipt remains unchanged. New artifacts cannot coexist with another client, missing main/title fixture evidence, nonduplicate main failure, incomplete first exchange, unknown receipt fields/statuses or a successful runtime tuple. No raw member may appear without its receipt; no captured receipt may omit/mismatch raw. Existing historical failures without these members remain accepted unchanged.
+
+At the measured25member full capture, this adds at most2 members (27total); original per-member/archive aggregate/privacy bounds remain unchanged. Do not raise generic archive limits, admit arbitrary new member names or alter frontend evidence. The unchanged shared final privacy/secret-free checks must recheck exported bytes before persistence.
+
+## 5. Implementation boundaries
+
+Expected source edits are only:
+
+* Existing `agentplugins_grok_project_native_provider_test.go`: small private one-shot observation state, exact duplicate-only hook and finish export. The original context/route/auth guards, first request capture/model predicate, fixed response bytes, original refusal message/failure value, counters, transport configuration and stop/cleanup body remain unchanged except the explicit bounded-before-cancel diagnostic ordering above.
+* New small dedicated Grok refused-duplicate helper and inert contract files for bounded capture/privacy/schema and actual HTTP refusal behavior.
+* Existing `scripts/project_native_runtime.py`: one exact Grok duplicate-member validator and narrow allowed-member union. Existing main/title receipt/response validators stay byte-identical.
+* A focused Python contract addition covering only the closed new diagnostic; preserve all old tests/outcomes and exact selectors. Add no workflow/new native lane.
+* Accepted plan and concise factual validation documentation.
+
+Keep main/title model configuration, environment, title handler/schema/SSE, original user HOME/profile freeze, Prepared/untrusted/disabled inspection, public installation, command fatal barrier, all process/supervisor/environment/authority guards and other clients byte-identical. No change to the original number of accepted main/title exchanges or any qualification field. If implementation needs another path/behavior or privacy/budget exception, stop for exact amended review before editing it.
+
+## 6. Meaningful checks and next actual evidence
+
+Under root's serialized test slot, inert HTTP contracts perform the actual first accepted main request/response and one eligible second request to the held loopback fixture, with an independently authored harmless JSON object and separate held title key. Assert first response bytes/counters unchanged; second is HTTP400, never SSE/200, original context cancels, Failure duplicate remains, accepted counts1/1 remain, only one diagnostic retained, and ordinary existing stop behavior or truthful forced failure. Synthetic capture is not native evidence.
+
+Exercise malformed/duplicate/trailing/nonfinite/null/array/deep/node/key/UTF8/oversize/partial bodies and raw/escaped/nested main/title credential strings and keys. Check zero raw retention on every refusal. Wrong/multiple auth, route/query/method/host/MIME/loopback/context, incomplete first exchange, title-provider duplicate and third/concurrent attempt cannot acquire another capture. Partial-body cancellation stays within existing server/original origins, fails truthfully, renews no context and sends no accepted response. A new synthetic raw object must remain ordinary data; no real tool/model is invoked.
+
+Both Go artifact helper and independent Python reader contracts enforce exact member/receipt relation, status typing, byte/hash/privacy revalidation, fixed role/index/failure/false response flag, first-exchange receipt joins and client isolation. Coherent hash-updated malicious objects must fail privacy/structure, not only mismatch hashes. Unknown/extra receipt fields, altered counters, forged success flags, missing title/main evidence, raw without receipt, duplicate raw slot, unknown files and refused status with a body refuse. Existing failed-only runtime boundary/allfivefalse remains mandatory.
+
+Execute focused inert Grok provider/title/project/native-runtime contracts plus affected Python runtime contracts, gofmt/whitespace, affected all-enabled lint againsta412ba5e137fdcb7e004393229b323211ed746e1 and whole unfiltered revive/funlen/gocyclo/gocognit/dupl/depguard. Record actual command/source/exits/log hashes; no skipped predicate or revised production assertion. No native/vendor/client/public installer/scanner execution locally. Broaden only for concrete remaining risk.
+
+Scratch pure readers replay unchanged34825member capture and prior61121member/representative earlier captures with their original exact source identities; original bytes/hashes/outcomes remain unchanged. Preserve inherited current Cline success independently. No old capture is relabeled or promoted. Obtain two full exact-source CODE critics and measured gates before root normal-FF publication.
+
+Only a fresh genuine current-source hosted capture may provide the actual second raw object or precise refusal metadata. Audit its exact source/tree/pins/public/inspection/first/title/duplicate evidence and full fatal/cleanup boundary independently before any new proposal. Even an observed safe second JSON body grants no response or completion; this lane remains failed/allfivefalse/runtimefalse/authfalse/modelfalse. No speculative second-auxiliary response, retry allowance, trust change or generic provider admission follows.
+
+## Baseline preservation anchors
+
+| Path | SHA256 |
+| --- | --- |
+| `repotests/agentplugins_grok_project_native_provider_test.go` | 6cb8f0f06e3e8a5ffec6dfb654e1566000ac9ca8dec1d450c4aa0d27a2421c65 |
+| `repotests/agentplugins_grok_project_native_route_test.go` | e41da580ebea3277d155e6a443149bb4463b65cc40fcf3fa3fa6d6f7ba78ccf7 |
+| `repotests/agentplugins_grok_project_native_title_test.go` | 76d595042a2fc2d3639cb4dad0568b8691485f342101689a76a97d844cf27658 |
+| `repotests/agentplugins_grok_project_native_privacy_test.go` | 4df4765a0caec14e4aa55963cb3000e1204ed0a9c1d1afe122d46cf6210c5164 |
+| `repotests/agentplugins_project_native_cli_attempt_test.go` | 07f40ed4e0def62f58698cd6d8ce839d407e6bc751e952680460affe39670791 |
+| `repotests/agentplugins_grok_project_native_attempt_test.go` | ee4f42b4574190e5350a1dde9f0bc4f90517bd5d1da70d27d78916e317f1aea4 |
+| `repotests/agentplugins_grok_project_native_environment_test.go` | dbbae16a28cfe9e893c30475ba8bfac343b41b06c3c264ad7dc0d2965b69cdb4 |
+| `scripts/project_native_runtime.py` | 24f39c61856d689535ac2fea81e01890caa780f4b74630b78c12c0df39cd6aee |
+
+This draft author read source/raw and wrote this scratch proposal only. No implementation, tests/gates/native execution or Git/GitHub mutations occurred for this plan.
+
+
+## Accepted refused-duplicate diagnostic plan before implementation
+
+Root R1 GO receipt SHA256 `089275e9328eff1c195bbc1915d56391868c0de6c7c4c7ba48c95aaab2f62969` and independent Kimi R2 GO receipt SHA256 `60d45fb3f2056ac8bfa2d9f0a8809efd9b372dbe7c720fc8c4097c9558aad4df` approve the exact draft above, SHA256 `670b875b7f2283058fcf3220a5cc3b222831e368c72b95bc10392e8bb233c0db`, before any implementation.
+
+The draft-time pending root RAW review is now complete: root receipt SHA256 `32168fb35ff64fedba411599187159a3090a4556ccc4ce101a937549019ee423`, alongside independent peer receipt `95a89455a84656cac9b6122258a54579ea8d1a45e3e780888cf2ca8934313fb1`. Both preserve actual348 failed-only source-bound evidence; no qualification follows. Current native and inherited Cline jobs are complete and retained.
+
+Both critics require the one eligible duplicate/first-failure decision to be atomic with no earlier failure overwrite, with no provider mutex held during bounded body/privacy work. Every path must execute original HTTP400 and duplicate cancellation, keep accepted counters1/1 and original read/work/total origins, and export only a settled finite receipt with no partial or private body. Independent Python finite byte/number validation and concurrent/partial-read controls are required by the accepted plan. Root alone owns commits/publication after two CODE GOs and measured gates.
+
+
+# Grok: supported suppression of the measured post-turn dashboard summary
+
+PRE-CODE PLAN DRAFT. Root and Native must independently approve this exact plan SHA256, and root must commit the accepted plan before implementation. This author performed source/raw reads and wrote scratch research/this proposal only. No implementation, test, native/acquired executable, public installer or scanner runs locally for this plan. Root alone owns Git/GitHub mutations and publication.
+
+## 1. Exact source and measured reason
+
+Plan base is published Grok source `b40da640c388d807cc3dc1fbb36c38e0d1b411ef`, tree `71b98e819bdd555154096c9c75850b9b40d3f54c`. Run `40610932429`, native job `122562097571`, has completed. Its actual evidence received two independent RAW GOs for failed diagnostic evidence only:
+
+- Root `/tmp/uap-grok-b40-current-40610932429/root-raw-audit.json`, SHA256 `6fb432088fa50f3093c7240911be9695186fb3c077f3bdb96c1b28fcf464785c`.
+- Peer `/tmp/uap-grok-b40-independent-40610932429/independent-raw-audit.json`, SHA256 `88c920ace4af34d476cdf133ea769751c136503e9149673718dfa48e3075fd9e`.
+
+| Artifact | ID | Outer SHA256 | Inner SHA256 | Members |
+| --- | --- | --- | --- | --- |
+| Grok native | 12782438155 | 9cf3260936143bed9bf9bc53fe29fe67db8fe4ffa01ae720e45ecbfe691141a2 | 86ed0632dd8345b0a224d77563ca5f44708e69a35829524076d668ffd7946f16 | 27 |
+| Grok frontend | 12782527675 | 8d331a482694e89814f8e6e7ff875d3f836ce86ad95ac98a5a9eac7c41e5deb0 | ee229372d55c8e33c1aec9379734ec695e26d5d106f62acde0a8566ce59a1ce8 | 25 |
+
+The diagnostic retained the complete second main-route body: 1,424 bytes, SHA256 `303ad4817a23b68aa02717ecedb70404362cf1397324da5a4d25d12f60a86bb5`. Its receipt is index2, role main-duplicate-diagnostic, captured, original_failure duplicate, response_issued false. Original first main and separate title counters/responses remain untouched. This is a measured dashboard summary request over the completed reply, rather than an assumed retry.
+
+Its system message is exactly the pinned `TURN_SUMMARY_SYSTEM`: 1,022 UTF8 bytes, SHA256 `9411e91b009d5f6672caa80f5aa9fa2eadbf4d1aa12d0b1488238afa64f58103`. Its user message exactly equals the source wrapper around the actual first main request's final user content and the fixed `UAP_GROK_PROVIDER_CAPTURE` reply. The model is the original main fixture, with streaming and include_usage true. The provider correctly refused this additional request and kept original cancellation.
+
+Public add and Prepared ownership checks do not establish native activation. The measured project remains untrusted; the selected plugin is disabled and skills/MCP inventories are empty. Runtime and all five qualification flags, authentication and real-model qualification remain false. No old capture is upgraded by this proposal.
+
+## 2. Pinned primary source and lineage limits
+
+All cited files belong to public `xai-org/grok-build` tree `2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`. Its complete 5,102-entry tree is non-truncated. This author independently recomputed Git blob SHA1, SHA256 and lengths for all eighteen previously retained title/source files and thirteen additional turn-summary files, and verified their paths/blob identities against that exact tree. Both actual ZIPs above were independently rehashed and every closed member's size/SHA/CRC checked.
+
+Primary research receipt: `/tmp/uap-grok-turn-summary-kimi-primary-research.json`, SHA256 `3de4e360348bd3188ea35f584fb48538f3dba89245f78801d0ed3e0d8daae930`. Native independently researched the same source: `/tmp/uap-grok-turn-summary-native-research/independent-source-research.json`, SHA256 `5e72513507b8d734cd87aade73afc448dec03c2b2f88cc99f5fb0feea9d6ca74`.
+
+| Source path under `crates/codegen/` | Exact Git blob | Source fact |
+| --- | --- | --- |
+| xai-grok-config-types/src/registry.rs | 645a34036de2a83981f8f90ba0e2cf0d7a334a40 | Lines229-236 define TurnSummary, key turn_summary, path features.turn_summary, env GROK_TURN_SUMMARY, default true. Feature::resolve uses requirements/environment/config/remote/default. |
+| xai-grok-config/src/resolved.rs | 7ee2b55aa5d44dd399579b8eac7250173f28b35e | BoolFlag resolve around95-134 chooses requirement, CLI, environment, configuration, managed, remote, default in order, preserving explicit false. |
+| xai-grok-shell/src/agent/config.rs | a430462ad3b8e0611368ad2051f093827d7babee | FeatureEntries around4224-4271 reads native TOML booleans;1492 maps them into feature_values. is_turn_summary_enabled1846 resolves Feature::TurnSummary; feature_sources2033 supplies the actual config tier. |
+| xai-grok-shell/src/session/acp_session_impl/spawn.rs | 323fe32f305231bfac22aa60d43f3123efd1c38e | Actor captures effective_config.is_turn_summary_enabled() at2077; title_refresh is resolved separately around1778. |
+| xai-grok-shell/src/session/acp_session_impl/turn_summary.rs | 84915ba9062b6fd394382e334cd35340133ad08e | restart_turn_summary returns before work if its gate is false or subagent. The helper is display-only and builds a tool-free request from the exact system/user source below. |
+| xai-grok-shell/src/session/helpers/turn_summary.rs | 382718b80599b54c0bd985eb819a044ced13b8b3 | TURN_SUMMARY_SYSTEM and turn_summary_user_message match the measured second request byte-for-byte. last_turn keeps the actual last prompt and visible reply, excluding reasoning/tools/results. |
+| xai-grok-shell/src/session/acp_session_impl/title_refresh.rs | e67a787a99e94cdc448276beba6018409158f45a | Later whole-conversation title refresh checks its own resolved title_refresh_enabled before starting. |
+| xai-grok-shell/src/session/helpers/session_summary.rs | 0f2af81e78701043b8446a8bffb2272921f3802c | Initial session-title fast path starts around188 and is distinct from per-turn dashboard summary and later title refresh. |
+| xai-grok-pager/docs/user-guide/26-config-reference.md | f5aa92e8599e821d81ca73b39049513bab4be2c0 | Row233 documents features.turn_summary boolean, default true, and GROK_TURN_SUMMARY. |
+
+The public tree is not proven equivalent to shipping Grok1.0.70/f50904eaee6c. Existing source research explicitly retains that limit. Exact prompt correspondence establishes the observed request's specific source match; it does not prove every config path in the binary. The setting below is a supported-source candidate requiring a fresh genuine hosted observation. Unsupported/ignored/overridden settings must remain a truthful failed observation; do not add a fallback or reinterpret the response.
+
+## 3. One fixed configuration change before original freeze
+
+Append exactly this native TOML suffix to the existing complete two-model configuration during `configureGrokTitleProvider`, before its only original HOME config write, authoredConfig clone and protected digest freeze:
+
+```toml
+[features]
+turn_summary = false
+```
+
+The exact appended bytes are one separating LF, `[features]`, LF, `turn_summary = false`, LF. The existing recipe already ends in LF. No dynamically discovered section/key, parser rewrite, config migration or file adoption is involved. This is a real TOML boolean, not the string false and not a `[turn_summary]` sampling-settings table.
+
+Keep the same `f.base.Home/.grok/config.toml`, ordinary0600 write, original parents, original HOME/CWD and both fixed model endpoint/key references. Author the complete recipe once; only then write, clone and hash it. Do not edit config after the native client starts, renew a baseline from native output, change originalConfig/protected/immutable maps after execution or introduce another HOME/profile.
+
+The existing child environment is constructed from a closed fixture environment and contains no GROK_TURN_SUMMARY or GROK_TITLE_REFRESH. Leave it byte-for-byte unchanged; do not add environment overrides as a second mechanism. Test that ambient true values remain excluded. No requirement/managed config override, remote fetch, credentials, trust, plugin enablement, tools or permission setting is introduced.
+
+### Acknowledge the later-title-refresh effect
+
+`Config::resolve_title_refresh` around2055 defaults to the current TurnSummary result when title_refresh is unset. Therefore false also makes later whole-conversation title refresh default false in this recipe. This incidental suppression is explicitly intended and bounded to optional post-turn display work. Do not claim that turn_summary exclusively controls one request.
+
+Keep the existing initial session-title route/model (`models.session_summary = uap-grok-title-fixture`) and all its request validation/response/counter/cleanup unchanged. Its independently observed first-title request remains expected; the setting must not be used to remove that fixture or admit a different title shape. Do not add features.title_refresh as a separate setting. Shipping behavior is measured by the next raw capture, including truthful partial/failure outcomes if it differs.
+
+## 4. Preserve every existing native/protocol authority
+
+There is no new native/public command, argument, retry, model, endpoint, request grammar, response, counter or artifact slot. Preserve all original main/title route/auth/type/body bounds and exact fixed first SSE bytes. Preserve the new refused-duplicate one-shot claim, original first-failure reservation, unlocked bounded read/privacy, done handoff/export race checks, HTTP400 and unconditional original cancellation. If any second main request still arrives, the existing diagnostic must refuse it and retain only its already-admitted bounded opaque evidence; no successful summary response is added.
+
+Keep original work origin150seconds, final origin180seconds, provider read/write5seconds, command contexts and ordinary full-descendant process supervision, original config/pin checks, raw privacy/resource bounds, no-follow filesystem/Prepared ownership checks, source/version/scanner pins, inspect command, no-probe/no-provider-qualification semantics and final all-false barrier. In particular, native exit0 still leads to the unchanged intentional raw-review fatal barrier; a clean startup does not activate or qualify anything.
+
+The current 27-member capture reflects a reached duplicate. The existing reader already permits its actual finite optional duplicate presence/absence. Do not require a fabricated duplicate when suppression works, or remove a real duplicate when it fails. Keep exact existing allowed member unions, summary and failed-only modes. No Python reader or contract is changed by this configuration amendment.
+
+## 5. Exact implementation surface and preservation exceptions
+
+After two exact-plan GOs and root's accepted pre-code commit, implementation is limited to:
+
+1. `repotests/agentplugins_grok_project_native_title_test.go`: append the fixed suffix to the complete original recipe at the existing configureGrokTitleProvider construction point, before the existing sole write/clone/hash. Preserve every other function in the file whole-byte, including title.configuration, all title request/response/serve/stop handlers and credential/listener setup. The minimal implementation can append the suffix directly to the existing returned recipe; no generalized configuration framework is warranted.
+2. `repotests/agentplugins_grok_project_native_title_configuration_test.go`: add only `features: {turn_summary: false}` to the existing independently stated expected TOML map. This explicit one-literal expectation exception is necessary because the fixture recipe changes. Preserve the remainder of that test and every existing assertion; do not rename, skip or weaken it.
+3. A new `repotests/agentplugins_grok_project_native_turn_summary_contract_test.go`: narrowly focused inert contracts for the fixed supported suffix, original freeze and ambient isolation described below. It may use the existing owned in-process fixture providers; it must not run acquired/native/public installer/scanner executables or impersonate a hosted environment.
+4. Append concise factual plan/validation to the existing Grok validation record and accepted plan to `docs/plans/project-install-e2e/remaining-native-qualification.md`. Distinguish old failed evidence, local inert checks and future hosted results accurately. No raw capture/log/source vendor payload is committed.
+
+Everything else is whole-byte preserved: all main provider, title handlers/configuration helper, duplicate/privacy/route diagnostics and existing contracts, selected project/Prepared authority, shared command/environment/process functions, collectors, Python runtime/Grok readers/contracts, production adapters/shared/VSCode, workflow/selection/pins and all other client files. New feature data is authored before the old guard's original freeze; no guard predicate or exception changes.
+
+## 6. Meaningful inert controls and exact-source gates
+
+The existing independent whole-map configuration contract must pass with its one extra boolean subtree. New inert contracts should demonstrate these concrete boundaries:
+
+- Raw authored TOML equals the unchanged complete two-model recipe plus the one fixed suffix, and parses to the complete independently stated map with exactly one features table containing only boolean turn_summary=false. Preserve every original models/model/marketplace field, both distinct held listeners/keys, max_retries0 and env-key names. Reject accidental string false, true, duplicate section/key, extra feature or sampling-table substitution through the expected-recipe contract; do not make a new native parser.
+- The same original HOME config is written and captured once with ordinary0600 metadata and protected digest covering the complete bytes; no project config is created. Keep every prior original-route/config-freeze assertion. Existing actual protected-config fatal-child controls remain unchanged and run in the focused gate; do not add a redundant new guard implementation or weaken fatal behavior.
+- With ambient GROK_TURN_SUMMARY=true, GROK_TITLE_REFRESH=true and foreign HOME/model settings, the constructed child env still contains neither flag and keeps the original held HOME, both keys and existing shared-client optout. Parent process environment remains unchanged; other clients receive no Grok feature/env authority. Add these controls in the new file rather than changing old environment contracts.
+- Existing strict first-main/title and refused-duplicate positive, malformed/privacy/Unicode/resource, partial/concurrent/third-request and closure tests run unchanged. A feature setting is not authority to alter provider behavior. No synthetic test claims that the vendor binary actually consumes the setting.
+
+Root owns the serialized gate slot. Execute meaningful focused `TestGrok`/`TestProjectNativeCLI`/`TestProjectNativeRuntime` contracts and affected Go package checks with no vendor/native/public installer/scanner, plus affected Python runtime/Grok contracts or precisely recorded whole-tree transfer if every relevant Python byte is unchanged. Run gofmt/diff, affected all-enabled lint against `a412ba5e137fdcb7e004393229b323211ed746e1`, and whole unfiltered revive/funlen/gocyclo/gocognit/dupl/depguard. Record actual exact source/tree/commands/exits/log SHAs and real test counts/skips; do not predict them or transfer an old pass as a new run.
+
+Verify whole-file/function preservation against the actual accepted pre-code base, including all Python modules/contracts and every protected handler/duplicate file. Replay actual b40/348 failed archives through original and candidate full readers with original source identities; raw ZIP/member/result hashes and all-false outcomes must remain identical. If root transfers a prior replay on a byte-identical complete Python tree, document that exact tree and receipt explicitly. No AST-extracted substitute reader or relabeled capture is allowed.
+
+Freeze the exact source manifest and get two independent full/delta CODE reviews before root publication. The author does not approve their own implementation.
+
+## 7. Composition, hosted observation and remaining qualification
+
+This plan's evidence/recipe base is exact b40. Root separately owns program-parent composition. The read-only composition receipt `/tmp/uap-grok-parent888-readonly-composition-kimi.json`, SHA256 `eae34e2d1eb5d25c4b3e0286226fcb4380ee5caf291de33229090e214758bff7`, identifies three documentation insertion conflicts and clean disjoint Python composition. If root composes qualified Kimi parent before this amendment, preserve both full leaf readers/tests and record the actual new pre-code base/tree; these b40 hashes remain historical anchors, not permission to replace combined files with the Grok side. No unpublished stale083b or named1109 baseline path is changed or discarded. Other clients' completed/in-flight evidence remains preserved.
+
+After reviews and measured gates, root alone publishes by the normal reviewed route and dispatches the unchanged genuine hosted workflow on the exact published source. Do not retry unchanged, supersede/cancel another pending capture, run the vendor locally or forge hosted eligibility. The next run must retain source/build/pin/API/closedZIP, public add and inspect raw, exact first main/title exchanges and ordinary cleanup. Independently audit whether a second main request exists and its truthful receipt/status. Absence after this supported setting is a new measured fact only on that fresh source; old b40/348 remain failed duplicate observations.
+
+If the setting is consumed and native exits cleanly, the existing intentional barrier still fails with every flag/runtime/auth/model false. If summary or any other unexpected request persists, existing refusal/cancellation/diagnostic applies and no fallback is authorized. If config or original process/authority guards fail, stop and retain that failure. No new request shape, title response, trust/enable transition, registry admission or runtime qualification follows from this amendment. Any later activation/tool/lifecycle success path requires its own actual evidence and two pre-code reviews.
+
+## Baseline preservation anchors
+
+Hashes below are from exact b40. The first two files have only the narrow recipe/expected-map exceptions above; remaining files are whole-byte anchors. A separately reviewed parent composition must establish its own complete combined pre-code anchors before implementation.
+
+| Path | SHA256 |
+| --- | --- |
+| `repotests/agentplugins_grok_project_native_title_test.go` | 76d595042a2fc2d3639cb4dad0568b8691485f342101689a76a97d844cf27658 |
+| `repotests/agentplugins_grok_project_native_title_configuration_test.go` | 788c9ecd7c818f5477eff713960f3710d8d435d3e53b89e01af74ef1c16b0f87 |
+| `repotests/agentplugins_grok_project_native_provider_test.go` | 90012dcf96cdfb882470e31a3feb52688d570ae64d9f356410ad7910c944e950 |
+| `repotests/agentplugins_grok_project_native_provider_contract_test.go` | 6aeaf8af3953324b28075e042835b4875e3e66e2c780b831c4fb30bc93bba801 |
+| `repotests/agentplugins_grok_project_native_privacy_test.go` | 4df4765a0caec14e4aa55963cb3000e1204ed0a9c1d1afe122d46cf6210c5164 |
+| `repotests/agentplugins_grok_project_native_duplicate_test.go` | 53a29267624dd1e308f7a3fce50499c87308fec08581c9b1f7bbe807f7b91be3 |
+| `repotests/agentplugins_grok_project_native_duplicate_evidence_test.go` | b2bcab1adcb962055232a72884505add1e8effdc32aaaf729cc0d3a608f91ea6 |
+| `repotests/agentplugins_grok_project_native_duplicate_contract_test.go` | c81bc20643000614d26ef0c021b75bee56b4a7e6648325c9c91068f0420a98ff |
+| `repotests/agentplugins_grok_project_native_title_contract_test.go` | f86600f85c5c24b7c7c08b10d6694d163b71aad092c3f3860c951a859a229b83 |
+| `repotests/agentplugins_grok_project_native_environment_test.go` | dbbae16a28cfe9e893c30475ba8bfac343b41b06c3c264ad7dc0d2965b69cdb4 |
+| `repotests/agentplugins_project_native_cli_attempt_test.go` | 07f40ed4e0def62f58698cd6d8ce839d407e6bc751e952680460affe39670791 |
+| `repotests/agentplugins_grok_project_native_attempt_test.go` | ee4f42b4574190e5350a1dde9f0bc4f90517bd5d1da70d27d78916e317f1aea4 |
+| `repotests/agentplugins_grok_config_contract_test.go` | 3153076a942ec8baf01c9b9d6e9ce328594e6dcbaa9f88f8e7eb25a2fd20ad47 |
+| `repotests/agentplugins_grok_config_diagnostic_test.go` | 8c23fe40cf5fcddad742ae325f8c3cca5032dc00a88d2deaf278944e03fa5fc8 |
+| `repotests/agentplugins_grok_config_refusal_test.go` | f32c416faeb9027bbed958317b563a23aff32a570e4170e2eea5dd24668139d4 |
+| `scripts/project_native_runtime.py` | b8ab281512d562903f90a44fca1765a5d05b55bc977e9f0e71fd6c53de4f2d19 |
+| `scripts/test_project_native_runtime.py` | d0ee55f930ed8ff790beb1b8a67baca894c7ee422f7b646949559a6c5136f82f |
+| `scripts/project_native_collectors/grok.py` | 95ef4b4f3bad0c4dfbb82c652f834660ee0d994899ab0059a772d848517af56c |
+| `scripts/test_project_native_grok.py` | 8e1d3c3267b55cfa29446a9d0509799fc9ff84d24256d1879d449e86b9d31fea |
+| `.github/workflows/project-native-runtime.yml` | 11140878d0b2ca882a76b0a5830b25a1c5763247d76fec2c3dea9b22ba8096a1 |
+
+This draft author performed pure source/ZIP/hash/JSON reads and wrote scratch research/plan files only. No source implementation, Go/unittest/lint/vendor/native/public installer/scanner execution, Git/GitHub mutation or publication occurred for this proposal.
+
+
+## Accepted measured turn-summary suppression plan before implementation
+
+Root R1 GO receipt SHA256 `a71549915420aa61f90a7ab05586e1e2280a516fa0b78eb3a0cfb2f48d45fd69` and independent Native R2 GO receipt SHA256 `a29a83c1a3b8fdf2ea5d70bc3e9e009ef88e58e974cc170d89b40ef07e90332d` approve the exact draft above, SHA256 `3bc56715f4b326634f99210fc7bde69a711c2edbe7c2880fece74ec950c4593e`, before implementation. Both independently reconstructed the captured summary messages from pinned primary source and verified all historical baseline anchors.
+
+This pre-code commit retains original published b40 as its code base; parent composition is separate. Only the fixed supported TOML feature suffix before the original configuration freeze, one complete-map expected literal, inert contracts and validation documentation are authorized. Original initial-title/main/duplicate handlers, environment, deadlines, config/pin guards, readers, privacy, workflow and failed-only review barrier remain unchanged. Fresh hosted evidence must establish behavior of the pinned shipping binary. Root alone commits and publishes after exact CODE reviews and measured gates.
+
+
+## Accepted Grok exact project trust and selected skill diagnostic
+
+Pre-code base: `91402cd32f39342aaac9175c9e76bddbd360f2df`, tree
+`c2f198f3ccf2bd8abfc4675c01cb2f153c1ad444`. Root and independent
+other_clients PLAN GO were received before implementation, with the conditions
+below. Publication still requires independent CODE reviews and actual gates.
+
+The genuine run40615904857 observed clean native exit with one strict main and
+one initial-title fixture exchange, while the project remained untrusted and
+the selected skill absent. This amendment only captures the next boundary.
+All five qualifications, runtime completion, vendor authentication and real
+model qualification remain false; the intentional raw-review failure remains.
+Grok project MCP is unsupported. Full installed lifecycle is separate work.
+
+### Exact supported fixture setup
+
+Before any child, append `[plugins] enabled = ["uap-grok-attempt"]` to the
+complete existing original-HOME two-model recipe, before its existing final
+`[features] turn_summary = false` table and sole config write/clone/hash.
+This is a supported name selector, not path-specific activation. The selected
+physical ID depends on the subsequently generated installation UUID. The
+existing manifest, binding, source and delivered-byte checks must still join
+the single selected ordinary project package.
+
+Author original-HOME `.grok/trusted_folders.toml` once, exclusively, mode0600,
+with only `[folders."<exact canonical owned project A>"] trusted = true`.
+Check the ordinary canonical project and original HOME, refuse HOME/root/B,
+overlap and aliases, and freeze the complete trust bytes under the existing
+protected digest before any child. Refuse existing trust/config entries rather
+than replacing or adopting them. No timestamp is needed; the publisher makes
+`decided_at` optional. No `--trust`, trust feature optout, environment override,
+`plugin-dir`, `[plugins].paths`, registry mutation or native tool is added.
+
+### Measured selection and failed-only admission
+
+Preserve the old disabled/untrusted Prepared checker and its negative tests.
+Share its identity checks through an explicit expected-selection boolean; the
+new selected branch requires exact canonical project/plugin identity and both
+trust booleans true. It additionally requires exactly one selected skill with
+the authored name/description, `userInvocable=true`, disabled absent or literal
+false, and exact source `{type: "plugin", plugin_name: <name>, path:
+<receipt-selected installed SKILL.md>}`. Reject folded identity aliases,
+duplicates, foreign paths and a trust-only plugin entry without that skill.
+
+Use the same real `native-inspect` command, cwd, deadline and held source
+authority, with an explicit selected-mode call. Add one finite Grok-only
+`fixture_selection` marker before inspection. Record completed selected
+`native_inspection` only after the exact raw check passes. The existing Python
+reader gains only a strict optional marker branch: join completed observation
+to raw inspection, successful exact inspect command/cwd, binding/profile/target
+and installed skill. Preserve failure-before-inspection capture and old
+unmarked archives, the closed members and every failed/all-false predicate.
+Do not add an artifact slot or infer load from plugin `enabled` alone.
+
+The strict provider is unchanged. Loaded skills may change its next request;
+an unrecognized shape is refused and captured under existing failed-only
+diagnostics. No success shape, extra response, retry or protocol allowance is
+introduced before genuine fresh raw review.
+
+### Bounded code and validation surface
+
+Change only Grok title recipe/whole-map expectation, Grok inspection helpers,
+the shared attempt's Grok-only call, new focused Grok selection contracts,
+the runtime reader and focused reader contracts. Existing turn-summary
+contracts need only the complete raw recipe and protected count2 expectations,
+plus creation of the now-required ordinary project in their inert constructors.
+Putting `[plugins]` before `[features]` preserves their duplicate-key and
+extra-feature negative controls. Preserve provider/title handlers, duplicate,
+privacy, environment, production adapters, workflow, pins and all deadlines.
+
+Run meaningful inert Grok/shared Go and Python runtime contracts, gofmt,
+affected all-enabled and complete six-linter gates. Replay actual old archives
+through complete old/current readers with original source identities. Obtain
+two independent exact CODE reviews before root publication and the next genuine
+disposable hosted run. No vendor, public installer or scanner runs locally.
+
+### Pinned primary source guidance
+
+All publisher paths below are under `xai-org/grok-build` tree
+`2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`, prefix `crates/codegen/`.
+The snapshot is not proven equivalent to shipping1.0.70/f50904eaee6c.
+
+| Path | Git blob | Relevant contract |
+| --- | --- | --- |
+| `xai-grok-permission-rules/src/trust.rs` | `9411e22ab04953bee3d9d68558e6b1bf0d896ab5` | Original-HOME exact folder TOML; optional timestamp; broad-root refusal |
+| `xai-grok-workspace/src/plugins.rs` | `9cd0d8aef4b2336635db5627b3e77431b5378c45` | User config enabled names or IDs |
+| `xai-grok-agent/src/plugins/discovery.rs` | `96b8caae336c6ae7a210141922e1454dacec7817` | Project trust; unlisted plugins disabled |
+| `xai-grok-agent/src/plugins/registry.rs` | `31112af7aac163927f63e6c61f2e21268e5359f8` | Active requires enabled and trusted |
+| `xai-grok-shell/src/inspect/mod.rs` | `bbbe3da44a5c73046ac0b514e3c124283f865afa` | Plugin enabled means trust; separate loaded skill source; camelCase userInvocable; false disabled omitted |
+| `xai-grok-agent/src/prompt/skills.rs` | `d70dcb18f5845ced0d1129d490773703bcf0eac1` | Only active plugin skills get exact source stamp |
+| `xai-grok-tools/src/types/config_source.rs` | `11f16ad8aee5243aa71c1697ac9c0f2a1645463a` | Plugin source serializes plugin_name and path |
+
+The separate native `plugin enable` command is unsuitable for this prepared
+directory: `xai-grok-pager/src/plugin_cmd.rs` blob
+`36b53be9bc0e22eed45bc437573595072289548a`, lines610-622, requires native
+install-registry membership. No such registration is invented.
+
+### Implemented selection diagnostic validation
+
+Two independent Sol/xhigh CODE reviews and the root review accepted the frozen
+nine-file candidate. Focused Go contracts passed (62 top-level runs, 271 pass
+events; one existing child-only helper skip), all 61 Python contracts passed,
+and affected all-enabled plus complete six-linter gates reported zero issues.
+The full original 91402 runtime archive replays identically through the original
+and current readers (25 members and the complete failed/all-false result).
+The Grok-only reader branch also has explicit unchanged-result coverage for
+Qoder, Kiro and Windsurf. No vendor executable ran locally. These are source
+and inert-contract results; fresh genuine hosted evidence remains required for
+selected-skill observation and subsequent complete lifecycle qualification.
+
+### Grok complete supported skills lifecycle (2026-10-28)
+
+Real hosted run40717447621 at f794d6d1 now confirms the exact selected loaded
+skill/source/description/userInvocable serialization and canonical path; native
+inspect/startup exit0, main/title each1request/response and ordinary shutdown.
+Its only test failure is the existing independent-raw-review barrier; all
+qualification flags remain false. Native artifact12834025060 outerSHA256
+bfdef920511b1c1c6200a349b2c4d86cbca85c053ccdbf203400b2010150e658 and inner
+49fee32d67edd1f59297025f96a0bcfc6928abc3a03660ce775adbda2fd48b00 retain
+the exact source/pins and25closed members. Two independent full raw audits
+confirm this failed capture and its unchanged all-false result.
+
+Two independent pre-code reviews accepted one bounded skills-only
+cycle: qualify only project-lifecycle/native-restart-removal; project MCP,
+vendor authentication, real models and skill execution stay unsupported or
+unclaimed. Persisted Grok bindings stay Prepared/package_validated. Reuse the
+existing hosted admission, original HOME, pins/scanner/process supervision,
+150s work/180s total origins,30s commands and closed archive bounds.
+
+Before any child, author/freeze original HOME config with supported exact
+A/B/user enabled names and disabled foreign A/B names; trust only canonical
+owned A+B. Hold independent original-user and foreign A/B native plugin/skill
+bytes, inode/owner/mode/membership and caller data through every operation.
+Distinct local A/B skills carry nonce/revisions; A-one updates to A-two at the
+same version. Direct local repair keeps A-two frozen and requires its recorded
+digest (repair_multi.go and installer/package.go), never invented remote pins.
+
+Exactly14 public commands cover3Git roots/version, addA/B, repeatadd,
+unchangedupdate, intactrepair, same-versionupdate, missingpackagerepair, removeA,
+repeatremoveA and removeB. The public CLI repair_many/RepairGroup route restages intact repair
+(mutated=true: lifecycle.go75-105, repair_multi.go321-328 and group_plan.go162);
+missing exact owned-package repair restores the recorded bytes (mutated=true).
+Actual public inert execution confirms partial-leaf absence refuses unchanged,
+while whole package absence repairs. Validate the sole managed_package_directory
+receipt and derived A/.grok/plugins/<physicalID> plus closed source/native bytes.
+Nonrecursively remove only plugin.json, skills/<name>/SKILL.md,
+.grok-plugin/plugin.json and their known empty directories, ending at that exact
+active root; refuse any extra entry, never RemoveAll. Keep state/source and
+parent/foreign/User/config/data authority, then require exact active-path absence.
+Installed skill-only packages have zero data receipts; default final-binding
+removal creates real retained owned data/marker/receipt, validated from
+remove_prepare.go and PluginDataManager and preserved afterward.
+
+Exactly20 fresh `inspect --json` processes cover outside/A/B initial, installed,
+stable, updated, damaged, repaired and removed/repeated/final states. Require
+whole exact plugin/skill catalogs, authored description plus exact source path,
+invocable/disabled semantics and unchanged User/foreign controls. Plugin.enabled
+means trust only. Damaged A lacks its selected plugin and skill; final A/B/outside lack both
+managed sources. No provider or extra native activation command is needed.
+
+Exactly4members contain summary/public/inspect/proof JSONL with bounded raw
+bytes/hash/base64 records and source/state/binding/ownership/removal joins.
+Apply the existing Grok privacy scanner before encoding and after strict
+decoding (no provider exists to trigger the old conditional keep scanner).
+Failed actual prefixes and every late failure keep all flagsfalse; only full
+closure plus ordinary cleanup/preservation and actual test exit0 can qualify
+the two applicable flags. Retain old diagnostic evidence/readers unchanged;
+no artificial transition review fatal, new framework, workflow or client pin.
+Obtain exact independent CODE reviews and focused inert Go/Python plus affected
+and complete six-linter gates, then one genuine hosted full-cycle capture and
+independent raw audit. No vendor executable runs locally.
+
+The implemented leaf24dcb5f0 has two independent exact-source CODE GOs and
+preserves every existing failure/ownership gate. Its composition with qualified
+program parent73208da2 has two independent reviews: all owned Go bytes remain
+identical, and the two shared Python files retain each reviewed client branch.
+On the composed source,64 focused top-level Go contracts pass (274 pass events;
+one unchanged child-only helper skip), the real inert public CLI repair contract
+passes,82 Python contracts pass, and affected all-enabled plus complete six-linter
+gates for both Go modules report zero issues. The original f794 native25-member
+and frontend25-member captures still replay to the identical failed/all-false
+result. These local gates do not qualify native behavior; the published complete
+cycle requires one fresh genuine hosted capture and two independent raw audits.
+
+## Qoder original anonymous-metadata fixture amendment
+
+Accepted bounded fixture correction. Native-finish R1 and independent CLI R2 approved exact plan SHA256 `0500e7dcd839dd3b27a70ebf3da1ae57ecdac43637d0ee6a2c1e9cba5858558b` before implementation. No native qualification or authentication claim.
+
+### Evidence and source boundary
+
+Current PR523 source 1973a9551f87a6e349c3cfd7ba6a9b8ff11118b8, tree 3e8fb0fc2c56162e6345f1797fd3c5b3419c984b, genuine runtime40566031581/job122407532341, native12761729753 and frontend12762294585, produces a successful exact flag-selected 765-byte catalog before the complete original .qoder profile guard fails. The full delta is10 additions,1 change,8 omissions. Existing file-priority diagnostic independently maps three held regular-file path hashes to published literals: installation_id (36bytes0644), .auth/.credential-transaction (0bytes0600), .auth/machine_id (36bytes0600). Actual ID contents were neither exported nor read. The unobserved eight entries remain unknown; no stability promise follows from these three observations.
+
+The published @qoder-ai/qodercli1.1.78 archive at https://registry.npmjs.org/@qoder-ai/qodercli/-/qodercli-1.1.78.tgz was checked against published SHA1 and SHA512 integrity. Its archive SHA256 is c5b237d2fd84ceb44af5427f281a7f1bcadd8c888fbed49197b5ce2f37dada4f; package/bundle/qodercli.js is34562870bytes, SHA256 ec7b2a2c1be206f525ca974c3b9455fbec9ce7411bc5dfdee55f1e82eb90df38. The npm bundle is source guidance only: its equivalence to the independently pinned standalone executable is not established.
+
+Root independently rechecked the entire archive/bundle hashes and these source paths, without executing Node, the installer or any client:
+
+- Installation reader at byte1016117 returns existing nonempty trimmed installation_id. getInstallationId at1016392 generates/writes a UUID only when absent, caching it separately from account credentials.
+- Auth directory/transaction setup MAl at3843720 creates .auth0700, opens the empty .credential-transaction target in append mode0600 and enforces0600. The transient .credential-transaction.lock is separate and is not authored by this proposal.
+- Machine reader FT at3850006 returns existing nonempty trimmed machine_id. getMachineId at3855626 returns the held value via PpA; absent identity takes the ordinary transaction/generation path, with hardware or random generation. PpA at3847740 records consistency of the identifier in process; it is not an account grant.
+- Wet at3843328 selects distinct account credential files .auth/user or .auth/user.<environment>. No such credential file, token, login state or trust entry is created or modified here. The fixture remains without vendor account credentials; a later genuine authentication refusal stays a failure.
+
+### Proposed finite fixture change
+
+Change only the Qoder fixture constructor, before the first public/native child and before any preservation baseline. In its already-owned original disposable HOME/.qoder, create precisely these independently authored entries:
+
+1. installation_id: one fresh independent RFC4122 version4 UUID, exactly36 ASCII bytes with no newline, ordinary single-link file0644.
+2. .auth: an ordinary directory0700, owned by the current original user; refuse any preexisting entry at this previously unowned exact path.
+3. .auth/machine_id: a second fresh independent version4 UUID, distinct from installation_id, exactly36 ASCII bytes with no newline, ordinary single-link file0600.
+4. .auth/.credential-transaction: an empty ordinary single-link file0600.
+
+Use fresh cryptographic randomness from the existing inert Go fixture process, not native-observed IDs, host hardware IDs, account data, imported HOME or native output. Do not reuse the public package/probe nonce as an ID or parse/copy any existing native auth file. Use existing held-parent/no-follow/exclusive-create helpers, exact modes and owner checks. Author only the above three files and their one absent parent; no unknown cache, directory, lock, registration or auth path is inferred from omitted diagnostics. If any target is unexpectedly present, special, linked or foreign-owned, fail without replacing it.
+
+Record the three expected byte digests in existing protected-file authority immediately, before any child. Also hold the exact initial recipe authority for these three ordinary files and their .auth parent: device/inode, UID/GID, full mode, single-link files, exact byte lengths and independent byte digests. Add a narrow Qoder-only fixed-recipe verifier to the existing f.check before/after each already-selected command, activated only after this constructor recipe exists. This verifier rejects same-byte mode changes, inode replacement, changed parent/type/owner/link count or bytes from the first child onward; it must not wait until the catalog snapshot to notice a version/public-child mutation. It accepts no extra file or directory authority and reads no account credential path. Existing intraread held identity checks remain unchanged; this is not a promise of immutable access/change timestamps after ordinary reads or same-mode chmod. Keep the complete original .qoder catalog before/after snapshot and equality guard unchanged, including full modes, membership, unknown files/directories, links and existing special original-log rule. Every later byte drift or missing marker is fatal; no post-run adoption, exception, exclusions, cleanup deletion or fallback recipe. Source/native divergence, unexpected chmod or additional native file creation remains a genuine failed observation.
+
+No new child command, native argv, provider, environment, permission, trust, source/installed digest, scanner, acquisition pin, deadline, supervision, raw member, diagnostic cap or admission schema is added. Current raw diagnostics stay three details/2KiB with full counts and omissions. All five qualification flags, runtime_attempt_complete, vendor authentication and real-model flags remain false, including a successful catalog or restricted startup. Project activation remains Prepared. No public adapter or installer production code changes.
+
+### Implementation and meaningful checks
+
+Keep the helper/client-only controls in new Qoder-specific test files with one guarded constructor authoring call and one guarded invocation in the existing f.check for spec.client==qoder; do not alter other clients. The extra held recipe field is private to this fixture and absent before construction; no common permission or profile snapshot policy changes. Unit tests call the helper on ordinary inert temporary directories only, never newProjectNativeCLIAttempt, a positive hosted guard or a vendor executable.
+
+Check the exact four-entry recipe, types/modes/owner/single-link/byte counts, canonical distinct valid UUIDs, protected digests and unchanged original settings. Verify preexisting target or .auth, symlink/hardlink/special/foreign authority refuses without overwrite, including partial-recipe failures. Exercise the narrow fixed-recipe verifier to show a real same-byte chmod or inode replacement before the catalog baseline fails, as well as after a command. Exercise the existing full profile snapshot to show metadata bytes/mode or any new sibling still cause inequality/refusal. No tests may bless the current eight omitted native entries or infer native source equivalence.
+
+Two independent plan GOs precede coding; independent exact code review and focused inert Go/affected-root/full-six lint gates precede root-only publication. Align actual program base a412ba5e137fdcb7e004393229b323211ed746e1 with separate preservation review. No force push, release, new PR or VS Code work. A fresh genuine hosted capture is required to learn whether the same exact catalog now preserves the profile; any remaining mutation/authentication/tool boundary is reported honestly rather than reclassified as success.
+
+The original Qoder leaf was aligned to actual Cline-containing program base in
+`ca88f79a399f1e0f8280a38476f862fd9667eb2e`, tree
+`65edbdc10526a653d0d225a3fb531dea2910d4b3`. Independent static preservation
+review verified all 5777 nonconflicting tree entries and every nonblank plan
+line from both parents; Qoder-owned source was unchanged by this merge.
+Focused inert verification and exact-code review are recorded separately once
+completed; this accepted plan does not claim those gates or native success.
+
+### Qoder anonymous-metadata amendment: exact implementation validation
+
+Code commit `ff5c144de817423e5430b92ad9dc099ed01db760`, tree
+`0a3c1a1d2d51d1fb812b801664d8e14e1348eef7`, contains only the private
+Qoder helper, its inert contracts, twelve shared-fixture hook lines and the
+accepted record above. The helper opens the original profile and absent auth
+parent through the existing held no-follow mechanics, creates only the three
+exclusive ordinary files, and verifies their bytes against independently
+generated inputs before publishing protected digests. Each existing selected
+command retains its original before/after check. The new private recipe check
+also pins initial device/inode, owner/group, full mode, file length/link count
+and byte digest; current linked identities are checked after held reads.
+
+Root independently approved the helper/shared/accepted-record delta and
+bounded test corrections. CLI independently reviewed exact final tree
+`0a3c1a1d2d51d1fb812b801664d8e14e1348eef7` and gave CODE GO without remaining
+findings. Tests preserve all child inodes during auth/profile parent replacement,
+so those negatives specifically prove the initial parent identity check. Other
+controls cover all three files' early same-byte chmod/replacement, changed
+bytes/types/links, preexisting targets, exclusive partial-write refusal, exact
+four-entry authoring and full-profile sibling/mode/byte inequality. Foreign
+held UID/GID controls always run for all five nodes; an additional real chown
+control explicitly reports unsupported privilege/user-namespace capability.
+Ordinary reads and same-mode chmod do not pin access/change timestamps.
+
+Focused inert `^(TestQoder|TestProjectNativeCLI)` passed in 0.139 seconds with
+Go 1.26.10. The actual all-enabled root lint gate with
+`--new-from-merge-base=a412ba5e137fdcb7e004393229b323211ed746e1` reported zero
+issues. The unchanged unfiltered whole-root
+revive/funlen/gocyclo/gocognit/dupl/depguard gate reported zero issues. Gofmt and
+staged whitespace checks were clean. No client, public installer, package hook
+or positive hosted guard ran locally.
+
+No current native artifact has been relabeled or promoted. The genuine
+1973a955 runtime 40566031581 still fails complete original-profile equality,
+with all five qualification flags false and eight omitted entries unknown.
+The npm/standalone equivalence caveat remains. Fresh genuine hosted evidence
+must establish the next boundary; any additional profile drift or genuine
+account refusal remains a failed observation. Root alone owns publication.
+
+## Qoder exact auth-membership correction (2026-10-27)
+
+Independent review found that an unknown auth sibling could enter the later
+catalog baseline after setup. The [reviewed addendum](qoder-auth-membership-addendum-plan.md)
+and [actual validation](qoder-auth-membership-validation.md) close that early
+window while preserving the original metadata commits and complete-profile guard.
+This source correction supplies no native qualification; fresh hosted evidence
+and the existing lifecycle gates remain required.
+
+
+# Qoder: complete the measured four-entry profile delta diagnostic
+
+PRE-CODE draft. Read AGENTS.md, owner scope and capability-preservation rules.
+Obtain two independent GPT-6.1 Sol xhigh plan GOs before implementation. This is
+diagnostic-only work on existing PR523, not permission for native log mutation,
+profile relocation, a native retry at unchanged source, a release or VS Code.
+
+## Exact new genuine evidence
+
+Published source 4f034eb374bb585f0bc409763e62f0058bebabed, tree
+3d04ce2878cf93239cfa2f9a2564dc2c6a931bc3. Actual runtime40585824651,
+Qoder job122486483093, fails the original complete-profile equality guard after
+4.42 seconds. Every recorded prefix command exits0 without a capture/context
+error. Public add succeeds Prepared; plugins list exits0 in1149ms and selects
+the one exact receipt-owned enabled flag-view plugin with one skill and no MCP.
+No native prompt, later lifecycle or authentication/model result was reached.
+
+Native artifact12773802932 is4508B,16closed members, outer SHA256
+750064bd0a084ff22e5109e3e114f6d7ed7a21bbfe98d3cafea4f9afddc3a581;
+frontend12774277343 has25members, outer
+a8dd9a901886a9c3eb7f28a090d6aaa7a370ddc76e1898f063760c0dd4e28d3e.
+API identities, ordinary ZIP membership/CRCs, clean exact source/tree/build,
+all24frontend stream joins and unchanged exact-source failed admission pass.
+Root semantic audit independently joins official archive/executable pins,
+public source/package/binding/physical/receipt identities and native catalog.
+Record /tmp/uap-qoder-4f-current-40585824651/root-semantic-audit.json,
+SHA25636c431d8799a7ae513ef30bab98452afa3e9a3fb9283fb9b8003aae8da9e0cff.
+
+The complete delta now has15before/18after,3added/0removed/1changed.
+Its area counts are exactly3logs and1log-latest; every other area is0.
+The three retained details show changed latest symlink, added0755directory and
+added0644file of994B. One entry is still explicitly omitted. Its name, kind,
+mode and bytes remain unknown. The prior three telemetry directories no longer
+appear as differences; that correction does not authorize any remaining change.
+
+Pinned npm1.1.78 source defines a candidate per-run directory, qodercli.log,
+manifest.json and latest-link replacement before CLI argument parsing. It does
+not identify the omitted native entry or prove npm/standalone implementation
+equivalence. No quiet/telemetry setting is assumed to suppress these writes.
+
+## Proposed finite diagnostic amendment
+
+Change only qoderDeltaBound's maximum retained metadata details from3to4.
+Preserve the existing complete-object2KiB JSON bound,4096-entry input bound,
+strict inventory-record grammar, finite areas/kinds/operations, hashed keys,
+hashed file/link records, and all numeric/mode constraints. Preserve the exact
+existing other-file priority and deterministic area/hash ordering. The first
+three selected details must remain identical; the fourth is the next detail
+under that same ordering. No raw name, path, link target, contents or credential
+is added and no filesystem read, enumeration or command is added.
+
+At exactly four valid differences the existing status becomes captured and
+omitted_count becomes0; at five or more it remains entry-limit with exactly
+total-minus4 omissions. The whole-object bound still refuses oversized output;
+it is never increased or bypassed. This is a bounded formatter over the already
+held unequal maps, not a new baseline, a permission decision or log classifier.
+
+All complete-profile, auth/metadata, empty telemetry, no-follow identity,
+original HOME, immutable source, catalog, deadlines and process cleanup gates
+remain byte-identical. The original t.Fatal after collecting this diagnostic
+remains unconditional for unequal original profiles. All five/native/auth/model
+flags stay false. Python admission, commands, workflow selection and source pins
+are unchanged; historical failed raw archives must re-admit byte-identically.
+
+## Meaningful verification
+
+Update the existing independent expected metadata/count assertions only where
+the intentional fourth retained detail changes them. Keep all prior checks,
+priority cases, hostile records, actual-filesystem nonmutation, private-canary
+checks and the original fatal full-profile comparison. The existing Qoder
+controls exercise actual filesystem drift and unequal inventory maps; there is
+no separate Qoder fatal-child test. Prove the fatal caller remains unchanged
+with its complete file hash. State independent literal key and content digests
+for the fourth selected fixture entries; do not replace
+assertions with expectations computed through the formatter being tested.
+
+Exercise an actual inert filesystem with a latest-link replacement plus a new
+log directory/two files: four details, exact counters, captured/zero omissions,
+complete serialized object<=2048bytes, original maps/profile unchanged. Add a
+fifth difference and verify exact one omission and unchanged prefix ordering.
+Preserve zero/one/seven other-area cases with corrected exact fourth selection;
+verify reverse insertion gives the same result. Extend the existing largest
+valid file-record control to five entries, retaining four with truthful omission
+and the unchanged complete-object limit. Unknown records remain refused.
+
+Run focused Qoder/shared inert Go contracts, existing runtime Python contracts,
+actual full-root affected all-enabled and unfiltered six-linter gates, gofmt,
+whitespace and unchanged original4f failed-envelope replay. No native/vendor,
+scanner or public installer executable runs locally. Serialize Go/lint slots;
+do not overlap snapshot-sensitive Go with other Python fixture mutations.
+
+## Review, source and publication
+
+After both plan GOs, recheck remote head and create an isolated worktree from
+the agreed current4f. Commit this accepted amendment to the existing consolidated
+remaining-native-qualification.md before code. Limit code to the Qoder formatter
+and its affected/new inert contracts; do not merge unrelated leaf sources.
+Two independent exact implementation reviews and executed gates follow. Root
+alone publishes a normal expected-head fast-forward to existing PR523 and audits
+the resulting genuine capture. Preserve concurrent work and all failed history.
+This amendment grants no eventual log allowance or full-cycle qualification.
+
+## Accepted Qoder diagnostic amendment before implementation
+
+The exact draft SHA256 `49e8fdec9188273f924542bf13469e44c83393ade9bc5c392ad0d5ddb68bfe4a` received independent GPT-6.1 Sol xhigh plan GOs from `vscode_finish` (R1) and `native_finish` (R2) before any code edit. Both reviewers inspected the current formatter and exact failed capture; the original full-profile failure and all qualification limits remain required.
+
+### Factual pre-code correction and renewed independent acceptance
+
+Before source edits, root corrected the reference to a separate fatal-child
+control: Qoder has actual filesystem drift/unequal-map controls and an
+unconditional fatal caller, not that separate Copilot test. The revised exact
+plan SHA256 is `449e9c92195a9d3460a6a6ee7a9e76f6d94d3ccc9a7539922ed6e0c9027d21c8`.
+Independent GPT-6.1 Sol xhigh reviewers `gemini_qoder_finish` and
+`native_e2e_finish` both gave PLAN GO before implementation; receipt SHA256s
+are `55cb807030414e335b55884c2187fc03f858748397546db2a6074f67eee4750e`
+and `cd499270db43b6536fa61f197bd0bfabafee58d610fa0abc4f6c0f1f4c37c10e`.
+Both checked the actual source and unchanged unconditional full-profile fatal
+caller, whose complete file SHA256 is
+`20ba3af567f4f0499220ff6ad7202993a4a4a292d6c41493f41cf174f804ba72`.
+This factual correction changes no guard, authorized scope or intended tests.
+The previous plan-only commit remains preserved in history.
+
+### Four-detail implementation and executed validation
+
+Reviewed code `393bd1cd777eee598d48000f53c0235f34c09e08`, tree
+`782cd158b1d579da3ad8f30c44c13042d91f0619`, received independent CODE GOs
+from `gemini_qoder_finish` and `native_e2e_finish`, both GPT-6.1 Sol xhigh.
+Receipt SHA256s are `c59a544e54b12a5339e138307bf7ac2e6940d4f06ab570683676f03a1032c3dc`
+and `ca520b77c7eb95774f73fb8ef7233c8c5d31bd7234316162ab9a29ab3637d71c`.
+Only the three retained-count literals change in the formatter. Strict parsing,
+priority comparator, whole-object 2048-byte bound, runtime reader and complete
+unconditional fatal caller remain unchanged. Independently stated fourth hashes
+and actual filesystem four/five-difference controls preserve the previous prefix,
+truthful omissions, privacy and held-map/profile nonmutation. Four maximum valid
+changed-file details serialize to 1845 bytes.
+
+Executed on that exact code: focused Qoder/shared inert Go contracts PASS; full
+root affected all-enabled lint against program base `a412ba5e137fdcb7e004393229b323211ed746e1`
+and unfiltered six-linter gate both zero issues; existing runtime Python contracts
+PASS. Full command outputs and their SHA256s are retained in the gate receipt.
+Original failed4f archive re-admits with all16 members and summary byte-identical,
+all five flags false. The native reader SHA256 remains
+`f3403d72755fde23afe46aaafb709fe4a1f78be9691324c07e2bbfe3f125cdf6`.
+No native client, vendor executable, public installer executable or scanner ran
+locally. Fresh genuine hosted output is still required; this change grants no
+log allowance, lifecycle qualification, authentication or model claim.
+
+## Qoder exact run-log projection before any ownership allowance (2026-10-28)
+
+Start at 1050bbbe163abf4c60f1ea13565b72bc864c6e75/tree 5e64b064acc40f52cf362ad43b59589dc829746a.
+Run 40594441986/native 12777840418 measures exactly 3 added log entries and 1 changed latest;
+all 4 details are retained, but added names and the new target/manifest remain unobserved.
+Official npm 1.1.78 archive SHA256 c5b237d2fd84ceb44af5427f281a7f1bcadd8c888fbed49197b5ce2f37dada4f;
+bundle/qodercli.js SHA256 ec7b2a2c1be206f525ca974c3b9455fbec9ce7411bc5dfdee55f1e82eb90df38.
+Its bytes36498/39612/40361 define timestamp-random-PID runID, logs/runs/<runID>,
+qodercli.log, manifest.json and latest replacement. This is publisher source guidance,
+not proof of standalone equivalence. No supported off/init-suppression route was found.
+
+Add only a failed-capture projection at the existing unequal-profile diagnostic before
+its unchanged unconditional fatal. Reuse the held no-follow latest/target mechanics;
+require its record to match the already-held after inventory and a source-format
+relative target runs/<runID>. Never export an arbitrary target, path or unknown name.
+Inspect only the exact manifest.json below that held ordinary owned run directory,
+at most 4096 bytes, single-link 0644, stable held/linked identity and exact inventory
+byte-count/hash. Do not read log bodies or enumerate additional profile content.
+Strictly parse the bounded source-defined manifest object; unknown/malformed shape
+returns a fixed refusal status, never raw text. Validate nested argv/env/log-file
+types privately. Emit only checked runID/relative target, manifest size/hash, numeric
+manifest pid/ppid, safe start/version/platform/arch/role, and finite equality/closure
+booleans against held A/selected argv/profile and the original before/after maps.
+No raw argv/env/project_id/full manifest/log body or path outside owned fixtures.
+Keep the complete serialized projection <=2048 bytes; refusal output is status-only.
+Label PID provenance manifest-only: no admitted native/supervisor PID is claimed.
+No runner/API, argv/env, config/auth/trust, acquisition/pin, deadline or cleanup change.
+
+Implement repotests/agentplugins_qoder_log_run_observation_test.go and _contract_test.go,
+one hook in agentplugins_project_native_cli_attempt_test.go, and optional Qoder-only
+complete-shape admission in scripts/project_native_runtime.py with matching contracts
+in scripts/test_project_native_runtime.py. Preserve unmarked archives and other clients.
+All qualification/runtime/auth/model flags stay false; no mutation allowance, adopted
+baseline, new member/command, release or VS Code work. Inert checks cover exact source
+layout/manifest joins, private canaries, unknown/duplicate/malformed/oversized data,
+aliases/hardlinks/foreign authority, unstable/mismatched held identities and unchanged
+maps/files/fatal guard. Two independent plan GOs precede code; exact code review,
+focused Go/Python and affected/full lint gates precede root-only publication and a
+fresh genuine hosted failed capture. Any ownership policy needs separate actual review.
+
+Implemented after root and independent Grok PLAN reviews; independent Grok and
+root CODE reviews found no remaining issue. Focused Qoder/shared inert Go passed
+in 0.379s; all 30 Python contracts passed, including the final valid-Grok baseline
+control. Affected all-enabled lint and unfiltered six-linter gates report zero
+issues. The original 1050 archive's 16 members and complete failed/all-false
+result replay unchanged. Timestamp and unsafe-leaf refusal controls were corrected
+without weakening admission. No vendor ran locally; fresh hosted observation is
+required before any supported log-ownership allowance or lifecycle claim.
+
+## Qoder complete supported skills catalog cycle — accepted precode amendment (2026-10-28)
+
+Root and an independent Sol reviewer read/rehashed and approved complete draft
+SHA256 `16483ff2c375042cdfb39b813e35c2fffb26220b8dc366971ff1b231bb2412a1`
+(17,922 bytes) before implementation; a third independent source review also
+approved the same complete draft. Source is published `25ea0f0d708504a914aeaf864206e98fdcfa1cc8`,
+tree `61331bbd744f447cc4cd86aabf742a2273d47e2a`. Two independent complete raw
+audits of run `40731229834` joined API native artifact `12836830994` and frontend
+`12836825965`, all16/25 members,24 stream receipts, source/tree/clean builds,
+exact supported flag catalog and the finite log-run projection. The catalog
+succeeded; the original profile guard correctly refused its four log changes.
+All qualifications/auth/model remain false. This receipt grants no qualification.
+
+The next single bounded full loop has14 public/system commands and20 fresh
+`qoder plugins list --json` catalogs in four closed members: summary,
+`qoder-cycle-public.jsonl`, `qoder-cycle-catalog.jsonl`, `qoder-cycle-proof.jsonl`.
+Only supported project lifecycle/restart-removal flags may qualify. Bindings
+remain Prepared/installation_verified; MCP/auth/model/skill execution, automatic
+cwd discovery and native import/cache replacement stay unclaimed. Preserve the
+separate old authenticated-startup test/reader. No production adapter, native
+mutation command, pin, workflow, runner API, provider or model change.
+
+Original source-authored schema2 User/foreignA/foreignB plugin records and their
+manifests/skills are disabled once before children and immutable. Publisher
+`getInstalledPluginRows` lists all three from every cwd with explicit projectPath
+for A/B. The owned row is only the exact supported `--plugin-dir` receipt view;
+never infer cwd hiding. After whole owned-package damage/removal, fresh queries
+retain the SAME old view argument and require absence of its flag row plus the
+complete original catalog. No empty replacement view or ignored stderr.
+
+Retain the original pre-native full profile map, held identities and logs-absent
+precondition separately from a derived admitted telemetry ledger. Git/UAP calls
+must preserve the full expected profile. Only explicit native version/catalog
+calls may create one exact fresh source-defined run and its manifest/log plus
+owned latest pointer; the first run may create only logs/runs parents as well.
+No other new path, old-record change, alias/hardlink/foreign leaf or baseline
+adoption is authorized. Reuse existing no-follow held root/link/manifest guards;
+join exact modes/owners/membership/hashes, fresh runID, millisecond command-time
+window, fixed version/role/platform and expected cwd. Manifest/argv/log/env stay
+private; safe finite run projection, lengths/hashes/deltas and ledger joins only.
+PID/PPID remain explicitly manifest-only, without runner/PID provenance claims.
+
+Exact publisher bundle1.1.78 SHA256
+`ec7b2a2c1be206f525ca974c3b9455fbec9ce7411bc5dfdee55f1e82eb90df38`
+(34,562,870 bytes) defines logger39612–41200, Bun normalization `f9a`8516 and
+`PGA/SJ`3529. Accept only exact held argv, or exactly one canonical bounded Linux
+`/$bunfs/…` entrypoint at index1 with held executable and exact held argument
+suffix; emit finite form without raw entrypoint. This is source guidance:
+the full genuine run must confirm the shipping form or fail all-false. Registry
+schema24599k, Boolean enabled-map24728830, resource collector24704176,
+missing-directory loader24604992 and JSON renderer27075013 support the exact
+catalog/control recipe; omit displayName in registry/manifest to avoid refresh.
+
+A/B have independent same-name local sources and stable derived identities.
+A-two changes skill metadata/body at the same version; keep its applied source
+frozen during whole exact-owned-package repair. Public grouped intact repair
+restages/mutates, unlike the single SDK Repair route. Repeat add/unchanged update
+are byte-stable no-ops. Preserve original User/B/foreign/caller authority. Verify
+installed zero DataReceipts and actual default-remove retained owner-only data;
+never invent native markers, adopt caller siblings or purge. Source/native view
+and installed payload are text-only and their framing is independently recomputed.
+
+Keep original150/180 deadlines,30s per command plus existing5s exit grace,
+1MiB stream/aggregate,16MiB total and80-member limits. Strict raw privacy before
+base64 and after decoding, exact finite DTO/stage closure, old capture replay,
+meaningful inert source/ownership/public API contracts and ordinary descendant
+cleanup remain required. No review fatal/step barrier. Root plus independent
+CODE reviews and focused Go/Python/affected/all-six gates precede root publication,
+then one genuine hosted full-cycle run and two independent complete raw audits.
+
+The actual inert public CLI contract confirms the stage-specific DTOs: repeated
+add is a singleton no-op with no operation/group ID; other successful lifecycle
+commands are grouped. Repair/removal report source `local`; add/update report
+`direct local source`. Repeat-add progress includes the transactional-apply line.
+Go and the independent reader close those measured forms without accepting a
+cross-stage union. Original profile and lifecycle authority remain unchanged.
+
+# Copilot: fixed empty native registry first capture
+
+PRE-CODE proposal. Root authors implementation only after two independent plan
+GOs. Read AGENTS.md, PROJECT_INSTALL_OWNER_SCOPE.md and capability preservation.
+No VS Code changes, release, native local execution or classifier widening.
+
+## Exact new actual evidence
+
+Published PR527 source922b705222927897fe54bb45e8665d8873fd790d,
+treebceb65e8cb04029e48012742a6975a22c6431481. Hosted runtime40584763860,
+job122484811964 failed on the public add-user command at22:17:09Z.
+Native12774483132 outer3232B SHA256
+2fbdecf541f20a9f4584485a91268859b368194fc5d636c99c2cafe321f4c3bb,
+inner46faf1136207357b8172fb73bcdad59a645ba7917b8d277adf550ddbef967506,
+14ordinary closed members. Frontend12774782735 outer3456B SHA256
+7b546cd3c597ff72b4184f8dbc0900454a1213865253ca6a4f021fe2b2ec256d,
+25members. Exact clean source/tree/build,24frontend stream joins, actual pins and
+unchanged exact-source failed-envelope Python admission pass. Independent audit
+/tmp/uap-copilot-922-current-40584763860/independent-raw-audit.json SHA256
+f7056506d11f174c91a4211c47855b4b540e3f3a62c8c3f56291239aa65d1cca.
+
+Actual prefix is git-A,git-B,version,add-user. Public add exits1 in1248ms with
+error=false,context_error=false and ordinary full-descendant closure. Strict JSON
+reports preflight_failed,0success/1failed,mutated=false; the ordinary scanner has
+3files and0findings. Exact stderr records target copilot identity preflight:
+native identity ownership is indeterminate; refusing mutation. No fixture native
+catalog, prompt or probe is reached. All5/runtime/auth/model flags remain false.
+Read-only metadata is observed2before/4after,3changed/0omitted. The two new opaque
+records are a0700directory and0600file; the third is the same originally owned
+0700root directory identity with bookkeeping changed. Hashes do not authorize a
+path/role/content inference or a profile allowance.
+
+## Existing source and uncertainty
+
+Current user-scope copilot.Adapter.InspectNativeRegistry delegates to
+shared.InspectCopilotRegistry. With held native executable and runner, the source
+calls exactly `copilot plugin list` through RunNativeRegistry and strict current
+listing classification. Provider combinedIdentityState also refuses an
+indeterminate prepared finding, so do not state the final public refusal alone
+proves the specific internal classifier branch. Its internal raw stdout/stderr,
+exit and cause are not exported by this artifact. No native registry absence,
+known empty grammar, successful public registration or permission is established.
+
+Relevant exact922 source files are
+install/integrationctl/agentplugins/clients/copilot/identity.go,
+install/integrationctl/agentplugins/clients/shared/copilot_identity.go (SHA256
+d784b9e56c45e72f95deac76ae1a5e9b7930673b50979959e3a4523c056ad6e3),
+install/integrationctl/agentplugins/providers/native_identity.go and
+install/integrationctl/agentplugins/usecase/identity.go.
+
+## Proposed smallest new observation
+
+Preserve the entire existing922 first-public-add observation and controls; do not
+change its fatal process guard or run a child after fatal failure. Add a distinct
+failed-only opt-in `copilot-empty-registry-first-capture` observation using the
+existing bounded collector, original HOME fixture, immutable executable/pin and
+full-descendant supervisor. It runs only fixed git-A,git-B,version then one exact
+`[held-copilot,"plugin","list"]` command from the existing fixed outside cwd.
+Every command retains30seconds; total work150/overall180seconds remains fixed.
+No public add, install, remove, provider, prompt or probe starts in this mode.
+Use the already authored firstLaunchAt/trustedFolders recipe and frozen original
+config, with all normal source/file/owner/no-follow/auth/probe guards intact.
+The new mode never accepts a returned path or creates a replacement user profile.
+
+Capture native-list raw stdout/stderr and normal command receipt under the existing
+bounded member/byte/omission controls. The same held-metadata capture/projection
+may describe this one command with a truthful fixed native-list stage. Preserve
+its1024inventory cap,16detail cap,whole-object2048byte cap and existing private
+path/content exclusions; never renew before/after values. Existing add-user
+metadata bytes/stage and contracts remain byte-identical. If projection is shared,
+accept only the two fixed stages add-user/native-list; retain1024entries,depth32,
+16details and the2048whole-object bound for both, including refusal envelopes.
+A new-stage byte-length increase must not bypass the existing whole-object bound. Snapshot before this one
+command, with read-only deferred projection only; deferred work never launches a
+child. A nonzero exit/capture/context/cleanup error remains fatal through the
+original command guard. If command exits0, retain bytes as opaque evidence and
+unconditionally t.Fatal at a review barrier. Listing interpretation and all5/
+runtime/auth/model flags remain false regardless of returned text or parseability.
+
+The new mode permits at most14total archive members (four command triples,
+one metadata projection and one summary), forbids every provider/probe member,
+and uses only prepare,before-list,native-list,review-barrier stages with matching
+complete command prefixes. A zero exit never authorizes a positive flag.
+
+Add the new mode to exact-prefix/closed-file admission and current source selector
+without deleting earlier modes or changing old failed-envelope acceptance. Keep
+workflow event/routing/admission, official source/runtime pins, real-host opt-in,
+credentials, commands for other modes and all production adapter/classifier code
+byte-identical. No automatic retry at unchanged source. Only root publishes.
+
+## Meaningful verification and review
+
+Before code, freeze exact source/head after two independent plan GOs. Inert
+controls must establish fixed complete/prefix argv,cwd,timeout and member closure;
+reject wrong/unrecorded/extra command,provider/probe,unknown mode/stage,oversized
+stream/metadata and false success/qualification. Exercise one normal inert child
+with output and one failed inert child to prove the original fatal behavior and
+that no subsequent command runs. Verify config/source/metadata canaries and no
+profile/map adoption. Historical922 source exact admission and the new reader's
+unchanged922 replay must return the same original raw summary/member bytes; keep
+previous189e success separate and readable. Existing source selectors retain
+exact old guards and new mode selects only the new named opted-in test.
+
+Run focused Copilot/shared inert Go contracts, affected Python contracts, actual
+affected all-enabled and unfiltered six-linter gates, gofmt and whitespace under
+the serialized slots. Do not execute any native/vendor, scanner or public installer
+binary locally. Obtain two exact code critics and executed receipts before root's
+normal expected-head fast-forward. Only a new genuine hosted capture can establish
+what this fixed direct listing actually prints. Later grammar, registration,
+profile allowances and full-cycle claims require separate evidence and review.
+
+## Accepted empty-registry plan before implementation
+
+Exact draft SHA256 `30858baf6e6d894641c59650d117e5f95672aaaa58b7bf2f2edf4712f8e7bc0e`
+received independent GPT-6.1 Sol xhigh PLAN GOs from `kimi_e2e_finish` and
+`gemini_qoder_finish` before code edits. Receipt SHA256s are
+`7fb5c7f31e1246af7d89d020e0bbe53cd16c676c9ced5919e037d7a8386f26bc`
+and `f2b5a84d34b44acb73f44757f9fb7e37bd91befe1ff92a38bac9da4903e900d4`.
+Both checked the actual unknown internal refusal boundary and current source,
+including fixed source/pin/profile/process gates and1024/depth32/16/2048 bounds.
+Root implements this isolated diagnostic; all existing production and previous
+observations remain preserved.
+
+
+## Copilot unchanged inert process contracts: hosted execution amendment (2026-10-27)
+
+Accepted exact pre-code plan SHA256 `435f0ff8fe6240e00497329e1e4068258f208fc7d0651f282afc4ad4c081de1c`. Independent plan GOs: native reviewer `091a987f16bcb3357e3a8988587850e8249cf142be8318198419223db5c47a73`, Gemini reviewer `eb8150f5ccc4b9aefb278b531e6433e434d0522684700bdda706e7c79145d16d`. The full local process gate remains failed on its recorded environment prerequisite; the proposed real hosted execution remains pending.
+
+### Accepted execution amendment
+
+PRE-CODE execution amendment to the accepted empty-registry diagnostic plan
+30858baf6e6d894641c59650d117e5f95672aaaa58b7bf2f2edf4712f8e7bc0e.
+Two independent plan reviews precede the workflow edit. No native capability,
+profile authority, test assertion, containment prerequisite or release changes.
+
+## Observed local gate limitation
+
+Frozen diagnostic source 7e193758d73c5ab8a374ffdabc1ad27aa941c348,
+tree 6740f5640cd45584054c7938e22006a889610ca0, has two exact independent code
+GOs. Its full focused Go command actually failed. The two failures are
+TestCopilotEmptyRegistryActualInertCommandKeepsOpaqueBytes and
+TestCopilotEmptyRegistryOriginalFatalGuardCannotContinue. The unchanged ordinary
+process supervisor refuses before running either owned inert child because this
+environment lacks /proc/<pid>/task/<tid>/children. A separate diagnostic using
+the unchanged supervisor reproduced the same refusal for immediate and naturally
+delayed inert children, including outside the ordinary execution sandbox.
+The original failed log is retained at
+/tmp/uap-copilot-empty-registry-gates/focused-go.log, SHA256
+0c5547b83c3eb0daffffe0a42e75d13c4142aefbc79edc581e2467e642ae4bec.
+This is not a successful process gate. Neither test nor the supervisor may be
+skipped inside source, relaxed, replaced with a fake process or labelled passed.
+
+The existing Project Native Runtime admission job only runs Python selection
+contracts; the native job compiles the Go test binary and selects the opted-in
+native test. It does not execute the new inert Go tests. The Required workflow's
+full Go lane only triggers on PRs to main/master, not this stacked draft leaf.
+Therefore merely pushing the existing source would not resolve this gate.
+
+## Smallest additional gate
+
+Change only .github/workflows/project-native-runtime.yml: after the existing
+selection step, add the already pinned actions/setup-go revision with Go1.26.10,
+cache false, and a focused inert contract command. Both steps are conditional on
+the actual selected matrix containing client copilot. Use the existing finite
+matrix output, not a user-controlled command or new flag. The command is exactly:
+
+    go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime)'
+
+The existing contracts job remains on ubuntu-24.04 with its existing five-minute
+deadline, exact head checkout and contents-read permissions. Do not add native
+opt-in, vendor acquisition, installer/scanner execution, credentials, environmental
+eligibility overrides, shell eval, retries or fallbacks. These tests execute only
+owned inert children, fixture HTTP/JSON and local source contracts. Preserve the
+two process tests byte-for-byte and execute both without an exclusion in CI.
+The complete native matrix still depends on successful contracts, so no native
+observation starts if this gate fails. Existing native host admission, selection,
+limits, pinned actions, workflow events/concurrency and native commands remain
+unchanged. Other client-only matrices do not incur this additional Go step.
+
+Add a small source contract to the existing runtime Python tests which verifies
+the conditional two steps, exact pinned toolchain and full focused invocation,
+and that native remains dependent on contracts. Use existing test conventions;
+do not add a YAML library or general workflow parser.
+
+## Honest execution and publication order
+
+Preserve the original full local failure. A separately named local subset may
+exclude only the two identified OSRunner process contracts, with the exact
+exclusion recorded; this establishes only the remaining inert contracts. Execute
+all affected Python contracts, affected all-enabled lint and unfiltered six-linter
+gate. Fix only the two already measured QF1003 dispatch style findings through
+equivalent tagged switches; preserve old mode behavior and command body guards.
+Re-run gates and obtain two code critics for the exact final source, including
+the workflow amendment and lint fix. Replay the previous922 failed and189e
+readiness raw evidence with both old and new readers as already required.
+
+After those gates and reviews, root may normally fast-forward the existing draft
+PR527 source solely to obtain the missing hosted execution, after confirming the
+old actual run has fully completed and the expected branch head is unchanged.
+Record both process tests as pending, never local-pass. Do not merge, qualify or
+claim the full gate until the actual exact-source GitHub run shows each process
+test executed and passed. Obtain source/job identity and raw job log proof, then
+audit the new bounded native diagnostic artifact normally. A CI process test
+failure stays blocking and is diagnosed from its real result. A successful inert
+gate proves its contract only; this new native observation still stops at the
+unconditional failed-only review barrier with all qualification flags false.
+
+
+## Copilot empty registry capture: local validation and pending hosted process gate (2026-10-27)
+
+Final code source `c80e34bc9097397ec15e3b9f741b39c449157ddf`, tree `653e9b7abbb08ab6f23ad0b660bf69b7ea21f799`, implements the accepted failed-only diagnostic and the separately reviewed hosted execution amendment. Two final independent GPT-6.1 Sol xhigh code critics approved the exact source: Gemini receipt `afc3518eb9c95d61cc99e018bc9c86df0ca33ca5385d52dbe195fe3d0c28890f` and native reviewer receipt `f7b14a15a01c4bf153dfd8f5ababb454c30f5cdf16946445937c841ddc0777e0`. Removing the two added conditional workflow steps restores the complete previous workflow; the existing native job still depends on contracts. The two process-test bodies are unchanged (whole file SHA256 `d328951b55a897eeb81783216a80d6f7f8d2fbcee3328b9f491d2d6dab210b6c`).
+
+The original full local focused Go gate FAILED because the real process supervisor could not obtain this host's `/proc/<pid>/task/<tid>/children` prerequisite. This failure is retained and is not a process-pass claim. The explicitly named local subset excluded only `TestCopilotEmptyRegistryActualInertCommandKeepsOpaqueBytes` and `TestCopilotEmptyRegistryOriginalFatalGuardCannotContinue`; its43 top-level tests /129 case-pass events passed. Actual affected all-enabled lint against `a412ba5e137fdcb7e004393229b323211ed746e1` and unfiltered six-linter gates each reported zero issues; all61 affected Python contracts passed. Executed local receipt SHA256 `a49225f173891a77f1d84121f59cf30786fca465876cab52bb10fccdd0df54e1`.
+
+Original922 failed registration and189e successful installed-tool readiness archives re-admit under their exact old readers and the new reader with all14/21 original member bytes and summary semantics unchanged. Current-reader replay receipt SHA256 `9162f0c5a2de82123286d936767196af66b50887cec66461f149c37681bb9563`; exact historical-reader replay receipt `3c9d6bdb9fd3013f4d92535f72d19d4f5807a7a294d4ee4f647caadafb9b2e52`. The readiness result remains separate from the five broader qualification flags, which remain false.
+
+This draft source is published solely to obtain actual hosted execution of the full focused Go command, with no exclusions, before native observation. Both strict process tests must have actual RUN and PASS records at the new source before the full gate or a merge can be claimed. No supervisor prerequisite, original profile guard, native opt-in or actual-host requirement is relaxed. No vendor client, public installer or scanner ran locally. The new native catalog capture retains its unconditional failed-only review barrier regardless of returned bytes; no registry grammar, registration, lifecycle, authentication or real-model success follows from publication.
+
+
+## Accepted Copilot post-add registry observation amendment, 2026-10-28
+
+Exact pre-code plan SHA256: `11faf859755a001ceb888f05ff3b071a0dbd9807b59618307168ac21ac191b4c`. Independent PLAN R1 root and PLAN R2 Kimi both GO before implementation. This is failed-only observation, not native activation or runtime qualification.
+
+# Copilot: one failed-only direct registry observation after public user add
+
+PRE-CODE observation plan. Two independent exact-plan GOs (root and Kimi) and root's accepted plan commit must precede implementation. Root alone performs Git/GitHub mutations and publication. Draft author performs source/raw reads and writes this scratch proposal only. No native/acquired client, public installer, scanner or vendor executable runs locally. Native owns the current serialized test/lint slot.
+
+## 1. Source-bound measured reason
+
+Plan base remains source `5781ef431714a1fb00dfa7a1c502e181699c9b54`, tree `19af10e298bdc10fe43c1392999a03cd5f2e47c2`, checkout `/tmp/uap-copilot-disabled-builtin-empty-current`. Later integration of other client tracks does not change this plan base. Root will separately reconcile composition/current remote state before publication.
+
+Hosted run40604771816 admission122541415832 passed the actual full unexcluded Copilot inert gate with Go1.26.10. Native122544613268 completed failed at the intended public-first-add review barrier. Inherited Cline122544613212 completed success and its independent full raw audit is preserved; no pending capture needs supersession or cancellation.
+
+Original actual artifacts are retained under `/tmp/uap-copilot-5781-independent-40604771816`:
+
+| Artifact | ID | Outer SHA256 | Inner SHA256 | Members |
+| --- | --- | --- | --- | --- |
+| Native | 12781916168 | a966373206c3ee5a216ababd3ff7b3754cf8f50d9ca7334fda9da7664a2039cc | b901d186c3ec043619a8af486930d36172136bb9cd4508e6927d50183766b04d | 14 |
+| Frontend | 12782145914 | da6d336af2e831d1ad992ddd277a2a15401720554e0d482589b73c3d8e896ebd | 064d5210d90862be0cb8b4381eb6cee59777e90715a4cd0b2411edb915149ca7 | 25 |
+
+Two independent actual raw reviews are complete:
+
+* Peer `/tmp/uap-copilot-5781-independent-40604771816/copilot-independent-raw-audit.json`, SHA256 `6ba02a976bd2db0bde65331033962fc6416af74ea0ed98869df2868c44150e73`.
+* Root `/tmp/uap-copilot-5781-root-40604771816/root-raw-audit.json`, SHA256 `30562fe7a660c705cabeb120ad68faa6ad4d7b1df2109f10038133f6f41e6efd`.
+
+All four commands git-A/git-B/version/add-user exit0 with error=false/context_error=false and ordinary full-descendant supervision. Public add takes2488ms; total4497ms. Its2831byte stdout SHA256 is `c14ba62e7310fc9f31b5aee315e02cbcf42c6c1c7fd0a0431d385abdb4da0185`. The versioned public result is add/success for native-proof1.0.0, one Copilot user target, installation `6dd5f5ca-4c29-4bd9-b5a7-c96b9444b586`, physical ID derived from that installation, and a matching public operation/security subject. It reports manual_activation_required, authentication not_checked and package_validated. The sole failure is the intentional review barrier reported at `agentplugins_copilot_user_registration_attempt_test.go:172`. Stage=review-barrier, all five qualifications/runtime/authentication/real-model remain false. No probe/provider exists.
+
+The1928byte metadata projection reports before2/after12/changed11/omitted5. It exposes path hashes and finite metadata comparisons only. Neither names nor contents of omitted entries are known. No ownership, permission, profile exception or new baseline follows from this observation.
+
+Current production source gives a concrete reason to capture the missing bytes: `CompleteCopilotActivation` returns `ManualCopilotVerification` for `ErrCopilotListContractUnknown`; the unattested fallback produces this manual-activation result. The post-install native list document is not exported. The public success therefore supports a new direct observation, but supplies no exact installed-list grammar, native enabled identity, ownership or runtime proof. Do not guess a builtin suffix, change a parser or activate the plugin from this result.
+
+Pins remain Copilot1.0.103 archive `9aeb4430e9ac9523546db07b227c7aba179a4710a55f9ac29ad143b0f9e1b325` / executable `f19b3554a6b62605db3a26d5255ebe2a3ee39fcd6a357edb18301ea5037f6f0d`, and the existing scanner pins. The exact production disabled-builtin empty preflight and all generic/VS Code registry behavior remain unchanged.
+
+## 2. One new observation mode and exact sequence
+
+Add exactly one new failed-only mode/test. Preserve old user-registration, empty-registry and readiness entrypoints/readers/helpers so their historical artifacts remain readable under their original source identities.
+
+| Field | Exact new value |
+| --- | --- |
+| mode | copilot-post-add-registry-first-capture |
+| selected test | TestAgentpluginsCopilotNativePostAddRegistryFirstObservation |
+| selected file | repotests/agentplugins_copilot_post_add_registry_attempt_test.go |
+| opt-in | AGENTPLUGINS_COPILOT_POST_ADD_REGISTRY_FIRST_CAPTURE |
+| CASES seconds / phase | 180 / runtime-attempt |
+
+The fixed command sequence is exactly:
+
+1. git-A: original held Git, `-c core.hooksPath=/dev/null init --quiet`, original projectA.
+2. git-B: the same held Git/flags, original projectB.
+3. version: `[heldCopilot, --version]`, original outside cwd, exact existing1.0.103 version check.
+4. add-user: `[heldInstaller, add, heldPackage, --no-save, --scope, user, --target, copilot, --format, json]`, original outside cwd.
+5. native-list: `[heldCopilot, plugin, list]`, the same original outside cwd and original HOME/environment.
+
+Every command receives exactly30seconds through the unchanged command path. This is one added direct diagnostic invocation after the ordinary public add; the public installer's own internal native operations remain unchanged and are not counted as this new direct invocation. There is no direct pre-add warmup, second add, retry, pre-registration, profile adoption, project list, prompt, tool, provider, activation, enable, trust or inspection command.
+
+Use the unchanged `newCopilotProjectAttempt`, `preparePackage`, authored original config, f.env, f.check and `f.command` process/receipt/guard path. The work context remains the same origin+150seconds, total remains the same origin+180seconds. The original30second command context and five-second descendant-exit grace remain exact; captured elapsed_ms can include that existing grace, so its finite receipt cap remains35000ms. Never renew/rebase an origin or replace an error with a later successful observation.
+
+## 3. New flow, existing guards, and two metadata observations
+
+The old `observeUserRegistration` cannot be called and then continued: its intentional t.Fatal is the old mode's boundary. Preserve its complete bytes. A new mode-local public phase repeats only that existing pre-barrier body: same original .copilot metadata capture, same exact public command through f.command, same strict bounded JSON and successful versioned-envelope validation. Require command=add/result=success/schema_version integer1/data object before the new mode can advance toward the direct list. Do not weaken or modify the existing common JSON helpers.
+
+Keep the public phase in its own ordinary function scope. Its deferred callback performs metadata capture/projection and f.keep only. It never runs a command, schedules the direct list, rebases a guard or changes a failure stage. Thus a t.Fatal in the unchanged public process/config/pin/cleanup guard exits before any fifth command. A public JSON validation failure also stops before the fifth command.
+
+Export the public phase metadata as `user-profile-metadata.json`, using unchanged `copilotUserMetadataAfter` / `copilotUserMetadataDelta` and stage add-user. When this phase returns normally, its deferred metadata projection has already settled. If it refused, set the finite after-user-metadata failure stage and stop; do not launch a new child after a refused diagnostic snapshot.
+
+Only after the ordinary public phase and its metadata complete, enter a second ordinary function for the direct list. Capture immediately-before-list metadata from the same original `.copilot` root. This is a read-only observation snapshot: never assign it to `originalConfigBaseline`, f.protected, immutable pins or any authorization map. A before-list metadata refusal records the finite native-list refusal projection and fails without launching the fifth command.
+
+Register a list-phase metadata-only deferred callback, then execute the exact native-list command through the unchanged command path. Its raw stdout/stderr and original command receipt are retained unchanged. The deferred callback uses the already-existing `copilotEmptyRegistryMetadataAfter` or the unchanged capture+`copilotMetadataDeltaAtStage(...,"native-list")` primitives and writes `native-list-profile-metadata.json`. It never starts a child or retries capture. After a normal return from this phase, refused metadata causes the finite after-list-metadata failure and no further action.
+
+Each metadata file is independently bounded by the unchanged2048byte projection, maximum1024 inventory entries, depth32, sixteen displayed changed entries before byte-bound truncation, strict no-follow held metadata/parent identity checks, and the original context. No raw path, unknown file body, native registry/config body or arbitrary error string is added to either projection. The five omitted entries in5781 remain unknown and create no exception.
+
+On ordinary fifth-command and metadata completion, set review-barrier and deliberately t.Fatal with a new precise raw-review message. Native list bytes stay opaque: no trim/ANSI removal/CRLF rewrite/section skipping/JSON parsing/absence classification or activation decision is made from them. Empty, unfamiliar or diagnostic stdout/stderr are retained as data under the original bounds. The unchanged outer artifact reader's UTF8 requirement still applies; invalid UTF8 cannot be admitted by inventing a new encoding allowance.
+
+## 4. Exact finite stages and artifacts
+
+Use the existing summary field set and optional finite `original_config_change` projection, with the new exact mode. Do not add provider_kind, inherited project activation, new success proof or inferred registry status. The new finalizer resets runtime_attempt_complete=false, all five qualification values=false, vendor_authentication_qualified=false and real_model_qualified=false, and calls t.Error if the test has not already failed. The unchanged outer finish therefore serializes the actual t.Failed() as true; it never fabricates a failed flag for a passing test. The admitted lane has probe_status=absent and no probe/provider member. If original finish encounters unexpected probe state, keep its truthful failure/refusal; do not normalize it to absent or admit it as this closed lane.
+
+All commands form an exact prefix of the five labels; every present command has its complete `.command.json`/`.stdout.log`/`.stderr.log` triple. A label not in the recorded prefix has no triple. Previously completed commands must be clean0/errorfalse/contextfalse before continuation. Only the last current command in prepare/public-user/native-list can carry the actual captured failure. Never accept a later stage or command after an earlier failed receipt.
+
+| Summary stage | Command-prefix length | Required metadata / truthful boundary |
+| --- | --- | --- |
+| prepare | 0..3 | No metadata; original Git/version/package preparation may fail. |
+| before-user | 3 | user metadata is the add-user refusal; no public child started. |
+| public-user | 3 or4 | user metadata required; original pre/post command fatal may occur before or after its complete captured triple. |
+| public-result | 4 | Public command clean; raw public JSON validation may fail; user metadata required. |
+| after-user-metadata | 4 | Public successful envelope verified, user metadata refused; no list metadata/triple. |
+| before-list | 4 | Public successful envelope and observed user metadata; native-list metadata refusal, no fifth child. |
+| native-list | 4 or5 | Earlier four clean/validated, observed user metadata; list metadata required, original pre/post list guard may fail. |
+| after-list-metadata | 5 | All commands clean, valid public result, observed user metadata; native-list metadata refused. |
+| review-barrier | 5 | All commands clean, valid public result, both metadata observed; intentional final t.Fatal. |
+
+For every stage beyond public-result, independently verify the retained successful public add envelope. For public-result itself preserve invalid/malformed raw stdout as truthful failed evidence; do not mislabel validation as completed. `original_config_change` remains allowed only at a stage where the original config guard can actually fail (prepare/public-user/native-list), with the existing finite projection validator. Successful continuation stages cannot carry it.
+
+Allowed files are only runtime-attempt.json, the exact prefix triples, `user-profile-metadata.json` when required above, and `native-list-profile-metadata.json` when required above. Full capture is exactly18members: one summary +15command files +two metadata files. The live Go prefix check runs before summary is added and therefore caps f.files at17; Python full admission caps18. No probe, provider, installed snapshot, second native-list slot or arbitrary diagnostic file is admitted. Do not raise generic ZIP/member/aggregate limits. Retain existing1MiB command capture/per-member mode bound, metadata2KiB each, archive32MiB and aggregate16MiB/ordinary-flat-member checks.
+
+Both stage/member guards and the new Python reader validate exact prefix/closure, typed receipt fields, argv/cwd/deadline/cleanup, previous clean commands, metadata stage/status/bounds, source/pins/scanner/layout and all-false tuple. A captured process error stays an admitted failed prefix only at its actual current boundary. Unknown stages, malformed metadata, false progress and extra authority are refused.
+
+## 5. Scoped source changes and whole-byte preservation
+
+Expected implementation paths are exactly:
+
+* Existing `repotests/agentplugins_copilot_project_native_attempt_test.go`: three finite new-mode hooks only—command guard switch case, command-prefix append eligibility, finish dispatch case. Keep every other byte of the command/check/environment/constructor/config/preparation/supervisor/finish serialization bodies unchanged. No generalized unknown-mode fallthrough or permissive mode-name prefix.
+* New `repotests/agentplugins_copilot_post_add_registry_attempt_test.go`: exact new mode/sequence/entrypoint, separate ordinary public/list phases, metadata-only defers, truthful stages, closed prefix/finalizer. Reuse existing pure helpers without modifying them.
+* New `repotests/agentplugins_copilot_post_add_registry_contract_test.go`: meaningful fixed command/stage/member/metadata/progression contracts.
+* New `repotests/agentplugins_copilot_post_add_registry_process_contract_test.go`: authored inert scripts and the same Go test child to exercise the actual original OSRunner/fatal guard. No vendor/public installer/scanner process.
+* New `scripts/project_native_copilot_post_add_registry.py` and `scripts/test_project_native_copilot_post_add_registry.py`: separate closed failed-only reader and independently authored synthetic contract envelopes. Reuse unchanged user authority/metadata/config-facts and typed pure primitives, without rewriting evidence into an old mode.
+* Existing `scripts/project_native_runtime.py`: exact Copilot CASES test/file/optin selection above (seconds/phase unchanged), and one exact new-mode dispatch to the new reader. Old dispatches/functions stay complete-byte exact otherwise.
+* Existing `scripts/test_project_native_copilot_user.py`: only the literal current-selection expectation changes to the new test/file/optin. This is the explicit root-accepted selection exception; preserve every old fixture/helper/outcome assertion, all other complete methods and the remainder of that selection method. Add new-mode selection controls in the new test file.
+* Accepted plan and concise factual validation documentation, naming historical/fresh gates accurately.
+
+The old user/empty/readiness Go entrypoint/helper/contract files, metadata capture/projection helpers/contracts, Python readers and old empty/readiness tests remain whole-byte exact. In particular, preserve both strict empty-registry actual process test functions and their whole file. Preserve all production Copilot/shared/VS Code parser/status/lifecycle/registry runner/adapter code, workflow, other clients/CASES, collectors, pins, security scanner and process/environment/authority code. No production or native activation/registry parser fix belongs to this amendment. No new CLI flags, native profile/registry seeding, config allowance, baseline adoption, acquired executable/log fixture or scanner execution is added.
+
+## 6. Meaningful inert and independent-reader controls
+
+Under the explicitly serialized slot, Go pure contracts exercise all five exact argv/cwd/30second labels, every allowed finite stage/prefix and required file set, refusal of skips/repeats/reordering/extra commands/flags/wrong executable/project cwd and60second substitutions. Check18total/17pre-summary caps and both independent2KiB metadata bounds; wrong metadata stage, missing/duplicate/unknown metadata, forged status/type/omission arithmetic and unexpected provider/probe/member refuse. No scalar bool may satisfy integer counts.
+
+New inert actual-process contracts use authored local scripts and the same Go test executable child, never an acquired/native/public installer/scanner or spoofed hosted eligibility. Exercise a clean inert add and one opaque list retaining exact stdout/stderr, including unfamiliar/non-JSON output, while original config bytes/digest/pin maps remain unchanged. Test an add exit7 and an add-time original-config mutation: original f.command must fatally stop and the list marker must be absent. Test list exit7 and list-time original-config mutation: preserve that actual failed prefix and prove no after-guard marker or later command executes. Metadata-only defers must still run and may record finite refused status; they cannot start a child or change the current failure stage. Metadata before/after refusal controls prove no fifth command after public-phase metadata refusal, and no list command after pre-list metadata refusal. Preserve the existing actual /proc capability guard and both original strict process tests unchanged; do not skip or spoof it.
+
+Independent Python synthetic positives cover all finite failed prefixes, both metadata observations and the full18member intentional-barrier envelope, always all-false. Use independently authored inert public JSON and opaque list bytes, not modified captured logs. Coherent negative controls update related lengths/hashes where applicable and exercise missing/partial/extra triples, sixth/repeated command, stage/prefix contradiction, prior failed add followed by list, list claimed completed on error/context/forced cleanup, wrong public schema/command/result at continuation stages, source/layout/pin/scanner drift, all success/auth/model/qualification mutations, count/bool/elapsed bounds, metadata omissions/stages/duplicate path hashes/whole byte caps, invalid UTF8/duplicate JSON and unexpected probe/provider/authority fields. Old mode plus new-only members and new final barrier over the old four-command capture must refuse; do not normalize it into a full new capture.
+
+Source preservation checks compare complete old files/functions, not merely named assertions. Record actual output/exits/source hashes for all checks. Pure synthetic acceptance proves the closed diagnostic schema only, never native registry interpretation or qualification.
+
+## 7. Gates, historical replay, publication and next raw review
+
+Execute locally available new pure Go contracts, the affected runtime/new-mode/old user/empty/readiness Python contracts and exact selector checks under root's serialized slot. Run gofmt/diff checks and affected all-enabled lint against `a412ba5e137fdcb7e004393229b323211ed746e1`, plus whole unfiltered revive/funlen/gocyclo/gocognit/dupl/depguard. Broaden only for a concrete remaining risk. Record the actual commands, source, exits and log digests; do not predict counts or transfer a historical pass as a new execution.
+
+The actual local platform previously lacks the /proc task/children interface required by unchanged OSRunner guards, even unsandboxed. Do not repeatedly run known-incapable local strict process tests, add exclusions to the required hosted command, weaken assertions, introduce skips or impersonate a hosted environment. Compile/pure local checks and historical failures remain accurately labeled. The unchanged workflow supplies the genuine hosted full gate after source publication and before native execution:
+
+```text
+go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime)'
+```
+
+Its conditional pinned Go1.26.10 setup, no-exclusion command, original two strict process cases and the new TestCopilot process contracts must actually RUN/PASS with no skips on the exact new source. Native already depends on admission. No workflow change is needed. Root publication records this fresh hosted gate as pending until measured; neither the old5781 admission nor a local synthetic pass is described as a new hosted pass. The historical5781 receipt is `/tmp/uap-copilot-5781-independent-40604771816/admission-hosted-inert-proof.json`, SHA256 `2133ee2348716dd8c0152d3524bf8beea559b581d954c5f52c96de525cb70f63`, original raw log SHA256 `c58702fbb238d4d4af49981a529ca27e656b9047254af4524a85e5ea660a3f89` (131RUN/131PASS, zero skip/fail, unchanged process file d328951b…).
+
+Scratch pure readers replay original189e readiness,922 failed user add,2c2 empty-registry barrier and5781 successful-public-add barrier artifacts under their original exact source identities. Verify archive/member/summary/raw bytes and hashes unchanged, original failed/pass distinctions and all-false outcomes preserved. The new mode neither retargets nor promotes an old capture. Preserve the already-audited inherited Cline results. No old capture/log/binary enters Git.
+
+Freeze exact source and obtain root plus independent Kimi CODE reviews before root publication; critics verify finite mode hooks, old whole-byte preservation, callback/late-failure behavior, metadata opacity, no rebaseline and no production/VS Code change. Root alone composes current remote state and normal-FF publication; do not retry unchanged or supersede any pending genuine capture.
+
+Only a fresh source-pinned hosted run may supply the post-add listing. Independently audit API/source/tree/build/pins/closed ZIPs, exact public and native argv/cwd/raw streams/receipts, both opaque metadata observations, original process/config/pin guard and intentional or earlier fatal boundary. A clean native list plus review barrier still has all flags/runtime/auth/model false. If the original guard or metadata fails, retain that failure and stop; do not introduce a profile exception. Any eventual parser/activation proposal requires the actual new raw bytes, source-backed diagnosis and its own two pre-code critics. No such product change or registry grammar is authorized here.
+
+## Baseline preservation hashes
+
+The following table is generated from the exact5781 source. Existing mode files/readers/contracts and production/metadata/workflow helpers are whole-byte preservation anchors; the shared attempt/runtime and selector test have only the explicit new-mode/selection exceptions above.
+
+| Path | SHA256 |
+| --- | --- |
+| `install/integrationctl/agentplugins/clients/shared/copilot_identity.go` | 8344e9718dd9ce9fa21d7a09316ec23620f7350cb742a5ff5cfdab79c9849331 |
+| `install/integrationctl/agentplugins/clients/shared/copilot_lifecycle.go` | 1c9d61deffedc62d558d17b0ee27e9b947589b79b53fadfd8b1a12993110ee4b |
+| `install/integrationctl/agentplugins/clients/shared/copilot_status.go` | 7fb2f5f03491f036d613217284c830a87efebfe15827038fa43401417be69ec4 |
+| `install/integrationctl/agentplugins/clients/shared/native_registry.go` | 9be2175d88e1ab6eeee8d1f0b812fafee5d43a5a67fc039abfd675cef2caa115 |
+| `repotests/agentplugins_copilot_project_native_attempt_test.go` | 8cc6cfdc416259c09852873274b07098c9f6ccd43e6b7f919a5f0b4afcad7be0 |
+| `repotests/agentplugins_copilot_user_registration_attempt_test.go` | 45447d0a35f8dede1f95d505f098c4485f3695402f76ccdfabd0e4100a8cb36d |
+| `repotests/agentplugins_copilot_user_registration_contract_test.go` | ca23e14493bf907f20a2e2af2b5d9cde1f6b32f961719add33805b804a3e14d1 |
+| `repotests/agentplugins_copilot_empty_registry_attempt_test.go` | 9e78c5fb43db2ecf4007e9dd271a4aa26010f75b96879cb30633e4419e8e3caa |
+| `repotests/agentplugins_copilot_empty_registry_contract_test.go` | ac7cba746373eaf9ecc0993db4959d93919775beaa079877e48678eba285e08d |
+| `repotests/agentplugins_copilot_empty_registry_process_contract_test.go` | d328951b55a897eeb81783216a80d6f7f8d2fbcee3328b9f491d2d6dab210b6c |
+| `repotests/agentplugins_copilot_user_metadata_test.go` | db5f1d60f4c1e0934ab32e90c39e654a1368beb90b0c63c462f7908a559c0b15 |
+| `repotests/agentplugins_copilot_user_metadata_projection_test.go` | 7f298659c71a0c4b529840380920a1b5ee333628158479967c6c2766feaea689 |
+| `repotests/agentplugins_copilot_readiness_completion_test.go` | 9df4e392cb97e3365374201f44163552c9b99f60c9f5f54cb8f8891b09abdea8 |
+| `repotests/agentplugins_copilot_readiness_contract_test.go` | 57f2bf81b41627ed342a8efc00f634c3e36bf19cc4c7f16897da88bd66a7d795 |
+| `repotests/agentplugins_copilot_readiness_events_test.go` | 2a4683b6bded2ccad5f30b883f3800af84c0284e5ddaab4ab5d969a6007d2d47 |
+| `repotests/agentplugins_copilot_readiness_exchange_test.go` | c641a4881f6393176a70f5c53388ed7ea9143f78b28faa7dbe885895ac6b7c1b |
+| `repotests/agentplugins_copilot_readiness_identity_contract_test.go` | f51bc243f72be24e4615348fe2156be4759b9e00a1df265a3403ac57f9ded6a6 |
+| `repotests/agentplugins_copilot_readiness_installed_test.go` | e478d85a649aedd6af7106079aeebf7724d5f810cff0a8e13b114faa3b7999a9 |
+| `repotests/agentplugins_copilot_readiness_metadata_test.go` | 1a7a184227f50d575d61499acd52c9dbeb17e70efee4281f3ce27ef774ea7a72 |
+| `scripts/project_native_runtime.py` | 0be88d5590ac950a64903ad22adc3b3b12624c9bd4341f0c5340beeac8674984 |
+| `scripts/project_native_copilot_user.py` | fe75f19d141b755bf19c1ee7605963fa2f045bdcbca5690b38ea044609bb42c5 |
+| `scripts/project_native_copilot_empty_registry.py` | 4bbf4e5e34ff8e908a867744beb14228fadfc5e91d8aacc60b242a8f96f1922e |
+| `scripts/project_native_copilot_readiness.py` | 98cb758e0b6b1dcfe4953c8032e51f67fb2afe974e6887ca862c3c70de518cc6 |
+| `scripts/test_project_native_copilot_user.py` | 299e89a5d0138a5e4e43cae955b03d704c627502ca02d2fe67ec8971581a610a |
+| `scripts/test_project_native_copilot_empty_registry.py` | 48ea493b5c1d177183d39b6f5a08196bf8a3940695d76b820ccab5127dee1f3f |
+| `scripts/test_project_native_copilot_readiness.py` | f339b7703c2d2358f953bd040285e242c1aef0db9bf4a73a3f1c41b1fd54dbdd |
+| `.github/workflows/project-native-runtime.yml` | 6d50637892ee2a387052b42d5d9a53a8db68e7a54aa2d04272f49425cb17e3df |
+
+Draft work performed source and already-audited raw reads only. No implementation, tests/lint/native execution, Git/GitHub mutation or publication has occurred for this proposal.
+
+
+## Accepted pre-code plan: Copilot exact user mixed live listing (2026-10-28)
+
+The following frozen proposal is accepted for its four code paths and two existing documentation paths. Its retained draft label records the original reviewable proposal; this acceptance authorizes implementation only after this root-owned pre-code commit.
+
+Base source: `85dfdaeaa217cf74f5c5a6464426cd1b67c2f069`; frozen draft SHA256 `061e3db491efc478921c130f22ae1888638d6936ba61b3095ce5c7aa41c760df`. Independent PLAN GOs: root `790e496e8d7ad30f862ae60fa627308c900cb40a19def7664ec811afae44ea90`, Kimi `16d1a95b203da5210edb53873e77896fd118d7ef77af9b7b93b64e4dc83413f3`. Both critics verified all 27 source files, 206 declaration anchors and five evidence receipts. The new-only strict recognition, exact old fallback semantics, and internal-verification observability limit are required. No qualification or release is authorized.
+
+# Copilot: exact disabled-builtin plus managed live-entry recognition
+
+Status: **PRE-CODE DRAFT ONLY**. No implementation, parser change, native retry,
+test or lint execution is authorized by this document. Root and a second
+independent critic must approve this exact draft; root must commit the accepted
+plan before any source edit. Root owns all Git/GitHub writes and publication.
+
+## 1. Exact source, actual evidence, and decision
+
+Plan base is clean source `85dfdaeaa217cf74f5c5a6464426cd1b67c2f069`, tree
+`10d2b3810d11b8e8fe984f0ab19d28bab4317faa`, already available at
+`/tmp/uap-copilot-post-add-registry-current`. Do not retarget that evidence to a
+future source identity. No new checkout or acquired executable is needed locally.
+
+Actual run40613833246, attempt1, native job122571919197 completed with the
+intended failed-only review barrier. Admission job122571555875 passed; inherited
+Cline job122571919162 also passed. These are separate outcomes. This plan does
+not turn the native diagnostic job into a passed runtime test.
+
+Both independent fresh whole RAW reviews are complete:
+
+| Reviewer | Receipt | SHA256 |
+|---|---|---|
+| Root R1 | `/tmp/uap-copilot-85df-root-40613833246/root-raw-audit.json` | `d54a31c9bb6d772e7793ece8877eb9305bfc027cd24643ca99ea8e5ea0dbabf1` |
+| Independent R2 | `/tmp/uap-copilot-85df-independent-40613833246/copilot-independent-raw-r2.json` | `c0b45dcf49faf16452d20b8cfbd1fbbcaadfa32ae80a8b6e7b2cb54692f066ef` |
+
+Both reviews bind own original ZIP/API identities and all raw/member/stream,
+source, build, compiler, pin, public result, direct-list and metadata joins.
+
+| Original artifact | Outer SHA256 | Inner SHA256 | Members |
+|---|---|---|---:|
+| Native12784890825 | `f07b24bf429c1623e0825ba0dd7e46924914c2f284bcef61a194c48cbbfcf57b` | `1c6df23cc53a8028f18923382edcaec40e8834789a9b6ec1e9c394575634ff06` | 18 |
+| Frontend12784436728 | `017d43a3c46d84eb04b2bbc4647fc2d18512a922ceaefb900bcbcbdc3493124e` | `9f189986f8c015fd5f83d878734091ac223b51c90fa0af66844801ed0287f938` | 25 |
+
+The actual five commands were git-A, git-B, version, public add-user, and one
+direct native-list in the same original HOME/outside directory. All had exit0,
+error=false, context_error=false and ordinary descendant cleanup. Add took3509ms;
+list524ms; total7088ms. Sole failure was the deliberate review barrier at
+`agentplugins_copilot_post_add_registry_attempt_test.go:346`. No probe/provider
+evidence exists; all five qualifications and runtime/account/model flags are
+false.
+
+The 396-byte LF stdout, SHA256
+`eb239f40f75369e78916a00e3700e3a75b695d35cd0e48a52b4ce531690a1373`, has:
+
+1. the exact 56-byte fixed prefix `Built-in plugins:` plus one disabled
+   `browser-use (v0.0.4)` line;
+2. the existing exact `CopilotLiveHeader`;
+3. one `native-proof@agentplugins-71b878b366b9 (v1.0.0) (enabled)` entry;
+4. one six-space `from ` line at the independently derived managed physical
+   path `.../installer-state/managed/clients/copilot/native-proof-024a9ef8a9f0`;
+5. exactly one final LF and no other bytes.
+
+The fixed-prefix SHA256 is
+`e83a8da5c004a1bfd6aa6645aacbe882ff506bf311b6a6c8c34833533e25caa2`.
+The direct stderr is exactly empty. Dynamic path/marketplace/physical identity
+were independently recalculated from public installation UUID
+`5cfee740-c7d0-4cee-83d1-b23f462a6e63`; no raw string was adopted as ownership.
+Raw logs and original captures remain scratch evidence, not repository fixtures.
+
+Public add emitted successful mutation, but its activation is still
+`manual_activation_required`, authentication `not_checked`, policy `allowed`,
+verification `package_validated`. The generic live parser requires
+`CopilotLiveHeader` as the first line; the captured later direct document begins
+with the builtin section and has no independently valid legacy Installed
+section. Applying the current verifier to these exact captured bytes therefore
+gives Unknown. The observed public manual result and reviewed source identify
+the existing `ErrCopilotListContractUnknown` fallback as the repair boundary.
+The installer's internal verification stdout is not exported, so matching that
+internal stdout or its precise parser branch to the later direct document is a
+source-supported inference, not a separately captured branch trace.
+
+**Selected candidate:** add exact recognition only for this measured whole
+shape in eligible Copilot user requests, route both registry preflight and
+activation verification through it, and reuse the current failed-only18-member
+post-add capture unchanged to verify the real repaired public activation.
+No new mode, selector, evidence format or metadata rule is needed.
+
+## 2. Source trace and preservation boundary
+
+Source and evidence hash inventory:
+`/tmp/uap-copilot-user-live-builtin-source-context.json`, SHA256
+`96c01f919aa21ef4c7acd2ada44c6b91f78f01b15b807c4dc1e841b6ef3b9da1`.
+It contains exact source commit/tree, 27 whole-file hashes and declaration-line
+anchors, the measured prefix hash, and the relevant original review receipts.
+
+Important call sites and invariants:
+
+| Source anchor | Current behavior / requirement |
+|---|---|
+| shared/copilot_status.go:40 `CopilotLivePluginStatus` | Header-first shared Copilot/VS Code parser. Preserve this entire file byte-for-byte. |
+| shared/copilot_identity.go:39 `inspectCopilotCLI` | Runs the held `plan.NativeRegistryExecutable plugin list` via existing tree-aware registry runner; handles errors/nonzero before classification. Add only one eligible positive branch after expectedPath selection. |
+| shared/copilot_identity.go:69 `copilotUserEmptyWithDisabledBuiltin` | Existing exact empty+disabled builtin admission. Preserve function and tests whole-byte exact. |
+| shared/copilot_identity.go `CopilotRegistryFindingAt` | Shared generic grammar and owned/unowned mapping. Preserve function and all scanner helpers byte-for-byte. |
+| shared/copilot_lifecycle.go:127 `VerifyCopilotPlugin` | Executes existing read-only listing. Add eligible exact recognition before its unchanged generic status switch. |
+| shared/copilot_lifecycle.go:19 `CompleteCopilotActivation` | Existing Active/Installed success, unknown/manual, and error/failure handling. Preserve this whole function. |
+| clients/copilot/lifecycle.go `Adapter.Activate` | Checks client identity; dispatches project requests separately; user requests call shared completion. Preserve entire adapter. |
+| clients/copilot/identity.go `InspectNativeRegistry` | Dispatches project observations to component-specific inspection; user to shared inspector. Preserve entire adapter. |
+| clients/vscode/lifecycle.go / identity.go | VS Code uses the same shared completion/inspector. Preserve all dedicated source and behavior; exact new branch must be unreachable for ClientVSCode. |
+| shared/marketplace.go:13 `ManagedMarketplaceName` | `agentplugins-` + first12 hex SHA256 of trimmed physical ID. Reuse existing function; do not change derivation. |
+| shared/command.go / native_registry.go | Original command/error and tree-grace behavior. Preserve whole files; no extra command, version probe, environment gate, or wrapper. |
+| planner/planner.go | Holds detected executable in NativeRegistryExecutable. Preserve planner and all profile/ownership machinery. |
+| post_add_registry_attempt_test.go:335 exact test | Existing ordinary public phase, metadata-only defer, ordinary list phase, final barrier and prefix/member guards. Preserve entire file. |
+| readiness_completion_test.go:98 | Original readiness may complete but all five qualification flags remain false. Preserve finalization and every old reader. |
+
+Whole-file hashes most useful for final review:
+
+| Preserved file | SHA256 |
+|---|---|
+| shared/copilot_status.go | `7fb2f5f03491f036d613217284c830a87efebfe15827038fa43401417be69ec4` |
+| shared/copilot_empty_builtin_test.go | `fc746bb5b7df509c4ac931982c17d019da53cbf8e6c52c69e66e9cebfe5d1d0b` |
+| shared/copilot_identity_test.go | `aea80041bc701a5813a3be96773a7ef849701ad3ca39ee10bfa66ecdfa00005c` |
+| clients/copilot/lifecycle.go | `75aa0d8a7863d463e6c77e276084682f69e3802acb7679da8d7d5cbbeddedd72` |
+| clients/vscode/lifecycle.go | `433edd4b7b41608a90c0737d3331b39b6785cc1d4ec51a613672031316b50ff2` |
+| repotests/agentplugins_copilot_project_native_attempt_test.go | `645e31328ee73f708a45f91e891c5c3031a947c972937fa8fec04be2b1b3f14d` |
+| repotests/agentplugins_copilot_post_add_registry_attempt_test.go | `405863943f307505d90e0c91856e26e60436b486fd19d00336d49f9f6152ac9b` |
+| original empty-registry strict process contracts | `d328951b55a897eeb81783216a80d6f7f8d2fbcee3328b9f491d2d6dab210b6c` |
+| new post-add strict process contracts | `0177b11697e3a2c2e655dd7165576be564e0a2f42bd4b767e41515e646474b75` |
+| scripts/project_native_runtime.py | `2327a1f1948566ca1d3296444943d15b6d2ee0303520da823fdec6b6b0c3a0e7` |
+| scripts/project_native_copilot_post_add_registry.py | `4996d333006a3bfc4aeae8f0ead56d8c7b0953ef45844a822150ed2d4bec9666` |
+| scripts/project_native_copilot_user.py | `fe75f19d141b755bf19c1ee7605963fa2f045bdcbca5690b38ea044609bb42c5` |
+| scripts/project_native_copilot_empty_registry.py | `4bbf4e5e34ff8e908a867744beb14228fadfc5e91d8aacc60b242a8f96f1922e` |
+| scripts/project_native_copilot_readiness.py | `98cb758e0b6b1dcfe4953c8032e51f67fb2afe974e6887ca862c3c70de518cc6` |
+| .github/workflows/project-native-runtime.yml | `6d50637892ee2a387052b42d5d9a53a8db68e7a54aa2d04272f49425cb17e3df` |
+
+Do not edit old generic, VS Code, user/empty/post-add/readiness readers or
+contracts, runtime selector, production profile/ownership code, workflow or
+capability implementation. AGENTS.md, the owner scope clarification and the
+capability-preservation contract remain controlling. No legacy deletion,
+implicit YAML fallback, release or VS Code qualification is in scope.
+
+## 3. Exact new recognition and eligible routing
+
+Add a private, small Copilot-only helper in a new shared-package file. This is
+an exact positive observation; it is not a replacement generic listing parser.
+
+### Held caller and identity prerequisites
+
+The plan has ClientCopilot and explicit ScopeUser. TargetContext.Scope is user
+or the existing unspecified default, never project/local; ProjectRoot is empty.
+The held registry executable is nonempty absolute clean, NUL/CR/LF-free and
+equals the executable actually used for this existing command. No new process
+or filesystem acquisition is performed to establish that equality.
+
+The declared name is nonempty, trimmed, valid for the existing ASCII live-entry
+identity grammar, and is not case-insensitively `browser-use`. The physical ID
+is nonempty, trimmed and valid as an existing namespace identity. The expected
+marketplace comes only from `ManagedMarketplaceName(plan.PhysicalArtifactID)`;
+the expected version is the exact `MarketplaceVersion(plan.DeclaredVersion)`
+value validated by the existing live-entry version grammar. There is no version
+wildcard, environment-spoof gate, or vendor-version command.
+
+The expected managed path is an absolute clean non-root NUL/CR/LF-free path,
+equals the held plan.ActivePath, and has basename plan.PhysicalArtifactID. Bind
+the exact path; do not normalize a received path. Bound dynamic identity strings
+to256 UTF8 bytes and path/executable strings to4096 bytes; bound this new whole
+document comparison to8KiB. These are new-only refusal caps and do not modify
+any generic parser or process capture bound.
+
+For inspection with a managed binding, additionally require that this existing
+binding is Copilot/user and its physical ID and target locator equal those held
+plan values. This branch never creates ownership. The same exact expected entry
+without an owned binding is Collision, not Expected or Clear.
+
+For activation verification, require the request's Client.ClientID and
+Delivery.ClientID also equal ClientCopilot; request.DeclaredName equals the held
+plan name; request.BackendExecutable equals both the plan's held registry
+executable and request.Client.ExecutablePath; Delivery.ActivePath equals the
+held expected path. Existing identity mismatch and project dispatch stay exact.
+These checks apply to the new branch only; legacy generic behavior stays intact.
+
+### Exact whole bytes
+
+For admission through the NEW helper, require existing command success with no
+runner error/nonzero exit, a live original context at admission, and exactly
+empty stderr. Its strict identity, context, byte-cap and stream requirements
+apply only to this new branch. Accept stdout through that branch only when it
+equals the constructed whole document:
+
+```
+Built-in plugins:
+  • browser-use (v0.0.4) [disabled]
+Live Plugins (loaded from a local marketplace directory, never copied):
+  • <held name>@<derived marketplace> (v<exact held version>) (enabled)
+      from <exact held managed path>
+```
+
+There is exactly one final LF. Do not strip a prefix, split away an unknown
+section, normalize line endings, trim incoming bytes, accept another builtin,
+ignore arbitrary suffixes, accept multiple live entries, or infer absence from
+an unrelated entry. Reject empty/extra/duplicate/reordered headings or entries,
+unknown status/version/path/name/marketplace, enabled builtin, missing builtin
+state, ANSI/NUL bytes, whitespace variation, CRLF, missing final LF or extra LF.
+All such documents fail the NEW helper and continue through each old unchanged
+classifier/fallback with its exact prior result. The new helper itself grants
+neither absence nor Clear on a mismatch. Do not strengthen or broaden legacy
+behavior while adding this branch.
+
+In particular, the generic verification function CopilotPluginStatus deliberately
+skips a preamble while scanning an old `Installed plugins:` section. Appending
+an independently valid exact expected Installed entry to the measured mixed
+document can therefore still return Installed through that OLD grammar, although
+the NEW helper refuses the extra bytes. The old generic inspection function
+CopilotRegistryFindingAt instead rejects this preamble and remains Indeterminate.
+Those two historical results must stay different and unchanged. Similarly, old
+recognized verification grammar keeps its prior stderr/context/size handling;
+the new branch's empty-stderr/live-context/8KiB rules do not rewrite it. Finite
+malformed-new-shape fixtures with no independently recognized legacy section
+continue to produce their original Unknown/manual result. No new legacy
+allowance is introduced by preserving an existing positive result.
+
+### The two edits to existing production functions
+
+1. In `inspectCopilotCLI`, preserve the exact existing command and all original
+   error/exit handling. After existing expectedPath selection and before the
+   unchanged generic return, apply the new eligible exact positive check. Recheck
+   ctx.Err before a positive result. Return Expected only for the matching held
+   owned binding; otherwise Collision. Existing exact empty+builtin admission
+   and all generic classifiers/scanners remain byte-for-byte unchanged.
+2. In `VerifyCopilotPlugin`, preserve its command and all runner/exit failures.
+   Before the original generic status switch, accept the exact eligible user
+   observation above, with empty stderr and ctx.Err rechecked. Otherwise use the
+   original switch unchanged. Do not change CompleteCopilotActivation,
+   ManualCopilotVerification, install/register/update/uninstall behavior,
+   attestation, recognized-negative errors or compensation.
+
+VS Code requests fail the new branch's ClientCopilot guard before recognition.
+Direct shared generic functions still return their old results on exactly the
+same prefixed input. All existing legacy Installed and header-first live forms
+continue through their old paths and tests. Project Copilot remains the original
+component/native-config adapter, not this user marketplace route.
+
+## 4. Concrete allowed files
+
+Only these four code paths are proposed:
+
+1. NEW `install/integrationctl/agentplugins/clients/shared/copilot_user_live_builtin.go`
+   — private exact helper and small caller-context predicates.
+2. NEW `install/integrationctl/agentplugins/clients/shared/copilot_user_live_builtin_test.go`
+   — independently authored synthetic whole documents and inert runner contracts.
+3. EXISTING `.../shared/copilot_identity.go` — only the explicit positive hook in
+   `inspectCopilotCLI`; every other function remains exact.
+4. EXISTING `.../shared/copilot_lifecycle.go` — only the exact eligible check in
+   `VerifyCopilotPlugin`; every other function remains exact.
+
+Root may append the accepted plan and final measured validation to the existing
+`docs/COPILOT_POST_ADD_REGISTRY_VALIDATION.md` and the governing consolidated plan
+`docs/plans/project-install-e2e/remaining-native-qualification.md`, following the
+established precode-plan workflow. These are the two allowed existing docs paths.
+No Python, runtime selector, mode, workflow, Go process-contract, production
+adapter, VS Code, old test or raw fixture path is authorized to change. If an
+unexpected need arises, stop and report the concrete dependency before editing.
+
+## 5. Meaningful independently authored contracts
+
+Use a new pure inert runner: no native executable, installer or scanner process.
+Inputs use new `/inert/...` paths/IDs, not copied hosted captures. Keep the exact
+public fixed prefix; derive its expected test identity independently. Cover:
+
+- exact measured shape / exact name-version-marketplace-path;
+- owned inspection Expected, unowned inspection Collision, wrong owned binding
+  Indeterminate, and no Clear granted by the new branch for
+  unrelated/missing/wrong live identities;
+- one read-only verification call returns recognized success through the NEW
+  helper only in eligible Copilot/user context; shared completion then returns
+  Active/Installed while preserving authentication policy. Independent old
+  recognized-grammar success remains unchanged for its original callers;
+- both initial activation and VerifyOnly use the same exact recognition; initial
+  inert transcript keeps existing marketplace-add/install/list commands and
+  ordering, with no extra command or version probe;
+- ClientVSCode/other/empty IDs, project/local/unspecified plan scope, conflicting
+  TargetContext, executable/client/delivery/name/path mismatch, same browser-use
+  name including case variants, invalid/canonicality/byte-bound identities;
+- each finite NEW-helper whole-byte refusal in section3, disabled expected live entry,
+  builtin version0.0.5/enabled/missing state, second unrelated/duplicate entry,
+  unexpected stderr and command error/nonzero/canceled-context behavior; these
+  are new-branch admission controls, not changes to old recognized grammar;
+- malformed/unknown prefixed input retains each original fallback result and
+  explicit attestation behavior. Add the concrete measured-document-plus-valid
+  Installed-section counterexample: NEW helper=false,
+  CopilotPluginStatus=Installed, CopilotRegistryFindingAt=Indeterminate.
+  Also cover old recognized verification with nonempty stderr: the new helper
+  refuses it while the old entrypoint keeps its prior result. Cases without an
+  independently valid old section must still exercise Unknown/manual/failure;
+- direct generic CopilotLivePluginStatus, CopilotPluginStatus,
+  CopilotRegistryFindingAt still refuse the unmodified measured prefixed input
+  exactly as before, while the independently valid legacy-section counterexample
+  preserves each function's distinct prior result. All old
+  empty/Installed/header-first live tests stay unchanged;
+- inspection preserves RunNativeRegistry's existing TreeCommandRunner selection
+  and one-second grace; verification preserves RunClientCommand's existing Run
+  path and original errors. Do not silently change one runner route to another.
+
+The unit contracts must test outcomes through both affected production entry
+points, not only mirror the new helper. There is no reason to alter any Python
+grammar: run all existing affected Python contracts and historical raw readers
+unchanged. A NEW-helper positive must never be inferred from a failed command or
+nonempty diagnostic stream. Do not extend this guarantee into a change to the
+preserved old verification entrypoint's recognized-grammar stream handling.
+
+## 6. Gates on the final immutable candidate
+
+After two PLAN GOs/root precode commit, implement only the allowed paths. Freeze
+and hash source; root commits. Two independent CODE critics read the exact
+commit/tree and compare unchanged functions/files. Do not rely on author review.
+
+Run only with the parent-owned serialized slot and sufficient disk. Record every
+actual command, exit and full log hash. No native/acquired client/public installer
+or scanner may be executed locally. Never spoof a hosted environment, weaken a
+process assertion, skip a required contract or claim a local full process pass.
+
+Required checks:
+
+1. Full affected production Go package tests (shared, Copilot, providers and
+   usecase, plus the existing provider/generic regression coverage). Newly
+   authored tests are pure inert contracts; any concrete local process-interface
+   limitation must remain an actual failure and be handled through genuine
+   hosted coverage, never an exclusion disguised as a full pass.
+2. Existing repotest pure4/package compilation and all67 affected Python
+   contracts, with their source whole-byte unchanged.
+3. Affected all-enabled lint with the unchanged project policy/base revision,
+   and whole unfiltered six `revive,funlen,gocyclo,gocognit,dupl,depguard`, zero
+   issues required. Actual lint findings may justify only reviewed equivalent
+   fixes; do not weaken lint policy.
+4. Full current-module immutable original-source raw replays for189e,922,2c2,
+   5781 and85df. Preserve ZIP/CRC/member hashes and original tuples.189e remains
+   readiness-complete/test_failed=false with all5 qualifications false;922,2c2,
+   5781 and85df remain failed/runtime-incomplete/all5false. Never rewrite them as
+   repaired Active evidence. Keep actual source/tree identities from each raw.
+5. Verify all old Python reader/test files and all repotest/process files,
+   workflow, shared generic parser, dedicated adapters and owner-scope anchors
+   byte-for-byte. In the two modified production files verify all non-target
+   functions byte-for-byte. No selector literal exception is needed this time.
+6. Fresh genuine hosted full unexcluded process gate on the published candidate:
+   `go test -json -p=1 -count=1 -timeout=120s ./repotests -run
+   '^(TestCopilot|TestProjectNativeRuntime)'`, actual Go1.26.10, every original
+   and new strict phase/fatal parent RUN/PASS, zero skip/fail.137 prior passes
+   are historical, not a substitute for the fresh candidate gate. Existing
+   normal CI must also cover the changed production package tests.
+
+Actual85df hosted process proof has137RUN/137PASS/0skip/0fail and raw job log
+178857bytes SHA256
+`3cb0300849cdade6bab99db0e39c00d5b08c405b6ee95f063a54dd3605d05a76`.
+Root receipt `/tmp/uap-copilot-85df-hosted-process-gate/root-process-gate-audit.json`
+SHA256 `fb89aa706559d5163e96c741ef4b4acd82cd935dd54f7ad48145636c0273fd14`;
+independent RAW R2 re-downloaded and verified the same complete hosted log.
+
+## 7. Actual native follow-up and repair acceptance
+
+After all source/CODE/local/hosted gates and root publication, make one genuine
+current-source run of the **unchanged existing post-add selected test**. Keep the
+same Copilot1.0.103 binary/archive and scanner pins; original HOME/outside;
+30-second command bounds; original150/180-second origins; descendant/config/
+immutable/profile guards; two separate metadata-only ordinary phase defers; five
+commands;18-member maximum; and all failed-only flags. Do not schedule an
+unchanged retry or supersede an active capture.
+
+Repair acceptance is concrete and stronger than merely reaching the barrier:
+
+- all five command receipts clean and exact original argv/cwd;
+- public result successful mutation, same ordinary schema/operation/UUID/physical
+  derivations, authentication `not_checked` and policy `allowed`, but activation
+  now **Active** and verification **installation_verified** through the existing
+  recognized-success path, without activation/user attestation;
+- no observed manual-contract fallback, FailedActivation or attestation in the
+  fresh public result; the reviewed source and inert production-entrypoint
+  contracts must support the candidate recognition path;
+- native list retains the exact independently bound expected live entry and
+  fixed disabled builtin tuple, stderr empty; both opaque metadata observations
+  valid within original bounds; no config-change diagnostic or unexpected probe;
+- sole final test failure remains the deliberate review barrier; runtime and all
+  five qualifications/account/model flags remain false.
+
+The unchanged18-member capture exports the public add result and the later
+direct native listing. It does NOT export the installer's internal
+VerifyCopilotPlugin stdout. Fresh public Active/installation_verified without
+attestation, the independently bound direct listing, reviewed source and inert
+entrypoint contracts together establish the observed repair behavior. A claim
+that the internal NEW helper, rather than another preserved recognized grammar,
+handled that unexported internal document remains a source-supported inference;
+it is not an independently captured branch trace. No instrumentation, new
+capture member or evidence-format change is authorized or needed for this slice.
+
+The unchanged capture/reader intentionally permits historical manual public
+responses as diagnostic evidence. Therefore `runtime_artifact_admitted=true` or
+the barrier alone is not repair proof. Two independent fresh whole RAW reviewers
+must explicitly compare the observed public activation/verification and later
+direct listing with the reviewed source/contracts, while retaining the internal
+stdout observability limit above. A still-manual result, a new unknown document
+or an earlier fatal is a preserved new failure, not a reason to broaden this
+parser speculatively.
+
+## 8. Finite continuation toward full project E2E: deliberate tradeoff
+
+The existing189e source `189e00d364ccde805c9ffc6738e61fc58ae277fc`, tree
+`3f6dd05e28e7c6ab009c37d41cf804d6c3907743`, already has a genuine successful
+21-member installed-tool-readiness capture. It proves one project component
+installation and one fresh native27-frame/2-provider-request exchange with one
+owned write call and3probe events. Its reader/finalizer explicitly keeps all five
+project/native lifecycle qualification flags false. That useful proof stays
+preserved and replayed.
+
+Current project setup dispatches independently to repository `.github` skill/MCP
+components and Prepared activation; it does not use the user marketplace
+verification being repaired here. The current readiness test has no native
+User/A/B isolation matrix, repeat-add/unchanged-update/intact-repair/update/
+missing-repair/default-remove/repeat-remove lifecycle, fresh-session retained
+marker reads after transitions, or native post-removal absence. Its single
+observed27-frame grammar is not evidence for unseen empty/removed catalogs or
+read/update/restart wire sequences. A same-mode rerun cannot fill those gaps.
+
+Reusing the current18-member post-add mode first is the smallest candidate that
+actually tests this user registration repair. Restoring the old readiness
+selector now would exercise the separate project component path and would not
+show whether the actual manual fallback was fixed. Combining both tests under a
+regex would also collide with their exclusive output ZIP and alter the bounded
+single-test frontend contract. Adding another alias/mode or combining HOME/
+fixture authorities is unnecessary for this repair.
+
+After the repaired user capture has its own two RAW GOs, the next reviewed slice
+should construct a **proper finite project lifecycle** using the existing
+transaction/state/data/source and measured readiness seams, while retaining
+Prepared/auth-not-checked production wording. An eventual lifecycle candidate
+must author independent Go/Python semantics, exact per-phase source/binding/data
+and catalog joins, fresh native sessions for installed/updated/repaired/restarted
+and removed states, honest retained-data/marker behavior and ordinary final
+cleanup. Any newly encountered native document must first remain a bounded
+failed observation; no unseen wire shape is invented or qualified by this plan.
+The exact lifecycle sequence, budgets and new evidence schema require their own
+two source-backed precode reviews before implementation. This plan authorizes
+neither that larger implementation nor early promotion of any qualification.
+
+## 9. Exit conditions
+
+Return this frozen draft and source-context hash for two independent PLAN
+critics. Keep source clean and do not run tests/lints while another worker owns
+the gate slot. After acceptance, root commits the plan, author implements the
+four allowed paths, both CODE critics review, actual gates are recorded and root
+publishes. Fresh native review establishes whether the repair occurred. Keep all
+prior raw outcomes and every limitation visible until the later full project
+E2E evidence is actually complete.
 
 ## Gemini owned-MCP listing diagnostic amendment
 
@@ -1961,3 +4225,256 @@ qualify. Current9e failed native history remains refused. A reader mutation that
 places success flags/proof over failed raw must fail; late failures clear staged
 flags. Only future same-source actual component and single-call success may be
 combined. Root freshly checked PR524 remains9e before this isolated checkout.
+
+## Copilot architecture ratchet amendment before project lifecycle (2026-10-28)
+
+Genuine current-source run40624054507 at838c3e19/tree0aa6dadd reaches only
+the existing post-add review barrier. Public user add now reports Active and
+installation_verified without attestation/manual fallback; its later direct
+listing retains the exact disabled builtin and enabled managed entry. This is
+user repair evidence, not project lifecycle qualification. All five/runtime/
+account/model flags remain false. Independent whole RAW review remains required.
+
+Core40624054521 exposed TestClientIDBudgetDoesNotGrow: five ClientCopilot
+references in clients/shared violate the unchanged architecture ratchet. Root and
+independent other_clients reviewed and approved this narrow amendment before
+implementation. Move the two exact user builtin recognizers and their complete
+strict contracts into clients/copilot, where client identity policy belongs.
+Shared orchestration receives explicit optional recognition callbacks after its
+original successful command admission. Existing exported APIs pass nil, and the
+Copilot adapter alone supplies its own recognizers on the existing user path.
+Keep the same single registry/final verification command and unchanged generic
+fallback. Positive recognition retains its original postrecognition context
+check; preserve the older generic fallback's existing cancellation behavior.
+Reuse the shared live grammar only after whole-byte exact tuple equality.
+No budget increase, VS Code source change, new native command, evidence/schema/
+reader/workflow/fixture change or broader lifecycle implementation is authorized
+by this amendment.
+
+Candidate validation must cover the moved strict scope/identity/ownership/path/
+version/byte/context suites, nil callback legacy behavior, refusal to invoke
+recognition after command error/nonzero exit and the original one-list install/
+VerifyOnly sequence. Run the architecture package and full test-core plus
+affected package/lint gates when execution is available. Remote-object preparation
+does not execute these tests and must not be represented as passing them.
+
+The implemented callback/matcher move received independent GPT-6.1 Sol/xhigh
+CODE GOs from both client reviewers and a separate root source review. The
+unchanged focused shared/Copilot/VS Code and architecture selection passed
+157 cases with no skips or failures. Two independent original-byte audits of
+run40624054507 verified both API-bound archives, 18 native and 25 frontend
+members, all 24 frontend stream joins and the original failed-only reader.
+They confirm the user repair result above, while every lifecycle/MCP flag
+remains false. Full core, lint and fresh hosted checks remain required.
+
+## Accepted Copilot complete User/A/B lifecycle plan (2026-10-28)
+
+Final precode draft:24,324bytes, SHA256
+`7f80f6896eece51b58c84b90b4f76535ce665b1784c648c3c9960a73a6b58438`.
+Independent other_clients and Grok reviewers rehashed/read this exact revision
+and returned renewed GO. It supersedes the earlier4a draft: source inspection
+found Copilot user projection preserves portable MCP/data semantics, while only
+project scope binds UAP managed-stdio/data. Do not assume native User PLUGIN_DATA
+equals a UAP receipt or survives native uninstall. The goal-correct User fixture
+is skill-only, matching the existing Cline control. A/B retain actual MCP/data
+qualification; no User-MCP claim, production change or artificial second server.
+
+Implement one complete bounded cycle with original HOME, separate A/B Git roots,
+immutable Copilot1.0.103/scanner/build pins and original150/180-second origins.
+17 public commands cover Git/version, user/A/B add, repeat add A, unchanged
+update A, intact repair A, A-two update, exact missing-component repair A and
+remove/repeat-remove A/B/User. Intact repair truthfully mutates; repeated removal
+retains exact supported exit1/unchanged state. Keep direct-local A-two source
+frozen: repair joins its recorded digest and restored bytes, without a moving
+source/store-fallback claim. Installed skill-only User has no active DataReceipt;
+default removal's real retained-owner allocation is verified from prior absence.
+
+15 direct native lists preserve the exact measured managed User tuple until its
+removal, then the exact empty/disabled-builtin tuple.14 fresh native sessions
+include6 project one-call/two-turn sessions (2 writes/4 reads) and8 no-call
+catalog sessions, with20 provider exchanges and6 initialize/list/call triples
+(18 probe events). User plugin skill is visible until its removal; User supplies
+no MCP tool. A/B independently join source, installation/binding/native/data
+receipt identities, fresh sessions, retained markers, update/repair and removal.
+
+Preserve two exact original native skills: HOME
+`.copilot/skills/uap-foreign-user/SKILL.md` and B
+`.github/skills/uap-foreign-b/SKILL.md`, with declared descriptions/frontmatter/
+nonce bodies and exact source/path/enabled/userInvocable/commandName catalog
+rows plus ordinary inode/owner/mode/byte checks. User foreign is always visible;
+B foreign only in B, including final absence. Neither may be invoked. Use
+supported `--excluded-tools` for19 observed builtin tools and omit
+`--available-tools`; unknown MCP tools remain visible. Require whole catalogs
+of2 measured builtin skills, applicable original foreign/phase-owned skills and
+5 disabled builtin servers plus the phase-owned A/B connected server. No-call
+phases have zero fixture MCP entries/declarations/probe activity, with exact
+phase-owned User skill presence before User removal and none finally.
+
+Reuse finite known event families/one-server call graph and their no-call
+one-turn projection, not a new event framework. SDKRPC blob
+`d269c4626b83c444a06bd14bf4c6ea77fe734a5a` supports array/provenance
+semantics; shipping equivalence is unclaimed and unknown actual output fails.
+Complete evidence has60 ordinary members:17 public triples, eight closed
+stage/value JSONL aggregates for native events/commands/registry/provider
+requests/responses/receipts/probe/proof and one runtime summary. Raw streams
+retain exact bytes/SHA256/base64 joins. Preserve1MiB aggregate/16MiB total and
+old ZIP bounds/modes. Go/Python independently validate every phase/source/
+receipt/catalog/call/result/data/absence join. Only full ordinary descendant/
+provider closure, original-authority checks and complete capture can set all
+five project/MCP flags. Project Prepared wording, vendor-authentication=false
+and real-model=false remain truthful. Two exact CODE reviews, inert gates,
+original/current RAW replay and fresh actual hosted whole-evidence review remain
+mandatory. No artificial review barrier, local vendor run, production/VS Code/
+pin/workflow change or unchanged-source retry is introduced.
+
+### Measured Copilot User command name correction (2026-10-28)
+
+Actual d32d8fd6 run40734424271 completes the first installed-User native process
+with15 exact events, one provider exchange, ordinary shutdown and zero probe
+bytes, but fails the whole catalog check. Two independent full raw audits bind
+both API artifacts,21 native/25 frontend members,24 frontend stream joins,
+source/build/pins and exact User source/state/native/no-data receipts. The sole
+catalog mismatch is the plugin skill commandName: actual
+`native-proof:uapcopilotuser`, while the original prediction was `uapcopilotuser`.
+The independently authored manifest declares exactly `native-proof`; all other
+foreign/builtin metadata matches. No project session ran in this failed prefix.
+
+Two independent plan and exact code reviews accept only that fixed User plugin
+spelling in the Go/Python expectations. Literal positive catalogs and seven
+negative namespace/name controls preserve plain project/foreign/builtin names
+and reject bare, wrong or doubled User prefixes. The four-file reviewed
+manifest is57a5ffd6e528ac5a5f7a4d23a6810d5eaa6c0b8b7480889965c0969586eba82a.
+Both focused Go catalog contracts pass without skips;39 focused Python
+contracts pass; affected all-enabled and whole-root six-linter gates report
+zero issues. The original full archive still replays byte-for-byte to its
+failed/all-false result. A fresh complete-cycle hosted run and two full raw
+audits remain required. No native vendor executable ran locally.
+
+### Copilot observed cached startup and public DTO correction (2026-10-29)
+
+Exact59c1cf29 run40741435108 reaches five validated native sessions and two
+MCP sessions, then stable-A emits tools-loaded before pending/connected. Admit
+that observed order by removing only pending-before-tools; retain pending before
+connected and both completion facts before the server summary, seven unique
+closed event kinds and the original parent/identity/catalog checks. The legacy
+readiness reader keeps its exact order. The same capture proves repeat-add's
+singleton public DTO and repair's literal `local` source; removal uses the same
+existing installed-source formatter. The Python reader selects the singleton
+only for repeat-add-A and retains exact batch/target and shared identity checks.
+
+Grok/Qoder and integration independently approved the plan and exact five-file
+code.38 focused Python contracts pass; six actual public DTOs and all27 stable-A
+events pass the corrected pure readers. Native artifact12844837031 SHA256
+`3f9ed2784825ffffa708778d1e93f0a2af9440721fc7d5449aeccbb6ca4024a3`
+and frontend12844687177 SHA256
+`a65e54f115985db183c6138a1dd55fddc96b76b2b8d80f46af3af3572fe4d444`
+match API sizes/hashes and closed36/25-member CRCs. The original failed archive
+replays unchanged with all flags false. Targeted startup/runtime contracts pass
+in0.033s. Broader unchanged inert-process tests still fail local process
+containment admission; this is not a vendor result or a full-suite pass. Fresh
+hosted complete-cycle evidence and independent raw audits remain required.
+
+### Windsurf complete bounded profile-delta projection (2026-10-28)
+
+The genuine090b failed component capture observes15 profile changes after the
+account-free empty skills catalog. Its original three-entry projection remains
+byte-for-byte unchanged. Five fixed pages at offsets0/3/6/9/12 now expose at most
+15 independently bounded hashed details from those same held frames, each
+within the original2KiB limit. Complete counts, explicit omissions and the
+existing serialization fallback remain truthful. No extra filesystem read,
+raw private path/body, native command, artifact member or profile exception is
+introduced; the original protected/immutable and unequal-profile fatal remain.
+
+Plan0227ee9609b5efbd1232f0e11a2465e79fbbbd0b7e8538eaa081501abdeea6b6
+received root and Grok pre-code GOs. Root and the independent Qoder owner
+reviewed all five frozen files under manifest
+ba2760d3debbdd443ad4fadb427a2d5cea782a5dd00711f9447bbdeb45e81910.
+Executed exact focused Go contracts:46pass/0skip/0fail, package2.662s; Python
+contracts30pass. Affected all-enabled lint and complete root six-linter each
+report0issues. A separately recorded accidental unfiltered all-enabled lint
+invocation found existing unrelated diagnostics; it caused no source change or
+suppression and is not substituted for either required gate. The genuine090b
+14-member archive SHA60ee39861c3292730d39770c00f811158925fc8cb3743073257c102682da3185
+replays with byte-identical failed result and all qualification flagsfalse.
+
+The pure reader admits this optional field only at the actual completed failed
+native stage, with exact five-page schema, original page0, strict scalar types,
+counts/omissions, global uniqueness/order and ordinary record bounds. This
+publication remains a failed-observation diagnostic. A new genuine hosted
+capture and whole raw review must establish all actually observed profile
+changes before any narrow initialization policy or full lifecycle claim.
+
+## Windsurf sixth bounded diagnostic window (2026-10-28)
+
+Two independent Sol reviewers approved exact amendment SHA256
+`002ccf74d04c52ec6083ce0313bf1e5e89b13f7b6bdb95fe76269c85209eddc1`.
+Actual `9a762821` run `40740022136` has two complete independent RAW audits:
+14 native/25 frontend members,24 stream joins and234 pinned file hashes.
+The exact first skills listing succeeds in185ms, then the original protected
+config guard fails. The profile has16 changes; five windows expose15 unique
+entries and omit one cache addition. All qualification flags remain false.
+
+Add only the sixth fixed diagnostic offset15, retaining three details/2KiB per
+window, the same held maps, original first five projections, global counts,
+privacy, refusals and cleanup. The failed-only reader preserves historical
+five-window captures and accepts the current six with exact ordering and joins.
+Observed16/exact18/overflow19 controls preserve truthful omissions. No profile
+ownership or unknown data/cache permission follows; no native argv, source pin,
+environment, deadline, evidence member or product behavior changes. Replay old
+failed captures unchanged and require a fresh hosted observation after review.
+
+### Windsurf fixed native startup state (2026-10-29)
+
+The exactd0ac8b3c diagnostic40753719131 closes all16 profile changes. Its native
+artifact12847601802 is27524bytes/SHA256
+`17c4529fb2791381fcfb180c8538da5c2d6a95f3e54b115bab365a1dc3b244d9`;
+frontend12846173942 is26113bytes/SHA256
+`825d1e694ecdc5665c2faca465654ddb015c98c17280dc33cf6f151406800ff1`.
+Both API-bound archives have ordinary closed members and valid CRCs. The final
+omitted directory is exactly `xdg-cache\0devin` (SHA256fddb766d...). All flags
+remain false. No broader profile ownership follows from those path identities.
+
+Independent static inspection rehashes the unchanged official archive/binary.
+The binary's logger construction1e06eef..1e06faa uses the Rust format at8bb4774,
+`{}_{}_{}.log`, with literal`devin`, local-time `%Y%m%d-%H%M%S` and process PID.
+Actual `devin_20261028-195926_5805.log` joins the captured439030f9... path hash.
+The maintenance lock helper2b05ce0 opens ordinary0666/umask0644, flocks EX|NB,
+truncates and writes its decimal getpid plus LF. Actual5805LF matches1dadcee....
+The config loader186526c..5288 migrates version0 but returns version1 without
+that schema write; a valid existing36-byte installation UUID returns its
+original bytes at1a2c5dd. The telemetry cache is exactly16bytes
+`{"is_zdr":false}`, matching captured7445ff87.... These are source inspections
+and byte/hash joins, not local native execution or authentication evidence.
+
+Before the component fixture's first vendor child, author version1 beside the
+unchanged two safety fields, a valid fresh installation UUID, exact telemetry
+bytes, the empty `devin/cli/plugins/lock.json.lock`, and the finite observed
+`devin/cli` directories under XDG config/cache/data plus data logs/plugins.
+Preserve the shared updater and historical startup/diagnostic recipes. Freeze
+all new seed bytes and original raw config. No post-child semantic adoption or
+renewal of the original protected digest is authorized.
+
+For registered non-version skills/MCP reads only, allow exactly one new ordinary
+0644, current-owner, single-link `devin_TIMESTAMP_PID.log`, at most1MiB and16MiB
+cumulative, plus an ordinary bounded maintenance lock containing that same
+positive decimal PID and LF. Require a real calendar timestamp in the actual
+command interval at second precision; the current hosted UTC spelling is
+admitted conservatively, without claiming the vendor hardcodes UTC or changing
+its environment. Prior logs stay identical; only the logs directory's content
+timestamps may change while its inode/mode/owner remain fixed. Refuse every
+other addition, removal, replacement, compression, raw-config rewrite, unsafe
+entry or expired budget. Preserve the original150-second deadline and ordinary
+process cleanup. The existing first-component capture stays deliberately failed
+and all-false; supported complete lifecycle/native grammar remains required.
+
+Grok/Qoder and integration independently approved this exact plan and final
+four-file code. Review fixes bind the log window to the immediate OSRun end,
+then copy the accepted held profile frame into the expected runtime subtree;
+a later filesystem observation cannot replace authority. Late log/UUID/unknown
+mutation controls prove refusal. Five new runtime controls plus the retained
+config contracts pass in0.070s; nine Python controls pass. Affected all-enabled
+and whole-root architecture/size six-linter gates report0issues. The broader
+component suite passes with its unchanged owner-change control excluded because
+this local UID namespace cannot chown to UID1 (EINVAL); that control is not
+waived or changed. The original14-member failed capture and all24 frontend
+stream/hash joins replay unchanged/all-false. No vendor process ran locally.
