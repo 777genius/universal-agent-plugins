@@ -51,7 +51,10 @@ Copilot 1.0.103, Grok 1.0.67 and Qoder 1.1.78 need Go-managed native processes.
 This local container lacks the required `/proc/<pid>/task/<tid>/children` interface;
 no production process guard is relaxed. A focused three-client Linux workflow
 qualifies only these SDK journeys and binds receipts to the checkout and executable
-hashes. [PR #566](https://github.com/777genius/universal-agent-plugins/pull/566)
+hashes. It uses a disposable hosted Ubuntu 24.04 runner after the shared AMD64
+pool had no active runners and left the native jobs unassigned; repository-wide
+runner variables and other workflows are unchanged.
+[PR #566](https://github.com/777genius/universal-agent-plugins/pull/566)
 records the current three-client results and required repository checks. Independent
 review reported no remaining P1/P2 finding; execution gates remain authoritative.
 The later Copilot correction has its own actual local
