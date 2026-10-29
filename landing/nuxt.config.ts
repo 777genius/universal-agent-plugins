@@ -35,9 +35,9 @@ const registryPagesOrigin =
 const discoveryKeyID = process.env.NUXT_PUBLIC_DISCOVERY_KEY_ID || 'uap-discovery-2026-01';
 const discoveryPublicKey =
   process.env.NUXT_PUBLIC_DISCOVERY_PUBLIC_KEY || 'IxWvGuscXR9crlCrGyBQZNqroYNVPbBA1B3pnjSffhc=';
-// Public playback ID for the owner-uploaded product film; an empty override disables it.
+// Public playback ID for the verified v29 product film; an empty override disables it.
 const muxPlaybackId =
-  process.env.NUXT_PUBLIC_MUX_PLAYBACK_ID ?? 'S00EgH5oQPTQzOoF7FkwuJttVnIXTKGjGaUYCuBoZzek';
+  process.env.NUXT_PUBLIC_MUX_PLAYBACK_ID ?? 'hq9E01xwa01Mxgz101B02wdKbjOV700GGpSUGjo8ehi0001cQU';
 
 function resolveRegistrySnapshot(): string {
   const explicit = process.env.UAP_SIGNED_SNAPSHOT_PATH;
