@@ -31,7 +31,7 @@ deliberately explicit:
 ```bash
 curl -fsSLo /tmp/agentplugins-install.sh \
   https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.sh
-AGENTPLUGINS_VERSION=0.1.44 AGENTPLUGINS_BIN_DIR="$HOME/bin" \
+AGENTPLUGINS_VERSION=0.1.94 AGENTPLUGINS_BIN_DIR="$HOME/bin" \
   sh /tmp/agentplugins-install.sh
 ```
 
@@ -49,7 +49,7 @@ Invoke-WebRequest `
   https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.ps1 `
   -OutFile "$env:TEMP\agentplugins-install.ps1"
 & "$env:TEMP\agentplugins-install.ps1" `
-  -Version 0.1.44 `
+  -Version 0.1.94 `
   -BinDir "$HOME\bin"
 ```
 
@@ -74,7 +74,7 @@ plus a standard SHA-256 utility on Unix, or PowerShell on Windows.
 Use `AGENTPLUGINS_VERSION` to avoid resolving `latest`:
 
 ```bash
-AGENTPLUGINS_VERSION=0.1.44 sh ./install.sh
+AGENTPLUGINS_VERSION=0.1.94 sh ./install.sh
 ```
 
 Automation can set `AGENTPLUGINS_OUTPUT_FILE`. The installer appends the exact
@@ -105,6 +105,6 @@ Unix command above already invokes the installed binary by its full path.
 
 Follow the CLI's activation or sign-in instructions, then start a new agent
 session. Installation does not by itself prove activation or plugin runtime.
-See the [client compatibility evidence](https://777genius.github.io/universal-agent-plugins/docs/en/reference/client-compatibility.html)
+See the [client compatibility evidence](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
 for tested versions and platform limitations, or [installer support](./SUPPORT.md#universal-agent-plugins-installer)
 if you need help.

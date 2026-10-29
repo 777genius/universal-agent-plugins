@@ -1,25 +1,10 @@
 <script setup lang="ts">
-import type { DocsLocale } from '~/utils/docsLinks';
-import { replaceDocsLocale } from '~/utils/docsLinks';
-
 const { t, locale } = useI18n();
 const { asset } = useSite();
-const config = useRuntimeConfig();
-
-const currentLocale = computed<DocsLocale>(() => {
-  const supported = new Set<DocsLocale>(['en', 'ru', 'es', 'fr', 'zh']);
-  return supported.has(locale.value as DocsLocale) ? (locale.value as DocsLocale) : 'en';
-});
-
-const docsRoot = computed(() => {
-  const url = String(
-    config.public.docsUrl || 'https://777genius.github.io/universal-agent-plugins/docs/en/',
-  );
-  return url.replace(/\/+$/, '') + '/';
-});
-
-const buildGuideUrl = computed(() =>
-  replaceDocsLocale(`${docsRoot.value}build/`, currentLocale.value, 'build'),
+const { docsLabel } = useDocsLinks();
+const sdkGuideUrl = 'https://github.com/777genius/universal-agent-plugins/blob/main/sdk/README.md';
+const sdkGuideLabel = computed(() =>
+  docsLabel(t('shell.builtWith.buildWithSdk'), locale.value !== 'en'),
 );
 </script>
 
@@ -70,8 +55,8 @@ const buildGuideUrl = computed(() =>
       </span>
     </a>
     <p class="built-with__footer">
-      <a class="built-with__docs" :href="buildGuideUrl" target="_blank" rel="noopener noreferrer">
-        {{ t('shell.builtWith.buildWithSdk') }}
+      <a class="built-with__docs" :href="sdkGuideUrl" target="_blank" rel="noopener noreferrer">
+        {{ sdkGuideLabel }}
         <svg
           width="18"
           height="18"

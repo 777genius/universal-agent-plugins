@@ -259,10 +259,53 @@
       "Verification": "installation_verified"
     }
   },
+  "pi": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "unchanged",
+      "NativeObjects": [
+        {
+          "BeforeDigest": "",
+          "CursorReceipt": {
+            "EntryDigest": "",
+            "Event": "",
+            "Executable": "",
+            "RemainderDigest": "",
+            "Selector": "",
+            "Shell": "",
+            "Version": 0
+          },
+          "Kind": "managed_package_directory",
+          "LogicalName": "demo",
+          "ManagedDigest": "${ARTIFACT}",
+          "ObjectID": "package:pi:demo-0123456789ab",
+          "Path": "\u003croot\u003e/pi/config/extensions/demo-0123456789ab",
+          "ProtectionClass": "managed",
+          "SourceRelative": "",
+          "UserModified": false
+        }
+      ],
+      "Policy": "allowed",
+      "UserActions": [
+        "Reload resources or restart Pi to load the installed extension."
+      ],
+      "Verification": "installation_verified"
+    }
+  },
   "qoder": {
     "Commands": [
       [
         "\u003croot\u003e/bin/qoder",
+        "--config-dir",
+        "\u003croot\u003e/qoder/config",
         "plugins",
         "list",
         "--json"

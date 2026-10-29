@@ -2,7 +2,7 @@ export const registryFaqItems = [
   {
     question: 'Which AI agents are supported?',
     answer:
-      'Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, and Kimi Code are supported or prepared through an explicit client-specific path.',
+      'Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: each has a client-specific installation or preparation path. Package components, scope and activation requirements determine compatibility.',
   },
   {
     question: 'Does one command install into every agent?',
@@ -17,7 +17,7 @@ export const registryFaqItems = [
   {
     question: 'Can I install a plugin outside this directory?',
     answer:
-      'Yes. Use a pinned GitHub source that contains a valid Agent Plugins 1.0 plugin.json package.',
+      'Yes. Install a complete plugin.json package from a local folder, Git over HTTPS or SSH, supported provider links, or a ready archive. The CLI records exact source pins for eligible saved dependencies.',
   },
   {
     question: 'Are all discovered plugins reviewed?',

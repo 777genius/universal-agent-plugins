@@ -26,6 +26,7 @@ const (
 	ClientGrok     ClientID = "grok"
 	ClientKimi     ClientID = "kimi"
 	ClientQoder    ClientID = "qoder"
+	ClientPi       ClientID = "pi"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
@@ -161,9 +162,14 @@ var clientDefinitions = []ClientDefinition{
 	withProjectScope(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:            LifecycleCLIRegistry,
+		BindsNativeProfileRoot:   true,
 		DiscoversNativeHooks:     true,
 		HonorsOpenAIMCPAuthHints: true,
 	}), LifecyclePrepared),
+	withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
+		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,
+	})), ActivationAutomatic),
 }
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {

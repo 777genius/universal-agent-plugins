@@ -156,3 +156,9 @@ func (activator Activator) dispatchActivate(ctx context.Context, request domain.
 	}
 	return domain.ActivationOutcome{}, fmt.Errorf("unsupported activation client %q", request.Client.ClientID)
 }
+
+// SupportsIndependentActivation delegates effect isolation to adapter metadata.
+func (activator Activator) SupportsIndependentActivation(request domain.ActivationRequest) bool {
+	independent, ok := clients.As[clients.IndependentActivator](activator.Registry, request.Client.ClientID)
+	return ok && independent.SupportsIndependentActivation(request)
+}

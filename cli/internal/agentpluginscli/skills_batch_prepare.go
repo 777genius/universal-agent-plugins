@@ -40,6 +40,7 @@ func (app App) PrepareSkills(ctx context.Context, input SkillsBatchRequest) (pla
 	if err = candidate.selectSkills(ctx, preview, input.Selections, targets); err != nil {
 		return nil, err
 	}
+	candidate.targets = targets
 	return candidate.prepare(ctx, app, preview, cleanup)
 }
 
@@ -48,6 +49,7 @@ type skillsBatchCandidate struct {
 	requirements environment.Requirements
 	previous     environment.Lock
 	aliases      []string
+	targets      []string
 	candidateIDs map[string]string
 }
 
@@ -85,7 +87,10 @@ func (candidate *skillsBatchCandidate) prepare(ctx context.Context, app, preview
 		return nil, err
 	}
 	warnings := []string{}
-	bindings, detected, paths, err := prepareSkillsBindings(ctx, preview, candidate.requirements, locked, aliases, nil, &warnings)
+	if notice := savedTargetNotice(locked, aliases, candidate.targets); notice != "" {
+		warnings = append(warnings, notice)
+	}
+	bindings, detected, paths, err := prepareSkillsBindings(ctx, preview, candidate.requirements, locked, aliases, nil, candidate.targets, &warnings)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +99,7 @@ func (candidate *skillsBatchCandidate) prepare(ctx context.Context, app, preview
 		return nil, err
 	}
 	snapshot := candidate.snapshot
-	request := dependencySyncRequest{requirements: candidate.requirements, lock: locked, manifestPath: snapshot.ManifestPath, lockPath: snapshot.LockPath, manifestBytes: snapshot.ManifestBytes, lockBytes: snapshot.LockBytes, candidateManifest: manifest, candidateLock: append(body, '\n'), aliases: aliases, prepared: bindings, detected: detected}
+	request := dependencySyncRequest{targets: candidate.targets, requirements: candidate.requirements, lock: locked, manifestPath: snapshot.ManifestPath, lockPath: snapshot.LockPath, manifestBytes: snapshot.ManifestBytes, lockBytes: snapshot.LockBytes, candidateManifest: manifest, candidateLock: append(body, '\n'), aliases: aliases, prepared: bindings, detected: detected}
 	plan := &PreparedSkillsBatch{app: app, preview: preview, cleanup: cleanup, request: request, warnings: warnings}
 	for _, binding := range bindings {
 		plan.actions = append(plan.actions, SkillsAction{Alias: binding.Alias, ClientID: binding.ClientID, Action: string(binding.Action), TargetPath: paths[binding.Alias+"\x00"+binding.ClientID], CandidateID: candidate.candidateIDs[binding.Alias]})
@@ -102,7 +107,7 @@ func (candidate *skillsBatchCandidate) prepare(ctx context.Context, app, preview
 	return plan, nil
 }
 
-func prepareSkillsBindings(ctx context.Context, app App, requirements environment.Requirements, lock environment.Lock, aliases []string, prior []dependencyAction, warnings ...*[]string) ([]dependencyAction, map[domain.ClientID]domain.DetectedClient, map[string]string, error) {
+func prepareSkillsBindings(ctx context.Context, app App, requirements environment.Requirements, lock environment.Lock, aliases []string, prior []dependencyAction, targets []string, warnings ...*[]string) ([]dependencyAction, map[domain.ClientID]domain.DetectedClient, map[string]string, error) {
 	view, err := app.Installer.Inspect(ctx)
 	if err != nil {
 		return nil, nil, nil, err
@@ -114,11 +119,11 @@ func prepareSkillsBindings(ctx context.Context, app App, requirements environmen
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	prepared, err := (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncFor(requirements, lock, observed, aliases, nil)
+	prepared, err := (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncForTargets(requirements, lock, observed, aliases, nil, targets)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if err = reserveSkillBindingIDs(prepared.Bindings, prior); err != nil {
+	if err = reserveSkillBindingIDs(view, prepared.Bindings, prior); err != nil {
 		return nil, nil, nil, err
 	}
 	detected, err := detectDependencyClients(ctx, app)
@@ -134,7 +139,7 @@ func prepareSkillsBindings(ctx context.Context, app App, requirements environmen
 	return actions, detected, paths, err
 }
 
-func reserveSkillBindingIDs(bindings, prior []dependencyAction) error {
+func reserveSkillBindingIDs(view installer.Inspection, bindings, prior []dependencyAction) error {
 	ids := map[string]string{}
 	for _, action := range prior {
 		if action.InstallationID != "" {
@@ -147,18 +152,49 @@ func reserveSkillBindingIDs(bindings, prior []dependencyAction) error {
 			continue
 		}
 		id := ids[action.Alias]
+		retainedID, err := retainedSkillInstallationID(view, *action)
+		if err != nil {
+			return err
+		}
+		if retainedID != "" {
+			if id != "" && id != retainedID {
+				return installer.ErrPlanChanged
+			}
+			id = retainedID
+		}
 		if id == "" {
 			var err error
 			id, err = domain.NewInstallationID()
 			if err != nil {
 				return err
 			}
-			ids[action.Alias] = id
 		}
+		ids[action.Alias] = id
 		// Authority stays unbound until the installer commits its first receipt.
 		action.InstallationID = id
 	}
 	return nil
+}
+
+// Last-binding removal retains installation identity and PLUGIN_DATA, but drops
+// the live environment receipt. Reuse only an exact source with no bindings;
+// name matches and foreign bindings never grant installation authority. The
+// ordinary installer still validates the package and retained-data ownership.
+func retainedSkillInstallationID(view installer.Inspection, action dependencyAction) (string, error) {
+	if action.Package == nil || action.Package.SourceKey == "" {
+		return "", nil
+	}
+	id := ""
+	for _, installation := range view.Installations {
+		if installation.SourceKey != action.Package.SourceKey || len(installation.Bindings) != 0 {
+			continue
+		}
+		if id != "" && id != installation.InstallationID {
+			return "", installer.ErrPlanChanged
+		}
+		id = installation.InstallationID
+	}
+	return id, nil
 }
 
 func skillBindingPaths(view installer.Inspection, actions []dependencyAction) map[string]string {

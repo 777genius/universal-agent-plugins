@@ -341,3 +341,7 @@ func (acquirer lazySourceAcquirer) AcquireHTTPSkillVerified(ctx context.Context,
 	}
 	return acquirer.acquirer.AcquireHTTPSkillVerified(ctx, facts)
 }
+
+func (acquirer lazySourceAcquirer) ListHTTPSkills(ctx context.Context, endpoint string) (sourceacquisition.HTTPSkillCatalog, error) {
+	return acquirer.acquirer.ListHTTPSkills(ctx, endpoint)
+}

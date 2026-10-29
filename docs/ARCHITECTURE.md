@@ -1,6 +1,14 @@
 # Architecture Notes
 
-This document describes the current shipped monorepo architecture.
+This document covers the current installer core alongside preserved runtime and
+legacy authoring architecture. The public process entrypoint is
+`cli/cmd/agentplugins`; `cli/cmd/plugin-kit-ai` and YAML workflow sections
+describe preserved implementation. Release availability comes from the
+[public guides](https://universal-agent-plugins.com/docs/en/) and
+[release runbook](agentplugins-release.md), not from source presence.
+
+The composition and dependency rules below include both maintained installer
+code and preserved runtime/legacy code.
 
 Current public contract docs live in:
 

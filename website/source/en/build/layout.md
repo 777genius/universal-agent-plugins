@@ -10,6 +10,9 @@ translationRequired: true
 
 # Understand the package root
 
+**Source-build authoring:** commands on this page require the
+[authoring-enabled source build](./#build-from-source). The current installer
+release does not include `agentplugins author`.
 
 The selected directory is the package root. Authoring reads root
 `plugin.json` and its standard components. It does not search parents for a

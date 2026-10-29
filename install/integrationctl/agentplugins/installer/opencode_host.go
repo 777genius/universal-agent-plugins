@@ -8,6 +8,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/hostprep"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 )
 
@@ -19,6 +20,39 @@ var ErrHostTargetRequired = hostprep.ErrHostTargetRequired
 var errOpenCodeTransportUnsupported = hostprep.ErrTransportUnsupported
 
 func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperation) error {
+	if err := e.prepareOpenCodeTarget(ctx, handle); err != nil {
+		return err
+	}
+	if handle.req.Operation != OpUpdate {
+		return nil
+	}
+	checks, err := e.compatibilityChecks(handle.req, usecase.AddInput{Envelope: handle.envelope, Client: handle.client})
+	if err != nil {
+		return err
+	}
+	for _, check := range checks {
+		if check.Client.ClientID == handle.client.ClientID {
+			continue
+		}
+		// Only verified installed siblings enter compatibility planning. Reuse
+		// the selected-target preparation, including prior-effect codec fences.
+		sibling := &PreparedOperation{req: handle.req, envelope: handle.envelope, client: check.Client, detected: handle.detected}
+		sibling.req.ClientID = string(check.Client.ClientID)
+		sibling.req.ClientConfigRoot = check.Client.ConfigRoot
+		sibling.req.ClientExecutable = check.BackendExecutable
+		if err := e.prepareOpenCodeTarget(ctx, sibling); err != nil {
+			return err
+		}
+		if sibling.openCodeHost != nil {
+			// The use case restores this immutable host from detected before its
+			// compatibility planner. Retain an independent copy for revalidation.
+			handle.openCodeSiblings = append(handle.openCodeSiblings, sibling.client)
+		}
+	}
+	return nil
+}
+
+func (e *Engine) prepareOpenCodeTarget(ctx context.Context, handle *PreparedOperation) error {
 	consumer, ok := clients.As[clients.OpenCodeHostProfileConsumer](e.cfg.Registry, handle.client.ClientID)
 	if !ok || !consumer.UsesOpenCodeHostProfile() {
 		return nil
@@ -98,15 +132,36 @@ func (e *Engine) previousOpenCodeEffects(handle *PreparedOperation, consumer cli
 }
 
 func (e *Engine) revalidateOpenCodeHost(ctx context.Context, handle *PreparedOperation) error {
-	if handle.openCodeHost == nil {
+	prepared := preparedOpenCodeClients(handle)
+	if len(prepared) == 0 {
 		return nil
 	}
 	preparer, err := hostprep.New(e.cfg.Registry, e.cfg.OpenCodeProbe, e.cfg.OpenCodeProbeEnvironment)
 	if err != nil {
 		return err
 	}
-	if err := preparer.RevalidateOpenCodeHost(ctx, handle.client); err != nil {
-		return ErrPlanChanged
+	for _, client := range prepared {
+		if err := preparer.RevalidateOpenCodeHost(ctx, client); err != nil {
+			return ErrPlanChanged
+		}
+	}
+	return nil
+}
+
+func preparedOpenCodeClients(handle *PreparedOperation) []domain.DetectedClient {
+	prepared := append([]domain.DetectedClient(nil), handle.openCodeSiblings...)
+	if handle.openCodeHost != nil {
+		prepared = append(prepared, handle.client)
+	}
+	return prepared
+}
+
+func checkOpenCodeHostRoots(handle *PreparedOperation) error {
+	for _, client := range preparedOpenCodeClients(handle) {
+		host, ok := client.OpenCodeHost.(*OpenCodePreparedHost)
+		if !ok || openCodeRootIdentity(client.ConfigRoot) != host.Root() {
+			return ErrPlanChanged
+		}
 	}
 	return nil
 }

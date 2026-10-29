@@ -154,6 +154,9 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 			return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
 		}
 		plan := prepared.Plan()
+		if adapter.previewExternalUninstalled != nil && action.Action == environment.ActionRemove && plan.RequiresExternalUninstalled {
+			adapter.previewExternalUninstalled[action.Alias+"\x00"+action.ClientID] = true
+		}
 		if adapter.previewPaths != nil {
 			adapter.previewPaths[action.Alias+"\x00"+action.ClientID] = plan.TargetPath
 		}
@@ -202,15 +205,19 @@ func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context
 }
 
 type dependencyInstaller struct {
-	previewWarnings *[]string
-	previewPaths    map[string]string
-	app             App
-	opts            *options
-	detected        map[domain.ClientID]domain.DetectedClient
-	cmd             *cobra.Command
-	beforeApply     func() error
-	consent         map[string]bool
-	previewUpdate   *installer.PreparedOperation
+	previewExternalUninstalled map[string]bool
+	previewWarnings            *[]string
+	previewPaths               map[string]string
+	app                        App
+	opts                       *options
+	detected                   map[domain.ClientID]domain.DetectedClient
+	cmd                        *cobra.Command
+	beforeApply                func() error
+	consent                    map[string]bool
+	previewUpdate              *installer.PreparedOperation
+	operationIDs               map[string]string
+	onResult                   func(environment.PreparedBinding, installer.Result)
+	currentAction              environment.PreparedBinding
 }
 
 func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environment.PreparedBinding) (*installer.PreparedOperation, error) {
@@ -225,7 +232,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	client, ok := adapter.detected[domain.ClientID(action.ClientID)]
 	if !ok || (action.Action != environment.ActionRemove && (client.Status != domain.DetectionDetected || client.DetectionError != nil)) {
-		return nil, fmt.Errorf("target %s is not detected; nothing was changed", action.ClientID)
+		return nil, fmt.Errorf("target %s is not detected; nothing was changed: %w", action.ClientID, installer.ErrTargetFactsUnavailable)
 	}
 	view, err := adapter.app.Installer.Inspect(ctx)
 	if err != nil {
@@ -239,10 +246,15 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	if err := resolveDependencyBindingIdentity(view, &action); err != nil {
 		return nil, err
 	}
-	operationID, err := domain.NewInstallationID()
-	if err != nil {
-		return nil, err
+	operationID := adapter.operationIDs[action.Alias+"\x00"+action.ClientID]
+	if operationID == "" {
+		var err error
+		operationID, err = domain.NewInstallationID()
+		if err != nil {
+			return nil, err
+		}
 	}
+	adapter.currentAction = action
 	request := installer.Request{Scope: adapter.app.scope(), ProjectRoot: adapter.app.ProjectRoot, OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
 		ClientExecutable: backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
 		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete}
@@ -265,7 +277,11 @@ func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *install
 			return installer.Result{}, err
 		}
 	}
-	return adapter.app.Installer.Apply(ctx, prepared, installer.Decision{Confirmed: true})
+	result, err := adapter.app.Installer.Apply(ctx, prepared, installer.Decision{Confirmed: true})
+	if adapter.onResult != nil {
+		adapter.onResult(adapter.currentAction, result)
+	}
+	return result, err
 }
 
 // Recheck the exact signed publication for lock restoration. Superseded releases
@@ -414,6 +430,11 @@ func (adapter *dependencyInstaller) recordedDependencyRelease(action environment
 			return nil, err
 		}
 		installation, found := locallyMatchedInstallation(state, action.InstallationID)
+		if unboundDependencyInstall(action) && (!found || len(installation.Clients) == 0) {
+			// A reserved identity, including one retained after last-binding
+			// removal, grants no installed-release exception without a live binding.
+			return nil, nil
+		}
 		if !found || installation.Directory == nil {
 			return nil, installer.ErrPlanChanged
 		}

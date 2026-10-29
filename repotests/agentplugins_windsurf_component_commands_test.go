@@ -110,14 +110,19 @@ func (w *windComponentFixture) command(t *testing.T, label string) {
 	defer cancel()
 	started := time.Now()
 	result, runErr := (process.OS{}).RunWithDescendantExitGrace(ctx, ports.Command{Argv: c.Argv, Dir: c.CWD, Env: f.env(), StdoutLimitBytes: 1 << 20}, 5*time.Second)
+	ended := time.Now()
 	f.keep(t, label+".stdout.log", result.Stdout)
 	f.keep(t, label+".stderr.log", result.Stderr)
-	receipt, _ := json.Marshal(map[string]any{"argv": c.Argv, "cwd": c.CWD, "exit": result.ExitCode, "error": runErr != nil, "deadline": ctx.Err() != nil, "elapsed_ms": time.Since(started).Milliseconds(), "cleanup": "full descendant supervision; forced cleanup fails"})
+	receipt, _ := json.Marshal(map[string]any{"argv": c.Argv, "cwd": c.CWD, "exit": result.ExitCode, "error": runErr != nil, "deadline": ctx.Err() != nil, "elapsed_ms": ended.Sub(started).Milliseconds(), "cleanup": "full descendant supervision; forced cleanup fails"})
 	f.keep(t, label+".command.json", receipt)
 	w.completed = append(w.completed, label)
 	if c.Native {
 		after := w.profile(t)
-		if !reflect.DeepEqual(before, after) {
+		valid := reflect.DeepEqual(before, after)
+		if label != "version" {
+			valid = w.runtimeClosure(before, after, started, ended) == nil
+		}
+		if !valid {
 			f.evidence["profile_delta"] = windProfileDifference(before, after)
 			f.evidence["profile_delta_pages"] = windProfileDifferencePages(before, after)
 			w.configDiagnostic(after)
@@ -125,6 +130,9 @@ func (w *windComponentFixture) command(t *testing.T, label string) {
 			// stronger complete-frame refusal; diagnostics authorize nothing.
 			f.check(t)
 			t.Fatal("Windsurf component changed the complete original profile frame")
+		}
+		if label != "version" {
+			w.freezeRuntime(after)
 		}
 	}
 	// Selected public closure is opened only after all non-selected paths were

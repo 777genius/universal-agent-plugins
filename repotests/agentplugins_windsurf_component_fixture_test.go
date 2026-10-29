@@ -102,6 +102,7 @@ func windFrozenTrees(ctx context.Context, trees map[string]map[string]windProfil
 func (w *windComponentFixture) prepare(t *testing.T) {
 	t.Helper()
 	f := w.f
+	w.prepareRuntime(t)
 	projectNativeRuntimeWrite(t, f.base.Events, []byte{}, 0600)
 	for _, scope := range []string{"user", "a", "b"} {
 		r := &windComponentRecipe{Scope: scope, Project: f.outside, Source: filepath.Join(f.base.Root, "component-source-"+scope), Revision: scope + "-one", Nonce: windsurfConfigDigest([]byte(f.base.Nonce + scope))[:32]}

@@ -836,6 +836,80 @@
       ]
     }
   },
+  "pi": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/clients/pi/extensions/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "pi",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
+          "Support": "unsupported"
+        },
+        {
+          "Kind": "mcp_server",
+          "Name": "remote",
+          "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
+          "Support": "unsupported"
+        },
+        {
+          "Kind": "app",
+          "Name": "remote",
+          "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
+          "Support": "unsupported"
+        },
+        {
+          "Kind": "extension",
+          "Name": "cursor",
+          "Reason": "extension_semantics_not_established",
+          "Source": "",
+          "SourceName": "",
+          "Support": "unsupported"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/pi",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/pi",
+      "OpenCodeHost": null,
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "PreviousNativeObjects": null,
+      "Scope": "user",
+      "SelectedDelivery": {},
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/clients/pi",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/pi"
+      },
+      "TargetRoot": "\u003croot\u003e/clients/pi/extensions",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "no_supported_components"
+      ]
+    }
+  },
   "qoder": {
     "Error": "",
     "Plan": {

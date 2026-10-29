@@ -151,7 +151,7 @@
       "quickstartTitle": "Abrir início rápido",
       "quickstartBody": "O caminho compatível mais curto da instalação a um repositório validado.",
       "buildTitle": "Abrir guia Criar",
-      "buildBody": "Crie e verifique pacotes plugin.json com agentplugins author.",
+      "buildBody": "Escreva pacotes plugin.json manualmente ou use as ferramentas compiladas do código-fonte; depois valide e instale com o gerenciador publicado.",
       "useTitle": "Abrir guia Usar",
       "useBody": "Encontre, visualize, instale e mantenha plugins com agentplugins."
     }
@@ -202,20 +202,33 @@
     "specLink": "Ler a especificação Agent Plugins 1.0",
     "compatibilityLink": "Compatibilidade de clientes (em inglês)",
     "limitations": "A compatibilidade é específica de cada pacote. A validação de esquema não comprova execução, OAuth nem ativação. O Codex não oferece suporte a MCP SSE declarado; stdio e Streamable HTTP mantêm o suporte existente por adaptador.",
-    "versions": "Autoria do Agent Plugins disponível: universal-agent-plugins; GitHub: agentplugins-v*.",
-    "availability": "Autoria do Agent Plugins disponível",
-    "releaseScope": "A autoria do Agent Plugins está disponível em universal-agent-plugins; GitHub: agentplugins-v*. npm, Homebrew, arquivos nativos, GitHub Releases e E2E público estão verificados. A versão inclui autoria estática; não inclui execução, servidores de desenvolvimento, instalação de dependências, exportação ou publicação.",
+    "versions": "Instalador nativo verificado: CLI 0.1.94; nome do pacote npm: universal-agent-plugins; tags do GitHub: agentplugins-v*.",
+    "availability": "Pacotes manuais e ferramentas compiladas do código-fonte",
+    "releaseScope": "GitHub Releases e Homebrew oferecem o instalador CLI 0.1.94, que não inclui agentplugins author. A instalação por npm também está disponível, mas as versões dos canais podem ser diferentes: confira a versão da CLI antes de usar recursos exclusivos de 0.1.94. Os comandos do guia Criar precisam de uma compilação do código-fonte com a criação ativada. A referência API gerada mantém sua origem histórica de 0.1.65; ela não descreve o instalador atual.",
     "buildGuideLink": "Abrir o guia de criação"
   },
   "shell": {
+    "dependencies": {
+      "eyebrow": "Dependências conectadas",
+      "title": "Dois plugins. Uma dependência compartilhada.",
+      "description": "Instale um plugin com suas dependências. Dependências compartilhadas da mesma versão compatível são instaladas uma única vez.",
+      "demoPackage": "Pacote de demonstração",
+      "installed": "Instalado",
+      "alreadyInstalled": "Já instalado",
+      "shared": "compartilhada",
+      "caption": "Pacotes e grafo ilustrativos. Os dois pacotes compartilham Playwright; Context7 já está instalado.",
+      "graphDescription": "marketing-kit depende de Playwright, HubSpot e Notion. Web Design Kit depende do mesmo pacote Playwright, Figma e Context7. Todos os pacotes estão instalados; Context7 já estava instalado."
+    },
     "restore": {
-      "title": "As mesmas versões de plugins no seu próximo computador",
+      "title": "As mesmas versões. Para toda a equipe.",
       "guide": "Guia",
-      "from": "Neste computador",
-      "to": "No próximo computador",
-      "transfer": "Copie {manifest} e {lockfile} para o outro computador entre estes comandos.",
+      "from": "No seu projeto",
+      "to": "Seu colega",
+      "transfer": "Inclua {manifest} e {lockfile} no Git com o projeto para que a equipe restaure as mesmas versões.",
       "requirements": "A restauração exige que as fontes registradas continuem disponíveis e que os clientes sejam compatíveis com o gerenciamento de dependências.",
-      "excludes": "Logins, segredos, configurações e dados dos plugins não são transferidos."
+      "excludes": "Logins, segredos, configurações e dados dos plugins não são transferidos.",
+      "subtitle": "Instale no projeto. Inclua o arquivo de lock no Git. Sua equipe poderá restaurar as mesmas versões.",
+      "commit": "Inclua uap.toml + uap.lock no Git"
     },
     "docs": {
       "englishLabel": "{label} (documentação em inglês)"
@@ -255,7 +268,7 @@
       "items": {
         "0": {
           "question": "Quais agentes de IA são compatíveis?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline e Windsurf têm suporte ou estão preparados por um caminho explícito específico do cliente. Grok Build e Kimi Code também aceitam skills e MCP nativos."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: cada cliente tem seu próprio caminho de instalação ou preparação. A compatibilidade depende dos componentes, do escopo e dos requisitos de ativação."
         },
         "1": {
           "question": "Um comando instala em todos os agentes?",
@@ -267,7 +280,7 @@
         },
         "3": {
           "question": "Posso instalar um plugin fora deste diretório?",
-          "answer": "Sim. Use uma fonte fixa do GitHub que contenha um pacote Agent Plugins 1.0 plugin.json válido."
+          "answer": "Sim. Instale um pacote completo com plugin.json de uma pasta local, Git por HTTPS ou SSH, um link de provedor compatível ou um arquivo pronto para instalar. A CLI registra as fontes exatas das dependências salvas que permitem isso."
         },
         "4": {
           "question": "Todos os plugins descobertos são revisados?",
@@ -564,6 +577,7 @@
       "explorePlugins": "Explorar plugins",
       "searchByCapabilityComponentOrSource": "Pesquise por recurso, componente ou fonte.",
       "allCategories": "Todas as categorias",
+      "marketingCategory": "Marketing e campanhas",
       "allComponents": "Todos os componentes",
       "allSources": "Todas as fontes",
       "upstreamPackages": "Pacotes upstream",
@@ -629,7 +643,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "Indisponível na fonte indexada; nenhum comando de instalação foi gerado.",
       "unavailableAtItsIndexedSource": "Indisponível na fonte indexada",
       "checkedAgainBeforeInstallation": "Verificado novamente antes da instalação",
-      "reviewedListing": "Revisado",
+      "reviewedListing": "Ficha revisada",
       "notAvailableForChatgpt": "Não disponível para ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Conexão verificada; conclua a configuração no ChatGPT",
       "allInstalledAgents": "Escolher agentes no terminal",
@@ -660,7 +674,8 @@
       "publisher": "Por {publisher}",
       "upstream": "origem upstream",
       "installable": "instalável",
-      "unavailable": "indisponível"
+      "unavailable": "indisponível",
+      "reviewedListingTooltip": "A ficha e os metadados foram revisados. Isso não certifica o código, o comportamento ou a segurança do plugin."
     },
     "install": {
       "allInstalledAgentsRecommended": "Escolher agentes no terminal",
@@ -766,7 +781,7 @@
         "note": "Pacote nativo de Agent Plugin",
         "status": "Compatível",
         "intro": "Instale Agent Plugins 1.0 em projetos do Cursor sem adaptar cada plugin manualmente. A CLI planeja o pacote nativo antes de alterar arquivos.",
-        "delivery": "A CLI grava o plugin do Cursor, a skill e as projeções MCP compatíveis para o projeto selecionado.",
+        "delivery": "A CLI prepara os componentes de plugin, skills e MCP compatíveis com Cursor no escopo escolhido. O comando add usa o escopo de usuário por padrão; selecione explicitamente o escopo de projeto para add.",
         "activation": "Recarregue o Cursor quando solicitado e verifique se o plugin foi detectado."
       },
       "copilot": {
@@ -845,6 +860,13 @@
         "intro": "Instale skills e servidores MCP para Qoder.",
         "delivery": "O CLI escreve um manifesto .qoder-plugin nativo e registra o pacote pelo Qoder CLI.",
         "activation": "Recarregue os plugins do Qoder ou reinicie o Qoder; confira MCP e autenticação no Qoder."
+      },
+      "pi": {
+        "note": "Apenas extensões nativas do Pi gerenciadas",
+        "status": "Compatível",
+        "intro": "Instale pacotes Agent Plugins 1.0 que declarem uma extensão nativa do Pi. Habilidades portáveis e projeção MCP estão fora do escopo atual deste adaptador.",
+        "delivery": "O CLI instala a extensão do Pi declarada no diretório do agente Pi e acompanha o pacote gerenciado para atualização, reparo e remoção.",
+        "activation": "Após a instalação, recarregue os recursos ou reinicie o Pi para carregar a extensão gerenciada."
       }
     },
     "directoryPage": {
@@ -864,7 +886,7 @@
       "components": "Componentes",
       "package": "Pacote",
       "pluginNotFound": "Plugin não encontrado",
-      "reviewedListing": "Revisado",
+      "reviewedListing": "Ficha revisada",
       "licenseNotSpecified": "Licença não especificada",
       "managedByCli": "Gerenciado pela CLI",
       "requiresAFinalStepInTheApp": "Requer uma etapa final no app",
@@ -873,7 +895,8 @@
       "title": "Agent Plugin {name} {'|'} Universal Agent Plugins",
       "schemaName": "Agent Plugin {name}",
       "directory": "Diretório de plugins",
-      "version": "Versão {version}"
+      "version": "Versão {version}",
+      "reviewedListingTooltip": "A ficha e os metadados foram revisados. Isso não certifica o código, o comportamento ou a segurança do plugin."
     },
     "community": {
       "breadcrumb": "Trilha de navegação",
@@ -921,7 +944,7 @@
       "vendorDocs": "Leia a documentação de {name}",
       "availableFor": "Plugins disponíveis para {name}",
       "count": "{count} pacote revisado oferece suporte a este cliente. | {count} pacotes revisados oferecem suporte a este cliente.",
-      "tryPlugin": "Experimente o Context7 ou substitua {source} pelo nome curto revisado de outro plugin compatível ou pela origem fixada de um pacote do GitHub.",
+      "tryPlugin": "Experimente Context7 ou substitua {source} pelo nome curto revisado de outro plugin compatível ou pela fonte de um pacote completo.",
       "localPackageHint": "Substitua ./my-plugin pelo caminho de um pacote Agent Plugins 1.0 válido."
     },
     "components": {
@@ -957,6 +980,23 @@
       "requiredDetail": "O pacote pode exigir conta, token ou login; isso não especifica OAuth nem confirma que você está conectado.",
       "not_requiredDetail": "Nenhuma autenticação foi declarada para estes agentes. Limites do serviço e outros requisitos podem se aplicar.",
       "unknownDetail": "Verifique os requisitos do pacote antes de conectar."
+    }
+  },
+  "pluginAuthoring": {
+    "eyebrow": "Criar plugins",
+    "title": "Usar plugins / Criar plugins",
+    "subtitle": "Instale e gerencie pacotes padrão ou escreva seu próprio pacote plugin.json e verifique com as ferramentas adequadas.",
+    "use": {
+      "badge": "CLI 0.1.94",
+      "title": "Usar plugins",
+      "description": "Encontre, visualize, instale e mantenha pacotes com o instalador publicado.",
+      "cta": "Abrir guia Usar"
+    },
+    "build": {
+      "badge": "Manualmente ou do código-fonte",
+      "title": "Criar plugins",
+      "description": "Escreva um pacote padrão com plugin.json na raiz e skills/ e mcp.json opcionais. O instalador publicado valida e instala esse pacote. Os modelos e as verificações de criação exigem a compilação do código-fonte descrita no guia. Verificações estáticas não comprovam execução nem ativação.",
+      "cta": "Abrir o guia de criação"
     }
   }
 }

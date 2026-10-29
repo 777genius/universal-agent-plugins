@@ -2,6 +2,8 @@ package agentpluginscli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -21,9 +23,14 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "install [name-or-source]",
 		Short: "Install or repair the declared dependency environment",
-		Long:  "Install/repair the declared environment from uap.toml and uap.lock: install everything declared on a first run, leave already-matching items alone, and converge missing or drifted state to the exact locked pins. With a source argument, install behaves as agentplugins add for that one package.",
+		Long:  "Install/repair the declared environment from uap.toml and uap.lock: install everything declared on a first run, leave already-matching items alone, and converge missing or drifted state to the exact locked pins. With no source, a uap.toml in the current directory selects project scope (no parent search); explicit --scope wins. An existing uap.lock is validated strictly; only a missing lock is resolved and created. Use update to change pins. The preview shows the selected scope and manifest/lock paths. With a source argument, install behaves as agentplugins add for that one package.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				if err := selectInstallScope(cmd, opts); err != nil {
+					return err
+				}
+			}
 			app, scopeErr := app.forOptions(opts)
 			if scopeErr != nil {
 				return scopeErr
@@ -34,8 +41,14 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 			if err := validateEnvironmentOptions("install", opts); err != nil {
 				return err
 			}
+			manifestPath, lockPath := app.dependencyPaths()
+			lockedOnly, err := installLockedOnly(lockPath, locked)
+			if err != nil {
+				return err
+			}
+			opts.installSelection = &installSelection{Scope: string(app.scope()), ProjectRoot: app.ProjectRoot, ManifestPath: manifestPath, LockPath: lockPath}
 			app.Lifecycle.PrepareHostsForPreview = true
-			return runDependencySyncConverge(cmd, app, opts, locked, yes, func(convergeApp App) (bool, error) {
+			return runDependencySyncConverge(cmd, app, opts, lockedOnly, yes, func(convergeApp App) (bool, error) {
 				return repairDeclaredEnvironmentDrift(cmd, convergeApp, opts, yes)
 			})
 		},
@@ -149,4 +162,49 @@ func applyDeclaredEnvironmentRepairs(cmd *cobra.Command, app App, opts *options,
 		return fmt.Errorf("dependency install stopped; inspect binding results and next actions: %w", applyErr)
 	}
 	return nil
+}
+
+// Only the argumentless install verb infers a project, and only in the exact
+// working directory. Explicit scope selection always takes precedence.
+func selectInstallScope(cmd *cobra.Command, opts *options) error {
+	if cmd.Flags().Changed("scope") || opts.projectRoot != "" {
+		return nil
+	}
+	info, err := os.Lstat("uap.toml")
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("detect project manifest: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("detect project manifest: current-directory uap.toml must be a regular non-symlink file; select --scope explicitly")
+	}
+	root, err := filepath.Abs(".")
+	if err != nil {
+		return err
+	}
+	opts.scope, opts.projectRoot = "project", root
+	return nil
+}
+
+func installLockedOnly(lockPath string, explicit bool) (bool, error) {
+	if explicit {
+		return true, nil
+	}
+	_, err := os.Lstat(lockPath)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("inspect dependency lock: %w", err)
+	}
+	return true, nil
+}
+
+type installSelection struct {
+	Scope        string `json:"scope"`
+	ProjectRoot  string `json:"project_root,omitempty"`
+	ManifestPath string `json:"manifest_path"`
+	LockPath     string `json:"lock_path"`
 }
