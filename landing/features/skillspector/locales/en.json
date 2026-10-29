@@ -11,7 +11,7 @@
       "partial": "Checked with limitations",
       "error": "Could not check",
       "detailsFor": "SkillSpector details for {name}",
-      "pluginScope": "Selected skills in this plugin",
+      "pluginScope": "Scope: Skill files in this plugin. Other plugin components are not checked by SkillSpector.",
       "skillScope": "Historical Skill report",
       "absent": "No published assessment matches this listing.",
       "checked": "Checked {date}",
@@ -39,7 +39,7 @@
       "confirmedMaterialIssue": "Confirmed material issue",
       "stale": "Outdated report",
       "unsupported": "Static check not applicable",
-      "fullyChecked": "{checked} of {total} skills fully checked",
+      "fullyChecked": "Skills fully checked: {checked} of {total}",
       "installAdvice": "Before installing",
       "adviceConfirmed": "A material issue has been confirmed. Review the evidence and remediation before installing.",
       "adviceReview": "Review the reported signals and their context before installing. Automated findings have not been confirmed by a reviewer.",
@@ -68,7 +68,7 @@
       "acceptedSignal": "Accepted signal",
       "classificationExplanation": "This classification is a narrowly matched registry rule, not a human security audit.",
       "limitedGroups": "The published report contains only the displayed groups. The total number of distinct findings is unknown.",
-      "selectedFullyChecked": "{checked} of {total} selected skills fully checked",
+      "selectedFullyChecked": "Selected Skills fully checked: {checked} of {total}",
       "skillRemoved": "The previously checked Skill file was removed at the newly examined source revision. The old report remains available as history; no current content was checked.",
       "acquisitionTransferLimit": "Source retrieval reached this scan profile’s transfer limit. Files that were not retrieved were not inspected.",
       "loadingAdvice": "SkillSpector is loading. Coverage is unknown; review the source before installing.",
@@ -81,7 +81,9 @@
       "contextTruncated": "Context is limited: {references} of {referencesTotal} references and {diagnostics} of {diagnosticsTotal} diagnostics are shown.",
       "unsupportedSourceDetails": "This source type is not supported by static SkillSpector checks. Its files have not been checked.",
       "checkUnavailableDetails": "The source could not be checked. Coverage is unknown; review the reported reason before installing.",
-      "reasonContexts": "{count} original contexts"
+      "reasonContexts": "{count} original contexts",
+      "noSkills": "No Skills to check",
+      "noSkillsDetails": "This plugin does not include Skills. SkillSpector checks Skill files only; other plugin components are outside its scope."
     }
   }
 }
