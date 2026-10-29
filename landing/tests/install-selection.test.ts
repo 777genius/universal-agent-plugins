@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { effectScope, nextTick, reactive, toRaw } from 'vue';
+import { effectScope, nextTick, reactive, toRaw, unref } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { usePluginInstallSelection } from '../composables/usePluginInstallSelection.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
@@ -54,7 +54,7 @@ test('project requires explicit agents without replacing the user default or sil
   state.updateTargets(['codex', 'cursor']);
   assert.equal(state.resolution.value.distribution, undefined);
   state.updateTargets(['codex']);
-  assert.equal(state.resolution.value.distribution?.targets[0]?.authentication, 'required');
+  assert.equal(unref(state.resolution).distribution?.targets[0]?.authentication, 'required');
   assert.match(
     pluginCommands(data(), state.targets.value, true, state.scope.value).add,
     /--target codex --scope project$/,
