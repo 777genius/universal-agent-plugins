@@ -12,15 +12,21 @@ import (
 // loadSaved removes environment-owned installations from imperative checking.
 // Declared roots remain checkable even before their first materialized binding.
 func (session *outdatedSession) loadSaved(selector string) (bool, error) {
+	session.savedOwned = map[string]bool{}
+	for _, receipt := range session.state.EnvironmentReceipts {
+		if receipt.EnvironmentID == session.app.environmentID() {
+			session.savedOwned[receipt.InstallationID] = true
+		}
+	}
 	manifest, _ := session.app.dependencyPaths()
-	if _, err := os.Stat(manifest); os.IsNotExist(err) {
+	if _, err := os.Stat(manifest); os.IsNotExist(err) && len(session.savedOwned) == 0 {
 		return false, nil
 	} else if err != nil {
-		return false, err
+		return session.savedEnvironmentUnavailable(selector, err)
 	}
 	snapshot, err := snapshotEnvironmentContext(session.ctx, session.app, false)
 	if err != nil {
-		return false, err
+		return session.savedEnvironmentUnavailable(selector, err)
 	}
 	aliases, selected, err := session.savedCheckAliases(snapshot, selector)
 	if err != nil {
@@ -34,12 +40,6 @@ func (session *outdatedSession) loadSaved(selector string) (bool, error) {
 		return false, err
 	}
 	session.result.Saved = &check
-	session.savedOwned = map[string]bool{}
-	for _, receipt := range session.state.EnvironmentReceipts {
-		if receipt.EnvironmentID == session.app.environmentID() {
-			session.savedOwned[receipt.InstallationID] = true
-		}
-	}
 	for _, fact := range check.Entries {
 		item := session.savedOutdatedItem(fact)
 		session.result.Installations = append(session.result.Installations, item)
@@ -47,6 +47,20 @@ func (session *outdatedSession) loadSaved(selector string) (bool, error) {
 	}
 
 	return selected, nil
+}
+
+func (session *outdatedSession) savedEnvironmentUnavailable(selector string, err error) (bool, error) {
+	if session.ctx.Err() != nil {
+		return false, session.ctx.Err()
+	}
+	if strings.TrimSpace(selector) != "" {
+		return false, err
+	}
+	reason := "saved dependency environment is unavailable; inspect uap.toml, uap.lock and recovery status"
+	session.result.Saved = &savedUpdateCheck{Reason: reason, Entries: []savedUpdateFact{}}
+	session.result.Installations = append(session.result.Installations, outdatedInstallation{Name: "saved environment", Status: "check_unavailable", Reason: reason})
+	session.countStatus("check_unavailable")
+	return false, nil
 }
 
 func (session *outdatedSession) savedCheckAliases(snapshot environmentSnapshot, selector string) ([]string, bool, error) {

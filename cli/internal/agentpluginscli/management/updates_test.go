@@ -1,8 +1,14 @@
 package management
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestExplicitUpdateCheckRouteValidatesSelectionAndNormalizesArrays(t *testing.T) {
@@ -27,5 +33,29 @@ func TestExplicitUpdateCheckRouteValidatesSelectionAndNormalizesArrays(t *testin
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 400 {
 		t.Fatal("update check bypassed private capability", response.StatusCode)
+	}
+}
+
+type deadlineUpdateCheckBackend struct{ testBackend }
+
+func (deadlineUpdateCheckBackend) CheckUpdates(ctx context.Context, _ UpdateCheckRequest) (UpdateCheck, error) {
+	<-ctx.Done()
+	return UpdateCheck{}, fmt.Errorf("source check: %w", ctx.Err())
+}
+
+func TestExplicitUpdateCheckDeadlineIsRetryable(t *testing.T) {
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer cancel()
+	request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/environment/check-updates", strings.NewReader(`{"all":true}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	server := Server{opts: Options{Backend: &deadlineUpdateCheckBackend{}}, ctx: t.Context()}
+	server.checkUpdates(response, request)
+	var out APIError
+	if err := json.Unmarshal(response.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusGatewayTimeout || out.Code != "UPDATE_CHECK_TIMEOUT" || !out.Retryable || strings.Contains(out.Message, "source check") {
+		t.Fatal(response.Code, out)
 	}
 }

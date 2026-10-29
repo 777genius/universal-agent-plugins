@@ -2,6 +2,7 @@ package management
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -196,6 +197,10 @@ func (s *Server) checkUpdates(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	value, err := s.opts.Backend.CheckUpdates(ctx, input)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			writeError(w, http.StatusGatewayTimeout, "UPDATE_CHECK_TIMEOUT", "The update check timed out; retry the read-only check", true)
+			return
+		}
 		writeBackendError(w, err)
 		return
 	}

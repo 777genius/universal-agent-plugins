@@ -267,6 +267,7 @@ func (session *updateAllSession) recordPlanned(installation domain.Installation,
 func (session *updateAllSession) applyAll() error {
 	session.result.Status = "completed"
 	if err := session.applySaved(); err != nil {
+		session.recordSavedPreApplyFailure()
 		markUnattemptedUpdateAll(&session.result, session.preparedItems, 0)
 		_ = renderUpdateAll(session.cmd, session.opts, session.result)
 		return err

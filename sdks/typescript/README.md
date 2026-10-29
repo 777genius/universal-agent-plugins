@@ -11,9 +11,11 @@ The SDK never downloads or updates an engine executable.
 
 ## Provision a management-enabled source engine
 
-The SDK needs the **current management-enabled source engine** as well as its
-own development tarball. The published CLI 0.1.94 does not expose `manage` and
-cannot run these examples. A generic pinned installer download is insufficient.
+The published [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+includes `manage serve` and `manage discover`.
+The SDK remains a separate development package. The new `checkUpdates` method
+requires a matching engine built from this reviewed source and the matching SDK
+tarball; CLI 0.1.95 predates that operation.
 Pin a reviewed source commit and the SHA-256 of the resulting executable in the
 consuming application's build evidence; provision that exact executable yourself.
 
@@ -65,7 +67,7 @@ merge additional discovered profiles into the captured startup context.
 
 The current development engine adds `client.checkUpdates({ all: true })` or
 `client.checkUpdates({ aliases: ['docs', 'tools'] })`. This capability is not part
-of the published CLI 0.1.94 or an SDK release. It performs a disposable read-only
+of the published CLI 0.1.95 or an SDK release. It performs a disposable read-only
 network check and does not save freshness, change the agreement, or install files.
 Ordinary `client.environment()` stays passive and reports unchecked moving intent
 as `check_unavailable`.

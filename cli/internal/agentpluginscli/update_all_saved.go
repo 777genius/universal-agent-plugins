@@ -257,3 +257,18 @@ func (session *updateAllSession) recordSavedBindings(applied dependencyApplicati
 		}
 	}
 }
+
+func (session *updateAllSession) recordSavedPreApplyFailure() {
+	if session.result.Status != "completed" {
+		return
+	}
+	session.result.Status = "apply_failed"
+	session.result.Failed++
+	for _, row := range session.saved.rows {
+		item := &session.result.Installations[row]
+		if item.Status == "planned" {
+			item.Status = "not_attempted"
+			item.Reason = "saved dependency application stopped before effects"
+		}
+	}
+}

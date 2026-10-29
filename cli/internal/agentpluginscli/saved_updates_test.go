@@ -122,3 +122,46 @@ func TestSavedCheckClassifiesTypedRefusalsIndependentlyOfWording(t *testing.T) {
 		}
 	}
 }
+
+func TestOutdatedUnreadableSavedEnvironmentRetainsIndependentChecks(t *testing.T) {
+	for _, failure := range []string{"invalid manifest", "missing manifest", "missing lock", "mismatched lock"} {
+		t.Run(failure, func(t *testing.T) {
+			j, _, _ := savedMixedUpdateJourney(t)
+			manifest, lock := j.cli.app.dependencyPaths()
+			switch failure {
+			case "invalid manifest":
+				dependencyWrite(t, manifest, "[")
+			case "missing manifest":
+				if err := os.Remove(manifest); err != nil {
+					t.Fatal(err)
+				}
+			case "missing lock":
+				if err := os.Remove(lock); err != nil {
+					t.Fatal(err)
+				}
+			case "mismatched lock":
+				dependencyWrite(t, manifest, "schema_version = 1\n[dependencies]\nother = '1.0.0'\n[targets]\n")
+			}
+			before := savedCheckFiles(t, j.cli.root)
+			output := j.run(t, "outdated", "--all", "--format", "json")
+			for _, want := range []string{`"check_unavailable":1`, `"unmanaged":1`, `"name":"imperative"`, `"name":"saved environment"`, `"complete":false`, `"changed":false`} {
+				if !strings.Contains(output, want) {
+					t.Fatal(want, output)
+				}
+			}
+			if strings.Contains(output, `"name":"`+managementArchiveName+`"`) {
+				t.Fatal("saved ownership leaked into imperative checking", output)
+			}
+			human := j.run(t, "outdated")
+			if !strings.Contains(human, "saved environment: check_unavailable") || !strings.Contains(human, "imperative: unmanaged") {
+				t.Fatal(human)
+			}
+			if _, _, err := j.cli.execute(false, "outdated", managementArchiveName, "--format", "json"); err == nil {
+				t.Fatal("explicit saved selection concealed its unreadable environment")
+			}
+			if !reflect.DeepEqual(before, savedCheckFiles(t, j.cli.root)) {
+				t.Fatal("unavailable saved check changed persistent files")
+			}
+		})
+	}
+}

@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"net/http"
@@ -100,6 +101,57 @@ func TestUpdateAllPublishedSavedIntentReportsPartialAndUnattempted(t *testing.T)
 		if installation.Package.Version != "1.0.0" {
 			t.Fatal("binding changed after publication failure", installation)
 		}
+	}
+}
+
+func TestUpdateAllSavedConfirmationFailureReportsUnattemptedBatch(t *testing.T) {
+	for _, input := range []string{"n\n", ""} {
+		t.Run(map[bool]string{true: "declined", false: "closed input"}[input != ""], func(t *testing.T) {
+			j, _, _ := savedMixedUpdateJourney(t)
+			preview, cleanup, err := dependencyPreviewApp(j.cli.app, &options{dryRun: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			preview.Terminal = true
+			var output bytes.Buffer
+			command := &cobra.Command{}
+			command.SetContext(t.Context())
+			command.SetIn(strings.NewReader(input))
+			command.SetOut(&output)
+			command.SetErr(io.Discard)
+			session := updateAllSession{ctx: t.Context(), cmd: command, app: preview, opts: &options{format: "human", scope: "user"}}
+			if _, err := session.load(); err != nil {
+				t.Fatal(err)
+			}
+			defer session.cleanupPrepared()
+			if err := session.preflightAll(); err != nil {
+				t.Fatal(err)
+			}
+			before := savedCheckFiles(t, j.cli.root)
+			if err := session.applyAll(); err == nil {
+				t.Fatal("confirmation failure was accepted")
+			}
+			if session.result.Status != "apply_failed" || session.result.Failed != 1 || session.result.Updated != 0 || !strings.Contains(output.String(), "Update all: apply_failed") {
+				t.Fatal(output.String(), session.result)
+			}
+			for _, row := range session.result.Installations {
+				if row.Status != "not_attempted" {
+					t.Fatal(row)
+				}
+			}
+			output.Reset()
+			session.opts.format = "json"
+			if err := renderUpdateAll(command, session.opts, session.result); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(output.String(), `"result":"failure"`) {
+				t.Fatal(output.String())
+			}
+			if !reflect.DeepEqual(before, savedCheckFiles(t, j.cli.root)) {
+				t.Fatal("confirmation failure changed persistent files")
+			}
+		})
 	}
 }
 func TestSavedRegistryNoLaterReleaseRechecksRecordedEligibility(t *testing.T) {
