@@ -151,7 +151,7 @@
       "quickstartTitle": "Abrir início rápido",
       "quickstartBody": "O caminho compatível mais curto da instalação a um repositório validado.",
       "buildTitle": "Abrir guia Criar",
-      "buildBody": "Crie e verifique pacotes plugin.json com agentplugins author.",
+      "buildBody": "Escreva pacotes plugin.json manualmente ou use as ferramentas compiladas do código-fonte; depois valide e instale com o gerenciador publicado.",
       "useTitle": "Abrir guia Usar",
       "useBody": "Encontre, visualize, instale e mantenha plugins com agentplugins."
     }
@@ -202,9 +202,9 @@
     "specLink": "Ler a especificação Agent Plugins 1.0",
     "compatibilityLink": "Compatibilidade de clientes (em inglês)",
     "limitations": "A compatibilidade é específica de cada pacote. A validação de esquema não comprova execução, OAuth nem ativação. O Codex não oferece suporte a MCP SSE declarado; stdio e Streamable HTTP mantêm o suporte existente por adaptador.",
-    "versions": "Autoria do Agent Plugins disponível: universal-agent-plugins; GitHub: agentplugins-v*.",
-    "availability": "Autoria do Agent Plugins disponível",
-    "releaseScope": "A autoria do Agent Plugins está disponível em universal-agent-plugins; GitHub: agentplugins-v*. npm, Homebrew, arquivos nativos, GitHub Releases e E2E público estão verificados. A versão inclui autoria estática; não inclui execução, servidores de desenvolvimento, instalação de dependências, exportação ou publicação.",
+    "versions": "Instalador nativo verificado: CLI 0.1.94; nome do pacote npm: universal-agent-plugins; tags do GitHub: agentplugins-v*.",
+    "availability": "Pacotes manuais e ferramentas compiladas do código-fonte",
+    "releaseScope": "GitHub Releases e Homebrew oferecem o instalador CLI 0.1.94, que não inclui agentplugins author. A instalação por npm também está disponível, mas as versões dos canais podem ser diferentes: confira a versão da CLI antes de usar recursos exclusivos de 0.1.94. Os comandos do guia Criar precisam de uma compilação do código-fonte com a criação ativada. A referência API gerada mantém sua origem histórica de 0.1.65; ela não descreve o instalador atual.",
     "buildGuideLink": "Abrir o guia de criação"
   },
   "shell": {
@@ -268,7 +268,7 @@
       "items": {
         "0": {
           "question": "Quais agentes de IA são compatíveis?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline e Windsurf têm suporte ou estão preparados por um caminho explícito específico do cliente. Grok Build e Kimi Code também aceitam skills e MCP nativos."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: cada cliente tem seu próprio caminho de instalação ou preparação. A compatibilidade depende dos componentes, do escopo e dos requisitos de ativação."
         },
         "1": {
           "question": "Um comando instala em todos os agentes?",
@@ -280,7 +280,7 @@
         },
         "3": {
           "question": "Posso instalar um plugin fora deste diretório?",
-          "answer": "Sim. Use uma fonte fixa do GitHub que contenha um pacote Agent Plugins 1.0 plugin.json válido."
+          "answer": "Sim. Instale um pacote completo com plugin.json de uma pasta local, Git por HTTPS ou SSH, um link de provedor compatível ou um arquivo pronto para instalar. A CLI registra as fontes exatas das dependências salvas que permitem isso."
         },
         "4": {
           "question": "Todos os plugins descobertos são revisados?",
@@ -781,7 +781,7 @@
         "note": "Pacote nativo de Agent Plugin",
         "status": "Compatível",
         "intro": "Instale Agent Plugins 1.0 em projetos do Cursor sem adaptar cada plugin manualmente. A CLI planeja o pacote nativo antes de alterar arquivos.",
-        "delivery": "A CLI grava o plugin do Cursor, a skill e as projeções MCP compatíveis para o projeto selecionado.",
+        "delivery": "A CLI prepara os componentes de plugin, skills e MCP compatíveis com Cursor no escopo escolhido. O comando add usa o escopo de usuário por padrão; selecione explicitamente o escopo de projeto para add.",
         "activation": "Recarregue o Cursor quando solicitado e verifique se o plugin foi detectado."
       },
       "copilot": {
@@ -937,7 +937,7 @@
       "vendorDocs": "Leia a documentação de {name}",
       "availableFor": "Plugins disponíveis para {name}",
       "count": "{count} pacote revisado oferece suporte a este cliente. | {count} pacotes revisados oferecem suporte a este cliente.",
-      "tryPlugin": "Experimente o Context7 ou substitua {source} pelo nome curto revisado de outro plugin compatível ou pela origem fixada de um pacote do GitHub.",
+      "tryPlugin": "Experimente Context7 ou substitua {source} pelo nome curto revisado de outro plugin compatível ou pela fonte de um pacote completo.",
       "localPackageHint": "Substitua ./my-plugin pelo caminho de um pacote Agent Plugins 1.0 válido."
     },
     "components": {
@@ -973,6 +973,23 @@
       "requiredDetail": "O pacote pode exigir conta, token ou login; isso não especifica OAuth nem confirma que você está conectado.",
       "not_requiredDetail": "Nenhuma autenticação foi declarada para estes agentes. Limites do serviço e outros requisitos podem se aplicar.",
       "unknownDetail": "Verifique os requisitos do pacote antes de conectar."
+    }
+  },
+  "pluginAuthoring": {
+    "eyebrow": "Criar plugins",
+    "title": "Usar plugins / Criar plugins",
+    "subtitle": "Instale e gerencie pacotes padrão ou escreva seu próprio pacote plugin.json e verifique com as ferramentas adequadas.",
+    "use": {
+      "badge": "CLI 0.1.94",
+      "title": "Usar plugins",
+      "description": "Encontre, visualize, instale e mantenha pacotes com o instalador publicado.",
+      "cta": "Abrir guia Usar"
+    },
+    "build": {
+      "badge": "Manualmente ou do código-fonte",
+      "title": "Criar plugins",
+      "description": "Escreva um pacote padrão com plugin.json na raiz e skills/ e mcp.json opcionais. O instalador publicado valida e instala esse pacote. Os modelos e as verificações de criação exigem a compilação do código-fonte descrita no guia. Verificações estáticas não comprovam execução nem ativação.",
+      "cta": "Abrir o guia de criação"
     }
   }
 }

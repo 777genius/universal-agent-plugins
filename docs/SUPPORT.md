@@ -3,7 +3,7 @@
 ## Universal Agent Plugins installer
 
 For `agentplugins`, start with [native CLI installation](./NATIVE_INSTALL.md)
-and the [client compatibility evidence](https://777genius.github.io/universal-agent-plugins/docs/en/reference/client-compatibility.html).
+and the [client compatibility evidence](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html).
 The matrix identifies tested installer/client versions and platforms;
 package validity, installation, activation, runtime and OAuth are separate layers.
 

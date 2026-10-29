@@ -68,9 +68,16 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-01-19',
   ssr: true,
   features: {
-    // Keep the shared assessment stylesheet cacheable without repeating it in detail HTML.
-    inlineStyles: (id) =>
-      !id?.replaceAll('\\', '/').includes('/components/registry/SkillSpectorAssessment.vue'),
+    // These shared styles already have cacheable stylesheet links. Avoid
+    // repeating the same CSS in every localized detail page's HTML payload.
+    inlineStyles: (id) => {
+      const moduleId = id?.replaceAll('\\', '/');
+      return ![
+        '/components/registry/SkillSpectorAssessment.vue',
+        '/components/PageBackground.vue',
+        '/components/registry/InstallPanel.vue',
+      ].some((component) => moduleId?.includes(component));
+    },
   },
   experimental: {
     // Work around the current Nuxt dev-time #app-manifest regression.

@@ -4,8 +4,8 @@
     "kind": "page",
     "surface": "build",
     "localeStrategy": "canonical-en",
-    "title": "Check a package without running it",
-    "summary": "Interpret conformance, static readiness, compatibility, and toolchain evidence separately.",
+    "title": "Check a package and its evidence",
+    "summary": "Separate static checks, explicit source-build MCP execution and client activation evidence.",
     "stability": "public-stable",
     "maturity": "stable",
     "publicVisibility": "public",
@@ -20,7 +20,7 @@
     "pathZh": "/zh/build/checks",
     "relatedIds": [],
     "searchTerms": [
-      "Check a package without running it"
+      "Check a package and its evidence"
     ]
   },
   {

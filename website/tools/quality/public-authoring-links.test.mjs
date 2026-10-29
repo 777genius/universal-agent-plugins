@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import { isRetiredArchive } from '../lib/public-routes.mjs';
+import { documentContent } from './check-output.mjs';
 
 const root = new URL('../../../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
@@ -34,6 +35,27 @@ test('published source never claims it is on a non-deploying branch', () => {
     if (!relative.endsWith('.md')) continue;
     const source = readFileSync(`${sourceRoot}/${relative}`, 'utf8');
     assert.doesNotMatch(source, /non-deploying preparation branch/, relative);
+  }
+});
+
+test('user dependency management never lets install infer a project from the working directory', async () => {
+  for (const locale of ['en', 'ru', 'es', 'fr', 'zh']) {
+    const source = read(`website/source/${locale}/use/manage.md`);
+    const boundary = '<a id="restore-project-dependencies"></a>';
+    assert.ok(source.includes(boundary), `${locale}: project section boundary`);
+    const userJourney = source.split(boundary, 1)[0];
+    const html = await md.renderAsync(userJourney);
+    const { commands, parseErrors } = documentContent(html);
+    assert.deepEqual(parseErrors, [], `${locale}: rendered user journey HTML`);
+    const installs = commands
+      .flatMap((command) => command.replace(/\\\n\s*/g, ' ').split('\n'))
+      .map((line) => line.trim())
+      .filter((line) => /^(?:(?:agentplugins|npx(?: -y)? universal-agent-plugins(?:@[^ ]+)?) )?install(?: |$)/.test(line));
+    assert.ok(installs.length >= 2, `${locale}: user initialization and restoration commands`);
+    for (const command of installs) {
+      assert.match(command, /--scope(?:=| +)user(?: |$)/,
+        `${locale}: user-environment installation must not infer a current project: ${command}`);
+    }
   }
 });
 
@@ -88,7 +110,7 @@ for (const locale of ['en', 'ru', 'es', 'fr', 'zh']) {
 
 test('README promotes the canonical quickstart and current build section', () => {
   const source = read('README.md');
-  const canonical = 'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html';
+  const canonical = 'https://universal-agent-plugins.com/docs/en/guide/quickstart.html';
   const links = [...source.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g)];
   for (const label of ['Use / Build quickstart']) {
     assert.deepEqual(links.filter(m => m[1] === label).map(m => m[2]), [canonical]);

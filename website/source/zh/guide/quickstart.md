@@ -1,76 +1,105 @@
 ---
 title: "快速入门"
-description: "安装已发布的插件，或准备可移植的 Agent Plugins 1.0 包。"
+description: "安装现有插件，或准备一个可移植 Agent Plugins 1.0 包。"
 canonicalId: "page:guide:quickstart"
 section: "guide"
 locale: "zh"
 generated: false
 translationRequired: true
+localeDisposition: "current-translation"
 ---
 
+<a id="quickstart"></a>
 <a id="快速入门"></a>
 
 # 使用插件 / 构建插件
 
-安装已发布的插件，或准备可移植的 Agent Plugins 1.0 包。
+为您使用的客户端安装包，或创建包含操作说明和工具配置的可移植 Agent Plugins 1.0 包。
 
 ## 使用插件 {#use-plugins}
 
-现已可用：通过 Universal Agent Plugins 安装插件。使用 Node.js 22+ 时运行：
+<a id="optional-first-proof"></a>
+
+安装 Node.js 22 或更高版本后，运行：
 
 ```bash
 npx universal-agent-plugins add context7
 ```
 
-如需在 macOS、Linux 或 Windows 上进行原生安装，请阅读安装指南。CLI 会询问要使用哪些兼容的客户端；个别插件可能需要自己的运行环境。
-
-[安装指南](https://github.com/777genius/universal-agent-plugins#quick-start)
-
-Agent Plugins 创作已在 `universal-agent-plugins` 中发布；GitHub 版本：`agentplugins-v*`。
-
-兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。
-
-[客户端兼容性（英文）](https://github.com/777genius/universal-agent-plugins#supported-clients)
-
-### 保存和恢复插件
-
-以下传输命令已包含在公开发布的 CLI 中。在要带到另一台电脑的文件夹中运行：
+CLI 会询问所选兼容客户端，并报告剩余激活步骤。也可先检查和预览：
 
 ```bash
-npx -y universal-agent-plugins@latest deps export
+npx universal-agent-plugins info context7
+npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 ```
 
-将文件夹复制到另一台电脑，打开该文件夹并安装目标客户端，然后运行：
+[原生安装指南](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)提供 macOS、Linux 和 Windows 可执行文件。
+原生管理器不需要 Node.js，但插件可能需要自己的运行时。
+
+[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)包含显式项目范围与自动项目安装选择。预览项目安装：
 
 ```bash
-npx -y universal-agent-plugins@latest deps import
-npx -y universal-agent-plugins@latest install --locked --scope user
+npx universal-agent-plugins add context7 --target cursor --scope project \
+  --project-root /path/to/project --dry-run
 ```
 
-也可合并导入和安装：
+选择已存在的项目目录。add 和维护命令默认使用用户范围，应明确指定项目范围。
+无参数 `install` 则在当前目录存在普通 `uap.toml` 时自动选择项目，不向上查找；显式范围优先，已有锁文件会被严格检查。
+
+各分发渠道的版本可能不同。使用 0.1.94 的自动项目选择前，先运行 `agentplugins version` 或
+`npx universal-agent-plugins version`。若所选渠道仍较旧，可使用[原生或 Homebrew 安装](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)，
+或继续使用 0.1.93 已支持的显式项目范围命令。
+
+检查计划后再去掉 `--dry-run`。写入包文件不等于客户端已发现、授予信任、完成认证或成功调用 MCP。
+
+[完整安装流程](../use/install) · [客户端兼容性与测试边界](../reference/client-compatibility)
+
+### 恢复已保存的依赖集合
+
+先检查所选用户环境的记录：
 
 ```bash
-npx -y universal-agent-plugins@latest deps import --install
+npx universal-agent-plugins deps status
 ```
 
-路径可省略，默认使用当前文件夹。导出始终读取用户的全局环境，导入始终写入目标
-电脑的用户全局环境；`AGENTPLUGINS_HOME` 可指定其目录。只复制经过严格验证的
-`uap.toml` 和 `uap.lock` 的原始字节，不包含包、设置或密钥。
+对于已保存的 `uap.toml` / `uap.lock`，在交换文件夹导出：
 
-每次实际复制都需要在终端确认（默认拒绝）或使用 `--yes`；`--dry-run` 仅预览，
-不写入文件。文件完全相同时无需复制或确认；`--install` 仍会检查并应用锁定的环境。
-文件传输可离线进行，但安装仍需可用的精确源文件或缓存包，并须通过当前的安全检查。
-客户端登录和手动激活仍需单独完成。
+```bash
+npx universal-agent-plugins deps export
+```
 
-[传输、错误及恢复的详细说明（英文）](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md#restore-on-another-machine)
+将该文件夹复制到另一台机器，安装目标客户端，再在该目录运行：
+
+```bash
+npx universal-agent-plugins deps import
+npx universal-agent-plugins install --locked --scope user
+```
+
+只转移经过验证的清单和锁文件；配置目录、设置、凭证、收据和插件数据需要单独处理。
+安装仍需确切来源或已验证缓存。项目应提交这两个文件，并以显式 `install --locked --scope project` 恢复。
+[维护与恢复](../use/manage)说明恢复和转移细节。
 
 ## 构建插件 {#build-plugins}
 
-以 plugin.json 为核心构建可移植的 Agent Plugins 1.0 包，可选包含 skills/ 和 mcp.json。客户端支持取决于包及其组件。
+<a id="recommended-default"></a>
+<a id="if-you-only-read-one-thing"></a>
 
-**Agent Plugins 创作已发布**
+标准包从根目录 `plugin.json` 开始，可包含 `skills/<name>/SKILL.md`、`mcp.json` 或两者。
+可以手动编写文件，再使用已发布安装器验证：
 
-静态创作已通过 `universal-agent-plugins` 中的 `agentplugins author` 发布；GitHub 版本：`agentplugins-v*`。npm、Homebrew、原生归档和公共 E2E 已验证。此版本不运行插件代码或开发服务器，不安装依赖项，不导出插件包，也不发布插件包。
+```bash
+npx universal-agent-plugins validate ./my-plugin
+npx universal-agent-plugins add ./my-plugin --target codex --dry-run
+```
+
+这些例子假设 `./my-plugin` 已经是完整包。[构建指南](../build/)提供手动技能包示例和源码骨架工具的步骤。
+
+**创作工具可用性：** 当前 npm 和原生安装器不包含 `agentplugins author`。
+当前源码实现了骨架、静态检查、显式 MCP 运行检查、开发周期、依赖 bootstrap 和 JSON 维护。
+这些命令需先[从源码构建](../build/#build-from-source)。旧版创作发布证据仍只对应其原始版本，不能说明当前下载可用功能。
+
+静态验证不证明运行、OAuth 或激活。MCP 传输支持也因客户端而异；例如 Codex 不支持声明为 SSE 的 MCP。
+请在 README 中保留前提条件和待完成检查。
 
 [Agent Plugins 1.0 规范](https://agent-plugins.org/specification)
 

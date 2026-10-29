@@ -111,7 +111,7 @@ export async function consumePreparedCLI(root, expectedSHA) {
         title: entry.command_path, description: entry.short, canonicalId: entry.identity,
         section: "api", surface: "authoring-cli", locale: "en", generated: true, editLink: false,
         translationRequired: false, ...metadata, sources: envelope.sources.map((pin) => `${pin.path}: ${pin.sha256}`)
-      }, `> Released Agent Plugins CLI reference from the exact source. [Exact source](${sourceHref}).\n\n${body}`)
+      }, `::: warning Versioned authoring reference: CLI 0.1.65\nThis English reference documents the static authoring commands from the immutable \`agentplugins-v0.1.65\` source. It preserves that version's command contract and release evidence.\n\nThe current native installer, CLI 0.1.94, does not include \`agentplugins author\`. For the current source-build setup, supported commands, and execution boundaries, follow the [Build guide](/en/build/). This versioned reference does not describe current-source runtime or development commands.\n:::\n\n> Released Agent Plugins CLI reference from the exact source. [Exact source](${sourceHref}).\n\n${body}`)
     });
   }
   return { entities, pages, envelope };

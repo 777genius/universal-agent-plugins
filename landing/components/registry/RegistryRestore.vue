@@ -2,7 +2,7 @@
 import monitorImage from '~/assets/images/restore-monitor.png';
 
 const { t } = useI18n();
-const { restoreGuideUrl } = useDocsLinks();
+const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
 </script>
 
 <template>
@@ -16,7 +16,8 @@ const { restoreGuideUrl } = useDocsLinks();
       <header class="registry-restore__header">
         <h2 id="restore-title">{{ t('shell.restore.title') }}</h2>
         <a class="registry-restore__guide" :href="restoreGuideUrl" target="_blank" rel="noreferrer"
-          >{{ t('shell.restore.guide') }} <span aria-hidden="true">↗</span></a
+          >{{ docsLabel(t('shell.restore.guide'), restoreGuideEnglishFallback) }}
+          <span aria-hidden="true">↗</span></a
         >
       </header>
       <p class="registry-restore__subtitle">{{ t('shell.restore.subtitle') }}</p>
