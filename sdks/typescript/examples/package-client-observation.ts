@@ -44,12 +44,16 @@ export async function inspectPackageNative(o: Options): Promise<NativeObservatio
     assert.equal(inspect.grokVersion, '1.0.67'); assert.equal(resolve(inspect.cwd as string), o.project);
     const plugins = array(inspect.plugins).filter((r) => r.name === name);
     assert.equal(plugins.length, entries.length);
-    if (entry) { assert.equal(plugins[0]!.enabled, true); assert.equal(plugins[0]!.scope, 'user'); assert.equal(plugins[0]!.path, entry.path); }
+    if (entry) {
+      assert.equal(plugins[0]!.enabled, true); assert.equal(plugins[0]!.scope, 'user');
+      assert.ok(plugins[0]!.path === o.managedArtifact || plugins[0]!.path === entry.path, 'Grok discovered another plugin artifact');
+      await contained(o.root, plugins[0]!.path as string);
+    }
     for (const row of array(inspect.skills)) {
       const source = row.source as Row | undefined;
       if (source?.type !== 'plugin' || source.plugin_name !== name) continue;
       assert.ok(entry, 'Grok Skill remains after uninstall'); assert.equal(typeof row.name, 'string'); assert.equal(typeof source.path, 'string');
-      await add(o, skills, row.name as string, source.path as string, entry.path as string);
+      await add(o, skills, row.name as string, source.path as string, plugins[0]!.path as string);
     }
     assert.equal(Boolean(entry), skills.size > 0, 'Grok plugin/Skill inventory disagreement');
     return { skills, pluginId: name };

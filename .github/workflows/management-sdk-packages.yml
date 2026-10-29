@@ -15,6 +15,7 @@ on:
       - 'repotests/testdata/agentplugins_commands_fixture/**'
       - 'cli/internal/agentpluginscli/management_scope*'
       - 'install/integrationctl/agentplugins/clients/cline/lifecycle.go'
+      - 'install/integrationctl/agentplugins/clients/copilot/**'
       - 'install/integrationctl/agentplugins/installer/native_recovery*'
       - '.github/workflows/management-sdk-packages.yml'
   workflow_dispatch:

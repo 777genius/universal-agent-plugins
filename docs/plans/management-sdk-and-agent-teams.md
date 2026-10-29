@@ -19,11 +19,14 @@ Those receipts remain tied to their original source.
 
 This continuation adds local pinned HTTPS fixture journeys for Cline and Gemini
 native Skills, Pi native extension auto-discovery, and the existing Kimi/Kiro/
-Windsurf SDK configuration lifecycles. Three real regressions are repaired:
+Windsurf SDK configuration lifecycles. Four real regressions are repaired:
 legacy user native-config attempts remain inspectable; read-only Cline preparation
 refusals report unchanged native state; owned Windsurf MCP entries prove the captured
-Management profile. Selected/project recovery authority and later mutation failure
-semantics remain unchanged.
+Management profile; Copilot's actual built-in plugin section no longer makes its
+user plugin inventory unrecognizable. The Copilot correction is confined to its
+adapter and retains the native runner's tree containment and error evidence.
+Selected/project recovery authority and later mutation failure semantics remain
+unchanged.
 
 After reconciliation with main `60967b8b6ca79245a61caf28895aa09c2c9d74a2`,
 all six local journeys passed on clean published source
@@ -40,8 +43,9 @@ it qualifies the admitted extension lifecycle, not Skills or MCP. Kimi 2.3.1,
 Kiro 2.33.1 and Windsurf each passed four SDK configuration lifecycle operations.
 Kimi/Kiro require native authentication and Windsurf requires an editor refresh;
 their receipts explicitly record `nativeLoaded: false`. Cursor's existing user
-editor route remains manual, and provisioning the pinned CLI was refused by the
-official endpoint (HTTP 403).
+editor route remains manual. The pinned Agent archive/version can now be acquired,
+but Agent presence does not establish the separate editor capability or native
+loading; see the [Cursor detection boundary](../../install/integrationctl/agentplugins/clients/cursor/README.md).
 
 Copilot 1.0.103, Grok 1.0.67 and Qoder 1.1.78 need Go-managed native processes.
 This local container lacks the required `/proc/<pid>/task/<tid>/children` interface;
@@ -49,7 +53,13 @@ no production process guard is relaxed. A focused three-client Linux workflow
 qualifies only these SDK journeys and binds receipts to the checkout and executable
 hashes. [PR #566](https://github.com/777genius/universal-agent-plugins/pull/566)
 records the current three-client results and required repository checks. Independent
-review reported no remaining P1/P2 finding; execution gates remain authoritative. No App/runtime architecture, S25/S26 project support, VS Code
+review reported no remaining P1/P2 finding; execution gates remain authoritative.
+The later Copilot correction has its own actual local
+[1.0.103 inventory evidence](../evidence/management-sdk/copilot-1.0.103-linux-listing.json)
+and adapter regressions; that diagnostic is not relabeled as a full SDK journey.
+Local SDK protocol/owned-process tests passed 46/46 without skips, and the packed
+npm consumer passed type checking and runtime imports. No App/runtime architecture,
+S25/S26 project support, VS Code
 changes or public SDK release is included.
 
 ## Continuation checkpoint — v11 (2026-10-28)
