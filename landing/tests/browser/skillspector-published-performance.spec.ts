@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page, type BrowserContext } from '@playwright/test';
 import { loadRegistryIndex } from '../../build/load-registry';
+import type { DiscoverySnapshot } from '../../types/discovery';
 import {
   hydrated,
   navigate,
@@ -37,6 +38,17 @@ const registry = loadRegistryIndex(
   new URL(registryPointer.snapshot_path, registryRoot).pathname,
   'published_snapshot',
 );
+const discoveryRoot = new URL('../../public/discovery/', import.meta.url);
+const discoveryPointer = JSON.parse(readFileSync(new URL('latest.json', discoveryRoot), 'utf8'));
+const discovery = JSON.parse(
+  readFileSync(new URL(discoveryPointer.snapshot_path, discoveryRoot), 'utf8'),
+) as DiscoverySnapshot;
+const hasSkillsBySource = new Map([
+  ...registry.plugins.map(
+    (plugin) => [plugin.install_source, plugin.components.includes('skills')] as const,
+  ),
+  ...discovery.records.map((record) => [record.slug, record.components.skills > 0] as const),
+]);
 
 async function publishedHome(page: Page, context: BrowserContext, isolated = false) {
   const errors = await offline(page);
@@ -102,13 +114,11 @@ test('published large reports keep closed cards unmounted after real data and ap
       elements.map((element) => element.getAttribute('data-install-source')),
     );
   expect(cardSources.length).toBeGreaterThan(20);
-  const plugins = cardSources.map((source) =>
-    registry.plugins.find((plugin) => plugin.install_source === source),
+  expect(cardSources.every((source) => source !== null && hasSkillsBySource.has(source))).toBe(
+    true,
   );
-  expect(plugins.every(Boolean)).toBe(true);
-  const expectedSources = plugins
-    .filter((plugin) => plugin!.components.includes('skills'))
-    .map((plugin) => plugin!.install_source)
+  const expectedSources = cardSources
+    .filter((source) => source !== null && hasSkillsBySource.get(source))
     .sort();
   expect(expectedSources.length).toBeGreaterThan(0);
   const assessedSources = await page
