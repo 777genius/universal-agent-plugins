@@ -73,7 +73,13 @@ installer-confirmation work, and PR 520 native work retain their ownership.
    update/re-add, repair, and remove. Preserve exact Git pins, source safety,
    dependency-saving policy, owned-package update/remove semantics, and explicit
    homepage target selection. Confirm each scope/lifecycle flag against released
-   help and current CLI contracts before changing a displayed command.
+   help and current CLI contracts before changing a displayed command. Every
+   active lifecycle command—add, exact-Git re-add, update, repair, and remove—must
+   carry `--scope project` when project is requested. Owned update/remove keep
+   their existing whole-alias target semantics; scope must not reintroduce a
+   subset target flag. Preserve the public `pluginCommands` third Boolean
+   release-qualification argument; add scope as a backward-compatible optional
+   fourth argument/options contract rather than silently reinterpreting calls.
 3. **Directory controls.** Add a compact scope control to the expanded card and
    detail InstallPanel. Label choices in ordinary terms: for this user versus
    this project. Project requires an explicit compatible agent selection when
@@ -96,10 +102,13 @@ installer-confirmation work, and PR 520 native work retain their ownership.
 5. **Preferences.** Add scope to existing package preferences with user as the
    default. Preserve explicit target/scope choices between card and detail when
    still valid. Changing package or losing supported targets invalidates only
-   stale choices according to existing store behavior. Switching targets while
-   project is selected must not silently install into user scope; keep the
-   requested scope with an actionable explanation or explicitly reconcile before
-   issuing any copyable command. No localStorage/session state subsystem.
+   stale choices according to existing store behavior. For the same package, a
+   scope change, target change, or refreshed feed that removes a selected agent
+   retains requested project scope and the visible invalid selection with a clear
+   reason. Suppress commands until the user makes a compatible explicit choice;
+   never reuse the current watcher fallback of `autoDetect = true` to create a
+   copyable user command. A different package still starts from its own default
+   user/auto choice. No localStorage/session state subsystem.
 6. **What happens next.** For explicit selections, derive component/delivery
    summaries and authentication/activation guidance from the resolved release's
    selected targets, not the plugin-wide default aggregate. Use existing labels
@@ -155,16 +164,21 @@ the separate early draft PR. Do not touch other worktrees or remote refs.
   Directory aliases; exact Git pin including safe unusual path; saved/no-save;
   add/update-or-re-add/repair/remove; legacy unreleased-saving parameter; invalid
   target/scope combinations; mixed scope support; ChatGPT; missing scope data.
+  Assert exact arguments for every lifecycle command, including project scope and
+  existing whole-alias target omissions on owned update/remove.
 - Resolver contracts: default supports user but fallback supports project;
   different releases support different scope/target sets; no single release
   supports all; revoked/suspended/failed evidence remains ineligible. Ensure
   selected component/delivery/next-step output comes from the winning release.
 - Preference contracts: default user/auto; card/detail navigation retains valid
-  explicit choices; invalidation cannot silently change project to user command.
+  explicit choices; same-package feed invalidation keeps requested project scope,
+  shows the invalid selection, and cannot silently issue a user command.
 - Browser journeys on desktop and mobile: expand card, select scope/agents, verify
   copied command arguments, navigate to detail/back, recover an unavailable
   combination, and verify the active homepage card and final-step wording. Exercise
   keyboard labels and narrow-width wrapping; inspect relevant screenshots.
+  Include project selection → unsupported selection/feed invalidation → no
+  copyable user command, followed by recovery through explicit agent selection.
 - Run relevant landing unit tests, i18n consistency, lint for edited files, and
   build/type checks required by existing landing workflow. Use existing browser
   harness rather than inventing a browser toolchain. Record concrete blocked
@@ -179,7 +193,7 @@ the separate early draft PR. Do not touch other worktrees or remote refs.
 | --- | --- | --- | --- |
 | Initial plan | This commit | Bounded scope, ownership, source rules, release authority, validation | Ready for draft PR |
 | Reconnaissance correction | Follow-up plan commit | Active homepage shares registry cards; legacy install section is unreachable; no generator changes; explicit project/auto transition and all-release target availability | Before independent review |
-| Independent plan round 1 | Parent assigns independent critic | Pending; amend and commit before round 2 | Required before implementation |
+| Independent plan round 1 | `/root/versions_owner`, current plan `2f8ddcf` | Required: exact project scope on every lifecycle command; preserve whole-alias target semantics; explicit same-package invalidation must never fall back to user commands. Nonblocking: preserve third Boolean API argument. All accepted and specified above in this correction. Parent coordinates gate accounting. | Review received and corrections committed; no source edits |
 | Independent plan round 2 | Parent assigns independent critic | Pending; amend and commit before source edits | Required before implementation |
 | Early draft PR | Parent publishes initial plan commit | Separate from versions/outdated PR | Pending |
 | Implementation commits | Parent publishes each checkpoint | Preserve overlap boundaries | Pending |
