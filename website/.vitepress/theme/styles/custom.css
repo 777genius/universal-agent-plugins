@@ -576,9 +576,9 @@ html[dir="rtl"] .VPNavBarSearch { padding-left: 0; padding-right: 24px; }
   .docs-card, .language-gateway__card, .locale-switcher__menu { transition: none; }
 }
 
-@media (min-width: 768px) and (max-width: 1199px) {
-  /* VitePress scoped selectors include an attribute selector; the wrapper
-     specificity keeps tablet navigation from falling back to a crowded row. */
+@media (min-width: 768px) and (max-width: 1439px) {
+  /* Long translated journey labels need the compact menu below 1440px.
+     Wrapper specificity overrides VitePress scoped desktop selectors. */
   .VPNav .VPNavBar .VPNavBarMenu { display: none; }
   .VPNav .VPNavBar .VPNavBarHamburger { display: flex; }
   .Layout .VPNav .VPNavScreen { display: block; }
