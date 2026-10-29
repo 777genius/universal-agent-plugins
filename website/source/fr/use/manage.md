@@ -107,7 +107,13 @@ Les profils clients, réglages, identifiants, reçus et `PLUGIN_DATA` ne sont pa
 
 ## Restaurez et maintenez un projet
 
-La portée projet explicite est disponible à partir de [CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93). Versionnez les fichiers `uap.toml` et `uap.lock` du projet. Dans une autre copie existante du dépôt, installez les clients requis, puis lancez :
+L’installation automatique de projet est disponible à partir de [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94). Versionnez les fichiers `uap.toml` et `uap.lock` du projet. Dans une autre copie existante du dépôt, installez les clients requis, puis lancez depuis le répertoire exact du projet :
+
+```bash
+agentplugins install
+```
+
+Un verrouillage existant est strictement validé. `--locked` exige aussi son existence, ce qui est utile en CI ; sans verrouillage, la première installation peut le créer. Depuis un autre répertoire, sélectionnez explicitement le projet existant :
 
 ```bash
 agentplugins install --locked --scope project --project-root /path/to/project

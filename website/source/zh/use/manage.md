@@ -113,8 +113,15 @@ agentplugins deps import --install
 
 ## 恢复并维护项目
 
-显式项目范围从 [CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93)起可用。
-将项目的 `uap.toml` 和 `uap.lock` 提交到版本控制，在另一处已存在的检出目录安装客户端后运行：
+自动项目安装从 [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)起可用。
+将项目的 `uap.toml` 和 `uap.lock` 提交到版本控制，在另一处已存在的检出目录安装客户端后，从项目的确切目录运行：
+
+```bash
+agentplugins install
+```
+
+已有锁文件会严格验证。`--locked` 还要求锁已存在，适合 CI；没有锁时，首次安装可创建锁。
+若从其他目录调用，请显式选择已存在的项目：
 
 ```bash
 agentplugins install --locked --scope project --project-root /path/to/project

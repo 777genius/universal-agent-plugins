@@ -142,10 +142,18 @@ agentplugins deps import --install
 
 ## Восстановите и обслуживайте проект
 
-Явная область проекта доступна в
-[CLI 0.1.93 и новее](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
+Автоматическая установка в проект доступна в
+[CLI 0.1.94 и новее](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94).
 Добавьте проектные `uap.toml` и `uap.lock` в контроль версий. В другом существующем
-checkout установите нужные клиенты и выполните:
+checkout установите нужные клиенты и выполните из точного каталога проекта:
+
+```bash
+agentplugins install
+```
+
+Существующий lock-файл строго проверяется. `--locked` дополнительно требует его
+наличия, что полезно в CI; без lock-файла первая установка может создать его.
+При запуске из другого каталога явно выберите существующий проект:
 
 ```bash
 agentplugins install --locked --scope project --project-root /path/to/project

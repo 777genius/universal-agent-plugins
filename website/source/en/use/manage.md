@@ -143,10 +143,18 @@ first when pending recovery is reported. Do not recreate transferred pins with
 
 ## Restore and maintain a project
 
-Explicit project scope is available in
-[CLI 0.1.93 and later](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
+Automatic project installation is available in
+[CLI 0.1.94 and later](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94).
 Commit the project's `uap.toml` and `uap.lock`. In another existing checkout,
-install the required clients and run:
+install the required clients and run this from the exact project directory:
+
+```bash
+agentplugins install
+```
+
+An existing lock is validated strictly. `--locked` additionally requires it to
+exist, which is useful in CI; without a lock, the first install may create one.
+When invoking from another directory, select the existing project explicitly:
 
 ```bash
 agentplugins install --locked --scope project --project-root /path/to/project

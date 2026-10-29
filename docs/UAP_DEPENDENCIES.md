@@ -1,7 +1,7 @@
 # UAP dependency environments
 
 **Released:** user dependency environments ship in CLI 0.1.90 and later;
-explicit project scope ships in CLI 0.1.93 and later. CLI 0.1.94 adds automatic
+explicit project scope ships in CLI 0.1.93 and later. CLI 0.1.94 and later add automatic
 project selection for argumentless install and strict existing-lock validation.
 Check `agentplugins version` before using 0.1.94 behavior; channels can differ.
 If needed, use [native/Homebrew installation](NATIVE_INSTALL.md), or explicit
@@ -158,7 +158,8 @@ independently. `recover` covers one complete owned pending scope and requires
 confirmation; run `sync` separately after it succeeds.
 
 `agentplugins install` is the everyday converge verb over the same machinery.
-In CLI 0.1.94, without a source argument and without an explicit scope, install selects
+In CLI 0.1.94 and later, without a source argument and without an explicit scope,
+install selects
 project scope when a regular `uap.toml` exists in the exact current directory;
 it never searches parent directories.
 Explicit `--scope` wins. An existing `uap.lock` is strictly validated before

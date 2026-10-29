@@ -3,7 +3,7 @@ import { hydrated } from './i18n-state.helpers';
 
 const commands = [
   'agentplugins add <git-url> --scope project',
-  'agentplugins install --locked --scope project',
+  'agentplugins install',
 ];
 
 // Exercise actual page geometry: long translations, both themes, and the four
@@ -23,7 +23,10 @@ for (const theme of ['dark', 'light']) {
       await context.addInitScript((value) => localStorage.setItem('theme', value), theme);
       await page.goto(locale === 'en' ? './' : `./${locale}/`);
       await hydrated(page);
-      await expect(page.locator('.v-application')).toHaveClass(new RegExp(`v-theme--${theme}`));
+      // Persisted theme initializes in Nuxt's idle-ready callback after hydration.
+      await expect(page.locator('.v-application')).toHaveClass(new RegExp(`v-theme--${theme}`), {
+        timeout: 15_000,
+      });
       await page.evaluate(() => document.fonts.ready.then(() => undefined));
       const section = page.locator('#restore-environment');
       await section.scrollIntoViewIfNeeded();

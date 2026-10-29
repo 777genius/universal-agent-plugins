@@ -107,7 +107,13 @@ No se transfieren perfiles, ajustes, credenciales, recibos ni `PLUGIN_DATA`. Con
 
 ## Restaura y mantén un proyecto
 
-El ámbito de proyecto explícito está disponible desde [CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93). Guarda `uap.toml` y `uap.lock` del proyecto en control de versiones. En otra copia existente del repositorio, instala los clientes necesarios y ejecuta:
+La instalación automática de proyecto está disponible desde [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94). Guarda `uap.toml` y `uap.lock` del proyecto en control de versiones. En otra copia existente del repositorio, instala los clientes necesarios y ejecuta desde el directorio exacto del proyecto:
+
+```bash
+agentplugins install
+```
+
+Un bloqueo existente se valida estrictamente. `--locked` exige además que exista, lo que resulta útil en CI; sin bloqueo, la primera instalación puede crearlo. Si ejecutas desde otro directorio, selecciona explícitamente el proyecto existente:
 
 ```bash
 agentplugins install --locked --scope project --project-root /path/to/project

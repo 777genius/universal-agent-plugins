@@ -1,8 +1,10 @@
 # Install plugins for one project
 
 **Released:** explicit project scope is available in CLI 0.1.93 and later.
-CLI 0.1.94 also includes automatic project selection for argumentless `install`
+CLI 0.1.94 and later also include automatic project selection for argumentless `install`
 and strict validation of an existing lock before installation or repair.
+From the project folder, run `agentplugins install`. Use `--locked` to
+additionally require an existing lock, for example in CI.
 Explicit scope remains useful in scripts and when restoring a chosen project.
 Check `agentplugins version` before relying on 0.1.94 behavior; channels can
 update at different times. Use the [native/Homebrew installer](NATIVE_INSTALL.md)
@@ -40,7 +42,7 @@ the final feature-source native run; each client's activation limits still apply
 ## Select the environment on every command
 
 Add and maintenance commands default to user scope unless project scope is
-explicitly selected. In CLI 0.1.94, argumentless `agentplugins install` selects
+explicitly selected. In CLI 0.1.94 and later, argumentless `agentplugins install` selects
 project scope when the exact current directory contains a regular `uap.toml`
 file. It never searches parent folders.
 A directory or symlink named `uap.toml` is refused during automatic selection;
@@ -54,7 +56,7 @@ directory. `--project-root` requires `--scope project` and an existing directory
 The install preview shows the selected scope, project root where applicable,
 and manifest and lock paths.
 
-In CLI 0.1.94, an existing `uap.lock` makes argumentless install
+In CLI 0.1.94 and later, an existing `uap.lock` makes argumentless install
 strictly validate the manifest and locked pins before installation or repair.
 A mismatch fails without changing
 the environment; use the explicit `update` path to advance pins, or `deps lock`
@@ -160,12 +162,15 @@ Copy the project's `uap.toml` and `uap.lock` into the new existing project
 directory, install the required clients, and run:
 
 ```sh
-agentplugins install --locked --scope project --project-root /path/to/new-project
+cd /path/to/new-project
+agentplugins install
 ```
 
-From the new project directory in CLI 0.1.94, `agentplugins install` infers
-project scope and strictly uses an existing lock. `--locked` additionally
-requires the lock's presence. Explicit scope/root flags still take priority.
+From the new project directory in CLI 0.1.94 and later, `agentplugins install`
+infers project scope and strictly uses an existing lock. From another directory, use
+`agentplugins install --scope project --project-root /path/to/new-project`.
+Explicit scope/root flags still take priority. `--locked` additionally requires
+the lock's presence.
 
 The explicit transfer commands support project scope too:
 

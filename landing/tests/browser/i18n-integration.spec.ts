@@ -40,7 +40,7 @@ for (const locale of publishedLocales) {
         await expect(restore.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(1);
         await expect(restore.locator('.command-snippet pre code')).toHaveText([
           'agentplugins add <git-url> --scope project',
-          'agentplugins install --locked --scope project',
+          'agentplugins install',
         ]);
         const docsLocale = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
         const guideLabel =
