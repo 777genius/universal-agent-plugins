@@ -629,6 +629,10 @@ test('community card navigation preserves the source-bound pending Skill report 
     return route.fulfill({ json: manifest });
   });
   await page.goto('./plugins/?component=skills&trust=conformant_unreviewed');
+  // The prerendered reviewed catalog precedes authenticated community-feed acquisition.
+  await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
+    timeout: 15_000,
+  });
   await expect(page.locator('.plugin-card').first()).toHaveAttribute(
     'data-install-source',
     plugin.slug,

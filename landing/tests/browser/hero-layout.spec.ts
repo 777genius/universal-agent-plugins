@@ -147,6 +147,8 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
     .toBeLessThanOrEqual(580);
   await expect(catalog).toHaveClass(/scroll-reveal--visible/);
   await page.goto('./');
+  // Loading the static document can finish before the client reveal observer is ready.
+  await expect(page.locator('html')).toHaveClass(/scroll-reveal-active/, { timeout: 15_000 });
   await page.locator('.hero__actions .button--primary').click();
   await expect(catalog).toHaveClass(/scroll-reveal--visible/);
   await expect(catalog).toHaveCSS('opacity', '1');
