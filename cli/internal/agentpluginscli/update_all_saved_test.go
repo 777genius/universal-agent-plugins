@@ -2,7 +2,6 @@ package agentpluginscli
 
 import (
 	"errors"
-	"github.com/spf13/cobra"
 	"io"
 	"net/http"
 	"os"
@@ -10,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"

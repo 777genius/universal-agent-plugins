@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
 // loadSaved removes environment-owned installations from imperative checking.

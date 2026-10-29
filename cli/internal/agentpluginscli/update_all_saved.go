@@ -56,7 +56,7 @@ func (session *updateAllSession) prepareSaved() error {
 }
 
 func (session *updateAllSession) prepareSavedGraph(preview App, snapshot environmentSnapshot) (dependencySyncRequest, []string, error) {
-	aliases := []string{}
+	aliases := make([]string, 0, len(snapshot.Requirements.Dependencies))
 	for alias := range snapshot.Requirements.Dependencies {
 		aliases = append(aliases, alias)
 	}

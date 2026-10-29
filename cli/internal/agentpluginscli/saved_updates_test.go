@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -86,7 +86,7 @@ func TestSavedFreshnessChecksIdentityWithoutPersistentEffects(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := checkSavedUpdates(ctx, j.cli.app, snapshot, []string{managementArchiveName}); err != context.Canceled {
+	if _, err := checkSavedUpdates(ctx, j.cli.app, snapshot, []string{managementArchiveName}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	if after := savedCheckFiles(t, j.cli.root); !reflect.DeepEqual(before, after) {
