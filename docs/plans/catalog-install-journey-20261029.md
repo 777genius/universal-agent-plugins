@@ -2,8 +2,8 @@
 
 Date: 2026-10-29. Branch: `feat/catalog-install-journey-20261029`.
 Base: `ec85ee7d759944b9799e451c96bfc1859f9d5533`.
-Status: initial plan checkpoint; implementation waits for two independent review
-rounds and disposition of their findings.
+Status: corrected reconnaissance checkpoint; implementation waits for two
+independent review rounds and disposition of their findings.
 
 ## Outcome and boundaries
 
@@ -29,9 +29,13 @@ installer-confirmation work, and PR 520 native work retain their ownership.
 
 - `landing/utils/commands.ts` builds Directory commands and validates exact
   community Git source selectors, but has no scope input.
-- `landing/data/pluginInstall.ts` separately builds homepage commands. Its five
-  supported lanes currently default to user scope and already carry follow-up
-  metadata. Keep those curated lanes; do not broaden homepage agent coverage.
+- The active homepage is `pages/index.vue` → `RegistryDirectory.vue` →
+  `UnifiedCatalog.vue` and the shared registry card surfaces. Legacy
+  `PluginInstallSection.vue` and `getResolvedPluginInstallSpec` have no production
+  consumer at this base (only existing tests). `landing/data/pluginInstall.ts`
+  still separately builds those legacy commands. Align its command facade with
+  the shared builder, but do not create a new visible legacy homepage journey or
+  broaden its curated five lanes.
 - `RegistryPlugin.client_support.scopes` is the normalized per-client scope map
   (the feed/domain uses `scopes_by_client` elsewhere). `ReleaseTarget.scopes` is
   the release-specific authority. A union of client support is insufficient to
@@ -42,8 +46,10 @@ installer-confirmation work, and PR 520 native work retain their ownership.
 - `clientCapabilities.generated.json` already describes client component and
   saved-dependency capabilities. `SAVED_DEPENDENCIES_CLI_RELEASED = true` is the
   existing release qualification; retain one authority instead of adding manual
-  per-feature booleans. Trace the generator to existing scope traits before
-  deciding whether its generated contract needs one minimal scope field.
+  per-feature booleans. The existing generator can access `clients.SupportsScope`,
+  but B needs no global scope export: active surfaces already have release-level
+  scope facts. Leave the generator and client metadata unchanged. Global client
+  admission could never override package-specific release scope anyway.
 - `InstallPanel.vue`, `RegistryPluginCard.vue`, `PluginInstallSection.vue`, and
   `installPreferences.ts` already implement selection, command copying, default
   detection, and navigation state. Extend these seams rather than adding a new
@@ -72,13 +78,21 @@ installer-confirmation work, and PR 520 native work retain their ownership.
    detail InstallPanel. Label choices in ordinary terms: for this user versus
    this project. Project requires an explicit compatible agent selection when
    automatic detection cannot guarantee a truthful target set. Explain a disabled
-   project choice with one short, specific reason. Show command controls even if
-   a newly chosen combination has no command, so the visitor can recover.
-4. **Homepage controls.** Add scope selection to `PluginInstallSection` using the
-   same released command and capability contract. Its current five lanes remain
-   the only targets. Existing path/follow-up summaries must follow selection;
-   project guidance must say to run from the project folder and must not display
-   user paths as a project destination.
+   project choice with one short, specific reason. Selecting project turns off
+   automatic detection and preserves the selected agents; automatic detection is
+   unavailable while project is selected. Do not silently omit any agent. Show
+   selection controls even if the combination has no command, so the visitor can
+   recover. Derive explicit target availability from one-target release resolution
+   across eligible releases, including fallback distributions, rather than only
+   the normalized default release's aggregate clients. Disable project entirely
+   with a clear reason when no package release qualifies any target for project.
+4. **Active homepage and legacy compatibility.** Shared registry cards deliver
+   the same scope behavior on the homepage and Directory without a separate
+   implementation. Legacy `pluginInstall.ts` retains its public facade and
+   existing lane metadata and delegates command assembly to the shared builder.
+   No changes to unreachable `PluginInstallSection.vue` are planned. Project
+   guidance on active surfaces says to run from the project folder; never show a
+   user install path as the project destination.
 5. **Preferences.** Add scope to existing package preferences with user as the
    default. Preserve explicit target/scope choices between card and detail when
    still valid. Changing package or losing supported targets invalidates only
@@ -96,15 +110,12 @@ installer-confirmation work, and PR 520 native work retain their ownership.
 
 Owned production files: `landing/utils/commands.ts`,
 `landing/data/pluginInstall.ts`, `landing/utils/registry.ts` (resolver only),
-`landing/types/registry.ts`, `landing/types/content.ts` (only required scope
-contract), `landing/stores/installPreferences.ts`,
+`landing/types/registry.ts`, `landing/stores/installPreferences.ts`,
 `landing/components/registry/InstallPanel.vue`,
-`landing/components/registry/RegistryPluginCard.vue` (installation region only),
-`landing/components/plugins/PluginInstallSection.vue`, and new keys in
+`landing/components/registry/RegistryPluginCard.vue` (installation region only), and new keys in
 `landing/locales/*.json`. Touch plugin detail page only if necessary to wire
-existing models; avoid its security and general visual sections. If generated
-client scope facts are missing, extend their existing generator and generated
-contract narrowly after identifying ownership and informing the CLI owner.
+existing models; avoid its security and general visual sections. Do not change
+the capability generator, native adapters, or generated client metadata.
 
 Owned tests: focused command/scope/resolver/preference tests in `landing/tests/`,
 one focused browser journey spec plus minimal fixture additions under
@@ -129,7 +140,7 @@ count target; extract only real shared behavior.
 
 1. Commit shared scope eligibility and command contract with focused unit tests.
 2. Commit Directory selection/preferences and scoped next-step presentation.
-3. Commit homepage alignment and all nine locale strings.
+3. Commit legacy command-facade alignment and all nine locale strings.
 4. Commit focused browser regressions, record visual verification and limitations,
    update this plan's completion ledger, and request final independent code
    review through the parent. Fix review findings in small commits.
@@ -152,7 +163,7 @@ the separate early draft PR. Do not touch other worktrees or remote refs.
   explicit choices; invalidation cannot silently change project to user command.
 - Browser journeys on desktop and mobile: expand card, select scope/agents, verify
   copied command arguments, navigate to detail/back, recover an unavailable
-  combination, and verify homepage selection and final-step wording. Exercise
+  combination, and verify the active homepage card and final-step wording. Exercise
   keyboard labels and narrow-width wrapping; inspect relevant screenshots.
 - Run relevant landing unit tests, i18n consistency, lint for edited files, and
   build/type checks required by existing landing workflow. Use existing browser
@@ -167,6 +178,7 @@ the separate early draft PR. Do not touch other worktrees or remote refs.
 | Gate | Reviewer / checkpoint | Findings and disposition | State |
 | --- | --- | --- | --- |
 | Initial plan | This commit | Bounded scope, ownership, source rules, release authority, validation | Ready for draft PR |
+| Reconnaissance correction | Follow-up plan commit | Active homepage shares registry cards; legacy install section is unreachable; no generator changes; explicit project/auto transition and all-release target availability | Before independent review |
 | Independent plan round 1 | Parent assigns independent critic | Pending; amend and commit before round 2 | Required before implementation |
 | Independent plan round 2 | Parent assigns independent critic | Pending; amend and commit before source edits | Required before implementation |
 | Early draft PR | Parent publishes initial plan commit | Separate from versions/outdated PR | Pending |
