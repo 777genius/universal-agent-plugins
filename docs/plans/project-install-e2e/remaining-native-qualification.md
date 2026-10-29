@@ -2025,3 +2025,30 @@ startup/cache effects remain unqualified and are not adopted as trusted config.
 All five project/MCP flags stay false, with scope, authentication and real-model
 work explicitly unobserved. Independent actual hosted raw review must establish
 the next supported component contract before additional qualification work.
+
+### Cursor first public project MCP capture, 2026-10-29
+
+The genuine seven-probe hosted help capture on `1eb5be73` confirms the pinned
+Agent wrapper, version and ordinary `mcp list` surface. The project-only Agent
+selection amendment is published at `e231c9e5`; User/editor selection is unchanged.
+This next slice reuses the existing runtime acquisition/build/scanner path and
+adds one bounded Cursor test. It runs two Git initializations, exact version,
+empty A/B/outside MCP listings, one real public project-A MCP-only add with
+`--no-save --format json`, then installed-A and B/outside control listings.
+There is no credential, approval, trust, provider or private configuration seed.
+
+The fixture holds all 445 runtime files and the exact public installer, scanner,
+probe and Git identities. The current-source add must produce a Prepared/installed
+project binding, owned MCP receipt and exact managed stdio recipe. Authored and
+selected installed bytes/config/state remain held; original-HOME/B/outside MCP
+sources remain absent. Raw MCP output and any harmless owned-probe event bytes
+are retained without guessing an installed-list parser or inferring that an
+unapproved entry cannot start a process. Unknown native HOME/cache effects are
+unqualified and are never adopted as trusted configuration.
+
+The first installed capture intentionally fails for independent raw review and
+keeps every lifecycle, restart/removal and MCP qualification false. It does not
+attempt skills discovery, User/B lifecycle, native enable, authentication or
+model use. Both independent plan reviews approved the ten literal commands,
+Cursor-only reader labels and unchanged descendant supervision/bounds. Local
+validation is inert; actual vendor execution remains hosted-only.

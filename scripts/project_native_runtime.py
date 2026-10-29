@@ -26,6 +26,9 @@ import project_native_cline_cycle as cline_cycle_success
 
 SOURCE = shared.SOURCE
 CASES = {
+    "cursor": {"test": "TestAgentpluginsCursorNativeProjectRuntimeAttempt",
+               "file": "repotests/agentplugins_cursor_project_native_attempt_test.go",
+               "optin": "AGENTPLUGINS_CURSOR_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
     "cline": {"test": "TestAgentpluginsClineNativeProjectCompleteCycle",
               "file": "repotests/agentplugins_cline_cycle_lifecycle_test.go",
               "optin": "AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
@@ -59,7 +62,7 @@ CASES = {
                  "file": "repotests/agentplugins_windsurf_project_native_attempt_test.go",
                  "optin": "AGENTPLUGINS_WINDSURF_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
 }
-CLI_ATTEMPTS = {"qoder": "1.1.78", "grok": "1.0.70", "kiro": "2.34.0", "windsurf": "3000.11.205"}
+CLI_ATTEMPTS = {"cursor": "2026.10.22-27dcf5f", "qoder": "1.1.78", "grok": "1.0.70", "kiro": "2.34.0", "windsurf": "3000.11.205"}
 MAX_ZIP = 32 << 20
 MAX_MEMBER = 2 << 20
 COMMANDS = ("git-A", "git-B", "version", "add-A", "native-attempt")
@@ -241,6 +244,8 @@ def cli_attempt_members(bodies, source, client):
         raise ValueError("unknown fixed native CLI attempt")
     allowed = {"runtime-attempt.json", "probe-events.jsonl"}
     commands = CLI_COMMANDS + (("native-catalog",) if client == "qoder" else ())
+    if client == "cursor":
+        commands += ("empty-a-mcp", "empty-b-mcp", "empty-outside-mcp", "control-b-mcp", "control-outside-mcp")
     for label in commands:
         triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
         allowed |= triple
