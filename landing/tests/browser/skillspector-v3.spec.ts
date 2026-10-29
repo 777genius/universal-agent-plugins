@@ -11,6 +11,8 @@ import {
 } from './i18n-state.helpers';
 import type { SkillSpectorManifestV3 } from '../../types/skillSpector';
 import type { DiscoverySnapshot } from '../../types/discovery';
+import { discoveryPlugin } from '../../utils/discovery';
+import { catalogVisiblePlugins, filterPlugins, groupCatalogPlugins } from '../../utils/filter';
 const fixtureRoot = new URL('../fixtures/skillspector-v3/', import.meta.url);
 const fixture = JSON.parse(
   readFileSync(new URL('index.json', fixtureRoot), 'utf8'),
@@ -580,8 +582,14 @@ test('community card navigation preserves the source-bound pending Skill report 
   const snapshot = (await (
     await page.request.get(`./discovery/${pointer.snapshot_path}`)
   ).json()) as DiscoverySnapshot;
+  const cards = groupCatalogPlugins(
+    filterPlugins(
+      catalogVisiblePlugins(snapshot.records.map((record) => discoveryPlugin(record, snapshot))),
+      { component: 'skills', trust: 'conformant_unreviewed' },
+    ),
+  );
   const plugin = snapshot.records.find(
-    (record) => record.components.skills > 0 && record.availability === 'available',
+    (record) => record.slug === cards[0]?.primary.install_source,
   )!;
   expect(plugin).toBeDefined();
   const coverage = {
@@ -620,7 +628,11 @@ test('community card navigation preserves the source-bound pending Skill report 
     requests++;
     return route.fulfill({ json: manifest });
   });
-  await page.goto(`./plugins/?q=${encodeURIComponent(plugin.repository)}`);
+  await page.goto('./plugins/?component=skills&trust=conformant_unreviewed');
+  await expect(page.locator('.plugin-card').first()).toHaveAttribute(
+    'data-install-source',
+    plugin.slug,
+  );
   const card = page.locator(`.plugin-card[data-install-source=${JSON.stringify(plugin.slug)}]`);
   const cardReport = card.locator('.skillspector');
   await expect(cardReport).toHaveClass(/skillspector--pending/);
