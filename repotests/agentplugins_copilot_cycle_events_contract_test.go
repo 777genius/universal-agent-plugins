@@ -3,9 +3,12 @@
 package pluginkitairepo_test
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // This is an inert projection test of known event families, not a native
@@ -38,6 +41,96 @@ func copilotCycleNoCallInert(t *testing.T) (*copilotProjectAttempt, *copilotProj
 	body, _ := json.Marshal(request)
 	p.requests = [][]byte{body}
 	return f, p, copilotReadinessEncode(t, rows)
+}
+
+// Model the literal observed repaired-A header (tools,pending,tools,connected,
+// skills,info,servers,updated) over the held inert tail, without qualifying it.
+func copilotCycleRefreshRows(t *testing.T, repeats int) (*copilotProjectAttempt, []map[string]any) {
+	t.Helper()
+	f, _, raw := copilotReadinessActual(t)
+	s, err := copilotReadinessDecode(raw, f.nativeStarted, f.nativeEnded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	order := []int{2, 0}
+	for i := 1; i < repeats; i++ {
+		order = append(order, 2)
+	}
+	order = append(order, 1, 3, 4, 5, 6)
+	rows := []map[string]any{}
+	for i, original := range order {
+		body, err := json.Marshal(s.rows[original])
+		if err != nil {
+			t.Fatal(err)
+		}
+		value, err := projectNativeRuntimeJSON(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		row := value.(map[string]any)
+		row["id"] = fmt.Sprintf("00000001-0000-4000-8000-%012d", i)
+		row["timestamp"] = s.rows[0]["timestamp"]
+		rows = append(rows, row)
+	}
+	return f, append(rows, s.rows[7:]...)
+}
+
+func TestCopilotCycleRepeatedToolsLoadedPreservesStrictLegacyAndRawIdentities(t *testing.T) {
+	for _, repeats := range []int{1, 2, 8} {
+		f, rows := copilotCycleRefreshRows(t, repeats)
+		body := copilotReadinessEncode(t, rows)
+		s, err := copilotReadinessDecodeOrder(body, f.nativeStarted, f.nativeEnded, true)
+		if err != nil || len(s.rows) != 27 || len(s.data) != 26 || s.data[2]["toolCount"] != json.Number("1") {
+			t.Fatal("same owned tools refresh lost its strict semantic graph", repeats, err)
+		}
+		if len(rows) != 26+repeats || !bytes.Equal(body, copilotReadinessEncode(t, rows)) {
+			t.Fatal("raw refresh rows were rewritten")
+		}
+		if _, err := copilotReadinessDecode(body, f.nativeStarted, f.nativeEnded); err == nil {
+			t.Fatal("cycle refresh widened historical strict grammar")
+		}
+	}
+}
+
+func TestCopilotCycleToolsRefreshRejectsEveryChangedAuthority(t *testing.T) {
+	for _, fault := range []string{"server", "count", "field", "ephemeral", "duplicate-id", "hidden-parent", "terminal-id", "late", "status", "missing", "unknown", "time", "oversize"} {
+		t.Run(fault, func(t *testing.T) {
+			f, rows := copilotCycleRefreshRows(t, 2)
+			switch fault {
+			case "server":
+				rows[2]["data"].(map[string]any)["serverName"] = "foreign"
+			case "count":
+				rows[2]["data"].(map[string]any)["toolCount"] = json.Number("2")
+			case "field":
+				rows[2]["extra"] = true
+			case "ephemeral":
+				rows[2]["ephemeral"] = false
+			case "duplicate-id":
+				rows[2]["id"] = rows[0]["id"]
+			case "hidden-parent":
+				rows[9]["parentId"] = rows[2]["id"]
+			case "terminal-id":
+				rows[len(rows)-1]["sessionId"] = rows[2]["id"]
+			case "late":
+				rows[2], rows[7] = rows[7], rows[2]
+			case "status":
+				rows[2]["type"], rows[2]["data"] = rows[1]["type"], rows[1]["data"]
+			case "missing":
+				rows = append(rows[:4], rows[5:]...)
+			case "unknown":
+				rows[2]["type"] = "unknown.startup"
+			case "time":
+				rows[2]["timestamp"] = f.nativeEnded.Add(time.Second).Format(time.RFC3339Nano)
+			}
+			body := copilotReadinessEncode(t, rows)
+			if fault == "oversize" {
+				body = append(body, bytes.Repeat([]byte{' '}, copilotProjectBodyLimit)...)
+			}
+			if _, err := copilotReadinessDecodeOrder(body, f.nativeStarted, f.nativeEnded, true); err == nil {
+				t.Fatal("changed startup refresh authority accepted")
+			}
+		})
+	}
 }
 
 func TestCopilotCycleNoCallGraphRequiresWholeTextOnlyClosure(t *testing.T) {
