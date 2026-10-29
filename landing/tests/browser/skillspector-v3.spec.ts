@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, mkdirSync } from 'node:fs';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
   deferred,
   navigate,
@@ -30,6 +30,16 @@ const completeContextFixture = JSON.parse(
 const producerShard = JSON.parse(
   readFileSync(new URL(fixture.shards[0]!.path, fixtureRoot), 'utf8'),
 );
+async function screenshotBelowHeader(assessment: Locator, path: string) {
+  await assessment.evaluate((element) => {
+    const headerBottom = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0;
+    window.scrollBy({
+      top: element.getBoundingClientRect().top - headerBottom - 16,
+      behavior: 'instant',
+    });
+  });
+  await assessment.screenshot({ path });
+}
 async function setup(
   page: Page,
   mode:
@@ -322,11 +332,12 @@ for (const width of [1280, 390]) {
     const screenshots = process.env.UAP_LANDING_SCREENSHOT_DIR;
     if (screenshots) {
       mkdirSync(screenshots, { recursive: true });
-      await assessment.screenshot({ path: `${screenshots}/report-${width}.png` });
+      await screenshotBelowHeader(assessment, `${screenshots}/report-${width}.png`);
     }
     const badge = page.locator(
       '.plugin-card[data-install-source="i18n-state-00"] .plugin-card__ribbon',
     );
+    await badge.scrollIntoViewIfNeeded();
     await badge.focus();
     await expect(
       page.locator('.app-tooltip').filter({ hasText: 'The listing and metadata were reviewed.' }),
@@ -428,9 +439,10 @@ for (const width of [1280, 390]) {
     const screenshots = process.env.UAP_LANDING_SCREENSHOT_DIR;
     if (screenshots) {
       mkdirSync(screenshots, { recursive: true });
-      await card
-        .locator('.skillspector')
-        .screenshot({ path: `${screenshots}/report-ru-${width}.png` });
+      await screenshotBelowHeader(
+        card.locator('.skillspector'),
+        `${screenshots}/report-ru-${width}.png`,
+      );
     }
     await expect(card.locator('.plugin-card__ribbon')).toHaveText('Карточка проверена');
     await card.locator('.plugin-card__ribbon').focus();
@@ -490,7 +502,7 @@ for (const locale of ['en', 'ru'] as const) {
       const screenshots = process.env.UAP_LANDING_SCREENSHOT_DIR;
       if (screenshots) {
         mkdirSync(screenshots, { recursive: true });
-        await explanation.screenshot({ path: `${screenshots}/no-skills-${locale}-${width}.png` });
+        await screenshotBelowHeader(explanation, `${screenshots}/no-skills-${locale}-${width}.png`);
       }
       expect(requests).toEqual([]);
       expect(errors).toEqual([]);
@@ -612,12 +624,12 @@ test('community card navigation preserves the source-bound pending Skill report 
   const card = page.locator(`.plugin-card[data-install-source=${JSON.stringify(plugin.slug)}]`);
   const cardReport = card.locator('.skillspector');
   await expect(cardReport).toHaveClass(/skillspector--pending/);
-  const summary = await cardReport.locator(':scope > summary').innerText();
+  const summary = await cardReport.locator(':scope > summary').textContent();
   await card.locator('.plugin-card__title-link').click();
   const detailReport = page.locator('.community-plugin-page .skillspector');
   await expect(detailReport).toHaveClass(/skillspector--pending/);
   await expect(detailReport).toHaveAttribute('open', '');
-  await expect(detailReport.locator(':scope > summary')).toHaveText(summary);
+  await expect(detailReport.locator(':scope > summary')).toHaveText(summary ?? '');
   await expect(detailReport).toContainText('A current check is pending.');
   await expect(detailReport).toContainText(
     'Other plugin components are not checked by SkillSpector.',

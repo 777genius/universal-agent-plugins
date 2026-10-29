@@ -141,7 +141,9 @@ for (const mobile of [false, true]) {
       await details.locator(':scope > summary').focus();
       await page.keyboard.press('Enter');
       await expect(details).toHaveAttribute('open', '');
-      await expect(details).toContainText('Selected skills in this plugin');
+      await expect(details).toContainText(
+        'Scope: Skill files in this plugin. Other plugin components are not checked by SkillSpector.',
+      );
       await expect(details).toContainText(source.revision!);
       await expect(details).toContainText('A selected child check failed.');
       await expect(details).toContainText(
