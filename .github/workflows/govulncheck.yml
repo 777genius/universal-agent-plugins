@@ -2,6 +2,7 @@ name: Govulncheck
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
   push:
     branches: [main, master]
@@ -15,6 +16,7 @@ concurrency:
 
 jobs:
   govulncheck:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     strategy:
       fail-fast: false
       matrix:
