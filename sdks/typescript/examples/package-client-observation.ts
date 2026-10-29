@@ -19,7 +19,7 @@ export async function inspectPackageNative(o: Options): Promise<NativeObservatio
     const text = await run(o, ['plugin', 'list']);
     // Built-in rows are permitted only in their own preamble. Every fixture
     // live row must have the complete identity/version/enabled/path grammar.
-    const fixtureLines = text.split(/\r?\n/).filter((line) => line.includes(name));
+    const fixtureLines = text.split(/\r?\n/).filter((line) => /^\s*•\s/.test(line) && line.includes(name));
     const matches = [...text.matchAll(/^  • (uap-commands-fixture@[^\s]+) \(v1\.0\.0\) \(enabled\)\r?\n      from ([^\r\n]+)(?:\r?\n|$)/gm)];
     assert.equal(matches.length, fixtureLines.length, 'Malformed, disabled or truncated Copilot fixture row');
     assert.ok(matches.length <= 1, 'Duplicate Copilot fixture');

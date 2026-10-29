@@ -183,5 +183,79 @@
       "stdout": "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\nBuilt-in plugins:\n  • browser-use (v0.0.4) [disabled]\n",
       "stderr": ""
     }
-  ]
+  ],
+  "observer_regression": {
+    "review_comment": "https://github.com/777genius/universal-agent-plugins/pull/566#discussion_r4416641617",
+    "fixture_named_path": "/tmp/uap-copilot-list-probe/uap-commands-fixture-012345abcdef",
+    "qualification": "actual-native-observer-diagnostic-only",
+    "engine_invoked": false,
+    "runs": [
+      {
+        "probe": "named-path-observer-before",
+        "argv": [
+          "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+          "--experimental-strip-types",
+          "/tmp/uap-copilot-list-probe/check-observation.mts"
+        ],
+        "cwd": "/tmp/uap-copilot-list-probe/project",
+        "error": null,
+        "exit": 1,
+        "elapsed_seconds": 0.552,
+        "stdout_file": "named-path-observer-before.stdout.log",
+        "stderr_file": "named-path-observer-before.stderr.log",
+        "stdout_bytes": 0,
+        "stderr_bytes": 597,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "7a10e585f1da647b8ff268b62a69788c15a3e60f172e9b2593de3fe9126fd4fc",
+        "stdout": "",
+        "stderr": "node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Malformed, disabled or truncated Copilot fixture row\n\n1 !== 2\n\n    at inspectPackageNative (file:///tmp/uap-sdk-remaining-work/sdks/typescript/examples/package-client-observation.ts:24:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///tmp/uap-copilot-list-probe/check-observation.mts:3:16 {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: 1,\n  expected: 2,\n  operator: 'strictEqual',\n  diff: 'simple'\n}\n\nNode.js v24.22.1\n",
+        "observer_source_dirty": false
+      },
+      {
+        "probe": "named-path-observer-after",
+        "argv": [
+          "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+          "--experimental-strip-types",
+          "/tmp/uap-copilot-list-probe/check-observation.mts"
+        ],
+        "cwd": "/tmp/uap-copilot-list-probe/project",
+        "error": null,
+        "exit": 0,
+        "elapsed_seconds": 1.045,
+        "stdout_file": "named-path-observer-after.stdout.log",
+        "stderr_file": "named-path-observer-after.stderr.log",
+        "stdout_bytes": 185,
+        "stderr_bytes": 0,
+        "stdout_sha256": "76396d2756b7ae20f9a9fc79dac6d3a80f642c814b629316fba8ec522508847d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\"pluginId\":\"uap-commands-fixture@agentplugins-012345abcdef\",\"skills\":[[\"fixture-guide\",\"/tmp/uap-copilot-list-probe/uap-commands-fixture-012345abcdef/skills/fixture-guide/SKILL.md\"]]}\n",
+        "stderr": "",
+        "observer_source_dirty": true
+      },
+      {
+        "probe": "named-path-observer-removed",
+        "argv": [
+          "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+          "--experimental-strip-types",
+          "/tmp/uap-copilot-list-probe/check-observation.mts",
+          "--remove"
+        ],
+        "cwd": "/tmp/uap-copilot-list-probe/project",
+        "error": null,
+        "exit": 0,
+        "elapsed_seconds": 3.711,
+        "stdout_file": "named-path-observer-removed.stdout.log",
+        "stderr_file": "named-path-observer-removed.stderr.log",
+        "stdout_bytes": 74,
+        "stderr_bytes": 0,
+        "stdout_sha256": "ec12c5f25bdeaa37e50060de96e09da29d0ee1bc8fb17f9946b24e05f3875eb3",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\"pluginId\":\"uap-commands-fixture@agentplugins-012345abcdef\",\"skills\":[]}\n",
+        "stderr": "",
+        "observer_source_dirty": true
+      }
+    ],
+    "observer_source_base": "a7a6a9914b4705201e8e9d63abb11b60ee9c9da1",
+    "corrected_source_change": "Count only fixture plugin bullet rows before comparing complete parsed native entries; remaining assertions unchanged."
+  }
 }

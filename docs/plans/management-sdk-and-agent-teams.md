@@ -58,7 +58,11 @@ The later Copilot correction has its own actual local
 [1.0.103 inventory evidence](../evidence/management-sdk/copilot-1.0.103-linux-listing.json)
 and adapter regressions; that diagnostic is not relabeled as a full SDK journey.
 Local SDK protocol/owned-process tests passed 46/46 without skips, and the packed
-npm consumer passed type checking and runtime imports. No App/runtime architecture,
+npm consumer passed type checking and runtime imports. CodeRabbit identified a
+Copilot observer counting a fixture-named path continuation as a second plugin;
+an actual local native run reproduced the failure, and counting only plugin
+bullet rows corrected it while retaining malformed/truncated-row refusal.
+No App/runtime architecture,
 S25/S26 project support, VS Code
 changes or public SDK release is included.
 
