@@ -54,7 +54,7 @@ func loadPlaceholderPackage(t *testing.T) domain.PackageEnvelope {
 	server := map[string]any{
 		"type": "stdio", "command": "node", "cwd": "./",
 		"args": []string{"${PLUGIN_ROOT}/config", "${PLUGIN_DATA}/cache", "${package.root}/literal", "${UNKNOWN}", "$HOME"},
-		"env": map[string]string{"ROOT": "${PLUGIN_ROOT}/config", "DATA": "${PLUGIN_DATA}/cache", "LITERAL": "${package.root}/literal", "UNKNOWN": "${UNKNOWN}", "SHELL": "$HOME"},
+		"env":  map[string]string{"ROOT": "${PLUGIN_ROOT}/config", "DATA": "${PLUGIN_DATA}/cache", "LITERAL": "${package.root}/literal", "UNKNOWN": "${UNKNOWN}", "SHELL": "$HOME"},
 	}
 	mcp := map[string]any{"$schema": domain.MCPSchemaV1, "mcpServers": map[string]any{"probe": server}}
 	for name, document := range map[string]any{"plugin.json": manifest, "mcp.json": mcp} {
