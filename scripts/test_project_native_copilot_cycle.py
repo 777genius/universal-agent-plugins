@@ -130,11 +130,17 @@ class CopilotCycleContracts(unittest.TestCase):
         self.assertEqual(data[1]["status"], "connected")
         with self.assertRaises(ValueError):
             events.decode(raw, start, end)
+        # The complete-cycle stable-A capture emits the cached tools first.
+        cached = copy.deepcopy(rows)
+        cached[0], cached[1] = cached[1], cached[0]
+        cached[0]["timestamp"], cached[1]["timestamp"] = cached[1]["timestamp"], cached[0]["timestamp"]
+        _, cached_data, _ = events.decode(b"\n".join(map(encoded, cached)) + b"\n", start, end, startup=True)
+        self.assertEqual(cached_data, data)
         for wrong in ("duplicate", "summary-early", "pending-late", "foreign"):
             bad = copy.deepcopy(rows)
             if wrong == "duplicate": bad[2] = copy.deepcopy(bad[1])
             elif wrong == "summary-early": bad[0], bad[5] = bad[5], bad[0]
-            elif wrong == "pending-late": bad[0], bad[1] = bad[1], bad[0]
+            elif wrong == "pending-late": bad[0], bad[2] = bad[2], bad[0]
             else: bad[1]["type"] = "unknown.startup"
             with self.assertRaises(ValueError):
                 events.decode(b"\n".join(map(encoded, bad)) + b"\n", start, end, startup=True)
@@ -190,6 +196,40 @@ class CopilotCycleContracts(unittest.TestCase):
             else: bad["data"]["dry_run"] = True
             with self.subTest(fault=fault), self.assertRaises(ValueError):
                 cycle.public_json(encoded(bad), "add-a", fixture_proof)
+
+    def test_public_repeat_add_and_installed_source_dtos_remain_label_bound(self):
+        bodies = actual()
+        summary = runtime.strict_json(bodies["runtime-attempt.json"])
+        public = runtime.strict_json(bodies["add-A.stdout.log"])
+        output = copy.deepcopy(public["data"]["targets"][0]["output"])
+        fixture_proof = {"scope": "a", "version": "1.0.0", "source_digest": summary["installation_source"]["tree_digest"],
+                         "binding": summary["binding"], "installation": {"installation_id": output["result"]["installation_id"],
+                         "package": {"manifest_digest": summary["binding"]["package_revision"]["manifest_digest"]}}}
+        output["result"].update(mutated=False, no_change=True)
+        output["result"].pop("group_phase", None)
+        singleton = {"schema_version": 1, "command": "add", "result": "success", "data": output}
+        cycle.public_json(encoded(singleton), "repeat-add-a", fixture_proof)
+        for label in ("add-a", "unchanged-update-a", "intact-repair-a", "remove-a"):
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                cycle.public_json(encoded(singleton), label, fixture_proof)
+        for fault in ("source", "digest", "scope", "mutated", "confirmation", "batch"):
+            bad = copy.deepcopy(singleton)
+            if fault == "source": bad["data"]["source"] = "local"
+            elif fault == "digest": bad["data"]["tree_digest"] = "sha256:" + "0" * 64
+            elif fault == "scope": bad["data"]["result"]["plan"]["scope"] = "user"
+            elif fault == "mutated": bad["data"]["result"]["mutated"] = True
+            elif fault == "confirmation": bad["data"]["result"]["requires_confirmation"] = True
+            else: bad["data"]["batch"] = True
+            with self.subTest(fault=fault), self.assertRaises(ValueError):
+                cycle.public_json(encoded(bad), "repeat-add-a", fixture_proof)
+        for label in ("intact-repair-a", "missing-repair-a"):
+            repaired = copy.deepcopy(public)
+            repaired["command"] = "repair"
+            repaired["data"]["targets"][0]["output"]["source"] = "local"
+            cycle.public_json(encoded(repaired), label, fixture_proof)
+            repaired["data"]["targets"][0]["output"]["source"] = "direct local source"
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                cycle.public_json(encoded(repaired), label, fixture_proof)
 
     def test_complete_catalog_preserves_foreign_skills_and_proves_native_absence(self):
         rows, _, _ = measured()

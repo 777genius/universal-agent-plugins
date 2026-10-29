@@ -34,7 +34,7 @@ async function syncQuery() {
       const failure = await router.replace({
         path: canonicalPath(route.path),
         query: skillsCatalogQuery(query.value, view.value, route.query),
-        hash: route.hash,
+        hash: '',
       });
       if (failure) break;
     }

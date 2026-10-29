@@ -10,63 +10,119 @@ translationRequired: true
 
 # Build plugins
 
-| Your job | Journey | Result |
-| --- | --- | --- |
-| Install someone else's package | [Use plugins](/en/use/) | Managed client installation and activation instructions. |
-| Write a new portable package | Continue below | Root `plugin.json`, Skills and/or MCP configuration. |
+An Agent Plugins 1.0 package is a directory with root `plugin.json` and Skills,
+MCP configuration, or both. Start with the smallest component that solves your
+users' task. A Skill supplies instructions; MCP supplies a connection to tools.
 
-Install the primary CLI with npm or Homebrew:
+## Availability
+
+The current native installer release,
+[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94),
+can validate and install standard packages. Package-manager channels can lag;
+check `agentplugins version` for the installed version. It does **not** include
+`agentplugins author`. The authoring commands in this Build journey describe
+**current source builds** with authoring enabled. Historical 0.1.65 authoring
+release evidence remains version-specific and does not describe today's installer.
+
+You can write the files by hand and use the released installer, or build the
+source tools below for scaffolding, static checks and an explicit MCP runtime
+loop. A passing static check does not prove native client activation or a working
+service connection.
+
+## Make a small package by hand
+
+Create this structure:
+
+```text
+review-helper/
+  plugin.json
+  skills/
+    review-docs/
+      SKILL.md
+```
+
+Put package identity in `plugin.json`:
+
+```json
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "review-helper",
+  "version": "0.1.0",
+  "description": "Review documentation changes for clarity and evidence"
+}
+```
+
+Start `skills/review-docs/SKILL.md` with:
+
+```markdown
+---
+name: review-docs
+description: Use when reviewing documentation for clarity and evidence.
+---
+
+# Review documentation
+
+Identify the intended reader and task. Check each command's input and effect.
+Separate verified behavior from prerequisites and untested claims. Return
+findings with file locations and a suggested correction.
+```
+
+Install the released manager, then validate and preview the package:
 
 ```bash
 npm install -g universal-agent-plugins
-# or: brew install 777genius/agentplugins/agentplugins
+agentplugins validate ./review-helper
+agentplugins add ./review-helper --target codex --dry-run
 ```
 
-Then use `agentplugins author` throughout this guide. Version 0.1.65 provides
-the static `init`, `validate`, `inspect`, `test`, `compat`, `doctor`,
-`capabilities`, and `skills` authoring commands documented here.
+Review the plan and use [Use plugins](../use/install) when ready to apply it.
+See [package layout](./layout) for the responsibility of each file.
 
-## Choose the smallest useful package
+## Build from source {#build-from-source}
 
-| Need | Template | Inputs beyond destination and identity |
+The following developer setup builds the current public authoring contract from
+source. It requires Git and the Go toolchain declared by the repository
+(currently Go 1.26.10). Record the checked-out commit when sharing results.
+
+```bash
+git clone https://github.com/777genius/universal-agent-plugins.git
+cd universal-agent-plugins/cli
+mkdir -p ../bin
+authoring_module=$(go list -f '{{.Module.Path}}' ./cmd/agentplugins)
+authoring_revision=$(git rev-parse HEAD)
+go build -ldflags "-X ${authoring_module}/internal/authoring/commands.Enabled=release-cli-contract-v1 -X ${authoring_module}/internal/authoring/commands.Revision=${authoring_revision}" \
+  -o ../bin/agentplugins ./cmd/agentplugins
+export PATH="$(cd ../bin && pwd):$PATH"
+agentplugins author --help
+```
+
+Use a separate working directory for the tutorial packages. This source binary
+is a development build. Its existence is not a qualified public authoring release.
+Check your executable path if the installed manager still reports an unknown
+`author` command.
+
+## Choose a package to scaffold
+
+| Need | Journey | Required template inputs |
 | --- | --- | --- |
-| Instructions an agent can follow | [Standalone Skill](./skill) | `--template skill`; optional explicit Skill name. |
-| Connect to an existing service | [Remote MCP](./mcp-remote) | `--template mcp-remote --url` with an explicit endpoint. |
-| Provide a local MCP process | [Stdio MCP](./mcp-stdio) | `--template mcp-stdio --runtime node`. |
-| Instructions plus tools | [Hybrid](./hybrid) | `--template hybrid --mcp-template` plus the selected MCP inputs. |
+| Instructions an agent can follow | [Standalone Skill](./skill) | `--template skill` |
+| Connect to an existing service | [Remote MCP](./mcp-remote) | `--template mcp-remote --url <endpoint>` |
+| Provide a local Node MCP process | [Stdio MCP](./mcp-stdio) | `--template mcp-stdio --runtime node` |
+| Instructions together with tools | [Hybrid](./hybrid) | `--template hybrid --mcp-template <choice>` and that MCP template's inputs |
 
-A standalone Skill here means a standard package whose portable component is a
-Skill. It still has root `plugin.json`; it is not an external Skills installer.
-Add more instructions later with [extra Skills](./skills).
-
-## Primary authoring commands
-
-| Job | Command |
-| --- | --- |
-| Create a package | `agentplugins author init` |
-| Validate | `agentplugins author validate` |
-| Inspect | `agentplugins author inspect` |
-| Static test | `agentplugins author test` |
-| Static client compatibility | `agentplugins author compat` |
-| Project doctor | `agentplugins author doctor` |
-| Engine capabilities | `agentplugins author capabilities` |
-| Add or validate Skills | `agentplugins author skills` |
+A standalone Skill package still has root `plugin.json`. Installing standalone
+Skills from another repository is a separate [installer operation](../use/install#install-agent-skills).
 
 ## Follow the authoring loop
 
-1. Choose a template and an absent destination under an existing parent.
-2. Review and edit the resulting [package files](./layout).
-3. Run [validate, inspect, and static test](./checks) against the exact root.
-4. Evaluate explicit target compatibility and inspect project doctor evidence.
-5. Send the package and its limits to the [installer planner](./handoff).
+1. Create a package in an absent destination, then edit the generated files.
+2. Run [validate, inspect and static test](./checks) on the exact package root.
+3. Check the intended clients with `compat` and inspect `doctor` evidence.
+4. For MCP, evaluate runtime separately with explicit source-build execution.
+5. Share the package and its evidence through the [installer handoff](./handoff).
 
-Creating files is local mutation. Validation, inspection, static test, and
-compatibility do not install into clients or launch package code. A passing
-static report is useful evidence, but it does not establish runtime success.
-
-## What this journey does not expose
-
-The 0.1.65 public release does not run package code, start development servers,
-bootstrap dependencies, generate client projections, export bundles, or publish
-packages. Hooks remain client-specific extensions. Select destinations
-positionally and read [command boundaries](./checks) before adapting automation.
+Current source also provides lockfile-based `bootstrap`, continuous `dev`, JSON
+`normalize` and explicit Claude MCP `import native`. See [checks](./checks) and
+[stdio MCP](./mcp-stdio). Client projection, bundle export and package publication
+are outside this current authoring command surface. Client-specific hooks remain
+separate from the portable Skill and MCP components.

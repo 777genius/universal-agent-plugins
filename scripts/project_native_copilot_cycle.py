@@ -157,22 +157,25 @@ def public_json(raw, label, proof):
     values(row, {"schema_version": 1, "command": verb, "result": "success"})
     changed = label not in ("repeat-add-a", "unchanged-update-a")
     data = row["data"]
-    required = set("batch status succeeded failed plugin dry_run targets".split())
-    allowed = required | set("operation_id action_required version source revision tree_digest manifest_digest security environment plugin_data_preserved data_retained retained_data retained_data_action".split())
-    require(type(data) is dict and required <= set(data) <= allowed)
-    values(data, {"batch": True, "succeeded": 1, "failed": 0, "plugin": "native-proof", "dry_run": False})
-    require(data["status"] == ("data_retained" if verb == "remove" else "completed"))
-    require(type(data["targets"]) is list and len(data["targets"]) == 1)
-    target = data["targets"][0]
-    required_target = {"target", "status", "output"} | ({"selected"} if verb == "update" else set())
-    require(type(target) is dict and required_target <= set(target) <= required_target | {"next_action"})
-    values(target, {"target": "copilot", "status": "external_completed"})
-    if verb == "update":
-        require(target["selected"] is True)
-    output = target["output"]
+    if label == "repeat-add-a":
+        output = data
+    else:
+        required = set("batch status succeeded failed plugin dry_run targets".split())
+        allowed = required | set("operation_id action_required version source revision tree_digest manifest_digest security environment plugin_data_preserved data_retained retained_data retained_data_action".split())
+        require(type(data) is dict and required <= set(data) <= allowed)
+        values(data, {"batch": True, "succeeded": 1, "failed": 0, "plugin": "native-proof", "dry_run": False})
+        require(data["status"] == ("data_retained" if verb == "remove" else "completed"))
+        require(type(data["targets"]) is list and len(data["targets"]) == 1)
+        target = data["targets"][0]
+        required_target = {"target", "status", "output"} | ({"selected"} if verb == "update" else set())
+        require(type(target) is dict and required_target <= set(target) <= required_target | {"next_action"})
+        values(target, {"target": "copilot", "status": "external_completed"})
+        if verb == "update":
+            require(target["selected"] is True)
+        output = target["output"]
     output_required = set("plugin version source tree_digest manifest_digest dry_run result".split())
     require(type(output) is dict and output_required <= set(output) <= output_required | {"operation_id", "revision", "security", "next_action"})
-    values(output, {"plugin": "native-proof", "version": proof["version"], "source": "direct local source", "tree_digest": proof["source_digest"],
+    values(output, {"plugin": "native-proof", "version": proof["version"], "source": "local" if verb in ("repair", "remove") else "direct local source", "tree_digest": proof["source_digest"],
                     "manifest_digest": proof["installation"]["package"]["manifest_digest"], "dry_run": False})
     outcome = output["result"]
     require(type(outcome) is dict)

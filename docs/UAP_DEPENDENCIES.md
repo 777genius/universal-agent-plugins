@@ -1,7 +1,11 @@
 # UAP dependency environments
 
-**Released:** this workflow ships in the published CLI (`agentplugins` 0.1.90 and
-later). The restore guide is on the docs site:
+**Released:** user dependency environments ship in CLI 0.1.90 and later;
+explicit project scope ships in CLI 0.1.93 and later. CLI 0.1.94 and later add automatic
+project selection for argumentless install and strict existing-lock validation.
+Check `agentplugins version` before using 0.1.94 behavior; channels can differ.
+If needed, use [native/Homebrew installation](NATIVE_INSTALL.md), or explicit
+scope flags with an older compatible installer. The restore guide is on the docs site:
 [Restore on another machine](https://universal-agent-plugins.com/docs/en/use/manage.html#restore-on-another-machine).
 
 `agentplugins deps` manages the selected dependency environment. By default it
@@ -153,7 +157,17 @@ is offline and reports manifest, owner/receipt, store and projection facts
 independently. `recover` covers one complete owned pending scope and requires
 confirmation; run `sync` separately after it succeeds.
 
-`agentplugins install` is the everyday converge verb over the same machinery:
+`agentplugins install` is the everyday converge verb over the same machinery.
+In CLI 0.1.94 and later, without a source argument and without an explicit scope,
+install selects
+project scope when a regular `uap.toml` exists in the exact current directory;
+it never searches parent directories.
+Explicit `--scope` wins. An existing `uap.lock` is strictly validated before
+changes, even with `--locked=false`; only an absent lock permits first-install
+resolution. `--locked` additionally requires that lock to exist. The preview
+shows the selected scope and agreement paths. Use `update` to advance pins.
+
+For the selected environment,
 a first run installs everything declared in `uap.toml`, a repeat run leaves
 matching state alone, and missing or drifted environment-owned projections are
 repaired from their recorded `uap.lock` pin before the machine converges to the
@@ -256,7 +270,7 @@ required target clients, then run:
 
 ```sh
 agentplugins deps import
-agentplugins install --locked
+agentplugins install --locked --scope user
 ```
 
 Or import and restore together:
@@ -269,8 +283,8 @@ The optional `[directory]` argument overrides the exchange folder, which default
 to the current working directory. Without scope flags, export reads the global
 user environment and import writes it; `AGENTPLUGINS_HOME` selects that
 environment as usual. A project manifest in the current folder does not change
-the default scope. With `--scope project`, both commands use the selected
-project environment. Choose a separate exchange directory because the portable
+the default scope of export/import. With `--scope project`, both commands use the
+selected project environment. Choose a separate exchange directory because the portable
 pair already lives in the project root; see [project restore](PROJECT_INSTALLATION.md#restore-in-another-checkout).
 
 Plain export/import transfers only `uap.toml` and `uap.lock`, preserving their
@@ -292,8 +306,9 @@ prompt; `--install` still checks and applies the locked environment.
 preflight before one action confirmation. Current security prompts and target, host, ownership
 and recovery policy still apply; `--yes` does not bypass them. A preflight refusal
 leaves the destination agreement unchanged. If existing projection drift blocks
-the combined preflight, import the files alone, then run `install --locked` to
-review repair through its normal flow.
+the combined preflight, import the files alone, then retry the locked installation
+for the same selected environment as shown below to review repair through its
+normal flow.
 
 An empty store is supported: installation fetches each exact recorded pin once
 and verifies its package and manifest digests. It does not select newer versions,
@@ -310,9 +325,20 @@ selectors could resolve differently.
 
 After import successfully saves the agreement, an installation failure keeps it
 as the new desired state and reports any partial installation. Address the error
-and retry `agentplugins install --locked`; if pending recovery is reported, run
-`agentplugins deps recover` first. The installer never falls back to unlocked
-resolution.
+and retry in the same selected environment. For a user import, retry
+`agentplugins install --locked --scope user`; if pending recovery is reported,
+run `agentplugins deps recover --scope user` first.
+
+For a project import, retain the same project root used by the original import:
+
+```sh
+agentplugins install --locked --scope project --project-root /path/to/new-project
+```
+
+If that project reports pending recovery, first run
+`agentplugins deps recover --scope project --project-root /path/to/new-project`,
+then retry the locked install for that same root. The installer never falls back
+to unlocked resolution or another environment.
 
 Configure client profiles, executable discovery and any required authentication
 on the destination. Do not copy local ownership receipts as installation proof.
@@ -332,10 +358,11 @@ all its bindings, including new targets. Mixing an imperative binding into it
 is refused. Conversely an environment cannot adopt an installation containing
 unmanaged bindings, even when the unmanaged target is absent from the manifest.
 
-## Ordinary commands (unreleased)
+## Ordinary commands (released in CLI 0.1.93)
 
-Eligible remote `add` commands now save exact dependency intent by default in the
-current user's `uap.toml` and `uap.lock`. For example:
+Eligible remote `add` commands save exact dependency intent by default in the
+selected environment's `uap.toml` and `uap.lock`. This behavior is present in the
+verified CLI 0.1.93 release; the exceptions below remain imperative. For example:
 
 ```sh
 agentplugins add github:acme/demo@0123456789012345678901234567890123456789 --target codex

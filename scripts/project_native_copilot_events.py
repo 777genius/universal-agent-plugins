@@ -112,7 +112,7 @@ def decode(body, start, end, startup=False):
         data.append(obj(row["data"], GRAMMAR[grammar][1]))
     if startup:
         require(set(order) == set(range(7)) and len(order) == 7
-                and order.index(0) < order.index(1) and order.index(0) < order.index(2)
+                and order.index(0) < order.index(1)
                 and order.index(5) > order.index(1) and order.index(5) > order.index(2))
         canonical = [None] * 7
         for index, kind in enumerate(order):

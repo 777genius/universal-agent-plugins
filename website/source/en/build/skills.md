@@ -10,6 +10,9 @@ translationRequired: true
 
 # Add extra Skills
 
+**Source-build authoring:** commands on this page require the
+[authoring-enabled source build](./#build-from-source). The current installer
+release does not include `agentplugins author`.
 
 Use the `skills init` job to add one Skill to an existing standard package.
 It works for Skill, MCP, or hybrid packages. Select the package root containing
@@ -20,7 +23,7 @@ It works for Skill, MCP, or hybrid packages. Select the package root containing
 Assume `./review-helper` is the package from the [standalone Skill journey](./skill)
 and `skills/release-notes/` does not exist.
 
-Run the released authoring command:
+With the authoring-enabled source build:
 
 ```bash
 agentplugins author skills init release-notes ./review-helper \
@@ -77,7 +80,7 @@ an existing destination will not overwrite it.
 
 Correct the reported input or package issue and repeat validation. If the name
 is wrong, review the intended source change explicitly rather than adding a
-force flag. No external Skills install, update, remove, or generate lifecycle is
-part of this v2 authoring journey.
+force flag. Installation and maintenance of external Skills belong to the separate installer
+journey; `author skills` edits and validates components in your source package.
 
 Continue with [static package checks](./checks) and the [handoff](./handoff).

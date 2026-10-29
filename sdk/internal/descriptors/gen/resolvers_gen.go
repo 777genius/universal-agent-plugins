@@ -23,6 +23,9 @@ func ResolveInvocation(args []string, _ runtime.Env) (runtime.Invocation, error)
 	if raw == "stop" {
 		return runtime.Invocation{Platform: "qoder", Event: "stop", RawName: raw}, nil
 	}
+	if raw == "pi-event" {
+		return runtime.Invocation{Platform: "pi", Event: "observation", RawName: raw}, nil
+	}
 	if strings.EqualFold(raw, "Stop") {
 		return runtime.Invocation{Platform: "claude", Event: "Stop", RawName: raw}, nil
 	}

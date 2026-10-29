@@ -23,6 +23,43 @@ func projectRemovalGroup(t *testing.T) *projectFilesFixture {
 	return f
 }
 
+func TestProjectRemovalPlanDoesNotRequireUserUninstallAttestation(t *testing.T) {
+	for _, grouped := range []bool{false, true} {
+		t.Run(map[bool]string{false: "single", true: "group"}[grouped], func(t *testing.T) {
+			f := projectRemovalGroup(t)
+			other := f.untouched(t)
+			req := f.req
+			if !grouped {
+				req.Targets = nil
+			}
+			req.Operation, req.OperationID = OpRemove, "project-removal-policy"
+			handle, err := f.engine.Prepare(t.Context(), req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := handle.Close(); err != nil {
+					t.Error(err)
+				}
+			}()
+			plan := handle.Plan()
+			if plan.RequiresExternalUninstalled {
+				t.Fatal("automatic owned project removal requested a user-plugin uninstall attestation")
+			}
+			for _, target := range plan.Targets {
+				if target.RequiresExternalUninstalled {
+					t.Fatal("project target inherited user removal policy", target.ClientID)
+				}
+			}
+			result, err := f.engine.Apply(t.Context(), handle, Decision{Confirmed: true})
+			if err != nil || result.Outcome != OutcomeCompleted || !result.Mutated {
+				t.Fatalf("project removal without external attestation: %+v %v", result, err)
+			}
+			f.assertUntouched(t, other)
+		})
+	}
+}
+
 func TestProjectGroupRemovalAbsentTargetsAreReadOnly(t *testing.T) {
 	for _, firstAbsent := range []bool{false, true} {
 		t.Run(map[bool]string{false: "both present", true: "one absent"}[firstAbsent], func(t *testing.T) {

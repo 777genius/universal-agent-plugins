@@ -97,29 +97,11 @@ func cloneClientBindings(source map[string]domain.ClientBinding) map[string]doma
 }
 
 func (service Service) activateWithNativeAttempt(ctx context.Context, installationID, bindingID string, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
-	if err := request.Plan.SelectedDelivery.ValidatePlan(request.Plan, selectedCanonicalDigest(request.Plan)); err != nil {
-		return domain.ActivationOutcome{}, err
-	}
-	if service.ClientPreparation != nil && !request.VerifyOnly {
-		if err := service.ClientPreparation.RevalidateClient(ctx, request.Client, request.Plan); err != nil {
-			return service.refusedPreparedActivation(installationID, bindingID, err)
-		}
-	}
-	if nativeLifecycleClient(request.Client.ClientID, request.Plan.SelectedDelivery, request.Plan.Scope) && !request.VerifyOnly {
-		if err := service.beginNativeAttemptWithObservation(installationID, bindingID, domain.NativeIntentRegister, request.Plan.SelectedDelivery, request.Plan.LocalEntryObservation.Clone()); err != nil {
-			return domain.ActivationOutcome{}, err
-		}
-		client, err := service.activationBinding(installationID, bindingID)
-		if err != nil {
-			return domain.ActivationOutcome{}, err
-		}
-		if client.NativeActivationAttempt == "" {
-			return domain.ActivationOutcome{}, fmt.Errorf("native attempt disappeared")
-		}
-		request.NativeAttempt = domain.NativeAttemptIdentity{OperationID: client.NativeActivationAttempt, InstallationID: installationID, BindingID: bindingID, NativeRoot: request.Client.ConfigRoot}
-		if request.Plan.Scope == domain.ScopeProject {
-			request.NativeAttempt.NativeRoot = request.Plan.NativeRegistryRoot
-		}
+	var preparationOutcome domain.ActivationOutcome
+	var preparationErr error
+	request, preparationOutcome, preparationErr = service.prepareNativeActivation(ctx, installationID, bindingID, request)
+	if preparationErr != nil {
+		return preparationOutcome, preparationErr
 	}
 	if request.Plan.SelectedDelivery.IsZero() {
 		return service.activatePreparedClient(ctx, installationID, bindingID, request)
@@ -235,4 +217,35 @@ func (service Service) refusedPreparedActivation(installationID, bindingID strin
 	outcome := lifecycleOutcome(binding)
 	outcome.NativeEffect = domain.NativeEffectUnchanged
 	return outcome, refusal
+}
+
+// prepareNativeActivation owns the serial journal transition before any client
+// effect. Independent activation uses the same preparation as the serial path.
+func (service Service) prepareNativeActivation(ctx context.Context, installationID, bindingID string, request domain.ActivationRequest) (domain.ActivationRequest, domain.ActivationOutcome, error) {
+	if err := request.Plan.SelectedDelivery.ValidatePlan(request.Plan, selectedCanonicalDigest(request.Plan)); err != nil {
+		return request, domain.ActivationOutcome{}, err
+	}
+	if service.ClientPreparation != nil && !request.VerifyOnly {
+		if err := service.ClientPreparation.RevalidateClient(ctx, request.Client, request.Plan); err != nil {
+			outcome, refusal := service.refusedPreparedActivation(installationID, bindingID, err)
+			return request, outcome, refusal
+		}
+	}
+	if nativeLifecycleClient(request.Client.ClientID, request.Plan.SelectedDelivery, request.Plan.Scope) && !request.VerifyOnly {
+		if err := service.beginNativeAttemptWithObservation(installationID, bindingID, domain.NativeIntentRegister, request.Plan.SelectedDelivery, request.Plan.LocalEntryObservation.Clone()); err != nil {
+			return request, domain.ActivationOutcome{}, err
+		}
+		client, err := service.activationBinding(installationID, bindingID)
+		if err != nil {
+			return request, domain.ActivationOutcome{}, err
+		}
+		if client.NativeActivationAttempt == "" {
+			return request, domain.ActivationOutcome{}, fmt.Errorf("native attempt disappeared")
+		}
+		request.NativeAttempt = domain.NativeAttemptIdentity{OperationID: client.NativeActivationAttempt, InstallationID: installationID, BindingID: bindingID, NativeRoot: request.Client.ConfigRoot}
+		if request.Plan.Scope == domain.ScopeProject {
+			request.NativeAttempt.NativeRoot = request.Plan.NativeRegistryRoot
+		}
+	}
+	return request, domain.ActivationOutcome{}, nil
 }

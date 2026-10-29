@@ -10,6 +10,7 @@ on:
       - 'repotests/testdata/agentplugins_commands_fixture/**'
       - 'install/integrationctl/agentplugins/**'
       - 'cli/**'
+      - 'sdks/typescript/**'
       - 'scripts/run-native-client-matrix.py'
       - 'scripts/native_client*.py'
       - 'scripts/test_native_client*.py'
@@ -21,16 +22,28 @@ on:
       - '.github/workflows/agentplugins-native-clients.yml'
       - '.github/workflows/agentplugins-released-native-clients.yml'
   workflow_dispatch:
+    inputs:
+      sdk_linux_only:
+        description: Run only the two focused SDK lifecycle jobs
+        type: boolean
+        default: false
+      sdk_target:
+        description: Platform for the focused SDK jobs
+        type: choice
+        default: linux-amd64
+        options: [linux-amd64, darwin-arm64]
 
 permissions:
   contents: read
 
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:
-  group: native-clients-${{ github.ref }}
-  cancel-in-progress: true
+  group: agentplugins-native-clients-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   native-client:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.sdk_linux_only }}
     name: ${{ matrix.client }} runtime (${{ matrix.platform.target }})
     strategy:
       fail-fast: false
@@ -78,11 +91,186 @@ jobs:
             --target '${{ matrix.platform.target }}' \
             --output '${{ runner.temp }}/native-client-proof' \
             "${project_args[@]}"
+      # Reuse the exact engine and native client already qualified in this cell.
+      - name: Set up Node for the real SDK lifecycle
+        if: ${{ matrix.client == 'opencode' && matrix.platform.target == 'darwin-arm64' }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.21.1'
+          package-manager-cache: false
+      - name: Build the management SDK from this checkout
+        if: ${{ matrix.client == 'opencode' && matrix.platform.target == 'darwin-arm64' }}
+        shell: bash
+        run: |
+          npm ci --prefix sdks/typescript --ignore-scripts --no-audit --no-fund
+          npm --prefix sdks/typescript run build
+      - name: Verify SDK lifecycle through the real Go engine and OpenCode
+        if: ${{ matrix.client == 'opencode' && matrix.platform.target == 'darwin-arm64' }}
+        timeout-minutes: 12
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          UAP_SDK_E2E_OUTPUT: ${{ runner.temp }}/native-client-proof
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import shutil
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path.cwd() / "scripts"))
+          from native_client_research import run_probe
+
+          output = Path(os.environ["UAP_SDK_E2E_OUTPUT"]).resolve()
+          native = json.loads((output / "runner-evidence.json").read_text())
+          commit = os.environ["EXPECTED_COMMIT"]
+          assert native["status"] == "passed" and native["commit"] == commit
+          assert native["client"] == "opencode" and native["target"] == "darwin-arm64"
+          scratch = Path(native["scratch"]).resolve(strict=True)
+          assert scratch.parent == Path(os.environ["RUNNER_TEMP"]).resolve()
+          assert scratch.name.startswith("uap-native-hosted-")
+          binary_dir = scratch / "bin"
+          temporary = (scratch / "evidence").resolve(strict=True)
+          assert temporary.parent == scratch
+          engine, client = binary_dir / "agentplugins", binary_dir / "opencode"
+          engine_hash = hashlib.sha256(engine.read_bytes()).hexdigest()
+          client_hash = hashlib.sha256(client.read_bytes()).hexdigest()
+          assert engine_hash == native["installer_sha256"]
+          assert client_hash == native["client_asset"]["binary_sha256"]
+          node = shutil.which("node")
+          assert node, "The pinned Node runtime is missing"
+          env = {key: os.environ[key] for key in
+                 ("PATH", "LANG", "LC_ALL", "SSL_CERT_FILE", "SSL_CERT_DIR")
+                 if key in os.environ}
+          env["PATH"] = str(binary_dir) + os.pathsep + env.get("PATH", "")
+          for key in ("TMPDIR", "TMP", "TEMP"):
+              env[key] = str(temporary)
+          source = "777genius/universal-agent-plugins@4555aa53844ee0078e9036cd82638afd67f77c16//repotests/testdata/agentplugins_commands_fixture"
+          receipt_path = output / "sdk-native-evidence.json"
+          probe, _, _ = run_probe(
+              [node, "--experimental-strip-types", "examples/real-engine-smoke.ts",
+               "--executable", str(engine), "--client-executable", str(client),
+               "--source", source, "--output", str(receipt_path)],
+              Path.cwd() / "sdks/typescript", env, output, "sdk-native",
+              timeout=600, limit=1 << 20,
+          )
+          (output / "sdk-native-process.json").write_text(
+              json.dumps({"commit": commit, **probe}, indent=2) + "\n"
+          )
+          # The example writes its receipt before finally closing its owned host.
+          # Require successful process completion as well as the receipt.
+          assert probe["error"] is None and probe["exit"] == 0, probe
+          assert receipt_path.stat().st_size <= 1 << 20
+          receipt = json.loads(receipt_path.read_text())
+          assert receipt["status"] == "passed" and receipt["stage"] == "complete"
+          assert receipt["error"] == "" and receipt["source"] == source
+          assert receipt["engineSHA256"] == engine_hash
+          assert receipt["nativeSHA256"] == client_hash
+          print("Real SDK / Go / OpenCode lifecycle passed for " + commit)
+          PY
       - name: Upload native evidence including failed stages
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: native-client-${{ matrix.client }}-${{ matrix.platform.target }}
           path: ${{ runner.temp }}/native-client-proof/
+          if-no-files-found: error
+          retention-days: 14
+
+  sdk-linux:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.sdk_linux_only }}
+    name: ${{ matrix.client }} SDK lifecycle (${{ inputs.sdk_target }})
+    runs-on: ${{ inputs.sdk_target == 'darwin-arm64' && 'macos-15' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [claude, codex]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.21.1'
+          package-manager-cache: false
+      - name: Build the current Go engine and SDK
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/sdk-linux-proof/bin"
+          (cd cli && go build -trimpath -o "$RUNNER_TEMP/sdk-linux-proof/bin/agentplugins" ./cmd/agentplugins)
+          npm ci --prefix sdks/typescript --ignore-scripts --no-audit --no-fund
+          npm --prefix sdks/typescript run build
+      - name: Provision only the selected pinned native client
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SDK_CLIENT: ${{ matrix.client }}
+          SDK_TARGET: ${{ inputs.sdk_target }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import importlib.util, json, os
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location("matrix", "scripts/run-native-client-matrix.py")
+          matrix = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(matrix)
+          output = Path(os.environ["RUNNER_TEMP"]) / "sdk-linux-proof"
+          selected = os.environ["SDK_CLIENT"]
+          binary, evidence = matrix.provision(matrix.PINS[os.environ["SDK_TARGET"]][selected], output / "bin", selected)
+          (output / "provision.json").write_text(json.dumps({"client": selected, "target": os.environ["SDK_TARGET"], "path": str(binary), **evidence}, indent=2) + "\n")
+          PY
+      - name: Verify SDK lifecycle through the real Go engine and native client
+        timeout-minutes: 12
+        env:
+          SDK_CLIENT: ${{ matrix.client }}
+          SDK_TARGET: ${{ inputs.sdk_target }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, shutil, subprocess, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / "scripts"))
+          from native_client_research import run_probe
+          output = Path(os.environ["RUNNER_TEMP"]) / "sdk-linux-proof"
+          selected = os.environ["SDK_CLIENT"]
+          target = os.environ["SDK_TARGET"]
+          commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          assert commit == os.environ["EXPECTED_COMMIT"]
+          source = "777genius/universal-agent-plugins@4555aa53844ee0078e9036cd82638afd67f77c16//repotests/testdata/agentplugins_commands_fixture"
+          engine, client = output / "bin/agentplugins", output / "bin" / selected
+          hashes = {"engineSHA256": hashlib.sha256(engine.read_bytes()).hexdigest(), "nativeSHA256": hashlib.sha256(client.read_bytes()).hexdigest()}
+          assert hashes["nativeSHA256"] == json.loads((output / "provision.json").read_text())["binary_sha256"]
+          (output / "source-identity.json").write_text(json.dumps({"commit": commit, "client": selected, "target": target, "source": source, **hashes}, indent=2) + "\n")
+          temporary = output / "tmp"
+          temporary.mkdir()
+          env = {key: os.environ[key] for key in ("PATH", "LANG", "LC_ALL", "SSL_CERT_FILE", "SSL_CERT_DIR") if key in os.environ}
+          env.update({key: str(temporary) for key in ("TMPDIR", "TMP", "TEMP")})
+          receipt_path = output / "sdk-native-evidence.json"
+          probe, _, _ = run_probe([shutil.which("node"), "--experimental-strip-types", "examples/real-engine-smoke.ts", "--client", selected, "--executable", str(engine), "--client-executable", str(client), "--source", source, "--output", str(receipt_path)], Path.cwd() / "sdks/typescript", env, output, "sdk-native", timeout=600, limit=1 << 20)
+          (output / "sdk-native-process.json").write_text(json.dumps(probe, indent=2) + "\n")
+          assert probe["error"] is None and probe["exit"] == 0, probe
+          assert receipt_path.stat().st_size <= 1 << 20
+          receipt = json.loads(receipt_path.read_text())
+          assert receipt["status"] == "passed" and receipt["stage"] == "complete"
+          assert receipt["error"] == "" and receipt["source"] == source and receipt["client"] == selected
+          assert (receipt["platform"], receipt["architecture"]) == {"linux-amd64": ("linux", "x64"), "darwin-arm64": ("darwin", "arm64")}[target]
+          assert all(receipt[key] == value for key, value in hashes.items())
+          PY
+      - name: Upload focused SDK lifecycle evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: sdk-${{ inputs.sdk_target }}-${{ matrix.client }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/sdk-linux-proof/*.json
+            ${{ runner.temp }}/sdk-linux-proof/*.log
           if-no-files-found: error
           retention-days: 14

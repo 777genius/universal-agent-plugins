@@ -45,7 +45,7 @@ func (s *copilotReadinessStream) cycleStartup(order [7]int) error {
 		positions[kind] = i
 		canonical[kind] = s.data[i]
 	}
-	if len(positions) != 7 || positions[0] >= positions[1] || positions[0] >= positions[2] || positions[5] <= positions[1] || positions[5] <= positions[2] {
+	if len(positions) != 7 || positions[0] >= positions[1] || positions[5] <= positions[1] || positions[5] <= positions[2] {
 		return fmt.Errorf("Copilot cycle incomplete per-server startup state")
 	}
 	copy(s.data[:7], canonical)

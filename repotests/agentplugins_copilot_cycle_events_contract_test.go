@@ -186,7 +186,7 @@ func TestCopilotCycleUserPluginCommandNameIsExactlyNamespaced(t *testing.T) {
 }
 
 func TestCopilotCycleCachedStartupOnlyAdmitsSourceDefinedPartialOrder(t *testing.T) {
-	for _, kind := range []string{"cached", "interleaved", "summary-before-ready", "duplicate-state", "failed-state"} {
+	for _, kind := range []string{"cached", "interleaved", "tools-before-pending", "connected-before-pending", "summary-before-ready", "duplicate-state", "failed-state"} {
 		f, _, raw := copilotReadinessActual(t)
 		s, err := copilotReadinessDecode(raw, f.nativeStarted, f.nativeEnded)
 		if err != nil {
@@ -195,6 +195,12 @@ func TestCopilotCycleCachedStartupOnlyAdmitsSourceDefinedPartialOrder(t *testing
 		order := []int{0, 2, 1, 3, 4, 5, 6}
 		if kind == "interleaved" {
 			order = []int{3, 0, 4, 2, 1, 5, 6}
+		}
+		if kind == "tools-before-pending" {
+			order = []int{2, 0, 1, 3, 4, 5, 6}
+		}
+		if kind == "connected-before-pending" {
+			order = []int{2, 1, 0, 3, 4, 5, 6}
 		}
 		if kind == "summary-before-ready" {
 			order = []int{0, 2, 5, 1, 3, 4, 6}
@@ -216,7 +222,7 @@ func TestCopilotCycleCachedStartupOnlyAdmitsSourceDefinedPartialOrder(t *testing
 		}
 		body := copilotReadinessEncode(t, rows)
 		_, err = copilotReadinessDecodeOrder(body, f.nativeStarted, f.nativeEnded, true)
-		if (err == nil) != (kind == "cached" || kind == "interleaved") {
+		if (err == nil) != (kind == "cached" || kind == "interleaved" || kind == "tools-before-pending") {
 			t.Fatal("startup partial order widened or lost supported cache path", kind, err)
 		}
 		if _, err = copilotReadinessDecode(body, f.nativeStarted, f.nativeEnded); err == nil {

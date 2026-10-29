@@ -17,8 +17,9 @@ because plugin.json is narrower or a standard-first command no longer calls it.
 Retiring command exposure is distinct from removing source. Preserve unresolved
 capabilities outside the standard dependency graph. Any deletion requires an
 inventory item and explicit owner acceptance. Do not add implicit YAML fallback
-or a second supported engine. All hosted workers for this program use
-gpt-6-astra with service tier default; fast mode is not authorized.
+or a second supported engine. All hosted Codex workers for this program use
+gpt-6.1-sol with reasoning effort low for ordinary tasks and service tier default;
+raise effort only when the task requires it. Astra and fast mode are not authorized.
 
 ## Public wording and release boundaries
 
@@ -26,8 +27,10 @@ Read the early-public-checkpoint owner decision in the implementation plan.
 D5 qualifies executable release; it does not block truthful public wording.
 Preserve PR190 availability labels and historical links. Never use
 DOCS_PREPARATION_PREVIEW in production or equate installer release proof with
-standard authoring release qualification. Use gpt-6-astra / medium / default
-for current hosted tasks; no fast.
+standard authoring release qualification. Use gpt-6.1-sol / low / default
+for ordinary hosted Codex tasks; raise effort only when needed. No Astra or fast.
+This owner instruction of 2026-10-26 supersedes older Astra assignments in plans
+and handoffs.
 
 ## Owner release authorization (2026-10-08)
 

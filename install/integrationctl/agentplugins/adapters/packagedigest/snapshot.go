@@ -296,31 +296,56 @@ func validateLinkText(target string) error {
 }
 
 func resolveInternalLink(linkRel, target string, known map[string]entry) error {
-	current := path.Clean(path.Join(path.Dir(linkRel), target))
-	for steps := 0; steps < 128; steps++ {
-		if current == ".." || strings.HasPrefix(current, "../") || path.IsAbs(current) {
-			return fmt.Errorf("symlink %q escapes the package root", linkRel)
-		}
-		parts := strings.Split(current, "/")
-		changed := false
-		for index := range parts {
-			prefix := strings.Join(parts[:index+1], "/")
-			item, ok := known[prefix]
-			if !ok {
-				return fmt.Errorf("symlink %q targets missing package path %q", linkRel, current)
-			}
-			if item.kind == "symlink" {
-				rest := strings.Join(parts[index+1:], "/")
-				current = path.Clean(path.Join(path.Dir(prefix), item.target, rest))
-				changed = true
-				break
-			}
-		}
-		if !changed {
-			return nil
-		}
+	// Resolve each link before interpreting the following ".." component.
+	// Lexically cleaning first can conceal traversal out of the package through
+	// an otherwise valid directory link, or conceal a missing/file ancestor.
+	var resolved []string
+	if parent := path.Dir(linkRel); parent != "." {
+		resolved = strings.Split(parent, "/")
 	}
-	return fmt.Errorf("symlink %q contains a cycle or excessive chain", linkRel)
+	kind := "directory"
+	// Each frame is an unprocessed suffix. Keeping frames instead of building
+	// expanded paths bounds allocation even when links repeatedly reference links.
+	pending := []string{target}
+	links := 0
+	for len(pending) > 0 {
+		last := len(pending) - 1
+		component, rest, more := strings.Cut(pending[last], "/")
+		if more {
+			pending[last] = rest
+		} else {
+			pending = pending[:last]
+		}
+		if kind != "directory" {
+			return fmt.Errorf("symlink %q traverses a non-directory package path", linkRel)
+		}
+		switch component {
+		case "", ".":
+			continue
+		case "..":
+			if len(resolved) == 0 {
+				return fmt.Errorf("symlink %q escapes the package root", linkRel)
+			}
+			resolved = resolved[:len(resolved)-1]
+			continue
+		}
+		current := strings.Join(append(resolved, component), "/")
+		item, ok := known[current]
+		if !ok {
+			return fmt.Errorf("symlink %q targets missing package path %q", linkRel, current)
+		}
+		if item.kind == "symlink" {
+			if links >= 128 {
+				return fmt.Errorf("symlink %q contains a cycle or excessive chain", linkRel)
+			}
+			links++
+			pending = append(pending, item.target)
+			continue
+		}
+		resolved = append(resolved, component)
+		kind = item.kind
+	}
+	return nil
 }
 
 func isLFSPointer(filename string, size int64) (bool, error) {

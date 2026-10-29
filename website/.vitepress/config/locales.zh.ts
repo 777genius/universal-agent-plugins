@@ -28,12 +28,12 @@ export const zhLocaleConfig = {
     },
     footer: {
       message: "面向插件作者和集成者的公共文档。",
-      copyright: "MIT 许可"
+      copyright: "采用 Apache 2.0 许可证"
     },
     nav: [
       ...journeyNav("zh"),
       { text: "快速开始", link: "/zh/guide/quickstart" },
-      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
+      { text: "0.1.65 API（英语）", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.zh.json"),
     editLink: {

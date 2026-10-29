@@ -18,7 +18,9 @@ agentplugins remove docs --target opencode \
 
 `--project-root` selects an existing directory explicitly. When omitted in
 project scope, UAP uses the invocation directory. It does not search upward for
-a different project. The default scope remains user.
+a different project. Add and maintenance commands default to user scope.
+Argumentless install in CLI 0.1.94 selects a current-directory project manifest
+unless an explicit scope is supplied.
 
 Existing JSONC selection, comments and foreign settings are preserved. If both
 config variants exist, UAP refuses the ambiguity. Exact logical MCP keys are

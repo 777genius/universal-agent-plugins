@@ -12,9 +12,13 @@ import (
 	"github.com/777genius/plugin-kit-ai/sdk/internal/descriptors/gen"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime/process"
+	"github.com/777genius/plugin-kit-ai/sdk/pi"
 	"github.com/777genius/plugin-kit-ai/sdk/qoder"
 	"github.com/777genius/plugin-kit-ai/sdk/vscodelocal"
 )
+
+// Pi returns the typed neutral Pi observation registrar.
+func (a *App) Pi() *pi.Registrar { return pi.NewRegistrar(registrarBackend{app: a}) }
 
 // Use appends middleware that wraps all subsequent handler dispatch.
 func (a *App) Use(mw Middleware) {

@@ -1,8 +1,14 @@
 # Install plugins for one project
 
-**Source only / unreleased:** project scope requires a compatible CLI built
-from this feature's source. These instructions do not describe a newly
-published CLI release.
+**Released:** explicit project scope is available in CLI 0.1.93 and later.
+CLI 0.1.94 and later also include automatic project selection for argumentless `install`
+and strict validation of an existing lock before installation or repair.
+From the project folder, run `agentplugins install`. Use `--locked` to
+additionally require an existing lock, for example in CI.
+Explicit scope remains useful in scripts and when restoring a chosen project.
+Check `agentplugins version` before relying on 0.1.94 behavior; channels can
+update at different times. Use the [native/Homebrew installer](NATIVE_INSTALL.md)
+if your selected channel is older, or keep explicit scope with the 0.1.93 CLI.
 
 Use `--scope project` to keep a project's plugin declarations, installed
 ownership and native client configuration separate from your user environment.
@@ -35,11 +41,28 @@ the final feature-source native run; each client's activation limits still apply
 
 ## Select the environment on every command
 
-The default scope remains `user`. An existing `uap.toml` in your current folder
-does not silently change that default. With `--scope project`, omitting
-`--project-root` selects the invocation directory; UAP does not search parent
-folders for a Git repository or another manifest. `--project-root` requires
-`--scope project` and an existing directory.
+Add and maintenance commands default to user scope unless project scope is
+explicitly selected. In CLI 0.1.94 and later, argumentless `agentplugins install` selects
+project scope when the exact current directory contains a regular `uap.toml`
+file. It never searches parent folders.
+A directory or symlink named `uap.toml` is refused during automatic selection;
+select the scope explicitly to resolve the ambiguity. Without that local
+manifest, install selects the user environment. Explicit `--scope user` or
+`--scope project` always wins. Other commands, including install with a source
+argument, continue to default to user scope.
+
+With `--scope project`, omitting `--project-root` selects the invocation
+directory. `--project-root` requires `--scope project` and an existing directory.
+The install preview shows the selected scope, project root where applicable,
+and manifest and lock paths.
+
+In CLI 0.1.94 and later, an existing `uap.lock` makes argumentless install
+strictly validate the manifest and locked pins before installation or repair.
+A mismatch fails without changing
+the environment; use the explicit `update` path to advance pins, or `deps lock`
+after deliberately editing dependency declarations. Only a missing lock permits
+first-install resolution and lock creation. `--locked` additionally requires an
+existing valid lock; `--locked=false` does not relax an existing lock's validation.
 
 ```sh
 cd /path/to/project
@@ -139,8 +162,15 @@ Copy the project's `uap.toml` and `uap.lock` into the new existing project
 directory, install the required clients, and run:
 
 ```sh
-agentplugins install --locked --scope project --project-root /path/to/new-project
+cd /path/to/new-project
+agentplugins install
 ```
+
+From the new project directory in CLI 0.1.94 and later, `agentplugins install`
+infers project scope and strictly uses an existing lock. From another directory, use
+`agentplugins install --scope project --project-root /path/to/new-project`.
+Explicit scope/root flags still take priority. `--locked` additionally requires
+the lock's presence.
 
 The explicit transfer commands support project scope too:
 

@@ -17,7 +17,7 @@ import (
 
 // auditedAncestorFixtureTrees models the audited ancestor facts for tests of the
 // historical source fixture. It is not a rebuilt historical binary and is never
-// a production exporter loader. Only the two reviewed live ancestor differences
+// a production exporter loader. Only the three reviewed live ancestor differences
 // are admitted; the unchanged projection golden rejects every other visible fact.
 func auditedAncestorFixtureTrees() ([]*cobra.Command, error) {
 	roots, err := trees()
@@ -57,6 +57,7 @@ func modelAuditedAncestorFacts(roots []*cobra.Command) error {
 	for _, want := range []flagFact{
 		{Name: "scope", Type: "string", Default: "user", Usage: "installation scope: user or project"},
 		{Name: "project-root", Type: "string", Default: "", Usage: "existing project directory (project scope only; default: current directory)"},
+		{Name: "target", Type: "string", Default: "", Usage: "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf, grok, kimi, qoder, pi"},
 	} {
 		if got := live[want.Name]; got != want {
 			return fmt.Errorf("audited ancestor fixture does not admit changed %s facts", want.Name)
@@ -64,6 +65,10 @@ func modelAuditedAncestorFacts(roots []*cobra.Command) error {
 	}
 	installer.PersistentFlags().Lookup("scope").Usage = "installation scope (user only in this release)"
 	installer.PersistentFlags().Lookup("project-root").Hidden = true
+	// Pi is a reviewed new installer target, absent from this historical source
+	// fixture. Restore only that exact flag fact; the original full fingerprint
+	// remains unchanged and still rejects any other drift.
+	installer.PersistentFlags().Lookup("target").Usage = "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf, grok, kimi, qoder"
 	return nil
 }
 

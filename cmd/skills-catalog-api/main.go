@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/internal/skillscatalog"
+	"github.com/777genius/plugin-kit-ai/internal/skillsresolve"
+	"github.com/777genius/plugin-kit-ai/internal/skillsresolve/gitsource"
 )
 
 func env(name, fallback string) string {
@@ -46,7 +48,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Addr: *listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
+	mux := http.NewServeMux()
+	mux.Handle("/v1/skills/resolve", resolveHandler())
+	mux.Handle("/", handler)
+	server := &http.Server{Addr: *listen, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 35 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {
@@ -60,4 +65,18 @@ func run() error {
 		return err
 	}
 	return nil
+}
+
+func resolveHandler() http.Handler {
+	token := os.Getenv("SKILLS_RESOLVER_SERVICE_TOKEN")
+	_ = os.Unsetenv("SKILLS_RESOLVER_SERVICE_TOKEN") // Git children never need the service capability.
+	if token == "" {
+		return skillscatalog.NewResolveHandler(nil, "")
+	}
+	source, err := gitsource.NewHosted(os.Getenv("SKILLS_RESOLVER_TEMP_DIR"))
+	if err != nil {
+		log.Print("Skill source resolution unavailable: bounded runtime is not configured")
+		return skillscatalog.NewResolveHandler(nil, "")
+	}
+	return skillscatalog.NewResolveHandler(skillsresolve.New(source), token)
 }

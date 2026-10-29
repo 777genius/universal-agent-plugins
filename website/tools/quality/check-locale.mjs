@@ -4,6 +4,7 @@ import path from "node:path";
 import { sourceRoot } from "../config/site.mjs";
 import { listMarkdownFiles } from "../lib/fs.mjs";
 import { readFrontmatter } from "../lib/site-model.mjs";
+import { isRetiredArchive } from "../lib/public-routes.mjs";
 
 const locales = ["en", "ru", "es", "fr", "zh"];
 const english = new Map();
@@ -24,6 +25,9 @@ for (const locale of locales) {
     if (!english.has(relative)) errors.push(`${locale}/${relative}: missing English counterpart`);
     if (meta.canonicalId !== english.get(relative)?.canonicalId) errors.push(`${locale}/${relative}: canonical mismatch`);
     for (const error of dispositionErrors(`${locale}/${relative}`, body, meta)) errors.push(`${locale}/${relative}: ${error}`);
+    if (!isRetiredArchive(`${locale}/${relative}`) && meta.localeDisposition !== "current-translation") {
+      errors.push(`${locale}/${relative}: published source page needs a current translation`);
+    }
   }
   if (locale !== "en") for (const relative of english.keys()) {
     if (!seen.has(relative)) errors.push(`${locale}/${relative}: missing counterpart`);

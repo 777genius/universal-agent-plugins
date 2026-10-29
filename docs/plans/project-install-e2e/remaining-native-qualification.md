@@ -3040,3 +3040,27 @@ contracts pass; affected all-enabled and whole-root six-linter gates report
 zero issues. The original full archive still replays byte-for-byte to its
 failed/all-false result. A fresh complete-cycle hosted run and two full raw
 audits remain required. No native vendor executable ran locally.
+
+### Copilot observed cached startup and public DTO correction (2026-10-29)
+
+Exact59c1cf29 run40741435108 reaches five validated native sessions and two
+MCP sessions, then stable-A emits tools-loaded before pending/connected. Admit
+that observed order by removing only pending-before-tools; retain pending before
+connected and both completion facts before the server summary, seven unique
+closed event kinds and the original parent/identity/catalog checks. The legacy
+readiness reader keeps its exact order. The same capture proves repeat-add's
+singleton public DTO and repair's literal `local` source; removal uses the same
+existing installed-source formatter. The Python reader selects the singleton
+only for repeat-add-A and retains exact batch/target and shared identity checks.
+
+Grok/Qoder and integration independently approved the plan and exact five-file
+code.38 focused Python contracts pass; six actual public DTOs and all27 stable-A
+events pass the corrected pure readers. Native artifact12844837031 SHA256
+`3f9ed2784825ffffa708778d1e93f0a2af9440721fc7d5449aeccbb6ca4024a3`
+and frontend12844687177 SHA256
+`a65e54f115985db183c6138a1dd55fddc96b76b2b8d80f46af3af3572fe4d444`
+match API sizes/hashes and closed36/25-member CRCs. The original failed archive
+replays unchanged with all flags false. Targeted startup/runtime contracts pass
+in0.033s. Broader unchanged inert-process tests still fail local process
+containment admission; this is not a vendor result or a full-suite pass. Fresh
+hosted complete-cycle evidence and independent raw audits remain required.

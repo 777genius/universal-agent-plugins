@@ -2,6 +2,7 @@ package clients
 
 import (
 	"context"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -68,4 +69,10 @@ type SelectionReader interface {
 // Adapters without this policy retain their existing SelectionReader layout.
 type ScopedSelectionReader interface {
 	ManagedMCPSelectionForScope(domain.InstallScope) (SelectionLayout, error)
+}
+
+// NativeDiscoveryPolicy supplies an adapter's bounded CLI registry budget.
+// The observer's explicit timeout remains authoritative when supplied.
+type NativeDiscoveryPolicy interface {
+	NativeDiscoveryTimeout() time.Duration
 }

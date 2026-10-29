@@ -124,6 +124,7 @@ func projectArgs(envelope domain.PackageEnvelope, serverName string, args func(B
 }
 
 type seamActivator struct {
+	independent  bool
 	profileCheck func(context.Context) error
 	inner        providers.Activator
 	onCommitted  func(context.Context, BindingFacts) error
@@ -134,9 +135,36 @@ type seamActivator struct {
 }
 
 func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	prepared, err := a.prepareActivation(ctx, request)
+	if err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	return a.inner.Activate(ctx, prepared)
+}
+
+// Native config adapters may write the shared kernel while activating. Effect
+// isolation must be explicitly attested by the registered client adapter.
+func (a seamActivator) SupportsIndependentActivation(request domain.ActivationRequest) bool {
+	return a.independent && a.inner.SupportsIndependentActivation(request)
+}
+
+func (a seamActivator) PrepareIndependentActivation(ctx context.Context, request domain.ActivationRequest) (func(context.Context) (domain.ActivationOutcome, error), error) {
+	if !a.SupportsIndependentActivation(request) {
+		return nil, fmt.Errorf("client activation cannot run independently")
+	}
+	prepared, err := a.prepareActivation(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return func(effectContext context.Context) (domain.ActivationOutcome, error) {
+		return a.inner.Activate(effectContext, prepared)
+	}, nil
+}
+
+func (a seamActivator) prepareActivation(ctx context.Context, request domain.ActivationRequest) (domain.ActivationRequest, error) {
 	if !request.Plan.SelectedDelivery.IsZero() {
 		if _, err := a.committedFacts(request); err != nil {
-			return domain.ActivationOutcome{}, err
+			return request, err
 		}
 	}
 	// The engine reconciles a pending host handoff before resuming an existing
@@ -151,18 +179,18 @@ func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRe
 	} else if a.onCommitted != nil && !request.VerifyOnly {
 		facts, err := a.committedFacts(request)
 		if err != nil {
-			return domain.ActivationOutcome{}, err
+			return request, err
 		}
 		if err := a.onCommitted(ctx, facts); err != nil {
-			return domain.ActivationOutcome{}, err
+			return request, err
 		}
 	}
 	if a.profileCheck != nil {
 		if err := a.profileCheck(ctx); err != nil {
-			return domain.ActivationOutcome{}, err
+			return request, err
 		}
 	}
-	return a.inner.Activate(ctx, request)
+	return request, nil
 }
 
 // keepProjectVerifyOnly preserves the core's existing read-only decision for
