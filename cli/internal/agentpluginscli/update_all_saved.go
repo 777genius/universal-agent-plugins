@@ -9,6 +9,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 type preparedSavedUpdateAll struct {
@@ -119,29 +120,48 @@ func (session *updateAllSession) checkPrepared() error {
 		}
 	}
 	for _, item := range session.preparedItems {
-		if err := checkPreparedImperativeUpdate(item.prepared); err != nil {
+		if err := checkPreparedImperativeUpdate(session.ctx, item.prepared); err != nil {
 			return err
 		}
 	}
 	return session.ctx.Err()
 }
-func checkPreparedImperativeUpdate(prepared *preparedUpdateMany) error {
+func checkPreparedImperativeUpdate(ctx context.Context, prepared *preparedUpdateMany) error {
 	state, err := prepared.service.StateStore.Load()
 	if err != nil {
 		return err
 	}
+	matching := false
 	for _, old := range prepared.state.Installations {
 		if old.InstallationID != prepared.installationID {
 			continue
 		}
 		for _, current := range state.Installations {
 			if current.InstallationID == old.InstallationID && reflect.DeepEqual(current, old) {
-				return nil
+				matching = true
 			}
 		}
 	}
-	return installer.ErrPlanChanged
+	if !matching {
+		return installer.ErrPlanChanged
+	}
+	// State equality cannot prove the managed tree, physical profile or native
+	// planning facts stayed unchanged. Reuse the process-inert group boundary.
+	reviewed, err := prepared.service.UpdateGroup(ctx, usecase.GroupInput{Targets: prepared.inputs, CompatibilityChecks: prepared.compatibility, OperationGroupID: prepared.result.OperationID, DryRun: true})
+	if err != nil {
+		return err
+	}
+	if len(reviewed.Targets) != len(prepared.result.Targets) {
+		return installer.ErrPlanChanged
+	}
+	for i, target := range reviewed.Targets {
+		if !reflect.DeepEqual(target.Plan, prepared.result.Targets[i].Output.Result.Plan) {
+			return installer.ErrPlanChanged
+		}
+	}
+	return nil
 }
+
 func (session *updateAllSession) applySaved() error {
 	if session.saved == nil {
 		return nil
@@ -159,39 +179,7 @@ func (session *updateAllSession) applySaved() error {
 	}
 	adapter := &dependencyInstaller{app: saved.app, opts: session.opts, detected: saved.request.detected, cmd: session.cmd, consent: saved.request.consent}
 	applied, applyErr := applyPreparedDependencies(session.ctx, saved.app, &saved.request, adapter, func(_ context.Context) error { return session.checkPrepared() })
-	cursor := 0
-	for _, action := range saved.request.prepared {
-		row := saved.rows[action.Alias]
-		item := &session.result.Installations[row]
-		if action.Action == environment.ActionUnchanged {
-			continue
-		}
-		if cursor >= len(applied.Results) {
-			if item.Status != "apply_failed" && item.Status != "updated" {
-				item.Status = "not_attempted"
-				item.Reason = "saved graph materialization stopped before this binding"
-			}
-			continue
-		}
-		result := applied.Results[cursor]
-		cursor++
-		if result.Outcome != installer.OutcomeCompleted && result.Outcome != installer.OutcomeUnchanged {
-			item.Status = "apply_failed"
-			item.Reason = "saved intent may have been published; inspect binding receipts and run deps sync or recovery"
-		} else if item.Status != "apply_failed" {
-			item.Status = "updated"
-			item.Reason = "saved dependency bindings updated"
-		}
-	}
-	for _, row := range saved.rows {
-		item := &session.result.Installations[row]
-		if item.Status == "updated" {
-			session.result.Updated++
-		}
-		if item.Status == "apply_failed" {
-			session.result.Failed++
-		}
-	}
+	session.recordSavedBindings(applied)
 	if applyErr != nil {
 		session.result.Status = "partial_failure"
 		if !applied.Published && len(applied.Results) == 0 {
@@ -212,4 +200,43 @@ func (session *updateAllSession) applySaved() error {
 		return applyErr
 	}
 	return nil
+}
+
+func (session *updateAllSession) recordSavedBindings(applied dependencyApplicationResult) {
+	cursor := 0
+	for _, action := range session.saved.request.prepared {
+		row := session.saved.rows[action.Alias]
+		item := &session.result.Installations[row]
+		if action.Action == environment.ActionUnchanged {
+			continue
+		}
+		if cursor >= len(applied.Results) {
+			if item.Status == "updated" {
+				item.Status = "apply_failed"
+				item.Reason = "saved dependency was only partially materialized; inspect binding receipts and run deps sync or recovery"
+			} else if item.Status != "apply_failed" {
+				item.Status = "not_attempted"
+				item.Reason = "saved graph materialization stopped before this binding"
+			}
+			continue
+		}
+		result := applied.Results[cursor]
+		cursor++
+		if result.Outcome != installer.OutcomeCompleted && result.Outcome != installer.OutcomeUnchanged {
+			item.Status = "apply_failed"
+			item.Reason = "saved intent may have been published; inspect binding receipts and run deps sync or recovery"
+		} else if item.Status != "apply_failed" {
+			item.Status = "updated"
+			item.Reason = "saved dependency bindings updated"
+		}
+	}
+	for _, row := range session.saved.rows {
+		item := &session.result.Installations[row]
+		if item.Status == "updated" {
+			session.result.Updated++
+		}
+		if item.Status == "apply_failed" {
+			session.result.Failed++
+		}
+	}
 }

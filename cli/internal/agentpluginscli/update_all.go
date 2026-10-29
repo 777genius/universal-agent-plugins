@@ -273,7 +273,7 @@ func (session *updateAllSession) applyAll() error {
 	}
 	for index := range session.preparedItems {
 		item := &session.preparedItems[index]
-		if err := checkPreparedImperativeUpdate(item.prepared); err != nil {
+		if err := checkPreparedImperativeUpdate(session.ctx, item.prepared); err != nil {
 			view := &session.result.Installations[item.resultIndex]
 			view.Status, view.Reason = "apply_failed", err.Error()
 			session.result.Failed++
@@ -363,6 +363,15 @@ func renderUpdateAllHuman(writer io.Writer, result updateAllResult) error {
 }
 
 func renderUpdateAllInstallation(writer io.Writer, installation updateAllInstallation) error {
+	for _, action := range installation.Actions {
+		if action.Action != "update" {
+			continue
+		}
+		from, to := dependencyTransition(action)
+		if _, err := fmt.Fprintf(writer, "  %s/%s: %s → %s\n", action.Alias, action.ClientID, from, to); err != nil {
+			return err
+		}
+	}
 	if installation.Plan != nil {
 		for _, target := range installation.Plan.Targets {
 			if err := renderOpenCodeRuntimeNotice(writer, target.Output.Result); err != nil {

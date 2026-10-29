@@ -61,6 +61,25 @@ paths, forward private profile facts to a renderer, or turn discovery into autom
 installation. Hosts preserve their own explicitly selected native profiles and can
 merge additional discovered profiles into the captured startup context.
 
+## Explicit update checks (development source)
+
+The current development engine adds `client.checkUpdates({ all: true })` or
+`client.checkUpdates({ aliases: ['docs', 'tools'] })`. This capability is not part
+of the published CLI 0.1.94 or an SDK release. It performs a disposable read-only
+network check and does not save freshness, change the agreement, or install files.
+Ordinary `client.environment()` stays passive and reports unchecked moving intent
+as `check_unavailable`.
+
+A check returns `complete`, `changed`, per-entry `installed`/`available` immutable
+identities, requested selectors, and shared dependency owner edges. `current`
+means the selected source was successfully checked; `pinned` means exact intent
+is retained. `check_unavailable` and `blocked` cannot be treated as current.
+A current root can still have changed shared dependencies, so inspect the overall
+`changed` flag and every returned entry. Canceling this read-only HTTP request
+stops checking; it does not create a retained mutation operation. An available
+candidate always needs a fresh `prepare({ action: 'update', ... })` review before
+apply, including drift, profile, source eligibility and stale-input checks.
+
 ## Start an owned engine
 
 Use the management-enabled source executable verified above in `executable`.

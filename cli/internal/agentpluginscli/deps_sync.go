@@ -131,6 +131,11 @@ func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, acti
 
 func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstaller, actions []dependencyAction) ([]dependencyAction, error) {
 	opts := adapter.opts
+	state, err := adapter.app.StateStore.Load()
+	if err != nil {
+		return nil, err
+	}
+	populateDependencyBeforeFacts(state, actions)
 	claims := map[string]string{}
 	updates := map[string]*installer.PreparedOperation{}
 	defer func() {

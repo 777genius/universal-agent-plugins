@@ -2,6 +2,8 @@ package agentpluginscli
 
 import (
 	"errors"
+	"github.com/spf13/cobra"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -133,5 +136,46 @@ func TestSavedRegistryNoLaterReleaseRechecksRecordedEligibility(t *testing.T) {
 				t.Fatal("ineligible fallback changed persistent files")
 			}
 		})
+	}
+}
+
+func TestUpdateAllDoesNotCountPartiallyAttemptedSavedAliasAsUpdated(t *testing.T) {
+	session := updateAllSession{result: updateAllResult{Installations: []updateAllInstallation{{Name: "shared", Saved: true, Status: "planned"}}}, saved: &preparedSavedUpdateAll{rows: map[string]int{"shared": 0}, request: dependencySyncRequest{prepared: []dependencyAction{{Alias: "shared", ClientID: "claude", Action: environment.ActionUpdate}, {Alias: "shared", ClientID: "codex", Action: environment.ActionUpdate}}}}}
+	session.recordSavedBindings(dependencyApplicationResult{Published: true, Results: []installer.Result{{Outcome: installer.OutcomeCompleted, Mutated: true}}})
+	if session.result.Updated != 0 || session.result.Failed != 1 || session.result.Installations[0].Status != "apply_failed" || !strings.Contains(session.result.Installations[0].Reason, "partially") {
+		t.Fatal(session.result)
+	}
+}
+
+func TestUpdateAllRechecksImperativeManagedDriftBeforeSavedPublication(t *testing.T) {
+	j, _, _ := savedMixedUpdateJourney(t)
+	preview, cleanup, err := dependencyPreviewApp(j.cli.app, &options{dryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	command := &cobra.Command{}
+	command.SetContext(t.Context())
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+	session := updateAllSession{ctx: t.Context(), cmd: command, app: preview, opts: &options{format: "json", scope: "user"}}
+	if _, err := session.load(); err != nil {
+		t.Fatal(err)
+	}
+	defer session.cleanupPrepared()
+	if err := session.preflightAll(); err != nil {
+		t.Fatal(err)
+	}
+	for _, installation := range j.state(t).Installations {
+		if installation.DeclaredName == "imperative" {
+			dependencyWrite(t, filepath.Join(installation.Clients[0].TargetLocator, "manual-edit.txt"), "keep this edit")
+		}
+	}
+	before := savedCheckFiles(t, j.cli.root)
+	if err := session.applyAll(); err == nil {
+		t.Fatal("late managed drift was accepted")
+	}
+	if !reflect.DeepEqual(before, savedCheckFiles(t, j.cli.root)) {
+		t.Fatal("saved graph or store changed before imperative drift refusal")
 	}
 }
