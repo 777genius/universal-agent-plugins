@@ -11,7 +11,7 @@
       "partial": "Vérifié avec des limites",
       "error": "Vérification impossible",
       "detailsFor": "Détails SkillSpector pour {name}",
-      "pluginScope": "Skills sélectionnées de ce plugin",
+      "pluginScope": "Périmètre : fichiers des Skills de ce plugin. SkillSpector ne vérifie pas les autres composants du plugin.",
       "skillScope": "Rapport historique de la Skill",
       "absent": "Aucune évaluation publiée ne correspond à cette fiche.",
       "checked": "Vérifié le {date}",
@@ -39,7 +39,7 @@
       "confirmedMaterialIssue": "Problème substantiel confirmé",
       "stale": "Rapport obsolète",
       "unsupported": "Vérification statique non applicable",
-      "fullyChecked": "{checked} compétences sur {total} entièrement vérifiées",
+      "fullyChecked": "Skills entièrement vérifiées : {checked} sur {total}",
       "installAdvice": "Avant l’installation",
       "adviceConfirmed": "Un problème substantiel a été confirmé. Examinez les preuves et la correction avant l’installation.",
       "adviceReview": "Examinez les signaux et leur contexte avant l’installation. Les constats automatiques ne sont pas encore confirmés par un réviseur.",
@@ -68,7 +68,7 @@
       "acceptedSignal": "Signal accepté",
       "classificationExplanation": "Cette classification suit une règle précise du registre et ne constitue pas un audit de sécurité humain.",
       "limitedGroups": "Le rapport publié ne contient que les groupes affichés. Le nombre total de constats distincts est inconnu.",
-      "selectedFullyChecked": "{checked} compétences sélectionnées sur {total} entièrement vérifiées",
+      "selectedFullyChecked": "Skills sélectionnées entièrement vérifiées : {checked} sur {total}",
       "skillRemoved": "Le fichier de compétence précédemment vérifié a été supprimé dans la nouvelle révision examinée. L’ancien rapport reste disponible à titre historique ; aucun contenu actuel n’a été vérifié.",
       "acquisitionTransferLimit": "La récupération du code a atteint la limite de transfert de ce profil. Les fichiers non récupérés n’ont pas été inspectés.",
       "loadingAdvice": "SkillSpector se charge. La couverture est inconnue ; examinez le code avant l’installation.",
@@ -81,7 +81,9 @@
       "contextTruncated": "Contexte limité : {references} références sur {referencesTotal} et {diagnostics} diagnostics sur {diagnosticsTotal} sont affichés.",
       "unsupportedSourceDetails": "Les vérifications statiques SkillSpector ne prennent pas en charge ce type de source. Ses fichiers n’ont pas été vérifiés.",
       "checkUnavailableDetails": "La source n’a pas pu être vérifiée. La couverture est inconnue ; consultez la raison indiquée avant l’installation.",
-      "reasonContexts": "{count} contextes d’origine"
+      "reasonContexts": "{count} contextes d’origine",
+      "noSkills": "Aucune Skill à vérifier",
+      "noSkillsDetails": "Ce plugin ne contient aucune Skill. SkillSpector vérifie uniquement les fichiers des Skills ; les autres composants du plugin sont hors de son périmètre."
     }
   }
 }

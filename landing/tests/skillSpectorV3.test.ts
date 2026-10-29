@@ -60,7 +60,10 @@ function decodeReference(record = referenceRecord()) {
 describe('SkillSpector v3 exact producer contract', () => {
   it('accepts a 17,715-root inventory without changing published evidence or per-plugin coverage', () => {
     const published = JSON.parse(
-      readFileSync(new URL('./fixtures/skillspector-v3-published-home/index.json', import.meta.url), 'utf8'),
+      readFileSync(
+        new URL('./fixtures/skillspector-v3-published-home/index.json', import.meta.url),
+        'utf8',
+      ),
     ) as SkillSpectorManifestV3;
     const expanded = structuredClone(published);
     const addedRoots = 17_715 - expanded.coverage.selected;
@@ -103,8 +106,74 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.equal(decodeSkillSpectorManifestV3(combined).source_states.length, 30_000);
     combined.source_states.push({ ...seed, id: 'over-source-state-budget' });
     assert.throws(() => decodeSkillSpectorManifestV3(combined), /invalid/);
+  });
+
+  it('accepts 10,000 community package states plus Directory states and bounds v3 packages at 20,000', () => {
     const packages = structuredClone(manifest);
-    packages.plugin_states = Array.from({ length: 10_001 }, () => ({ ...packages.plugin_states[0]! }));
+    packages.coverage = {
+      selected: 0,
+      reported: 0,
+      pending: 0,
+      complete: 0,
+      partial: 0,
+      error: 0,
+      stale: 0,
+    };
+    packages.shards = [];
+    packages.plugin_coverage = [];
+    packages.source_states = [];
+    const noSkills = {
+      ...packages.plugin_states[0]!,
+      state: 'not_applicable',
+      reason: 'no_skill_files',
+      skills_total: 0,
+      selected_ids: [],
+    };
+    packages.plugin_states = Array.from({ length: 10_000 }, (_, index) => ({
+      ...noSkills,
+      id: `discovery:community/plugin-${index}`,
+      repository: `community/plugin-${index}`,
+      plugin_path: '',
+    }));
+    packages.plugin_states.push(noSkills);
+    assert.equal(decodeSkillSpectorManifestV3(packages).plugin_states.length, 10_001);
+    packages.plugin_states.push(
+      ...Array.from({ length: 9_999 }, (_, index) => ({
+        ...noSkills,
+        id: `directory/package-${index}`,
+        repository: `directory/package-${index}`,
+      })),
+    );
+    assert.equal(decodeSkillSpectorManifestV3(packages).plugin_states.length, 20_000);
+    packages.plugin_states.push({ ...noSkills, id: 'over-package-state-budget' });
+    assert.throws(() => decodeSkillSpectorManifestV3(packages), /invalid/);
+  });
+
+  it('accepts coverage for 10,000 community packages plus one Directory package within the v3 root budget', () => {
+    const packages = structuredClone(manifest);
+    packages.shards = [];
+    packages.plugin_states = [];
+    packages.source_states = [];
+    const pending = {
+      selected: 1,
+      reported: 0,
+      pending: 1,
+      complete: 0,
+      partial: 0,
+      error: 0,
+      stale: 0,
+    };
+    const rows = Array.from({ length: 20_001 }, (_, index) => ({
+      ...pending,
+      repository: index < 10_000 ? `community/plugin-${index}` : `directory/plugin-${index}`,
+      plugin_path: '',
+    }));
+    for (const count of [10_001, 20_000]) {
+      packages.plugin_coverage = rows.slice(0, count);
+      packages.coverage = { ...pending, selected: count, pending: count };
+      assert.equal(decodeSkillSpectorManifestV3(packages).plugin_coverage.length, count);
+    }
+    packages.plugin_coverage.push(rows[20_000]!);
     assert.throws(() => decodeSkillSpectorManifestV3(packages), /invalid/);
   });
 
