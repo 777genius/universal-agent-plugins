@@ -100,12 +100,20 @@ the ordinary success flow.
 
 ### Smallest useful evolution
 
-First improve author templates and examples: use standard PLUGIN_ROOT/DATA tokens,
-ship the relevant ecosystem lock, state supported host requirements, and document
-which command consumes that lock without resolving it anew. Reuse the existing
-npm preparation path rather than create a second runner. A Python example can
-use uv script metadata plus its adjacent script lock; uv documents creating this
-with `uv lock --script`. [S4]
+First improve author templates and examples: ship the relevant ecosystem lock,
+state supported host requirements, and document which command consumes that lock
+without resolving it anew. For standard stdio MCP configuration, use
+`${PLUGIN_ROOT}` and `${PLUGIN_DATA}` only in the permitted argument, environment
+value and working-directory fields, not in `command` or environment keys. These
+MCP subprocess guarantees do not establish universal environment variables or
+Markdown interpolation for standalone Skills or arbitrary agent-launched shells.
+Skill examples must follow their host's documented script, path and environment
+contract. [S7]
+
+Reuse the existing bounded npm preparation path for packages that declare that
+runtime, rather than create a second runner or silently opt arbitrary Skills into
+it. A Python example can use uv script metadata plus its adjacent script lock;
+uv documents creating this with `uv lock --script`. [S4]
 
 Be precise about flags. In uv, `--locked` checks that the lock is current, whereas
 `--frozen` skips that freshness check. In npm, `ci` rejects manifest/lock mismatch.
@@ -193,7 +201,8 @@ subject to their own existing ownership and retention policy.
 **Runtime challenge:** exact package versions should be enough. Response: the
 executed npm/pip fixture demonstrates changing transitive selection without any
 parent-byte change. Delegate full dependency locking rather than promise it from
-Skill pinning alone.
+Skill pinning alone. MCP subprocess environment requirements also must not be
+presented as a universal execution contract for standalone Skills. [S7]
 
 **Architecture challenge:** a universal runner makes the UX consistent. Response:
 that adds toolchain acquisition, build scripts, platform support and sandboxing.
@@ -219,3 +228,4 @@ have its own scope and evidence; a local research PASS is not native E2E readine
 - [S4: uv script dependency locking](https://docs.astral.sh/uv/guides/scripts/).
 - [S5: uv locked versus frozen](https://docs.astral.sh/uv/concepts/projects/sync/).
 - [S6: npm ci](https://docs.npmjs.com/cli/v11/commands/npm-ci/).
+- [S7: Agent Plugins subprocess environment and expansion, sections 9.1–9.2](https://agent-plugins.org/specification).
