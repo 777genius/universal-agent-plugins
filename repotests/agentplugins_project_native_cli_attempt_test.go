@@ -62,7 +62,7 @@ func projectNativeCLIArguments(client, executable, view, prompt string) ([]strin
 	case "grok":
 		// Source-guided candidate: unlike --tools "" (which parses as None), the
 		// strict permission parser maps --deny "" to Deny/Any/no pattern.
-		return []string{executable, "--single", prompt, "--output-format", "streaming-json", "--permission-mode", "default", "--deny", "", "--no-subagents", "--disable-web-search", "--max-turns", "1"}, nil
+		return []string{executable, "--single", prompt, "--output-format", "streaming-json", "--permission-mode", "default", "--deny", "", "--no-subagents", "--disable-web-search", "--max-turns", "1", "--model", grokProjectProviderModel}, nil
 	case "kiro":
 		return []string{executable, "chat", "--v2", "--no-interactive", prompt}, nil
 	case "windsurf":
@@ -96,10 +96,17 @@ type projectNativeCLIAttempt struct {
 	binding                                                                      domain.ClientBinding
 	qoderMetadata                                                                *qoderOriginalMetadata
 	qoderTelemetry                                                               *qoderEmptyTelemetry
+	grok                                                                         *grokProjectProvider
 }
 
 func (f *projectNativeCLIAttempt) keep(t *testing.T, name string, body []byte) {
 	t.Helper()
+	if f.grok != nil {
+		body = f.grok.redact(body)
+		if grokProjectPrivateCredential(body) {
+			t.Fatal("unredacted Grok fixture credential refused")
+		}
+	}
 	total := len(body)
 	for _, b := range f.files {
 		total += len(b)
@@ -121,10 +128,13 @@ func (f *projectNativeCLIAttempt) check(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, inventory := range []map[string]string{f.immutable, f.protected} {
+	for index, inventory := range []map[string]string{f.immutable, f.protected} {
 		for path, want := range inventory {
 			got, err := projectNativeRuntimeDigest(path)
 			if err != nil || got != want {
+				if index == 1 && err == nil {
+					f.observeGrokConfigMutation(path, want, got)
+				}
 				t.Fatalf("native CLI immutable/protected identity changed: %s (%v)", path, err)
 			}
 		}
@@ -142,6 +152,12 @@ func (f *projectNativeCLIAttempt) env() []string {
 	env := append(f.base.env(f.bin), "NO_COLOR=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_TERMINAL_PROMPT=0")
 	if f.spec.client == "grok" {
 		env = append(env, "GROK_DISABLE_AUTOUPDATER=1")
+		if f.grok != nil {
+			env = append(env, "UAP_GROK_TEST_PROVIDER_KEY="+f.grok.key, "GROK_SAMPLER_SHARED_CLIENT=0")
+			if f.grok.title != nil {
+				env = append(env, "UAP_GROK_TITLE_PROVIDER_KEY="+f.grok.title.transport.key)
+			}
+		}
 	}
 	return env
 }
@@ -171,6 +187,11 @@ func (f *projectNativeCLIAttempt) selectedCommand(label, cwd string, argv []stri
 			return fmt.Errorf("only the exact receipt-selected Qoder catalog is registered")
 		}
 		expected = []string{f.client, "plugins", "list", "--json", "--plugin-dir", f.view}
+	case "native-inspect":
+		if f.spec.client != "grok" {
+			return fmt.Errorf("only Grok has the measured installed inspection")
+		}
+		expected = []string{f.client, "inspect", "--json"}
 	default:
 		return fmt.Errorf("unregistered native CLI command label")
 	}
@@ -184,6 +205,9 @@ func (f *projectNativeCLIAttempt) command(t *testing.T, label, cwd string, argv 
 	allowed := map[string]bool{"git-a": true, "git-b": true, "version": true, "add-a": true, "native-attempt": true}
 	if f.spec.client == "qoder" {
 		allowed["native-catalog"] = true
+	}
+	if f.spec.client == "grok" {
+		allowed["native-inspect"] = true
 	}
 	if !allowed[label] || f.used[label] {
 		t.Fatal("unregistered/repeated CLI attempt command")
@@ -671,10 +695,18 @@ func projectNativeCLIClosedView(root, name string, skill []byte) error {
 func (f *projectNativeCLIAttempt) finish(t *testing.T) {
 	t.Helper()
 	defer f.cancel()
+	if f.grok != nil {
+		f.grok.finish(t, f)
+	}
 	if time.Since(f.started) > 180*time.Second {
 		t.Error("original CLI attempt total deadline exceeded")
 	}
 	f.evidence["test_failed"], f.evidence["elapsed_ms"] = t.Failed(), time.Since(f.started).Milliseconds()
+	if f.spec.client == "grok" && f.evidence["capture_mode"] == "grok-complete-skills-cycle" {
+		complete := !t.Failed() && f.ctx.Err() == nil && f.evidence["cycle_observed_complete"] == true
+		f.evidence["runtime_attempt_complete"] = complete
+		f.evidence["qualification"] = map[string]bool{"project-lifecycle": complete, "native-restart-removal": complete, "mcp-initialize": false, "mcp-tools-list": false, "mcp-tools-call": false}
+	}
 	if f.base != nil && f.evidence["capture_mode"] != qoderCycleMode {
 		if body, err := projectNativeRuntimeRead(f.base.Events, 1<<20); err == nil {
 			f.keep(t, "probe-events.jsonl", body)
@@ -683,6 +715,14 @@ func (f *projectNativeCLIAttempt) finish(t *testing.T) {
 	qoderCycleFinalizeEvidence(f.evidence)
 	raw, _ := json.MarshalIndent(f.evidence, "", "  ")
 	f.keep(t, "runtime-attempt.json", append(raw, '\n'))
+	if f.grok != nil || f.spec.client == "grok" && f.evidence["capture_mode"] == "grok-complete-skills-cycle" {
+		for _, body := range f.files {
+			if grokProjectPrivateCredential(body) {
+				t.Error("unredacted Grok fixture credential refused")
+				return
+			}
+		}
+	}
 	file, err := os.OpenFile(filepath.Join(f.output, "research.zip"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		t.Error(err)
@@ -815,8 +855,13 @@ func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 	}
 	f := newProjectNativeCLIAttempt(t, spec)
 	defer f.finish(t)
+	if client == "grok" {
+		// finish owns cleanup before any listener or native child can start.
+		f.configureGrokTitleProvider(t)
+	}
 	f.setup(t)
-	if client == "qoder" {
+	switch client {
+	case "qoder":
 		profile := filepath.Join(f.base.Home, ".qoder")
 		before, err := projectNativeCLIQoderProfile(profile)
 		if err != nil {
@@ -845,6 +890,8 @@ func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 		}
 		sum := sha256.Sum256(result.Stdout)
 		f.evidence["native_catalog"] = map[string]any{"schema_qualified": false, "json_kind": kind, "sha256": hex.EncodeToString(sum[:]), "original_profile_preserved": true, "selection_interpretation": "opaque native catalog; no scope or runtime qualification"}
+	case "grok":
+		f.inspectGrokSelected(t)
 	}
 	prompt := "Describe only the installed " + f.name + " skill marker. Do not run any tool or change any file."
 	argv, err := projectNativeCLIArguments(client, f.client, f.view, prompt)

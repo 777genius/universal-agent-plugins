@@ -259,7 +259,7 @@ func (f *cursorProjectAttempt) configBinding(t *testing.T, body []byte, active, 
 		t.Fatal("Cursor native MCP fields differ")
 	}
 	env := map[string]any{"UAP_TEST_ROOT": f.base.Root, "UAP_TEST_EVENTS": f.base.Events, "UAP_TEST_NONCE": f.base.Nonce, "UAP_TEST_REVISION": "cursor-a-one", "PLUGIN_ROOT": active, "PLUGIN_DATA": data}
-	args := []any{managedstdio.Mode, active, data, active, "plugin", "--", "./bin/probe", "cursor-component"}
+	args := []any{managedstdio.Mode, active, data, active, "plugin", "--argv-base64-v1", "Li9iaW4vcHJvYmU=", "Y3Vyc29yLWNvbXBvbmVudA=="}
 	if server["command"] != filepath.Join(active, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName) || !reflect.DeepEqual(server["args"], args) || !reflect.DeepEqual(server["env"], env) {
 		t.Fatal("Cursor installed managed stdio recipe differs")
 	}
