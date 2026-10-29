@@ -4,18 +4,21 @@ on:
     paths:
       - '.github/workflows/project-native-research.yml'
       - 'scripts/project_native_research.py'
+      - 'scripts/project_native_cursor_acquisition.py'
+      - 'scripts/project_native_service.py'
       - 'scripts/project_native_collectors/**'
       - 'scripts/test_project_native_*.py'
       - 'scripts/native_client_research.py'
       - 'scripts/native_client_project_artifacts.py'
       - 'scripts/research-grok-native.py'
       - 'scripts/run-native-client-matrix.py'
+      - 'repotests/testdata/agentplugins_native_probe/**'
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: project-native-research-${{ github.ref }}
-  cancel-in-progress: true
+  group: project-native-research-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   contracts:
     name: Inert contracts and explicit research selection
@@ -59,6 +62,11 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: ${{ matrix.client == 'kimi' && matrix.phase == 'observe' }}
+        with:
+          go-version: '1.26.10'
+          cache: false
       - name: Acquire or observe exact native bytes in a fresh original profile
         env:
           AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'

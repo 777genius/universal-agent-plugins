@@ -33,18 +33,20 @@ class CursorAcquisitionContract(unittest.TestCase):
             leaf = load_leaf()
             for context in (None, ForbiddenContext(), {"native_opt_in": True, "hosted": True}):
                 with self.subTest(context_type=type(context).__name__):
-                    with self.assertRaisesRegex(RuntimeError, "acquisition-only.*reviewed pin amendment"):
+                    with self.assertRaisesRegex(RuntimeError, "acquisition-only.*separately reviewed collector"):
                         leaf.collect(context)
             process.assert_not_called()
             download.assert_not_called()
 
-    def test_candidate_has_no_execution_identity_before_inventory(self):
+    def test_measured_pin_keeps_native_execution_disabled(self):
         leaf = load_leaf()
         self.assertIs(leaf.ACQUISITION_ONLY, True)
-        self.assertIsNone(leaf.ACQUISITION["integrity"])
-        self.assertIsNone(leaf.ACQUISITION["entrypoint"])
-        self.assertNotIn("binary_sha256", leaf.ACQUISITION)
-        self.assertNotIn("expected_bytes", leaf.ACQUISITION)
+        self.assertEqual(leaf.ACQUISITION["integrity"], "sha256:85296944e4600a83c4b764f578d1502bf9c416db200d33a593e8f3ecabfdc294")
+        self.assertEqual(leaf.ACQUISITION["entrypoint"], "dist-package/cursor-agent")
+        self.assertEqual(leaf.ACQUISITION["binary_sha256"], "2ccc9a8e167797641448b5e5c936f006ba137a2555f117f38c5eb76a5238a233")
+        self.assertEqual(leaf.ACQUISITION["expected_bytes"], 184859176)
+        self.assertEqual(leaf.ACQUISITION["max_expanded_bytes"], 640 << 20)
+        self.assertEqual(leaf.ACQUISITION["transport"], "cursor-publisher-curl")
         # A flag change alone must not accidentally expose native execution.
         leaf.ACQUISITION_ONLY = False
         with self.assertRaisesRegex(RuntimeError, "acquisition-only"):
@@ -66,7 +68,7 @@ class CursorAcquisitionContract(unittest.TestCase):
         self.assertGreater(candidate["max_bytes"], 0)
         self.assertLessEqual(candidate["max_bytes"], 256 * 1024 * 1024)
         self.assertEqual(candidate["format"], "tar.gz")
-        self.assertEqual(candidate["runtime"], "node")
+        self.assertEqual(candidate["runtime"], "native")
 
 
 if __name__ == "__main__":

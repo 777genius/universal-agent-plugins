@@ -222,20 +222,25 @@ function updateAutoDetect(value: boolean) {
     :data-trust="isDiscovered ? 'community' : 'reviewed'"
     :data-install-source="plugin.install_source"
   >
-    <span
-      v-if="!isDiscovered"
-      class="plugin-card__ribbon"
-      :class="{ 'plugin-card__ribbon--muted': !canInstall && !vendorAvailable }"
-      >{{
-        canInstall || vendorAvailable
-          ? t('registryUi.card.reviewedListing')
-          : expired
-            ? t('registryUi.card.temporarilyPaused')
-            : !published
-              ? t('registryUi.card.previewOnly')
-              : t('registryUi.card.notAvailable')
-      }}</span
-    >
+    <AppTooltip v-if="!isDiscovered" above-header>
+      <template #trigger>
+        <span
+          class="plugin-card__ribbon"
+          tabindex="0"
+          :class="{ 'plugin-card__ribbon--muted': !canInstall && !vendorAvailable }"
+          >{{
+            canInstall || vendorAvailable
+              ? t('registryUi.card.reviewedListing')
+              : expired
+                ? t('registryUi.card.temporarilyPaused')
+                : !published
+                  ? t('registryUi.card.previewOnly')
+                  : t('registryUi.card.notAvailable')
+          }}</span
+        >
+      </template>
+      <p class="app-tooltip__compact">{{ t('registryUi.card.reviewedListingTooltip') }}</p>
+    </AppTooltip>
     <div
       class="plugin-card__identity"
       :class="{
@@ -286,11 +291,24 @@ function updateAutoDetect(value: boolean) {
       </AppTooltip>
       <span aria-hidden="true"> · </span>{{ t('registryUi.card.agentPlugins10') }}
     </p>
-    <SecurityAssessmentBadge
-      v-if="plugin.security && !discoveryStale"
-      :plugin="plugin"
-      :details-to="securityDetailURL"
-    />
+    <div class="plugin-card__assessments">
+      <SecurityAssessmentBadge
+        v-if="plugin.security && !discoveryStale"
+        :plugin="plugin"
+        :details-to="securityDetailURL"
+      />
+      <SkillSpectorAssessment
+        :applicable="plugin.components.includes('skills')"
+        :subject="{
+          kind: 'plugin',
+          repository: plugin.source.repository,
+          path: plugin.source.path,
+          revision: plugin.source.revision,
+        }"
+        :name="plugin.display_name"
+        scope="plugin"
+      />
+    </div>
     <p class="plugin-card__description">{{ plugin.description }}</p>
     <details v-if="alternatives.length" class="plugin-other-sources">
       <summary>
@@ -423,6 +441,16 @@ function updateAutoDetect(value: boolean) {
 </template>
 
 <style scoped lang="scss">
+.plugin-card__assessments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 12px;
+  min-width: 0;
+}
+.plugin-card__assessments :deep(.skillspector[open]) {
+  flex-basis: 100%;
+}
 .plugin-card__actions {
   display: flex;
   align-items: center;

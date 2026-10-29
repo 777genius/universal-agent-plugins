@@ -1,0 +1,38 @@
+{
+  "name": "@uap/management-sdk",
+  "version": "0.0.0-development",
+  "description": "Typed client and optional Node host for the UAP Go management engine",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-schema.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "npm run build && node --experimental-strip-types --test test/*.test.ts",
+    "test:consumer": "node scripts/check-packed.ts"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.4",
+    "typescript": "7.0.2"
+  }
+}

@@ -161,8 +161,8 @@ func (session *repairManySession) revisionKey(binding domain.ClientBinding) (str
 }
 
 func (session *repairManySession) preflight() error {
-	_, detected, err := preflightSelectedTargets(
-		session.ctx, session.app, session.targets, nil,
+	_, detected, err := preflightProjectLifecycleTargets(
+		session.ctx, session.app, session.opts, session.targets, nil,
 		!session.opts.dryRun && session.installation.OriginMode == domain.OriginModeDirectory,
 		lifecycleInstallIntents(session.installation, session.opts.scope, nil),
 	)

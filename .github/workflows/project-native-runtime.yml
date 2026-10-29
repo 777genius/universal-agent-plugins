@@ -1,0 +1,125 @@
+name: Project Native Runtime
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/project-native-runtime.yml'
+      - 'scripts/project_native_runtime.py'
+      - 'scripts/project_native_research.py'
+      - 'scripts/project_native_service.py'
+      - 'scripts/project_native_collectors/**'
+      - 'scripts/test_project_native_runtime.py'
+      - 'repotests/agentplugins_*project_native_*test.go'
+      - 'repotests/testdata/agentplugins_native_probe/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: project-native-runtime-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  contracts:
+    name: Runtime admission contracts and exact selection
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.selection.outputs.matrix }}
+      count: ${{ steps.selection.outputs.count }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify inert envelope and selection contracts
+        run: python3 -m unittest discover -s scripts -p 'test_project_native_runtime.py'
+      - name: Select only implemented exact native tests
+        id: selection
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, subprocess
+          value = subprocess.check_output(['python3', 'scripts/project_native_runtime.py', '--matrix'], text=True).strip()
+          matrix = json.loads(value)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('matrix=' + value + '\n')
+              output.write('count=' + str(len(matrix['include'])) + '\n')
+          print(value)
+          PYTHON
+  native:
+    name: ${{ matrix.client }} / ${{ matrix.phase }} / installed public CLI
+    needs: contracts
+    if: ${{ needs.contracts.outputs.count != '0' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.contracts.outputs.matrix) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 26
+    env:
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Admit actual hosted environment and clean source before toolchain setup
+        run: |
+          python3 - <<'PYTHON'
+          import os, platform, re, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / 'scripts'))
+          from native_client_research import run_probe
+          required = {'GITHUB_ACTIONS': 'true', 'RUNNER_ENVIRONMENT': 'github-hosted', 'AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED': '1'}
+          if any(os.environ.get(key) != value for key, value in required.items()) or platform.system() != 'Linux' or platform.machine() != 'x86_64':
+              raise SystemExit('actual opted-in GitHub-hosted Linux x64 required')
+          expected = os.environ['EXPECTED_COMMIT']
+          env = {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_TERMINAL_PROMPT': '0'}
+          def git(*args):
+              record, stdout, stderr = run_probe(['/usr/bin/git', *args], Path.cwd(), env, Path('/tmp'), 'source-guard', timeout=10, limit=65536, memory_only=True)
+              if record['error'] is not None or record['exit'] != 0 or stderr:
+                  raise SystemExit('bounded source identity query failed')
+              return stdout.decode('ascii', errors='strict').strip()
+          if not re.fullmatch('[0-9a-f]{40}', expected) or git('rev-parse', 'HEAD') != expected or not re.fullmatch('[0-9a-f]{40}', git('rev-parse', 'HEAD^{tree}')) or git('status', '--porcelain', '--untracked-files=normal'):
+              raise SystemExit('exact clean current-source checkout required')
+          PYTHON
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Run the selected bounded current-source native test
+        run: python3 scripts/project_native_runtime.py --client '${{ matrix.client }}' --output '${{ runner.temp }}/project-runtime-${{ matrix.client }}'
+      - name: Admit exact closed output files
+        id: admission
+        if: ${{ always() }}
+        env:
+          EVIDENCE: ${{ runner.temp }}/project-runtime-${{ matrix.client }}/upload
+        run: |
+          /usr/bin/python3 -I - <<'PYTHON'
+          import os, stat
+          from pathlib import Path
+          root = Path(os.environ['EVIDENCE'])
+          for label in ('frontend', 'runtime'):
+              path = root / (label + '.zip')
+              if not path.exists():
+                  continue
+              info = path.lstat()
+              if path.resolve() != path or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid() or info.st_size > 32 * 1024 * 1024:
+                  raise SystemExit('refusing aliased or unbounded closed evidence')
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+                  output.write(label + '=true\n')
+          PYTHON
+      - name: Upload source, build and test receipt
+        if: ${{ always() && steps.admission.outputs.frontend == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: project-runtime-${{ matrix.client }}-${{ matrix.phase }}-frontend
+          path: ${{ runner.temp }}/project-runtime-${{ matrix.client }}/upload/frontend.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload admitted native runtime evidence
+        if: ${{ always() && steps.admission.outputs.runtime == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: project-runtime-${{ matrix.client }}-${{ matrix.phase }}-native
+          path: ${{ runner.temp }}/project-runtime-${{ matrix.client }}/upload/runtime.zip
+          if-no-files-found: error
+          retention-days: 14

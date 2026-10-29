@@ -1,0 +1,12 @@
+Two verbatim current/complete producer records retained from the first full v3
+catalog artifact (registry run40686109468), generated_at2026-10-28T13:01:22Z.
+Cloudflare One migrations has17 rejected/out_of_scope external references and no
+ledger exceptions. affaan-m/ecc recsys-pipeline-architect has2 references including
+a resolved/analyzed SKILL.md self-reference, and no ledger exceptions. Original
+source revisions/content digests, findings, timing, coverage, queue and retry
+metadata remain unchanged. Tests scope the surrounding manifest to a subject and
+recompute the shard transport hash/byte count without altering these records.
+These complete reports prove that retained reference context does not imply
+incomplete inspection. Source artifacts: registry fullcatalog publication report,
+cloudflare registry shard and affaan-m/ecc shard
+6a7037d9c686e955cb6a3da549775dd9ef4102c7390b9a7fc71a180a2fd29fde.json.

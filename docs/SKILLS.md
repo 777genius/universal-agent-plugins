@@ -1,5 +1,10 @@
 # plugin-kit-ai Skills
 
+This page preserves the experimental Skills commands of the retired
+`plugin-kit-ai` CLI. For the current public installer workflow, read
+[Installing Agent Skills](AGENT_SKILLS_INSTALLER.md). The two command families
+have different source formats and release boundaries.
+
 `plugin-kit-ai skills` is an experimental, compatibility-first authoring layer for repository-local skills.
 
 It also includes a small external skills wrapper:

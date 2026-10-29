@@ -2,6 +2,7 @@ package clients
 
 import (
 	"context"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -61,4 +62,17 @@ var DefaultSelectionLayout = SelectionLayout{File: "mcp.json", Nested: true}
 // generic default is DefaultSelectionLayout.
 type SelectionReader interface {
 	ManagedMCPSelection() SelectionLayout
+}
+
+// ScopedSelectionReader chooses the managed selection layout for an explicit
+// installation scope. It does not infer scope from artifact or native files.
+// Adapters without this policy retain their existing SelectionReader layout.
+type ScopedSelectionReader interface {
+	ManagedMCPSelectionForScope(domain.InstallScope) (SelectionLayout, error)
+}
+
+// NativeDiscoveryPolicy supplies an adapter's bounded CLI registry budget.
+// The observer's explicit timeout remains authoritative when supplied.
+type NativeDiscoveryPolicy interface {
+	NativeDiscoveryTimeout() time.Duration
 }

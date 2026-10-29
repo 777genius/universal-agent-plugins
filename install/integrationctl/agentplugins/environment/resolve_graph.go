@@ -48,7 +48,7 @@ type graphSolver struct {
 	resolver     Resolver
 	graph        GraphResolver
 	requirements Requirements
-	update       string
+	update       map[string]bool
 	roots        map[string]graphNode
 	pins         map[string]LockedPackage
 	descriptions map[string]ResolvedPackage
@@ -58,8 +58,8 @@ type graphConflict struct{ message string }
 
 func (err graphConflict) Error() string { return err.message }
 
-func newGraphSolver(resolver Resolver, requirements Requirements, previous Lock, update string) *graphSolver {
-	solver := &graphSolver{resolver: resolver, requirements: requirements, update: update, roots: map[string]graphNode{}, pins: map[string]LockedPackage{}, descriptions: map[string]ResolvedPackage{}}
+func newGraphSolver(resolver Resolver, requirements Requirements, previous Lock, update map[string]bool) *graphSolver {
+	solver := &graphSolver{resolver: resolver, requirements: requirements, update: map[string]bool{}, roots: map[string]graphNode{}, pins: map[string]LockedPackage{}, descriptions: map[string]ResolvedPackage{}}
 	solver.graph, _ = resolver.(GraphResolver)
 	for _, pkg := range previous.Packages {
 		solver.pins[pkg.SourceKey] = pkg
@@ -67,8 +67,8 @@ func newGraphSolver(resolver Resolver, requirements Requirements, previous Lock,
 	for _, alias := range sortedKeys(requirements.Dependencies) {
 		req := requirements.Dependencies[alias]
 		key, _ := req.SourceKey()
-		if alias == update {
-			solver.update = key
+		if update[alias] {
+			solver.update[key] = true
 		}
 		if pin, ok := solver.pins[key]; ok {
 			req.Alias = pin.Alias
@@ -161,14 +161,14 @@ func (solver *graphSolver) search(ctx context.Context, choices map[string]Resolv
 
 func (solver *graphSolver) choose(ctx context.Context, key string, node graphNode, choices map[string]ResolvedPackage) (map[string]ResolvedPackage, map[string]graphNode, error) {
 	var last error
-	if solver.update != "" && key != solver.update {
+	if len(solver.update) > 0 && !solver.update[key] {
 		if _, root := solver.roots[key]; root {
 			if old, ok := solver.pins[key]; ok && !nodeAccepts(node, old) {
 				return nil, nil, conflictFor(key, node)
 			}
 		}
 	}
-	if old, ok := solver.pins[key]; ok && key != solver.update && nodeAccepts(node, old) {
+	if old, ok := solver.pins[key]; ok && !solver.update[key] && nodeAccepts(node, old) {
 		// Newly acquired saved-add seeds have source identity before graph intent.
 		// Supply their known targets when the cold manifest must be read again.
 		if len(old.Targets) == 0 {
@@ -187,7 +187,7 @@ func (solver *graphSolver) choose(ctx context.Context, key string, node graphNod
 			return nil, nil, err
 		}
 		last = err
-		if solver.update != "" {
+		if len(solver.update) > 0 {
 			if _, root := solver.roots[key]; root {
 				return nil, nil, last
 			}
@@ -243,7 +243,7 @@ func (solver *graphSolver) chooseExact(ctx context.Context, key string, node gra
 		return nil, nil, ErrDependencyFactsUnavailable
 	}
 	old, ok := solver.pins[key]
-	pkg, err := solver.resolver.Resolve(ctx, node.requirement, node.targets, pinOrNil(old, ok), key == solver.update)
+	pkg, err := solver.resolver.Resolve(ctx, node.requirement, node.targets, pinOrNil(old, ok), solver.update[key])
 	if err != nil {
 		return nil, nil, err
 	}

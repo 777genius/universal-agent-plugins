@@ -1,3 +1,4 @@
+import { catalogCategories } from './catalogCategories.ts';
 import type {
   DiscoveryBundle,
   DiscoveryEnvelope,
@@ -337,7 +338,7 @@ export function discoveryPlugin(
     description: record.description || `Agent Plugins 1.0 package from ${record.repository}`,
     author: record.author ?? { name: record.owner, url: `https://github.com/${record.owner}` },
     license: record.license ?? 'Not specified',
-    categories: [],
+    categories: catalogCategories(source),
     keywords: [record.owner, record.repository, ...record.mcp_transports],
     source,
     install_source: record.slug,

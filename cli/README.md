@@ -1,12 +1,12 @@
 # plugin-kit-ai CLI
 
-> **Historical v1 reference — baseline 1.2.4.** The commands and capabilities
-> below describe the preserved YAML v1 workflow. Released Milestone A static
-> authoring is available from npm as `universal-agent-plugins` or `plugin-kit-ai@2.0.5`;
-> see the [current Build guide](../website/source/en/build/index.md). Runtime/dev/bootstrap, migration,
-> export and publication remain deferred from v2. Use `plugin-kit-ai@1.2.4`
-> explicitly for the historical instructions below. npm, PyPI, Homebrew,
-> GitHub Releases and public-channel E2E have been verified for Milestone A.
+> **Historical YAML CLI reference — baseline 1.2.4.** The instructions below
+> preserve the retired `plugin-kit-ai` workflow. For the current public CLI,
+> install `universal-agent-plugins` and read the [Use guide](../website/source/en/use/index.md).
+> The [Build guide](../website/source/en/build/index.md) explains standard
+> `plugin.json` authoring and identifies commands that need a qualified/source
+> build. Existing `plugin-kit-ai` artifacts remain immutable history; this
+> page does not qualify their old commands for the current installer.
 
 Canonical repo: `github.com/777genius/plugin-kit-ai`. The CLI lives in the submodule `github.com/777genius/plugin-kit-ai/cli` and builds the **`plugin-kit-ai`** binary: `init`, `bootstrap`, `doctor`, `dev`, `test`, `export`, `bundle install`, `bundle fetch`, `bundle publish`, `generate`, `import`, `inspect`, `normalize`, `validate`, `capabilities`, `install`, `version`, plus experimental `skills` authoring commands.
 

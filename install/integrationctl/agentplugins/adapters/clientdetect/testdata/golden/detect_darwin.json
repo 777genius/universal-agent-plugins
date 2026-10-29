@@ -72,6 +72,11 @@
         "Detected": true,
         "Evidence": "configuration_directory",
         "ID": "cline_cursor_config"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "cline_cli"
       }
     ],
     "Version": ""
@@ -299,6 +304,30 @@
         "Detected": true,
         "Evidence": "application_bundle",
         "ID": "opencode_desktop"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "pi",
+    "ConfigRoot": "\u003chome\u003e/.pi/agent",
+    "DetectionError": null,
+    "DisplayName": "Pi",
+    "ExecutablePath": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
+    "Status": "not_detected",
+    "Surfaces": [
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "pi_cli"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "pi_config"
       }
     ],
     "Version": ""

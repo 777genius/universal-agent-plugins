@@ -1,0 +1,176 @@
+openapi: 3.0.3
+info:
+  title: Immutable skill source preview
+  version: 1.0.0
+  description: >-
+    Service-authenticated, bounded public GitHub source resolution. This does not
+    install or execute a skill, fetch companion resource contents, or establish
+    safety. The anonymous listing contract remains skills-catalog.openapi.yaml.
+servers:
+  - url: https://api.universal-agent-plugins.com
+paths:
+  /v1/skills/resolve:
+    post:
+      operationId: resolveSkillSource
+      security:
+        - resolverServiceToken: []
+      description: >-
+        No browser Origin or query parameters are accepted. JSON is at most
+        8192 bytes; unknown/duplicate fields and null values are rejected. Initial
+        discovery resolves the default branch once. A hint only auto-selects a
+        unique validated exact name after complete discovery. Explicit selection
+        uses the returned immutable commit and actual directory path, including
+        the empty string for repository root; it never re-resolves a branch.
+        Response is at most 262144 encoded bytes. One active resolver per process,
+        burst two with one token per five seconds, and 30 seconds including
+        process termination apply. The configured deployment has one replica.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/DiscoveryRequest'
+                - $ref: '#/components/schemas/SelectionRequest'
+      responses:
+        '200':
+          description: >-
+            Inspect status. Only resolved contains selected bytes. Incomplete is
+            not a complete source or an empty successful catalog. A stale hint
+            may produce selection_required with the actual available candidates.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ResolveResult'}
+        '400':
+          description: Invalid request, coordinates, media type or unsupported query.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ResolveError'}
+        '401':
+          description: Missing or invalid service bearer token.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ResolveError'}
+        '403':
+          description: Browser Origin is not permitted; this endpoint has no CORS.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ResolveError'}
+        '405':
+          description: Only POST is accepted.
+        '503':
+          description: >-
+            Resolver disabled, runtime envelope unavailable, source unavailable,
+            cancellation/deadline, or bounded admission busy. No raw Git error or
+            credential is returned. The listing and health routes are independent.
+          headers:
+            Retry-After:
+              schema: {type: integer, minimum: 1}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ResolveError'}
+components:
+  securitySchemes:
+    resolverServiceToken:
+      type: http
+      scheme: bearer
+      description: Operator-configured capability for public source previews only.
+  schemas:
+    Repository:
+      type: string
+      maxLength: 256
+      description: Public GitHub owner/repository, no URL, selector or .git suffix; returned canonical lowercase.
+    Commit:
+      type: string
+      pattern: '^[0-9a-f]{40}$'
+    SkillPath:
+      type: string
+      maxLength: 4096
+      description: >-
+        Exact repository-relative directory in UTF-8, at most 4096 bytes. Empty
+        string denotes root. No leading/trailing slash, traversal, backslashes,
+        controls or '.' alias. This is not the SKILL.md filename or catalog slug.
+    DiscoveryRequest:
+      type: object
+      additionalProperties: false
+      required: [repository]
+      properties:
+        repository: {$ref: '#/components/schemas/Repository'}
+        skillNameHint:
+          type: string
+          minLength: 1
+          maxLength: 512
+          description: Exact unverified provider name, at most 512 UTF-8 bytes, without controls.
+    SelectionRequest:
+      type: object
+      additionalProperties: false
+      required: [repository, commit, path]
+      properties:
+        repository: {$ref: '#/components/schemas/Repository'}
+        commit: {$ref: '#/components/schemas/Commit'}
+        path: {$ref: '#/components/schemas/SkillPath'}
+    Candidate:
+      type: object
+      additionalProperties: false
+      required: [path, name, description]
+      properties:
+        path: {$ref: '#/components/schemas/SkillPath'}
+        name: {type: string}
+        description: {type: string}
+    ResolvedSkill:
+      type: object
+      additionalProperties: false
+      required: [path, name, description, rawContent, rawSha256, hasResources]
+      properties:
+        path: {$ref: '#/components/schemas/SkillPath'}
+        name: {type: string}
+        description: {type: string}
+        rawContent:
+          type: string
+          description: Exact original UTF-8 SKILL.md bytes, at most 65536 bytes; CRLF is preserved, invalid UTF-8 is rejected.
+        rawSha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 of rawContent encoded as UTF-8, without a prefix.
+        hasResources:
+          type: boolean
+          description: >-
+            Ordinary companion files are present but were not downloaded/imported.
+            Advisory inventory only, not bundle completeness or a trust verdict.
+    ResolveResult:
+      type: object
+      additionalProperties: false
+      required: [version, status, repository, commit]
+      properties:
+        version: {type: integer, enum: [1]}
+        status: {type: string, enum: [resolved, selection_required, not_found, incomplete]}
+        repository: {$ref: '#/components/schemas/Repository'}
+        commit: {$ref: '#/components/schemas/Commit'}
+        skill: {$ref: '#/components/schemas/ResolvedSkill'}
+        candidates:
+          type: array
+          maxItems: 128
+          items: {$ref: '#/components/schemas/Candidate'}
+        reasons:
+          type: array
+          items: {type: string}
+      oneOf:
+        - required: [skill]
+          properties:
+            status: {enum: [resolved]}
+        - required: [candidates]
+          properties:
+            status: {enum: [selection_required]}
+        - properties:
+            status: {enum: [not_found, incomplete]}
+    ResolveError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: {type: string}
+            message: {type: string}
+        retryAfter: {type: integer, minimum: 1}

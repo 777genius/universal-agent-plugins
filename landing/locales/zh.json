@@ -288,7 +288,7 @@
       "quickstartTitle": "打开快速入门",
       "quickstartBody": "从安装到经过验证的存储库的最短受支持路径。",
       "buildTitle": "打开构建指南",
-      "buildBody": "使用 agentplugins author 创建并检查 plugin.json 包。",
+      "buildBody": "手动编写 plugin.json 包，或使用源码创作工具，再通过已发布管理器验证和安装。",
       "useTitle": "打开使用指南",
       "useBody": "使用 agentplugins 查找、预览、安装和维护插件。"
     }
@@ -339,20 +339,33 @@
     "specLink": "Agent Plugins 1.0 规范",
     "compatibilityLink": "客户端兼容性（英文）",
     "limitations": "兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。",
-    "versions": "Agent Plugins 创作已发布: universal-agent-plugins; GitHub: agentplugins-v*.",
-    "availability": "Agent Plugins 创作已发布",
-    "releaseScope": "Agent Plugins 创作已在 universal-agent-plugins 中发布；GitHub：agentplugins-v*。npm、Homebrew、原生归档、GitHub Releases 和公共 E2E 已验证。此版本提供静态创作；不包含运行插件、开发服务器、依赖项安装、导出或发布。",
+    "versions": "已验证原生安装器：CLI 0.1.94；npm 包名为 universal-agent-plugins；GitHub 发布标签为 agentplugins-v*。",
+    "availability": "手动编写包，或使用源码创作工具",
+    "releaseScope": "GitHub Releases 和 Homebrew 提供 CLI 0.1.94 安装器，其中不包含 agentplugins author。也可通过 npm 安装，但各渠道版本可能不同；使用 0.1.94 专属行为前请先检查 CLI 版本。构建指南中的创作命令需要启用创作功能的源码构建。生成的 API 参考保留其历史 0.1.65 来源，不能用于说明当前安装器包含哪些功能。",
     "buildGuideLink": "打开构建指南"
   },
   "shell": {
+    "dependencies": {
+      "eyebrow": "相互连接的依赖",
+      "title": "两个插件，共享一个依赖。",
+      "description": "安装插件及其依赖。版本相同且兼容的共享依赖只安装一次。",
+      "demoPackage": "演示软件包",
+      "installed": "已安装",
+      "alreadyInstalled": "此前已安装",
+      "shared": "共享",
+      "caption": "软件包和依赖图仅作示例。两个软件包共享 Playwright；Context7 此前已安装。",
+      "graphDescription": "marketing-kit 依赖 Playwright、HubSpot 和 Notion。Web Design Kit 依赖同一个 Playwright 软件包、Figma 和 Context7。所有软件包均已安装；Context7 此前已安装。"
+    },
     "restore": {
-      "title": "在下一台电脑上使用相同的插件版本",
+      "title": "相同的插件版本，整个团队共享。",
       "guide": "指南",
-      "from": "在当前电脑上",
-      "to": "在下一台电脑上",
-      "transfer": "在运行这两条命令之间，将 {manifest} 和 {lockfile} 复制到另一台电脑。",
+      "from": "在你的项目中",
+      "to": "你的同事",
+      "transfer": "将 {manifest} 和 {lockfile} 随项目提交，让同事恢复相同版本。",
       "requirements": "恢复需要记录的源仍可访问，并且客户端支持依赖管理。",
-      "excludes": "不会传输登录状态、机密信息、设置或插件数据。"
+      "excludes": "不会传输登录状态、机密信息、设置或插件数据。",
+      "subtitle": "在项目中安装，提交锁定文件，让同事恢复相同版本。",
+      "commit": "提交 uap.toml + uap.lock"
     },
     "docs": {
       "englishLabel": "{label}（英文文档）"
@@ -392,7 +405,7 @@
       "items": {
         "0": {
           "question": "支持哪些人工智能代理？",
-          "answer": "Codex、ChatGPT、Cursor、GitHub Copilot CLI、VS Code、Kiro、Claude Code、Gemini CLI、OpenCode、Cline 和 Windsurf 通过显式的特定于客户端的路径进行支持或准备。 Grok Build 和 Kimi Code 也支持原生技能与 MCP。"
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder：各客户端有自己的安装或准备流程。兼容性取决于包的组件、安装范围和激活要求。"
         },
         "1": {
           "question": "是否将一个命令安装到每个代理中？",
@@ -404,7 +417,7 @@
         },
         "3": {
           "question": "我可以在该目录之外安装插件吗？",
-          "answer": "是的。使用包含有效代理插件 1.0 plugin.json 包的固定 GitHub 源。"
+          "answer": "可以。可从本地文件夹、HTTPS 或 SSH Git、受支持的提供方链接或完整归档安装带有 plugin.json 的完整包。对于可保存的依赖，CLI 会记录精确的源版本。"
         },
         "4": {
           "question": "所有发现的插件都会经过审核吗？",
@@ -564,6 +577,7 @@
       "explorePlugins": "探索插件",
       "searchByCapabilityComponentOrSource": "按功能、组件或来源搜索。",
       "allCategories": "所有类别",
+      "marketingCategory": "市场营销",
       "allComponents": "所有组件",
       "allSources": "所有来源",
       "upstreamPackages": "上游包",
@@ -629,7 +643,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "在其索引源中不可用；没有生成安装命令。",
       "unavailableAtItsIndexedSource": "在其索引源中不可用",
       "checkedAgainBeforeInstallation": "安装前再次检查",
-      "reviewedListing": "已审核",
+      "reviewedListing": "条目信息已审核",
       "notAvailableForChatgpt": "不适用于 ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "已验证连接；在 ChatGPT 中完成设置",
       "allInstalledAgents": "在终端中选择代理",
@@ -660,7 +674,8 @@
       "publisher": "通过 {publisher}",
       "upstream": "上游",
       "installable": "可安装的",
-      "unavailable": "不可用"
+      "unavailable": "不可用",
+      "reviewedListingTooltip": "已审核条目及元数据。这不代表对插件代码、行为或安全性的认证。"
     },
     "install": {
       "allInstalledAgentsRecommended": "在终端中选择代理",
@@ -766,7 +781,7 @@
         "note": "本机代理插件包",
         "status": "支持",
         "intro": "将 Agent Plugins 1.0 安装到 Cursor 项目中，无需手动翻译每个插件。 CLI 在更改文件之前规划本机包。",
-        "delivery": "CLI 为所选项目编写支持的 Cursor 插件、技能和 MCP 投影。",
+        "delivery": "CLI 按所选范围准备 Cursor 支持的插件、技能和 MCP 组件。add 默认使用用户范围；通过 add 安装到项目时需要显式选择项目范围。",
         "activation": "根据请求重新加载光标，然后验证是否已发现该插件。"
       },
       "copilot": {
@@ -845,6 +860,13 @@
         "intro": "为 Qoder 安装技能和 MCP 服务器。",
         "delivery": "CLI 写入原生 .qoder-plugin 清单，并通过 Qoder CLI 注册插件。",
         "activation": "重新加载 Qoder 插件或重启 Qoder；在 Qoder 中确认 MCP 和身份验证。"
+      },
+      "pi": {
+        "note": "仅支持受管理的 Pi 原生扩展",
+        "status": "已支持",
+        "intro": "安装声明了 Pi 原生扩展的 Agent Plugins 1.0 软件包。此适配器目前不支持可移植技能和 MCP 映射。",
+        "delivery": "CLI 将声明的 Pi 扩展安装到你的 Pi 代理目录，并跟踪受管理的软件包，以便更新、修复和删除。",
+        "activation": "安装后重新加载资源或重启 Pi，以加载受管理的扩展。"
       }
     },
     "directoryPage": {
@@ -864,7 +886,7 @@
       "components": "组件",
       "package": "套餐",
       "pluginNotFound": "找不到插件",
-      "reviewedListing": "已审核",
+      "reviewedListing": "条目信息已审核",
       "licenseNotSpecified": "未指定许可证",
       "managedByCli": "由 CLI 管理",
       "requiresAFinalStepInTheApp": "需要在应用程序中执行最后一步",
@@ -873,7 +895,8 @@
       "title": "{name} 代理插件 {'|'} 通用代理插件",
       "schemaName": "{name} 代理插件",
       "directory": "插件目录",
-      "version": "版本 {version}"
+      "version": "版本 {version}",
+      "reviewedListingTooltip": "已审核条目及元数据。这不代表对插件代码、行为或安全性的认证。"
     },
     "community": {
       "breadcrumb": "面包屑",
@@ -921,7 +944,7 @@
       "vendorDocs": "阅读 {name} 文档",
       "availableFor": "适用于 {name} 的插件",
       "count": "{count} 已审核的软件包支持此客户端。 | {count} 已审核的软件包支持此客户端。",
-      "tryPlugin": "尝试 Context7，或将 {source} 替换为另一个兼容插件的经过审核的短名称或固定的 GitHub 包源。",
+      "tryPlugin": "可先试用 Context7，或将 {source} 替换为其他兼容插件经过审核的短名称或完整包的源地址。",
       "localPackageHint": "将 ./my-plugin 替换为有效 Agent Plugins 1.0 包的路径。"
     },
     "components": {
@@ -957,6 +980,23 @@
       "requiredDetail": "此包可能需要账户、令牌或登录；这并不指定 OAuth，也不确认您已登录。",
       "not_requiredDetail": "这些代理未声明身份验证要求。仍可能存在服务限制和其他设置要求。",
       "unknownDetail": "连接前请检查包的要求。"
+    }
+  },
+  "pluginAuthoring": {
+    "eyebrow": "构建插件",
+    "title": "使用插件 / 构建插件",
+    "subtitle": "安装和管理标准包，或编写自己的 plugin.json 包并使用相应工具检查。",
+    "use": {
+      "badge": "CLI 0.1.94",
+      "title": "使用插件",
+      "description": "通过已发布安装器查找、预览、安装和维护包。",
+      "cta": "打开使用指南"
+    },
+    "build": {
+      "badge": "手动编写或源码构建",
+      "title": "构建插件",
+      "description": "编写包含根目录 plugin.json 以及可选 skills/ 和 mcp.json 的标准包，再用已发布安装器验证和安装。骨架和创作检查需要构建指南中的源码构建。静态检查不能证明运行或激活成功。",
+      "cta": "打开构建指南"
     }
   }
 }

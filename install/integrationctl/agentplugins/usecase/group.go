@@ -29,6 +29,7 @@ const (
 	GroupProgressPreparing   GroupProgressPhase = "preparing"
 	GroupProgressConfiguring GroupProgressPhase = "configuring"
 	GroupProgressConfigured  GroupProgressPhase = "configured"
+	GroupProgressActivating  GroupProgressPhase = "activating"
 	GroupProgressActivated   GroupProgressPhase = "activated"
 )
 

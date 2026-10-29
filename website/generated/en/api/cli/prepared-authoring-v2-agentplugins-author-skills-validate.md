@@ -82,6 +82,12 @@ localeStrategy: "canonical-en"
 sourceKind: "authoring-docs-adapter"
 sourceRef: "https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands"
 ---
+::: warning Versioned authoring reference: CLI 0.1.65
+This English reference documents the static authoring commands from the immutable `agentplugins-v0.1.65` source. It preserves that version's command contract and release evidence.
+
+The current native installer, CLI 0.1.94, does not include `agentplugins author`. For the current source-build setup, supported commands, and execution boundaries, follow the [Build guide](/en/build/). This versioned reference does not describe current-source runtime or development commands.
+:::
+
 > Released Agent Plugins CLI reference from the exact source. [Exact source](https://github.com/777genius/universal-agent-plugins/tree/ec9397a63f7c7550a680fcb0f5565902acbf7243/cli/plugin-kit-ai/internal/authoring/commands).
 
 <!-- namespace: prepared-authoring-v2; status: released; source-sha: ec9397a63f7c7550a680fcb0f5565902acbf7243 -->

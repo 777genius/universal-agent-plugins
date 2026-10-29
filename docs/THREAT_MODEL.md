@@ -1,5 +1,11 @@
 # Threat Model
 
+This page records trust boundaries for the preserved `plugin-kit-ai`
+implementation. For current installation, also read the
+[installer support boundary](SUPPORT.md#universal-agent-plugins-installer),
+[removal safety](REMOVAL_SAFETY.md) and source-specific acquisition contracts.
+A historical runtime contract does not qualify the current release surface.
+
 This document captures the current trust boundaries for shipped `plugin-kit-ai` surfaces.
 
 ## Trust Boundaries

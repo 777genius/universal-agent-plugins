@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -311,7 +312,21 @@ func (manager Manager) Load(operationID string) (Receipt, error) {
 	if err := pathpolicy.ValidateLeafID(operationID); err != nil {
 		return Receipt{}, fmt.Errorf("unsafe directory swap operation id: %w", err)
 	}
-	body, err := atomicfile.ReadFile(manager.journalPath(operationID))
+	// Keep symlink resolution beneath the captured journal directory, and
+	// validate the file that will actually be read rather than a path probe.
+	file, err := os.OpenInRoot(manager.JournalDir, operationID+".json")
+	if err != nil {
+		return Receipt{}, err
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return Receipt{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return Receipt{}, fmt.Errorf("directory swap journal %q must be a regular file", manager.journalPath(operationID))
+	}
+	body, err := io.ReadAll(file)
 	if err != nil {
 		return Receipt{}, err
 	}

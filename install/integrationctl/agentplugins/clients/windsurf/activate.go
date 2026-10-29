@@ -81,16 +81,17 @@ func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request d
 
 // Deactivate removes owned Windsurf MCP entries, or asks the operator to
 // finish a leftover channel first.
-func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	if request.TargetContext.Scope == domain.ScopeProject {
 		return deactivateDevinProject(ctx, env, request)
 	}
 	outcome := shared.StartedDeactivation()
-	if len(WindsurfObjects(request.NativeObjects)) == 0 {
-		return shared.RequireExternalUninstall(outcome, request.ExternalUninstalled, "remove the prepared package manually, then rerun remove with `--external-uninstalled`"), nil
-	}
-	if strings.TrimSpace(request.Client.ConfigRoot) == "" {
-		return shared.RequireExternalUninstall(outcome, request.ExternalUninstalled, "select exactly one installed Windsurf channel, then rerun remove"), nil
+	if adapter.RequiresExternalUninstalled(env, request) {
+		action := "remove the prepared package manually, then rerun remove with `--external-uninstalled`"
+		if len(WindsurfObjects(request.NativeObjects)) > 0 {
+			action = "select exactly one installed Windsurf channel, then rerun remove"
+		}
+		return shared.RequireExternalUninstall(outcome, request.ExternalUninstalled, action), nil
 	}
 	if !request.Confirmed {
 		outcome.UserActions = append(outcome.UserActions, "agentplugins will remove only its owned Windsurf MCP entries")

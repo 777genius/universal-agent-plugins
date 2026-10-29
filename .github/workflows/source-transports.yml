@@ -23,14 +23,15 @@ on:
 permissions:
   contents: read
 
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:
-  group: source-transports-${{ github.ref }}
-  cancel-in-progress: true
+  group: source-transports-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   native-ssh:
     name: native-ssh-linux
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 15
     env:
       UAP_REQUIRE_NATIVE_SSH: '1'

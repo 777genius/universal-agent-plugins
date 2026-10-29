@@ -193,7 +193,7 @@ func TestNewOSCapturesClientConfigOverrides(t *testing.T) {
 	}
 }
 
-func TestDetectorFindsClineOnlyFromSupportedEditorSurfaces(t *testing.T) {
+func TestDetectorFindsClineFromSupportedEditorSurfaces(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
 	extension := filepath.Join(home, ".vscode", "extensions", "saoudrizwan.claude-dev-3.26.4")
@@ -838,8 +838,8 @@ func testDetector(home string, binaries map[string]string) Detector {
 		Environment:           map[string]string{},
 		SystemApplicationsDir: applications,
 		LookPath: func(name string) (string, error) {
-			if path := binaries[name]; path != "" {
-				return path, nil
+			if resolved := binaries[name]; resolved != "" {
+				return resolved, nil
 			}
 			return "", exec.ErrNotFound
 		},
@@ -892,4 +892,63 @@ func surfaceDetected(surfaces []domain.ClientSurface, id string) bool {
 		}
 	}
 	return false
+}
+
+func TestDetectorClineCLIPresenceKeepsFileOnlyAuthorityWithoutVersionProbes(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []string{"cli-only", "editor-only", "coexistence", "product-directory-only", "no-supported-surface"} {
+		t.Run(mode, func(t *testing.T) {
+			home := t.TempDir()
+			binaries := map[string]string{}
+			cli := mode == "cli-only" || mode == "coexistence"
+			editor := mode == "editor-only" || mode == "coexistence"
+			if cli {
+				binaries["cline"] = filepath.Join(home, "bin", "cline")
+			}
+			if editor {
+				makeDirs(t, home, filepath.Join(".vscode", "extensions", "saoudrizwan.claude-dev-3.26.4"))
+			}
+			if mode == "product-directory-only" {
+				makeDirs(t, home, ".cline")
+			}
+			detector := testDetector(home, binaries)
+			calls := 0
+			detector.ProbeVersionWithEnvironment = func(context.Context, string, []string) (string, error) {
+				calls++
+				return "", errors.New("Cline presence must never execute a version probe")
+			}
+			for _, detect := range []func(context.Context) ([]domain.DetectedClient, error){
+				detector.Detect,
+				detector.DetectWithVersionProbe,
+				func(ctx context.Context) ([]domain.DetectedClient, error) {
+					return detector.DetectTargetsWithVersionProbe(ctx, []domain.ClientID{domain.ClientCline})
+				},
+			} {
+				observed, err := detect(t.Context())
+				if err != nil {
+					t.Fatal(err)
+				}
+				client := clientOf(observed, domain.ClientCline)
+				wantStatus := domain.DetectionNotDetected
+				if cli || editor {
+					wantStatus = domain.DetectionDetected
+				}
+				if client.Status != wantStatus || client.DetectionError != nil || client.ConfigRoot != filepath.Join(home, ".cline") || client.ExecutablePath != "" || client.Version != "" || calls != 0 {
+					t.Fatalf("Cline presence changed file-only authority or executed a client: %+v, calls=%d", client, calls)
+				}
+				wantIDs := []string{"cline_vscode_extension", "cline_vscode_config", "cline_cursor_extension", "cline_cursor_config", "cline_cli"}
+				if len(client.Surfaces) != len(wantIDs) {
+					t.Fatalf("Cline surface inventory changed: %+v", client.Surfaces)
+				}
+				for i, id := range wantIDs {
+					if client.Surfaces[i].ID != id {
+						t.Fatalf("Cline editor surface order changed: %+v", client.Surfaces)
+					}
+				}
+				if surfaceDetected(client.Surfaces, "cline_cli") != cli || surfaceDetected(client.Surfaces, "cline_vscode_extension") != editor {
+					t.Fatalf("Cline presence evidence differs: %+v", client.Surfaces)
+				}
+			}
+		})
+	}
 }

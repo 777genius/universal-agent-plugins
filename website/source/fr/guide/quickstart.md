@@ -1,86 +1,88 @@
 ---
 title: "Démarrage rapide"
-description: "Installez des plugins disponibles ou préparez un paquet portable Agent Plugins 1.0."
+description: "Installez des paquets publiés ou préparez votre propre paquet portable Agent Plugins 1.0."
 canonicalId: "page:guide:quickstart"
 section: "guide"
 locale: "fr"
 generated: false
 translationRequired: true
+localeDisposition: "current-translation"
 ---
 
 <a id="demarrage-rapide"></a>
 
 # Utiliser des plugins / Créer des plugins
 
-Installez des plugins disponibles ou préparez un paquet portable Agent Plugins 1.0.
+Installez un paquet pour vos agents ou créez un paquet portable Agent Plugins 1.0 avec des instructions et une configuration d’outils.
 
 ## Utiliser des plugins {#use-plugins}
 
-Disponible maintenant : installez des plugins avec Universal Agent Plugins. Avec Node.js 22+, exécutez :
+Avec Node.js 22 ou une version ultérieure :
 
 ```bash
 npx universal-agent-plugins add context7
 ```
 
-Pour une installation native sur macOS, Linux ou Windows, consultez le guide. Le CLI demande quels agents compatibles utiliser ; chaque plugin peut nécessiter son propre environnement d’exécution.
-
-[Guide d’installation](https://github.com/777genius/universal-agent-plugins#quick-start)
-
-La création Agent Plugins est disponible dans `universal-agent-plugins` ; version GitHub : `agentplugins-v*`.
-
-La compatibilité dépend du paquet. La validation du schéma ne prouve ni l’exécution, ni OAuth, ni l’activation. Codex ne prend pas en charge MCP SSE déclaré ; stdio et Streamable HTTP conservent leur prise en charge par les adaptateurs existants.
-
-[Compatibilité des clients (en anglais)](https://github.com/777genius/universal-agent-plugins#supported-clients)
-
-### Sauvegarder et restaurer vos plugins
-
-**Code source actuel, pas encore publié :** ces commandes de transfert nécessitent
-un CLI compilé à partir du code actuel ; elles ne sont pas encore qualifiées
-comme version publiée. Dans le dossier à emporter sur un autre ordinateur, lancez :
+Le CLI vous demande quels agents compatibles utiliser et indique les étapes d’activation restantes. Pour examiner et prévisualiser d’abord :
 
 ```bash
-agentplugins deps export
+npx universal-agent-plugins info context7
+npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 ```
 
-Copiez le dossier sur l’autre ordinateur, ouvrez-le et installez les agents cibles.
-Puis lancez :
+Le [guide d’installation native](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) fournit des exécutables pour macOS, Linux et Windows. Le gestionnaire natif ne nécessite pas Node.js, même si certains plugins ont besoin de leur propre environnement d’exécution.
+
+[CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93) comprend la portée projet explicite. Pour prévisualiser une installation de projet :
 
 ```bash
-agentplugins deps import
-agentplugins install --locked
+npx universal-agent-plugins add context7 --target cursor --scope project \
+  --project-root /path/to/project --dry-run
 ```
 
-Ou combinez l’importation et l’installation :
+Choisissez un dossier de projet existant. `add` utilise par défaut la portée utilisateur : sélectionnez projet explicitement pour cette opération. Depuis [CLI natif 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), `install` sans argument détecte le projet uniquement si un fichier `uap.toml` ordinaire existe dans le dossier courant exact, sans recherche dans les parents. Une portée explicite reste prioritaire. Cette sélection automatique nécessite 0.1.94 ou une version ultérieure : vérifiez `agentplugins version` et utilisez l’installateur natif ou Homebrew si votre canal est antérieur. Les canaux peuvent être mis à jour à des moments différents ; les exemples `npx` avec portée explicite de cette page restent compatibles avec 0.1.93. Examinez le plan avant d’omettre `--dry-run`. La découverte native, la confiance, l’authentification et les appels MCP réussis restent distincts de l’écriture des fichiers du paquet.
+
+[Parcours complet d’installation](../use/install) · [Compatibilité des clients et portée des tests](../reference/client-compatibility)
+
+### Restaurez des dépendances enregistrées
+
+Vérifiez ce que l’environnement utilisateur sélectionné enregistre :
 
 ```bash
-agentplugins deps import --install
+npx universal-agent-plugins deps status
 ```
 
-Le chemin est facultatif : le dossier courant est utilisé par défaut. L’exportation
-lit l’environnement global de l’utilisateur et l’importation écrit celui de
-l’ordinateur cible ; `AGENTPLUGINS_HOME` en choisit le répertoire. Seuls les octets
-exacts de `uap.toml` et `uap.lock`, strictement validés, sont copiés, sans paquets,
-paramètres ni secrets.
+Pour un couple `uap.toml`/`uap.lock` enregistré, exportez depuis un dossier d’échange :
 
-Chaque copie effective nécessite une confirmation dans le terminal (refus par
-défaut) ou `--yes` ; `--dry-run` affiche un aperçu sans écrire. Des fichiers
-identiques ne nécessitent ni copie ni confirmation ; `--install` vérifie et
-applique toujours l’environnement verrouillé. Le transfert fonctionne hors ligne,
-mais l’installation nécessite les sources exactes disponibles ou les paquets en
-cache et reste soumise aux règles de sécurité actuelles. La connexion aux agents
-et l’activation manuelle restent des étapes séparées.
+```bash
+npx universal-agent-plugins deps export
+```
 
-[Détails du transfert, des erreurs et de la récupération (en anglais)](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md#restore-on-another-machine)
+Copiez le dossier sur une autre machine, installez les clients cibles, puis exécutez :
+
+```bash
+npx universal-agent-plugins deps import
+npx universal-agent-plugins install --locked --scope user
+```
+
+Seuls l’accord et le verrouillage validés sont transférés. Profils, réglages, identifiants, reçus et données du plugin restent séparés. L’installation nécessite toujours les sources exactes ou des paquets vérifiés en cache. Pour un projet, versionnez les deux fichiers et restaurez avec `install --locked --scope project` explicite. Consultez [la maintenance et la restauration](../use/manage) pour la récupération et le transfert.
 
 ## Créer des plugins {#build-plugins}
 
-Créez un paquet portable Agent Plugins 1.0 autour de plugin.json, avec skills/ et mcp.json facultatifs. La prise en charge dépend du paquet et de ses composants.
+Un paquet standard commence avec `plugin.json` à sa racine et peut inclure `skills/<name>/SKILL.md`, `mcp.json` ou les deux. Vous pouvez écrire ces fichiers à la main et valider le paquet avec l’installateur publié :
 
-**La création Agent Plugins est disponible**
+```bash
+npx universal-agent-plugins validate ./my-plugin
+npx universal-agent-plugins add ./my-plugin --target codex --dry-run
+```
 
-La création statique est disponible via `agentplugins author` dans `universal-agent-plugins` ; version GitHub : `agentplugins-v*`. npm, Homebrew, archives natives et E2E public sont vérifiés. Cette version n’exécute pas le code du paquet ni les serveurs de développement, n’installe pas les dépendances, n’exporte pas les paquets et ne les publie pas.
+Ces exemples supposent que `./my-plugin` contient déjà un paquet complet. Le [guide de création](../build/) décrit un paquet Skill manuel et les outils source de génération d’une structure initiale.
+
+**Disponibilité de la création :** l’installateur actuel npm ou natif n’inclut pas `agentplugins author`. Le code source actuel implémente la génération initiale, les vérifications statiques, les tests MCP explicites, les cycles de développement, l’installation des dépendances et la maintenance JSON. Utilisez [la préparation depuis le code source](../build/#build-from-source) pour ces commandes. Les preuves d’anciennes publications restent liées à leurs versions ; elles ne promettent pas les mêmes fonctions dans l’installateur actuel.
+
+La validation statique ne prouve ni l’exécution, ni OAuth, ni l’activation. Les transports MCP pris en charge varient aussi par client : par exemple, Codex ne prend pas en charge MCP SSE déclaré. Indiquez les prérequis du paquet et les vérifications restantes dans son README.
 
 [Spécification Agent Plugins 1.0](https://agent-plugins.org/specification)
+
 
 <!-- locale-historical-source:start
 locale-historical-frontmatter:start

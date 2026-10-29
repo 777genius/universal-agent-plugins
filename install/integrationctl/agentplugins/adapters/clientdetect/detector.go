@@ -179,9 +179,16 @@ func (detector Detector) detectClient(ctx context.Context, host clients.Host, ad
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		var environment []string
-		if profile, ok := adapter.(clients.VersionProbeEnvironment); ok {
+		switch profile := adapter.(type) {
+		case clients.VersionProbeEnvironment:
 			var err error
 			environment, err = profile.VersionProbeEnvironment(client.ConfigRoot)
+			if err != nil {
+				return client, err
+			}
+		case clients.HostVersionProbeEnvironment:
+			var err error
+			environment, err = profile.VersionProbeEnvironmentForHost(host, client)
 			if err != nil {
 				return client, err
 			}
@@ -196,7 +203,7 @@ func (detector Detector) detectClient(ctx context.Context, host clients.Host, ad
 			version, err = detector.ProbeVersionWithEnvironment(ctx, client.ExecutablePath, environment)
 		}
 		// A legacy probe cannot carry profile authority. Leave the version unknown
-		// rather than invoking Codex against a different or ambient profile.
+		// rather than invoking a native client against a different or ambient profile.
 		if err == nil {
 			client.Version = normalizeVersion(version)
 		}
@@ -228,7 +235,7 @@ func environmentSnapshot() map[string]string {
 	for _, name := range []string{
 		"APPDATA", "LOCALAPPDATA", "ProgramFiles", "ProgramW6432", "ProgramFiles(x86)",
 		"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
-		"CODEX_HOME", "CLAUDE_CONFIG_DIR", "GEMINI_CLI_HOME", "CLINE_DATA_DIR", "CLINE_MCP_SETTINGS_PATH",
+		"CODEX_HOME", "CLAUDE_CONFIG_DIR", "GEMINI_CLI_HOME", "QODER_CONFIG_DIR", "CLINE_DATA_DIR", "CLINE_MCP_SETTINGS_PATH", "PI_CODING_AGENT_DIR",
 	} {
 		if value, ok := os.LookupEnv(name); ok {
 			values[name] = value

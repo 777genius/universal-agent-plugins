@@ -14,6 +14,7 @@ func renderSupportIndex() string {
 	b.WriteString("\tentries = append(entries, cursorSupportEntries()...)\n")
 	b.WriteString("\tentries = append(entries, vscodeLocalSupportEntries()...)\n")
 	b.WriteString("\tentries = append(entries, qoderSupportEntries()...)\n")
+	b.WriteString("\tentries = append(entries, piSupportEntries()...)\n")
 	b.WriteString("\treturn entries\n")
 	b.WriteString("}\n")
 	return b.String()

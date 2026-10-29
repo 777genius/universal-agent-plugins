@@ -15,8 +15,7 @@ var _ clients.ProfileBindingValidator = (*Adapter)(nil)
 const DevinProjectAction = "Devin project configuration is installed; open the selected project and inspect skills and MCP servers. Native discovery, imported aliases, enablement, workspace trust, permissions, cloud/team policy and MCP initialization remain unobserved"
 
 func requireCurrentDevin(client domain.DetectedClient) error {
-	name := strings.ToLower(filepath.Base(client.ExecutablePath))
-	if client.ClientID != domain.ClientWindsurf || !filepath.IsAbs(client.ExecutablePath) || filepath.Clean(client.ExecutablePath) != client.ExecutablePath || (name != "devin" && name != "devin.exe") || client.Version != "3000.11.205" {
+	if client.ClientID != domain.ClientWindsurf || !primaryDevinExecutable(client.ExecutablePath) || client.Version != "3000.11.205" {
 		return fmt.Errorf("devin project configuration requires the explicitly selected primary devin executable with observed exact version 3000.11.205; legacy Windsurf, unknown or other versions require separate qualification")
 	}
 	return nil

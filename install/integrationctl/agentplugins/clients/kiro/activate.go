@@ -195,12 +195,12 @@ func manualKiroVerification(outcome domain.ActivationOutcome, request domain.Act
 
 // Deactivate removes managed Kiro native objects, or asks the operator to
 // finish a leftover custom Power first.
-func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	if request.TargetContext.Scope == domain.ScopeProject {
 		return deactivateKiroProject(ctx, env, request)
 	}
 	outcome := shared.StartedDeactivation()
-	if len(NativeObjects(request.NativeObjects)) == 0 {
+	if adapter.RequiresExternalUninstalled(env, request) {
 		return shared.RequireExternalUninstall(outcome, request.ExternalUninstalled, "remove the legacy custom Power in Kiro, then rerun remove with `--external-uninstalled`"), nil
 	}
 	if !request.Confirmed {

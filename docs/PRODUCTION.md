@@ -1,6 +1,11 @@
 # Production Plugin Workflow
 
-This document is the canonical production authoring path for plugin authors using `plugin-kit-ai`.
+This page preserves the historical `plugin-kit-ai` production workflow. It is
+not current installation guidance for `agentplugins`. Start new standard
+packages with the [Build guide](https://universal-agent-plugins.com/docs/en/build/),
+which states the available installer and qualified/source authoring boundaries.
+
+The workflow below was the production authoring path for the YAML `plugin-kit-ai` product.
 
 If you are starting a new repo, use the job-first entry layer first:
 

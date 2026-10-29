@@ -192,6 +192,7 @@ func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (
 		Targets: inputs, CompatibilityChecks: inputs,
 		OperationGroupID: firstNonEmpty(prepared.req.OperationID, "group"),
 		Confirmed:        true, Repair: prepared.req.Operation == OpRepair,
+		Progress: e.reportGroupActivation,
 	}
 	var got usecase.GroupResult
 	switch prepared.req.Operation {
@@ -203,4 +204,18 @@ func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (
 		got, err = svc.AddGroup(ctx, group)
 	}
 	return &got, err
+}
+
+func (e *Engine) reportGroupActivation(event usecase.GroupProgressEvent) {
+	if (event.Phase != usecase.GroupProgressActivated && event.Phase != usecase.GroupProgressActivating) || e.cfg.Progress == nil {
+		return
+	}
+	item := ClientResult{ClientID: string(event.ClientID), GroupPhase: string(event.Result.GroupPhase), Activation: string(event.Result.Activation.Activation)}
+	if event.Phase == usecase.GroupProgressActivating {
+		item.GroupPhase = "external_started"
+	}
+	if event.Result.Failure != nil {
+		item.Failure = &ClientFailure{Stage: event.Result.Failure.Stage}
+	}
+	e.cfg.Progress(ProgressEvent{Phase: ProgressActivate, Client: &item})
 }

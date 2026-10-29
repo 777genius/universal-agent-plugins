@@ -10,6 +10,9 @@ translationRequired: true
 
 # Build a hybrid package
 
+**Source-build authoring:** commands on this page require the
+[authoring-enabled source build](./#build-from-source). The current installer
+release does not include `agentplugins author`.
 
 A hybrid is useful when instructions explain how and when to use tools. Both
 components live under one root manifest. A client may support them differently,

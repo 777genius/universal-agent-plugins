@@ -43,6 +43,10 @@ func (w versionWriter) Write(value []byte) (int, error) {
 	return w.output.stdout.Write(value)
 }
 
+// Version discovery is diagnostic metadata, not a compatibility allowlist.
+// Do not derive host CLI minimums, maximums or exact-version admission checks
+// from native test pins; new CLI releases must not require a UAP update merely
+// to be discovered. Validate the capabilities and data contract actually used.
 func probeExecutableVersion(ctx context.Context, executable string) (string, error) {
 	return probeExecutableVersionWithEnvironment(ctx, executable, nil)
 }

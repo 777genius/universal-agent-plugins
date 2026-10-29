@@ -1,8 +1,8 @@
 # Direct complete package sources
 
-**SOURCE ONLY / UNRELEASED.** These transports are implemented on the source
-feature branch. They are not a claim that a published installer already includes
-this behavior, or that every client supports every package component.
+**Released in CLI 0.1.93:** complete-package sources include the Git and archive
+transports below. Source acquisition support does not imply that every client
+accepts every package component or that native runtime has been qualified.
 
 A direct source must contain a complete standard Agent Plugins package with
 `plugin.json`. Its skills, MCP configuration and other components use the existing

@@ -1,12 +1,14 @@
 """Inert process-capture regressions; no native client or hosted guard spoofing."""
+import errno
 import importlib.util
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 research = None
 if os.name == "posix":
@@ -14,6 +16,70 @@ if os.name == "posix":
     research = importlib.util.module_from_spec(SPEC)
     SPEC.loader.exec_module(research)
 
+
+@unittest.skipUnless(os.name == "posix", "requires POSIX process-group signaling")
+class GroupCleanupTests(unittest.TestCase):
+    def process(self, returncode):
+        process = Mock(spec=["pid", "poll"], pid=43210)
+        process.poll.return_value = returncode
+        return process
+
+    def test_initial_success_or_missing_group_does_not_poll(self):
+        for outcome in (None, ProcessLookupError(errno.ESRCH, "missing group")):
+            with self.subTest(outcome=outcome):
+                process = self.process(None)
+                with patch.object(research.os, "killpg", side_effect=[outcome]) as kill:
+                    research.kill_group(process)
+                kill.assert_called_once_with(43210, research.signal.SIGKILL)
+                process.poll.assert_not_called()
+
+    def test_permission_error_with_live_child_preserves_original_failure(self):
+        process = self.process(None)
+        denied = PermissionError(errno.EPERM, "original group refusal")
+        with patch.object(research.os, "killpg", side_effect=denied) as kill:
+            with self.assertRaises(PermissionError) as raised:
+                research.kill_group(process)
+        self.assertIs(raised.exception, denied)
+        process.poll.assert_called_once_with()
+        kill.assert_called_once_with(43210, research.signal.SIGKILL)
+
+    def test_exited_child_accepts_only_absence_of_original_group(self):
+        process = self.process(0)
+        denied = PermissionError(errno.EPERM, "original group refusal")
+
+        def reap():
+            process.pid = 54321
+            return 0
+
+        process.poll.side_effect = reap
+        with patch.object(research.os, "killpg", side_effect=[denied, ProcessLookupError(errno.ESRCH, "missing group")]) as kill:
+            research.kill_group(process)
+        process.poll.assert_called_once_with()
+        self.assertEqual(kill.call_args_list, [call(43210, research.signal.SIGKILL), call(43210, 0)])
+
+    def test_present_or_ambiguous_group_preserves_original_permission_failure(self):
+        for outcome in (None, PermissionError(errno.EPERM, "probe refusal"), OSError(errno.EIO, "probe error")):
+            with self.subTest(outcome=outcome):
+                process = self.process(-9)
+                denied = PermissionError(errno.EPERM, "original group refusal")
+                with patch.object(research.os, "killpg", side_effect=[denied, outcome]) as kill:
+                    with self.assertRaises(PermissionError) as raised:
+                        research.kill_group(process)
+                self.assertIs(raised.exception, denied)
+                process.poll.assert_called_once_with()
+                self.assertEqual(kill.call_args_list, [call(43210, research.signal.SIGKILL), call(43210, 0)])
+
+    def test_absence_probe_does_not_suppress_unexpected_failure_or_interruption(self):
+        for failure in (RuntimeError("unexpected probe failure"), KeyboardInterrupt("interrupted probe")):
+            with self.subTest(failure=type(failure).__name__):
+                process = self.process(0)
+                denied = PermissionError(errno.EPERM, "original group refusal")
+                with patch.object(research.os, "killpg", side_effect=[denied, failure]) as kill:
+                    with self.assertRaises(type(failure)) as raised:
+                        research.kill_group(process)
+                self.assertIs(raised.exception, failure)
+                process.poll.assert_called_once_with()
+                self.assertEqual(kill.call_args_list, [call(43210, research.signal.SIGKILL), call(43210, 0)])
 
 
 @unittest.skipUnless(os.name == "posix", "requires POSIX resource limits, selectable pipes, sessions and killpg")
@@ -62,6 +128,44 @@ class CaptureTests(unittest.TestCase):
             self.assertEqual(stdout, b"o" * 262144)
             self.assertEqual(stderr, b"e" * 262144)
 
+    def wait_for_unreaped_exit(self, process):
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            if os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT):
+                return
+            time.sleep(.005)
+        self.fail("child must exit before the simulated macOS group signal")
+
+    def test_group_permission_error_reaps_exited_leader_before_retry(self):
+        signal_group = os.killpg
+        with subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True) as process:
+            self.wait_for_unreaped_exit(process)
+
+            def signal_unreaped_group(pid, signum):
+                if process.returncode is None:
+                    raise PermissionError(errno.EPERM, "unreaped group")
+                return signal_group(pid, signum)
+
+            with patch.object(research.os, "killpg", side_effect=signal_unreaped_group):
+                research.kill_group(process)
+            self.assertEqual(process.returncode, 0)
+
+    def test_group_permission_error_remains_an_error_for_live_or_denied_group(self):
+        for exited in (False, True):
+            with self.subTest(exited=exited):
+                body = "pass" if exited else "import time; time.sleep(10)"
+                with subprocess.Popen([sys.executable, "-c", body], start_new_session=True) as process:
+                    try:
+                        if exited:
+                            self.wait_for_unreaped_exit(process)
+                        with patch.object(research.os, "killpg", side_effect=PermissionError(errno.EPERM, "denied")):
+                            with self.assertRaises(PermissionError):
+                                research.kill_group(process)
+                        self.assertEqual(process.returncode, 0 if exited else None)
+                    finally:
+                        research.kill_group(process)
+                        process.wait(timeout=2)
+
     def descendant_body(self, root, exit_leader):
         ready, survived = root / "descendant-ready", root / "descendant-survived"
         child = ("from pathlib import Path; import time; "
@@ -87,6 +191,38 @@ class CaptureTests(unittest.TestCase):
             self.assertLess(time.monotonic() - started, 1)
             time.sleep(.6)
             self.assertFalse(survived.exists())
+
+    def test_group_permission_error_refuses_surviving_descendant_without_retry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            body, ready, survived = self.descendant_body(root, True)
+            signal_group = os.killpg
+            with subprocess.Popen([sys.executable, "-c", body], cwd=root, start_new_session=True) as process:
+                try:
+                    self.wait_for_unreaped_exit(process)
+                    self.assertTrue(ready.exists(), "descendant must start before leader exit")
+                    first_signal = True
+                    denied = PermissionError(errno.EPERM, "inert group denial")
+
+                    def deny_first_signal(pid, signum):
+                        nonlocal first_signal
+                        if first_signal:
+                            first_signal = False
+                            raise denied
+                        return signal_group(pid, signum)
+
+                    with patch.object(research.os, "killpg", side_effect=deny_first_signal) as kill:
+                        with self.assertRaises(PermissionError) as raised:
+                            research.kill_group(process)
+                    self.assertIs(raised.exception, denied)
+                    self.assertEqual(process.returncode, 0)
+                    self.assertEqual(kill.call_args_list, [
+                        call(process.pid, research.signal.SIGKILL), call(process.pid, 0)])
+                finally:
+                    research.kill_group(process)
+                    process.wait(timeout=2)
+                time.sleep(.6)
+                self.assertFalse(survived.exists())
 
     def test_capture_error_and_parent_interruption_reap_started_child(self):
         for failure in (OSError("inert capture failure"), KeyboardInterrupt("inert interruption")):
