@@ -1,5 +1,37 @@
 # Remaining native project qualification
 
+## Cursor acquisition and optional Kiro CI authentication, 2026-10-29
+
+The [official Cursor installer](https://cursor.com/install) still names the
+reviewed `2026.10.22-27dcf5f` Linux x64 archive. A bounded plain request again
+returned HTTP403 before executable bytes; no replacement pin, bypass header or
+local vendor execution is introduced. Cursor remains acquisition-blocked.
+
+Kiro's [authentication](https://kiro.dev/docs/getting-started/authentication/)
+and [headless](https://kiro.dev/docs/cli/headless/) documentation support
+`KIRO_API_KEY` for noninteractive CLI automation. Static inspection of the exact
+132018592-byte pinned2.34.0 archive, SHA256
+`11dce9286cf7401079cf4eac02a3d5982daac16a346d880109ec7b4a0b941040`,
+verified all three already-recorded companion digests and the chat executable's
+embedded API-key documentation. No native executable ran during inspection.
+
+Independent Grok-owner R1 and Copilot-owner R2 plan reviews approved a narrow
+optional dedicated-key path. The workflow supplies only the selected Kiro step;
+the runner validates its private capture bounds before any child and registers
+plain, JSON-escaped and base64 forms with the existing redactor. The key enters
+only read-only Kiro list probes or the exact installed native-attempt child;
+source queries, builds, public UAP commands and other clients retain their closed
+environments. Go evidence is redacted before retention, and outer admission
+refuses residual private forms in the inner native ZIP. No key, profile or token
+is placed in argv, receipts or uploaded configuration.
+
+Absent-key behavior, immutable pins, fixed prompts/arguments, original deadlines,
+no automatic trust, failed first-capture review and all-false qualification remain
+unchanged. No dedicated key is available in this session. Supplying a valid CI
+secret permits a fresh genuine hosted attempt; it does not establish that Kiro's
+read-only account commands accept API keys, that authentication succeeds, or any
+lifecycle/MCP/model qualification. Those outcomes require their own raw review.
+
 ## Owner reprioritization, 2026-10-27
 
 The owner explicitly deferred VS Code: it is not a priority and is skipped in
@@ -1635,6 +1667,92 @@ capture-interruption and non-POSIX import controls. Local Linux contracts do
 not qualify the observed macOS race; the original hosted macOS contract remains
 required. Two independent plan rounds precede implementation, followed by
 independent code review and exact-source validation.
+
+## Observed Kiro read-only authentication boundary
+
+Genuine research run `40354148442`, job `121719233213`, at source
+`d650ef37ff5cd2f38f6b784ebcd9723c47e62cf7`, tree
+`6b2be08d15092de328f2644478036f8c751e2b94`, reached the first selected
+`mcp list workspace` operation in A after all eight fixed version/help probes
+completed. Artifact `12673026085` has ZIP SHA256
+`8187c2423340174d86c70a21480139f6a9a1f2999d5437a4ef82092dbb82d068`.
+Its exact command receipt records exit `1`, no capture error, empty stdout and
+64 stderr bytes: `error: You are not logged in, please log in with kiro-cli login`
+followed by one LF. This is an observed authentication refusal for that read-only
+operation; it does not establish the outcome of native chat, ACP, discovery,
+trust, MCP startup or any later command. The archive was independently hashed
+and the held raw streams inspected; no credentials were available or used.
+
+Keep the immutable 2.34.0 archive, full closure, verified companions, fixed
+version/help commands, original HOME, disabled inert marker configurations,
+closed PATH, before/after fixture checks and all existing process/capture
+bounds. In the Kiro leaf only, recognize this exact receipt/stream tuple solely
+for label `a-workspace-raw-list`, arguments `mcp list workspace`, project `a`
+and the existing 30-second deadline. Require the explicit integer exit `1`,
+an explicit null capture error, empty byte stdout and exactly the measured
+stderr bytes. Any changed message, whitespace, additional diagnostic, stdout,
+status, missing field, capture failure, wrong label/argv/project/deadline or
+unsafe fixture still fails. Existing version/help stderr exceptions stay
+separate and cannot accept the authentication tuple.
+
+After this exact measured refusal, stop the list table without attempting its
+five unobserved remaining commands. Retain the raw failed command in the shared
+closed capture, and record one finite structured observation identifying this
+command's authentication-required boundary. Leave the opaque-list observation
+table empty; do not synthesize absent catalogs or source/marker results. The
+already completed fixed version/help probes may satisfy only `kiro.help`.
+The source scope observation and all project lifecycle/restart/MCP, vendor
+authentication and real-model qualifications remain false and explicitly
+unobserved. A successful help research collection cannot satisfy or replace
+the separate required installed runtime attempt, which remains fail-closed.
+
+Change only `scripts/project_native_collectors/kiro.py`, its inert contract
+test, and this consolidated plan. Do not change shared case selection, artifact
+admission, qualification schema, runtime fixtures or native behavior. Add inert
+contracts for the exact observed tuple and stop point, all changed/missing or
+misrouted tuples above, companion/config preservation after the refusal, the
+unchanged six-successful-list path and zero positive qualification. No vendor
+execution is permitted locally. Obtain two independent plan approvals before
+code, then independent implementation review and a fresh genuine hosted
+capture before claiming that the amended research path completed.
+
+## Kiro opaque agent-list first-capture amendment
+
+The genuine PR529 source `d5d7b2186d873b097677e1b4e52bfcd2097a007a`,
+help run `40553356151` / artifact `12760035043` (outer SHA256
+`311c206bbe8ec0038afcaf7b634a6f2eaa24c8f4586d0e45144dc663fa6a2830`),
+exports exact pinned `agent --help`: 1172 bytes, SHA256
+`8d44a934188eebb8c0ac9d70b5d77166b1ca1443ffda2f1931fde6564d72ff4d`.
+It documents `agent list` and containing-cwd local-agent discovery. This
+advertisement is command authority, not observed UAP skill/MCP discovery.
+Current native chat and the exclusive first MCP list remain auth-blocked.
+
+Root R1 and independent desktop R2 approved the exact plan SHA256
+`223d58fe3a1c9b4f806c697a1e587ed1faee5ea2e8a2fbb436f407aa23d6a227`
+before implementation. Add only `a-agent-raw-list`, exact `agent list` from
+project A, after all eight help commands and before authored MCP markers.
+The original 30-second probe/aggregate bounds, exact launcher/three-companion
+identity and sealed PATH checks remain unchanged. The new label rejects any
+other argv/project before a child. Strict clean exit/stream/safe-text checks
+apply; no authentication exception, retry or later operation after failure.
+
+Keep raw streams through the existing probe capture and one fixed hash-only
+`raw_agent_list_observation`. The text stays opaque; no agent names, schema,
+skill selection, trust, account/model or runtime qualification is inferred.
+Only the existing help case passes, with the same six unobserved IDs and all
+false qualification flags. Full collector calls become 16 and the current
+first-MCP-auth path becomes 11; its archive becomes 35 members within existing
+bounds. The old 33-member source capture receives no invented observation.
+
+All 23 Kiro Python contracts passed in 0.417s. They cover exact pre-marker
+order/route/hash projection, wrong typed process/streams and unsafe/error text,
+exclusive old-auth-tuple behavior, companion/PATH mutation and refusal to
+adopt preexisting authored marker bytes. Both changed ASTs and whitespace
+checks pass. Actual old 33-member research and 16-member native archives replay
+unchanged: help observation remains source-bound, native failed/incomplete
+with all five qualifications false. No Go, vendor, public installer or hosted
+guard ran locally. Independent exact-code review precedes root publication;
+the new actual command requires fresh genuine capture and raw interpretation.
 
 ## Observed Gemini wait-for-previous description correction
 
