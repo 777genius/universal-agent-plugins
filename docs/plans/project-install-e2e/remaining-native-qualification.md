@@ -2066,3 +2066,25 @@ component suite passes with its unchanged owner-change control excluded because
 this local UID namespace cannot chown to UID1 (EINVAL); that control is not
 waived or changed. The original14-member failed capture and all24 frontend
 stream/hash joins replay unchanged/all-false. No vendor process ran locally.
+
+### Windsurf exact native telemetry timestamp rewrite (2026-10-29)
+
+Current-source run40878254890 attempt2 still stops after the first successful
+skills read. Its27-to29 profile delta contains the expected new log/maintenance
+pair and log-directory metadata, plus a changed record for the exact seeded
+`xdg-cache/devin/telemetry_state.json`: both sides remain16 bytes with SHA256
+`7445ff8769cba2e1b004c754a770a85293e7548228e4fa3d363263c96c9b6290`.
+The pinned binary's2e37ca0 helper joins XDG_CACHE_HOME, `devin` and
+`telemetry_state.json`; its2e34180 serializer uses the `is_zdr` field.
+Permit only Modified/Changed timestamp variation for that exact cache file,
+requiring unchanged device/inode/kind/mode0644/owner/group/single-link authority,
+size16 and exact fixed bytes before and after. Copy only its accepted frame record
+into the existing cache expectation; never reread or replace a protected digest.
+Keep original config/UUID/other-cache/old-log and late-write guards unchanged.
+The raw diagnostic omits inode/owner details, so it does not itself establish
+these predicates: the next genuine hosted capture must satisfy them or fail.
+Both independent plan reviews approve this limited correction; the historical
+failed capture remains failed with every qualification flag false.
+Both independent code reviews also approve the exact predicate and accepted-frame
+copy. Six focused startup/runtime controls pass in0.100s; affected all-enabled
+lint and the unfiltered six-linter architecture/size gate report0issues.

@@ -119,8 +119,68 @@ func TestWindsurfComponentRuntimeClosureFreezesPreviousLogsAndSeeds(t *testing.T
 	}
 }
 
+func TestWindsurfComponentRuntimeTelemetryRewritePreservesExactAuthorityAndBytes(t *testing.T) {
+	w := windComponentInert(t)
+	start := time.Date(2026, 10, 28, 19, 59, 26, 0, time.UTC)
+	before := w.profile(t)
+	windRuntimeAuthorLog(t, w, "5805")
+	path := filepath.Join(w.f.base.Root, "xdg-cache", "devin", "telemetry_state.json")
+	if err := os.WriteFile(path, []byte(windRuntimeTelemetryBody), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, start, start); err != nil {
+		t.Fatal(err)
+	}
+	after := w.profile(t)
+	if before[windRuntimeTelemetry].Modified == after[windRuntimeTelemetry].Modified || w.runtimeClosure(before, after, start, start.Add(time.Second)) != nil {
+		t.Fatal("same-inode fixed-byte telemetry timestamp rewrite refused")
+	}
+	w.freezeRuntime(after)
+	w.check(t)
+	if w.f.protected[path] != windsurfConfigDigest([]byte(windRuntimeTelemetryBody)) {
+		t.Fatal("native cache timestamp variation replaced the protected bytes")
+	}
+	for _, fault := range []string{"content", "size", "kind", "mode", "device", "inode", "owner", "group", "links", "missing", "unknown"} {
+		bad := make(map[string]windProfileRecord, len(after))
+		for key, record := range after {
+			bad[key] = record
+		}
+		record := bad[windRuntimeTelemetry]
+		switch fault {
+		case "content":
+			record.SHA256 = strings.Repeat("0", 64)
+		case "size":
+			record.Size--
+		case "kind":
+			record.Kind = "directory"
+		case "mode":
+			record.Mode = 0100600
+		case "device":
+			record.Device++
+		case "inode":
+			record.Inode++
+		case "owner":
+			record.UID++
+		case "group":
+			record.GID++
+		case "links":
+			record.Links = 2
+		case "missing":
+			delete(bad, windRuntimeTelemetry)
+		case "unknown":
+			bad["xdg-cache\x00devin/unknown"] = record
+		}
+		if fault != "missing" {
+			bad[windRuntimeTelemetry] = record
+		}
+		if w.runtimeClosure(before, bad, start, start.Add(time.Second)) == nil {
+			t.Fatal("telemetry timestamp exception widened exact cache authority", fault)
+		}
+	}
+}
+
 func TestWindsurfComponentRuntimeDoesNotAdoptMutationAfterValidatedFrame(t *testing.T) {
-	for _, fault := range []string{"log", "uuid", "unknown"} {
+	for _, fault := range []string{"log", "uuid", "cache", "cache-timestamp", "unknown"} {
 		w := windComponentInert(t)
 		start := time.Date(2026, 10, 28, 19, 59, 26, 0, time.UTC)
 		before := w.profile(t)
@@ -134,10 +194,18 @@ func TestWindsurfComponentRuntimeDoesNotAdoptMutationAfterValidatedFrame(t *test
 		switch fault {
 		case "uuid":
 			path = filepath.Join(root, "installation_id")
+		case "cache", "cache-timestamp":
+			path = filepath.Join(w.f.base.Root, "xdg-cache", "devin", "telemetry_state.json")
 		case "unknown":
 			path = filepath.Join(root, "unknown")
 		}
-		if err := os.WriteFile(path, []byte("late unvalidated bytes"), 0644); err != nil {
+		var err error
+		if fault == "cache-timestamp" {
+			err = os.Chtimes(path, start, start)
+		} else {
+			err = os.WriteFile(path, []byte("late unvalidated bytes"), 0644)
+		}
+		if err != nil {
 			t.Fatal(err)
 		}
 		w.freezeRuntime(after)
