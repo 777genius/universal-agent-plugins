@@ -2103,3 +2103,27 @@ the existing initial pre-child seed. Freeze it before any vendor command, with
 no later-write exception, OAuth file, credential, approval or config mutation.
 The existing complete profile closure must reject later file/mode/identity drift;
 this failed capture and every qualification flag remain unchanged/all-false.
+
+### Windsurf exact empty native plugin lock seed (2026-10-29)
+
+The genuine e9448dd6 capture (run 40894288914) completed six native commands,
+then refused the first project-A skills read because the native client created
+`xdg-data/devin/cli/plugins/lock.json`: ordinary 0644, 57 bytes, SHA-256
+`cbce3a5464482eb4cfb7b152ad15183bcb5db5c5557c625ee0cec1edb582aa88`.
+Its failed frame and all five false qualification flags remain unchanged.
+
+One bounded reacquisition verified the exact original archive and the entire
+217494824-byte executable against the existing pins, without executing it.
+Independent static reviews confirmed the loader accepts the native serializer's
+empty `requirements`, `resolved`, and `edges` arrays, in that order, with two-space
+indentation and no trailing newline. The empty optional `resolve_failures` field
+is omitted; these source-derived bytes hash exactly to the captured file.
+
+Author only those exact 57 bytes as an ordinary 0644 file before any native child
+and the initial baseline. Preserve the existing protected digest and complete
+profile identity, content, metadata, and membership freeze without an exception.
+Static inspection does not establish that every startup path skips a rewrite:
+the next genuine capture must satisfy every unchanged predicate or still fail.
+No temporary file, same-byte rewrite, replacement, credential, approval, config,
+command, deadline, or qualification allowance is introduced. Both independent
+reviewers approved this bounded plan before implementation.

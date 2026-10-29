@@ -52,6 +52,11 @@ func (w *windComponentFixture) prepareRuntime(t *testing.T) {
 		"xdg-data/devin/cli/installation_id":        []byte(id),
 		"xdg-data/devin/cli/plugins/lock.json.lock": {},
 		"xdg-cache/devin/telemetry_state.json":      []byte(windRuntimeTelemetryBody),
+		"xdg-data/devin/cli/plugins/lock.json": []byte(`{
+  "requirements": [],
+  "resolved": [],
+  "edges": []
+}`),
 	} {
 		path := filepath.Join(f.base.Root, relative)
 		projectNativeRuntimeWrite(t, path, raw, 0644)
