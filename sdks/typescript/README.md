@@ -356,20 +356,32 @@ Preconditions for `publish=true`, checked by the workflow where possible:
 
 npm can configure a trusted publisher only for an existing package, so the
 first version is a one-time bootstrap by the npm package owner. Run the
-workflow with `publish=false`, then publish that run's attested tarball once:
+workflow with `publish=false`, then publish that run's attested tarball once.
+Take the expected commit from your own up-to-date clone, not from the artifact:
 
 ```sh
-gh run download <run-id> --repo 777genius/universal-agent-plugins \
-  -n management-sdk-<version> -D management-sdk-<version>
-cd management-sdk-<version>
+version=<version>
+run=<successful publish=false run id>
+git fetch origin main "refs/tags/management-sdk-v${version}:refs/tags/management-sdk-v${version}"
+commit=$(git rev-parse "management-sdk-v${version}^{commit}")
+git merge-base --is-ancestor "$commit" origin/main
+gh run view "$run" --repo 777genius/universal-agent-plugins --json headSha,conclusion,event \
+  --jq "select(.headSha == \"$commit\" and .conclusion == \"success\" and .event == \"workflow_dispatch\") | .headSha"
+gh run download "$run" --repo 777genius/universal-agent-plugins \
+  -n "management-sdk-${version}" -D "management-sdk-${version}"
+cd "management-sdk-${version}"
 sha256sum --check checksums.txt
-gh attestation verify universal-agent-plugins-management-sdk-<version>.tgz \
+test "$(cat source-commit.txt)" = "$commit"
+gh attestation verify "universal-agent-plugins-management-sdk-${version}.tgz" \
   --repo 777genius/universal-agent-plugins \
   --signer-workflow github.com/777genius/universal-agent-plugins/.github/workflows/management-sdk-release.yml \
-  --source-digest "$(cat source-commit.txt)"
-npm publish ./universal-agent-plugins-management-sdk-<version>.tgz \
+  --source-ref "refs/tags/management-sdk-v${version}" --source-digest "$commit" --deny-self-hosted-runners
+npm publish "./universal-agent-plugins-management-sdk-${version}.tgz" \
   --access public --tag latest --provenance=false
 ```
+
+The `gh run view` command must print the commit; empty output means the run
+does not match. On macOS, use `shasum -a 256 --check checksums.txt`.
 
 npm provenance can only be generated on a supported CI provider, so this one
 local publication passes `--provenance=false`; the GitHub attestation still

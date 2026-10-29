@@ -101,19 +101,26 @@ jobs:
             exit 1
           fi
           # A missing environment would be created on demand without any
-          # protection, so publishing requires the reviewed configuration.
-          if [[ "${PUBLISH}" == true ]]; then
-            protected=false
-            if environment="$(gh api "repos/${GITHUB_REPOSITORY}/environments/npm-management-sdk")" &&
-              policies="$(gh api "repos/${GITHUB_REPOSITORY}/environments/npm-management-sdk/deployment-branch-policies")" &&
-              jq -e '.can_admins_bypass == false and .deployment_branch_policy.custom_branch_policies == true and ([.protection_rules[] | select(.type == "required_reviewers" and (.reviewers | length) > 0)] | length) == 1' <<<"${environment}" >/dev/null &&
-              jq -e '[.branch_policies[] | {name, type}] == [{"name": "management-sdk-v*", "type": "tag"}]' <<<"${policies}" >/dev/null; then
-              protected=true
-            fi
-            if [[ "${protected}" != true ]]; then
-              echo "npm-management-sdk must exist with required reviewers, no admin bypass and only the management-sdk-v* tag policy" >&2
-              exit 1
-            fi
+          # protection, so publishing requires the reviewed configuration. The
+          # publish job repeats this check; publish=false only warns early.
+          protected=false
+          if environment="$(gh api "repos/${GITHUB_REPOSITORY}/environments/npm-management-sdk")" &&
+            policies="$(gh api "repos/${GITHUB_REPOSITORY}/environments/npm-management-sdk/deployment-branch-policies")" &&
+            jq -e '.can_admins_bypass == false and .deployment_branch_policy.custom_branch_policies == true and ([.protection_rules[] | select(.type == "required_reviewers" and (.reviewers | length) > 0)] | length) == 1' <<<"${environment}" >/dev/null &&
+            jq -e '[.branch_policies[] | {name, type}] == [{"name": "management-sdk-v*", "type": "tag"}]' <<<"${policies}" >/dev/null; then
+            protected=true
+          fi
+          if [[ "${protected}" != true && "${PUBLISH}" == true ]]; then
+            echo "npm-management-sdk must exist with required reviewers, no admin bypass and only the management-sdk-v* tag policy" >&2
+            exit 1
+          elif [[ "${protected}" != true ]]; then
+            echo "::warning::npm-management-sdk is not protected yet; publish=true will be refused until it is"
+          fi
+          # Trusted publishing cannot create a package: refuse publish=true
+          # before qualification when the one-time bootstrap has not happened.
+          if [[ "${PUBLISH}" == true ]] && ! npm view "${package_name}" name --registry=https://registry.npmjs.org/ >/dev/null; then
+            echo "${package_name} must already exist on npm; see the one-time bootstrap in sdks/typescript/README.md" >&2
+            exit 1
           fi
           {
             echo "version=${VERSION}"
@@ -239,10 +246,28 @@ jobs:
     timeout-minutes: 10
     environment: npm-management-sdk
     permissions:
+      actions: read
       contents: read
       id-token: write
       attestations: read
     steps:
+      - name: Require the protected npm-management-sdk environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          protected=false
+          if environment="$(gh api "repos/${GITHUB_REPOSITORY}/environments/npm-management-sdk")" &&
+            policies="$(gh api "repos/${GITHUB_REPOSITORY}/environments/npm-management-sdk/deployment-branch-policies")" &&
+            jq -e '.can_admins_bypass == false and .deployment_branch_policy.custom_branch_policies == true and ([.protection_rules[] | select(.type == "required_reviewers" and (.reviewers | length) > 0)] | length) == 1' <<<"${environment}" >/dev/null &&
+            jq -e '[.branch_policies[] | {name, type}] == [{"name": "management-sdk-v*", "type": "tag"}]' <<<"${policies}" >/dev/null; then
+            protected=true
+          fi
+          if [[ "${protected}" != true ]]; then
+            echo "npm-management-sdk must exist with required reviewers, no admin bypass and only the management-sdk-v* tag policy" >&2
+            exit 1
+          fi
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.23.2"
@@ -308,7 +333,7 @@ jobs:
           # Publish only bytes attested by this workflow for the tagged commit.
           gh attestation verify "${dir}/${TARBALL}" --repo "${GITHUB_REPOSITORY}" \
             --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/management-sdk-release.yml" \
-            --source-digest "${COMMIT}"
+            --source-ref "refs/tags/management-sdk-v${VERSION}" --source-digest "${COMMIT}" --deny-self-hosted-runners
       - name: Refuse overwrite and publish the exact attested bytes
         env:
           PACKAGE_NAME: ${{ needs.build.outputs.package_name }}

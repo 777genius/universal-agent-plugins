@@ -37,7 +37,7 @@ func managementSDKExpectedJobs() map[string]managementSDKJob {
 		"qualify":       {[]string{"verify-source"}, dispatch + "needs.verify-source.result == 'success' }}", read},
 		"build":         {[]string{"verify-source", "qualify"}, dispatch + "needs.verify-source.result == 'success' && needs.qualify.result == 'success' }}", read},
 		"attest":        {[]string{"build"}, dispatch + "needs.build.result == 'success' }}", map[string]string{"contents": "read", "id-token": "write", "attestations": "write"}},
-		"publish":       {[]string{"build", "attest"}, dispatch + "inputs.publish == true && needs.build.result == 'success' && needs.attest.result == 'success' }}", map[string]string{"contents": "read", "id-token": "write", "attestations": "read"}},
+		"publish":       {[]string{"build", "attest"}, dispatch + "inputs.publish == true && needs.build.result == 'success' && needs.attest.result == 'success' }}", map[string]string{"actions": "read", "contents": "read", "id-token": "write", "attestations": "read"}},
 		"verify-public": {[]string{"build", "publish"}, dispatch + "inputs.publish == true && needs.publish.result == 'success' }}", read},
 	}
 }
@@ -51,6 +51,9 @@ func managementSDKRequiredLines() map[string][]string {
 		exact   = `printf '%s  %s\n' "${TARBALL_SHA256}" "${dir}/${TARBALL}" | sha256sum --check --strict`
 		name    = `test "${PACKAGE_NAME}" = ` + managementSDKPackage
 		product = ` management-sdk`
+		// The protected-environment guard, in verify-source and again in publish.
+		reviewed = `jq -e '.can_admins_bypass == false and .deployment_branch_policy.custom_branch_policies == true and ([.protection_rules[] | select(.type == "required_reviewers" and (.reviewers | length) > 0)] | length) == 1' <<<"${environment}" >/dev/null &&`
+		tagOnly  = `jq -e '[.branch_policies[] | {name, type}] == [{"name": "management-sdk-v*", "type": "tag"}]' <<<"${policies}" >/dev/null; then`
 	)
 	return map[string][]string{
 		"verify-source": {
@@ -58,8 +61,9 @@ func managementSDKRequiredLines() map[string][]string {
 			`test "$(git rev-list -n 1 "refs/tags/${tag}")" = "${commit}"`,
 			`git fetch --no-tags --force origin main:refs/remotes/origin/main`,
 			`git merge-base --is-ancestor "${commit}" refs/remotes/origin/main`,
-			`test "${package_name}" = ` + managementSDKPackage, absent, forward,
-			`jq -e '[.branch_policies[] | {name, type}] == [{"name": "management-sdk-v*", "type": "tag"}]' <<<"${policies}" >/dev/null; then`,
+			`test "${package_name}" = ` + managementSDKPackage, absent, forward, reviewed, tagOnly, `protected=true`,
+			`if [[ "${protected}" != true && "${PUBLISH}" == true ]]; then`,
+			`if [[ "${PUBLISH}" == true ]] && ! npm view "${package_name}" name --registry=https://registry.npmjs.org/ >/dev/null; then`,
 		},
 		"build": {
 			`test "$(git rev-parse HEAD)" = "${COMMIT}"`, `npm run build`,
@@ -67,12 +71,15 @@ func managementSDKRequiredLines() map[string][]string {
 		},
 		"attest": {exact},
 		"publish": {
+			reviewed, tagOnly, `protected=true`, `if [[ "${protected}" != true ]]; then`,
+			`for (const [claim, value] of Object.entries(expected)) {`,
+			"if (claims[claim] !== value) throw new Error(`OIDC claim ${claim} is ${JSON.stringify(claims[claim])}, expected ${JSON.stringify(value)}`);",
 			`environment: "npm-management-sdk", repository: env.GITHUB_REPOSITORY, ref: tag, sha: env.COMMIT,`,
 			"workflow_ref: `${env.GITHUB_REPOSITORY}/.github/workflows/" + managementSDKReleaseWorkflow + "@${tag}`,",
 			`runner_environment: "github-hosted",`,
 			`gh attestation verify "${dir}/${TARBALL}" --repo "${GITHUB_REPOSITORY}" \`,
 			`--signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/` + managementSDKReleaseWorkflow + `" \`,
-			`--source-digest "${COMMIT}"`, `test -z "${NPM_TOKEN:-}"`, `test -z "${NODE_AUTH_TOKEN:-}"`, name, exact,
+			`--source-ref "refs/tags/management-sdk-v${VERSION}" --source-digest "${COMMIT}" --deny-self-hosted-runners`, `test -z "${NPM_TOKEN:-}"`, `test -z "${NODE_AUTH_TOKEN:-}"`, name, exact,
 			`if ! existing="$(npm view "${PACKAGE_NAME}" name --registry=https://registry.npmjs.org/)" || [[ "${existing}" != "${PACKAGE_NAME}" ]]; then`,
 			absent, forward, managementSDKPublishCommand,
 		},
@@ -384,6 +391,11 @@ func managementSDKMutations() map[string]func(*releaseWorkflow) {
 		"tag binding":       run("verify-source", `"refs/tags/${tag}"`, `"${GITHUB_REF}"`),
 		"main ref":          run("verify-source", "origin main:refs/remotes/origin/main", "origin feature:refs/remotes/origin/main"),
 		"environment guard": run("verify-source", `"management-sdk-v*", "type": "tag"`, `"*", "type": "branch"`),
+		"admin bypass":      run("publish", ".can_admins_bypass == false and", "(.can_admins_bypass == false or true) and"),
+		"guard skipped":     run("verify-source", `&& "${PUBLISH}" == true ]]; then`, `&& "${PUBLISH}" == never ]]; then`),
+		"guard ignored":     run("publish", `if [[ "${protected}" != true ]]; then`, `if [[ "${protected}" == maybe ]]; then`),
+		"claims ignored":    run("publish", "if (claims[claim] !== value) throw", "if (false) throw"),
+		"attestation ref":   run("publish", `--source-ref "refs/tags/management-sdk-v${VERSION}" `, ""),
 		"skipped consumer":  run("build", `npm run test:consumer -- "--tarball=${out}/${tarball}"`, `: npm run test:consumer`),
 		"verification":      run("verify-public", "--registry-version", "--tarball"),
 		"contract product":  run("verify-public", `"${COMMIT}" management-sdk`, `"${COMMIT}"`),

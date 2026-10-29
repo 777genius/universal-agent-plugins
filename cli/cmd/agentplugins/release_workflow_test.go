@@ -655,7 +655,7 @@ func evaluateReleaseCondition(t *testing.T, expression string, values map[string
 			expression = strings.ReplaceAll(expression, fn+"()", strconv.FormatBool(value.(bool)))
 		}
 	}
-	// Job IDs such as needs.release-artifact contain hyphens; GitHub expressions
+	// Job IDs such as needs.verify-source contain hyphens; GitHub expressions
 	// have no subtraction operator, so a hyphen is always part of a name.
 	words := regexp.MustCompile(`'[^']*'|[a-zA-Z_][a-zA-Z0-9_.-]*`)
 	expression = words.ReplaceAllStringFunc(expression, func(word string) string {
