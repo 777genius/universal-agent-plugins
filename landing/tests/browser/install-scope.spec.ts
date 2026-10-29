@@ -105,6 +105,10 @@ for (const width of [1440, 390]) {
     });
     await page.goBack();
     await expect(card.locator('.command-snippet code')).toHaveText(expectedAdd);
+    await card.scrollIntoViewIfNeeded();
+    // Back navigation remounts the existing catalog scroll-reveal observer.
+    // Wait for its real visible state before accepting visual evidence.
+    await expect(page.locator('.catalog-wrap')).toHaveCSS('opacity', '1');
     await card.screenshot({
       path: testInfo.outputPath(`project-card-${width}.png`),
       animations: 'disabled',
