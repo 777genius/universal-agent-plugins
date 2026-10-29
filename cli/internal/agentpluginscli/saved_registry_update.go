@@ -36,6 +36,15 @@ func prepareSavedRegistryUpdate(ctx context.Context, app App, dryRun bool, snaps
 	}
 	loaded, err := app.acquireDirectory(ctx, old.Source.Registry.DistributionID, request)
 	if errors.Is(err, domain.ErrDirectoryNoSafeUpdate) {
+		// Update selection skips recorded releases before their eligibility is
+		// examined. No later release is not proof the installed release is safe.
+		eligible, checkErr := (dependencyResolver{app: app, dryRun: true}).Eligible(ctx, old, old.Targets)
+		if checkErr != nil {
+			return requirements, false, checkErr
+		}
+		if !eligible {
+			return requirements, false, domain.ErrDirectoryIneligible
+		}
 		return requirements, false, nil
 	}
 	if err != nil {

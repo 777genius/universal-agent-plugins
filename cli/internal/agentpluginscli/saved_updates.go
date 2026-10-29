@@ -171,6 +171,7 @@ func checkSavedUpdates(ctx context.Context, app App, snapshot environmentSnapsho
 			fact.Installed = savedPinIdentity(old)
 			if !nextOK {
 				fact.Source = old.SourceKey
+				fact.RequiredBy = old.RequiredBy
 				fact.Reason = "the selected graph no longer requires this dependency"
 			}
 		}
