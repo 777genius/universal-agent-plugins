@@ -2131,6 +2131,7 @@ img {
 :root:has(.v-theme--light) .hero__actions .button--primary,
 :root:has(.v-theme--light) .plugin-card__install-toggle {
   color: #fff;
+  background: linear-gradient(120deg, var(--cyan), #6b57ed 54%, var(--primary));
 }
 .plugin-card__unavailable {
   color: var(--subtle);
