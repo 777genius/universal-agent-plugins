@@ -2,7 +2,7 @@
   "nav": {
     "features": "Características",
     "plugins": "Complementos",
-    "comparison": "Por que funciona",
+    "comparison": "Por qué funciona",
     "download": "empezar",
     "faq": "Preguntas frecuentes",
     "viewOnGithub": "Abrir GitHub"
@@ -85,7 +85,7 @@
       "linux": "Linux",
       "other": "tu dispositivo"
     },
-    "supportTitle": "Agentes apoyados",
+    "supportTitle": "Agentes compatibles",
     "supportSubtitle": "La compatibilidad depende del plugin. La CLI comprueba cada agente seleccionado e indica los pasos de activación o inicio de sesión pendientes.",
     "supportLink": "Leer el límite de soporte"
   },
@@ -94,8 +94,8 @@
     "next": "Siguiente"
   },
   "theme": {
-    "dark": "oscuro",
-    "light": "Luz",
+    "dark": "Tema oscuro",
+    "light": "Tema claro",
     "toggle": "Alternar tema"
   },
   "language": {
@@ -294,7 +294,7 @@
     }
   },
   "comparison": {
-    "sectionTitle": "Por que funciona",
+    "sectionTitle": "Por qué funciona",
     "sectionSubtitle": "No es una lucha contra competidores. Solo una comparación práctica con las tres formas en que los equipos de complementos suelen crear derivas innecesarias.",
     "feature": "Flujo de trabajo",
     "columns": {
@@ -339,9 +339,9 @@
     "specLink": "Especificación Agent Plugins 1.0",
     "compatibilityLink": "Compatibilidad de clientes (en inglés)",
     "limitations": "La compatibilidad depende del paquete. Validar el esquema no demuestra ejecución, OAuth ni activación. Codex no admite MCP SSE declarado; stdio y Streamable HTTP conservan el soporte de sus adaptadores actuales.",
-    "versions": "Instalador nativo verificado: CLI 0.1.94; nombre del paquete npm: universal-agent-plugins; etiquetas de GitHub: agentplugins-v*.",
+    "versions": "Instalador nativo verificado: CLI 0.1.95; nombre del paquete npm: universal-agent-plugins; etiquetas de GitHub: agentplugins-v*.",
     "availability": "Paquetes manuales y herramientas desde el código fuente",
-    "releaseScope": "GitHub Releases y Homebrew ofrecen el instalador CLI 0.1.94, que no incluye agentplugins author. También puedes instalar mediante npm, pero las versiones de los canales pueden diferir: comprueba la versión del CLI antes de usar funciones exclusivas de 0.1.94. Los comandos de la guía Crear necesitan una compilación del código fuente con la creación activada. La referencia API generada conserva su procedencia histórica de 0.1.65; no describe el instalador actual.",
+    "releaseScope": "GitHub Releases ofrece el instalador CLI 0.1.95 verificado, con una API local de gestión y extensiones nativas de Pi; no incluye agentplugins author. npm y Homebrew son canales de instalación cuyas versiones pueden actualizarse más tarde: comprueba la versión del CLI antes de depender del comportamiento de una versión concreta. Usa una compilación del código fuente con la creación habilitada para los comandos author de la guía Crear. La referencia API generada conserva su procedencia histórica de 0.1.65; no describe el instalador actual.",
     "buildGuideLink": "Abrir la guía de creación"
   },
   "shell": {
@@ -377,11 +377,11 @@
     "accessibility": {
       "home": "Inicio de Universal Agent Plugins",
       "chooseTargets": "Elige agentes objetivo",
-      "supportedAgents": "Agentes apoyados",
+      "supportedAgents": "Agentes compatibles",
       "license": "licencia apache 2.0"
     },
     "why": {
-      "eyebrow": "Por que funciona",
+      "eyebrow": "Por qué funciona",
       "title": "Un estándar",
       "subtitle": "Entrega nativa",
       "intro": "El paquete sigue siendo portátil; el instalador maneja el formato y el ciclo de vida de cada cliente.",
@@ -409,7 +409,7 @@
           "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: cada cliente tiene una ruta propia de instalación o preparación. La compatibilidad depende de los componentes, el ámbito y los requisitos de activación."
         },
         "1": {
-          "question": "¿Se instala un comando en cada agente?",
+          "question": "¿Un solo comando instala el plugin en todos los agentes?",
           "answer": "Por defecto, la CLI detecta los agentes compatibles instalados y te pide confirmación. También puedes seleccionar uno o varios agentes de forma explícita."
         },
         "2": {
@@ -494,7 +494,7 @@
     },
     "header": {
       "plugins": "Complementos",
-      "why": "Por que funciona",
+      "why": "Por qué funciona",
       "faq": "Preguntas frecuentes",
       "openMenu": "Abrir menú de navegación",
       "closeMenu": "Cerrar menú de navegación",
@@ -504,7 +504,7 @@
     },
     "navigation": {
       "plugins": "Complementos",
-      "why": "Por que funciona",
+      "why": "Por qué funciona",
       "faq": "Preguntas frecuentes",
       "open": "Abrir menú de navegación",
       "close": "Cerrar menú de navegación",
@@ -988,7 +988,7 @@
     "title": "Usar plugins / Crear plugins",
     "subtitle": "Instala y mantén paquetes estándar, o escribe tu propio paquete plugin.json y compruébalo con las herramientas adecuadas.",
     "use": {
-      "badge": "CLI 0.1.94",
+      "badge": "CLI 0.1.95",
       "title": "Usar plugins",
       "description": "Busca, previsualiza, instala y mantén paquetes con el instalador publicado.",
       "cta": "Abrir la guía Usar"

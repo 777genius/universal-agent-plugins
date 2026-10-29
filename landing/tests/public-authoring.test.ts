@@ -32,7 +32,7 @@ test('all authoring messages compile and distinguish installer, source tools and
     }
     assert.ok(rendered.versions.includes('universal-agent-plugins'), locale);
     assert.ok(rendered.versions.includes('agentplugins-v*'), locale);
-    for (const fact of ['0.1.94', 'agentplugins author', '0.1.65'])
+    for (const fact of ['0.1.95', 'agentplugins author', '0.1.65'])
       assert.ok(rendered.releaseScope.includes(fact), `${locale}:${fact}`);
     assert.doesNotMatch(rendered.releaseScope, /E2E|production-ready/i, locale);
     assert.doesNotMatch(rendered.releaseScope, /plugin-kit-ai|PyPI|pipx/i, locale);
@@ -58,7 +58,7 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
     assert.ok(copy.standard.includes('plugin.json'));
     assert.doesNotMatch(copy.releaseScope, /plugin-kit-ai|PyPI|pipx|1\.2\.4/i);
     assert.ok(copy.versions.includes('agentplugins-v*'));
-    assert.ok(copy.versions.includes('0.1.94'));
+    assert.ok(copy.versions.includes('0.1.95'));
     assert.ok(copy.releaseScope.includes('0.1.65'));
     assert.ok(copy.releaseScope.includes('agentplugins author'));
     assert.equal(Object.hasOwn(copy, 'history'), false);
@@ -100,7 +100,7 @@ test('quickstarts use released installer commands and link source authoring sepa
     assert.ok(text.includes('canonicalId: "page:guide:quickstart"'));
     assert.match(publishedText, /^description: .*Agent Plugins 1\.0.*$/m);
     assert.doesNotMatch(publishedText, /^description: .*plugin-kit-ai.*$/m);
-    for (const fact of ['universal-agent-plugins', 'agentplugins-v0.1.94', 'agentplugins author'])
+    for (const fact of ['universal-agent-plugins', 'agentplugins-v0.1.95', '0.1.94', 'agentplugins author'])
       assert.ok(publishedText.includes(fact), `${locale}:${fact}`);
     assert.ok(publishedText.includes('../build/#build-from-source'), locale);
     assert.doesNotMatch(publishedText, /plugin-kit-ai|PyPI|pipx|historical-v1/i);

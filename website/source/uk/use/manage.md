@@ -37,6 +37,30 @@ agentplugins outdated --all
 | Клієнт потребує довіри, активації чи входу | Виконайте вказівки для цільового клієнта з результату команди. |
 | Локальний пакет не проходить перевірку | Передайте автору звіт про пакет і [настанови з перевірок](../build/checks). |
 
+## Локальний API керування (CLI 0.1.95) {#local-management-api}
+
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+додає `agentplugins manage serve` для застосунків, що вбудовують інсталятор,
+та `agentplugins manage discover` для локального виявлення клієнтів і профілів
+без внесення змін. Виявлення не запускає клієнти, не перевіряє їхні версії,
+не завантажує джерела й не змінює файли.
+
+`manage serve` працює як процес під керуванням застосунку з контекстом,
+зафіксованим під час запуску, та приватним автентифікованим API на IPv4 loopback.
+Застосунок передає JSON через stdin і зберігає початкову URL-адресу та
+bearer-токен у таємниці. Перед інтеграцією перевірте довідку команд:
+
+```bash
+agentplugins version
+agentplugins manage serve --help
+agentplugins manage discover --help
+```
+
+Правила запуску та життєвого циклу описано в
+[контракті протоколу керування](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md).
+[TypeScript Management SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md)
+залишається окремим пакетом для розробки, який ще не опубліковано.
+
 ## Оновлюйте свідомо {#update-deliberately}
 
 ```bash

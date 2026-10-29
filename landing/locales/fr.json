@@ -94,8 +94,8 @@
     "next": "Suivant"
   },
   "theme": {
-    "dark": "Sombre",
-    "light": "Lumière",
+    "dark": "Thème sombre",
+    "light": "Thème clair",
     "toggle": "Changer de thème"
   },
   "language": {
@@ -339,9 +339,9 @@
     "specLink": "Spécification Agent Plugins 1.0",
     "compatibilityLink": "Compatibilité des clients (en anglais)",
     "limitations": "La compatibilité dépend du paquet. La validation du schéma ne prouve ni l’exécution, ni OAuth, ni l’activation. Codex ne prend pas en charge MCP SSE déclaré ; stdio et Streamable HTTP conservent leur prise en charge par les adaptateurs existants.",
-    "versions": "Installateur natif vérifié : CLI 0.1.94 ; nom du paquet npm : universal-agent-plugins ; étiquettes GitHub : agentplugins-v*.",
+    "versions": "Installateur natif vérifié : CLI 0.1.95 ; nom du paquet npm : universal-agent-plugins ; étiquettes GitHub : agentplugins-v*.",
     "availability": "Paquets manuels et outils compilés depuis les sources",
-    "releaseScope": "GitHub Releases et Homebrew proposent l’installateur CLI 0.1.94, qui n’inclut pas agentplugins author. L’installation via npm est aussi possible, mais les versions des canaux peuvent différer : vérifiez la version du CLI avant d’utiliser les fonctions propres à 0.1.94. Les commandes du guide Créer nécessitent une compilation des sources où la création est activée. La référence API générée conserve sa provenance historique de 0.1.65 ; elle ne décrit pas l’installateur actuel.",
+    "releaseScope": "GitHub Releases fournit CLI 0.1.95, qui ajoute une API de gestion locale et des extensions natives Pi en portée utilisateur, sans inclure agentplugins author. Homebrew et npm peuvent proposer une version antérieure ; vérifiez avec agentplugins version. Les commandes de création du guide nécessitent une compilation des sources où la création est activée. La référence API générée conserve sa provenance historique de 0.1.65 ; elle ne décrit pas l’installateur actuel.",
     "buildGuideLink": "Ouvrir le guide de création"
   },
   "shell": {
@@ -409,7 +409,7 @@
           "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder : chaque client dispose de son propre parcours d’installation ou de préparation. La compatibilité dépend des composants, de la portée et des conditions d’activation."
         },
         "1": {
-          "question": "Une commande est-elle installée sur chaque agent ?",
+          "question": "Une seule commande installe-t-elle le plugin dans tous les agents ?",
           "answer": "Par défaut, la CLI détecte les agents compatibles installés et vous demande de confirmer. Vous pouvez également sélectionner explicitement un ou plusieurs agents."
         },
         "2": {
@@ -988,7 +988,7 @@
     "title": "Utiliser des plugins / Créer des plugins",
     "subtitle": "Installez et gérez des paquets standard, ou écrivez votre propre paquet plugin.json et vérifiez-le avec les outils adaptés.",
     "use": {
-      "badge": "CLI 0.1.94",
+      "badge": "CLI 0.1.95",
       "title": "Utiliser des plugins",
       "description": "Recherchez, prévisualisez, installez et gérez des paquets avec l’installateur publié.",
       "cta": "Ouvrir le guide Utiliser"

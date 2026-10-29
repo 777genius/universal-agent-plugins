@@ -94,8 +94,8 @@
     "next": "下一步"
   },
   "theme": {
-    "dark": "黑暗",
-    "light": "光",
+    "dark": "深色主题",
+    "light": "浅色主题",
     "toggle": "切换主题"
   },
   "language": {
@@ -339,9 +339,9 @@
     "specLink": "Agent Plugins 1.0 规范",
     "compatibilityLink": "客户端兼容性（英文）",
     "limitations": "兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。",
-    "versions": "已验证原生安装器：CLI 0.1.94；npm 包名为 universal-agent-plugins；GitHub 发布标签为 agentplugins-v*。",
+    "versions": "已验证原生安装器：CLI 0.1.95；npm 包名为 universal-agent-plugins；GitHub 发布标签为 agentplugins-v*。",
     "availability": "手动编写包，或使用源码创作工具",
-    "releaseScope": "GitHub Releases 和 Homebrew 提供 CLI 0.1.94 安装器，其中不包含 agentplugins author。也可通过 npm 安装，但各渠道版本可能不同；使用 0.1.94 专属行为前请先检查 CLI 版本。构建指南中的创作命令需要启用创作功能的源码构建。生成的 API 参考保留其历史 0.1.65 来源，不能用于说明当前安装器包含哪些功能。",
+    "releaseScope": "GitHub Releases 提供 CLI 0.1.95，新增本地管理 API 和用户范围的 Pi 原生扩展，其中不包含 agentplugins author。Homebrew 和 npm 的版本可能滞后；请用 agentplugins version 确认。构建指南中的创作命令需要启用创作功能的源码构建。生成的 API 参考保留其历史 0.1.65 来源，不能用于说明当前安装器包含哪些功能。",
     "buildGuideLink": "打开构建指南"
   },
   "shell": {
@@ -409,11 +409,11 @@
           "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder：各客户端有自己的安装或准备流程。兼容性取决于包的组件、安装范围和激活要求。"
         },
         "1": {
-          "question": "是否将一个命令安装到每个代理中？",
+          "question": "一个命令就能为所有智能体安装插件吗？",
           "answer": "默认情况下，CLI 会检测已安装的兼容代理并要求您确认。您还可以明确选择一名或多名代理。"
         },
         "2": {
-          "question": "当客服人员需要登录时会发生什么？",
+          "question": "当智能体需要登录时会怎样？",
           "answer": "CLI 准备包并显示确切的激活或登录步骤。它永远不会收到您的 OAuth 密码。"
         },
         "3": {
@@ -988,7 +988,7 @@
     "title": "使用插件 / 构建插件",
     "subtitle": "安装和管理标准包，或编写自己的 plugin.json 包并使用相应工具检查。",
     "use": {
-      "badge": "CLI 0.1.94",
+      "badge": "CLI 0.1.95",
       "title": "使用插件",
       "description": "通过已发布安装器查找、预览、安装和维护包。",
       "cta": "打开使用指南"

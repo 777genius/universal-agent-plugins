@@ -202,9 +202,9 @@
     "specLink": "Ler a especificação Agent Plugins 1.0",
     "compatibilityLink": "Compatibilidade de clientes (em inglês)",
     "limitations": "A compatibilidade é específica de cada pacote. A validação de esquema não comprova execução, OAuth nem ativação. O Codex não oferece suporte a MCP SSE declarado; stdio e Streamable HTTP mantêm o suporte existente por adaptador.",
-    "versions": "Instalador nativo verificado: CLI 0.1.94; nome do pacote npm: universal-agent-plugins; tags do GitHub: agentplugins-v*.",
+    "versions": "Instalador nativo verificado: CLI 0.1.95; nome do pacote npm: universal-agent-plugins; tags do GitHub: agentplugins-v*.",
     "availability": "Pacotes manuais e ferramentas compiladas do código-fonte",
-    "releaseScope": "GitHub Releases e Homebrew oferecem o instalador CLI 0.1.94, que não inclui agentplugins author. A instalação por npm também está disponível, mas as versões dos canais podem ser diferentes: confira a versão da CLI antes de usar recursos exclusivos de 0.1.94. Os comandos do guia Criar precisam de uma compilação do código-fonte com a criação ativada. A referência API gerada mantém sua origem histórica de 0.1.65; ela não descreve o instalador atual.",
+    "releaseScope": "O GitHub Releases fornece o instalador CLI 0.1.95 verificado, com uma API local de gerenciamento e extensões nativas do Pi; ele não inclui agentplugins author. npm e Homebrew são canais de instalação cujas versões podem demorar para receber a atualização; confira a versão da CLI antes de depender do comportamento de uma versão específica. Use uma compilação do código-fonte com criação habilitada para os comandos author do guia Criar. A referência API gerada mantém sua origem histórica de 0.1.65; ela não descreve o instalador atual.",
     "buildGuideLink": "Abrir o guia de criação"
   },
   "shell": {
@@ -988,7 +988,7 @@
     "title": "Usar plugins / Criar plugins",
     "subtitle": "Instale e gerencie pacotes padrão ou escreva seu próprio pacote plugin.json e verifique com as ferramentas adequadas.",
     "use": {
-      "badge": "CLI 0.1.94",
+      "badge": "CLI 0.1.95",
       "title": "Usar plugins",
       "description": "Encontre, visualize, instale e mantenha pacotes com o instalador publicado.",
       "cta": "Abrir o guia de uso"

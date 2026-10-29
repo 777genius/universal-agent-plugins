@@ -51,16 +51,21 @@ próprio ambiente de execução. Os exemplos deste caminho usam `agentplugins`;
 4. [Mantenha o estado instalado](./manage) com listagem, atualização, reparo e remoção.
 5. Quando necessário, restaure um conjunto compartilhado de dependências a partir de `uap.toml` e `uap.lock`.
 
-A [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)
-é o instalador nativo atual. Canais de gerenciadores de pacotes podem demorar
-para receber uma versão; confira `agentplugins version` antes de depender do
-comportamento da 0.1.94. Use o instalador nativo ou o Homebrew se o canal escolhido
-for mais antigo. O escopo de projeto explícito funciona desde a 0.1.93.
-A maioria dos comandos usa o escopo de usuário por padrão. Desde a 0.1.94,
-`install` sem argumento de origem nem escopo explícito só seleciona um projeto
-quando existe um arquivo regular `uap.toml` na pasta atual exata; não há busca
-em pastas superiores. Selecione `--scope project` nos comandos de manutenção de
-projetos. O suporte a projetos e a ativação variam conforme o destino.
+A [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+é o instalador nativo atual. Ela adiciona uma API local de gerenciamento e
+extensões nativas do Pi no escopo de usuário. Consulte
+[gerenciamento local](./manage#local-management-api) e
+[compatibilidade com o Pi](../reference/client-compatibility#pi-native-extensions).
+Canais de gerenciadores de pacotes podem demorar para receber a atualização;
+confira `agentplugins version`. O instalador nativo fornece a versão atual
+verificada.
+
+O escopo de projeto explícito funciona desde a 0.1.93. A maioria dos comandos usa
+o escopo de usuário por padrão. Desde a 0.1.94, `install` sem argumento de origem
+nem escopo explícito só seleciona um projeto quando existe um arquivo regular
+`uap.toml` na pasta atual exata; não há busca em pastas superiores. Selecione
+`--scope project` nos comandos de manutenção de projetos. O suporte a projetos
+e a ativação variam conforme o destino.
 
 ## Interprete cada nível do resultado {#read-the-result-at-the-right-level}
 

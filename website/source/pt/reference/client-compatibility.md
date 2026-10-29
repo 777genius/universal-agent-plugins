@@ -14,12 +14,19 @@ translationRequired: false
 
 ## Versão atual e escopo {#current-release-and-scope}
 
-A [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), versão nativa publicada em 28 de outubro de 2026,
-adiciona seleção automática de projeto para `install` sem argumento de origem
-quando a pasta atual exata contém um arquivo regular `uap.toml`. O escopo
-explícito prevalece; pastas superiores não são pesquisadas. Locks existentes
-são verificados estritamente mesmo sem `--locked`. A entrega explícita em
-projetos foi introduzida na 0.1.93. Essas evidências da versão do instalador
+A [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95),
+versão nativa publicada em 29 de outubro de 2026, adiciona uma API local de
+gerenciamento com processo controlado pelo aplicativo, descoberta de clientes
+e perfis sem alterações e um provedor de extensões nativas do Pi no escopo de
+usuário. Consulte [gerenciamento local](../use/manage#local-management-api).
+Canais de gerenciadores de pacotes podem demorar para receber a atualização;
+confira `agentplugins version`.
+
+Desde a CLI 0.1.94, `install` sem argumento de origem seleciona automaticamente
+o projeto quando a pasta atual exata contém um arquivo regular `uap.toml`.
+O escopo explícito prevalece; pastas superiores não são pesquisadas. Locks
+existentes são verificados estritamente mesmo sem `--locked`. A entrega explícita
+em projetos foi introduzida na 0.1.93. Essas evidências da versão do instalador
 não qualificam a execução em todos os agentes nativos nem o executável padrão
 de criação. O instalador npm/nativo atual não inclui `agentplugins author`;
 consulte o [guia de criação](../build/) para as ferramentas do código-fonte.
@@ -43,10 +50,25 @@ fixada não é evidência de inicialização MCP nem de execução do modelo. Co
 
 Os registros abaixo preservam versões históricas exatas, versões dos clientes,
 identidades das plataformas e limitações observadas. Eles não se aplicam
-automaticamente à 0.1.94, a uma versão posterior de cliente, a outro escopo ou
+automaticamente à 0.1.95, a uma versão posterior de cliente, a outro escopo ou
 a um pacote não testado. UAP é uma ferramenta independente da comunidade; estas
 são observações delimitadas dos mantenedores, não certificação de fornecedores
 nem uma afirmação de prontidão universal para produção.
+
+## Extensões nativas do Pi {#pi-native-extensions}
+
+A CLI 0.1.95 aceita `--target pi` para pacotes que declaram uma
+[extensão nativa do Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md).
+Esse provedor oferece extensões nativas no escopo de usuário; Skills portáteis
+e projeção MCP estão fora do escopo atual. Recarregue os recursos ou reinicie
+o Pi após a instalação.
+
+As [evidências nativas registradas](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md)
+cobrem o Pi 1.4.0 no Linux, incluindo descoberta nativa e execução da extensão
+selecionada, atualização, reparo de pacote ausente, remoção e preservação de
+extensões de terceiros. Elas não demonstram execução no macOS ou Windows,
+notificações de desktop, áudio ou foco do terminal. O sucesso da instalação,
+por si só, não prova que uma sessão do Pi em execução carregou a extensão.
 
 ## Rascunho histórico do instalador 0.1.55 {#historical-draft-installer-0155}
 

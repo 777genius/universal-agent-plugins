@@ -9,16 +9,19 @@ This source package has the development version `0.0.0-development`. It is consu
 as a built, integrity-pinned tarball until separately authorized public publication.
 The SDK never downloads or updates an engine executable.
 
-## Provision a management-enabled source engine
+## Provision a management-enabled engine
 
-The SDK needs the **current management-enabled source engine** as well as its
-own development tarball. The published CLI 0.1.94 does not expose `manage` and
-cannot run these examples. A generic pinned installer download is insufficient.
-Pin a reviewed source commit and the SHA-256 of the resulting executable in the
-consuming application's build evidence; provision that exact executable yourself.
+The SDK needs a **management-enabled engine** as well as its own development
+tarball. The published native [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+exposes `manage serve` and `manage discover`; earlier CLI 0.1.94 does not.
+Provision the exact executable yourself and record its version and SHA-256 in
+the consuming application's build evidence. Package-manager channels may lag,
+so check both command-help examples below before integration. The SDK remains
+a separate, unreleased development package and never provisions the engine.
 
-From a clean, reviewed repository checkout, use Git and the repository's Go
-1.26.10 toolchain. The following Unix-shell example starts at the repository root:
+You can also build an engine from a clean, reviewed repository checkout. Pin
+the reviewed commit and use Git and the repository's declared Go toolchain.
+The following Unix-shell example starts at the repository root:
 
 ```sh
 uap_engine_revision=$(git rev-parse HEAD)
@@ -29,13 +32,14 @@ mkdir -p bin
 sha256sum ./bin/agentplugins-management
 ```
 
-Record `uap_engine_revision` alongside that digest and the SDK tarball digest.
+For a source build, record `uap_engine_revision` alongside the executable digest
+and the SDK tarball digest.
 On macOS, use `shasum -a 256` for the executable digest. On Windows, build an
 `.exe` output and use `Get-FileHash -Algorithm SHA256`. Both help checks must
 succeed before supplying the executable to `startUap` or `discoverTargets`.
 They establish command availability, not installation or native runtime success.
 
-The current development CLI root registers `manage` directly; this build needs
+The CLI root registers `manage` directly; the source build needs
 no authoring linker flag. Its management startup captures profile authority and
 uses the shared installer composition. The [wire contract](../../contracts/management/README.md)
 defines that protocol and its independent capability versioning.
@@ -63,7 +67,7 @@ merge additional discovered profiles into the captured startup context.
 
 ## Start an owned engine
 
-Use the management-enabled source executable verified above in `executable`.
+Use the pinned management-enabled executable verified above in `executable`.
 
 ```ts
 import { startUap } from '@uap/management-sdk/node';

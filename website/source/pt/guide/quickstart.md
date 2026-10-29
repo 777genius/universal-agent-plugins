@@ -40,13 +40,16 @@ também fornece executáveis para macOS, Linux e Windows. O gerenciador nativo
 não precisa de Node.js, embora plugins individuais possam precisar de seus
 próprios ambientes de execução. Confira `npx universal-agent-plugins version`
 ao usar npm: um canal de gerenciador de pacotes ainda pode fornecer uma CLI
-mais antiga. A seleção automática abaixo exige 0.1.94; use o instalador nativo
-ou o Homebrew se necessário. Os comandos explícitos de projeto deste guia também
+mais antiga. A seleção automática abaixo exige 0.1.94; o instalador nativo
+fornece a versão verificada. Os comandos explícitos de projeto deste guia também
 funcionam com a 0.1.93.
 
-A [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)
-inclui escopo de projeto explícito e seleção automática de projeto para
-`install`. Para conferir a adição de um pacote a um projeto:
+A [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+mantém o escopo de projeto explícito e a seleção automática de `install`,
+introduzida na 0.1.94. Ela também adiciona uma
+[API local de gerenciamento](../use/manage#local-management-api) e
+[extensões nativas do Pi](../reference/client-compatibility#pi-native-extensions).
+Para conferir o plano de adição de um pacote a um projeto:
 
 ```bash
 npx universal-agent-plugins add context7 --target cursor --scope project \

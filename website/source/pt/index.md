@@ -44,16 +44,22 @@ para macOS, Linux ou Windows; o gerenciador nativo em si não exige Node.js.
 
 ## O que está disponível {#what-is-available}
 
-A [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)
-é a versão atual do instalador nativo. Ela inclui escopo de projeto explícito e
-restauração com versões fixadas. A maioria dos comandos usa o ambiente do usuário
-por padrão. Um `install` sem argumento de origem seleciona o projeto atual quando
-essa pasta exata contém um arquivo regular `uap.toml`; o escopo explícito prevalece.
+A [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+é a versão atual do instalador nativo, publicada em 29 de outubro de 2026.
+Ela adiciona uma API local de gerenciamento e extensões nativas do Pi no escopo
+de usuário. Consulte [gerenciamento local](./use/manage#local-management-api) e
+[compatibilidade com o Pi](./reference/client-compatibility#pi-native-extensions).
+
+O instalador oferece escopo de projeto explícito e restauração com versões
+fixadas. A maioria dos comandos usa o ambiente do usuário por padrão. Um
+`install` sem argumento de origem seleciona o projeto atual quando essa pasta
+exata contém um arquivo regular `uap.toml`; o escopo explícito prevalece.
 Selecione o escopo de projeto nos comandos de manutenção. Confira
-`agentplugins version`: a seleção automática exige a versão 0.1.94. Se o canal
-do seu gerenciador de pacotes estiver desatualizado, use o instalador nativo ou o
-Homebrew, ou mantenha as opções explícitas de projeto, disponíveis desde a
-0.1.93. Consulte [instalação](./use/install) e [manutenção](./use/manage).
+`agentplugins version`: a seleção automática exige a versão 0.1.94. Canais de
+gerenciadores de pacotes podem demorar para receber a atualização; o instalador
+nativo fornece a versão atual verificada. As opções explícitas de projeto estão
+disponíveis desde a 0.1.93. Consulte [instalação](./use/install) e
+[manutenção](./use/manage).
 
 O instalador atual não inclui `agentplugins author`. O [guia de criação](./build/)
 explica como escrever pacotes manualmente e apresenta os comandos de criação

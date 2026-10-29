@@ -40,11 +40,13 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 Node.js не потрібен, хоча окремі плагіни можуть потребувати власних середовищ
 виконання. Під час використання npm перевіряйте `npx universal-agent-plugins version`:
 канал менеджера пакетів може ще надавати старішу CLI. Автоматичний вибір нижче
-потребує 0.1.94; за потреби скористайтеся нативним інсталятором або Homebrew.
+потребує 0.1.94; перевірений випуск можна отримати через нативний інсталятор.
 Явні команди для проєкту в цьому посібнику також працюють із 0.1.93.
 
-[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)
-містить явну область проєкту та автоматичний вибір проєкту для `install`.
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+зберігає явну область проєкту та автоматичний вибір для `install`, запроваджений
+у 0.1.94. Також доступні [локальний API керування](../use/manage#local-management-api)
+та [нативні розширення Pi](../reference/client-compatibility#pi-native-extensions).
 Щоб переглянути план додавання пакета до проєкту:
 
 ```bash

@@ -13,7 +13,9 @@ localeDisposition: "current-translation"
 
 ## Versión actual y alcance
 
-[CLI nativo 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), publicado el 28 de octubre de 2026, incluye la selección automática de proyecto para `install` sin argumento de origen y la validación estricta de un bloqueo existente. La instalación de proyecto explícita ya estaba disponible en 0.1.93. La referencia nativa y de Homebrew es 0.1.94; los canales pueden actualizarse en momentos distintos. Comprueba la versión del ejecutable antes de aplicar las instrucciones específicas de 0.1.94. Las pruebas de su publicación como instalador no acreditan la ejecución de todos los clientes nativos ni el ejecutable estándar de creación. El instalador actual npm o nativo no incluye `agentplugins author`; consulta [Crear plugins](../build/) para las herramientas del código fuente.
+[CLI nativo 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95), publicado el 29 de octubre de 2026, añade una API local de gestión con un proceso controlado por la aplicación, detección de clientes y perfiles sin cambios y un proveedor de extensiones nativas de Pi en el ámbito de usuario. Consulta [la gestión local](../use/manage#local-management-api). Los canales de los gestores de paquetes pueden actualizarse más tarde: comprueba `agentplugins version`.
+
+Desde CLI 0.1.94, `install` sin argumento de origen selecciona automáticamente el proyecto si existe un `uap.toml` regular en el directorio actual exacto. Un ámbito explícito tiene prioridad; no se buscan directorios superiores. Los archivos de bloqueo existentes se validan de forma estricta incluso sin `--locked`. La instalación de proyecto explícita se introdujo en 0.1.93. Las pruebas de publicación del instalador no acreditan la ejecución de todos los clientes nativos ni el ejecutable estándar de creación. El instalador actual npm o nativo no incluye `agentplugins author`; consulta [Crear plugins](../build/) para las herramientas del código fuente.
 
 Interpreta la compatibilidad como comprobaciones independientes:
 
@@ -27,9 +29,15 @@ Interpreta la compatibilidad como comprobaciones independientes:
 
 La entrega de proyecto suele quedar **Prepared** mientras falten confianza, recarga, configuración explícita o una nueva sesión. ChatGPT rechaza la instalación de proyecto. VS Code prepara archivos para una sola carpeta local; observar sus metadatos no demuestra arranque MCP ni ejecución de modelos. Consulta [la compatibilidad por proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md) y [el índice de pruebas de proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
+## Extensiones nativas de Pi {#pi-native-extensions}
+
+CLI 0.1.95 acepta `--target pi` para paquetes que declaran una [extensión nativa de Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md). Este proveedor admite extensiones nativas en el ámbito de usuario; los Skills portables y la proyección MCP quedan fuera de su alcance actual. Recarga los recursos o reinicia Pi después de instalar.
+
+Las [pruebas nativas registradas](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md) cubren Pi 1.4.0 en Linux: detección nativa y ejecución de la extensión seleccionada, actualización, reparación de un paquete ausente, eliminación y conservación de extensiones ajenas. No demuestran ejecución en macOS o Windows, notificaciones de escritorio, audio ni foco del terminal. Una instalación correcta, por sí sola, no prueba que una sesión de Pi en ejecución haya cargado la extensión.
+
 ## Cómo leer las pruebas históricas
 
-Los registros siguientes conservan sus versiones, plataformas y límites originales. No se aplican automáticamente a 0.1.94, a un cliente posterior, a otro ámbito ni a un paquete no probado. UAP es una herramienta comunitaria independiente; estas observaciones de los mantenedores no son una certificación del proveedor.
+Los registros siguientes conservan sus versiones, plataformas y límites originales. No se aplican automáticamente a 0.1.95, a un cliente posterior, a otro ámbito ni a un paquete no probado. UAP es una herramienta comunitaria independiente; estas observaciones de los mantenedores no son una certificación del proveedor.
 
 | Registro | Alcance y resultado observado | Fuente verificable |
 | --- | --- | --- |

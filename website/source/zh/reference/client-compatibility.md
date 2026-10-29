@@ -13,10 +13,9 @@ localeDisposition: "current-translation"
 
 ## 当前版本与范围
 
-[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)于 2026 年 10 月 28 日发布，支持当前目录的自动项目安装选择和严格的已有锁文件验证。
-显式项目范围从 0.1.93 起提供。
-安装器的发布证据不能证明每个原生客户端的运行行为，也不能替代标准创作工具的可执行文件发布验收。
-当前 npm/原生安装器不包含 `agentplugins author`；源码工具见[构建指南](../build/)。
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)于 2026 年 10 月 29 日发布，新增由宿主管理生命周期的本地管理 API、只读客户端和配置目录发现，以及用户范围的 Pi 原生扩展提供程序。请参阅[本地管理](../use/manage#local-management-api)。各分发渠道的版本可能滞后，请先用 `agentplugins version` 确认。
+
+自 CLI 0.1.94 起，未指定来源参数的 `install` 在当前目录存在普通 `uap.toml` 文件时自动选择项目；显式范围优先，不搜索父目录。即使没有 `--locked`，已有锁文件也会严格验证。显式项目范围从 0.1.93 起提供。安装器的发布证据不能证明每个原生客户端的运行行为，也不能替代标准创作工具的可执行文件发布验收。当前 npm/原生安装器不包含 `agentplugins author`；源码工具见[构建指南](../build/)。
 
 | 检查层次 | 含义 |
 | --- | --- |
@@ -31,8 +30,14 @@ ChatGPT 明确不支持原生项目安装。VS Code 项目范围为单个本地�
 请参阅[逐客户端项目支持](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)和
 [项目证据索引](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md)。
 
-下列历史观察对应精确的安装器、客户端、平台和测试范围。结果不会自动延伸到 0.1.94、其他客户端版本、其他安装范围或未经测试的包。
+下列历史观察对应精确的安装器、客户端、平台和测试范围。结果不会自动延伸到 0.1.95、其他客户端版本、其他安装范围或未经测试的包。
 UAP 是独立社区工具；这些是维护者进行的有限观察，不是厂商认证或通用的生产就绪保证。
+
+## Pi 原生扩展 {#pi-native-extensions}
+
+CLI 0.1.95 支持为声明了[Pi 原生扩展](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md)的包指定 `--target pi`。此提供程序支持用户范围的原生扩展，当前范围不包括可移植技能和 MCP 配置投射。安装后请重新加载资源或重启 Pi。
+
+[已记录的原生证据](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md)覆盖 Linux 上的 Pi 1.4.0，包括原生发现、选定的扩展执行、更新、缺失包修复、移除和保留外部扩展。它不能证明 macOS/Windows 执行、桌面通知、音频或终端焦点行为。仅安装成功不能证明正在运行的 Pi 会话已加载扩展。
 
 ## 历史证据索引
 

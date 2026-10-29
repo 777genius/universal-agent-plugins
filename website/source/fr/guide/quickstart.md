@@ -32,14 +32,14 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 
 Le [guide d’installation native](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) fournit des exécutables pour macOS, Linux et Windows. Le gestionnaire natif ne nécessite pas Node.js, même si certains plugins ont besoin de leur propre environnement d’exécution.
 
-[CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93) comprend la portée projet explicite. Pour prévisualiser une installation de projet :
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) conserve la portée projet explicite et la sélection automatique pour `install` introduite dans 0.1.94. Il ajoute aussi une [API de gestion locale](../use/manage#local-management-api) et des [extensions natives Pi](../reference/client-compatibility#pi-native-extensions). Pour prévisualiser l’ajout d’un paquet à un projet :
 
 ```bash
 npx universal-agent-plugins add context7 --target cursor --scope project \
   --project-root /path/to/project --dry-run
 ```
 
-Choisissez un dossier de projet existant. `add` utilise par défaut la portée utilisateur : sélectionnez projet explicitement pour cette opération. Depuis [CLI natif 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), `install` sans argument de source détecte le projet uniquement si un fichier `uap.toml` ordinaire existe dans le dossier courant exact, sans recherche dans les parents. Une portée explicite reste prioritaire. Cette sélection automatique nécessite 0.1.94 ou une version ultérieure : vérifiez `agentplugins version` et utilisez l’installateur natif ou Homebrew si votre canal est antérieur. Les canaux peuvent être mis à jour à des moments différents ; les exemples `npx` avec portée explicite de cette page restent compatibles avec 0.1.93. Examinez le plan avant d’omettre `--dry-run`. La découverte native, la confiance, l’authentification et les appels MCP réussis restent distincts de l’écriture des fichiers du paquet.
+Choisissez un dossier de projet existant. `add` utilise par défaut la portée utilisateur : sélectionnez projet explicitement pour cette opération. Depuis [CLI natif 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), `install` sans argument de source détecte le projet uniquement si un fichier `uap.toml` ordinaire existe dans le dossier courant exact, sans recherche dans les parents. Une portée explicite reste prioritaire. Cette sélection automatique nécessite 0.1.94 ou une version ultérieure : vérifiez `agentplugins version` et utilisez l’installateur natif si votre canal est antérieur. Les canaux peuvent être mis à jour à des moments différents ; les exemples `npx` avec portée explicite de cette page restent compatibles avec 0.1.93. Examinez le plan avant d’omettre `--dry-run`. La découverte native, la confiance, l’authentification et les appels MCP réussis restent distincts de l’écriture des fichiers du paquet.
 
 [Parcours complet d’installation](../use/install) · [Compatibilité des clients et portée des tests](../reference/client-compatibility)
 

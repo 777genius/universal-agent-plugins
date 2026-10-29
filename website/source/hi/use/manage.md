@@ -31,6 +31,20 @@ agentplugins outdated --all
 | क्लाइंट को ट्रस्ट, सक्रियण या साइन-इन चाहिए | टार्गेट के परिणाम में दिए क्लाइंट निर्देश पूरे करें। |
 | लोकल पैकेज वैलिडेशन असफल है | लेखक को पैकेज रिपोर्ट और [जाँच के निर्देश](../build/checks) दें। |
 
+## लोकल मैनेजमेंट API (CLI 0.1.95) {#local-management-api}
+
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) में इंस्टॉलर को अपने भीतर इस्तेमाल करने वाले ऐप्लिकेशन के लिए `agentplugins manage serve` और लोकल क्लाइंट व प्रोफ़ाइल की केवल पढ़ने वाली खोज के लिए `agentplugins manage discover` जोड़े गए हैं। यह खोज क्लाइंट नहीं चलाती, उनके संस्करण नहीं जाँचती, स्रोत नहीं लाती और फ़ाइलें नहीं बदलती।
+
+`manage serve` ऐसी प्रक्रिया है जिसका जीवनचक्र उसे शुरू करने वाला ऐप्लिकेशन संभालता है। यह स्टार्टअप पर दर्ज संदर्भ और निजी, प्रमाणित IPv4 लूपबैक API इस्तेमाल करती है। इंटीग्रेशन करने वाला होस्ट stdin पर JSON देता है और bootstrap URL तथा bearer capability को निजी रखता है। इंटीग्रेशन से पहले कमांड की मदद देखें:
+
+```bash
+agentplugins version
+agentplugins manage serve --help
+agentplugins manage discover --help
+```
+
+स्टार्टअप और जीवनचक्र के नियम [मैनेजमेंट प्रोटोकॉल अनुबंध](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md) में हैं। [TypeScript मैनेजमेंट SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md) अब भी अलग, अप्रकाशित विकास पैकेज है।
+
 ## सोच-समझकर अपडेट करें {#update-deliberately}
 
 ```bash

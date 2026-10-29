@@ -31,6 +31,20 @@ agentplugins outdated --all
 | يحتاج العميل إلى الثقة أو التفعيل أو تسجيل الدخول | اتبع تعليمات العميل التي أبلغ عنها الهدف. |
 | تفشل الحزمة المحلية في التحقق | أعطِ المؤلف تقرير الحزمة و[إرشادات الفحص](../build/checks). |
 
+## واجهة API للإدارة المحلية (CLI 0.1.95) {#local-management-api}
+
+يضيف [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) الأمر `agentplugins manage serve` للتطبيقات التي تدمج المثبّت، والأمر `agentplugins manage discover` لاكتشاف العملاء وملفات التعريف المحلية للقراءة فقط. لا ينفّذ الاكتشاف العملاء، ولا يفحص إصداراتهم، ولا يجلب المصادر، ولا يغيّر الملفات.
+
+`manage serve` عملية يدير التطبيق المضيف دورة حياتها، وتستخدم سياقًا يُلتقط عند بدء التشغيل وواجهة API خاصة ومصادَقًا عليها عبر عنوان استرجاع IPv4 محلي. يرسل المضيف JSON عبر stdin ويحافظ على خصوصية عنوان URL للتهيئة وقدرة التفويض bearer. افحص مساعدة الأوامر قبل الدمج:
+
+```bash
+agentplugins version
+agentplugins manage serve --help
+agentplugins manage discover --help
+```
+
+راجع [عقد بروتوكول الإدارة](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md) لقواعد بدء التشغيل ودورة الحياة. تبقى [حزمة SDK للإدارة بلغة TypeScript](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md) حزمة تطوير منفصلة وغير منشورة.
+
 ## حدّث عن قصد {#update-deliberately}
 
 ```bash

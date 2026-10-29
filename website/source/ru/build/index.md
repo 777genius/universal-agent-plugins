@@ -19,7 +19,7 @@ localeDisposition: "current-translation"
 ## Доступность
 
 Текущий нативный установщик,
-[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94),
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95),
 проверяет и устанавливает стандартные пакеты. Пакетные каналы могут
 обновляться позднее; узнайте установленную версию через `agentplugins version`.
 В нём **нет**

@@ -17,7 +17,7 @@ users' task. A Skill supplies instructions; MCP supplies a connection to tools.
 ## Availability
 
 The current native installer release,
-[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94),
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95),
 can validate and install standard packages. Package-manager channels can lag;
 check `agentplugins version` for the installed version. It does **not** include
 `agentplugins author`. The authoring commands in this Build journey describe

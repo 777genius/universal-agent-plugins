@@ -49,11 +49,13 @@ can run the same installer commands.
 4. [Maintain the installed state](./manage) with list, update, repair and removal.
 5. Restore a shared dependency set from `uap.toml` and `uap.lock` when needed.
 
-[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)
-is the current native installer. Package-manager channels can lag; check
-`agentplugins version` before relying on 0.1.94 behavior. Use the native installer
-or Homebrew if the selected channel is older. Explicit project scope works
-since 0.1.93.
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+is the current native installer. It adds a local management API and user-scope
+native Pi extensions. See [local management](./manage#local-management-api)
+and [Pi compatibility](../reference/client-compatibility#pi-native-extensions).
+Package-manager channels can lag; check `agentplugins version` before relying
+on release-specific behavior. Use the native installer for the verified release.
+Explicit project scope works since 0.1.93.
 Most commands default to user scope. Since 0.1.94, `install` without a source
 argument or explicit scope selects a project only when a regular `uap.toml`
 exists in the exact current folder; it does not search parents. Select

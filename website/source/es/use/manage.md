@@ -31,6 +31,20 @@ agentplugins outdated --all
 | El cliente necesita confianza, activación o inicio de sesión | Sigue las instrucciones indicadas para ese destino. |
 | Falla la validación de un paquete local | Entrega al autor el informe y la [guía de comprobaciones](../build/checks). |
 
+## API local de gestión (CLI 0.1.95) {#local-management-api}
+
+[CLI nativo 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) añade `agentplugins manage serve` para aplicaciones que integran el instalador y `agentplugins manage discover` para descubrir clientes y perfiles locales sin modificarlos. La detección no ejecuta clientes, consulta sus versiones, descarga orígenes ni cambia archivos.
+
+`manage serve` es un proceso controlado por la aplicación integradora, con un contexto capturado al arrancar y una API privada autenticada en el loopback IPv4. La aplicación proporciona JSON por stdin y mantiene privados la URL inicial y la credencial bearer. Comprueba la ayuda de los comandos antes de integrar:
+
+```bash
+agentplugins version
+agentplugins manage serve --help
+agentplugins manage discover --help
+```
+
+Consulta el [contrato del protocolo de gestión](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md) para conocer las reglas de arranque y ciclo de vida. El [TypeScript Management SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md) sigue siendo un paquete de desarrollo independiente que todavía no se ha publicado.
+
 ## Actualiza de forma deliberada
 
 ```bash

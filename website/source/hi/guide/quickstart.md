@@ -32,9 +32,9 @@ npx universal-agent-plugins info context7
 npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 ```
 
-[नेटिव इंस्टॉलेशन गाइड](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) में macOS, Linux और Windows के एक्ज़ीक्यूटेबल भी मिलते हैं। नेटिव मैनेजर को Node.js नहीं चाहिए, हालाँकि अलग प्लगइन को अपने रनटाइम चाहिए हो सकते हैं। npm इस्तेमाल करते समय `npx universal-agent-plugins version` जाँचें: पैकेज मैनेजर चैनल अब भी पुराना CLI दे सकता है। नीचे के स्वचालित चयन के लिए 0.1.94 आवश्यक है; ज़रूरत हो तो नेटिव इंस्टॉलर या Homebrew इस्तेमाल करें। इस गाइड की स्पष्ट प्रोजेक्ट कमांड 0.1.93 पर भी काम करती हैं।
+[नेटिव इंस्टॉलेशन गाइड](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) में macOS, Linux और Windows के एक्ज़ीक्यूटेबल भी मिलते हैं। नेटिव मैनेजर को Node.js नहीं चाहिए, हालाँकि अलग प्लगइन को अपने रनटाइम चाहिए हो सकते हैं। npm इस्तेमाल करते समय `npx universal-agent-plugins version` जाँचें: पैकेज मैनेजर चैनल अब भी पुराना CLI दे सकता है। नीचे के स्वचालित चयन के लिए 0.1.94 आवश्यक है; ज़रूरत हो तो नेटिव इंस्टॉलर इस्तेमाल करें। इस गाइड की स्पष्ट प्रोजेक्ट कमांड 0.1.93 पर भी काम करती हैं।
 
-[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94) में स्पष्ट प्रोजेक्ट स्कोप और `install` के लिए स्वचालित प्रोजेक्ट चयन है। प्रोजेक्ट में पैकेज जोड़ने का पूर्वावलोकन देखें:
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) में स्पष्ट प्रोजेक्ट स्कोप और 0.1.94 में आया स्वचालित `install` चयन उपलब्ध रहता है। इसमें [लोकल मैनेजमेंट API](../use/manage#local-management-api) और [Pi के नेटिव एक्सटेंशन](../reference/client-compatibility#pi-native-extensions) भी जोड़े गए हैं। प्रोजेक्ट में पैकेज जोड़ने का पूर्वावलोकन देखें:
 
 ```bash
 npx universal-agent-plugins add context7 --target cursor --scope project \

@@ -33,6 +33,20 @@ agentplugins outdated --all
 | 客户端需要信任、激活或登录 | 按该目标报告的步骤处理。 |
 | 本地包未通过验证 | 将报告和[检查指南](../build/checks)交给作者。 |
 
+## 本地管理 API（CLI 0.1.95） {#local-management-api}
+
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)新增 `agentplugins manage serve`，供应用嵌入安装器使用；`agentplugins manage discover` 则只读发现本地客户端和配置目录。发现操作不执行客户端、不探测版本、不获取来源，也不修改文件。
+
+`manage serve` 是由集成应用管理生命周期的进程，使用启动时捕获的上下文和经过认证的私有 IPv4 回环 API。宿主应用通过 stdin 提供 JSON，并应将引导 URL 和 bearer capability 保密。集成前先查看命令帮助：
+
+```bash
+agentplugins version
+agentplugins manage serve --help
+agentplugins manage discover --help
+```
+
+启动与生命周期规则见[管理通信协议](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md)。[TypeScript 管理 SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md)仍是独立的、尚未发布的开发包。
+
 ## 明确更新或修复
 
 ```bash

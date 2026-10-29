@@ -16,8 +16,9 @@ Agent Plugins 1.0 包是包含根目录 `plugin.json` 及技能、MCP 配置或�
 
 ## 可用性
 
-当前安装器 [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)可以验证并安装标准包，
-但**不包含 `agentplugins author`**。本节中的创作命令要求**启用创作功能的当前源码构建**。
+当前安装器 [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)可以验证并安装标准包，
+各分发渠道的版本可能不同，请先用 `agentplugins version` 确认已安装版本。
+它**不包含 `agentplugins author`**。本节中的创作命令要求**启用创作功能的当前源码构建**。
 历史 0.1.65 创作版本的证据仍只对应那个版本，不能说明当前安装器包含哪些功能。
 
 您可以手动编写文件并使用已发布安装器，也可以构建下方源码工具以生成骨架、执行静态检查和显式 MCP 运行检查。

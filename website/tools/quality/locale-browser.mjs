@@ -258,7 +258,7 @@ async function runLocalizedBuildChecks(page, goto, evidence, artifactsRoot) {
       assert.equal((await doc.locator("h1").first().innerText()).replace(/\u200b/g, "").trim(), expected.headings[index], `${route}: localized H1`);
       const body = (await doc.innerText()).replace(/\s+/g, " ");
       if (index === 0) {
-        assert.ok(await doc.locator('a[href$="/agentplugins-v0.1.94"]').isVisible(), `${route}: visible release source`);
+        assert.ok(await doc.locator('a[href$="/agentplugins-v0.1.95"]').isVisible(), `${route}: visible release source`);
         assert.match(body, expected.exclusion, `${route}: installer excludes author`);
         assert.match(body, expected.currentSource, `${route}: current-source authoring`);
         assert.ok(await doc.locator("#build-from-source").isVisible(), `${route}: source setup anchor`);

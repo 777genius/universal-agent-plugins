@@ -274,7 +274,7 @@
     "title": "Use plugins / Build plugins",
     "subtitle": "Install and manage standard packages, or write your own plugin.json package and check it with the appropriate tools.",
     "use": {
-      "badge": "CLI 0.1.94",
+      "badge": "CLI 0.1.95",
       "title": "Use plugins",
       "description": "Find, preview, install and maintain packages with the released installer.",
       "cta": "Open Use guide"
@@ -356,9 +356,9 @@
     "specLink": "Read the Agent Plugins 1.0 specification",
     "compatibilityLink": "Client compatibility (English)",
     "limitations": "Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.",
-    "versions": "Verified native installer: CLI 0.1.94; npm package name: universal-agent-plugins; GitHub release tags: agentplugins-v*.",
+    "versions": "Verified native installer: CLI 0.1.95; npm package name: universal-agent-plugins; GitHub release tags: agentplugins-v*.",
     "availability": "Manual packages and source-build authoring",
-    "releaseScope": "GitHub Releases and Homebrew provide the CLI 0.1.94 installer, which does not include agentplugins author. npm is another installation channel; versions can differ, so check your CLI version before using 0.1.94-only behavior. Use an authoring-enabled source build for the author commands in the Build guide. The generated API reference retains its historical 0.1.65 provenance; it does not describe the current installer download.",
+    "releaseScope": "GitHub Releases provides the verified CLI 0.1.95 installer with a local management API and native Pi extensions; it does not include agentplugins author. npm and Homebrew are installation channels whose versions may lag; check your CLI version before relying on release-specific behavior. Use an authoring-enabled source build for the author commands in the Build guide. The generated API reference retains its historical 0.1.65 provenance; it does not describe the current installer download.",
     "buildGuideLink": "Open the Build guide"
   },
   "shell": {

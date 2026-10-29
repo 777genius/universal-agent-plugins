@@ -793,11 +793,16 @@
     "sourceKind": "hand-authored",
     "sourceRef": "reference/client-compatibility.md",
     "anchorsByLocale": {
-      "en": [],
-      "ru": [],
+      "en": [
+        "pi-native-extensions"
+      ],
+      "ru": [
+        "pi-native-extensions"
+      ],
       "uk": [
         "uap-client-compatibility-evidence",
         "current-release-and-scope",
+        "pi-native-extensions",
         "historical-draft-installer-0155",
         "released-installer-0153",
         "supplemental-linux-amd64-proof-for-0153",
@@ -809,11 +814,16 @@
         "other-platforms-and-clients",
         "project-scope-evidence"
       ],
-      "zh": [],
-      "es": [],
+      "zh": [
+        "pi-native-extensions"
+      ],
+      "es": [
+        "pi-native-extensions"
+      ],
       "hi": [
         "uap-client-compatibility-evidence",
         "current-release-and-scope",
+        "pi-native-extensions",
         "historical-draft-installer-0155",
         "released-installer-0153",
         "supplemental-linux-amd64-proof-for-0153",
@@ -828,6 +838,7 @@
       "ar": [
         "uap-client-compatibility-evidence",
         "current-release-and-scope",
+        "pi-native-extensions",
         "historical-draft-installer-0155",
         "released-installer-0153",
         "supplemental-linux-amd64-proof-for-0153",
@@ -842,6 +853,7 @@
       "pt": [
         "uap-client-compatibility-evidence",
         "current-release-and-scope",
+        "pi-native-extensions",
         "historical-draft-installer-0155",
         "released-installer-0153",
         "supplemental-linux-amd64-proof-for-0153",
@@ -853,7 +865,9 @@
         "other-platforms-and-clients",
         "project-scope-evidence"
       ],
-      "fr": []
+      "fr": [
+        "pi-native-extensions"
+      ]
     },
     "pathEn": "/en/reference/client-compatibility",
     "pathRu": "/ru/reference/client-compatibility",
@@ -1033,14 +1047,17 @@
     "sourceRef": "use/manage.md",
     "anchorsByLocale": {
       "en": [
+        "local-management-api",
         "restore-project-dependencies"
       ],
       "ru": [
+        "local-management-api",
         "restore-project-dependencies"
       ],
       "uk": [
         "maintain-installed-plugins",
         "inspect-the-situation-first",
+        "local-management-api",
         "update-deliberately",
         "repair-recorded-state",
         "remove-the-selected-installation",
@@ -1052,15 +1069,18 @@
         "report-a-problem-clearly"
       ],
       "zh": [
+        "local-management-api",
         "restore-on-another-machine",
         "restore-project-dependencies"
       ],
       "es": [
+        "local-management-api",
         "restore-project-dependencies"
       ],
       "hi": [
         "maintain-installed-plugins",
         "inspect-the-situation-first",
+        "local-management-api",
         "update-deliberately",
         "repair-recorded-state",
         "remove-the-selected-installation",
@@ -1074,6 +1094,7 @@
       "ar": [
         "maintain-installed-plugins",
         "inspect-the-situation-first",
+        "local-management-api",
         "update-deliberately",
         "repair-recorded-state",
         "remove-the-selected-installation",
@@ -1087,6 +1108,7 @@
       "pt": [
         "maintain-installed-plugins",
         "inspect-the-situation-first",
+        "local-management-api",
         "update-deliberately",
         "repair-recorded-state",
         "remove-the-selected-installation",
@@ -1098,6 +1120,7 @@
         "report-a-problem-clearly"
       ],
       "fr": [
+        "local-management-api",
         "restore-project-dependencies"
       ]
     },

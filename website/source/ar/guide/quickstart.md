@@ -32,9 +32,9 @@ npx universal-agent-plugins info context7
 npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 ```
 
-يوفر [دليل التثبيت الأصلي](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) أيضًا ملفات تنفيذية لأنظمة macOS وLinux وWindows. لا يحتاج المدير الأصلي إلى Node.js، لكن الإضافات قد تحتاج إلى بيئات تشغيل خاصة بها. تحقّق من `npx universal-agent-plugins version` عند استخدام npm، فقد توفر قناة مدير الحزم CLI أقدم. يتطلب الاختيار التلقائي أدناه 0.1.94؛ استخدم المثبّت الأصلي أو Homebrew عند الحاجة. تعمل أوامر المشروع الصريحة في هذا الدليل أيضًا مع 0.1.93.
+يوفر [دليل التثبيت الأصلي](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) أيضًا ملفات تنفيذية لأنظمة macOS وLinux وWindows. لا يحتاج المدير الأصلي إلى Node.js، لكن الإضافات قد تحتاج إلى بيئات تشغيل خاصة بها. تحقّق من `npx universal-agent-plugins version` عند استخدام npm، فقد توفر قناة مدير الحزم CLI أقدم. يتطلب الاختيار التلقائي أدناه 0.1.94؛ استخدم المثبّت الأصلي عند الحاجة. تعمل أوامر المشروع الصريحة في هذا الدليل أيضًا مع 0.1.93.
 
-يتضمن [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94) نطاق المشروع الصريح والاختيار التلقائي للمشروع في `install`. لمعاينة إضافة حزمة إلى مشروع:
+يحتفظ [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) بنطاق المشروع الصريح والاختيار التلقائي في `install` الذي أُضيف في 0.1.94. ويضيف أيضًا [واجهة API للإدارة المحلية](../use/manage#local-management-api) و[امتدادات Pi الأصلية](../reference/client-compatibility#pi-native-extensions). لمعاينة إضافة حزمة إلى مشروع:
 
 ```bash
 npx universal-agent-plugins add context7 --target cursor --scope project \

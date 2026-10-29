@@ -20,7 +20,7 @@ com ferramentas.
 ## Disponibilidade {#availability}
 
 A versão atual do instalador nativo,
-[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94),
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95),
 pode validar e instalar pacotes padrão. Canais de gerenciadores de pacotes podem
 estar desatualizados; confira a versão instalada com `agentplugins version`.
 Ela **não** inclui `agentplugins author`. Os comandos de criação deste caminho
