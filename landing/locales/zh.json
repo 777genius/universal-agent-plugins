@@ -725,6 +725,31 @@
         "local": "本地包不会保存为可移植依赖。",
         "discovery": "discovery 选择器不会保存为依赖。",
         "chatgpt": "ChatGPT 准备操作不会保存依赖。"
+      },
+      "scope": {
+        "label": "安装范围",
+        "user": "此用户",
+        "project": "此项目",
+        "projectHint": "请在项目文件夹中运行这些命令。代理可能会要求您信任或激活该项目。",
+        "projectUnavailable": "此软件包不支持项目安装。",
+        "selectionUnavailable": "所选代理与安装位置的组合不可用。请选择其他代理或位置。"
+      },
+      "outcome": {
+        "includes": "包含：",
+        "label": "安装及后续步骤",
+        "managed": "CLI 管理已安装的文件。",
+        "prepared": "文件已准备好。请在代理中完成设置。",
+        "manual_activation": "请在代理中激活此软件包。",
+        "unknown": "请在代理中检查设置。",
+        "auth": {
+          "required": "可能仍需登录或提供凭据。",
+          "unknown": "请查看此软件包的登录要求。"
+        },
+        "components": {
+          "skills": "技能",
+          "mcp": "MCP 工具",
+          "extensions": "扩展"
+        }
       }
     },
     "authentication": {
@@ -753,7 +778,8 @@
       "distributionReason": "{distribution}：{reasons}",
       "noEligibleDistribution": "{name}：没有符合条件的发行版支持完整的目标集{targets}； {reasons}",
       "external": "来源提供的原因：{reason}",
-      "separator": ";"
+      "separator": ";",
+      "unsupportedScope": "发布版本 {sequence} 不支持为 {targets} 安装到所选位置。"
     },
     "status": {
       "candidate": "候选人",

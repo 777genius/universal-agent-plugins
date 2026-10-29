@@ -1158,6 +1158,7 @@ export function eligibleTargetPolicies(
  * individually eligible (release, target) pair is reachable. */
 export function reachableTargetPolicies(
   distributions: readonly Pick<DistributionView, 'kind' | 'status' | 'releases'>[],
+  scope?: InstallScope,
 ): ReleaseTarget[] {
   const policies: ReleaseTarget[] = [];
   for (const distribution of distributions) {
@@ -1165,6 +1166,7 @@ export function reachableTargetPolicies(
     for (const release of distribution.releases) {
       if (release.release_status !== 'active' || !release.meets_minimum_capabilities) continue;
       for (const target of eligibleTargetPolicies(distribution.kind, release)) {
+        if (scope && !target.scopes.includes(scope)) continue;
         if (
           !policies.some(
             (item) =>

@@ -725,6 +725,31 @@
         "local": "Pacotes locais não são salvos como dependências portáteis.",
         "discovery": "Seletores discovery não são salvos como dependências.",
         "chatgpt": "A preparação do ChatGPT não salva uma dependência."
+      },
+      "scope": {
+        "label": "Instalar para",
+        "user": "Este usuário",
+        "project": "Este projeto",
+        "projectHint": "Execute estes comandos na pasta do projeto. Seu agente pode pedir que você confie no projeto ou o ative.",
+        "projectUnavailable": "A instalação em um projeto não está disponível para este pacote.",
+        "selectionUnavailable": "Esta combinação de agentes e local não está disponível. Escolha outro agente ou local."
+      },
+      "outcome": {
+        "includes": "Inclui:",
+        "label": "Instalação e próximas etapas",
+        "managed": "A CLI gerencia os arquivos instalados.",
+        "prepared": "Os arquivos estão preparados. Conclua a configuração no seu agente.",
+        "manual_activation": "Ative o pacote no seu agente.",
+        "unknown": "Revise a configuração no seu agente.",
+        "auth": {
+          "required": "Ainda pode ser necessário entrar ou fornecer credenciais.",
+          "unknown": "Confira os requisitos de acesso do pacote."
+        },
+        "components": {
+          "skills": "Habilidades",
+          "mcp": "Ferramentas MCP",
+          "extensions": "Extensões"
+        }
       }
     },
     "authentication": {
@@ -753,7 +778,8 @@
       "distributionReason": "{distribution}: {reasons}",
       "noEligibleDistribution": "{name}: nenhuma distribuição elegível é compatível com o conjunto completo de destinos {targets}; {reasons}",
       "external": "Motivo informado pela origem: {reason}",
-      "separator": "; "
+      "separator": "; ",
+      "unsupportedScope": "A versão {sequence} não oferece suporte ao local escolhido para {targets}."
     },
     "status": {
       "candidate": "candidata",

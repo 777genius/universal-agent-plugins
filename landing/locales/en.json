@@ -742,6 +742,31 @@
         "local": "Local packages are not saved as portable dependencies.",
         "discovery": "Discovery selectors are not saved as dependencies.",
         "chatgpt": "ChatGPT preparation does not save a dependency."
+      },
+      "scope": {
+        "label": "Install for",
+        "user": "This user",
+        "project": "This project",
+        "projectHint": "Run these commands from your project folder. Your agent may ask you to trust or activate the project.",
+        "projectUnavailable": "Project installation is not available for this package.",
+        "selectionUnavailable": "This combination of agents and install location is unavailable. Choose another agent or location."
+      },
+      "outcome": {
+        "includes": "Includes:",
+        "label": "Installation and next steps",
+        "managed": "The CLI manages the installed files.",
+        "prepared": "Files are prepared. Finish setup in your agent.",
+        "manual_activation": "Activate the package in your agent.",
+        "unknown": "Review setup in your agent.",
+        "auth": {
+          "required": "Sign-in or credentials may still be required.",
+          "unknown": "Check the package’s sign-in requirements."
+        },
+        "components": {
+          "skills": "Skills",
+          "mcp": "MCP tools",
+          "extensions": "Extensions"
+        }
       }
     },
     "authentication": {
@@ -770,7 +795,8 @@
       "distributionReason": "{distribution}: {reasons}",
       "noEligibleDistribution": "{name}: no eligible distribution supports the complete target set {targets}; {reasons}",
       "external": "Source-provided reason: {reason}",
-      "separator": "; "
+      "separator": "; ",
+      "unsupportedScope": "Release {sequence} does not support the selected install location for {targets}."
     },
     "status": {
       "candidate": "candidate",

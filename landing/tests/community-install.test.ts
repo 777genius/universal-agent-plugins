@@ -30,14 +30,43 @@ const targetlessFixture = {
 };
 
 const messages = JSON.parse(readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'));
-const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
+const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({
+  legacy: false,
+  locale: 'en',
+  messages: { en: messages },
+}).global;
 
-function panelState({ installable = true, autoDetect = true, current = true, stale = false, reviewed = false } = {}) {
+function panelState({
+  installable = true,
+  autoDetect = true,
+  current = true,
+  stale = false,
+  reviewed = false,
+} = {}) {
   return runInNewContext(script, {
     ref,
     useI18n: () => i18n,
-    useInstallPreferencesStore: () => ({ package: { identity: '' }, readPackage: () => ({ targetIds: [], autoDetect: true, expanded: false }), selectPackage: () => {} }),
-    defineProps: () => ({ plugin: { ...targetlessFixture, installable, trust_state: reviewed ? 'reviewed' : 'conformant_unreviewed' } }),
+    useInstallPreferencesStore: () => ({
+      package: { identity: '' },
+      readPackage: () => ({ targetIds: [], autoDetect: true, expanded: false }),
+      selectPackage: () => {},
+    }),
+    usePluginInstallSelection: () => ({
+      scope: ref('user'),
+      targetDistributions: ref(new Map()),
+      projectAvailable: ref(false),
+      resolution: ref({ unavailable_reason: 'No compatible source.' }),
+      updateTargets() {},
+      updateAutoDetect() {},
+      updateScope() {},
+    }),
+    defineProps: () => ({
+      plugin: {
+        ...targetlessFixture,
+        installable,
+        trust_state: reviewed ? 'reviewed' : 'conformant_unreviewed',
+      },
+    }),
     defineModel: (name: string) => ({ value: name === 'targets' ? [] : autoDetect }),
     computed: (read: () => unknown) => ({
       get value() {
@@ -88,7 +117,10 @@ test('non-installable targetless fixture has an explicit reason and no commands'
 test('community automatic commands remain available regardless of catalog or reviewed Directory age', () => {
   for (const current of [true, false]) {
     const state = panelState({ stale: true, current });
-    assert.equal(state.commands.value.add, `npx -y universal-agent-plugins add github:example/targetless-fixture@${'a'.repeat(40)}`);
+    assert.equal(
+      state.commands.value.add,
+      `npx -y universal-agent-plugins add github:example/targetless-fixture@${'a'.repeat(40)}`,
+    );
     assert.equal(state.unavailableDiscoveryReason.value, '');
   }
 });

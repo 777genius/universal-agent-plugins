@@ -10,6 +10,7 @@ import { computed, effectScope, nextTick, reactive, ref, watch } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
+import { usePluginInstallSelection } from '../composables/usePluginInstallSelection.ts';
 import { useCatalogUiStore } from '../stores/catalogUi.ts';
 import { clients } from '../data/clients.ts';
 import * as registryDomain from '../utils/registry.ts';
@@ -22,13 +23,17 @@ import { createMemoryHistory, createRouter, type RouteLocationRaw } from 'vue-ro
 const fixture = JSON.parse(
   readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
 ).plugins[0];
-const messages = JSON.parse(
-  readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'),
-);
-const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], string, false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
+const messages = JSON.parse(readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'));
+const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], string, false>({
+  legacy: false,
+  locale: 'en',
+  messages: { en: messages },
+}).global;
 const discoveryStatus = ref({ state: 'current', count: 0 });
 const discoveryHelpers = runInNewContext(
-  stripTypeScriptTypes(readFileSync(new URL('../composables/useDiscoveryStatus.ts', import.meta.url), 'utf8')).replace(/^export /gm, '') + '\n({ useDiscoveryIsStale });',
+  stripTypeScriptTypes(
+    readFileSync(new URL('../composables/useDiscoveryStatus.ts', import.meta.url), 'utf8'),
+  ).replace(/^export /gm, '') + '\n({ useDiscoveryIsStale });',
   { computed, useState: () => discoveryStatus },
 );
 const common = {
@@ -45,6 +50,7 @@ const common = {
   useI18n: () => i18n,
   useLocalePath: () => (path: string) => path,
   useInstallPreferencesStore,
+  usePluginInstallSelection,
   useCatalogUiStore,
   useSite: () => ({
     asset: (path: string) => path,
@@ -82,7 +88,10 @@ function card(props = packageProps()) {
 
 test('expired community card and detail produce pinned commands with compatible targets while unavailable packages stay blocked', () => {
   setActivePinia(createPinia());
-  const data = signedDiscoveryFixture({ generated: '2000-01-01T00:00:00Z', expires: '2000-01-02T00:00:00Z' });
+  const data = signedDiscoveryFixture({
+    generated: '2000-01-01T00:00:00Z',
+    expires: '2000-01-02T00:00:00Z',
+  });
   const plugin = discoveryPlugin(data.snapshot.records[0]!, data.snapshot);
   const expected = `npx -y universal-agent-plugins add github:test/plugin-00000@${'a'.repeat(40)}`;
   const instance = card(packageProps(plugin));
@@ -91,15 +100,26 @@ test('expired community card and detail produce pinned commands with compatible 
   instance.state.updateAutoDetect(false);
   assert.equal(instance.state.command.value, `${expected} --target codex`);
   instance.stop();
-  const panel = setup('InstallPanel', {
-    defineProps: () => ({ plugin }),
-    defineModel: (name: string) => name === 'targets' ? ref(['codex']) : ref(false),
-    useDirectoryStatus: () => ({ current: ref(false), published: ref(false), expired: ref(true) }),
-  }, 'commands, unavailableDiscoveryReason');
+  const panel = setup(
+    'InstallPanel',
+    {
+      defineProps: () => ({ plugin }),
+      defineModel: (name: string) => (name === 'targets' ? ref(['codex']) : ref(false)),
+      useDirectoryStatus: () => ({
+        current: ref(false),
+        published: ref(false),
+        expired: ref(true),
+      }),
+    },
+    'commands, unavailableDiscoveryReason',
+  );
   assert.equal(panel.state.commands.value.add, `${expected} --target codex`);
   assert.equal(panel.state.unavailableDiscoveryReason.value, '');
   panel.stop();
-  const unavailable = discoveryPlugin({ ...data.snapshot.records[0]!, availability: 'unavailable' }, data.snapshot);
+  const unavailable = discoveryPlugin(
+    { ...data.snapshot.records[0]!, availability: 'unavailable' },
+    data.snapshot,
+  );
   const blocked = card(packageProps(unavailable));
   assert.equal(blocked.state.command.value, '');
   blocked.stop();
@@ -140,6 +160,13 @@ test('invalid target preferences are discarded and a new package does not inheri
     packageProps({
       ...fixture,
       client_support: { ...fixture.client_support, clients: ['cursor'] },
+      distributions: fixture.distributions.map((distribution: any) => ({
+        ...distribution,
+        releases: distribution.releases.map((release: any) => ({
+          ...release,
+          targets: release.targets.filter((target: any) => target.client === 'cursor'),
+        })),
+      })),
     }),
   );
   assert.deepEqual(Array.from(changed.state.targets.value), ['cursor']);
@@ -154,33 +181,51 @@ test('bound detail v-model persists picker event order and exact commands across
   const pinia = createPinia();
   setActivePinia(pinia);
   const store = useInstallPreferencesStore();
-  const source = readFileSync(new URL('../components/registry/InstallPanel.vue', import.meta.url), 'utf8')
-    .replace('</script>', 'defineExpose({ commands, updateTargets, updateAutoDetect });</script>');
+  const source = readFileSync(
+    new URL('../components/registry/InstallPanel.vue', import.meta.url),
+    'utf8',
+  ).replace('</script>', 'defineExpose({ commands, updateTargets, updateAutoDetect });</script>');
   const { descriptor } = parse(source);
-  const compiled = compileScript(descriptor, { id: 'install-panel-regression' }).content
-    .replace(/import \{([^}]+)\} from ["']vue["'];?/g, (_line, names: string) =>
-      'const {' + names.replace(/ as /g, ': ') + '} = Vue;')
+  const compiled = compileScript(descriptor, { id: 'install-panel-regression' })
+    .content.replace(
+      /import \{([^}]+)\} from ["']vue["'];?/g,
+      (_line, names: string) => 'const {' + names.replace(/ as /g, ': ') + '} = Vue;',
+    )
     .replace(/^import[\s\S]*?from '[^']+';\n/gm, '')
     .replace('export default', 'const Component =');
   const Child = runInNewContext(stripTypeScriptTypes(compiled) + '\nComponent', { ...common, Vue });
   Child.render = () => null;
   // A real Vue renderer runs parent render updates, child props and useModel emissions.
   const renderer = Vue.createRenderer<object, object>({
-    patchProp() {}, insert() {}, remove() {}, createElement: () => ({}),
-    createText: () => ({}), createComment: () => ({}), setText() {}, setElementText() {},
-    parentNode: () => null, nextSibling: () => null,
+    patchProp() {},
+    insert() {},
+    remove() {},
+    createElement: () => ({}),
+    createText: () => ({}),
+    createComment: () => ({}),
+    setText() {},
+    setElementText() {},
+    parentNode: () => null,
+    nextSibling: () => null,
   });
   async function mount() {
     const targets = ref(['cursor']);
     const autoDetect = ref(true);
     const panel = ref();
     const app = renderer.createApp({
-      setup: () => () => Vue.h(Child, {
-        ref: panel, plugin: structuredClone(fixture), targets: targets.value,
-        autoDetect: autoDetect.value,
-        'onUpdate:targets': (value: string[]) => { targets.value = value; },
-        'onUpdate:autoDetect': (value: boolean) => { autoDetect.value = value; },
-      }),
+      setup: () => () =>
+        Vue.h(Child, {
+          ref: panel,
+          plugin: structuredClone(fixture),
+          targets: targets.value,
+          autoDetect: autoDetect.value,
+          'onUpdate:targets': (value: string[]) => {
+            targets.value = value;
+          },
+          'onUpdate:autoDetect': (value: boolean) => {
+            autoDetect.value = value;
+          },
+        }),
     });
     app.use(pinia);
     app.mount({});
@@ -283,40 +328,59 @@ test('catalog Show more survives language remount and filter changes replace its
 
 test('clearing search during URL navigation persists the latest input and external navigation still restores filters', async () => {
   setActivePinia(createPinia());
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: {} }] });
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: {} }],
+  });
   await router.push('/');
   const route = reactive({
-    get path() { return router.currentRoute.value.path; },
-    get query() { return router.currentRoute.value.query; },
-    get hash() { return router.currentRoute.value.hash; },
+    get path() {
+      return router.currentRoute.value.path;
+    },
+    get query() {
+      return router.currentRoute.value.query;
+    },
+    get hash() {
+      return router.currentRoute.value.hash;
+    },
   });
   function barrier() {
     let release!: () => void;
     let enter!: () => void;
-    const wait = new Promise<void>(resolve => { release = resolve; });
-    const entered = new Promise<void>(resolve => { enter = resolve; });
+    const wait = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
     return { release, enter, wait, entered };
   }
   let gate = barrier();
-  router.beforeEach(async to => {
+  router.beforeEach(async (to) => {
     if (to.query.q !== 'gitlab') return;
     const blocked = gate;
     blocked.enter();
     await blocked.wait;
   });
   const writes: Promise<unknown>[] = [];
-  const instance = setup('PluginCatalog', {
-    defineProps: () => ({ plugins: [fixture] }),
-    withDefaults: (value: unknown) => value,
-    useRoute: () => route,
-    useRouter: () => ({ replace: (target: RouteLocationRaw) => {
-      const write = router.replace(target);
-      writes.push(write);
-      return write;
-    } }),
-    useDiscoveryStatus: () => ref({ state: 'idle' }),
-    canonicalPath: (path: string) => path,
-  }, 'query, client');
+  const instance = setup(
+    'PluginCatalog',
+    {
+      defineProps: () => ({ plugins: [fixture] }),
+      withDefaults: (value: unknown) => value,
+      useRoute: () => route,
+      useRouter: () => ({
+        replace: (target: RouteLocationRaw) => {
+          const write = router.replace(target);
+          writes.push(write);
+          return write;
+        },
+      }),
+      useDiscoveryStatus: () => ref({ state: 'idle' }),
+      canonicalPath: (path: string) => path,
+    },
+    'query, client',
+  );
   try {
     instance.state.query.value = 'gitlab';
     await gate.entered;
@@ -346,17 +410,24 @@ test('clearing search during URL navigation persists the latest input and extern
   }
 });
 
-
 test('distribution captions use stable kind and authentication visibility ignores translated wording', () => {
   setActivePinia(createPinia());
   const props = packageProps();
-  for (const distribution of props.plugin.distributions) distribution.label = 'UNTRANSLATED DOMAIN LABEL';
-  const panel = setup('InstallPanel', {
-    defineProps: () => props,
-    defineModel: (name: string) => name === 'targets' ? ref(['codex']) : ref(false),
-  }, 'expectedSource, expectedSourceLabel');
+  for (const distribution of props.plugin.distributions)
+    distribution.label = 'UNTRANSLATED DOMAIN LABEL';
+  const panel = setup(
+    'InstallPanel',
+    {
+      defineProps: () => props,
+      defineModel: (name: string) => (name === 'targets' ? ref(['codex']) : ref(false)),
+    },
+    'expectedSource, expectedSourceLabel',
+  );
   assert.ok(panel.state.expectedSource.value);
-  assert.equal(panel.state.expectedSourceLabel.value, i18n.t(`registryUi.distribution.${panel.state.expectedSource.value.kind}`));
+  assert.equal(
+    panel.state.expectedSourceLabel.value,
+    i18n.t(`registryUi.distribution.${panel.state.expectedSource.value.kind}`),
+  );
   assert.notEqual(panel.state.expectedSourceLabel.value, 'UNTRANSLATED DOMAIN LABEL');
   panel.stop();
 
@@ -364,9 +435,16 @@ test('distribution captions use stable kind and authentication visibility ignore
   instance.state.updateTargets(['codex']);
   instance.state.updateAutoDetect(false);
   const visible = instance.state.showAuthentication.value;
-  i18n.mergeLocaleMessage('en', { registryUi: { authenticationIndicator: Object.fromEntries(
-    ['not_required', 'required', 'unknown', 'varies', 'oauth', 'client_managed'].map(key => [key, 'SYNTHETIC CAPTION']),
-  ) } });
+  i18n.mergeLocaleMessage('en', {
+    registryUi: {
+      authenticationIndicator: Object.fromEntries(
+        ['not_required', 'required', 'unknown', 'varies', 'oauth', 'client_managed'].map((key) => [
+          key,
+          'SYNTHETIC CAPTION',
+        ]),
+      ),
+    },
+  });
   // Node's vue-i18n composer does not invalidate computed consumers on a
   // message merge. A normal target change refreshes this same card instance.
   instance.state.updateTargets(['cursor']);
