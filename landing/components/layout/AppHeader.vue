@@ -248,6 +248,16 @@ onMounted(() => {
   display: none;
 }
 
+@media (min-width: 960px) and (max-width: 1439px) {
+  .app-header__nav {
+    display: none;
+  }
+
+  .app-header__mobile-actions {
+    display: flex;
+  }
+}
+
 @media (max-width: 959px) {
   .app-header__nav {
     display: none;

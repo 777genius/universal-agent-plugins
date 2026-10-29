@@ -78,6 +78,7 @@ section {
 
 h1,
 h2 {
+  overflow-wrap: anywhere;
   line-height: 1.2;
   margin-bottom: 1rem;
 }
