@@ -207,6 +207,21 @@ export const clientLandingPages: ClientLandingPage[] = [
     activation:
       'Reload Qoder plugins or restart Qoder after installation. Runtime MCP connections and provider authentication still need confirmation in Qoder.',
   },
+  {
+    id: 'pi',
+    slug: 'pi',
+    name: 'Pi',
+    icon: 'pi.svg',
+    note: 'Managed native Pi extensions only',
+    status: 'Supported',
+    intro:
+      'Install Agent Plugins 1.0 packages that declare a native Pi extension. Portable skills and MCP projection are outside this adapter’s current scope.',
+    delivery:
+      'The CLI installs the declared Pi extension in your Pi agent directory and tracks the managed package for update, repair, and removal.',
+    activation: 'Reload resources or restart Pi after installation to load the managed extension.',
+    vendorDocsUrl:
+      'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md',
+  },
 ];
 
 export const clients: ClientTarget[] = clientLandingPages.map(

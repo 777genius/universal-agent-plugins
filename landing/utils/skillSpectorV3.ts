@@ -235,10 +235,15 @@ const scanner = (value: unknown) => {
   if (s.id !== 'skillspector' || !text(s.version, 100) || !revision.test(s.revision)) fail();
   return s;
 };
+// Full v3 inventory includes signed community package roots; transport and per-package
+// limits below remain independent of this global coverage budget.
+const maximumInventoryRoots = 20_000;
+// Listing observations may coexist with inventory roots not present in the listing.
+const maximumSourceStates = maximumInventoryRoots + 10_000;
 function coverage(value: unknown) {
   const c = obj(value);
   for (const key of ['selected', 'reported', 'pending', 'complete', 'partial', 'error', 'stale'])
-    if (!count(c[key], 10_000)) fail();
+    if (!count(c[key], maximumInventoryRoots)) fail();
   if (
     c.selected !== c.complete + c.partial + c.error + c.pending ||
     c.reported !== c.complete + c.partial + c.error + c.stale ||
@@ -282,7 +287,7 @@ export function decodeSkillSpectorManifestV3(
     !Array.isArray(m.shards) ||
     m.shards.length > 10_000 ||
     !Array.isArray(m.plugin_coverage) ||
-    m.plugin_coverage.length > 10_000
+    m.plugin_coverage.length > maximumInventoryRoots
   )
     fail();
   let records = 0,
@@ -322,7 +327,15 @@ export function decodeSkillSpectorManifestV3(
     plugins.add(key);
   }
   for (const key of ['source_states', 'plugin_states', 'repository_aliases'])
-    if (!Array.isArray(m[key]) || m[key].length > (key === 'source_states' ? 20_000 : 10_000))
+    if (
+      !Array.isArray(m[key]) ||
+      m[key].length >
+        (key === 'source_states'
+          ? maximumSourceStates
+          : key === 'plugin_states'
+            ? maximumInventoryRoots
+            : 10_000)
+    )
       fail();
   const aliases = new Map<string, string>();
   for (const alias of m.repository_aliases) {

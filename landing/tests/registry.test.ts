@@ -72,7 +72,7 @@ describe('unified registry landing', () => {
         }[];
       }[];
     };
-    const nativeClients = clients.filter((client) => ['grok', 'kimi', 'qoder'].includes(client.id));
+    const nativeClients = clients.filter((client) => ['grok', 'kimi', 'qoder', 'pi'].includes(client.id));
     const distribution = fixture.distributions.find((item) => item.id === '777genius/context7')!;
     for (const policy of distribution.release_policies) {
       policy.targets = nativeClients.map((client) => ({

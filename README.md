@@ -1,5 +1,24 @@
 <img width="2172" height="724" alt="Universal Agent Plugins - install and create plugins across AI agents with one command" src="assets/readme-banner.png" />
 
+<p align="center">
+  <a href="#supported-clients">
+    <img src="landing/public/client-icons/openai.svg" width="32" height="32" alt="Codex and ChatGPT" />&nbsp;&nbsp;
+    <img src="landing/public/client-icons/cursor.svg" width="32" height="32" alt="Cursor" />&nbsp;&nbsp;
+    <img src="landing/public/client-icons/github-copilot.svg" width="32" height="32" alt="GitHub Copilot CLI" />&nbsp;&nbsp;
+    <img src="landing/public/client-icons/vscode.svg" width="32" height="32" alt="VS Code" />&nbsp;&nbsp;
+    <img src="landing/public/client-icons/kiro.svg" width="32" height="32" alt="Kiro" />&nbsp;&nbsp;
+    <img src="landing/public/client-icons/claude.svg" width="32" height="32" alt="Claude Code" />&nbsp;&nbsp;
+    <img src="landing/public/client-icons/gemini.svg" width="32" height="32" alt="Gemini CLI" />&nbsp;&nbsp;
+    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="32" height="32" alt="OpenCode" /></picture>&nbsp;&nbsp;
+    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="32" height="32" alt="Cline" /></picture>&nbsp;&nbsp;
+    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="32" height="32" alt="Windsurf" /></picture>&nbsp;&nbsp;
+    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="32" height="32" alt="Grok Build" /></picture>&nbsp;&nbsp;
+    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/kimi-dark.svg"><img src="landing/public/client-icons/kimi.svg" width="32" height="32" alt="Kimi Code" /></picture>&nbsp;&nbsp;
+    <img src="landing/public/client-icons/qoder.svg" width="32" height="32" alt="Qoder" />&nbsp;&nbsp;
+    <img src="landing/public/client-icons/pi.svg" width="32" height="32" alt="Pi" />
+  </a>
+</p>
+
 [![Required](https://github.com/777genius/universal-agent-plugins/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/777genius/universal-agent-plugins/actions/workflows/ci.yml)
 [![Codecov](https://codecov.io/gh/777genius/universal-agent-plugins/graph/badge.svg)](https://codecov.io/gh/777genius/universal-agent-plugins)
 [![npm](https://img.shields.io/npm/v/universal-agent-plugins?label=npm)](https://www.npmjs.com/package/universal-agent-plugins)
@@ -262,9 +281,12 @@ The CLI has adapters for:
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> OpenCode | skills and MCP configuration |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> Cline | skills and MCP configuration |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="24" height="24" alt="" align="middle"></picture> Windsurf | MCP configured; skills prepared for manual use |
-| <img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"> Grok Build | native skills/MCP plugin; Grok CLI install and verification when available |
-| <img src="landing/public/client-icons/kimi.svg" width="24" height="24" alt="" align="middle"> Kimi Code | native skills/MCP plugin and managed user registry; reload required |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> Grok Build | native skills/MCP plugin; Grok CLI install and verification when available |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/kimi-dark.svg"><img src="landing/public/client-icons/kimi.svg" width="24" height="24" alt="" align="middle"></picture> Kimi Code | native skills/MCP plugin and managed user registry; reload required |
 | <img src="landing/public/client-icons/qoder.svg" width="24" height="24" alt="" align="middle"> Qoder | native skills/MCP plugin; Qoder CLI install and verification when available |
+| <img src="landing/public/client-icons/pi.svg" width="24" height="24" alt="" align="middle"> Pi | native Pi extensions only; user-scope installation and reload required |
+
+Pi installs packages that declare a [native Pi extension](docs/PI_NATIVE_EXTENSION_CONTRACT.md). Run `npx universal-agent-plugins add ./my-plugin --target pi`, then reload resources or restart Pi. The Pi adapter supports native extensions only; portable skills and MCP projection are outside its current scope.
 
 Grok Build, Kimi Code, and Qoder accept automatic user-scope installation of portable skills and MCP servers through `agentplugins add ./my-plugin --target grok,kimi,qoder`. Grok Build and Kimi Code support stdio/HTTP MCP; the Qoder adapter currently supports stdio MCP. The CLI verifies native registration and supports update and removal. A running client still needs a reload, and MCP authentication/connectivity is verified in that client.
 
