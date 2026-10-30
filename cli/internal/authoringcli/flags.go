@@ -89,3 +89,5 @@ func AdaptFlags(cmd *cobra.Command, support Support) (Options, error) {
 	}
 	return opts, nil
 }
+
+// Throwaway CI path filter check, not for merge.
