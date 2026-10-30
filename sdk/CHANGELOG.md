@@ -1,10 +1,19 @@
 # Changelog
 
-All notable changes to this module are documented here.
+This file preserves accumulated Go runtime SDK changes. It is not a per-release
+ledger: entries below may already be included in published versions. The SDK is
+no longer a pending `v1.0.0` release candidate.
 
-The format is inspired by Keep a Changelog; versions follow SemVer. This unreleased entry is the pending `v1.0.0` release candidate.
+Use the [SDK integration guide](./README.md) for the recommended published module
+version and [tagged releases](https://github.com/777genius/universal-agent-plugins/releases)
+for version-specific notes. Go module tags use `sdk/vX.Y.Z`; they are separate
+from the installer's `agentplugins-v*` releases and the TypeScript Management SDK.
+The recorded beta/native-qualification limits below are not promoted by a release
+number. Historical migration examples are not a replacement for the current guide.
 
-## [Unreleased]
+<a id="unreleased"></a>
+
+## Accumulated source history
 
 ### Added
 
