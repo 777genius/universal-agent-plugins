@@ -57,7 +57,7 @@ func (r listingCommandRunner) command(command legacyports.Command) legacyports.C
 	if base == nil {
 		base = os.Environ()
 	}
-	command.Env = make([]string, 0, len(base)+1)
+	command.Env = make([]string, 0, len(base))
 	for _, entry := range base {
 		key, _, _ := strings.Cut(entry, "=")
 		if !strings.EqualFold(key, "COPILOT_HOME") {
