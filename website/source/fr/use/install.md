@@ -75,7 +75,7 @@ agentplugins add 'ssh://git@git.example.com/team/tools.git#main//plugins/demo' -
 agentplugins add 'https://downloads.example.com/plugin.tar.gz' --target codex --dry-run
 ```
 
-Git utilise les identifiants natifs et la confiance SSH existants. Les archives HTTPS n’utilisent pas d’identifiants et doivent contenir un paquet standard complet. Le verrouillage fixe les révisions Git exactes ou les octets originaux de l’archive, ainsi que les empreintes du paquet. Une source mobile peut avancer lors d’une mise à jour explicite ; une restauration verrouillée conserve la révision fixée. Ces sources de paquets complets diffèrent de l’acquisition de Skills autonomes. Consultez [les sources directes de paquets complets](https://github.com/777genius/universal-agent-plugins/blob/main/docs/DIRECT_PACKAGE_SOURCES.md) pour la syntaxe des fournisseurs, la sélection de paquets, les sommes de contrôle et les limites d’extraction.
+Git utilise les identifiants natifs et la confiance SSH existants. Les archives HTTPS n’utilisent pas d’identifiants et doivent contenir un paquet standard complet. Le verrouillage fixe les révisions Git exactes ou les octets originaux de l’archive, ainsi que les empreintes du paquet. Une source évolutive peut avancer lors d’une mise à jour explicite ; une restauration verrouillée conserve la révision fixée. Ces sources de paquets complets diffèrent de l’acquisition de Skills autonomes. Consultez [les sources directes de paquets complets](https://github.com/777genius/universal-agent-plugins/blob/main/docs/DIRECT_PACKAGE_SOURCES.md) pour la syntaxe des fournisseurs, la sélection de paquets, les sommes de contrôle et les limites d’extraction.
 
 ## Installez des Agent Skills {#install-agent-skills}
 
@@ -112,7 +112,7 @@ agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project
 ```
 
-La première commande prévisualise ; omettez `--dry-run` pour appliquer le plan. La seconde ouvre un sélecteur avec cette portée et peut appliquer votre sélection. Sans `--project-root`, la portée projet explicite utilise le dossier d’invocation. Elle ne recherche pas dans les dossiers parents. Les commandes `add` et `skills add` utilisent par défaut la portée utilisateur. La sélection automatique de projet par `install` sans argument, publiée dans 0.1.94, est expliquée dans [la maintenance](./manage).
+La première commande prévisualise ; omettez `--dry-run` pour appliquer le plan. La seconde ouvre un sélecteur avec cette portée et peut appliquer votre sélection. Sans `--project-root`, la portée projet explicite utilise le dossier d’invocation. Elle ne recherche pas dans les dossiers parents. Les commandes `add` et `skills add` utilisent par défaut la portée utilisateur. La sélection automatique de projet par `install` sans argument de source, publiée dans 0.1.94, est expliquée dans [la maintenance](./manage).
 
 La cible doit prendre en charge les composants de projet demandés. L’installation de projet pour ChatGPT n’est pas prise en charge et est refusée explicitement. VS Code prépare `.github/skills` et les membres `servers` appartenant à l’installation dans `.vscode/mcp.json`, pour un seul dossier local. Son résultat reste Prepared : examinez la confiance de l’espace de travail et des serveurs, puis les réglages du client. Cette observation de métadonnées ne prouve ni le démarrage de MCP, ni les appels d’outils, ni l’exécution du modèle.
 

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { collectDocsLocaleAvailability } from '../scripts/generate-docs-locale-availability.mjs';
 
-const locales = ['en', 'ru', 'es', 'fr', 'zh'];
+const locales = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'];
 const currentRoutes = [
   '', 'build', 'build/checks', 'build/handoff', 'build/hybrid', 'build/layout',
   'build/mcp-remote', 'build/mcp-stdio', 'build/skill', 'build/skills',
@@ -43,7 +43,7 @@ test('only correctly localized current public translations become landing destin
   await write('ru/build/mismatched.md', 'es', 'current-translation');
 
   const initial = await collectDocsLocaleAvailability(root);
-  assert.deepEqual(initial.realPaths, { en: ['build'], ru: ['build'], es: [], fr: [], zh: [] });
+  assert.deepEqual(initial.realPaths, Object.fromEntries(locales.map(locale => [locale, ['en', 'ru'].includes(locale) ? ['build'] : []])));
 
   // A current translation changes the link map without editing or inventing
   // an entry in the historical preservation inventory.

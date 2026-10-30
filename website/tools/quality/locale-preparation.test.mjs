@@ -21,11 +21,11 @@ for (const locale of localeCodes) for (const file of await listMarkdownFiles(pat
   entity[`path${locale[0].toUpperCase()}${locale.slice(1)}`] = routeFor(relative);
   entities.set(meta.canonicalId, entity);
 }
-for (const locale of localeCodes) for (const file of await listMarkdownFiles(path.join(generatedRoot, locale))) {
+for (const locale of localeCodes) for (const file of await listMarkdownFiles(path.join(generatedRoot, locale), { allowMissing: true })) {
   routes.set(routeFor(path.relative(generatedRoot, file)), file);
 }
 
-test("all five locales switch through existing counterpart routes and matching canonical IDs", async () => {
+test("all nine locales switch through existing counterpart routes and matching canonical IDs", async () => {
   for (const [id, entity] of entities) for (const locale of localeCodes) {
     const target = localeDestination(entity, locale);
     assert.equal(target.fallback, !entity[`path${locale[0].toUpperCase()}${locale.slice(1)}`], `${id}/${locale}`);
@@ -55,7 +55,7 @@ test("gateway honors saved locale then browser preference order including Englis
   assert.equal(preferredLocale("", []), "en");
   const gateway = await fs.readFile(path.join(sourceRoot, "gateway/index.md"), "utf8");
   const inline = gateway.split("    - |\n")[1].split("\n---")[0].split("\n").map(line => line.slice(6)).join("\n");
-  for (const [saved, languages] of [["FR", ["en", "zh"]], ["invalid", ["en-GB", "ru"]], ["fr-CA", ["es-MX", "zh"]], ["", ["zh_CN", "fr"]]]) {
+  for (const [saved, languages] of [["FR", ["en", "zh"]], ["AR", ["en"]], ["", ["uk-UA", "en"]], ["", ["hi-IN", "pt-BR"]], ["", ["pt-PT"]], ["invalid", ["en-GB", "ru"]], ["fr-CA", ["es-MX", "zh"]], ["", ["zh_CN", "fr"]]]) {
     let target;
     vm.runInNewContext(inline, { URLSearchParams, window: {
       location: { search: "", pathname: "/docs/", hash: "", replace: value => { target = value; } },
@@ -111,12 +111,25 @@ test("localized navigation targets produced source pages; both switcher variants
   for (const locale of localeCodes.slice(1)) {
     const config = await fs.readFile(path.join(repoRoot, `website/.vitepress/config/locales.${locale}.ts`), "utf8");
     assert.ok(config.includes(`...journeyNav("${locale}")`));
+    for (const key of ["skipToContentLabel", "darkModeSwitchTitle", "lightModeSwitchTitle"])
+      assert.match(config, new RegExp(`\\b${key}:\\s*"[^"\\n]+"`), `${locale}: ${key}`);
     assert.deepEqual(journeyNav(locale).map(x => x.link), [`/${locale}/use/`, `/${locale}/build/`]);
     assert.equal(journeyNav(locale)[0].text, journeyLabels[locale][0]);
     for (const match of config.matchAll(/link: "(\/[^\"]+)"/g)) assert.ok(routes.has(match[1]), match[1]);
   }
   const component = await fs.readFile(path.join(repoRoot, "website/.vitepress/theme/components/LocaleSwitcher.vue"), "utf8");
-  assert.ok(component.includes("localeDestination(currentEntity.value, locale.code)"));
+  assert.ok(component.includes("localeDestination(currentEntity.value, locale.code, currentHash.value)"));
   assert.equal(component.match(/:hreflang="locale.language"/g)?.length, 2);
   assert.ok(!component.includes("buildLocalePath"));
+});
+
+
+test("language switches retain only fragments attested in the destination page", () => {
+  const entity = { pathEn: "/en/build/", pathAr: "/ar/build/", anchorsByLocale: { en: ["build-from-source"], ar: ["build-from-source", "أمثلة"] } };
+  assert.equal(localeDestination(entity, "ar", "#build-from-source").path, "/ar/build/#build-from-source");
+  assert.equal(localeDestination(entity, "ar", "#أمثلة").path, "/ar/build/#%D8%A3%D9%85%D8%AB%D9%84%D8%A9");
+  assert.equal(localeDestination(entity, "ar", "#missing").path, "/ar/build/");
+  assert.equal(localeDestination(entity, "ar", "#%broken").path, "/ar/build/");
+  assert.equal(localeDestination(entity, "hi", "#build-from-source").path, "/en/build/#build-from-source");
+  assert.equal(localeDestination(null, "ar", "#build-from-source").path, "/ar/");
 });

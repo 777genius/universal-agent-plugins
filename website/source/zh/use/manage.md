@@ -33,6 +33,20 @@ agentplugins outdated --all
 | 客户端需要信任、激活或登录 | 按该目标报告的步骤处理。 |
 | 本地包未通过验证 | 将报告和[检查指南](../build/checks)交给作者。 |
 
+## 本地管理 API（CLI 0.1.95） {#local-management-api}
+
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)新增 `agentplugins manage serve`，供应用嵌入安装器使用；`agentplugins manage discover` 则只读发现本地客户端和配置目录。发现操作不执行客户端、不探测版本、不获取来源，也不修改文件。
+
+`manage serve` 是由集成应用管理生命周期的进程，使用启动时捕获的上下文和经过认证的私有 IPv4 回环 API。宿主应用通过 stdin 提供 JSON，并应将引导 URL 和 bearer capability 保密。集成前先查看命令帮助：
+
+```bash
+agentplugins version
+agentplugins manage serve --help
+agentplugins manage discover --help
+```
+
+启动与生命周期规则见[管理通信协议](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md)。[TypeScript 管理 SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md)以 `universal-agent-plugins-management-sdk` 为包名独立管理版本。兼容的 `agentplugins` 引擎版本和包安装方法请参阅 SDK 的 README。请选择 npm 上已发布的版本；如需使用尚未发布的改动，请从固定的源码提交构建包并进行测试。SDK 和引擎的版本都应固定。
+
 ## 明确更新或修复
 
 ```bash
@@ -136,13 +150,13 @@ agentplugins repair review --target cursor --scope project --project-root /path/
 agentplugins deps recover --scope project --project-root /path/to/project
 ```
 
-名称有歧义时使用 list 中的安装标识。add 和维护命令默认使用用户范围。CLI 0.1.94 的无参数 `install` 会识别当前目录的项目清单；
+名称有歧义时使用 list 中的安装标识。add 和维护命令默认使用用户范围。在 CLI 0.1.94 中，未指定来源参数的 `install` 会识别当前目录的项目清单；
 显式范围优先。明确项目范围但省略 `--project-root` 时只使用调用目录。将 `.uap/` 中的收据、恢复记录和保留数据留在本机，
 从可移植清单重建原生组件，再完成客户端信任与激活。来源和私有来源访问权限仍须可用。
 
 ## 当前目录的安装与严格锁定
 
-**CLI 0.1.94 已发布：** 无参数 `agentplugins install` 在当前目录存在普通 `uap.toml` 文件时自动选择项目范围，
+**CLI 0.1.94 已发布：** 未指定来源参数的 `agentplugins install` 在当前目录存在普通 `uap.toml` 文件时自动选择项目范围，
 不搜索父目录。符号链接或同名目录会被拒绝；显式 `--scope` 优先。没有本地清单时选择用户环境。
 有源参数的 install 与 add 相同，仍默认用户范围。
 

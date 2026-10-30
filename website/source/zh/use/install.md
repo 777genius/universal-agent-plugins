@@ -117,7 +117,7 @@ agentplugins skills add owner/repository --ui --scope project \
 ```
 
 第一条只预览，准备应用时去掉 `--dry-run`。第二条打开绑定到该项目的选择器，可应用用户确认的选择。
-指定项目范围但省略 `--project-root` 时，仅使用调用目录，不向上查找。add 和技能安装默认使用用户范围。CLI 0.1.94 的无参数 `install` 可根据当前目录的清单自动选择项目范围，详见[维护与恢复](./manage)。
+指定项目范围但省略 `--project-root` 时，仅使用调用目录，不向上查找。add 和技能安装默认使用用户范围。在 CLI 0.1.94 中，未指定来源参数的 `install` 可根据当前目录的清单自动选择项目范围，详见[维护与恢复](./manage)。
 
 目标必须支持所请求的项目组件。ChatGPT 明确不支持原生项目安装。
 VS Code 为单个本地文件夹准备 `.github/skills` 和 `.vscode/mcp.json` 中属于 UAP 的 `servers` 成员；

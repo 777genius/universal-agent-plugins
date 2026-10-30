@@ -6,7 +6,7 @@ const { t, locale } = useI18n();
 const config = useRuntimeConfig();
 
 const currentLocale = computed<DocsLocale>(() => {
-  const supported = new Set<DocsLocale>(['en', 'ru', 'es', 'fr', 'zh']);
+  const supported = new Set<DocsLocale>(['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr']);
   return supported.has(locale.value as DocsLocale) ? (locale.value as DocsLocale) : 'en';
 });
 

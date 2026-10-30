@@ -38,6 +38,7 @@ export type ClientEvidenceLevel = Exclude<EvidenceLevel, 'schema'>;
 export type EvidenceOutcome =
   'passed' | 'failed' | 'inconclusive' | 'not_tested' | 'not_applicable';
 export type DeliveryMode = 'managed' | 'prepared' | 'manual_activation';
+export type InstallScope = 'user' | 'project';
 export type DistributionStatus = 'candidate' | 'active' | 'suspended';
 export type ReleaseStatus = 'active' | 'superseded' | 'revoked';
 export type TargetAuthentication = 'not_required' | 'required' | 'unknown';
@@ -203,6 +204,7 @@ export interface RegistryDiagnostic {
     | 'releaseStatus'
     | 'missingComponents'
     | 'unsupportedTargets'
+    | 'unsupportedScope'
     | 'blockingFailure'
     | 'missingEvidence'
     | 'noReleases'

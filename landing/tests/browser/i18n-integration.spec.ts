@@ -42,7 +42,7 @@ for (const locale of publishedLocales) {
           'agentplugins add <git-url> --scope project',
           'agentplugins install',
         ]);
-        const docsLocale = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
+        const docsLocale = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
         const guideLabel =
           docsLocale === locale
             ? copy.guide!
