@@ -200,4 +200,24 @@ Production real Git acquisition refused before execution with
 `ordinary_unsupported`: this host cannot provide its required procfs process
 observation. Preserve that failure and require genuine supported-host Linux and
 Windows runs for the full catalog. These exploratory tests do not qualify the
-new implementation, which is not written yet.
+new implementation; they were recorded before implementation began.
+
+## Implementation findings
+
+The new public archive journey reproduced a second defect: `add` could not
+promote a retained transitive Git/archive source to a direct dependency because
+the absent root declaration was compared as a zero-value selector. Restore the
+recorded requirement from its immutable pin when that declaration is absent;
+keep selector/alias-change refusal and the existing exact-Git-commit exception.
+Independent review accepted this as a correction to existing promotion behavior.
+
+A related regression proved that a valid graph can use a declaration key equal
+to another package's stable alias. Direct promotion must refuse an occupied key
+belonging to a different source rather than returning its requirement. Default
+regressions and the reusable agreement catalog retain these source/identity
+checks. No alias renaming or resolver policy change is introduced.
+
+The longer catalog test names also exposed an old transfer assertion that
+mistook the word `invalid` in a temporary path for a real error diagnostic. It
+now inspects the structured TOML diagnostic field. All transfer state/byte
+assertions are retained.

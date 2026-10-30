@@ -1,0 +1,44 @@
+{
+  "archive": [
+    "depth32",
+    "fanout64",
+    "dense-shared-dag",
+    "self-cycle",
+    "three-cycle-removal",
+    "deterministic-order",
+    "shared-root-lifecycle",
+    "mixed-target-inheritance",
+    "locked-replay",
+    "archive-refusals",
+    "lock-refusals",
+    "preview-no-effects"
+  ],
+  "registry": [
+    "compatible-ranges",
+    "incompatible-ranges",
+    "forced-backtracking",
+    "candidate-integrity-failure",
+    "candidate-ineligibility",
+    "partial-commit-locked-retry",
+    "mixed-source-target-union",
+    "portable-cold-restore"
+  ],
+  "agreement": [
+    "manifest-rejections",
+    "manifest-locations",
+    "version-intent-preservation",
+    "transfer-replacement-noop",
+    "transfer-confirmation-recheck",
+    "transfer-publication-rollback",
+    "transfer-mutation-guards",
+    "lock-external-edits",
+    "lock-store-publication-recheck",
+    "lock-cold-store-hydration",
+    "lock-read-only-no-publication",
+    "lock-empty-existing-refusal",
+    "absent-empty-distinct",
+    "direct-source-promotion",
+    "direct-source-selector-refusal",
+    "occupied-declaration-key"
+  ]
+}
