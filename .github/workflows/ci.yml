@@ -9,6 +9,7 @@ on:
   push:
     branches: [main, master, refactor/installer-core-clean-architecture]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
 
 # Replace ordinary PR/push CI; isolate manual and scheduled invocations.
@@ -31,11 +32,13 @@ jobs:
 
   # One qualification definition shared with the Management SDK release.
   management-sdk:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     permissions:
       contents: read
     uses: ./.github/workflows/management-sdk.yml
 
   test:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45
     steps:
