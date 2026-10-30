@@ -13,22 +13,21 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 type dependencySyncRequest struct {
-	requirements                     environment.Requirements
-	lock                             environment.Lock
-	manifestPath, lockPath           string
-	manifestBytes, lockBytes         []byte
-	prepared                         []dependencyAction
-	detected                         map[domain.ClientID]domain.DetectedClient
-	consent                          map[string]bool
-	candidateManifest, candidateLock []byte
-	aliases                          []string
-	targets                          []string
-	attestation                      *environment.Attestation
-	repairOnly                       bool
+	requirements environment.Requirements
+	lock         environment.Lock
+	intent       environmentapp.Intent
+	prepared     []dependencyAction
+	detected     map[domain.ClientID]domain.DetectedClient
+	consent      map[string]bool
+	aliases      []string
+	targets      []string
+	attestation  *environment.Attestation
+	repairOnly   bool
 }
 
 func dependencyActions(view installer.Inspection, requirements environment.Requirements, lock environment.Lock, environmentIDs ...string) ([]dependencyAction, error) {
@@ -134,6 +133,9 @@ func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependenc
 			return writeJSONResult(cmd.OutOrStdout(), "add", "success", data)
 		}
 		return renderJSON(cmd.OutOrStdout(), data)
+	}
+	if err := renderDependencyTransitions(cmd, actions); err != nil {
+		return err
 	}
 	if selected := opts.installSelection; selected != nil {
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Scope: %s\n", selected.Scope); err != nil {
@@ -245,10 +247,7 @@ func dependencySyncUnchanged(ctx context.Context, app App, request dependencySyn
 			}
 		}
 	}
-	if request.candidateManifest != nil && string(request.candidateManifest) != string(request.manifestBytes) {
-		return false
-	}
-	return request.candidateLock == nil || string(request.candidateLock) == string(request.lockBytes)
+	return !request.intent.Pending()
 }
 
 func validateDependencyRemovals(opts *options, actions []dependencyAction) error {
@@ -287,26 +286,7 @@ func renderDependencyConfirmation(cmd *cobra.Command, opts *options, prepared []
 }
 
 func (request dependencySyncRequest) checkInputs() error {
-	if !sameEnvironmentFile(request.manifestPath, request.manifestBytes) || !sameEnvironmentFile(request.lockPath, request.lockBytes) {
-		return installer.ErrPlanChanged
-	}
-	return nil
-}
-
-func (request *dependencySyncRequest) publish() error {
-	if request.candidateManifest != nil && string(request.candidateManifest) != string(request.manifestBytes) {
-		if err := publishEnvironmentFile(request.manifestPath, request.candidateManifest); err != nil {
-			return err
-		}
-		request.manifestBytes = request.candidateManifest
-	}
-	if request.candidateLock != nil && string(request.candidateLock) != string(request.lockBytes) {
-		if err := publishEnvironmentFile(request.lockPath, request.candidateLock); err != nil {
-			return fmt.Errorf("uap.toml saved, uap.lock not written: %w; run agentplugins deps lock, then retry, or agentplugins deps sync", err)
-		}
-		request.lockBytes = request.candidateLock
-	}
-	return nil
+	return request.intent.Check(dependencyIntentFiles{})
 }
 
 func prepareDependencySyncCandidate(cmd *cobra.Command, app App, opts *options, lockedOnly bool) (dependencySyncRequest, error) {
@@ -356,7 +336,7 @@ func prepareDependencySyncCandidateContext(ctx context.Context, app App, opts *o
 		candidateLock = lockBytes
 	}
 
-	return dependencySyncRequest{requirements: requirements, lock: lock, manifestPath: manifestPath, lockPath: lockPath, manifestBytes: manifestBytes, lockBytes: lockBytes, candidateLock: candidateLock}, nil
+	return dependencySyncRequest{requirements: requirements, lock: lock, intent: environmentapp.Intent{ManifestPath: manifestPath, LockPath: lockPath, ManifestBytes: manifestBytes, LockBytes: lockBytes, CandidateLock: candidateLock}}, nil
 
 }
 
@@ -388,20 +368,7 @@ func (request dependencySyncRequest) recheck(cmd *cobra.Command, app App, opts *
 }
 
 func (request dependencySyncRequest) selectedLock() environment.Lock {
-	lock := request.lock
-	storeLock := lock
-	if len(request.aliases) > 0 {
-		storeLock.Packages = nil
-		for _, pkg := range lock.Packages {
-			for _, alias := range request.aliases {
-				if alias == pkg.Alias {
-					storeLock.Packages = append(storeLock.Packages, pkg)
-				}
-			}
-		}
-	}
-
-	return storeLock
+	return environmentapp.SelectedLock(request.lock, request.aliases)
 }
 
 func confirmDependencySync(cmd *cobra.Command, app App, opts *options, yes bool) (bool, error) {

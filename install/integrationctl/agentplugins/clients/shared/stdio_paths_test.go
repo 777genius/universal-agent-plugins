@@ -62,15 +62,15 @@ func TestApplyStdioDataContractResolvesOnlyAuthoringTokenInCommand(t *testing.T)
 	if e := ApplyStdioDataContract(config, active, data); e != nil {
 		t.Fatal(e)
 	}
-	if config["command"] != filepath.Join(active, "bin/server") {
+	if config["command"] != active+"/bin/server" {
 		t.Fatalf("command = %v", config["command"])
 	}
 	args := config["args"].([]any)
-	if args[0] != filepath.Join(active, "bin/run") || args[1] != filepath.Join(active, "share") || args[2] != filepath.Join(data, "cache") {
+	if args[0] != active+"/bin/run" || args[1] != "${package.root}/share" || args[2] != data+"/cache" {
 		t.Fatalf("args = %v", args)
 	}
 	env := config["env"].(map[string]any)
-	if env["CACHE"] != filepath.Join(data, "cache") || env["PLUGIN_ROOT"] != active || env["PLUGIN_DATA"] != data {
+	if env["CACHE"] != data+"/cache" || env["PLUGIN_ROOT"] != active || env["PLUGIN_DATA"] != data {
 		t.Fatalf("env = %v", env)
 	}
 

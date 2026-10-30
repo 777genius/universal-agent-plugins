@@ -9,6 +9,7 @@ on:
   push:
     branches: [main, master, refactor/installer-core-clean-architecture]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
 
 # Replace ordinary PR/push CI; isolate manual and scheduled invocations.
@@ -18,9 +19,56 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
+  # Pull requests only: classify the diff once so lint and the Management SDK
+  # qualification are skipped when none of their inputs changed. `test` never
+  # waits for it and runs on every ready pull request, because repotests also
+  # read README.md, docs/, website/, landing/ and workflow files. Pushes and an
+  # unavailable or oversized classification run every job. It only calls the
+  # GitHub API, so it uses a GitHub-hosted runner instead of waiting in the
+  # CI_LINUX_RUNNER queue. repotests/ci_path_policy_test.go covers the script.
+  changes:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      lint: ${{ steps.classify.outputs.lint }}
+      management_sdk: ${{ steps.classify.outputs.management_sdk }}
+    steps:
+      - name: Classify changed paths
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: |
+          set -euo pipefail
+          # The pull request files API lists at most 3000 files.
+          if (( CHANGED_FILES >= 3000 )); then
+            printf 'lint=true\nmanagement_sdk=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Renames count on both sides so a move out of an input path still runs.
+          if ! files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
+            --jq '.[] | .filename, (.previous_filename // empty)')"; then
+            echo "::warning::Changed files are unavailable; running every gated job."
+            printf 'lint=true\nmanagement_sdk=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Never echo raw file names: they could carry workflow commands.
+          echo "classified $(grep -c . <<<"$files" || true) paths"
+          matches() { if grep -qE "$1" <<<"$files"; then echo true; else echo false; fi; }
+          lint="$(matches '(\.go$|(^|/)go\.(mod|sum)$|^go\.work(\.sum)?$|^\.golangci\.yml$|^scripts/(check-lint-baseline\.sh|lint-baseline-renames\.txt)$|^\.github/workflows/(ci|lint)\.yml$)')"
+          # SDK Go fixtures build with GOWORK=off against the root module.
+          management_sdk="$(matches '^(sdks/typescript/|contracts/management/|cli/internal/agentpluginscli/management/|go\.(mod|sum)$|\.github/workflows/(ci|management-sdk)\.yml$)')"
+          printf 'lint=%s\nmanagement_sdk=%s\n' "$lint" "$management_sdk" | tee -a "$GITHUB_OUTPUT"
+
   # Separate job rather than a step in `test`: `test` is the 9-27 min critical
   # path, while the three lint matrix legs finish in a few minutes in parallel.
   lint:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.lint == 'true') }}
     permissions:
       contents: read
     uses: ./.github/workflows/lint.yml
@@ -31,11 +79,14 @@ jobs:
 
   # One qualification definition shared with the Management SDK release.
   management-sdk:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && (needs.changes.result != 'success' || needs.changes.outputs.management_sdk == 'true'))) }}
     permissions:
       contents: read
     uses: ./.github/workflows/management-sdk.yml
 
   test:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45
     steps:

@@ -2,6 +2,15 @@ name: Skills picker
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Documentation and web-only changes cannot affect the picker or its Go
+    # bridge. Pushes to main stay unfiltered for release evidence.
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
   push:
     branches: [main]
 
@@ -16,6 +25,7 @@ concurrency:
 
 jobs:
   skills-picker:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:

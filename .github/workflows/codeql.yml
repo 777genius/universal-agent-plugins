@@ -2,7 +2,13 @@ name: CodeQL
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
+    # Markdown and docs/ hold no Go or JavaScript/TypeScript sources. Pushes to
+    # main and the weekly schedule stay unfiltered.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   push:
     branches: [main, master]
   schedule:
@@ -21,6 +27,7 @@ permissions:
 
 jobs:
   analyze:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: analyze (${{ matrix.language }})
     runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     strategy:

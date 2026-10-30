@@ -1,7 +1,6 @@
 package agentpluginscli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -93,57 +93,65 @@ func snapshotEnvironmentContext(ctx context.Context, app App, verifyPrevious ...
 // runSavedEnvironment shares preflight, confirmation and publication with deps sync.
 // The candidate is fully validated before either intent file is published.
 func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, requirements environment.Requirements, locked environment.Lock, manifest []byte, aliases []string, attest *environment.Attestation, targets []string) error {
-	if err := validateDependencyTargets(app, requirements); err != nil {
-		return err
-	}
-	if err := locked.Validate(requirements); err != nil {
-		return err
-	}
-	if err := verifyDependencyDeclarations(cmd.Context(), app, locked); err != nil {
-		return err
-	}
-	aliases = savedClosureAliases(snapshot.Lock, locked, aliases)
-	if err := verifyUnselectedPins(snapshot.Lock, locked, aliases); err != nil {
-		return err
-	}
-	view, err := app.Installer.Inspect(cmd.Context())
-	if err != nil {
-		return err
-	}
-	observed, err := environment.ObserveForEnvironment(view, app.environmentID())
-	if err != nil {
-		return err
-	}
-	if err := renderSavedTargetNotice(cmd, opts, locked, aliases, targets); err != nil {
-		return err
-	}
-	prepared, err := (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncForTargets(requirements, locked, observed, aliases, attest, targets)
-	if err != nil {
-		return err
-	}
-	detected, err := detectDependencyClients(cmd.Context(), app)
-	if err != nil {
-		return err
-	}
-	consent := map[string]bool{}
-	actions, err := preflightDependencyActions(cmd, app, opts, prepared.Bindings, detected, consent)
+	request, err := prepareSavedSync(cmd, app, opts, snapshot, requirements, locked, manifest, aliases, attest, targets)
 	if err != nil {
 		return err
 	}
 	if opts.dryRun {
-		return renderDependencySync(cmd, opts, actions, true)
+		return renderDependencySync(cmd, opts, request.prepared, true)
+	}
+	return applyDependencySync(cmd, app, opts, request, mutationConfirmed(app, opts))
+}
+
+func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, requirements environment.Requirements, locked environment.Lock, manifest []byte, aliases []string, attest *environment.Attestation, targets []string) (dependencySyncRequest, error) {
+	request := dependencySyncRequest{}
+	if err := validateDependencyTargets(app, requirements); err != nil {
+		return request, err
+	}
+	if err := locked.Validate(requirements); err != nil {
+		return request, err
+	}
+	if err := verifyDependencyDeclarations(cmd.Context(), app, locked); err != nil {
+		return request, err
+	}
+	aliases = savedClosureAliases(snapshot.Lock, locked, aliases)
+	if err := verifyUnselectedPins(snapshot.Lock, locked, aliases); err != nil {
+		return request, err
+	}
+	view, err := app.Installer.Inspect(cmd.Context())
+	if err != nil {
+		return request, err
+	}
+	observed, err := environment.ObserveForEnvironment(view, app.environmentID())
+	if err != nil {
+		return request, err
+	}
+	if err := renderSavedTargetNotice(cmd, opts, locked, aliases, targets); err != nil {
+		return request, err
+	}
+	prepared, err := (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncForTargets(requirements, locked, observed, aliases, attest, targets)
+	if err != nil {
+		return request, err
+	}
+	detected, err := detectDependencyClients(cmd.Context(), app)
+	if err != nil {
+		return request, err
+	}
+	consent := map[string]bool{}
+	actions, err := preflightDependencyActions(cmd, app, opts, prepared.Bindings, detected, consent)
+	if err != nil {
+		return request, err
 	}
 	body, err := json.MarshalIndent(locked, "", "  ")
 	if err != nil {
-		return err
+		return request, err
 	}
 	body = append(body, '\n')
-	// Match the established lock encoding so unchanged commands never rewrite it.
 	if equalDependencyLock(snapshot.Lock, locked) || (snapshot.Lock.LockVersion == 0 && len(requirements.Dependencies) == 0) {
 		body = snapshot.LockBytes
 	}
-	request := dependencySyncRequest{targets: targets, requirements: requirements, lock: locked, manifestPath: snapshot.ManifestPath, lockPath: snapshot.LockPath, manifestBytes: snapshot.ManifestBytes, lockBytes: snapshot.LockBytes, prepared: actions, detected: detected, consent: consent, candidateManifest: manifest, candidateLock: body, aliases: aliases, attestation: attest}
-	return applyDependencySync(cmd, app, opts, request, mutationConfirmed(app, opts))
+	request = dependencySyncRequest{targets: targets, requirements: requirements, lock: locked, intent: snapshot.intent(manifest, body), prepared: actions, detected: detected, consent: consent, aliases: aliases, attestation: attest}
+	return request, nil
 }
 
 // Replaced only by disposable failure-injection tests.
@@ -155,12 +163,10 @@ var publishEnvironmentFile = func(path string, body []byte) error {
 	return atomicfile.Write(path, body, mode)
 }
 
-func sameEnvironmentFile(path string, expected []byte) bool {
-	body, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return expected == nil
-	}
-	return err == nil && expected != nil && bytes.Equal(body, expected)
+func (snapshot environmentSnapshot) intent(manifest, lock []byte) environmentapp.Intent {
+	return environmentapp.Intent{ManifestPath: snapshot.ManifestPath, LockPath: snapshot.LockPath,
+		ManifestBytes: snapshot.ManifestBytes, LockBytes: snapshot.LockBytes,
+		CandidateManifest: manifest, CandidateLock: lock}
 }
 
 func editEnvironmentIntent(snapshot environmentSnapshot, wanted environment.Requirements) ([]byte, error) {

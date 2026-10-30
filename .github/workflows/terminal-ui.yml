@@ -1,6 +1,14 @@
 name: Terminal UI
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Documentation and web-only changes cannot affect the terminal matrix.
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
   workflow_dispatch:
 # Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:
@@ -11,6 +19,7 @@ permissions:
   contents: read
 jobs:
   terminal:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     timeout-minutes: 20
     strategy:
       fail-fast: false

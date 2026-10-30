@@ -2,7 +2,12 @@ name: Docs
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
+    # The docs site reads README.md, docs/ and code, but never the landing app
+    # (Landing builds the combined site itself). Pushes to main stay unfiltered.
+    paths-ignore:
+      - 'landing/**'
   push:
     branches: [main, master]
   workflow_dispatch:
@@ -15,6 +20,7 @@ concurrency:
 
 jobs:
   docs-check:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     defaults:
       run:
