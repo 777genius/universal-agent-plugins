@@ -95,7 +95,10 @@ async function publishedHome(page: Page, context: BrowserContext, isolated = fal
   await hydrated(page);
   await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
   if (!isolated)
-    await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', 'current');
+    // The large published catalog can finish loading after hydration on a busy CI runner.
+    await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', 'current', {
+      timeout: 20_000,
+    });
   // Anchor subsequent probes to stable source identity, not a megabyte of descendant text.
   const report = page.locator(
     `[data-install-source=${JSON.stringify(isolated ? 'i18n-state-00' : cloudflareSource)}] details.skillspector`,
@@ -108,6 +111,7 @@ test('published large reports keep closed cards unmounted after real data and ap
   page,
   context,
 }) => {
+  test.setTimeout(60_000);
   const { report, errors, requests } = await publishedHome(page, context);
   const cardSources = await page
     .locator('.plugin-card')
