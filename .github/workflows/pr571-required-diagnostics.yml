@@ -1,0 +1,62 @@
+name: PR571 Required diagnostics
+
+on:
+  push:
+    branches: [diagnostic/pr571-required-20261030]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Collect only the two known failed jobs and exact public source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -f 204800
+          mkdir -p evidence
+          gh api repos/777genius/universal-agent-plugins/actions/runs/41038450229 > evidence/run.json
+          for job in 124005003413 124022147790; do
+            gh api "repos/777genius/universal-agent-plugins/actions/jobs/$job" > "evidence/job-$job.json"
+            gh api "repos/777genius/universal-agent-plugins/actions/jobs/$job/logs" > "evidence/job-$job.log"
+          done
+          gh api repos/777genius/universal-agent-plugins/git/commits/7fea8522f1eb22156d9e069056ff0e5cb6f724f3 > evidence/commit.json
+          gh api repos/777genius/universal-agent-plugins/tarball/7fea8522f1eb22156d9e069056ff0e5cb6f724f3 > evidence/source.tar.gz
+          python3 - <<'PY'
+          import hashlib, json, pathlib, re
+          root = pathlib.Path('evidence')
+          head = '7fea8522f1eb22156d9e069056ff0e5cb6f724f3'
+          run = json.loads((root / 'run.json').read_text())
+          commit = json.loads((root / 'commit.json').read_text())
+          assert run['head_sha'] == head and commit['sha'] == head
+          assert commit['tree']['sha'] == '3570455acc97139a075b290af2eafd39fa4eaf76'
+          for job in (124005003413, 124022147790):
+              info = json.loads((root / f'job-{job}.json').read_text())
+              assert info['id'] == job and info['run_id'] == 41038450229
+              assert info['head_sha'] == head and info['conclusion'] == 'failure'
+              lines = (root / f'job-{job}.log').read_text(errors='replace').splitlines()
+              selected = set()
+              for index, line in enumerate(lines):
+                  if re.search(r'panic:|--- FAIL:|FAIL\s|##\[error\]|test timed out|Error [0-9]', line):
+                      selected.update(range(max(0, index - 3), min(len(lines), index + 25)))
+              summary = '\n'.join(f'{index + 1}: {lines[index]}' for index in sorted(selected))
+              (root / f'failure-{job}.txt').write_text(summary)
+              print(f'JOB {job}: {len(lines)} log lines; failure summary saved')
+              print(summary[:24000])
+          hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in root.iterdir() if p.is_file()}
+          (root / 'sha256.json').write_text(json.dumps(hashes, indent=2, sort_keys=True))
+          PY
+      - name: Retain bounded diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: pr571-required-diagnostics
+          path: evidence/
+          retention-days: 3
+          if-no-files-found: error
