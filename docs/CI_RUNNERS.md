@@ -64,8 +64,10 @@ landing work no longer queues Govulncheck, Polyglot Smoke, Terminal UI,
 Coverage, Skills picker, lint, the Management SDK matrix or the authoring
 native, packed and Milestone A lanes. Pushes to `main`, schedules and manual
 dispatches keep their unfiltered triggers, so every merge commit still
-produces the push-triggered checks the release workflow requires.
-`repotests/ci_path_policy_test.go` guards these rules.
+produces the push-triggered checks the release workflow requires. Terminal UI
+and both authoring workflows have no push trigger; Milestone A release
+evidence comes from a manual dispatch. `repotests/ci_path_policy_test.go`
+guards these rules.
 
 The documentation and web surface is root Markdown, `docs/`, `website/`,
 `landing/` and `assets/`. Every filter below that skips documentation names
@@ -74,8 +76,14 @@ exactly this list.
 - `pr-changes.yml` is the one pull request classifier. It runs on a
   GitHub-hosted runner, reads the pull request file list once and reports
   `lint`, `management_sdk` and `authoring`. Callers skip a job only on an
-  explicit `false`. An unavailable files API or a 3,000+ file diff marks
-  every class true.
+  explicit `false`. An unavailable or empty files API response for a
+  non-empty diff, a 3,000+ file diff or a path with a control character marks
+  every class true, and a classifier failure runs every gated job. Gated jobs
+  wait for it, so when many pull requests use
+  `ci:github-hosted` and that queue is longer than the Namespace queue, set
+  the `CI_LIGHTWEIGHT_RUNNER` variable (for example to the `CI_LINUX_RUNNER`
+  label) to move only this API-only job; it never checks out pull request
+  code. Unset it to return to `ubuntu-latest`.
 - `Required / test` runs on every ready pull request: repotests read
   `README.md`, `docs/`, `website/`, `landing/` and workflow files. `lint`
   skips without a Go, module, `.golangci.yml` or lint baseline change, and
@@ -85,8 +93,10 @@ exactly this list.
   always-running `Authoring / required native and packed` aggregate. Its
   native and packed lanes skip only when the classifier reports a
   documentation-only diff (`authoring=false`), and the aggregate then requires
-  both lanes to be skipped; otherwise it requires both to succeed, as
-  `scripts/check-packed-workflow.py` enforces. A path that a Windows checkout
+  both lanes to be skipped and says so in a notice and the job summary;
+  otherwise it requires both to succeed, as `scripts/check-packed-workflow.py`
+  enforces. A green aggregate is native and packed evidence only when the lanes
+  ran. A path that a Windows checkout
   rejects still runs the lanes, because they hold the remaining Windows pull
   request checkout for such a diff.
 - Authoring Milestone A E2E ignores the documentation surface at workflow
@@ -99,9 +109,11 @@ exactly this list.
 - Dependency Review stays unfiltered: the release workflow needs its success
   on the merged pull request head.
 
-GitHub evaluates workflow path filters on the first 3,000 changed files only.
-A larger pull request can skip a filtered workflow; its push to `main` still
-runs every lane.
+GitHub evaluates workflow path filters on the first 3,000 changed files only,
+so a larger pull request can skip a filtered workflow. Workflows with a push
+trigger still run every lane on the merge commit; Terminal UI and Milestone A
+then run again on the next pull request that touches their inputs, or by
+manual dispatch.
 
 No branch protection or ruleset requires these checks today. If one is added,
 require only checks from unfiltered workflows: a check from a skipped workflow
