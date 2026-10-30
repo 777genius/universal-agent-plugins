@@ -15,6 +15,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -109,8 +110,9 @@ func checkDependencyLockInputs(manifestPath, lockPath string, manifestBefore, lo
 		path   string
 		before []byte
 	}{{manifestPath, manifestBefore}, {lockPath, lockBefore}} {
-		if !sameEnvironmentFile(input.path, input.before) {
-			return fmt.Errorf("%s changed during lock resolution; rerun deps lock: %w", filepath.Base(input.path), installer.ErrPlanChanged)
+		intent := environmentapp.Intent{ManifestPath: input.path, LockPath: input.path, ManifestBytes: input.before, LockBytes: input.before}
+		if err := intent.Check(dependencyIntentFiles{}); err != nil {
+			return fmt.Errorf("%s changed during lock resolution; rerun deps lock: %w", filepath.Base(input.path), err)
 		}
 	}
 	return nil

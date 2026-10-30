@@ -93,14 +93,21 @@ func TestDependencyLockPreservesExternalEdits(t *testing.T) {
 	}
 }
 
-func TestSameEnvironmentFileDistinguishesAbsentAndEmpty(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "agreement")
-	if !sameEnvironmentFile(path, nil) || sameEnvironmentFile(path, []byte{}) {
-		t.Fatal("absent file did not preserve absence separately from empty bytes")
+func TestDependencyLockInputCheckDistinguishesAbsentAndEmpty(t *testing.T) {
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "uap.toml")
+	lockPath := filepath.Join(dir, "uap.lock")
+	manifestBytes := []byte("schema_version = 1\n")
+	dependencyWrite(t, manifestPath, string(manifestBytes))
+	if err := checkDependencyLockInputs(manifestPath, lockPath, manifestBytes, nil); err != nil {
+		t.Fatalf("absent lock did not preserve an absent preimage: %v", err)
 	}
-	dependencyWrite(t, path, "")
-	if sameEnvironmentFile(path, nil) || !sameEnvironmentFile(path, []byte{}) {
-		t.Fatal("existing empty file was confused with an absent preimage")
+	dependencyWrite(t, lockPath, "")
+	if err := checkDependencyLockInputs(manifestPath, lockPath, manifestBytes, nil); !errors.Is(err, installer.ErrPlanChanged) {
+		t.Fatalf("existing empty lock was confused with an absent preimage: %v", err)
+	}
+	if err := checkDependencyLockInputs(manifestPath, lockPath, manifestBytes, []byte{}); err != nil {
+		t.Fatalf("existing empty lock did not match an empty preimage: %v", err)
 	}
 }
 
