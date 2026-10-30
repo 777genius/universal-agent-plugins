@@ -301,6 +301,13 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.equal(result.fullyChecked, 3);
     assert.equal(result.selected, 13);
     assert.equal(result.inventoryKnown, true);
+    assert.deepEqual(result.outcomes, {
+      complete: 3,
+      limited: 10,
+      failed: 0,
+      historical: 0,
+      unscanned: 0,
+    });
     const selectedOnly = { ...report, plugin_states: [] };
     assert.equal(skillSpectorAssessment(selectedOnly, subject).inventoryKnown, false);
     assert.ok(result.findingCount > 0);
@@ -341,7 +348,7 @@ describe('SkillSpector v3 exact producer contract', () => {
     report.records = [];
     report.plugin_coverage = [];
     for (const [state, status] of [
-      ['resolved', 'pending'],
+      ['resolved', 'notChecked'],
       ['not_applicable', 'unsupported'],
       ['unavailable', 'unavailable'],
       ['unresolved', 'unavailable'],
@@ -357,6 +364,74 @@ describe('SkillSpector v3 exact producer contract', () => {
       ];
       assert.equal(skillSpectorAssessment(report, subject).status, status);
     }
+  });
+  it('distinguishes selected missing reports from inventory with no selected check', () => {
+    const report = display();
+    report.records = [];
+    report.plugin_coverage = [];
+    Object.assign(report.plugin_states[0]!, { skills_total: 1, selected_ids: [] });
+    const unselected = skillSpectorAssessment(report, subject);
+    assert.equal(unselected.status, 'notChecked');
+    assert.deepEqual(unselected.outcomes, {
+      complete: 0,
+      limited: 0,
+      failed: 0,
+      historical: 0,
+      unscanned: 1,
+    });
+    report.plugin_states[0]!.selected_ids = ['selected-root'];
+    const selected = skillSpectorAssessment(report, subject);
+    assert.equal(selected.status, 'pending');
+    assert.deepEqual(selected.retries, { scheduled: 0, blocked: 0, exhausted: 0 });
+  });
+  it('counts each Skill once across current, failed, historical and missing reports', () => {
+    const report = display();
+    report.records[0]!.freshness = 'historical';
+    report.records[1]!.status = 'error';
+    report.records[1]!.coverage!.status = 'not_started';
+    report.records[2]!.status = 'partial';
+    report.records[2]!.retry = {
+      attempt_count: 2,
+      disposition: 'blocked',
+      next_attempt_at: null,
+      next_profile: null,
+      reason: 'reference_missing',
+    };
+    Object.assign(report.plugin_states[0]!, { skills_total: 15 });
+    const result = skillSpectorAssessment(report, subject);
+    assert.equal(result.status, 'stale');
+    assert.equal(result.outcomes!.historical, 1);
+    assert.equal(result.outcomes!.failed, 1);
+    assert.equal(result.outcomes!.unscanned, 2);
+    assert.equal(
+      Object.values(result.outcomes!).reduce((sum, count) => sum + count, 0),
+      15,
+    );
+    assert.ok(result.retries!.blocked > 0);
+    assert.equal(
+      result.fullyChecked,
+      report.records.filter(
+        (record) =>
+          record.freshness === 'current' &&
+          record.status === 'complete' &&
+          record.coverage!.status === 'complete' &&
+          record.execution!.state === 'completed',
+      ).length,
+    );
+  });
+  it('keeps omitted finding groups unresolved even when retained groups were classified', () => {
+    const report = display();
+    const record = report.records[0]!;
+    const finding = record.findings[0]!;
+    record.findings = [{ ...finding, raw_count: 1, review_status: 'false_positive' }];
+    record.finding_count = 4;
+    record.findings_truncated = true;
+    record.coverage!.grouping_complete = false;
+    report.records = [record];
+    const result = skillSpectorAssessment(report, subject);
+    assert.equal(result.unreviewedCount, 3);
+    assert.equal(result.groupCount, undefined);
+    assert.notEqual(result.status, 'reviewedFindings');
   });
   it('keeps standalone source states specific and exposes discovery reasons after aliases', () => {
     const report = display();
@@ -648,7 +723,10 @@ describe('SkillSpector v3 exact producer contract', () => {
           'https://fixture/v3/index.json',
         ).reportFor(subject.repository),
       );
-      assert.deepEqual(requests, ['https://fixture/v3/index.json']);
+      assert.deepEqual(
+        requests,
+        Array(response.status === 503 ? 2 : 1).fill('https://fixture/v3/index.json'),
+      );
     }
   });
 });

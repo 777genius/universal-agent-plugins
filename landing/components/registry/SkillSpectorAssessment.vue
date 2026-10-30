@@ -63,13 +63,26 @@ const displayStatus = computed(() => {
   }
   return status;
 });
-const label = computed(() =>
-  t(
-    `registryUi.skillSpector.${reportStatus.value === 'ready' && displayStatus.value === 'unavailable' ? 'error' : displayStatus.value}`,
-  ),
-);
+const label = computed(() => {
+  let key: string = displayStatus.value;
+  if (reportStatus.value === 'ready' && key === 'unavailable') key = 'error';
+  if (!legacy.value && key === 'noStaticFindings')
+    key =
+      props.scope === 'plugin' && !assessment.value.inventoryKnown
+        ? 'selectionScanned'
+        : 'scanComplete';
+  return t(`registryUi.skillSpector.${key}`);
+});
 const fullyChecked = computed(() =>
   assessment.value.selected ? assessment.value.fullyChecked : undefined,
+);
+const coverageRows = computed(() =>
+  Object.entries(assessment.value.outcomes ?? {}).filter(
+    ([outcome, count]) => outcome !== 'complete' && count > 0,
+  ),
+);
+const retryRows = computed(() =>
+  Object.entries(assessment.value.retries ?? {}).filter(([, count]) => count > 0),
 );
 const advice = computed(() => {
   if (displayStatus.value === 'confirmedMaterialIssue') return 'adviceConfirmed';
@@ -86,6 +99,18 @@ const reasons = computed(
     assessment.value.reasons ??
     assessment.value.records.flatMap((record) => record.coverage?.reasons ?? record.errors),
 );
+const limitationExplanations = computed(() => {
+  if (!assessment.value.outcomes?.limited) return [];
+  const codes = new Set(reasons.value.map((reason) => reason.code));
+  return [
+    ['reference_missing', 'referenceMissing'],
+    ['static_parse_limit', 'staticParseLimit'],
+    ['analyzer_incomplete', 'analyzerIncomplete'],
+    ['acquisition_transfer_limit', 'acquisitionTransferLimit'],
+  ]
+    .filter(([code]) => codes.has(code!))
+    .map(([, key]) => key!);
+});
 const reasonGroups = computed(() => groupSkillSpectorReasons(reasons.value));
 const onReasonToggle = (key: string, event: Event) => {
   if (event.target !== event.currentTarget) return;
@@ -108,17 +133,22 @@ const reasonPosition = (reason: { path?: unknown; start_line?: unknown; end_line
 };
 const groups = (record: SkillSpectorRecord) => record.findings;
 const recordStatus = (record: SkillSpectorRecord) =>
-  record.status === 'error'
-    ? 'unavailable'
-    : record.coverage?.status === 'complete' || (!record.coverage && record.status === 'complete')
-      ? record.finding_count
-        ? record.findings.some(
-            (finding) => !finding.review_status || finding.review_status === 'unreviewed',
-          )
-          ? 'unreviewedFindings'
-          : 'reviewedFindings'
-        : 'noStaticFindings'
-      : 'incomplete';
+  record.freshness === 'historical' ||
+  (props.subject?.kind === 'plugin' && record.source.revision !== props.subject.revision)
+    ? 'stale'
+    : record.status === 'error'
+      ? 'unavailable'
+      : record.coverage?.status === 'complete' || (!record.coverage && record.status === 'complete')
+        ? record.finding_count
+          ? record.findings_truncated ||
+            record.coverage?.grouping_complete === false ||
+            record.findings.some(
+              (finding) => !finding.review_status || finding.review_status === 'unreviewed',
+            )
+            ? 'unreviewedFindings'
+            : 'reviewedFindings'
+          : 'noStaticFindings'
+        : 'incomplete';
 const occurrence = (
   finding: SkillSpectorFinding,
   value: SkillSpectorOccurrence,
@@ -137,7 +167,10 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
     v-if="scope === 'plugin' && applicable === false"
     class="skillspector skillspector--noSkills"
   >
-    <strong>SkillSpector · {{ t('registryUi.skillSpector.noSkills') }}</strong>
+    <strong
+      >{{ t('registryUi.skillSpector.title') }} ·
+      {{ t('registryUi.skillSpector.noSkills') }}</strong
+    >
     <p>{{ t('registryUi.skillSpector.noSkillsDetails') }}</p>
   </section>
   <p
@@ -155,23 +188,9 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
     :open="expanded || undefined"
     @toggle="onToggle"
   >
-    <summary :aria-label="`${t('registryUi.skillSpector.detailsFor', { name })}: ${label}`">
+    <summary :aria-label="`${name}: ${t('registryUi.skillSpector.title')} · ${label}`">
       <span class="skillspector__icon" aria-hidden="true">i</span>
-      <span
-        >SkillSpector · {{ label
-        }}<span v-if="fullyChecked !== undefined" class="skillspector__summary-coverage">
-          ·
-          {{
-            t(
-              `registryUi.skillSpector.${assessment.inventoryKnown ? 'fullyChecked' : 'selectedFullyChecked'}`,
-              {
-                checked: n(fullyChecked),
-                total: n(assessment.selected ?? 0),
-              },
-            )
-          }}</span
-        ></span
-      >
+      <span>{{ t('registryUi.skillSpector.title') }} · {{ label }}</span>
       <span class="skillspector__arrow" aria-hidden="true">⌄</span>
     </summary>
     <div v-if="detailsOpen" class="skillspector__details" :aria-busy="reportStatus === 'loading'">
@@ -202,6 +221,19 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
             )
           }}
         </p>
+        <dl v-if="coverageRows.length" class="skillspector__outcomes">
+          <div v-for="[outcome, count] in coverageRows" :key="outcome">
+            <dt>{{ t(`registryUi.skillSpector.outcome${outcome}`) }}</dt>
+            <dd>{{ n(count) }}</dd>
+          </div>
+        </dl>
+        <p v-for="explanation in limitationExplanations" :key="explanation">
+          {{ t(`registryUi.skillSpector.${explanation}`) }}
+        </p>
+        <p v-for="[retry, count] in retryRows" :key="retry">
+          {{ t(`registryUi.skillSpector.retry${retry}`, { count: n(count) }) }}
+        </p>
+        <p>{{ t('registryUi.skillSpector.engine') }}</p>
         <p v-if="legacy">{{ t('registryUi.skillSpector.legacyCoverage') }}</p>
         <p v-if="assessment.outOfDate">{{ t('registryUi.skillSpector.older') }}</p>
         <p v-if="scope === 'skill' && assessment.records.length">
@@ -378,7 +410,7 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
           reasons.length ||
           contextRecords.length ||
           assessment.status === 'incomplete' ||
-          assessment.coverage?.pending
+          (legacy && assessment.coverage?.pending)
         "
         class="skillspector__coverage"
       >
@@ -488,7 +520,9 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
             </details>
           </details>
         </template>
-        <p v-if="assessment.coverage?.pending">{{ t('registryUi.skillSpector.pendingDetails') }}</p>
+        <p v-if="legacy && assessment.coverage?.pending">
+          {{ t('registryUi.skillSpector.pendingDetails') }}
+        </p>
       </section>
       <details v-if="assessment.records.length" class="skillspector__technical">
         <summary>{{ t('registryUi.skillSpector.provenance') }}</summary>
@@ -613,6 +647,18 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
 }
 .skillspector__details p {
   margin: 6px 0;
+}
+.skillspector__outcomes {
+  margin: 8px 0;
+}
+.skillspector__outcomes > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.skillspector__outcomes dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 .skillspector__details a {
   color: var(--cyan);

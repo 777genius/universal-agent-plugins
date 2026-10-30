@@ -256,12 +256,16 @@ export function skillSpectorAssessment(
             String(item.id).toLowerCase() ===
               `${subject?.repository.toLowerCase()}/${subject?.name}`),
     );
-    const fullyChecked = records.filter(
+    const currentRecords = records.filter(
       (record) =>
         record.freshness === 'current' &&
-        record.coverage?.status === 'complete' &&
-        record.execution?.state === 'completed' &&
         (subject?.kind !== 'plugin' || record.source.revision === subject.revision),
+    );
+    const fullyChecked = currentRecords.filter(
+      (record) =>
+        record.status === 'complete' &&
+        record.coverage?.status === 'complete' &&
+        record.execution?.state === 'completed',
     ).length;
     const selected = Math.max(
       coverage?.selected ?? records.length,
@@ -270,23 +274,48 @@ export function skillSpectorAssessment(
         ? state.selected_ids.length
         : 0,
     );
-    const outOfDate = records.some(
-      (record) =>
-        record.freshness === 'historical' ||
-        (subject?.kind === 'plugin' && record.source.revision !== subject.revision),
-    );
+    // Each known Skill belongs to exactly one outcome. Pending producer coverage
+    // includes historical reports; it is not proof of a queued or running job.
+    const failed = currentRecords.filter(
+      (record) => record.status === 'error' || record.coverage?.status === 'not_started',
+    ).length;
+    const outcomes = {
+      complete: fullyChecked,
+      limited: currentRecords.length - fullyChecked - failed,
+      failed,
+      historical: records.length - currentRecords.length,
+      unscanned: Math.max(0, selected - records.length),
+    };
+    const outOfDate = outcomes.historical > 0;
+    const retries = { scheduled: 0, blocked: 0, exhausted: 0 };
+    for (const record of records) {
+      const disposition = record.retry?.disposition;
+      if (disposition && disposition in retries) retries[disposition as keyof typeof retries]++;
+    }
     const reasons = records.flatMap((record) => record.coverage?.reasons ?? []);
     if (state?.reason) reasons.push({ code: String(state.reason), message: String(state.reason) });
     if (Array.isArray(state?.candidates) && state.candidates.length)
       reasons.push({ code: 'source_candidates', message: state.candidates.join(', ') });
-    const unreviewedCount = records.reduce(
+    const retainedUnreviewedCount = records.reduce(
       (sum, record) =>
         sum +
         record.findings
-          .filter((finding) => finding.review_status === 'unreviewed')
+          .filter((finding) => !finding.review_status || finding.review_status === 'unreviewed')
           .reduce((count, finding) => count + (finding.raw_count ?? 1), 0),
       0,
     );
+    const unreviewedCount =
+      retainedUnreviewedCount +
+      records.reduce(
+        (sum, record) =>
+          sum +
+          Math.max(
+            0,
+            record.finding_count -
+              record.findings.reduce((count, finding) => count + (finding.raw_count ?? 1), 0),
+          ),
+        0,
+      );
     const confirmed = records.some((record) =>
       record.findings.some(
         (finding) =>
@@ -298,18 +327,15 @@ export function skillSpectorAssessment(
         ? 'unavailable'
         : ['unsupported', 'not_applicable'].includes(String(state?.state))
           ? 'unsupported'
-          : coverage?.pending || state?.state === 'resolved'
+          : coverage?.pending || (Array.isArray(state?.selected_ids) && state.selected_ids.length)
             ? 'pending'
             : 'notChecked'
       : confirmed
         ? 'confirmedMaterialIssue'
-        : records.every(
-              (record) =>
-                record.execution?.state === 'failed' && record.coverage?.status === 'not_started',
-            )
-          ? 'unavailable'
-          : outOfDate
-            ? 'stale'
+        : outOfDate
+          ? 'stale'
+          : outcomes.failed === records.length
+            ? 'unavailable'
             : fullyChecked < selected ||
                 records.some(
                   (record) =>
@@ -343,6 +369,8 @@ export function skillSpectorAssessment(
         (sum, record) => sum + (record.raw_finding_count ?? record.finding_count),
         0,
       ),
+      outcomes,
+      retries,
       legacy: false,
     };
   }
