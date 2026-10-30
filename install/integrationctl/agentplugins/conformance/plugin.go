@@ -19,7 +19,7 @@ func (loader InstallerDecoder) Plugin(body []byte) (domain.PluginManifest, []dom
 	}
 	for _, key := range sortedKeys(rawFields) {
 		raw := rawFields[key]
-		if _, known := pluginManifestFields[key]; known {
+		if _, known := pluginManifestFields[key]; known && key != "extensions" {
 			if err := rejectDuplicateJSONKeys(raw); err != nil {
 				return domain.PluginManifest{}, nil, "", domain.FatalLoad("plugin_manifest_malformed", "plugin.json", fmt.Sprintf("parse plugin.json field %q", key), err)
 			}
@@ -66,11 +66,16 @@ func (loader InstallerDecoder) Plugin(body []byte) (domain.PluginManifest, []dom
 				Message:  "plugin.json extensions was reported and ignored because it is not an object",
 			})
 		} else {
+			// Namespace identity is structured; unknown namespace contents are opaque.
+			// Do not reject nested duplicate keys in an extension we do not implement.
+			if err := rejectDuplicateTopLevelObjectKeys(raw); err != nil {
+				return domain.PluginManifest{}, diagnostics, "", domain.FatalLoad("plugin_manifest_malformed", "plugin.json", "parse extensions namespace keys", err)
+			}
 			rawExtensions = append(json.RawMessage(nil), raw...)
 			for _, namespace := range sortedKeys(extensionFields) {
 				extensionRaw := extensionFields[namespace]
 				var extensionValue any
-				if err := decodeJSON(extensionRaw, &extensionValue); err != nil {
+				if err := decodeJSONUnchecked(extensionRaw, &extensionValue); err != nil {
 					return domain.PluginManifest{}, diagnostics, "", domain.FatalLoad("plugin_schema_invalid", "plugin.json", fmt.Sprintf("plugin extension %q is malformed", namespace), err)
 				}
 				if _, object := extensionValue.(map[string]any); !object {

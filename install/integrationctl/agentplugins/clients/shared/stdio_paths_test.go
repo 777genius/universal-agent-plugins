@@ -47,7 +47,7 @@ func TestStdioPathProjectionPreservesTraversalAndAnchor(t *testing.T) {
 	}
 }
 
-func TestApplyStdioDataContractResolvesOnlyAuthoringTokenInCommand(t *testing.T) {
+func TestApplyStdioDataContractNeverExpandsCommand(t *testing.T) {
 	active := filepath.Join(t.TempDir(), "future")
 	data := t.TempDir()
 	if e := os.MkdirAll(filepath.Join(data, "work"), 0700); e != nil {
@@ -62,7 +62,7 @@ func TestApplyStdioDataContractResolvesOnlyAuthoringTokenInCommand(t *testing.T)
 	if e := ApplyStdioDataContract(config, active, data); e != nil {
 		t.Fatal(e)
 	}
-	if config["command"] != active+"/bin/server" {
+	if config["command"] != "${package.root}/bin/server" {
 		t.Fatalf("command = %v", config["command"])
 	}
 	args := config["args"].([]any)

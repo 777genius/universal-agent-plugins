@@ -36,10 +36,8 @@ func DeliverManagedStdio(deliver func(root string) error, root string, envelope 
 // environment values expand only the two standard tokens, once; unknown tokens
 // such as ${package.root} remain literal (Agent Plugins 1.0 section 9.2).
 //
-// The command keeps client-managed placeholders verbatim: the managed launcher
-// resolves command form itself and rejects rewritten commands. The existing
-// authoring-command compatibility token ${package.root} is handled separately;
-// it does not authorize additional expansion in standard args or env values.
+// The standard command is never expanded, including legacy-looking tokens.
+// Legacy authoring conversion is a separate format, not an MCP loader rule.
 //
 // observationRoot is where the paths are checked to exist. During staging that
 // is the staging tree, while pluginRoot is the location the entry has to
@@ -55,7 +53,7 @@ func ApplyStdioDataContract(config map[string]any, pluginRoot, dataPath string, 
 	expandStdioArguments(config, expand)
 	command, _ := config["command"].(string)
 	cwd, _ := config["cwd"].(string)
-	resolvedCommand, resolvedCWD, err := ResolveStdioPaths(strings.ReplaceAll(command, "${package.root}", pluginRoot), cwd, pluginRoot, dataPath, observationRoot...)
+	resolvedCommand, resolvedCWD, err := ResolveStdioPaths(command, cwd, pluginRoot, dataPath, observationRoot...)
 	if err != nil {
 		return err
 	}
