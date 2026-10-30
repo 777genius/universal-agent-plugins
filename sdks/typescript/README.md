@@ -63,10 +63,10 @@ refuse an engine that does not report management API v1
 (`UNSUPPORTED_API_VERSION`); the SDK does not compare engine version strings.
 Use `requiredCapabilities` to refuse an engine without a feature your host needs.
 
-`checkUpdates` (SDK 0.1.1 and newer) needs an engine that serves that operation,
-and no CLI release does yet; CLI 0.1.95 predates it. See
-[Explicit update checks](#explicit-update-checks-unreleased-engine) below before
-choosing the engine for that method.
+`checkUpdates` (SDK 0.1.1 and newer) needs an engine that serves that operation;
+CLI 0.1.95 and older do not. It has no capability entry, so `requiredCapabilities`
+cannot detect it. See [Explicit update checks](#explicit-update-checks) below
+before choosing the engine for that method.
 
 ## Provision the engine
 
@@ -136,14 +136,16 @@ paths, forward private profile facts to a renderer, or turn discovery into autom
 installation. Hosts preserve their own explicitly selected native profiles and can
 merge additional discovered profiles into the captured startup context.
 
-## Explicit update checks (unreleased engine)
+## Explicit update checks
 
 SDK 0.1.1 adds `client.checkUpdates({ all: true })` and
-`client.checkUpdates({ aliases: ['docs', 'tools'] })`. No CLI release serves this
-operation yet: CLI 0.1.95 predates it and answers `404`, which the SDK reports as a
-`ManagementError` with status 404. Until a CLI release includes it, build the engine
-from the `management-sdk-vX.Y.Z` tag of the SDK version you install, as described in
-[Provision the engine](#provision-the-engine), and pin its revision and digest.
+`client.checkUpdates({ aliases: ['docs', 'tools'] })` for
+`POST /api/v1/environment/check-updates`. CLI 0.1.95 and older do not serve this
+operation and answer `404`; the SDK reports that as a `ManagementError` with
+`code === 'HTTP_ERROR'` and `status === 404`. Use a CLI release whose release notes
+list this operation, or build the engine from the `management-sdk-vX.Y.Z` tag of the
+SDK version you install, as described in [Provision the engine](#provision-the-engine),
+and pin its revision and digest.
 The method performs a disposable read-only network check
 and does not save freshness, change the agreement, or install files.
 Ordinary `client.environment()` stays passive and reports unchecked moving intent
@@ -427,7 +429,9 @@ Preconditions for `publish=true`, checked by the workflow where possible:
 - The package already exists on npm, and its trusted publisher names GitHub
   Actions, `777genius` / `universal-agent-plugins`, the workflow filename
   `management-sdk-release.yml` and the environment `npm-management-sdk`, with
-  direct `npm publish` allowed.
+  direct `npm publish` allowed. A newly saved trusted publisher stays pending
+  and expires unless a publication through it succeeds within two days, so run
+  `publish=true` soon after changing that configuration.
 
 ### Bootstrap history
 

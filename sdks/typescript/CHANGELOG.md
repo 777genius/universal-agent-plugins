@@ -24,18 +24,21 @@ publishing, with npm provenance for the `management-sdk-v0.1.1` tag.
 
 ### Compatibility
 
-- No breaking changes. The other methods, the `/node` entry point and the
-  existing management API v1 operations are unchanged.
-- `checkUpdates` needs an engine that serves the operation, and no CLI release
-  does yet. CLI 0.1.95 predates it and answers `404`, which the SDK reports as
-  a `ManagementError` with status 404. Until a CLI release includes it, build
-  the engine from the `management-sdk-v0.1.1` tag (see the README). Every other
+- No runtime or wire changes for existing methods, the `/node` entry point or
+  the existing management API v1 operations. The `ManagementClient` type gains
+  `checkUpdates`, so code that implements that type itself (for example, a
+  test double) must add it.
+- `checkUpdates` needs an engine that serves the operation. CLI 0.1.95 and
+  older do not and answer `404`, which the SDK reports as a `ManagementError`
+  with `code` `HTTP_ERROR` and `status` 404; no capability entry announces the
+  operation. Use a CLI release whose release notes list it, or build the
+  engine from the `management-sdk-v0.1.1` tag (see the README). Every other
   method still works with CLI 0.1.95 or newer.
 
 ### Upgrade
 
 Run `npm install --save-exact universal-agent-plugins-management-sdk@0.1.1`.
-No code changes are needed.
+Code that only calls the client needs no changes.
 
 ## [0.1.0]
 
