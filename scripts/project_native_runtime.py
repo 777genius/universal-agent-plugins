@@ -2222,6 +2222,29 @@ def cline_service(ctx, tests, env, output):
     return result
 
 
+def cursor_admission_refusal(error):
+    """Emit only a bounded owned-source callsite; never format error data."""
+    owned = {str(SOURCE / "scripts" / name): name for name in (
+        "project_native_cursor_cycle.py", "project_native_cursor_cycle_proof.py", "project_native_runtime.py")}
+    location = "unavailable"
+    for candidate in (error.__cause__, error):
+        if not isinstance(candidate, BaseException):
+            continue
+        trace, selected = candidate.__traceback__, None
+        for _ in range(128):
+            if trace is None:
+                break
+            code = trace.tb_frame.f_code
+            label = owned.get(code.co_filename)
+            if label is not None and code.co_name not in ("require", "obj") and 0 < trace.tb_lineno <= 999999:
+                selected = label + ":" + str(trace.tb_lineno)
+            trace = trace.tb_next
+        if trace is None and selected is not None:
+            location = selected
+            break
+    print("Cursor native admission refused at " + location, file=sys.stderr, flush=True)
+
+
 def run(client, output):
     shared.native.require_hosted("linux-amd64")
     if client == "cline":
@@ -2281,6 +2304,8 @@ def run(client, output):
                 except Exception as error:
                     summary["runtime_admission_error"] = type(error).__name__
                     summary["test_passed"] = False
+                    if client == "cursor":
+                        cursor_admission_refusal(error)
             summary["collection_complete"] = bool(summary["test_passed"] and summary["runtime_artifact_admitted"])
             shared.publish(summary, ctx, output)
             (output / "upload/research.zip").rename(output / "upload/frontend.zip")

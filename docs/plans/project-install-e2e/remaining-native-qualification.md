@@ -4687,3 +4687,23 @@ have six including that phase and omit `no_change`. The existing exact removal
 result, ownership/source joins, native commands, deadlines, aggregate bounds and
 qualification rules remain unchanged. A fresh complete hosted cycle and full RAW
 review are still required before any lifecycle qualification.
+
+
+### Cursor admission refusal callsite diagnostic, 2026-10-30
+
+The genuine `70048a6c` run `41039188565` reports the selected native Go test
+passing in 86.84 seconds, but strict Python artifact admission then raises
+`ValueError`. The verified frontend contains all twelve successful source/build/
+test commands; the rejected native ZIP was not uploaded. All qualification
+flags remain false. The generic exception type does not identify the rejected
+predicate, so no native RAW or exact cause is inferred from the producer PASS.
+
+On Cursor admission refusal only, emit one bounded diagnostic to existing job
+stderr: a fixed owned reader basename and source line, or a fixed unavailable
+fallback. Match exact owned script paths, inspect only the explicit cause and
+outer traceback with finite traversal, and exclude generic require/object
+helpers. Never print exception messages, locals, source text, input, unknown
+paths or a full stack. The frontend schema, original refusal, flags and native
+ZIP rejection remain unchanged; other clients are unaffected. A fresh changed-
+source hosted run must reveal the actual site before any corrective reader
+change or qualification.
