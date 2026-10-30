@@ -1,9 +1,9 @@
 # Clean staged resources after grouped preparing-progress refusal
 
-Status: plan only, 2026-10-30. Independent plan review and coordinator publication
-must precede implementation. No production or test source has changed for this
-plan. The coordinator alone commits, pushes, opens the draft PR and merges after
-the required reviews and checks. No release is included.
+Status: implemented locally, 2026-10-30; independent code review and applicable
+exact-head CI remain pending. Independent plan review and coordinator publication
+preceded implementation, as recorded below. The coordinator alone commits,
+pushes and merges after the required reviews and checks. No release is included.
 
 Base: `29480e1d3b1fbf021c8fc0c6e3f741ac0c1fdcbb` (`origin/main`, after the four
 reviewed preceding PRs merged). Dedicated branch:
@@ -169,3 +169,50 @@ qualification. Neither changes `group_stage.go` or `group.go`. Its inspected
 not alter discard/purge guards. The separate projection-refresh lane may change
 `group_plan.go`; it does not own this staging branch. Do not absorb those scopes
 or claim their qualification as evidence for this correction.
+
+## Plan review and implementation evidence
+
+The independent GPT-6.1 Sol / xhigh plan critic approved the complete plan with
+no required changes. The coordinator published the approved plan as draft PR
+[#594](https://github.com/777genius/universal-agent-plugins/pull/594), commit
+`15be7a309863ec44e2d6b4504bbdf70ad7aeee59`, tree
+`041d3a5601115d3329fb28c6d286ed56092ac4f6`, before authorizing implementation.
+The worker fetched that exact remote head and verified the local and published
+plan blobs both equal `e154f43cdbac0c0d0fba6d2ff4b80ccba08481cd` before safely
+synchronizing the dedicated branch. No unpublished source edits existed then.
+
+Production adds only the reviewed `session.cleanupStaged()` call before returning
+the preparing-progress validation error. The new package-local regression file
+uses the real staging/data providers and authority algorithm. It covers cleanup
+after later-target refusal with new or reused data, first-target refusal,
+pending-journal custody, actual later-profile replacement, and preservation of
+an already committed no-change group. The inert stdio fixture has an explicit
+fixture PATH and does not depend on a host shell or execute its helper.
+
+Validation so far uses Go 1.26.10 and the shared cached module dependencies:
+
+- PASS: `go test -count=1 -run '^TestGroupedPreparing' -v
+  ./install/integrationctl/agentplugins/usecase` (0.503 s). Every new case passed,
+  including real staging/data removal and existing-data byte preservation.
+- EXPECTED RED: restore only `group_stage.go` from the published plan head using
+  a temporary Go source overlay and run that same new test selection. The two
+  later-target cleanup cases failed on surviving staging; the new-data case also
+  failed on its surviving owned data directory. First-target, journal,
+  replaced-profile and managed-no-change controls passed (0.505 s overall).
+  This confirms that the regressions distinguish the correction from the
+  original implementation rather than merely counting cleanup calls.
+- PASS: `go test -count=1 -race -run
+  '^Test(GroupedPreparing|GroupedAddUpdateAndRemoveUseOneCommitDecision$|SwitchGroupPreservesOwnedPluginDataAcrossDistributionSwitchReverseAndRollback$|GroupedConfiguringCallbacksPrecedeFinalIdentityObservation$)'
+  ./install/integrationctl/agentplugins/usecase` (4.226 s). This includes the new
+  filesystem regressions and the three selected existing lifecycle/callback
+  controls with the race detector.
+- PASS: golangci-lint 2.13.2 changed-line correctness/style pass for `./usecase`,
+  using `--new-from-patch` with the complete production/new-test diff against
+  the base (including the not-yet-committed test file): zero issues.
+- PASS: full-file `revive,funlen,gocyclo,gocognit,dupl,depguard` gate for
+  `./usecase`: zero issues. No lint suppression or baseline was added.
+- PASS: `git diff --check`.
+
+The default usecase package run is still in progress at this local checkpoint.
+Independent code review and required exact-published-head CI remain pending.
+No native-client execution or release qualification is claimed.
