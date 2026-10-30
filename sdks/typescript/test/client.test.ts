@@ -169,3 +169,23 @@ test('Skill catalog discard releases discovery resources with an idempotent empt
   await f.client.skills.discard('source/one');
   assert.equal(calls, 2);
 });
+
+test('explicit update check sends selected intent once and returns graph facts', async (t) => {
+  let requests = 0;
+  const f = await fixture((request, response) => {
+    requests++;
+    assert.equal(request.method, 'POST');
+    assert.equal(request.url, '/api/v1/environment/check-updates');
+    let body = '';
+    request.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+    request.on('end', () => {
+      assert.deepEqual(JSON.parse(body), { aliases: ['docs'] });
+      response.end(JSON.stringify({ contextId: 'context-one', complete: true, changed: true, entries: [], diagnostics: [] }));
+    });
+  });
+  t.after(f.close);
+  const result = await f.client.checkUpdates({ aliases: ['docs'] });
+  assert.equal(result.complete, true);
+  assert.equal(result.changed, true);
+  assert.equal(requests, 1);
+});

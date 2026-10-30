@@ -135,6 +135,9 @@ func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependenc
 		}
 		return renderJSON(cmd.OutOrStdout(), data)
 	}
+	if err := renderDependencyTransitions(cmd, actions); err != nil {
+		return err
+	}
 	if selected := opts.installSelection; selected != nil {
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Scope: %s\n", selected.Scope); err != nil {
 			return err

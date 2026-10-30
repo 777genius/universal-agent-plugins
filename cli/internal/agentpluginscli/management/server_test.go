@@ -27,6 +27,9 @@ func (*testBackend) SkillsCatalog(context.Context, SourceRequest) (SkillCatalog,
 	return SkillCatalog{}, nil
 }
 func (*testBackend) Inspect(context.Context) (Environment, error) { return Environment{}, nil }
+func (*testBackend) CheckUpdates(context.Context, UpdateCheckRequest) (UpdateCheck, error) {
+	return UpdateCheck{}, nil
+}
 func (b *testBackend) Prepare(_ context.Context, in ChangeRequest, id string) (Prepared, error) {
 	return b.makePlan(in, id), nil
 }

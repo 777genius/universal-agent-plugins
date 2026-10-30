@@ -178,7 +178,7 @@ func TestGraphBacktracksCandidateDependencies(t *testing.T) {
 				t.Fatal(err)
 			}
 			before, _ := json.Marshal(previous)
-			resolver.packages["acme/a"] = []ResolvedPackage{conflictPackage("a", "1.0.0", 3, map[string]string{"acme/b": "^1.3"}), resolver.packages["acme/a"][0]}
+			resolver.packages["acme/a"] = []ResolvedPackage{conflictPackage("a", "1.2.0", 3, map[string]string{"acme/b": "^1.3"}), resolver.packages["acme/a"][0]}
 			resolver.packages["acme/b"] = append(resolver.packages["acme/b"], conflictPackage("b", "1.3.0", 4, nil))
 			updated, err := coordinator.Resolve(context.Background(), req, previous, "a")
 			if err != nil {
@@ -186,7 +186,7 @@ func TestGraphBacktracksCandidateDependencies(t *testing.T) {
 			}
 			selected, _ := updated.Package("a")
 			shared, _ := updated.Package("b")
-			wantA, wantB := "1.0.0", "1.3.0"
+			wantA, wantB := "1.2.0", "1.3.0"
 			if independent {
 				wantA, wantB = "1.1.0", "1.2.0"
 			}
