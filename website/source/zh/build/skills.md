@@ -1,6 +1,6 @@
 ---
 title: "添加更多技能"
-description: "为现有标准包添加一项直接子技能。"
+description: "为现有标准包在 skills/ 下直接添加一个 Skill。"
 canonicalId: "page:build:skills"
 section: "build"
 locale: "zh"
@@ -53,7 +53,7 @@ agentplugins author inspect ./review-helper
 agentplugins author test ./review-helper
 ```
 
-技能验证同时报告整个包的就绪情况和直接子技能的结果。因此，新技能本身没有问题时，包内其他错误仍可能影响整体结果。
+技能验证同时报告整个包的就绪情况和直接位于 `skills/` 下的各个 Skill 的结果。因此，新技能本身没有问题时，包内其他错误仍可能影响整体结果。
 省略包路径只使用当前目录，不向上查找。从技能子目录运行不能代替选择正确包根目录。
 
 ## 失败时保留已有工作

@@ -4,6 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { docsBaseUrl, runtimeRoot, websiteRoot } from "../config/site.mjs";
 import { listMarkdownFiles } from "../lib/fs.mjs";
+import { docsLocaleEntries } from "../config/locales.mjs";
 import { isRetiredArchive } from "../lib/public-routes.mjs";
 
 // Vue is a direct docs dependency and declares this compiler dependency. Resolve
@@ -18,7 +19,7 @@ const blockTags = new Set([
 ]);
 
 export const quickstartClaims = [
-  "Use plugins", "Build plugins", "CLI 0.1.94", "explicit project scope",
+  "Use plugins", "Build plugins", "CLI 0.1.95", "explicit project scope",
   "source-build setup", "universal-agent-plugins", "plugin.json", "agentplugins author"
 ];
 
@@ -116,7 +117,7 @@ function staleAvailabilityErrors(text, label) {
 export function homeErrors(html) {
   const { text, commands, links, parseErrors } = documentContent(html);
   const errors = parseErrors.map((error) => `EN home page has invalid HTML: ${error}`);
-  for (const claim of ["Use plugins", "Build plugins", "Agent Plugins", "plugin.json", "CLI 0.1.94", "explicit project scope", "locked restoration"]) {
+  for (const claim of ["Use plugins", "Build plugins", "Agent Plugins", "plugin.json", "CLI 0.1.95", "explicit project scope", "locked restoration"]) {
     if (!text.includes(claim)) errors.push(`EN home page is missing its current installer guidance: ${claim}`);
   }
   if (!/current installer does not include agentplugins author/i.test(text)) {
@@ -181,7 +182,7 @@ export async function checkOutput() {
     // are not current public copy. Scan only the visible/current source.
     const body = currentSourceBody(await fs.readFile(file, "utf8"));
     if (body.includes("maintainer-docs")) errors.push(`Internal docs leaked into built output: ${relative}`);
-    if (/href="\/(en|ru|es|fr|zh)\//.test(body) || /src="\/assets\//.test(body)) errors.push(`Root-relative path detected in built output: ${relative}`);
+    if (/href="\/(en|ru|uk|zh|es|hi|ar|pt|fr)\//.test(body) || /src="\/assets\//.test(body)) errors.push(`Root-relative path detected in built output: ${relative}`);
     if (isRetiredArchive(relative)) errors.push(`Retired documentation was published: ${relative}`);
   }
   for (const relative of ["index.html", "404.html"]) {
@@ -198,6 +199,24 @@ export async function checkOutput() {
     const title = body.match(/^title:\s*"([^"]+)"$/m)?.[1]?.trim();
     const heading = body.match(/^#\s+(.+)$/m)?.[1]?.trim();
     if (title && heading && title !== heading) errors.push(`Generated page title/H1 mismatch: ${file} ("${title}" vs "${heading}")`);
+  }
+  const entities = JSON.parse(await fs.readFile(path.join(websiteRoot, "generated", "registries", "entities.json"), "utf8"));
+  for (const entity of entities.filter((entry) => entry.sourceKind === "hand-authored")) {
+    for (const locale of docsLocaleEntries) {
+      const field = `path${locale.code[0].toUpperCase()}${locale.code.slice(1)}`;
+      const route = entity[field];
+      if (!route) { errors.push(`${entity.canonicalId}: missing ${locale.code} route`); continue; }
+      const file = path.join(distRoot, route.endsWith("/") ? `${route}index.html` : `${route}.html`);
+      const html = await fs.readFile(file, "utf8");
+      const root = html.match(/<html\b[^>]*>/)?.[0] || "";
+      if (!root.includes(`lang="${locale.lang}"`) || !root.includes(`dir="${locale.dir}"`)) errors.push(`${route}: incorrect HTML language/direction`);
+      const absolute = new URL(route.slice(1), docsBaseUrl).href;
+      if (!html.includes(`rel="canonical" href="${absolute}"`)) errors.push(`${route}: missing canonical URL`);
+      for (const alternate of docsLocaleEntries) {
+        const href = new URL(route.replace(new RegExp(`^/${locale.code}/`), `${alternate.code}/`), docsBaseUrl).href;
+        if (!html.includes(`hreflang="${alternate.lang}" href="${href}"`)) errors.push(`${route}: missing ${alternate.code} hreflang`);
+      }
+    }
   }
   const editPrefix = "https://github.com/777genius/universal-agent-plugins/edit/main/website/source/";
   const home = await fs.readFile(path.join(distRoot, "en", "index.html"), "utf8");

@@ -1,6 +1,6 @@
 ---
 title: "Add extra Skills"
-description: "Extend an existing standard package with another immediate Skill."
+description: "Add another Skill in a direct child directory of skills/ to an existing standard package."
 canonicalId: "page:build:skills"
 section: "build"
 locale: "en"
@@ -56,14 +56,14 @@ not proof of execution or permission to run them. The `allowed-tools` field is
 not independent authorization evidence. Review supporting material with the
 same care as the instruction text.
 
-## Validate the package and immediate Skills
+## Validate the package and its Skills {#validate-the-package-and-immediate-skills}
 
 ```bash
 agentplugins author skills validate ./review-helper
 ```
 
-The command reports
-package-wide readiness and isolated immediate Skills. An error elsewhere in the
+The command reports package-wide readiness and individual results for Skills
+in direct child directories of `skills/`. An error elsewhere in the
 package can therefore affect the overall result even when the new Skill's own
 findings are clean.
 

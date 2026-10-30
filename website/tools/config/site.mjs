@@ -12,13 +12,7 @@ export const generatedRoot = path.join(outputRoot, "generated");
 export const runtimeRoot = path.join(outputRoot, ".site");
 export const docsToolsRoot = process.env.DOCS_TOOLS_ROOT ? path.resolve(process.env.DOCS_TOOLS_ROOT) : path.join(websiteRoot, ".docs-tools");
 
-export const locales = [
-  { code: "en", label: "English", lang: "en-US" },
-  { code: "ru", label: "Русский", lang: "ru-RU" },
-  { code: "es", label: "Español", lang: "es-ES" },
-  { code: "fr", label: "Français", lang: "fr-FR" },
-  { code: "zh", label: "简体中文", lang: "zh-CN" }
-];
+export { docsLocaleEntries as locales } from "./locales.mjs";
 
 export const publicGoPackages = [
   { id: "root", importPath: "github.com/777genius/plugin-kit-ai/sdk", relativePath: "sdk" },

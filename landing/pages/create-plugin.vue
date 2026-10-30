@@ -41,12 +41,14 @@ usePageSeo('publicAuthoring.title', 'publicAuthoring.intro', {
           <strong>{{ t('publicAuthoring.availability') }}</strong>
         </p>
         <p>{{ t('publicAuthoring.releaseScope') }}</p>
-        <a :href="buildGuideUrl">
-          {{ docsLabel(t('publicAuthoring.buildGuideLink'), buildGuideEnglishFallback) }}
-        </a>
-        <a href="https://agent-plugins.org/specification">
-          {{ t('publicAuthoring.specLink') }}
-        </a>
+        <div class="authoring-links">
+          <a :href="buildGuideUrl">
+            {{ docsLabel(t('publicAuthoring.buildGuideLink'), buildGuideEnglishFallback) }}
+          </a>
+          <a href="https://agent-plugins.org/specification">
+            {{ t('publicAuthoring.specLink') }}
+          </a>
+        </div>
         <p>{{ t('publicAuthoring.limitations') }}</p>
         <a href="https://github.com/777genius/universal-agent-plugins#supported-clients">
           {{ t('publicAuthoring.compatibilityLink') }}
@@ -76,6 +78,7 @@ section {
 
 h1,
 h2 {
+  overflow-wrap: anywhere;
   line-height: 1.2;
   margin-bottom: 1rem;
 }
@@ -94,5 +97,21 @@ pre {
 a {
   text-decoration: underline;
   text-underline-offset: 0.2em;
+}
+
+.authoring-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+}
+
+.authoring-links a {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  overflow-wrap: anywhere;
 }
 </style>

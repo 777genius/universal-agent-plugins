@@ -12,10 +12,15 @@ translationRequired: false
 
 ## Current release and scope
 
-[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94),
-the native release published on 28 October 2026, adds automatic project selection for an `install`
-without a source argument when the exact current folder contains a regular
-`uap.toml`. Explicit scope wins; parent folders are not searched. Existing locks
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95),
+the native release published on 29 October 2026, adds an owned local management
+API, read-only client/profile discovery and a user-scope native Pi extension
+provider. See [local management](../use/manage#local-management-api).
+Package-manager channels may lag; check `agentplugins version`.
+
+Since CLI 0.1.94, an `install` without a source argument automatically selects
+project scope when the exact current folder contains a regular `uap.toml`.
+Explicit scope wins; parent folders are not searched. Existing locks
 are checked strictly even without `--locked`. Explicit project delivery was
 introduced in 0.1.93. This installer release evidence does not qualify every native agent
 runtime or the standard authoring executable. The current npm/native installer
@@ -39,10 +44,25 @@ See [project support by client](https://github.com/777genius/universal-agent-plu
 and the [project evidence index](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
 The records below preserve exact historical releases, client versions, platform
-identities and observed limitations. They do not automatically apply to 0.1.94,
+identities and observed limitations. They do not automatically apply to 0.1.95,
 a later client version, another scope or an untested package. UAP is independent
 community tooling; these are bounded maintainer observations, not vendor
 certification or a claim of universal production readiness.
+
+## Pi native extensions {#pi-native-extensions}
+
+CLI 0.1.95 accepts `--target pi` for packages declaring a
+[native Pi extension](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md).
+This provider supports user-scope native extensions; portable Skills and MCP
+projection are outside its current scope. Reload resources or restart Pi after
+installation.
+
+The [recorded native evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md)
+covers Pi 1.4.0 on Linux, including native discovery and selected extension
+execution, update, missing-package repair, removal and foreign-extension
+preservation. It does not establish macOS/Windows execution, desktop
+notifications, audio or terminal focus. Installation success alone does not
+prove that a running Pi session loaded the extension.
 
 ## Historical draft installer 0.1.55
 

@@ -6,15 +6,45 @@ The package's pure entry point has no filesystem, process, Electron or UI depend
 The separate `/node` entry point owns an explicitly provisioned Go process.
 The SDK never downloads or updates an engine executable.
 
-## Install
+## Install or consume a packed build
+
+The source package is `universal-agent-plugins-management-sdk` version `0.1.0`.
+SDK versions and npm publication are independent of CLI releases. Verify that the
+exact SDK version is available on npm:
 
 ```sh
-npm install --save-exact universal-agent-plugins-management-sdk
+npm view universal-agent-plugins-management-sdk@0.1.0 version
 ```
 
-Every version is built from an immutable `management-sdk-vX.Y.Z` tag, and its
-exact tarball carries a GitHub artifact attestation. Versions after the first
-are published by the release workflow through npm trusted publishing with npm
+Only after that check returns `0.1.0`, install it from the registry:
+
+```sh
+npm install --save-exact universal-agent-plugins-management-sdk@0.1.0
+```
+
+If that version has not been published, build and pack it from a clean, reviewed
+source checkout instead:
+
+```sh
+(
+  set -euo pipefail
+  cd sdks/typescript
+  npm ci --ignore-scripts --no-audit --no-fund
+  npm run build
+  npm run typecheck
+  npm test
+  npm run test:consumer
+  npm pack --ignore-scripts
+)
+```
+
+Install the resulting `universal-agent-plugins-management-sdk-0.1.0.tgz` in the
+consuming project using its absolute path, and retain its digest and source commit
+with the lockfile. A local build is not evidence of a public npm publication.
+
+The release workflow builds versioned tarballs from immutable
+`management-sdk-vX.Y.Z` tags and attests their exact bytes. After the initial
+owner bootstrap, public publication uses npm trusted publishing with npm
 provenance. See the
 [changelog](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/CHANGELOG.md)
 for release notes and migration from the earlier `@uap/management-sdk`
@@ -58,8 +88,8 @@ AGENTPLUGINS_VERSION=0.1.95 AGENTPLUGINS_BIN_DIR="$PWD/bin" \
 
 `agentplugins-engine.env` records the exact version, release tag, asset and
 verified SHA-256. Keep it with the SDK version and its lockfile integrity. On
-Windows, `install.ps1` accepts `-Version` and `-BinDir`. Both help checks must
-succeed before supplying the executable to `startUap` or `discoverTargets`.
+Windows, `install.ps1` accepts `-Version` and `-BinDir`. Package-manager channels
+may lag; check the installed version. Both help checks must succeed before supplying the executable to `startUap` or `discoverTargets`.
 They establish command availability, not installation or native runtime success.
 
 To use engine changes that are not released yet, build the CLI from a clean,
@@ -75,6 +105,8 @@ mkdir -p bin
 sha256sum ./bin/agentplugins-management
 ```
 
+For a source build, record `uap_engine_revision` alongside the executable digest
+and the SDK tarball digest.
 On macOS, use `shasum -a 256` for the executable digest. On Windows, build an
 `.exe` output and use `Get-FileHash -Algorithm SHA256`.
 
@@ -126,7 +158,7 @@ apply, including drift, profile, source eligibility and stale-input checks.
 
 ## Start an owned engine
 
-Use the engine executable verified above in `executable`.
+Use the pinned management-enabled executable verified above in `executable`.
 
 ```ts
 import { startUap } from 'universal-agent-plugins-management-sdk/node';
@@ -339,13 +371,19 @@ integrity and the engine digest belong in the consuming app's build evidence.
 
 Maintainers release from an immutable tag on a `main` commit whose `package.json`
 already has the release version, and add the release notes to `CHANGELOG.md`
-in the same change:
+in the same change. Set `SDK_RELEASE_VERSION` to that stable version (for example,
+`0.1.1`) and `SDK_RELEASE_COMMIT` to the full reviewed `main` commit SHA:
 
 ```sh
-git tag -a management-sdk-v0.1.1 -m "Management SDK 0.1.1" <main-commit>
-git push origin management-sdk-v0.1.1
-gh workflow run management-sdk-release.yml --repo 777genius/universal-agent-plugins \
-  --ref management-sdk-v0.1.1 -f version=0.1.1 -f publish=false
+(
+  set -euo pipefail
+  version="${SDK_RELEASE_VERSION:?Set SDK_RELEASE_VERSION to the package version}"
+  commit="${SDK_RELEASE_COMMIT:?Set SDK_RELEASE_COMMIT to the reviewed main commit SHA}"
+  git tag -a "management-sdk-v${version}" -m "Management SDK ${version}" "$commit"
+  git push origin "management-sdk-v${version}"
+  gh workflow run management-sdk-release.yml --repo 777genius/universal-agent-plugins \
+    --ref "management-sdk-v${version}" -f "version=${version}" -f publish=false
+)
 ```
 
 The [release workflow](https://github.com/777genius/universal-agent-plugins/blob/main/.github/workflows/management-sdk-release.yml)
@@ -366,7 +404,7 @@ environment. Afterwards it checks the registry metadata, `latest` tag,
 provenance (tag, commit and workflow), `npm audit signatures`, the downloaded
 bytes, and a clean registry install with both entry points. The same consumer
 check is available locally after a release:
-`npm run test:consumer -- --registry-version=<version>`.
+`npm run test:consumer -- --registry-version="${SDK_RELEASE_VERSION:?Set SDK_RELEASE_VERSION to the published version}"`.
 
 Preconditions for `publish=true`, checked by the workflow where possible:
 
@@ -382,13 +420,15 @@ Preconditions for `publish=true`, checked by the workflow where possible:
 npm can configure a trusted publisher only for an existing package, so the
 first version is a one-time bootstrap by the npm package owner. Run the
 workflow with `publish=false`, then publish that run's attested tarball once.
-Take the expected commit from your own up-to-date clone, not from the artifact:
+Take the expected commit from your own up-to-date clone, not from the artifact.
+Set `SDK_RELEASE_VERSION` to the intended version and `SDK_RELEASE_RUN_ID` to
+the successful `publish=false` workflow run ID:
 
 ```sh
 (
   set -euo pipefail
-  version=<version>
-  run=<successful publish=false run id>
+  version="${SDK_RELEASE_VERSION:?Set SDK_RELEASE_VERSION to the package version}"
+  run="${SDK_RELEASE_RUN_ID:?Set SDK_RELEASE_RUN_ID to the successful publish=false run ID}"
   git fetch origin main "refs/tags/management-sdk-v${version}:refs/tags/management-sdk-v${version}"
   commit=$(git rev-parse "management-sdk-v${version}^{commit}")
   git merge-base --is-ancestor "$commit" origin/main
@@ -475,12 +515,14 @@ Linux requires the engine's ordinary-process containment prerequisites, includin
 cannot qualify the real installation journey; the production refusal remains.
 The existing Native Client Runtime workflow also has a manual `sdk_linux_only`
 mode that runs just the Claude and Codex SDK journeys on the selected platform, without running
-the other native matrix cells:
+the other native matrix cells. Set `SDK_SMOKE_REF` to the committed branch
+whose native journeys should run:
 
 ```sh
 gh workflow run agentplugins-native-clients.yml \
   --repo 777genius/universal-agent-plugins \
-  --ref <committed-branch> -f sdk_linux_only=true -f sdk_target=linux-amd64
+  --ref "${SDK_SMOKE_REF:?Set SDK_SMOKE_REF to the committed branch}" \
+  -f sdk_linux_only=true -f sdk_target=linux-amd64
 ```
 
 If Linux runners are queued, select `-f sdk_target=darwin-arm64` to run the same

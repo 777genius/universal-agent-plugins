@@ -168,8 +168,8 @@ export default defineNuxtConfig({
     bundle: {
       optimizeTranslationDirective: false,
     },
-    // Localized landing routes are not published yet. Avoid redirecting users
-    // and crawlers to locale URLs that GitHub Pages correctly serves as 404.
+    // Published locales have explicit URLs. Keep the requested route instead
+    // of redirecting automatically from the browser's language preference.
     detectBrowserLanguage: false,
   },
   // @ts-expect-error - field provided by nuxt modules
