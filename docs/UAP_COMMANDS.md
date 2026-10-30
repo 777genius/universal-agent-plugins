@@ -237,8 +237,8 @@ rules, so both kinds of change have to reach the client.
   since installation, such as the `opencode.jsonc` OpenCode creates on its
   first run, are not a reason to refresh, exactly as for a package without
   commands. An embedded installer's update preview for such a package reports
-  `RequiresConfirmation` and never `NoChange`. Clients that receive no portable
-  commands keep the ordinary update behavior. `update
+  `RequiresConfirmation` and never `NoChange`. Clients whose registry definitions
+  do not support portable commands keep the ordinary update behavior. `update
   --all` still skips a Directory installation that the signed Discovery record
   reports as current; run `agentplugins update <name>` for it.
 - **Operations that keep the installed tree** do not apply new rules. On
