@@ -42,11 +42,18 @@ After provisioning, run `pnpm run docs:check` from `website/`, followed by
 `pnpm run docs:smoke-ui` against the built site with Chromium installed. Use the
 same explicit environment and private test HOME described in the setup.
 
-Maintain published journeys in all five documentation locales: `en`, `ru`,
-`es`, `fr` and `zh`. Keep release/source availability consistent, preserve
-embedded historical-source blocks, and regenerate references from their source
-inputs. The website README defines the publication boundary. Landing locales
-have a separate nine-language catalog.
+Maintain published journeys in all nine documentation locales: `en`, `ru`, `uk`,
+`zh`, `es`, `hi`, `ar`, `pt` and `fr`. The
+[locale configuration](./website/tools/config/locales.mjs) is the source of truth
+for their order, language tags and text direction. Keep release/source availability
+consistent, preserve embedded historical-source blocks, and regenerate references
+from their source inputs. The website README defines the publication boundary.
+The landing supports the same nine languages; after changing public translations,
+regenerate its documentation link inventory from the repository root:
+
+```bash
+node landing/scripts/generate-docs-locale-availability.mjs
+```
 
 ## Lint Gate and Size Limits
 
