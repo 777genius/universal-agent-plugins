@@ -17,6 +17,7 @@ import type {
   TargetAuthentication,
   RegistryIndex,
   RegistryPlugin,
+  InstallScope,
 } from '../types/registry';
 
 const REPOSITORY = /^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\/[a-z0-9](?:[a-z0-9._-]{0,98}[a-z0-9])?$/;
@@ -961,9 +962,16 @@ export function defaultDistribution(plugin: RegistryPlugin): DistributionView {
   return distribution;
 }
 
+function supportsInstallScope(target: ReleaseTarget | undefined, scope: InstallScope): boolean {
+  // A remote app connection has no project filesystem installation. Missing
+  // scope facts cannot authorize a project command on older projections.
+  return Boolean(target?.scopes?.includes(scope) && (scope !== 'project' || !target.app_binding));
+}
+
 function eligibleRelease(
   distribution: DistributionView,
   targets: ReadonlySet<ClientID>,
+  scope?: InstallScope,
 ): { release?: DistributionReleaseView; reason?: string; diagnostic?: RegistryDiagnostic } {
   if (distribution.status !== 'active')
     return {
@@ -996,6 +1004,25 @@ function eligibleRelease(
         params: { sequence: release.release_sequence, targets: missing.join(',') },
       });
     } else {
+      const missingScope = scope
+        ? [...targets].filter(
+            (client) =>
+              !supportsInstallScope(
+                release.targets.find((target) => target.client === client),
+                scope,
+              ),
+          )
+        : [];
+      if (scope && missingScope.length) {
+        reasons.push(
+          `release ${release.release_sequence} does not support ${scope} scope for ${missingScope.sort().join(',')}`,
+        );
+        diagnostics.push({
+          code: 'unsupportedScope',
+          params: { sequence: release.release_sequence, scope, targets: missingScope.join(',') },
+        });
+        continue;
+      }
       const failures = [...targets]
         .filter((target) => release.blocking_clients.includes(target))
         .sort();
@@ -1038,6 +1065,7 @@ function eligibleRelease(
 export function resolveDistribution(
   plugin: RegistryPlugin,
   targets: readonly ClientID[],
+  scope?: InstallScope,
 ): DistributionResolution {
   if (!targets.length || new Set(targets).size !== targets.length)
     return {
@@ -1046,7 +1074,7 @@ export function resolveDistribution(
     };
   const selectedTargets = new Set(targets);
   const resolved = (distribution: DistributionView): DistributionView | undefined => {
-    const release = eligibleRelease(distribution, selectedTargets).release;
+    const release = eligibleRelease(distribution, selectedTargets, scope).release;
     return release
       ? {
           ...distribution,
@@ -1071,7 +1099,7 @@ export function resolveDistribution(
   if (!declared) throw new Error(`${plugin.name}: declared default distribution is unavailable`);
   const selectedDefault = resolved(declared);
   if (selectedDefault) return { distribution: selectedDefault };
-  const defaultEligibility = eligibleRelease(declared, selectedTargets);
+  const defaultEligibility = eligibleRelease(declared, selectedTargets, scope);
   const defaultReason = defaultEligibility.reason ?? 'no releases';
   const defaultDiagnostic = defaultEligibility.diagnostic ?? { code: 'noReleases' as const };
   const priority: Record<DistributionKind, number> = {
@@ -1100,7 +1128,7 @@ export function resolveDistribution(
     }
     ineligibleReasons.push({
       distribution_id: distribution.id,
-      reason: eligibleRelease(distribution, selectedTargets).reason ?? 'no releases',
+      reason: eligibleRelease(distribution, selectedTargets, scope).reason ?? 'no releases',
     });
   }
   const targetList = [...selectedTargets].sort().join(',');
@@ -1114,7 +1142,9 @@ export function resolveDistribution(
         code: 'distributionReason',
         params: { distribution: distribution.id },
         reasons: [
-          eligibleRelease(distribution, selectedTargets).diagnostic ?? { code: 'noReleases' },
+          eligibleRelease(distribution, selectedTargets, scope).diagnostic ?? {
+            code: 'noReleases',
+          },
         ],
       })),
     },
@@ -1137,6 +1167,7 @@ export function eligibleTargetPolicies(
  * individually eligible (release, target) pair is reachable. */
 export function reachableTargetPolicies(
   distributions: readonly Pick<DistributionView, 'kind' | 'status' | 'releases'>[],
+  scope?: InstallScope,
 ): ReleaseTarget[] {
   const policies: ReleaseTarget[] = [];
   for (const distribution of distributions) {
@@ -1144,6 +1175,7 @@ export function reachableTargetPolicies(
     for (const release of distribution.releases) {
       if (release.release_status !== 'active' || !release.meets_minimum_capabilities) continue;
       for (const target of eligibleTargetPolicies(distribution.kind, release)) {
+        if (scope && !supportsInstallScope(target, scope)) continue;
         if (
           !policies.some(
             (item) =>

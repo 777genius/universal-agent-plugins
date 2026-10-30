@@ -31,6 +31,20 @@ agentplugins outdated --all
 | Le client demande confiance, activation ou connexion | Suivez les instructions indiquées pour cette cible. |
 | Un paquet local échoue à la validation | Transmettez à l’auteur le rapport et le [guide des vérifications](../build/checks). |
 
+## API de gestion locale (CLI 0.1.95) {#local-management-api}
+
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) ajoute `agentplugins manage serve` pour les applications qui intègrent l’installateur et `agentplugins manage discover` pour la découverte en lecture seule des clients et profils locaux. Cette découverte n’exécute pas les clients, ne sonde pas leurs versions, ne récupère pas de sources et ne modifie aucun fichier.
+
+`manage serve` est un processus dont l’application hôte gère le cycle de vie. Il capture son contexte au démarrage et expose une API privée authentifiée sur la boucle locale IPv4. L’hôte fournit du JSON sur stdin et garde privés l’URL d’amorçage et le jeton d’autorisation bearer. Consultez l’aide des commandes avant l’intégration :
+
+```bash
+agentplugins version
+agentplugins manage serve --help
+agentplugins manage discover --help
+```
+
+Le [contrat du protocole de gestion](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md) décrit les règles de démarrage et de cycle de vie. Les versions du [SDK de gestion TypeScript](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md) sont gérées séparément sous le nom de paquet `universal-agent-plugins-management-sdk`. Consultez son README pour connaître les versions compatibles du moteur `agentplugins` et les instructions d’installation du paquet. Choisissez une version publiée sur npm ou, pour travailler sur des changements pas encore publiés, compilez et testez un paquet à partir d’un commit précis du code source. Fixez les versions du SDK et du moteur.
+
 ## Mettez à jour délibérément
 
 ```bash
@@ -43,7 +57,7 @@ Examinez la source, la version et les destinations choisies. Omettez `--dry-run`
 agentplugins update context7 --target codex,cursor
 ```
 
-`update --all` couvre tous les candidats de mise à jour gérés. Utilisez-le lorsque vous souhaitez traiter cet ensemble complet. Une source fixée à un commit exact reste immuable : une mise à jour ne lui fait pas suivre une branche. Les plages de dépendances enregistrées et les références mobiles avancent via l’opération explicite de mise à jour appropriée.
+`update --all` couvre tous les candidats de mise à jour gérés. Utilisez-le lorsque vous souhaitez traiter cet ensemble complet. Une source fixée à un commit exact reste immuable : une mise à jour ne lui fait pas suivre une branche. Les plages de dépendances enregistrées et les références évolutives avancent via l’opération explicite de mise à jour appropriée.
 
 ## Réparez l’état enregistré
 
@@ -128,7 +142,7 @@ agentplugins repair review --target cursor --scope project --project-root /path/
 agentplugins deps recover --scope project --project-root /path/to/project
 ```
 
-Si un nom est ambigu, utilisez l’identité d’installation renvoyée par `list`. `add` et les commandes de maintenance utilisent par défaut la portée utilisateur ; sélectionnez le projet explicitement. Depuis 0.1.94, `install` sans argument peut le sélectionner automatiquement, comme expliqué ci-dessous. `--scope project` explicite, sans `--project-root`, utilise uniquement le dossier d’invocation.
+Si un nom est ambigu, utilisez l’identité d’installation renvoyée par `list`. `add` et les commandes de maintenance utilisent par défaut la portée utilisateur ; sélectionnez le projet explicitement. Depuis 0.1.94, `install` sans argument de source peut le sélectionner automatiquement, comme expliqué ci-dessous. `--scope project` explicite, sans `--project-root`, utilise uniquement le dossier d’invocation.
 
 Gardez les reçus, journaux de récupération et données de `.uap/` en local. Restaurez les composants natifs depuis l’accord portable et suivez les instructions du client pour la confiance ou l’activation. Les sources et l’accès aux sources privées doivent rester disponibles. Consultez [l’installation par projet](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) et les [limites par client](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md).
 
@@ -142,7 +156,7 @@ agentplugins version
 
 Ce comportement nécessite 0.1.94 ou une version ultérieure. Les canaux peuvent être mis à jour à des moments différents ; si le vôtre fournit encore une version antérieure, utilisez [l’installateur natif](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) ou Homebrew. Les exemples précédents avec portée explicite restent compatibles avec 0.1.93.
 
-`agentplugins install` sans argument sélectionne la portée projet si un fichier `uap.toml` ordinaire existe dans le dossier courant exact. Il ne recherche pas les parents. Une portée explicite reste prioritaire ; sans ce manifeste local, l’environnement utilisateur est sélectionné.
+`agentplugins install` sans argument de source sélectionne la portée projet si un fichier `uap.toml` ordinaire existe dans le dossier courant exact. Il ne recherche pas les parents. Lors de la sélection automatique, un dossier ou un lien symbolique nommé `uap.toml` est refusé ; précisez la portée pour lever l’ambiguïté. Une portée explicite reste prioritaire ; sans ce manifeste local, l’environnement utilisateur est sélectionné.
 
 Un `uap.lock` existant est strictement validé avant tout changement, même sans `--locked` : ses révisions épinglées ne sont pas résolues à nouveau. Seule l’absence du verrouillage permet la résolution initiale des dépendances et sa création. `--locked` exige un verrouillage valide existant. Utilisez `update` pour avancer les révisions épinglées ; une installation ordinaire ne sert pas à les modifier. Les exemples précédents avec portée explicite et `--locked` restent une restauration reproductible du projet.
 

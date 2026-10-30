@@ -23,8 +23,8 @@ agentplugins author inspect ./review-helper
 agentplugins author test ./review-helper
 ```
 
-validate 检查捕获的标准配置和创作就绪情况；inspect 显示组件与未解决的要求。
-不加运行参数的 test 静态检查配置、目录卫生、技能和 MCP。这些命令不启动服务器，也不执行技能说明。
+validate 检查读取到的标准配置和创作就绪情况；inspect 显示组件与未解决的要求。
+不加运行参数的 test 静态检查配置、目录与文件规范、技能和 MCP。这些命令不启动服务器，也不执行技能说明。
 
 ## 分层理解证据
 

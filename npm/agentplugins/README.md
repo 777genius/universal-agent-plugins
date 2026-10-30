@@ -12,7 +12,7 @@ verified once, then prepared for every agent you selected.
 
 You need Node.js 22 or newer.
 
-The verified native baseline is CLI 0.1.94. npm and native channel versions can
+The verified native baseline is CLI 0.1.95. npm and native channel versions can
 differ; check `npx universal-agent-plugins version` before relying on automatic
 current-directory project selection, which requires 0.1.94. If this channel is
 older, use the native or Homebrew installer, or the explicit project-scope
@@ -61,8 +61,9 @@ Supported clients include Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code,
 Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code,
 and Qoder. Compatibility depends on the package, selected scope and client.
 The CLI distinguishes installed components, prepared configuration and remaining
-activation or sign-in steps. Pi support is newer source work and is not part
-of the verified 0.1.94 release baseline.
+activation or sign-in steps. CLI 0.1.95 adds user-scope native Pi extensions;
+portable Skills and MCP projection are outside that provider's scope. Check the
+installed channel version and the version-bound native evidence before use.
 
 See the [client compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
 for version-bound evidence and limits.
@@ -167,12 +168,15 @@ project installation. See [project installation](https://github.com/777genius/un
 ## Build plugins
 
 Create a root `plugin.json` with optional `skills/` and `mcp.json`, then validate
-and install the package. The verified 0.1.94 installer does not expose
+and install the package. The verified 0.1.95 installer does not expose
 `agentplugins author`. Some examples in the
 [Build guide](https://universal-agent-plugins.com/docs/en/build/) require a
 qualified authoring build or a source build. The TypeScript Management SDK is
 the separate npm package `universal-agent-plugins-management-sdk`; it drives
-the `manage` commands of CLI 0.1.95 and newer.
+the `manage` commands of CLI 0.1.95 and newer. Its
+[SDK README](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md)
+covers engine compatibility and package checks. Pin the SDK and engine
+independently.
 
 ## Safety and verification
 

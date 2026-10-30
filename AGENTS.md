@@ -62,4 +62,4 @@ tag requirements remain mandatory.
   `guide/quickstart`, `reference/client-compatibility` and the authoring API.
   Other `website/source/en` pages are archived and not published.
 - Pages under `use/` and `build/` are journey pages. They need released status
-  and routes in all five maintained locales (`en`, `ru`, `es`, `fr`, `zh`).
+  and routes in all nine maintained locales (`en`, `ru`, `uk`, `zh`, `es`, `hi`, `ar`, `pt`, `fr`).

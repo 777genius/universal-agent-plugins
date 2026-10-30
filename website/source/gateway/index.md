@@ -19,7 +19,7 @@ head:
 
         const storageKey = "plugin-kit-ai-docs-locale";
         const candidates = [];
-        const supportedLocales = ["en", "ru", "es", "fr", "zh"];
+        const supportedLocales = ["en", "ru", "uk", "zh", "es", "hi", "ar", "pt", "fr"];
         try {
           const saved = window.localStorage.getItem(storageKey);
           if (supportedLocales.includes(String(saved).toLowerCase())) {

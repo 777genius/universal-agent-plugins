@@ -98,8 +98,22 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect(securityBadge).not.toHaveAttribute('title');
   await hydrated(page);
   await securityBadge.scrollIntoViewIfNeeded();
+  // The real scroll/reveal movement dismisses tooltips. Open only once the
+  // badge settles, as in the dedicated security-badge keyboard journey below.
+  await securityBadge.evaluate(async (element) => {
+    let previous = element.getBoundingClientRect().top;
+    let stableFrames = 0;
+    while (stableFrames < 3) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const current = element.getBoundingClientRect().top;
+      stableFrames = current === previous ? stableFrames + 1 : 0;
+      previous = current;
+    }
+  });
   await securityBadge.focus();
-  const securityTooltip = page.locator('.app-tooltip');
+  const securityTooltip = page.locator(
+    '.app-tooltip[data-state="instant-open"], .app-tooltip[data-state="delayed-open"]',
+  );
   // Capture visibility and text in one browser turn: tooltip dismissal
   // can unmount the tooltip between separate visibility and text queries.
   let tooltipText: string | undefined;
@@ -653,7 +667,10 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
     'npx -y universal-agent-plugins add context7',
   );
   await expect(page.locator('#build-plugins')).toContainText(
-    'CLI 0.1.94 installer, which does not include agentplugins author',
+    'verified CLI 0.1.95 installer',
+  );
+  await expect(page.locator('#build-plugins')).toContainText(
+    'it does not include agentplugins author',
   );
   await expect(page.locator('#build-plugins')).toContainText('authoring-enabled source build');
   await expect(page.locator('#build-plugins')).toContainText('historical 0.1.65 provenance');

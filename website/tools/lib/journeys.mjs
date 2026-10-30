@@ -1,9 +1,13 @@
-export const docsLocales = ["en", "ru", "es", "fr", "zh"];
-export const localePathField = (locale) => `path${locale[0].toUpperCase()}${locale.slice(1)}`;
+import { docsLocales, localePathField } from "../config/locales.mjs";
+export { docsLocales, localePathField };
 export const entityPath = (entry, locale) => entry[localePathField(locale)] || entry.pathEn || "";
 export const isCurrentJourney = (relative) => /^(use|build)\//.test(relative);
 
 export const journeyLabels = {
+  uk: ["Використовувати плагіни", "Створювати плагіни", "Англійською"],
+  hi: ["प्लगइन इस्तेमाल करें", "प्लगइन बनाएँ", "अंग्रेज़ी में"],
+  ar: ["استخدام الإضافات", "بناء الإضافات", "بالإنجليزية"],
+  pt: ["Usar plugins", "Criar plugins", "Em inglês"],
   "en": [
     "Use plugins",
     "Build plugins",
@@ -36,6 +40,62 @@ export function journeyNav(locale) {
 }
 
 export const journeyPageLabels = {
+  uk: {
+      "page:use:index": "Огляд",
+      "page:use:install": "Встановлення",
+      "page:use:manage": "Керування",
+      "page:build:index": "Огляд",
+      "page:build:skill": "Один Skill",
+      "page:build:mcp-remote": "Віддалений MCP",
+      "page:build:mcp-stdio": "Локальний MCP",
+      "page:build:hybrid": "Гібридний плагін",
+      "page:build:skills": "Кілька Skills",
+      "page:build:layout": "Структура",
+      "page:build:checks": "Перевірки",
+      "page:build:handoff": "Передавання"
+  },
+  hi: {
+      "page:use:index": "अवलोकन",
+      "page:use:install": "इंस्टॉल करें",
+      "page:use:manage": "प्रबंधित करें",
+      "page:build:index": "अवलोकन",
+      "page:build:skill": "एक Skill",
+      "page:build:mcp-remote": "रिमोट MCP",
+      "page:build:mcp-stdio": "स्थानीय MCP",
+      "page:build:hybrid": "हाइब्रिड प्लगइन",
+      "page:build:skills": "कई Skills",
+      "page:build:layout": "संरचना",
+      "page:build:checks": "जाँच",
+      "page:build:handoff": "हस्तांतरण"
+  },
+  ar: {
+      "page:use:index": "نظرة عامة",
+      "page:use:install": "التثبيت",
+      "page:use:manage": "الإدارة",
+      "page:build:index": "نظرة عامة",
+      "page:build:skill": "Skill واحدة",
+      "page:build:mcp-remote": "MCP بعيد",
+      "page:build:mcp-stdio": "MCP محلي",
+      "page:build:hybrid": "إضافة هجينة",
+      "page:build:skills": "عدة Skills",
+      "page:build:layout": "البنية",
+      "page:build:checks": "الفحوصات",
+      "page:build:handoff": "التسليم"
+  },
+  pt: {
+      "page:use:index": "Visão geral",
+      "page:use:install": "Instalar",
+      "page:use:manage": "Gerenciar",
+      "page:build:index": "Visão geral",
+      "page:build:skill": "Um Skill",
+      "page:build:mcp-remote": "MCP remoto",
+      "page:build:mcp-stdio": "MCP local",
+      "page:build:hybrid": "Plugin híbrido",
+      "page:build:skills": "Vários Skills",
+      "page:build:layout": "Estrutura",
+      "page:build:checks": "Verificações",
+      "page:build:handoff": "Entrega"
+  },
   "ru": {
     "page:use:index": "Обзор",
     "page:use:install": "Установка",
@@ -95,6 +155,7 @@ export const journeyPageLabels = {
 };
 
 const referenceLabels = {
+  uk: "довідник 0.1.65", hi: "0.1.65 संदर्भ", ar: "مرجع 0.1.65", pt: "referência 0.1.65",
   en: "0.1.65 reference", ru: "справочник 0.1.65", es: "referencia 0.1.65",
   fr: "référence 0.1.65", zh: "0.1.65 版本参考"
 };
@@ -112,6 +173,7 @@ export function journeySidebar(locale, entities) {
   }) }));
   groups.push(...["agentplugins author"].map((surface) => ({
     text: `${surface} · ${referenceLabels[locale]}`,
+    collapsed: true,
     items: entities.filter((entry) => entry.surface === "authoring-cli" &&
       (entry.title === surface || entry.title.startsWith(`${surface} `)))
       .map((entry) => ({ text: entry.title + (locale === "en" || entry[localePathField(locale)] ? "" : ` (${journeyLabels[locale][2]})`), link: entityPath(entry, locale) }))
@@ -120,7 +182,7 @@ export function journeySidebar(locale, entities) {
 }
 
 // A path enters the registry only after its page has been produced. Never infer
-// ES/FR/ZH existence from EN, including for generated English-only references.
+// translated existence from EN, including for generated English-only references.
 export function bindGeneratedPaths(entities, pages) {
   const available = new Set(pages.map((page) => `/${page.relativePath.replace(/index\.md$/, "").replace(/\.md$/, "")}`));
   return entities.map((entity) => {
@@ -146,11 +208,10 @@ export function requirePublicationBoundary(entities, env = process.env) {
   if (stale.length) {
     throw new Error(`Public documentation retains unreleased preparation metadata: ${stale[0].canonicalId || "unknown"}`);
   }
-  const journeys = entities.filter((entry) => entry.sourceKind === "hand-authored" &&
-    typeof entry.sourceRef === "string" && isCurrentJourney(entry.sourceRef));
-  for (const entry of journeys) {
-    if (entry.status !== "released" || entry.released !== true || entry.publicVisibility !== "public" ||
-        entry.stability !== "public-stable" || entry.maturity !== "stable") {
+  const sources = entities.filter((entry) => entry.sourceKind === "hand-authored");
+  for (const entry of sources) {
+    if (isCurrentJourney(entry.sourceRef || "") && (entry.status !== "released" || entry.released !== true || entry.publicVisibility !== "public" ||
+        entry.stability !== "public-stable" || entry.maturity !== "stable")) {
       throw new Error(`Public documentation misclassifies a released journey: ${entry.canonicalId || "unknown"}`);
     }
     if (docsLocales.some((locale) => !entry[localePathField(locale)])) {
