@@ -48,6 +48,9 @@ func retainedDirectAdd(snapshot environmentSnapshot, requirement environment.Req
 			return requirement, pin, true, errors.New("source_change: source already saved under alias " + alias)
 		}
 		old, declared := snapshot.Requirements.Dependencies[alias]
+		if declared && mustSourceKey(old) != pin.SourceKey {
+			return requirement, pin, true, errors.New("source_change: alias " + alias + " already belongs to another source")
+		}
 		if !declared {
 			// A retained transitive node already owns its alias and immutable pin.
 			// Promotion saves that pin's requested intent, without resolving it again.

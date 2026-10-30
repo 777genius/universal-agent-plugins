@@ -86,6 +86,36 @@ func TestDirectSavedPromotionRejectsSelectorOrAliasChanges(t *testing.T) {
 	}
 }
 
+func TestDirectSavedPromotionRejectsOccupiedDeclarationKey(t *testing.T) {
+	intent := environment.Requirement{Alias: "c", Archive: &environment.ArchiveSource{URL: "https://packages.test/c.zip"}}
+	snapshot, _ := directPromotionSnapshot(t, intent, false)
+	// Root declaration keys may differ from their stable locked aliases. Keep
+	// package A bound as A, but declare its source under the key C. The retained
+	// package C remains reachable through A and B; promoting it must not select A.
+	root := snapshot.Requirements.Dependencies["a"]
+	delete(snapshot.Requirements.Dependencies, "a")
+	root.Alias = "c"
+	snapshot.Requirements.Dependencies["c"] = root
+	snapshot.Requirements.Targets["gemini"] = []string{"b", "c"}
+	var err error
+	snapshot.Lock.ManifestDigest, err = environment.ManifestDigest(snapshot.Requirements)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := snapshot.Lock.Validate(snapshot.Requirements); err != nil {
+		t.Fatalf("declaration-key collision test must start with a valid graph: %v", err)
+	}
+	before, _ := json.Marshal(snapshot)
+	_, _, err = resolveDirectSavedAdd(t.Context(), App{}, &options{alias: "c"}, intent.Archive.URL, snapshot)
+	if err == nil || !strings.Contains(err.Error(), "source_change:") {
+		t.Fatalf("promotion selected an occupied declaration key belonging to another source: %v", err)
+	}
+	after, _ := json.Marshal(snapshot)
+	if string(before) != string(after) {
+		t.Fatal("occupied-key refusal mutated either saved source")
+	}
+}
+
 func directPromotionSnapshot(t *testing.T, intent environment.Requirement, declared bool) (environmentSnapshot, environment.LockedPackage) {
 	t.Helper()
 	requirements := environment.Requirements{SchemaVersion: 1, Dependencies: map[string]environment.Requirement{}, Targets: map[string][]string{"gemini": {"a", "b"}}}
