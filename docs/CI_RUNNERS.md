@@ -49,7 +49,8 @@ frozen VS Code workflows and signing jobs keep their existing routing.
 Apply the label **before** the push that starts the desired checks. Adding a
 label does not reroute an existing queued job, and these workflows deliberately
 have no `labeled` pull-request trigger. In particular, the packed/native
-workflow keeps its required unfiltered PR and dispatch trigger contract. A new
+workflow keeps its unfiltered PR and dispatch triggers and its always-running
+aggregate; only its lanes are gated (see below). A new
 head must complete its actual checks; earlier successful results remain history.
 
 Changing the shared lint workflow also triggers Core fast under its existing
@@ -60,26 +61,43 @@ per-PR opt-in covers their ordinary Linux amd64 execution.
 
 Pull requests skip lanes whose inputs did not change, so documentation and
 landing work no longer queues Govulncheck, Polyglot Smoke, Terminal UI,
-Coverage, Skills picker, lint or the Management SDK matrix. Pushes to `main`,
-schedules and manual dispatches keep their unfiltered triggers, so every merge
-commit still produces the push-triggered checks the release workflow requires.
-`repotests/ci_path_policy_test.go` guards both rules.
+Coverage, Skills picker, lint, the Management SDK matrix or the authoring
+native, packed and Milestone A lanes. Pushes to `main`, schedules and manual
+dispatches keep their unfiltered triggers, so every merge commit still
+produces the push-triggered checks the release workflow requires.
+`repotests/ci_path_policy_test.go` guards these rules.
 
+The documentation and web surface is root Markdown, `docs/`, `website/`,
+`landing/` and `assets/`. Every filter below that skips documentation names
+exactly this list.
+
+- `pr-changes.yml` is the one pull request classifier. It runs on a
+  GitHub-hosted runner, reads the pull request file list once and reports
+  `lint`, `management_sdk` and `authoring`. Callers skip a job only on an
+  explicit `false`. An unavailable files API or a 3,000+ file diff marks
+  every class true.
 - `Required / test` runs on every ready pull request: repotests read
-  `README.md`, `docs/`, `website/`, `landing/` and workflow files. A `changes`
-  job on a GitHub-hosted runner classifies the diff once and skips `lint` (no
-  Go, module, `.golangci.yml` or lint baseline change) and `management-sdk`
-  (no `sdks/typescript/`, `contracts/management/`, generated DTO or root module
-  change). An unavailable or oversized classification runs both.
+  `README.md`, `docs/`, `website/`, `landing/` and workflow files. `lint`
+  skips without a Go, module, `.golangci.yml` or lint baseline change, and
+  `management-sdk` without a `sdks/typescript/`, `contracts/management/`,
+  generated DTO or root module change.
+- Authoring native offline keeps its unfiltered pull request trigger and its
+  always-running `Authoring / required native and packed` aggregate. Its
+  native and packed lanes skip only when the classifier reports a
+  documentation-only diff (`authoring=false`), and the aggregate then requires
+  both lanes to be skipped; otherwise it requires both to succeed, as
+  `scripts/check-packed-workflow.py` enforces. A path that a Windows checkout
+  rejects still runs the lanes, because they hold the remaining Windows pull
+  request checkout for such a diff.
+- Authoring Milestone A E2E ignores the documentation surface at workflow
+  level. A job-level gate would add jobs to its dispatch runs, and Milestone A
+  release admission binds a dispatch run with exactly its four jobs.
 - Govulncheck runs only for Go sources, `go.mod`, `go.sum` and `go.work*`.
   CodeQL ignores Markdown and `docs/`. Docs ignores `landing/`.
-- Polyglot Smoke, Terminal UI, Coverage and Skills picker ignore root
-  Markdown, `docs/`, `website/`, `landing/` and `assets/`.
-- Dependency Review, Authoring native offline and Authoring Milestone A E2E
-  stay unfiltered. The release workflow needs a Dependency Review success on
-  the merged pull request head, and both authoring workflows enforce an
-  unfiltered pull request trigger in their own contract checks. Authoring
-  native offline also keeps a full Windows checkout on every pull request.
+- Polyglot Smoke, Terminal UI, Coverage and Skills picker ignore the
+  documentation surface.
+- Dependency Review stays unfiltered: the release workflow needs its success
+  on the merged pull request head.
 
 GitHub evaluates workflow path filters on the first 3,000 changed files only.
 A larger pull request can skip a filtered workflow; its push to `main` still

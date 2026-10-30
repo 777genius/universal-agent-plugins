@@ -1,0 +1,75 @@
+name: Pull request changes
+
+# Classifies a pull request diff once for job-level gating (docs/CI_RUNNERS.md).
+# Every class fails open: an unavailable files API or a 3000+ file diff marks
+# all classes true. repotests/ci_path_policy_test.go runs this script against a
+# table of paths. Callers pass `pull-requests: read`.
+on:
+  workflow_call:
+    outputs:
+      lint:
+        description: Go sources, module files, lint configuration or the lint baseline changed.
+        value: ${{ jobs.classify.outputs.lint }}
+      management_sdk:
+        description: The Management SDK, its contract, generated DTO or root module changed.
+        value: ${{ jobs.classify.outputs.management_sdk }}
+      authoring:
+        description: Something beyond documentation and web content changed, or a path is unsafe on Windows.
+        value: ${{ jobs.classify.outputs.authoring }}
+
+jobs:
+  classify:
+    # It only calls the GitHub API, so it uses a GitHub-hosted runner instead of
+    # waiting in the CI_LINUX_RUNNER queue.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      lint: ${{ steps.classify.outputs.lint }}
+      management_sdk: ${{ steps.classify.outputs.management_sdk }}
+      authoring: ${{ steps.classify.outputs.authoring }}
+    steps:
+      - name: Classify changed paths
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: |
+          set -euo pipefail
+          run_everything() { printf 'lint=true\nmanagement_sdk=true\nauthoring=true\n' >> "$GITHUB_OUTPUT"; }
+          # The pull request files API lists at most 3000 files.
+          if (( CHANGED_FILES >= 3000 )); then
+            run_everything
+            exit 0
+          fi
+          # Renames count on both sides so a move out of an input path still runs.
+          if ! files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
+            --jq '.[] | .filename, (.previous_filename // empty)')"; then
+            echo "::warning::Changed files are unavailable; running every gated job."
+            run_everything
+            exit 0
+          fi
+          # Never echo raw file names: they could carry workflow commands.
+          echo "classified $(grep -c . <<<"$files" || true) paths"
+          if [[ -z "$files" ]]; then
+            printf 'lint=false\nmanagement_sdk=false\nauthoring=false\n' | tee -a "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          matches() { if grep -qE "$1" <<<"$files"; then echo true; else echo false; fi; }
+          outside() { if grep -qvE "$1" <<<"$files"; then echo true; else echo false; fi; }
+          lint="$(matches '(\.go$|(^|/)go\.(mod|sum)$|^go\.work(\.sum)?$|^\.golangci\.yml$|^scripts/(check-lint-baseline\.sh|lint-baseline-renames\.txt)$|^\.github/workflows/(ci|lint|pr-changes)\.yml$)')"
+          # SDK Go fixtures build with GOWORK=off against the root module.
+          management_sdk="$(matches '^(sdks/typescript/|contracts/management/|cli/internal/agentpluginscli/management/|go\.(mod|sum)$|\.github/workflows/(ci|management-sdk|pr-changes)\.yml$)')"
+          # Authoring lanes skip only documentation and web content: root
+          # Markdown, docs/, website/, landing/ and assets/. They also run for a
+          # path a Windows checkout rejects, because their Windows lanes are the
+          # only pull request checkout on Windows left for such a diff.
+          authoring="$(outside '^([^/]+\.md|(docs|website|landing|assets)/.+)$')"
+          if grep -qE '[<>:"|?*\\]|[[:cntrl:]]|[. ](/|$)' <<<"$files" ||
+            grep -qiE '(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.[^/]*)?(/|$)' <<<"$files" ||
+            awk 'length > 200 { found = 1 } END { exit !found }' <<<"$files"; then
+            authoring=true
+          fi
+          printf 'lint=%s\nmanagement_sdk=%s\nauthoring=%s\n' "$lint" "$management_sdk" "$authoring" | tee -a "$GITHUB_OUTPUT"
