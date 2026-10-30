@@ -97,7 +97,7 @@ func managementSyncRequest(snapshot environmentSnapshot, requirements environmen
 	if equalDependencyLock(snapshot.Lock, locked) || locked.LockVersion == 0 || snapshot.Lock.LockVersion == 0 && len(requirements.Dependencies) == 0 {
 		body = snapshot.LockBytes
 	}
-	request := dependencySyncRequest{requirements: requirements, lock: locked, manifestPath: snapshot.ManifestPath, lockPath: snapshot.LockPath, manifestBytes: snapshot.ManifestBytes, lockBytes: snapshot.LockBytes, candidateManifest: manifest, candidateLock: body, aliases: aliases, repairOnly: repair}
+	request := dependencySyncRequest{requirements: requirements, lock: locked, intent: snapshot.intent(manifest, body), aliases: aliases, repairOnly: repair}
 	return request, nil
 }
 

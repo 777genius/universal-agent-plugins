@@ -373,6 +373,7 @@ try {
     for (const { locale, width } of [
       { locale: 'en', width: 1280 },
       { locale: 'en', width: 390 },
+      { locale: 'ru', width: 1280 },
       { locale: 'ru', width: 390 },
     ]) {
       const t = wording(locale);
@@ -555,12 +556,15 @@ try {
       // Keep assertions at Playwright's ordinary 5-second budget.
       await expect(panel).toHaveClass(new RegExp(`skillspector--${assessment.status}(?:\\s|$)`));
       const summary = panel.locator(':scope > summary');
+      const fullyChecked = t('fullyChecked', {
+        checked: new Intl.NumberFormat(locale).format(assessment.fullyChecked),
+        total: new Intl.NumberFormat(locale).format(assessment.selected),
+      });
+      await expect(summary).toContainText(t('title'));
       await expect(summary).toContainText(
-        t('fullyChecked', {
-          checked: new Intl.NumberFormat(locale).format(assessment.fullyChecked),
-          total: new Intl.NumberFormat(locale).format(assessment.selected),
-        }),
+        t(assessment.status === 'noStaticFindings' ? 'scanComplete' : assessment.status),
       );
+      await expect(summary).not.toContainText(fullyChecked);
       await expect(panel.locator('.skillspector__details')).toHaveCount(0);
       await summary.focus();
       await page.keyboard.press('Enter');
@@ -577,6 +581,16 @@ try {
         ],
       );
       await expect(panel.locator('.skillspector__advice')).toContainText(t('installAdvice'));
+      await expect(panel.locator('.skillspector__advice')).toContainText(fullyChecked);
+      const outcomes = Object.entries(assessment.outcomes).filter(
+        ([outcome, count]) => outcome !== 'complete' && count > 0,
+      );
+      await expect(panel.locator('.skillspector__outcomes dt')).toHaveText(
+        outcomes.map(([outcome]) => t(`outcome${outcome}`)),
+      );
+      await expect(panel.locator('.skillspector__outcomes dd')).toHaveText(
+        outcomes.map(([, count]) => new Intl.NumberFormat(locale).format(count)),
+      );
       await expect(panel.locator('.skillspector__signals')).toContainText(t('signalExplanation'));
       const technicalRecords = await panel
         .locator('.skillspector__technical > div > details > pre')
@@ -710,6 +724,7 @@ try {
         plugin_status: assessment.status,
         selected: assessment.selected,
         fully_checked: assessment.fullyChecked,
+        outcomes: assessment.outcomes,
         rendered_records: technicalRecords.length,
         classified_groups: classified.length,
         references: main.coverage.references.length,

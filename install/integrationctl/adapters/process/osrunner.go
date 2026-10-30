@@ -644,6 +644,9 @@ func runExplicit(ctx context.Context, command ports.Command, treeExitGrace time.
 	stdout := newSynchronizedOutputBuffer(command.StdoutLimitBytes)
 	stderr := newBoundedDiagnosticBuffer(32 * 1024)
 	c.Stdout = stdout
+	if command.DiscardStdout {
+		c.Stdout = io.Discard
+	}
 	c.Stderr = stderr
 	containment, err := newOrdinaryCommandContainment(c, treeExitGrace)
 	if err != nil {
