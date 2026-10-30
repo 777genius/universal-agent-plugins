@@ -91,8 +91,8 @@ func packageManagerIncompatibleRanges(t *testing.T) {
 
 func packageManagerForcedBacktracking(t *testing.T) {
 	fixture, repo, _ := dependencyReviewFixture(t)
-	firstA := packageManagerRegistryRelease(t, fixture, repo, "a", "1.0.0", 1, map[string]string{"c": "^1.0", "d": "^1.0"})
-	a := packageManagerRegistryRelease(t, fixture, repo, "a", "1.1.0", 2, map[string]string{"c": "^2.0"})
+	a := packageManagerRegistryRelease(t, fixture, repo, "a", "1.0.0", 1, map[string]string{"c": "^2.0"})
+	rejected := packageManagerRegistryRelease(t, fixture, repo, "a", "1.1.0", 2, map[string]string{"c": "^1.0", "d": "^1.0"})
 	b := packageManagerRegistryRelease(t, fixture, repo, "b", "1.0.0", 1, map[string]string{"c": "^2.0"})
 	packageManagerRegistryRelease(t, fixture, repo, "c", "1.0.0", 1, nil)
 	c := packageManagerRegistryRelease(t, fixture, repo, "c", "2.0.0", 2, nil)
@@ -105,7 +105,7 @@ func packageManagerForcedBacktracking(t *testing.T) {
 	for _, fetch := range fixture.source.verified {
 		seen[fetch.commit+"/"+fetch.path] = true
 	}
-	for _, release := range []domain.DirectoryRelease{firstA, a} {
+	for _, release := range []domain.DirectoryRelease{a, rejected} {
 		if !seen[release.PackageSource.Revision+"/"+release.PackageSource.Path] {
 			t.Fatalf("backtracking did not acquire A %s: %+v", release.PackageVersion, fixture.source.verified)
 		}
@@ -118,13 +118,13 @@ func packageManagerForcedBacktracking(t *testing.T) {
 
 func packageManagerCandidateIntegrityFailure(t *testing.T) {
 	fixture, repo, directory := dependencyReviewFixture(t)
-	first := packageManagerRegistryRelease(t, fixture, repo, "a", "1.0.0", 1, nil)
-	packageManagerRegistryRelease(t, fixture, repo, "a", "1.1.0", 2, nil)
-	// Metadata admits the first release, but its authenticated package identity
+	packageManagerRegistryRelease(t, fixture, repo, "a", "1.0.0", 1, nil)
+	attempted := packageManagerRegistryRelease(t, fixture, repo, "a", "1.1.0", 2, nil)
+	// Metadata admits the highest attempted release, but its authenticated package identity
 	// disagrees with the real bytes. Integrity errors must abort candidate search.
 	wrong := "sha256:" + strings.Repeat("0", 64)
-	directory.bundle.Snapshot.Distributions[0].Releases[0].TreeDigest = wrong
-	directory.bundle.Snapshot.Evidence[0].PackageTreeDigest = wrong
+	directory.bundle.Snapshot.Distributions[0].Releases[1].TreeDigest = wrong
+	directory.bundle.Snapshot.Evidence[1].PackageTreeDigest = wrong
 	mp, _ := fixture.app.dependencyPaths()
 	manifest := "schema_version = 1\n[dependencies]\na = \"^1.0\"\n[targets]\ncodex = [\"a\"]\n"
 	dependencyWrite(t, mp, manifest)
@@ -132,7 +132,7 @@ func packageManagerCandidateIntegrityFailure(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "acquired package tree digest") || !strings.Contains(err.Error(), "does not match expected") {
 		t.Fatalf("candidate integrity failure was masked or did not reach byte verification: %v", err)
 	}
-	if len(fixture.source.verified) != 1 || fixture.source.verified[0].path != first.PackageSource.Path || fixture.source.verified[0].digest != wrong {
+	if len(fixture.source.verified) != 1 || fixture.source.verified[0].path != attempted.PackageSource.Path || fixture.source.verified[0].digest != wrong {
 		t.Fatalf("integrity failure fell back to another candidate: %+v", fixture.source.verified)
 	}
 	packageManagerAssertRegistryRefusal(t, fixture, manifest)
