@@ -1,22 +1,17 @@
 # Changelog
 
-This file preserves accumulated Go runtime SDK development notes. It is not a
-complete release-by-release ledger: entries below include changes that have
-already shipped as well as source-tree additions. The old `Unreleased` heading
-must not be used to decide whether a feature is available in a published module.
+This file collects Go SDK source changes and historical migration notes. It is
+not a complete version-by-version release ledger: some entries below have
+already shipped. Do not interpret this collection as a pending v1.0.0 release.
 
-For installation and a verified module version, start with the
-[SDK README](README.md). It documents the published `v1.3.0` baseline and the
-`vX.Y.Z` / `sdk/vX.Y.Z` tag contract. Consult the
-[release history](https://github.com/777genius/universal-agent-plugins/releases)
-and the selected module tag for release-specific changes; installer
-`agentplugins-v*` and TypeScript `management-sdk-v*` releases are separate products.
-Runtime stability and native-client qualification remain separate from publication;
-see [STABILITY.md](STABILITY.md) and the README's runtime contract boundaries.
+For the published module version, installation and current compatibility
+boundary, start with the [SDK README](README.md) and [stability policy](STABILITY.md).
+Use the exact `sdk/vX.Y.Z` tag when checking which changes a module contains;
+installer and TypeScript Management SDK releases have separate versions.
 
 <a id="unreleased"></a>
 
-## Development history
+## Source changes and historical migration notes
 
 ### Added
 
@@ -74,17 +69,21 @@ see [STABILITY.md](STABILITY.md) and the README's runtime contract boundaries.
 
 ### Migration
 
+These are historical pre-v1 migration fragments. In Go code, use the import alias
+`pluginkitai` for `github.com/777genius/plugin-kit-ai/sdk`, as shown in the
+[complete examples](README.md#claude-example).
+
 - Replace:
 
 ```go
-app := plugin-kit-ai.New()
+app := pluginkitai.New()
 app.OnStop(...)
 ```
 
 with:
 
 ```go
-app := plugin-kit-ai.New(plugin-kit-ai.Config{Name: "my-plugin"})
+app := pluginkitai.New(pluginkitai.Config{Name: "my-plugin"})
 app.Claude().OnStop(...)
 ```
 

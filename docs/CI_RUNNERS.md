@@ -48,13 +48,50 @@ frozen VS Code workflows and signing jobs keep their existing routing.
 
 Apply the label **before** the push that starts the desired checks. Adding a
 label does not reroute an existing queued job, and these workflows deliberately
-retain their existing pull-request triggers. In particular, the packed/native
+have no `labeled` pull-request trigger. In particular, the packed/native
 workflow keeps its required unfiltered PR and dispatch trigger contract. A new
 head must complete its actual checks; earlier successful results remain history.
 
 Changing the shared lint workflow also triggers Core fast under its existing
 path policy. Keep those additional checks and their dependent jobs; the same
 per-PR opt-in covers their ordinary Linux amd64 execution.
+
+## Pull request path policy
+
+Pull requests skip lanes whose inputs did not change, so documentation and
+landing work no longer queues Govulncheck, Polyglot Smoke, Terminal UI,
+Coverage, Skills picker, lint or the Management SDK matrix. Pushes to `main`,
+schedules and manual dispatches keep their unfiltered triggers, so every merge
+commit still produces the push-triggered checks the release workflow requires.
+`repotests/ci_path_policy_test.go` guards both rules.
+
+- `Required / test` runs on every ready pull request: repotests read
+  `README.md`, `docs/`, `website/`, `landing/` and workflow files. A `changes`
+  job on a GitHub-hosted runner classifies the diff once and skips `lint` (no
+  Go, module, `.golangci.yml` or lint baseline change) and `management-sdk`
+  (no `sdks/typescript/`, `contracts/management/`, generated DTO or root module
+  change). An unavailable or oversized classification runs both.
+- Govulncheck runs only for Go sources, `go.mod`, `go.sum` and `go.work*`.
+  CodeQL ignores Markdown and `docs/`. Docs ignores `landing/`.
+- Polyglot Smoke, Terminal UI, Coverage and Skills picker ignore root
+  Markdown, `docs/`, `website/`, `landing/` and `assets/`.
+- Dependency Review, Authoring native offline and Authoring Milestone A E2E
+  stay unfiltered. The release workflow needs a Dependency Review success on
+  the merged pull request head, and both authoring workflows enforce an
+  unfiltered pull request trigger in their own contract checks. Authoring
+  native offline also keeps a full Windows checkout on every pull request.
+
+GitHub evaluates workflow path filters on the first 3,000 changed files only.
+A larger pull request can skip a filtered workflow; its push to `main` still
+runs every lane.
+
+No branch protection or ruleset requires these checks today. If one is added,
+require only checks from unfiltered workflows: a check from a skipped workflow
+stays pending. If a newer merge cancelled the `main` push run of a release
+candidate that came from a documentation-only pull request, its pull request
+head has no Go checks to fall back on. Tag the newest `main` commit whose push
+checks completed, or re-run the cancelled workflows only while no newer `main`
+push run is in progress, because a re-run joins the same concurrency group.
 
 ## Run Pages on hosted runners at an exact source commit
 

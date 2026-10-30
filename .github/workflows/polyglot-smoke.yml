@@ -5,6 +5,15 @@ on:
     branches: [main, master]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    # Documentation and web-only changes do not change what these lanes build
+    # or test. Required still runs the docs-alignment repotests on every ready
+    # pull request, and pushes to main stay unfiltered for release evidence.
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
   workflow_dispatch:
 
 # Replace ordinary PR/push CI; isolate manual and scheduled invocations.

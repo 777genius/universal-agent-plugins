@@ -485,7 +485,8 @@ func TestInstallDependencyGraphLifecycle(t *testing.T) {
 	if source.downloads != downloads || source.lookups != lookups || !reflect.DeepEqual(before, snapshot(paths...)) {
 		t.Fatal("repeat install acquired source or changed bytes/mtime")
 	}
-	// 4. Repair from the store, then add a newer release with a lower semver.
+	// 4. Repair from the store. A later lower version cannot downgrade A;
+	// an eligible higher version then advances A and the shared C closure.
 	drift := filepath.Join(installed["c"].TargetPath, "user-edit.txt")
 	dependencyWrite(t, drift, "drift")
 	run("install", "--locked", "--yes", "--format", "json")
@@ -496,9 +497,17 @@ func TestInstallDependencyGraphLifecycle(t *testing.T) {
 	if _, err := os.Stat(drift); !os.IsNotExist(err) {
 		t.Fatalf("drift survived repair: %v", err)
 	}
-	nextA := addRelease("a", "1.2.0", "^1.3", 2)
+	addRelease("a", "1.2.0", "^1.3", 2)
 	directory.bundle.Snapshot.Sequence = 2
 	directory.bundle.Digest = "sha256:" + strings.Repeat("b", 64)
+	beforeLower := snapshot(mp, lp, f.store.Path, f.app.EnvironmentStoreRoot, f.app.ManagedRoot)
+	run("deps", "update", "a", "--format", "json")
+	if !reflect.DeepEqual(locked, readLock()) || !reflect.DeepEqual(beforeLower, snapshot(mp, lp, f.store.Path, f.app.EnvironmentStoreRoot, f.app.ManagedRoot)) {
+		t.Fatal("later lower version changed the pinned graph or installed files")
+	}
+	nextA := addRelease("a", "1.4.0", "^1.3", 3)
+	directory.bundle.Snapshot.Sequence = 3
+	directory.bundle.Digest = "sha256:" + strings.Repeat("c", 64)
 	beforeUpdate := snapshot(append([]string{mp, f.store.Path}, paths[3:]...)...)
 	previousLock := dependencyRead(t, lp)
 	run("deps", "update", "a", "--format", "json")

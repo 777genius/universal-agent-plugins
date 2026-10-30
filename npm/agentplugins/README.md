@@ -149,14 +149,22 @@ for confirmation and recovery behavior.
 
 ## Install for one project
 
-Explicit project scope ships in CLI 0.1.93. The selected directory must exist:
+Explicit project scope ships in CLI 0.1.93. Replace `/path/to/project` with an
+existing directory and install the selected clients first. Save a registry
+dependency, then restore its recorded lock:
 
 ```bash
-npx universal-agent-plugins add ./my-plugin --target codex,claude \
+npx universal-agent-plugins add context7 --target codex,claude \
   --scope project --project-root /path/to/project
 npx universal-agent-plugins install --locked \
   --scope project --project-root /path/to/project
 ```
+
+The first command saves the project's `uap.toml` and `uap.lock` after successful
+preflight and confirmation; the second replays that saved environment. Direct
+local-path installs such as `add ./my-plugin` do not create portable dependency
+intent or the lock required by `install --locked`; use the saved dependency flow
+above for reproducible restoration.
 
 Pass the same scope on later maintenance commands. In CLI 0.1.94, argumentless
 `install` selects project scope for a regular `uap.toml` in the exact current

@@ -277,6 +277,33 @@ func (e Scope) Valid() bool {
 	}
 }
 
+// Defines values for UpdateCheckEntryStatus.
+const (
+	UpdateCheckEntryStatusAvailable        UpdateCheckEntryStatus = "available"
+	UpdateCheckEntryStatusBlocked          UpdateCheckEntryStatus = "blocked"
+	UpdateCheckEntryStatusCheckUnavailable UpdateCheckEntryStatus = "check_unavailable"
+	UpdateCheckEntryStatusCurrent          UpdateCheckEntryStatus = "current"
+	UpdateCheckEntryStatusPinned           UpdateCheckEntryStatus = "pinned"
+)
+
+// Valid indicates whether the value is a known member of the UpdateCheckEntryStatus enum.
+func (e UpdateCheckEntryStatus) Valid() bool {
+	switch e {
+	case UpdateCheckEntryStatusAvailable:
+		return true
+	case UpdateCheckEntryStatusBlocked:
+		return true
+	case UpdateCheckEntryStatusCheckUnavailable:
+		return true
+	case UpdateCheckEntryStatusCurrent:
+		return true
+	case UpdateCheckEntryStatusPinned:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIError Structured failure before acceptance or while observing. retryable never authorizes generating a fresh ID for an uncertain mutation.
 type APIError struct {
 	Code      string `json:"code"`
@@ -676,6 +703,62 @@ type TargetDiscovery struct {
 	Targets       []DiscoveredTarget `json:"targets"`
 }
 
+// UpdateCheck Complete describes the whole selected graph. A current root may have changed shared dependencies listed separately. Unavailable facts never mean current or approved.
+type UpdateCheck struct {
+	Changed     bool               `json:"changed"`
+	Complete    bool               `json:"complete"`
+	ContextId   string             `json:"contextId"`
+	Diagnostics []Diagnostic       `json:"diagnostics"`
+	Entries     []UpdateCheckEntry `json:"entries"`
+}
+
+// UpdateCheckEntry defines model for UpdateCheckEntry.
+type UpdateCheckEntry struct {
+	Alias      string                 `json:"alias"`
+	Available  *UpdateIdentity        `json:"available,omitempty"`
+	Declared   bool                   `json:"declared"`
+	Installed  *UpdateIdentity        `json:"installed,omitempty"`
+	Reason     string                 `json:"reason"`
+	Requested  *UpdateSelector        `json:"requested,omitempty"`
+	RequiredBy []UpdateOwner          `json:"requiredBy"`
+	Selected   bool                   `json:"selected"`
+	Source     string                 `json:"source"`
+	Status     UpdateCheckEntryStatus `json:"status"`
+}
+
+// UpdateCheckEntryStatus defines model for UpdateCheckEntry.Status.
+type UpdateCheckEntryStatus string
+
+// UpdateCheckRequest Select unique declared aliases or all; both and empty selection are invalid.
+type UpdateCheckRequest struct {
+	Aliases *[]string `json:"aliases,omitempty"`
+	All     bool      `json:"all,omitempty"`
+}
+
+// UpdateIdentity defines model for UpdateIdentity.
+type UpdateIdentity struct {
+	DistributionId string `json:"distributionId,omitempty"`
+	ManifestDigest string `json:"manifestDigest"`
+
+	// ReleaseSequence Decimal signed release sequence; a string preserves the exact integer identity.
+	ReleaseSequence string `json:"releaseSequence,omitempty"`
+	Revision        string `json:"revision"`
+	TreeDigest      string `json:"treeDigest"`
+	Version         string `json:"version"`
+}
+
+// UpdateOwner defines model for UpdateOwner.
+type UpdateOwner struct {
+	Alias    string         `json:"alias"`
+	Selector UpdateSelector `json:"selector"`
+}
+
+// UpdateSelector defines model for UpdateSelector.
+type UpdateSelector struct {
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
+}
+
 // Error Structured failure before acceptance or while observing. retryable never authorizes generating a fresh ID for an uncertain mutation.
 type Error = APIError
 
@@ -683,6 +766,9 @@ type Error = APIError
 type GetCatalogParams struct {
 	Query *string `form:"query,omitempty" json:"query,omitempty"`
 }
+
+// CheckUpdatesJSONRequestBody defines body for CheckUpdates for application/json ContentType.
+type CheckUpdatesJSONRequestBody = UpdateCheckRequest
 
 // PreparePlanJSONRequestBody defines body for PreparePlan for application/json ContentType.
 type PreparePlanJSONRequestBody = ChangeRequest

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 
@@ -14,11 +15,13 @@ import (
 )
 
 type updateAllInstallation struct {
-	InstallationID string             `json:"installation_id"`
-	Name           string             `json:"name"`
-	Status         string             `json:"status"`
-	Reason         string             `json:"reason,omitempty"`
-	Plan           *updateMultiResult `json:"plan,omitempty"`
+	Saved          bool                  `json:"saved,omitempty"`
+	Actions        []dependencyActionDTO `json:"actions,omitempty"`
+	InstallationID string                `json:"installation_id"`
+	Name           string                `json:"name"`
+	Status         string                `json:"status"`
+	Reason         string                `json:"reason,omitempty"`
+	Plan           *updateMultiResult    `json:"plan,omitempty"`
 }
 
 type updateAllResult struct {
@@ -39,6 +42,7 @@ type preparedUpdateAllItem struct {
 }
 
 type updateAllSession struct {
+	saved           *preparedSavedUpdateAll
 	ctx             context.Context
 	cmd             *cobra.Command
 	app             App
@@ -55,7 +59,14 @@ type updateAllSession struct {
 }
 
 func runUpdateAll(ctx context.Context, cmd *cobra.Command, app App, opts *options) error {
-	session := &updateAllSession{ctx: ctx, cmd: cmd, app: app, opts: opts}
+	staging := *opts
+	staging.dryRun = true
+	preview, cleanup, err := dependencyPreviewApp(app, &staging)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	session := &updateAllSession{ctx: ctx, cmd: cmd, app: preview, opts: opts}
 	empty, err := session.load()
 	if err != nil {
 		return err
@@ -113,7 +124,9 @@ func (session *updateAllSession) load() (bool, error) {
 		Batch: true, Status: "planned", DryRun: session.opts.dryRun,
 		Installations: make([]updateAllInstallation, 0, len(installations)),
 	}
-	if len(installations) == 0 {
+	manifest, _ := session.app.dependencyPaths()
+	_, manifestErr := os.Stat(manifest)
+	if len(installations) == 0 && os.IsNotExist(manifestErr) {
 		session.result.Status = "no_installations"
 		return true, nil
 	}
@@ -127,14 +140,29 @@ func (session *updateAllSession) load() (bool, error) {
 }
 
 func (session *updateAllSession) cleanupPrepared() {
+	if session.saved != nil {
+		session.saved.cleanup()
+	}
 	for index := range session.preparedItems {
 		session.preparedItems[index].prepared.cleanup()
 	}
 }
 
 func (session *updateAllSession) preflightAll() error {
+	if err := session.prepareSaved(); err != nil {
+		session.preflightFailed = true
+		session.result.Failed++
+		session.result.Installations = append(session.result.Installations, updateAllInstallation{Name: "saved environment", Saved: true, Status: "preflight_failed", Reason: err.Error()})
+	}
 	for _, installation := range session.installations {
 		session.classifyInstallation(installation)
+	}
+	if !session.preflightFailed {
+		if err := session.checkPrepared(); err != nil {
+			session.preflightFailed = true
+			session.result.Failed++
+			session.result.Installations = append(session.result.Installations, updateAllInstallation{Name: "batch", Status: "preflight_failed", Reason: err.Error()})
+		}
 	}
 	if session.preflightFailed {
 		session.result.Status = "preflight_failed"
@@ -145,6 +173,9 @@ func (session *updateAllSession) preflightAll() error {
 }
 
 func (session *updateAllSession) classifyInstallation(installation domain.Installation) {
+	if session.savedContains(installation.InstallationID) {
+		return
+	}
 	item := updateAllInstallation{InstallationID: installation.InstallationID, Name: installation.DeclaredName}
 	if aliases := session.ownedAliases[installation.InstallationID]; len(aliases) > 0 {
 		sort.Strings(aliases)
@@ -162,7 +193,16 @@ func (session *updateAllSession) classifyInstallation(installation domain.Instal
 		return
 	}
 	targets := installationTargets(installation, session.opts.scope)
-	prepared, prepareErr := prepareUpdateMany(session.ctx, session.app, session.opts, installation, targets, !session.opts.dryRun)
+	// Keep every imperative preview process-inert until the complete mixed batch passes.
+	previewOpts := *session.opts
+	previewOpts.dryRun = true
+	previewApp := session.app
+	previewApp.Lifecycle.PrepareHostsForPreview = false
+	prepared, prepareErr := prepareUpdateMany(session.ctx, previewApp, &previewOpts, installation, targets, false)
+	if prepared != nil {
+		prepared.dryRun = session.opts.dryRun
+		prepared.result.DryRun = session.opts.dryRun
+	}
 	if prepareErr != nil {
 		session.recordPreflightFailure(&item, prepared, prepareErr)
 		return
@@ -226,8 +266,23 @@ func (session *updateAllSession) recordPlanned(installation domain.Installation,
 
 func (session *updateAllSession) applyAll() error {
 	session.result.Status = "completed"
+	if err := session.applySaved(); err != nil {
+		session.recordSavedPreApplyFailure()
+		markUnattemptedUpdateAll(&session.result, session.preparedItems, 0)
+		_ = renderUpdateAll(session.cmd, session.opts, session.result)
+		return err
+	}
 	for index := range session.preparedItems {
 		item := &session.preparedItems[index]
+		if err := checkPreparedImperativeUpdate(session.ctx, item.prepared); err != nil {
+			view := &session.result.Installations[item.resultIndex]
+			view.Status, view.Reason = "apply_failed", err.Error()
+			session.result.Failed++
+			session.result.Status = "partial_failure"
+			markUnattemptedUpdateAll(&session.result, session.preparedItems, index+1)
+			_ = renderUpdateAll(session.cmd, session.opts, session.result)
+			return err
+		}
 		applied, applyErr := applyPreparedUpdate(session.ctx, item.prepared)
 		view := &session.result.Installations[item.resultIndex]
 		view.Plan = &applied
@@ -309,6 +364,15 @@ func renderUpdateAllHuman(writer io.Writer, result updateAllResult) error {
 }
 
 func renderUpdateAllInstallation(writer io.Writer, installation updateAllInstallation) error {
+	for _, action := range installation.Actions {
+		if action.Action != "update" {
+			continue
+		}
+		from, to := dependencyTransition(action)
+		if _, err := fmt.Fprintf(writer, "  %s/%s: %s → %s\n", action.Alias, action.ClientID, from, to); err != nil {
+			return err
+		}
+	}
 	if installation.Plan != nil {
 		for _, target := range installation.Plan.Targets {
 			if err := renderOpenCodeRuntimeNotice(writer, target.Output.Result); err != nil {

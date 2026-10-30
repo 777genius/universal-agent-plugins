@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
+    # The docs site reads README.md, docs/ and code, but never the landing app
+    # (Landing builds the combined site itself). Pushes to main stay unfiltered.
+    paths-ignore:
+      - 'landing/**'
   push:
     branches: [main, master]
   workflow_dispatch:

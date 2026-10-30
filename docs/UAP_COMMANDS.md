@@ -121,13 +121,17 @@ The skill appears in plans as `kind: skill` with `source: command` and
 installer writes them into the client's copy.
 
 **Ordinary commands** (`disable-model-invocation: false`) reach clients whose
-adapters support both Skills and portable commands. Check the per-client plan;
-being a supported installation target does not imply support for every component.
-GitHub Copilot CLI and Visual Studio Code withhold commands as described below.
-Pi supports native extensions only and receives neither portable Skills nor
-command Skills; see [the Pi extension contract](PI_NATIVE_EXTENSION_CONTRACT.md).
-The user runs a delivered skill the way the client runs skills by hand. Like any
-ordinary skill, the model may also choose it on its own.
+adapters support both Skills and portable commands. This includes Grok Build,
+Kimi Code and Qoder; their native command files are a separate capability.
+Check the per-client plan; being a supported installation target does not imply
+support for every component. The user runs a delivered skill through the client's
+normal skill interface, and the model may also choose it on its own. Delivery does
+not by itself prove activation or execution in a running client.
+
+**Pi receives native extensions only.** Its provider does not project portable
+Skills, MCP servers or command skills. See the
+[Pi native extension contract](PI_NATIVE_EXTENSION_CONTRACT.md); extension-defined
+behavior is separate from this portable-command format.
 
 **GitHub Copilot CLI and Visual Studio Code receive no commands.** Visual
 Studio Code is frozen by an owner decision of 2026-10-16, and it installs
@@ -145,8 +149,10 @@ the client registry withholds commands from both:
 - authoring reports show the warning `target_command_withheld`, and an error
   only when the client gets nothing else.
 
-When the freeze is lifted, both clients receive commands again; run
-`agentplugins update <name>` after upgrading the installer.
+Enabling command delivery for this family requires a separate reviewed installer
+change. A newer client version or a change to the freeze policy alone does not
+change the installed package. Follow the relevant installer release notes and
+review its plan before updating an installation.
 
 **Explicit-only commands** (`disable-model-invocation: true`) reach a client
 only when its adapter declares that the client enforces explicit invocation.
