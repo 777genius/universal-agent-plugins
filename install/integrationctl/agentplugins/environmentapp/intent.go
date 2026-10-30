@@ -72,7 +72,7 @@ func sameFile(files IntentFiles, path string, expected []byte) bool {
 	if errors.Is(err, fs.ErrNotExist) {
 		return expected == nil
 	}
-	return err == nil && bytes.Equal(body, expected)
+	return err == nil && expected != nil && bytes.Equal(body, expected)
 }
 
 // SelectedLock limits materialization to the already-selected closure. It does

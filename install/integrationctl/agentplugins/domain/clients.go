@@ -503,11 +503,14 @@ type DeactivationRequest struct {
 }
 
 type DeactivationOutcome struct {
-	Activation              ActivationState `json:"activation"`
-	ArtifactRemovalAllowed  bool            `json:"artifact_removal_allowed"`
-	ExternalRemovalComplete bool            `json:"external_removal_complete"`
-	UserActions             []string        `json:"user_actions,omitempty"`
-	LocalActions            []string        `json:"-"`
+	// NativeEffect is transient evidence of a native transaction's actual
+	// effects. An ordinary error never establishes that removal was unchanged.
+	NativeEffect            NativeEffectState `json:"-"`
+	Activation              ActivationState   `json:"activation"`
+	ArtifactRemovalAllowed  bool              `json:"artifact_removal_allowed"`
+	ExternalRemovalComplete bool              `json:"external_removal_complete"`
+	UserActions             []string          `json:"user_actions,omitempty"`
+	LocalActions            []string          `json:"-"`
 }
 
 func supportsLocalDelivery(id ClientID) bool { return id == ClientVSCode }

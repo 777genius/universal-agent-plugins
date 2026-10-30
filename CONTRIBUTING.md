@@ -30,6 +30,11 @@ make test-install-compat
 make test-polyglot-smoke
 ```
 
+For dependency resolution, lockfile, acquisition or saved-install changes, run
+`python scripts/package-manager-e2e.py`. The [portable package-manager E2E guide](./docs/testing/package-manager-e2e.md)
+documents the shared Linux/Windows/macOS catalog, disposable profiles, execution
+evidence and restricted-host subset.
+
 If your change touches public docs or the docs toolchain, follow the complete
 [website build setup](./website/README.md#build-and-checks), which mirrors
 [the Docs workflow](./.github/workflows/docs.yml). Full checks need the exact
