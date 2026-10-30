@@ -61,7 +61,10 @@ second runner, or a new timeout policy.
 Preserve VS Code's frozen implementation and dedicated tests. Preserve legacy
 capabilities and the standard-first dependency graph. Do not change environment
 CLI routing, adapter-boundary tests, release workflows, CI matrices, lock
-protocols, client behavior, or overlapping source/project/SDK E2E work. The
+protocols, client behavior, or overlapping source/project/SDK E2E work. The only
+workflow exception is the diagnosed Skills source resolution runner correction
+recorded below; it changes the existing job's runner selection without changing
+its tests, permissions, timeout, or concurrency. The
 process runner remains a trusted-command supervisor, not a hostile-process
 sandbox. Platform containment is inherited from the existing implementation.
 
@@ -182,3 +185,36 @@ or waiting for a second result.
   proc-children prerequisite. The independent reviewer rechecked the final
   handoff, cleanup ownership, and select behavior and reported no remaining code
   findings.
+
+
+### Diagnosed Skills source resolution runner correction
+
+The final-commit CI run exposed an existing runner capability mismatch in
+[Skills source resolution run 41087510047, job 124172431116](https://github.com/777genius/universal-agent-plugins/actions/runs/41087510047/job/124172431116)
+on npm commit `74ade1d3`. The source adapter tests and Docker runtime-envelope
+probe passed. The subsequent real systemd deployment probe failed before running
+its test: `/run/systemd/system` was absent, systemd was not PID 1, and `systemctl`
+could not contact the system bus (`Host is down`).
+
+The existing `source-and-runtime` job selected the generic `CI_LINUX_RUNNER`
+repository variable for same-repository PRs and main pushes. In this run that
+variable selected a Namespace container, whose container environment does not
+provide the systemd VM required by the deployment probe. A PR-label fallback
+would leave main pushes exposed to the same diagnosed failure.
+
+The bounded correction selects the explicit GitHub-hosted `ubuntu-24.04` VM for
+this existing job on every trigger, with a short systemd capability comment.
+All existing source tests, Docker checks, deployment/systemd probe commands,
+permissions, timeout, and concurrency remain unchanged. No workflow, flag,
+capability framework, runtime-code change, or weaker probe was added. This is
+the sole exception to the original no-workflow scope, justified by the observed
+CI failure and the coordinator's explicit instruction to repair it.
+
+Validation: PyYAML 6.0.3 parsed the workflow successfully. A complete parsed
+mapping comparison against `HEAD` confirmed that only
+`jobs.source-and-runtime.runs-on` changed; triggers, steps, permissions, timeout,
+and concurrency are identical. `git diff --check` passed. `actionlint` is not
+installed in PATH or the available cached tooling directory, so it was not run.
+Runtime-code tests were not repeated because this correction changes only
+runner selection. The unchanged real systemd probe must pass on the selected
+GitHub-hosted VM before CI is claimed green.
