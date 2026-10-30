@@ -1,0 +1,323 @@
+# Same-revision group native projection refresh
+
+Date: 2026-10-30. Planning base: `29480e1d3b1fbf021c8fc0c6e3f741ac0c1fdcbb`.
+Branch: `fix/group-native-projection-refresh-20261030`.
+Status: plan only; implementation waits for independent critique, disposition,
+and the coordinating owner's implementation gate. The coordinator owns commits,
+publication, the draft PR, final review, and merge. No release is authorized by
+this plan. Workers and reviewers follow the current `AGENTS.md` model and scope
+instructions; this lane uses the specifically requested GPT-6.1 Sol / xhigh.
+
+## Problem and severity
+
+An explicit `usecase.Service.UpdateGroup` can report successful completion and
+`NoChange` for an unchanged package revision even when its prepared OpenCode host
+requires changing the installed native configuration from V1 to V2. The reverse
+transition has the same missing decision. A requested host projection change is
+therefore silently ignored.
+
+This is a **P2 correctness issue in the exported usecase API**. The public
+installer facade deliberately refuses grouped OpenCode install/update/repair in
+`installer/group.go:validateGroupTargets`, because its group handles do not retain
+per-target native host snapshots. Preserve that refusal. Existing usecase tests
+already intentionally support grouped OpenCode through prepared authority
+(`TestOpenCodeHostBridgeSingleAndGroup` and
+`TestOpenCodeGroupPreparesMissingAuthorityBeforeNativeProjection`). Do not describe
+this finding as a currently reachable public CLI group migration bug or as native
+client qualification evidence.
+
+### Evidence and reproduction
+
+The current single update guards its same-revision shortcut with
+`nativeDialectProjectionChanged` (`usecase/apply.go:noChangeOrResume`). That helper
+in `usecase/native_attempt.go` explicitly compares the OpenCode client id,
+prepared dialect strings, and historical MCP receipt kinds.
+
+The equivalent group predicate in `usecase/group_plan.go:recordGroupTarget`
+checks package revision, component removal, repair/switch state, and affected
+surface, but omits a host projection change. The resulting path is:
+
+1. `recordGroupTarget` marks the installed target unchanged.
+2. `group_stage.go:stageGroupDeliveries` skips package staging for it.
+3. `group_activate.go:groupActivationRequest` calls `activeNativeDelivery` on the
+   old installed package and sets `VerifyOnly` when those old receipts match.
+4. OpenCode's `BuildOpenCodeNativeObjects` reads the codec from that old package's
+   `.agentplugins-opencode.json`; the requested prepared V2 host does not replace
+   those old V1 projection bytes.
+5. Read-only verification succeeds for the installed V1 objects, so the group
+   reports completion without the explicitly requested projection change.
+
+A temporary Go-overlay regression uses `serviceFixture`, `hostBridgeInput`, the
+real planner/stager/activator/native kernel/state store, and a pure trusted host
+fixture whose `ConfigDialect` changes from `opencode_v1` to `opencode_v2`. It adds
+one group target, retains the same immutable package, then calls `UpdateGroup`.
+The observed red result was:
+
+```text
+=== RUN   TestAuditGroupSameRevisionDialect
+err=<nil> phase=completed mutated=false noChange=true configUnchanged=true
+config={"mcp":{"docs":{"type":"remote","url":"https://docs.test/mcp"}}}
+accepted same-revision V2 group update without materializing V2 projection
+--- FAIL: TestAuditGroupSameRevisionDialect (0.03s)
+```
+
+The actual temporary test and overlay are
+`/tmp/uap-next-critical-repro/group_dialect_test.go` and
+`/tmp/uap-next-critical-repro/projection-worktree-overlay.json`. From the core
+module directory in this worktree, the reproduction command is:
+
+```bash
+PATH=/tmp/uap-e2e-tools/go/bin:$PATH \
+GOCACHE=/tmp/uap-audit-gocache \
+GOMODCACHE=/tmp/uap-audit-gomodcache \
+/tmp/uap-e2e-tools/go/bin/go test \
+  -overlay=/tmp/uap-next-critical-repro/projection-worktree-overlay.json \
+  ./usecase -run '^TestAuditGroupSameRevisionDialect$' -count=1 -v
+```
+
+The first reproduction was run against `d85dbb70` in the original architecture
+worktree, then against `c08eaede` before this plan worktree fast-forwarded to the
+planning base above. The relevant projection/usecase sources are identical in
+those revisions. The final repeat on
+`29480e1d3b1fbf021c8fc0c6e3f741ac0c1fdcbb` produced the same red output above:
+`usecase` failed in 0.037s because the explicit V2 update was incorrectly reported
+as a completed no-op. This is expected red reproduction evidence, not a passing
+validation gate.
+
+The overlay source embeds `contracttest.OpenCodeV1Host` and overrides only
+`ConfigDialect` for the V2 request. This is an injected, read-only host contract
+fixture, not a real host probe or permission bypass. The minimal red case does
+not wire a transition recorder because the bug never attempts a transition.
+The permanent successful-transition regression must wire the existing recorder.
+The repository remains untouched by the overlay.
+
+## Chosen design
+
+Add one ephemeral, generic boolean decision to `domain.DeliveryPlan`:
+`RequiresNativeProjectionRefresh bool`, tagged `json:"-"`. Its precise meaning
+is: **the current adapter's prepared host projection differs from a recognized
+recorded native representation, so an explicit update must not use only package
+revision equality to skip staging**.
+
+The decision is computed through the existing `clients.PlanRefiner`; no new
+capability interface, dispatcher, service, recovery engine, persisted receipt,
+schema, or configurable policy is needed. OpenCode owns the dialect comparison
+inside its adapter. The generic usecase consumes only the decision.
+
+### Decision provenance and lifetime
+
+`usecase/intent.go:planInstall` already selects the exact stored planning binding,
+clones its native receipts, and sends them in `domain.PlanRequest.PreviousNativeObjects`.
+The generic planner clones those facts into `clients.PlanInput`, and OpenCode's
+existing `RefinePlan` already receives that input and the prepared immutable host.
+Use those predecessor objects, not ambient native configuration, rediscovery,
+constructor guesses, or the desired staged objects, to compute the decision.
+
+The generic planner starts with the zero decision. The OpenCode refiner sets it
+explicitly from the current inputs on every successful refinement, so a reused
+plan cannot retain an unrelated earlier true value. Other adapters keep the zero
+decision until they have a concrete host projection requirement of their own.
+Struct copies and the existing plan-cloning helpers preserve it inside the
+operation. It is not written to installation state, package projection metadata,
+native intent, mutation receipts, public installer DTOs, or diagnostics JSON.
+JSON decoding therefore cannot restore it as a plan authority.
+
+The decision grants no native ownership or mutation permission. True only
+prevents an optimization; all confirmation, frozen profile, package verification,
+native identity, exact receipt, state lock, durable transition, and drift gates
+still apply. False is not an attestation that native activation is complete.
+Existing lifecycle/runtime checks still decide whether to verify or resume.
+
+`ports.DeliveryPlanner` remains a trusted injected planning dependency. A custom
+planner that wants to support host-induced same-revision updates must produce or
+preserve this generic decision, just as it must produce the rest of the plan.
+All production planning in this repository uses the registry/refiner pipeline.
+Document and test this contract; do not retain an OpenCode-specific fallback in
+the generic usecase or claim that arbitrary external planners are corrected by a
+new field they do not populate. The independent critic should assess this
+source-compatibility tradeoff before implementation.
+
+### Adapter classification policy
+
+Move the existing comparison rather than broaden host or ownership admission.
+Use the adapter's existing OpenCode object-kind constants. Preserve the current
+host-validation order in `RefinePlan`; do not introduce a new codec-selection
+validation pass solely to compute the boolean.
+
+| Prepared host and recorded objects | Decision and behavior |
+| --- | --- |
+| V1 host, only recognized V1 MCP receipts | False; an unchanged update may take the existing runtime/lifecycle path. |
+| V2 host, only recognized V2 MCP receipts | False; same behavior. |
+| V2 host with a recognized V1 MCP receipt | True; explicit update must stage the requested projection. |
+| V1 host with a recognized V2 MCP receipt | True; explicit update must stage the requested projection. |
+| Recognized V1 and V2 MCP receipts mixed | True if any recognized receipt differs from the host; existing identity/transition validation must reject unsupported mixed-source authority rather than normalize or adopt it. The boolean itself does not certify transition eligibility. |
+| No prior objects, only the managed-package receipt, or skills-only receipts | False; a first install or skills-only package does not invent a dialect migration. |
+| No prepared host or no dialect accessor | False as in the old helper; the existing refiner refusal for desired native effects without a host still applies. Empty/metadata-only planning gains no new host requirement. |
+| Unknown dialect or unrecognized object kind | No new migration authority or new compatibility admission. Existing host, projector, observer, and transition validation retain their present refusal behavior. |
+
+Do not accept mixed receipts because a subset matches the target. Do not discard
+foreign or unknown objects to make a transition appear eligible. Do not turn a
+missing native root into a new profile selection.
+
+### Usecase behavior and existing runtime preparation
+
+In `applySession.noChangeOrResume`, replace the OpenCode-specific helper check in
+the **replace/update branch only** with the generic plan decision. Remove the
+now-unused helper from `usecase/native_attempt.go`. Preserve the existing
+registration-migration, component-removal, revision, identity, and managed-package
+checks and their order.
+
+In `groupSession.recordGroupTarget`, make an explicit update target ineligible
+for the package no-change optimization when the plan requires refresh. Guard
+this with the existing `session.replace` operation mode. `Repair` and `Switch`
+already have their separate group rules; do not route them through a new policy.
+The update proceeds through ordinary staging, data/runtime preparation, managed
+directory transactions, activation, transition publication, and result reporting.
+
+Repeated `Add`/`AddGroup` must continue to verify/resume the installed projection
+without replacing its managed directory merely because a different host dialect
+was supplied. Ordinary `Repair`/`RepairGroup` retain their current behavior,
+including exact reconstruction and command-rendering rules. `RefreshProjection`
+retains its explicit projection-changing purpose. This flag introduces no new
+repair refusal, repeated-add migration, or automatic refresh command.
+
+For a matching dialect, retain the existing `finishExistingLifecycle` path in
+single update and `stageGroupDeliveries`' no-change path in group update. They
+still prepare the installed MCP runtime before declaring success, verify managed
+objects, resume incomplete activation, and retain unresolved native attempts.
+Do not implement an early boolean return that skips these checks. A changed
+dialect uses the existing staged runtime path before activation. Preserve
+`PluginData` ownership and runtime locator checks in either path.
+
+## Bounded file scope and exclusions
+
+Expected production edits are limited to:
+
+- `domain/clients.go`: add the ephemeral plan decision and its contract comment.
+- `clients/opencode/plan.go` or one small adjacent adapter helper: compute it
+  during existing refinement from frozen predecessor receipts and prepared host.
+- `usecase/apply.go`: consume it in single update's existing shortcut.
+- `usecase/group_plan.go`: consume it in explicit group update's shortcut.
+- `usecase/native_attempt.go`: remove the relocated OpenCode-specific helper.
+
+Add focused adapter and usecase regression tests in their own files. Existing
+facade/recovery tests should run unchanged. Only add a narrowly justified test
+assertion if a concrete coverage gap remains; do not alter their recovery setup
+to make the new test pass.
+
+Do not edit `usecase/group_stage.go` or its separately owned cleanup tests; that
+parallel lane owns them. This lane relies on its existing staging/runtime paths.
+Coordinate any unavoidable conflict before editing. Do not edit the frozen VS
+Code implementation or dedicated fixtures, release code, authoring phases 9–11,
+schemas, capability/transport tables, public support labels, dependency-selection
+logic, or the current independent identity/process/environment implementation
+lanes. Do not widen `installer.validateGroupTargets`, replace the OpenCode
+recorder, generalize native journal registration, or change historical
+group-removal or missing-intent recovery policy.
+
+## Validation and acceptance
+
+### Adapter decision tests
+
+Use a small table against the real OpenCode `RefinePlan` for both supported
+dialects, matching and opposite recognized MCP receipts, mixed V1/V2 receipts,
+unrelated managed/skill objects, empty predecessors, and a reused plan whose
+previous decision was true. Check exact predecessor slices remain unchanged.
+Exercise missing-host native refusal and hostless metadata-only behavior. Keep
+unknown-host/unknown-kind cases within the existing admission policy; test that
+the new decision adds no authority rather than inventing a new rejection rule.
+
+The matrix should establish that a matching subset cannot hide an opposite
+recognized receipt, while malformed/mixed state still passes through the
+existing fail-closed observer/transition checks.
+
+### Real grouped update regression
+
+Use the real planner, stager, activator, native kernel, state store and existing
+`opencode.NativeTransitions` composition. Start from an actual V1 native install,
+then update the exact same package identity through a V2 prepared host; repeat
+for V2 to V1. Include a second independent client target to exercise the ordinary
+group path without changing its group admission rules. No real client process
+or model invocation is required for this correctness regression.
+
+Assert the old implementation fails the test because it reports a no-op. The
+corrected implementation must commit the changed package projection/native
+configuration, report mutation for the migrating target, retain logical native
+object IDs, acknowledge the target dialect receipts, clear the attempt only
+after the existing durable acknowledgement, preserve the owned data locator and
+foreign configuration bytes, and leave the independent target's projection and
+receipts intact. A following same-dialect update must converge without an extra
+package/native transaction. Native config readback must inspect the requested
+codec/selector, not merely compare a success enum or the new boolean.
+
+Add negative behavior cases for mixed-source receipts or late foreign edits
+using the existing refusal mechanisms. Confirm absence of a durable recorder
+cannot become successful migration: it retains the existing explicit refusal
+and effect/attempt handling. Do not weaken native containment to run a test.
+
+### Operation and runtime semantics
+
+Cover repeated `Add`/`AddGroup` with an opposite prepared dialect: they must not
+replace the recorded projection. Cover representative intact repair behavior
+and retain the existing repair/projection-refresh regression suite. Check a
+matching-dialect same-revision group update still prepares the existing MCP
+runtime and propagates its failure before native effects, while an opposite
+dialect uses the existing staged runtime preparation. Reuse current runtime
+fixtures or a narrow manager wrapper; avoid a test that only mirrors a new
+conditional. Keep no-change lifecycle resume, unresolved attempts, profile
+revalidation and component-removal tests applicable.
+
+### Existing single update and recovery proof
+
+Run these current suites unchanged on the corrected tree:
+
+- `TestOpenCodeNativeFacadeDurableRoundTrip`: actual facade V1 to V2 to V1 on the
+  same package and stable logical receipt IDs; fresh engine inspection and
+  stored removal/recovery remain process-inert.
+- `TestOpenCodeNativeFacadeTransitionRefusesForeignFacts`: equal foreign
+  destination, edited source, foreign source entries, ambiguous config variants.
+- `TestOpenCodeNativeFacadeCrashRecovery`: fresh-facade native/state crash
+  recovery and changed-state refusal, with no supplied host or projection bytes.
+- `TestNativeTransitionReopensEveryDurableBoundary` and
+  `TestProjectOpenCodeTransitionReopensEveryDurableBoundary`: existing durable
+  recorder behavior remains exact for user/project contexts.
+- The relevant usecase projection-refresh, command projection, runtime preparation,
+  selected delivery, and group lifecycle tests, plus architecture guards.
+
+The ephemeral plan decision must not be required during stored recovery. The
+existing native receipts, attempt identity, transition record, and state digest
+remain its only authority. No stored host probing or fallback profile discovery
+is introduced. A missing root or foreign state remains a refusal.
+
+Run focused changed-package tests first, then the core module's relevant
+regressions and mandatory lint/architecture gates, including unchanged golden
+contracts and `git diff --check`. Test selection should resolve concrete risks;
+do not multiply native-client E2E matrices for this read-only plan decision.
+Use Go 1.26.10 with the existing shared caches. Native process-containment
+limitations must be reported honestly; never disable a safety gate or substitute
+a mocked native qualification claim. Exact-head required CI and independent code
+review remain merge gates managed by the coordinator.
+
+## Review checkpoints and open choices
+
+1. Coordinator publishes this concrete plan in a draft and obtains fresh
+   independent critique before implementation. Correct and record any findings.
+2. Confirm the trusted custom-planner contract described above. The chosen
+   design reuses `PlanRefiner` and a generic ephemeral field; it intentionally
+   avoids a new provider capability or OpenCode-specific compatibility fallback.
+3. Confirm the compatibility-preserving missing/unknown/mixed classification
+   matrix. The boolean requests staging; it does not classify malformed state as
+   eligible or replace existing transition refusals.
+4. After the implementation gate, land the regression and bounded change, then
+   run the listed behavior and recovery evidence. A fresh critic checks both
+   transition directions, update-only consumption, decision provenance, unchanged
+   recovery authority, and honest scope/severity reporting.
+5. Root manages all commits, pushes, PR publication and merge. No source changes,
+   new package-manager/recovery machinery, group-facade widening, or release work
+   are authorized by the plan-writing step itself.
+
+Acceptance is: both explicit same-revision grouped dialect transitions really
+materialize and acknowledge the requested native representation; matching updates
+retain their runtime/lifecycle checks; repeated-add/repair semantics and all
+existing refusal/recovery boundaries remain exact; generic usecases contain no
+OpenCode dialect/object-kind decision after the extraction.
