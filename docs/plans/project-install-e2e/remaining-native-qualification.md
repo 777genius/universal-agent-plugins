@@ -4304,6 +4304,42 @@ zero-list/reinitialization/post-call/extra-call/oversize/identity/facts controls
 No native argv, provider, pin, environment, time budget or completion gate changes;
 all three failed captures remain failed/all-false pending fresh full lifecycle.
 
+### Copilot repeated startup tool notifications on the qualified parent (2026-10-29)
+
+Wind source16283a4/treeaf8cee9 run40954917050's Copilot baseline reaches
+`native:repaired-a`, where the vendor exits0 with ordinary cleanup and emits28
+events: tools-loaded, pending, tools-loaded, connected, skills, info, server
+summary, tools-updated, then the existing20-event execution tail. Both tool
+notifications have the same owned server/count and root parent, distinct UUIDs
+and monotonic times. All128 Copilot-owned source paths equal qualified17b13226;
+the failure is the inherited27-row cycle template, not a changed vendor pin.
+The retained42/25-member native/frontend archives,159 embedded stream joins,
+provider exchanges and append-only probe prefix close. The failed run has no
+after-native-repaired-a state proof and keeps every qualification flag false.
+
+Both independent plan critics approve a cycle-only semantic startup view:
+require one-or-more identical owned tools-loaded notifications before the server
+summary; keep the other six startup observations unique, pending before
+connected, and connected plus every tools-loaded before the summary. Validate
+every original raw row's closed shape, payload, ephemeral flag, fresh UUID,
+root parent and command time before retaining one startup observation for the
+existing graph/catalog validators. Keep even omitted refresh UUIDs in the global
+identity set. Raw bytes/counts/hashes and the exact20-event tail stay unchanged;
+legacy strict27 readiness and15-row no-call readers remain strict. The retained
+vendor JavaScript handles this as a state notification; variable refresh
+cardinality is an inference from the observed repetition, not an emitter-count
+guarantee. Existing2MiB/60s bounds, provider/probe/facts joins, native argv,
+environment, authority and completion gates remain unchanged. Inert one/two/eight
+refresh positives and hostile payload/identity/parent/order/time/size controls
+exercise this correction; fresh genuine complete evidence remains required.
+
+The25 focused Python contracts and focused cycle/readiness Go contracts pass;
+affected all-enabled whole-file lint and the unfiltered root six-linter gate
+report zero issues. Offline readers preserve the qualified17b full verdict and
+all three retained failed verdicts exactly. The actual28-row stream passes only
+the corrected cycle decoder; its legacy strict reader still refuses it. These
+checks run no vendor client and do not replace a fresh hosted complete cycle.
+
 ### Windsurf complete bounded profile-delta projection (2026-10-28)
 
 The genuine090b failed component capture observes15 profile changes after the
@@ -4534,3 +4570,15 @@ before freezing. Refuse renewed preparation of a frozen Git root. No local confi
 file, runtime Git-write allowance, observed baseline adoption, native command,
 credential, trust, deadline, archive-bound or qualification change is introduced.
 The next genuine hosted capture must satisfy the unchanged full frozen guards.
+
+The next run `40954917050` stops after `git-a` at the initial exclude-authority
+predicate, before any vendor command. Its raw evidence does not disclose which
+stat field or absence caused that refusal; all qualifications remain false.
+Git's [initialization documentation](https://git-scm.com/docs/git-init) specifies
+umask-dependent permissions; upstream `copy.c` creates non-executable template
+copies with `0666` before umask. A universal `0644` requirement is unsupported.
+For a present ordinary exclude file, bind mode to its already validated fresh
+Git frame and preserve that exact mode through append and freeze. Keep full
+stat/digest joins, current ownership, single link, nofollow checks, no-write
+stability and final equality. Missing original files remain fatal; no creation
+fallback, chmod, runtime allowance or diagnosis of an actual mode is introduced.

@@ -136,6 +136,27 @@ func TestWindsurfComponentGitPreparationRefusesChangedAuthority(t *testing.T) {
 	}
 }
 
+func TestWindsurfComponentGitPreparationPreservesOriginalTemplatePermissions(t *testing.T) {
+	for _, mode := range []os.FileMode{0600, 0640, 0664} {
+		w := windComponentInert(t)
+		path, _, original := windContractGitInit(t, w, "a")
+		if err := os.Chmod(path, mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.gitFreeze("git-a"); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Lstat(path)
+		if err != nil || info.Mode() != mode {
+			t.Fatal("original Git template permissions changed", mode, err)
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(raw, append(append([]byte{}, original...), []byte(".devin/config.local.json\n.devin/mcp_config.local.json\n")...)) {
+			t.Fatal("original Git bytes or exact rules changed", err)
+		}
+	}
+}
+
 func windContractGitMutation(t *testing.T, path string, raw []byte, kind string) {
 	t.Helper()
 	var err error

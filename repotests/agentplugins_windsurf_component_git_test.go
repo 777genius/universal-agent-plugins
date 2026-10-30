@@ -15,6 +15,9 @@ import (
 // Pinned local-config loaders skip their exclude writer on these exact lines.
 // Prepare only the newly initialized fixture Git file, before its first freeze.
 func windGitExcludePrepare(directory string, want windProfileRecord) (record windProfileRecord, err error) {
+	if want.Kind != "file" {
+		return record, fmt.Errorf("Git exclude authority refused: original ordinary file required")
+	}
 	edges, err := windOpenDirectory(directory)
 	if err != nil {
 		return record, fmt.Errorf("Git exclude parent refused")
@@ -26,7 +29,7 @@ func windGitExcludePrepare(directory string, want windProfileRecord) (record win
 	}()
 	parent := int(edges[len(edges)-1].file.Fd())
 	var before unix.Stat_t
-	if unix.Fstatat(parent, "exclude", &before, unix.AT_SYMLINK_NOFOLLOW) != nil || !windOwned(before) || before.Mode != unix.S_IFREG|0644 || before.Nlink != 1 || before.Size < 0 || before.Size > 64<<20 {
+	if unix.Fstatat(parent, "exclude", &before, unix.AT_SYMLINK_NOFOLLOW) != nil || !windOwned(before) || before.Mode&unix.S_IFMT != unix.S_IFREG || before.Mode != want.Mode || before.Nlink != 1 || before.Size < 0 || before.Size > 64<<20 {
 		return record, fmt.Errorf("Git exclude authority refused")
 	}
 	fd, err := unix.Openat(parent, "exclude", unix.O_RDWR|unix.O_APPEND|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)

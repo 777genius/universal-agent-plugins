@@ -2,7 +2,10 @@
 
 package pluginkitairepo_test
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
 func copilotCycleStartupIndex(value any) (int, error) {
 	row, ok := value.(map[string]any)
@@ -33,6 +36,31 @@ func copilotCycleStartupIndex(value any) (int, error) {
 		return 6, nil
 	}
 	return 0, fmt.Errorf("Copilot cycle unknown startup event/state")
+}
+
+// Every raw notification has already passed shape, UUID and time checks. Keep
+// repeated tools-loaded IDs in the global seen set while giving existing graph
+// validators one semantic startup observation. Original capture bytes stay raw.
+func (s *copilotReadinessStream) retainCycleStartup(row, data map[string]any, kind int, order *[7]int) (bool, error) {
+	for i := range s.rows {
+		if kind == 2 && order[i] == 5 {
+			return false, fmt.Errorf("Copilot cycle tools refresh after server summary")
+		}
+	}
+	for i := range s.rows {
+		if order[i] != kind {
+			continue
+		}
+		if kind != 2 || !reflect.DeepEqual(data, s.data[i]) || row["parentId"] != s.rows[i]["parentId"] {
+			return false, fmt.Errorf("Copilot cycle duplicate startup observation differs")
+		}
+		return false, nil
+	}
+	if len(s.rows) >= len(order) {
+		return false, fmt.Errorf("Copilot cycle startup observation count")
+	}
+	order[len(s.rows)] = kind
+	return true, nil
 }
 
 func (s *copilotReadinessStream) cycleStartup(order [7]int) error {

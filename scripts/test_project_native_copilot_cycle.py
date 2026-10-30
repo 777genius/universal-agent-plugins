@@ -36,6 +36,19 @@ def measured():
     return rows, events.instant("2026-10-27T18:31:21.7Z"), events.instant("2026-10-27T18:31:21.9Z")
 
 
+def refreshed(repeats=2):
+    original, start, end = measured()
+    # Literal observed repaired-A startup order, over the held inert fixed tail.
+    order = [2, 0] + [2] * (repeats - 1) + [1, 3, 4, 5, 6]
+    rows = []
+    for index, kind in enumerate(order):
+        row = copy.deepcopy(original[kind])
+        row["id"] = f"00000001-0000-4000-8000-{index:012d}"
+        row["timestamp"] = original[0]["timestamp"]
+        rows.append(row)
+    return rows + original[7:], start, end
+
+
 def no_call():
     old, start, end = measured()
     rows = [copy.deepcopy(old[index]) for index in exchange.NO_CALL]
@@ -69,6 +82,41 @@ class CopilotCycleContracts(unittest.TestCase):
     def refused(self, bodies):
         with self.assertRaises(ValueError):
             cycle.members(bodies, SOURCE)
+
+    def test_repeated_tools_notifications_preserve_raw_and_strict_legacy(self):
+        for count in (1, 2, 8):
+            rows, start, end = refreshed(count)
+            raw = b"\n".join(map(encoded, rows)) + b"\n"
+            kept, data, _ = events.decode(raw, start, end, startup=True)
+            self.assertEqual(len(kept), 27)
+            self.assertEqual(data[2], {"serverName": "uapcopilota", "toolCount": 1})
+            self.assertEqual(kept[7:], rows[6 + count:])
+            self.assertEqual(len(rows), 26 + count)
+            self.assertEqual(raw, b"\n".join(map(encoded, rows)) + b"\n")
+            with self.assertRaises(ValueError):
+                events.decode(raw, start, end)
+
+    def test_repeated_startup_notifications_reject_authority_changes(self):
+        for fault in ("server", "count", "field", "ephemeral", "uuid", "hidden-parent", "parent", "terminal-id",
+                      "late", "status", "missing", "unknown", "time", "oversize"):
+            rows, start, end = refreshed()
+            if fault == "server": rows[2]["data"]["serverName"] = "foreign"
+            elif fault == "count": rows[2]["data"]["toolCount"] = 2
+            elif fault == "field": rows[2]["extra"] = True
+            elif fault == "ephemeral": rows[2]["ephemeral"] = False
+            elif fault == "uuid": rows[2]["id"] = rows[0]["id"]
+            elif fault == "hidden-parent": rows[9]["parentId"] = rows[2]["id"]
+            elif fault == "parent": rows[2]["parentId"] = "00000002-0000-4000-8000-000000000000"
+            elif fault == "terminal-id": rows[-1]["sessionId"] = rows[2]["id"]
+            elif fault == "late": rows[2], rows[7] = rows[7], rows[2]
+            elif fault == "status": rows[2]["type"], rows[2]["data"] = rows[1]["type"], rows[1]["data"]
+            elif fault == "missing": del rows[4]
+            elif fault == "unknown": rows[2]["type"] = "unknown.startup"
+            elif fault == "time": rows[2]["timestamp"] = "2026-10-28T00:00:00Z"
+            raw = b"\n".join(map(encoded, rows)) + b"\n"
+            if fault == "oversize": raw += b" " * (2 << 20)
+            with self.subTest(fault=fault), self.assertRaises(ValueError):
+                events.decode(raw, start, end, startup=True)
 
     def test_truthful_failed_prefix_and_unforgeable_flags(self):
         bodies = {"runtime-attempt.json": encoded(prefix())}
