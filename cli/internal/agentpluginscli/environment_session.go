@@ -160,7 +160,7 @@ func sameEnvironmentFile(path string, expected []byte) bool {
 	if os.IsNotExist(err) {
 		return expected == nil
 	}
-	return err == nil && bytes.Equal(body, expected)
+	return err == nil && expected != nil && bytes.Equal(body, expected)
 }
 
 func editEnvironmentIntent(snapshot environmentSnapshot, wanted environment.Requirements) ([]byte, error) {
