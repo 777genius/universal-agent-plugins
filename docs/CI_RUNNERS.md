@@ -73,17 +73,17 @@ The documentation and web surface is root Markdown, `docs/`, `website/`,
 `landing/` and `assets/`. Every filter below that skips documentation names
 exactly this list.
 
-- `pr-changes.yml` is the one pull request classifier. It runs on a
-  GitHub-hosted runner, reads the pull request file list once and reports
-  `lint`, `management_sdk` and `authoring`. Callers skip a job only on an
-  explicit `false`. An unavailable or empty files API response for a
-  non-empty diff, a 3,000+ file diff or a path with a control character marks
-  every class true, and a classifier failure runs every gated job. Gated jobs
-  wait for it, so when many pull requests use
-  `ci:github-hosted` and that queue is longer than the Namespace queue, set
-  the `CI_LIGHTWEIGHT_RUNNER` variable (for example to the `CI_LINUX_RUNNER`
-  label) to move only this API-only job; it never checks out pull request
-  code. Unset it to return to `ubuntu-latest`.
+- `pr-changes.yml` is the one pull request classifier. It reads the pull
+  request file list once and reports `lint`, `management_sdk` and
+  `authoring`. Callers skip a job only on an explicit `false`. An unavailable
+  or empty files API response for a non-empty diff, a 3,000+ file diff or a
+  path with a control character marks every class true, and a classifier
+  failure runs every gated job. Gated jobs wait for it, so it follows the
+  pull request's own routing above (`CI_LINUX_RUNNER`, or GitHub-hosted for
+  `ci:github-hosted` and forks) rather than adding a wait in a second queue.
+  It only calls the GitHub API and never checks out pull request code, so the
+  `CI_LIGHTWEIGHT_RUNNER` variable may move it to any pool; unset it to
+  return to the default routing.
 - `Required / test` runs on every ready pull request: repotests read
   `README.md`, `docs/`, `website/`, `landing/` and workflow files. `lint`
   skips without a Go, module, `.golangci.yml` or lint baseline change, and
