@@ -93,11 +93,25 @@ The repository remains untouched by the overlay.
 
 ## Chosen design
 
-Add one ephemeral, generic boolean decision to `domain.DeliveryPlan`:
-`RequiresNativeProjectionRefresh bool`, tagged `json:"-"`. Its precise meaning
-is: **the current adapter's prepared host projection differs from a recognized
+Add one ephemeral, generic boolean decision to `domain.DeliveryPlan`, stored in
+the private field `requiresNativeProjectionRefresh`. Expose
+`RequiresNativeProjectionRefresh() bool` for readers and
+`WithNativeProjectionRefresh(bool) DeliveryPlan` for trusted planners to return a
+value copy with the current decision. This follows the existing private
+profile-authority/value-copy pattern on the same plan. Its precise meaning is:
+**the current adapter's prepared host projection differs from a recognized
 recorded native representation, so an explicit update must not use only package
 revision equality to skip staging**.
+
+An initial implementation using the originally proposed exported boolean passed
+behavior and recovery tests, but the operational golden harness deliberately
+reflects every exported field regardless of JSON tags. It therefore added a false
+decision to every stored plan snapshot, including frozen client cases. Preserve
+the golden bytes and the harness's complete exported-field coverage: private
+storage omits the new transient implementation detail without editing fixtures,
+changing shared normalization, or weakening a test. The public JSON contract also
+remains identical because it cannot encode/decode the private field. This is an
+encapsulation refinement of the same decision, not a new policy or capability.
 
 The decision is computed through the existing `clients.PlanRefiner`; no new
 capability interface, dispatcher, service, recovery engine, persisted receipt,
@@ -113,14 +127,17 @@ existing `RefinePlan` already receives that input and the prepared immutable hos
 Use those predecessor objects, not ambient native configuration, rediscovery,
 constructor guesses, or the desired staged objects, to compute the decision.
 
-The generic planner starts with the zero decision. The OpenCode refiner sets it
-explicitly from the current inputs on every successful refinement, so a reused
-plan cannot retain an unrelated earlier true value. Other adapters keep the zero
-decision until they have a concrete host projection requirement of their own.
-Struct copies and the existing plan-cloning helpers preserve it inside the
-operation. It is not written to installation state, package projection metadata,
-native intent, mutation receipts, public installer DTOs, or diagnostics JSON.
-JSON decoding therefore cannot restore it as a plan authority.
+The generic planner starts with the zero decision. The OpenCode refiner replaces
+its plan with the value returned by `WithNativeProjectionRefresh` using the
+current inputs on every successful refinement, so a reused plan cannot retain an
+unrelated earlier true value. Other adapters keep the zero decision until they
+have a concrete host projection requirement of their own. Struct copies and the
+existing plan-cloning helpers preserve it inside the operation. The value-copy
+method must also leave its receiver and all other plan facts unchanged. It is not
+written to installation state, package projection metadata, native intent,
+mutation receipts, public installer DTOs, diagnostics JSON, or reflection-based
+exported-field goldens. JSON decoding therefore cannot restore it as a plan
+authority.
 
 The decision grants no native ownership or mutation permission. True only
 prevents an optimization; all confirmation, frozen profile, package verification,
@@ -193,7 +210,9 @@ dialect uses the existing staged runtime path before activation. Preserve
 
 Expected production edits are limited to:
 
-- `domain/clients.go`: add the ephemeral plan decision and its contract comment.
+- `domain/clients.go`: add private storage for the ephemeral plan decision.
+- One small `domain/plan_projection_refresh.go` file: document and implement the
+  reader and value-copy methods, including trusted custom-planner responsibility.
 - `clients/opencode/plan.go` or one small adjacent adapter helper: compute it
   during existing refinement from frozen predecessor receipts and prepared host.
 - `usecase/apply.go`: consume it in single update's existing shortcut.
@@ -226,6 +245,12 @@ previous decision was true. Check exact predecessor slices remain unchanged.
 Exercise missing-host native refusal and hostless metadata-only behavior. Keep
 unknown-host/unknown-kind cases within the existing admission policy; test that
 the new decision adds no authority rather than inventing a new rejection rule.
+Test that the value-copy method returns its explicit true/false decision without
+mutating its receiver or other plan facts, that JSON cannot encode/restore it,
+and that ordinary operation-local copies retain it. A trusted custom planner
+test must demonstrate that single/group usecases consume the generic decision
+for another client without knowing OpenCode's representation. Leave the shared
+golden normalizer and every frozen fixture unchanged.
 
 The matrix should establish that a matching subset cannot hide an opposite
 recognized receipt, while malformed/mixed state still passes through the
@@ -315,6 +340,25 @@ review remain merge gates managed by the coordinator.
 5. Root manages all commits, pushes, PR publication and merge. No source changes,
    new package-manager/recovery machinery, group-facade widening, or release work
    are authorized by the plan-writing step itself.
+
+### Independent review and encapsulation checkpoint
+
+The independent plan critic `/root/final_review_application_boundaries` approved
+the original bounded plan with no requested corrections on 2026-10-30. The critic
+explicitly accepted the documented trusted custom-planner tradeoff, existing
+`PlanRefiner` reuse, update-only consumption, both recorder-backed transition
+directions, no-change runtime checks, preserved repeated add/repair semantics,
+and fresh-facade recovery gates. Root published the approved plan as draft PR
+[#595](https://github.com/777genius/universal-agent-plugins/pull/595), original plan
+head `c9b863c69e80b74857b4a4bfee15d3d6f2dbf6ad`.
+
+The exported-field golden observation above was reported before any golden or
+normalizer change. Root selected private storage plus the reader/value-copy
+methods as the preferred refinement and requested a fresh independent check and
+plan-only publication checkpoint. The existing initial implementation remains
+uncommitted while that refinement gate is pending. Do not interpret its observed
+green behavior tests as approval to skip the amended design review or the final
+code/CI gates.
 
 Acceptance is: both explicit same-revision grouped dialect transitions really
 materialize and acknowledge the requested native representation; matching updates
