@@ -37,13 +37,13 @@ jobs:
   package-manager:
     name: package-manager (${{ matrix.os }})
     # Real Git containment requires a conventional procfs on Linux. This focused
-    # qualification intentionally uses disposable hosted runners on both OSes.
+    # qualification uses disposable hosted runners, including both Mac architectures.
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-2025]
+        os: [ubuntu-24.04, windows-2025, macos-15, macos-15-intel]
     env:
       GOMAXPROCS: '3'
     steps:

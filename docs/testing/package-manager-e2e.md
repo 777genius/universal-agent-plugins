@@ -105,14 +105,17 @@ permission to bind a local HTTPS server. The report lists the excluded Registry
 cases and keeps `full_qualification: false`, even when the subset passes. A full
 run on a supported CI host is separate evidence for that host.
 
-## CI and the macOS handoff
+## CI and local macOS execution
 
 [`Package manager E2E`](../../.github/workflows/package-manager-e2e.yml) runs the
-full command on hosted Ubuntu and Windows when relevant source/test files change.
+full command on hosted Ubuntu 24.04, Windows 2025, macOS 15 on Apple Silicon
+(`macos-15`) and macOS 15 on Intel (`macos-15-intel`) when relevant source/test files change.
 It also supports manual dispatch. Superseded PR runs cancel automatically; jobs
 have a generous hang limit, retain reports and logs, and need no account secrets.
 
-For the owner's macOS run, check out the reviewed PR branch and run:
+The two macOS jobs exercise the same suite and assertions. Their runner labels
+select an OS generation and architecture; GitHub updates the underlying images.
+For an additional local macOS run, check out the reviewed PR branch and run:
 
 ```sh
 git fetch origin test/package-manager-conformance-20261030

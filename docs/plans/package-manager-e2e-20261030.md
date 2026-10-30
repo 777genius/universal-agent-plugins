@@ -228,3 +228,24 @@ was mistaken for an active lifecycle fact. Status checks now inspect exact
 labels in `facts[].facts`, with a regression that places diagnostic words in
 unrelated metadata. The transfer rollback assertion likewise requires the
 actual `rollback incomplete` diagnostic instead of a word present in its path.
+
+## Owner follow-up: broader installation qualification
+
+The owner now authorizes macOS execution in GitHub Actions, asks for more deep
+synthetic-plugin installation journeys, and requests an evidence-based readiness
+assessment after execution. The earlier owner-only macOS handoff is superseded.
+Keep the same draft PR and publish every commit immediately.
+
+An independent Sol/xhigh portability critic approved adding both `macos-15`
+(Apple Silicon) and `macos-15-intel` to the existing full-suite matrix after
+checking the [official runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+These are explicit OS/architecture labels, not immutable machine images. Every
+row uses the same entry point and required-case verification. No native runtime
+qualification is implied by filesystem/composed installation success.
+
+Three renewed Sol/xhigh investigations cover concrete installation/lifecycle
+gaps, adversarial failure/recovery behavior, and portable execution/evidence.
+Prioritize new user journeys and stronger installed-byte assertions; selecting
+existing tests improves reusable coverage but is not counted as new scenarios.
+Keep the current resolver/update-policy boundaries and discuss any controversial
+production design change with the owner before implementation.
