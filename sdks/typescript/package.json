@@ -1,6 +1,6 @@
 {
   "name": "universal-agent-plugins-management-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Typed client and optional Node host for the Universal Agent Plugins (UAP) Go management engine",
   "license": "Apache-2.0",
   "repository": {

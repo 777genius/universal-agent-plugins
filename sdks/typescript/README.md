@@ -8,18 +8,18 @@ The SDK never downloads or updates an engine executable.
 
 ## Install or consume a packed build
 
-The source package is `universal-agent-plugins-management-sdk` version `0.1.0`.
+The source package is `universal-agent-plugins-management-sdk` version `0.1.1`.
 SDK versions and npm publication are independent of CLI releases. Verify that the
 exact SDK version is available on npm:
 
 ```sh
-npm view universal-agent-plugins-management-sdk@0.1.0 version
+npm view universal-agent-plugins-management-sdk@0.1.1 version
 ```
 
-Only after that check returns `0.1.0`, install it from the registry:
+Only after that check returns `0.1.1`, install it from the registry:
 
 ```sh
-npm install --save-exact universal-agent-plugins-management-sdk@0.1.0
+npm install --save-exact universal-agent-plugins-management-sdk@0.1.1
 ```
 
 If that version has not been published, build and pack it from a clean, reviewed
@@ -38,14 +38,14 @@ source checkout instead:
 )
 ```
 
-Install the resulting `universal-agent-plugins-management-sdk-0.1.0.tgz` in the
+Install the resulting `universal-agent-plugins-management-sdk-0.1.1.tgz` in the
 consuming project using its absolute path, and retain its digest and source commit
 with the lockfile. A local build is not evidence of a public npm publication.
 
 The release workflow builds versioned tarballs from immutable
-`management-sdk-vX.Y.Z` tags and attests their exact bytes. After the initial
-owner bootstrap, public publication uses npm trusted publishing with npm
-provenance. See the
+`management-sdk-vX.Y.Z` tags and attests their exact bytes. From 0.1.1, it
+publishes those bytes through npm trusted publishing with npm provenance;
+0.1.0 was a one-time owner bootstrap without npm provenance. See the
 [changelog](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/CHANGELOG.md)
 for release notes and migration from the earlier `@uap/management-sdk`
 development tarball.
@@ -63,10 +63,10 @@ refuse an engine that does not report management API v1
 (`UNSUPPORTED_API_VERSION`); the SDK does not compare engine version strings.
 Use `requiredCapabilities` to refuse an engine without a feature your host needs.
 
-`checkUpdates` is a newer development-source capability. It requires an SDK
-and engine built from a reviewed revision containing that operation; CLI 0.1.95
-predates it. See [Explicit update checks](#explicit-update-checks-development-source)
-below before choosing the engine and SDK for that method.
+`checkUpdates` (SDK 0.1.1 and newer) needs an engine that serves that operation;
+CLI 0.1.95 and older do not. It has no capability entry, so `requiredCapabilities`
+cannot detect it. See [Explicit update checks](#explicit-update-checks) below
+before choosing the engine for that method.
 
 ## Provision the engine
 
@@ -136,12 +136,17 @@ paths, forward private profile facts to a renderer, or turn discovery into autom
 installation. Hosts preserve their own explicitly selected native profiles and can
 merge additional discovered profiles into the captured startup context.
 
-## Explicit update checks (development source)
+## Explicit update checks
 
-The current development engine adds `client.checkUpdates({ all: true })` or
-`client.checkUpdates({ aliases: ['docs', 'tools'] })`. Use an SDK tarball and engine
-executable built from the same reviewed source revision containing this operation;
-CLI 0.1.95 predates it. The method performs a disposable read-only network check
+SDK 0.1.1 adds `client.checkUpdates({ all: true })` and
+`client.checkUpdates({ aliases: ['docs', 'tools'] })` for
+`POST /api/v1/environment/check-updates`. CLI 0.1.95 and older do not serve this
+operation and answer `404`; the SDK reports that as a `ManagementError` with
+`code === 'HTTP_ERROR'` and `status === 404`. Use a CLI release whose release notes
+list this operation, or build the engine from the `management-sdk-vX.Y.Z` tag of the
+SDK version you install, as described in [Provision the engine](#provision-the-engine),
+and pin its revision and digest.
+The method performs a disposable read-only network check
 and does not save freshness, change the agreement, or install files.
 Ordinary `client.environment()` stays passive and reports unchecked moving intent
 as `check_unavailable`.
@@ -396,8 +401,17 @@ separate job that runs no repository code attests those exact bytes. Only
 stable `X.Y.Z` versions are accepted; they are published with the `latest`
 dist-tag.
 
-`publish=true` additionally publishes those exact bytes through npm trusted
-publishing after the `npm-management-sdk` environment approves the job. Before
+After that run succeeds, start the same version with `publish=true`:
+
+```sh
+gh workflow run management-sdk-release.yml --repo 777genius/universal-agent-plugins \
+  --ref "management-sdk-v${SDK_RELEASE_VERSION:?Set SDK_RELEASE_VERSION to the package version}" \
+  -f "version=${SDK_RELEASE_VERSION}" -f publish=true
+```
+
+`publish=true` reruns the qualification and additionally publishes the exact
+bytes through npm trusted publishing after a required reviewer approves the
+`npm-management-sdk` deployment. Before
 publishing, the job verifies the tarball digest and its GitHub attestation and
 refuses an OIDC identity that is not this repository, workflow, tag and
 environment. Afterwards it checks the registry metadata, `latest` tag,
@@ -415,50 +429,22 @@ Preconditions for `publish=true`, checked by the workflow where possible:
 - The package already exists on npm, and its trusted publisher names GitHub
   Actions, `777genius` / `universal-agent-plugins`, the workflow filename
   `management-sdk-release.yml` and the environment `npm-management-sdk`, with
-  direct `npm publish` allowed.
+  direct `npm publish` allowed. A newly saved trusted publisher stays pending
+  and expires unless a publication through it succeeds within two days, so run
+  `publish=true` soon after changing that configuration.
 
-npm can configure a trusted publisher only for an existing package, so the
-first version is a one-time bootstrap by the npm package owner. Run the
-workflow with `publish=false`, then publish that run's attested tarball once.
-Take the expected commit from your own up-to-date clone, not from the artifact.
-Set `SDK_RELEASE_VERSION` to the intended version and `SDK_RELEASE_RUN_ID` to
-the successful `publish=false` workflow run ID:
+### Bootstrap history
 
-```sh
-(
-  set -euo pipefail
-  version="${SDK_RELEASE_VERSION:?Set SDK_RELEASE_VERSION to the package version}"
-  run="${SDK_RELEASE_RUN_ID:?Set SDK_RELEASE_RUN_ID to the successful publish=false run ID}"
-  git fetch origin main "refs/tags/management-sdk-v${version}:refs/tags/management-sdk-v${version}"
-  commit=$(git rev-parse "management-sdk-v${version}^{commit}")
-  git merge-base --is-ancestor "$commit" origin/main
-  test "$(gh run view "$run" --repo 777genius/universal-agent-plugins --json headSha,conclusion,event \
-    --jq 'select(.conclusion == "success" and .event == "workflow_dispatch") | .headSha')" = "$commit"
-  gh run download "$run" --repo 777genius/universal-agent-plugins \
-    -n "management-sdk-${version}" -D "management-sdk-${version}"
-  cd "management-sdk-${version}"
-  sha256sum --check checksums.txt
-  test "$(cat source-commit.txt)" = "$commit"
-  gh attestation verify "universal-agent-plugins-management-sdk-${version}.tgz" \
-    --repo 777genius/universal-agent-plugins \
-    --signer-workflow github.com/777genius/universal-agent-plugins/.github/workflows/management-sdk-release.yml \
-    --source-ref "refs/tags/management-sdk-v${version}" --source-digest "$commit" --deny-self-hosted-runners
-  npm publish "./universal-agent-plugins-management-sdk-${version}.tgz" \
-    --access public --tag latest --provenance=false
-)
-```
-
-The subshell stops at the first failed check, before `npm publish`. On macOS,
-replace `sha256sum --check` with `shasum -a 256 --check`.
-
-npm provenance can only be generated on a supported CI provider, so this one
-local publication passes `--provenance=false`; the GitHub attestation still
-binds its bytes to the tag commit. Configure the trusted publisher when the
-next version is ready: a new configuration expires unless a publication through
-it succeeds within two days. After that publication succeeds, set the package's
-publishing access to "Require two-factor authentication and disallow tokens".
-The workflow never creates the package or uses a token; if the package is
-missing it fails closed.
+npm can configure a trusted publisher only for an existing package, so 0.1.0
+was a one-time bootstrap: the npm package owner published the attested tarball
+of its `publish=false` run with `--provenance=false`. Its GitHub attestation
+still binds those bytes to the `management-sdk-v0.1.0` tag. The
+[0.1.0 README](https://github.com/777genius/universal-agent-plugins/blob/management-sdk-v0.1.0/sdks/typescript/README.md#release)
+keeps that procedure. Do not publish later versions locally; `publish=true`
+publishes them with npm provenance. Once a trusted publication has succeeded,
+the package's publishing access should be "Require two-factor authentication
+and disallow tokens". The workflow never creates the package or uses a token;
+if the package is missing it fails closed.
 
 ## Real engine qualification
 
