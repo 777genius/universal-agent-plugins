@@ -41,7 +41,7 @@ def run_installations(run, binary, scratch, env):
     run.save()
     try:
         _installations(run, binary, scratch, env, facts)
-    except (OSError, ValueError, KeyError, IndexError, TypeError, RuntimeError) as error:
+    except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError, RuntimeError) as error:
         facts.update(status="fail", error=str(error))
         run.save()
         raise RuntimeError("unchanged-binary installation proof failed: " + str(error)) from error

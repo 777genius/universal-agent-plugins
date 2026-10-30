@@ -158,19 +158,17 @@ have a generous hang limit, retain reports and logs, and need no account secrets
 
 The two macOS jobs exercise the same suite and assertions. Their runner labels
 select an OS generation and architecture; GitHub updates the underlying images.
-For an additional local macOS run, check out the reviewed PR branch and run:
+For an optional supplementary local macOS run, check out the revision you
+want to qualify and run:
 
 ```sh
-git fetch origin test/package-manager-conformance-20261030
-git switch --track origin/test/package-manager-conformance-20261030
 python3 scripts/package-manager-e2e.py
 ```
 
-If the branch already exists locally, switch to it and update it normally before
-running the command. Success is exit code 0 with `suite: full`, `status: pass`,
+Success is exit code 0 with `suite: full`, `status: pass`,
 `full_qualification: true` and `source_unchanged_during_run: true` in the report.
-The reported platform must be Darwin. A Linux or Windows result cannot substitute
-for this macOS execution.
+The reported platform must be Darwin for macOS evidence; a Linux or Windows
+result does not qualify a Mac.
 
 ## Adding a scenario
 

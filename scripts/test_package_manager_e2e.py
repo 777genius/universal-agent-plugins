@@ -99,5 +99,53 @@ class EvidenceAcceptanceTests(unittest.TestCase):
             process.stderr.close()
 
 
+    def test_smoke_exception_preserves_independent_qualification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = RUNNER.Run.__new__(RUNNER.Run)
+            run.directory = root
+            run.env = {"GOPATH": str(root / "gopath"), "GOCACHE": str(root / "gocache")}
+            run.groups = RUNNER.CATALOG_GROUPS
+            run.catalog_required = ["catalog-case"]
+            run.install_required = ["installation-case"]
+            run.composed_required = ["composition-case"]
+            run.report = {"suite": "full", "source": {"commit": "unchanged"}, "phases": []}
+            (root / ("agentplugins.exe" if os.name == "nt" else "agentplugins")).write_bytes(b"fixture")
+            called = []
+
+            def command(name, *args, **kwargs):
+                called.append(name)
+                return True
+
+            with patch.object(run, "command", side_effect=command), \
+                    patch.object(run, "smoke", side_effect=KeyError("missing smoke diagnostic")), \
+                    patch.object(RUNNER, "run_installations", return_value=True), \
+                    patch.object(RUNNER, "source_identity", return_value={"commit": "unchanged"}):
+                self.assertFalse(run.execute(root))
+
+            self.assertIn("missing smoke diagnostic", run.report.get("smoke_error", ""))
+            self.assertEqual(called, ["build", "catalog", "installations", "composition"])
+            self.assertEqual(run.report["status"], "fail")
+            self.assertFalse(run.report["full_qualification"])
+            self.assertEqual(json.loads((root / "report.json").read_text())["status"], "fail")
+
+    def test_nested_binary_installation_error_is_reported(self):
+        import package_manager_binary
+
+        class Recorder:
+            def __init__(self):
+                self.report = {}
+
+            def save(self):
+                pass
+
+        run = Recorder()
+        with patch.object(package_manager_binary, "_installations",
+                          side_effect=AttributeError("unexpected null nested JSON")):
+            with self.assertRaisesRegex(RuntimeError, "unchanged-binary installation proof failed"):
+                package_manager_binary.run_installations(run, None, None, None, None)
+        self.assertEqual(run.report["binary_installation"]["status"], "fail")
+        self.assertIn("unexpected null nested JSON", run.report["binary_installation"]["error"])
+
 if __name__ == "__main__":
     unittest.main()

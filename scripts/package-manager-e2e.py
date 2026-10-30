@@ -328,14 +328,23 @@ class Run:
         if built:
             self.report["binary_sha256"] = sha256(binary)
             self.save()
-        smoke = self.smoke(binary, scratch) if built else False
+        smoke = False
+        if built:
+            try:
+                smoke = self.smoke(binary, scratch)
+            except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError, RuntimeError) as error:
+                # A failed smoke proof must remain visible without suppressing
+                # the independent graph, installation and composition phases.
+                self.report["smoke_error"] = str(error)
+                self.save()
+                print(str(error), file=sys.stderr)
         binary_installations = False
         if built:
             try:
                 install_env = isolated_environment(scratch / "binary-install-profile",
                                                    {key: self.env[key] for key in ["GOPATH", "GOCACHE"]})
                 binary_installations = run_installations(self, binary, scratch, install_env)
-            except RuntimeError as error:
+            except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError, RuntimeError) as error:
                 # Retain independent catalog results even when public scanner
                 # acquisition or an executable postcondition fails.
                 print(str(error), file=sys.stderr)
