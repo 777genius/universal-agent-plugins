@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,9 @@ import (
 // This replays only captured argv through the real public CLI composition.
 // The shell used to check presentation runs printf, never agentplugins/purge.
 func TestProjectRetainedDataGuidancePreservesSelectedRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shell argv replay is not qualified on Windows, even when Git supplies sh")
+	}
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("POSIX argument-presentation check requires sh; no Windows shell qualification claimed")
 	}
