@@ -24,3 +24,5 @@ func ExitCodeFromErr(err error) int {
 	}
 	return 1
 }
+
+// Throwaway CI path filter check, not for merge.
