@@ -83,7 +83,7 @@ jobs:
         include:
           - {runner: ubuntu-24.04, platform: linux, arch: amd64}
           - {runner: windows-2022, platform: windows, arch: amd64}
-          - {runner: macos-14, platform: darwin, arch: arm64}
+          - {runner: macos-15, platform: darwin, arch: arm64}
     runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.runner == 'ubuntu-24.04' && matrix.runner || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.runner || startsWith(matrix.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.runner) || matrix.runner }}
     timeout-minutes: 12
     env:
