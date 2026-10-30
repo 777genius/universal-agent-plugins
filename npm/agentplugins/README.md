@@ -171,11 +171,12 @@ Create a root `plugin.json` with optional `skills/` and `mcp.json`, then validat
 and install the package. The verified 0.1.95 installer does not expose
 `agentplugins author`. Some examples in the
 [Build guide](https://universal-agent-plugins.com/docs/en/build/) require a
-qualified authoring build or a source build. The separately versioned
-`universal-agent-plugins-management-sdk` has its own
+qualified authoring build or a source build. The TypeScript Management SDK is
+the separate npm package `universal-agent-plugins-management-sdk`; it drives
+the `manage` commands of CLI 0.1.95 and newer. Its
 [SDK README](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md)
-with engine compatibility, npm availability checks and a pinned-source package
-workflow. Pin the SDK and engine independently.
+covers engine compatibility and package checks. Pin the SDK and engine
+independently.
 
 ## Safety and verification
 

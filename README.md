@@ -346,10 +346,10 @@ behavior](docs/CODEX_TRANSPORT_EVIDENCE.md).
 ## Already built with UAP SDK
 
 Build with reusable Go installer components and typed runtime hooks. The
-[TypeScript Management SDK](sdks/typescript/README.md) is versioned separately as
-`universal-agent-plugins-management-sdk`. Its README covers engine compatibility,
-checking npm availability, and building and testing a package from a pinned
-source commit. Pin the SDK and engine independently.
+[TypeScript Management SDK](sdks/typescript/README.md) is published on npm as
+`universal-agent-plugins-management-sdk` and drives the `agentplugins` 0.1.95+
+management engine. Its README covers engine compatibility and package checks.
+Pin the SDK and engine independently.
 
 <table>
   <tr>
