@@ -327,6 +327,8 @@ async function setup(
     ),
     errors,
     plugin,
+    manifest,
+    body,
   };
 }
 for (const width of [1280, 390]) {
@@ -492,6 +494,33 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
     expect(errors).toEqual([]);
   });
 }
+
+
+test('v3 report recovers from 503 in the same open card without losing coverage', async ({
+  page,
+}) => {
+  const { assessment, errors, manifest, body } = await setup(page, 'unavailable');
+  await expect(assessment.locator(':scope > summary')).toContainText('Report unavailable');
+  await assessment.locator(':scope > summary').click();
+  const retry = assessment.getByRole('button', { name: 'Try loading again' });
+  await expect(retry).toBeVisible();
+  const requests: string[] = [];
+  await page.route('**/reports/skillspector/v3/**', (route) => {
+    const isManifest = route.request().url().endsWith('/index.json');
+    requests.push(isManifest ? 'manifest' : 'shard');
+    return isManifest
+      ? route.fulfill({ json: manifest })
+      : route.fulfill({ body, contentType: 'application/json' });
+  });
+  await retry.click();
+  await expect(assessment.locator(':scope > summary')).toContainText('Partially scanned');
+  await expect(assessment.locator('.skillspector__advice')).toContainText(
+    'Skills fully checked: 3 of 13',
+  );
+  await expect(retry).toHaveCount(0);
+  expect(requests).toEqual(['manifest', 'shard']);
+  expect(errors).toEqual([]);
+});
 
 test('v3 detail page opens install advice before installation and explains the metadata badge', async ({
   page,
