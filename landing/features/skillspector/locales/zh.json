@@ -17,7 +17,7 @@
       "checked": "检查日期：{date}",
       "revision": "修订版本",
       "scanner": "仅静态检查 · SkillSpector {version}",
-      "disclaimer": "此历史报告仅涵盖所记录修订版本中的指定技能文件。它不会运行代码，也不保证安全。",
+      "disclaimer": "此报告仅涵盖所记录修订版本中的指定技能文件。它不会运行代码，也不保证安全。",
       "unverified": "此条目的当前修订版本尚未验证。",
       "incomplete": "部分扫描",
       "source": "源文件",

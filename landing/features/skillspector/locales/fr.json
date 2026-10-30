@@ -17,7 +17,7 @@
       "checked": "Vérifié le {date}",
       "revision": "Révision",
       "scanner": "Vérifications statiques uniquement · SkillSpector {version}",
-      "disclaimer": "Ce rapport historique couvre uniquement les fichiers de Skills indiqués à la révision enregistrée. Il n’exécute pas de code et ne garantit pas la sécurité.",
+      "disclaimer": "Ce rapport couvre uniquement les fichiers de Skills indiqués à la révision enregistrée. Il n’exécute pas de code et ne garantit pas la sécurité.",
       "unverified": "La révision actuelle de cette fiche n’a pas été vérifiée.",
       "incomplete": "Analyse partielle",
       "source": "Fichiers sources",

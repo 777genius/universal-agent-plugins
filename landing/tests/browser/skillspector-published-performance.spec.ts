@@ -94,6 +94,8 @@ async function publishedHome(page: Page, context: BrowserContext, isolated = fal
   } else await page.goto('./');
   await hydrated(page);
   await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
+  if (!isolated)
+    await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', 'current');
   // Anchor subsequent probes to stable source identity, not a megabyte of descendant text.
   const report = page.locator(
     `[data-install-source=${JSON.stringify(isolated ? 'i18n-state-00' : cloudflareSource)}] details.skillspector`,
