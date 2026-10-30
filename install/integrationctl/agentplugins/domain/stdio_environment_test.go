@@ -4,10 +4,10 @@ import "testing"
 
 func TestReservedStdioEnvKeyPlatformRules(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		env any
+		name    string
+		env     any
 		windows bool
-		want string
+		want    string
 	}{
 		{"none", nil, true, ""},
 		{"canonical-any", map[string]any{"PLUGIN_ROOT": "bad"}, false, "PLUGIN_ROOT"},
