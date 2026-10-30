@@ -40,3 +40,29 @@ A consumer that supplied all prospective binding inputs but relied on a nil erro
 after an invalid target will now receive the resolution error. Such a result never
 provided the requested binding/path. Intentionally partial requests and recorded
 binding lookup continue to succeed under the same conditions.
+
+## Independent review
+
+A fresh GPT-6.1 Sol xhigh reviewer approved the implementation with no blocking
+correctness or compatibility findings. The reviewer checked preserved partial
+requests and recorded-binding priority, original-error identity, absence of
+state/native writes and the unchanged public signature. An independent uncached
+`go test ./installer -run '^TestReserveIdentity' -count=1` passed, including the
+existing reservation/Prepare correspondence and collision regressions. The only
+intended behavior change is truthful error reporting for a complete prospective
+request whose target cannot resolve.
+
+## Implementation evidence
+
+The private helper now returns resolution errors unchanged, and `ReserveIdentity`
+propagates them through its existing error result. The new regressions reproduce
+both relative-root and file-as-profile refusals and preserve an adapter sentinel
+through `errors.Is`. Omitted-input requests and existing-binding lookup are tested
+with a target layout that fails if called; the existing read-only test store also
+rejects any attempted state save.
+
+All `TestReserveIdentity*` tests passed, including the existing reservation/Prepare
+identity match and direct-collision regressions. Running the two new error tests
+against the unchanged base implementation through a Go source overlay failed on
+the expected nil errors, confirming that they exercise the defect. No Linux
+containment workaround or assertion weakening was needed for these focused checks.
