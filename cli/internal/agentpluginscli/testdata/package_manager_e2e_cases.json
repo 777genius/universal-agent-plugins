@@ -23,6 +23,31 @@
     "mixed-source-target-union",
     "portable-cold-restore"
   ],
+  "transport": [
+    "zip",
+    "tar",
+    "tar-gzip",
+    "tgz",
+    "extensionless",
+    "nested-literal-plus"
+  ],
+  "evolution": [
+    "graph-edge-replacement",
+    "graph-update-failure-retry",
+    "cascade-remove-drift",
+    "prune-drift-after-lock",
+    "competing-lock-writers",
+    "selective-cache-hydration"
+  ],
+  "adversarial": [
+    "foreign-native-settings",
+    "managed-native-drift",
+    "hostile-archives",
+    "cache-metadata-corruption",
+    "malformed-state",
+    "component-name-collision",
+    "stale-lock-metadata"
+  ],
   "agreement": [
     "manifest-rejections",
     "manifest-locations",

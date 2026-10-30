@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import signal
 import subprocess
@@ -19,20 +20,45 @@ import sys
 import tempfile
 import time
 
+from package_manager_binary import run_installations
+
 
 REPO = Path(__file__).resolve().parents[1]
 CATALOG = REPO / "cli/internal/agentpluginscli/testdata/package_manager_e2e_cases.json"
+INSTALL_CATALOG = REPO / "cli/cmd/agentplugins/testdata/package_manager_install_cases.json"
 CLI_PACKAGE = "github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 MAIN_PACKAGE = "github.com/777genius/plugin-kit-ai/cli/cmd/agentplugins"
 ROOT_TEST = "TestPackageManagerE2E"
+INSTALL_ROOT_TEST = "TestPackageManagerInstallE2E"
+CATALOG_GROUPS = ("archive", "registry", "agreement", "transport", "evolution", "adversarial")
+ARCHIVE_GROUPS = tuple(group for group in CATALOG_GROUPS if group != "registry")
 COMPOSED_TESTS = [
     "TestProjectComposedSourceLifecycleSeparatesUserAndProjects",
     "TestProjectComposedAgreementColdRestoreUsesPortablePins",
+    "TestProjectCursorComposedSourceLifecycle",
 ]
 
 
 def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def validate_case_ids(cases):
+    if (not isinstance(cases, list) or not cases
+            or any(not isinstance(case, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", case) for case in cases)
+            or len(set(cases)) != len(cases)):
+        raise ValueError("case inventory must contain unique nonempty canonical case IDs")
+    return cases
+
+
+def load_case_inventories():
+    catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
+    if not isinstance(catalog, dict) or set(catalog) != set(CATALOG_GROUPS):
+        raise ValueError("catalog groups changed; explicitly classify new groups before qualification")
+    for cases in catalog.values():
+        validate_case_ids(cases)
+    installations = validate_case_ids(json.loads(INSTALL_CATALOG.read_text(encoding="utf-8")))
+    return catalog, installations
 
 
 def validate_go_events(path, required, package, exit_code):
@@ -156,23 +182,28 @@ def stop_owned_process(process):
 
 
 class Run:
-    def __init__(self, directory, env, suite, catalog):
+    def __init__(self, directory, env, suite, catalog, installations):
         self.directory, self.env = directory, env
-        groups = list(catalog) if suite == "full" else ["archive", "agreement"]
-        self.required = [ROOT_TEST] + [f"{ROOT_TEST}/{group}" for group in groups]
-        self.required += [f"{ROOT_TEST}/{group}/{case}" for group in groups for case in catalog[group]]
+        self.groups = CATALOG_GROUPS if suite == "full" else ARCHIVE_GROUPS
+        self.catalog_required = [ROOT_TEST] + [f"{ROOT_TEST}/{group}" for group in self.groups]
+        self.catalog_required += [f"{ROOT_TEST}/{group}/{case}" for group in self.groups for case in catalog[group]]
+        self.install_required = [INSTALL_ROOT_TEST] + [f"{INSTALL_ROOT_TEST}/{case}" for case in installations]
+        self.composed_required = [name + "/zip" for name in COMPOSED_TESTS] + COMPOSED_TESTS
+        self.required = self.catalog_required + self.install_required + self.composed_required
         self.report = {
-            "schema_version": 1, "suite": suite, "status": "running",
+            "schema_version": 2, "suite": suite, "status": "running",
             "full_qualification": False, "source": source_identity(env),
             "platform": {"os": platform.system(), "architecture": platform.machine()},
             "tools": {"python": platform.python_version(), "go": output(["go", "version"], env),
                       "git": output(["git", "--version"], env)},
             "required_tests": self.required,
-            "excluded_tests": [f"{ROOT_TEST}/{group}/{case}" for group in catalog if group not in groups
+            "catalog_sha256": sha256(CATALOG), "installation_catalog_sha256": sha256(INSTALL_CATALOG),
+            "excluded_tests": [f"{ROOT_TEST}/{group}/{case}" for group in CATALOG_GROUPS if group not in self.groups
                                for case in catalog[group]],
             "boundaries": ["Security assessment and verified Directory inputs are fixtures in composed cases.",
-                           "Native agent sessions, production scanner execution and model calls are not qualified.",
-                           "The unchanged executable has separate preflight and empty-environment smoke coverage."],
+                           "Native agent sessions, authentication, MCP execution and model calls are not qualified.",
+                           "The unchanged executable separately installs a local synthetic plugin using the real pinned production scanner.",
+                           "The scanner is downloaded from its public release into a cold disposable profile; no scanner assessment is preseeded."],
             "phases": [],
         }
         self.save()
@@ -180,9 +211,11 @@ class Run:
     def save(self):
         (self.directory / "report.json").write_text(json.dumps(self.report, indent=2) + "\n", encoding="utf-8")
 
-    def command(self, name, argv, proof_class, cwd=REPO, expected_success=True, required=None, package=None):
+    def command(self, name, argv, proof_class, cwd=REPO, expected_success=True, required=None, package=None, env=None):
         row = {"name": name, "argv": [str(arg) for arg in argv], "proof_class": proof_class,
                "status": "running"}
+        if required is not None:
+            row["required_tests"] = list(required)
         self.report["phases"].append(row)
         self.save()
         started = time.monotonic()
@@ -192,10 +225,11 @@ class Run:
         try:
             kwargs = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
             with stdout.open("wb") as out, stderr.open("wb") as err:
-                process = subprocess.Popen(row["argv"], cwd=cwd, env=self.env,
+                process = subprocess.Popen(row["argv"], cwd=cwd, env=self.env if env is None else env,
                                            stdin=subprocess.DEVNULL, stdout=out, stderr=err, **kwargs)
                 try:
-                    timeout = 780 if required else 60 if proof_class == "production_binary_smoke" else 600
+                    timeout = (780 if required else 60 if proof_class == "production_binary_smoke"
+                               else 120 if proof_class == "production_binary_installation" else 600)
                     row["exit_code"] = process.wait(timeout=timeout)
                 except subprocess.TimeoutExpired:
                     stop_owned_process(process)
@@ -295,20 +329,32 @@ class Run:
             self.report["binary_sha256"] = sha256(binary)
             self.save()
         smoke = self.smoke(binary, scratch) if built else False
-        selection = "^TestPackageManagerE2E$" if self.report["suite"] == "full" else "^TestPackageManagerE2E/(archive|agreement)$"
+        binary_installations = False
+        if built:
+            try:
+                install_env = isolated_environment(scratch / "binary-install-profile",
+                                                   {key: self.env[key] for key in ["GOPATH", "GOCACHE"]})
+                binary_installations = run_installations(self, binary, scratch, install_env)
+            except RuntimeError as error:
+                # Retain independent catalog results even when public scanner
+                # acquisition or an executable postcondition fails.
+                print(str(error), file=sys.stderr)
+        selection = "^TestPackageManagerE2E$" if self.report["suite"] == "full" else "^TestPackageManagerE2E/(" + "|".join(self.groups) + ")$"
         catalog = self.command("catalog", ["go", "test", "-tags=uappm_e2e", "-count=1", "-timeout=12m", "-json",
                                            "./cli/internal/agentpluginscli", "-run", selection],
-                               "composed_cli", required=self.required, package=CLI_PACKAGE)
-        required = [name + "/zip" for name in COMPOSED_TESTS] + COMPOSED_TESTS
+                               "composed_cli", required=self.catalog_required, package=CLI_PACKAGE)
+        installations = self.command("installations", ["go", "test", "-tags=uappm_e2e", "-count=1", "-timeout=12m", "-json",
+                                                        "./cli/cmd/agentplugins", "-run", "^" + INSTALL_ROOT_TEST + "$"],
+                                     "production_composed", required=self.install_required, package=MAIN_PACKAGE)
         composed = self.command("composition", ["go", "test", "-count=1", "-timeout=12m", "-json",
                                                   "./cli/cmd/agentplugins", "-run", "^(" + "|".join(COMPOSED_TESTS) + ")$/^zip$"],
-                                "production_composed", required=required, package=MAIN_PACKAGE)
+                                "production_composed", required=self.composed_required, package=MAIN_PACKAGE)
         stable = self.report["source"] == source_identity(self.env)
         self.report["source_unchanged_during_run"] = stable
         if not stable:
             self.report["error"] = "Source changed during execution; rerun against a stable checkout."
             print(self.report["error"], file=sys.stderr)
-        passed = built and smoke and catalog and composed and stable
+        passed = built and smoke and binary_installations and catalog and installations and composed and stable
         self.report.update(status="pass" if passed else "fail", full_qualification=passed and self.report["suite"] == "full")
         self.save()
         return passed
@@ -330,13 +376,13 @@ def main():
             if not shutil.which(command):
                 raise RuntimeError(f"{command} is required on PATH")
         caches = json.loads(subprocess.check_output(["go", "env", "-json", "GOPATH", "GOCACHE"], cwd=REPO, timeout=60))
-        catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
+        catalog, installations = load_case_inventories()
         with tempfile.TemporaryDirectory(prefix="uap pm Ω ") as temporary:
             scratch = Path(temporary).resolve()
-            run = Run(directory, isolated_environment(scratch, caches), args.suite, catalog)
+            run = Run(directory, isolated_environment(scratch, caches), args.suite, catalog, installations)
             passed = run.execute(scratch)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, KeyboardInterrupt) as error:
-        report = run.report if run else {"schema_version": 1, "suite": args.suite, "phases": []}
+        report = run.report if run else {"schema_version": 2, "suite": args.suite, "phases": []}
         report.update(status="fail", full_qualification=False, error=str(error) or "interrupted")
         (directory / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         print(str(error), file=sys.stderr)

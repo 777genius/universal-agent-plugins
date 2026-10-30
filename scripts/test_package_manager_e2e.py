@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 SPEC = importlib.util.spec_from_file_location("package_manager_e2e", Path(__file__).with_name("package-manager-e2e.py"))
@@ -17,6 +18,20 @@ SPEC.loader.exec_module(RUNNER)
 
 
 class EvidenceAcceptanceTests(unittest.TestCase):
+    def test_empty_duplicate_or_unsafe_case_inventory_is_refused(self):
+        for cases in [[], {}, ["same", "same"], ["a/b"], [""], [1], ["PASS"]]:
+            with self.subTest(cases=cases), self.assertRaises(ValueError):
+                RUNNER.validate_case_ids(cases)
+        self.assertEqual(RUNNER.validate_case_ids(["install", "cold-restore"]), ["install", "cold-restore"])
+
+    def test_unknown_group_cannot_silently_enter_archive_subset(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "catalog.json"
+            path.write_text(json.dumps({**{group: ["case"] for group in RUNNER.CATALOG_GROUPS},
+                                        "unknown-native-runtime": ["case"]}), encoding="utf-8")
+            with patch.object(RUNNER, "CATALOG", path), self.assertRaisesRegex(ValueError, "explicitly classify"):
+                RUNNER.load_case_inventories()
+
     def check(self, events, required=("TestCatalog", "TestCatalog/leaf"), exit_code=0):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "events.jsonl"

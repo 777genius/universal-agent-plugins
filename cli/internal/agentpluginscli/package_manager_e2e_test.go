@@ -18,9 +18,12 @@ var packageManagerCaseCatalog []byte
 
 func TestPackageManagerE2E(t *testing.T) {
 	groups := map[string]map[string]func(*testing.T){
-		"archive":   packageManagerArchiveCases(),
-		"registry":  packageManagerRegistryCases(),
-		"agreement": packageManagerAgreementCases(),
+		"archive":     packageManagerArchiveCases(),
+		"registry":    packageManagerRegistryCases(),
+		"agreement":   packageManagerAgreementCases(),
+		"transport":   packageManagerTransportCases(),
+		"evolution":   packageManagerEvolutionCases(),
+		"adversarial": packageManagerAdversarialCases(),
 	}
 	var catalog map[string][]string
 	if err := json.Unmarshal(packageManagerCaseCatalog, &catalog); err != nil {
@@ -43,9 +46,9 @@ func TestPackageManagerE2E(t *testing.T) {
 			seen[id] = true
 		}
 	}
-	// The runner selects archive+agreement with Go's ordinary -run group filter.
+	// The runner selects the explicit archive-safe groups with Go's -run filter.
 	// Registration above is checked in full even when only a subset executes.
-	for _, group := range []string{"archive", "registry", "agreement"} {
+	for _, group := range []string{"archive", "registry", "agreement", "transport", "evolution", "adversarial"} {
 		t.Run(group, func(t *testing.T) {
 			for _, id := range catalog[group] {
 				t.Run(id, groups[group][id])

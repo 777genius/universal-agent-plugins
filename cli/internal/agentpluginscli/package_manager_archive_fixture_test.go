@@ -39,6 +39,7 @@ type pmArchiveOrigin struct {
 	requests map[string]int
 	blocked  string
 	started  chan struct{}
+	release  <-chan struct{}
 }
 
 type pmArchiveGraph map[string][]string
@@ -60,15 +61,18 @@ func newPMArchiveOrigin(t *testing.T, graph pmArchiveGraph) *pmArchiveOrigin {
 		origin.mu.Lock()
 		origin.requests[r.Method+" "+r.URL.Path]++
 		body, found := origin.payloads[r.URL.Path]
-		blocked, started := origin.blocked == r.URL.Path, origin.started
+		blocked, started, release := origin.blocked == r.URL.Path, origin.started, origin.release
 		origin.mu.Unlock()
 		if blocked {
 			select {
 			case started <- struct{}{}:
 			default:
 			}
-			<-r.Context().Done()
-			return
+			select {
+			case <-release:
+			case <-r.Context().Done():
+				return
+			}
 		}
 		if !found || r.Method != http.MethodGet {
 			http.NotFound(w, r)
@@ -90,7 +94,7 @@ func newPMArchiveOrigin(t *testing.T, graph pmArchiveGraph) *pmArchiveOrigin {
 			"plugin.json":                  fmt.Sprintf(`{"$schema":%q,"name":%q,"version":"1.0.0","description":"Disposable package-manager graph"}`, domain.PluginSchemaV1, name),
 			"uap.toml":                     manifest,
 			"marker.txt":                   pmArchiveMarker(name),
-			"skills/" + name + "/SKILL.md": fmt.Sprintf("---\nname: %s\ndescription: Disposable graph marker\n---\n%s", name, pmArchiveMarker(name)),
+			"skills/" + name + "/SKILL.md": pmArchiveSkill(name),
 			"mcp.json":                     fmt.Sprintf(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{%q:{"type":"streamable-http","url":%q}}}`, name, "https://example.test/pm/"+name),
 		}
 		var body bytes.Buffer
@@ -114,6 +118,9 @@ func newPMArchiveOrigin(t *testing.T, graph pmArchiveGraph) *pmArchiveOrigin {
 
 func pmArchiveMarker(name string) string {
 	return "independent ZIP payload for " + name + " version 1.0.0\n"
+}
+func pmArchiveSkill(name string) string {
+	return fmt.Sprintf("---\nname: %s\ndescription: Disposable graph marker\n---\n%s", name, pmArchiveMarker(name))
 }
 func (o *pmArchiveOrigin) url(name string) string { return o.server.URL + "/" + name + ".zip" }
 func (o *pmArchiveOrigin) counts() map[string]int {
@@ -291,21 +298,26 @@ func (f pmArchiveEnvironment) assertInstalled(t *testing.T, expected pmArchiveTa
 	}
 	bindings := map[string]installer.InspectedBinding{}
 	settings := dependencyRead(t, filepath.Join(f.clients["gemini"].ConfigRoot, "settings.json"))
-	if !strings.Contains(settings, "https://foreign.test/mcp") || !strings.Contains(settings, "preserve foreign settings") {
-		t.Fatal("installation/removal changed foreign Gemini settings")
-	}
 	var native struct {
-		Servers map[string]json.RawMessage `json:"mcpServers"`
+		Servers  map[string]map[string]any `json:"mcpServers"`
+		Sentinel string                    `json:"sentinel"`
 	}
 	if err := json.Unmarshal([]byte(settings), &native); err != nil {
 		t.Fatal(err)
+	}
+	if native.Sentinel != "preserve foreign settings" || native.Servers["foreign.test"]["httpUrl"] != "https://foreign.test/mcp" {
+		t.Fatal("installation/removal changed foreign Gemini settings")
 	}
 	wantNative := 1
 	for name, targets := range expected {
 		if slices.Contains(targets, "gemini") {
 			wantNative++
-			if !strings.Contains(settings, fmt.Sprintf("%q", "https://example.test/pm/"+name)) {
-				t.Fatalf("Gemini settings omitted %s", name)
+			wantServer := map[string]any{"httpUrl": "https://example.test/pm/" + name}
+			if !reflect.DeepEqual(native.Servers[name], wantServer) {
+				t.Fatalf("Gemini server %s=%#v want=%#v", name, native.Servers[name], wantServer)
+			}
+			if body := dependencyRead(t, filepath.Join(f.clients["gemini"].ConfigRoot, "skills", name, "SKILL.md")); body != pmArchiveSkill(name) {
+				t.Fatalf("wrong native Gemini skill bytes for %s: %q", name, body)
 			}
 		}
 	}
@@ -328,7 +340,7 @@ func (f pmArchiveEnvironment) assertInstalled(t *testing.T, expected pmArchiveTa
 			}
 			name, target := binding.Owner.Alias, binding.ClientID
 			key := name + "/" + target
-			if !slices.Contains(expected[name], target) || bindings[key].BindingID != "" || binding.Materialization != "materialized" || binding.ProjectionStatus != "" {
+			if !slices.Contains(expected[name], target) || bindings[key].BindingID != "" || binding.Materialization != "materialized" || binding.ProjectionStatus != "" || binding.Activation != "active" || binding.Verification != "installation_verified" {
 				t.Fatalf("unexpected/unhealthy binding: %+v", binding)
 			}
 			bindings[key] = binding
@@ -338,6 +350,9 @@ func (f pmArchiveEnvironment) assertInstalled(t *testing.T, expected pmArchiveTa
 			}
 			if body := dependencyRead(t, filepath.Join(binding.TargetPath, "marker.txt")); body != pmArchiveMarker(name) {
 				t.Fatalf("wrong installed bytes for %s: %q", key, body)
+			}
+			if body := dependencyRead(t, filepath.Join(binding.TargetPath, "skills", name, "SKILL.md")); body != pmArchiveSkill(name) {
+				t.Fatalf("wrong installed skill bytes for %s: %q", key, body)
 			}
 		}
 	}

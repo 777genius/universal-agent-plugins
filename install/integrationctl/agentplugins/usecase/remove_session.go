@@ -74,7 +74,7 @@ func (session *removeSession) deactivateRemoveTarget() error {
 	var attempt *nativeRemovalAttempt
 	if nativeAttempt {
 		var err error
-		attempt, err = session.service.beginNativeRemovalAttempt(session.installation.InstallationID, session.clientKey, session.client)
+		attempt, err = session.service.beginNativeRemovalAttempt(session.installation.InstallationID, session.clientKey, session.client, session.state)
 		if err != nil {
 			return err
 		}

@@ -249,3 +249,60 @@ Prioritize new user journeys and stronger installed-byte assertions; selecting
 existing tests improves reusable coverage but is not counted as new scenarios.
 Keep the current resolver/update-policy boundaries and discuss any controversial
 production design change with the owner before implementation.
+
+### Follow-up design and independent critique
+
+The reviewed increment adds thirteen new graph-evolution/adversarial cases and
+nine production-composed installation journeys, reuses six existing archive
+transport cases with stronger installed-content assertions, and includes the
+existing Cursor ZIP composer lifecycle. The new composition uses strict real
+TLS routes and explicit rich package files, Gemini/Cursor native configuration,
+scoped data, and fixture detection/security. No new installer or resolver is
+introduced. Archive graph evolution avoids the separate Registry update policy.
+
+Critique requires positive witnesses for intended failure boundaries, exact
+independent skills/resources and parsed complete metadata values, preservation
+snapshots appropriate to each phase, no hidden skips, deterministic acquisition
+barriers for two competing commands, and allocated-data checks only where the
+fixture really allocates plugin data. Advisory lock process metadata is not
+mistaken for durable installed state. Production `install` convergence and
+strict `deps sync` drift refusal are tested as distinct documented contracts.
+
+An independent executable spike established that the unchanged binary can
+install a harmless nonempty local plugin through normal Gemini detection and
+the real pinned LintAI scanner without credentials or a native Gemini process.
+The common runner therefore adds this mandatory five-command subprocess
+lifecycle, with a cold scanner cache, actual scan identity/hash, exact installed
+and foreign bytes, no-op repeat, read-only inspection, missing-skill repair and
+removal. Public scanner acquisition is an explicit network requirement; it is
+not replaced by a fixture and cannot silently skip. Security/native fixtures
+remain explicit in the other test layers.
+
+The cross-source MCP collision probe confirms a current limitation: a native
+namespace conflict may be discovered after the new binding and desired agreement
+commit. Existing ownership must survive, the new binding must report truthful
+partial/failed state, same-pin retry must remain safe, and removing the failed
+addition must restore the prior usable environment. Independent critics accepted
+testing this current boundary without redefining global transaction semantics;
+earlier collision admission remains an explicit improvement opportunity. This
+observation is from the archive harness with optional native observation
+disabled; production-composed preflight is tested separately.
+
+The native-owned edit removal probe also found a distinct real defect. Gemini's
+transaction already reports a typed `NativeEffectUnchanged` when ownership
+verification fails before effects, but removal discarded that evidence and left
+an orphan attempt marker. Restoring the edited entry could not unblock retry.
+Two default installer regressions reproduced the unrecoverable state. Independent
+critics approved propagating the existing effect as a transient, non-serialized
+deactivation outcome and acknowledging only the exact newly created attempt when
+the complete expected predecessor remains unchanged. The original refusal still
+returns, native/managed/data authority stays intact, and unknown/partial effects,
+changed callback authority or failed persistence must retain uncertainty. No
+recovery guard or saved agreement rollback contract is relaxed.
+
+The runner now records schema-2 evidence with all phase requirements aggregated,
+per-phase required and passed IDs, and hashes of both shared case inventories.
+Unknown groups require deliberate archive-safe classification. Readiness scores
+will distinguish core resolution/replay/ownership, executable/security evidence,
+native runtime, and release/operational qualification rather than averaging test
+counts into a blanket production-ready claim.

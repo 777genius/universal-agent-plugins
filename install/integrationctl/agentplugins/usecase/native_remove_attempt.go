@@ -30,8 +30,8 @@ func freezeNativeRemovalAttempt(before, attempted domain.StateFileV2, attemptID 
 	return &nativeRemovalAttempt{before: frozen[0], attempted: frozen[1], attemptID: attemptID}, nil
 }
 
-func (service Service) beginNativeRemovalAttempt(installationID, bindingID string, predecessor domain.ClientBinding) (*nativeRemovalAttempt, error) {
-	return service.beginNativeAttemptWithPredecessor(installationID, bindingID, domain.NativeIntentRemove, predecessor.SelectedDelivery, predecessor.LocalEntryObservation.Clone(), &predecessor)
+func (service Service) beginNativeRemovalAttempt(installationID, bindingID string, client domain.ClientBinding, predecessor domain.StateFileV2) (*nativeRemovalAttempt, error) {
+	return service.beginNativeAttemptWithPredecessor(installationID, bindingID, domain.NativeIntentRemove, client.SelectedDelivery, client.LocalEntryObservation.Clone(), &predecessor)
 }
 
 // acknowledgeUnchangedRemoval aborts only an owned attempt whose callback

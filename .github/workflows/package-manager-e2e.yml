@@ -10,6 +10,7 @@ on:
       - '**/go.mod'
       - '**/go.sum'
       - 'scripts/package-manager-e2e.py'
+      - 'scripts/package_manager_binary.py'
       - 'scripts/test_package_manager_e2e.py'
       - '.github/workflows/package-manager-e2e.yml'
   push:
@@ -22,6 +23,7 @@ on:
       - '**/go.mod'
       - '**/go.sum'
       - 'scripts/package-manager-e2e.py'
+      - 'scripts/package_manager_binary.py'
       - 'scripts/test_package_manager_e2e.py'
       - '.github/workflows/package-manager-e2e.yml'
   workflow_dispatch:

@@ -236,3 +236,35 @@ func TestNativeRemovalAttemptSnapshotDoesNotAliasState(t *testing.T) {
 		t.Fatalf("frozen removal token aliased mutable predecessor: %s / %s", actualBefore, actualAttempted)
 	}
 }
+
+func TestNativeRemovalAttemptRejectsChangedSourcePredecessor(t *testing.T) {
+	service, statePath, id, _ := removeNoEffectFixture(t)
+	predecessor, err := service.StateStore.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := onlyBinding(predecessor.Installations[0])
+	changed, err := service.StateStore.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed.Installations[0].Source.Publisher = "newer external source authority"
+	if err := service.StateStore.Save(changed); err != nil {
+		t.Fatal(err)
+	}
+	newerBytes, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt, err := service.beginNativeRemovalAttempt(id, client.ClientBindingID, client, predecessor)
+	if err == nil || attempt != nil || !strings.Contains(err.Error(), "predecessor changed") {
+		t.Fatalf("source-only drift was adopted before native attempt: %+v %v", attempt, err)
+	}
+	afterBytes, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(newerBytes, afterBytes) {
+		t.Fatal("pre-attempt refusal overwrote newer source authority or published a marker")
+	}
+}

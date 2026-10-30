@@ -14,7 +14,7 @@ func (session *removeGroupSession) removeGroupNative() error {
 		var attempt *nativeRemovalAttempt
 		if nativeAttempt {
 			var err error
-			attempt, err = session.service.beginNativeRemovalAttempt(session.installation.InstallationID, item.clientKey, item.client)
+			attempt, err = session.service.beginNativeRemovalAttempt(session.installation.InstallationID, item.clientKey, item.client, session.state)
 			if err != nil {
 				return err
 			}

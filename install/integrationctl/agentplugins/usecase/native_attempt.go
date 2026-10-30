@@ -28,10 +28,13 @@ func (service Service) beginNativeAttemptWithObservation(installationID, binding
 	return err
 }
 
-func (service Service) beginNativeAttemptWithPredecessor(installationID, bindingID string, direction domain.NativeIntentDirection, selected domain.SelectedDelivery, previousObservation *domain.LocalEntryObservation, predecessor *domain.ClientBinding) (*nativeRemovalAttempt, error) {
+func (service Service) beginNativeAttemptWithPredecessor(installationID, bindingID string, direction domain.NativeIntentDirection, selected domain.SelectedDelivery, previousObservation *domain.LocalEntryObservation, predecessor *domain.StateFileV2) (*nativeRemovalAttempt, error) {
 	state, err := service.StateStore.Load()
 	if err != nil {
 		return nil, err
+	}
+	if predecessor != nil && !reflect.DeepEqual(state, *predecessor) {
+		return nil, fmt.Errorf("native removal predecessor changed before attempt")
 	}
 	for i, installation := range state.Installations {
 		if installation.InstallationID != installationID {
@@ -40,9 +43,6 @@ func (service Service) beginNativeAttemptWithPredecessor(installationID, binding
 		client, ok := installation.Clients[bindingID]
 		if !ok {
 			return nil, fmt.Errorf("client binding disappeared before native activation")
-		}
-		if predecessor != nil && !reflect.DeepEqual(client, *predecessor) {
-			return nil, fmt.Errorf("native removal predecessor changed before attempt")
 		}
 		if !client.LocalEntryObservation.Equal(previousObservation) {
 			return nil, fmt.Errorf("native attempt observation predecessor changed")
