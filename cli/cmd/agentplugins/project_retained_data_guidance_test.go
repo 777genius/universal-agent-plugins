@@ -17,8 +17,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-// This replays only captured argv through the real public CLI composition.
-// The shell used to check presentation runs printf, never agentplugins/purge.
+// This POSIX-only check replays captured argv through the real public CLI.
+// The shell used for presentation runs printf, never agentplugins/purge.
 func TestProjectRetainedDataGuidancePreservesSelectedRoot(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX shell argv replay is not qualified on Windows, even when Git supplies sh")
