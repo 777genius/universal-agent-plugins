@@ -124,7 +124,7 @@ the old path was exempt in the base revision and is gone from the working tree,
 the new path exists and is new, no two lines name the same file, and `git diff -M`
 sees the pair as a rename. A move that also rewrites the file past the similarity
 threshold is a rewrite, and a rewritten file does not keep its amnesty. The
-entry itself still has to carry the same linters and message shapes,
+entry itself still has to carry the same linters and the same message patterns,
 or the comparison fails as it would for any widening.
 
 Once the move has landed in the base branch the line is reported as removable and
@@ -137,7 +137,7 @@ the effect is identical. That is deliberate: such an edit should be looked at.
 
 ### Suppressions
 
-`//nolint` is allowed only with an explanation (`nolintlint` enforces it):
+`//nolint` is allowed only with an explanation (`nolintlint` enforcesces it):
 
 ```go
 //nolint:gosec // path is validated by pathpolicy.RequireExactPath above
