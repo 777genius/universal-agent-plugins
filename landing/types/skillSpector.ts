@@ -242,4 +242,12 @@ export interface SkillSpectorAssessment {
   groupCount?: number;
   rawCount?: number;
   unreviewedCount?: number;
+  outcomes?: {
+    complete: number;
+    limited: number;
+    failed: number;
+    historical: number;
+    unscanned: number;
+  };
+  retries?: { scheduled: number; blocked: number; exhausted: number };
 }
