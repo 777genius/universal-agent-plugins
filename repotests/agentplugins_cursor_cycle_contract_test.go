@@ -153,3 +153,51 @@ func TestCursorCycleRemovalRequiresExactDeactivation(t *testing.T) {
 		deactivation[key] = original
 	}
 }
+
+func TestCursorCyclePublicOutcomeRequiresMeasuredStageShape(t *testing.T) {
+	r := &cursorCycleRecipe{Installation: domain.Installation{InstallationID: "held-installation"}, Data: domain.DataReceipt{PhysicalBackend: "held-physical"}}
+	for _, stage := range []string{"add-a", "repeat-add-a", "unchanged-update-a", "intact-repair-a", "update-a", "missing-repair-a"} {
+		t.Run(stage, func(t *testing.T) {
+			verb := "add"
+			if strings.Contains(stage, "update") {
+				verb = "update"
+			} else if strings.Contains(stage, "repair") {
+				verb = "repair"
+			}
+			step := cursorCycleStep{stage, "a", verb}
+			plan := map[string]any{"client_id": "cursor", "scope": "project", "status": "ready", "package_mode": "native", "physical_artifact_id": "held-physical", "activation": "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "package_validated", "components": []any{map[string]any{"kind": "mcp_server", "name": "uapcursora", "support": "native"}}}
+			activation := map[string]any{"activation": "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "installation_verified"}
+			outcome := map[string]any{"installation_id": "held-installation", "plan": plan, "activation": activation, "requires_confirmation": false, "mutated": stage != "repeat-add-a" && stage != "unchanged-update-a"}
+			if stage != "repeat-add-a" {
+				outcome["group_phase"] = "external_completed"
+			}
+			if stage == "repeat-add-a" || stage == "unchanged-update-a" {
+				outcome["no_change"] = true
+			}
+			output := map[string]any{"result": outcome}
+			if err := cursorCyclePublicOutcome(output, step, r); err != nil {
+				t.Fatal("measured stage shape refused", err)
+			}
+			for _, field := range []string{"no_change", "group_phase"} {
+				before, present := outcome[field]
+				if present {
+					delete(outcome, field)
+				} else {
+					outcome[field] = true
+				}
+				if cursorCyclePublicOutcome(output, step, r) == nil {
+					t.Fatal("cross-stage or missing field admitted", field)
+				}
+				if present {
+					outcome[field] = false
+					if cursorCyclePublicOutcome(output, step, r) == nil {
+						t.Fatal("incorrect measured field value admitted", field)
+					}
+					outcome[field] = before
+				} else {
+					delete(outcome, field)
+				}
+			}
+		})
+	}
+}

@@ -95,14 +95,20 @@ func cursorCyclePublicOutcome(output map[string]any, step cursorCycleStep, r *cu
 		}
 		return nil
 	}
-	optional := ""
+	keys := "installation_id plan activation requires_confirmation mutated"
 	if step.label != "repeat-add-a" {
-		optional = "group_phase no_change"
+		keys += " group_phase"
+		if outcome["group_phase"] != "external_completed" {
+			return refused
+		}
 	}
-	if projectNativeRuntimeKeys(outcome, "installation_id plan activation requires_confirmation mutated", optional) != nil {
-		return refused
+	if step.label == "repeat-add-a" || step.label == "unchanged-update-a" {
+		keys += " no_change"
+		if outcome["no_change"] != true {
+			return refused
+		}
 	}
-	if step.label == "unchanged-update-a" && outcome["no_change"] != true {
+	if projectNativeRuntimeKeys(outcome, keys, "") != nil {
 		return refused
 	}
 	plan, p := outcome["plan"].(map[string]any)

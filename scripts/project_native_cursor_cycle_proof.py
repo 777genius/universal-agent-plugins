@@ -220,7 +220,7 @@ def public_result(raw, stage, selected):
                 if key in checks:
                     require(same(item, checks[key]))
                 if key == "no_change":
-                    require(type(item) is bool and item is (stage == "unchanged-update-a"))
+                    require(type(item) is bool and item is (stage in ("repeat-add-a", "unchanged-update-a")))
                 identities(item)
         elif type(value) is list:
             for item in value:
@@ -233,8 +233,15 @@ def public_result(raw, stage, selected):
         require(outcome["plugin"] == "native-proof" and outcome["client_id"] == "cursor" and outcome["affected_surfaces"] == ["cursor"] and outcome["group_phase"] == "external_completed")
         require(same(outcome["deactivation"], {"activation": "not_required", "artifact_removal_allowed": True, "external_removal_complete": True}))
     else:
-        obj(outcome, "installation_id plan activation requires_confirmation mutated", "group_phase no_change" if group else "")
-        if stage == "unchanged-update-a":
+        keys = "installation_id plan activation requires_confirmation mutated"
+        if group:
+            keys += " group_phase"
+        if stage in ("repeat-add-a", "unchanged-update-a"):
+            keys += " no_change"
+        obj(outcome, keys)
+        if group:
+            require(outcome["group_phase"] == "external_completed")
+        if stage in ("repeat-add-a", "unchanged-update-a"):
             require(outcome["no_change"] is True)
         plan, activation = outcome["plan"], outcome["activation"]
         obj(plan, "client_id scope status package_mode activation authentication policy verification physical_artifact_id components", "user_actions warnings")

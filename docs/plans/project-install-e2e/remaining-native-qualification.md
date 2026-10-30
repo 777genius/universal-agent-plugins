@@ -4651,3 +4651,39 @@ lifecycle, fresh restart/removal, initialization and tools-list flags. Tools-cal
 skills, vendor authentication and model use remain unqualified, and stored
 activation remains Prepared. No positive native lifecycle is claimed by the
 inert contracts or by this source change before its hosted run.
+
+
+### Cursor finite writer-lock frame and exact read-only public result
+
+The current-source run `40986850597` on `45f562161e710eec41e8d6b50a5253059415c84e`
+completed seven ordinary commands through public `add-a`, then failed the exact
+expected-tree membership guard. All three complete RAW audits retain that
+failure and all qualification flags as false. The generic refusal does not
+identify the extra live entry, and no post-add installed proof was uploaded.
+
+The default native-config writer source derives the exact selected JSON path's
+`.agentplugins.lock`, creates an empty ordinary lock, and closes it without
+unlinking it. A separate real-Cobra inert HTTP-only reproduction measured that
+same persistent empty lock and retained its identity and original mode through
+add, no-op, update, intact/missing repair, remove and repeated-remove refusal.
+It also measured the exact Cursor singleton repeat-add result: `no_change:true`
+and no `group_phase`. This observation uses no endpoint connection, native
+client, or managed-stdio launcher execution; the original stdio contract and
+hosted 35-command recipe remain unchanged.
+
+The fixture now derives and authors only those two exact A/B writer locks before
+the initial baseline, requires empty ordinary current-owned single-link 0600
+files, and holds their original identity, metadata and digest permanently. The
+initial, installed/removed and missing-config frames include those literal
+entries. The selected mutation opening never releases them. No User/outside lock,
+unknown member, wildcard, runtime write allowance or observed-tree adoption is
+introduced. A real default-writer contract uses the same expected-tree predicate
+to prove the old finite frame refuses and the exact source-defined frame passes.
+
+Go and Python require the measured stage-specific result fields: repeat-add has
+six including true `no_change` and no group phase; unchanged-update has seven
+including true `no_change` and `external_completed`; other non-removal mutations
+have six including that phase and omit `no_change`. The existing exact removal
+result, ownership/source joins, native commands, deadlines, aggregate bounds and
+qualification rules remain unchanged. A fresh complete hosted cycle and full RAW
+review are still required before any lifecycle qualification.

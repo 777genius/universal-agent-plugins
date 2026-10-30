@@ -73,6 +73,12 @@ func (c *cursorMCPProjectCycle) acceptFile(path string, expected []byte, declare
 
 func (c *cursorMCPProjectCycle) acceptTree(t *testing.T, root string, files map[string][]byte, source bool) {
 	t.Helper()
+	if err := c.acceptTreeError(root, files, source); err != nil {
+		t.Fatal("Cursor complete expected tree differs", err)
+	}
+}
+
+func (c *cursorMCPProjectCycle) acceptTreeError(root string, files map[string][]byte, source bool) error {
 	directories, count := cursorCycleDirectories(files), 0
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil || projectNativeRuntimeParents(path) != nil {
@@ -109,10 +115,14 @@ func (c *cursorMCPProjectCycle) acceptTree(t *testing.T, root string, files map[
 		}
 		return c.acceptFile(path, body, mode)
 	})
-	if err != nil || count != len(files)+len(directories) {
-		t.Fatal("Cursor complete expected tree differs", err)
+	if err != nil {
+		return err
+	}
+	if count != len(files)+len(directories) {
+		return fmt.Errorf("Cursor expected tree finite membership differs")
 	}
 	c.trees[root] = files
+	return nil
 }
 
 func (c *cursorMCPProjectCycle) acceptDirectory(path, name string, source bool) error {

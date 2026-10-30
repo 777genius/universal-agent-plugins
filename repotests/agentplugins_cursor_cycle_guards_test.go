@@ -122,7 +122,7 @@ func (c *cursorMCPProjectCycle) profile(t *testing.T, r *cursorCycleRecipe) []by
 	if err := cursorCycleDocument(raw, map[string]any{"mcpServers": servers}); err != nil {
 		t.Fatal(err)
 	}
-	files := map[string][]byte{"mcp.json": raw, "foreign-owned.txt": []byte("caller-owned " + r.Scope + "\n")}
+	files := map[string][]byte{"mcp.json": raw, "foreign-owned.txt": []byte("caller-owned " + r.Scope + "\n"), "mcp.json.agentplugins.lock": {}}
 	c.acceptTree(t, filepath.Dir(r.Config), files, false)
 	return raw
 }
@@ -159,7 +159,7 @@ func (c *cursorMCPProjectCycle) missingA(t *testing.T) {
 	}
 	c.forget(r.Config)
 	c.f.absent = append(c.f.absent, r.Config)
-	c.trees[filepath.Dir(r.Config)] = map[string][]byte{"foreign-owned.txt": []byte("caller-owned a\n")}
+	c.trees[filepath.Dir(r.Config)] = map[string][]byte{"foreign-owned.txt": []byte("caller-owned a\n"), "mcp.json.agentplugins.lock": {}}
 	c.proof(t, "missing-native-a", map[string]any{"scope": "a", "path": r.Config, "before": c.stream(t, raw), "managed_package_unchanged": true})
 	c.check(t)
 }

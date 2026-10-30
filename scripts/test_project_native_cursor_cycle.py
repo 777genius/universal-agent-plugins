@@ -121,7 +121,7 @@ def synthetic_cycle():
                     outcome.update(plan={"client_id": "cursor", "scope": "project", "status": "ready", "package_mode": "native", "activation": "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "package_validated", "physical_artifact_id": physical, "components": [{"kind": "mcp_server", "name": "uapcursora", "support": "native"}]}, activation={"activation": "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "installation_verified"})
                     if stage != "repeat-add-a":
                         outcome["group_phase"] = "external_completed"
-                    if stage == "unchanged-update-a":
+                    if stage in ("repeat-add-a", "unchanged-update-a"):
                         outcome["no_change"] = True
                 output = {"plugin": "native-proof", "version": version, "source": "local" if verb in ("repair", "remove") else "direct local source", "tree_digest": src["digest"], "manifest_digest": pack["manifest_digest"], "dry_run": False, "result": outcome}
                 data_out = output
@@ -234,6 +234,23 @@ class CursorCycleContracts(unittest.TestCase):
         for client in ("qoder", "grok", "kiro", "windsurf"):
             with self.assertRaises(ValueError):
                 runtime.cli_attempt_members({"runtime-attempt.json": compact({"capture_mode": cycle.MODE})}, {}, client)
+
+    def test_public_stage_no_change_and_group_fields_are_exact(self):
+        for stage in ("add-a", "repeat-add-a", "unchanged-update-a", "intact-repair-a", "update-a", "missing-repair-a"):
+            for field in ("no_change", "group_phase"):
+                for fault in ("presence", "value"):
+                    captured = synthetic_cycle()
+                    command = next(row["value"] for row in captured[0] if row["stage"] == stage)
+                    document = json.loads(cycle.stream(command["stdout"]))
+                    output = document["data"] if stage == "repeat-add-a" else document["data"]["targets"][0]["output"]
+                    outcome = output["result"]
+                    if fault == "presence" and field in outcome:
+                        del outcome[field]
+                    else:
+                        outcome[field] = False if fault == "value" else True
+                    command["stdout"] = wire(compact(document))
+                    with self.subTest(stage=stage, field=field, fault=fault), patch.object(cycle, "pins"), self.assertRaises(ValueError):
+                        cycle.complete(*captured)
 
     def test_stream_canonical_bounds_and_privacy(self):
         self.assertEqual(cycle.stream({"bytes": 0, "sha256": sha(b""), "body": ""}), b"")

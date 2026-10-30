@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -64,11 +65,31 @@ func (c *cursorMCPProjectCycle) prepare(t *testing.T) {
 		if err := c.acceptFile(foreign, []byte("caller-owned "+scope+"\n"), 0600); err != nil {
 			t.Fatal(err)
 		}
+		lock, err := cursorCycleWriterLock(r.Config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		projectNativeRuntimeWrite(t, lock, nil, 0600)
+		info, err := os.Lstat(lock)
+		if err != nil || info.Mode().Perm() != 0600 || c.acceptFile(lock, nil, 0600) != nil {
+			t.Fatal("Cursor original writer lock authority differs")
+		}
+		if held := f.held[lock]; !os.SameFile(info, held.info) || !projectNativeRuntimeStableStat(info.Sys(), held.info.Sys()) {
+			t.Fatal("Cursor validated writer lock changed before hold")
+		}
 		c.author(t, r)
-		c.acceptTree(t, filepath.Dir(r.Config), map[string][]byte{"foreign-owned.txt": []byte("caller-owned " + scope + "\n")}, false)
+		c.acceptTree(t, filepath.Dir(r.Config), map[string][]byte{"foreign-owned.txt": []byte("caller-owned " + scope + "\n"), "mcp.json.agentplugins.lock": {}}, false)
 	}
 	f.evidence["cycle_layout"] = map[string]any{"root": f.base.Root, "home": f.base.Home, "a": f.base.Project, "b": f.other, "outside": f.outside, "source_a": c.recipes["a"].Source, "source_b": c.recipes["b"].Source, "nonce": f.base.Nonce, "installer": f.installer, "client": f.client, "git": f.git, "installer_sha256": clineAttemptSHA(c.installerBody), "probe_sha256": clineAttemptSHA(c.probeBody)}
 	c.proof(t, "original-controls", map[string]any{"user_config": user, "user_body": c.stream(t, []byte("{\"mcpServers\":{}}\n")), "foreign_user": filepath.Join(f.base.Home, "foreign-owned.txt"), "approval_controls": append([]string(nil), f.absent[3:]...)})
+}
+
+func cursorCycleWriterLock(config string) (string, error) {
+	locks, err := nativeconfig.WriterLockPaths(nativeconfig.Paths{JSON: config}, nativeconfig.CodecMCPServers)
+	if err != nil || len(locks) != 1 || locks[0] != config+".agentplugins.lock" {
+		return "", fmt.Errorf("Cursor sole native writer lock identity differs")
+	}
+	return locks[0], nil
 }
 
 func (c *cursorMCPProjectCycle) author(t *testing.T, r *cursorCycleRecipe) {
