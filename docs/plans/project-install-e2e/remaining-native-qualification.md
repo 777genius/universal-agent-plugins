@@ -4339,3 +4339,397 @@ report zero issues. Offline readers preserve the qualified17b full verdict and
 all three retained failed verdicts exactly. The actual28-row stream passes only
 the corrected cycle decoder; its legacy strict reader still refuses it. These
 checks run no vendor client and do not replace a fresh hosted complete cycle.
+### Cursor measured publisher acquisition transport (2026-10-29)
+
+The four historical hosted HTTP403 acquisition captures remain failed evidence.
+A bounded ordinary publisher-style curl request now receives200 at the same exact
+2026.10.22-27dcf5f official URL. Its first1MiB ceiling refuses the declared archive
+before downloading bytes. A subsequent authorized static-only download obtains
+184859176bytes, SHA256
+`85296944e4600a83c4b764f578d1502bf9c416db200d33a593e8f3ecabfdc294`.
+This local download uses the environment's ordinary supplied network proxy; a
+closed-environment local control fails DNS before HTTP. Neither result establishes
+why the old403 occurred or predicts the genuine hosted closed-environment result.
+
+Independent complete static inventory has565members,445regular files and
+583198758payload bytes in583659520expanded tar bytes, without links, special,
+sparse, duplicate or unsafe members. Canonical complete index SHA256 is
+`0646a2eff536987e17b914607380879094058ac4f8c6b54d011cf5fe884d7b97`.
+The1096-byte `dist-package/cursor-agent` launcher SHA256 is
+`2ccc9a8e167797641448b5e5c936f006ba137a2555f117f38c5eb76a5238a233`.
+It selects its own126879696-byte sibling Node, SHA256
+`e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb`,
+and7520482-byte sibling index.js, SHA256
+`7b4bb3badb36cff7b6cee7996d61bd3c32866cf354214374b77f5a5d33a0b3f2`.
+The immutable archive binds their entire ordinary support-file closure; this is
+static inspection, without extraction or execution. Select the actual native
+shell launcher, rather than prepending a separately acquired Node. Its leaf-only
+640MiB expanded cap fits the existing768MiB admission ceiling and measured size.
+
+Only this exact Cursor URL selects ordinary curl acquisition. Require curl8.4+
+for the live byte cap, ignore curlrc, use a private HOME and closed environment,
+HTTPS only, no redirects, headers or authentication, the original shared budget,
+bounded supervised capture and a private ordinary output with held identity
+checks. Preserve existing compressed-size, expected-size, digest, inventory and
+runtime-file guards. Other clients retain their original urllib transport. The
+collector remains acquisition-only and refuses native context access even after
+its pin is frozen. All project/MCP/authentication/model flags remain false; actual
+hosted acquisition and a separately reviewed read-only collector remain required.
+
+### Cursor first read-only help and empty-component capture (2026-10-29)
+
+After reviewed acquisition publicationfd1df496, enable only acquire/help research
+phases with the same exact archive, native shell launcher, bundled Node and full
+445-file support closure. The pinned index version callback writes exactly
+`2026.10.22-27dcf5f` plus LF. Its command table defines top-level help, MCP help,
+plugin help and MCP list; it does not define a skills-list command. The exact
+2297-byte2601.index.js MCP list module SHA256 is
+`6635570334069b0ff14fc4b4e9d629f16478f1a9e8b13c626182874437eaf850`.
+
+Run the fixed version/top-help/MCP-help/plugin-help table in A, then read-only
+empty MCP lists in A, B and the outside directory. Reuse existing30-second
+supervised probes, the original shared360-second budget, closed environment,
+full runtime identity guards and bounded original stdout/stderr capture. Seed
+no native configuration, disabled store, approval, credential or provider. Add
+no environment override, updater assumption, login, model, installation, plugin
+marketplace mutation, skills command or production detection change.
+
+Only the exact version, ordinary successful processes and nonempty strict-UTF8
+help can support cursor.help. Retain all three component streams as opaque first
+captures; do not infer an empty-catalog grammar, configuration preservation,
+server initialization or scope/lifecycle from them. Private disposable-HOME
+startup/cache effects remain unqualified and are not adopted as trusted config.
+All five project/MCP flags stay false, with scope, authentication and real-model
+work explicitly unobserved. Independent actual hosted raw review must establish
+the next supported component contract before additional qualification work.
+
+### Cursor first public project MCP capture, 2026-10-29
+
+The genuine seven-probe hosted help capture on `1eb5be73` confirms the pinned
+Agent wrapper, version and ordinary `mcp list` surface. The project-only Agent
+selection amendment is published at `e231c9e5`; User/editor selection is unchanged.
+This next slice reuses the existing runtime acquisition/build/scanner path and
+adds one bounded Cursor test. It runs two Git initializations, exact version,
+empty A/B/outside MCP listings, one real public project-A MCP-only add with
+`--no-save --format json`, then installed-A and B/outside control listings.
+There is no credential, approval, trust, provider or private configuration seed.
+
+The fixture holds all 445 runtime files and the exact public installer, scanner,
+probe and Git identities. The current-source add must produce a Prepared/installed
+project binding, owned MCP receipt and exact managed stdio recipe. Authored and
+selected installed bytes/config/state remain held; original-HOME/B/outside MCP
+sources remain absent. Raw MCP output and any harmless owned-probe event bytes
+are retained without guessing an installed-list parser or inferring that an
+unapproved entry cannot start a process. Unknown native HOME/cache effects are
+unqualified and are never adopted as trusted configuration.
+
+The first installed capture intentionally fails for independent raw review and
+keeps every lifecycle, restart/removal and MCP qualification false. It does not
+attempt skills discovery, User/B lifecycle, native enable, authentication or
+model use. Both independent plan reviews approved the ten literal commands,
+Cursor-only reader labels and unchanged descendant supervision/bounds. Local
+validation is inert; actual vendor execution remains hosted-only.
+
+### Cursor exact materialized runtime closure (2026-10-29)
+
+Actual `bd2a8375` runtime run40898077111/job123542851427 stops in constructor
+closure checking, before any Cursor, fixture Git or public installer command.
+Only frontend artifact12911120814 is present: 46977 bytes, SHA-256
+`7497501dec2cf21eea5b340b150705e520c53af2fe2f0585f20a6681ddd187bc`;
+its inner263726-byte ZIP has25 ordinary CRC-clean members. All12 frontend
+commands/24 raw stream joins, clean source/build, exact source/tree, complete
+565-row archive inventory and445 runtime file identities were audited. There is
+no native artifact or component observation; every qualification remains false.
+
+The existing materializer writes regular files and creates their parent chains.
+Its exact trusted file-derived set is445 files plus114 directory ancestors,
+559 live members. Six inventoried empty archive directories are not created;
+the original Go expectation incorrectly required all565 archive entries.
+Derive the expected live set only from recorded regular-file paths and their
+recorded directory ancestors, refusing missing/non-directory parents. Preserve
+the full archive pin/inventory validation, all445 held file hashes and the
+unchanged exact live-set check. Unknown files, empty directories, aliases and
+removals still fail; no observed filesystem entry becomes authority. No shared
+materializer, native command, environment, credential or budget changes.
+
+## Cursor: approve one owned MCP server and capture its tool catalog
+
+The genuine hosted first component run `40907605330`, target `123579519017`,
+source `b8ae9c2a1faa8088ada9c7615bef9024e3dc82ad`, tree
+`9b9537a15546c794915da9a8919e3d61fde613bc`, reached all ten commands and the
+intentional independent-review fatal. Native artifact `12915339844` is 49,448
+bytes, SHA256 `5d580fb925097f98e3c25a333c3dc5a100bc196206fb6050605c8d0778a892f6`;
+frontend `12917210951` is 47,006 bytes, SHA256
+`99f2358f1c14f042113464354c8bef3b693045c6a23eb261140b9adb0abff3a4`.
+All three full raw audits close the exact source, 32/25 ordinary members,
+24 frontend and 20 native stream joins, full 565-member archive inventory,
+445 held runtime file pins and exact 559 materialized members. The owned A
+public add is Prepared. Its genuine catalog is exactly
+`uapcursora: not loaded (needs approval)`; baseline A/B/outside and later
+B/outside controls report the empty sentinel. Probe events are empty. The
+17,241-ms observation does not qualify MCP initialization, tools/list,
+tools/call, a complete lifecycle, skill loading, authentication or model use.
+The historical failed capture and all five false flags remain unchanged.
+
+The measured pinned MCP help explicitly supports `enable <identifier>` and
+`list-tools <identifier>`. One bounded source-only reacquisition verified the
+entire same official 184,859,176-byte archive and SHA256 `85296944e4600a83c4b764f578d1502bf9c416db200d33a593e8f3ecabfdc294`
+in anonymous RAM, then closed it. No vendor ran or bulk archive was retained.
+Only the needed handler/loader source and small authentication/skills excerpts
+were retained. This local static transfer used the supplied proxy transport;
+it is separate from genuine hosted runtime evidence.
+
+Exact pinned enable chunk `5993.index.js`, 1,762 bytes, SHA256
+`df1bf13ae26a84f6553bed547dfa024b3be96da6a473e284844f4277d79a825f`,
+resolves the actual cwd's git root, merges original User and project MCP
+configuration with project precedence, and approves only the exact selected
+project server fingerprint. It does not load a client or call a model. The
+approval is in the original disposable HOME's
+`.cursor/projects/<source-encoded-project-A>/mcp-approvals.json`, not a project
+configuration file or a global approval. The source fingerprint is identifier
+plus the first 16 hex digits of SHA256 over compact
+`{path: projectRoot, server: parsedConfig}`. JSONC/environment expansion and the
+pinned Zod parser rebuild stdio fields in schema order `command,args,env` for
+this fixture; the record parser preserves its fixed sorted environment keys.
+Hash that exact ordered projection of the already held native configuration,
+not its raw JSON field order. Optional `type`, cwd, timeout, unknown fields and
+unresolved interpolation are absent. The writer appends one fingerprint and
+writes a two-space-indented JSON array without a trailing newline. Removing a
+disabled record is conditional; this fixture's disabled stores stay absent.
+
+Pinned tool-list chunk `3575.index.js`, 1,378 bytes, SHA256
+`1b7fb573f4335003d64b3f47c062d5a5a59f4f0a7023bc95184602a45b7d0878`,
+loads the selected client through the normal approval-aware loader, checks its
+state, obtains its tools and closes it/clears caches on success and failure.
+It has no tools/call route. Both independent corrected plan reviews approved
+only two extra native calls after the existing unapproved A observation:
+`mcp enable uapcursora`, then `mcp list-tools uapcursora`, both in A. All other
+ten calls, the original closed environment and descendant supervision remain.
+
+Require A/B/outside approval and disabled files absent before native execution.
+Only that registered native enable may create A's exact one-fingerprint
+approval file. Validate its bytes, ordinary 0644 current ownership/group and
+single-link identity, then hold it and its ordinary 0755 parent authority
+through all later commands/final checks. B/outside approval and every disabled
+store stay absent. Original source/config/state/package/data-owner and all
+runtime identities stay held. Require probe events still empty after enable;
+retain the actual tool-list streams and subsequent intrinsic probe JSONL as
+opaque first-capture evidence. Unknown private profile/cache effects remain
+unqualified and are not adopted as preserved authority.
+
+Only the two Cursor-specific member labels and the finite capture member bound
+change, from 32 to 38. Child/work/total deadlines, 1-MiB per-member/16-MiB total
+bounds and five-second descendant grace remain unchanged. The new twelve-call
+capture still deliberately fails for independent raw review and keeps every
+runtime/authentication/model flag false. It adds no approval seed, approve-all,
+trust, login, provider, credentials, model/chat call, skill command or production
+adapter behavior. The normal pinned Agent chat route has a separate account
+authentication gate; this supported MCP slice does not need a Cursor key.
+
+Final corrected code received both independent CODE GOs, including the explicit
+join between validated approval Lstat authority and the held snapshot. Seven
+focused Cursor Go contracts pass (0.026s), seven focused Cursor Python contracts
+pass, and the exact shared workflow/admission module passes all 45 tests
+(5.443s). The original complete ten-command failed capture replays identically
+and remains all false through the amended reader. Affected all-enabled
+whole-file lint against actual `b8ae9c2a` and the unfiltered required six-linter
+root gate both report zero issues. The first Go linker attempt hit ENOSPC;
+after owner-controlled reproducible-cache cleanup, the same required gate
+passed without a source change or a relaxed check. No vendor ran locally.
+
+## Cursor opaque child argv transport correction
+
+The source-pinned approval/tools run `40928300509`, job `123647659006`, at
+`db13ecd86f5c332d1f1db9680d75304ced183cfa` / tree
+`88ad91f2f0bb2b9476603cd23a4636db60bad1f0`, has a truthful failed ten-of-twelve
+command prefix. Native artifact `12925726343` is 49,874 bytes, SHA256
+`440dab9fd216f3bf94ad39c3c0463b8af2fdf16c5b676c52800de1ff91e982a0`;
+frontend `12925885582` is 46,987 bytes, SHA256
+`9b6fdf3506b947ed6973f850cfa1b9381184f5b73321d4ffc50960142d8594b2`.
+All three full RAW audits close API/source/pins, both CRCs, 32/25 ordinary
+members, 24 frontend and 20 native stream joins, selected state/config/public
+add/data receipts and the exact native-generated A approval fingerprint
+`uapcursora-fd6d245f2b5a1b9c`. Enable succeeded; pre-tools and final probe events
+are empty. Tool listing exits 1 with the managed-stdio bare/bundled-command
+refusal, before initialization. The final review stop and two later B/outside
+controls did not execute. Every qualification/authentication/model flag remains
+false; the 18,682-ms failed capture is not rewritten as a successful cycle.
+
+This exposes a product transport defect, not an invalid authored `./bin/probe`.
+The unchanged managed-stdio launcher accepts that bundled form and resolves it
+through ParseCommand/Resolve; qualified Cline and Copilot fixtures use it.
+Pinned Cursor `index.js` remains 7,520,482 bytes, SHA256
+`7b4bb3badb36cff7b6cee7996d61bd3c32866cf354214374b77f5a5d33a0b3f2`.
+Its `Oa` function (actual UTF-8 byte offset 4,590,998) rewrites `./`/`.` and
+`~/`/`~` values; the local MCP loader maps every argument through it (byte
+4,592,151). With no outer native cwd, the held child `./bin/probe` is therefore
+forwarded as A's absolute `bin/probe` path. The wrapper correctly refuses it.
+The same transformation would damage other supported opaque relative args.
+Changing this fixture to a bare PATH runtime would hide that product defect.
+
+Both independent corrected plans approve one additive form within the existing
+private v1 Mode and positional roots. The explicit separator
+`--argv-base64-v1` carries each child command/argument as canonical standard
+Base64. Only Cursor project projection chooses this form. Plugin/data/cwd and
+anchor fields stay exact; every decoded command still goes through the same
+cwd anchor, ParseCommand, containment, bare executable lookup and process
+replacement rules. No absolute-command relaxation, shell/env executable, PATH
+addition, new Mode/namespace, state migration or general transport framework is
+introduced. The existing raw `--` producer and other clients remain unchanged.
+
+One pure decoder serves execution and Cursor installed-form verification. It
+rejects unknown separators, missing encoded commands, malformed/noncanonical
+Base64, CR/LF in encoded wire tokens and decoded NUL before a child can run.
+Decoded CR/LF, empty arguments, Unicode, relative/tildes and environment-looking
+text remain opaque. Decoding is linear and cannot expand aggregate incoming
+argv bytes; no new arbitrary argument count/length limit is imposed. Selected
+Mode/package/data/cwd/anchor checks and native-object/managed-digest ownership
+remain intact. Receipt-bound legacy raw installations remain recognized.
+
+The native fixture retains its authored bundled probe, all twelve commands,
+normal one-server approval, original closed environment and 38-member bound.
+Only its independently expected installed wire changes. The next genuine frame
+still ends at independent review with all flags false. Inert actual-process
+contracts model the exact pinned Oa transformation: raw bundled forwarding
+fails, while encoded forwarding preserves the copied test executable's Plugin
+and Data cwd, opaque argv, stdin/stdout/stderr and exit. Canonical/malformed,
+absolute/traversal, selected-root/data/cwd and legacy-form controls protect the
+unchanged authority boundaries; these simulations are not vendor evidence.
+
+## Cursor complete MCP project cycle after the reviewed twelve-command frame
+
+Runtime `40954740804`, target `123736744311`, on published `ad8b1d3d` / tree
+`33397a13` completed all twelve commands and reached only the intended independent
+review stop. All three full RAW audits close the 38 native and 25 frontend
+members, source/pins, all 24 frontend and 24 native stream joins, public/state/
+native ownership, the exact encoded bundled command, and the native-generated
+approval `uapcursora-93cb2b990e8ab114`. Both post-tools controls remain empty.
+The 691-byte probe prefix contains two fresh initialize/list sessions with null
+facts and no tool call. The original capture remains failed/all false; this is
+account-free MCP approval and discovery evidence, not a lifecycle qualification.
+
+Both independent plans approve one bounded, MCP-only complete-cycle fixture.
+Its literal 35 commands are ten public installer commands, two Git setup
+commands, the pinned version, and 22 ordinary native list/enable/list-tools
+commands. Independent same-name A/B installations have different held package
+sources, challenges, installation IDs, physical packages and persistent data.
+An ordinary valid empty User MCP document and separate foreign caller files are
+authored before the baseline. Native approval is only the supported exact-name
+enable command: A1 and B1 each append their own fingerprint, while A2 preserves
+A1 and appends the independently computed revised fingerprint in order. Disabled
+and outside approval stores stay absent. Repair does not renew approval.
+
+The sequence covers repeated add and unchanged update without state rewrites,
+intact repair, A-only source revision/update, fresh A/B/outside controls, and an
+exact sole-owned A native-config absence fault followed by repair. The managed
+package remains intact during that fault. Removal and repeated-removal refusal
+preserve the caller-authored PLUGIN_DATA marker and owner receipt, while fresh
+native observations prove selected absence and the remaining B installation.
+The marker is explicitly caller-authored; no vendor marker-write, returned cwd
+or opaque-argv fact is inferred from list-tools.
+
+Only the selected independently validated mutation closure is opened. Unselected
+state/package/data, both authored sources except the explicit A revision, User
+and foreign files, the held installer/scanner/Git/probe, all 445 native runtime
+files and exact 559 materialized members remain guarded around every child.
+New selected bytes, receipts, IDs and membership are proven from the recipe
+before they become held authority. Unknown profile effects are not adopted.
+
+Three client-specific JSONL aggregates retain exact command stdout/stderr and
+receipts, proof bytes, and every append-prefix probe delta. Existing stream/hash,
+strict JSON and bounded aggregation helpers are reused: encoded Base64/JSON
+counts toward the unchanged 1-MiB member and 16-MiB total limits. The original
+150-second work/180-second test/30-second child budgets and five-second strict
+descendant grace remain. The earlier 38-member failed-only reader is preserved.
+
+A positive summary requires every literal stage, every state/public/approval
+join, exact tool/empty output, and at least one fresh initialize then tools/list+
+session per tools command. Every raw event must have the selected nonce, valid
+PID/session, command time, null facts and no call; non-tools commands append no
+probe bytes. Only a genuine complete capture may qualify the MCP-scoped project
+lifecycle, fresh restart/removal, initialization and tools-list flags. Tools-call,
+skills, vendor authentication and model use remain unqualified, and stored
+activation remains Prepared. No positive native lifecycle is claimed by the
+inert contracts or by this source change before its hosted run.
+
+
+### Cursor finite writer-lock frame and exact read-only public result
+
+The current-source run `40986850597` on `45f562161e710eec41e8d6b50a5253059415c84e`
+completed seven ordinary commands through public `add-a`, then failed the exact
+expected-tree membership guard. All three complete RAW audits retain that
+failure and all qualification flags as false. The generic refusal does not
+identify the extra live entry, and no post-add installed proof was uploaded.
+
+The default native-config writer source derives the exact selected JSON path's
+`.agentplugins.lock`, creates an empty ordinary lock, and closes it without
+unlinking it. A separate real-Cobra inert HTTP-only reproduction measured that
+same persistent empty lock and retained its identity and original mode through
+add, no-op, update, intact/missing repair, remove and repeated-remove refusal.
+It also measured the exact Cursor singleton repeat-add result: `no_change:true`
+and no `group_phase`. This observation uses no endpoint connection, native
+client, or managed-stdio launcher execution; the original stdio contract and
+hosted 35-command recipe remain unchanged.
+
+The fixture now derives and authors only those two exact A/B writer locks before
+the initial baseline, requires empty ordinary current-owned single-link 0600
+files, and holds their original identity, metadata and digest permanently. The
+initial, installed/removed and missing-config frames include those literal
+entries. The selected mutation opening never releases them. No User/outside lock,
+unknown member, wildcard, runtime write allowance or observed-tree adoption is
+introduced. A real default-writer contract uses the same expected-tree predicate
+to prove the old finite frame refuses and the exact source-defined frame passes.
+
+Go and Python require the measured stage-specific result fields: repeat-add has
+six including true `no_change` and no group phase; unchanged-update has seven
+including true `no_change` and `external_completed`; other non-removal mutations
+have six including that phase and omit `no_change`. The existing exact removal
+result, ownership/source joins, native commands, deadlines, aggregate bounds and
+qualification rules remain unchanged. A fresh complete hosted cycle and full RAW
+review are still required before any lifecycle qualification.
+
+
+### Cursor admission refusal callsite diagnostic, 2026-10-30
+
+The genuine `70048a6c` run `41039188565` reports the selected native Go test
+passing in 86.84 seconds, but strict Python artifact admission then raises
+`ValueError`. The verified frontend contains all twelve successful source/build/
+test commands; the rejected native ZIP was not uploaded. All qualification
+flags remain false. The generic exception type does not identify the rejected
+predicate, so no native RAW or exact cause is inferred from the producer PASS.
+
+On Cursor admission refusal only, emit one bounded diagnostic to existing job
+stderr: a fixed owned reader basename and source line, or a fixed unavailable
+fallback. Match exact owned script paths, inspect only the explicit cause and
+outer traceback with finite traversal, and exclude generic require/object
+helpers. Never print exception messages, locals, source text, input, unknown
+paths or a full stack. The frontend schema, original refusal, flags and native
+ZIP rejection remain unchanged; other clients are unaffected. A fresh changed-
+source hosted run must reveal the actual site before any corrective reader
+change or qualification.
+
+
+### Cursor approval-proof container admission, 2026-10-30
+
+The `af549028` run `41043633550` again reports the selected native Go test
+passing, this time in 105.67 seconds. The bounded refusal diagnostic identifies
+`project_native_cursor_cycle.py:67`, the exact raw-stream key check. The verified
+frontend remains unqualified and the rejected native ZIP is unavailable.
+
+The Go approval producer emits an outer proof with exactly `scope`, `path`,
+`body`, `fingerprints`, `probe_bytes` and `probe_sha256`; its `body` is itself a
+canonical stream receipt. The generic embedded-stream traversal treated the
+outer proof's `body` key as a stream marker and rejected that outer dictionary.
+A literal producer-shaped inert input reproduces the same refusal site. The
+previous complete-cycle positive called the semantic checker directly and did
+not exercise serialized record traversal.
+
+Only the three exact approval stages in the fixed proof order now close that
+six-key outer container and explicitly validate its inner stream. All other
+embedded/raw-stream handling remains unchanged. A full four-member serialized
+ZIP admission positive covers the original missing path; finite-stage,
+malformed-container, malformed-inner-stream and foreign-role negatives preserve
+refusal. Native commands, Go guards, source/approval/state/probe joins, flags,
+deadlines, pins and capture bounds are unchanged. Historical captures retain
+false qualification; a fresh admitted full native packet still requires all
+independent RAW audits before lifecycle qualification.
