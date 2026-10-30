@@ -16,7 +16,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Prepare hash-verified unreferenced objects without moving any branch
+      - name: Prepare one verified fixture blob without moving a branch
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -26,10 +26,13 @@ jobs:
           python3 - <<'PY'
           import base64, hashlib, json, pathlib, subprocess
           repo = 'repos/777genius/universal-agent-plugins/'
-          head = '7fea8522f1eb22156d9e069056ff0e5cb6f724f3'
-          tree = '3570455acc97139a075b290af2eafd39fa4eaf76'
+          head = '583ad8039b7fcc60bde302e5a8f0dd436d621afe'
+          tree = '1de4d13f26ab2b97d0b6b216577ae4ac9e57bda2'
           old = b'93ebbf02aa70a38b18fdc720ace9e45c8f911b91d94a5c85a26b96c2d69efa46'
           new = b'1b15ef92a8baaa1dbc92b512365cd694e4cc2ba5b24a951cb2c395468d129b09'
+          path = 'npm/agentplugins/test/authoring-native-qualification.test.js'
+          before = '3a12fd65bc4a9b066bcff4bb78a5bbdc93f95aa0'
+          after = '00f54e125f3921c69ae9ec54f608cd64b36ab7bc'
           def api(path, payload=None):
               args = ['gh', 'api', repo + path]
               if payload is not None:
@@ -42,29 +45,17 @@ jobs:
           assert api('git/commits/' + head)['tree']['sha'] == tree
           profile = api('contents/install/integrationctl/agentplugins/conformance/profiles/README.md?ref=' + head)
           assert hashlib.sha256(base64.b64decode(profile['content'])).hexdigest().encode() == new
-          files = [
-              ('npm/agentplugins/scripts/authoring-native-qualification.js', 'f4b3db14df10b0ee538c0d4753678d4053f1e86a', '16198dec07e315c665fe59f5b5db25f803dea489'),
-              ('npm/agentplugins/scripts/public-authoring-acceptance.js', '14ea9f85006db2e0a4b5c6d0afa83293e11f4a36', 'b5e40522ef24e5eceae29190db95a769048a1d54'),
-              ('npm/agentplugins/test/authoring-native-qualification.test.js', '7f485537b2306c984ef00a8f0c252876d5ffaa07', '3a12fd65bc4a9b066bcff4bb78a5bbdc93f95aa0'),
-          ]
-          entries = []
-          for path, before, after in files:
-              value = api('contents/' + path + '?ref=' + head)
-              body = base64.b64decode(value['content'])
-              assert value['sha'] == before and blob_id(body) == before
-              if '/scripts/' in path:
-                  assert body.count(old) == 1
-                  body = body.replace(old, new)
-              else:
-                  needle = b'test("fixed profile and schema pins agree with preserved domain contracts", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, () => {\n  const n = internal().test, root = path.resolve(__dirname, "../../..");\n'
-                  assert body.count(needle) == 1
-                  body = body.replace(needle, needle + b'  assert.deepEqual(n.PROFILES, require("../scripts/public-authoring-acceptance").PROFILES);\n')
-              assert blob_id(body) == after
-              created = api('git/blobs', {'content': base64.b64encode(body).decode(), 'encoding': 'base64'})
-              assert created['sha'] == after
-              entries.append({'path': path, 'mode': '100644', 'type': 'blob', 'sha': after})
+          value = api('contents/' + path + '?ref=' + head)
+          body = base64.b64decode(value['content'])
+          assert value['sha'] == before and blob_id(body) == before
+          assert body.count(old) == 1
+          body = body.replace(old, new)
+          assert blob_id(body) == after
+          created = api('git/blobs', {'content': base64.b64encode(body).decode(), 'encoding': 'base64'})
+          assert created['sha'] == after
+          entries = [{'path': path, 'mode': '100644', 'type': 'blob', 'sha': after}]
           result_tree = api('git/trees', {'base_tree': tree, 'tree': entries})
-          commit = api('git/commits', {'message': 'fix: align authoring evidence pins with the corrected profile', 'tree': result_tree['sha'], 'parents': [head], 'author': {'name': '777genius', 'email': 'iliyazelenkog@gmail.com'}})
+          commit = api('git/commits', {'message': 'test: align the subprocess fixture with the corrected profile', 'tree': result_tree['sha'], 'parents': [head], 'author': {'name': '777genius', 'email': 'iliyazelenkog@gmail.com'}})
           pathlib.Path('evidence/commit.json').write_text(json.dumps(commit, indent=2))
           pathlib.Path('evidence/changes.json').write_text(json.dumps(entries, indent=2))
           print('Prepared commit ' + commit['sha'] + '; no branch reference changed')
