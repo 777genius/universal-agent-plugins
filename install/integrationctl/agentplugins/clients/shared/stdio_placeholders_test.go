@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -74,4 +75,25 @@ func roundTripStdioConfig(t *testing.T, config map[string]any) map[string]any {
 		t.Fatal(err)
 	}
 	return result
+}
+
+func TestApplyStdioDataContractRejectsPlatformReservedAliases(t *testing.T) {
+	for _, env := range []any{
+		map[string]any{"plugin_root": "foreign"},
+		map[string]string{"plugin_data": "foreign"},
+	} {
+		config := map[string]any{"command": "node", "env": env}
+		original := roundTripStdioConfig(t, config)
+		err := ApplyStdioDataContract(config, t.TempDir(), t.TempDir())
+		if runtime.GOOS == "windows" {
+			if err == nil || !strings.Contains(err.Error(), "is reserved") {
+				t.Fatalf("Windows must reject a case-insensitive reserved alias, got %v", err)
+			}
+			if !reflect.DeepEqual(roundTripStdioConfig(t, config), original) {
+				t.Fatal("rejected alias mutated source configuration")
+			}
+		} else if err != nil {
+			t.Fatalf("Unix must preserve distinct lowercase environment keys: %v", err)
+		}
+	}
 }

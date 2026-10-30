@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
@@ -320,21 +321,8 @@ func validateReservedStdioEnvironment(envelope domain.PackageEnvelope, plan doma
 		if server.Type != "stdio" {
 			continue
 		}
-		switch env := server.Decoded["env"].(type) {
-		case map[string]any:
-			if _, ok := env["PLUGIN_ROOT"]; ok {
-				return fmt.Errorf("stdio MCP server %s defines reserved PLUGIN_ROOT", name)
-			}
-			if _, ok := env["PLUGIN_DATA"]; ok {
-				return fmt.Errorf("stdio MCP server %s defines reserved PLUGIN_DATA", name)
-			}
-		case map[string]string:
-			if _, ok := env["PLUGIN_ROOT"]; ok {
-				return fmt.Errorf("stdio MCP server %s defines reserved PLUGIN_ROOT", name)
-			}
-			if _, ok := env["PLUGIN_DATA"]; ok {
-				return fmt.Errorf("stdio MCP server %s defines reserved PLUGIN_DATA", name)
-			}
+		if reserved := domain.ReservedStdioEnvKey(server.Decoded["env"], runtime.GOOS == "windows"); reserved != "" {
+			return fmt.Errorf("stdio MCP server %s defines reserved %s", name, reserved)
 		}
 	}
 	return nil

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -481,5 +482,21 @@ func TestClaudeMissingHelperRetainsPreviouslySelectedStdio(t *testing.T) {
 	}}
 	if err := service.preflightComponents(envelope, &plan, true, map[string]bool{"local": true, "remote": true}); err == nil || !strings.Contains(err.Error(), "retaining the entire installed package") {
 		t.Fatalf("previous selection silently withdrawn: %v", err)
+	}
+}
+
+func TestStdioPreflightReservedEnvironmentPlatformAliases(t *testing.T) {
+	for _, env := range []any{
+		map[string]any{"plugin_root": "foreign"},
+		map[string]string{"plugin_data": "foreign"},
+	} {
+		err := rejectReservedStdioEnv(map[string]any{"env": env})
+		if runtime.GOOS == "windows" {
+			if err == nil || !strings.Contains(err.Error(), "stdio environment defines reserved") {
+				t.Fatalf("Windows preflight accepted a reserved environment alias: %v", err)
+			}
+		} else if err != nil {
+			t.Fatalf("Unix preflight rejected a distinct lowercase key: %v", err)
+		}
 	}
 }

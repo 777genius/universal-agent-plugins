@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -64,7 +65,7 @@ func ApplyStdioDataContract(config map[string]any, pluginRoot, dataPath string, 
 func applyStdioEnvironment(config map[string]any, pluginRoot, dataPath string, expand func(string) string) error {
 	switch env := config["env"].(type) {
 	case map[string]any:
-		if err := rejectReservedStdioKeys(func(key string) bool { _, exists := env[key]; return exists }); err != nil {
+		if err := rejectReservedStdioKeys(env); err != nil {
 			return err
 		}
 		for key, value := range env {
@@ -74,7 +75,7 @@ func applyStdioEnvironment(config map[string]any, pluginRoot, dataPath string, e
 		}
 		env["PLUGIN_ROOT"], env["PLUGIN_DATA"] = pluginRoot, dataPath
 	case map[string]string:
-		if err := rejectReservedStdioKeys(func(key string) bool { _, exists := env[key]; return exists }); err != nil {
+		if err := rejectReservedStdioKeys(env); err != nil {
 			return err
 		}
 		for key, value := range env {
@@ -89,11 +90,9 @@ func applyStdioEnvironment(config map[string]any, pluginRoot, dataPath string, e
 	return nil
 }
 
-func rejectReservedStdioKeys(present func(key string) bool) error {
-	for _, reserved := range []string{"PLUGIN_ROOT", "PLUGIN_DATA"} {
-		if present(reserved) {
-			return fmt.Errorf("%s is reserved and client-managed", reserved)
-		}
+func rejectReservedStdioKeys(env any) error {
+	if reserved := domain.ReservedStdioEnvKey(env, runtime.GOOS == "windows"); reserved != "" {
+		return fmt.Errorf("%s is reserved and client-managed", reserved)
 	}
 	return nil
 }
