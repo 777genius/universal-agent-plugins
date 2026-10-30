@@ -39,7 +39,7 @@ const onToggle = (event: Event) => {
   if (!detailsOpen.value) reasonContextsOpen.value.clear();
 };
 const { t, n, locale } = useI18n({ useScope: 'local' });
-const { report, status: loadedStatus, recoverable, retry } = useSkillSpector(() =>
+const { report, status: loadedStatus, recoverable, retry: retryReport } = useSkillSpector(() =>
   props.applicable === false ? undefined : props.subject,
 );
 const reportStatus = computed(() => (props.applicable === false ? 'ready' : loadedStatus.value));
@@ -217,7 +217,7 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
           v-if="reportStatus === 'unavailable' && recoverable"
           type="button"
           class="skillspector__retry"
-          @click="retry"
+          @click="retryReport"
         >
           {{ t('registryUi.skillSpector.retryLoad') }}
         </button>
