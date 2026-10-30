@@ -486,9 +486,7 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
     if (mode === 'unavailable' || mode === 'invalid')
       await expect(assessment).toContainText('could not be loaded');
     if (mode === 'unavailable')
-      await expect(
-        assessment.getByRole('button', { name: 'Try loading again' }),
-      ).toBeVisible();
+      await expect(assessment.getByRole('button', { name: 'Try loading again' })).toBeVisible();
     if (mode === 'invalid')
       await expect(assessment.locator('.skillspector__retry')).toHaveCount(0);
     expect(errors).toEqual([]);
