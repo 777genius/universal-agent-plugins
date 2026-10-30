@@ -168,4 +168,3 @@ the existing CLI `TestUpdateAll*` and
 The CLI run used the permitted local-socket environment and did not require
 proxy-variable changes. `git diff --check` passed. Native/Git qualification
 remains assigned to the normal hosted CI; local review does not replace it.
-
