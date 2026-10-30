@@ -2,6 +2,7 @@ package gemini
 
 import (
 	"context"
+	"errors"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -65,6 +66,10 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 	}
 	if err := DeactivateGeminiNativeWithKernel(ctx, request, env.NativeConfig); err != nil {
 		if !shared.CommittedNativeDeactivationCleanup(&outcome, err) {
+			var observed *shared.NativeEffectError
+			if errors.As(err, &observed) && observed.Effect == domain.NativeEffectUnchanged {
+				outcome.NativeEffect = domain.NativeEffectUnchanged
+			}
 			return outcome, err
 		}
 	}
