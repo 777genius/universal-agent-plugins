@@ -3,8 +3,11 @@ import base64
 import copy
 import hashlib
 import json
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
+import zipfile
 
 import project_native_cursor_cycle as cycle
 import project_native_runtime as runtime
@@ -227,6 +230,62 @@ class CursorCycleContracts(unittest.TestCase):
         with patch.object(cycle, "pins") as pins:
             cycle.complete(*captured)
             pins.assert_called_once()
+
+    def test_full_serialized_archive_admission_includes_approval_containers(self):
+        commands, proofs, probes, result = synthetic_cycle()
+        source = {"source_commit": "a" * 40, "source_tree": "b" * 40}
+        summary = {"client": "cursor", "version": "2026.10.22-27dcf5f", "capture_mode": cycle.MODE,
+                   "activation": "prepared", "runtime_attempt_complete": True, "test_failed": False,
+                   "cycle_observed_complete": True, "vendor_authentication_qualified": False,
+                   "real_model_qualified": False, "qualification": {key: key != "mcp-tools-call" for key in cycle.FLAGS},
+                   "qualification_scope": cycle.SCOPE, "acquisition": {}, "scanner": {},
+                   "source_identity": {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"], "installer_source_state": "committed", "installer_patch_sha256": []},
+                   "cycle_command_stages": [row["stage"] for row in commands],
+                   "cycle_proof_stages": [row["stage"] for row in proofs], **result}
+        bodies = {name: b"".join(compact(row) + b"\n" for row in rows)
+                  for name, rows in zip(cycle.MEMBERS, (commands, proofs, probes))}
+        bodies["runtime-attempt.json"] = compact(summary)
+        with tempfile.TemporaryDirectory() as temporary, patch.object(cycle, "pins") as pins:
+            path = Path(temporary) / "research.zip"
+            with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                for name, body in bodies.items():
+                    archive.writestr(name, body)
+            admitted, observed = runtime.admit_runtime(path, "cursor", source)
+            self.assertEqual(admitted, bodies)
+            self.assertEqual(observed, summary)
+            pins.assert_called_once()
+
+    def test_approval_containers_are_finite_and_inner_streams_remain_closed(self):
+        _, proofs, _, _ = synthetic_cycle()
+        for stage in ("approve-a-one", "approve-b-one", "approve-a-two"):
+            prefix = copy.deepcopy(proofs[:cycle.PROOFS.index(stage) + 1])
+            raw = lambda rows: b"".join(compact(row) + b"\n" for row in rows)
+            self.assertEqual(cycle.records(raw(prefix), cycle.PROOFS), prefix)
+            for fault in ("extra", "missing", "body-string", "inner-extra", "inner-missing", "inner-bytes", "inner-base64"):
+                hostile = copy.deepcopy(prefix)
+                value = hostile[-1]["value"]
+                if fault == "extra":
+                    value["unknown"] = True
+                elif fault == "missing":
+                    del value["scope"]
+                elif fault == "body-string":
+                    value["body"] = "unframed"
+                elif fault == "inner-extra":
+                    value["body"]["unknown"] = True
+                elif fault == "inner-missing":
+                    del value["body"]["sha256"]
+                elif fault == "inner-bytes":
+                    value["body"]["bytes"] = True
+                else:
+                    value["body"]["body"] += "\n"
+                with self.subTest(stage=stage, fault=fault), self.assertRaises(ValueError):
+                    cycle.records(raw(hostile), cycle.PROOFS)
+        foreign = [{"stage": cycle.PROOFS[0], "value": copy.deepcopy(proofs[4]["value"])}]
+        with self.assertRaises(ValueError):
+            cycle.records(raw(foreign), cycle.PROOFS)
+        foreign = [{"stage": cycle.STAGES[0], "value": copy.deepcopy(proofs[4]["value"])}]
+        with self.assertRaises(ValueError):
+            cycle.records(raw(foreign), cycle.STAGES)
 
     def test_literal_stages_and_exact_mode_dispatch(self):
         commands, _, _, _ = synthetic_cycle()

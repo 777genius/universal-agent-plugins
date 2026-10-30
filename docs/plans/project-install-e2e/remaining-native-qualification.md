@@ -4707,3 +4707,29 @@ paths or a full stack. The frontend schema, original refusal, flags and native
 ZIP rejection remain unchanged; other clients are unaffected. A fresh changed-
 source hosted run must reveal the actual site before any corrective reader
 change or qualification.
+
+
+### Cursor approval-proof container admission, 2026-10-30
+
+The `af549028` run `41043633550` again reports the selected native Go test
+passing, this time in 105.67 seconds. The bounded refusal diagnostic identifies
+`project_native_cursor_cycle.py:67`, the exact raw-stream key check. The verified
+frontend remains unqualified and the rejected native ZIP is unavailable.
+
+The Go approval producer emits an outer proof with exactly `scope`, `path`,
+`body`, `fingerprints`, `probe_bytes` and `probe_sha256`; its `body` is itself a
+canonical stream receipt. The generic embedded-stream traversal treated the
+outer proof's `body` key as a stream marker and rejected that outer dictionary.
+A literal producer-shaped inert input reproduces the same refusal site. The
+previous complete-cycle positive called the semantic checker directly and did
+not exercise serialized record traversal.
+
+Only the three exact approval stages in the fixed proof order now close that
+six-key outer container and explicitly validate its inner stream. All other
+embedded/raw-stream handling remains unchanged. A full four-member serialized
+ZIP admission positive covers the original missing path; finite-stage,
+malformed-container, malformed-inner-stream and foreign-role negatives preserve
+refusal. Native commands, Go guards, source/approval/state/probe joins, flags,
+deadlines, pins and capture bounds are unchanged. Historical captures retain
+false qualification; a fresh admitted full native packet still requires all
+independent RAW audits before lifecycle qualification.

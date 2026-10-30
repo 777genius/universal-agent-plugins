@@ -92,7 +92,14 @@ def records(raw, order):
     for row, stage in zip(rows, order):
         obj(row, "stage value")
         require(row["stage"] == stage and type(row["value"]) is dict)
-        embedded(row["value"])
+        if order == PROOFS and stage in ("approve-a-one", "approve-b-one", "approve-a-two"):
+            obj(row["value"], "scope path body fingerprints probe_bytes probe_sha256")
+            stream(row["value"]["body"])
+            for key, item in row["value"].items():
+                if key != "body":
+                    embedded(item)
+        else:
+            embedded(row["value"])
     return rows
 
 
