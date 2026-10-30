@@ -790,7 +790,6 @@ test('source acquisition transfer limits are explained as incomplete coverage', 
 }) => {
   const { assessment, errors } = await setup(page, 'acquisition');
   await expect(assessment).toHaveClass(/skillspector--incomplete/);
-  await assessment.locator(':scope > summary').click();
   await expect(assessment.locator('.skillspector__coverage')).toContainText(
     'Source retrieval reached this scan profile’s transfer limit.',
   );
@@ -861,6 +860,10 @@ test('published acquisition failure says could not check while keeping its repor
   await expect(assessment).toHaveClass(/skillspector--unavailable/);
   await expect(assessment.locator(':scope > summary')).toContainText('Scan unavailable');
   await expect(assessment.locator(':scope > summary')).not.toContainText('Report unavailable');
+  await assessment.locator(':scope > summary').click();
+  await expect(assessment.locator('.skillspector__record > summary').first()).toContainText(
+    'Scan unavailable',
+  );
   await assessment.locator(':scope > summary').click();
   await expect(assessment.locator('.skillspector__coverage')).toContainText(
     'Pinned source retrieval failed.',

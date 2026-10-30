@@ -141,7 +141,7 @@ const recordStatus = (record: SkillSpectorRecord) =>
   (props.subject?.kind === 'plugin' && record.source.revision !== props.subject.revision)
     ? 'stale'
     : record.status === 'error'
-      ? 'unavailable'
+      ? 'error'
       : record.coverage?.status === 'complete' || (!record.coverage && record.status === 'complete')
         ? hasIncompleteSkillSpectorFindings(record) ||
           record.findings.some(
