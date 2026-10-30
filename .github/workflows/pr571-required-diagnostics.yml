@@ -24,10 +24,11 @@ jobs:
           gh api repos/777genius/universal-agent-plugins/actions/runs/41038450229 > evidence/run.json
           for job in 124005003413 124022147790; do
             gh api "repos/777genius/universal-agent-plugins/actions/jobs/$job" > "evidence/job-$job.json"
-            gh api "repos/777genius/universal-agent-plugins/actions/jobs/$job/logs" > "evidence/job-$job.log"
+            # Preserve ANSI-bearing log bytes in a file, never on the terminal.
+            gh api --allow-escape-sequences "repos/777genius/universal-agent-plugins/actions/jobs/$job/logs" > "evidence/job-$job.log"
           done
           gh api repos/777genius/universal-agent-plugins/git/commits/7fea8522f1eb22156d9e069056ff0e5cb6f724f3 > evidence/commit.json
-          gh api repos/777genius/universal-agent-plugins/tarball/7fea8522f1eb22156d9e069056ff0e5cb6f724f3 > evidence/source.tar.gz
+          gh api --allow-escape-sequences repos/777genius/universal-agent-plugins/tarball/7fea8522f1eb22156d9e069056ff0e5cb6f724f3 > evidence/source.tar.gz
           python3 - <<'PY'
           import hashlib, json, pathlib, re
           root = pathlib.Path('evidence')
@@ -48,7 +49,6 @@ jobs:
               summary = '\n'.join(f'{index + 1}: {lines[index]}' for index in sorted(selected))
               (root / f'failure-{job}.txt').write_text(summary)
               print(f'JOB {job}: {len(lines)} log lines; failure summary saved')
-              print(summary[:24000])
           hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in root.iterdir() if p.is_file()}
           (root / 'sha256.json').write_text(json.dumps(hashes, indent=2, sort_keys=True))
           PY
