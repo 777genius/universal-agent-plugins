@@ -579,3 +579,5 @@ make vet
 Universal Agent Plugins is licensed under the [Apache License 2.0](LICENSE).
 Third-party components retain their original licenses; see [NOTICE](NOTICE) for
 attribution.
+
+<!-- Throwaway CI path filter check, not for merge. -->
