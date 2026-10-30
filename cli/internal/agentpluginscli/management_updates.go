@@ -35,7 +35,7 @@ func (b *ManagementBackend) CheckUpdates(ctx context.Context, input management.U
 	if err := b.validateManagementContext(ctx); err != nil {
 		return out, err
 	}
-	if !sameEnvironmentFile(snapshot.ManifestPath, snapshot.ManifestBytes) || !sameEnvironmentFile(snapshot.LockPath, snapshot.LockBytes) {
+	if err := snapshot.intent(nil, nil).Check(dependencyIntentFiles{}); err != nil {
 		return out, management.ErrPlanStale
 	}
 	out.Complete, out.Changed = facts.Complete, facts.Changed
