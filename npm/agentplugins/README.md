@@ -48,7 +48,7 @@ macOS and Windows preparation does not claim automatic runtime verification.
 
 See the [real Context7 ChatGPT and Kiro E2E evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/CONTEXT7_CHATGPT_KIRO_E2E.md).
 
-[Browse plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
+[Browse plugins](https://universal-agent-plugins.com/plugins/)
 
 ## What it does
 
@@ -199,7 +199,7 @@ package. For direct native downloads, retain the companion notice file from
 the same release with the binary, including when redistributing.
 
 - [Source and documentation](https://github.com/777genius/universal-agent-plugins)
-- [Browse the plugin catalog](https://777genius.github.io/universal-agent-plugins/plugins/)
+- [Browse the plugin catalog](https://universal-agent-plugins.com/plugins/)
 - [Client E2E evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/AGENTPLUGINS_CLIENT_E2E.md)
 
 Universal Agent Plugins is an independent community project. It is not
