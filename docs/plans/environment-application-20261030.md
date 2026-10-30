@@ -1,7 +1,7 @@
 # Transport-independent environment application
 
-Status: implemented locally; focused validation passed; draft PR #590 remains
-subject to hosted checks and independent review. The plan was published in
+Status: implemented and independently reviewed; PR #590 awaits final hosted
+checks. The initial draft plan was published in
 `efd979ed98da178922eca4045ce9a2720674eb15` before implementation began.
 Base: `ae068426706d5f2c9d624ae94c6504ac8b7f553e`.
 Branch: `refactor/environment-application-20261030`.
@@ -150,4 +150,22 @@ management/Skills preparation, exact-registry dry run and the dependency CLI
 journey. Their assertions and production fail-closed process policy remain
 intact. They require the existing qualified hosted Linux CI; these local results
 do not constitute native-client or all-transport E2E qualification.
+
+## Independent review checkpoint — 2026-10-30
+
+A fresh GPT-6.1 Sol xhigh reviewer inspected implementation
+`f31d5879d55c61337a3fcd81347371d10bdbb7fe`, all eight CLI changes, all new
+implementation and test files, and the surrounding coordinator, Skills,
+management, agreement-import and update-all paths. The review found no actionable
+correctness or architecture regression. It verified ordering, lock release,
+preimage advancement, partial publication, selected-package filtering,
+repair-only behavior, custom guards, adapter-hook restoration and agreement
+rollback against the original implementation.
+
+The reviewer independently reran the environment/application package tests and
+the existing CLI `TestUpdateAll*` and
+`TestManagementOutcomePreservesPublicManualInstructions` tests; all passed.
+The CLI run used the permitted local-socket environment and did not require
+proxy-variable changes. `git diff --check` passed. Native/Git qualification
+remains assigned to the normal hosted CI; local review does not replace it.
 
