@@ -78,12 +78,15 @@ exactly this list.
   `authoring`. Callers skip a job only on an explicit `false`. An unavailable
   or empty files API response for a non-empty diff, a 3,000+ file diff or a
   path with a control character marks every class true, and a classifier
-  failure runs every gated job. Gated jobs wait for it, so it follows the
-  pull request's own routing above (`CI_LINUX_RUNNER`, or GitHub-hosted for
-  `ci:github-hosted` and forks) rather than adding a wait in a second queue.
-  It only calls the GitHub API and never checks out pull request code, so the
-  `CI_LIGHTWEIGHT_RUNNER` variable may move it to any pool; unset it to
-  return to the default routing.
+  failure runs every gated job. Gated jobs wait for it. On `CI_LINUX_RUNNER`
+  it would join the scarce queue twice, before and together with the lanes it
+  gates, so it runs on `ubuntu-latest`, where a few seconds of API work
+  usually start at once. When many `ci:github-hosted` pull requests fill the
+  GitHub-hosted queue instead, set the `CI_LIGHTWEIGHT_RUNNER` variable (for
+  example to the `CI_LINUX_RUNNER` label); the classifier never checks out
+  pull request code, so any pool is safe. Unset it to return to
+  `ubuntu-latest`. A documentation-only `Authoring / required native and
+  packed` aggregate also runs on `ubuntu-24.04`.
 - `Required / test` runs on every ready pull request: repotests read
   `README.md`, `docs/`, `website/`, `landing/` and workflow files. `lint`
   skips without a Go, module, `.golangci.yml` or lint baseline change, and

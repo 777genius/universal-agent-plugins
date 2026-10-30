@@ -19,11 +19,12 @@ on:
 
 jobs:
   classify:
-    # Gated jobs wait for this one, so it follows the pull request's own runner
-    # routing (docs/CI_RUNNERS.md) instead of adding a wait in a second queue.
-    # It only calls the GitHub API and never checks out pull request code, so
-    # CI_LIGHTWEIGHT_RUNNER may move it to any pool.
-    runs-on: ${{ vars.CI_LIGHTWEIGHT_RUNNER || github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    # Gated jobs wait for this one. On CI_LINUX_RUNNER it would join the scarce
+    # queue twice, before and with the lanes it gates, so it uses a
+    # GitHub-hosted runner, where a few seconds of API work usually starts at
+    # once. It never checks out pull request code, so CI_LIGHTWEIGHT_RUNNER may
+    # move it to any pool while ci:github-hosted pull requests fill that queue.
+    runs-on: ${{ vars.CI_LIGHTWEIGHT_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
       pull-requests: read

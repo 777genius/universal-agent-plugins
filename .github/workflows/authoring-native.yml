@@ -259,7 +259,9 @@ jobs:
     # Status aggregation must not queue a runner for an obsolete cancelled run.
     needs: [changes, native, packed]
     if: always() && !cancelled()
-    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-24.04' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
+    # A documentation-only aggregate only checks results and structure, so it
+    # stays off the CI_LINUX_RUNNER queue.
+    runs-on: ${{ needs.changes.outputs.authoring == 'false' && 'ubuntu-24.04' || github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-24.04' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     env:
       REQUIRED_RESULTS: ${{ toJSON(needs) }}
