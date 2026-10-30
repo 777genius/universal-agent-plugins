@@ -2,11 +2,12 @@
 
 Date: 2026-10-30. Planning base: `29480e1d3b1fbf021c8fc0c6e3f741ac0c1fdcbb`.
 Branch: `fix/group-native-projection-refresh-20261030`.
-Status: plan only; implementation waits for independent critique, disposition,
-and the coordinating owner's implementation gate. The coordinator owns commits,
-publication, the draft PR, final review, and merge. No release is authorized by
-this plan. Workers and reviewers follow the current `AGENTS.md` model and scope
-instructions; this lane uses the specifically requested GPT-6.1 Sol / xhigh.
+Status: bounded implementation and local validation complete; frozen publication
+checkpoint for fresh independent code review and exact-head CI. The coordinator
+owns commits, publication, the draft PR, final review, and merge. No release is
+authorized by this plan. Workers and reviewers follow the current `AGENTS.md`
+model and scope instructions; this lane uses the specifically requested
+GPT-6.1 Sol / xhigh.
 
 ## Problem and severity
 
@@ -354,14 +355,88 @@ head `c9b863c69e80b74857b4a4bfee15d3d6f2dbf6ad`.
 
 The exported-field golden observation above was reported before any golden or
 normalizer change. Root selected private storage plus the reader/value-copy
-methods as the preferred refinement and requested a fresh independent check and
-plan-only publication checkpoint. The existing initial implementation remains
-uncommitted while that refinement gate is pending. Do not interpret its observed
-green behavior tests as approval to skip the amended design review or the final
-code/CI gates.
+methods as the preferred refinement. The same independent critic explicitly
+approved that refinement, including zero/copy/reset and JSON no-restore semantics.
+Root published the amended plan alone at
+`a9ceee1c4a883a38a1eecc56867fa402b5a65282`, blob
+`6ab6f28dc2382d093dd5728f53763434f2e2543f`, before authorizing the source refinement.
+The worktree was safely mixed-reset to that plan head after confirming the exact
+published plan blob; existing uncommitted implementation/test files were retained.
 
 Acceptance is: both explicit same-revision grouped dialect transitions really
 materialize and acknowledge the requested native representation; matching updates
 retain their runtime/lifecycle checks; repeated-add/repair semantics and all
 existing refusal/recovery boundaries remain exact; generic usecases contain no
 OpenCode dialect/object-kind decision after the extraction.
+
+## Implementation and local validation evidence
+
+The implementation follows the amended plan. `DeliveryPlan` stores a private
+boolean; the small domain reader/value-copy methods document trusted planner
+responsibility. OpenCode's existing refiner computes the decision from the frozen
+predecessor objects and prepared host. Single update consumes it in the existing
+replace shortcut; group update clears the no-change candidate when replace is
+requested and the decision is true. The former OpenCode-specific usecase helper
+is removed. No lifecycle, staging/runtime, recorder, facade admission, schema,
+capability table, golden fixture, shared golden normalizer, or frozen VS Code
+implementation was changed. The separate `group_stage.go` cleanup lane is untouched.
+
+`TestGroupSameRevisionNativeProjectionRefresh` was added before production edits.
+It uses two real client targets, real package/data/native/state effects, the
+existing native observer, and the existing durable transition recorder. On the
+old code **both V1-to-V2 and V2-to-V1 cases failed** because update reported a
+completed no-op (`usecase` 0.201s). On the corrected code both pass, including
+read-only preview, actual requested-codec readback, changed package projection,
+stable logical IDs and data receipt, preserved foreign comments/large integer,
+unchanged independent client, cleared pending attempt, and exact stable-dialect
+replay without another transaction.
+
+Additional tests cover adapter decisions for matching/opposite/mixed receipts,
+missing/unknown host facts, unrecognized receipts, untouched predecessor slices,
+and resetting a reused plan. Domain tests cover zero/copy/reset/receiver behavior
+and JSON no-restore. A custom trusted planner sets the decision for Cursor and
+proves both single/group update consume it without OpenCode identity knowledge.
+Real usecase cases prove matching/opposite dialect runtime failure occurs before
+native effects, repeated single/group add and intact single repair retain their
+old projection, a missing recorder refuses migration, and a late foreign edit
+stops managed commit while retaining the foreign bytes.
+
+Final local verification used Go 1.26.10 and the shared Go caches:
+
+| Gate | Result |
+| --- | --- |
+| Full `./domain` tests | PASS, 0.048s. |
+| Full `./clients/opencode` tests | PASS, 2.386s; includes existing user/project durable-boundary recovery and unknown/mixed stored-codec refusal tests. |
+| Full `./internal/archtest` tests | PASS, 1.690s. |
+| Full `./planner` tests | PASS, 0.051s; unchanged operational plan goldens now pass without fixture changes. |
+| Focused `./usecase` projection, runtime, host, command refresh, add/repair, custom planner and group regression selection | PASS, 2.241s on the final refined code. |
+| Focused `./installer` existing native facade and projection-refresh selection | PASS, 7.889s; includes durable roundtrip, foreign-fact refusal, and fresh-facade crash recovery. |
+| Golden selection in planner/providers/clientdetect/clients-all | PASS, 0.035s / 0.244s / 0.014s / 0.007s; all stored golden bytes remain unchanged. |
+| Scoped whole-file size/architecture lint on domain/OpenCode/usecase | PASS, 0 issues with repository golangci-lint 2.13.2. |
+| Scoped correctness lint using a complete patch including all new/untracked files | PASS, 0 issues (`--new-from-patch=/tmp/uap-projection-complete.patch`). |
+| Baseline and whitespace checks | PASS; 138 lint exclusions remain unchanged; `git diff --check` is clean. Existing already-landed rename advisories require no scope change. |
+
+The final focused test selection was
+`Test(GroupSameRevisionNativeProjectionRefresh|GroupProjectionRefresh|NativeProjectionRefreshPreserves|TrustedPlannerProjection|OpenCodeHostBridge|OpenCodeGroupPrepares|OpenCodeNativeFacade|UpdateRefreshesCommandProjection|UpdateGroupRefreshesCommandProjection|RepairGroupRefusesAnOutdatedCommandProjection|RuntimePreparationFailure|RefreshProjection)`
+across `./usecase ./installer`. This is targeted evidence, not a claim that every
+core/CLI test or real client/model E2E ran.
+
+An initial custom-planner test reused the fixture's already-committed operation
+ID and failed with the expected existing replay refusal. Only the new test was
+corrected to give its update a distinct ID; the full focused selection then passed.
+An initial exported-field golden run exposed the reflection issue that motivated
+the separately reviewed/published private-storage refinement above. An ambient
+provider golden run, and one broader installer projection-refresh selection,
+also encountered the pre-existing duplicate proxy-environment casing refusal in
+Codex. Their final passing invocations removed a lowercase proxy key from the
+child test process only when its uppercase counterpart existed, as previously
+authorized by the coordinator. Product environment validation and the parent
+environment were not modified. The first linter invocation could not create its
+cache under the read-only home; rerunning with the task-owned writable
+`GOLANGCI_LINT_CACHE=/tmp/uap-projection-lint-cache` completed normally.
+
+The source and test changes remain uncommitted for the coordinator's publication
+from parent `a9ceee1c`. Fresh independent code review and exact-head required CI
+remain outstanding at this checkpoint. No commit, push, merge, publication,
+release, native-containment weakening, lint exclusion, or support-scope widening
+was performed by this worker.

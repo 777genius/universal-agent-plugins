@@ -363,6 +363,8 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
+	requiresNativeProjectionRefresh bool
+
 	TargetContext              TargetContext           `json:"-"`
 	profileAuthority           *ProfileAuthority       `json:"-"`
 	profileNamespace           string                  `json:"-"`

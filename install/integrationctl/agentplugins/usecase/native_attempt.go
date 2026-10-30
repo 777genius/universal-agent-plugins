@@ -179,25 +179,6 @@ func (service Service) completeNativeRemoval(installationID, bindingID string, r
 	return fmt.Errorf("installation disappeared before recording native removal")
 }
 
-// A deliberate profile change must materialize the new projection even when
-// portable package bytes/revision are unchanged. Stored operations have no host.
-func nativeDialectProjectionChanged(client domain.ClientBinding, plan domain.DeliveryPlan) bool {
-	if client.ClientID != "opencode" || plan.OpenCodeHost == nil {
-		return false
-	}
-	authority, ok := plan.OpenCodeHost.(interface{ ConfigDialect() string })
-	if !ok {
-		return false
-	}
-	target := authority.ConfigDialect()
-	for _, object := range client.NativeObjects {
-		if object.Kind == "opencode_global_mcp_server" && target == "opencode_v2" || object.Kind == "opencode_v2_global_mcp_server" && target == "opencode_v1" {
-			return true
-		}
-	}
-	return false
-}
-
 func (service Service) activatePreparedClient(ctx context.Context, installationID, bindingID string, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if service.ClientPreparation != nil && !request.VerifyOnly {
 		if err := service.ClientPreparation.RevalidateClient(ctx, request.Client, request.Plan); err != nil {

@@ -160,6 +160,9 @@ func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput,
 	}
 	session.result.Targets[targetIndex].Plan = plan
 	noChange := !requiresComponentRemoval(plan) && managed != nil && !session.input.Repair && !session.input.Switch && groupPackageUnchanged(*managed, target) && containsSurface(managed.AffectedSurfaces, string(target.Client.ClientID))
+	if session.replace && plan.RequiresNativeProjectionRefresh() {
+		noChange = false
+	}
 	if domain.ClientTraitsFor(target.Client.ClientID).ReportsMCPToolNamespaceCollision && managed != nil && (managed.Activation == domain.ActivationFailed || managed.Verification == domain.VerificationFailed) {
 		noChange = false
 	}
