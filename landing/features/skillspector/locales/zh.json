@@ -2,7 +2,7 @@
   "registryUi": {
     "skillSpector": {
       "loading": "正在加载报告",
-      "unavailable": "扫描不可用",
+      "unavailable": "报告无法加载",
       "loadingDetails": "正在加载已发布的评估…",
       "unavailableDetails": "无法加载已发布的评估。此条目的检查状态未知。",
       "notChecked": "尚未扫描",
@@ -94,7 +94,8 @@
       "retryblocked": "后续检查受阻：{count}。请查看下方原因。",
       "retryexhausted": "已达自动重试上限：{count}。",
       "scanComplete": "扫描完成",
-      "selectionScanned": "已扫描选定技能"
+      "selectionScanned": "已扫描选定技能",
+      "retryLoad": "重新加载"
     }
   }
 }

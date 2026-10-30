@@ -39,7 +39,7 @@ const onToggle = (event: Event) => {
   if (!detailsOpen.value) reasonContextsOpen.value.clear();
 };
 const { t, n, locale } = useI18n({ useScope: 'local' });
-const { report, status: loadedStatus } = useSkillSpector(() =>
+const { report, status: loadedStatus, recoverable, retry } = useSkillSpector(() =>
   props.applicable === false ? undefined : props.subject,
 );
 const reportStatus = computed(() => (props.applicable === false ? 'ready' : loadedStatus.value));
@@ -213,6 +213,14 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
             )
           }}
         </p>
+        <button
+          v-if="reportStatus === 'unavailable' && recoverable"
+          type="button"
+          class="skillspector__retry"
+          @click="retry"
+        >
+          {{ t('registryUi.skillSpector.retryLoad') }}
+        </button>
         <p v-if="fullyChecked !== undefined">
           {{
             t(
@@ -652,6 +660,22 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
 .skillspector__details p {
   margin: 6px 0;
 }
+.skillspector__retry {
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--cyan);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cyan);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+.skillspector__retry:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
 .skillspector__outcomes {
   margin: 8px 0;
 }
@@ -720,7 +744,8 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
 }
 @media (max-width: 600px), (pointer: coarse) {
   .skillspector > summary,
-  .skillspector__record-summary {
+  .skillspector__record-summary,
+  .skillspector__retry {
     min-height: 44px;
   }
 }

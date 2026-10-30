@@ -200,7 +200,8 @@ function networkError(error: unknown): never {
     throw new NetworkError();
   throw error;
 }
-function transient(error: unknown): boolean {
+/** Only recoverable transport failures qualify for an explicit UI retry. */
+export function isTransientSkillSpectorError(error: unknown): boolean {
   return (
     error instanceof NetworkError ||
     (error instanceof HttpError && [408, 429, 500, 502, 503, 504].includes(error.status))
@@ -254,7 +255,7 @@ async function readBytes(url: string, maximum: number, fetcher: typeof fetch) {
   } catch (error) {
     // Rate limits wait for a later request after the cache cooldown. Other
     // transient failures get one retry; validation failures never retry.
-    if (!transient(error) || (error instanceof HttpError && error.status === 429)) throw error;
+    if (!isTransientSkillSpectorError(error) || (error instanceof HttpError && error.status === 429)) throw error;
     await new Promise<void>((resolve) => setTimeout(resolve, 250));
     return readBytesOnce(url, maximum, fetcher);
   }
@@ -276,7 +277,7 @@ function cachedRequest<T>(
     promise: Promise.resolve()
       .then(work)
       .catch((error) => {
-        if (transient(error)) entry.retryAt = Date.now() + 30_000;
+        if (isTransientSkillSpectorError(error)) entry.retryAt = Date.now() + 30_000;
         throw error;
       }),
   };
@@ -284,7 +285,11 @@ function cachedRequest<T>(
   return entry.promise;
 }
 
-/** Shared session cache; transient failures recover on demand after a bounded cooldown. */
+function dropTransientFailures<T>(cache: Map<string, CachedRequest<T>>): void {
+  for (const [key, entry] of cache) if (entry.retryAt !== undefined) cache.delete(key);
+}
+
+/** Shared session cache; transient failures recover on explicit retry or later demand. */
 export function createSkillSpectorClient(
   manifestUrl: string,
   legacyUrl: string,
@@ -355,8 +360,7 @@ export function createSkillSpectorClient(
       }),
     );
   }
-  return {
-    async reportFor(repositoryName: string): Promise<SkillSpectorDisplayReport> {
+  const reportFor = async (repositoryName: string): Promise<SkillSpectorDisplayReport> => {
       const key = repositoryName.toLowerCase();
       return cachedRequest(repositories, key, async () => {
         const manifest = await loadManifest();
@@ -403,6 +407,16 @@ export function createSkillSpectorClient(
         if (pluginCounts.size) invalid();
         return { ...manifest, records };
       });
+  };
+  return {
+    reportFor,
+    retryReportFor(repositoryName: string): Promise<SkillSpectorDisplayReport> {
+      // Preserve validated successful results and requests still in flight.
+      // Only previously failed transport requests are eligible for re-fetch.
+      dropTransientFailures(manifests);
+      dropTransientFailures(shards);
+      dropTransientFailures(repositories);
+      return reportFor(repositoryName);
     },
   };
 }

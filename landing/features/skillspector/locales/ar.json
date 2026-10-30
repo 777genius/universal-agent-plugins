@@ -2,7 +2,7 @@
   "registryUi": {
     "skillSpector": {
       "loading": "جارٍ تحميل التقرير",
-      "unavailable": "الفحص غير متاح",
+      "unavailable": "تعذّر تحميل التقرير",
       "loadingDetails": "جارٍ تحميل التقييم المنشور…",
       "unavailableDetails": "تعذّر تحميل التقييم المنشور. حالة فحص هذا العنصر غير معروفة.",
       "notChecked": "لم يُفحص بعد",
@@ -94,7 +94,8 @@
       "retryblocked": "فحوص المتابعة المحظورة: {count}. راجع الأسباب أدناه.",
       "retryexhausted": "وصلت إلى حد إعادة المحاولة التلقائية: {count}.",
       "scanComplete": "اكتمل الفحص",
-      "selectionScanned": "فُحصت المهارات المحددة"
+      "selectionScanned": "فُحصت المهارات المحددة",
+      "retryLoad": "إعادة تحميل التقرير"
     }
   }
 }
