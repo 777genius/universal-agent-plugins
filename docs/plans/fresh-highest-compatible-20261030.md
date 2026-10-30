@@ -1,7 +1,7 @@
 # Lock-first, highest-compatible dependency resolution
 
 Owner decision: accepted on 2026-10-30. Initial base: `d2717aea08e8a4d4d7405e6b45755aac4fad76be`.
-Implementation status: planned; not a released guarantee.
+Implementation status: implemented in development source by #584; not yet released.
 Integration base: `c8c35655d6d1b97839c0e952c6b1491e54f39de9`, including #563.
 
 ## Accepted contract
