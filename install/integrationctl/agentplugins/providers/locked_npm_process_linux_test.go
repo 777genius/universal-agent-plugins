@@ -4,12 +4,13 @@ package providers
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -26,13 +27,14 @@ func TestLockedNPMCancellationStopsInheritedStderrHelperBeforeRuntimeCleanup(t *
 		t.Run(mode, func(t *testing.T) {
 			requireLockedNPMProcessPrerequisites(t)
 			root := installLockedNPMProcessFixture(t)
+			socket := listenLockedNPMFixture(t)
 			manager, envelope, plan, dataPath, _ := lockedRuntimeFixture(t)
 			manager.RunNPM = nil // Exercise the production command and supervisor.
 			ctx, cancel := context.WithCancel(t.Context())
 			want := context.Canceled
 			if mode == "deadline" {
 				cancel()
-				ctx, cancel = context.WithTimeout(t.Context(), 3*time.Second)
+				ctx, cancel = context.WithTimeout(t.Context(), 15*time.Second)
 				want = context.DeadlineExceeded
 			}
 			defer cancel()
@@ -49,24 +51,48 @@ func TestLockedNPMCancellationStopsInheritedStderrHelperBeforeRuntimeCleanup(t *
 					}
 				}
 			})
-			leader := waitForLockedNPMPIDFD(t, root, "leader.pid")
-			child := waitForLockedNPMPIDFD(t, root, "child.pid")
+			// One readiness budget covers both handoffs, independently of the
+			// longer real deadline. An unready fixture cannot prove cancellation.
+			if err := socket.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			handles := make(map[string]int, 2)
+			for range 2 {
+				role, fd := receiveLockedNPMFixturePIDFD(t, socket)
+				if _, duplicate := handles[role]; duplicate {
+					t.Fatalf("duplicate fake npm %s readiness", role)
+				}
+				handles[role] = fd
+			}
 			if mode == "cancel" {
 				cancel()
 			}
+			var runErr error
 			select {
-			case err := <-done:
+			case <-ctx.Done():
+			case runErr = <-done:
 				completed = true
-				if !errors.Is(err, want) {
-					t.Fatalf("PrepareRuntime error = %v, want %v", err, want)
+				// Cancellation and completion may both be ready after this
+				// goroutine is rescheduled. Preserve the consumed outcome.
+				if ctx.Err() == nil {
+					t.Fatalf("npm preparation stopped before cancellation: %v", runErr)
 				}
-				if mode == "cancel" && strings.Contains(err.Error(), "timed out") {
-					t.Fatalf("cancellation mislabeled as timeout: %v", err)
-				}
-			case <-time.After(6 * time.Second):
-				t.Fatal("npm cancellation hung on an inherited stderr descriptor")
 			}
-			for name, fd := range map[string]int{"npm leader": leader, "inherited-stderr helper": child} {
+			if !completed {
+				select {
+				case runErr = <-done:
+					completed = true
+				case <-time.After(6 * time.Second):
+					t.Fatal("npm cancellation hung on an inherited stderr descriptor")
+				}
+			}
+			if !errors.Is(runErr, want) {
+				t.Fatalf("PrepareRuntime error = %v, want %v", runErr, want)
+			}
+			if mode == "cancel" && strings.Contains(runErr.Error(), "timed out") {
+				t.Fatalf("cancellation mislabeled as timeout: %v", runErr)
+			}
+			for name, fd := range handles {
 				if !lockedNPMPIDFDExited(t, fd) {
 					t.Errorf("%s remained alive after preparation returned", name)
 				}
@@ -86,6 +112,45 @@ func TestLockedNPMCancellationStopsInheritedStderrHelperBeforeRuntimeCleanup(t *
 				t.Fatalf("real-command retry after %s: %v", mode, err)
 			}
 		})
+	}
+}
+
+// This handoff check needs no proc-children supervisor, so local environments
+// can verify descriptor ownership even when the full cancellation E2E must skip.
+func TestLockedNPMFixtureTransferredPIDFDStopsItsOriginatingProcess(t *testing.T) {
+	requireLockedNPMPIDFD(t)
+	installLockedNPMProcessFixture(t)
+	socket := listenLockedNPMFixture(t)
+	t.Setenv("UAP_LOCKED_NPM_FIXTURE_CHILD", "1")
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestLockedNPMProcessFixture$")
+	command.Env = os.Environ()
+	command.Stdout, command.Stderr = os.Stdout, os.Stderr
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	waited := false
+	t.Cleanup(func() {
+		_ = command.Process.Kill()
+		if !waited {
+			_ = command.Wait()
+		}
+	})
+	if err := socket.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	role, fd := receiveLockedNPMFixturePIDFD(t, socket)
+	if role != "child" {
+		t.Fatalf("fixture transferred role %q, want child", role)
+	}
+	if err := unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	err := command.Wait()
+	waited = true
+	if err == nil || !lockedNPMPIDFDExited(t, fd) {
+		t.Fatalf("transferred pidfd did not stop its originating process: %v", err)
 	}
 }
 
@@ -124,6 +189,11 @@ func requireLockedNPMProcessPrerequisites(t *testing.T) {
 		}
 		t.Fatalf("Linux process containment preflight: %v", err)
 	}
+	requireLockedNPMPIDFD(t)
+}
+
+func requireLockedNPMPIDFD(t *testing.T) {
+	t.Helper()
 	fd, err := unix.PidfdOpen(os.Getpid(), 0)
 	if err != nil {
 		if os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted" {
@@ -157,30 +227,68 @@ func installLockedNPMProcessFixture(t *testing.T) string {
 	return root
 }
 
-func waitForLockedNPMPIDFD(t *testing.T, root, name string) int {
+func listenLockedNPMFixture(t *testing.T) *net.UnixConn {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if body, err := os.ReadFile(filepath.Join(root, name)); err == nil {
-			pid, err := strconv.Atoi(string(body))
-			if err != nil {
-				t.Fatal(err)
-			}
-			fd, err := unix.PidfdOpen(pid, 0)
-			if err != nil {
-				t.Fatalf("capture fixture process %d: %v", pid, err)
-			}
-			t.Cleanup(func() {
-				_ = unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0)
-				_ = unix.Close(fd)
-			})
-			return fd
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("fake npm did not reach %s readiness", name)
-		}
-		time.Sleep(5 * time.Millisecond)
+	// Linux abstract addresses avoid sockaddr_un's pathname length limit;
+	// the random name keeps each fixture's descriptor transfer private.
+	address := &net.UnixAddr{Name: "@uap-npm-" + rand.Text(), Net: "unixgram"}
+	socket, err := net.ListenUnixgram("unixgram", address)
+	if err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = socket.Close() })
+	t.Setenv("UAP_LOCKED_NPM_FIXTURE_SOCKET", address.Name)
+	return socket
+}
+
+func receiveLockedNPMFixturePIDFD(t *testing.T, socket *net.UnixConn) (string, int) {
+	t.Helper()
+	body, control := make([]byte, 16), make([]byte, unix.CmsgSpace(4))
+	n, controlN, flags, _, err := socket.ReadMsgUnix(body, control)
+	if err != nil {
+		t.Fatalf("fake npm did not transfer its own pidfd before readiness deadline: %v", err)
+	}
+	messages, controlErr := unix.ParseSocketControlMessage(control[:controlN])
+	var fds []int
+	for _, message := range messages {
+		received, rightsErr := unix.ParseUnixRights(&message)
+		for _, fd := range received {
+			unix.CloseOnExec(fd)
+			t.Cleanup(func() { _ = unix.Close(fd) })
+		}
+		fds = append(fds, received...)
+		controlErr = errors.Join(controlErr, rightsErr)
+	}
+	if controlErr != nil || len(messages) != 1 {
+		t.Fatalf("fake npm pidfd control messages = %d: %v", len(messages), controlErr)
+	}
+	// Even a malformed or duplicate handoff never authorizes signaling a
+	// numeric PID. The only received handles originated in PidfdOpen(self).
+	role := string(body[:n])
+	if len(fds) != 1 || flags&(unix.MSG_TRUNC|unix.MSG_CTRUNC) != 0 || (role != "leader" && role != "child") {
+		t.Fatalf("invalid fake npm pidfd handoff: role=%q handles=%d flags=%d", role, len(fds), flags)
+	}
+	fd := fds[0]
+	t.Cleanup(func() { _ = unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0) })
+	if lockedNPMPIDFDExited(t, fd) {
+		t.Fatalf("fake npm %s exited before readiness", role)
+	}
+	return role, fd
+}
+
+func sendLockedNPMFixturePIDFD(role string) error {
+	fd, err := unix.PidfdOpen(os.Getpid(), 0)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = unix.Close(fd) }()
+	socket, err := unix.Socket(unix.AF_UNIX, unix.SOCK_DGRAM|unix.SOCK_CLOEXEC, 0)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = unix.Close(socket) }()
+	address := &unix.SockaddrUnix{Name: os.Getenv("UAP_LOCKED_NPM_FIXTURE_SOCKET")}
+	return unix.Sendmsg(socket, []byte(role), unix.UnixRights(fd), address, 0)
 }
 
 func lockedNPMPIDFDExited(t *testing.T, fd int) bool {
@@ -198,7 +306,8 @@ func TestLockedNPMProcessFixture(t *testing.T) {
 		return
 	}
 	if os.Getenv("UAP_LOCKED_NPM_FIXTURE_CHILD") == "1" {
-		if err := writeLockedNPMFixturePID(root, "child.pid"); err != nil {
+		if err := sendLockedNPMFixturePIDFD("child"); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "send child pidfd:", err)
 			os.Exit(81)
 		}
 		for {
@@ -241,21 +350,14 @@ func TestLockedNPMProcessFixture(t *testing.T) {
 	if err := child.Start(); err != nil {
 		os.Exit(87)
 	}
-	if err := writeLockedNPMFixturePID(root, "leader.pid"); err != nil {
+	if err := sendLockedNPMFixturePIDFD("leader"); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "send leader pidfd:", err)
 		_ = child.Process.Kill()
 		_ = child.Wait()
 		os.Exit(88)
 	}
 	_ = child.Wait()
 	os.Exit(0)
-}
-
-func writeLockedNPMFixturePID(root, name string) error {
-	path := filepath.Join(root, name)
-	if err := os.WriteFile(path+".tmp", []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(path+".tmp", path)
 }
 
 func validateLockedNPMProcessFixture() error {

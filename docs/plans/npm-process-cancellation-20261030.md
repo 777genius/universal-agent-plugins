@@ -121,11 +121,14 @@ with a real fake-npm executable and a persistent helper inheriting stderr. It
 requires readiness before cancellation, checks typed cancellation/deadline and
 bounded return, observes both identities through pidfds, checks no target or
 staging residue, triggers a delayed cache mutation that must not occur, then
-retries successfully through the same real command path. Fixture PID readiness
-is published atomically and cleanup uses pidfds rather than recyclable PIDs.
+retries successfully through the same real command path. Each fixture opens a
+pidfd for itself and transfers that already-bound handle to the test through
+`SCM_RIGHTS`. The parent never reacquires a handle from a numeric PID or PID
+file. One overall five-second readiness deadline covers both handoffs; the
+actual deadline subtest has a separate fifteen-second context timeout. Missing
+readiness fails rather than counting an early timeout as cancellation proof.
 Portable process tests additionally verify discarded large stdout retains
 nonzero status, stderr diagnostics, typed cancellation, and cleanup attestation.
-
 
 Windows compatibility was inspected against cached Go 1.26.10 source:
 `CommandContext` delegates to `Command(name, args...)` and adds only its context
@@ -135,3 +138,47 @@ resume without rewriting command lines or adding a shell. Both old and new npm
 paths select `npm.cmd` without an explicit `cmd.exe /c` wrapper. Any native batch
 launch limitation of that pre-existing choice is outside this cancellation
 correction; Windows compilation is not presented as runtime proof.
+
+
+### Independent harness review correction
+
+The fresh independent review identified a test-only identity race in the first
+published harness: a three-second context timeout could allow npm to be reaped
+before the parent opened a pidfd from its atomic PID file. A subsequently reused
+PID could therefore name an unrelated task. Atomic file publication did not
+bind the acquired descriptor to the original fixture. The timeout also preceded
+the original five-second readiness allowance. Production code was unchanged.
+
+The correction removes numeric PID publication and reacquisition entirely.
+Fixtures open their own pidfds and pass them through Linux Unix datagram
+`SCM_RIGHTS`; the receiver validates the role, exactly one descriptor, and
+untruncated control data before registering signal cleanup. Received descriptors
+are marked close-on-exec and closed on validation failure. Cleanup signals the
+transferred stable handle before closing it. A random Linux abstract socket
+address avoids Unix socket pathname-length failures in long test directories.
+The sender uses `unix.Sendmsg` directly because Go 1.26.10 rejects
+`WriteMsgUnix` on connected Unix datagram sockets, even with a nil destination.
+
+A single five-second socket read deadline bounds both readiness handoffs, while
+the real deadline context allows fifteen seconds from command launch. Completion
+and cancellation may be observed simultaneously: the test rechecks `ctx.Err()`
+and retains an already-consumed result rather than reporting a false early exit
+or waiting for a second result.
+
+- PASS, actual local execution with the race detector:
+  `go test -count=1 -race -v -run '^TestLockedNPMFixtureTransferredPIDFDStopsItsOriginatingProcess$'
+  ./install/integrationctl/agentplugins/providers` (1.099s, outside the restricted
+  sandbox). This test starts a direct fixture process, receives its self-opened
+  pidfd, signals that transferred handle, and confirms the originating command
+  was stopped and reaped. It needs no proc-children supervisor.
+- PASS, independently repeated by the fresh reviewer:
+  `go test -count=1 -race -run 'TestLockedNPMFixtureTransferredPIDFDStopsItsOriginatingProcess|TestLockedNPMCommandOutcome|TestLockedRuntimeCanceledSuccessfulRunnerCannotCommitTarget'
+  ./install/integrationctl/agentplugins/providers` (1.182s, outside the restricted
+  sandbox).
+- PASS: focused locked-runtime/outcome race tests (1.871s), changed-line provider
+  lint, and the full-file provider size/architecture gates (zero issues).
+- Full supervised cancellation/deadline proof continues to require observed
+  non-skipped GitHub-hosted execution because this local host lacks the existing
+  proc-children prerequisite. The independent reviewer rechecked the final
+  handoff, cleanup ownership, and select behavior and reported no remaining code
+  findings.
