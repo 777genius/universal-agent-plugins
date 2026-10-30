@@ -34,13 +34,23 @@ def kill_group(process):
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except PermissionError:
-            # macOS can report EPERM for a group containing only an unreaped
-            # zombie. Reap our own exited child, then still signal the group:
-            # its descendants may survive. A live child or persistent denial
-            # remains an error.
+            # macOS can report EPERM while the exited leader is a zombie.
+            # Reap it, then briefly retry while the group settles. A live
+            # leader or persistent denial remains an error; never abandon
+            # a surviving descendant merely because the leader exited.
             if process.poll() is None:
                 raise
-            os.killpg(process.pid, signal.SIGKILL)
+            for attempt in range(4):
+                if attempt:
+                    time.sleep(.02)
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    return
+                except ProcessLookupError:
+                    return
+                except PermissionError:
+                    if attempt == 3:
+                        raise
     except ProcessLookupError:
         pass
 
