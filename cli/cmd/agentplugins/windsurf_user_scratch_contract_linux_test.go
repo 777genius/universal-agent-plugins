@@ -45,7 +45,13 @@ func windUserScratchApp(app agentpluginscli.App, profile, state string) agentplu
 	return app
 }
 
-func TestWindsurfPublicUserAddUsesDefaultSnapshotScratch(t *testing.T) {
+type windUserScratchFixture struct {
+	app                             agentpluginscli.App
+	state, scratch, source, profile string
+}
+
+func newWindUserScratchFixture(t *testing.T) windUserScratchFixture {
+	t.Helper()
 	root := projectJourneyTemp(t)
 	home, state, scratch, source := filepath.Join(root, "home"), filepath.Join(root, "installer-state"), filepath.Join(root, "tmp"), filepath.Join(root, "source")
 	profile := filepath.Join(home, ".codeium", "windsurf")
@@ -74,8 +80,15 @@ func TestWindsurfPublicUserAddUsesDefaultSnapshotScratch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app = windUserScratchApp(app, profile, state)
-	windUserScratchExecute(t, app, source, scratch)
+	return windUserScratchFixture{app, state, scratch, source, profile}
+}
+
+func TestWindsurfPublicUserAddUsesDefaultSnapshotScratch(t *testing.T) {
+	f := newWindUserScratchFixture(t)
+	app := windUserScratchApp(f.app, f.profile, f.state)
+	windUserScratchExecute(t, app, f.source, f.scratch)
+	config := filepath.Join(f.profile, "mcp_config.json")
+	foreignSkill := filepath.Join(f.profile, "skills", "foreign-user", "SKILL.md")
 	var document struct {
 		Servers    map[string]json.RawMessage `json:"mcpServers"`
 		Preference string                     `json:"foreignPreference"`
@@ -93,7 +106,7 @@ func TestWindsurfPublicUserAddUsesDefaultSnapshotScratch(t *testing.T) {
 	}
 }
 
-func windUserScratchExecute(t *testing.T, app agentpluginscli.App, source, scratch string) {
+func windUserScratchExecute(t *testing.T, app agentpluginscli.App, source, scratch string) []byte {
 	t.Helper()
 	lock := filepath.Join(app.UserHome, ".codeium", "windsurf", "mcp_config.json.agentplugins.lock")
 	before, err := os.Lstat(scratch)
@@ -134,4 +147,5 @@ func windUserScratchExecute(t *testing.T, app agentpluginscli.App, source, scrat
 		t.Fatal("existing native lock identity changed", err)
 	}
 	t.Logf("actual User scratch: size_equal=%t modified_equal=%t changed_equal=%t", before.Size() == after.Size(), oldStat.Mtim == newStat.Mtim, oldStat.Ctim == newStat.Ctim)
+	return append([]byte{}, output.Bytes()...)
 }

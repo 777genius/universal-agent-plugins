@@ -144,7 +144,7 @@ func (w *windComponentFixture) command(t *testing.T, label string) {
 		if err := windPublicProfileClosure(before, w.profile(t), c.Scope, started, ended); err != nil {
 			t.Fatal("Windsurf public profile closure", err)
 		}
-		w.publicProof(t, w.recipes[c.Scope], result.Stdout)
+		w.publicProof(t, w.recipes[c.Scope], result.Stdout, started, ended)
 	}
 	if label == "git-a" || label == "git-b" {
 		if err := w.gitFreeze(label); err != nil {

@@ -167,6 +167,14 @@ func (w *windComponentFixture) prepare(t *testing.T) {
 	f := w.f
 	w.prepareRuntime(t)
 	projectNativeRuntimeWrite(t, f.base.Events, []byte{}, 0600)
+	// The supported evaluator owns this directory; no assessment is pre-authored.
+	cache := filepath.Join(f.base.Root, "installer-state", "security", "assessments")
+	if err := os.MkdirAll(filepath.Dir(cache), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(cache, 0700); err != nil {
+		t.Fatal("fresh empty assessment directory required", err)
+	}
 	for _, scope := range []string{"user", "a", "b"} {
 		r := &windComponentRecipe{Scope: scope, Project: f.outside, Source: filepath.Join(f.base.Root, "component-source-"+scope), Revision: scope + "-one", Nonce: windsurfConfigDigest([]byte(f.base.Nonce + scope))[:32]}
 		r.StateRoot = filepath.Join(f.base.Root, "installer-state")

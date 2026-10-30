@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -46,17 +47,21 @@ func windComponentSource(i domain.Installation, r *windComponentRecipe) error {
 	}
 	return nil
 }
-func (w *windComponentFixture) publicProof(t *testing.T, r *windComponentRecipe, stdout []byte) {
+func (w *windComponentFixture) publicProof(t *testing.T, r *windComponentRecipe, stdout []byte, start, end time.Time) {
 	t.Helper()
 	if windComponentPublicJSON(stdout) != nil {
 		t.Fatal("component public installer JSON")
+	}
+	assessment, err := windPublicAssessment(stdout, r, start, end)
+	if err != nil {
+		t.Fatal("component exact public security assessment", err)
 	}
 	statePath := filepath.Join(r.StateRoot, "state-v2.json")
 	raw, err := projectNativeRuntimeRead(statePath, 64<<10)
 	if err != nil {
 		t.Fatal("component state read")
 	}
-	proof, err := w.validateProof(r, raw)
+	proof, err := w.validateProofWithAssessment(r, raw, &assessment)
 	if err != nil {
 		t.Fatal("component independent public authority proof", err)
 	}
@@ -66,6 +71,10 @@ func (w *windComponentFixture) publicProof(t *testing.T, r *windComponentRecipe,
 	w.freezeProof(t, r)
 }
 func (w *windComponentFixture) validateProof(r *windComponentRecipe, raw []byte) (map[string]any, error) {
+	return w.validateProofWithAssessment(r, raw, nil)
+}
+
+func (w *windComponentFixture) validateProofWithAssessment(r *windComponentRecipe, raw []byte, assessment *windPublicCache) (map[string]any, error) {
 	state, err := windComponentState(raw)
 	if err != nil {
 		return nil, err
@@ -125,10 +134,10 @@ func (w *windComponentFixture) validateProof(r *windComponentRecipe, raw []byte)
 	if err = windComponentReceipts(i, b, digest); err != nil {
 		return nil, err
 	}
-	if err = w.scopeClosure(r); err != nil {
+	if err = w.publicStateFrames(r, frames, assessment); err != nil {
 		return nil, err
 	}
-	if err = w.projectClosure(r); err != nil {
+	if err = w.projectClosure(r, frames[r.Project]); err != nil {
 		return nil, err
 	}
 	if err = w.proofStable(r, frames, raw); err != nil {

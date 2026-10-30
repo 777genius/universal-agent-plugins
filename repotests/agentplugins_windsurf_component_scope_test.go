@@ -18,6 +18,10 @@ func (w *windComponentFixture) scopeClosure(r *windComponentRecipe) error {
 	if err != nil {
 		return err
 	}
+	return w.scopeFrameClosure(r, tree, "")
+}
+
+func (w *windComponentFixture) scopeFrameClosure(r *windComponentRecipe, tree map[string]windProfileRecord, cacheLeaf string) error {
 	before := w.trees[r.StateRoot]
 	activeRel, err := filepath.Rel(r.StateRoot, r.Active)
 	if err != nil {
@@ -35,6 +39,10 @@ func (w *windComponentFixture) scopeClosure(r *windComponentRecipe) error {
 	}
 	for name, record := range tree {
 		if previous, ok := before[name]; ok && previous == record {
+			continue
+		}
+		if cacheLeaf != "" && (name == windAssessmentDirectory || name == cacheLeaf) {
+			// Only the separately validated exact public cache frame reaches here.
 			continue
 		}
 		switch {
@@ -241,11 +249,7 @@ func windNativeProfileClosure(before, after map[string]windProfileRecord, scope 
 	return nil
 }
 
-func (w *windComponentFixture) projectClosure(r *windComponentRecipe) error {
-	after, err := windOwnedTree(w.f.ctx, r.Project)
-	if err != nil {
-		return err
-	}
+func (w *windComponentFixture) projectClosure(r *windComponentRecipe, after map[string]windProfileRecord) error {
 	operation := "user-public"
 	if r.Scope != "user" {
 		operation = "project-public"

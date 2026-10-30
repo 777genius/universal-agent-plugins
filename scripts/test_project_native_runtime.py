@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import stat
 import tempfile
+import types
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -15,6 +16,49 @@ import project_native_runtime as runtime
 
 class RuntimeTests(unittest.TestCase):
     source = {"source_commit": "a" * 40, "source_tree": "b" * 40}
+
+    def test_cursor_refusal_reports_only_owned_callsite_on_stderr(self):
+        import project_native_cursor_cycle as cycle
+        try:
+            cycle.admit({}, self.source)
+        except ValueError as original:
+            try:
+                raise ValueError("uap-cursor-private-secret password=must-not-escape") from original
+            except ValueError as error:
+                with patch("sys.stderr", new_callable=io.StringIO) as stderr, patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                    runtime.cursor_admission_refusal(error)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertRegex(stderr.getvalue(), r"^Cursor native admission refused at project_native_cursor_cycle\.py:[1-9][0-9]{0,5}\n$")
+        self.assertNotIn("secret", stderr.getvalue())
+        self.assertLessEqual(len(stderr.getvalue().encode()), 256)
+
+    def test_cursor_refusal_ignores_external_same_basename_and_error_text(self):
+        code = compile('raise ValueError("uap-cursor-private-secret" * 1000)', "/foreign/project_native_cursor_cycle.py", "exec")
+        try:
+            exec(code)
+        except ValueError as error:
+            with patch("sys.stderr", new_callable=io.StringIO) as stderr, patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                runtime.cursor_admission_refusal(error)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), "Cursor native admission refused at unavailable\n")
+
+    def test_cursor_refusal_bounds_trace_walk_and_source_line(self):
+        import project_native_cursor_cycle as cycle
+        try:
+            cycle.admit({}, self.source)
+        except ValueError as original:
+            trace = original.__traceback__
+            while trace.tb_frame.f_code.co_filename != str(runtime.SOURCE / "scripts/project_native_cursor_cycle.py"):
+                trace = trace.tb_next
+        for count, line in ((129, 1), (1, 0), (1, 1000000)):
+            chain = None
+            for _ in range(count):
+                chain = types.TracebackType(chain, trace.tb_frame, trace.tb_lasti, line)
+            error = ValueError("uap-cursor-private-secret").with_traceback(chain)
+            with self.subTest(count=count, line=line), patch("sys.stderr", new_callable=io.StringIO) as stderr, patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                runtime.cursor_admission_refusal(error)
+            self.assertEqual(stdout.getvalue(), "")
+            self.assertEqual(stderr.getvalue(), "Cursor native admission refused at unavailable\n")
 
     def result(self):
         return {"client": "copilot", "provider_kind": "scripted_loopback", "activation": "prepared",
@@ -1473,6 +1517,8 @@ def load_tests(loader, tests, pattern):
         tests.addTests(loader.loadTestsFromName("test_project_native_cline_cycle.CompleteCycleTests"))
         tests.addTests(loader.loadTestsFromName("test_project_native_grok_cycle.GrokCycleContracts"))
         tests.addTests(loader.loadTestsFromName("test_project_native_qoder_cycle.QoderCycleContracts"))
+        tests.addTests(loader.loadTestsFromName("test_project_native_cursor_runtime.CursorRuntimeTests"))
+        tests.addTests(loader.loadTestsFromName("test_project_native_cursor_cycle.CursorCycleContracts"))
         tests.addTests(loader.loadTestsFromName("test_project_native_windsurf_components.WindsurfComponentTests"))
     return tests
 

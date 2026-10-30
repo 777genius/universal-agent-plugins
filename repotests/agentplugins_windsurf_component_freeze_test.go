@@ -21,7 +21,7 @@ func windComponentPublicJSON(raw []byte) error {
 }
 func (w *windComponentFixture) proofFrames(r *windComponentRecipe) (map[string]map[string]windProfileRecord, error) {
 	result := map[string]map[string]windProfileRecord{}
-	for _, path := range []string{r.StateRoot, r.Profile, r.Project} {
+	for _, path := range w.proofRoots(r) {
 		frame, err := windOwnedTree(w.f.ctx, path)
 		if err != nil {
 			return nil, fmt.Errorf("component proof frame refused")
@@ -29,6 +29,13 @@ func (w *windComponentFixture) proofFrames(r *windComponentRecipe) (map[string]m
 		result[path] = frame
 	}
 	return result, nil
+}
+func (w *windComponentFixture) proofRoots(r *windComponentRecipe) []string {
+	paths := []string{r.StateRoot, r.Profile, r.Project}
+	if r.Scope != "user" {
+		paths = append(paths, w.recipes["user"].StateRoot)
+	}
+	return paths
 }
 func (w *windComponentFixture) proofStable(r *windComponentRecipe, frames map[string]map[string]windProfileRecord, raw []byte) error {
 	state := frames[r.StateRoot]["state-v2.json"]
@@ -43,8 +50,13 @@ func (w *windComponentFixture) proofStable(r *windComponentRecipe, frames map[st
 }
 func (w *windComponentFixture) freezeProof(t *testing.T, r *windComponentRecipe) {
 	t.Helper()
-	if len(r.proven) != 3 || r.proven[r.StateRoot]["state-v2.json"].Kind != "file" || r.proven[r.Profile]["mcp_config.json"].Kind != "file" || r.proven[r.Project]["."].Kind != "directory" {
+	if len(r.proven) != len(w.proofRoots(r)) || r.proven[r.StateRoot]["state-v2.json"].Kind != "file" || r.proven[r.Profile]["mcp_config.json"].Kind != "file" || r.proven[r.Project]["."].Kind != "directory" {
 		t.Fatal("component complete proven frame required before freeze")
+	}
+	for _, path := range w.proofRoots(r) {
+		if r.proven[path]["."].Kind != "directory" {
+			t.Fatal("component exact proven roots required before freeze")
+		}
 	}
 	for path, frame := range r.proven {
 		cloned := make(map[string]windProfileRecord, len(frame))
