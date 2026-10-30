@@ -63,6 +63,11 @@ refuse an engine that does not report management API v1
 (`UNSUPPORTED_API_VERSION`); the SDK does not compare engine version strings.
 Use `requiredCapabilities` to refuse an engine without a feature your host needs.
 
+`checkUpdates` is a newer development-source capability. It requires an SDK
+and engine built from a reviewed revision containing that operation; CLI 0.1.95
+predates it. See [Explicit update checks](#explicit-update-checks-development-source)
+below before choosing the engine and SDK for that method.
+
 ## Provision the engine
 
 Provision an exact released engine and pin it in the consuming application's
@@ -130,6 +135,26 @@ observations with no profile. Never derive authority from their labels or displa
 paths, forward private profile facts to a renderer, or turn discovery into automatic
 installation. Hosts preserve their own explicitly selected native profiles and can
 merge additional discovered profiles into the captured startup context.
+
+## Explicit update checks (development source)
+
+The current development engine adds `client.checkUpdates({ all: true })` or
+`client.checkUpdates({ aliases: ['docs', 'tools'] })`. Use an SDK tarball and engine
+executable built from the same reviewed source revision containing this operation;
+CLI 0.1.95 predates it. The method performs a disposable read-only network check
+and does not save freshness, change the agreement, or install files.
+Ordinary `client.environment()` stays passive and reports unchecked moving intent
+as `check_unavailable`.
+
+A check returns `complete`, `changed`, per-entry `installed`/`available` immutable
+identities, requested selectors, and shared dependency owner edges. `current`
+means the selected source was successfully checked; `pinned` means exact intent
+is retained. `check_unavailable` and `blocked` cannot be treated as current.
+A current root can still have changed shared dependencies, so inspect the overall
+`changed` flag and every returned entry. Canceling this read-only HTTP request
+stops checking; it does not create a retained mutation operation. An available
+candidate always needs a fresh `prepare({ action: 'update', ... })` review before
+apply, including drift, profile, source eligibility and stale-input checks.
 
 ## Start an owned engine
 

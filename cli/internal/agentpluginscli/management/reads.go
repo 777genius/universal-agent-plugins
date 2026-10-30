@@ -2,6 +2,7 @@ package management
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -177,4 +178,38 @@ func validIDs(ids []string, limit int) bool {
 		seen[id] = true
 	}
 	return true
+}
+
+func (s *Server) checkUpdates(w http.ResponseWriter, r *http.Request) {
+	var input UpdateCheckRequest
+	if !loopbackapi.Decode(w, r, &input, writeError) {
+		return
+	}
+	aliases := []string{}
+	if input.Aliases != nil {
+		aliases = *input.Aliases
+	}
+	if !validIDs(aliases, 2000) || input.All && len(aliases) > 0 || !input.All && len(aliases) == 0 {
+		writeError(w, 400, "INVALID_REQUEST", "Choose unique declared aliases or all", false)
+		return
+	}
+	ctx, cancel := s.requestContext(r)
+	defer cancel()
+	value, err := s.opts.Backend.CheckUpdates(ctx, input)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			writeError(w, http.StatusGatewayTimeout, "UPDATE_CHECK_TIMEOUT", "The update check timed out; retry the read-only check", true)
+			return
+		}
+		writeBackendError(w, err)
+		return
+	}
+	value.ContextId = s.opts.ContextID
+	if value.Entries == nil {
+		value.Entries = []UpdateCheckEntry{}
+	}
+	if value.Diagnostics == nil {
+		value.Diagnostics = []Diagnostic{}
+	}
+	loopbackapi.WriteJSON(w, 200, value)
 }
