@@ -1,7 +1,6 @@
 package agentpluginscli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -150,7 +150,7 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	if equalDependencyLock(snapshot.Lock, locked) || (snapshot.Lock.LockVersion == 0 && len(requirements.Dependencies) == 0) {
 		body = snapshot.LockBytes
 	}
-	request = dependencySyncRequest{targets: targets, requirements: requirements, lock: locked, manifestPath: snapshot.ManifestPath, lockPath: snapshot.LockPath, manifestBytes: snapshot.ManifestBytes, lockBytes: snapshot.LockBytes, prepared: actions, detected: detected, consent: consent, candidateManifest: manifest, candidateLock: body, aliases: aliases, attestation: attest}
+	request = dependencySyncRequest{targets: targets, requirements: requirements, lock: locked, intent: snapshot.intent(manifest, body), prepared: actions, detected: detected, consent: consent, aliases: aliases, attestation: attest}
 	return request, nil
 }
 
@@ -163,12 +163,10 @@ var publishEnvironmentFile = func(path string, body []byte) error {
 	return atomicfile.Write(path, body, mode)
 }
 
-func sameEnvironmentFile(path string, expected []byte) bool {
-	body, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return expected == nil
-	}
-	return err == nil && bytes.Equal(body, expected)
+func (snapshot environmentSnapshot) intent(manifest, lock []byte) environmentapp.Intent {
+	return environmentapp.Intent{ManifestPath: snapshot.ManifestPath, LockPath: snapshot.LockPath,
+		ManifestBytes: snapshot.ManifestBytes, LockBytes: snapshot.LockBytes,
+		CandidateManifest: manifest, CandidateLock: lock}
 }
 
 func editEnvironmentIntent(snapshot environmentSnapshot, wanted environment.Requirements) ([]byte, error) {

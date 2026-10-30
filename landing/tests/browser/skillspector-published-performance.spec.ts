@@ -38,6 +38,11 @@ const registry = loadRegistryIndex(
   new URL(registryPointer.snapshot_path, registryRoot).pathname,
   'published_snapshot',
 );
+const cloudflareSource = registry.plugins.find(
+  (plugin) =>
+    plugin.source.path === 'plugins/cloudflare' &&
+    plugin.source.repository === '777genius/universal-agent-plugins-registry',
+)!.install_source;
 const discoveryRoot = new URL('../../public/discovery/', import.meta.url);
 const discoveryPointer = JSON.parse(readFileSync(new URL('latest.json', discoveryRoot), 'utf8'));
 const discovery = JSON.parse(
@@ -89,17 +94,13 @@ async function publishedHome(page: Page, context: BrowserContext, isolated = fal
   } else await page.goto('./');
   await hydrated(page);
   await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
-  const ready = page
-    .locator('details.skillspector')
-    .filter({ hasText: 'Skills fully checked: 3 of 13' });
-  await expect(ready).toHaveCount(1);
-  const source = await ready.evaluate((element) =>
-    element.closest('[data-install-source]')!.getAttribute('data-install-source'),
-  );
+  if (!isolated)
+    await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', 'current');
   // Anchor subsequent probes to stable source identity, not a megabyte of descendant text.
   const report = page.locator(
-    `[data-install-source=${JSON.stringify(source)}] details.skillspector`,
+    `[data-install-source=${JSON.stringify(isolated ? 'i18n-state-00' : cloudflareSource)}] details.skillspector`,
   );
+  await expect(report.locator(':scope > summary')).toContainText('Skill scan · Partially scanned');
   return { report, errors, requests, registryRequests: () => registryRequests };
 }
 
@@ -129,7 +130,7 @@ test('published large reports keep closed cards unmounted after real data and ap
   expect(assessedSources).toEqual(expectedSources);
   await expect(page.locator('details.skillspector')).toHaveCount(expectedSources.length);
   await expect(page.locator('.skillspector__details')).toHaveCount(0);
-  await expect(report.locator(':scope > summary')).toContainText('Skills fully checked: 3 of 13');
+  await expect(report.locator(':scope > summary')).toContainText('Skill scan · Partially scanned');
   expect(requests.get('index.json')).toBe(1);
   for (const shard of shards) expect(requests.get(shard.path)).toBe(1);
   expect(errors).toEqual([]);

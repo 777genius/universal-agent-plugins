@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 func runLockedNPM(ctx context.Context, temporary, dataPath string, omitOptional bool) error {
@@ -24,12 +25,7 @@ func runLockedNPM(ctx context.Context, temporary, dataPath string, omitOptional 
 	if filepath.Separator == '\\' {
 		npm = "npm.cmd"
 	}
-	command := exec.CommandContext(timeout, npm, args...)
-	command.Dir = temporary
-	command.Stdin = nil
-	command.Stdout = io.Discard
-	var stderr runtimeStderrTail
-	command.Stderr = &stderr
+	command := ports.Command{Argv: append([]string{npm}, args...), Dir: temporary, DiscardStdout: true}
 	cachePath := filepath.Join(dataPath, "npm-cache")
 	if err := os.Mkdir(cachePath, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
 		return err
@@ -53,33 +49,51 @@ func runLockedNPM(ctx context.Context, temporary, dataPath string, omitOptional 
 		"npm_config_ignore_scripts=true", "npm_config_audit=false", "npm_config_fund=false",
 		"npm_config_update_notifier=false", "npm_config_registry=https://registry.npmjs.org/")
 	command.Env = env
-	if err := command.Run(); err != nil {
-		if timeout.Err() != nil {
-			return fmt.Errorf("locked npm runtime preparation timed out: %w", timeout.Err())
-		}
-		detail := strings.TrimSpace(string(stderr.tail))
-		if detail == "" {
-			return fmt.Errorf("locked npm runtime preparation: %w", err)
-		}
-		return fmt.Errorf("locked npm runtime preparation: %w: %s", err, detail)
+	result, err := (process.OS{}).Run(timeout, command)
+	if ctxErr := timeout.Err(); ctxErr != nil {
+		err = errors.Join(err, ctxErr)
 	}
-	return nil
+	return lockedNPMCommandError(result, err)
 }
 
-// npm can emit unbounded diagnostics on a failing dependency graph. Keep only
-// the useful tail without letting an untrusted package exhaust installer RAM.
-type runtimeStderrTail struct{ tail []byte }
-
-func (writer *runtimeStderrTail) Write(chunk []byte) (int, error) {
+func lockedNPMCommandError(result ports.CommandResult, err error) error {
+	if err == nil && result.ExitCode == 0 {
+		return nil
+	}
+	if err == nil {
+		err = fmt.Errorf("command exited with code %d", result.ExitCode)
+	}
+	operation := "locked npm runtime preparation"
+	if errors.Is(err, context.DeadlineExceeded) {
+		operation += " timed out"
+	} else if errors.Is(err, context.Canceled) {
+		operation += " canceled"
+	}
+	// The shared runner bounds diagnostics while retaining their suffix. Keep
+	// the existing npm error tail without dropping typed cleanup/cancel causes.
 	const maxBytes = 1200
-	length := len(chunk)
-	if length >= maxBytes {
-		writer.tail = append(writer.tail[:0], chunk[length-maxBytes:]...)
-		return length, nil
+	diagnostic := result.Stderr
+	if len(diagnostic) > maxBytes {
+		diagnostic = diagnostic[len(diagnostic)-maxBytes:]
 	}
-	if len(writer.tail)+length > maxBytes {
-		writer.tail = append(writer.tail[:0], writer.tail[len(writer.tail)+length-maxBytes:]...)
+	// Runner errors may themselves contain its larger diagnostic buffer. Keep
+	// the full cause available to errors.Is/As while bounding the human message.
+	cause := err.Error()
+	const maxCauseBytes = 300
+	if len(cause) > maxCauseBytes {
+		cause = cause[:maxCauseBytes] + " [truncated]"
 	}
-	writer.tail = append(writer.tail, chunk...)
-	return length, nil
+	message := operation + ": " + cause
+	if detail := strings.TrimSpace(string(diagnostic)); detail != "" {
+		message += ": " + detail
+	}
+	return &lockedNPMFailure{message: message, cause: err}
 }
+
+type lockedNPMFailure struct {
+	message string
+	cause   error
+}
+
+func (failure *lockedNPMFailure) Error() string { return failure.message }
+func (failure *lockedNPMFailure) Unwrap() error { return failure.cause }

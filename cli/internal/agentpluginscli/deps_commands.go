@@ -15,6 +15,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -67,6 +68,14 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 	if manifestReadErr != nil {
 		return dependencyLockResult{}, manifestReadErr
 	}
+	lockBefore, lockReadErr := os.ReadFile(lockPath)
+	if os.IsNotExist(lockReadErr) {
+		lockBefore = nil
+	} else if lockReadErr != nil {
+		return dependencyLockResult{}, lockReadErr
+	} else if lockBefore == nil {
+		lockBefore = []byte{}
+	}
 	requirements, err := readDependencyManifestBytes(manifestPath, manifestBefore)
 	if err != nil {
 		return dependencyLockResult{}, err
@@ -80,31 +89,50 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 	}
 	defer cleanup()
 	app = preview
-	requirements, previous, locked, err := resolveDependencyLock(ctx, app, opts, requirements, lockPath, updateAlias)
+	requirements, previous, locked, err := resolveDependencyLock(ctx, app, opts, requirements, lockBefore, updateAlias)
 	if err != nil {
 		return dependencyLockResult{}, err
 	}
 	hadPrevious := previous.LockVersion != 0
 	changed := !hadPrevious || !equalDependencyLock(previous, locked)
-	if allowWrite && changed && !opts.dryRun {
-		if err := publishResolvedDependencyLock(ctx, app, manifestPath, lockPath, manifestBefore, locked); err != nil {
+	if allowWrite && !opts.dryRun {
+		if err := publishResolvedDependencyLock(ctx, app, manifestPath, lockPath, manifestBefore, lockBefore, locked, changed); err != nil {
 			return dependencyLockResult{}, err
 		}
-
+	} else if err := checkDependencyLockInputs(manifestPath, lockPath, manifestBefore, lockBefore); err != nil {
+		return dependencyLockResult{}, err
 	}
 	return dependencyLockResult{Manifest: requirements, Lock: locked, LockPath: lockPath, Changed: changed, DryRun: opts.dryRun}, nil
 }
 
-func publishResolvedDependencyLock(ctx context.Context, app App, manifestPath, lockPath string, manifestBefore []byte, locked environment.Lock) error {
-	manifestAfter, readErr := os.ReadFile(manifestPath)
-	if readErr != nil || string(manifestAfter) != string(manifestBefore) {
-		return errors.New("uap.toml changed during lock resolution; rerun deps lock")
+func checkDependencyLockInputs(manifestPath, lockPath string, manifestBefore, lockBefore []byte) error {
+	for _, input := range []struct {
+		path   string
+		before []byte
+	}{{manifestPath, manifestBefore}, {lockPath, lockBefore}} {
+		intent := environmentapp.Intent{ManifestPath: input.path, LockPath: input.path, ManifestBytes: input.before, LockBytes: input.before}
+		if err := intent.Check(dependencyIntentFiles{}); err != nil {
+			return fmt.Errorf("%s changed during lock resolution; rerun deps lock: %w", filepath.Base(input.path), err)
+		}
+	}
+	return nil
+}
+
+func publishResolvedDependencyLock(ctx context.Context, app App, manifestPath, lockPath string, manifestBefore, lockBefore []byte, locked environment.Lock, changed bool) error {
+	if err := checkDependencyLockInputs(manifestPath, lockPath, manifestBefore, lockBefore); err != nil {
+		return err
 	}
 	if err := ensureDependencyStore(ctx, app, locked); err != nil {
 		return err
 	}
-	if err := writeDependencyLock(lockPath, locked); err != nil {
+	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if err := checkDependencyLockInputs(manifestPath, lockPath, manifestBefore, lockBefore); err != nil {
+		return err
+	}
+	if changed {
+		return writeDependencyLock(lockPath, locked)
 	}
 	return nil
 }
@@ -263,18 +291,16 @@ func validateDependencyTargets(app App, requirements environment.Requirements) e
 	return nil
 }
 
-func resolveDependencyLock(ctx context.Context, app App, opts *options, requirements environment.Requirements, lockPath, updateAlias string) (environment.Requirements, environment.Lock, environment.Lock, error) {
+func resolveDependencyLock(ctx context.Context, app App, opts *options, requirements environment.Requirements, lockBefore []byte, updateAlias string) (environment.Requirements, environment.Lock, environment.Lock, error) {
 	var err error
 	var previous environment.Lock
 	hadPrevious := false
-	if body, readErr := os.ReadFile(lockPath); readErr == nil {
-		previous, err = decodeCompatibleDependencyLockBytes(body, requirements)
+	if lockBefore != nil {
+		previous, err = decodeCompatibleDependencyLockBytes(lockBefore, requirements)
 		if err != nil {
 			return requirements, environment.Lock{}, environment.Lock{}, err
 		}
 		hadPrevious = err == nil
-	} else if !os.IsNotExist(readErr) {
-		return requirements, environment.Lock{}, environment.Lock{}, readErr
 	}
 	if err := canonicalizeRequirementsFromLock(&requirements, previous); err != nil {
 		return requirements, environment.Lock{}, environment.Lock{}, err
@@ -291,11 +317,6 @@ func resolveDependencyLock(ctx context.Context, app App, opts *options, requirem
 	locked, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: resolver}).Resolve(ctx, requirements, derefLock(previousPin), updateAlias)
 	if err != nil {
 		return requirements, environment.Lock{}, environment.Lock{}, err
-	}
-	if !opts.dryRun {
-		if err := ensureDependencyStore(ctx, app, locked); err != nil {
-			return requirements, environment.Lock{}, environment.Lock{}, err
-		}
 	}
 	return requirements, previous, locked, nil
 }
