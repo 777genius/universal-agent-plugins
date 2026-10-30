@@ -4582,3 +4582,29 @@ Git frame and preserve that exact mode through append and freeze. Keep full
 stat/digest joins, current ownership, single link, nofollow checks, no-write
 stability and final equality. Missing original files remain fatal; no creation
 fallback, chmod, runtime allowance or diagnosis of an actual mode is introduced.
+
+### Windsurf public snapshot scratch closure, 2026-10-30
+
+The genuine `cded02aa` run `40985280283` completes ten ordinary commands through
+the successful public User add, then refuses an original-profile change. Its
+generic fatal does not export the changed key or after-frame; no post-add state
+proof or positive native qualification is inferred. All five flags remain false.
+
+The default legacy Stager uses `packagesnapshot.Builder` with an empty TempRoot.
+Build creates a private snapshot child under the fixture's TMPDIR and Close
+removes it. Two vendor-free inert contracts exercise the actual public User add
+and the real default Build/Close path with a tiny inert HTTP recipe. The earlier
+verified runs showed final empty scratch membership and unchanged directory
+authority/size, with only its mtime and ctime changed. The complete profile
+contract showed every other original record unchanged. Reconstructed contracts
+retain that boundary; they do not qualify the original hosted stdio lifecycle.
+
+For registered public User/A/B adds only, permit those two timestamps at the
+exact TMP root when both complete TMP subtrees are empty. Keep type, device,
+inode, mode, UID/GID, link count, size and empty directory hash fixed; require
+ordinary current ownership and positive inode/link count. Both after timestamps
+must fall inside the immediate OSRun interval. Every other profile entry and
+native runtime guard remains unchanged. No TMP baseline is renewed or adopted;
+TMP belongs to the complete profile frame, not the frozen payload trees. No
+command, deadline, capture bound, approval or qualification flag changes. The
+next genuine 23-command frame still requires complete independent raw review.

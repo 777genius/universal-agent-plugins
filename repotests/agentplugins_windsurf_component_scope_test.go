@@ -107,10 +107,14 @@ func windMutationLock(path string) error {
 	}
 	return nil
 }
-func windPublicProfileClosure(before, after map[string]windProfileRecord, scope string) error {
+func windPublicProfileClosure(before, after map[string]windProfileRecord, scope string, start, end time.Time) error {
+	tmp := windPublicTmpRoot(before, after, scope, start, end)
 	for key, old := range before {
 		current, present := after[key]
 		if present && old == current {
+			continue
+		}
+		if key == "tmp\x00." && tmp {
 			continue
 		}
 		if scope != "user" {
@@ -136,6 +140,28 @@ func windPublicProfileClosure(before, after map[string]windProfileRecord, scope 
 	}
 	return nil
 }
+
+func windPublicTmpRoot(before, after map[string]windProfileRecord, scope string, start, end time.Time) bool {
+	if scope != "user" && scope != "a" && scope != "b" {
+		return false
+	}
+	for _, frame := range []map[string]windProfileRecord{before, after} {
+		if _, present := frame["tmp\x00."]; !present {
+			return false
+		}
+		for key := range frame {
+			if strings.HasPrefix(key, "tmp\x00") && key != "tmp\x00." {
+				return false
+			}
+		}
+	}
+	old, now := before["tmp\x00."], after["tmp\x00."]
+	return old.Kind == "directory" && old.Mode&0170000 == 0040000 && old.Mode&07000 == 0 &&
+		old.Inode > 0 && old.Links > 0 && old.UID == uint32(os.Getuid()) && old.GID == uint32(os.Getgid()) &&
+		windRuntimeAuthority(old, now) && old.Size >= 0 && old.Size == now.Size &&
+		old.SHA256 == "" && now.SHA256 == "" && windRuntimeCommandTimes(now, start, end)
+}
+
 func (w *windComponentFixture) gitFreeze(label string) error {
 	r := w.recipes[strings.TrimPrefix(label, "git-")]
 	if (label != "git-a" && label != "git-b") || r == nil {

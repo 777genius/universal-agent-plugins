@@ -141,7 +141,7 @@ func (w *windComponentFixture) command(t *testing.T, label string) {
 		t.Fatal("Windsurf component child/capture/cleanup failed")
 	}
 	if public {
-		if err := windPublicProfileClosure(before, w.profile(t), c.Scope); err != nil {
+		if err := windPublicProfileClosure(before, w.profile(t), c.Scope, started, ended); err != nil {
 			t.Fatal("Windsurf public profile closure", err)
 		}
 		w.publicProof(t, w.recipes[c.Scope], result.Stdout)
