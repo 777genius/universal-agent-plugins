@@ -257,9 +257,42 @@ for (const result of ['malformed', 'unavailable', 'unselected'] as const) {
       );
       await expect(retry).toHaveCount(0);
     } else {
-      await expect(page.getByRole('button', { name: 'Try loading again' })).toHaveCount(0);
+      await expect(page.locator('.skillspector__retry')).toHaveCount(0);
     }
     expect(requests).toBe(result === 'unavailable' ? 3 : 1);
+    expect(errors).toEqual([]);
+  });
+}
+
+for (const width of [1280, 390]) {
+  test(`temporary report failure recovers in the same open card on ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors = await offline(page);
+    let requests = 0;
+    const valid: SkillSpectorReport = JSON.parse(
+      readFileSync(new URL('../fixtures/skillspector-report.json', import.meta.url), 'utf8'),
+    );
+    await page.route('**/reports/skillspector/v1/index.json', (route) => {
+      requests++;
+      return requests <= 2
+        ? route.fulfill({ status: 503, body: 'Unavailable' })
+        : route.fulfill({ json: { ...valid, generated_at: checked(), records: [] } });
+    });
+    await projections(page, skillRegistryFixture());
+    await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
+    const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
+    const details = card.locator('.skillspector');
+    await expect(details.locator(':scope > summary')).toContainText('Report unavailable');
+    await details.locator(':scope > summary').click();
+    const retry = details.getByRole('button', { name: 'Try loading again' });
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect(details.locator(':scope > summary')).toContainText('Not scanned yet');
+    await expect(details).toContainText('No published scan report matches this listing.');
+    await expect(retry).toHaveCount(0);
+    expect(requests).toBe(3);
     expect(errors).toEqual([]);
   });
 }

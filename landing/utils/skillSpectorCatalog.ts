@@ -255,7 +255,11 @@ async function readBytes(url: string, maximum: number, fetcher: typeof fetch) {
   } catch (error) {
     // Rate limits wait for a later request after the cache cooldown. Other
     // transient failures get one retry; validation failures never retry.
-    if (!isTransientSkillSpectorError(error) || (error instanceof HttpError && error.status === 429)) throw error;
+    if (
+      !isTransientSkillSpectorError(error) ||
+      (error instanceof HttpError && error.status === 429)
+    )
+      throw error;
     await new Promise<void>((resolve) => setTimeout(resolve, 250));
     return readBytesOnce(url, maximum, fetcher);
   }

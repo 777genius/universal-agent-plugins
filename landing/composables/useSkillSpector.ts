@@ -1,6 +1,9 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { SkillSpectorDisplayReport, SkillSpectorSubject } from '~/types/skillSpector';
-import { createSkillSpectorClient, isTransientSkillSpectorError } from '~/utils/skillSpectorCatalog';
+import {
+  createSkillSpectorClient,
+  isTransientSkillSpectorError,
+} from '~/utils/skillSpectorCatalog';
 
 const clients = new WeakMap<object, ReturnType<typeof createSkillSpectorClient>>();
 
