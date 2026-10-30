@@ -724,7 +724,33 @@
         "noSave": "Cette sélection utilise --no-save et n’enregistre aucune dépendance.",
         "local": "Les paquets locaux ne sont pas enregistrés comme dépendances portables.",
         "discovery": "Les sélecteurs discovery ne sont pas enregistrés comme dépendances.",
-        "chatgpt": "La préparation de ChatGPT n’enregistre aucune dépendance."
+        "chatgpt": "La préparation de ChatGPT n’enregistre aucune dépendance.",
+        "projectSaved": "Enregistré dans les fichiers uap.toml et uap.lock de ce projet. Vérifiez avec npx -y universal-agent-plugins deps status --scope project depuis ce dossier. La suppression concerne tous les agents enregistrés de ce projet."
+      },
+      "scope": {
+        "label": "Installer pour",
+        "user": "Cet utilisateur",
+        "project": "Ce projet",
+        "projectHint": "Exécutez ces commandes depuis le dossier du projet. Votre agent peut vous demander de lui faire confiance ou de l’activer.",
+        "projectUnavailable": "L’installation dans un projet n’est pas disponible pour ce paquet.",
+        "selectionUnavailable": "Cette combinaison d’agents et d’emplacement est indisponible. Choisissez un autre agent ou emplacement."
+      },
+      "outcome": {
+        "includes": "Contenu :",
+        "label": "Installation et étapes suivantes",
+        "managed": "La CLI gère les fichiers installés.",
+        "prepared": "Les fichiers sont préparés. Terminez la configuration dans votre agent.",
+        "manual_activation": "Activez le paquet dans votre agent.",
+        "unknown": "Vérifiez la configuration dans votre agent.",
+        "auth": {
+          "required": "Une connexion ou des identifiants peuvent encore être nécessaires.",
+          "unknown": "Consultez les exigences de connexion du paquet."
+        },
+        "components": {
+          "skills": "Compétences",
+          "mcp": "Outils MCP",
+          "extensions": "Modules complémentaires"
+        }
       }
     },
     "authentication": {
@@ -753,7 +779,8 @@
       "distributionReason": "{distribution} : {reasons}",
       "noEligibleDistribution": "{name} : aucune distribution éligible ne prend en charge l'ensemble des cibles {targets} ; {reasons}",
       "external": "Raison fournie par la source : {reason}",
-      "separator": ";"
+      "separator": ";",
+      "unsupportedScope": "La version {sequence} ne prend pas en charge l’emplacement choisi pour {targets}."
     },
     "status": {
       "candidate": "candidat",

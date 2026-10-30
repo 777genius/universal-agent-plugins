@@ -31,18 +31,14 @@ export function downloadChannelTitle(locale: PublishedLocale, channel: string) {
 }
 
 export async function hydrated(page: Page) {
+  // Theme/locale initialization runs on app:suspense:resolve, alongside Nuxt's
+  // hydration completion. A later browser idle turn is not an app lifecycle gate.
   await page.waitForFunction(() => {
     const root = document.querySelector('#__nuxt') as HTMLElement & {
       __vue_app__?: { config: { globalProperties: { $nuxt?: { isHydrating: boolean } } } };
     };
     return root?.__vue_app__?.config.globalProperties.$nuxt?.isHydrating === false;
   });
-  // Nuxt onNuxtReady callbacks (including theme/locale setup) run in a native
-  // idle turn after this flag flips. Hydration alone is not app readiness.
-  // Preserve the actual scheduler and all existing test/assertion timeouts.
-  await page.evaluate(() => new Promise<void>((resolve) => {
-    requestIdleCallback(() => queueMicrotask(resolve));
-  }));
 }
 
 export async function navigate(page: Page, family: string, locale: PublishedLocale = 'en', suffix = '') {

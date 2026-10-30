@@ -4,7 +4,7 @@ import {
   dependencyAddFlag,
   isPinnedGitSource,
 } from './savedDependencies.ts';
-import type { RegistryPlugin } from '../types/registry';
+import type { InstallScope, RegistryPlugin } from '../types/registry';
 
 const CLI_INVOCATION = 'npx -y universal-agent-plugins';
 
@@ -41,27 +41,48 @@ export function pluginCommands(
   plugin: RegistryPlugin,
   targets?: string | readonly string[],
   savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
+  scope: InstallScope = 'user',
 ) {
+  return installCommands(
+    plugin.trust_state === 'conformant_unreviewed'
+      ? communityAddSource(plugin)
+      : plugin.install_source,
+    plugin.name,
+    targets,
+    savedDependenciesReleased,
+    scope,
+  );
+}
+
+/** Shared command contract for Directory and the legacy curated install facade. */
+export function installCommands(
+  source: string,
+  name: string,
+  targets?: string | readonly string[],
+  savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
+  scope: InstallScope = 'user',
+  invocation = CLI_INVOCATION,
+) {
+  if (scope !== 'user' && scope !== 'project') throw new Error('Unsupported installation scope');
   const values = (targets === undefined ? [] : Array.isArray(targets) ? targets : [targets])
     .map((target) => target.trim())
     .filter((target, index, all) => target && all.indexOf(target) === index);
   if (targets !== undefined && !values.length) throw new Error('At least one target is required');
+  if (scope === 'project' && !values.length)
+    throw new Error('Project installation requires explicit targets');
   const targetFlag = values.length ? ` --target ${values.join(',')}` : '';
-  const addSource =
-    plugin.trust_state === 'conformant_unreviewed'
-      ? communityAddSource(plugin)
-      : plugin.install_source;
-  const mode = dependencySaveMode(addSource, values);
+  const scopeFlag = scope === 'project' ? ' --scope project' : '';
+  const mode = dependencySaveMode(source, values);
   const owned = savedDependenciesReleased && mode === 'saved';
   return {
     saveMode: savedDependenciesReleased ? mode : undefined,
-    add: `${CLI_INVOCATION} add ${addSource}${targetFlag}${dependencyAddFlag(mode, savedDependenciesReleased)}`,
+    add: `${invocation} add ${source}${targetFlag}${scopeFlag}${dependencyAddFlag(mode, savedDependenciesReleased)}`,
     update:
-      owned && isPinnedGitSource(addSource)
-        ? `${CLI_INVOCATION} add ${addSource}${targetFlag}`
-        : `${CLI_INVOCATION} update ${plugin.name}${owned ? '' : targetFlag}`,
-    repair: `${CLI_INVOCATION} repair ${plugin.name}${targetFlag}`,
-    switch: `${CLI_INVOCATION} switch ${plugin.name} --to <distribution-id>`,
-    remove: `${CLI_INVOCATION} remove ${plugin.name}${owned ? '' : targetFlag}`,
+      owned && isPinnedGitSource(source)
+        ? `${invocation} add ${source}${targetFlag}${scopeFlag}`
+        : `${invocation} update ${name}${owned ? '' : targetFlag}${scopeFlag}`,
+    repair: `${invocation} repair ${name}${targetFlag}${scopeFlag}`,
+    switch: `${invocation} switch ${name} --to <distribution-id>${scopeFlag}`,
+    remove: `${invocation} remove ${name}${owned ? '' : targetFlag}${scopeFlag}`,
   };
 }
