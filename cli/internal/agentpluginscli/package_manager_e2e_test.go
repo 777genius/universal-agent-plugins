@@ -71,7 +71,7 @@ func packageManagerAgreementCases() map[string]func(*testing.T) {
 		"lock-cold-store-hydration":      TestDependencyLockUnchangedHydratesMissingStore,
 		"lock-read-only-no-publication":  TestDependencyLockReadOnlyResolutionDoesNotPublish,
 		"lock-empty-existing-refusal":    TestDependencyLockRejectsEmptyExistingLock,
-		"absent-empty-distinct":          TestSameEnvironmentFileDistinguishesAbsentAndEmpty,
+		"absent-empty-distinct":          TestDependencyLockInputCheckDistinguishesAbsentAndEmpty,
 		"direct-source-promotion":        TestDirectSavedAddPromotesRetainedIntentWithoutAcquisition,
 		"direct-source-selector-refusal": TestDirectSavedPromotionRejectsSelectorOrAliasChanges,
 		"occupied-declaration-key":       TestDirectSavedPromotionRejectsOccupiedDeclarationKey,
