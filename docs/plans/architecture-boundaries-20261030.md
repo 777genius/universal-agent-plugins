@@ -2,8 +2,9 @@
 
 Date: 2026-10-30. Base: `ae068426706d5f2c9d624ae94c6504ac8b7f553e`.
 Branch: `refactor/architecture-boundaries-20261030`.
-Status: implemented locally after plan checkpoint `e738d4f`; ready for independent review.
-Draft PR: https://github.com/777genius/universal-agent-plugins/pull/591.
+Status: implemented and independently reviewed; final hosted CI is pending.
+Initial plan checkpoint: `e738d4f`; draft PR opened before implementation.
+PR: https://github.com/777genius/universal-agent-plugins/pull/591.
 
 ## Problem and priority
 
@@ -149,8 +150,25 @@ counted as a pass.
 
 The persistent Go fixtures are the regression gate; the temporary synthetic
 linter module is validation evidence, not a new repository tool or runtime
-dependency. Independent review and normal PR CI remain pending. No release or
-merge was performed.
+dependency. Independent review is complete; normal PR CI remains pending. No
+release or merge was performed.
+
+## Independent review checkpoint — 2026-10-30
+
+A fresh GPT-6.1 Sol xhigh reviewer inspected implementation
+`1f51bb34d2848441d15e3048045cf4441ee96f04`, the complete policy diff and scanner
+tests, and the actual before/after linter evidence. The reviewer found no
+blocking correctness, rule-equivalence, maintainability or scope issue and
+independently reran the architecture package successfully.
+
+Ten additional independent compilable controls through golangci-lint 2.13.2
+resolved the remaining path-matching risk: six forbidden source files were
+rejected and four permitted files were accepted. These covered direct versus
+nested Gemini consumer tests, exact versus nested own imports, future-adapter
+tests, nested helpers and assembly, registry descendants and helper dependency
+leaks. Only the valid run after preparing the required Git fixture was counted.
+Import enforcement still does not prove semantic client independence or replace
+runtime behavioral tests.
 
 ## Ranked remaining audit followups
 
@@ -162,7 +180,7 @@ Additional issues below are deferred, rather than expanded into this patch.
 | Priority | Evidence in the audited base | Future-change risk and bounded next step |
 | --- | --- | --- |
 | P2 | `usecase/native_attempt.go`, `nativeDialectProjectionChanged`; `installer/native_recovery.go`, `inspectNativeIntents`; `installer/group_remove.go`, `planRemoveGroup` | Generic code still embeds OpenCode dialect/object identifiers and historical Claude/Codex admission policy as string comparisons. The zero client-selector budget cannot detect these semantics. When these behaviors next change, move them behind a narrow adapter capability or an explicit, tested historical-compatibility policy. Mechanically replacing strings with constants would only move the metric. |
-| P2 | `installer/identity.go`, `reserveNewBinding`; `installer/project_scope.go`, `nativeRegistryRoot` | Target resolution receives `context.Background()` rather than the operation context; identity reservation also suppresses resolver errors. Current target adapters were not shown to perform long-running work here, so no present cancellation failure is claimed. A new adapter that probes the host could expand that limitation. Review a context-aware identity/target API before adding such work, retaining compatibility for current callers. |
+| P2 | `installer/identity.go`, `reserveNewBinding`; `installer/project_scope.go`, `nativeRegistryRoot` | Target resolution receives `context.Background()` rather than the operation context. Current target adapters perform synchronous layout checks, so no present unbounded cancellation failure is claimed. Review a context-aware identity/target API before adding host probes. The separate, reproduced suppression of prospective target errors is addressed by the narrow SDK fix in PR #592 without changing the public signature. |
 
 This plan does not claim that import rules enforce all semantic architecture.
 The unchanged contract dependency-closure test still sweeps its declared
