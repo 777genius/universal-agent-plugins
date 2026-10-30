@@ -221,3 +221,10 @@ The longer catalog test names also exposed an old transfer assertion that
 mistook the word `invalid` in a temporary path for a real error diagnostic. It
 now inspects the structured TOML diagnostic field. All transfer state/byte
 assertions are retained.
+
+The first full hosted run exposed the same oracle hazard in the reused
+partial-installation/retry journey: the word `partial` in its temporary path
+was mistaken for an active lifecycle fact. Status checks now inspect exact
+labels in `facts[].facts`, with a regression that places diagnostic words in
+unrelated metadata. The transfer rollback assertion likewise requires the
+actual `rollback incomplete` diagnostic instead of a word present in its path.

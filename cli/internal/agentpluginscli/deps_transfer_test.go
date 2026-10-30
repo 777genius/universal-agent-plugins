@@ -343,7 +343,7 @@ func TestDependencyTransferPublicationRollback(t *testing.T) {
 			partial := scenario == "rollback failed" || scenario == "external edit" || scenario == "external read-only toggle"
 			if partial {
 				result := transferJSON(t, out)
-				if string(result["outcome"]) != `"partial"` || !strings.Contains(err.Error(), "rollback") || !strings.Contains(err.Error(), fixture.app.DependenciesRoot) {
+				if string(result["outcome"]) != `"partial"` || !strings.Contains(err.Error(), "rollback incomplete") || !strings.Contains(err.Error(), fixture.app.DependenciesRoot) {
 					t.Fatalf("partial rollback lacks truthful retry state: %v %s", err, out)
 				}
 				want := manifest
