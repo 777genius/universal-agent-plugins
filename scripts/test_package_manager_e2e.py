@@ -143,7 +143,7 @@ class EvidenceAcceptanceTests(unittest.TestCase):
         with patch.object(package_manager_binary, "_installations",
                           side_effect=AttributeError("unexpected null nested JSON")):
             with self.assertRaisesRegex(RuntimeError, "unchanged-binary installation proof failed"):
-                package_manager_binary.run_installations(run, None, None, None, None)
+                package_manager_binary.run_installations(run, None, None, None)
         self.assertEqual(run.report["binary_installation"]["status"], "fail")
         self.assertIn("unexpected null nested JSON", run.report["binary_installation"]["error"])
 
