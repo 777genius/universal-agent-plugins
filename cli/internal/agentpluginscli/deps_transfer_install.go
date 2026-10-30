@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -73,7 +74,7 @@ func commitDependencyTransferInstall(cmd *cobra.Command, original App, staged Ap
 	if err := transfer.publish(cmd.Context()); err != nil {
 		return renderDependencyTransferFailure(cmd, opts, transfer, err)
 	}
-	request.manifestBytes, request.lockBytes = transfer.source.files[0].body, transfer.source.files[1].body
+	request.intent.ManifestBytes, request.intent.LockBytes = transfer.source.files[0].body, transfer.source.files[1].body
 	if err := cmd.Context().Err(); err != nil {
 		return finishDependencyTransferInstall(cmd, opts, transfer, request, nil, err)
 	}
@@ -88,7 +89,7 @@ func commitDependencyTransferInstall(cmd *cobra.Command, original App, staged Ap
 
 func prepareDependencyTransferInstall(cmd *cobra.Command, app App, opts *options, transfer *dependencyTransfer) (dependencySyncRequest, error) {
 	source, destination := transfer.source, transfer.destination
-	request := dependencySyncRequest{requirements: source.requirements, lock: source.lock, manifestPath: destination.files[0].path, lockPath: destination.files[1].path, manifestBytes: destination.files[0].body, lockBytes: destination.files[1].body, candidateManifest: source.files[0].body, candidateLock: source.files[1].body}
+	request := dependencySyncRequest{requirements: source.requirements, lock: source.lock, intent: environmentapp.Intent{ManifestPath: destination.files[0].path, LockPath: destination.files[1].path, ManifestBytes: destination.files[0].body, LockBytes: destination.files[1].body, CandidateManifest: source.files[0].body, CandidateLock: source.files[1].body}}
 	if err := verifyDependencyDeclarations(cmd.Context(), app, request.lock); err != nil {
 		return request, err
 	}

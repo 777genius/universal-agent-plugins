@@ -1,6 +1,8 @@
 # Transport-independent environment application
 
-Status: planned; publish this plan and open the draft PR before implementation.
+Status: implemented locally; focused validation passed; draft PR #590 remains
+subject to hosted checks and independent review. The plan was published in
+`efd979ed98da178922eca4045ce9a2720674eb15` before implementation began.
 Base: `ae068426706d5f2c9d624ae94c6504ac8b7f553e`.
 Branch: `refactor/environment-application-20261030`.
 
@@ -99,4 +101,53 @@ ownership.
    cohesive reviewable change, with risk-focused tests and evidence.
 3. Root coordinates commits and immediately pushes each commit. Update the draft
    description and this plan with actual validation and remaining limitations.
+
+## Implemented slice and validation
+
+`environmentapp.Service` now owns the application ordering through narrow
+readiness, environment-lock, selected-package materialization, intent-file and
+existing binding-mutator ports. `environmentapp.Intent` owns preimage validation,
+pending-change detection and the existing manifest-first publication policy.
+`dependencySyncRequest` retains this one mutable intent object; successful writes
+advance the same preimages that every later binding guard observes.
+
+The CLI mapping moves an existing custom `beforeApply` guard to the service for
+the duration of application, restoring it afterward. This preserves the Skills
+context guard and executes one guard before each native preparation/application.
+`environment.Coordinator.ApplySync` remains the sole binding loop. No resolver,
+security, provenance, transaction, import rollback or native-client policy was
+changed. The four callers already shared the protocol; this change makes that
+protocol independently usable and testable outside the CLI package.
+
+Passed locally with Go 1.26.10:
+
+- `go test ./environment ./environmentapp -count=1` in the installer module.
+  New tests cover readiness/lock/review refusals, cancellation, materialization
+  failure, selected-package isolation, repair-only behavior, unchanged intent,
+  partial writes and error-after-write durable effects, preimage advancement,
+  custom guards, per-Prepare and per-Apply input checks, partial installer results
+  and the application import boundary.
+- CLI package compilation: `go test ./internal/agentpluginscli -run '^$'`.
+- Existing CLI integration selection passed: `TestUpdateAll*`,
+  `TestManagementMutableArchiveUpdate*`, the replacement/noop, invalid-source,
+  confirmation-recheck and publication-rollback `TestDependencyTransfer*` tests,
+  and `TestInstallScopeSelection`, `TestInstallPreviewShowsSelection` and
+  `TestInstallAutoScopeRejectsNonregularManifest`. These use real archive
+  acquisition/SDK persistence and controlled native runners. Loopback tests ran
+  outside the network sandbox. The child environment removed duplicate lowercase
+  proxy-variable names exported by this host; Codex's ambiguity check and all
+  source/fixture assertions remained unchanged.
+- Full `golangci-lint run ./environmentapp`: zero issues. CLI changed-line lint
+  against `ae068426706d5f2c9d624ae94c6504ac8b7f553e`: zero issues. Unfiltered CLI
+  package lint reports 112 existing findings outside this slice; no unrelated
+  source cleanup or suppression was added.
+- Formatting and `git diff --check` passed.
+
+Host limitation: baseline and refactored real Git-backed tests stop before the
+application path with `ErrOrdinaryContainmentUnsupported` because this Linux
+host lacks the required `/proc` task-children interface. This includes real-Git
+management/Skills preparation, exact-registry dry run and the dependency CLI
+journey. Their assertions and production fail-closed process policy remain
+intact. They require the existing qualified hosted Linux CI; these local results
+do not constitute native-client or all-transport E2E qualification.
 
