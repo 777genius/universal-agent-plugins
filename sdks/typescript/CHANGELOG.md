@@ -8,13 +8,13 @@ from an immutable `management-sdk-vX.Y.Z` tag by the
 
 ## [0.1.0]
 
-First public npm release.
+Initial npm package.
 
 ### Added
 
-- Public npm package `universal-agent-plugins-management-sdk`. This version is
-  the one-time bootstrap publication of the tarball that the release workflow
-  built and attested from the `management-sdk-v0.1.0` tag. npm trusted
+- Package `universal-agent-plugins-management-sdk`. The first publication uses
+  a tarball built and attested by the release workflow from the
+  `management-sdk-v0.1.0` tag. npm trusted
   publishing with npm provenance applies from the next version, because npm
   can configure it only for an existing package.
 - Pure entry point: `createClient`, `ManagementError`, `isTerminal` and the
@@ -40,7 +40,8 @@ Earlier builds were consumed only as integrity-pinned tarballs named
 `@uap/management-sdk` with version `0.0.0-development`. The name changed because
 the `@uap` npm scope is not available to this project.
 
-1. Replace the vendored tarball dependency with an exact registry version:
+1. After the version is available on npm, replace the vendored tarball dependency
+   with that exact registry version:
    `npm install --save-exact universal-agent-plugins-management-sdk@0.1.0`.
 2. Rename imports: `@uap/management-sdk` becomes
    `universal-agent-plugins-management-sdk`, and `@uap/management-sdk/node`
@@ -50,5 +51,5 @@ the `@uap` npm scope is not available to this project.
    in your build evidence.
 
 Compared with a development tarball built from the same source commit, the
-public API and wire protocol are the same; the package name, version and npm
-metadata changed.
+API and wire protocol are the same; the package name, version and npm metadata
+changed. A source version or tag alone does not establish npm publication.

@@ -29,10 +29,10 @@ test('card and detail reviewed badges explicitly describe the listing review', (
     uk: 'Картку перевірено',
     zh: '条目信息已审核',
     es: 'Ficha revisada',
-    hi: 'सूची की समीक्षा हुई',
+    hi: 'प्रविष्टि की समीक्षा हुई',
     ar: 'تمت مراجعة البطاقة',
     pt: 'Ficha revisada',
-    fr: 'Fiche vérifiée',
+    fr: 'Fiche examinée',
   };
   for (const filename of readdirSync(new URL('../locales/', import.meta.url))) {
     if (!filename.endsWith('.json')) continue;

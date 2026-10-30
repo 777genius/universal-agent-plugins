@@ -2,7 +2,7 @@
   "nav": {
     "features": "Características",
     "plugins": "Complementos",
-    "comparison": "Por que funciona",
+    "comparison": "Por qué funciona",
     "download": "empezar",
     "faq": "Preguntas frecuentes",
     "viewOnGithub": "Abrir GitHub"
@@ -11,7 +11,7 @@
     "primaryCta": "Abrir GitHub",
     "secondaryCta": "Ver complementos",
     "docsCta": "Ver documentos",
-    "preview": "Vista previa del flujo de complementos de agente universal",
+    "preview": "Vista previa del flujo de Universal Agent Plugins",
     "latestRelease": "Última versión",
     "status": "Complementos propios disponibles ahora",
     "trust": {
@@ -20,7 +20,7 @@
       "openSource": "Código abierto"
     },
     "demo": {
-      "title": "Flujo de complementos de agente universal",
+      "title": "Flujo de Universal Agent Plugins",
       "subtitle": "Un repositorio. Etapas claras. Múltiples salidas.",
       "live": "Activo",
       "ready": "listo",
@@ -38,7 +38,7 @@
       "captions": {
         "author": "Describe el complemento una vez en un repositorio administrado.",
         "generate": "Cree los resultados específicos del agente que necesita ahora.",
-        "validate": "Verifique la estructura, la política y la preparación para la transferencia.",
+        "validate": "Verifica la estructura, la política y la preparación para la transferencia.",
         "ship": "Publique a través de documentos, versiones y rutas de instalación."
       },
       "logs": {
@@ -51,19 +51,19 @@
     "paths": {
       "onlineService": {
         "title": "Conectar un servicio en línea",
-        "description": "Comience con una integración alojada como Notion, Stripe, Cloudflare o Vercel.",
-        "example": "Vea el ejemplo de Noción"
+        "description": "Empieza con una integración alojada, como Notion, Stripe, Cloudflare o Vercel.",
+        "example": "Ver el ejemplo de Notion"
       },
       "localTool": {
         "title": "Conectar una herramienta local",
-        "description": "Comience con una herramienta de propiedad de repositorio como Docker Hub, Chrome DevTools o HubSpot Developer.",
-        "example": "Vea el ejemplo de Docker Hub"
+        "description": "Empieza con una herramienta mantenida en el repositorio, como Docker Hub, Chrome DevTools o HubSpot Developer.",
+        "example": "Ver el ejemplo de Docker Hub"
       },
       "customLogic": {
         "title": "Cree una lógica de complemento personalizada",
         "badge": "Avanzado",
-        "description": "Comience con código respaldado por un iniciador cuando los enlaces, la lógica de tiempo de ejecución o el comportamiento personalizado definan el producto.",
-        "example": "Abra la guía avanzada de lógica personalizada"
+        "description": "Empieza con una plantilla de código cuando los hooks, la lógica de ejecución o el comportamiento personalizado definan el producto.",
+        "example": "Abre la guía avanzada de lógica personalizada"
       }
     }
   },
@@ -75,18 +75,18 @@
     "copy": "Copiar",
     "copied": "Copiado",
     "quickstartTitle": "inicio más rápido",
-    "quickstartSubtitle": "Este es el camino más rápido hacia la instalación de un complemento real o un repositorio validado.",
-    "installTabsLabel": "Elija cómo ejecutar los complementos de Universal Agent",
+    "quickstartSubtitle": "La forma más rápida de instalar un plugin o validar un paquete.",
+    "installTabsLabel": "Elige cómo ejecutar Universal Agent Plugins",
     "detectedRecommendation": "La mejor opción para {platform} seleccionada",
-    "mobileUnsupported": "La CLI se ejecuta en el escritorio. Copie un comando aquí y luego ejecútelo en macOS, Linux o Windows.",
+    "mobileUnsupported": "La CLI se ejecuta en un ordenador. Copia el comando y ejecútalo en macOS, Linux o Windows.",
     "platforms": {
-      "macos": "macos",
-      "windows": "ventanas",
-      "linux": "linux",
+      "macos": "macOS",
+      "windows": "Windows",
+      "linux": "Linux",
       "other": "tu dispositivo"
     },
-    "supportTitle": "Agentes apoyados",
-    "supportSubtitle": "La compatibilidad depende del complemento. La CLI verifica a cada agente seleccionado e imprime los pasos de activación o inicio de sesión restantes.",
+    "supportTitle": "Agentes compatibles",
+    "supportSubtitle": "La compatibilidad depende del plugin. La CLI comprueba cada agente seleccionado e indica los pasos de activación o inicio de sesión pendientes.",
     "supportLink": "Leer el límite de soporte"
   },
   "common": {
@@ -94,8 +94,8 @@
     "next": "Siguiente"
   },
   "theme": {
-    "dark": "oscuro",
-    "light": "Luz",
+    "dark": "Tema oscuro",
+    "light": "Tema claro",
     "toggle": "Alternar tema"
   },
   "language": {
@@ -110,25 +110,25 @@
   },
   "plugins": {
     "sectionTitle": "Nuestros primeros complementos comienzan aquí",
-    "sectionSubtitle": "Explore el catálogo propio real de servicios en línea y herramientas locales. Si el valor del producto se encuentra en su propio código de ejecución, utilice la ruta de lógica personalizada avanzada en su lugar.",
-    "supports": "Soportes",
+    "sectionSubtitle": "Explora nuestro catálogo de plugins para servicios en línea y herramientas locales. Si la función principal depende de tu propio código de ejecución, elige la guía avanzada de lógica personalizada.",
+    "supports": "Compatible con",
     "openPlugin": "Abrir complemento",
     "viewDetails": "Ver detalles",
     "viewAll": "Ver todo",
     "catalogEyebrow": "Catálogo de complementos",
     "catalogTitle": "Todos los complementos propios en un catálogo con capacidad de búsqueda",
-    "catalogSubtitle": "Explore el catálogo real en busca de servicios en línea y herramientas locales, luego abra el repositorio de origen solo después de saber que el complemento se adapta al trabajo.",
-    "catalogAdvancedNote": "¿Necesita enlaces, orquestación o comportamiento de tiempo de ejecución en lugar de un complemento de catálogo?",
-    "catalogAdvancedLink": "Abra la guía avanzada de lógica personalizada.",
-    "searchLabel": "Complementos de búsqueda",
+    "catalogSubtitle": "Explora el catálogo de servicios en línea y herramientas locales. Cuando encuentres un plugin adecuado para tu trabajo, abre su repositorio de origen.",
+    "catalogAdvancedNote": "¿Necesitas hooks, orquestación o comportamiento de ejecución en lugar de un plugin del catálogo?",
+    "catalogAdvancedLink": "Abre la guía avanzada de lógica personalizada.",
+    "searchLabel": "Buscar plugins",
     "searchPlaceholder": "Buscar complementos o flujos de trabajo...",
     "filterLabel": "Filtrar por flujo de trabajo",
     "allCategories": "Todos los flujos de trabajo",
     "clearSearch": "Borrar búsqueda",
     "emptyTitle": "Ningún complemento coincidió con esa búsqueda",
-    "emptyText": "Pruebe con una palabra clave más amplia como Git, documentos, backend, planificación o restablezca el filtro de flujo de trabajo activo.",
+    "emptyText": "Prueba una búsqueda más amplia, como Git, documentación, backend o planificación, o restablece el filtro de flujo de trabajo activo.",
     "backToCatalog": "Volver al catálogo",
-    "openRepository": "Repositorio abierto",
+    "openRepository": "Abrir repositorio",
     "detailSummaryEyebrow": "Resumen del complemento",
     "categoriesTitle": "Construido para",
     "useCasesTitle": "Lo mejor para",
@@ -136,19 +136,19 @@
     "install": {
       "eyebrow": "Instalar flujo",
       "title": "Instalar este complemento",
-      "subtitle": "Elija su agente, elija cómo ejecutar los complementos de agente universal si lo necesita y luego copie el comando exacto para este complemento.",
+      "subtitle": "Elige tu agente y, si lo necesitas, cómo ejecutar Universal Agent Plugins. Después, copia el comando de instalación de este plugin.",
       "supportedLabel": "Objetivos disponibles",
       "allAgents": "Todos",
       "chooseAgentTitle": "Elige tu agente",
-      "chooseAgentBody": "Todos los objetivos están seleccionados de forma predeterminada. Elija un conjunto más pequeño cuando desee un comando de instalación más limitado.",
-      "getCliTitle": "Ejecute los complementos de Universal Agent a su manera",
-      "getCliBody": "Utilice npx para el primer intento más rápido o instale la CLI para uso diario.",
+      "chooseAgentBody": "Todos los destinos están seleccionados por defecto. Elige menos agentes si quieres limitar la instalación.",
+      "getCliTitle": "Elige cómo ejecutar Universal Agent Plugins",
+      "getCliBody": "Usa npx para una primera prueba rápida o instala la CLI para el uso diario.",
       "installTitle": "Instalar el complemento",
-      "installBody": "Ejecute el comando de instalación para el destino que seleccionó. El comando permanece explícito, por lo que el alcance resultante sigue siendo obvio más adelante.",
+      "installBody": "Ejecuta el comando de instalación para el destino que seleccionaste. Los destinos se indican explícitamente para que el ámbito siga estando claro.",
       "manualTitle": "Enlaces de configuración nativos",
-      "manualBody": "Abra el repositorio o los documentos oficiales de su agente.",
+      "manualBody": "Abre el repositorio o la documentación oficial de tu agente.",
       "manageTitle": "Administrar más tarde",
-      "manageBody": "Después de la instalación, utilice estos comandos para actualizar, reparar la deriva o eliminar el complemento limpiamente.",
+      "manageBody": "Después de instalar, usa estos comandos para actualizar, reparar archivos modificados o eliminar el plugin.",
       "recommended": "Recomendado",
       "showInstallCta": "Instalar",
       "hideInstallCta": "Ocultar pasos de instalación",
@@ -160,7 +160,7 @@
       "copy": "Copiar",
       "copied": "Copiado",
       "fullOnboardingCta": "Abrir incorporación completa",
-      "alreadyInstalled": "¿Ya estás ejecutando Universal Agent Plugins de otra manera? Vaya directamente al Paso 3.",
+      "alreadyInstalled": "¿Ya ejecutas Universal Agent Plugins de otra forma? Ve directamente al paso 3.",
       "repositoryCta": "Repositorio de complementos",
       "agentDocsCta": "{agent} documentos",
       "boundaryLabel": "Atención",
@@ -171,46 +171,46 @@
       "userScope": "Alcance del usuario",
       "projectScope": "Alcance del proyecto",
       "mixedScope": "Alcances mixtos",
-      "projectRootHint": "Este objetivo escribe la configuración del espacio de trabajo en el proyecto actual, así que ejecute el comando desde la raíz del proyecto.",
-      "projectRootHintMixed": "Esta instalación combina objetivos a nivel de usuario con objetivos de propiedad del proyecto. Claude, Codex y Gemini permanecen en el ámbito del usuario, mientras que OpenCode y Cursor escriben en el proyecto actual, así que ejecute el comando desde la raíz del proyecto si desea que esas configuraciones del espacio de trabajo se creen en el repositorio correcto.",
+      "projectRootHint": "Este destino escribe la configuración del espacio de trabajo en el proyecto actual. Ejecuta el comando desde la raíz del proyecto.",
+      "projectRootHintMixed": "Esta instalación combina destinos del ámbito de usuario con destinos del proyecto. Claude, Codex y Gemini permanecen en el ámbito de usuario, mientras que OpenCode y Cursor escriben en el proyecto actual. Ejecuta el comando desde la raíz del proyecto para crear esas configuraciones en el repositorio correcto.",
       "selectionBodies": {
-        "all": "Instala todos los objetivos compatibles con este complemento con un solo comando. Utilice los chips de agente cuando desee una ruta de instalación más estrecha.",
+        "all": "Instala el plugin en todos los destinos compatibles con un solo comando. Selecciona menos agentes para limitar la instalación.",
         "multi": "Instala los objetivos seleccionados: {agents}."
       },
       "manualNotes": {
-        "all": "Utilice el repositorio cuando desee inspeccionar los resultados generados directamente o abra los documentos oficiales del agente para obtener una ruta nativa específica del destino.",
-        "multi": "Abra el repositorio o los documentos del agente seleccionado cuando desee inspeccionar o completar la configuración nativa para {agents}."
+        "all": "Abre el repositorio para inspeccionar los archivos generados o consulta la documentación oficial del agente para seguir su proceso nativo de configuración.",
+        "multi": "Abre el repositorio o la documentación del agente seleccionado para inspeccionar o completar la configuración nativa de {agents}."
       },
       "followUps": {
         "none": "Listo para usar después de la instalación",
-        "reload": "Vuelva a cargar los complementos o vuelva a abrir el agente si no aparece inmediatamente",
-        "enable": "Revise los permisos o habilite la extensión si Gemini solicita confirmación",
+        "reload": "Recarga los plugins o vuelve a abrir el agente si no aparecen inmediatamente",
+        "enable": "Revisa los permisos o activa la extensión si Gemini pide confirmación",
         "activation": "El paquete está preparado para Codex, pero la activación final aún puede requerir una instalación nativa o un nuevo hilo dentro de Codex.",
         "depends": "Depende de los objetivos seleccionados"
       },
       "targets": {
         "claude": {
           "installBody": "Instala el complemento en el flujo de complementos administrado de Claude con un valor predeterminado a nivel de usuario.",
-          "manualNote": "Utilice el repositorio cuando desee inspeccionar el paquete Claude generado o siga manualmente el flujo del complemento nativo de Claude.",
-          "boundaryNote": "Si Claude ya está abierto, vuelva a cargar los complementos o vuelva a abrir la sesión para que aparezca el nuevo complemento."
+          "manualNote": "Abre el repositorio para inspeccionar el paquete de Claude generado o seguir manualmente el proceso de plugins nativos de Claude.",
+          "boundaryNote": "Si Claude ya está abierto, recarga los plugins o vuelve a abrir la sesión para que aparezca el nuevo plugin."
         },
         "codex": {
-          "installBody": "Prepara el paquete Codex y el ingreso al mercado local a través del plano de control de integración.",
-          "manualNote": "Utilice el repositorio o los documentos del Codex si desea inspeccionar el paquete preparado o finalizar la ruta de activación nativa usted mismo.",
-          "boundaryNote": "La automatización del Codex sigue siendo conservadora en este caso. Universal Agent Plugins prepara el paquete y el mercado, pero Codex aún puede requerir un paso de seguimiento nativo antes de que el complemento se active."
+          "installBody": "Prepara el paquete de Codex y su entrada en el marketplace local.",
+          "manualNote": "Abre el repositorio o la documentación de Codex para inspeccionar el paquete preparado o completar la activación nativa.",
+          "boundaryNote": "Universal Agent Plugins prepara el paquete y el marketplace de Codex. La activación puede requerir un paso adicional dentro de Codex."
         },
         "gemini": {
           "installBody": "Instala la extensión Gemini en el directorio de extensiones del usuario y mantiene los flujos de actualización y reparación posteriores en la misma raíz administrada.",
-          "manualNote": "Abra el repositorio cuando desee inspeccionar el paquete de extensión Gemini generado o administrarlo a través de los comandos de extensión nativos de Gemini.",
-          "boundaryNote": "Gemini puede solicitar confirmación o revisión de permiso según la configuración de seguridad de su extensión local."
+          "manualNote": "Abre el repositorio para inspeccionar el paquete de extensión de Gemini generado o gestionarlo con los comandos nativos de extensiones de Gemini.",
+          "boundaryNote": "Gemini puede pedirte confirmación o revisar los permisos según la configuración local de seguridad de las extensiones."
         },
         "opencode": {
-          "installBody": "Agrega este complemento a la configuración OpenCode propiedad de su proyecto y a los archivos de soporte .opencode administrados.",
-          "manualNote": "Abra el repositorio o los documentos del complemento OpenCode si desea conectar la misma configuración a mano."
+          "installBody": "Añade el plugin a la configuración de OpenCode de tu proyecto y a los archivos de soporte .opencode gestionados.",
+          "manualNote": "Abre el repositorio o la documentación del plugin de OpenCode para configurar manualmente la misma integración."
         },
         "cursor": {
           "installBody": "Agrega este complemento a la configuración de Cursor MCP del proyecto para que el repositorio mantenga la integración en la configuración del espacio de trabajo versionado.",
-          "manualNote": "Abra el repositorio o los documentos de Cursor MCP cuando desee administrar la misma entrada del servidor manualmente."
+          "manualNote": "Abre el repositorio o la documentación de Cursor MCP para gestionar manualmente la misma entrada del servidor."
         }
       }
     },
@@ -247,27 +247,27 @@
   },
   "customLogic": {
     "eyebrow": "Ruta avanzada",
-    "title": "Cree una lógica de complemento personalizada cuando el producto se encuentre en su código",
-    "subtitle": "Este camino sigue siendo de primera clase, pero no es el mismo tipo de inicio que los complementos de herramientas y servicios respaldados por catálogo. Úselo cuando el comportamiento del tiempo de ejecución, los enlaces o la orquestación definan el producto.",
+    "title": "Crea lógica de plugins personalizada cuando la función principal dependa de tu código",
+    "subtitle": "Este proceso también está plenamente respaldado, pero parte de una base distinta a la de los plugins de servicios y herramientas del catálogo. Elígelo cuando el comportamiento de ejecución, los hooks o la orquestación definan el producto.",
     "advancedBadge": "Avanzado",
     "commandLabel": "Comando de inicio",
-    "commandBody": "Comience aquí cuando el valor del complemento esté en su código y desee que un repositorio mantenga alineados el código fuente creado, los resultados generados y el comportamiento en tiempo de ejecución.",
+    "commandBody": "Empieza aquí si la función principal del plugin depende de tu código y quieres mantener el código fuente, los archivos generados y el comportamiento de ejecución en un mismo repositorio.",
     "openGuide": "Abrir guía avanzada",
     "openExample": "Abrir repositorio de ejemplo",
     "points": {
       "code": "Edite los archivos orientados al tiempo de ejecución en src/, además del punto de entrada propiedad del repositorio que define el comportamiento del complemento.",
-      "generated": "Mantenga administradas las salidas raíz generadas en lugar de tratarlas como fuentes editadas a mano.",
-      "guide": "Utilice inspeccionar --authoring y la guía avanzada antes de agregar más salidas."
+      "generated": "Mantén administradas las salidas raíz generadas en lugar de tratarlas como fuentes editadas a mano.",
+      "guide": "Utiliza inspect --authoring y la guía avanzada antes de añadir más salidas."
     }
   },
   "createPlugin": {
     "eyebrow": "Crea tu propio complemento",
     "title": "Crea tu propio complemento",
-    "subtitle": "Elija la forma del repositorio que coincida con el trabajo y luego abra la guía que explica esa ruta con más detalle.",
-    "onlineServiceCta": "Abra la guía del trabajo primero",
-    "localToolCta": "Abra la guía del trabajo primero",
+    "subtitle": "Elige la estructura del repositorio que se adapte a tu tarea y abre la guía que explica ese proceso en detalle.",
+    "onlineServiceCta": "Abre la guía del trabajo primero",
+    "localToolCta": "Abre la guía del trabajo primero",
     "customLogicCta": "Abrir la guía avanzada",
-    "customLogicDescription": "Elija esto cuando su código, enlaces o comportamiento de tiempo de ejecución definan el producto."
+    "customLogicDescription": "Elige esta opción cuando tu código, los hooks o el comportamiento de ejecución definan el producto."
   },
   "faq": {
     "sectionTitle": "¿Tienes preguntas? Tenemos respuestas",
@@ -290,15 +290,15 @@
       "buildTitle": "Abrir la guía Crear",
       "buildBody": "Escribe paquetes plugin.json a mano o usa las herramientas compiladas desde el código fuente; después valídalos e instálalos con el gestor publicado.",
       "useTitle": "Abrir la guía Usar",
-      "useBody": "Busque, previsualice, instale y mantenga plugins con agentplugins."
+      "useBody": "Busca, previsualiza, instala y mantén plugins con agentplugins."
     }
   },
   "comparison": {
-    "sectionTitle": "Por que funciona",
+    "sectionTitle": "Por qué funciona",
     "sectionSubtitle": "No es una lucha contra competidores. Solo una comparación práctica con las tres formas en que los equipos de complementos suelen crear derivas innecesarias.",
     "feature": "Flujo de trabajo",
     "columns": {
-      "pluginKitAi": "Complementos de agentes universales",
+      "pluginKitAi": "Universal Agent Plugins",
       "manual": "Configuración manual",
       "duplicated": "Configuraciones duplicadas",
       "scripts": "Guiones únicos"
@@ -306,19 +306,19 @@
   },
   "footer": {
     "copyright": "© {year}",
-    "tagline": "Instalar una vez. Administre complementos en sus agentes de IA.",
+    "tagline": "Instala una vez. Gestiona plugins en tus agentes de IA.",
     "github": "GitHub",
     "docs": "Documentos"
   },
   "meta": {
-    "homeTitle": "Complementos de agentes universales | Un comando para todos tus agentes de IA",
-    "homeDescription": "Instale, actualice, repare y elimine Agent Plugins 1.0 en todos los agentes de IA con un solo comando.",
-    "downloadTitle": "Comience con los complementos de agentes universales",
-    "downloadDescription": "Instale la CLI, elija uno o más agentes y ejecute su primer comando de complemento.",
-    "pluginsTitle": "Catálogo de complementos | Complementos de agentes universales",
-    "pluginsDescription": "Explore los complementos de agente 1.0 instalables con soporte al cliente claro y comandos de ciclo de vida.",
-    "pluginDetailTitle": "{plugin} | Complementos de agentes universales",
-    "pluginDetailDescription": "Instale {plugin} en todos sus agentes de IA compatibles. {tagline}"
+    "homeTitle": "Universal Agent Plugins | Un comando para todos tus agentes de IA",
+    "homeDescription": "Instala, actualiza, repara y elimina Agent Plugins 1.0 en agentes de IA con un solo comando.",
+    "downloadTitle": "Empieza con Universal Agent Plugins",
+    "downloadDescription": "Instala la CLI, elige uno o varios agentes y ejecuta tu primer comando de instalación.",
+    "pluginsTitle": "Catálogo de complementos | Universal Agent Plugins",
+    "pluginsDescription": "Explora paquetes Agent Plugins 1.0 instalables con información clara sobre los clientes compatibles y los comandos de ciclo de vida.",
+    "pluginDetailTitle": "{plugin} | Universal Agent Plugins",
+    "pluginDetailDescription": "Instala {plugin} en tus agentes de IA compatibles. {tagline}"
   },
   "error": {
     "notFoundTitle": "Página no encontrada",
@@ -339,9 +339,9 @@
     "specLink": "Especificación Agent Plugins 1.0",
     "compatibilityLink": "Compatibilidad de clientes (en inglés)",
     "limitations": "La compatibilidad depende del paquete. Validar el esquema no demuestra ejecución, OAuth ni activación. Codex no admite MCP SSE declarado; stdio y Streamable HTTP conservan el soporte de sus adaptadores actuales.",
-    "versions": "Instalador nativo verificado: CLI 0.1.94; nombre del paquete npm: universal-agent-plugins; etiquetas de GitHub: agentplugins-v*.",
+    "versions": "Instalador nativo verificado: CLI 0.1.95; nombre del paquete npm: universal-agent-plugins; etiquetas de GitHub: agentplugins-v*.",
     "availability": "Paquetes manuales y herramientas desde el código fuente",
-    "releaseScope": "GitHub Releases y Homebrew ofrecen el instalador CLI 0.1.94, que no incluye agentplugins author. También puedes instalar mediante npm, pero las versiones de los canales pueden diferir: comprueba la versión del CLI antes de usar funciones exclusivas de 0.1.94. Los comandos de la guía Crear necesitan una compilación del código fuente con la creación activada. La referencia API generada conserva su procedencia histórica de 0.1.65; no describe el instalador actual.",
+    "releaseScope": "GitHub Releases ofrece el instalador CLI 0.1.95 verificado, con una API local de gestión y extensiones nativas de Pi; no incluye agentplugins author. npm y Homebrew son canales de instalación cuyas versiones pueden actualizarse más tarde: comprueba la versión del CLI antes de depender del comportamiento de una versión concreta. Usa una compilación del código fuente con la creación habilitada para los comandos author de la guía Crear. La referencia API generada conserva su procedencia histórica de 0.1.65; no describe el instalador actual.",
     "buildGuideLink": "Abrir la guía de creación"
   },
   "shell": {
@@ -368,19 +368,20 @@
       "commit": "Guarda uap.toml + uap.lock en Git"
     },
     "docs": {
+      "navLabel": "Documentación",
       "englishLabel": "{label} (documentación en inglés)"
     },
     "logo": {
       "subtitle": "CLI multiagente"
     },
     "accessibility": {
-      "home": "Inicio de complementos de agente universal",
-      "chooseTargets": "Elija agentes objetivo",
-      "supportedAgents": "Agentes apoyados",
+      "home": "Inicio de Universal Agent Plugins",
+      "chooseTargets": "Elige agentes objetivo",
+      "supportedAgents": "Agentes compatibles",
       "license": "licencia apache 2.0"
     },
     "why": {
-      "eyebrow": "Por que funciona",
+      "eyebrow": "Por qué funciona",
       "title": "Un estándar",
       "subtitle": "Entrega nativa",
       "intro": "El paquete sigue siendo portátil; el instalador maneja el formato y el ciclo de vida de cada cliente.",
@@ -388,7 +389,7 @@
       "clientTitle": "Consciente del cliente",
       "clientDescription": "Codex, Cursor, Claude Code, Gemini CLI, OpenCode y otros clientes reciben el formato que admiten.",
       "lifecycleTitle": "Ciclo de vida completo",
-      "lifecycleDescription": "Agregue, inspeccione, actualice, repare, cambie de fuente o elimine un complemento a través de la misma CLI.",
+      "lifecycleDescription": "Añade, inspecciona, actualiza, repara, cambia de fuente o elimina un plugin con la misma CLI.",
       "sourceTitle": "Fuente visible",
       "sourceDescription": "Los paquetes revisados y el descubrimiento de la comunidad permanecen claramente etiquetados y su fuente está disponible antes de la instalación.",
       "standardDescription": "Los paquetes se leen desde Agent Plugins 1.0 {manifest}, sin un segundo manifiesto de instalación."
@@ -408,20 +409,20 @@
           "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: cada cliente tiene una ruta propia de instalación o preparación. La compatibilidad depende de los componentes, el ámbito y los requisitos de activación."
         },
         "1": {
-          "question": "¿Se instala un comando en cada agente?",
-          "answer": "De forma predeterminada, la CLI detecta agentes compatibles instalados y le solicita confirmación. También puede seleccionar uno o varios agentes explícitamente."
+          "question": "¿Un solo comando instala el plugin en todos los agentes?",
+          "answer": "Por defecto, la CLI detecta los agentes compatibles instalados y te pide confirmación. También puedes seleccionar uno o varios agentes de forma explícita."
         },
         "2": {
           "question": "¿Qué sucede cuando un agente necesita iniciar sesión?",
-          "answer": "La CLI prepara el paquete y muestra el paso exacto de activación o inicio de sesión. Nunca recibe su contraseña de OAuth."
+          "answer": "La CLI prepara el paquete y muestra los pasos exactos de activación o inicio de sesión. Nunca recibe tu contraseña de OAuth."
         },
         "3": {
           "question": "¿Puedo instalar un complemento fuera de este directorio?",
-          "answer": "Sí. Instale un paquete completo con plugin.json desde una carpeta local, Git por HTTPS o SSH, un enlace de proveedor admitido o un archivo listo para instalar. La CLI fija las fuentes exactas de las dependencias guardadas que lo permiten."
+          "answer": "Sí. Instala un paquete completo con plugin.json desde una carpeta local, Git por HTTPS o SSH, un enlace de proveedor admitido o un archivo listo para instalar. La CLI fija las fuentes exactas de las dependencias guardadas que lo permiten."
         },
         "4": {
           "question": "¿Se revisan todos los complementos descubiertos?",
-          "answer": "No. Las entradas revisadas y los paquetes comunitarios descubiertos automáticamente están etiquetados por separado para que pueda elegir el nivel de confianza que necesita."
+          "answer": "No. Las entradas revisadas y los paquetes comunitarios descubiertos automáticamente se etiquetan por separado para que elijas el nivel de confianza que necesitas."
         },
         "5": {
           "question": "¿Puedo deshacer una instalación?",
@@ -430,14 +431,14 @@
       }
     },
     "seo": {
-      "indexTitle": "CLI de complementos de agente universal {'|'} Instalar complementos de agente 1.0",
-      "indexDescription": "Instale, actualice, repare y elimine Agent Plugins 1.0 en los agentes de IA compatibles con una CLI.",
-      "downloadTitle": "Descargar CLI de complementos de agente universal",
-      "downloadDescription": "Instale la CLI de Universal Agent Plugins en macOS, Linux o Windows y administre Agent Plugins 1.0 desde un solo comando.",
+      "indexTitle": "Universal Agent Plugins CLI {'|'} Instalar Agent Plugins 1.0",
+      "indexDescription": "Instala, actualiza, repara y elimina paquetes Agent Plugins 1.0 en los agentes de IA compatibles con una sola CLI.",
+      "downloadTitle": "Descargar Universal Agent Plugins CLI",
+      "downloadDescription": "Instala Universal Agent Plugins CLI en macOS, Linux o Windows y gestiona Agent Plugins 1.0 con un solo comando.",
       "applicationSubCategory": "Administrador de complementos del agente",
       "softwareRequirements": "CLI nativa para macOS, Linux y Windows; o Node.js 22+ para npx",
       "featureList": "Instalar, inspeccionar, actualizar, reparar, cambiar de fuente y eliminar Agent Plugins 1.0",
-      "imageAlt": "Complementos de agentes universales: instale complementos en agentes de IA con una CLI",
+      "imageAlt": "Universal Agent Plugins: instala plugins en agentes de IA con una sola CLI",
       "organizationDescription": "Instalador multiagente de código abierto y administrador del ciclo de vida para Agent Plugins 1.0."
     },
     "hero": {
@@ -445,42 +446,42 @@
       "autoSummary": "Elegir agentes en la terminal",
       "autoDescription": "El comando permite elegir agentes antes de instalar.",
       "unavailable": "No disponible temporalmente",
-      "refreshing": "Actualizar datos del complemento",
+      "refreshing": "Actualizando los datos de los plugins",
       "chatgptSetup": "Finalizar la configuración en ChatGPT",
       "notAvailable": "No disponible",
       "notAvailableForPlugin": "No disponible para este complemento",
       "title": "Un complemento",
       "subtitle": "Todos tus agentes",
-      "intro": "Instale, actualice, repare y elimine Agent Plugins 1.0 en los agentes de IA compatibles con un solo comando. Deje que la CLI detecte los agentes instalados o elija exactamente dónde va el complemento.",
+      "intro": "Instala, actualiza, repara y elimina paquetes Agent Plugins 1.0 en los agentes de IA compatibles con un solo comando. Deja que la CLI detecte los agentes instalados o elige los destinos.",
       "github": "Abrir GitHub",
       "choose": "Elige agentes",
       "chooseHint": "Uno, muchos o detección automática",
       "run": "Copiar y ejecutar",
       "terminal": "en tu terminal",
-      "refreshNotice": "Los datos del complemento son refrescantes. Vuelve a intentarlo en breve.",
+      "refreshNotice": "Los datos de los plugins se están actualizando. Vuelve a intentarlo en unos instantes.",
       "otherMethods": "Otros métodos de instalación",
       "watchDemo": "Ver demostración",
       "demoVideoTitle": "Demostración de instalación de Universal Agent Plugins",
-      "supportedClients": "Clientes apoyados",
-      "clientNote": "La CLI instala o prepara el formato nativo que admite cada cliente. Algunos clientes pueden pedirle que finalice la activación o inicie sesión.",
+      "supportedClients": "Clientes compatibles",
+      "clientNote": "La CLI instala o prepara el formato nativo que admite cada cliente. Algunos clientes requieren completar la activación o iniciar sesión.",
       "install": "Instalar {name}",
       "explore": "Explorar complementos",
-      "exploreCount": "Explora los complementos {count} | Explora el complemento {count} | Explora los complementos de {count}",
+      "exploreCount": "Explora {count} plugins | Explora {count} plugin | Explora {count} plugins",
       "delivery": {
         "managed": "Instalación administrada",
-        "prepared": "Preparado; la importación de clientes permanece",
+        "prepared": "Preparado; falta importarlo en el cliente",
         "manual_activation": "Se requiere activación manual"
       },
       "sourceReason": "Razón de la fuente: {reason}",
       "diagnostics": {
-        "distributionStatus": "la distribución es {status}",
-        "releaseStatus": "lanzamiento {sequence} es {status}",
-        "missingComponents": "la versión {sequence} omite los componentes necesarios",
-        "unsupportedTargets": "la versión {sequence} no es compatible con {targets}",
-        "blockingFailure": "La versión {sequence} tiene un error de bloqueo confiable para {targets}",
-        "missingEvidence": "La versión {sequence} carece de evidencia actual positiva de compatibilidad de paquetes (materialización aprobada) para {targets}",
-        "noReleases": "sin lanzamientos",
-        "defaultIneligible": "el valor predeterminado declarado {distribution} no era elegible: {reasons}",
+        "distributionStatus": "la distribución tiene el estado {status}",
+        "releaseStatus": "la versión {sequence} tiene el estado {status}",
+        "missingComponents": "la versión {sequence} no incluye los componentes necesarios",
+        "unsupportedTargets": "la versión {sequence} no admite {targets}",
+        "blockingFailure": "una fuente de confianza confirma un fallo bloqueante de la versión {sequence} para {targets}",
+        "missingEvidence": "la versión {sequence} no dispone de una comprobación de compatibilidad del paquete vigente y satisfactoria para {targets}",
+        "noReleases": "no hay versiones",
+        "defaultIneligible": "la distribución predeterminada declarada {distribution} no cumple los requisitos: {reasons}",
         "reasonSeparator": ";",
         "status": {
           "candidate": "candidato",
@@ -493,29 +494,29 @@
     },
     "header": {
       "plugins": "Complementos",
-      "why": "Por que funciona",
+      "why": "Por qué funciona",
       "faq": "Preguntas frecuentes",
       "openMenu": "Abrir menú de navegación",
       "closeMenu": "Cerrar menú de navegación",
       "menuTitle": "Menú de navegación",
-      "menuDescription": "Vaya a complementos, detalles del producto, preguntas frecuentes o GitHub.",
+      "menuDescription": "Accede a los plugins, los detalles del producto, las preguntas frecuentes o GitHub.",
       "appearance": "Apariencia"
     },
     "navigation": {
       "plugins": "Complementos",
-      "why": "Por que funciona",
+      "why": "Por qué funciona",
       "faq": "Preguntas frecuentes",
       "open": "Abrir menú de navegación",
       "close": "Cerrar menú de navegación",
       "title": "Menú de navegación",
-      "description": "Vaya a complementos, detalles del producto, preguntas frecuentes o GitHub.",
+      "description": "Accede a los plugins, los detalles del producto, las preguntas frecuentes o GitHub.",
       "appearance": "Apariencia"
     }
   },
   "registryUi": {
     "select": {
-      "up": "Opciones de desplazamiento hacia arriba",
-      "down": "Opciones de desplazamiento hacia abajo"
+      "up": "Desplazar las opciones hacia arriba",
+      "down": "Desplazar las opciones hacia abajo"
     },
     "combobox": {
       "open": "Abrir {label}",
@@ -526,49 +527,49 @@
       "selected": "{count} seleccionado",
       "auto": "Detección automática",
       "choose": "O elegir agentes específicos",
-      "automaticHelp": "La CLI compara este complemento con los agentes instalados, omite los incompatibles y le permite confirmar los objetivos. ChatGPT se incluye solo cuando el complemento proporciona una conexión verificada.",
-      "manualHelp": "Seleccione cada agente que debería recibir este complemento. Al menos uno permanece seleccionado.",
+      "automaticHelp": "La CLI comprueba este plugin con los agentes instalados, omite los incompatibles y te permite confirmar los destinos. ChatGPT solo se incluye si el plugin ofrece una conexión verificada.",
+      "manualHelp": "Selecciona los agentes que deben recibir este plugin. Debe quedar al menos uno seleccionado.",
       "summary": "{label}: {summary}"
     },
     "command": {
-      "terminal": "terminales",
+      "terminal": "En la terminal",
       "copiedLabel": "Comando copiado",
-      "copyLabel": "comando copiar",
+      "copyLabel": "Copiar comando",
       "copied": "Copiado",
       "copy": "Copiar",
       "announcement": "Comando copiado al portapapeles"
     },
     "directory": {
       "heading": "Encuentra tu complemento",
-      "reviewed": "{count} complemento revisado. Busque, elija sus agentes y copie un comando. | {count} complementos revisados. Busque, elija sus agentes y copie un comando.",
-      "combined": "{reviewed} más {community}. Busque, elija sus agentes y copie un comando.",
+      "reviewed": "{count} plugin revisado. Busca, elige tus agentes y copia un comando. | {count} plugins revisados. Busca, elige tus agentes y copia un comando.",
+      "combined": "{reviewed} más {community}. Busca, elige tus agentes y copia un comando.",
       "reviewedCount": "{count} complemento revisado | {count} complementos revisados",
       "communityCount": "{count} paquete comunitario | {count} paquetes comunitarios"
     },
     "security": {
-      "blocking": "Revisión automatizada: {count} hallazgo de bloqueo | Revisión automatizada: {count} resultados de bloqueo",
+      "blocking": "Revisión automatizada: {count} hallazgo bloqueante | Revisión automatizada: {count} hallazgos bloqueantes",
       "notes": "Revisión automatizada: {count} nota | Revisión automatizada: {count} notas",
-      "clear": "Revisión automatizada: sin resultados de bloqueo",
+      "clear": "Revisión automatizada: sin hallazgos bloqueantes",
       "review": "Revisar antes de instalar",
-      "noBlocking": "No se detectaron resultados de bloqueo",
+      "noBlocking": "No se detectaron hallazgos bloqueantes",
       "maintenance": "Notas de mantenimiento del repositorio",
       "reviewNotes": "Notas de revisión automatizadas",
       "unknown": "desconocido",
       "tooltipScope": "LintAI {version} comprobó la revisión indexada exacta {revision}.",
       "tooltipDisclaimer": "Esta verificación estática busca patrones configurados. No ejecuta el complemento ni garantiza la seguridad.",
-      "openReview": "{label}. Abra la reseña completa de {name}",
+      "openReview": "{label}. Abre el informe completo de {name}",
       "staticReview": "Revisión estática automatizada",
-      "more": "+{count} más en la reseña completa",
-      "fullDetails": "Abra la página del complemento para obtener todos los detalles.",
+      "more": "+{count} más en el informe completo",
+      "fullDetails": "Abre la página del complemento para obtener todos los detalles.",
       "eyebrow": "Revisión de seguridad automatizada",
-      "scope": "LintAI {version} verificó la revisión indexada exacta {revision} en {date}. Este resultado se aplica solo a esos archivos de paquete.",
-      "freshness": "Una revisión ascendente más reciente es un código diferente. Debe indexarse ​​y comprobarse nuevamente; la CLI no reutilizará este resultado para archivos modificados.",
+      "scope": "LintAI {version} comprobó la revisión indexada exacta {revision} el {date}. El resultado solo se aplica a los archivos de ese paquete.",
+      "freshness": "Una revisión más reciente del origen contiene código diferente. Debe indexarse y comprobarse de nuevo; la CLI no reutiliza este resultado para archivos modificados.",
       "before": "Cosas a revisar antes de instalar",
       "maintenanceCount": "Notas de mantenimiento del repositorio ({count})",
       "maintenanceHelp": "Estos hallazgos se refieren a la automatización del repositorio del autor. Son consejos de refuerzo útiles, pero el instalador no ejecuta esos flujos de trabajo.",
       "truncated": "Mostrando {shown} de {total} hallazgos. El resumen público firmado tiene un tamaño limitado; los totales incluyen todos los hallazgos del escaneo.",
       "empty": "Las reglas automatizadas no detectaron ningún patrón de bloqueo en los archivos verificados.",
-      "disclaimer": "Los controles automatizados reducen el riesgo; no prueban que un complemento sea seguro. Revise la fuente y los permisos antes de instalar software en el que no confía."
+      "disclaimer": "Las comprobaciones automáticas reducen el riesgo, pero no prueban que un plugin sea seguro. Revisa la fuente y los permisos antes de instalar software en el que no confíes."
     },
     "catalog": {
       "staleCommunityResults": "Se muestran {count} entradas de la comunidad del último catálogo firmado, generado el {generated}, caducado el {expired}. Los comandos de instalación están pausados hasta que haya un catálogo actualizado. Las entradas revisadas siguen disponibles.",
@@ -576,11 +577,11 @@
       "staleCommunityCommands": "Los comandos de instalación de la comunidad están pausados porque el catálogo firmado ha caducado. Puedes seguir consultando las entradas y su código fuente.",
       "explorePlugins": "Explorar complementos",
       "searchByCapabilityComponentOrSource": "Busque por capacidad, componente o fuente.",
-      "allCategories": "Todas las categorias",
+      "allCategories": "Todas las categorías",
       "marketingCategory": "Marketing y campañas",
       "allComponents": "Todos los componentes",
       "allSources": "Todas las fuentes",
-      "upstreamPackages": "Paquetes ascendentes",
+      "upstreamPackages": "Paquetes de origen",
       "communityBridges": "Puentes comunitarios",
       "communityPackages": "Paquetes comunitarios",
       "directSources": "Fuentes directas",
@@ -603,8 +604,8 @@
       "hideFilters": "Ocultar filtros",
       "moreFilters": "Más filtros",
       "addAPlugin": "Agregar un complemento",
-      "filterPlugins": "Complementos de filtro",
-      "searchPlugins": "Complementos de búsqueda",
+      "filterPlugins": "Filtrar plugins",
+      "searchPlugins": "Buscar plugins",
       "searchByNameAuthorOrCapability": "Busque por nombre, autor o capacidad...",
       "clearPluginSearch": "Borrar búsqueda de complementos",
       "filterByCategory": "Filtrar por categoría",
@@ -615,26 +616,26 @@
       "filterByAgent": "Filtrar por agente",
       "filterByAuthentication": "Filtrar por autenticación",
       "filterByOwner": "Filtrar por propietario",
-      "searchOwners": "Propietarios de búsqueda…",
+      "searchOwners": "Buscar propietarios…",
       "activeFilters": "Filtros activos",
       "pluginDirectory": "Directorio de complementos",
       "addPlugin": "Agregar complemento",
       "resetFilters": "Restablecer filtros",
-      "findingMoreCommunityPluginsOnGithub": "Encontrar más complementos comunitarios en GitHub...",
-      "communityResultsAreRefreshingReviewedListingsRemainAvailable": "Los resultados de la comunidad son refrescantes. Los listados revisados ​​siguen disponibles.",
-      "communityResultsAreTemporarilyUnavailableReviewedListingsRemainAvailable": "Los resultados de la comunidad no están disponibles temporalmente. Los listados revisados ​​siguen disponibles.",
+      "findingMoreCommunityPluginsOnGithub": "Buscando más plugins de la comunidad en GitHub…",
+      "communityResultsAreRefreshingReviewedListingsRemainAvailable": "Los resultados de la comunidad se están actualizando. Las fichas revisadas siguen disponibles.",
+      "communityResultsAreTemporarilyUnavailableReviewedListingsRemainAvailable": "Los resultados de la comunidad no están disponibles temporalmente. Las fichas revisadas siguen disponibles.",
       "noMatchingPlugins": "No hay complementos coincidentes",
-      "tryABroaderSearchOrClearOneOfTheFilters": "Pruebe una búsqueda más amplia o borre uno de los filtros.",
+      "tryABroaderSearchOrClearOneOfTheFilters": "Prueba una búsqueda más amplia o borra uno de los filtros.",
       "clearFilters": "Limpiar filtros",
-      "addAPluginByPullRequest": "Agregar un complemento mediante solicitud de extracción",
+      "addAPluginByPullRequest": "Añadir un plugin mediante una pull request",
       "removeFilter": "Eliminar {label}",
-      "activeCount": "{count} activo",
+      "activeCount": "{count} filtros activos",
       "showMore": "Mostrar {count} más",
       "remaining": "{count} complemento coincidente restante | {count} complementos coincidentes restantes",
       "noMatches": "No hay coincidencias · {total} total",
-      "shown": "{shown} mostrado · {total} complemento | {shown} mostrado · {total} complementos",
-      "shownMatching": "{shown} mostrado · {matching} coincidente · {total} total",
-      "matching": "{matching} coincidencia · {total} total"
+      "shown": "{shown} mostrados · {total} plugin | {shown} mostrados · {total} plugins",
+      "shownMatching": "{shown} mostrados · {matching} coincidencias · {total} en total",
+      "matching": "{matching} coincidencias · {total} en total"
     },
     "card": {
       "foundOnGithub": "Encontrado en GitHub",
@@ -656,45 +657,45 @@
       "notInstallableFromAnActiveRelease": "No se puede instalar desde una versión activa",
       "detectedWhenYouRunTheCommand": "El comando permite elegir agentes antes de instalar.",
       "commandsDisabledBecauseTheDirectoryIsTemporarilyStale": "Comandos deshabilitados porque el directorio está temporalmente obsoleto.",
-      "unavailableReviewDataIsNotInstallationAuthority": "No disponible: los datos de revisión no son autoridad de instalación",
+      "unavailableReviewDataIsNotInstallationAuthority": "No disponible: los datos de revisión no autorizan la instalación",
       "temporarilyPaused": "pausado temporalmente",
       "communityDirect": "comunidad / directo",
       "installCandidateComponents": "Instalar componentes candidatos",
       "add": "Añadir",
       "thisIsTheGithubRepositorySStarCountNotARatingForThisIndividualPlugin": "Este es el recuento de estrellas del repositorio de GitHub, no una calificación para este complemento individual.",
-      "agentPlugins10": "Complementos de agente 1.0",
+      "agentPlugins10": "Agent Plugins 1.0",
       "install": "Instalar",
       "viewSource": "Ver fuente",
       "deliverySummary": "{managed} se instala automáticamente · {prepared} requiere un paso final",
       "installName": "Instalar {name}",
-      "chooseClients": "Elija clientes para {name}",
+      "chooseClients": "Elige los clientes para {name}",
       "stars": "{count} estrellas en el repositorio",
       "otherSources": "Otras fuentes ({count})",
       "forPlugin": "para {name}",
       "publisher": "Por {publisher}",
-      "upstream": "aguas arriba",
+      "upstream": "origen",
       "installable": "instalable",
       "unavailable": "no disponible",
       "reviewedListingTooltip": "Se revisaron la ficha y los metadatos. Esto no certifica el código, el comportamiento ni la seguridad del complemento."
     },
     "install": {
       "allInstalledAgentsRecommended": "Elegir agentes en la terminal",
-      "useWithYourAgent": "Úselo con su agente",
+      "useWithYourAgent": "Úsalo con tu agente",
       "notReadyToInstall": "No listo para instalar",
       "detectedWhenYouRunTheCommand": "El comando permite elegir agentes antes de instalar.",
       "thisPackageIsNoLongerAvailableFromItsSource": "Este paquete ya no está disponible desde su fuente.",
       "notAvailableForChatgpt": "No disponible para ChatGPT",
       "unavailableSignedDirectorySnapshotExpired": "No disponible: la instantánea del directorio firmada expiró",
       "noActiveReleaseSupportsThisClient": "Ninguna versión activa admite este cliente",
-      "unavailableReviewDataIsNotInstallationAuthority": "No disponible: los datos de revisión no son autoridad de instalación",
+      "unavailableReviewDataIsNotInstallationAuthority": "No disponible: los datos de revisión no autorizan la instalación",
       "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "Este paquete aún no es compatible con ninguno de los agentes disponibles en el instalador.",
       "verifiedConnectionFinishSetupInChatgpt": "Conexión verificada; finalizar la configuración en ChatGPT",
       "allInstalledAgents": "Elegir agentes en la terminal",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "Encontramos este proyecto, pero aún no incluye ninguna herramienta que el instalador pueda agregar.",
-      "chooseTargetAgents": "Elija agentes objetivo",
+      "chooseTargetAgents": "Elige los agentes de destino",
       "add": "Copia y ejecuta en tu terminal",
       "update": "Actualizar",
-      "repair": "Reparación",
+      "repair": "Reparar",
       "remove": "Quitar",
       "installer": "Instalador",
       "runWithNpx": "Ejecutar con npx",
@@ -707,20 +708,20 @@
       "thisProductIsRetiredNewInstallsAreUnavailableAndExistingInstallsCanOnlyBeRemoved": "Este producto está retirado. No hay instalaciones nuevas; las existentes solo pueden eliminarse.",
       "agents": "Agentes",
       "commandsUnavailableStaleDirectory": "Comandos no disponibles: directorio obsoleto.",
-      "thisSignedSnapshotHasExpiredBrowseItsHistoryThenReturnAfterAFreshSnapshotIsPublished": "Esta instantánea firmada ha caducado. Explore su historial y luego regrese después de que se publique una instantánea nueva.",
+      "thisSignedSnapshotHasExpiredBrowseItsHistoryThenReturnAfterAFreshSnapshotIsPublished": "Esta instantánea firmada ha caducado. Explora su historial y vuelve cuando se publique una nueva.",
       "commandsUnavailableInReviewPreview": "Los comandos no están disponibles en la vista previa de la revisión.",
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "Los datos no resueltos son sólo para revisión; Los comandos de producción requieren una instantánea del directorio firmada y publicada.",
       "commandsUnavailable": "Comandos no disponibles.",
       "automaticDetection": "Elegir agentes en la terminal",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "La CLI compara este complemento con los agentes instalados, omite los incompatibles y le permite confirmar los objetivos. ChatGPT se incluye solo cuando este complemento proporciona una conexión verificada.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "La CLI comprueba este plugin con los agentes instalados, omite los incompatibles y te permite confirmar los destinos. ChatGPT solo se incluye cuando el plugin ofrece una conexión verificada.",
       "oneStepRemainsInChatgpt": "Queda un paso en ChatGPT.",
-      "noSingleSourceServesThisTargetSet": "Ninguna fuente sirve a este conjunto de objetivos.",
-      "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "La CLI fallará antes de la mutación y sugerirá combinaciones compatibles de objetivo/fuente; nunca mezcla distribuciones entre clientes.",
+      "noSingleSourceServesThisTargetSet": "Ninguna fuente admite todos los destinos seleccionados.",
+      "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "La CLI se detendrá antes de modificar archivos y sugerirá combinaciones de destinos y fuentes compatibles. Nunca mezcla distribuciones entre clientes.",
       "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "La CLI verifica cada agente seleccionado antes de cambiar archivos y muestra cualquier paso de inicio de sesión o activación. Las credenciales de OAuth permanecen con el agente.",
-      "chatgptFinish": "Abra ChatGPT, seleccione {name} en Aplicaciones o Complementos, conéctelo e inicie un nuevo chat. La disponibilidad depende de su cuenta y espacio de trabajo.",
-      "expectedFallback": "Reserva de fuente esperada: {source}.",
+      "chatgptFinish": "Abre ChatGPT, selecciona {name} en Apps o Plugins, conéctalo e inicia un chat nuevo. La disponibilidad depende de tu cuenta y espacio de trabajo.",
+      "expectedFallback": "Fuente alternativa prevista: {source}.",
       "dependencySaving": {
-        "saved": "Se guarda para tu cuenta de usuario en uap.toml y uap.lock. Consulta sus rutas con npx -y universal-agent-plugins deps status. Remove afecta a todos los destinos guardados.",
+        "saved": "Se guarda para tu cuenta de usuario en uap.toml y uap.lock. Consulta sus rutas con npx -y universal-agent-plugins deps status. La eliminación afecta a todos los destinos guardados.",
         "noSave": "Esta selección usa --no-save y no registra una dependencia.",
         "local": "Los paquetes locales no se guardan como dependencias portátiles.",
         "discovery": "Los selectores discovery no se guardan como dependencias.",
@@ -763,19 +764,19 @@
     },
     "delivery": {
       "managed": "Instalación administrada",
-      "prepared": "Preparado; la importación de clientes permanece",
+      "prepared": "Preparado; falta importarlo en el cliente",
       "manual_activation": "Se requiere activación manual"
     },
     "reason": {
-      "distributionStatus": "la distribución es {status}",
-      "releaseStatus": "lanzamiento {sequence} es {status}",
-      "missingComponents": "la versión {sequence} omite los componentes necesarios",
-      "unsupportedTargets": "la versión {sequence} no es compatible con {targets}",
-      "blockingFailure": "La versión {sequence} tiene un error de bloqueo confiable para {targets}",
-      "missingEvidence": "La versión {sequence} carece de evidencia actual positiva de compatibilidad de paquetes (materialización aprobada) para {targets}",
-      "noReleases": "sin lanzamientos",
+      "distributionStatus": "la distribución tiene el estado {status}",
+      "releaseStatus": "la versión {sequence} tiene el estado {status}",
+      "missingComponents": "la versión {sequence} no incluye los componentes necesarios",
+      "unsupportedTargets": "la versión {sequence} no admite {targets}",
+      "blockingFailure": "una fuente de confianza confirma un fallo bloqueante de la versión {sequence} para {targets}",
+      "missingEvidence": "la versión {sequence} no dispone de una comprobación de compatibilidad del paquete vigente y satisfactoria para {targets}",
+      "noReleases": "no hay versiones",
       "invalidTargets": "Los objetivos deben ser ID de cliente compatibles únicos.",
-      "defaultIneligible": "el valor predeterminado declarado {distribution} no era elegible: {reasons}",
+      "defaultIneligible": "la distribución predeterminada declarada {distribution} no cumple los requisitos: {reasons}",
       "distributionReason": "{distribution}: {reasons}",
       "noEligibleDistribution": "{name}: ninguna distribución elegible admite el conjunto de objetivos completo {targets}; {reasons}",
       "external": "Motivo proporcionado por la fuente: {reason}",
@@ -791,102 +792,102 @@
     },
     "clients": {
       "codex": {
-        "note": "Habilidades y transportes MCP admitidos.",
-        "status": "Apoyado",
-        "intro": "Instale los complementos de agente portátiles 1.0 para Codex con un comando CLI. Las habilidades y los servidores MCP compatibles se preparan en el formato que entiende el Codex.",
+        "note": "Skills y transportes MCP admitidos.",
+        "status": "Compatible",
+        "intro": "Instala los paquetes portátiles Agent Plugins 1.0 para Codex con un comando CLI. Las Skills y los servidores MCP compatibles se preparan en el formato que entiende el Codex.",
         "delivery": "La CLI prepara el paquete compatible con OpenAI y mantiene reversible su estado administrado.",
-        "activation": "Siga cualquier sugerencia de activación impresa por la CLI y luego inicie una nueva sesión del Codex."
+        "activation": "Sigue las instrucciones de activación que muestre la CLI y después inicia una nueva sesión de Codex."
       },
       "chatgpt": {
-        "note": "Conexiones ChatGPT verificadas",
+        "note": "Vinculaciones de aplicaciones verificadas y configuración guiada de Context7",
         "status": "Configuración en la aplicación",
-        "intro": "Prepare Agent Plugins 1.0 compatibles para ChatGPT mientras mantiene la activación de la aplicación y el consentimiento de la cuenta dentro de ChatGPT.",
-        "delivery": "La CLI valida y prepara el paquete compatible o el enlace de la aplicación registrada.",
-        "activation": "Complete el paso final de activación de la aplicación o inicio de sesión en ChatGPT cuando se le solicite."
+        "intro": "Prepara paquetes Agent Plugins 1.0 compatibles para ChatGPT, manteniendo la activación de la aplicación y el consentimiento de la cuenta dentro de ChatGPT.",
+        "delivery": "La CLI valida las vinculaciones de aplicaciones del publicador y puede preparar un paquete de marketplace personal para Context7 con su endpoint MCP público sin autenticación.",
+        "activation": "Crea o conecta la aplicación en Developer Mode, instala el plugin personal preparado y selecciónalo en un chat nuevo."
       },
       "cursor": {
         "note": "Paquete de complemento de agente nativo",
-        "status": "Apoyado",
-        "intro": "Instale Agent Plugins 1.0 en proyectos de Cursor sin traducir cada complemento a mano. La CLI planifica el paquete nativo antes de cambiar los archivos.",
+        "status": "Compatible",
+        "intro": "Instala Agent Plugins 1.0 en proyectos de Cursor sin traducir cada complemento a mano. La CLI planifica el paquete nativo antes de cambiar los archivos.",
         "delivery": "La CLI prepara los componentes de plugin, skills y MCP compatibles con Cursor en el ámbito elegido. El comando add usa el ámbito de usuario por defecto; el ámbito de proyecto debe elegirse explícitamente para add.",
-        "activation": "Vuelva a cargar el cursor cuando se le solicite y luego verifique que se haya descubierto el complemento."
+        "activation": "Recarga Cursor cuando se solicite y comprueba que se detecte el plugin."
       },
       "copilot": {
         "note": "Complemento nativo administrado",
-        "status": "Apoyado",
-        "intro": "Instale Agent Plugins 1.0 a través de GitHub Copilot CLI usando su flujo de trabajo de complemento nativo y el mismo comando de ciclo de vida usado para otros agentes.",
+        "status": "Compatible",
+        "intro": "Instala Agent Plugins 1.0 a través de GitHub Copilot CLI usando su flujo de trabajo de complemento nativo y el mismo comando de ciclo de vida usado para otros agentes.",
         "delivery": "La CLI utiliza el diseño del complemento Copilot compatible y verifica el estado de instalación resultante.",
-        "activation": "Reinicie o vuelva a cargar el cliente solo cuando el flujo de trabajo nativo de Copilot lo solicite."
+        "activation": "Reinicia o recarga el cliente solo cuando el proceso nativo de Copilot lo solicite."
       },
       "vscode": {
         "note": "Integración del complemento Copilot",
-        "status": "Apoyado",
-        "intro": "Prepare Agent Plugins 1.0 para VS Code a través de la integración compatible de GitHub Copilot, con instrucciones de seguimiento exactas cuando la configuración manual permanece.",
+        "status": "Compatible",
+        "intro": "Prepara Agent Plugins 1.0 para VS Code a través de la integración compatible de GitHub Copilot, con instrucciones de seguimiento exactas cuando la configuración manual permanece.",
         "delivery": "La CLI reutiliza el paquete de complementos Copilot compatible cuando la ruta del cliente nativo está disponible.",
         "activation": "Si la activación automática no está disponible, siga la configuración exacta o la ruta de importación impresa por la CLI."
       },
       "kiro": {
-        "note": "Paquete de carpetas nativas",
-        "status": "Apoyado",
-        "intro": "Instale Agent Plugins 1.0 para Kiro desde el mismo paquete portátil utilizado por otros agentes de IA.",
-        "delivery": "La CLI prepara el paquete de carpetas nativas de Kiro con los componentes del complemento compatibles.",
-        "activation": "Siga la sugerencia impresa de importación o activación cuando Kiro requiera un paso final del lado del cliente."
+        "note": "Skills y configuración MCP gestionadas",
+        "status": "Compatible",
+        "intro": "Instala Agent Plugins 1.0 para Kiro desde el mismo paquete portátil utilizado por otros agentes de IA.",
+        "delivery": "La CLI instala las Skills y entradas MCP de Kiro que gestiona, sin alterar la configuración global ajena.",
+        "activation": "Completa el paso de OAuth o reinicio indicado. La preparación en macOS y Windows no implica que se haya verificado automáticamente la ejecución."
       },
       "claude": {
         "note": "Configuración de MCP administrada",
-        "status": "Apoyado",
-        "intro": "Instale Agent Plugins 1.0 para Claude Code con habilidades administradas y configuración MCP en lugar de mantener una configuración separada a mano.",
+        "status": "Compatible",
+        "intro": "Instala Agent Plugins 1.0 para Claude Code con Skills administradas y configuración MCP en lugar de mantener una configuración separada a mano.",
         "delivery": "La CLI crea las proyecciones de Claude Code compatibles y las rastrea para actualizarlas, repararlas y eliminarlas.",
-        "activation": "Recargue el Código Claude cuando lo solicite y complete cualquier inicio de sesión de servicio en el cliente o proveedor."
+        "activation": "Recarga Claude Code cuando se solicite y completa el inicio de sesión del servicio en el cliente o proveedor."
       },
       "gemini": {
         "note": "Configuración de MCP administrada",
-        "status": "Apoyado",
-        "intro": "Instale Agent Plugins 1.0 compatible para Gemini CLI mientras conserva el paquete de complementos portátil como fuente de verdad.",
-        "delivery": "La CLI escribe la configuración compatible de la CLI de Gemini y los componentes del paquete compatibles.",
-        "activation": "Habilite o vuelva a cargar la integración cuando Gemini CLI imprima un paso de seguimiento."
+        "status": "Compatible",
+        "intro": "Instala Agent Plugins 1.0 compatible para Gemini CLI mientras conserva el paquete de complementos portátil como fuente de verdad.",
+        "delivery": "La CLI escribe la configuración compatible de Gemini CLI y los componentes del paquete admitidos.",
+        "activation": "Activa o recarga la integración cuando Gemini CLI indique un paso pendiente."
       },
       "opencode": {
         "note": "Configuración de MCP administrada",
-        "status": "Apoyado",
-        "intro": "Instale Agent Plugins 1.0 en proyectos OpenCode con configuración MCP administrada y estado de ciclo de vida reversible.",
+        "status": "Compatible",
+        "intro": "Instala Agent Plugins 1.0 en proyectos OpenCode con configuración MCP administrada y estado de ciclo de vida reversible.",
         "delivery": "La CLI prepara la configuración del proyecto admitida y los componentes de complemento para OpenCode.",
-        "activation": "Abra una nueva sesión de OpenCode después de la instalación para que se vuelva a cargar la configuración del proyecto."
+        "activation": "Abre una nueva sesión de OpenCode después de la instalación para que se vuelva a cargar la configuración del proyecto."
       },
       "cline": {
         "note": "Configuración de MCP administrada",
-        "status": "Apoyado",
-        "intro": "Instale Agent Plugins 1.0 compatibles para Cline sin reconstruir la configuración de MCP para cada complemento.",
+        "status": "Compatible",
+        "intro": "Instala Agent Plugins 1.0 compatibles para Cline sin reconstruir la configuración de MCP para cada complemento.",
         "delivery": "La CLI prepara y realiza un seguimiento de la configuración de Cline MCP compatible.",
-        "activation": "Vuelva a cargar Cline cuando se le solicite y complete la autenticación del proveedor fuera del paquete del complemento."
+        "activation": "Recarga Cline cuando se solicite y completa la autenticación del proveedor fuera del paquete del plugin."
       },
       "windsurf": {
         "note": "Paquete preparado; Se requiere activación manual",
         "status": "Preparado por CLI",
-        "intro": "Prepare Agent Plugins 1.0 para Windsurf con un comando CLI y luego finalice explícitamente el paso de activación específico del cliente.",
+        "intro": "Prepara Agent Plugins 1.0 para Windsurf con un comando de la CLI y después completa el paso de activación específico del cliente.",
         "delivery": "La CLI valida y prepara el paquete de Windsurf compatible sin reclamar la activación automática.",
-        "activation": "Siga la ruta de activación manual exacta impresa después de la preparación."
+        "activation": "Sigue la ruta de activación manual exacta impresa después de la preparación."
       },
       "grok": {
-        "note": "Plugin nativo de skills y MCP",
-        "status": "Apoyado",
-        "intro": "Instala skills y servidores MCP para Grok Build.",
-        "delivery": "El CLI crea un plugin nativo y lo registra mediante Grok CLI.",
-        "activation": "Recarga Grok Build; instala su CLI y repite update si falta."
+        "note": "Plugin nativo de Skills y MCP; verificación mediante CLI",
+        "status": "Compatible",
+        "intro": "Instala Skills y servidores MCP portátiles de Agent Plugins 1.0 para Grok Build con la misma CLI que usas para otros clientes.",
+        "delivery": "La CLI escribe un manifiesto nativo .grok-plugin en el directorio de plugins del usuario de Grok y gestiona el registro mediante Grok CLI cuando está disponible.",
+        "activation": "Recarga Grok Build después de instalar. Si Grok CLI no está disponible, instálala y vuelve a ejecutar el comando de actualización para realizar la verificación nativa."
       },
       "kimi": {
-        "note": "Plugin gestionado de skills y MCP",
-        "status": "Apoyado",
-        "intro": "Instala skills y servidores MCP para Kimi Code.",
-        "delivery": "El CLI registra un plugin nativo sin alterar otros plugins de Kimi.",
-        "activation": "Ejecuta /reload o /new; comprueba MCP y la autenticación en Kimi Code."
+        "note": "Plugin de usuario gestionado con Skills y MCP",
+        "status": "Compatible",
+        "intro": "Instala Skills y servidores MCP portátiles de Agent Plugins 1.0 en Kimi Code mediante un plugin de usuario gestionado.",
+        "delivery": "La CLI escribe un manifiesto nativo .kimi-plugin y registra el paquete gestionado sin alterar otros plugins de Kimi.",
+        "activation": "Ejecuta /reload o /new en Kimi Code. Las conexiones MCP y la autenticación del proveedor todavía deben confirmarse en Kimi."
       },
       "qoder": {
-        "note": "Plugin nativo de skills y MCP; verificación por CLI",
-        "status": "Apoyado",
-        "intro": "Instala skills y servidores MCP para Qoder.",
-        "delivery": "El CLI escribe un manifiesto .qoder-plugin nativo y registra el paquete a través del Qoder CLI.",
-        "activation": "Recarga los plugins de Qoder o reinicia Qoder; comprueba MCP y la autenticación en Qoder."
+        "note": "Plugin nativo de Skills y MCP; verificación mediante CLI",
+        "status": "Compatible",
+        "intro": "Instala Skills y servidores MCP portátiles de Agent Plugins 1.0 para Qoder con la misma CLI que usas para otros clientes.",
+        "delivery": "La CLI escribe un manifiesto nativo .qoder-plugin y registra el paquete gestionado mediante Qoder CLI cuando está disponible.",
+        "activation": "Recarga los plugins de Qoder o reinicia Qoder después de instalar. Las conexiones MCP y la autenticación del proveedor todavía deben confirmarse en Qoder."
       },
       "pi": {
         "note": "Solo extensiones nativas de Pi gestionadas",
@@ -897,15 +898,15 @@
       }
     },
     "directoryPage": {
-      "description": "Busque complementos de agente comunitarios y revisados ​​1.0 para Codex, Claude Code, Cursor, Gemini CLI, OpenCode y más.",
-      "title": "Directorio de complementos de agente 1.0 {'|'} Buscar complementos",
+      "description": "Busca paquetes Agent Plugins 1.0 revisados y de la comunidad para Codex, Claude Code, Cursor, Gemini CLI, OpenCode y otros clientes.",
+      "title": "Directorio de Agent Plugins 1.0 {'|'} Buscar complementos",
       "listName": "Paquetes de Agent Plugins 1.0 revisados"
     },
     "detail": {
       "backToPluginDirectory": "Volver al directorio de complementos",
-      "breadcrumb": "Miga de pan",
+      "breadcrumb": "Ruta de navegación",
       "plugins": "Complementos",
-      "agentPlugins10": "Complementos de agente 1.0",
+      "agentPlugins10": "Agent Plugins 1.0",
       "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "Se revisaron el listado y los metadatos. Una evaluación de seguridad automatizada, cuando está presente, se aplica únicamente a la revisión escaneada exacta. El comportamiento en tiempo de ejecución no se audita.",
       "installPlugin": "Instalar complemento",
       "viewSource": "Ver fuente",
@@ -918,15 +919,15 @@
       "managedByCli": "Gestionado por CLI",
       "requiresAFinalStepInTheApp": "Requiere un paso final en la aplicación.",
       "deliveryDetailsNotSpecified": "Detalles de entrega no especificados",
-      "descriptionLead": "Instale el complemento del agente {name} para {clients}.",
-      "title": "{name} Complemento de agente {'|'} Complementos de agente universal",
-      "schemaName": "{name} Complemento de agente",
+      "descriptionLead": "Instala el Agent Plugin {name} para {clients}.",
+      "title": "Agent Plugin {name}: detalles {'|'} Universal Agent Plugins",
+      "schemaName": "Paquete Agent Plugin {name}",
       "directory": "Directorio de complementos",
       "version": "Versión {version}",
       "reviewedListingTooltip": "Se revisaron la ficha y los metadatos. Esto no certifica el código, el comportamiento ni la seguridad del complemento."
     },
     "community": {
-      "breadcrumb": "Miga de pan",
+      "breadcrumb": "Ruta de navegación",
       "plugins": "Complementos",
       "author": "Autor",
       "source": "Fuente",
@@ -944,43 +945,43 @@
       "detectedAtInstallTime": "Detectado en el momento de la instalación",
       "lastKnownComponents": "Últimos componentes conocidos",
       "components": "Componentes",
-      "title": "{name} Complemento de agente {'|'} Complementos de agente universal",
-      "defaultTitle": "Complemento de agente comunitario {'|'} Complementos de agente universal",
-      "description": "Instale un complemento de agente comunitario en los agentes de IA compatibles."
+      "title": "Agent Plugin {name} de la comunidad {'|'} Universal Agent Plugins",
+      "defaultTitle": "Agent Plugin de la comunidad {'|'} Universal Agent Plugins",
+      "description": "Instala un complemento de agente comunitario en los agentes de IA compatibles."
     },
     "agentPage": {
-      "breadcrumb": "Miga de pan",
-      "backToUniversalAgentPlugins": "Volver a los complementos del agente universal",
+      "breadcrumb": "Ruta de navegación",
+      "backToUniversalAgentPlugins": "Volver a Universal Agent Plugins",
       "install": "Instalar",
       "home": "Inicio",
-      "agentPlugins10": "Complementos de agente 1.0",
+      "agentPlugins10": "Agent Plugins 1.0",
       "oneCommand": "un comando",
-      "chooseAPluginAndInstallIt": "Elija un complemento e instálelo",
+      "chooseAPluginAndInstallIt": "Elige un plugin e instálalo",
       "nativeDelivery": "Entrega nativa",
       "packageDelivery": "Entrega de paquetes",
       "activation": "Activación",
       "lifecycle": "Ciclo de vida",
-      "useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin": "Utilice la misma CLI para inspeccionar, actualizar, reparar, cambiar de fuente o eliminar el complemento.",
+      "useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin": "Utiliza la misma CLI para inspeccionar, actualizar, reparar, cambiar de fuente o eliminar el complemento.",
       "reviewedDirectory": "Directorio revisado",
       "exploreTheFullPluginDirectory": "Explora el directorio completo de complementos",
       "agentNotFound": "Agente no encontrado",
-      "title": "Complementos de agente para {name} {'|'} Complementos de agente universal",
+      "title": "Agent Plugins para {name} {'|'} Universal Agent Plugins",
       "listName": "Paquetes de Agent Plugins 1.0 revisados para {name}",
-      "installFor": "Instalar complementos de agente para {name}",
-      "whatHappens": "¿Qué pasa con {name}",
-      "vendorDocs": "Leer la documentación {name}",
+      "installFor": "Instalar Agent Plugins para {name}",
+      "whatHappens": "Cómo funciona con {name}",
+      "vendorDocs": "Leer la documentación de {name}",
       "availableFor": "Complementos disponibles para {name}",
       "count": "{count} paquete revisado es compatible con este cliente. | {count} paquetes revisados ​​son compatibles con este cliente.",
-      "tryPlugin": "Pruebe Context7 o sustituya {source} por el nombre corto revisado de otro plugin compatible o por la fuente de un paquete completo.",
+      "tryPlugin": "Prueba Context7 o sustituye {source} por el nombre corto revisado de otro plugin compatible o por la fuente de un paquete completo.",
       "localPackageHint": "Sustituye ./my-plugin por la ruta de un paquete Agent Plugins 1.0 válido."
     },
     "components": {
       "extensions": "extensiones",
-      "mcp": "mcp",
-      "skills": "habilidades"
+      "mcp": "MCP",
+      "skills": "Skills"
     },
     "distribution": {
-      "upstream": "Paquete ascendente",
+      "upstream": "Paquete de origen",
       "community_bridge": "Puente comunitario",
       "community": "Paquete comunitario",
       "direct": "fuente directa"
@@ -1014,7 +1015,7 @@
     "title": "Usar plugins / Crear plugins",
     "subtitle": "Instala y mantén paquetes estándar, o escribe tu propio paquete plugin.json y compruébalo con las herramientas adecuadas.",
     "use": {
-      "badge": "CLI 0.1.94",
+      "badge": "CLI 0.1.95",
       "title": "Usar plugins",
       "description": "Busca, previsualiza, instala y mantén paquetes con el instalador publicado.",
       "cta": "Abrir la guía Usar"
