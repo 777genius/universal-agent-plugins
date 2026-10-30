@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Structural guard for this one workflow, not hosted required-check enforcement."""
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -26,6 +27,13 @@ def results(value):
     documentation_only = changes.get('result') == 'success' and (changes.get('outputs') or {}).get('authoring') == 'false'
     if documentation_only:
         require(lanes == ['skipped', 'skipped'], 'a documentation-only classification must skip both lanes')
+        # A green aggregate must not read as native and packed evidence.
+        message = 'Native and packed lanes were skipped: documentation-only pull request classification.'
+        print('::notice title=Authoring lanes skipped::' + message)
+        summary = os.environ.get('GITHUB_STEP_SUMMARY')
+        if summary:
+            with open(summary, 'a', encoding='utf-8') as handle:
+                handle.write(message + '\n')
     else:
         require(lanes == ['success', 'success'], 'native and packed must both exist and succeed')
 

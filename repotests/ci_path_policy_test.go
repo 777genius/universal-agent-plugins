@@ -161,7 +161,9 @@ var classifierCases = []classifierCase{
 	{name: "windows trailing dot", files: []string{"docs/notes./a.md"}, lint: "false", sdk: "false", authoring: "true"},
 	{name: "windows device name", files: []string{"website/source/en/Aux.md"}, lint: "false", sdk: "false", authoring: "true"},
 	{name: "windows path length", files: []string{"docs/" + strings.Repeat("a", 200) + ".md"}, lint: "false", sdk: "false", authoring: "true"},
-	{name: "empty diff", lint: "false", sdk: "false", authoring: "false"},
+	{name: "empty diff", changed: "0", lint: "false", sdk: "false", authoring: "false"},
+	{name: "no paths for a non-empty diff", lint: "true", sdk: "true", authoring: "true"},
+	{name: "control character", files: []string{"docs/a\tb.md"}, lint: "true", sdk: "true", authoring: "true"},
 	{name: "api unavailable", files: []string{"README.md"}, fail: "1", lint: "true", sdk: "true", authoring: "true"},
 	{name: "beyond api limit", files: []string{"README.md"}, changed: "3000", lint: "true", sdk: "true", authoring: "true"},
 }
