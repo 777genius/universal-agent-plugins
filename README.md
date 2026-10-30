@@ -203,12 +203,13 @@ picker and saved dependencies are included.
 
 ## Install for one project
 
-**Released in CLI 0.1.93:** select project scope explicitly. Replace `owner/repo`
-with a real remote plugin repository and `/path/to/project` with an existing
-project directory:
+**Released in CLI 0.1.93:** select project scope explicitly. Replace
+`/path/to/project` with an existing project directory. The first command saves
+a registry dependency; the second restores its recorded lock. For the separate
+Skills command, replace `owner/repository` with a real Skills source:
 
 ```sh
-agentplugins add owner/repo --alias review --target cursor \
+agentplugins add context7 --target cursor \
   --scope project --project-root /path/to/project
 agentplugins install --locked --scope project --project-root /path/to/project
 agentplugins skills add owner/repository --ui \
@@ -297,7 +298,7 @@ Pi installs packages that declare a [native Pi extension](docs/PI_NATIVE_EXTENSI
 
 Grok Build, Kimi Code, and Qoder accept automatic user-scope installation of portable skills and MCP servers through `agentplugins add ./my-plugin --target grok,kimi,qoder`. Grok Build and Kimi Code support stdio/HTTP MCP; the Qoder adapter currently supports stdio MCP. The CLI verifies native registration and supports update and removal. A running client still needs a reload, and MCP authentication/connectivity is verified in that client.
 
-Qoder also preserves target-native `hooks/**`, `commands/**`, and bundled `bin/**` files for native discovery. Its Go SDK supports `SessionStart`, `UserPromptSubmit`, `PostToolUse`, and `Stop`. These native files are separate from portable hook and command conversion; portable agents, hooks, commands, and LSP components remain outside these three adapters' supported scope.
+Qoder also preserves target-native `hooks/**`, `commands/**`, and bundled `bin/**` files for native discovery. Its Go SDK supports `SessionStart`, `UserPromptSubmit`, `PostToolUse`, and `Stop`. These native files are separate from portable components; portable agents, hooks, and LSP components remain outside these three adapters' supported scope. Ordinary [portable commands](docs/UAP_COMMANDS.md) are delivered as Skills, not converted into native command files. Explicit-only commands remain withheld until the client's invocation safety is qualified.
 
 Compatibility depends on the package and client. The CLI tells you what is
 installed, prepared, or still needs activation or sign-in.

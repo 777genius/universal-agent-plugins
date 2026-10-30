@@ -120,11 +120,17 @@ The skill appears in plans as `kind: skill` with `source: command` and
 `source_name: deploy`. The package never contains these skill files; the
 installer writes them into the client's copy.
 
-**Ordinary commands** (`disable-model-invocation: false`) reach every client
-that takes skills and receives commands, which today is every supported client
-except GitHub Copilot CLI and Visual Studio Code (see below). The user runs
-the skill the way the client runs skills by hand. Like any skill, the model
-may also choose it on its own.
+**Ordinary commands** (`disable-model-invocation: false`) are delivered as
+skills when the selected client declares skill support and does not withhold
+commands. This includes Grok Build, Kimi Code and Qoder; their native command
+files are a separate capability. The user runs the generated skill through the
+client's normal skill interface, and the model may also choose it on its own.
+Check the installation plan and compatibility report for the selected target.
+
+Pi's native-extension provider does not deliver portable skills or commands.
+GitHub Copilot CLI and Visual Studio Code also withhold commands, as described
+below. Installing a package or projecting a skill does not prove invocation in
+the native client.
 
 **GitHub Copilot CLI and Visual Studio Code receive no commands.** Visual
 Studio Code is frozen by an owner decision of 2026-10-16, and it installs
