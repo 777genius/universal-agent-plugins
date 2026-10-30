@@ -45,7 +45,7 @@ agentplugins manage serve --help
 agentplugins manage discover --help
 ```
 
-启动与生命周期规则见[管理通信协议](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md)。[TypeScript 管理 SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md)仍是独立的、尚未发布的开发包。
+启动与生命周期规则见[管理通信协议](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md)。[TypeScript 管理 SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md)以 `universal-agent-plugins-management-sdk` 为包名独立管理版本。兼容的 `agentplugins` 引擎版本和包安装方法请参阅 SDK 的 README。请选择 npm 上已发布的版本；如需使用尚未发布的改动，请从固定的源码提交构建包并进行测试。SDK 和引擎的版本都应固定。
 
 ## 明确更新或修复
 

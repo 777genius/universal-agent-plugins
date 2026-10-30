@@ -43,7 +43,7 @@ agentplugins manage serve --help
 agentplugins manage discover --help
 ```
 
-स्टार्टअप और जीवनचक्र के नियम [मैनेजमेंट प्रोटोकॉल अनुबंध](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md) में हैं। [TypeScript मैनेजमेंट SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md) अब भी अलग, अप्रकाशित विकास पैकेज है।
+स्टार्टअप और जीवनचक्र के नियम [मैनेजमेंट प्रोटोकॉल अनुबंध](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md) में हैं। [TypeScript मैनेजमेंट SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md) के संस्करण `universal-agent-plugins-management-sdk` पैकेज के रूप में स्वतंत्र रूप से प्रबंधित किए जाते हैं। `agentplugins` इंजन के संगत संस्करणों और पैकेज इंस्टॉल करने के निर्देशों के लिए SDK का README देखें। npm पर प्रकाशित कोई संस्करण चुनें या, अभी तक जारी न हुए बदलावों के साथ काम करने के लिए, स्रोत कोड के किसी पिन किए गए कमिट से पैकेज बनाएँ और उसका परीक्षण करें। SDK और इंजन, दोनों के संस्करण पिन करें।
 
 ## सोच-समझकर अपडेट करें {#update-deliberately}
 

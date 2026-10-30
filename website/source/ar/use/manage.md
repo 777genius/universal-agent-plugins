@@ -43,7 +43,7 @@ agentplugins manage serve --help
 agentplugins manage discover --help
 ```
 
-راجع [عقد بروتوكول الإدارة](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md) لقواعد بدء التشغيل ودورة الحياة. تبقى [حزمة SDK للإدارة بلغة TypeScript](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md) حزمة تطوير منفصلة وغير منشورة.
+راجع [عقد بروتوكول الإدارة](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md) لقواعد بدء التشغيل ودورة الحياة. تُدار إصدارات [حزمة SDK للإدارة بلغة TypeScript](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md) بشكل مستقل باسم الحزمة `universal-agent-plugins-management-sdk`. راجع ملف README الخاص بها لمعرفة إصدارات محرك `agentplugins` المتوافقة وتعليمات تثبيت الحزمة. اختر إصدارًا منشورًا على npm، أو ابنِ حزمة واختبرها انطلاقًا من commit محدد وثابت للشيفرة المصدرية للعمل على تغييرات لم تُنشر بعد. ثبّت كلًّا من SDK والمحرك على إصدار محدد.
 
 ## حدّث عن قصد {#update-deliberately}
 

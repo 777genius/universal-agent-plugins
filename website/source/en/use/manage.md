@@ -57,7 +57,10 @@ agentplugins manage discover --help
 See the [management wire contract](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md)
 for startup and lifecycle rules. The
 [TypeScript Management SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md)
-remains a separate, unreleased development package.
+is versioned separately as `universal-agent-plugins-management-sdk`. Follow its
+README for compatible engine versions and package installation. Choose a
+published npm release, or build and test a package from a pinned source commit
+for unreleased work. Pin both the SDK and the engine.
 
 ## Update deliberately
 

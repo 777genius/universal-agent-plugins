@@ -6,7 +6,8 @@ section contains historical entries that have since shipped; its wording is not
 the current availability contract. Use the versioned
 [Agentplugins release notes](https://github.com/777genius/universal-agent-plugins/releases)
 and [current documentation](https://universal-agent-plugins.com/docs/en/) for
-published commands. Runtime SDK history remains in [sdk/CHANGELOG.md](sdk/CHANGELOG.md).
+published commands. Runtime SDK history remains in [sdk/CHANGELOG.md](sdk/CHANGELOG.md);
+TypeScript Management SDK releases are in [sdks/typescript/CHANGELOG.md](sdks/typescript/CHANGELOG.md).
 
 ## [Unreleased]
 

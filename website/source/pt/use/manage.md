@@ -60,7 +60,11 @@ agentplugins manage discover --help
 Consulte o [contrato do protocolo de gerenciamento](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md)
 para conhecer as regras de inicialização e ciclo de vida.
 O [TypeScript Management SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md)
-continua sendo um pacote de desenvolvimento separado, ainda não publicado.
+tem versionamento independente como pacote `universal-agent-plugins-management-sdk`.
+Consulte o README do SDK para saber quais versões do motor `agentplugins` são
+compatíveis e como instalar o pacote. Escolha uma versão publicada no npm ou, para
+trabalhar com alterações ainda não lançadas, compile e teste um pacote a partir
+de um commit específico do código-fonte. Fixe as versões tanto do SDK quanto do motor.
 
 ## Atualize de forma deliberada {#update-deliberately}
 
