@@ -2,8 +2,8 @@
 
 Date: 2026-10-30. Base: `29480e1d3b1fbf021c8fc0c6e3f741ac0c1fdcbb`.
 Branch: `fix/macos-14-retirement-20261030`.
-Status: plan only; root publishes this plan in a separate draft CI PR and obtains
-independent approval before implementation. Root owns all commits, publication
+Status: independently approved plan implemented and locally verified; frozen for
+root publication and independent code review. Root owns all commits, publication
 and merges. Worker/reviewer model: GPT-6.1 Sol / xhigh as specifically requested.
 
 ## Evidence and scope
@@ -107,3 +107,46 @@ Acceptance: both active workflow matrices use the supported explicit label,
 their architecture and security/artifact semantics remain exact, existing local
 contracts pass, and the CI PR plus inheriting feature candidates obtain valid
 new-head native evidence. No release or public-channel execution is implied.
+
+## Approved implementation checkpoint
+
+The independent critic `/root/final_review_application_boundaries` approved this
+plan without corrections. Root published it in draft
+[#600](https://github.com/777genius/universal-agent-plugins/pull/600) at
+`4091e1b8d0a125119c9078be68a999b07fad3ea4`, plan blob
+`a08f2be022d4867c4981edc3abc7415a37d5723a`, before giving implementation GO.
+The worker fetched that exact branch, verified the local/published plan blobs
+matched, and mixed-reset to that plan head before making the three reviewed
+scalar substitutions. No other workflow/test source bytes changed.
+
+Local evidence on the implementation:
+
+| Check | Result |
+| --- | --- |
+| Full existing `node --test npm/agentplugins/test/milestone-a-e2e.test.js` | PASS, 45/45 tests, no skips, 5.847s, available Node 24.22.1. |
+| `python3 scripts/test_public_channel_e2e.py` | PASS, 10 tests, 0.033s. |
+| Parsed YAML before/after comparison | PASS using PyYAML BaseLoader: only the selected runner scalar differs in each workflow; all other structure, step bodies, expressions and architecture facts are identical. |
+| Exact byte-diff comparison | PASS: each of the three implementation files equals its published-plan-parent version after exactly one `macos-14` to `macos-15` substitution. |
+| Active-reference inventory / whitespace | No live retired label or stale existing test expectation remains; `git diff --check` passes. Historical labels in this plan remain evidence. |
+
+The normal Node suite initially failed at file level in the restricted execution
+sandbox. A bounded diagnostic run exposed existing `spawnSync node/git EPERM`
+errors, and an independent Node child-spawn command with no repository imports
+reproduced `EPERM`. Running the unchanged normal test command with an approved
+execution escalation allowed the private fixtures to execute and passed all 45
+tests. No test/source flags, skips, product environment rules or production
+containment controls were changed; no alternate runtime download was necessary.
+This local suite is contract evidence, not native macOS 15 CI qualification.
+
+Root's monitor identified separate draft #597 changing a trigger-policy assertion
+on the same compact test line (and disjoint workflow trigger lines). It remains
+outside this change, as do proof drafts #598/#599. Base remains `29480e1d`; do not
+absorb those branches. If #597 later lands before propagation/integration, root
+must preserve both reviewed differences through explicit conflict review and
+new-head qualification rather than overwrite its trigger behavior with a whole
+older assertion blob.
+
+Only the reviewed four paths are changed. No commit, push, merge, release,
+public-channel dispatch, or application-source change was performed by the
+worker. Root publishes the frozen checkpoint, obtains independent exact-head
+code review, then manages the planned three-blob forward inheritance and CI.
