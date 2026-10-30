@@ -74,7 +74,7 @@ func versionSelectionRequirements() Requirements {
 	return Requirements{SchemaVersion: 1, Dependencies: map[string]Requirement{"a": {Alias: "a", Registry: &RegistrySource{Distribution: "acme/a", Selector: Selector{Kind: SelectorRange, Value: "^1.2"}}}}, Targets: map[string][]string{"codex": {"a"}}}
 }
 
-func TestVersionSelectionMinimalGraph(t *testing.T) {
+func TestVersionSelectionHighestCompatibleGraph(t *testing.T) {
 	for _, distribution := range []string{"acme/7tool", "acme/" + strings.Repeat("long", 20)} {
 		t.Run("manifest alias for "+distribution, func(t *testing.T) {
 			req := versionSelectionRequirements()
@@ -120,16 +120,16 @@ func TestVersionSelectionMinimalGraph(t *testing.T) {
 		sequence uint64
 		stale    bool
 	}{
-		{name: "numeric order and equal sequences", want: "1.2.0", sequence: 2},
-		{name: "target union", deny: map[string]bool{"acme/a@1.2.0/claude": true}, want: "1.3.0", sequence: 4},
+		{name: "numeric order and equal sequences", want: "1.10.0", sequence: 5},
+		{name: "target union", deny: map[string]bool{"acme/a@1.10.0/claude": true}, want: "1.3.0", sequence: 4},
 		{name: "discard rejected dependencies", deny: map[string]bool{"acme/c@1.2.0/codex": true}, want: "1.3.0", sequence: 4, stale: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := versionSelectionRequirements()
 			req.Targets["claude"] = []string{"a"}
-			resolver := &versionSelectionResolver{candidates: map[string][]Candidate{"acme/a": {{Version: "1.10.0", ReleaseSequence: 1}, {Version: "1.3.0", ReleaseSequence: 4}, {Version: "1.2.0", ReleaseSequence: 3}, {Version: "1.2.0", ReleaseSequence: 2}}, "acme/c": {{Version: "1.2.0", ReleaseSequence: 1}}}, deny: tc.deny, dependencies: map[string]map[string]string{}}
+			resolver := &versionSelectionResolver{candidates: map[string][]Candidate{"acme/a": {{Version: "1.10.0", ReleaseSequence: 1}, {Version: "1.10.0", ReleaseSequence: 5}, {Version: "1.3.0", ReleaseSequence: 4}, {Version: "1.2.0", ReleaseSequence: 3}, {Version: "1.2.0", ReleaseSequence: 2}}, "acme/c": {{Version: "1.2.0", ReleaseSequence: 1}}}, deny: tc.deny, dependencies: map[string]map[string]string{}}
 			if tc.stale {
-				resolver.dependencies["acme/a@1.2.0"] = map[string]string{"acme/c": "^1.2"}
+				resolver.dependencies["acme/a@1.10.0"] = map[string]string{"acme/c": "^1.2"}
 			}
 			lock, err := (Coordinator{Resolver: resolver}).Resolve(context.Background(), req, Lock{}, "")
 			if err != nil {
@@ -160,7 +160,7 @@ func TestVersionSelectionReplayKeepsCompatiblePin(t *testing.T) {
 			if expression == "1.3.0" {
 				req.Dependencies["a"].Registry.Selector.Kind = SelectorVersion
 			}
-			resolver.candidates["acme/a"] = []Candidate{{Version: "1.2.0", ReleaseSequence: 1}, {Version: "1.3.0", ReleaseSequence: 3}}
+			resolver.candidates["acme/a"] = []Candidate{{Version: "1.2.0", ReleaseSequence: 1}, {Version: "1.3.0", ReleaseSequence: 3}, {Version: "1.10.0", ReleaseSequence: 9}}
 			resolver.enumerated, resolver.acquired = 0, 0
 			lock, err := coordinator.Resolve(context.Background(), req, old, "")
 			if err != nil {
