@@ -725,7 +725,33 @@
         "noSave": "يستخدم هذا الاختيار --no-save ولا يسجل تبعية.",
         "local": "لا تُحفظ الحزم المحلية كتبعيات قابلة للنقل.",
         "discovery": "لا تُحفظ محددات discovery كتبعيات.",
-        "chatgpt": "لا يحفظ إعداد ChatGPT تبعية."
+        "chatgpt": "لا يحفظ إعداد ChatGPT تبعية.",
+        "projectSaved": "حُفظ في ملفي uap.toml وuap.lock لهذا المشروع. للتحقق، شغّل npx -y universal-agent-plugins deps status --scope project من هذا المجلد. تؤثر الإزالة على جميع الوكلاء المحفوظين في هذا المشروع."
+      },
+      "scope": {
+        "label": "التثبيت من أجل",
+        "user": "هذا المستخدم",
+        "project": "هذا المشروع",
+        "projectHint": "شغّل هذه الأوامر من مجلد مشروعك. قد يطلب منك الوكيل الوثوق بالمشروع أو تفعيله.",
+        "projectUnavailable": "التثبيت داخل مشروع غير متاح لهذه الحزمة.",
+        "selectionUnavailable": "هذه المجموعة من الوكلاء وموقع التثبيت غير متاحة. اختر وكيلاً أو موقعًا آخر."
+      },
+      "outcome": {
+        "includes": "تتضمن:",
+        "label": "التثبيت والخطوات التالية",
+        "managed": "تدير واجهة سطر الأوامر الملفات المثبتة.",
+        "prepared": "الملفات جاهزة. أكمل الإعداد في وكيلك.",
+        "manual_activation": "فعّل الحزمة في وكيلك.",
+        "unknown": "راجع الإعداد في وكيلك.",
+        "auth": {
+          "required": "قد يظل تسجيل الدخول أو تقديم بيانات اعتماد مطلوبًا.",
+          "unknown": "تحقق من متطلبات تسجيل الدخول للحزمة."
+        },
+        "components": {
+          "skills": "مهارات",
+          "mcp": "أدوات MCP",
+          "extensions": "إضافات"
+        }
       }
     },
     "authentication": {
@@ -754,7 +780,8 @@
       "distributionReason": "{distribution}: {reasons}",
       "noEligibleDistribution": "{name}: لا يوجد توزيع مؤهل يدعم مجموعة الأهداف الكاملة {targets}؛ {reasons}",
       "external": "السبب المقدم من المصدر: {reason}",
-      "separator": "; "
+      "separator": "; ",
+      "unsupportedScope": "الإصدار {sequence} لا يدعم موقع التثبيت المحدد للوكلاء {targets}."
     },
     "status": {
       "candidate": "مرشح",

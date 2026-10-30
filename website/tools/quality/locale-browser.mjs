@@ -364,13 +364,16 @@ async function runNativeSearchAndNavigation(page, goto, evidence) {
   await button.press("Enter");
   assert.equal(await button.getAttribute("aria-expanded"), "true");
   for (const { code } of docsLocaleEntries) assert.ok((await widget.locator(`a[hreflang="${code}"]`).getAttribute("href")).endsWith(`#build-from-source`));
+  // Vue can expose aria-expanded before the CSS transition makes links focusable.
+  await widget.locator("a").first().waitFor({ state: "visible" });
   await button.press("Tab");
-  assert.ok(await widget.locator("a").first().evaluate(el => el === document.activeElement));
+  assert.ok(await widget.locator("a").first().evaluate(el => el === document.activeElement), "English source-build menu: native Tab focuses the first language link");
   await page.keyboard.press("Escape");
   assert.equal(await button.getAttribute("aria-expanded"), "false");
   await button.focus();
   await button.press("Enter");
   const arabic = widget.locator('a[hreflang="ar"]');
+  await arabic.waitFor({ state: "visible" });
   await arabic.focus();
   await arabic.press("Enter");
   await page.waitForURL(url => url.pathname.endsWith("/ar/build/") && url.hash === "#build-from-source");

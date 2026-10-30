@@ -109,3 +109,4 @@ jobs:
           name: docs-ui-artifacts
           path: website/.playwright-artifacts
           if-no-files-found: ignore
+          include-hidden-files: true
