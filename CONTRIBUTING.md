@@ -137,7 +137,7 @@ the effect is identical. That is deliberate: such an edit should be looked at.
 
 ### Suppressions
 
-`//nolint` is allowed only with an explanation (`nolintlint` enforcesces it):
+`//nolint` is allowed only with an explanation (`nolintlint` enforces it):
 
 ```go
 //nolint:gosec // path is validated by pathpolicy.RequireExactPath above
