@@ -1143,6 +1143,7 @@ test("independent package identity uses content framing and portable executable 
 
 test("fixed profile and schema pins agree with preserved domain contracts", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, () => {
   const n = internal().test, root = path.resolve(__dirname, "../../..");
+  assert.deepEqual(n.PROFILES, require("../scripts/public-authoring-acceptance").PROFILES);
   for (const schema of n.capabilities().schemas) {
     const name = schema.id.endsWith("/plugin.schema.json") ? "plugin" : "mcp";
     const file = path.join(root, `install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/${name}.schema.json`);
