@@ -120,11 +120,14 @@ The skill appears in plans as `kind: skill` with `source: command` and
 `source_name: deploy`. The package never contains these skill files; the
 installer writes them into the client's copy.
 
-**Ordinary commands** (`disable-model-invocation: false`) reach every client
-that takes skills and receives commands, which today is every supported client
-except GitHub Copilot CLI and Visual Studio Code (see below). The user runs
-the skill the way the client runs skills by hand. Like any skill, the model
-may also choose it on its own.
+**Ordinary commands** (`disable-model-invocation: false`) reach clients whose
+adapters support both Skills and portable commands. Check the per-client plan;
+being a supported installation target does not imply support for every component.
+GitHub Copilot CLI and Visual Studio Code withhold commands as described below.
+Pi supports native extensions only and receives neither portable Skills nor
+command Skills; see [the Pi extension contract](PI_NATIVE_EXTENSION_CONTRACT.md).
+The user runs a delivered skill the way the client runs skills by hand. Like any
+ordinary skill, the model may also choose it on its own.
 
 **GitHub Copilot CLI and Visual Studio Code receive no commands.** Visual
 Studio Code is frozen by an owner decision of 2026-10-16, and it installs
@@ -234,8 +237,8 @@ rules, so both kinds of change have to reach the client.
   since installation, such as the `opencode.jsonc` OpenCode creates on its
   first run, are not a reason to refresh, exactly as for a package without
   commands. An embedded installer's update preview for such a package reports
-  `RequiresConfirmation` and never `NoChange`. GitHub Copilot CLI and Visual
-  Studio Code, which receive no commands, keep the ordinary update. `update
+  `RequiresConfirmation` and never `NoChange`. Clients that receive no portable
+  commands keep the ordinary update behavior. `update
   --all` still skips a Directory installation that the signed Discovery record
   reports as current; run `agentplugins update <name>` for it.
 - **Operations that keep the installed tree** do not apply new rules. On
