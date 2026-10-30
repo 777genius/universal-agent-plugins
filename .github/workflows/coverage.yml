@@ -6,6 +6,14 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
+    # Documentation and web-only changes do not move Go coverage. Required
+    # still runs every test on every pull request.
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
 
 # Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:

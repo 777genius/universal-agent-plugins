@@ -3,6 +3,14 @@ name: Skills picker
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    # Documentation and web-only changes cannot affect the picker or its Go
+    # bridge. Pushes to main stay unfiltered for release evidence.
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
   push:
     branches: [main]
 

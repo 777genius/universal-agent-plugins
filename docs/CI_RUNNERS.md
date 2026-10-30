@@ -56,6 +56,34 @@ Changing the shared lint workflow also triggers Core fast under its existing
 path policy. Keep those additional checks and their dependent jobs; the same
 per-PR opt-in covers their ordinary Linux amd64 execution.
 
+## Pull request path policy
+
+Pull requests skip lanes whose inputs did not change, so documentation and
+landing work does not queue Go and native lanes. Pushes to `main`, schedules
+and manual dispatches keep their unfiltered triggers. Every merge commit
+therefore still produces the checks that the release workflow requires.
+
+- `Required / test` runs on every pull request: repotests read `README.md`,
+  `docs/`, `website/`, `landing/` and workflow files. A `changes` job on a
+  GitHub-hosted runner classifies the diff once and skips `lint` (no Go,
+  module, `.golangci.yml` or lint baseline change) and `management-sdk` (no
+  `sdks/typescript/`, `contracts/management/` or generated DTO change). A
+  failed or oversized classification runs both.
+- Govulncheck runs only for Go sources, `go.mod`, `go.sum` and `go.work*`.
+  CodeQL ignores Markdown and `docs/`. Docs ignores `landing/`.
+- Polyglot Smoke, Terminal UI, Coverage and Skills picker ignore root
+  Markdown, `docs/`, `website/`, `landing/` and `assets/`.
+- Dependency Review, Authoring native offline and Authoring Milestone A E2E
+  stay unfiltered. The release workflow needs a Dependency Review success on
+  the merged pull request head, and both authoring workflows enforce an
+  unfiltered pull request trigger in their own contract checks.
+
+No branch protection or ruleset requires these checks today. If one is added,
+require only checks from unfiltered workflows: a check from a skipped workflow
+stays pending. If a release candidate's push run on `main` was cancelled by a
+newer merge, its documentation-only pull request head has no Go checks to fall
+back on; re-run the cancelled workflows on that commit before tagging.
+
 ## Run Pages on hosted runners at an exact source commit
 
 The existing Pages workflow accepts a manual boolean `github_hosted` input,
