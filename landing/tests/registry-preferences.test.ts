@@ -10,6 +10,7 @@ import { computed, effectScope, nextTick, reactive, ref, watch } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
+import { usePluginInstallSelection } from '../composables/usePluginInstallSelection.ts';
 import { useCatalogUiStore } from '../stores/catalogUi.ts';
 import { clients } from '../data/clients.ts';
 import * as registryDomain from '../utils/registry.ts';
@@ -45,6 +46,7 @@ const common = {
   useI18n: () => i18n,
   useLocalePath: () => (path: string) => path,
   useInstallPreferencesStore,
+  usePluginInstallSelection,
   useCatalogUiStore,
   useSite: () => ({
     asset: (path: string) => path,
@@ -76,9 +78,29 @@ function card(props = packageProps()) {
   return setup(
     'RegistryPluginCard',
     { defineProps: () => props, withDefaults: (value: unknown) => value },
-    'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall',
+    'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall, deliverySummary, updateScope',
   );
 }
+
+test('explicit card delivery summary follows the winning scoped release rather than default aggregate', () => {
+  setActivePinia(createPinia());
+  const plugin = structuredClone(fixture);
+  const fallback = structuredClone(plugin.distributions[0]);
+  fallback.id = 'project-fallback';
+  fallback.kind = 'community';
+  fallback.releases[0].targets = [{ client: 'codex', scopes: ['project'], delivery: 'prepared', authentication: 'required' }];
+  fallback.releases[0].blocking_clients = [];
+  fallback.releases[0].meets_minimum_capabilities = true;
+  fallback.releases = [fallback.releases[0]];
+  plugin.distributions.push(fallback);
+  const instance = card(packageProps(plugin));
+  instance.state.updateTargets(['codex']);
+  instance.state.updateAutoDetect(false);
+  instance.state.updateScope('project');
+  assert.equal(instance.state.deliverySummary.value, '0 installed automatically · 1 require one final step');
+  assert.match(instance.state.command.value, /--target codex --scope project$/);
+  instance.stop();
+});
 
 test('expired community card and detail produce pinned commands with compatible targets while unavailable packages stay blocked', () => {
   setActivePinia(createPinia());
@@ -140,6 +162,12 @@ test('invalid target preferences are discarded and a new package does not inheri
     packageProps({
       ...fixture,
       client_support: { ...fixture.client_support, clients: ['cursor'] },
+      distributions: fixture.distributions.map((distribution: any) => ({
+        ...distribution,
+        releases: distribution.releases.map((release: any) => ({
+          ...release, targets: release.targets.filter((target: any) => target.client === 'cursor'),
+        })),
+      })),
     }),
   );
   assert.deepEqual(Array.from(changed.state.targets.value), ['cursor']);

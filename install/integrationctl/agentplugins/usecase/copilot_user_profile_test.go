@@ -31,4 +31,10 @@ func TestNewCopilotUserBindingRetainsSelectedProfile(t *testing.T) {
 	if got := stagedClientBinding(domain.ClientBinding{}, false, input, plan, "new-binding", "now"); got.NativeProfileRoot != "" {
 		t.Fatal("VS Code inherited Copilot profile recording")
 	}
+
+	input.Client.ClientID, input.Scope = domain.ClientCopilot, domain.ScopeProject
+	plan.Scope, plan.NativeRegistryRoot = domain.ScopeProject, t.TempDir()
+	if got := stagedClientBinding(domain.ClientBinding{}, false, input, plan, "project-binding", "now"); got.NativeProfileRoot != plan.NativeRegistryRoot {
+		t.Fatalf("project binding borrowed user profile: got %q want %q", got.NativeProfileRoot, plan.NativeRegistryRoot)
+	}
 }

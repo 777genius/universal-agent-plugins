@@ -88,17 +88,16 @@ func stagedClientBinding(previous domain.ClientBinding, bindingExists bool, inpu
 		bindingClientID = previous.ClientID
 	}
 	profileRoot := previous.NativeProfileRoot
-	// A new Copilot CLI registration lives in the selected user profile even
-	// though its managed marketplace artifact is outside that profile. Record
-	// the selection at creation; an existing or coalesced binding is never
-	// adopted into the newly requested profile.
-	if !bindingExists && input.Client.ClientID == domain.ClientCopilot && input.Scope == domain.ScopeUser {
+	// Creation-only profile recording never adopts an existing or coalesced
+	// binding into a newly requested user profile.
+	traits := plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope)
+	if !bindingExists && input.Scope == domain.ScopeUser && traits.RecordsUserProfileOnCreate {
 		profileRoot = input.Client.ConfigRoot
 	}
 	if token := plan.ProfileAuthority(); token != nil {
 		profileRoot = token.Facts().CanonicalRoot
 	}
-	if profileRoot == "" && plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope).BindsNativeProfileRoot {
+	if profileRoot == "" && traits.BindsNativeProfileRoot {
 		profileRoot = input.Client.ConfigRoot
 		if input.Scope == domain.ScopeProject {
 			profileRoot = plan.NativeRegistryRoot

@@ -32,14 +32,14 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 
 La [guía de instalación nativa](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) ofrece ejecutables para macOS, Linux y Windows. El gestor nativo no necesita Node.js, aunque cada plugin puede requerir su propio entorno de ejecución.
 
-[CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93) incluye el ámbito de proyecto explícito. Para previsualizar una instalación de proyecto:
+[CLI nativo 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) conserva el ámbito de proyecto explícito y la selección automática de `install` introducida en 0.1.94. También añade una [API local de gestión](../use/manage#local-management-api) y [extensiones nativas de Pi](../reference/client-compatibility#pi-native-extensions). Para previsualizar una instalación de proyecto:
 
 ```bash
 npx universal-agent-plugins add context7 --target cursor --scope project \
   --project-root /path/to/project --dry-run
 ```
 
-Elige un directorio de proyecto existente. `add` usa por defecto el ámbito de usuario: selecciona proyecto explícitamente para esta operación. Desde [CLI nativo 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), `install` sin argumentos detecta el proyecto solo si existe un `uap.toml` regular en el directorio actual exacto; no busca en los superiores. Un ámbito explícito tiene prioridad. Esa selección automática exige 0.1.94 o posterior: comprueba `agentplugins version` y usa el instalador nativo o Homebrew si tu canal es anterior. Los canales pueden actualizarse en momentos distintos; los ejemplos `npx` con ámbito explícito de esta página siguen siendo compatibles con 0.1.93. Revisa el plan antes de omitir `--dry-run`. La detección nativa, la confianza, la autenticación y las llamadas MCP correctas siguen siendo independientes de escribir los archivos del paquete.
+Elige un directorio de proyecto existente. `add` usa por defecto el ámbito de usuario: selecciona proyecto explícitamente para esta operación. Desde [CLI nativo 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), `install` sin argumento de origen detecta el proyecto solo si existe un `uap.toml` regular en el directorio actual exacto; no busca en los superiores. Un ámbito explícito tiene prioridad. Esa selección automática exige 0.1.94 o posterior: comprueba `agentplugins version` y usa el instalador nativo para obtener la versión verificada. Los canales de npm y Homebrew pueden actualizarse más tarde; los ejemplos `npx` con ámbito explícito de esta página siguen siendo compatibles con 0.1.93. Revisa el plan antes de omitir `--dry-run`. La detección nativa, la confianza, la autenticación y las llamadas MCP correctas siguen siendo independientes de escribir los archivos del paquete.
 
 [Recorrido completo de instalación](../use/install) · [Compatibilidad de clientes y límites de las pruebas](../reference/client-compatibility)
 

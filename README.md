@@ -1,7 +1,6 @@
 <img width="2172" height="724" alt="Universal Agent Plugins - install and create plugins across AI agents with one command" src="assets/readme-banner.png" />
 
 <p align="center">
-  <a href="#supported-clients">
     <img src="landing/public/client-icons/openai.svg" width="32" height="32" alt="Codex and ChatGPT" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/cursor.svg" width="32" height="32" alt="Cursor" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/github-copilot.svg" width="32" height="32" alt="GitHub Copilot CLI" />&nbsp;&nbsp;
@@ -16,7 +15,6 @@
     <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/kimi-dark.svg"><img src="landing/public/client-icons/kimi.svg" width="32" height="32" alt="Kimi Code" /></picture>&nbsp;&nbsp;
     <img src="landing/public/client-icons/qoder.svg" width="32" height="32" alt="Qoder" />&nbsp;&nbsp;
     <img src="landing/public/client-icons/pi.svg" width="32" height="32" alt="Pi" />
-  </a>
 </p>
 
 [![Required](https://github.com/777genius/universal-agent-plugins/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/777genius/universal-agent-plugins/actions/workflows/ci.yml)
@@ -79,12 +77,15 @@ The CLI automatically finds compatible agents, including Codex and Claude Code.
 Choose agents if several are found; a single detected agent is selected automatically.
 Follow the printed setup steps, then start a new agent session.
 
-The current verified native release is CLI **0.1.94**, also available through
-Homebrew. Distribution channels can update at different times. Check
-`agentplugins version` (or `npx universal-agent-plugins version`) before using
-0.1.94-only automatic project selection. If your selected channel is older,
-use the native/Homebrew installation below or keep the explicit project-scope
-commands supported since 0.1.93.
+The current verified native release is [CLI **0.1.95**](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95).
+It adds an owned local management API (`manage serve`), read-only local profile
+discovery (`manage discover`) and native Pi extensions. See the
+[management guide](https://universal-agent-plugins.com/docs/en/use/manage.html#local-management-api) and
+[Pi compatibility](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html#pi-native-extensions).
+npm and Homebrew versions may lag; check `agentplugins version` (or
+`npx universal-agent-plugins version`) before relying on release-specific
+behavior. Use the native installer for the verified release. Automatic project
+selection requires 0.1.94; explicit project-scope commands work since 0.1.93.
 
 <details>
 <summary>Other installation options</summary>
@@ -343,8 +344,10 @@ behavior](docs/CODEX_TRANSPORT_EVIDENCE.md).
 ## Already built with UAP SDK
 
 Build with reusable Go installer components and typed runtime hooks. The
-[TypeScript Management SDK](sdks/typescript/README.md) is available in source as
-a development package; it has no public npm release.
+[TypeScript Management SDK](sdks/typescript/README.md) is published on npm as
+`universal-agent-plugins-management-sdk` and drives the `agentplugins` 0.1.95+
+management engine. Its README covers engine compatibility and package checks.
+Pin the SDK and engine independently.
 
 <table>
   <tr>

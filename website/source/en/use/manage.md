@@ -35,6 +35,33 @@ remote service is healthy or that a client has completed authentication.
 | Client needs trust, activation or sign-in | Follow the target's reported client instructions. |
 | Local package fails validation | Give the author the package report and [check guidance](../build/checks). |
 
+## Local management API (CLI 0.1.95) {#local-management-api}
+
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) adds
+`agentplugins manage serve` for applications embedding the installer and
+`agentplugins manage discover` for read-only local client/profile discovery.
+Discovery does not execute clients, probe their versions, fetch sources or
+change files.
+
+`manage serve` is an owned process with a captured startup context and a private
+authenticated IPv4 loopback API. The integrating host supplies JSON on stdin and
+keeps the bootstrap URL and bearer capability private. Check the command help
+before integration:
+
+```bash
+agentplugins version
+agentplugins manage serve --help
+agentplugins manage discover --help
+```
+
+See the [management wire contract](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md)
+for startup and lifecycle rules. The
+[TypeScript Management SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md)
+is versioned separately as `universal-agent-plugins-management-sdk`. Follow its
+README for compatible engine versions and package installation. Choose a
+published npm release, or build and test a package from a pinned source commit
+for unreleased work. Pin both the SDK and the engine.
+
 ## Update deliberately
 
 ```bash
@@ -183,7 +210,7 @@ and [per-client limits](https://github.com/777genius/universal-agent-plugins/blo
 ## Default install selection in CLI 0.1.94
 
 Check `agentplugins version` first. This behavior requires 0.1.94; if your
-package-manager channel is older, use the native installer or Homebrew. The
+package-manager channel is older, use the native installer. The
 explicit project-scope commands above remain compatible with 0.1.93.
 
 **Released in [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94):**
