@@ -54,7 +54,7 @@ installer, start with the [Quick start](#quick-start).
 Our [installer automation principle](docs/INSTALLER_AUTOMATION_PRINCIPLE.md) is to complete every ownership-safe client step automatically and ask the user only for genuine external approvals, authentication, or reloads.
 
 [Read the documentation](https://universal-agent-plugins.com/docs/en/) ·
-[Browse plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
+[Browse plugins](https://universal-agent-plugins.com/plugins/)
 
 <a href="https://universal-agent-plugins.com/"><img width="495" height="285" alt="image" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
 <img width="423" height="234" alt="image" src="https://github.com/user-attachments/assets/3f8786ea-bb3a-4869-aabe-99b245364b3d" />
@@ -64,7 +64,7 @@ Our [installer automation principle](docs/INSTALLER_AUTOMATION_PRINCIPLE.md) is 
 ## Use plugins
 
 Install, inspect, update, repair, and remove packages with the existing installer.
-The [Use guide source](website/source/en/use/index.md) collects this journey.
+The [Use guide](https://universal-agent-plugins.com/docs/en/use/) collects this journey.
 See [Build plugins](#build-plugins) below to create and check a package.
 
 ### Quick start
@@ -156,7 +156,7 @@ selected agent.
 
 </details>
 
-[Browse plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
+[Browse plugins](https://universal-agent-plugins.com/plugins/)
 
 ## What the CLI does
 
@@ -186,8 +186,10 @@ agentplugins deps import --install
 The optional directory argument defaults to the current folder. By default,
 export reads the global user environment and import writes it. Only `uap.toml` and `uap.lock`
 are transferred. Restore verifies exact locked packages from still-available
-sources or the destination cache for supported dependency clients: Claude Code,
-Codex, OpenCode, Cursor and Gemini CLI.
+sources or the destination cache for targets supported by the selected dependency
+environment. Run `agentplugins deps status` to see supported and excluded targets
+for your installed CLI; see the [dependency guide](docs/UAP_DEPENDENCIES.md) for
+the scope and client boundaries.
 
 Authentication, client settings, secrets and plugin data need separate setup
 or backup. Transferring the files does not guarantee offline installation.
@@ -201,7 +203,9 @@ picker and saved dependencies are included.
 
 ## Install for one project
 
-**Released in CLI 0.1.93:** select project scope explicitly:
+**Released in CLI 0.1.93:** select project scope explicitly. Replace `owner/repo`
+with a real remote plugin repository and `/path/to/project` with an existing
+project directory:
 
 ```sh
 agentplugins add owner/repo --alias review --target cursor \
@@ -279,7 +283,7 @@ The CLI has adapters for:
 | <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> GitHub Copilot CLI | native plugin installed through a managed marketplace |
 | <img src="landing/public/client-icons/vscode.svg" width="24" height="24" alt="" align="middle"> VS Code | plugin package prepared for Copilot |
 | <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> Kiro | skills and MCP setup; OAuth/restart may be required |
-| <img src="landing/public/client-icons/claude.svg" width="24" height="24" alt="" align="middle"> Claude Code | native Claude Code plugin installation |
+| <img src="landing/public/client-icons/claude.svg" width="24" height="24" alt="" align="middle"> Claude Code | native Claude Code | native Claude Code plugin installation |
 | <img src="landing/public/client-icons/gemini.svg" width="24" height="24" alt="" align="middle"> Gemini CLI | skills and MCP configuration |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> OpenCode | skills and MCP configuration |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> Cline | skills and MCP configuration |
@@ -384,7 +388,7 @@ publisher-qualified exact-SHA selector and are validated again before mutation.
 The registry is optional for direct installs, but it makes reviewed short names,
 provenance, compatibility notes, and safe discovery convenient:
 
-[Browse the registry](https://777genius.github.io/universal-agent-plugins/plugins/) ·
+[Browse the registry](https://universal-agent-plugins.com/plugins/) ·
 [Submit a package](https://github.com/777genius/universal-agent-plugins-registry/blob/main/CONTRIBUTING.md)
 
 ## Lifecycle safety
@@ -482,7 +486,7 @@ optional `skills/` and `mcp.json`, then validate and install it with the command
 above. The current npm and native installer releases do not include
 `agentplugins author`.
 
-The [Build guide](website/source/en/build/index.md) covers package structure,
+The [Build guide](https://universal-agent-plugins.com/docs/en/build/) covers package structure,
 remote MCP, stdio MCP, hybrid packages, and the handoff to installation. Its
 authoring commands require a qualified authoring build or a source build.
 See the [Use / Build quickstart](https://universal-agent-plugins.com/docs/en/guide/quickstart.html).
