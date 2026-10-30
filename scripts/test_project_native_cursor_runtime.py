@@ -18,8 +18,8 @@ class CursorRuntimeTests(unittest.TestCase):
 
     def test_first_capture_registers_exact_cursor_test_and_only_cursor_labels(self):
         self.assertEqual(runtime.CASES["cursor"], {
-            "test": "TestAgentpluginsCursorNativeProjectRuntimeAttempt",
-            "file": "repotests/agentplugins_cursor_project_native_attempt_test.go",
+            "test": "TestAgentpluginsCursorNativeProjectCompleteMCPCycle",
+            "file": "repotests/agentplugins_cursor_cycle_finish_test.go",
             "optin": "AGENTPLUGINS_CURSOR_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"})
         labels = ("empty-a-mcp", "empty-b-mcp", "empty-outside-mcp", "control-b-mcp", "control-outside-mcp",
                   "approve-a-mcp", "native-tools-a")

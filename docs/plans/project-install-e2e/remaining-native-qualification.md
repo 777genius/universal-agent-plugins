@@ -4303,6 +4303,42 @@ helper boundary; Python already enforces it. Add repeated-list positives and
 zero-list/reinitialization/post-call/extra-call/oversize/identity/facts controls.
 No native argv, provider, pin, environment, time budget or completion gate changes;
 all three failed captures remain failed/all-false pending fresh full lifecycle.
+
+### Copilot repeated startup tool notifications on the qualified parent (2026-10-29)
+
+Wind source16283a4/treeaf8cee9 run40954917050's Copilot baseline reaches
+`native:repaired-a`, where the vendor exits0 with ordinary cleanup and emits28
+events: tools-loaded, pending, tools-loaded, connected, skills, info, server
+summary, tools-updated, then the existing20-event execution tail. Both tool
+notifications have the same owned server/count and root parent, distinct UUIDs
+and monotonic times. All128 Copilot-owned source paths equal qualified17b13226;
+the failure is the inherited27-row cycle template, not a changed vendor pin.
+The retained42/25-member native/frontend archives,159 embedded stream joins,
+provider exchanges and append-only probe prefix close. The failed run has no
+after-native-repaired-a state proof and keeps every qualification flag false.
+
+Both independent plan critics approve a cycle-only semantic startup view:
+require one-or-more identical owned tools-loaded notifications before the server
+summary; keep the other six startup observations unique, pending before
+connected, and connected plus every tools-loaded before the summary. Validate
+every original raw row's closed shape, payload, ephemeral flag, fresh UUID,
+root parent and command time before retaining one startup observation for the
+existing graph/catalog validators. Keep even omitted refresh UUIDs in the global
+identity set. Raw bytes/counts/hashes and the exact20-event tail stay unchanged;
+legacy strict27 readiness and15-row no-call readers remain strict. The retained
+vendor JavaScript handles this as a state notification; variable refresh
+cardinality is an inference from the observed repetition, not an emitter-count
+guarantee. Existing2MiB/60s bounds, provider/probe/facts joins, native argv,
+environment, authority and completion gates remain unchanged. Inert one/two/eight
+refresh positives and hostile payload/identity/parent/order/time/size controls
+exercise this correction; fresh genuine complete evidence remains required.
+
+The25 focused Python contracts and focused cycle/readiness Go contracts pass;
+affected all-enabled whole-file lint and the unfiltered root six-linter gate
+report zero issues. Offline readers preserve the qualified17b full verdict and
+all three retained failed verdicts exactly. The actual28-row stream passes only
+the corrected cycle decoder; its legacy strict reader still refuses it. These
+checks run no vendor client and do not replace a fresh hosted complete cycle.
 ### Cursor measured publisher acquisition transport (2026-10-29)
 
 The four historical hosted HTTP403 acquisition captures remain failed evidence.
@@ -4559,3 +4595,59 @@ fails, while encoded forwarding preserves the copied test executable's Plugin
 and Data cwd, opaque argv, stdin/stdout/stderr and exit. Canonical/malformed,
 absolute/traversal, selected-root/data/cwd and legacy-form controls protect the
 unchanged authority boundaries; these simulations are not vendor evidence.
+
+## Cursor complete MCP project cycle after the reviewed twelve-command frame
+
+Runtime `40954740804`, target `123736744311`, on published `ad8b1d3d` / tree
+`33397a13` completed all twelve commands and reached only the intended independent
+review stop. All three full RAW audits close the 38 native and 25 frontend
+members, source/pins, all 24 frontend and 24 native stream joins, public/state/
+native ownership, the exact encoded bundled command, and the native-generated
+approval `uapcursora-93cb2b990e8ab114`. Both post-tools controls remain empty.
+The 691-byte probe prefix contains two fresh initialize/list sessions with null
+facts and no tool call. The original capture remains failed/all false; this is
+account-free MCP approval and discovery evidence, not a lifecycle qualification.
+
+Both independent plans approve one bounded, MCP-only complete-cycle fixture.
+Its literal 35 commands are ten public installer commands, two Git setup
+commands, the pinned version, and 22 ordinary native list/enable/list-tools
+commands. Independent same-name A/B installations have different held package
+sources, challenges, installation IDs, physical packages and persistent data.
+An ordinary valid empty User MCP document and separate foreign caller files are
+authored before the baseline. Native approval is only the supported exact-name
+enable command: A1 and B1 each append their own fingerprint, while A2 preserves
+A1 and appends the independently computed revised fingerprint in order. Disabled
+and outside approval stores stay absent. Repair does not renew approval.
+
+The sequence covers repeated add and unchanged update without state rewrites,
+intact repair, A-only source revision/update, fresh A/B/outside controls, and an
+exact sole-owned A native-config absence fault followed by repair. The managed
+package remains intact during that fault. Removal and repeated-removal refusal
+preserve the caller-authored PLUGIN_DATA marker and owner receipt, while fresh
+native observations prove selected absence and the remaining B installation.
+The marker is explicitly caller-authored; no vendor marker-write, returned cwd
+or opaque-argv fact is inferred from list-tools.
+
+Only the selected independently validated mutation closure is opened. Unselected
+state/package/data, both authored sources except the explicit A revision, User
+and foreign files, the held installer/scanner/Git/probe, all 445 native runtime
+files and exact 559 materialized members remain guarded around every child.
+New selected bytes, receipts, IDs and membership are proven from the recipe
+before they become held authority. Unknown profile effects are not adopted.
+
+Three client-specific JSONL aggregates retain exact command stdout/stderr and
+receipts, proof bytes, and every append-prefix probe delta. Existing stream/hash,
+strict JSON and bounded aggregation helpers are reused: encoded Base64/JSON
+counts toward the unchanged 1-MiB member and 16-MiB total limits. The original
+150-second work/180-second test/30-second child budgets and five-second strict
+descendant grace remain. The earlier 38-member failed-only reader is preserved.
+
+A positive summary requires every literal stage, every state/public/approval
+join, exact tool/empty output, and at least one fresh initialize then tools/list+
+session per tools command. Every raw event must have the selected nonce, valid
+PID/session, command time, null facts and no call; non-tools commands append no
+probe bytes. Only a genuine complete capture may qualify the MCP-scoped project
+lifecycle, fresh restart/removal, initialization and tools-list flags. Tools-call,
+skills, vendor authentication and model use remain unqualified, and stored
+activation remains Prepared. No positive native lifecycle is claimed by the
+inert contracts or by this source change before its hosted run.

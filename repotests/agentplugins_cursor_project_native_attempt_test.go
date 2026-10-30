@@ -44,6 +44,7 @@ type cursorProjectAttempt struct {
 	approvalParents                                map[string]os.FileInfo
 	absent                                         []string
 	evidence                                       map[string]any
+	cycle                                          *cursorMCPProjectCycle
 }
 
 func (f *cursorProjectAttempt) commands() []cursorProjectCommand {
@@ -112,6 +113,12 @@ func (f *cursorProjectAttempt) keep(t *testing.T, name string, body []byte) {
 }
 func (f *cursorProjectAttempt) command(t *testing.T, command cursorProjectCommand) ports.CommandResult {
 	t.Helper()
+	if f.cycle != nil {
+		if err := f.cycle.admit(command); err != nil {
+			t.Fatal(err)
+		}
+		f.cycle.beforeProbe(t)
+	}
 	if err := f.check(); err != nil {
 		t.Fatal(err)
 	}
@@ -120,11 +127,17 @@ func (f *cursorProjectAttempt) command(t *testing.T, command cursorProjectComman
 	began := time.Now()
 	env := append(nativePlatformEnvironment(f.base.Root, f.base.Home, filepath.Dir(f.client), filepath.Dir(f.git)), "AGENTPLUGINS_HOME="+filepath.Join(f.base.Root, "installer-state"), "NO_COLOR=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_TERMINAL_PROMPT=0")
 	result, err := (process.OS{}).RunWithDescendantExitGrace(ctx, ports.Command{Argv: command.argv, Env: env, Dir: command.cwd, StdoutLimitBytes: 1 << 20}, 5*time.Second)
-	receipt, _ := json.Marshal(map[string]any{"argv": command.argv, "cwd": command.cwd, "exit": result.ExitCode, "error": err != nil, "deadline": ctx.Err() != nil, "elapsed_ms": time.Since(began).Milliseconds(), "cleanup": "full descendant supervision; forced cleanup fails"})
-	f.keep(t, command.label+".command.json", receipt)
-	f.keep(t, command.label+".stdout.log", result.Stdout)
-	f.keep(t, command.label+".stderr.log", result.Stderr)
-	if command.label == "approve-a-mcp" {
+	ended := time.Now()
+	meta := map[string]any{"argv": command.argv, "cwd": command.cwd, "exit": result.ExitCode, "error": err != nil, "deadline": ctx.Err() != nil, "elapsed_ms": ended.Sub(began).Milliseconds(), "cleanup": "full descendant supervision; forced cleanup fails"}
+	if f.cycle != nil {
+		f.cycle.capture(t, command, result, meta, began, ended)
+	} else {
+		receipt, _ := json.Marshal(meta)
+		f.keep(t, command.label+".command.json", receipt)
+		f.keep(t, command.label+".stdout.log", result.Stdout)
+		f.keep(t, command.label+".stderr.log", result.Stderr)
+	}
+	if f.cycle == nil && command.label == "approve-a-mcp" {
 		if err != nil || ctx.Err() != nil || result.ExitCode != 0 {
 			t.Fatal("Cursor exact owned MCP approval command failed")
 		}
@@ -135,7 +148,8 @@ func (f *cursorProjectAttempt) command(t *testing.T, command cursorProjectComman
 	if err := f.check(); err != nil {
 		t.Fatal(err)
 	}
-	if err != nil || ctx.Err() != nil || result.ExitCode != 0 || bytes.Contains(result.Stderr, []byte("stderr bytes omitted")) {
+	allowedExit := f.cycle != nil && f.cycle.allowedExit(command, result)
+	if err != nil || ctx.Err() != nil || (result.ExitCode != 0 && !allowedExit) || bytes.Contains(result.Stderr, []byte("stderr bytes omitted")) {
 		t.Fatalf("Cursor %s process/capture/cleanup failed; see bounded capture", command.label)
 	}
 	return result
@@ -212,7 +226,11 @@ func (f *cursorProjectAttempt) finish(t *testing.T) {
 	} else if err != nil {
 		t.Error(err)
 	}
-	f.keep(t, "probe-events.jsonl", events)
+	if f.cycle == nil {
+		f.keep(t, "probe-events.jsonl", events)
+	} else {
+		f.cycle.finish(t, events)
+	}
 	f.evidence["test_failed"] = t.Failed()
 	f.evidence["elapsed_ms"] = time.Since(f.started).Milliseconds()
 	body, err := json.MarshalIndent(f.evidence, "", "  ")

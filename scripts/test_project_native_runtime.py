@@ -1474,6 +1474,7 @@ def load_tests(loader, tests, pattern):
         tests.addTests(loader.loadTestsFromName("test_project_native_grok_cycle.GrokCycleContracts"))
         tests.addTests(loader.loadTestsFromName("test_project_native_qoder_cycle.QoderCycleContracts"))
         tests.addTests(loader.loadTestsFromName("test_project_native_cursor_runtime.CursorRuntimeTests"))
+        tests.addTests(loader.loadTestsFromName("test_project_native_cursor_cycle.CursorCycleContracts"))
     return tests
 
 

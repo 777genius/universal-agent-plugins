@@ -26,8 +26,8 @@ import project_native_cline_cycle as cline_cycle_success
 
 SOURCE = shared.SOURCE
 CASES = {
-    "cursor": {"test": "TestAgentpluginsCursorNativeProjectRuntimeAttempt",
-               "file": "repotests/agentplugins_cursor_project_native_attempt_test.go",
+    "cursor": {"test": "TestAgentpluginsCursorNativeProjectCompleteMCPCycle",
+               "file": "repotests/agentplugins_cursor_cycle_finish_test.go",
                "optin": "AGENTPLUGINS_CURSOR_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
     "cline": {"test": "TestAgentpluginsClineNativeProjectCompleteCycle",
               "file": "repotests/agentplugins_cline_cycle_lifecycle_test.go",
@@ -712,6 +712,8 @@ def cli_attempt_members(bodies, source, client):
             from project_native_grok_cycle import members
         elif (client, summary["capture_mode"]) == ("qoder", "qoder-complete-skills-cycle"):
             from project_native_qoder_cycle import members
+        elif (client, summary["capture_mode"]) == ("cursor", "cursor-complete-mcp-cycle"):
+            from project_native_cursor_cycle import members
         else:
             raise ValueError("unknown fixed native CLI capture mode")
         return members(bodies, source)

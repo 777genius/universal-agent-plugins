@@ -78,24 +78,27 @@ def decode(body, start, end, startup=False):
     require(type(body) is bytes and len(body) <= 2 << 20 and body.endswith(b"\n")
             and 0 <= end - start <= 60 * 10**9)
     lines = body[:-1].split(b"\n")
-    require(len(lines) == 27)
+    require(len(lines) >= 27 if startup else len(lines) == 27)
+    header = len(lines) - 20
     rows, data, ids, last, order = [], [], set(), start, []
     for i, line in enumerate(lines):
-        ephemeral = i < 7 or i in (9, 10, 11, 14, 18, 19, 20, 21, 23, 25)
+        grammar = i - header + 7 if startup else i
+        if startup and i == header:
+            require(len(rows) == 7)
+        ephemeral = (startup and i < header) or grammar < 7 or grammar in (9, 10, 11, 14, 18, 19, 20, 21, 23, 25)
         keys = "type data id timestamp parentId" + (" ephemeral" if ephemeral else "")
-        if i == 26:
+        if grammar == 26:
             keys = "type timestamp sessionId exitCode usage"
         row = obj(strict_json(line), keys)
         when = instant(row["timestamp"])
         require(last <= when <= end)
         last = when
-        rows.append(row)
-        if i == 26:
+        if grammar == 26:
             values(row, {"type": "result", "exitCode": 0})
             require(uuid(row["sessionId"]) not in ids)
+            rows.append(row)
             continue
-        grammar = i
-        if startup and i < 7:
+        if startup and i < header:
             if row["type"] == "session.mcp_server_status_changed":
                 require(type(row["data"]) is dict and row["data"].get("status") in ("pending", "connected"))
                 grammar = 0 if row["data"]["status"] == "pending" else 1
@@ -103,13 +106,16 @@ def decode(body, start, end, startup=False):
                 matches = [j for j in range(2, 7) if GRAMMAR[j][0] == row["type"]]
                 require(len(matches) == 1)
                 grammar = matches[0]
-            order.append(grammar)
         require(row["type"] == GRAMMAR[grammar][0] and uuid(row["id"]) not in ids)
         ids.add(row["id"])
         uuid(row["parentId"])
         if ephemeral:
             require(row["ephemeral"] is True)
-        data.append(obj(row["data"], GRAMMAR[grammar][1]))
+        payload = obj(row["data"], GRAMMAR[grammar][1])
+        if startup and i < header and not _retain_startup(row, payload, grammar, rows, data, order):
+            continue
+        rows.append(row)
+        data.append(payload)
     if startup:
         require(set(order) == set(range(7)) and len(order) == 7
                 and order.index(0) < order.index(1)
@@ -129,6 +135,20 @@ def decode(body, start, end, startup=False):
         require(rows[child]["parentId"] == rows[parent]["id"])
     require(rows[12]["parentId"] == rows[11]["parentId"] and rows[22]["parentId"] == rows[21]["parentId"])
     return rows, data, session
+
+
+def _retain_startup(row, payload, grammar, rows, data, order):
+    # All raw IDs remain globally checked even when repeated notifications share
+    # one semantic startup slot. Captured bytes and stream receipts stay raw.
+    if grammar == 2:
+        require(5 not in order)
+    if grammar in order:
+        index = order.index(grammar)
+        require(grammar == 2 and same(payload, data[index]) and row["parentId"] == rows[index]["parentId"])
+        return False
+    require(len(order) < 7)
+    order.append(grammar)
+    return True
 
 
 def metadata(data, root, project):

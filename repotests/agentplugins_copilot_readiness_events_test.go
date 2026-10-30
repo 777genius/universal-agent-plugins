@@ -80,9 +80,10 @@ func copilotReadinessDecodeOrder(body []byte, start, end time.Time, interleaved 
 		return nil, fmt.Errorf("Copilot readiness stream/command interval")
 	}
 	lines := bytes.Split(bytes.TrimSuffix(body, []byte{'\n'}), []byte{'\n'})
-	if len(lines) != 27 {
+	if (!interleaved && len(lines) != 27) || (interleaved && len(lines) < 27) {
 		return nil, fmt.Errorf("Copilot readiness finite event count")
 	}
+	header := len(lines) - 20
 	s := &copilotReadinessStream{}
 	seen := map[any]bool{}
 	last := start
@@ -90,20 +91,24 @@ func copilotReadinessDecodeOrder(body []byte, start, end time.Time, interleaved 
 	for i, line := range lines {
 		v, err := projectNativeRuntimeJSON(line)
 		grammarIndex := i
-		if interleaved && i < 7 {
+		if interleaved {
+			grammarIndex = i - header + 7
+		}
+		if interleaved && i < header {
 			var kindErr error
 			grammarIndex, kindErr = copilotCycleStartupIndex(v)
 			if kindErr != nil {
 				return nil, kindErr
 			}
-			startup[i] = grammarIndex
+		} else if interleaved && i == header && len(s.rows) != 7 {
+			return nil, fmt.Errorf("Copilot cycle incomplete startup observations")
 		}
 		keys := "type data id timestamp parentId"
-		ephemeral := i < 7 || i == 9 || i == 10 || i == 11 || i == 14 || (i >= 18 && i <= 21) || i == 23 || i == 25
+		ephemeral := grammarIndex < 7 || grammarIndex == 9 || grammarIndex == 10 || grammarIndex == 11 || grammarIndex == 14 || (grammarIndex >= 18 && grammarIndex <= 21) || grammarIndex == 23 || grammarIndex == 25
 		if ephemeral {
 			keys += " ephemeral"
 		}
-		if i == 26 {
+		if grammarIndex == 26 {
 			keys = "type timestamp sessionId exitCode usage"
 		}
 		row, shapeErr := copilotReadinessObject(v, keys)
@@ -116,12 +121,12 @@ func copilotReadinessDecodeOrder(body []byte, start, end time.Time, interleaved 
 			return nil, fmt.Errorf("Copilot readiness event time")
 		}
 		last = when
-		s.rows = append(s.rows, row)
-		if i == 26 {
+		if grammarIndex == 26 {
 			if row["type"] != "result" || !copilotReadinessID(row["sessionId"]) || seen[row["sessionId"]] || row["exitCode"] != json.Number("0") {
 				return nil, fmt.Errorf("Copilot readiness terminal session/result")
 			}
 			s.session = row["sessionId"].(string)
+			s.rows = append(s.rows, row)
 			continue
 		}
 		if row["type"] != copilotReadinessGrammar[grammarIndex][0] || !copilotReadinessID(row["id"]) || seen[row["id"]] || !copilotReadinessID(row["parentId"]) || ephemeral && row["ephemeral"] != true {
@@ -132,6 +137,16 @@ func copilotReadinessDecodeOrder(body []byte, start, end time.Time, interleaved 
 		if err != nil {
 			return nil, err
 		}
+		if interleaved && i < header {
+			keep, err := s.retainCycleStartup(row, data, grammarIndex, &startup)
+			if err != nil {
+				return nil, err
+			}
+			if !keep {
+				continue
+			}
+		}
+		s.rows = append(s.rows, row)
 		s.data = append(s.data, data)
 	}
 	if interleaved {
