@@ -141,11 +141,19 @@ Ship both `scripts/check.py` and `scripts/check.py.lock`. In a reviewed executio
 context with the documented uv/Python versions, consume that lock rather than
 silently resolving new dependencies:
 
+For a strict lock requirement, check the adjacent file before invoking uv.
+On macOS/Linux:
+
 ```sh
+test -f scripts/check.py.lock || { echo 'Missing script lock' >&2; exit 1; }
 uv run --locked --script scripts/check.py
 ```
 
-`--locked` refuses a missing or stale lock. Dependencies, environments and caches
+In PowerShell, use `if (-not (Test-Path -LiteralPath 'scripts/check.py.lock' -PathType Leaf)) { throw 'Missing script lock' }` before the same `uv run` command.
+
+`--locked` rejects stale locks. Some uv releases warn and continue unlocked when
+a script lock is missing, so the explicit existence check is necessary for a
+strict guarantee. Dependencies, environments and caches
 can still require writes and downloads, and uv can acquire Python when allowed by
 its configuration. Specify the host policy separately; this is not a sandbox or
 an offline guarantee. Do not regenerate a lock inside UAP's managed package/store
