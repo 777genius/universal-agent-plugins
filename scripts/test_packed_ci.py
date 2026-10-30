@@ -1,6 +1,8 @@
 """Synthetic controls only; no product execution and no packed acceptance claim."""
+import contextlib
 import copy
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -408,10 +410,16 @@ class WorkflowControls(unittest.TestCase):
         # Dispatch (classifier skipped), a relevant diff and a failed classifier
         # all require both lanes; only an explicit documentation-only result
         # accepts two skipped lanes.
+        # Captured: this suite runs inside the aggregate, and a stray notice
+        # would claim skipped lanes on every run. Only the documentation-only
+        # result may announce that.
         for good in (needs('skipped', 'success'), needs('success', 'success', 'true'),
                      needs('failure', 'success'), needs('success', 'success', ''),
                      needs('success', 'skipped', 'false')):
-            with self.subTest(good=good): w.results(good)
+            with self.subTest(good=good), patch.dict(os.environ, {'GITHUB_STEP_SUMMARY': ''}):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output): w.results(good)
+                self.assertEqual('lanes were skipped' in output.getvalue(), good['native']['result'] == 'skipped')
         for job in ('native', 'packed'):
             for changes, authoring in (('skipped', None), ('success', 'true'), ('failure', None)):
                 for status in ('failure', 'skipped', 'cancelled', None):
