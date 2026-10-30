@@ -708,12 +708,13 @@ func (f *projectNativeCLIAttempt) finish(t *testing.T) {
 		f.evidence["runtime_attempt_complete"] = complete
 		f.evidence["qualification"] = map[string]bool{"project-lifecycle": complete, "native-restart-removal": complete, "mcp-initialize": false, "mcp-tools-list": false, "mcp-tools-call": false}
 	}
-	if f.base != nil && f.evidence["capture_mode"] != qoderCycleMode {
+	if f.base != nil && f.evidence["capture_mode"] != qoderCycleMode && f.evidence["capture_mode"] != windCycleMode {
 		if body, err := projectNativeRuntimeRead(f.base.Events, 1<<20); err == nil {
 			f.keep(t, "probe-events.jsonl", body)
 		}
 	}
 	qoderCycleFinalizeEvidence(f.evidence)
+	windCycleFinalizeEvidence(f.evidence)
 	raw, _ := json.MarshalIndent(f.evidence, "", "  ")
 	f.keep(t, "runtime-attempt.json", append(raw, '\n'))
 	if f.grok != nil || f.spec.client == "grok" && f.evidence["capture_mode"] == "grok-complete-skills-cycle" {

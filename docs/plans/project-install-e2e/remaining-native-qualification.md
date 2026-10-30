@@ -5041,3 +5041,57 @@ payload proof, recheck every complete accepted frame, then clone only those
 frames into the frozen baseline. Low-level proofs without a public assessment
 admit no cache changes. Native guards, the original 23-command recipe, all capture
 bounds and false qualification flags remain unchanged pending genuine review.
+
+### Windsurf: observed metadata grammar and bounded project lifecycle
+
+The source-bound `8c4f6b3f` observation in runtime `41050724879`, selected job
+`124051233606`, completed all 23 commands and three independent installation
+proofs in 17,234 ms. Primary and both independent whole-RAW reviews closed the
+72-member native archive and 25-member frontend archive. Its deliberate final
+review stop remains failed and all qualification flags remain false. The seven
+skills catalogs, seven MCP lists and three gets establish only metadata and
+configuration visibility; the probe remained empty.
+
+The next exact mode, `windsurf-complete-project-skills-cycle`, retains that
+literal prefix and appends eight public operations plus sixteen already
+observed metadata commands, for 47 calls. Independent A/B identities, direct
+singleton repeat-add, unchanged update, intact repair, controlled A2 source
+revision, whole owned native skill-directory absence and repair, default
+removal, repeated removal refusal and remaining-scope controls are explicit.
+Removed project MCP entries expose the held original User same-name fallback.
+User skills remain unactivated; project bindings and component support remain
+Prepared. A successful complete mode may qualify only project lifecycle and
+native restart/removal, with all MCP, authentication and model flags false.
+
+A real default-composer tiny HTTP inert journey (no endpoint/process) measured
+the ten project public stages with only Scanner substituted. The scanner ledger
+was 1,2,2,2,2,3,3,3,3,3. Public security is present at adds and repeat-add only;
+A2 nevertheless writes a new cold assessment. The native recipe includes the
+original User assessment, therefore its finite final cache set has four keys.
+A2 has a closed typed raw assessment proof joined to its held source, manifest,
+DefaultRequirement, canonical Evidence-cleared bytes, exact cache key, captured
+file/parent metadata and immediate command interval. Absence of public security
+is never treated as evidence of a cache hit. Prior cache records remain frozen.
+
+New-mode command receipts expose actual UTC nanosecond start/end instants,
+integer elapsed duration, monotonic windows and original wall-span/summary
+bounds. Selected mutation.lock retains ordinary current-owned authority and
+closed positive PID/acquired_at metadata; its PID is source-attested, not joined
+to a nonexistent CommandResult leader-PID field. Repeated removal exits before
+lock acquisition and must preserve the prior lock raw bytes and full record.
+Caller marker creation is a
+separate exact fixture delta after independent data-ownership checks and before
+the first accepted complete frame, never a later whole-tree renewal.
+
+Three bounded JSONL aggregates plus the summary produce four ZIP members.
+Existing 1 MiB encoded-member, 16 MiB total, 150-second work, 180-second test,
+10-second native, 30-second public and five-second descendant-grace bounds stay
+fixed. The shared privacy helper is unchanged: each closed bounded JSONL row is
+checked, and every explicit opaque stream is independently decoded and checked.
+The full synthetic proof aggregate is below 1 MiB but exceeds that helper's
+single-document node budget, so aggregate checks use the existing per-row JSONL
+boundary rather than increasing any helper limit. A real serialized four-member
+ZIP positive must cross runtime admission, exact mode dispatch and complete
+proof validation. The historical first-observation mode and failed verdict stay
+unchanged. Genuine complete execution and all three full-RAW audits are still
+required before qualification or merge.

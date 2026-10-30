@@ -15,7 +15,11 @@ import (
 )
 
 func (w *windComponentFixture) expectedEntry(r *windComponentRecipe) map[string]any {
-	args := []any{"--internal-stdio-v1", r.Active, r.Data, r.Active, "plugin", "--", "./bin/probe", "Owned Windsurf " + r.Scope, r.Active + "/argument"}
+	tag := r.Scope
+	if r.Revision == "a-two" {
+		tag = "a-two"
+	}
+	args := []any{"--internal-stdio-v1", r.Active, r.Data, r.Active, "plugin", "--", "./bin/probe", "Owned Windsurf " + tag, r.Active + "/argument"}
 	env := map[string]any{"PLUGIN_ROOT": r.Active, "PLUGIN_DATA": r.Data, "UAP_TEST_ROOT": w.f.base.Root, "UAP_TEST_EVENTS": w.f.base.Events, "UAP_TEST_NONCE": r.Nonce, "UAP_TEST_REVISION": r.Revision}
 	return map[string]any{"command": filepath.Join(r.Active, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName), "args": args, "env": env}
 }

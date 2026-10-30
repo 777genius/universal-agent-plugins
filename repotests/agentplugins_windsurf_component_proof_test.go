@@ -41,7 +41,7 @@ func windComponentState(raw []byte) (domain.StateFileV2, error) {
 func windComponentSource(i domain.Installation, r *windComponentRecipe) error {
 	source := domain.SourceBinding{SourceBindingID: "src_" + windsurfConfigDigest([]byte(r.Source + "\x00\x00"))[:24], RequestedSource: r.Source, CanonicalSource: r.Source, TreeDigest: r.Digest}
 	inventory := domain.ComponentInventory{Skills: []string{windComponentName}, MCPPresent: true, MCPEnabled: true, MCPServers: []string{windComponentName}}
-	pkg := domain.PackageBinding{LoaderKind: domain.LoaderKindAgentPlugins, FormatID: domain.FormatIDAgentPluginsV1, SchemaURI: domain.PluginSchemaV1, DeclaredName: windComponentName, Version: "1.0.0", ManifestDigest: "sha256:" + windsurfConfigDigest(r.Authored["plugin.json"]), Inventory: inventory}
+	pkg := domain.PackageBinding{LoaderKind: domain.LoaderKindAgentPlugins, FormatID: domain.FormatIDAgentPluginsV1, SchemaURI: domain.PluginSchemaV1, DeclaredName: windComponentName, Version: windCycleVersion(r), ManifestDigest: "sha256:" + windsurfConfigDigest(r.Authored["plugin.json"]), Inventory: inventory}
 	if !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(i.InstallationID) || i.DeclaredName != windComponentName || !reflect.DeepEqual(i.Source, source) || !reflect.DeepEqual(i.Package, pkg) || i.DataRetained || i.NeedsRebind || i.Directory != nil || i.LocalChatGPTMapping != nil || len(i.InstallPreferences) != 0 || i.OriginMode != domain.OriginModeDirect {
 		return fmt.Errorf("component exact source/package authority")
 	}
