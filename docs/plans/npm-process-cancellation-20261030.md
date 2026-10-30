@@ -1,6 +1,6 @@
 # Locked npm runtime subprocess cancellation
 
-Status: researched implementation plan, 2026-10-30. Scope is the existing locked
+Status: implemented; native Linux CI proof pending, 2026-10-30. Scope is the existing locked
 npm preparation path in `agentplugins/providers`. No release or merge is requested.
 
 ## Evidence and problem
@@ -35,12 +35,16 @@ second runner, or a new timeout policy.
 3. Execute npm through `process.OS.Run`. Treat nonzero `CommandResult.ExitCode`
    as failure; the shared runner intentionally returns natural nonzero statuses
    in the result. Preserve the final 1,200 bytes of bounded stderr in npm errors.
-   Wrap the runner's actual error so `errors.Is` still identifies cancellation,
-   deadline, and cleanup failures. Distinguish cancellation from timeout in the
+   A small typed npm error retains the full runner cause for `errors.Is` and
+   `errors.As`, while rendering at most 300 bytes of cause summary plus a
+   truncation label and the 1,200-byte stderr tail (under 1,600 bytes total).
+   This also bounds cancellation/cleanup errors that already embed the shared
+   runner's larger diagnostic buffer. Distinguish cancellation from timeout in the
    human diagnostic rather than labeling all cancellation as timeout.
-4. Recheck the preparation context after the npm runner returns successfully and
-   before validating/publishing the runtime, preventing a successful injected
-   runner from committing a runtime after it has observed cancellation.
+4. Recheck the preparation context immediately after the npm runner returns
+   successfully and again directly before committing the target, preventing a
+   successful injected runner from committing after observed cancellation. This
+   does not claim atomic cancellation of an already-started filesystem commit.
 5. Replace implementation-only stderr-tail coverage with meaningful command
    outcome coverage and a real subprocess regression through `PrepareRuntime`.
    The fake npm starts a persistent helper that inherits stderr and writes a
@@ -48,7 +52,9 @@ second runner, or a new timeout policy.
    `errors.Is(context.Canceled)`, no committed target, no staging leftovers,
    stopped subprocesses, no delayed mutation, and a successful retry. Cover a
    deadline separately without waiting for the production timeout. Use existing
-   platform process test conventions; no npm registry or real client is needed.
+   Linux process test conventions and pidfds for stable fixture identities;
+   existing runner tests retain Darwin/Windows lifecycle coverage. No npm
+   registry or real client is needed.
 
 ## Boundaries
 
@@ -71,4 +77,61 @@ then publishes each coordinated commit immediately. No worker pushes or merges.
 
 ## Execution evidence
 
-Pending implementation after plan publication.
+The plan was published before production edits as draft PR #589, plan commit
+`bb8881242db103af584382125aea95a91bd79abd`. The implementation uses the existing
+ordinary process runner, retains npm's ten-minute preparation timeout and
+argument/environment contract, and adds only an opt-in stdout discard field.
+No subprocess framework, release policy, workflow, or CI matrix was added.
+
+Validation used Go 1.26.10, with cached dependencies in `/tmp/uap-audit-gomodcache`.
+
+- PASS: `go test -count=1 -race -run 'TestLockedRuntime|TestLockedNPMCommand'
+  ./install/integrationctl/agentplugins/providers` (final rerun: 1.448s). This exercises the
+  existing locked-runtime lifecycle tests, canceled-successful runner refusal,
+  exact cancellation/deadline cause preservation including joined cleanup
+  failure, natural nonzero status, and bounded diagnostic-tail behavior.
+- PASS: changed-line golangci-lint against base `ae068426706d5f2c9d624ae94c6504ac8b7f553e`
+  for `providers`, `adapters/process`, and `ports`: zero issues. Full-file size
+  and architecture gates (`revive,funlen,gocyclo,gocognit,dupl,depguard`) also
+  report zero issues for those packages.
+- PASS: `go test -c` for both providers and the process adapter on
+  `GOOS=darwin GOARCH=arm64` and `GOOS=windows GOARCH=amd64`. These are compile
+  checks, not runtime execution on those systems.
+- PASS: `git diff --check`.
+- BLOCKED LOCALLY: real subprocess execution. The pre-existing
+  `TestOSRunnerPreservesCommandOutputAndExitCode` fails inside the restricted
+  sandbox with `current locked OS thread disappeared during ordinary
+  containment preflight`. Running the same baseline outside that sandbox
+  reaches the existing explicit capability skip: a positively live proc task
+  lacks its `children` interface. The new native cancellation/deadline cases,
+  real-command outcome test, and portable process discard tests likewise
+  explicitly SKIP outside the sandbox for this missing prerequisite. On
+  `RUNNER_ENVIRONMENT=github-hosted`, only the new Linux npm regressions turn
+  unavailable containment or pidfd prerequisites into a failure, so green
+  GitHub-hosted Required execution cannot hide a skip of this regression. These
+  skips are not cancellation proof; observed non-skipped Linux CI execution
+  remains required. No production guard was weakened.
+- PRE-EXISTING BROADER FAILURE: before implementation, running the full providers
+  package failed in existing Codex identity/activation/golden tests with
+  `malformed or duplicate Codex environment entry` (5.178s). Focused npm tests
+  pass; this patch does not change Codex environment parsing.
+
+The Linux subprocess regression executes the production `PrepareRuntime` path
+with a real fake-npm executable and a persistent helper inheriting stderr. It
+requires readiness before cancellation, checks typed cancellation/deadline and
+bounded return, observes both identities through pidfds, checks no target or
+staging residue, triggers a delayed cache mutation that must not occur, then
+retries successfully through the same real command path. Fixture PID readiness
+is published atomically and cleanup uses pidfds rather than recyclable PIDs.
+Portable process tests additionally verify discarded large stdout retains
+nonzero status, stderr diagnostics, typed cancellation, and cleanup attestation.
+
+
+Windows compatibility was inspected against cached Go 1.26.10 source:
+`CommandContext` delegates to `Command(name, args...)` and adds only its context
+and cancellation callback. The shared runner uses the same command constructor
+and argv; Windows containment adds suspended creation, Job attachment, and
+resume without rewriting command lines or adding a shell. Both old and new npm
+paths select `npm.cmd` without an explicit `cmd.exe /c` wrapper. Any native batch
+launch limitation of that pre-existing choice is outside this cancellation
+correction; Windows compilation is not presented as runtime proof.

@@ -405,10 +405,16 @@ func installLockedRuntime(ctx context.Context, dataPath, store, target string, e
 	if err := runner(ctx, temporary, dataPath, config.OmitOptional); err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := validatePreparedRuntime(temporary, config.Entrypoint); err != nil {
 		return err
 	}
 	if err := writeRuntimeMarker(temporary, expected); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if err := commitLockedRuntimeTarget(store, target, temporary, expected); err != nil {
