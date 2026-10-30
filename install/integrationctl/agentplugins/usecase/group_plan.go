@@ -127,7 +127,8 @@ func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput
 	}
 	// Coalescing discards one plan, so all frozen authority, including revision
 	// digests, must agree. SameSelection deliberately excludes those digests.
-	if !reflect.DeepEqual(prior.plan.SelectedDelivery, plan.SelectedDelivery) || !prior.plan.LocalEntryObservation.Equal(plan.LocalEntryObservation) || !reflect.DeepEqual(prior.plan.PreviousNativeObjects, plan.PreviousNativeObjects) {
+	projectionRefreshConflicts := session.requiresNativeProjectionRefresh(prior.plan) != session.requiresNativeProjectionRefresh(plan)
+	if !reflect.DeepEqual(prior.plan.SelectedDelivery, plan.SelectedDelivery) || !prior.plan.LocalEntryObservation.Equal(plan.LocalEntryObservation) || !reflect.DeepEqual(prior.plan.PreviousNativeObjects, plan.PreviousNativeObjects) || projectionRefreshConflicts {
 		return false, fmt.Errorf("targets select different delivery facts for physical backend %s", key)
 	}
 	if prior.noChange {
@@ -137,6 +138,12 @@ func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput
 	prior.resultIndexes = append(prior.resultIndexes, targetIndex)
 	session.result.Targets[targetIndex].Plan = prior.plan
 	return true, nil
+}
+
+// Only explicit update consumes the projection-refresh decision. Other
+// operations retain their existing coalescing and lifecycle policy.
+func (session *groupSession) requiresNativeProjectionRefresh(plan domain.DeliveryPlan) bool {
+	return session.replace && !session.input.Repair && !session.input.Switch && plan.RequiresNativeProjectionRefresh()
 }
 
 func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput, plan domain.DeliveryPlan, clientID string, managed *domain.ClientBinding) error {
@@ -160,7 +167,7 @@ func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput,
 	}
 	session.result.Targets[targetIndex].Plan = plan
 	noChange := !requiresComponentRemoval(plan) && managed != nil && !session.input.Repair && !session.input.Switch && groupPackageUnchanged(*managed, target) && containsSurface(managed.AffectedSurfaces, string(target.Client.ClientID))
-	if session.replace && plan.RequiresNativeProjectionRefresh() {
+	if session.requiresNativeProjectionRefresh(plan) {
 		noChange = false
 	}
 	if domain.ClientTraitsFor(target.Client.ClientID).ReportsMCPToolNamespaceCollision && managed != nil && (managed.Activation == domain.ActivationFailed || managed.Verification == domain.VerificationFailed) {

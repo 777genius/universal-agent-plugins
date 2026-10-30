@@ -435,8 +435,76 @@ environment were not modified. The first linter invocation could not create its
 cache under the read-only home; rerunning with the task-owned writable
 `GOLANGCI_LINT_CACHE=/tmp/uap-projection-lint-cache` completed normally.
 
-The source and test changes remain uncommitted for the coordinator's publication
-from parent `a9ceee1c`. Fresh independent code review and exact-head required CI
-remain outstanding at this checkpoint. No commit, push, merge, publication,
-release, native-containment weakening, lint exclusion, or support-scope widening
-was performed by this worker.
+Root published that implementation checkpoint at
+`0fb187e5850d6367329cd43151de4396bb66addb` from parent `a9ceee1c`. The independent
+code review and bounded correction below supersede its initial review status.
+No commit, push, merge, publication, release, native-containment weakening, lint
+exclusion, or support-scope widening was performed by this worker.
+
+## Independent code review: coalescing correction
+
+The fresh independent critic reproduced one P2 on published `0fb187e5` and
+requested changes: `collideGroupTarget` can coalesce duplicate requests for the
+same physical binding before `recordGroupTarget` consumes the new decision. Its
+existing frozen-facts equality omitted that decision. For an installed V1
+binding, duplicate same-revision targets prepared for V1 and V2 therefore chose
+the result by input order: V1 first discarded the V2 request and returned a
+completed no-op; V2 first migrated and replaced both logical result plans with
+the first decision. No other findings remained in the critic's final review.
+
+Root accepted a bounded correction to the existing conflict guard. It now
+compares the **effective update decisions for equality** and refuses a mismatch
+through the existing `different delivery facts` path. It does not OR them,
+select a winner, inspect client identities, or introduce a capability framework.
+One small `groupSession.requiresNativeProjectionRefresh` helper is shared by the
+collision guard and no-change consumer. It returns the plan decision only for
+explicit update (`replace && !Repair && !Switch`); outside that mode it returns
+false. Repeated add, repair and switch therefore retain their previous coalescing
+policy instead of acquiring a new refusal for a decision they do not consume.
+The helper also keeps the two call sites' operation interpretation identical.
+
+`group_projection_coalescing_test.go` reuses the real recorder-backed fixture and
+adds these checks:
+
+- Both conflicting input orders refuse before any managed/native/data effect,
+  comparing exact loaded state and full state/receipt/journal, package, native
+  configuration/skill, and PLUGIN_DATA filesystem entries and bytes.
+- Equivalent false decisions still coalesce as a no-op with exact retained
+  state/files; equivalent true decisions perform one physical package mutation,
+  publish the same receipt/effect to both logical result indexes, and acknowledge
+  the requested V2 native projection. The independent client remains exact.
+- Both repeated-add input orders with differing host projection decisions still
+  coalesce without mutation or rejection and retain the V1 projection.
+
+The filesystem observation excludes only the exact fixture coordinator path
+`filepath.Join(filepath.Dir(f.store.Path), "mutation.lock")`. Existing process-lock
+acquisition rewrites its owner token even on a preflight refusal. An initial
+control confirmed `stateChanged=false` and identified that single changed path.
+This is a fixture observation boundary, not a product regression or a general
+exclusion: no basename glob, installation-state, data, receipt or journal subtree
+is excluded.
+
+A red Go-overlay control at
+`/tmp/uap-projection-coalescing-red/overlay.json` restores only the old collision
+guard while keeping the corrected operation-mode helper and all new tests. The
+final red run fails in **0.554s** only for the two intended conflict cases:
+`refresh_second` incorrectly returns `completed, mutated=false`, and
+`refresh_first` incorrectly returns `completed, mutated=true`. Both equivalent
+decision controls and both repeated-add compatibility controls pass in that red
+run. This isolates the regression to the missing equality guard.
+
+The corrected-tree focused selection passes in **1.226s**, covering all three
+new coalescing tests plus the existing same-revision V1/V2 transition, runtime,
+transition refusal, repeated add/repair and trusted-planner regressions. Focused
+architecture guards pass in **0.274s**. Whole-file size/architecture lint on
+`./usecase` passes with **0 issues**. The first direct spelling of the explicit
+update mode in the no-change consumer exceeded its cyclomatic limit (22); the
+shared helper above resolves that finding without any linter configuration,
+exclusion or baseline change. Changed-line correctness lint and final whitespace
+checks are recorded at the correction handoff.
+
+This correction changes only `usecase/group_plan.go`, the new focused test file,
+and this evidence. No unrelated platform matrix was repeated; previously passed
+facade/recovery/golden tests cover unchanged surfaces. Root owns publication of
+the correction from `0fb187e5`, followed by the critic's exact-head re-review and
+required CI before merge. The worker has made no local commits or pushes.
