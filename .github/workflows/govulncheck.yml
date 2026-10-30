@@ -4,6 +4,18 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
+    # govulncheck reads only Go sources and module files. Pushes to main stay
+    # unfiltered, so every merge commit still carries the release-required
+    # govulncheck checks.
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'go.work'
+      - 'go.work.sum'
+      - '.github/workflows/govulncheck.yml'
   push:
     branches: [main, master]
   workflow_dispatch:
