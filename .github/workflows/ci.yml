@@ -21,10 +21,11 @@ concurrency:
 jobs:
   # Pull requests only: classify the diff once so lint and the Management SDK
   # qualification are skipped when none of their inputs changed. `test` never
-  # waits for it and always runs, because repotests also read README.md, docs/,
-  # website/, landing/ and workflow files. Pushes, dispatches and a failed or
-  # oversized classification run every job. One API call, so it uses a
-  # GitHub-hosted runner instead of waiting in the CI_LINUX_RUNNER queue.
+  # waits for it and runs on every ready pull request, because repotests also
+  # read README.md, docs/, website/, landing/ and workflow files. Pushes and an
+  # unavailable or oversized classification run every job. It only calls the
+  # GitHub API, so it uses a GitHub-hosted runner instead of waiting in the
+  # CI_LINUX_RUNNER queue. repotests/ci_path_policy_test.go covers the script.
   changes:
     if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
@@ -49,13 +50,18 @@ jobs:
             exit 0
           fi
           # Renames count on both sides so a move out of an input path still runs.
-          files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
-            --jq '.[] | .filename, (.previous_filename // empty)')"
+          if ! files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
+            --jq '.[] | .filename, (.previous_filename // empty)')"; then
+            echo "::warning::Changed files are unavailable; running every gated job."
+            printf 'lint=true\nmanagement_sdk=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # Never echo raw file names: they could carry workflow commands.
           echo "classified $(grep -c . <<<"$files" || true) paths"
           matches() { if grep -qE "$1" <<<"$files"; then echo true; else echo false; fi; }
           lint="$(matches '(\.go$|(^|/)go\.(mod|sum)$|^go\.work(\.sum)?$|^\.golangci\.yml$|^scripts/(check-lint-baseline\.sh|lint-baseline-renames\.txt)$|^\.github/workflows/(ci|lint)\.yml$)')"
-          management_sdk="$(matches '^(sdks/typescript/|contracts/management/|cli/internal/agentpluginscli/management/|\.github/workflows/(ci|management-sdk)\.yml$)')"
+          # SDK Go fixtures build with GOWORK=off against the root module.
+          management_sdk="$(matches '^(sdks/typescript/|contracts/management/|cli/internal/agentpluginscli/management/|go\.(mod|sum)$|\.github/workflows/(ci|management-sdk)\.yml$)')"
           printf 'lint=%s\nmanagement_sdk=%s\n' "$lint" "$management_sdk" | tee -a "$GITHUB_OUTPUT"
 
   # Separate job rather than a step in `test`: `test` is the 9-27 min critical

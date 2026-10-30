@@ -7,7 +7,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
     # Documentation and web-only changes do not move Go coverage. Required
-    # still runs every test on every pull request.
+    # still runs every test on every ready pull request.
     paths-ignore:
       - '*.md'
       - 'docs/**'
