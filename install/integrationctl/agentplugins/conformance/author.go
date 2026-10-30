@@ -106,7 +106,11 @@ func (d Decoder) DecodePlugin(ctx context.Context, doc Document) (Facts, error) 
 	return f, nil
 }
 func (d Decoder) structure(ctx context.Context, f *Facts, doc Document, boundary domain.FailureBoundary) ([]duplicate, Outcome, error) {
-	duplicates, err := scanJSON(ctx, doc.body, d.Limits.bounded(), duplicateRecord)
+	mode := duplicateRecord
+	if boundary == domain.BoundaryPlugin {
+		mode = duplicatePluginRecord
+	}
+	duplicates, err := scanJSON(ctx, doc.body, d.Limits.bounded(), mode)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, NotEvaluated, ctx.Err()
@@ -123,17 +127,7 @@ func (d Decoder) structure(ctx context.Context, f *Facts, doc Document, boundary
 		f.add("document_json_invalid", rule, reportPath(boundary), "", "", Normative, boundary)
 		return nil, Fail, nil
 	}
-	// Duplicate keys inside ignored values do not create a loading failure.
-	// Keep ambiguity checks on recognized fields and on namespace identifiers.
-	relevant := duplicates[:0]
 	for ordinal, dup := range duplicates {
-		if boundary == domain.BoundaryPlugin && len(dup.keys) >= 2 {
-			_, known := pluginManifestFields[dup.keys[0]]
-			if !known || (dup.keys[0] == "extensions" && len(dup.keys) >= 3) {
-				continue
-			}
-		}
-		relevant = append(relevant, dup)
 		b := boundary
 		item := ""
 		pointer := ""
@@ -148,7 +142,7 @@ func (d Decoder) structure(ctx context.Context, f *Facts, doc Document, boundary
 			f.Findings[len(f.Findings)-1].Ordinal = ordinal + 1
 		}
 	}
-	return relevant, Pass, nil
+	return duplicates, Pass, nil
 }
 
 // DecodeMCP keeps document and individual-server failure boundaries. Paths are

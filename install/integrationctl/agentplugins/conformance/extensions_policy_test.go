@@ -2,8 +2,10 @@ package conformance_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
@@ -106,5 +108,28 @@ func TestDuplicateExtensionNamespaceIsNotSilentlySelected(t *testing.T) {
 	_, _, _, err = (conformance.InstallerDecoder{Registry: registry}).Plugin(body)
 	if err == nil {
 		t.Fatal("duplicate extension namespace was silently selected")
+	}
+}
+
+func TestOpaqueDuplicatesDoNotConsumeDiagnosticBudget(t *testing.T) {
+	registry, err := specregistry.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var opaque strings.Builder
+	for i := 0; i < 400; i++ {
+		if i > 0 {
+			opaque.WriteByte(',')
+		}
+		fmt.Fprintf(&opaque, `"field-%d":1,"field-%d":2`, i, i)
+	}
+	body := []byte(`{"$schema":"` + domain.PluginSchemaV1 + `","name":"valid-opaque","extensions":{"com.example.future":{` + opaque.String() + `}}}`)
+	facts, err := (conformance.Decoder{Registry: registry}).DecodePlugin(context.Background(), conformance.NewDocument("plugin.json", conformance.Present, body))
+	if err != nil || facts.Coverage.Plugin != conformance.Pass || facts.Package == nil {
+		t.Fatalf("opaque duplicate budget blocked valid plugin: err=%v findings=%+v", err, facts.Findings)
+	}
+	_, _, _, err = (conformance.InstallerDecoder{Registry: registry}).Plugin(body)
+	if err != nil {
+		t.Fatalf("installer rejected valid opaque extension: %v", err)
 	}
 }
