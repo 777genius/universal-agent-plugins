@@ -433,6 +433,63 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.equal(result.groupCount, undefined);
     assert.notEqual(result.status, 'reviewedFindings');
   });
+  for (const retained of ['classified', 'empty']) {
+    it(`keeps decoder-accepted omitted groups unresolved with ${retained} retained findings and no numeric surplus`, () => {
+      const value = structuredClone(shard);
+      const complete = value.records.find(
+        (record: SkillSpectorRecord) => record.status === 'complete',
+      );
+      const record =
+        retained === 'classified'
+          ? value.records.find((record: SkillSpectorRecord) =>
+              record.findings.some((finding) => finding.review_status === 'false_positive'),
+            )
+          : structuredClone(complete);
+      record.status = 'complete';
+      record.coverage = structuredClone(complete.coverage);
+      record.execution.state = 'completed';
+      record.execution.exit_code = 0;
+      record.errors = [];
+      record.findings =
+        retained === 'classified'
+          ? record.findings.filter(
+              (finding: { review_status: string }) => finding.review_status === 'false_positive',
+            )
+          : [];
+      record.finding_count = record.findings.reduce(
+        (sum: number, finding: { raw_count: number }) => sum + finding.raw_count,
+        0,
+      );
+      record.raw_finding_count = record.finding_count;
+      record.finding_group_count = record.findings.length + 1;
+      record.findings_truncated = true;
+      const [decoded] = decodeSkillSpectorShardV3({ ...value, records: [record] }, manifest, {
+        ...descriptor,
+        record_count: 1,
+      });
+      const report = display();
+      report.records = [decoded!];
+      report.plugin_coverage[0] = {
+        ...report.plugin_coverage[0]!,
+        selected: 1,
+        reported: 1,
+        complete: 1,
+        partial: 0,
+        error: 0,
+        pending: 0,
+        stale: 0,
+      };
+      Object.assign(report.plugin_states[0]!, { skills_total: 1, selected_ids: [decoded!.id] });
+      const result = skillSpectorAssessment(report, subject);
+      assert.equal(
+        result.unreviewedCount,
+        0,
+        'Unknown groups must not invent a numeric finding count',
+      );
+      assert.equal(result.findingCount, record.finding_count);
+      assert.equal(result.status, 'unreviewedFindings');
+    });
+  }
   it('keeps standalone source states specific and exposes discovery reasons after aliases', () => {
     const report = display();
     report.records = [];

@@ -59,6 +59,7 @@ async function setup(
     | 'completeResolved'
     | 'pending'
     | 'unselected'
+    | 'truncated'
     | 'unsupportedSource' = 'mixed',
   reportGate?: Promise<void>,
 ) {
@@ -204,6 +205,34 @@ async function setup(
       manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
       Object.assign(manifest.plugin_states[0]!, { skills_total: 1, selected_ids: [record.id] });
     }
+  }
+  if (mode === 'truncated') {
+    shard.records = shard.records
+      .filter((record: { status: string }) => record.status === 'complete')
+      .slice(0, 2);
+    for (const record of shard.records) {
+      record.findings = [];
+      record.finding_count = 0;
+      record.raw_finding_count = 0;
+      record.finding_group_count = 0;
+      record.findings_truncated = false;
+    }
+    shard.records[0].finding_group_count = 1;
+    shard.records[0].findings_truncated = true;
+    manifest.coverage = {
+      selected: 2,
+      reported: 2,
+      complete: 2,
+      partial: 0,
+      error: 0,
+      pending: 0,
+      stale: 0,
+    };
+    manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
+    Object.assign(manifest.plugin_states[0]!, {
+      skills_total: 2,
+      selected_ids: shard.records.map((record: { id: string }) => record.id),
+    });
   }
   const body = JSON.stringify(shard);
   const hash = createHash('sha256').update(body).digest('hex');
@@ -384,6 +413,28 @@ for (const width of [1280, 390]) {
     expect(errors).toEqual([]);
   });
 }
+test('omitted groups with zero published signals never render a clean result or exhaustive zero counts', async ({
+  page,
+}) => {
+  const { assessment, errors } = await setup(page, 'truncated');
+  await expect(assessment.locator(':scope > summary')).toContainText('Findings need review');
+  await assessment.locator(':scope > summary').click();
+  await expect(assessment.locator('.skillspector__record-summary').first()).toContainText(
+    'Findings need review',
+  );
+  await expect(assessment.locator('.skillspector__advice')).toContainText(
+    'Review the reported signals',
+  );
+  await assessment.locator('.skillspector__record-summary').first().click();
+  await expect(assessment.locator('.skillspector__signals')).not.toContainText(
+    'No findings were reported',
+  );
+  await expect(assessment.locator('.skillspector__signals')).not.toContainText('content signals');
+  await expect(
+    assessment.getByText('Showing 0 of 1 finding groups.', { exact: true }),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+});
 for (const mode of ['pending', 'unselected'] as const) {
   test(`unscanned ${mode} source has a clear card and truthful automatic-check explanation`, async ({
     page,

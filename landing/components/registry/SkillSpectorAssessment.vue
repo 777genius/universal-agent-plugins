@@ -7,6 +7,7 @@ import type {
 } from '~/types/skillSpector';
 import {
   skillSpectorAssessment,
+  hasIncompleteSkillSpectorFindings,
   groupSkillSpectorReasons,
   skillSpectorFindingLocation,
   skillSpectorFindingUrl,
@@ -76,6 +77,9 @@ const label = computed(() => {
 const fullyChecked = computed(() =>
   assessment.value.selected ? assessment.value.fullyChecked : undefined,
 );
+const findingsIncomplete = computed(() =>
+  assessment.value.records.some(hasIncompleteSkillSpectorFindings),
+);
 const coverageRows = computed(() =>
   Object.entries(assessment.value.outcomes ?? {}).filter(
     ([outcome, count]) => outcome !== 'complete' && count > 0,
@@ -139,15 +143,14 @@ const recordStatus = (record: SkillSpectorRecord) =>
     : record.status === 'error'
       ? 'unavailable'
       : record.coverage?.status === 'complete' || (!record.coverage && record.status === 'complete')
-        ? record.finding_count
-          ? record.findings_truncated ||
-            record.coverage?.grouping_complete === false ||
-            record.findings.some(
-              (finding) => !finding.review_status || finding.review_status === 'unreviewed',
-            )
-            ? 'unreviewedFindings'
-            : 'reviewedFindings'
-          : 'noStaticFindings'
+        ? hasIncompleteSkillSpectorFindings(record) ||
+          record.findings.some(
+            (finding) => !finding.review_status || finding.review_status === 'unreviewed',
+          )
+          ? 'unreviewedFindings'
+          : record.finding_count
+            ? 'reviewedFindings'
+            : 'noStaticFindings'
         : 'incomplete';
 const occurrence = (
   finding: SkillSpectorFinding,
@@ -243,7 +246,7 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
       <section v-if="assessment.records.length" class="skillspector__signals">
         <strong>{{ t('registryUi.skillSpector.findingsAndConfidence') }}</strong>
         <p>{{ t('registryUi.skillSpector.signalExplanation') }}</p>
-        <p v-if="assessment.groupCount !== undefined">
+        <p v-if="assessment.groupCount !== undefined && !findingsIncomplete">
           {{
             t('registryUi.skillSpector.signalCounts', {
               groups: n(assessment.groupCount),
@@ -255,6 +258,7 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
         <p
           v-if="
             !assessment.findingCount &&
+            !findingsIncomplete &&
             assessment.records.some((record) => record.status === 'complete')
           "
         >

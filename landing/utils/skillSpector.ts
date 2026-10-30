@@ -7,6 +7,11 @@ import type {
   SkillSpectorSubject,
 } from '../types/skillSpector.ts';
 
+/** Published totals do not establish the review state of omitted finding groups. */
+export function hasIncompleteSkillSpectorFindings(record: SkillSpectorRecord): boolean {
+  return record.findings_truncated || record.coverage?.grouping_complete === false;
+}
+
 /** Presentation-only exact message grouping; every original context remains intact. */
 export function groupSkillSpectorReasons<T extends { code: string; message: string }>(
   reasons: readonly T[],
@@ -343,7 +348,7 @@ export function skillSpectorAssessment(
                     record.execution?.state !== 'completed',
                 )
               ? 'incomplete'
-              : unreviewedCount
+              : unreviewedCount || records.some(hasIncompleteSkillSpectorFindings)
                 ? 'unreviewedFindings'
                 : findingCount
                   ? 'reviewedFindings'
