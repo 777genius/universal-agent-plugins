@@ -175,7 +175,7 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   });
   await page.getByRole('searchbox', { name: 'Search plugins' }).fill('context7');
   const badge = page.locator('.plugin-card__ribbon').first();
-  await expect(badge).toHaveText('Listing reviewed');
+  await expect(badge).toHaveText('Reviewed');
   const badgeBox = (await badge.boundingBox())!;
   expect(badgeBox.width).toBeLessThan(120);
 

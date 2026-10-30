@@ -2,6 +2,13 @@ name: Terminal UI
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    # Documentation and web-only changes cannot affect the terminal matrix.
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
   workflow_dispatch:
 # Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:

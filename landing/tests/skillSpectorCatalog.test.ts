@@ -241,14 +241,164 @@ describe('bounded SkillSpector repository catalog', () => {
     assert.equal(requests.length, 2);
   });
 
-  it('isolates a tampered or failed shard without downgrading to v1', async () => {
+  it('shares a bounded automatic retry when a manifest request is interrupted', async () => {
+    const { bodies } = await catalog();
+    const requests: string[] = [];
+    const read = fetchFrom(bodies, requests);
+    let manifestRequests = 0;
+    const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === manifestUrl && ++manifestRequests === 1) {
+        requests.push(String(input));
+        throw new TypeError('Network connection interrupted');
+      }
+      return read(input, init);
+    }) as typeof fetch;
+    const client = createSkillSpectorClient(manifestUrl, legacyUrl, fetcher);
+    const [first, same, other] = await Promise.all([
+      client.reportFor('owner/one'),
+      client.reportFor('OWNER/one'),
+      client.reportFor('owner/two'),
+    ]);
+    assert.equal(first, same);
+    assert.equal(other.records.length, 1);
+    assert.equal(manifestRequests, 2);
+    assert.equal(requests.length, 4);
+    assert.equal(requests.includes(legacyUrl), false);
+  });
+
+  it('recovers an exhausted manifest request on demand after a shared cooldown', async (context) => {
+    const { bodies } = await catalog();
+    const requests: string[] = [];
+    const read = fetchFrom(bodies, requests);
+    let current = Date.now();
+    context.mock.method(Date, 'now', () => current);
+    let unavailable = true;
+    const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === manifestUrl && unavailable) {
+        requests.push(String(input));
+        return new Response('', { status: 503 });
+      }
+      return read(input, init);
+    }) as typeof fetch;
+    const client = createSkillSpectorClient(manifestUrl, legacyUrl, fetcher);
+    await assert.rejects(client.reportFor('owner/one'), /503/);
+    await assert.rejects(client.reportFor('owner/two'), /503/);
+    assert.equal(requests.length, 2);
+    unavailable = false;
+    await assert.rejects(client.reportFor('owner/one'), /503/);
+    assert.equal(requests.length, 2, 'Failed requests must not create a retry storm');
+    current += 30_001;
+    const [first, same, other] = await Promise.all([
+      client.reportFor('owner/one'),
+      client.reportFor('OWNER/one'),
+      client.reportFor('owner/two'),
+    ]);
+    assert.equal(first, same);
+    assert.equal(other.records.length, 1);
+    assert.equal(requests.filter((url) => url === manifestUrl).length, 3);
+    assert.equal(requests.length, 5);
+  });
+
+  it('recovers only a transiently failed shard while preserving healthy repository caches', async (context) => {
+    const { manifest, bodies } = await catalog();
+    const failedUrl = new URL(manifest.shards[0]!.path, manifestUrl).href;
+    const requests: string[] = [];
+    const read = fetchFrom(bodies, requests);
+    let current = Date.now();
+    context.mock.method(Date, 'now', () => current);
+    let unavailable = true;
+    const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === failedUrl && unavailable) {
+        requests.push(String(input));
+        return new Response('', { status: 502 });
+      }
+      return read(input, init);
+    }) as typeof fetch;
+    const client = createSkillSpectorClient(manifestUrl, legacyUrl, fetcher);
+    const [failed, same] = await Promise.allSettled([
+      client.reportFor('owner/one'),
+      client.reportFor('OWNER/one'),
+    ]);
+    assert.equal(failed.status, 'rejected');
+    assert.equal(same.status, 'rejected');
+    assert.equal(requests.filter((url) => url === failedUrl).length, 2);
+    const healthy = await client.reportFor('owner/two');
+    unavailable = false;
+    await assert.rejects(client.reportFor('owner/one'), /502/);
+    assert.equal(requests.filter((url) => url === failedUrl).length, 2);
+    current += 30_001;
+    const [recovered, sameRecovered] = await Promise.all([
+      client.reportFor('owner/one'),
+      client.reportFor('OWNER/one'),
+    ]);
+    assert.equal(recovered, sameRecovered);
+    assert.equal(recovered.records.length, 1);
+    assert.equal(await client.reportFor('owner/two'), healthy);
+    assert.equal(requests.filter((url) => url === manifestUrl).length, 1);
+    assert.equal(requests.filter((url) => url === failedUrl).length, 3);
+    assert.equal(requests.length, 5);
+  });
+
+  it('retries an interrupted response body without exposing incomplete records', async () => {
+    const { manifest, bodies } = await catalog();
+    const shardUrl = new URL(manifest.shards[0]!.path, manifestUrl).href;
+    const requests: string[] = [];
+    const read = fetchFrom(bodies, requests);
+    let interrupted = false;
+    const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === shardUrl && !interrupted) {
+        interrupted = true;
+        requests.push(String(input));
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new TypeError('Response stream interrupted'));
+            },
+          }),
+        );
+      }
+      return read(input, init);
+    }) as typeof fetch;
+    const report = await createSkillSpectorClient(manifestUrl, legacyUrl, fetcher).reportFor(
+      'owner/one',
+    );
+    assert.equal(report.records.length, 1);
+    assert.equal(requests.filter((url) => url === shardUrl).length, 2);
+  });
+
+  it('keeps tampered shards failed without retrying or downgrading to v1', async (context) => {
     const { manifest, bodies } = await catalog();
     bodies.set(new URL(manifest.shards[0]!.path, manifestUrl).href, 'tampered');
     const requests: string[] = [];
+    let current = Date.now();
+    context.mock.method(Date, 'now', () => current);
     const client = createSkillSpectorClient(manifestUrl, legacyUrl, fetchFrom(bodies, requests));
     await assert.rejects(client.reportFor('owner/one'), /invalid/);
+    current += 60_000;
+    await assert.rejects(client.reportFor('OWNER/one'), /invalid/);
+    assert.equal(requests.length, 2, 'Digest validation failures must stay failed');
     assert.equal((await client.reportFor('owner/two')).records.length, 1);
     assert.equal(requests.includes(legacyUrl), false);
+  });
+
+  it('keeps malformed manifests and permanent HTTP failures failed after the cooldown', async (context) => {
+    let current = Date.now();
+    context.mock.method(Date, 'now', () => current);
+    for (const response of [
+      () => new Response('{invalid json'),
+      () => new Response(JSON.stringify({ schema_version: 2 })),
+      () => new Response('', { status: 403 }),
+    ]) {
+      let requests = 0;
+      const client = createSkillSpectorClient(manifestUrl, legacyUrl, (async () => {
+        requests++;
+        return response();
+      }) as typeof fetch);
+      await assert.rejects(client.reportFor('owner/one'));
+      current += 60_000;
+      await assert.rejects(client.reportFor('owner/two'));
+      assert.equal(requests, 1);
+    }
   });
 
   it('rejects duplicated immutable subjects across repository parts even under different IDs', async () => {
