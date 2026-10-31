@@ -135,7 +135,7 @@ for (const mobile of [false, true]) {
       const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
       const details = card.locator('.skillspector');
       await expect(details).toHaveClass(/skillspector--incomplete/);
-      await expect(details.locator(':scope > summary')).toContainText('Partially scanned');
+      await expect(details.locator(':scope > summary')).toContainText('Incomplete check');
       await details.locator(':scope > summary').focus();
       await page.keyboard.press('Enter');
       await expect(details).toHaveAttribute('open', '');
@@ -229,7 +229,7 @@ for (const result of ['malformed', 'unavailable', 'unselected'] as const) {
     ).toBeEnabled();
     gate.release();
     if (result === 'unselected') {
-      await expect(details.locator(':scope > summary')).toContainText('Not scanned yet');
+      await expect(details.locator(':scope > summary')).toContainText('Not checked');
       await expect(details).toContainText('No published scan report matches this listing.');
     } else {
       await expect(details.locator(':scope > summary')).toContainText('Report unavailable');
@@ -289,7 +289,7 @@ for (const width of [1280, 390]) {
     const retry = details.getByRole('button', { name: 'Try loading again' });
     await expect(retry).toBeVisible();
     await retry.click();
-    await expect(details.locator(':scope > summary')).toContainText('Not scanned yet');
+    await expect(details.locator(':scope > summary')).toContainText('Not checked');
     await expect(details).toContainText('No published scan report matches this listing.');
     await expect(retry).toHaveCount(0);
     expect(requests).toBe(3);
@@ -321,7 +321,7 @@ test('partial reports explain coverage and link the visible finding count to sca
   await projections(page, index);
   await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
   const details = page.locator('.plugin-card[data-install-source="i18n-state-00"] .skillspector');
-  await expect(details.locator(':scope > summary')).toContainText('Partially scanned');
+  await expect(details.locator(':scope > summary')).toContainText('Incomplete check');
   await details.locator(':scope > summary').click();
   await expect(details).toContainText('static_parse_limit');
   await expect(details).toContainText('reference_missing');
@@ -450,7 +450,7 @@ test('multiple selected skills stay collapsed and let users open a later skill d
     `https://github.com/${source.repository}/blob/${source.revision}/${records[11]!.source.path}/SKILL.md#L50`,
   );
   const failed = children.last();
-  await expect(failed.locator('summary')).toContainText('Scan unavailable');
+  await expect(failed.locator('summary')).toContainText('Could not check');
   await failed.locator('summary').click();
   await expect(failed).toContainText('This selected skill could not be checked.');
   expect(

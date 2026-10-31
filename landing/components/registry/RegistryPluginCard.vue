@@ -25,7 +25,6 @@ const {
   autoDetect,
   scope,
   installExpanded,
-  availableClients,
   targetDistributions,
   projectAvailable,
   updateTargets,
@@ -34,16 +33,16 @@ const {
   toggleInstall,
 } = selection;
 const deliverySummary = computed(() => {
-  const delivery = autoDetect.value
-    ? availableClients.value.map((client) => props.plugin.client_support.delivery[client.id])
-    : (selection.resolution.value.distribution?.targets
-        .filter((target) => targets.value.includes(target.client))
-        .map((target) => target.delivery) ?? []);
+  if (autoDetect.value)
+    return t('registryUi.card.agentCompatibilityCheckedWhenYouRunTheCommand');
+  const delivery = selection.resolution.value.distribution?.targets
+    .filter((target) => targets.value.includes(target.client))
+    .map((target) => target.delivery) ?? [];
   const managed = delivery.filter((mode) => mode === 'managed').length;
   const prepared = delivery.filter(
     (mode) => mode === 'prepared' || mode === 'manual_activation',
   ).length;
-  if (managed + prepared < delivery.length || !delivery.length)
+  if (managed + prepared !== targets.value.length || !delivery.length)
     return t('registryUi.card.agentCompatibilityCheckedWhenYouRunTheCommand');
   return t('registryUi.card.deliverySummary', { managed: n(managed), prepared: n(prepared) });
 });

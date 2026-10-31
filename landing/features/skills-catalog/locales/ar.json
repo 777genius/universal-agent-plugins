@@ -25,7 +25,7 @@
       "showMore": "عرض المزيد من المهارات",
       "externalSource": "مصدر خارجي",
       "githubSource": "المصدر على GitHub",
-      "unsupportedSource": "التثبيت من هذا المصدر غير مدعوم بعد.",
+      "unsupportedSource": "لا يتوفر مصدر تثبيت موثّق لهذا الإدراج.",
       "chooseAgents": "اختر الوكلاء",
       "chooseInTerminal": "اختيار الوكلاء في الطرفية",
       "chooseInTerminalHelp": "يتيح الأمر اختيار الوكلاء قبل التثبيت.",
@@ -41,9 +41,11 @@
         "1h": "{count} تثبيت · آخر ساعة"
       },
       "pageHeading": "اعثر على Agent Skills",
-      "unsupportedName": "اسم المهارة في هذا الإدراج غير مدعوم. راجع المصدر للحصول على تعليمات التثبيت.",
+      "unsupportedName": "التثبيت المباشر غير متاح لهذا الإدراج. راجع المصدر على GitHub.",
       "collectionShown": "عرض {count} من {total} في هذه المجموعة",
-      "headingPrefix": "اعثر على"
+      "headingPrefix": "اعثر على",
+      "viewListing": "عرض الإدراج الأصلي",
+      "manualSkillSelection": "اختر المهارة الدقيقة في أداة التثبيت؛ اسمها الوارد في الفهرس غير مُتحقَّق منه."
     },
     "directoryPage": {
       "pluginDirectory": "دليل الإضافات",

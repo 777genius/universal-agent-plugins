@@ -683,7 +683,7 @@
       "agentPlugins10": "Agent Plugins 1.0",
       "install": "Install",
       "viewSource": "View source",
-      "deliverySummary": "{managed} installed automatically · {prepared} require one final step",
+      "deliverySummary": "Agents: {managed} automatic setup · {prepared} need follow-up",
       "installName": "Install {name}",
       "chooseClients": "Choose clients for {name}",
       "stars": "{count} stars on repo",
