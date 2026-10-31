@@ -57,6 +57,8 @@ jobs:
           if (!snapshots) throw Error('pnpm snapshots section missing');
           const snapshot = snapshots.match(/^  '@nuxtjs\/i18n@10\.6\.0[^\n]*\n(?:    [^\n]*\n|      [^\n]*\n)+/m)?.[0];
           if (!snapshot) throw Error('Nuxt i18n snapshot missing');
+          // Diagnostic prints only public dependency versions, never secrets.
+          console.log(snapshot.split('\n').slice(0, 28).join('\n'));
           for (const line of [
             "'@intlify/core': 11.4.14",
             "'@intlify/message-compiler': 11.4.14",
