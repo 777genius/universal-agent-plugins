@@ -25,7 +25,7 @@
       "showMore": "显示更多技能",
       "externalSource": "外部来源",
       "githubSource": "GitHub 源码",
-      "unsupportedSource": "直接安装需要经过验证的 GitHub 来源。",
+      "unsupportedSource": "此条目暂无经过验证的安装来源。",
       "chooseAgents": "选择代理",
       "chooseInTerminal": "在终端中选择代理",
       "chooseInTerminalHelp": "命令会在安装前让你选择代理。",

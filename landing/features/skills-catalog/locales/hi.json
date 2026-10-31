@@ -25,7 +25,7 @@
       "showMore": "और स्किल दिखाएँ",
       "externalSource": "बाहरी स्रोत",
       "githubSource": "GitHub स्रोत",
-      "unsupportedSource": "सीधे इंस्टॉल करने के लिए सत्यापित GitHub स्रोत चाहिए।",
+      "unsupportedSource": "इस लिस्टिंग के लिए सत्यापित इंस्टॉल स्रोत उपलब्ध नहीं है।",
       "chooseAgents": "एजेंट चुनें",
       "chooseInTerminal": "टर्मिनल में एजेंट चुनें",
       "chooseInTerminalHelp": "कमांड इंस्टॉल से पहले एजेंट चुनने देता है।",

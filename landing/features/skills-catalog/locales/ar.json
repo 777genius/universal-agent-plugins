@@ -25,7 +25,7 @@
       "showMore": "عرض المزيد من المهارات",
       "externalSource": "مصدر خارجي",
       "githubSource": "المصدر على GitHub",
-      "unsupportedSource": "يتطلب التثبيت المباشر مصدر GitHub متحققًا منه.",
+      "unsupportedSource": "لا يتوفر مصدر تثبيت موثّق لهذا الإدراج.",
       "chooseAgents": "اختر الوكلاء",
       "chooseInTerminal": "اختيار الوكلاء في الطرفية",
       "chooseInTerminalHelp": "يتيح الأمر اختيار الوكلاء قبل التثبيت.",
