@@ -113,17 +113,20 @@ func BenchmarkVersionSelectionSharedGraph(b *testing.B) {
 		b.Run(fmt.Sprint(width), func(b *testing.B) {
 			requirements := versionSelectionRequirements()
 			children := make(map[string]string, width)
+			aliases := make(map[string]string, width)
 			candidates := map[string][]Candidate{
 				"acme/a": {{Version: "1.3.0", ReleaseSequence: 2}},
 			}
 			for i := range width {
 				name := fmt.Sprintf("acme/c%02d", i)
+				aliases[name] = fmt.Sprintf("c%02d", i)
 				children[name] = "^1.2"
 				candidates[name] = []Candidate{{Version: "1.2.0", ReleaseSequence: 1}}
 			}
 			resolver := &versionSelectionResolver{
 				candidates: candidates,
 				dependencies: map[string]map[string]string{"acme/a@1.3.0": children},
+				manifestAliases: aliases,
 			}
 			coordinator := Coordinator{Resolver: resolver}
 			b.ReportAllocs()
