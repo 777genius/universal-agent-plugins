@@ -75,7 +75,18 @@ agentplugins add owner/repository@0123456789abcdef0123456789abcdef01234567//path
 repair 重放记录的来源；切换到不同固定来源是单独的源选择操作。
 
 CLI 0.1.93 也支持 HTTPS/SSH Git、受支持的提供方浏览器链接，以及完整的 HTTPS 或本地归档。
-完整语法、引用和摘要规则见[直接安装完整包](https://github.com/777genius/universal-agent-plugins/blob/main/docs/DIRECT_PACKAGE_SOURCES.md)。
+请将以下占位地址替换为经过审核的真实包来源：
+
+```text
+agentplugins add 'https://git.example.com/team/tools.git#refs/heads/main//plugins/demo' --target codex --dry-run
+agentplugins add 'ssh://git@git.example.com/team/tools.git#main//plugins/demo' --target codex --dry-run
+agentplugins add 'https://downloads.example.com/plugin.tar.gz' --target codex --dry-run
+```
+
+Git 使用现有的原生凭据和 SSH 主机信任配置。HTTPS 归档不使用凭据，且必须包含完整的标准包。
+锁文件固定精确的 Git 提交或原始归档字节，并记录包摘要。跟踪可变引用的来源只能通过显式更新推进；
+按锁文件恢复时仍使用原先固定的版本。这些完整包来源与独立技能的获取方式不同。
+完整语法、包选择、校验和及解压限制见[直接安装完整包](https://github.com/777genius/universal-agent-plugins/blob/main/docs/DIRECT_PACKAGE_SOURCES.md)。
 
 ## 安装 Agent Skills {#install-agent-skills}
 
@@ -117,7 +128,9 @@ agentplugins skills add owner/repository --ui --scope project \
 ```
 
 第一条只预览，准备应用时去掉 `--dry-run`。第二条打开绑定到该项目的选择器，可应用用户确认的选择。
-指定项目范围但省略 `--project-root` 时，仅使用调用目录，不向上查找。add 和技能安装默认使用用户范围。CLI 0.1.94 的无参数 `install` 可根据当前目录的清单自动选择项目范围，详见[维护与恢复](./manage)。
+指定项目范围但省略 `--project-root` 时，仅使用调用目录，不向上查找。add 和维护命令默认使用用户范围。
+从 CLI 0.1.94 起，未指定来源参数的 `install` 仅在当前目录中存在普通文件 `uap.toml` 时自动选择项目范围；
+显式指定的范围始终优先。严格的锁文件校验规则见[维护与恢复](./manage)。
 
 目标必须支持所请求的项目组件。ChatGPT 明确不支持原生项目安装。
 VS Code 为单个本地文件夹准备 `.github/skills` 和 `.vscode/mcp.json` 中属于 UAP 的 `servers` 成员；

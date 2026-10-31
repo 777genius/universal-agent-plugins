@@ -1,6 +1,6 @@
 import createOpenAPIClient from 'openapi-fetch';
 import type { paths } from './generated/schema.js';
-import type { ChangeRequest, LocalSkillRequest, Operation, SourceRequest, WireError } from './types.js';
+import type { ChangeRequest, LocalSkillRequest, Operation, SourceRequest, UpdateCheckRequest, WireError } from './types.js';
 
 export interface ClientOptions {
   baseUrl: string;
@@ -98,6 +98,8 @@ export function createClient(options: ClientOptions) {
       },
       preview: async (catalogId: string, candidateId: string, request: RequestOptions = {}) => unwrap(await transport.GET('/api/v1/skills/catalog/{catalogId}/candidates/{candidateId}/preview', { ...request, params: { path: { catalogId, candidateId } } })),
     },
+    /** Explicit read-only source/graph freshness check; does not prepare or apply changes. */
+    checkUpdates: async (body: UpdateCheckRequest, request: RequestOptions = {}) => unwrap(await transport.POST('/api/v1/environment/check-updates', { ...request, body })),
     environment: async (request: RequestOptions = {}) => unwrap(await transport.GET('/api/v1/environment', { ...request })),
     prepare: async (body: ChangeRequest, request: RequestOptions = {}) => unwrap(await transport.POST('/api/v1/plans', { ...request, body })),
     plans: {

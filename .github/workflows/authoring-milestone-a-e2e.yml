@@ -1,7 +1,16 @@
 name: Authoring Milestone A E2E
 
 on:
+  # Documentation and web content cannot change the packed candidate. A filter
+  # keeps the dispatch job graph at exactly the four jobs that Milestone A
+  # release admission accepts, which a job-level gate would extend.
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
   workflow_dispatch:
 
 permissions:
@@ -15,7 +24,7 @@ concurrency:
 jobs:
   prepare:
     name: Exact candidate package
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-24.04' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 20
     outputs:
       artifact-id: ${{ steps.upload.outputs.artifact-id }}
@@ -83,8 +92,8 @@ jobs:
         include:
           - {runner: ubuntu-24.04, platform: linux, arch: amd64}
           - {runner: windows-2022, platform: windows, arch: amd64}
-          - {runner: macos-14, platform: darwin, arch: arm64}
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.runner || startsWith(matrix.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.runner) || matrix.runner }}
+          - {runner: macos-15, platform: darwin, arch: arm64}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.runner == 'ubuntu-24.04' && matrix.runner || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.runner || startsWith(matrix.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.runner) || matrix.runner }}
     timeout-minutes: 12
     env:
       NODE_OPTIONS: --max-old-space-size=384

@@ -22,7 +22,7 @@ test('catalog groups duplicate sources and tolerates a small typo', async ({ pag
   await expect(group).toHaveCount(1);
   const alternatives = group.locator('.plugin-other-sources');
   await expect(alternatives).toBeVisible();
-  await expect(group.locator('.plugin-card__ribbon')).toHaveText('Listing reviewed');
+  await expect(group.locator('.plugin-card__ribbon')).toHaveText('Reviewed');
   await alternatives.locator('summary').click();
   await expect(alternatives.locator('li')).not.toHaveCount(0);
   await expect(group).not.toContainText('777genius/universal-agent-plugins-registry');
@@ -31,14 +31,14 @@ test('catalog groups duplicate sources and tolerates a small typo', async ({ pag
   await expect(page.getByRole('heading', { name: 'Context7', exact: true })).toHaveCount(1);
 });
 
-test('catalog URL preserves filters through detail navigation and Reset is always available', async ({
+test('catalog URL preserves filters through detail navigation and Reset appears only for active filters', async ({
   page,
 }) => {
   await page.goto('./plugins/');
   await waitForDiscovery(page);
   const search = page.getByRole('searchbox', { name: 'Search plugins' });
   const reset = page.getByRole('button', { name: 'Reset filters', exact: true });
-  await expect(reset).toBeDisabled();
+  await expect(reset).toHaveCount(0);
 
   await search.fill('gitlab');
   await expect(page).toHaveURL(/\?q=gitlab$/);
@@ -54,7 +54,7 @@ test('catalog URL preserves filters through detail navigation and Reset is alway
   await reset.click();
   await expect(page).toHaveURL(/\/plugins\/$/);
   await expect(search).toHaveValue('');
-  await expect(reset).toBeDisabled();
+  await expect(reset).toHaveCount(0);
 });
 
 test('community source labels link to the exact GitHub source', async ({ page }) => {

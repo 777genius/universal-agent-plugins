@@ -22,17 +22,17 @@ const { t } = createI18n<[LocaleMessageDictionary<VueMessageType>], string, fals
 const translate = (key: string, params: Record<string, string | number> = {}, plural?: number) =>
   plural === undefined ? t(key, params) : t(key, params, plural);
 
-test('card and detail reviewed badges explicitly describe the listing review', () => {
+test('card and detail reviewed badges use one word with a listing-specific tooltip', () => {
   const expected: Record<string, string> = {
-    en: 'Listing reviewed',
-    ru: 'Карточка проверена',
-    uk: 'Картку перевірено',
-    zh: '条目信息已审核',
-    es: 'Ficha revisada',
-    hi: 'सूची की समीक्षा हुई',
-    ar: 'تمت مراجعة البطاقة',
-    pt: 'Ficha revisada',
-    fr: 'Fiche vérifiée',
+    en: 'Reviewed',
+    ru: 'Проверено',
+    uk: 'Перевірено',
+    zh: '已审核',
+    es: 'Revisado',
+    hi: 'समीक्षित',
+    ar: 'مُراجَع',
+    pt: 'Revisado',
+    fr: 'Examiné',
   };
   for (const filename of readdirSync(new URL('../locales/', import.meta.url))) {
     if (!filename.endsWith('.json')) continue;
@@ -51,6 +51,7 @@ test('card and detail reviewed badges explicitly describe the listing review', (
       const label = t(`registryUi.${surface}.reviewedListing`);
       assert.ok(expected[code], `${code}: agreed reviewed badge translation`);
       assert.equal(label, expected[code], `${code}: ${surface}`);
+      assert.equal(label.trim().split(/\s+/u).length, 1, `${code}: one-word badge`);
       assert.ok(t(`registryUi.${surface}.reviewedListingTooltip`).length > label.length);
     }
   }
@@ -135,7 +136,7 @@ test('all owned presentation keys exist and technical client content remains the
   );
   assert.equal(
     t('registryUi.agentPage.tryPlugin', { source: 'context7' }),
-    "Try Context7, or replace context7 with another compatible plugin’s reviewed short name or complete package source.",
+    'Try Context7, or replace context7 with another compatible plugin’s reviewed short name or complete package source.',
   );
   for (const count of [0, 1, 2, 5, 11, 21, 22, 25, 101]) {
     assert.equal(t('registryUi.multi.agents', count), `${count} agent${count === 1 ? '' : 's'}`);

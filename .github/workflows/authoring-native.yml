@@ -21,8 +21,20 @@ permissions:
 # remains an UNPROVEN release gate; the preserved read-only research profile
 # does not establish authoring support or full MVP acceptance. No Mac provisioning.
 jobs:
+  # Pull requests only. The shared classifier lets a documentation and web only
+  # diff skip both lanes; every other diff, an unavailable or oversized
+  # classification and every dispatch run them. The always-running aggregate
+  # accepts skipped lanes only for that classification.
+  changes:
+    if: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      pull-requests: read
+    uses: ./.github/workflows/pr-changes.yml
+
   native:
     name: Authoring / ${{ matrix.os }}-${{ matrix.arch }}
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.authoring != 'false') }}
     strategy:
       fail-fast: false
       matrix:
@@ -33,7 +45,7 @@ jobs:
           # data/reusables/actions/supported-github-runners.md (standard public runners).
           - {runner: ubuntu-24.04-arm, os: linux, arch: arm64}
           - {runner: windows-11-arm, os: windows, arch: arm64}
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.runner || matrix.runner == 'ubuntu-24.04-arm' && (vars.CI_LINUX_ARM_RUNNER || matrix.runner) || startsWith(matrix.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.runner) || matrix.runner }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.runner == 'ubuntu-24.04' && matrix.runner || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.runner || matrix.runner == 'ubuntu-24.04-arm' && (vars.CI_LINUX_ARM_RUNNER || matrix.runner) || startsWith(matrix.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.runner) || matrix.runner }}
     timeout-minutes: 25
     defaults:
       run:
@@ -192,7 +204,9 @@ jobs:
 
   packed:
     name: Authoring / packed Linux amd64
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.authoring != 'false') }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-24.04' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 45
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -243,9 +257,11 @@ jobs:
   acceptance:
     name: Authoring / required native and packed
     # Status aggregation must not queue a runner for an obsolete cancelled run.
-    needs: [native, packed]
+    needs: [changes, native, packed]
     if: always() && !cancelled()
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
+    # A documentation-only aggregate only checks results and structure, so it
+    # stays off the CI_LINUX_RUNNER queue.
+    runs-on: ${{ needs.changes.outputs.authoring == 'false' && 'ubuntu-24.04' || github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-24.04' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     env:
       REQUIRED_RESULTS: ${{ toJSON(needs) }}

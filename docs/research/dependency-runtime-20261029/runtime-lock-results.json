@@ -1,0 +1,36 @@
+{
+  "npm": {
+    "lock_bytes_unchanged": true,
+    "manifest_mismatch_refused": true,
+    "parent_sha256": "4550b43efb373b857288de24a339c6e6dcd81d5ccc0317c34d3645897843e8be",
+    "selections": {
+      "first": "1.0.0",
+      "fresh_later": "1.1.0",
+      "locked_replay": "1.0.0"
+    },
+    "tool": "npm 10.9.2"
+  },
+  "pip": {
+    "incompatible_pins_refused": true,
+    "installed_packages": false,
+    "parent_sha256": "5eec8cf6fd3e0bbf16da41f4aa852fb0c81fd3360d7e75554c45d221e791cba7",
+    "selections": {
+      "first": {
+        "uap_research_leaf": "1.0.0",
+        "uap_research_parent": "1.0.0"
+      },
+      "fresh_later": {
+        "uap_research_leaf": "1.1.0",
+        "uap_research_parent": "1.0.0"
+      },
+      "full_pins": {
+        "uap_research_leaf": "1.0.0",
+        "uap_research_parent": "1.0.0"
+      }
+    },
+    "tool": "pip 25.1.1 from /opt/pyvenv/lib/python3.13/site-packages/pip (python 3.13)"
+  },
+  "python": "3.13.5",
+  "scope": "inert local packages; real package-manager resolution; not UAP/native-client E2E",
+  "temporary_roots_removed": true
+}

@@ -60,7 +60,10 @@ function decodeReference(record = referenceRecord()) {
 describe('SkillSpector v3 exact producer contract', () => {
   it('accepts a 17,715-root inventory without changing published evidence or per-plugin coverage', () => {
     const published = JSON.parse(
-      readFileSync(new URL('./fixtures/skillspector-v3-published-home/index.json', import.meta.url), 'utf8'),
+      readFileSync(
+        new URL('./fixtures/skillspector-v3-published-home/index.json', import.meta.url),
+        'utf8',
+      ),
     ) as SkillSpectorManifestV3;
     const expanded = structuredClone(published);
     const addedRoots = 17_715 - expanded.coverage.selected;
@@ -103,8 +106,74 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.equal(decodeSkillSpectorManifestV3(combined).source_states.length, 30_000);
     combined.source_states.push({ ...seed, id: 'over-source-state-budget' });
     assert.throws(() => decodeSkillSpectorManifestV3(combined), /invalid/);
+  });
+
+  it('accepts 10,000 community package states plus Directory states and bounds v3 packages at 20,000', () => {
     const packages = structuredClone(manifest);
-    packages.plugin_states = Array.from({ length: 10_001 }, () => ({ ...packages.plugin_states[0]! }));
+    packages.coverage = {
+      selected: 0,
+      reported: 0,
+      pending: 0,
+      complete: 0,
+      partial: 0,
+      error: 0,
+      stale: 0,
+    };
+    packages.shards = [];
+    packages.plugin_coverage = [];
+    packages.source_states = [];
+    const noSkills = {
+      ...packages.plugin_states[0]!,
+      state: 'not_applicable',
+      reason: 'no_skill_files',
+      skills_total: 0,
+      selected_ids: [],
+    };
+    packages.plugin_states = Array.from({ length: 10_000 }, (_, index) => ({
+      ...noSkills,
+      id: `discovery:community/plugin-${index}`,
+      repository: `community/plugin-${index}`,
+      plugin_path: '',
+    }));
+    packages.plugin_states.push(noSkills);
+    assert.equal(decodeSkillSpectorManifestV3(packages).plugin_states.length, 10_001);
+    packages.plugin_states.push(
+      ...Array.from({ length: 9_999 }, (_, index) => ({
+        ...noSkills,
+        id: `directory/package-${index}`,
+        repository: `directory/package-${index}`,
+      })),
+    );
+    assert.equal(decodeSkillSpectorManifestV3(packages).plugin_states.length, 20_000);
+    packages.plugin_states.push({ ...noSkills, id: 'over-package-state-budget' });
+    assert.throws(() => decodeSkillSpectorManifestV3(packages), /invalid/);
+  });
+
+  it('accepts coverage for 10,000 community packages plus one Directory package within the v3 root budget', () => {
+    const packages = structuredClone(manifest);
+    packages.shards = [];
+    packages.plugin_states = [];
+    packages.source_states = [];
+    const pending = {
+      selected: 1,
+      reported: 0,
+      pending: 1,
+      complete: 0,
+      partial: 0,
+      error: 0,
+      stale: 0,
+    };
+    const rows = Array.from({ length: 20_001 }, (_, index) => ({
+      ...pending,
+      repository: index < 10_000 ? `community/plugin-${index}` : `directory/plugin-${index}`,
+      plugin_path: '',
+    }));
+    for (const count of [10_001, 20_000]) {
+      packages.plugin_coverage = rows.slice(0, count);
+      packages.coverage = { ...pending, selected: count, pending: count };
+      assert.equal(decodeSkillSpectorManifestV3(packages).plugin_coverage.length, count);
+    }
+    packages.plugin_coverage.push(rows[20_000]!);
     assert.throws(() => decodeSkillSpectorManifestV3(packages), /invalid/);
   });
 
@@ -232,6 +301,13 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.equal(result.fullyChecked, 3);
     assert.equal(result.selected, 13);
     assert.equal(result.inventoryKnown, true);
+    assert.deepEqual(result.outcomes, {
+      complete: 3,
+      limited: 10,
+      failed: 0,
+      historical: 0,
+      unscanned: 0,
+    });
     const selectedOnly = { ...report, plugin_states: [] };
     assert.equal(skillSpectorAssessment(selectedOnly, subject).inventoryKnown, false);
     assert.ok(result.findingCount > 0);
@@ -272,7 +348,7 @@ describe('SkillSpector v3 exact producer contract', () => {
     report.records = [];
     report.plugin_coverage = [];
     for (const [state, status] of [
-      ['resolved', 'pending'],
+      ['resolved', 'notChecked'],
       ['not_applicable', 'unsupported'],
       ['unavailable', 'unavailable'],
       ['unresolved', 'unavailable'],
@@ -289,6 +365,131 @@ describe('SkillSpector v3 exact producer contract', () => {
       assert.equal(skillSpectorAssessment(report, subject).status, status);
     }
   });
+  it('distinguishes selected missing reports from inventory with no selected check', () => {
+    const report = display();
+    report.records = [];
+    report.plugin_coverage = [];
+    Object.assign(report.plugin_states[0]!, { skills_total: 1, selected_ids: [] });
+    const unselected = skillSpectorAssessment(report, subject);
+    assert.equal(unselected.status, 'notChecked');
+    assert.deepEqual(unselected.outcomes, {
+      complete: 0,
+      limited: 0,
+      failed: 0,
+      historical: 0,
+      unscanned: 1,
+    });
+    report.plugin_states[0]!.selected_ids = ['selected-root'];
+    const selected = skillSpectorAssessment(report, subject);
+    assert.equal(selected.status, 'pending');
+    assert.deepEqual(selected.retries, { scheduled: 0, blocked: 0, exhausted: 0 });
+  });
+  it('counts each Skill once across current, failed, historical and missing reports', () => {
+    const report = display();
+    report.records[0]!.freshness = 'historical';
+    report.records[1]!.status = 'error';
+    report.records[1]!.coverage!.status = 'not_started';
+    report.records[2]!.status = 'partial';
+    report.records[2]!.retry = {
+      attempt_count: 2,
+      disposition: 'blocked',
+      next_attempt_at: null,
+      next_profile: null,
+      reason: 'reference_missing',
+    };
+    Object.assign(report.plugin_states[0]!, { skills_total: 15 });
+    const result = skillSpectorAssessment(report, subject);
+    assert.equal(result.status, 'stale');
+    assert.equal(result.outcomes!.historical, 1);
+    assert.equal(result.outcomes!.failed, 1);
+    assert.equal(result.outcomes!.unscanned, 2);
+    assert.equal(
+      Object.values(result.outcomes!).reduce((sum, count) => sum + count, 0),
+      15,
+    );
+    assert.ok(result.retries!.blocked > 0);
+    assert.equal(
+      result.fullyChecked,
+      report.records.filter(
+        (record) =>
+          record.freshness === 'current' &&
+          record.status === 'complete' &&
+          record.coverage!.status === 'complete' &&
+          record.execution!.state === 'completed',
+      ).length,
+    );
+  });
+  it('keeps omitted finding groups unresolved even when retained groups were classified', () => {
+    const report = display();
+    const record = report.records[0]!;
+    const finding = record.findings[0]!;
+    record.findings = [{ ...finding, raw_count: 1, review_status: 'false_positive' }];
+    record.finding_count = 4;
+    record.findings_truncated = true;
+    record.coverage!.grouping_complete = false;
+    report.records = [record];
+    const result = skillSpectorAssessment(report, subject);
+    assert.equal(result.unreviewedCount, 3);
+    assert.equal(result.groupCount, undefined);
+    assert.notEqual(result.status, 'reviewedFindings');
+  });
+  for (const retained of ['classified', 'empty']) {
+    it(`keeps decoder-accepted omitted groups unresolved with ${retained} retained findings and no numeric surplus`, () => {
+      const value = structuredClone(shard);
+      const complete = value.records.find(
+        (record: SkillSpectorRecord) => record.status === 'complete',
+      );
+      const record =
+        retained === 'classified'
+          ? value.records.find((record: SkillSpectorRecord) =>
+              record.findings.some((finding) => finding.review_status === 'false_positive'),
+            )
+          : structuredClone(complete);
+      record.status = 'complete';
+      record.coverage = structuredClone(complete.coverage);
+      record.execution.state = 'completed';
+      record.execution.exit_code = 0;
+      record.errors = [];
+      record.findings =
+        retained === 'classified'
+          ? record.findings.filter(
+              (finding: { review_status: string }) => finding.review_status === 'false_positive',
+            )
+          : [];
+      record.finding_count = record.findings.reduce(
+        (sum: number, finding: { raw_count: number }) => sum + finding.raw_count,
+        0,
+      );
+      record.raw_finding_count = record.finding_count;
+      record.finding_group_count = record.findings.length + 1;
+      record.findings_truncated = true;
+      const [decoded] = decodeSkillSpectorShardV3({ ...value, records: [record] }, manifest, {
+        ...descriptor,
+        record_count: 1,
+      });
+      const report = display();
+      report.records = [decoded!];
+      report.plugin_coverage[0] = {
+        ...report.plugin_coverage[0]!,
+        selected: 1,
+        reported: 1,
+        complete: 1,
+        partial: 0,
+        error: 0,
+        pending: 0,
+        stale: 0,
+      };
+      Object.assign(report.plugin_states[0]!, { skills_total: 1, selected_ids: [decoded!.id] });
+      const result = skillSpectorAssessment(report, subject);
+      assert.equal(
+        result.unreviewedCount,
+        0,
+        'Unknown groups must not invent a numeric finding count',
+      );
+      assert.equal(result.findingCount, record.finding_count);
+      assert.equal(result.status, 'unreviewedFindings');
+    });
+  }
   it('keeps standalone source states specific and exposes discovery reasons after aliases', () => {
     const report = display();
     report.records = [];
@@ -579,7 +780,10 @@ describe('SkillSpector v3 exact producer contract', () => {
           'https://fixture/v3/index.json',
         ).reportFor(subject.repository),
       );
-      assert.deepEqual(requests, ['https://fixture/v3/index.json']);
+      assert.deepEqual(
+        requests,
+        Array(response.status === 503 ? 2 : 1).fill('https://fixture/v3/index.json'),
+      );
     }
   });
 });

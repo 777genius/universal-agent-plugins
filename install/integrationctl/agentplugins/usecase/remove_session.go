@@ -71,8 +71,11 @@ func (session *removeSession) loadRemoveTarget() error {
 
 func (session *removeSession) deactivateRemoveTarget() error {
 	nativeAttempt := nativeLifecycleClient(session.input.Client.ClientID, session.client.SelectedDelivery, session.input.Scope) && session.input.Confirmed && !session.input.DryRun
+	var attempt *nativeRemovalAttempt
 	if nativeAttempt {
-		if err := session.service.beginNativeAttemptWithObservation(session.installation.InstallationID, session.clientKey, domain.NativeIntentRemove, session.client.SelectedDelivery, session.client.LocalEntryObservation.Clone()); err != nil {
+		var err error
+		attempt, err = session.service.beginNativeRemovalAttempt(session.installation.InstallationID, session.clientKey, session.client, session.state)
+		if err != nil {
 			return err
 		}
 	}
@@ -92,6 +95,9 @@ func (session *removeSession) deactivateRemoveTarget() error {
 		NativeObjects:       append([]domain.NativeObjectOwnership(nil), session.client.NativeObjects...),
 	})
 	session.result.Deactivation = deactivation
+	if err != nil {
+		return session.service.acknowledgeUnchangedRemoval(attempt, deactivation, err)
+	}
 	if err == nil && nativeAttempt {
 		if persistErr := session.service.completeNativeRemoval(session.installation.InstallationID, session.clientKey, deactivation.ExternalRemovalComplete); persistErr != nil {
 			return persistErr

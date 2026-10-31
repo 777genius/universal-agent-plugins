@@ -287,7 +287,7 @@ export function decodeSkillSpectorManifestV3(
     !Array.isArray(m.shards) ||
     m.shards.length > 10_000 ||
     !Array.isArray(m.plugin_coverage) ||
-    m.plugin_coverage.length > 10_000
+    m.plugin_coverage.length > maximumInventoryRoots
   )
     fail();
   let records = 0,
@@ -329,7 +329,12 @@ export function decodeSkillSpectorManifestV3(
   for (const key of ['source_states', 'plugin_states', 'repository_aliases'])
     if (
       !Array.isArray(m[key]) ||
-      m[key].length > (key === 'source_states' ? maximumSourceStates : 10_000)
+      m[key].length >
+        (key === 'source_states'
+          ? maximumSourceStates
+          : key === 'plugin_states'
+            ? maximumInventoryRoots
+            : 10_000)
     )
       fail();
   const aliases = new Map<string, string>();

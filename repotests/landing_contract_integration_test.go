@@ -56,7 +56,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 			"https://777genius.github.io/universal-agent-plugins/docs/",
 			"https://777genius.github.io/docs/",
 			"https://universal-agent-plugins.com/docs/",
-			"const docsLanguages = ['en', 'ru', 'es', 'fr', 'zh'] as const",
+			"const docsLanguages = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'] as const",
 			"(docsLanguages as readonly string[]).includes(locale) ? locale : 'en'",
 			"englishFallback: locale !== language",
 			"configuredUrl || defaultUrl", "source === owned",
@@ -69,7 +69,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	} else {
 		// Foundation checkpoint: the original docs resolver is still wired.
 		mustContain(t, docsLinks, "import type { LocaleCode } from '~/data/i18n'")
-		mustContain(t, docsLinks, `const docsLocalePattern = /\/(en|ru|es|fr|zh)(?=\/|$)/;`)
+		mustContain(t, docsLinks, `const docsLocalePattern = /\/(en|ru|uk|zh|es|hi|ar|pt|fr)(?=\/|$)/;`)
 		mustContain(t, docsLinks, "new Set<LocaleCode>(['en', 'ru', 'es', 'fr', 'zh'])")
 		for _, path := range []string{"", "guide/quickstart.html", "reference/support-boundary.html", "guide/build-custom-plugin-logic.html"} {
 			mustContain(t, docsLinks, "https://777genius.github.io/universal-agent-plugins/docs/en/"+path+"'")

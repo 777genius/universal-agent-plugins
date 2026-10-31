@@ -135,13 +135,13 @@ for (const mobile of [false, true]) {
       const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
       const details = card.locator('.skillspector');
       await expect(details).toHaveClass(/skillspector--incomplete/);
-      await expect(details.locator(':scope > summary')).toContainText(
-        'Incomplete check',
-      );
+      await expect(details.locator(':scope > summary')).toContainText('Incomplete check');
       await details.locator(':scope > summary').focus();
       await page.keyboard.press('Enter');
       await expect(details).toHaveAttribute('open', '');
-      await expect(details).toContainText('Selected skills in this plugin');
+      await expect(details).toContainText(
+        'Scope: Skill files in this plugin. Other plugin components are not checked by SkillSpector.',
+      );
       await expect(details).toContainText(source.revision!);
       await expect(details).toContainText('A selected child check failed.');
       await expect(details).toContainText(
@@ -202,10 +202,12 @@ for (const result of ['malformed', 'unavailable', 'unselected'] as const) {
     const errors = await offline(page);
     const gate = deferred();
     let requests = 0;
+    let recovered = false;
     await page.route('**/reports/skillspector/v1/index.json', async (route) => {
       requests += 1;
       await gate.promise;
-      if (result === 'unavailable') return route.fulfill({ status: 503, body: 'Unavailable' });
+      if (result === 'unavailable' && !recovered)
+        return route.fulfill({ status: 503, body: 'Unavailable' });
       if (result === 'malformed')
         return route.fulfill({ json: { schema_version: 1, records: [] } });
       const report: SkillSpectorReport = JSON.parse(
@@ -220,7 +222,7 @@ for (const result of ['malformed', 'unavailable', 'unselected'] as const) {
     await expect(details.locator(':scope > summary')).toContainText('Loading report');
     await details.locator(':scope > summary').click();
     await expect(details).toContainText('Loading the published assessment…');
-    await expect(details).not.toContainText('No published assessment matches this listing.');
+    await expect(details).not.toContainText('No published scan report matches this listing.');
     await expect(details.locator('.skillspector__details')).toHaveAttribute('aria-busy', 'true');
     await expect(
       card.getByRole('button', { name: 'Install I18n State 00', exact: true }),
@@ -228,11 +230,11 @@ for (const result of ['malformed', 'unavailable', 'unselected'] as const) {
     gate.release();
     if (result === 'unselected') {
       await expect(details.locator(':scope > summary')).toContainText('Not checked');
-      await expect(details).toContainText('No published assessment matches this listing.');
+      await expect(details).toContainText('No published scan report matches this listing.');
     } else {
       await expect(details.locator(':scope > summary')).toContainText('Report unavailable');
       await expect(details).toContainText('This listing’s check status is unknown.');
-      await expect(details).not.toContainText('No published assessment matches this listing.');
+      await expect(details).not.toContainText('No published scan report matches this listing.');
     }
     await expect(details.locator('.skillspector__details')).toHaveAttribute('aria-busy', 'false');
     await navigate(page, '/plugins/', 'ru', '?q=i18n-state-00');
@@ -241,7 +243,56 @@ for (const result of ['malformed', 'unavailable', 'unselected'] as const) {
         `registryUi.skillSpector.${result === 'unselected' ? 'notChecked' : 'unavailable'}`,
       ),
     );
-    expect(requests).toBe(1);
+    if (result === 'unavailable') {
+      recovered = true;
+      await page.locator('.skillspector summary').first().click();
+      const retry = page.getByRole('button', {
+        name: wording('ru')('registryUi.skillSpector.retryLoad'),
+      });
+      await expect(retry).toBeVisible();
+      await retry.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('.skillspector summary').first()).toContainText(
+        wording('ru')('registryUi.skillSpector.notChecked'),
+      );
+      await expect(retry).toHaveCount(0);
+    } else {
+      await expect(page.locator('.skillspector__retry')).toHaveCount(0);
+    }
+    expect(requests).toBe(result === 'unavailable' ? 3 : 1);
+    expect(errors).toEqual([]);
+  });
+}
+
+for (const width of [1280, 390]) {
+  test(`temporary report failure recovers in the same open card on ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors = await offline(page);
+    let requests = 0;
+    const valid: SkillSpectorReport = JSON.parse(
+      readFileSync(new URL('../fixtures/skillspector-report.json', import.meta.url), 'utf8'),
+    );
+    await page.route('**/reports/skillspector/v1/index.json', (route) => {
+      requests++;
+      return requests <= 2
+        ? route.fulfill({ status: 503, body: 'Unavailable' })
+        : route.fulfill({ json: { ...valid, generated_at: checked(), records: [] } });
+    });
+    await projections(page, skillRegistryFixture());
+    await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
+    const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
+    const details = card.locator('.skillspector');
+    await expect(details.locator(':scope > summary')).toContainText('Report unavailable');
+    await details.locator(':scope > summary').click();
+    const retry = details.getByRole('button', { name: 'Try loading again' });
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect(details.locator(':scope > summary')).toContainText('Not checked');
+    await expect(details).toContainText('No published scan report matches this listing.');
+    await expect(retry).toHaveCount(0);
+    expect(requests).toBe(3);
     expect(errors).toEqual([]);
   });
 }
@@ -270,9 +321,7 @@ test('partial reports explain coverage and link the visible finding count to sca
   await projections(page, index);
   await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
   const details = page.locator('.plugin-card[data-install-source="i18n-state-00"] .skillspector');
-  await expect(details.locator(':scope > summary')).toContainText(
-    'Incomplete check',
-  );
+  await expect(details.locator(':scope > summary')).toContainText('Incomplete check');
   await details.locator(':scope > summary').click();
   await expect(details).toContainText('static_parse_limit');
   await expect(details).toContainText('reference_missing');
@@ -289,7 +338,9 @@ test('partial reports explain coverage and link the visible finding count to sca
       const findings = element.querySelector('.skillspector__findings')!;
       return (
         [...element.querySelectorAll('p')]
-          .find((p) => p.textContent?.includes('The published report contains only the displayed groups.'))!
+          .find((p) =>
+            p.textContent?.includes('The published report contains only the displayed groups.'),
+          )!
           .compareDocumentPosition(findings) & Node.DOCUMENT_POSITION_FOLLOWING
       );
     }),
@@ -334,7 +385,7 @@ test('real Directory metadata limits SkillSpector to listings with Skill files',
   await navigate(page, '/plugins/', 'en', `?q=${mcpOnly.name}`);
   const mcpCard = page.locator(`.plugin-card[data-install-source="${mcpOnly.install_source}"]`);
   await expect(mcpCard).toBeVisible();
-  await expect(mcpCard.locator('.skillspector')).toHaveClass(/skillspector--unsupported/);
+  await expect(mcpCard.locator('.skillspector')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -387,7 +438,9 @@ test('multiple selected skills stay collapsed and let users open a later skill d
   await expect(children).toHaveCount(13);
   await expect(assessment.locator('.skillspector__record[open]')).toHaveCount(0);
   const later = children.nth(11);
-  await expect(later.locator('summary')).toContainText('cloudflare-wrangler · Findings need review');
+  await expect(later.locator('summary')).toContainText(
+    'cloudflare-wrangler · Findings need review',
+  );
   await later.locator('summary').focus();
   await page.keyboard.press('Enter');
   await expect(later).toHaveAttribute('open', '');
@@ -397,7 +450,7 @@ test('multiple selected skills stay collapsed and let users open a later skill d
     `https://github.com/${source.repository}/blob/${source.revision}/${records[11]!.source.path}/SKILL.md#L50`,
   );
   const failed = children.last();
-  await expect(failed.locator('summary')).toContainText('Report unavailable');
+  await expect(failed.locator('summary')).toContainText('Could not check');
   await failed.locator('summary').click();
   await expect(failed).toContainText('This selected skill could not be checked.');
   expect(

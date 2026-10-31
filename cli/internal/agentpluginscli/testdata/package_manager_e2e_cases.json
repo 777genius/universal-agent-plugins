@@ -1,0 +1,69 @@
+{
+  "archive": [
+    "depth32",
+    "fanout64",
+    "dense-shared-dag",
+    "self-cycle",
+    "three-cycle-removal",
+    "deterministic-order",
+    "shared-root-lifecycle",
+    "mixed-target-inheritance",
+    "locked-replay",
+    "archive-refusals",
+    "lock-refusals",
+    "preview-no-effects"
+  ],
+  "registry": [
+    "compatible-ranges",
+    "incompatible-ranges",
+    "forced-backtracking",
+    "candidate-integrity-failure",
+    "candidate-ineligibility",
+    "partial-commit-locked-retry",
+    "mixed-source-target-union",
+    "portable-cold-restore"
+  ],
+  "transport": [
+    "zip",
+    "tar",
+    "tar-gzip",
+    "tgz",
+    "extensionless",
+    "nested-literal-plus"
+  ],
+  "evolution": [
+    "graph-edge-replacement",
+    "graph-update-failure-retry",
+    "cascade-remove-drift",
+    "prune-drift-after-lock",
+    "competing-lock-writers",
+    "selective-cache-hydration"
+  ],
+  "adversarial": [
+    "foreign-native-settings",
+    "managed-native-drift",
+    "hostile-archives",
+    "cache-metadata-corruption",
+    "malformed-state",
+    "component-name-collision",
+    "stale-lock-metadata"
+  ],
+  "agreement": [
+    "manifest-rejections",
+    "manifest-locations",
+    "version-intent-preservation",
+    "transfer-replacement-noop",
+    "transfer-confirmation-recheck",
+    "transfer-publication-rollback",
+    "transfer-mutation-guards",
+    "lock-external-edits",
+    "lock-store-publication-recheck",
+    "lock-cold-store-hydration",
+    "lock-read-only-no-publication",
+    "lock-empty-existing-refusal",
+    "absent-empty-distinct",
+    "direct-source-promotion",
+    "direct-source-selector-refusal",
+    "occupied-declaration-key"
+  ]
+}

@@ -38,8 +38,8 @@ Schemas retain the existing registry's exact identifiers and pinned digests.
 | skills/frontmatter | YAML mapping, string required and optional fields, name 1-64 and matches directory, description 1-1024, compatibility 1-500 if supplied, string-to-string metadata, inert allowed-tools. |
 | host/input | Typed absent/present/unreadable/wrong_kind/blocked observations, exact logical paths, aggregate/component count bounds. Partial discovery preserves captured facts; failed discovery is unavailable and contradictory absence cannot pass. |
 | host/bounds | 1 MiB plugin/Skill, 4 MiB MCP, 64 KiB frontmatter, 16 MiB aggregate, depth 64, 100000 tokens/nodes, 10000 members/inputs, 256 findings. Caller can only lower ceilings. |
-| host/utf8 | Strict UTF-8 before parsing author input. Installer compatibility retains its historical byte interpretation. |
-| host/duplicates | One structural scanner records decoded-key duplicates. Installer rejects root/known values and server-local duplicates while opaque unknown nested duplicates survive. Author duplicate ambiguity is host unavailability, independent of original schema failure. |
+| host/utf8 | Strict UTF-8 before parsing author input and in the shared installer/authoring Skill parser. Other installer document formats retain their own decoding policy. |
+| host/duplicates | One bounded structural scanner records relevant decoded-key duplicates. Installer rejects root, recognized-field and MCP server duplicates, but ignores duplicates nested inside opaque unknown top-level fields or unimplemented extension namespace values. Those ignored duplicates also do not consume diagnostic capacity; syntax, depth, members and byte budgets still apply. Namespace identity duplicates remain ambiguous. Author duplicate ambiguity is host unavailability only for interpreted fields. |
 | host/yaml | Conservative lexical potential-depth guard precedes node allocation; actual nodes/depth/members are checked before map conversion. Aliases and merge keys follow YAML semantics with expansion work counted before conversion; cycles and budget exhaustion are host unavailability. Duplicate mapping keys are host ambiguity. |
 | engine/schema | Only pinned local registry digests establish engine availability. A schema ValidationError proves invalidity; other engine errors do not. |
 
@@ -48,12 +48,15 @@ explicitly says Unicode lowercase alphanumeric characters, despite parenthetical
 ASCII examples. This profile accepts Unicode lowercase letters and numbers,
 counts characters as Unicode code points, and does not normalize names. Unknown
 frontmatter fields are not normatively prohibited by this prose and remain opaque.
-Installer retains its ASCII names and unknown-field rejection. Both paths require
-string-to-string metadata and compatibility of 1-500 characters when supplied. YAML LF/CRLF framing
-and EOF closing delimiter reuse the installer grammar; author input also accepts a leading UTF-8 BOM while retaining its original bytes. Body content has no format
-restrictions; empty body is valid per the source minimal example. Markdown
-references and scripts are not parsed or executed; their captured path containment
-belongs to the reader. No arbitrary text is asserted secret-free by this decoder.
+The installer and authoring share this bounded Unicode-aware Skill grammar;
+generated portable command names still use the separate ASCII subset. Both paths
+require string-to-string metadata and compatibility of 1-500 characters when
+supplied. Their shared frontmatter decoder accepts LF/CRLF framing, an EOF closing
+delimiter and a leading UTF-8 BOM while retaining the original Skill bytes. Body
+content has no format restrictions; empty body is valid per the source minimal
+example. Markdown references and scripts are not parsed or executed; their captured
+path containment belongs to the reader. No arbitrary text is asserted secret-free
+by this decoder.
 
 Finding identities hash code/rule/layer/boundary/logical location and opaque item
 identity and deterministic duplicate-span ordinal, never messages or values. Public findings contain fixed message codes;

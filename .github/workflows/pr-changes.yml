@@ -1,0 +1,89 @@
+name: Pull request changes
+
+# Classifies a pull request diff once for job-level gating (docs/CI_RUNNERS.md).
+# Every class fails open: an unavailable files API or a 3000+ file diff marks
+# all classes true. repotests/ci_path_policy_test.go runs this script against a
+# table of paths. Callers pass `pull-requests: read`.
+on:
+  workflow_call:
+    outputs:
+      lint:
+        description: Go sources, module files, lint configuration or the lint baseline changed.
+        value: ${{ jobs.classify.outputs.lint }}
+      management_sdk:
+        description: The Management SDK, its contract, generated DTO or root module changed.
+        value: ${{ jobs.classify.outputs.management_sdk }}
+      authoring:
+        description: Something beyond documentation and web content changed, or a path is unsafe on Windows.
+        value: ${{ jobs.classify.outputs.authoring }}
+
+jobs:
+  classify:
+    # Gated jobs wait for this one. On CI_LINUX_RUNNER it would join the scarce
+    # queue twice, before and with the lanes it gates, so it uses a
+    # GitHub-hosted runner, where a few seconds of API work usually starts at
+    # once. It never checks out pull request code, so CI_LIGHTWEIGHT_RUNNER may
+    # move it to any pool while ci:github-hosted pull requests fill that queue.
+    runs-on: ${{ vars.CI_LIGHTWEIGHT_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      lint: ${{ steps.classify.outputs.lint }}
+      management_sdk: ${{ steps.classify.outputs.management_sdk }}
+      authoring: ${{ steps.classify.outputs.authoring }}
+    steps:
+      - name: Classify changed paths
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: |
+          set -euo pipefail
+          run_everything() {
+            echo "::warning::$1; running every gated job."
+            printf 'lint=true\nmanagement_sdk=true\nauthoring=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          # The pull request files API lists at most 3000 files.
+          (( CHANGED_FILES < 3000 )) || run_everything "The diff exceeds the files API limit"
+          # Renames count on both sides so a move out of an input path still
+          # runs. Newlines inside a name become a control character, which
+          # cannot split one path into two innocent ones.
+          files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
+            --jq '.[] | (.filename, (.previous_filename // empty)) | gsub("\n"; "\u0001")')" ||
+            run_everything "Changed files are unavailable"
+          # Never echo raw file names: they could carry workflow commands.
+          count="$(grep -c . <<<"$files" || true)"
+          echo "classified ${count} paths"
+          if [[ -z "$files" ]]; then
+            (( CHANGED_FILES == 0 )) || run_everything "The files API returned no paths for a non-empty diff"
+            printf 'lint=false\nmanagement_sdk=false\nauthoring=false\n' | tee -a "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ! grep -q '[[:cntrl:]]' <<<"$files" || run_everything "A changed path contains a control character"
+          # has FLAGS REGEX prints whether any path matches (with v: whether any
+          # path does not). A grep error fails the step, and callers then run
+          # every gated job.
+          has() {
+            local status=0
+            grep -q"$1"E -- "$2" <<<"$files" || status=$?
+            (( status < 2 )) || return "$status"
+            if (( status == 0 )); then echo true; else echo false; fi
+          }
+          lint="$(has '' '(\.go$|(^|/)go\.(mod|sum)$|^go\.work(\.sum)?$|^\.golangci\.yml$|^scripts/(check-lint-baseline\.sh|lint-baseline-renames\.txt)$|^\.github/workflows/(ci|lint|pr-changes)\.yml$)')"
+          # SDK Go fixtures build with GOWORK=off against the root module.
+          management_sdk="$(has '' '^(sdks/typescript/|contracts/management/|cli/internal/agentpluginscli/management/|go\.(mod|sum)$|\.github/workflows/(ci|management-sdk|pr-changes)\.yml$)')"
+          # Authoring lanes skip only documentation and web content: root
+          # Markdown, docs/, website/, landing/ and assets/. They also run for a
+          # path a Windows checkout rejects, because their Windows lanes are the
+          # only pull request checkout on Windows left for such a diff.
+          authoring="$(has v '^([^/]+\.md|(docs|website|landing|assets)/.+)$')"
+          reserved_characters="$(has '' '[<>:"|?*\\]|[. ](/|$)')"
+          device_names="$(has i '(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.[^/]*)?(/|$)')"
+          long_paths="$(awk 'length > 200 { found = 1 } END { print (found ? "true" : "false") }' <<<"$files")"
+          if [[ "$reserved_characters" == true || "$device_names" == true || "$long_paths" == true ]]; then
+            authoring=true
+          fi
+          printf 'lint=%s\nmanagement_sdk=%s\nauthoring=%s\n' "$lint" "$management_sdk" "$authoring" | tee -a "$GITHUB_OUTPUT"

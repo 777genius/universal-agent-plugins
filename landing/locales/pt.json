@@ -38,13 +38,13 @@
       "captions": {
         "author": "Descreva o plugin uma vez em um único repositório gerenciado.",
         "generate": "Crie as saídas específicas por agente de que você precisa agora.",
-        "validate": "Verifique estrutura, política e prontidão para repasse.",
+        "validate": "Verifique a estrutura, a política e se o pacote está pronto para entrega.",
         "ship": "Publique por documentação, versões e caminhos de instalação."
       },
       "logs": {
         "author": "Definindo o plugin uma vez a partir de um único repositório gerenciado...",
         "generate": "Gerando as saídas compatíveis para a necessidade atual do produto...",
-        "validate": "Executando validate --strict antes do repasse...",
+        "validate": "Executando validate --strict antes da entrega...",
         "ship": "Publicando por versões, documentação e canais de instalação..."
       }
     },
@@ -62,7 +62,7 @@
       "customLogic": {
         "title": "Criar lógica personalizada de plugin",
         "badge": "Avançado",
-        "description": "Comece com código apoiado por launcher quando hooks, lógica em tempo de execução ou comportamento personalizado definem o produto.",
+        "description": "Comece com código executado por um inicializador quando hooks, lógica de execução ou comportamento personalizado definirem o produto.",
         "example": "Abrir o guia avançado de lógica personalizada"
       }
     }
@@ -105,16 +105,16 @@
     "retry": "Tentar novamente"
   },
   "features": {
-    "sectionTitle": "Um caminho limpo de um repositório de plugin para muitos agentes",
+    "sectionTitle": "Um caminho claro de um repositório de plugin para vários agentes",
     "sectionSubtitle": "Posicionamento em linguagem clara, limites honestos e um fluxo que continua gerenciável conforme o produto cresce."
   },
   "customLogic": {
     "eyebrow": "Caminho avançado",
-    "title": "Crie lógica personalizada de plugin quando o produto vive no seu código",
-    "subtitle": "Este caminho continua sendo de primeira classe, mas não é o mesmo tipo de ponto de partida dos plugins de serviço e ferramenta baseados em catálogo. Use-o quando comportamento em tempo de execução, hooks ou orquestração definem o produto.",
+    "title": "Crie lógica personalizada de plugin quando seu código define o produto",
+    "subtitle": "Este continua sendo um caminho principal de desenvolvimento, mas seu ponto de partida difere dos plugins de serviço e ferramenta do catálogo. Use-o quando comportamento de execução, hooks ou orquestração definirem o produto.",
     "advancedBadge": "Avançado",
     "commandLabel": "Comando inicial",
-    "commandBody": "Comece aqui quando o valor do plugin vive no seu código e você quer um repositório para manter fonte autorada, saídas geradas e comportamento em tempo de execução alinhados.",
+    "commandBody": "Comece aqui quando o valor do plugin estiver no seu código e você quiser manter o código-fonte, os arquivos gerados e o comportamento de execução alinhados em um único repositório.",
     "openGuide": "Abrir guia avançado",
     "openExample": "Abrir repositório de exemplo",
     "points": {
@@ -127,8 +127,8 @@
     "eyebrow": "Crie seu próprio plugin",
     "title": "Crie seu próprio plugin",
     "subtitle": "Escolha o formato de repositório que corresponde ao trabalho e abra o guia que explica esse caminho em mais detalhes.",
-    "onlineServiceCta": "Abrir o guia orientado ao trabalho",
-    "localToolCta": "Abrir o guia orientado ao trabalho",
+    "onlineServiceCta": "Abrir o guia para sua tarefa",
+    "localToolCta": "Abrir o guia para sua tarefa",
     "customLogicCta": "Abrir o guia avançado",
     "customLogicDescription": "Escolha isto quando seu código, hooks ou comportamento em tempo de execução definem o produto."
   },
@@ -147,12 +147,12 @@
     "quickLinks": {
       "badge": "Comece aqui",
       "title": "Precisa de um próximo passo mais claro?",
-      "subtitle": "A maioria das pessoas só precisa de três páginas: o início rápido, o guia Criar para autoria e o guia Usar para instalar e gerenciar plugins.",
+      "subtitle": "Para a maioria das pessoas, três páginas bastam: o início rápido, o guia de criação e o guia de uso para instalar e gerenciar plugins.",
       "quickstartTitle": "Abrir início rápido",
       "quickstartBody": "O caminho compatível mais curto da instalação a um repositório validado.",
-      "buildTitle": "Abrir guia Criar",
+      "buildTitle": "Abrir o guia de criação",
       "buildBody": "Escreva pacotes plugin.json manualmente ou use as ferramentas compiladas do código-fonte; depois valide e instale com o gerenciador publicado.",
-      "useTitle": "Abrir guia Usar",
+      "useTitle": "Abrir o guia de uso",
       "useBody": "Encontre, visualize, instale e mantenha plugins com agentplugins."
     }
   },
@@ -202,9 +202,9 @@
     "specLink": "Ler a especificação Agent Plugins 1.0",
     "compatibilityLink": "Compatibilidade de clientes (em inglês)",
     "limitations": "A compatibilidade é específica de cada pacote. A validação de esquema não comprova execução, OAuth nem ativação. O Codex não oferece suporte a MCP SSE declarado; stdio e Streamable HTTP mantêm o suporte existente por adaptador.",
-    "versions": "Instalador nativo verificado: CLI 0.1.94; nome do pacote npm: universal-agent-plugins; tags do GitHub: agentplugins-v*.",
+    "versions": "Instalador nativo verificado: CLI 0.1.95; nome do pacote npm: universal-agent-plugins; tags do GitHub: agentplugins-v*.",
     "availability": "Pacotes manuais e ferramentas compiladas do código-fonte",
-    "releaseScope": "GitHub Releases e Homebrew oferecem o instalador CLI 0.1.94, que não inclui agentplugins author. A instalação por npm também está disponível, mas as versões dos canais podem ser diferentes: confira a versão da CLI antes de usar recursos exclusivos de 0.1.94. Os comandos do guia Criar precisam de uma compilação do código-fonte com a criação ativada. A referência API gerada mantém sua origem histórica de 0.1.65; ela não descreve o instalador atual.",
+    "releaseScope": "O GitHub Releases fornece o instalador CLI 0.1.95 verificado, com uma API local de gerenciamento e extensões nativas do Pi; ele não inclui agentplugins author. npm e Homebrew são canais de instalação cujas versões podem demorar para receber a atualização; confira a versão da CLI antes de depender do comportamento de uma versão específica. Use uma compilação do código-fonte com criação habilitada para os comandos author do guia Criar. A referência API gerada mantém sua origem histórica de 0.1.65; ela não descreve o instalador atual.",
     "buildGuideLink": "Abrir o guia de criação"
   },
   "shell": {
@@ -231,6 +231,7 @@
       "commit": "Inclua uap.toml + uap.lock no Git"
     },
     "docs": {
+      "navLabel": "Documentação",
       "englishLabel": "{label} (documentação em inglês)"
     },
     "logo": {
@@ -247,8 +248,8 @@
       "title": "Um padrão",
       "subtitle": "Entrega nativa",
       "intro": "O pacote permanece portátil; o instalador cuida do formato e do ciclo de vida de cada cliente.",
-      "standardTitle": "Padrão primeiro",
-      "clientTitle": "Ciente do cliente",
+      "standardTitle": "Baseado no padrão",
+      "clientTitle": "Adaptado a cada cliente",
       "clientDescription": "Codex, Cursor, Claude Code, Gemini CLI, OpenCode e outros clientes recebem o formato compatível.",
       "lifecycleTitle": "Ciclo de vida completo",
       "lifecycleDescription": "Adicione, inspecione, atualize, repare, troque a fonte ou remova um plugin pela mesma CLI.",
@@ -340,7 +341,7 @@
         "releaseStatus": "a versão {sequence} está {status}",
         "missingComponents": "a versão {sequence} não tem componentes obrigatórios",
         "unsupportedTargets": "a versão {sequence} não oferece suporte a {targets}",
-        "blockingFailure": "a versão {sequence} tem uma falha confiável bloqueante para {targets}",
+        "blockingFailure": "a versão {sequence} tem uma falha bloqueante registrada em evidência confiável para {targets}",
         "missingEvidence": "a versão {sequence} não tem evidência positiva atual de compatibilidade do pacote (materialização aprovada) para {targets}",
         "noReleases": "nenhuma versão",
         "defaultIneligible": "o padrão declarado {distribution} estava inelegível: {reasons}",
@@ -377,15 +378,15 @@
   },
   "plugins": {
     "sectionTitle": "Os primeiros plugins começam aqui",
-    "sectionSubtitle": "Explore o catálogo oficial de serviços online e ferramentas locais. Se o valor do produto estiver no seu próprio código de runtime, use o caminho avançado de lógica personalizada.",
+    "sectionSubtitle": "Explore o catálogo mantido pelo projeto para serviços online e ferramentas locais. Se o valor do produto estiver no seu próprio código de execução, use o caminho avançado de lógica personalizada.",
     "supports": "Compatível com",
     "openPlugin": "Abrir plugin",
     "viewDetails": "Ver detalhes",
     "viewAll": "Ver tudo",
     "catalogEyebrow": "Catálogo de plugins",
-    "catalogTitle": "Todos os plugins oficiais em um catálogo pesquisável",
+    "catalogTitle": "Todos os plugins do projeto em um catálogo com busca",
     "catalogSubtitle": "Explore o catálogo real de serviços online e ferramentas locais, depois abra o repositório de código-fonte somente quando souber que o plugin atende ao trabalho.",
-    "catalogAdvancedNote": "Precisa de hooks, orquestração ou comportamento de runtime em vez de um plugin do catálogo?",
+    "catalogAdvancedNote": "Precisa de hooks, orquestração ou comportamento de execução em vez de um plugin do catálogo?",
     "catalogAdvancedLink": "Abra o guia avançado de lógica personalizada.",
     "searchLabel": "Pesquisar plugins",
     "searchPlaceholder": "Pesquise plugins ou fluxos de trabalho…",
@@ -426,7 +427,7 @@
       "removeCommandLabel": "Comando de remoção",
       "copy": "Copiar",
       "copied": "Copiado",
-      "fullOnboardingCta": "Abrir integração inicial completa",
+      "fullOnboardingCta": "Abrir o guia completo de primeiros passos",
       "alreadyInstalled": "Já está executando o Universal Agent Plugins de outra forma? Vá direto para a etapa 3.",
       "repositoryCta": "Repositório do plugin",
       "agentDocsCta": "Documentação do {agent}",
@@ -462,7 +463,7 @@
           "boundaryNote": "Se o Claude já estiver aberto, recarregue os plugins ou reabra a sessão para que o novo plugin apareça."
         },
         "codex": {
-          "installBody": "Prepara o pacote do Codex e a entrada do marketplace local por meio do plano de controle de integração.",
+          "installBody": "Prepara o pacote do Codex e a entrada do marketplace local por meio do gerenciamento de integrações.",
           "manualNote": "Use o repositório ou a documentação do Codex se quiser inspecionar o pacote preparado ou concluir por conta própria o caminho de ativação nativa.",
           "boundaryNote": "A automação do Codex permanece conservadora aqui. O Universal Agent Plugins prepara o pacote e o marketplace, mas o Codex ainda pode exigir uma etapa nativa adicional antes que o plugin fique ativo."
         },
@@ -643,7 +644,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "Indisponível na fonte indexada; nenhum comando de instalação foi gerado.",
       "unavailableAtItsIndexedSource": "Indisponível na fonte indexada",
       "checkedAgainBeforeInstallation": "Verificado novamente antes da instalação",
-      "reviewedListing": "Ficha revisada",
+      "reviewedListing": "Revisado",
       "notAvailableForChatgpt": "Não disponível para ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Conexão verificada; conclua a configuração no ChatGPT",
       "allInstalledAgents": "Escolher agentes no terminal",
@@ -665,7 +666,7 @@
       "agentPlugins10": "Agent Plugins 1.0",
       "install": "Instalar",
       "viewSource": "Ver fonte",
-      "deliverySummary": "{managed} instalados automaticamente · {prepared} exigem uma etapa final",
+      "deliverySummary": "Agentes: {managed} com configuração automática · {prepared} exigem etapas adicionais",
       "installName": "Instalar {name}",
       "chooseClients": "Escolha os clientes para {name}",
       "stars": "{count} estrelas no repositório",
@@ -720,11 +721,37 @@
       "chatgptFinish": "Abra o ChatGPT, selecione {name} em Apps ou Plugins, conecte-o e inicie uma nova conversa. A disponibilidade depende da sua conta e do espaço de trabalho.",
       "expectedFallback": "Origem alternativa esperada: {source}.",
       "dependencySaving": {
-        "saved": "Salvo para sua conta de usuário em uap.toml e uap.lock. Veja os caminhos com npx -y universal-agent-plugins deps status. Remove afeta todos os destinos salvos.",
+        "saved": "Salvo para sua conta de usuário em uap.toml e uap.lock. Veja os caminhos com npx -y universal-agent-plugins deps status. O comando remove afeta todos os destinos salvos.",
         "noSave": "Esta seleção usa --no-save e não registra uma dependência.",
         "local": "Pacotes locais não são salvos como dependências portáteis.",
-        "discovery": "Seletores discovery não são salvos como dependências.",
-        "chatgpt": "A preparação do ChatGPT não salva uma dependência."
+        "discovery": "Seletores Discovery não são salvos como dependências.",
+        "chatgpt": "A preparação do ChatGPT não salva uma dependência.",
+        "projectSaved": "Salvo nos arquivos uap.toml e uap.lock deste projeto. Confira com npx -y universal-agent-plugins deps status --scope project nesta pasta. A remoção afeta todos os agentes salvos neste projeto."
+      },
+      "scope": {
+        "label": "Instalar para",
+        "user": "Este usuário",
+        "project": "Este projeto",
+        "projectHint": "Execute estes comandos na pasta do projeto. Seu agente pode pedir que você confie no projeto ou o ative.",
+        "projectUnavailable": "A instalação em um projeto não está disponível para este pacote.",
+        "selectionUnavailable": "Esta combinação de agentes e local não está disponível. Escolha outro agente ou local."
+      },
+      "outcome": {
+        "includes": "Inclui:",
+        "label": "Instalação e próximas etapas",
+        "managed": "A CLI gerencia os arquivos instalados.",
+        "prepared": "Os arquivos estão preparados. Conclua a configuração no seu agente.",
+        "manual_activation": "Ative o pacote no seu agente.",
+        "unknown": "Revise a configuração no seu agente.",
+        "auth": {
+          "required": "Ainda pode ser necessário entrar ou fornecer credenciais.",
+          "unknown": "Confira os requisitos de acesso do pacote."
+        },
+        "components": {
+          "skills": "Habilidades",
+          "mcp": "Ferramentas MCP",
+          "extensions": "Extensões"
+        }
       }
     },
     "authentication": {
@@ -745,7 +772,7 @@
       "releaseStatus": "a versão {sequence} está {status}",
       "missingComponents": "a versão {sequence} não inclui componentes obrigatórios",
       "unsupportedTargets": "a versão {sequence} não é compatível com {targets}",
-      "blockingFailure": "a versão {sequence} tem uma falha bloqueante verificada para {targets}",
+      "blockingFailure": "a versão {sequence} tem uma falha bloqueante registrada em evidência confiável para {targets}",
       "missingEvidence": "a versão {sequence} não tem evidência positiva atual de compatibilidade do pacote (materialização aprovada) para {targets}",
       "noReleases": "nenhuma versão",
       "invalidTargets": "os destinos devem ser IDs de cliente compatíveis e únicos",
@@ -753,7 +780,8 @@
       "distributionReason": "{distribution}: {reasons}",
       "noEligibleDistribution": "{name}: nenhuma distribuição elegível é compatível com o conjunto completo de destinos {targets}; {reasons}",
       "external": "Motivo informado pela origem: {reason}",
-      "separator": "; "
+      "separator": "; ",
+      "unsupportedScope": "A versão {sequence} não oferece suporte ao local escolhido para {targets}."
     },
     "status": {
       "candidate": "candidata",
@@ -771,11 +799,11 @@
         "activation": "Siga qualquer dica de ativação exibida pela CLI e inicie uma nova sessão do Codex."
       },
       "chatgpt": {
-        "note": "Conexões verificadas do ChatGPT",
+        "note": "Vínculos de apps verificados e configuração guiada do Context7",
         "status": "Configuração no app",
         "intro": "Prepare Agent Plugins 1.0 compatíveis para o ChatGPT, mantendo a ativação do app e o consentimento da conta dentro do ChatGPT.",
-        "delivery": "A CLI valida e prepara o pacote compatível ou o vínculo do app registrado.",
-        "activation": "Conclua a ativação final do app ou a etapa de login no ChatGPT quando solicitado."
+        "delivery": "A CLI valida os vínculos de apps dos publicadores e pode preparar um pacote de marketplace pessoal para o Context7 usando seu endpoint MCP público, que não exige autenticação.",
+        "activation": "Crie ou conecte o app no Modo de Desenvolvedor (Developer Mode), instale o plugin pessoal preparado e selecione-o em uma nova conversa."
       },
       "cursor": {
         "note": "Pacote nativo de Agent Plugin",
@@ -799,11 +827,11 @@
         "activation": "Se a ativação automática não estiver disponível, siga exatamente a configuração ou o caminho de importação exibido pela CLI."
       },
       "kiro": {
-        "note": "Pacote de pasta nativo",
+        "note": "Skills e configuração MCP gerenciadas",
         "status": "Compatível",
         "intro": "Instale Agent Plugins 1.0 para o Kiro a partir do mesmo pacote portável usado por outros agentes de IA.",
-        "delivery": "A CLI prepara o pacote de pasta nativo do Kiro com os componentes de plugin compatíveis.",
-        "activation": "Siga a dica de importação ou ativação exibida quando o Kiro exigir uma etapa final no lado do cliente."
+        "delivery": "A CLI instala as Skills e as entradas MCP do Kiro que gerencia, preservando as demais configurações globais.",
+        "activation": "Conclua a etapa de OAuth ou reinicialização indicada. A preparação para macOS e Windows não comprova verificação automática de execução."
       },
       "claude": {
         "note": "Configuração MCP gerenciada",
@@ -841,25 +869,25 @@
         "activation": "Siga exatamente o caminho de ativação manual exibido após a preparação."
       },
       "grok": {
-        "note": "Plugin nativo de skills e MCP",
+        "note": "Plugin nativo de Skills e MCP; verificação pela CLI",
         "status": "Compatível",
-        "intro": "Instale skills e servidores MCP para Grok Build.",
-        "delivery": "O CLI cria um plugin nativo e o registra pelo Grok CLI.",
-        "activation": "Recarregue o Grok Build; instale o CLI e repita update se ele faltar."
+        "intro": "Instale Skills e servidores MCP portáteis do Agent Plugins 1.0 para o Grok Build pela mesma CLI usada para outros clientes.",
+        "delivery": "A CLI grava um manifesto nativo .grok-plugin no diretório de plugins do usuário do Grok e gerencia o registro pela Grok CLI, quando disponível.",
+        "activation": "Recarregue o Grok Build após a instalação. Se a Grok CLI não estiver disponível, instale-a e execute novamente o comando update para verificação nativa."
       },
       "kimi": {
-        "note": "Plugin gerenciado de skills e MCP",
+        "note": "Plugin de usuário gerenciado com Skills e MCP",
         "status": "Compatível",
-        "intro": "Instale skills e servidores MCP para Kimi Code.",
-        "delivery": "O CLI registra um plugin nativo sem alterar outros plugins Kimi.",
-        "activation": "Execute /reload ou /new; confira MCP e autenticação no Kimi Code."
+        "intro": "Instale Skills e servidores MCP portáteis do Agent Plugins 1.0 no Kimi Code por um plugin de usuário gerenciado.",
+        "delivery": "A CLI grava um manifesto nativo .kimi-plugin e registra o pacote gerenciado, preservando os demais plugins do Kimi.",
+        "activation": "Execute /reload ou /new no Kimi Code. As conexões MCP em execução e a autenticação do provedor ainda precisam ser confirmadas no Kimi."
       },
       "qoder": {
         "note": "Plugin nativo de skills e MCP; verificação por CLI",
         "status": "Compatível",
-        "intro": "Instale skills e servidores MCP para Qoder.",
-        "delivery": "O CLI escreve um manifesto .qoder-plugin nativo e registra o pacote pelo Qoder CLI.",
-        "activation": "Recarregue os plugins do Qoder ou reinicie o Qoder; confira MCP e autenticação no Qoder."
+        "intro": "Instale Skills e servidores MCP portáteis do Agent Plugins 1.0 para o Qoder pela mesma CLI usada para outros clientes.",
+        "delivery": "A CLI grava um manifesto nativo .qoder-plugin e registra o pacote gerenciado pela Qoder CLI, quando disponível.",
+        "activation": "Recarregue os plugins do Qoder ou reinicie o Qoder após a instalação. As conexões MCP em execução e a autenticação do provedor ainda precisam ser confirmadas no Qoder."
       },
       "pi": {
         "note": "Apenas extensões nativas do Pi gerenciadas",
@@ -886,7 +914,7 @@
       "components": "Componentes",
       "package": "Pacote",
       "pluginNotFound": "Plugin não encontrado",
-      "reviewedListing": "Ficha revisada",
+      "reviewedListing": "Revisado",
       "licenseNotSpecified": "Licença não especificada",
       "managedByCli": "Gerenciado pela CLI",
       "requiresAFinalStepInTheApp": "Requer uma etapa final no app",
@@ -950,7 +978,7 @@
     "components": {
       "extensions": "extensões",
       "mcp": "mcp",
-      "skills": "habilidades"
+      "skills": "Skills"
     },
     "distribution": {
       "upstream": "Pacote upstream",
@@ -961,7 +989,7 @@
     "errors": {
       "unavailable": "O diretório de plugins está indisponível",
       "uninitialized": "O diretório de plugins não foi inicializado",
-      "discoveryUnavailable": "O Índice de Descoberta assinado está indisponível"
+      "discoveryUnavailable": "O índice Discovery assinado está indisponível"
     },
     "controls": {
       "optionsRequired": "{component} \"{label}\" requer pelo menos uma opção",
@@ -987,10 +1015,10 @@
     "title": "Usar plugins / Criar plugins",
     "subtitle": "Instale e gerencie pacotes padrão ou escreva seu próprio pacote plugin.json e verifique com as ferramentas adequadas.",
     "use": {
-      "badge": "CLI 0.1.94",
+      "badge": "CLI 0.1.95",
       "title": "Usar plugins",
       "description": "Encontre, visualize, instale e mantenha pacotes com o instalador publicado.",
-      "cta": "Abrir guia Usar"
+      "cta": "Abrir o guia de uso"
     },
     "build": {
       "badge": "Manualmente ou do código-fonte",

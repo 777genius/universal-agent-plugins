@@ -133,8 +133,19 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.setViewportSize({ width: 1440, height: 600 });
-  await page.goto('./');
-  await expect(page.locator('html')).toHaveClass(/scroll-reveal-active/, { timeout: 15_000 });
+  const gotoReadyHome = async (url = './') => {
+    await page.goto(url);
+    await hydrated(page);
+    const reducedMotion = await page.evaluate(
+      () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    );
+    // Every full navigation starts a new client lifecycle; reduced motion skips the observer.
+    await expect(page.locator('html')).toHaveClass(
+      reducedMotion ? /scroll-reveal-ready/ : /scroll-reveal-active/,
+      { timeout: 15_000 },
+    );
+  };
+  await gotoReadyHome();
   const catalog = page.locator('.catalog-wrap');
   await catalog.evaluate((node) => {
     window.scrollTo({
@@ -146,28 +157,29 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
     .poll(() => catalog.evaluate((node) => node.getBoundingClientRect().top))
     .toBeLessThanOrEqual(580);
   await expect(catalog).toHaveClass(/scroll-reveal--visible/);
-  await page.goto('./');
+  await gotoReadyHome();
   await page.locator('.hero__actions .button--primary').click();
   await expect(catalog).toHaveClass(/scroll-reveal--visible/);
   await expect(catalog).toHaveCSS('opacity', '1');
 
-  await page.goto('./#plugins');
+  await gotoReadyHome('./#plugins');
   await expect(catalog).toHaveClass(/scroll-reveal--visible/);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('./');
+  await gotoReadyHome();
   await expect(catalog).toHaveClass(/scroll-reveal--visible/);
 
   await page.goto('./plugins/');
+  await hydrated(page);
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
     timeout: 15_000,
   });
   await page.getByRole('searchbox', { name: 'Search plugins' }).fill('context7');
   const badge = page.locator('.plugin-card__ribbon').first();
-  await expect(badge).toHaveText('Listing reviewed');
+  await expect(badge).toHaveText('Reviewed');
   const badgeBox = (await badge.boundingBox())!;
   expect(badgeBox.width).toBeLessThan(120);
 
-  await page.goto('./');
+  await gotoReadyHome();
   await expect(page.locator('.hero-demo-video')).toBeVisible();
   await expect(page.locator('.hero-demo-video button')).toHaveAccessibleName('Watch demo');
   const preview = (await page.locator('.hero-demo-video').boundingBox())!;

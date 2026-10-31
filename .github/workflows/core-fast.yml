@@ -35,7 +35,7 @@ concurrency:
 jobs:
   project-contracts:
     name: project-contracts (${{ matrix.os }})
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.os == 'ubuntu-24.04' && matrix.os || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -98,6 +98,9 @@ jobs:
       - name: Qualify native Windows managed stdio process-tree ownership
         working-directory: install/integrationctl/agentplugins
         run: go test -count=1 -timeout=3m -v ./managedstdio -run '^TestWindows(JobTreeCleanup|AssignFailureKillsSuspendedProcessBeforeWait)$'
+      - name: Qualify Agent Plugins reserved MCP environment rules on Windows
+        working-directory: install/integrationctl/agentplugins
+        run: go test -count=1 -timeout=4m ./domain ./clients/shared ./usecase -run '^(TestReservedStdioEnvKeyPlatformRules|TestApplyStdioDataContractRejectsPlatformReservedAliases|TestStdioPreflightReservedEnvironmentPlatformAliases|TestStdioReservedAliasPreservesHealthySkillEndToEnd)$'
       - name: Qualify global dependency transfer and rollback on Windows
         working-directory: cli
         env:
@@ -145,7 +148,7 @@ jobs:
 
   test-core:
     name: test-core
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -185,7 +188,7 @@ jobs:
 
   cross-build:
     name: cross-build (${{ matrix.goos }})
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -215,7 +218,7 @@ jobs:
 
   vet-all:
     name: vet-all
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

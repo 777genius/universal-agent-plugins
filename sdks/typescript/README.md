@@ -4,21 +4,97 @@ A typed client for the existing Go installer. Plugin resolution, ownership,
 prepared authority, manifest/lock publication and recovery stay in Go.
 The package's pure entry point has no filesystem, process, Electron or UI dependency.
 The separate `/node` entry point owns an explicitly provisioned Go process.
-
-This source package has the development version `0.0.0-development`. It is consumed
-as a built, integrity-pinned tarball until separately authorized public publication.
 The SDK never downloads or updates an engine executable.
 
-## Provision a management-enabled source engine
+## Install or consume a packed build
 
-The SDK needs the **current management-enabled source engine** as well as its
-own development tarball. The published CLI 0.1.94 does not expose `manage` and
-cannot run these examples. A generic pinned installer download is insufficient.
-Pin a reviewed source commit and the SHA-256 of the resulting executable in the
-consuming application's build evidence; provision that exact executable yourself.
+The source package is `universal-agent-plugins-management-sdk` version `0.1.1`.
+SDK versions and npm publication are independent of CLI releases. Verify that the
+exact SDK version is available on npm:
 
-From a clean, reviewed repository checkout, use Git and the repository's Go
-1.26.10 toolchain. The following Unix-shell example starts at the repository root:
+```sh
+npm view universal-agent-plugins-management-sdk@0.1.1 version
+```
+
+Only after that check returns `0.1.1`, install it from the registry:
+
+```sh
+npm install --save-exact universal-agent-plugins-management-sdk@0.1.1
+```
+
+If that version has not been published, build and pack it from a clean, reviewed
+source checkout instead:
+
+```sh
+(
+  set -euo pipefail
+  cd sdks/typescript
+  npm ci --ignore-scripts --no-audit --no-fund
+  npm run build
+  npm run typecheck
+  npm test
+  npm run test:consumer
+  npm pack --ignore-scripts
+)
+```
+
+Install the resulting `universal-agent-plugins-management-sdk-0.1.1.tgz` in the
+consuming project using its absolute path, and retain its digest and source commit
+with the lockfile. A local build is not evidence of a public npm publication.
+
+The release workflow builds versioned tarballs from immutable
+`management-sdk-vX.Y.Z` tags and attests their exact bytes. From 0.1.1, it
+publishes those bytes through npm trusted publishing with npm provenance;
+0.1.0 was a one-time owner bootstrap without npm provenance. See the
+[changelog](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/CHANGELOG.md)
+for release notes and migration from the earlier `@uap/management-sdk`
+development tarball.
+
+## Compatibility
+
+| SDK | Engine (`agentplugins` CLI) | Management API | Node.js |
+| --- | --- | --- | --- |
+| 0.1.x | 0.1.95 or newer | v1 | 22.18 or newer |
+
+CLI 0.1.95 is the first published release with `manage serve` and
+`manage discover`; CLI 0.1.94 and older do not have `manage`. The management API
+version is independent of the engine and package versions. Startup and discovery
+refuse an engine that does not report management API v1
+(`UNSUPPORTED_API_VERSION`); the SDK does not compare engine version strings.
+Use `requiredCapabilities` to refuse an engine without a feature your host needs.
+
+`checkUpdates` (SDK 0.1.1 and newer) needs an engine that serves that operation;
+CLI 0.1.95 and older do not. It has no capability entry, so `requiredCapabilities`
+cannot detect it. See [Explicit update checks](#explicit-update-checks) below
+before choosing the engine for that method.
+
+## Provision the engine
+
+Provision an exact released engine and pin it in the consuming application's
+build evidence. The repository installer accepts an explicit version, verifies
+the release asset against the release `checksums.txt` and can record the
+verified SHA-256 (see [native installation](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)).
+A Unix-shell example:
+
+```sh
+curl -fsSLo ./agentplugins-install.sh \
+  https://raw.githubusercontent.com/777genius/universal-agent-plugins/agentplugins-v0.1.95/install.sh
+AGENTPLUGINS_VERSION=0.1.95 AGENTPLUGINS_BIN_DIR="$PWD/bin" \
+  AGENTPLUGINS_OUTPUT_FILE="$PWD/agentplugins-engine.env" sh ./agentplugins-install.sh
+./bin/agentplugins version
+./bin/agentplugins manage serve --help
+./bin/agentplugins manage discover --help
+```
+
+`agentplugins-engine.env` records the exact version, release tag, asset and
+verified SHA-256. Keep it with the SDK version and its lockfile integrity. On
+Windows, `install.ps1` accepts `-Version` and `-BinDir`. Package-manager channels
+may lag; check the installed version. Both help checks must succeed before supplying the executable to `startUap` or `discoverTargets`.
+They establish command availability, not installation or native runtime success.
+
+To use engine changes that are not released yet, build the CLI from a clean,
+reviewed repository checkout with the repository's Go 1.26.10 toolchain and pin
+the source revision and executable digest instead:
 
 ```sh
 uap_engine_revision=$(git rev-parse HEAD)
@@ -29,15 +105,14 @@ mkdir -p bin
 sha256sum ./bin/agentplugins-management
 ```
 
-Record `uap_engine_revision` alongside that digest and the SDK tarball digest.
+For a source build, record `uap_engine_revision` alongside the executable digest
+and the SDK tarball digest.
 On macOS, use `shasum -a 256` for the executable digest. On Windows, build an
-`.exe` output and use `Get-FileHash -Algorithm SHA256`. Both help checks must
-succeed before supplying the executable to `startUap` or `discoverTargets`.
-They establish command availability, not installation or native runtime success.
+`.exe` output and use `Get-FileHash -Algorithm SHA256`.
 
-The current development CLI root registers `manage` directly; this build needs
-no authoring linker flag. Its management startup captures profile authority and
-uses the shared installer composition. The [wire contract](../../contracts/management/README.md)
+The CLI root registers `manage` directly; no authoring linker flag is needed.
+Its management startup captures profile authority and uses the shared installer
+composition. The [wire contract](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md)
 defines that protocol and its independent capability versioning.
 
 ## Discover private user-profile facts
@@ -61,12 +136,37 @@ paths, forward private profile facts to a renderer, or turn discovery into autom
 installation. Hosts preserve their own explicitly selected native profiles and can
 merge additional discovered profiles into the captured startup context.
 
+## Explicit update checks
+
+SDK 0.1.1 adds `client.checkUpdates({ all: true })` and
+`client.checkUpdates({ aliases: ['docs', 'tools'] })` for
+`POST /api/v1/environment/check-updates`. CLI 0.1.95 and older do not serve this
+operation and answer `404`; the SDK reports that as a `ManagementError` with
+`code === 'HTTP_ERROR'` and `status === 404`. Use a CLI release whose release notes
+list this operation, or build the engine from the `management-sdk-vX.Y.Z` tag of the
+SDK version you install, as described in [Provision the engine](#provision-the-engine),
+and pin its revision and digest.
+The method performs a disposable read-only network check
+and does not save freshness, change the agreement, or install files.
+Ordinary `client.environment()` stays passive and reports unchecked moving intent
+as `check_unavailable`.
+
+A check returns `complete`, `changed`, per-entry `installed`/`available` immutable
+identities, requested selectors, and shared dependency owner edges. `current`
+means the selected source was successfully checked; `pinned` means exact intent
+is retained. `check_unavailable` and `blocked` cannot be treated as current.
+A current root can still have changed shared dependencies, so inspect the overall
+`changed` flag and every returned entry. Canceling this read-only HTTP request
+stops checking; it does not create a retained mutation operation. An available
+candidate always needs a fresh `prepare({ action: 'update', ... })` review before
+apply, including drift, profile, source eligibility and stale-input checks.
+
 ## Start an owned engine
 
-Use the management-enabled source executable verified above in `executable`.
+Use the pinned management-enabled executable verified above in `executable`.
 
 ```ts
-import { startUap } from '@uap/management-sdk/node';
+import { startUap } from 'universal-agent-plugins-management-sdk/node';
 
 const host = await startUap({
   executable: '/absolute/path/to/pinned/agentplugins-management',
@@ -230,7 +330,7 @@ refuses new work when full rather than discarding unresolved identity.
 ## Use an existing endpoint
 
 ```ts
-import { createClient } from '@uap/management-sdk';
+import { createClient } from 'universal-agent-plugins-management-sdk';
 const client = createClient({ baseUrl, origin, token, fetch: customFetch });
 ```
 
@@ -255,10 +355,12 @@ New code is checked with pinned TypeScript 7.0.2. Node 22.18 or newer is require
 The child-process tests compile a tiny Go transport fixture using the repository's
 Go toolchain. These tests prove SDK protocol/lifetime behavior, **not installation**.
 Separate integration/Electron tests run the real Go engine and inspect native output.
-The clean packed-consumer check installs the actual `.tgz`, checks browser-safe
-public types, both export entry points and runtime imports without monorepo aliases.
-Required CI runs the build, typecheck, lifecycle tests and packed-consumer check on
-Linux, macOS and Windows. Generated-contract drift is checked on Linux.
+The clean packed-consumer check installs the actual `.tgz`, checks that it ships
+only `package.json`, `README.md`, `LICENSE` and compiled `dist` files, and checks
+browser-safe public types, both export entry points and runtime imports without
+monorepo aliases. Required CI runs the build, typecheck, lifecycle tests and
+packed-consumer check on Linux, macOS and Windows through the shared
+`management-sdk.yml` workflow. Generated-contract drift is checked on Linux.
 
 Regenerate wire types from the repository root:
 
@@ -267,9 +369,82 @@ node contracts/management/generate.ts
 node contracts/management/generate.ts --check
 ```
 
-Never edit `src/generated/schema.d.ts` directly. A source pin, SDK tarball digest and
-engine digest belong in the consuming app's build evidence; public npm or binary
-release publication is a separate authorized action.
+Never edit `src/generated/schema.d.ts` directly. The SDK version with its lockfile
+integrity and the engine digest belong in the consuming app's build evidence.
+
+## Release
+
+Maintainers release from an immutable tag on a `main` commit whose `package.json`
+already has the release version, and add the release notes to `CHANGELOG.md`
+in the same change. Set `SDK_RELEASE_VERSION` to that stable version (for example,
+`0.1.1`) and `SDK_RELEASE_COMMIT` to the full reviewed `main` commit SHA:
+
+```sh
+(
+  set -euo pipefail
+  version="${SDK_RELEASE_VERSION:?Set SDK_RELEASE_VERSION to the package version}"
+  commit="${SDK_RELEASE_COMMIT:?Set SDK_RELEASE_COMMIT to the reviewed main commit SHA}"
+  git tag -a "management-sdk-v${version}" -m "Management SDK ${version}" "$commit"
+  git push origin "management-sdk-v${version}"
+  gh workflow run management-sdk-release.yml --repo 777genius/universal-agent-plugins \
+    --ref "management-sdk-v${version}" -f "version=${version}" -f publish=false
+)
+```
+
+The [release workflow](https://github.com/777genius/universal-agent-plugins/blob/main/.github/workflows/management-sdk-release.yml)
+refuses a ref that is not that tag, a tag that is not on `main`, a package name
+or version that differs, a version that already exists on npm, and a version
+lower than the current `latest`. It runs the same qualification as required CI
+on Linux, macOS and Windows. A build job without signing or publishing
+credentials then packs and checks one tarball and uploads it as an artifact; a
+separate job that runs no repository code attests those exact bytes. Only
+stable `X.Y.Z` versions are accepted; they are published with the `latest`
+dist-tag.
+
+After that run succeeds, start the same version with `publish=true`:
+
+```sh
+gh workflow run management-sdk-release.yml --repo 777genius/universal-agent-plugins \
+  --ref "management-sdk-v${SDK_RELEASE_VERSION:?Set SDK_RELEASE_VERSION to the package version}" \
+  -f "version=${SDK_RELEASE_VERSION}" -f publish=true
+```
+
+`publish=true` reruns the qualification and additionally publishes the exact
+bytes through npm trusted publishing after a required reviewer approves the
+`npm-management-sdk` deployment. Before
+publishing, the job verifies the tarball digest and its GitHub attestation and
+refuses an OIDC identity that is not this repository, workflow, tag and
+environment. Afterwards it checks the registry metadata, `latest` tag,
+provenance (tag, commit and workflow), `npm audit signatures`, the downloaded
+bytes, and a clean registry install with both entry points. The same consumer
+check is available locally after a release:
+`npm run test:consumer -- --registry-version="${SDK_RELEASE_VERSION:?Set SDK_RELEASE_VERSION to the published version}"`.
+
+Preconditions for `publish=true`, checked by the workflow where possible:
+
+- The GitHub environment `npm-management-sdk` exists with required reviewers,
+  no administrator bypass and a deployment policy that allows only the tag
+  pattern `management-sdk-v*`. Without it the workflow refuses to publish.
+- A tag ruleset protects `management-sdk-v*` from updates and deletion.
+- The package already exists on npm, and its trusted publisher names GitHub
+  Actions, `777genius` / `universal-agent-plugins`, the workflow filename
+  `management-sdk-release.yml` and the environment `npm-management-sdk`, with
+  direct `npm publish` allowed. A newly saved trusted publisher stays pending
+  and expires unless a publication through it succeeds within two days, so run
+  `publish=true` soon after changing that configuration.
+
+### Bootstrap history
+
+npm can configure a trusted publisher only for an existing package, so 0.1.0
+was a one-time bootstrap: the npm package owner published the attested tarball
+of its `publish=false` run with `--provenance=false`. Its GitHub attestation
+still binds those bytes to the `management-sdk-v0.1.0` tag. The
+[0.1.0 README](https://github.com/777genius/universal-agent-plugins/blob/management-sdk-v0.1.0/sdks/typescript/README.md#release)
+keeps that procedure. Do not publish later versions locally; `publish=true`
+publishes them with npm provenance. Once a trusted publication has succeeded,
+the package's publishing access should be "Require two-factor authentication
+and disallow tokens". The workflow never creates the package or uses a token;
+if the package is missing it fails closed.
 
 ## Real engine qualification
 
@@ -326,14 +501,93 @@ Linux requires the engine's ordinary-process containment prerequisites, includin
 cannot qualify the real installation journey; the production refusal remains.
 The existing Native Client Runtime workflow also has a manual `sdk_linux_only`
 mode that runs just the Claude and Codex SDK journeys on the selected platform, without running
-the other native matrix cells:
+the other native matrix cells. Set `SDK_SMOKE_REF` to the committed branch
+whose native journeys should run:
 
 ```sh
 gh workflow run agentplugins-native-clients.yml \
   --repo 777genius/universal-agent-plugins \
-  --ref <committed-branch> -f sdk_linux_only=true -f sdk_target=linux-amd64
+  --ref "${SDK_SMOKE_REF:?Set SDK_SMOKE_REF to the committed branch}" \
+  -f sdk_linux_only=true -f sdk_target=linux-amd64
 ```
 
 If Linux runners are queued, select `-f sdk_target=darwin-arm64` to run the same
 two isolated SDK journeys on macOS 15. The default remains `linux-amd64`; the
 receipt and uploaded source identity record the selected platform.
+
+### Additional user-scope clients and local execution
+
+The same real-engine journey also supports Cline 3.0.73, Gemini 0.65.0,
+GitHub Copilot CLI 1.0.103, Grok 1.0.67 and Qoder 1.1.78. Cline's own
+`config skills --json` and Gemini's `skills list` must observe the exact installed
+Skill bytes. Copilot, Grok and Qoder are checked through fresh native plugin and
+Skill inventories. Their version, enabled state, identity and owned package/cache
+paths must agree. Copilot's admitted route supports Skills while portable commands
+remain unsupported: the journey verifies the exact fixture Skill and absence of
+both fixture commands. Other clients also verify the exact rendered portable
+command bytes and withhold the explicit-only command.
+Copilot also uses a captured profile that differs from the engine's inherited
+`COPILOT_HOME` and `HOME/.copilot`. Native inspection and the full lifecycle must
+use the captured profile; the unselected ambient profile and its sentinel must
+remain unchanged through repair, restart, recovery, removal and local Skill undo.
+When removal requires external uninstall, the example performs
+the exact native uninstall, verifies fresh absence, then prepares a new SDK review
+with the explicit attestation.
+
+Cline and Gemini use the separate-projection repair journey: edits are preserved,
+partial failure remains visible, and recovery follows explicit manual preservation.
+The OpenCode-specific typed preservation diagnostic is not asserted for other
+clients. All five additional clients retain the accepted-response loss, owned-engine
+termination, restart, idempotent replay and local Skill undo checks.
+
+From the repository root, the local runner creates a deterministic fixture archive,
+serves it over owned loopback HTTPS, and pins its SHA-256. This exercises the normal
+HTTPS source acquirer without requiring a Git subprocess. The certificate is trusted
+only in the child test environment. It neither changes the engine's source policy
+nor relaxes native process containment.
+
+```sh
+(cd cli && go build -trimpath -o /absolute/tools/agentplugins ./cmd/agentplugins)
+(cd sdks/typescript && npm ci --ignore-scripts && npm run build)
+python3 scripts/run-sdk-native-local.py --client cline \
+  --executable /absolute/tools/agentplugins \
+  --client-executable /absolute/tools/cline \
+  --output /absolute/new-evidence-directory
+```
+
+Provide a new output directory for each attempt. It contains the incremental SDK
+receipt, bounded process logs and a source identity record with the commit, dirty
+worktree flag, fixture hashes and executable hashes. Qualification requires both
+a successful complete receipt and clean process termination. A dirty worktree run
+is preliminary evidence, not a published-source qualification.
+
+For Gemini, supply `--client-archive /absolute/gemini-cli-bundle.zip` with the
+official 0.65.0 ZIP. The launcher must contain exactly `#!/bin/sh` and
+`exec /absolute/node /absolute/gemini.js "$@"`. The runner verifies the archive,
+every extracted bundle file, entrypoint and Node identity; a launcher hash alone
+does not identify the executed JavaScript.
+
+| Client route | Example selected by the local runner | Qualification boundary |
+| --- | --- | --- |
+| Cline, Gemini, Copilot, Grok, Qoder | `real-engine-smoke.ts` | Actual SDK lifecycle and fresh native plugin/Skill discovery; no model or login. |
+| Pi 1.4.0 | `real-pi-engine-smoke.ts` | Actual SDK extension lifecycle, native auto-discovery and inert registered RPC command; Pi Skills/MCP are not claimed. |
+| Kimi 2.3.1, Kiro 2.33.1 | `real-engine-policy-smoke.ts` | SDK install/update/repair/restart/removal only; authenticated native acceptance remains unverified. |
+| Windsurf user MCP | `real-engine-policy-smoke.ts` | Owned MCP configuration lifecycle and refresh guidance; editor loading remains unverified. No client executable is required for this existing configuration route. |
+| Cursor user editor | Not qualified by these examples | Existing manual activation route; a CLI/project observation does not qualify the editor's user package. |
+
+Pi runs offline without a model, session, tools or MCP. Its fresh process must
+load the installed extension automatically, execute the fixture's registered
+command, and stop discovering it after removal. The journey also checks exact
+fixture bytes and locked package digest, missing-package repair, edited-package
+refusal, manual preservation, fresh repair and durable accepted-operation replay.
+
+Kimi, Kiro and Windsurf receipts explicitly use `qualification: sdk-lifecycle-only`
+and `nativeLoaded: false`. Native journeys use `sdk-native-lifecycle`. Configuration
+success must not be relabeled as native loading.
+
+The **Management SDK Native Packages** workflow runs only the Copilot, Grok and
+Qoder journeys on Linux. These three need the process observation interface absent
+from some local containers. It checks out the exact PR head, provisions pinned
+native bytes, builds that engine/SDK, and uploads receipts bound to the source and
+executable hashes. Existing required checks remain authoritative; this focused
+workflow does not run the full native platform matrix.
