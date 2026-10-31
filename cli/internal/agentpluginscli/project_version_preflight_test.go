@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kimi"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
@@ -250,7 +251,8 @@ func TestProjectDependencyPreviewDoesNotProbeVersions(t *testing.T) {
 	reachedPreparation := false
 	boundary := errors.New("inert preview preparation boundary")
 	adapter := &dependencyInstaller{
-		app: App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeProject, Detector: detector}, opts: &options{},
+		app: App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeProject, Detector: detector,
+			StateStore: statev2.Store{Path: filepath.Join(t.TempDir(), "state.json")}}, opts: &options{},
 		detected: map[domain.ClientID]domain.DetectedClient{domain.ClientKimi: client},
 		beforeApply: func() error {
 			reachedPreparation = true

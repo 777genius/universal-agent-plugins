@@ -97,7 +97,7 @@ func (c *copilotProjectCycle) bindingProof(t *testing.T, r *copilotCycleRecipe, 
 	active := filepath.Join(filepath.Dir(c.statePath(r)), "managed", "clients", "copilot", physical)
 	profile, activation := r.Project, domain.ActivationPrepared
 	if r.Key == "user" {
-		profile, activation = "", domain.ActivationActive
+		profile, activation = filepath.Join(c.f.base.Home, ".copilot"), domain.ActivationActive
 	}
 	id := "client_" + copilotProjectConfigHash([]byte(strings.Join([]string{i.InstallationID, "copilot", copilotCycleScope(r), active}, "\x00")))[:24]
 	revision := &domain.ClientPackageRevision{Version: r.Version, TreeDigest: r.Digest, ManifestDigest: "sha256:" + copilotProjectConfigHash(r.Authored["plugin.json"])}
