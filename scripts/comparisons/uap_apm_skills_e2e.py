@@ -184,74 +184,139 @@ def prepare_apm_manifest(project: Path, commit: str) -> None:
     )
 
 
+def captured_portable(project: Path, product: str) -> dict[str, bytes]:
+    names = ("uap.toml", "uap.lock") if product == "uap" else ("apm.yml", "apm.lock.yaml")
+    found = {}
+    for name in names:
+        path = project / name
+        try:
+            if path.is_symlink() or not path.is_file():
+                return {}
+            data = path.read_bytes()
+            if not data or len(data) > 2 * 1024 * 1024:
+                return {}
+            found[name] = data
+        except OSError:
+            return {}
+    return found
+
+
+def stored_portable(portable: dict[str, bytes], output: Path, product: str, phase: str) -> None:
+    directory = output / "portable" / product / phase
+    directory.mkdir(parents=True, exist_ok=True)
+    for name, content in portable.items():
+        (directory / name).write_bytes(content)
+
+
+def portable_identity(portable: dict[str, bytes], commit: str) -> dict:
+    lock_name = "uap.lock" if "uap.lock" in portable else "apm.lock.yaml"
+    return {
+        "sha256": {name: sha(content) for name, content in portable.items()},
+        "exact_source_commit_recorded_in_lock": commit.encode("ascii") in portable.get(lock_name, b""),
+    }
+
+
 def evaluate(product: str, executable: str, root: Path, commit: str,
-             expected: dict[str, bytes]) -> list[dict]:
+             expected: dict[str, bytes], output: Path, on_progress=None) -> list[dict]:
     results: list[dict] = []
+
+    def saved() -> None:
+        if on_progress is not None:
+            on_progress(results)
+
+    def skip(scenario: str, reason: str) -> None:
+        results.append({"product": product, "scenario": scenario, "status": "NOT_RUN",
+                        "reason": reason, "native_loaded": "NOT_RUN",
+                        "oauth_or_tool_call": "NOT_RUN"})
+        saved()
+
     env = isolated_env(root)
     project, foreign = make_project(root)
     sentinel = project / ".agents" / "skills" / "foreign-neighbor" / "SKILL.md"
     if product == "apm":
         prepare_apm_manifest(project, commit)
-    cmd = run_process(tool_args(product, executable, project, commit), project, env, root)
-    files = payloads(project, expected)
-    add_result(results, product, "S1_install", cmd, files, sentinel.read_bytes() == foreign)
+    command = run_process(tool_args(product, executable, project, commit), project, env, root)
+    observed = payloads(project, expected)
+    preserved = safe_same_bytes(sentinel, foreign, project)
+    add_result(results, product, "S1_install", command, observed, preserved)
+    saved()
 
-    if cmd["exit_code"] != 0 or cmd["timed_out"] or not files["skills"] or not files["references"]:
-        for name in ("S1_repeat", "R1_cold_locked_restore"):
-            results.append({
-                "product": product, "scenario": name, "status": "NOT_RUN",
-                "reason": "initial delivery not admitted", "native_loaded": "NOT_RUN",
-                "oauth_or_tool_call": "NOT_RUN",
-            })
+    # Snapshot portable bytes immediately after FIRST install, before replay.
+    initial = captured_portable(project, product)
+    if initial:
+        stored_portable(initial, output, product, "initial")
+    admitted = results[-1]["status"] == "PASS"
+    if not admitted:
+        skip("S1_repeat", "initial delivery did not pass exact projected-byte and safety checks")
+        skip("R1_cold_locked_restore", "initial delivery not admitted")
+    elif not initial:
+        skip("S1_repeat", "no complete portable manifest/lock from the documented initial route")
+        skip("R1_cold_locked_restore", "no complete portable manifest/lock from the documented initial route")
     else:
-        # Both tools must replay their own recorded lock; repeating a mutable
-        # add request for only one tool would not be an equivalent scenario.
-        lock_name = "uap.lock" if product == "uap" else "apm.lock.yaml"
-        if (project / lock_name).is_file():
-            repeat = run_process(tool_args(product, executable, project, commit, replay=True), project, env, root)
-            add_result(results, product, "S1_repeat", repeat, payloads(project, expected), sentinel.read_bytes() == foreign)
+        source_identity = portable_identity(initial, commit)
+        if not source_identity["exact_source_commit_recorded_in_lock"]:
+            skip("S1_repeat", "source commit absent from recorded lock; provenance needs manual verification")
+            skip("R1_cold_locked_restore", "source commit absent from recorded lock; provenance needs manual verification")
         else:
-            results.append({
-                "product": product, "scenario": "S1_repeat", "status": "NOT_RUN",
-                "reason": "initial documented source route did not create a saved lock",
-                "native_loaded": "NOT_RUN", "oauth_or_tool_call": "NOT_RUN",
-            })
-        # A cold copy receives ONLY portable intent/lock, not receipts, caches or user config.
-        restore_root = root / "restore"
-        restore_env = isolated_env(restore_root)
-        fresh, fresh_foreign = make_project(restore_root)
-        for name in (("uap.toml", "uap.lock") if product == "uap" else ("apm.yml", "apm.lock.yaml")):
-            source = project / name
-            if not source.is_file():
-                results.append({
-                    "product": product, "scenario": "R1_cold_locked_restore",
-                    "status": "NOT_RUN", "reason": f"no portable {name} produced by initial documented route",
-                    "native_loaded": "NOT_RUN", "oauth_or_tool_call": "NOT_RUN",
-                })
-                break
-            shutil.copy2(source, fresh / name)
-        else:
-            restored = run_process(tool_args(product, executable, fresh, commit, replay=True), fresh, restore_env, restore_root)
-            add_result(results, product, "R1_cold_locked_restore", restored, payloads(fresh, expected),
-                       (fresh / ".agents" / "skills" / "foreign-neighbor" / "SKILL.md").read_bytes() == fresh_foreign)
+            replay = run_process(tool_args(product, executable, project, commit, replay=True), project, env, root)
+            after_replay = captured_portable(project, product)
+            add_result(results, product, "S1_repeat", replay, payloads(project, expected),
+                       safe_same_bytes(sentinel, foreign, project))
+            results[-1]["portable"] = {
+                "initial": source_identity, "after": portable_identity(after_replay, commit),
+                "byte_identical": initial == after_replay,
+            }
+            if results[-1]["status"] == "PASS" and after_replay != initial:
+                results[-1]["status"] = "FAIL"
+                results[-1]["reason"] = "repeat rewrote portable manifest or lock"
+            if after_replay:
+                stored_portable(after_replay, output, product, "after-repeat")
+            saved()
 
-    # Separate adversarial environment: a pre-existing foreign Skill with the same name.
+            fresh_root = root / "restore"
+            fresh_env = isolated_env(fresh_root)
+            fresh, fresh_foreign = make_project(fresh_root)
+            for name, content in initial.items():
+                (fresh / name).write_bytes(content)
+            restore = run_process(tool_args(product, executable, fresh, commit, replay=True),
+                                  fresh, fresh_env, fresh_root)
+            after_restore = captured_portable(fresh, product)
+            add_result(results, product, "R1_cold_locked_restore", restore, payloads(fresh, expected),
+                       safe_same_bytes(fresh / ".agents" / "skills" / "foreign-neighbor" / "SKILL.md",
+                                       fresh_foreign, fresh))
+            results[-1]["portable"] = {
+                "initial": source_identity, "after": portable_identity(after_restore, commit),
+                "byte_identical": initial == after_restore,
+            }
+            if results[-1]["status"] == "PASS" and after_restore != initial:
+                results[-1]["status"] = "FAIL"
+                results[-1]["reason"] = "cold restore rewrote the supplied portable manifest or lock"
+            if after_restore:
+                stored_portable(after_restore, output, product, "after-cold-restore")
+            saved()
+
+    # Independent collision experiment; never overwrite or delete a foreign Skill.
     collision_root = root / "collision"
     collision_env = isolated_env(collision_root)
-    conflicting_project, existing_foreign = make_project(collision_root)
+    conflicting_project, foreign_content = make_project(collision_root)
     conflict_file = conflicting_project / ".agents" / "skills" / "benchmark-note" / "SKILL.md"
     conflict_file.parent.mkdir(parents=True)
-    conflict_content = b"FOREIGN OWNED COLLISION -- NEVER OVERWRITE\n"
-    conflict_file.write_bytes(conflict_content)
+    conflict_bytes = b"FOREIGN OWNED COLLISION -- NEVER OVERWRITE\n"
+    conflict_file.write_bytes(conflict_bytes)
     if product == "apm":
         prepare_apm_manifest(conflicting_project, commit)
     conflict = run_process(tool_args(product, executable, conflicting_project, commit),
                            conflicting_project, collision_env, collision_root)
-    preserved = (conflict_file.read_bytes() == conflict_content and
-                 (conflicting_project / ".agents" / "skills" / "foreign-neighbor" / "SKILL.md").read_bytes() == existing_foreign)
+    preserved = (
+        safe_same_bytes(conflict_file, conflict_bytes, conflicting_project)
+        and safe_same_bytes(conflicting_project / ".agents" / "skills" / "foreign-neighbor" / "SKILL.md",
+                            foreign_content, conflicting_project)
+    )
     add_result(results, product, "S1_foreign_collision", conflict,
-               payloads(conflicting_project, expected), preserved,
-               "safe refusal or non-destructive outcome required" if preserved else "foreign content overwritten")
+               payloads(conflicting_project, expected), preserved)
+    if results[-1]["status"] == "BLOCKED":
+        results[-1]["reason"] = "foreign bytes preserved, but refusal cause not independently classified"
+    saved()
     return results
 
 
