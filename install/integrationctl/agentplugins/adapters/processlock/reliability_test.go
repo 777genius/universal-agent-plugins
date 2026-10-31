@@ -2,7 +2,6 @@ package processlock
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -89,8 +88,7 @@ func TestLockReleasedAfterForcedProcessDeath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var stderr bytes.Buffer
-	child.Stderr = &stderr
+	child.Stderr = io.Discard
 	if err := child.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -113,10 +111,10 @@ func TestLockReleasedAfterForcedProcessDeath(t *testing.T) {
 	select {
 	case err := <-ready:
 		if err != nil {
-			t.Fatalf("child lock handshake: %v; stderr: %s", err, stderr.String())
+			t.Fatalf("child lock handshake: %v", err)
 		}
 	case <-time.After(15 * time.Second):
-		t.Fatalf("child never acquired OS lock; stderr: %s", stderr.String())
+		t.Fatal("child never acquired OS lock")
 	}
 	lock := Lock{Path: path}
 	if _, err := lock.Acquire(context.Background()); !errors.Is(err, ErrActive) {
