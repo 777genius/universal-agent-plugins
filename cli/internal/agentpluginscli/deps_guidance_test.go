@@ -54,12 +54,18 @@ func TestDependencyStatusPendingRecoveryNeverSuggestsOtherMutations(t *testing.T
 	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
 		t.Fatalf("status JSON changed into prose: %v: %s", err, body)
 	}
-	keys := make([]string, 0, len(decoded))
-	for k := range decoded {
-		keys = append(keys, k)
+	expectedFields := map[string]bool{
+		"excluded_targets": true, "scope": true, "manifest_path": true,
+		"lock_path": true, "supported_targets": true, "pending_recovery": true,
+		"facts": true,
 	}
-	if len(keys) != 7 || decoded["valid_lock"] != nil {
-		t.Fatalf("private guidance data added to public JSON: %v", keys)
+	if len(decoded) != len(expectedFields) {
+		t.Fatalf("public JSON shape changed: %+v", decoded)
+	}
+	for field := range decoded {
+		if !expectedFields[field] {
+			t.Fatalf("unexpected JSON field %q in status", field)
+		}
 	}
 	var restored dependencyStatus
 	if err := json.Unmarshal([]byte(body), &restored); err != nil {
