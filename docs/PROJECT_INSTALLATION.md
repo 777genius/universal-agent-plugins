@@ -39,6 +39,34 @@ take a saved dependency `--alias`. The [project evidence index](evidence/PROJECT
 separates historical failures, blocked observations and successful checks from
 the final feature-source native run; each client's activation limits still apply.
 
+## Reviewed catalog: pinned project source
+
+The signed Directory v1 policy remains **user-only** for backward compatibility.
+A catalog entry that is reviewed, active and pinned to a complete Git commit
+may separately offer an explicit project **direct-source** command for Claude
+Code, Codex or OpenCode, when the release contains only portable Skills/MCP
+components and its user-scope package eligibility already passes. This is
+not a newly signed project-scope Directory policy and does not change the
+behavior of an existing user-scope alias.
+
+From the exact project root, the generated command takes the form:
+
+```sh
+agentplugins add github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH \
+  --target codex --scope project
+```
+
+The CLI acquires and checks the selected pinned package under its ordinary Git
+source authority, then uses the existing project-specific transaction, ownership,
+repair and removal boundaries. The saved dependency remains pinned to that
+source; to advance versions, explicitly choose and review a new source commit.
+Do not treat preparation as proof of native MCP initialization, workspace trust,
+OAuth or real-model activation. Unsupported clients/components, incomplete
+sources and stale signed snapshots must never be offered this shortcut.
+Publishing real `project` target policies in the Directory requires a
+separate versioned compatible signed contract; do not change v1 `scopes` to
+`["user", "project"]` while older clients reject that field.
+
 ## Select the environment on every command
 
 Add and maintenance commands default to user scope unless project scope is
