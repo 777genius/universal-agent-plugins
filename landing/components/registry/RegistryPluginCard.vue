@@ -25,7 +25,6 @@ const {
   autoDetect,
   scope,
   installExpanded,
-  availableClients,
   targetDistributions,
   projectAvailable,
   updateTargets,
