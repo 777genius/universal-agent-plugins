@@ -565,6 +565,8 @@ try {
       // inventory contains both complete and incomplete Skill scans.
       // Match that presentation precisely; never interpret it as full coverage.
       const showProgress =
+        report.schema_version === 3 &&
+        !report.records.some((record) => record.legacy_format) &&
         assessment.status === 'incomplete' &&
         assessment.inventoryKnown &&
         (assessment.fullyChecked ?? 0) > 0 &&
