@@ -63,7 +63,7 @@ PINS = {
 # the independently pinned V1 PINS above as a separate regression lane.
 OPENCODE_V2_PINS = {
     "linux-amd64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-linux-x64.tar.gz", "sha256:09f44302c10fd036912f59c81fd1aef5df45dd06f649197f9dfc9bbe2a79614e", "opencode"),
-    "linux-arm64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-linux-arm64.tar.gz", "sha256:5a528f42caf576c6dce6a191eb273d3db54effa5518e0402684d8f8026aeb6", "opencode"),
+    "linux-arm64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-linux-arm64.tar.gz", "sha256:5a528f42caf576c6cdece6a191eb273d3db54effa5518e0402684d8f8026aeb6", "opencode"),
     "darwin-arm64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-darwin-arm64.zip", "sha256:25ba9908979fa7d764792c82589b4b5768ab1511154e0317d98aa77d216ce767", "opencode"),
     "windows-amd64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-windows-x64.zip", "sha256:2f3bfd6b3527c60c2a882557b20ddc9ba6bdff4b5a8fe61c853da8fcfb3076e8", "opencode.exe"),
 }
