@@ -6,9 +6,9 @@ import { test } from 'node:test';
 
 test('Vuetify owns ArrowUp/Down keydown and receives the forwarded activator props', () => {
   const source = readFileSync(new URL('../components/layout/LanguageSwitcher.vue', import.meta.url), 'utf8');
-  assert.match(source, /<v-menu\\b[^>]*v-model="menuOpen"/);
-  assert.match(source, /<v-btn\\s+v-bind="menuProps"/);
-  assert.doesNotMatch(source, /@keydown\\.capture|stopImmediatePropagation\\(/);
+  assert.match(source, /<v-menu\b[^>]*v-model="menuOpen"/);
+  assert.match(source, /<v-btn\s+v-bind="menuProps"/);
+  assert.doesNotMatch(source, /@keydown\.capture|stopImmediatePropagation\(/);
   // The mounted real Nuxt/Vuetify keyboard and history contract is exercised in
   // tests/fixtures/i18n-candidate/candidate.spec.ts.template at both base paths.
 });
