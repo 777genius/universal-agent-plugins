@@ -45,7 +45,7 @@
     {
       "Path": "package-lock.json",
       "Mode": 420,
-      "SHA256": "511be046a301839587e4050e15260a89f56cd762d4028dcf991bae32824ae837"
+      "SHA256": "18f06a4543babb89a7a1ef91be168e3310190f8446cb1c40b32e2efe7f4fcaa8"
     },
     {
       "Path": "package.json",
@@ -109,7 +109,7 @@
     {
       "Path": "package-lock.json",
       "Mode": 420,
-      "SHA256": "511be046a301839587e4050e15260a89f56cd762d4028dcf991bae32824ae837"
+      "SHA256": "18f06a4543babb89a7a1ef91be168e3310190f8446cb1c40b32e2efe7f4fcaa8"
     },
     {
       "Path": "package.json",
