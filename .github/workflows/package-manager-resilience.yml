@@ -1,0 +1,76 @@
+name: Package manager resilience
+
+# Expensive race/fuzz/performance diagnostics are not on every PR.
+# Fuzz seeds still run under ordinary go test; this lane adds exploration.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'install/integrationctl/agentplugins/environment/resolver_reliability_test.go'
+      - 'install/integrationctl/agentplugins/adapters/processlock/reliability_test.go'
+      - '.github/workflows/package-manager-resilience.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-manager-resilience-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  reliability:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    name: Linux race, bounded fuzz and graph benchmark
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GOMAXPROCS: '3'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: true
+          cache-dependency-path: '**/go.sum'
+      - name: Race test native mutation lock and dependency resolver
+        working-directory: install/integrationctl/agentplugins
+        run: go test -race -count=1 -timeout=8m ./adapters/processlock ./environment
+      - name: Fuzz candidate order, immutable pin and replay
+        working-directory: install/integrationctl/agentplugins
+        run: go test ./environment -run '^$' -fuzz '^FuzzVersionSelectionOrderAndPinReplay$' -fuzztime=20s -parallel=2 -timeout=4m
+      - name: Fuzz cyclic and shared graph closure
+        working-directory: install/integrationctl/agentplugins
+        run: go test ./environment -run '^$' -fuzz '^FuzzDependencyClosureMatchesTraversal$' -fuzztime=20s -parallel=2 -timeout=4m
+      - name: Retain failing fuzz inputs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: resolver-fuzz-failures-${{ github.sha }}
+          path: install/integrationctl/agentplugins/environment/testdata/fuzz
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Benchmark bounded shared dependency graphs
+        working-directory: install/integrationctl/agentplugins
+        shell: bash
+        run: |
+          set -o pipefail
+          go test ./environment -run '^$' -bench '^BenchmarkVersionSelectionSharedGraph$' -benchtime=300ms -count=1 -timeout=5m | tee "$RUNNER_TEMP/resolver-benchmark.log"
+          {
+            echo '### Resolver benchmark (informational)'
+            echo '~~~'
+            cat "$RUNNER_TEMP/resolver-benchmark.log"
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: resolver-benchmark-${{ github.sha }}
+          path: ${{ runner.temp }}/resolver-benchmark.log
+          if-no-files-found: ignore
+          retention-days: 14

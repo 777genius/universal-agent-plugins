@@ -58,7 +58,7 @@ from duplicating existing scenarios during ordinary `go test ./...` runs.
 | Registry and Git | Compatible and incompatible ranges, forced candidate backtracking, discarded-branch absence, integrity error without fallback, ineligible candidates, partial commit and locked retry, mixed-source target union and cold restore |
 | Agreement | Manifest/version intent, transfer and rollback, confirmation-time changes, external lock/manifest edits, missing versus empty files, unchanged-lock store hydration and read-only resolution |
 | Graph evolution | Replacing dependency edges; pruning unreachable nodes while retaining shared nodes; failed new-leaf acquisition and retry; cascading removal and strict sync with user drift; two actual competing lock commands; selective missing-cache hydration |
-| Adversarial installed state | Foreign/native edits, hostile otherwise-valid ZIPs on fresh install and update, damaged cache metadata, corrupt active state, cross-source component collisions, stale and obstructed lock files |
+| Adversarial installed state | Foreign/native edits, hostile otherwise-valid ZIPs on fresh install and update, damaged cache metadata, corrupt active state, cross-source component collisions, stale and obstructed lock files; symlink/occupied lock refusal; pre-existing foreign native skill collision; obstructed native settings and clean retries |
 | Transport breadth | Existing ZIP, TAR, TAR.GZ, TGZ and extensionless installation/update/cold replay, strengthened with independently expected resource/skill bytes and complete normalized metadata values; nested literal-plus package selection on first and cold install |
 | Production installation catalog | Nine new real ZIP journeys through the main application composer: unsaved install/repeat/remove; two-target ownership; component replacement; foreign skills and disabled MCP collisions; malformed native configuration; exact-pin repair; preview/decline; rich cold transfer and user/project isolation |
 | Existing production composition | Gemini ZIP user/project isolation, update, repair, retained data, removal and cold agreement transfer; Cursor ZIP lifecycle with its distinct native configuration and ownership layout |
@@ -129,6 +129,33 @@ The separate saved Registry update program in [#563](https://github.com/777geniu
 owns its additional version-selection changes. This catalog does not redefine
 that policy or add support for side-by-side versions.
 
+## Additional resilience and native-agent proof
+
+The ordinary Go tests in `adapters/processlock` now exercise 16 simultaneous
+mutation contenders and abrupt termination of a *separate OS process* holding
+the lock. They require real kernel lock cleanup before the next writer can
+succeed. They do **not** claim to simulate a process crash between arbitrary
+installer transaction boundaries; existing durable journal and partial-recovery
+tests cover those failure boundaries separately.
+
+The resolver's bounded property seeds cover version-candidate permutations,
+highest compatible release ordering, exact-pin replay, and independent BFS
+reachability of cyclic/shared dependency graphs. The separate
+[`Package manager resilience`](../../.github/workflows/package-manager-resilience.yml)
+workflow runs these with Go race detection, two bounded fuzz campaigns and
+informational 8/24/48-node benchmark samples **nightly, manually, or on a ready
+PR that changes these very reliability tests**. Ordinary PRs do not pay for them. The benchmark has no flaky platform-specific performance threshold;
+failures in invariants/races/fuzzing are real failures.
+
+The existing [`Native Client Runtime`](../../.github/workflows/agentplugins-native-clients.yml)
+workflow qualifies genuine pinned Codex, Claude Code and OpenCode executables on
+macOS ARM and Windows using fresh disposable profiles, exact downloaded hashes
+and scripted local model endpoints. A **weekly** main-branch run catches native
+CLI drift while relevant PR changes still trigger the existing native gates.
+The native suites provide genuine skills/config discovery and, for qualified
+Codex project MCP scenarios, direct native MCP RPC without live model inference;
+this does not certify real authenticated model turns or external MCP services.
+
 ## Restricted Linux environments
 
 Production Git acquisition requires process-tree observation from the operating
@@ -155,8 +182,22 @@ run on a supported CI host is separate evidence for that host.
 [`Package manager E2E`](../../.github/workflows/package-manager-e2e.yml) runs the
 full command on hosted Ubuntu 24.04, Windows 2025, macOS 15 on Apple Silicon
 (`macos-15`) and macOS 15 on Intel (`macos-15-intel`) when relevant source/test files change.
-It also supports manual dispatch. Superseded PR runs cancel automatically; jobs
-have a generous hang limit, retain reports and logs, and need no account secrets.
+While a PR is **draft**, only the quick Python evidence/CI-policy preflight runs;
+ordinary core tests are supplied by the separate Core fast workflow. Marking a
+PR **ready for review** runs the complete four-platform matrix, as does each
+subsequent code push while it remains ready. A relevant merge into `main`
+always gets a separate complete matrix, and manual dispatch remains available.
+Moving a PR back to draft is not a substitute for final-head qualification.
+Superseded runs for the same PR/ref cancel automatically; jobs have a generous
+hang limit, retain reports and logs, and need no account secrets.
+
+If a maintainer-configured external Linux runner is unavailable, maintainers
+can apply the existing `ci:github-hosted` PR label. The repository's Core fast,
+Required and shared lint workflows then select GitHub-hosted Ubuntu runners;
+this does **not** bypass or skip their assertions. Because the triggering PR
+event captures labels, a new `synchronize` event (for example a legitimate
+follow-up documentation or test commit) is required after applying the label;
+adding a label alone does not move already queued jobs to another runner.
 
 The two macOS jobs exercise the same suite and assertions. Their runner labels
 select an OS generation and architecture; GitHub updates the underlying images.
