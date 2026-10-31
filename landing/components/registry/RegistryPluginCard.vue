@@ -8,6 +8,7 @@ import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { githubSourceUrl, reachableTargetPolicies, vendorInstallSource } from '~/utils/registry';
 import { authenticationIndicator } from '~/utils/authentication';
 import { pluginCommands } from '~/utils/commands';
+import { projectCatalogCommands } from '~/utils/projectCatalogSource';
 const { t, locale, n } = useI18n();
 const localePath = useLocalePath();
 
@@ -81,11 +82,9 @@ const canInstall = computed(
 );
 const command = computed(() =>
   canInstall.value
-    ? pluginCommands(
-        props.plugin,
-        autoDetect.value ? undefined : targets.value,
-        undefined,
-        scope.value,
+    ? (scope.value === 'project'
+        ? projectCatalogCommands(props.plugin, targets.value)
+        : pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
       ).add
     : '',
 );
