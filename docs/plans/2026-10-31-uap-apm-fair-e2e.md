@@ -128,8 +128,13 @@ downloads under `apm_modules` or `.uap` cannot qualify. Tool-specific
 manifests and lockfiles need not have identical bytes.
 
 Each product uses its own new HOME/XDG/cache/project/temporary/git-config root,
-a constant inert foreign Skill neighbor and no secrets/SSH agent. No actual
-Codex process is launched; native activation/auth/tool calls are `NOT_RUN`.
+a constant inert foreign Skill neighbor and no secrets/SSH agent. The selected real `@openai/codex@0.164.0` runtime is provisioned
+in a disposable runner location for target discovery in both products.
+Its expected published npm integrity is checked, installation scripts are
+disabled, and its `codex --version` is invoked without authentication;
+the profile roots remain distinct and empty. No Codex native client
+session, Skill list, plugin activation, model request or tool call is made;
+native activation/auth/tool calls are `NOT_RUN`.
 The baseline suite observes initial install, replay, fresh locked transfer when
 the documented route actually produces one, and a separate foreign collision.
 A non-zero collision attempt that leaves foreign bytes intact is `BLOCKED`
