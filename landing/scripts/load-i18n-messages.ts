@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-type GlobalMessages = typeof import('../locales/en.json');
+type GlobalMessages = typeof import('../i18n/locales/en.json');
 type CatalogMessages = typeof import('../features/skills-catalog/locales/en.json');
 type SkillSpectorMessages = typeof import('../features/skillspector/locales/en.json');
 
@@ -12,7 +12,7 @@ export function loadI18nMessages(
     JSON.parse(
       readFileSync(new URL(`../${folder}/${locale}.json`, import.meta.url), 'utf8'),
     ) as Messages;
-  const base = read<GlobalMessages>('locales');
+  const base = read<GlobalMessages>('i18n/locales');
   const catalog = read<CatalogMessages>('features/skills-catalog/locales');
   const skillSpector = read<SkillSpectorMessages>('features/skillspector/locales');
   return {

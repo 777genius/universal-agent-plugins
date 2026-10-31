@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@mdi/js": "^7.4.47",
-    "@nuxtjs/i18n": "^9.5.6",
+    "@nuxtjs/i18n": "10.6.0",
     "@pinia/nuxt": "^0.11.3",
     "@vueuse/nuxt": "^10.11.1",
     "bowser": "2.14.1",
@@ -34,7 +34,7 @@
     "reka-ui": "2.10.4",
     "swiper": "^12.2.0",
     "vue": "^3.5.40",
-    "vue-i18n": "11.4.8",
+    "vue-i18n": "11.4.14",
     "vue-router": "^4.6.4",
     "vuetify": "^3.12.11"
   },

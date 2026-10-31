@@ -139,11 +139,11 @@ export function pageRouteSeo(
     current,
     canonical: current.family === 'community' ? undefined : absolute(current.path),
     alternates,
-    ogLocale: localeMetadata[current.locale].iso.replace('-', '_'),
+    ogLocale: localeMetadata[current.locale].language.replace('-', '_'),
     ogAlternates: current.indexable
       ? locales
           .filter((locale) => locale !== current.locale)
-          .map((locale) => localeMetadata[locale].iso.replace('-', '_'))
+          .map((locale) => localeMetadata[locale].language.replace('-', '_'))
       : [],
   };
 }

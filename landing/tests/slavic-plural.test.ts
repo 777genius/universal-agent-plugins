@@ -8,7 +8,7 @@ import { slavicPluralRule } from '../utils/slavicPluralRule.ts';
 test('actual Nuxt configuration selects ONE | FEW | MANY for RU and UK', () => {
   const nuxt = readFileSync(new URL('../nuxt.config.ts', import.meta.url), 'utf8');
   assert.match(nuxt, /vueI18n: '\.\/i18n.config.ts'/);
-  const source = readFileSync(new URL('../i18n.config.ts', import.meta.url), 'utf8')
+  const source = readFileSync(new URL('../i18n/i18n.config.ts', import.meta.url), 'utf8')
     .replace(/^import[^;]+;/m, '').replace('export default', '');
   const config = runInNewContext(source, { defineI18nConfig: (factory: () => object) => factory(), slavicPluralRule });
   const { t, locale } = createI18n<[LocaleMessageDictionary<VueMessageType>], 'ru' | 'uk', false>({
