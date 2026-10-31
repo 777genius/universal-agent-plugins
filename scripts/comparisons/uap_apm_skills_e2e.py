@@ -114,7 +114,8 @@ def isolated_env(root: Path) -> dict[str, str]:
     paths = {
         "HOME": home, "XDG_CONFIG_HOME": home / ".config",
         "XDG_CACHE_HOME": home / ".cache", "XDG_DATA_HOME": home / ".local" / "share",
-        "AGENTPLUGINS_HOME": home / "agentplugins", "TMPDIR": root / "tmp",
+        "AGENTPLUGINS_HOME": home / "agentplugins", "CODEX_HOME": home / ".codex",
+        "TMPDIR": root / "tmp",
         "GIT_CONFIG_GLOBAL": root / "empty-gitconfig",
     }
     for path in paths.values():
@@ -130,6 +131,7 @@ def isolated_env(root: Path) -> dict[str, str]:
         "XDG_CACHE_HOME": str(paths["XDG_CACHE_HOME"]),
         "XDG_DATA_HOME": str(paths["XDG_DATA_HOME"]),
         "AGENTPLUGINS_HOME": str(paths["AGENTPLUGINS_HOME"]),
+        "CODEX_HOME": str(paths["CODEX_HOME"]),
         "TMPDIR": str(paths["TMPDIR"]),
     }
 
