@@ -88,8 +88,9 @@ A normal green CI without actual APM/UAP binary execution is **not** E2E proof.
 
 ## Execution scope
 
-Use a manual/opt-in bounded GitHub Actions workflow, not a new expensive
-required gate on every PR. Implement an executable small first-case harness,
+Use a bounded GitHub Actions workflow triggered only when comparison files change
+in its PR, plus manual dispatch; this is a **path-scoped automatic experiment**,
+not a globally required gate or a manual-only/opt-in trigger. Implement an executable small first-case harness,
 then expand by evidence without compromising fairness. Never infer native-loaded
 from copied files. All work in this branch only; keep user UX PR separate.
 
@@ -104,6 +105,9 @@ Standards:
 ## First executable S1 admission (2026-10-31)
 
 The initial workflow is an **evidence-only experiment**, not a scored leaderboard.
+The comparison workflow runs automatically only for changes to its own harness,
+fixture or workflow files, and is manually dispatchable; no project-wide new
+required check, unattended recurring benchmark or user telemetry is introduced.
 UAP is built from published `agentplugins-v0.1.95`, and APM is installed as
 published `apm-cli==0.35.0`; the report records the UAP source commit,
 both executable SHA-256 values and the APM installed Python dependency tree.
@@ -112,7 +116,11 @@ commit `a92e2a3c35a08327937b3facbf4b22791ae50eea`. Both original files
 are hashed independently of manager manifests and output artifacts.
 
 The first admitted target is **Codex project scope on a fresh ephemeral
-GitHub-hosted Linux VM**. UAP uses the released `skills add` command with exact
+GitHub-hosted Linux VM**. The VM is isolated from user profiles, but the two
+product processes on it are not confined to separate writable mount namespaces;
+therefore **host filesystem confinement is unverified** and cannot be scored.
+A later stronger isolation benchmark needs a separately reviewed VM/container
+sandbox and explicit, restricted mounts. UAP uses the released `skills add` command with exact
 Git commit and path; APM uses its documented GitHub Skill subpath in `apm.yml`
 followed by `apm install --target codex`. The runner records commands and
 checks the **delivered** `.agents/skills/benchmark-note/` files; cached
