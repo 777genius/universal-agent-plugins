@@ -182,8 +182,11 @@ func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding
 			return err
 		}
 	case domain.ScopeProject:
-		if filepath.Base(root) != ".pi" || cleanRoot(root) != nil {
-			return fmt.Errorf("pi project binding root differs")
+		if filepath.Base(root) != ".pi" || validateProfile(root) != nil {
+			return fmt.Errorf("pi project binding is not in a canonical native directory")
+		}
+		if err := pathpolicy.RequireContainedChild(filepath.Dir(root), binding.TargetLocator); err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("pi binding scope is unsupported")
