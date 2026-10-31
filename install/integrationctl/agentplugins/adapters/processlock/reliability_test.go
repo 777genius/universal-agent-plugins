@@ -21,7 +21,7 @@ func TestLockConcurrentContendersAndRetry(t *testing.T) {
 	started := make(chan struct{})
 	results := make(chan struct {
 		unlock func() error
-		err error
+		err    error
 	}, writers)
 	var group sync.WaitGroup
 	for range writers {
@@ -32,7 +32,7 @@ func TestLockConcurrentContendersAndRetry(t *testing.T) {
 			unlock, err := lock.Acquire(context.Background())
 			results <- struct {
 				unlock func() error
-				err error
+				err    error
 			}{unlock: unlock, err: err}
 		}()
 	}
@@ -72,13 +72,17 @@ func TestLockReleasedAfterForcedProcessDeath(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		fmt.Fprintln(os.Stdout, "UAP_PROCESSLOCK_ACQUIRED")
+		if _, err := fmt.Fprintln(os.Stdout, "UAP_PROCESSLOCK_ACQUIRED"); err != nil {
+			t.Fatal(err)
+		}
 		_, _ = io.Copy(io.Discard, os.Stdin)
 		_ = release()
 		return
 	}
 	path := filepath.Join(t.TempDir(), "mutation.lock")
-	child := exec.Command(os.Args[0], "-test.run=^TestLockReleasedAfterForcedProcessDeath$")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	child := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestLockReleasedAfterForcedProcessDeath$")
 	child.Env = append(os.Environ(), "UAP_PROCESSLOCK_KILL_CHILD=1", "UAP_PROCESSLOCK_KILL_PATH="+path)
 	stdin, err := child.StdinPipe()
 	if err != nil {

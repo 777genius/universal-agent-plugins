@@ -124,14 +124,14 @@ func BenchmarkVersionSelectionSharedGraph(b *testing.B) {
 				candidates[name] = []Candidate{{Version: "1.2.0", ReleaseSequence: 1}}
 			}
 			resolver := &versionSelectionResolver{
-				candidates: candidates,
-				dependencies: map[string]map[string]string{"acme/a@1.3.0": children},
+				candidates:      candidates,
+				dependencies:    map[string]map[string]string{"acme/a@1.3.0": children},
 				manifestAliases: aliases,
 			}
 			coordinator := Coordinator{Resolver: resolver}
 			b.ReportAllocs()
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				lock, err := coordinator.Resolve(context.Background(), requirements, Lock{}, "")
 				if err != nil {
 					b.Fatal(err)
