@@ -341,7 +341,6 @@ for (const width of [1280, 390]) {
     await expect(assessment.locator(':scope > summary')).toContainText(
       'Skill scan · 3/13 fully checked',
     );
-    await expect(assessment.locator(':scope > summary')).toContainText('3/13 fully checked');
     await expect(assessment.locator(':scope > summary')).not.toContainText('Findings:');
     await assessment.locator(':scope > summary').click();
     await expect(assessment.locator('.skillspector__advice')).toContainText(

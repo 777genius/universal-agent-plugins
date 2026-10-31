@@ -54,7 +54,7 @@ test('catalog URL preserves filters through detail navigation and Reset appears 
   await reset.click();
   await expect(page).toHaveURL(/\/plugins\/$/);
   await expect(search).toHaveValue('');
-  await expect(reset).toBeDisabled();
+  await expect(reset).toHaveCount(0);
 });
 
 test('community source labels link to the exact GitHub source', async ({ page }) => {
