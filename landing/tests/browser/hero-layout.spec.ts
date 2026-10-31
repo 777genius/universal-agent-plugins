@@ -38,14 +38,21 @@ for (const width of [1440, 1024, 390, 320]) {
 
     const items = page.locator('.client-strip > li');
     await expect(items).toHaveCount(clientLandingPages.length);
-    // A complete strip must link the right client, not just render N cards.
+    // Verify exact deployment-base URLs: suffix matches could hide a broken prefix.
+    const baseURL = test.info().project.use.baseURL;
+    if (!baseURL) throw new Error('Browser baseURL is required');
+    const basePath = new URL(baseURL).pathname;
     for (const [index, client] of clientLandingPages.entries()) {
       const item = items.nth(index);
       await expect(item.locator('.client-strip__copy strong')).toHaveText(client.name);
-      const href = await item.locator('a').getAttribute('href');
-      const iconSrc = await item.locator('img').getAttribute('src');
-      expect(href?.endsWith(`/agents/${client.slug}/`)).toBe(true);
-      expect(iconSrc?.endsWith(`/client-icons/${client.icon}`)).toBe(true);
+      await expect(item.locator('a')).toHaveAttribute('href', `${basePath}agents/${client.slug}/`);
+      const image = item.locator('img');
+      await expect(image).toHaveAttribute('src', `${basePath}client-icons/${client.icon}`);
+      if (width === 1440) {
+        await expect
+          .poll(() => image.evaluate((node) => (node as HTMLImageElement).naturalWidth))
+          .toBeGreaterThan(0);
+      }
     }
     const geometry = await items.evaluateAll((nodes) =>
       nodes.map((node) => {
