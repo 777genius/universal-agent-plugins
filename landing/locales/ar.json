@@ -666,7 +666,7 @@
       "agentPlugins10": "Agent Plugins 1.0",
       "install": "تثبيت",
       "viewSource": "عرض المصدر",
-      "deliverySummary": "تم تثبيت {managed} تلقائيًا · يتطلب {prepared} خطوة أخيرة واحدة",
+      "deliverySummary": "الوكلاء: إعداد تلقائي لـ {managed} · يحتاج {prepared} إلى خطوات إضافية",
       "installName": "تثبيت {name}",
       "chooseClients": "اختيار العملاء لـ {name}",
       "stars": "{count} نجمة على المستودع",
