@@ -269,13 +269,19 @@ func validateGeminiObjectPaths(root string, objects []domain.NativeObjectOwnersh
 }
 
 func validateGeminiObject(root string, object domain.NativeObjectOwnership) error {
-	if err := pathpolicy.ValidateLeafID(object.LogicalName); err != nil {
-		return err
-	}
 	expected := filepath.Join(root, "settings.json")
-	if object.Kind == GeminiSkillObjectKind {
+	switch object.Kind {
+	case GeminiSkillObjectKind:
+		if err := pathpolicy.ValidateLeafID(object.LogicalName); err != nil {
+			return err
+		}
 		expected = filepath.Join(root, "skills", object.LogicalName)
-	} else if object.Kind != GeminiMCPObjectKind {
+	case GeminiMCPObjectKind:
+		// MCP selectors are JSON member keys, never filesystem path segments.
+		if object.LogicalName == "" || strings.TrimSpace(object.LogicalName) != object.LogicalName {
+			return fmt.Errorf("invalid Gemini MCP server name %q", object.LogicalName)
+		}
+	default:
 		return fmt.Errorf("unsupported Gemini native object kind %q", object.Kind)
 	}
 	// Do not normalize ownership into authority: a symlink followed by .. can

@@ -2,6 +2,8 @@ package gemini_test
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -245,5 +247,95 @@ func TestExactOwnershipPathStillRejectsSymlinkComponents(t *testing.T) {
 			}
 			assertTestBytes(t, filepath.Join(other, "skills", "docs", "SKILL.md"), "# TEST foreign skill\n")
 		})
+	}
+}
+
+func TestGeminiMCPJsonSelectorWithSpacesLifecycle(t *testing.T) {
+	base := testDirectory(t)
+	root := filepath.Join(base, ".gemini")
+	active := filepath.Join(base, "prepared")
+	name := "deployment notes"
+	settings := filepath.Join(root, "settings.json")
+	foreign, err := json.Marshal(map[string]any{
+		"mcpServers": map[string]any{"foreign": map[string]any{"url": "https://foreign.test/mcp", "disabled": true}},
+		"sentinel":   "keep",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, settings, string(foreign))
+	descriptor, err := json.Marshal(gemini.GeminiDescriptor{DataRoot: base})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(active, gemini.GeminiDescriptorName), string(descriptor))
+
+	kernel := nativeconfig.New()
+	var previous []domain.NativeObjectOwnership
+	for _, url := range []string{"https://managed.test/v1", "https://managed.test/v2"} {
+		projected, err := json.Marshal(map[string]any{
+			"mcpServers": map[string]any{name: map[string]any{"type": "streamable-http", "url": url}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, filepath.Join(active, "mcp.json"), string(projected))
+		native := nativeconfig.Server{Type: "remote", RemoteTransport: "streamable-http", URL: url}
+		receipt, err := nativeconfig.DesiredReceipt(settings, nativeconfig.CodecGemini, name, native,
+			nativeconfig.Placeholders{PackageRoot: active, DataRoot: base})
+		if err != nil {
+			t.Fatal(err)
+		}
+		desired := []domain.NativeObjectOwnership{{
+			ObjectID: "gemini-mcp:" + name, Kind: gemini.GeminiMCPObjectKind,
+			LogicalName: name, Path: settings, ManagedDigest: receipt.Digest, ProtectionClass: "managed",
+		}}
+		if err := gemini.ApplyGeminiNativeMutation(root, active, previous, desired); err != nil {
+			t.Fatalf("add/update spaced Gemini MCP selector: %v", err)
+		}
+		if err := gemini.VerifyGeminiNativeObjects(root, desired, false, kernel); err != nil {
+			t.Fatalf("verify spaced Gemini MCP selector: %v", err)
+		}
+		body, err := os.ReadFile(settings)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var document map[string]any
+		if err := json.Unmarshal(body, &document); err != nil {
+			t.Fatal(err)
+		}
+		servers, ok := document["mcpServers"].(map[string]any)
+		if !ok || len(servers) != 2 || servers["foreign"] == nil || servers[name] == nil ||
+			document["sentinel"] != "keep" || !strings.Contains(string(body), url) {
+			t.Fatalf("Gemini JSON mutation lost managed or foreign data: %s", body)
+		}
+		previous = desired
+	}
+	if err := gemini.ApplyGeminiNativeMutation(root, "", previous, nil); err != nil {
+		t.Fatalf("remove spaced Gemini MCP selector: %v", err)
+	}
+	body, err := os.ReadFile(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var final map[string]any
+	if err := json.Unmarshal(body, &final); err != nil {
+		t.Fatal(err)
+	}
+	servers, ok := final["mcpServers"].(map[string]any)
+	if !ok || servers[name] != nil || servers["foreign"] == nil || final["sentinel"] != "keep" {
+		t.Fatalf("Gemini JSON removal touched foreign data: %s", body)
+	}
+}
+
+func TestGeminiSkillObjectStillRequiresFilesystemLeaf(t *testing.T) {
+	root := filepath.Join(testDirectory(t), ".gemini")
+	name := "unsafe skill"
+	object := domain.NativeObjectOwnership{
+		Kind: gemini.GeminiSkillObjectKind, LogicalName: name,
+		Path: filepath.Join(root, "skills", name),
+	}
+	if err := gemini.VerifyGeminiNativeObjects(root, []domain.NativeObjectOwnership{object}, true, nativeconfig.New()); err == nil {
+		t.Fatal("Gemini Skill accepted a nonportable filesystem leaf")
 	}
 }
