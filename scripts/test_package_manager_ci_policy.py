@@ -9,6 +9,7 @@ import re
 import unittest
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/package-manager-e2e.yml"
+NATIVE_WORKFLOW = WORKFLOW.with_name("agentplugins-native-clients.yml")
 
 
 class PackageManagerCIPolicyTests(unittest.TestCase):
@@ -44,6 +45,15 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
             event_paths = re.findall(r"(?m)^      - " + re.escape(path) + r"$", self.body)
             self.assertEqual(len(event_paths), 2, path)
         self.assertRegex(self.body, r"(?m)^  cancel-in-progress:.*pull_request.*push.*$")
+
+    def test_native_matrix_not_lost_when_draft_becomes_ready(self):
+        native = NATIVE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("types: [opened, synchronize, reopened, ready_for_review]", native)
+        self.assertIn("github.event.pull_request.draft == false", native)
+        self.assertIn("client: [codex, claude, opencode]", native)
+        self.assertIn("--project-components", native)
+        self.assertIn("schedule:", native)
+        self.assertIn("workflow_dispatch:", native)
 
 
 if __name__ == "__main__":
