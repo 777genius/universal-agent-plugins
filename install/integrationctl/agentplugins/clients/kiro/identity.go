@@ -120,14 +120,17 @@ func requireKiroObjectAbsent(configRoot string, object domain.NativeObjectOwners
 }
 
 func validateKiroObject(configRoot string, object domain.NativeObjectOwnership) error {
-	if err := pathpolicy.ValidateLeafID(object.LogicalName); err != nil {
-		return fmt.Errorf("invalid Kiro native object name %q: %w", object.LogicalName, err)
-	}
 	var expected string
 	switch object.Kind {
 	case kiroSkillObjectKind:
+		if err := pathpolicy.ValidateLeafID(object.LogicalName); err != nil {
+			return fmt.Errorf("invalid Kiro skill name %q: %w", object.LogicalName, err)
+		}
 		expected = filepath.Join(configRoot, "skills", object.LogicalName)
 	case kiroMCPObjectKind:
+		if object.LogicalName == "" || strings.TrimSpace(object.LogicalName) != object.LogicalName {
+			return fmt.Errorf("invalid Kiro MCP selector %q", object.LogicalName)
+		}
 		expected = filepath.Join(configRoot, "settings", "mcp.json")
 	default:
 		return fmt.Errorf("unsupported Kiro native object kind %q", object.Kind)

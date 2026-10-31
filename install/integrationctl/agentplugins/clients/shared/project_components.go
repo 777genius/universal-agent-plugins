@@ -55,8 +55,12 @@ func (layout ProjectComponents) ValidateObjects(objects []domain.NativeObjectOwn
 		if strings.TrimSpace(object.LogicalName) != object.LogicalName {
 			return fmt.Errorf("project component name must not be padded")
 		}
-		if err := pathpolicy.ValidateLeafID(object.LogicalName); err != nil {
-			return err
+		// Skills are directory leafs; MCP server names are JSON object keys.
+		// Never impose filesystem leaf syntax on an MCP selector.
+		if object.Kind == layout.SkillKind {
+			if err := pathpolicy.ValidateLeafID(object.LogicalName); err != nil {
+				return err
+			}
 		}
 		if object.ObjectID != object.Kind+":"+object.LogicalName || seen[object.ObjectID] || object.ManagedDigest == "" {
 			return fmt.Errorf("invalid or duplicate project component ownership")
@@ -239,10 +243,10 @@ func (layout ProjectComponents) inspectComponent(component domain.ComponentDecis
 	if strings.TrimSpace(component.Name) != component.Name {
 		return false, false, fmt.Errorf("project component name must not be padded")
 	}
-	if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
-		return false, false, err
-	}
 	if component.Kind == domain.ComponentSkill {
+		if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
+			return false, false, err
+		}
 		_, err := os.Lstat(filepath.Join(layout.SkillsRoot, component.Name))
 		if err != nil && !os.IsNotExist(err) {
 			return false, false, err
