@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import tempfile
 import threading
@@ -217,21 +218,39 @@ def prepare_apm_manifest(project: Path, commit: str) -> None:
     )
 
 
-def captured_portable(project: Path, product: str) -> dict[str, bytes]:
+def captured_portable(project: Path, product: str) -> tuple[dict[str, bytes], dict[str, str] | None]:
+    """Bounded, regular-file-only capture of portable manager inputs.
+
+    A failed capture is evidence, not an empty-but-valid portable environment.
+    The result carries a stable reason without recording private file contents.
+    """
     names = ("uap.toml", "uap.lock") if product == "uap" else ("apm.yml", "apm.lock.yaml")
-    found = {}
+    found: dict[str, bytes] = {}
+    limit = 2 * 1024 * 1024
     for name in names:
         path = project / name
         try:
-            if path.is_symlink() or not path.is_file():
-                return {}
-            data = path.read_bytes()
-            if not data or len(data) > 2 * 1024 * 1024:
-                return {}
+            if any(part.is_symlink() for part in (path, *path.parents)):
+                return {}, {"file": name, "code": "symlink_path"}
+            if not stat.S_ISREG(path.lstat().st_mode):
+                return {}, {"file": name, "code": "not_regular"}
+            # O_NOFOLLOW protects the leaf if the measured process races the check.
+            # O_NONBLOCK prevents a raced-in FIFO from hanging beyond the deadline.
+            flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+            with os.fdopen(os.open(path, flags), "rb") as stream:
+                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                    return {}, {"file": name, "code": "not_regular"}
+                data = stream.read(limit + 1)
+            if not data:
+                return {}, {"file": name, "code": "empty"}
+            if len(data) > limit:
+                return {}, {"file": name, "code": "too_large"}
             found[name] = data
+        except FileNotFoundError:
+            return {}, {"file": name, "code": "missing"}
         except OSError:
-            return {}
-    return found
+            return {}, {"file": name, "code": "read_error"}
+    return found, None
 
 
 def stored_portable(portable: dict[str, bytes], output: Path, product: str, phase: str) -> None:
@@ -272,7 +291,7 @@ def portable_identity(portable: dict[str, bytes], commit: str, product: str) -> 
                 if not isinstance(git, dict):
                     continue
                 if (git.get("repository") == REPOSITORY
-                        and (git.get("resolved_skill_path") == SKILL_PATH or git.get("path") == SKILL_PATH)
+                        and git.get("resolved_skill_path") == SKILL_PATH
                         and git.get("commit") == commit):
                     result["resolved_source_matches"] = True
         else:
@@ -328,7 +347,8 @@ def evaluate(product: str, executable: str, root: Path, commit: str,
     saved()
 
     # Snapshot portable bytes immediately after FIRST install, before replay.
-    initial = captured_portable(project, product)
+    initial, initial_capture_error = captured_portable(project, product)
+    results[-1]["portable_capture_error"] = initial_capture_error
     if initial:
         stored_portable(initial, output, product, "initial")
     admitted = results[-1]["status"] == "PASS"
@@ -336,8 +356,11 @@ def evaluate(product: str, executable: str, root: Path, commit: str,
         skip("S1_repeat", "initial delivery did not pass exact projected-byte and safety checks")
         skip("R1_cold_locked_restore", "initial delivery not admitted")
     elif not initial:
-        skip("S1_repeat", "no complete portable manifest/lock from the documented initial route")
-        skip("R1_cold_locked_restore", "no complete portable manifest/lock from the documented initial route")
+        reason = "no complete portable manifest/lock from the documented initial route"
+        if initial_capture_error:
+            reason += " (" + initial_capture_error["code"] + ": " + initial_capture_error["file"] + ")"
+        skip("S1_repeat", reason)
+        skip("R1_cold_locked_restore", reason)
     else:
         source_identity = portable_identity(initial, commit, product)
         if not source_identity["exact_source_commit_recorded_in_lock"]:
@@ -345,12 +368,13 @@ def evaluate(product: str, executable: str, root: Path, commit: str,
             skip("R1_cold_locked_restore", "source commit absent from recorded lock; provenance needs manual verification")
         else:
             replay = run_process(tool_args(product, executable, project, commit, replay=True), project, env, root)
-            after_replay = captured_portable(project, product)
+            after_replay, repeat_capture_error = captured_portable(project, product)
             add_result(results, product, "S1_repeat", replay, payloads(project, expected),
                        safe_same_bytes(sentinel, foreign, project))
             results[-1]["portable"] = {
                 "initial": source_identity, "after": portable_identity(after_replay, commit, product),
                 "byte_identical": initial == after_replay,
+                "capture_error": repeat_capture_error,
             }
             if results[-1]["status"] == "PASS" and after_replay != initial:
                 results[-1]["status"] = "FAIL"
@@ -366,13 +390,14 @@ def evaluate(product: str, executable: str, root: Path, commit: str,
                 (fresh / name).write_bytes(content)
             restore = run_process(tool_args(product, executable, fresh, commit, replay=True),
                                   fresh, fresh_env, fresh_root)
-            after_restore = captured_portable(fresh, product)
+            after_restore, restore_capture_error = captured_portable(fresh, product)
             add_result(results, product, "R1_cold_locked_restore", restore, payloads(fresh, expected),
                        safe_same_bytes(fresh / ".agents" / "skills" / "foreign-neighbor" / "SKILL.md",
                                        fresh_foreign, fresh))
             results[-1]["portable"] = {
                 "initial": source_identity, "after": portable_identity(after_restore, commit, product),
                 "byte_identical": initial == after_restore,
+                "capture_error": restore_capture_error,
             }
             if results[-1]["status"] == "PASS" and after_restore != initial:
                 results[-1]["status"] = "FAIL"
