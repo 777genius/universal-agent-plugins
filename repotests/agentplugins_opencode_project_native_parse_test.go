@@ -177,6 +177,117 @@ func openCodeProjectCheckSkills(found map[string]openCodeProjectSkill, expected 
 	}
 	return nil
 }
+// OpenCode V2's public "debug config" returns an ordered source inventory,
+// not the flattened V1 effective config object. Bind every source to the
+// independently selected fixture paths before computing the expected
+// lower-to-higher-priority MCP namespace. This proves source attribution,
+// not MCP connection, model use or native plugin activation.
+func openCodeProjectV2SourceConfig(body []byte, userDir, projectDir string, allowInline bool) (map[string]any, error) {
+	value, err := openCodeProjectJSON(body)
+	if err != nil {
+		return nil, err
+	}
+	rows, ok := value.([]any)
+	if !ok || len(rows) < 1 || len(rows) > 12 {
+		return nil, fmt.Errorf("V2 native source inventory is not a bounded array")
+	}
+	allowed := map[string]bool{}
+	for _, base := range []string{userDir, projectDir} {
+		for _, name := range []string{"opencode.json", "opencode.jsonc", ".opencode", ""} {
+			allowed[filepath.Join(base, name)] = true
+		}
+	}
+	seen := map[string]bool{}
+	servers := map[string]any{}
+	userDocument, projectDocument, inlineDocument := false, false, false
+	for _, row := range rows {
+		entry, ok := row.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("V2 native source entry is malformed")
+		}
+		kind, ok := entry["type"].(string)
+		if !ok || (kind != "directory" && kind != "document") {
+			return nil, fmt.Errorf("V2 native source type is unknown")
+		}
+		path, hasPath := entry["path"].(string)
+		if raw, present := entry["path"]; present && !hasPath || hasPath && (!filepath.IsAbs(path) || filepath.Clean(path) != path || !allowed[path]) {
+			_ = raw
+			return nil, fmt.Errorf("V2 native source path escaped expected config directories")
+		}
+		if kind == "directory" {
+			if !hasPath || len(entry) != 2 {
+				return nil, fmt.Errorf("V2 native directory entry has unexpected members")
+			}
+			if seen[path] {
+				return nil, fmt.Errorf("duplicate native config source")
+			}
+			seen[path] = true
+			continue
+		}
+		if len(entry) != 3 && !(len(entry) == 2 && !hasPath) {
+			return nil, fmt.Errorf("V2 native config document has unexpected members")
+		}
+		info, ok := entry["info"].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("V2 native config document has no bounded info")
+		}
+		if !hasPath {
+			if !allowInline || inlineDocument {
+				return nil, fmt.Errorf("unrequested V2 inline config document")
+			}
+			inlineDocument = true
+		} else {
+			if seen[path] {
+				return nil, fmt.Errorf("duplicate V2 native config document")
+			}
+			seen[path] = true
+			if path == filepath.Join(userDir, "opencode.jsonc") || path == filepath.Join(userDir, "opencode.json") {
+				userDocument = true
+			}
+			if path == filepath.Join(projectDir, "opencode.jsonc") || path == filepath.Join(projectDir, "opencode.json") {
+				projectDocument = true
+			}
+		}
+		mcp, exists := info["mcp"]
+		if !exists {
+			continue
+		}
+		config, ok := mcp.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("V2 native source MCP field is malformed")
+		}
+		for key, raw := range config {
+			if key == "servers" {
+				continue
+			}
+			// Timeout and other MCP policy members are valid in V2, but
+			// only a concrete servers object can establish native source.
+			if key != "timeout" {
+				return nil, fmt.Errorf("V2 native source has a flat MCP member")
+			}
+			_ = raw
+		}
+		serverSet, exists := config["servers"]
+		if !exists {
+			continue
+		}
+		mapping, ok := serverSet.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("V2 native source servers member is malformed")
+		}
+		for name, source := range mapping {
+			if _, ok := source.(map[string]any); !ok {
+				return nil, fmt.Errorf("V2 native source server is malformed")
+			}
+			servers[name] = source
+		}
+	}
+	if !userDocument || projectDir != userDir && !projectDocument || allowInline && !inlineDocument {
+		return nil, fmt.Errorf("V2 native expected config sources were not observed")
+	}
+	return map[string]any{"mcp": map[string]any{"servers": servers}}, nil
+}
+
 func openCodeProjectConfig(body []byte) (map[string]any, error) {
 	value, err := openCodeProjectJSON(body)
 	if err != nil {
