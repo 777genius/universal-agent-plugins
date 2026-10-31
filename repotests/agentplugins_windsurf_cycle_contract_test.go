@@ -116,7 +116,7 @@ func TestWindsurfCycleSelectedParentPreservesUnchangedMtimeButRequiresWindowedCt
 		Kind: "directory", Mode: 040700, Device: 2, Inode: 123, Links: 2,
 		UID: uint32(os.Getuid()), GID: uint32(os.Getgid()), Size: 4096,
 		Modified: [2]int64{start.Unix() - 20, 0},
-		Changed: [2]int64{start.Unix() - 20, 0},
+		Changed:  [2]int64{start.Unix() - 20, 0},
 	}
 	now := old
 	now.Changed = [2]int64{start.Unix(), 200000000}
