@@ -221,8 +221,9 @@ func (f *openCodeProjectFixture) setup(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.evidence["source_identity"] = identity
-	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") != "1.18.34" || nativeSHA(t, f.client) != os.Getenv("AGENTPLUGINS_OPENCODE_SHA256") {
-		t.Fatal("missing/exact OpenCode pin mismatch")
+	pinnedVersion := os.Getenv("AGENTPLUGINS_OPENCODE_VERSION")
+	if (pinnedVersion != "1.18.34" && pinnedVersion != "2.2.5") || nativeSHA(t, f.client) != os.Getenv("AGENTPLUGINS_OPENCODE_SHA256") {
+		t.Fatal("missing/exact OpenCode V1/V2 pin mismatch")
 	}
 	f.evidence["client_sha256"] = nativeSHA(t, f.client)
 	f.evidence["installer_sha256"] = nativeSHA(t, f.installer)
@@ -238,7 +239,7 @@ func (f *openCodeProjectFixture) setup(t *testing.T) {
 		}
 	}
 	r := f.command(t, "native", "version", f.client, f.user, f.env(), []string{"--version"})
-	if r.Exit != 0 || len(bytesTrim(r.Stderr)) != 0 || string(bytesTrim(r.Stdout)) != "1.18.34" {
+	if r.Exit != 0 || len(bytesTrim(r.Stderr)) != 0 || string(bytesTrim(r.Stdout)) != pinnedVersion {
 		t.Fatal("native version is not exact pin")
 	}
 	f.evidence["client_version_measured"] = string(bytesTrim(r.Stdout))
