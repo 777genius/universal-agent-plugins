@@ -14,7 +14,7 @@ test('keyboard opening retries focus after hidden lazy overlay enters and cancel
   }));
   const menuOpen = { value: false };
   const ticks: (() => void)[] = [];
-  const state = runInNewContext(stripTypeScriptTypes(logic) + '\n({ onActivatorKeydown, focusOpeningItem })', {
+  const state = runInNewContext(stripTypeScriptTypes(logic) + '\n({ onActivatorKeydown, focusOpeningItem, afterMenuEnter })', {
     document, menuOpen, pending: { value: false },
     menu: { value: { contentEl: { querySelectorAll: () => options } } },
     nextTick: (callback: () => void) => ticks.push(callback),
@@ -24,7 +24,9 @@ test('keyboard opening retries focus after hidden lazy overlay enters and cancel
   ticks.shift()!();
   assert.equal(document.activeElement, null);
   visible = true;
-  state.focusOpeningItem(); // VMenu after-enter, when the hidden item becomes focusable.
+  state.afterMenuEnter(); // VMenu after-enter queues focus after Vuetify's own transition.
+  assert.equal(document.activeElement, null, 'after-enter must defer focus until next tick');
+  ticks.shift()!();
   assert.equal(document.activeElement, options[0]);
   document.activeElement = options[1];
   state.focusOpeningItem();
