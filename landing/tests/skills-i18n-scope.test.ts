@@ -36,7 +36,12 @@ for (const block of descriptor.customBlocks) {
   );
   const locale = String(block.attrs.locale);
   const request = `${fileURLToPath(path)}?vue&type=custom&index=0&src=true&blockType=i18n&locale=${locale}&lang.json`;
-  const result = await compiler.transform.call(
+  // Unplugin 3 exposes Vite hooks as objects with a `handler`, rather than
+  // callable hooks. Exercise the actual compiler instead of replacing it.
+  const hook = compiler.transform;
+  const transform = typeof hook === 'function' ? hook : hook?.handler;
+  assert.equal(typeof transform, 'function', 'i18n SFC transform hook is installed');
+  const result = await transform.call(
     {
       error: (error: unknown) => {
         throw error;
