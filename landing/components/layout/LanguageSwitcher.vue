@@ -41,16 +41,20 @@ const menuOpen = ref(false);
 watch(menuOpen, open => emit('menu-open', open), { flush: 'sync' });
 onBeforeUnmount(() => emit('menu-open', false));
 let openingEdge: 'first' | 'last' | undefined;
-function focusOpeningItem() {
+function focusOpeningItem(final = false) {
   if (!menuOpen.value || !openingEdge) return;
   const options = menu.value?.contentEl?.querySelectorAll<HTMLElement>('[role="menuitemradio"]');
   const option = openingEdge === 'first' ? options?.[0] : options?.[options.length - 1];
   if (option) {
     option.focus();
-    // Lazy overlay content can exist while its enter transition still hides it.
-    // Keep the request until focus succeeds; after-enter retries at visibility.
-    if (document.activeElement === option) openingEdge = undefined;
+    // Vuetify may focus the active item later in the enter transition.
+    // Do not consume the keyboard request until the transition has settled.
+    if (final && document.activeElement === option) openingEdge = undefined;
   }
+}
+function afterMenuEnter() {
+  // Run after the overlay's own focus management, not during the same tick.
+  nextTick(() => focusOpeningItem(true));
 }
 function onActivatorKeydown(event: KeyboardEvent) {
   if (pending.value || !['ArrowDown', 'ArrowUp'].includes(event.key)) return;
@@ -78,7 +82,7 @@ const onChange = async (value: unknown) => {
 
 <template>
   <!-- attach=true renders inline inside the mobile modal focus/inert boundary. -->
-  <v-menu v-model="menuOpen" ref="menu" :attach="props.containMenu || false" location="bottom end" :close-on-content-click="false" @after-enter="focusOpeningItem">
+  <v-menu v-model="menuOpen" ref="menu" :attach="props.containMenu || false" location="bottom end" :close-on-content-click="false" @after-enter="afterMenuEnter">
     <template #activator="{ props: menuProps }">
       <v-btn
         v-bind="menuProps"
