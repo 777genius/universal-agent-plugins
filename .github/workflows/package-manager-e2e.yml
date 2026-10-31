@@ -1,0 +1,81 @@
+name: Package manager E2E
+
+on:
+  pull_request:
+    paths:
+      - 'cli/**'
+      - 'install/integrationctl/**'
+      - 'sdk/**'
+      - 'go.work*'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'scripts/package-manager-e2e.py'
+      - 'scripts/package_manager_binary.py'
+      - 'scripts/test_package_manager_e2e.py'
+      - '.github/workflows/package-manager-e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cli/**'
+      - 'install/integrationctl/**'
+      - 'sdk/**'
+      - 'go.work*'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'scripts/package-manager-e2e.py'
+      - 'scripts/package_manager_binary.py'
+      - 'scripts/test_package_manager_e2e.py'
+      - '.github/workflows/package-manager-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-manager-e2e-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
+jobs:
+  package-manager:
+    name: package-manager (${{ matrix.os }})
+    # Real Git containment requires a conventional procfs on Linux. This focused
+    # qualification uses disposable hosted runners, including both Mac architectures.
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-15, macos-15-intel]
+    env:
+      GOMAXPROCS: '3'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: true
+          cache-dependency-path: '**/go.sum'
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.12'
+      - name: Check evidence rejection cases
+        run: python -B -m unittest discover -s scripts -p test_package_manager_e2e.py
+      - name: Execute the full portable catalog
+        run: python -B scripts/package-manager-e2e.py --output "${{ runner.temp }}/package-manager-e2e"
+      - name: Retain execution evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-manager-e2e-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/package-manager-e2e/report.json
+            ${{ runner.temp }}/package-manager-e2e/*.stdout
+            ${{ runner.temp }}/package-manager-e2e/*.stderr
+          if-no-files-found: error
+          retention-days: 14

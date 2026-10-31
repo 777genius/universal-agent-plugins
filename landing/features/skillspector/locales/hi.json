@@ -2,7 +2,7 @@
   "registryUi": {
     "skillSpector": {
       "loading": "रिपोर्ट लोड हो रही है",
-      "unavailable": "जाँच उपलब्ध नहीं",
+      "unavailable": "रिपोर्ट लोड नहीं हुई",
       "loadingDetails": "प्रकाशित आकलन लोड हो रहा है…",
       "unavailableDetails": "प्रकाशित आकलन लोड नहीं हो सका। इस प्रविष्टि की जाँच की स्थिति अज्ञात है।",
       "notChecked": "अभी जाँच नहीं हुई",
@@ -94,7 +94,8 @@
       "retryblocked": "आगे की जाँचें अवरुद्ध हैं: {count}। नीचे कारण देखें।",
       "retryexhausted": "स्वचालित पुनः प्रयासों की सीमा पूरी हुई: {count}।",
       "scanComplete": "जाँच पूरी हुई",
-      "selectionScanned": "चुने गए स्किल जाँचे गए"
+      "selectionScanned": "चुने गए स्किल जाँचे गए",
+      "retryLoad": "फिर से लोड करें"
     }
   }
 }
