@@ -159,6 +159,37 @@ for (const width of [1440, 390]) {
   });
 }
 
+test('reviewed user-only v1 catalog generates exact pinned project Git commands', async ({ page }) => {
+  const errors = await offline(page);
+  const index = registryFixture();
+  index.plugins[0]!.trust_state = 'reviewed';
+  await projections(page, index);
+  await navigate(page, '/', 'en', '?q=i18n-state-00');
+  const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
+  await card.locator('.plugin-card__install-toggle').click();
+  const project = card.getByRole('button', { name: 'This project', exact: true });
+  await expect(project).toBeEnabled();
+  await project.click();
+  await expect(card.locator('.command-snippet')).toHaveCount(0); // Cursor not in the proven first wave.
+  await targets(page, card, ['Codex', 'Cursor']);
+  const source = index.plugins[0]!.distributions[0]!.releases[0]!.source;
+  const exact = `github:${source.repository}@${source.revision}//${source.path}`;
+  const expected = `npx -y universal-agent-plugins add ${exact} --target codex --scope project`;
+  await expect(card.locator('.command-snippet code')).toHaveText(expected);
+  await card.locator('.command-snippet button').click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expected);
+  await card.locator('.plugin-card__title-link').click();
+  const panel = page.locator('.install-panel');
+  await expect(panel.locator('.command-snippet--add code')).toHaveText(expected);
+  await expect(panel.locator('.command-snippet--update code')).toHaveText(expected);
+  await expect(panel.locator('.command-snippet--remove code'))
+    .toHaveText('npx -y universal-agent-plugins remove i18n-state-00 --scope project');
+  await panel.getByRole('button', { name: 'This user', exact: true }).click();
+  await expect(panel.locator('.command-snippet--add code'))
+    .toHaveText('npx -y universal-agent-plugins add i18n-state-00 --target codex');
+  expect(errors).toEqual([]);
+});
+
 test('unqualified project scope is hidden while auto agent delivery stays non-numeric', async ({
   page,
 }) => {

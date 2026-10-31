@@ -2,6 +2,7 @@ import { computed, ref, watch, type Ref } from 'vue';
 import { clients } from '../data/clients.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { reachableTargetPolicies, resolveDistribution } from '../utils/registry.ts';
+import { projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { ClientID, InstallScope, RegistryPlugin } from '../types/registry';
 
 /** Card and detail share one selection/persistence policy; no machine detection occurs here. */
@@ -18,21 +19,21 @@ export function usePluginInstallSelection(
     const policies = reachableTargetPolicies(plugin().distributions);
     return clients.filter((client) => policies.some((policy) => policy.client === client.id));
   });
+  const select = (selected: ClientID[]) => scope.value === 'project'
+    ? projectCatalogSelection(plugin(), selected).resolution
+    : resolveDistribution(plugin(), selected, 'user');
   const targetDistributions = computed(
     () =>
       new Map(
-        clients.map((client) => [
-          client.id,
-          resolveDistribution(plugin(), [client.id], scope.value).distribution,
-        ]),
+        clients.map((client) => [client.id, select([client.id]).distribution]),
       ),
   );
   const projectAvailable = computed(() =>
     availableClients.value.some((client) =>
-      Boolean(resolveDistribution(plugin(), [client.id], 'project').distribution),
+      Boolean(projectCatalogSelection(plugin(), [client.id]).resolution.distribution),
     ),
   );
-  const resolution = computed(() => resolveDistribution(plugin(), targets.value, scope.value));
+  const resolution = computed(() => select(targets.value));
   let choicePending = false;
   function saveChoice() {
     preferences.selectPackage(
