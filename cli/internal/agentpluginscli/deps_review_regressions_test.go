@@ -29,14 +29,14 @@ func TestDependencySelectionSkipsHostAndLoadedMCPIneligibility(t *testing.T) {
 	for _, dependency := range []string{"", "go"} {
 		t.Run("runtime dependency="+dependency, func(t *testing.T) {
 			fixture, repo, directory := dependencyReviewFixture(t)
-			first := freshRestorePackage(t, fixture, repo, "a", "1.0.0", "a-1.0.0", "", 1, true)
+			first := freshRestorePackage(t, fixture, repo, "a", "1.1.0", "a-1.1.0", "", 2, true)
 			if dependency != "" {
 				first = dependencyReviewReviseRelease(t, fixture, repo, first, func(root string) {
 					dependencyWrite(t, filepath.Join(root, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"a":{"type":"stdio","command":"go","args":["version"]}}}`)
 				})
 			}
-			safe := freshRestorePackage(t, fixture, repo, "a", "1.1.0", "a-1.1.0", "", 2, true)
-			failure := intendedTrustedDirectoryEvidence(domain.DirectoryEvidence{ID: "host-runtime-failure", DistributionID: "acme/a", ReleaseSequence: 1, PackageTreeDigest: first.TreeDigest, Level: "runtime", Outcome: "failed", Client: domain.ClientCodex, InstallerVersion: fixture.app.Version, OS: runtime.GOOS, Architecture: runtime.GOARCH, DependencyIdentity: dependency})
+			safe := freshRestorePackage(t, fixture, repo, "a", "1.0.0", "a-1.0.0", "", 1, true)
+			failure := intendedTrustedDirectoryEvidence(domain.DirectoryEvidence{ID: "host-runtime-failure", DistributionID: "acme/a", ReleaseSequence: first.Sequence, PackageTreeDigest: first.TreeDigest, Level: "runtime", Outcome: "failed", Client: domain.ClientCodex, InstallerVersion: fixture.app.Version, OS: runtime.GOOS, Architecture: runtime.GOARCH, DependencyIdentity: dependency})
 			failure.ClientVersion = "" // Candidate filtering has no detected client version.
 			directory.bundle.Snapshot.Evidence = append(directory.bundle.Snapshot.Evidence, failure)
 			policy := &directory.bundle.Snapshot.Distributions[0].ReleasePolicies[0]
@@ -54,8 +54,8 @@ func TestDependencySelectionSkipsHostAndLoadedMCPIneligibility(t *testing.T) {
 			}
 			dependencyRun(t, fixture.cliFixture, "deps", "lock", "--format", "json")
 			locked := freshRestoreReadLock(t, fixture.cliFixture)
-			if len(locked.Packages) != 1 || locked.Packages[0].Version != "1.1.0" || locked.Packages[0].TreeDigest != safe.TreeDigest || locked.Packages[0].Source.Registry.Commit != safe.PackageSource.Revision {
-				t.Fatalf("selection failed to advance past ineligible minimum: %+v", locked)
+			if len(locked.Packages) != 1 || locked.Packages[0].Version != safe.PackageVersion || locked.Packages[0].TreeDigest != safe.TreeDigest || locked.Packages[0].Source.Registry.Commit != safe.PackageSource.Revision {
+				t.Fatalf("selection failed to fall back from ineligible highest: %+v", locked)
 			}
 			fetchedFirst := false
 			for _, fetch := range fixture.source.verified {
@@ -120,11 +120,11 @@ func dependencyReviewReviseRelease(t *testing.T, fixture freshRestoreEnvironment
 
 func TestDependencyLateTargetUnionRetainsLoadedMCPIdentity(t *testing.T) {
 	fixture, repo, directory := dependencyReviewFixture(t)
-	first := freshRestorePackage(t, fixture, repo, "c", "1.0.0", "c-1.0.0", "", 1, true)
+	first := freshRestorePackage(t, fixture, repo, "c", "1.1.0", "c-1.1.0", "", 2, true)
 	first = dependencyReviewReviseRelease(t, fixture, repo, first, func(root string) {
 		dependencyWrite(t, filepath.Join(root, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"c":{"type":"stdio","command":"go","args":["version"]}}}`)
 	})
-	safe := freshRestorePackage(t, fixture, repo, "c", "1.1.0", "c-1.1.0", "", 2, true)
+	safe := freshRestorePackage(t, fixture, repo, "c", "1.0.0", "c-1.0.0", "", 1, true)
 	freshRestorePackage(t, fixture, repo, "z", "1.0.0", "z-1.0.0", "^1.0", 1, true)
 	snapshot := &directory.bundle.Snapshot
 	for i := range snapshot.Distributions {
@@ -142,7 +142,7 @@ func TestDependencyLateTargetUnionRetainsLoadedMCPIdentity(t *testing.T) {
 			}
 		}
 	}
-	failure := intendedTrustedDirectoryEvidence(domain.DirectoryEvidence{ID: "claude-go-failure", DistributionID: "acme/c", ReleaseSequence: 1, PackageTreeDigest: first.TreeDigest, Level: "runtime", Outcome: "failed", Client: domain.ClientClaude, InstallerVersion: fixture.app.Version, DependencyIdentity: "go"})
+	failure := intendedTrustedDirectoryEvidence(domain.DirectoryEvidence{ID: "claude-go-failure", DistributionID: "acme/c", ReleaseSequence: first.Sequence, PackageTreeDigest: first.TreeDigest, Level: "runtime", Outcome: "failed", Client: domain.ClientClaude, InstallerVersion: fixture.app.Version, DependencyIdentity: "go"})
 	failure.ClientVersion = ""
 	snapshot.Evidence = append(snapshot.Evidence, failure)
 	snapshot.Distributions[0].ReleasePolicies[0].CurrentEvidence = append(snapshot.Distributions[0].ReleasePolicies[0].CurrentEvidence, failure.ID)
@@ -151,14 +151,21 @@ func TestDependencyLateTargetUnionRetainsLoadedMCPIdentity(t *testing.T) {
 	dependencyRun(t, fixture.cliFixture, "deps", "lock", "--format", "json")
 	locked := freshRestoreReadLock(t, fixture.cliFixture)
 	pin, ok := locked.Package("c")
-	if !ok || len(locked.Packages) != 2 || pin.Version != "1.1.0" || pin.TreeDigest != safe.TreeDigest || !reflect.DeepEqual(pin.Targets, []string{"claude", "codex"}) {
+	if !ok || len(locked.Packages) != 2 || pin.Version != safe.PackageVersion || pin.TreeDigest != safe.TreeDigest || !reflect.DeepEqual(pin.Targets, []string{"claude", "codex"}) {
 		t.Fatalf("late target union accepted executable-specific failed evidence: %+v", locked)
 	}
+	fetchedFirst := false
+	for _, fetch := range fixture.source.verified {
+		fetchedFirst = fetchedFirst || fetch.commit == first.PackageSource.Revision
+	}
+	if !fetchedFirst {
+		t.Fatal("late target test did not acquire the conflicting highest candidate")
+	}
 	firstPin := pin
-	firstPin.Version, firstPin.TreeDigest, firstPin.ManifestDigest = "1.0.0", first.TreeDigest, first.ManifestDigest
+	firstPin.Version, firstPin.TreeDigest, firstPin.ManifestDigest = first.PackageVersion, first.TreeDigest, first.ManifestDigest
 	source := *pin.Source.Registry
 	firstPin.Source.Registry = &source
-	source.ReleaseSequence, source.Commit, source.Path = 1, first.PackageSource.Revision, first.PackageSource.Path
+	source.ReleaseSequence, source.Commit, source.Path = first.Sequence, first.PackageSource.Revision, first.PackageSource.Path
 	eligible, err := (dependencyResolver{app: fixture.app}).Eligible(context.Background(), firstPin, []string{"claude", "codex"})
 	if err != nil || eligible {
 		t.Fatalf("known stored executable identity was discarded: eligible=%v error=%v", eligible, err)

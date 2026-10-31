@@ -99,8 +99,10 @@ The suite preserves UAP's current dependency rules:
 
 - One selected version per canonical source within an environment; compatible
   cycles represent co-installation, not service startup order.
-- Compatible existing pins are retained. Fresh Registry resolution uses the
-  existing minimum-compatible stable preference and backtracking.
+- Compatible existing pins are retained. On this development source, fresh
+  Registry resolution prefers the highest eligible stable version (then highest
+  signed release sequence), with complete-graph backtracking. Previously
+  released versions used lowest-compatible fresh ordering.
 - `--locked` forbids choosing a new solution. It can download recorded immutable
   bytes for a cold restore; it is not an offline mode.
 - Existing malformed/stale agreements fail closed. Errors before installation
