@@ -129,6 +129,33 @@ The separate saved Registry update program in [#563](https://github.com/777geniu
 owns its additional version-selection changes. This catalog does not redefine
 that policy or add support for side-by-side versions.
 
+## Additional resilience and native-agent proof
+
+The ordinary Go tests in `adapters/processlock` now exercise 16 simultaneous
+mutation contenders and abrupt termination of a *separate OS process* holding
+the lock. They require real kernel lock cleanup before the next writer can
+succeed. They do **not** claim to simulate a process crash between arbitrary
+installer transaction boundaries; existing durable journal and partial-recovery
+tests cover those failure boundaries separately.
+
+The resolver's bounded property seeds cover version-candidate permutations,
+highest compatible release ordering, exact-pin replay, and independent BFS
+reachability of cyclic/shared dependency graphs. The separate
+[`Package manager resilience`](../../.github/workflows/package-manager-resilience.yml)
+workflow runs these with Go race detection, two bounded fuzz campaigns and
+informational 8/24/48-node benchmark samples **nightly or manually**, not on
+every PR. The benchmark has no flaky platform-specific performance threshold;
+failures in invariants/races/fuzzing are real failures.
+
+The existing [`Native Client Runtime`](../../.github/workflows/agentplugins-native-clients.yml)
+workflow qualifies genuine pinned Codex, Claude Code and OpenCode executables on
+macOS ARM and Windows using fresh disposable profiles, exact downloaded hashes
+and scripted local model endpoints. A **weekly** main-branch run catches native
+CLI drift while relevant PR changes still trigger the existing native gates.
+The native suites provide genuine skills/config discovery and, for qualified
+Codex project MCP scenarios, direct native MCP RPC without live model inference;
+this does not certify real authenticated model turns or external MCP services.
+
 ## Restricted Linux environments
 
 Production Git acquisition requires process-tree observation from the operating
