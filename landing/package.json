@@ -19,8 +19,8 @@
     "test:browser": "playwright test",
     "lint": "eslint \"app.vue\" \"error.vue\" \"components/**/*.{vue,ts}\" \"composables/**/*.{ts,js}\" \"data/**/*.{ts,js}\" \"layouts/**/*.vue\" \"pages/**/*.vue\" \"plugins/**/*.{ts,js}\" \"server/**/*.{ts,js}\" \"stores/**/*.{ts,js}\" \"types/**/*.ts\" \"utils/**/*.{ts,js}\" \"nuxt.config.ts\" --no-error-on-unmatched-pattern",
     "lint:fix": "pnpm run lint -- --fix",
-    "format": "prettier --check app.vue error.vue assets/styles/main.scss components composables content data features layouts locales pages plugins server stores types utils nuxt.config.ts package.json",
-    "format:fix": "prettier --write app.vue error.vue assets/styles/main.scss components composables content data features layouts locales pages plugins server stores types utils nuxt.config.ts package.json"
+    "format": "prettier --check app.vue error.vue assets/styles/main.scss components composables content data features layouts i18n pages plugins server stores types utils nuxt.config.ts package.json",
+    "format:fix": "prettier --write app.vue error.vue assets/styles/main.scss components composables content data features layouts i18n pages plugins server stores types utils nuxt.config.ts package.json"
   },
   "dependencies": {
     "@mdi/js": "^7.4.47",
