@@ -19,25 +19,25 @@ import (
 // the native directory transaction is allowed to commit. All other outcomes
 // leave the directory journal and backup intact for recovery.
 func (kernel Kernel) persistCommitDecision(desired domain.StateFileV2, beforeJSON []byte) (oldState bool, err error) {
-	if err := kernel.StateStore.Save(desired); err == nil {
+	initialErr := kernel.StateStore.Save(desired)
+	if initialErr == nil {
 		return false, nil
-	} else {
-		initialErr := err
+	}
 		observed, loadErr := kernel.StateStore.Load()
 		if loadErr != nil {
-			return false, fmt.Errorf("state save failed (%v) and commit visibility is unknown: %w", initialErr, loadErr)
+			return false, fmt.Errorf("state save failed (%v) and commit visibility is unknown: %w", fmt.Sprint(initialErr), loadErr)
 		}
 		observedJSON, marshalErr := marshalComparableState(observed)
 		if marshalErr != nil {
-			return false, fmt.Errorf("state save failed (%v) and observed state cannot be compared: %w", initialErr, marshalErr)
+			return false, fmt.Errorf("state save failed (%v) and observed state cannot be compared: %w", fmt.Sprint(initialErr), marshalErr)
 		}
 		desiredJSON, marshalErr := marshalComparableState(desired)
 		if marshalErr != nil {
-			return false, fmt.Errorf("state save failed (%v) and desired state cannot be compared: %w", initialErr, marshalErr)
+			return false, fmt.Errorf("state save failed (%v) and desired state cannot be compared: %w", fmt.Sprint(initialErr), marshalErr)
 		}
 		if bytes.Equal(observedJSON, desiredJSON) {
 			if retryErr := kernel.StateStore.Save(desired); retryErr != nil {
-				return false, fmt.Errorf("state became visible after save error (%v), but durability retry failed: %w", initialErr, retryErr)
+				return false, fmt.Errorf("state became visible after save error (%v), but durability retry failed: %w", fmt.Sprint(initialErr), retryErr)
 			}
 			return false, nil
 		}
@@ -45,7 +45,6 @@ func (kernel Kernel) persistCommitDecision(desired domain.StateFileV2, beforeJSO
 			return true, initialErr
 		}
 		return false, fmt.Errorf("state save failed and reload matched neither exact old nor desired state: %w", initialErr)
-	}
 }
 
 // PersistStateDecision gives lifecycle state writes the same visibility and
@@ -129,27 +128,34 @@ func replaceReceipt(client domain.ClientBinding, receipt domain.MutationReceipt)
 	return client
 }
 
+func matchesDirectoryReceipt(receipt domain.MutationReceipt, directory dirswap.Receipt, mutationType string) bool {
+	return sameDirectoryProof(receipt.DirectoryProof, directory) &&
+		sameReceiptOwners(receipt.ProfileOwners, directory.ProfileOwners) &&
+		receipt.DataReceiptID == directory.DataReceiptID &&
+		receipt.OperationID == directory.OperationID &&
+		receipt.ClientBindingID == directory.ClientBindingID &&
+		receipt.Sequence == directory.Sequence &&
+		receipt.MutationType == mutationType &&
+		receipt.ActivePath == directory.ActivePath &&
+		receipt.StagingPath == directory.StagingPath &&
+		receipt.BackupPath == directory.BackupPath &&
+		(receipt.Phase == ReceiptPhaseStateCommitted || receipt.Phase == ReceiptPhaseCommitted)
+}
+
 func findReceipt(state domain.StateFileV2, directory dirswap.Receipt) (int, string, int, bool) {
 	mutationType := "directory_swap"
 	if directory.Operation == dirswap.OperationRemove {
 		mutationType = "directory_remove"
 	}
 	for receiptIndex, receipt := range state.TransactionReceipts {
-		if sameDirectoryProof(receipt.DirectoryProof, directory) && sameReceiptOwners(receipt.ProfileOwners, directory.ProfileOwners) && receipt.DataReceiptID == directory.DataReceiptID && receipt.OperationID == directory.OperationID && receipt.ClientBindingID == directory.ClientBindingID &&
-			receipt.Sequence == directory.Sequence && receipt.MutationType == mutationType &&
-			receipt.ActivePath == directory.ActivePath && receipt.StagingPath == directory.StagingPath && receipt.BackupPath == directory.BackupPath &&
-			(receipt.Phase == ReceiptPhaseStateCommitted || receipt.Phase == ReceiptPhaseCommitted) {
+		if matchesDirectoryReceipt(receipt, directory, mutationType) {
 			return -1, "", receiptIndex, true
 		}
 	}
 	for installationIndex, installation := range state.Installations {
 		for clientKey, client := range installation.Clients {
 			for receiptIndex, receipt := range client.Receipts {
-				if sameDirectoryProof(receipt.DirectoryProof, directory) && sameReceiptOwners(receipt.ProfileOwners, directory.ProfileOwners) && receipt.DataReceiptID == directory.DataReceiptID && receipt.OperationID == directory.OperationID &&
-					receipt.ClientBindingID == directory.ClientBindingID && clientKey == directory.ClientBindingID &&
-					receipt.Sequence == directory.Sequence && receipt.MutationType == mutationType &&
-					receipt.ActivePath == directory.ActivePath && receipt.StagingPath == directory.StagingPath && receipt.BackupPath == directory.BackupPath &&
-					(receipt.Phase == ReceiptPhaseStateCommitted || receipt.Phase == ReceiptPhaseCommitted) {
+				if matchesDirectoryReceipt(receipt, directory, mutationType) && clientKey == directory.ClientBindingID {
 					return installationIndex, clientKey, receiptIndex, true
 				}
 			}
