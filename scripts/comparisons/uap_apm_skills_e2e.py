@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 
 REPOSITORY = "777genius/universal-agent-plugins"
@@ -31,50 +32,77 @@ def sha(data: bytes) -> str:
 
 
 def run_process(argv: list[str], cwd: Path, env: dict[str, str], root: Path) -> dict:
+    """Observe a process with a bounded in-memory stream and an explicit deadline."""
     started = time.monotonic()
     timed_out, cleanup_error, return_code = False, None, None
-    log_hash, tail = hashlib.sha256(), b""
+    captured = {"bytes": 0, "tail": b"", "digest": hashlib.sha256(), "error": None}
+    capture_complete = False
+
     try:
-        with tempfile.TemporaryFile() as log:
-            proc = subprocess.Popen(
-                argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-                stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
-            )
+        proc = subprocess.Popen(
+            argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        if proc.stdout is None:
+            raise OSError("subprocess output pipe unavailable")
+
+        def drain() -> None:
             try:
-                try:
-                    return_code = proc.wait(timeout=TIMEOUT_SECONDS)
-                except subprocess.TimeoutExpired:
-                    timed_out = True
-                    try:
-                        os.killpg(proc.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    try:
-                        return_code = proc.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        cleanup_error = "child did not exit after session-group kill"
-            finally:
+                while chunk := proc.stdout.read(64 * 1024):
+                    captured["bytes"] += len(chunk)
+                    captured["digest"].update(chunk)
+                    captured["tail"] = (captured["tail"] + chunk)[-8192:]
+            except (OSError, ValueError) as exc:
+                captured["error"] = type(exc).__name__
+
+        reader = threading.Thread(target=drain, name="bounded-e2e-output", daemon=True)
+        reader.start()
+        try:
+            try:
+                return_code = proc.wait(timeout=TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                timed_out = True
                 try:
                     os.killpg(proc.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
-                except OSError as exc:
-                    cleanup_error = type(exc).__name__
-            log.seek(0)
-            while chunk := log.read(64 * 1024):
-                log_hash.update(chunk)
-                tail = (tail + chunk)[-8192:]
+                try:
+                    return_code = proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    cleanup_error = "child did not exit after process-group kill"
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except OSError as exc:
+                cleanup_error = type(exc).__name__
+            reader.join(timeout=10)
+            capture_complete = not reader.is_alive()
+            if not capture_complete and cleanup_error is None:
+                cleanup_error = "output pipe remained open after process exit"
+            if capture_complete:
+                proc.stdout.close()
+            elif captured["error"] is None:
+                captured["error"] = "incomplete output due to detached process"
     except (OSError, subprocess.SubprocessError) as exc:
         cleanup_error = type(exc).__name__
-    text = tail.decode("utf-8", "replace").replace(str(root), "<sandbox>")
+
+    # Only a bounded, best-effort redacted tail is retained, never raw logs.
+    text = captured["tail"].decode("utf-8", "replace").replace(str(root), "<sandbox>")
     text = re.sub(r"(?i)(token|password|api[_-]?key)\s*[:=]\s*\S+", r"\1=<redacted>", text)
+    text = re.sub(r"(?i)(Authorization\s*:\s*Bearer\s+)\S+", r"\1<redacted>", text)
     return {
         "argv": [str(a).replace(str(root), "<sandbox>") for a in argv],
         "exit_code": return_code,
         "timed_out": timed_out,
-        "cleanup_error": cleanup_error,
+        "cleanup_error": cleanup_error or captured["error"],
+        "capture_complete": capture_complete,
+        "output_bytes": captured["bytes"],
+        "output_truncated": captured["bytes"] > len(captured["tail"]),
         "duration_ms": round((time.monotonic() - started) * 1000),
-        "output_sha256": log_hash.hexdigest(),
+        "output_sha256": captured["digest"].hexdigest() if capture_complete else None,
         "output_tail": text[-3500:],
     }
 
