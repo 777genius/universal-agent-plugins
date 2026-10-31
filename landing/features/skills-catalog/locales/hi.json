@@ -25,7 +25,7 @@
       "showMore": "और स्किल दिखाएँ",
       "externalSource": "बाहरी स्रोत",
       "githubSource": "GitHub स्रोत",
-      "unsupportedSource": "इस स्रोत से इंस्टॉल करना अभी समर्थित नहीं है।",
+      "unsupportedSource": "सीधे इंस्टॉल करने के लिए सत्यापित GitHub स्रोत चाहिए।",
       "chooseAgents": "एजेंट चुनें",
       "chooseInTerminal": "टर्मिनल में एजेंट चुनें",
       "chooseInTerminalHelp": "कमांड इंस्टॉल से पहले एजेंट चुनने देता है।",
@@ -41,9 +41,11 @@
         "1h": "{count} इंस्टॉल · पिछला घंटा"
       },
       "pageHeading": "Agent Skills खोजें",
-      "unsupportedName": "इस सूची में Skill का नाम समर्थित नहीं है। इंस्टॉल करने के निर्देश स्रोत में देखें।",
+      "unsupportedName": "इस लिस्टिंग से सीधे इंस्टॉल नहीं हो सकता। GitHub स्रोत जाँचें।",
       "collectionShown": "इस संग्रह में {total} में से {count} दिख रहे हैं",
-      "headingPrefix": "खोजें"
+      "headingPrefix": "खोजें",
+      "viewListing": "मूल लिस्टिंग देखें",
+      "manualSkillSelection": "इंस्टॉलर में सही Skill चुनें; कैटलॉग का नाम सत्यापित नहीं है।"
     },
     "directoryPage": {
       "pluginDirectory": "प्लगइन निर्देशिका",

@@ -25,7 +25,7 @@
       "showMore": "显示更多技能",
       "externalSource": "外部来源",
       "githubSource": "GitHub 源码",
-      "unsupportedSource": "暂不支持从此来源安装。",
+      "unsupportedSource": "直接安装需要经过验证的 GitHub 来源。",
       "chooseAgents": "选择代理",
       "chooseInTerminal": "在终端中选择代理",
       "chooseInTerminalHelp": "命令会在安装前让你选择代理。",
@@ -41,9 +41,11 @@
         "1h": "{count} 次安装 · 最近一小时"
       },
       "pageHeading": "查找 Agent Skills",
-      "unsupportedName": "此条目的技能名称不受支持。请查看来源中的安装说明。",
+      "unsupportedName": "此条目暂不支持直接安装，请查看 GitHub 来源。",
       "collectionShown": "本合集显示 {count} 个，共 {total} 个",
-      "headingPrefix": "发现你的"
+      "headingPrefix": "发现你的",
+      "viewListing": "查看原始条目",
+      "manualSkillSelection": "请在安装器中选择准确的技能；目录中的名称尚未核实。"
     },
     "directoryPage": {
       "pluginDirectory": "插件目录",
