@@ -31,41 +31,49 @@ def sha(data: bytes) -> str:
 
 def run_process(argv: list[str], cwd: Path, env: dict[str, str], root: Path) -> dict:
     started = time.monotonic()
-    with tempfile.TemporaryFile() as log:
-        proc = subprocess.Popen(
-            argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-            stdout=log, stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-        timed_out = False
-        try:
-            proc.wait(timeout=TIMEOUT_SECONDS)
-        except subprocess.TimeoutExpired:
-            timed_out = True
+    timed_out, cleanup_error, return_code = False, None, None
+    log_hash, tail = hashlib.sha256(), b""
+    try:
+        with tempfile.TemporaryFile() as log:
+            proc = subprocess.Popen(
+                argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+            )
             try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            proc.wait(timeout=10)
-        # Bound helpers left in the selected process group, even on exit zero.
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        digest = hashlib.sha256()
-        tail = b""
-        log.seek(0)
-        while chunk := log.read(64 * 1024):
-            digest.update(chunk)
-            tail = (tail + chunk)[-8192:]
+                try:
+                    return_code = proc.wait(timeout=TIMEOUT_SECONDS)
+                except subprocess.TimeoutExpired:
+                    timed_out = True
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    try:
+                        return_code = proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        cleanup_error = "child did not exit after session-group kill"
+            finally:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except OSError as exc:
+                    cleanup_error = type(exc).__name__
+            log.seek(0)
+            while chunk := log.read(64 * 1024):
+                log_hash.update(chunk)
+                tail = (tail + chunk)[-8192:]
+    except (OSError, subprocess.SubprocessError) as exc:
+        cleanup_error = type(exc).__name__
     text = tail.decode("utf-8", "replace").replace(str(root), "<sandbox>")
     text = re.sub(r"(?i)(token|password|api[_-]?key)\s*[:=]\s*\S+", r"\1=<redacted>", text)
     return {
         "argv": [str(a).replace(str(root), "<sandbox>") for a in argv],
-        "exit_code": proc.returncode,
+        "exit_code": return_code,
         "timed_out": timed_out,
+        "cleanup_error": cleanup_error,
         "duration_ms": round((time.monotonic() - started) * 1000),
-        "output_sha256": digest.hexdigest(),
+        "output_sha256": log_hash.hexdigest(),
         "output_tail": text[-3500:],
     }
 
