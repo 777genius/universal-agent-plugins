@@ -1,10 +1,10 @@
 // Strict signed directory snapshot projection.
-import { catalogCategories } from './catalogCategories.ts';
+import { catalogCategories } from '../catalogCategories.ts';
 import {
   PLUGIN_NAME, COMPONENTS, KINDS, record, requiredString, optionalString, stringArray,
   digestValue, safeSequence, parseRFC3339Instant, compareInstants, author, source, icon,
-} from './registryDecodeCommon.ts';
-import { releaseTargets, evidenceFromSnapshot, eligibleTargetPolicies } from './registryDecodeEvidence.ts';
+} from './common.ts';
+import { releaseTargets, evidenceFromSnapshot, eligibleTargetPolicies } from './evidence.ts';
 import type {
   ComponentID,
   DistributionReleaseView,
@@ -12,7 +12,7 @@ import type {
   DistributionView,
   RegistryIndex,
   RegistryPlugin,
-} from '../types/registry';
+} from '../../types/registry';
 
 export function parseSnapshot(
   input: Record<string, unknown>,

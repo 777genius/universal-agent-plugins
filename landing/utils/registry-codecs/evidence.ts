@@ -2,7 +2,7 @@
 import {
   REPOSITORY, REVISION, DIGEST, CLIENTS, EVIDENCE_WORKFLOW, EVIDENCE_SOURCE_REF,
   record, requiredString, optionalString, stringArray,
-} from './registryDecodeCommon.ts';
+} from './common.ts';
 import type {
   ClientEvidence,
   ClientID,
@@ -12,7 +12,7 @@ import type {
   PackageEvidence,
   ReleaseTarget,
   TargetAuthentication,
-} from '../types/registry';
+} from '../../types/registry';
 
 export function releaseTargets(value: unknown, context: string): ReleaseTarget[] {
   if (!Array.isArray(value) || !value.length) throw new Error(`${context}: targets are required`);

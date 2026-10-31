@@ -2,14 +2,14 @@
 import {
   PLUGIN_NAME, COMPONENTS, record, requiredString, stringArray, author, source, icon,
   clientIDs, legacyDelivery, legacyAuthentication, legacyTargetAuthentication, legacyEvidence,
-} from './registryDecodeCommon.ts';
+} from './common.ts';
 import type {
   ComponentID,
   DistributionKind,
   DistributionView,
   RegistryIndex,
   RegistryPlugin,
-} from '../types/registry';
+} from '../../types/registry';
 
 export function parseLegacyIndex(input: Record<string, unknown>): RegistryIndex {
   if (input.schema_version !== 1 || !Array.isArray(input.plugins)) {

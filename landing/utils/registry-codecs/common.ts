@@ -9,7 +9,7 @@ import type {
   PluginSource,
   TargetAuthentication,
   RegistryPlugin,
-} from '../types/registry';
+} from '../../types/registry';
 
 export const REPOSITORY = /^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\/[a-z0-9](?:[a-z0-9._-]{0,98}[a-z0-9])?$/;
 export const REVISION = /^[a-f0-9]{40}$/;
