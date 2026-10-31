@@ -3,6 +3,8 @@ package agentpluginscli
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 func renderDependencyStatusForTest(t *testing.T, status dependencyStatus, format string) string {
@@ -122,6 +125,53 @@ func TestDependencyStatusGuidanceRequiresValidatedLock(t *testing.T) {
 	}
 	if strings.Contains(valid, "No valid uap.lock") || strings.Contains(valid, "agentplugins install") {
 		t.Fatalf("valid lock suggested an unsafe mutation: %s", valid)
+	}
+}
+
+// Exercise the collector as well as the human renderer: an absent or corrupt
+// lock must never be presented as safe to inspect or replay.
+func TestDependencyStatusCollectorRejectsUnusableLocks(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		lock []byte
+	}{
+		{name: "missing"},
+		{name: "malformed", lock: []byte("{not valid JSON")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newCLIFixture(t, nil)
+			f.app.DependenciesRoot = filepath.Join(t.TempDir(), "dependencies")
+			var err error
+			f.app.Installer, err = installer.New(installer.Config{
+				StateRoot: f.app.DependenciesRoot, Registry: f.app.ClientRegistry,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := f.execute(false, "deps", "init"); err != nil {
+				t.Fatalf("initialize saved-dependency manifest: %v", err)
+			}
+			_, lockPath := f.app.dependencyPaths()
+			if tc.lock != nil {
+				if err := os.WriteFile(lockPath, tc.lock, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			output, _, err := f.execute(false, "deps", "status")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{"No valid uap.lock was found", "Inspect uap.toml and uap.lock"} {
+				if !strings.Contains(output, want) {
+					t.Fatalf("collector omitted invalid-lock guidance %q: %s", want, output)
+				}
+			}
+			for _, unsafe := range []string{"agentplugins deps tree", "agentplugins install --locked"} {
+				if strings.Contains(output, unsafe) {
+					t.Fatalf("collector suggested %q for %s lock: %s", unsafe, tc.name, output)
+				}
+			}
+		})
 	}
 }
 
