@@ -156,6 +156,13 @@ def times(value,start,end):
     return all(start <= value[k][0]*10**9+value[k][1] <= end for k in ("Modified","Changed"))
 
 
+def selected_parent_times(old,now,start,end):
+    # processlock can advance ctime without advancing mtime; unchanged stamps
+    # remain the exact original values, every changed stamp belongs to the call.
+    changed=any(old[k]!=now[k] for k in ("Modified","Changed"))
+    return changed and all(old[k]==now[k] or start<=now[k][0]*10**9+now[k][1]<=end for k in ("Modified","Changed"))
+
+
 def frame(value):
     require(type(value) is dict and 0<len(value)<=4096 and "." in value)
     for name,row in value.items():
@@ -471,7 +478,7 @@ def cross_frames(paths,current,previous,global_before,cmd,stage):
         if same(old,now):continue
         if name=="mutation.lock":require(now is not None and authority(old,now));continue
         if name in parents:
-            require(now is not None and all(old[k]==now[k] for k in ("Kind","Mode","Device","Inode","UID","GID")) and times(now,start,end));continue
+            require(now is not None and all(old[k]==now[k] for k in ("Kind","Mode","Device","Inode","UID","GID")) and selected_parent_times(old,now,start,end));continue
         require(stage not in NOOPS and (name=="state-v2.json" or name==active or name.startswith(active+"/")))
     for name in set(new_state)-set(old_state):require(stage not in NOOPS and (name==active or name.startswith(active+"/")))
     require(all(same(row,new_state.get(name)) for name,row in old_state.items() if name==data or name.startswith(data+"/")))

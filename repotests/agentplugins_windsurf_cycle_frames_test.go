@@ -12,8 +12,36 @@ import (
 	"time"
 )
 
+func windCycleParentAuthority(old, now windProfileRecord) bool {
+	return old.Kind == "directory" && now.Kind == "directory" && old.Device == now.Device && old.Inode == now.Inode && old.Inode > 0 && old.Mode == now.Mode && old.UID == now.UID && old.GID == now.GID && now.UID == uint32(os.Getuid()) && now.GID == uint32(os.Getgid()) && now.Size >= 0 && now.Size <= 1<<20 && old.SHA256 == "" && now.SHA256 == ""
+}
+
 func windCycleParent(old, now windProfileRecord, start, end time.Time) bool {
-	return old.Kind == "directory" && now.Kind == "directory" && old.Device == now.Device && old.Inode == now.Inode && old.Inode > 0 && old.Mode == now.Mode && old.UID == now.UID && old.GID == now.GID && now.UID == uint32(os.Getuid()) && now.GID == uint32(os.Getgid()) && now.Size >= 0 && now.Size <= 1<<20 && old.SHA256 == "" && now.SHA256 == "" && windRuntimeCommandTimes(now, start, end)
+	return windCycleParentAuthority(old, now) && windRuntimeCommandTimes(now, start, end)
+}
+
+// An operation lock may chmod the selected parent: ctime advances while mtime
+// retains its previous value. Changed timestamps must belong to this command.
+func windCycleSelectedParent(old, now windProfileRecord, start, end time.Time) bool {
+	if !windCycleParentAuthority(old, now) {
+		return false
+	}
+	changed := false
+	for _, stamps := range [][2][2]int64{{old.Modified, now.Modified}, {old.Changed, now.Changed}} {
+		if stamps[0] == stamps[1] {
+			continue
+		}
+		changed = true
+		stamp := stamps[1]
+		if stamp[1] < 0 || stamp[1] >= int64(time.Second) {
+			return false
+		}
+		when := time.Unix(stamp[0], stamp[1])
+		if when.Before(start) || when.After(end) {
+			return false
+		}
+	}
+	return changed
 }
 
 func windCycleLock(path string, old, now windProfileRecord, start, end time.Time) error {
@@ -136,7 +164,7 @@ func (c *windProjectCycle) selectedFrame(label string, r *windComponentRecipe, a
 				return err
 			}
 		case parents[name]:
-			if now.Kind != "directory" || now.Mode != 040700 || now.UID != uint32(os.Getuid()) || now.GID != uint32(os.Getgid()) || now.Size < 0 || now.Size > 1<<20 || had && !windCycleParent(old, now, start, end) {
+			if now.Kind != "directory" || now.Mode != 040700 || now.UID != uint32(os.Getuid()) || now.GID != uint32(os.Getgid()) || now.Size < 0 || now.Size > 1<<20 || had && !windCycleSelectedParent(old, now, start, end) {
 				return fmt.Errorf("Windsurf selected parent authority")
 			}
 		case name == "state-v2.json":

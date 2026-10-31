@@ -43,6 +43,18 @@ class WindsurfCycleContracts(unittest.TestCase):
                 with self.assertRaises(ValueError):self.admit()
         self.proofs=original
 
+    def test_selected_parent_chmod_preserves_old_mtime_and_requires_windowed_ctime(self):
+        start,end=cycle.stamp("2030-03-17T00:00:00Z"),cycle.stamp("2030-03-17T00:00:01Z")
+        old={"Modified":[start//10**9-20,0],"Changed":[start//10**9-20,0]}
+        now=copy.deepcopy(old);now["Changed"]=[start//10**9,200000000]
+        self.assertTrue(cycle.selected_parent_times(old,now,start,end))
+        self.assertFalse(cycle.selected_parent_times(old,old,start,end))
+        for timestamp in ([start//10**9-1,0],[end//10**9+1,0]):
+            bad=copy.deepcopy(now);bad["Changed"]=timestamp
+            self.assertFalse(cycle.selected_parent_times(old,bad,start,end))
+        bad=copy.deepcopy(now);bad["Modified"]=[start//10**9-1,0]
+        self.assertFalse(cycle.selected_parent_times(old,bad,start,end))
+
     def test_a2_parent_replacement_cannot_renew_accepted_global_authority(self):
         active=False
         root=self.result["component_layout"]["root"]+"/installer-state"

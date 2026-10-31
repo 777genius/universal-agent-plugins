@@ -109,6 +109,40 @@ func TestWindsurfCycleActualOwnedMarkerAndLateReplacementRefuse(t *testing.T) {
 	}
 }
 
+func TestWindsurfCycleSelectedParentPreservesUnchangedMtimeButRequiresWindowedCtime(t *testing.T) {
+	start := time.Unix(1900000000, 0)
+	end := start.Add(time.Second)
+	old := windProfileRecord{
+		Kind: "directory", Mode: 040700, Device: 2, Inode: 123, Links: 2,
+		UID: uint32(os.Getuid()), GID: uint32(os.Getgid()), Size: 4096,
+		Modified: [2]int64{start.Unix() - 20, 0},
+		Changed: [2]int64{start.Unix() - 20, 0},
+	}
+	now := old
+	now.Changed = [2]int64{start.Unix(), 200000000}
+	if !windCycleSelectedParent(old, now, start, end) || windCycleParent(old, now, start, end) {
+		t.Fatal("selected chmod must keep old mtime without relaxing native parent proof")
+	}
+	for _, fault := range []struct {
+		name string
+		edit func(*windProfileRecord)
+	}{
+		{"unchanged", func(r *windProfileRecord) { r.Changed = old.Changed }},
+		{"stale ctime", func(r *windProfileRecord) { r.Changed = [2]int64{start.Unix() - 1, 0} }},
+		{"future ctime", func(r *windProfileRecord) { r.Changed = [2]int64{end.Unix() + 1, 0} }},
+		{"invalid nanoseconds", func(r *windProfileRecord) { r.Changed[1] = 1000000000 }},
+		{"foreign inode", func(r *windProfileRecord) { r.Inode++ }},
+		{"foreign mode", func(r *windProfileRecord) { r.Mode = 040755 }},
+		{"old mtime rewritten", func(r *windProfileRecord) { r.Modified = [2]int64{start.Unix() - 1, 0} }},
+	} {
+		bad := now
+		fault.edit(&bad)
+		if windCycleSelectedParent(old, bad, start, end) {
+			t.Fatal("selected parent accepted", fault.name)
+		}
+	}
+}
+
 func TestWindsurfCycleSelectedMutationLockRequiresActualWindowAndAuthority(t *testing.T) {
 	c := windCycleInert(t)
 	r := c.w.recipes["a"]

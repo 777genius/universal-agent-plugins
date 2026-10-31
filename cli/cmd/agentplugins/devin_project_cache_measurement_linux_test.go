@@ -222,8 +222,13 @@ func (probe *windDirectCacheProbe) observe(t *testing.T, stage string, raw []byt
 	expected, err := json.Marshal(assessment)
 	path := filepath.Join(cache.Root, key+".json")
 	file := after["security/assessments/"+key+".json"]
-	if err != nil || projectJourneyRead(t, path) != string(expected) || file.Mode != 0100600 || file.Size != int64(len(expected)) || file.Digest != windDirectCacheSHA(expected) || file.Device != after["security/assessments"].Device {
-		t.Fatal("canonical assessment cache differs", err)
+	sameBytes := projectJourneyRead(t, path) == string(expected)
+	sameMode := file.Mode == 0100600
+	sameSize := file.Size == int64(len(expected))
+	sameDigest := file.Digest == windDirectCacheSHA(expected)
+	sameDevice := file.Device == after["security/assessments"].Device
+	if err != nil || !sameBytes || !sameMode || !sameSize || !sameDigest || !sameDevice {
+		t.Fatalf("canonical assessment cache differs: marshal=%t bytes=%t mode=%t size=%t digest=%t device=%t", err == nil, sameBytes, sameMode, sameSize, sameDigest, sameDevice)
 	}
 	if !existed {
 		for _, stamp := range []syscall.Timespec{file.Modified, file.Changed} {
