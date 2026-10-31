@@ -2,6 +2,7 @@ name: Native Client Runtime
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, 'feat/project-*', feat/source-transports-e2e]
     paths:
       - 'repotests/agentplugins_*native*'
