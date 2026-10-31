@@ -31,7 +31,10 @@ func inspectNativeIntents(state domain.StateFileV2) ([]PendingNativeIntent, erro
 	for _, installation := range state.Installations {
 		for _, binding := range installation.Clients {
 			if binding.PendingNativeIntent == nil {
-				if binding.NativeActivationAttempt != "" && (binding.ClientID != "opencode" || !binding.SelectedDelivery.IsZero()) {
+				// Legacy user native-config attempts predate persisted selected intents.
+				// Inspection preserves their uncertainty without granting mutation authority.
+				legacyNativeConfig := binding.SelectedDelivery.IsZero() && binding.Scope == string(domain.ScopeUser) && binding.SelectedDelivery.EffectiveTraitsForScope(domain.ClientID(binding.ClientID), domain.ScopeUser).LifecycleKind == domain.LifecycleNativeConfig
+				if binding.NativeActivationAttempt != "" && !legacyNativeConfig && (binding.ClientID != "opencode" || !binding.SelectedDelivery.IsZero()) {
 					return out, fmt.Errorf("native attempt has no persisted intent; retain uncertainty")
 				}
 				continue
