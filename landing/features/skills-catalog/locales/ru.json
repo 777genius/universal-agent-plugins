@@ -25,7 +25,7 @@
       "showMore": "Показать ещё навыки",
       "externalSource": "Внешний источник",
       "githubSource": "Исходники на GitHub",
-      "unsupportedSource": "Для прямой установки нужен подтверждённый источник GitHub.",
+      "unsupportedSource": "Для этой записи нет подтверждённого источника установки.",
       "chooseAgents": "Выберите агентов",
       "chooseInTerminal": "Выбрать агентов в терминале",
       "chooseInTerminalHelp": "Команда предложит выбрать агентов перед установкой.",

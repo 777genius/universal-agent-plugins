@@ -25,7 +25,7 @@
       "showMore": "Показати ще навички",
       "externalSource": "Зовнішнє джерело",
       "githubSource": "Код на GitHub",
-      "unsupportedSource": "Для прямого встановлення потрібне підтверджене джерело GitHub.",
+      "unsupportedSource": "Для цього запису немає підтвердженого джерела встановлення.",
       "chooseAgents": "Виберіть агентів",
       "chooseInTerminal": "Вибрати агентів у терміналі",
       "chooseInTerminalHelp": "Команда запропонує вибрати агентів перед встановленням.",

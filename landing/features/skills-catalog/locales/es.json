@@ -25,7 +25,7 @@
       "showMore": "Mostrar más Skills",
       "externalSource": "Fuente externa",
       "githubSource": "Código en GitHub",
-      "unsupportedSource": "La instalación directa requiere una fuente de GitHub verificada.",
+      "unsupportedSource": "No hay una fuente de instalación verificada para esta ficha.",
       "chooseAgents": "Elige agentes",
       "chooseInTerminal": "Elegir agentes en la terminal",
       "chooseInTerminalHelp": "El comando permite elegir agentes antes de instalar.",
