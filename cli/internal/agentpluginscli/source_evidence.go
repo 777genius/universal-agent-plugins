@@ -249,17 +249,17 @@ func cloneDirectoryOrigin(value *domain.DirectoryOrigin) *domain.DirectoryOrigin
 	if value == nil {
 		return nil
 	}
-	copy := *value
-	return &copy
+	cloned := *value
+	return &cloned
 }
 
 func cloneDirectorySelection(value *domain.DirectorySelection) *domain.DirectorySelection {
 	if value == nil {
 		return nil
 	}
-	copy := *value
-	copy.Diagnostics = append([]domain.DirectoryDiagnostic(nil), value.Diagnostics...)
-	return &copy
+	cloned := *value
+	cloned.Diagnostics = append([]domain.DirectoryDiagnostic(nil), value.Diagnostics...)
+	return &cloned
 }
 
 func cloneCatalogCompatibility(source map[string]domain.CatalogCompatibility) map[string]domain.CatalogCompatibility {

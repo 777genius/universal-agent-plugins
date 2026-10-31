@@ -9,7 +9,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-func (app App) addResolutionRequest(selector string, targets []domain.ClientID) packageResolutionRequest {
+func (app App) addResolutionRequest(_ string, targets []domain.ClientID) packageResolutionRequest {
 	return packageResolutionRequest{Targets: append([]domain.ClientID(nil), targets...), Operation: domain.DirectoryInstall, RetainRecorded: true}
 }
 
@@ -175,7 +175,7 @@ func retainedDirectoryInstallation(state domain.StateFileV2, selector, productID
 			return domain.Installation{}, false, fmt.Errorf("retained installation %q has incomplete or corrupt Directory release identity", installation.InstallationID)
 		}
 		if productID != "" && installation.Directory.ProductID != productID {
-			return domain.Installation{}, false, fmt.Errorf("Directory selector %q now resolves to product %q, but retained installation %q records product %q", selector, productID, installation.InstallationID, installation.Directory.ProductID)
+			return domain.Installation{}, false, fmt.Errorf("directory selector %q now resolves to product %q, but retained installation %q records product %q", selector, productID, installation.InstallationID, installation.Directory.ProductID)
 		}
 		matches = append(matches, installation)
 	}
