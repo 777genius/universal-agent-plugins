@@ -94,11 +94,15 @@ test('explicit card delivery summary follows the winning scoped release rather t
   fallback.releases = [fallback.releases[0]];
   plugin.distributions.push(fallback);
   const instance = card(packageProps(plugin));
+  assert.equal(instance.state.deliverySummary.value, '', 'terminal detection cannot claim agent status');
   instance.state.updateTargets(['codex']);
   instance.state.updateAutoDetect(false);
   instance.state.updateScope('project');
   assert.equal(instance.state.deliverySummary.value, 'Agents: 0 automatic setup · 1 need follow-up');
   assert.match(instance.state.command.value, /--target codex --scope project$/);
+  instance.state.updateScope('user');
+  instance.state.updateAutoDetect(true);
+  assert.equal(instance.state.deliverySummary.value, '', 'switching back to terminal hides agent status');
   instance.stop();
 });
 
