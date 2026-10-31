@@ -25,7 +25,13 @@ var (
 
 func (*ProjectAdapter) NativeRegistry(in clients.PlanInput) (string, string) {
     if in.TargetContext.Scope == domain.ScopeProject {
-        return filepath.Join(in.TargetContext.ProjectRoot, ".pi"), in.Client.ExecutablePath
+        root, err := projectPiRoot(in.Client, in.TargetContext, "")
+        if err != nil {
+            // The interface cannot return an error; an empty native root
+            // makes the planner refuse this project before source loading.
+            return "", ""
+        }
+        return root, in.Client.ExecutablePath
     }
     return in.Client.ConfigRoot, in.Client.ExecutablePath
 }
@@ -47,8 +53,11 @@ func projectPiRoot(client domain.DetectedClient, target domain.TargetContext, pl
         return "", err
     }
     if client.ClientID != domain.ClientPi || scoped.Scope != domain.ScopeProject ||
-        scoped.UserConfigRoot != client.ConfigRoot {
+        scoped.UserConfigRoot != client.ConfigRoot || client.ConfigRoot == "" {
         return "", fmt.Errorf("Pi project selection differs from the original user profile")
+    }
+    if err := validateProfile(client.ConfigRoot); err != nil {
+        return "", fmt.Errorf("Pi project requires a canonical original user profile: %w", err)
     }
     root := filepath.Join(scoped.ProjectRoot, ".pi")
     if planned != "" && planned != root {
