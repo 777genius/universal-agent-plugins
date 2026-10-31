@@ -1,0 +1,32 @@
+{
+  "artifact_id": 12760476935,
+  "files": {
+    "add-A.command.json": "ef3364fa7b8b68d110a529c28187a8087f1e804d1a06e0a0c24910587fbbbb66",
+    "add-A.stderr.log": "281ecf9b22a66c055553b25d724560f92d5ab06ca507e2e6327a0b8f77f763b0",
+    "add-A.stdout.log": "0f9563c156943301ab2ce4bc3cf792d27c9525ac17b303f28522b1c59c5757ae",
+    "git-A.command.json": "de94f8b216543fa2f5e2c824da0f514cfabba8d27484b1c6f10ed1d5e6947389",
+    "git-A.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "git-A.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "git-B.command.json": "1f511e07a0b3dc6a3663008e24948d25cafeab16c5122445cbcdea07fcc461a9",
+    "git-B.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "git-B.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "mcp.json.installed": "d08c0b8d7fc2826557f07d263fbe8d1d45066a4164f4bed526ac960cccbda789",
+    "native-attempt.command.json": "7eff48ef429dc9e5eebe5ed3955610f060b1a26865da9021ecc61b2989e97458",
+    "native-attempt.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "native-attempt.stdout.log": "f1d94b523ddf402064bf585d35f02c7c8d3c67ebf3bea4fbbdc02c1329170b15",
+    "probe-events.jsonl": "5b9d9ed25ee4d98c6731b4e81084858d8cd0c1021ee7be23b92067951cc94f96",
+    "provider-request-1.json": "ecf2afa191d7819e80d52ac466c362466ba393ca625118a521c98792f5c52054",
+    "provider-request-2.json": "05f1d4d86d459e7a6bfa384e4bd57d203a7098118627205dc799fcf2f4e2f545",
+    "runtime-attempt.json": "64d5a22bac60d94c55f05b756b2a51d941203acced299d20b332a3f95ab7e7b5",
+    "uapcopilota-SKILL.md.installed": "f26d18ccb915c2fe54ce92df7308616cc5cce2868fb5587ed92ff63b9c6b3c5d",
+    "version.command.json": "b1b370e550004b1270744948b7257dc19e024163e0a2cdc08097a0e023da0119",
+    "version.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "version.stdout.log": "0381297224b3ae763df6f5434597b39b5ea5d26a42cab604ad8d346d69487237"
+  },
+  "inner_sha256": "37bb4526d83f77857c203b9ec75a695c93ac57ae323e2f6830b2ade75bbbc9f9",
+  "interpretation": "historical deliberately failed capture; replay is inert and never qualifies a new source",
+  "outer_sha256": "bc595e6e56049a1f3a642159ef6032c5fc702e386360b66494ccffb83557e3e1",
+  "run_id": 40553325878,
+  "source_commit": "9b8ddc5332d70ca0c8d39c41c5ce60f3bba1c6e7",
+  "source_tree": "8386a313607a2d1acfd5583bd9335d9ce7af1340"
+}

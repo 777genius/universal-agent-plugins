@@ -77,7 +77,7 @@ func bindCursorStdio(entry map[string]any, server domain.MCPServer, activePath, 
 		command = "./" + strings.TrimPrefix(command, "${package.root}/")
 	}
 	entry["command"] = filepath.Join(activePath, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
-	entry["args"] = managedstdio.Arguments(activePath, dataPath, absoluteCWD, cwd.Anchor, command, args)
+	entry["args"] = managedstdio.EncodedArguments(activePath, dataPath, absoluteCWD, cwd.Anchor, command, args)
 	delete(entry, "cwd")
 	return nil
 }

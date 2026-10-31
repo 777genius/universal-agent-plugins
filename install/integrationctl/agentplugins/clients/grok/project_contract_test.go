@@ -55,6 +55,7 @@ type projectTestRunner struct {
 	calls   int
 	enabled bool
 	bad     string
+	version string
 }
 
 func (runner *projectTestRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -63,17 +64,28 @@ func (runner *projectTestRunner) Run(_ context.Context, command legacyports.Comm
 	if !reflect.DeepEqual(command.Argv, []string{runner.request.Client.ExecutablePath, "inspect", "--json"}) || command.Dir != plan.TargetContext.ProjectRoot || command.StdoutLimitBytes != 1<<20 {
 		return legacyports.CommandResult{}, os.ErrPermission
 	}
-	body, _ := json.Marshal(map[string]any{"grokVersion": "1.0.67", "cwd": command.Dir, "projectRoot": command.Dir + string(filepath.Separator), "projectTrusted": false, "skills": []any{}, "plugins": []any{map[string]any{"name": "demo", "scope": "project", "path": plan.ActivePath, "enabled": runner.enabled}}})
+	version := runner.version
+	if version == "" {
+		version = "1.0.67"
+	}
+	body, _ := json.Marshal(map[string]any{"grokVersion": version, "cwd": command.Dir, "projectRoot": command.Dir + string(filepath.Separator), "projectTrusted": false, "skills": []any{}, "plugins": []any{map[string]any{"name": "demo", "scope": "project", "path": plan.ActivePath, "enabled": runner.enabled}}})
 	if runner.bad != "" {
 		body = []byte(runner.bad)
 	}
 	return legacyports.CommandResult{Stdout: body}, nil
 }
 func TestProjectGrokPreparedForeverAndNoGlobalCommand(t *testing.T) {
+	for _, version := range []string{"1.0.67", "1.0.70"} {
+		t.Run(version, func(t *testing.T) { testProjectGrokPreparedForever(t, version) })
+	}
+}
+
+func testProjectGrokPreparedForever(t *testing.T, version string) {
+	t.Helper()
 	request := projectTestRequest(t)
 	projectTestWrite(t, filepath.Join(request.Plan.ActivePath, ".grok-plugin", "plugin.json"), `{"name":"demo"}`)
 	for _, enabled := range []bool{false, true} {
-		runner := &projectTestRunner{request: request, enabled: enabled}
+		runner := &projectTestRunner{request: request, enabled: enabled, version: version}
 		env := clients.Env{Runner: runner}
 		out, err := New().Activate(t.Context(), env, request)
 		if err != nil || out.Activation != domain.ActivationPrepared || out.Verification != domain.VerificationPackageValid || out.AuthoritativeObservation || runner.calls != 1 {
@@ -99,8 +111,15 @@ func TestProjectGrokPreparedForeverAndNoGlobalCommand(t *testing.T) {
 	}
 }
 func TestProjectGrokStrictObservedInspectShape(t *testing.T) {
+	for _, version := range []string{"1.0.67", "1.0.70"} {
+		t.Run(version, func(t *testing.T) { testProjectGrokStrictObservedInspectShape(t, version) })
+	}
+}
+
+func testProjectGrokStrictObservedInspectShape(t *testing.T, version string) {
+	t.Helper()
 	request := projectTestRequest(t)
-	runner := &projectTestRunner{request: request}
+	runner := &projectTestRunner{request: request, version: version}
 	command := legacyports.Command{Argv: []string{request.Client.ExecutablePath, "inspect", "--json"}, Dir: request.Plan.TargetContext.ProjectRoot, StdoutLimitBytes: 1 << 20}
 	result, err := runner.Run(t.Context(), command)
 	if err != nil {
@@ -127,8 +146,11 @@ func TestProjectGrokStrictObservedInspectShape(t *testing.T) {
 			t.Fatal("observed root spelling refused", err)
 		}
 	}
-	invalid := make([]string, 0, 10)
-	invalid = append(invalid, strings.Replace(body, `"grokVersion":"1.0.67"`, `"grokVersion":"1.0.68"`, 1), strings.Replace(body, `"cwd":`, `"Cwd":`, 1), strings.Replace(body, `"projectRoot":`, `"ProjectRoot":`, 1), strings.Replace(body, `"enabled":false`, `"enabled":null`, 1), body+` {}`, strings.Replace(body, `"skills":[]`, `"skills":null`, 1), strings.Replace(body, `"name":"demo"`, `"name":"demo","Name":"demo"`, 1))
+	invalid := make([]string, 0, 12)
+	for _, unsupported := range []string{"1.0.68", "1.0.71", "1.0.70-dev"} {
+		invalid = append(invalid, strings.Replace(body, `"grokVersion":"`+version+`"`, `"grokVersion":"`+unsupported+`"`, 1))
+	}
+	invalid = append(invalid, strings.Replace(body, `"cwd":`, `"Cwd":`, 1), strings.Replace(body, `"projectRoot":`, `"ProjectRoot":`, 1), strings.Replace(body, `"enabled":false`, `"enabled":null`, 1), body+` {}`, strings.Replace(body, `"skills":[]`, `"skills":null`, 1), strings.Replace(body, `"name":"demo"`, `"name":"demo","Name":"demo"`, 1))
 	for _, suffix := range []string{"//", "/./", "/../A/"} {
 		invalid = append(invalid, replaceRoot(project+suffix))
 	}

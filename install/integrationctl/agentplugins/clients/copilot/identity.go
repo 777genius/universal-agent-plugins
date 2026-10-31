@@ -28,7 +28,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 	if err != nil {
 		return clients.RegistryIndeterminate, err
 	}
-	return shared.InspectCopilotRegistry(ctx, bound, plan, managed)
+	return shared.InspectCopilotRegistryWithListingRecognition(ctx, bound, plan, managed, recognizeCopilotUserRegistry)
 }
 
 func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, owned bool) (clients.RegistryFinding, error) {

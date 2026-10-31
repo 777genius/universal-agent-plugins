@@ -1,0 +1,98 @@
+name: Remaining Project Native Research
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/project-native-research.yml'
+      - 'scripts/project_native_research.py'
+      - 'scripts/project_native_cursor_acquisition.py'
+      - 'scripts/project_native_service.py'
+      - 'scripts/project_native_collectors/**'
+      - 'scripts/test_project_native_*.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/native_client_project_artifacts.py'
+      - 'scripts/research-grok-native.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'repotests/testdata/agentplugins_native_probe/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: project-native-research-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  contracts:
+    name: Inert contracts and explicit research selection
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.selection.outputs.matrix }}
+      count: ${{ steps.selection.outputs.count }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Test capture, pins, admission and leaf parsers without vendor execution
+        run: python3 -m unittest discover -s scripts -p 'test_project_native_*.py'
+      - name: Select only declared research phases
+        id: selection
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, subprocess
+          result = subprocess.check_output(['python3', 'scripts/project_native_research.py', '--matrix'], text=True).strip()
+          matrix = json.loads(result)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('matrix=' + result + '\n')
+              output.write('count=' + str(len(matrix['include'])) + '\n')
+          print(result)
+          print('Research selection does not qualify lifecycle, MCP, model use or a release.')
+          PYTHON
+  research:
+    name: ${{ matrix.client }} / ${{ matrix.phase }} / current source
+    needs: contracts
+    if: ${{ needs.contracts.outputs.count != '0' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix: ${{ fromJSON(needs.contracts.outputs.matrix) }}
+    runs-on: ${{ matrix.host }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: ${{ matrix.client == 'kimi' && matrix.phase == 'observe' }}
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Acquire or observe exact native bytes in a fresh original profile
+        env:
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 scripts/project_native_research.py --client '${{ matrix.client }}' --phase '${{ matrix.phase }}' --output '${{ runner.temp }}/project-native-${{ matrix.client }}'
+      - name: Admit the exact bounded evidence ZIP
+        id: admission
+        if: ${{ always() }}
+        env:
+          EVIDENCE: ${{ runner.temp }}/project-native-${{ matrix.client }}/upload/research.zip
+        run: |
+          /usr/bin/python3 -I - <<'PYTHON'
+          import os, stat
+          from pathlib import Path
+          path = Path(os.environ['EVIDENCE'])
+          info = path.lstat()
+          if path.resolve() != path or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid() or info.st_size > 32 * 1024 * 1024:
+              raise SystemExit('refusing nonregular or unbounded research ZIP')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('valid=true\n')
+          PYTHON
+      - name: Upload closed research evidence
+        if: ${{ always() && steps.admission.outputs.valid == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: project-native-${{ matrix.client }}-${{ matrix.phase }}-linux-amd64
+          path: ${{ runner.temp }}/project-native-${{ matrix.client }}/upload/research.zip
+          if-no-files-found: error
+          retention-days: 14

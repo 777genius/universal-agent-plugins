@@ -404,7 +404,7 @@ func (f pmInstallJourney) assertInstalled(t *testing.T, project, target, revisio
 		for _, receipt := range installation.DataReceipts {
 			data = receipt.Locator
 		}
-		if !reflect.DeepEqual(worker["args"], []any{"--internal-stdio-v1", binding.TargetLocator, data, binding.TargetLocator, "plugin", "--", "go", "version"}) {
+		if !reflect.DeepEqual(worker["args"], []any{"--internal-stdio-v1", binding.TargetLocator, data, binding.TargetLocator, "plugin", "--argv-base64-v1", "Z28=", "dmVyc2lvbg=="}) {
 			t.Fatalf("Cursor launcher bindings=%+v", worker)
 		}
 		env, ok := worker["env"].(map[string]any)

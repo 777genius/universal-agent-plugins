@@ -20,7 +20,7 @@ type projectInspection struct{ plugins []projectPlugin }
 
 func parseProjectInspect(body []byte, project string) (projectInspection, error) {
 	fail := func() (projectInspection, error) {
-		return projectInspection{}, fmt.Errorf("grok 1.0.67 project inspect contract is not recognized")
+		return projectInspection{}, fmt.Errorf("grok project inspect contract (1.0.67 or 1.0.70) is not recognized")
 	}
 	value, err := shared.DecodeStrictJSONObject(body)
 	if err != nil {
@@ -29,7 +29,7 @@ func parseProjectInspect(body []byte, project string) (projectInspection, error)
 	if !exactProjectFields(value, []string{"grokVersion", "cwd", "projectRoot", "projectTrusted", "plugins", "skills"}) {
 		return fail()
 	}
-	if value["grokVersion"] != "1.0.67" || value["cwd"] != project || (value["projectRoot"] != project && value["projectRoot"] != project+string(filepath.Separator)) {
+	if (value["grokVersion"] != "1.0.67" && value["grokVersion"] != "1.0.70") || value["cwd"] != project || (value["projectRoot"] != project && value["projectRoot"] != project+string(filepath.Separator)) {
 		return fail()
 	}
 	if _, ok := value["projectTrusted"].(bool); !ok {
