@@ -155,8 +155,14 @@ run on a supported CI host is separate evidence for that host.
 [`Package manager E2E`](../../.github/workflows/package-manager-e2e.yml) runs the
 full command on hosted Ubuntu 24.04, Windows 2025, macOS 15 on Apple Silicon
 (`macos-15`) and macOS 15 on Intel (`macos-15-intel`) when relevant source/test files change.
-It also supports manual dispatch. Superseded PR runs cancel automatically; jobs
-have a generous hang limit, retain reports and logs, and need no account secrets.
+While a PR is **draft**, only the quick Python evidence/CI-policy preflight runs;
+ordinary core tests are supplied by the separate Core fast workflow. Marking a
+PR **ready for review** runs the complete four-platform matrix, as does each
+subsequent code push while it remains ready. A relevant merge into `main`
+always gets a separate complete matrix, and manual dispatch remains available.
+Moving a PR back to draft is not a substitute for final-head qualification.
+Superseded runs for the same PR/ref cancel automatically; jobs have a generous
+hang limit, retain reports and logs, and need no account secrets.
 
 The two macOS jobs exercise the same suite and assertions. Their runner labels
 select an OS generation and architecture; GitHub updates the underlying images.

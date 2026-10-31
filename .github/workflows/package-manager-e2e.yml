@@ -2,6 +2,7 @@ name: Package manager E2E
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'cli/**'
       - 'install/integrationctl/**'
@@ -12,6 +13,7 @@ on:
       - 'scripts/package-manager-e2e.py'
       - 'scripts/package_manager_binary.py'
       - 'scripts/test_package_manager_e2e.py'
+      - 'scripts/test_package_manager_ci_policy.py'
       - '.github/workflows/package-manager-e2e.yml'
   push:
     branches: [main]
@@ -25,6 +27,7 @@ on:
       - 'scripts/package-manager-e2e.py'
       - 'scripts/package_manager_binary.py'
       - 'scripts/test_package_manager_e2e.py'
+      - 'scripts/test_package_manager_ci_policy.py'
       - '.github/workflows/package-manager-e2e.yml'
   workflow_dispatch:
 
@@ -36,7 +39,26 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
+  # Drafts get cheap evidence validation; ready PRs and main get real E2E.
+  draft-preflight:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
+    name: draft evidence preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.12'
+      - name: Check evidence and CI policy rejection cases
+        run: |
+          python -B -m unittest discover -s scripts -p test_package_manager_e2e.py
+          python -B -m unittest discover -s scripts -p test_package_manager_ci_policy.py
+
   package-manager:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: package-manager (${{ matrix.os }})
     # Real Git containment requires a conventional procfs on Linux. This focused
     # qualification uses disposable hosted runners, including both Mac architectures.
@@ -64,8 +86,10 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
         with:
           python-version: '3.12'
-      - name: Check evidence rejection cases
-        run: python -B -m unittest discover -s scripts -p test_package_manager_e2e.py
+      - name: Check evidence and CI policy rejection cases
+        run: |
+          python -B -m unittest discover -s scripts -p test_package_manager_e2e.py
+          python -B -m unittest discover -s scripts -p test_package_manager_ci_policy.py
       - name: Execute the full portable catalog
         run: python -B scripts/package-manager-e2e.py --output "${{ runner.temp }}/package-manager-e2e"
       - name: Retain execution evidence
