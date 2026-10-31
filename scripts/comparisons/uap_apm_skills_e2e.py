@@ -168,8 +168,10 @@ def tool_args(product: str, executable: str, project: Path, commit: str, *, repl
     if product == "uap":
         if replay:
             return [executable, "install", "--locked", "--scope", "project", "--project-root", str(project), "--yes", "--format", "json"]
-        return [executable, "skills", "add", "777genius/universal-agent-plugins",
-                "--path", SKILL_PATH, "--ref", commit, "--target", "codex",
+        # The released --ref flag is for branches/tags, not commit objects.
+        # Exact-SHA repo@commit//folder is the documented immutable Git selector.
+        source = f"{REPOSITORY}@{commit}//{SKILL_PATH}"
+        return [executable, "skills", "add", source, "--target", "codex",
                 "--scope", "project", "--project-root", str(project),
                 "--no-ui", "--yes", "--format", "json"]
     if replay:
