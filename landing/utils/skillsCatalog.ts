@@ -70,13 +70,7 @@ export function skillInstallCommand(
 ): string | undefined {
   const source = skillRepositoryUrl(skill);
   if (!source || skill.availability === 'unsupported-source') return undefined;
-  const tokens = [
-    'npx',
-    'universal-agent-plugins@latest',
-    'skills',
-    'add',
-    source,
-  ];
+  const tokens = ['npx', 'universal-agent-plugins@latest', 'skills', 'add', source];
   if (!skillNeedsManualSelection(skill)) tokens.push('--skill', skill.skillNameHint);
   if (targets !== undefined) {
     const ids = [...new Set(targets.map((id) => id.trim()).filter(Boolean))];
@@ -84,8 +78,9 @@ export function skillInstallCommand(
     tokens.push('--target', ids.join(','));
   }
   // Every dynamic token is a validated repository, normative name or known
-  // target ID. Unverified names open the CLI picker instead of being guessed. Double quotes preserve Unicode in CMD and CSV in PowerShell;
-  // these identifiers cannot contain shell expansions or quote delimiters.
+  // target ID. Unverified names open the CLI picker instead of being guessed.
+  // Double quotes preserve Unicode in CMD and CSV in PowerShell; these
+  // identifiers cannot contain shell expansions or quote delimiters.
   return tokens
     .map((token) => (/^[A-Za-z0-9_./:@+=-]+$/.test(token) ? token : `"${token}"`))
     .join(' ');

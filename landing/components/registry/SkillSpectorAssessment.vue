@@ -80,6 +80,7 @@ const label = computed(() => {
     props.scope === 'plugin' &&
     assessment.value.inventoryKnown &&
     (assessment.value.fullyChecked ?? 0) > 0 &&
+    (assessment.value.fullyChecked ?? 0) < (assessment.value.selected ?? 0) &&
     (assessment.value.selected ?? 0) > 1
   )
     return t('registryUi.skillSpector.coverageProgress', {
