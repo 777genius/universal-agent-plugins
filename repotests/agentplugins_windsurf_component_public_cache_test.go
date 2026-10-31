@@ -117,8 +117,12 @@ func (w *windComponentFixture) assessmentFrame(r *windComponentRecipe, frame map
 		return "", refused
 	}
 	raw, err := projectNativeRuntimeRead(filepath.Join(root, name), 1<<20)
+	// Linux overlay filesystems may expose different st_dev values for a
+	// directory and its regular children. The held no-follow inventory, not
+	// a parent/child device-number assumption, proves the leaf's identity.
+	actual, actualErr := windOwnedTree(w.f.ctx, root)
 	file := frame[name]
-	if err != nil || !bytes.Equal(raw, expected) || file.Kind != "file" || file.Mode != 0100600 || file.UID != uint32(os.Getuid()) || file.GID != uint32(os.Getgid()) || file.Links != 1 || file.Inode == 0 || file.Device != frame[windAssessmentDirectory].Device || file.Size != int64(len(expected)) || file.SHA256 != windsurfConfigDigest(expected) || !windRuntimeCommandTimes(file, cache.start, cache.end) {
+	if err != nil || actualErr != nil || actual[name] != file || !bytes.Equal(raw, expected) || file.Kind != "file" || file.Mode != 0100600 || file.UID != uint32(os.Getuid()) || file.GID != uint32(os.Getgid()) || file.Links != 1 || file.Inode == 0 || file.Device == 0 || file.Size != int64(len(expected)) || file.SHA256 != windsurfConfigDigest(expected) || !windRuntimeCommandTimes(file, cache.start, cache.end) {
 		return "", refused
 	}
 	return name, nil
