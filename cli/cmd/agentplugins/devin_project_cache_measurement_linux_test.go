@@ -226,9 +226,11 @@ func (probe *windDirectCacheProbe) observe(t *testing.T, stage string, raw []byt
 	sameMode := file.Mode == 0100600
 	sameSize := file.Size == int64(len(expected))
 	sameDigest := file.Digest == windDirectCacheSHA(expected)
-	sameDevice := file.Device == after["security/assessments"].Device
-	if err != nil || !sameBytes || !sameMode || !sameSize || !sameDigest || !sameDevice {
-		t.Fatalf("canonical assessment cache differs: marshal=%t bytes=%t mode=%t size=%t digest=%t device=%t", err == nil, sameBytes, sameMode, sameSize, sameDigest, sameDevice)
+	// OverlayFS may report different devices for an ordinary file and its
+	// parent. The no-follow read, owner/link checks and the exact saved
+	// device+inode in each subsequent frame protect the actual file identity.
+	if err != nil || !sameBytes || !sameMode || !sameSize || !sameDigest {
+		t.Fatalf("canonical assessment cache differs: marshal=%t bytes=%t mode=%t size=%t digest=%t", err == nil, sameBytes, sameMode, sameSize, sameDigest)
 	}
 	if !existed {
 		for _, stamp := range []syscall.Timespec{file.Modified, file.Changed} {
