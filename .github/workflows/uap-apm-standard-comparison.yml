@@ -50,6 +50,9 @@ jobs:
         run: |
           set -euo pipefail
           python -m venv "$RUNNER_TEMP/apm-venv"
+          mkdir -p "$RUNNER_TEMP/apm-distribution"
+          "$RUNNER_TEMP/apm-venv/bin/python" -m pip download --no-deps --dest "$RUNNER_TEMP/apm-distribution" "apm-cli==0.35.0"
+          sha256sum "$RUNNER_TEMP"/apm-distribution/* > "$RUNNER_TEMP/apm-distribution-sha256.txt"
           "$RUNNER_TEMP/apm-venv/bin/python" -m pip install --disable-pip-version-check "apm-cli==0.35.0"
           "$RUNNER_TEMP/apm-venv/bin/apm" --version
           "$RUNNER_TEMP/apm-venv/bin/python" -m pip freeze > "$RUNNER_TEMP/apm-installed-requirements.txt"
@@ -69,6 +72,7 @@ jobs:
             --uap-source-sha "$(git -C "$RUNNER_TEMP/uap-release" rev-parse HEAD)" \
             --output "$RUNNER_TEMP/uap-apm-results"
           cp "$RUNNER_TEMP/apm-installed-requirements.txt" "$RUNNER_TEMP/uap-apm-results/apm-installed-requirements.txt"
+          cp "$RUNNER_TEMP/apm-distribution-sha256.txt" "$RUNNER_TEMP/uap-apm-results/apm-distribution-sha256.txt"
           cat "$RUNNER_TEMP/uap-apm-results/report.md" >> "$GITHUB_STEP_SUMMARY"
           # Green workflow means evidence capture, not that either tool won.
 
