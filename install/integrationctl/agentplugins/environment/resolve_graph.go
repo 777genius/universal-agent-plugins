@@ -210,10 +210,7 @@ func (solver *graphSolver) chooseCandidates(ctx context.Context, key string, nod
 	}
 	sort.Slice(candidates, func(i, j int) bool {
 		c := CompareVersions(candidates[i].Version, candidates[j].Version)
-		if solver.update[key] {
-			return c > 0 || c == 0 && candidates[i].ReleaseSequence > candidates[j].ReleaseSequence
-		}
-		return c < 0 || c == 0 && candidates[i].ReleaseSequence < candidates[j].ReleaseSequence
+		return c > 0 || c == 0 && candidates[i].ReleaseSequence > candidates[j].ReleaseSequence
 	})
 	for _, candidate := range candidates {
 		if !candidateAccepts(node, candidate) || solver.downgrades(key, candidate.Version) {
