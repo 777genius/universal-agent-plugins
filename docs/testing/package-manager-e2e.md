@@ -191,6 +191,14 @@ Moving a PR back to draft is not a substitute for final-head qualification.
 Superseded runs for the same PR/ref cancel automatically; jobs have a generous
 hang limit, retain reports and logs, and need no account secrets.
 
+If a maintainer-configured external Linux runner is unavailable, maintainers
+can apply the existing `ci:github-hosted` PR label. The repository's Core fast,
+Required and shared lint workflows then select GitHub-hosted Ubuntu runners;
+this does **not** bypass or skip their assertions. Because the triggering PR
+event captures labels, a new `synchronize` event (for example a legitimate
+follow-up documentation or test commit) is required after applying the label;
+adding a label alone does not move already queued jobs to another runner.
+
 The two macOS jobs exercise the same suite and assertions. Their runner labels
 select an OS generation and architecture; GitHub updates the underlying images.
 For an optional supplementary local macOS run, check out the revision you
