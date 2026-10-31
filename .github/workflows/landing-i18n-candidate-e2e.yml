@@ -1,0 +1,52 @@
+# One-off qualification of the real Nuxt i18n 10 SSR loader and locale switcher.
+# Read-only; remove after recording results in the migration PR.
+name: Nuxt i18n 10 candidate SSR E2E
+
+on:
+  push:
+    branches:
+      - fix/nuxt-i18n10-landing-20261031
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+        with:
+          package_json_file: landing/package.json
+          dest: /tmp/uap-pnpm-candidate
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.21.1'
+          cache: pnpm
+          cache-dependency-path: landing/pnpm-lock.yaml
+
+      - name: Install exact generated lock
+        working-directory: landing
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        working-directory: landing
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+
+      - name: Real Nuxt 3 SSR locale failure, retry and navigation at both base paths
+        working-directory: landing
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_dir="$(node tests/fixtures/i18n-candidate/prepare.mjs)"
+          test -d "$candidate_dir"
+          for base in / /universal-agent-plugins/; do
+            echo "Validating Nuxt i18n 10 candidate at base $base"
+            UAP_CANDIDATE_BASE="$base" node "$candidate_dir/build.mjs"
+            UAP_CANDIDATE_BASE="$base" node node_modules/@playwright/test/cli.js test --config "$candidate_dir/playwright.config.ts" --reporter=line
+          done
