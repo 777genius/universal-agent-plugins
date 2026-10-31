@@ -166,9 +166,8 @@ test('unqualified project scope is hidden while auto agent delivery stays non-nu
   await projections(page, registryFixture());
   await navigate(page, '/', 'en', '?q=i18n-state-00');
   const card = page.locator('[data-install-source="i18n-state-00"]');
-  await expect(card.locator('.plugin-card__source-label')).toContainText(
-    'Agent compatibility checked when you run the command',
-  );
+  // Terminal auto-detection does not know which local agents are installed.
+  await expect(card.locator('.plugin-card__source-label')).toHaveCount(0);
   await card.locator('.plugin-card__install-toggle').click();
   await expect(card.locator('.install-scope')).toHaveCount(0);
   await expect(card.locator('.command-snippet code')).toHaveText(
