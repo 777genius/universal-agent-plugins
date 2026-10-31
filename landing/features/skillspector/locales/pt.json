@@ -2,7 +2,7 @@
   "registryUi": {
     "skillSpector": {
       "loading": "Carregando relatório",
-      "unavailable": "Análise indisponível",
+      "unavailable": "Não foi possível carregar o relatório",
       "loadingDetails": "Carregando a avaliação publicada…",
       "unavailableDetails": "Não foi possível carregar a avaliação publicada. O estado da verificação deste item é desconhecido.",
       "notChecked": "Ainda sem análise",
@@ -94,7 +94,8 @@
       "retryblocked": "Verificações de acompanhamento bloqueadas: {count}. Consulte os motivos abaixo.",
       "retryexhausted": "Limite de tentativas automáticas atingido: {count}.",
       "scanComplete": "Análise concluída",
-      "selectionScanned": "Skills selecionados analisados"
+      "selectionScanned": "Skills selecionados analisados",
+      "retryLoad": "Tentar carregar novamente"
     }
   }
 }

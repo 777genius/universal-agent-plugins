@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Structural guard for this one workflow, not hosted required-check enforcement."""
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -10,9 +11,31 @@ def require(ok, message):
     if not ok: raise ValueError(message)
 
 
+# The only permitted condition on the lanes: they run unless the shared pull
+# request classifier succeeded and reported a documentation-only diff.
+GATE = ("    needs: changes\n"
+        "    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.authoring != 'false') }}\n")
+CLASSIFIER = ("    if: ${{ github.event_name == 'pull_request' }}\n"
+              "    permissions:\n      pull-requests: read\n"
+              "    uses: ./.github/workflows/pr-changes.yml\n")
+
+
 def results(value):
-    require(set(value) == {'native', 'packed'} and all(v.get('result') == 'success' for v in value.values()),
-            'native and packed must both exist and succeed')
+    require(set(value) == {'changes', 'native', 'packed'}, 'changes, native and packed results required')
+    changes = value['changes'] or {}
+    lanes = [value[name].get('result') if isinstance(value[name], dict) else None for name in ('native', 'packed')]
+    documentation_only = changes.get('result') == 'success' and (changes.get('outputs') or {}).get('authoring') == 'false'
+    if documentation_only:
+        require(lanes == ['skipped', 'skipped'], 'a documentation-only classification must skip both lanes')
+        # A green aggregate must not read as native and packed evidence.
+        message = 'Native and packed lanes were skipped: documentation-only pull request classification.'
+        print('::notice title=Authoring lanes skipped::' + message)
+        summary = os.environ.get('GITHUB_STEP_SUMMARY')
+        if summary:
+            with open(summary, 'a', encoding='utf-8') as handle:
+                handle.write(message + '\n')
+    else:
+        require(lanes == ['success', 'success'], 'native and packed must both exist and succeed')
 
 
 def check(text, runner):
@@ -20,8 +43,12 @@ def check(text, runner):
     require('\non:\n  pull_request:\n  workflow_dispatch:\n' in text, 'unfiltered PR and dispatch required')
     require(not re.search(r'^\s*(?:paths(?:-ignore)?|branches(?:-ignore)?|continue-on-error):', text, re.M), 'success override/filter')
     jobs = dict(re.findall(r'^  (\w+):\n(.*?)(?=^  \w+:\n|\Z)', text.split('\njobs:\n', 1)[1], re.M | re.S))
-    require(set(jobs) == {'native', 'packed', 'acceptance'}, 'required jobs missing/renamed')
+    require(set(jobs) == {'changes', 'native', 'packed', 'acceptance'}, 'required jobs missing/renamed')
     native, packed, aggregate = (jobs[n] for n in ('native', 'packed', 'acceptance'))
+    require(jobs['changes'].strip('\n') + '\n' == CLASSIFIER, 'shared pull request classifier required')
+    for body in (native, packed):
+        require(body.count(GATE) == 1 and len(re.findall(r'^    (?:if|needs):', body, re.M)) == 2,
+                'lanes may only be gated by the fail-open documentation classifier')
     # github/docs contexts.md: jobs.<job_id>.env excludes runner (steps.env allows it).
     for body in jobs.values():
         job_env = re.search(r'^    env:\n((?:[ \t]+.*\n|\n)*?)(?=^    \S|\Z)', body, re.M)
@@ -42,13 +69,11 @@ def check(text, runner):
             '      - name: Preserve packed evidence including failure logs and sealed inputs\n        if: always()\n' in packed and
             '            ${{ env.PACKED_ROOT }}/**\n' in packed and
             '          if-no-files-found: error\n' in packed, 'always checker/upload required')
-    for body in (native, packed):
-        require(not re.search(r'^    (?:if|continue-on-error):', body, re.M), 'required job cannot be conditional')
     matrix = re.findall(r'- \{runner: ([\w.-]+), os: (\w+), arch: (\w+)\}', native)
     require(set(matrix) == {('ubuntu-24.04', 'linux', 'amd64'), ('ubuntu-24.04-arm', 'linux', 'arm64'),
         ('windows-2022', 'windows', 'amd64'), ('windows-11-arm', 'windows', 'arm64')} and len(matrix) == 4, 'four native lanes required')
-    require('    needs: [native, packed]\n    if: always() && !cancelled()\n' in aggregate,
-            'aggregate must need native+packed and aggregate failures without running after cancellation')
+    require('    needs: [changes, native, packed]\n    if: always() && !cancelled()\n' in aggregate,
+            'aggregate must need the classifier and both lanes without running after cancellation')
     require('      REQUIRED_RESULTS: ${{ toJSON(needs) }}\n' in aggregate, 'actual needs results required')
     for body in (packed, aggregate):
         require('          ref: ${{ github.event.pull_request.head.sha || github.sha }}\n' in body and
@@ -56,7 +81,7 @@ def check(text, runner):
         require(not re.search(r'\|\|\s*(?:true|:)|exit 0|set \+e', body), 'masked failure')
         # The status-only aggregate skips cancelled runs; its individual steps
         # still run after failure, as do the packed evidence checker and upload.
-        step_body = body.replace('    if: always() && !cancelled()\n', '', 1) if body == aggregate else body
+        step_body = body.replace('    if: always() && !cancelled()\n', '', 1) if body == aggregate else body.replace(GATE, '', 1)
         require(all(line.strip() == 'if: always()' for line in step_body.splitlines() if re.match(r'\s*if:', line)), 'skipped step')
     require('          go-version: \'1.26.10\'' in packed and "          node-version: '22.23.2'" in packed, 'tool pins')
     require('        run: python3 -B scripts/run-packed-ci.py "$PACKED_ROOT" "$EXPECTED_HEAD"\n' in packed and
