@@ -43,7 +43,16 @@ func main() {
     if result.Outcome != installer.OutcomeCompleted && result.Outcome != installer.OutcomeUnchanged {
         fail(fmt.Errorf("incomplete UAP Pi project operation: %s", result.Outcome))
     }
-    body, err := json.Marshal(result)
+    // Stable, minimal public E2E receipt: never copy internal state, native
+    // configuration or credentials into uploaded CI artifacts.
+    receipt := map[string]any{
+        "outcome": result.Outcome,
+        "binding": map[string]string{
+            "scope": result.Binding.Scope,
+            "target_path": result.Binding.TargetPath,
+        },
+    }
+    body, err := json.Marshal(receipt)
     if err != nil { fail(err) }
     if err := os.WriteFile(os.Args[7], append(body, '\n'), 0600); err != nil { fail(err) }
 }
