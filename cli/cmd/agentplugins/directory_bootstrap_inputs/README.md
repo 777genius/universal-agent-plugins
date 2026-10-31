@@ -2,11 +2,11 @@
 
 Stable release validation requires three exact files in this directory:
 
-- `snapshot.json`: signed Directory sequence 39 from publication run
-  `36769713154`, digest
-  `sha256:4d3d7755d89123aa238b28e6ffb92d01ec20b70586dbc292293d6b4d5524f532`;
+- `snapshot.json`: signed Directory sequence 43 from publication run
+  `40229838422`, digest
+  `sha256:7ffb6078ac08e7ed00575dbf9a871b0dba53c755591d8983dd9399bfdc4edaf6`;
 - `envelope.json`: its byte-exact detached Ed25519 envelope from immutable
-  sequence tag commit `298a9af013354cae1b9a2091f4be225debb41b5a`;
+  protected ledger snapshot sequence 43 (published 2026-10-25);
 - `trusted-keys.json`: the reviewed schema-1 trust document, unchanged from
   the previous bootstrap, with digest
   `sha256:cbcc644df25cfe12b7f7cda236c95594a12f31714569e957d62723d334a1c198`.
