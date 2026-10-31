@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -187,10 +188,33 @@ func openCodeProjectConfig(body []byte) (map[string]any, error) {
 	}
 	return object, nil
 }
-func openCodeProjectCheckConfig(object map[string]any, urls map[string]string, absent []string) error {
+// Read the actual V1/V2 MCP shape without treating a flattened test
+// projection as native evidence. V2 declares servers under mcp.servers.
+func openCodeProjectServers(object map[string]any) (map[string]any, error) {
 	mcp, ok := object["mcp"].(map[string]any)
 	if !ok {
-		return fmt.Errorf("native config has no MCP object")
+		return nil, fmt.Errorf("native config has no MCP object")
+	}
+	switch os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") {
+	case "", "1.18.34":
+		if _, exists := mcp["servers"]; exists {
+			return nil, fmt.Errorf("V1 native MCP unexpectedly uses V2 server structure")
+		}
+		return mcp, nil
+	case "2.2.5":
+		servers, ok := mcp["servers"].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("V2 native MCP has no servers object")
+		}
+		return servers, nil
+	default:
+		return nil, fmt.Errorf("unsupported native OpenCode version in project proof")
+	}
+}
+func openCodeProjectCheckConfig(object map[string]any, urls map[string]string, absent []string) error {
+	mcp, err := openCodeProjectServers(object)
+	if err != nil {
+		return err
 	}
 	for name, url := range urls {
 		server, ok := mcp[name].(map[string]any)
@@ -201,6 +225,12 @@ func openCodeProjectCheckConfig(object map[string]any, urls map[string]string, a
 			flag, valid := enabled.(bool)
 			if !valid || !flag {
 				return fmt.Errorf("native MCP enabled flag %q malformed or false", name)
+			}
+		}
+		if disabled, present := server["disabled"]; present {
+			flag, valid := disabled.(bool)
+			if !valid || flag {
+				return fmt.Errorf("native MCP disabled flag %q malformed or true", name)
 			}
 		}
 	}
