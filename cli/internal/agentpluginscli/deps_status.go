@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"sort"
@@ -47,6 +48,7 @@ type dependencyStatus struct {
 	ManifestDigest   string                     `json:"manifest_digest,omitempty"`
 	LockDigest       string                     `json:"lock_digest,omitempty"`
 	PendingRecovery  bool                       `json:"pending_recovery"`
+	ValidLock       bool                       `json:"-"`
 	Facts            []dependencyStatusFact     `json:"facts"`
 }
 
@@ -84,6 +86,7 @@ func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 		var lockErr error
 		lock, lockErr = readDependencyLock(lockPath, requirements)
 		validLock = lockErr == nil
+		status.ValidLock = validLock
 		if lockErr != nil {
 			status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"not_synced"}})
 		} else {
@@ -291,33 +294,32 @@ func renderDependencyStatus(cmd *cobra.Command, opts *options, status dependency
 }
 
 func renderDependencyStatusGuidance(writer io.Writer, status dependencyStatus) error {
-	if status.PendingRecovery {
-		if _, err := fmt.Fprintln(writer, "\nRecovery is pending. Review it first: agentplugins deps recover --dry-run"); err != nil {
-			return err
-		}
-	}
 	missing := false
 	for _, fact := range status.Facts {
 		for _, code := range fact.Facts {
-			if code == "manifest_missing" {
-				missing = true
-			}
+			missing = missing || code == "manifest_missing"
 		}
 	}
-	if missing {
-		if _, err := fmt.Fprintln(writer, "\nNo uap.toml is recorded for this environment. Start with: agentplugins add <source> --target <agent>"); err != nil {
-			return err
-		}
-	} else {
-		if _, err := fmt.Fprintln(writer, "\nManage saved dependencies:\n  See exact versions and dependency relationships: agentplugins deps tree\n  Check updates without changes: agentplugins outdated --all\n  Restore the recorded lock: agentplugins install --locked\n  Change a saved pin: agentplugins deps update <alias>, then agentplugins deps sync --locked"); err != nil {
-			return err
-		}
+	var explanation string
+	switch {
+	case status.PendingRecovery:
+		explanation = "Recovery is pending. Inspect it before any other changes: agentplugins deps recover --dry-run"
+	case missing:
+		explanation = "No saved uap.toml was found. This does not mean other plugins are absent. To save a supported Registry/Git package, start with agentplugins add <source> --target <agent>"
+	case !status.ValidLock:
+		explanation = "No valid uap.lock was found. Review uap.toml before explicitly running agentplugins deps lock; locked installation is not available yet."
+	default:
+		explanation = "Inspect exact saved versions and dependency relationships: agentplugins deps tree"
 	}
-	if status.Scope == string(domain.ScopeProject) {
-		_, err := fmt.Fprintln(writer, "These commands default to user scope; add --scope project and the same --project-root to stay in this project.")
+	if _, err := fmt.Fprintln(writer, "\n"+explanation); err != nil {
 		return err
 	}
-	return nil
+	if status.Scope == string(domain.ScopeProject) {
+		_, err := fmt.Fprintln(writer, "For this project, use --scope project and the same --project-root directory with the suggested command.")
+		return err
+	}
+	_, err := fmt.Fprintln(writer, "For this user environment, use --scope user with the suggested command.")
+	return err
 }
 
 func inspectDependencyFacts(ctx context.Context, app App, state installer.Inspection, lock environment.Lock, validLock bool) []dependencyStatusFact {
