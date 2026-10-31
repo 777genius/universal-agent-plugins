@@ -180,8 +180,18 @@ def evaluate(product: str, executable: str, root: Path, commit: str,
                 "oauth_or_tool_call": "NOT_RUN",
             })
     else:
-        repeat = run_process(tool_args(product, executable, project, commit, replay=(product == "apm")), project, env, root)
-        add_result(results, product, "S1_repeat", repeat, payloads(project, expected), sentinel.read_bytes() == foreign)
+        # Both tools must replay their own recorded lock; repeating a mutable
+        # add request for only one tool would not be an equivalent scenario.
+        lock_name = "uap.lock" if product == "uap" else "apm.lock.yaml"
+        if (project / lock_name).is_file():
+            repeat = run_process(tool_args(product, executable, project, commit, replay=True), project, env, root)
+            add_result(results, product, "S1_repeat", repeat, payloads(project, expected), sentinel.read_bytes() == foreign)
+        else:
+            results.append({
+                "product": product, "scenario": "S1_repeat", "status": "NOT_RUN",
+                "reason": "initial documented source route did not create a saved lock",
+                "native_loaded": "NOT_RUN", "oauth_or_tool_call": "NOT_RUN",
+            })
         # A cold copy receives ONLY portable intent/lock, not receipts, caches or user config.
         restore_root = root / "restore"
         restore_env = isolated_env(restore_root)
