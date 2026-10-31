@@ -19,6 +19,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import tomllib
 
 REPOSITORY = "777genius/universal-agent-plugins"
 SKILL_PATH = "tests/fixtures/uap_apm/skills/benchmark-note"
@@ -240,12 +241,65 @@ def stored_portable(portable: dict[str, bytes], output: Path, product: str, phas
         (directory / name).write_bytes(content)
 
 
-def portable_identity(portable: dict[str, bytes], commit: str) -> dict:
-    lock_name = "uap.lock" if "uap.lock" in portable else "apm.lock.yaml"
-    return {
+def portable_identity(portable: dict[str, bytes], commit: str, product: str) -> dict:
+    """Verify requested and resolved *source identities*, not a SHA substring."""
+    result = {
         "sha256": {name: sha(content) for name, content in portable.items()},
-        "exact_source_commit_recorded_in_lock": commit.encode("ascii") in portable.get(lock_name, b""),
+        "requested_source_matches": False,
+        "resolved_source_matches": False,
+        "exact_source_commit_recorded_in_lock": False,
     }
+    try:
+        if product == "uap":
+            manifest = tomllib.loads(portable["uap.toml"].decode("utf-8"))
+            lock = json.loads(portable["uap.lock"])
+            dependencies = manifest.get("dependencies", {})
+            if not isinstance(dependencies, dict) or not isinstance(lock.get("packages"), list):
+                return result
+            for requirement in dependencies.values():
+                if not isinstance(requirement, dict):
+                    continue
+                requested_git = requirement.get("git")
+                requested_repo = requested_git in (
+                    REPOSITORY, f"https://github.com/{REPOSITORY}.git",
+                    f"https://github.com/{REPOSITORY}",
+                )
+                if (requested_repo and requirement.get("path") == SKILL_PATH
+                        and requirement.get("commit") == commit):
+                    result["requested_source_matches"] = True
+            for package in lock["packages"]:
+                git = package.get("source", {}).get("git", {}) if isinstance(package, dict) else {}
+                if not isinstance(git, dict):
+                    continue
+                if (git.get("repository") == REPOSITORY
+                        and (git.get("resolved_skill_path") == SKILL_PATH or git.get("path") == SKILL_PATH)
+                        and git.get("commit") == commit):
+                    result["resolved_source_matches"] = True
+        else:
+            import yaml  # From APM's pinned runtime environment in the workflow.
+
+            manifest = yaml.safe_load(portable["apm.yml"])
+            lock = yaml.safe_load(portable["apm.lock.yaml"])
+            requested = manifest.get("dependencies", {}).get("apm", [])
+            if isinstance(requested, list):
+                result["requested_source_matches"] = (
+                    f"{REPOSITORY}/{SKILL_PATH}#{commit}" in requested
+                )
+            locked = lock.get("dependencies", [])
+            if isinstance(locked, list):
+                result["resolved_source_matches"] = any(
+                    isinstance(entry, dict)
+                    and entry.get("repo_url") == REPOSITORY
+                    and entry.get("virtual_path") == SKILL_PATH
+                    and entry.get("resolved_commit") == commit
+                    for entry in locked
+                )
+    except (KeyError, TypeError, ValueError, UnicodeDecodeError, ImportError):
+        return result
+    result["exact_source_commit_recorded_in_lock"] = (
+        result["requested_source_matches"] and result["resolved_source_matches"]
+    )
+    return result
 
 
 def evaluate(product: str, executable: str, root: Path, commit: str,
@@ -285,7 +339,7 @@ def evaluate(product: str, executable: str, root: Path, commit: str,
         skip("S1_repeat", "no complete portable manifest/lock from the documented initial route")
         skip("R1_cold_locked_restore", "no complete portable manifest/lock from the documented initial route")
     else:
-        source_identity = portable_identity(initial, commit)
+        source_identity = portable_identity(initial, commit, product)
         if not source_identity["exact_source_commit_recorded_in_lock"]:
             skip("S1_repeat", "source commit absent from recorded lock; provenance needs manual verification")
             skip("R1_cold_locked_restore", "source commit absent from recorded lock; provenance needs manual verification")
@@ -295,7 +349,7 @@ def evaluate(product: str, executable: str, root: Path, commit: str,
             add_result(results, product, "S1_repeat", replay, payloads(project, expected),
                        safe_same_bytes(sentinel, foreign, project))
             results[-1]["portable"] = {
-                "initial": source_identity, "after": portable_identity(after_replay, commit),
+                "initial": source_identity, "after": portable_identity(after_replay, commit, product),
                 "byte_identical": initial == after_replay,
             }
             if results[-1]["status"] == "PASS" and after_replay != initial:
@@ -317,7 +371,7 @@ def evaluate(product: str, executable: str, root: Path, commit: str,
                        safe_same_bytes(fresh / ".agents" / "skills" / "foreign-neighbor" / "SKILL.md",
                                        fresh_foreign, fresh))
             results[-1]["portable"] = {
-                "initial": source_identity, "after": portable_identity(after_restore, commit),
+                "initial": source_identity, "after": portable_identity(after_restore, commit, product),
                 "byte_identical": initial == after_restore,
             }
             if results[-1]["status"] == "PASS" and after_restore != initial:
