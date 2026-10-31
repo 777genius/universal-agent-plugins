@@ -35,7 +35,7 @@ for (const block of descriptor.customBlocks) {
     new URL('../components/registry/UnifiedCatalog.vue', import.meta.url),
   );
   const locale = String(block.attrs.locale);
-  const request = `${fileURLToPath(path)}?vue&type=custom&index=0&src=true&blockType=i18n&locale=${locale}&lang.json`;
+  const request = `${fileURLToPath(path)}?vue&type=i18n&index=0&src=true&locale=${locale}&lang.json`;
   // Unplugin 3 exposes Vite hooks as objects with a `handler`, rather than
   // callable hooks. Exercise the actual compiler instead of replacing it.
   const hook = compiler.transform;
@@ -51,6 +51,7 @@ for (const block of descriptor.customBlocks) {
     readFileSync(path, 'utf8'),
     request,
   );
+  assert.ok(result && typeof result === 'object' && 'code' in result, `${locale}: custom i18n block was not compiled`);
   const component: ComponentOptions = {};
   const attach = runInNewContext(result.code.replace('export default', '(') + ')');
   attach(component);
