@@ -71,7 +71,7 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.install-outcome')).not.toContainText('MCP tools');
     await expect(card.locator('.install-outcome')).toContainText('Sign-in or credentials');
     await expect(card.locator('.plugin-card__source-label')).toContainText(
-      '0 installed automatically · 1 require one final step',
+      'Agents: 0 automatic setup · 1 need follow-up',
     );
     await card.locator('.command-snippet button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expectedAdd);
