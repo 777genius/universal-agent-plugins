@@ -472,8 +472,16 @@ func TestMCPReservedEnvironmentPlatformAdmission(t *testing.T) {
 			if !healthy || len(facts.Package.Skills) != 1 || selected == invalid {
 				t.Fatalf("component isolation: selected=%v invalid=%v healthy=%v skills=%d", selected, invalid, healthy, len(facts.Package.Skills))
 			}
-			if invalid && !hasFinding(facts, "stdio_env_reserved", Normative, domain.BoundaryMCPServer) {
-				t.Fatalf("missing platform-aware MCP finding: %+v", facts.Findings)
+			if invalid {
+				// The portable schema already excludes exact reserved keys;
+				// platform-only casing aliases reach the semantic check.
+				findingCode := "stdio_env_reserved"
+				if tc.alwaysInvalid {
+					findingCode = "server_schema"
+				}
+				if !hasFinding(facts, findingCode, Normative, domain.BoundaryMCPServer) {
+					t.Fatalf("missing %s finding: %+v", findingCode, facts.Findings)
+				}
 			}
 			loaded, _ := (InstallerDecoder{Registry: d.Registry}).MCP([]byte(body), domain.PluginSchemaV1,
 				func(config map[string]any) (*domain.StdioRequirement, error) {
