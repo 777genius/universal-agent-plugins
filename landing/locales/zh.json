@@ -666,7 +666,7 @@
       "agentPlugins10": "Agent Plugins 1.0",
       "install": "安装",
       "viewSource": "查看源码",
-      "deliverySummary": "{managed} 自动安装 · {prepared} 需要最后一步",
+      "deliverySummary": "代理：{managed} 个可自动配置 · {prepared} 个需要额外步骤",
       "installName": "安装 {name}",
       "chooseClients": "选择 {name} 的客户端",
       "stars": "仓库获得 {count} 颗星",

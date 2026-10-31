@@ -666,7 +666,7 @@
       "agentPlugins10": "Agent Plugins 1.0",
       "install": "Встановити",
       "viewSource": "Переглянути джерело",
-      "deliverySummary": "{managed} встановлено автоматично · {prepared} потребують одного останнього кроку",
+      "deliverySummary": "Агенти: {managed} з автоматичним налаштуванням · {prepared} потребують додаткових дій",
       "installName": "Встановити {name}",
       "chooseClients": "Виберіть клієнтів для {name}",
       "stars": "зірок у репозиторії: {count}",

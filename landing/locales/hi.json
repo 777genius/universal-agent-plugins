@@ -666,7 +666,7 @@
       "agentPlugins10": "Agent Plugins 1.0",
       "install": "स्थापित करें",
       "viewSource": "स्रोत देखें",
-      "deliverySummary": "{managed} अपने-आप इंस्टॉल · {prepared} के लिए एक अंतिम चरण बाकी",
+      "deliverySummary": "एजेंट: {managed} का स्वचालित सेटअप · {prepared} को अतिरिक्त चरण चाहिए",
       "installName": "{name} स्थापित करें",
       "chooseClients": "{name} के लिए क्लाइंट चुनें",
       "stars": "रिपॉज़िटरी पर {count} स्टार",
