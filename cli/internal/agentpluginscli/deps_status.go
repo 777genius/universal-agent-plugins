@@ -287,6 +287,36 @@ func renderDependencyStatus(cmd *cobra.Command, opts *options, status dependency
 			}
 		}
 	}
+	return renderDependencyStatusGuidance(cmd.OutOrStdout(), status)
+}
+
+func renderDependencyStatusGuidance(writer io.Writer, status dependencyStatus) error {
+	if status.PendingRecovery {
+		if _, err := fmt.Fprintln(writer, "\nRecovery is pending. Review it first: agentplugins deps recover --dry-run"); err != nil {
+			return err
+		}
+	}
+	missing := false
+	for _, fact := range status.Facts {
+		for _, code := range fact.Facts {
+			if code == "manifest_missing" {
+				missing = true
+			}
+		}
+	}
+	if missing {
+		if _, err := fmt.Fprintln(writer, "\nNo uap.toml is recorded for this environment. Start with: agentplugins add <source> --target <agent>"); err != nil {
+			return err
+		}
+	} else {
+		if _, err := fmt.Fprintln(writer, "\nManage saved dependencies:\n  See exact versions and dependency relationships: agentplugins deps tree\n  Check updates without changes: agentplugins outdated --all\n  Restore the recorded lock: agentplugins install --locked\n  Change a saved pin: agentplugins deps update <alias>, then agentplugins deps sync --locked"); err != nil {
+			return err
+		}
+	}
+	if status.Scope == string(domain.ScopeProject) {
+		_, err := fmt.Fprintln(writer, "These commands default to user scope; add --scope project and the same --project-root to stay in this project.")
+		return err
+	}
 	return nil
 }
 
