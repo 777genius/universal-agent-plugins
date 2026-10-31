@@ -232,7 +232,7 @@ jobs:
             --output '${{ runner.temp }}/native-client-v2-proof'
       - name: Upload V2 native evidence including failures
         if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0 # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: native-client-opencode-v2-${{ matrix.target }}
           path: ${{ runner.temp }}/native-client-v2-proof/
