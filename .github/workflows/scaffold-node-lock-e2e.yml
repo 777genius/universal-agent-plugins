@@ -1,0 +1,74 @@
+name: Scaffold Node lock E2E
+
+on:
+  pull_request:
+    paths:
+      - 'cli/internal/authoring/scaffold/templates/package.json'
+      - 'cli/internal/authoring/scaffold/templates/package-lock.json'
+      - 'cli/internal/authoring/scaffold/scaffold_test.go'
+      - 'cli/internal/authoring/scaffold/templates.go'
+      - 'cli/internal/authoring/scaffold/plan.go'
+      - '.github/workflows/scaffold-node-lock-e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cli/internal/authoring/scaffold/templates/package.json'
+      - 'cli/internal/authoring/scaffold/templates/package-lock.json'
+      - 'cli/internal/authoring/scaffold/scaffold_test.go'
+      - 'cli/internal/authoring/scaffold/templates.go'
+      - 'cli/internal/authoring/scaffold/plan.go'
+      - '.github/workflows/scaffold-node-lock-e2e.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  generated-node-stdio:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.2'
+      - name: Generate a real Node MCP plugin and install its exact lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$(mktemp -d "$RUNNER_TEMP/uap-node-lock-XXXXXXXX")"
+          trap 'rm -rf -- "$fixture"' EXIT
+          go run -ldflags='-X github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands.Enabled=vertical-slice-v1' \
+            ./cli/cmd/agentplugins author init "$fixture/locked-node" \
+            --template mcp-stdio --name locked-node \
+            --description 'Exercise generated MCP stdio dependency lock' \
+            --runtime node --format=json
+          cd "$fixture/locked-node"
+          npm ci --ignore-scripts --no-audit --no-fund
+          timeout 30s node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { resolve } from 'node:path';
+          import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+          import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+          const transport = new StdioClientTransport({
+            command: process.execPath,
+            args: [resolve('src/server.mjs')],
+          });
+          const client = new Client({ name: 'scaffold-lock-e2e', version: '0.1.0' });
+          try {
+            await client.connect(transport);
+            const tools = await client.listTools();
+            assert.ok(tools.tools.some((tool) => tool.name === 'hello'));
+            const reply = await client.callTool({ name: 'hello', arguments: {} });
+            assert.equal(reply.isError, undefined);
+            assert.equal(reply.content?.[0]?.text, 'Hello from locked-node!');
+          } finally {
+            await client.close();
+          }
+          NODE
