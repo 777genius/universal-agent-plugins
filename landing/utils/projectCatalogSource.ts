@@ -32,7 +32,24 @@ export function projectCatalogSelection(
   const signed = resolveDistribution(plugin, targets, 'project');
   if (signed.distribution) return { resolution: signed };
   const pinned = pinnedSource(plugin, targets);
-  if (pinned) return { resolution: pinned.selection, directSource: pinned.source };
+  if (pinned) {
+    // A user-target policy can establish a reviewed source, NOT native project
+    // activation. Project delivery remains Prepared until the client proves it.
+    const distribution = pinned.selection.distribution!;
+    return {
+      resolution: {
+        ...pinned.selection,
+        distribution: {
+          ...distribution,
+          targets: distribution.targets.map((target) => ({
+            ...target,
+            delivery: 'prepared' as const,
+          })),
+        },
+      },
+      directSource: pinned.source,
+    };
+  }
   return { resolution: signed };
 }
 
