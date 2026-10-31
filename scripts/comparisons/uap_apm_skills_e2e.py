@@ -389,13 +389,16 @@ def main() -> int:
         for name, executable in (("uap", opts.uap), ("apm", opts.apm)):
             root = Path(directory) / name
             root.mkdir()
+            partial_cases: list[dict] = []
             def progress(partial: list[dict]) -> None:
-                write_receipt(opts.output, metadata, cases + partial)
+                partial_cases[:] = partial
+                write_receipt(opts.output, metadata, cases + partial_cases)
             try:
                 cases.extend(evaluate(name, str(executable), root, opts.fixture_commit,
                                       expected, opts.output, on_progress=progress))
             except Exception as exc:
-                # Do not silently treat harness defects or destroyed output as product failures.
+                # Never drop already-completed observations on unexpected harness errors.
+                cases.extend(partial_cases)
                 errors.append(name)
                 cases.append({
                     "product": name, "scenario": "HARNESS_ERROR", "status": "BLOCKED",
