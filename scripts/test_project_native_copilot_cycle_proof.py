@@ -132,12 +132,19 @@ class CopilotCycleProofContracts(unittest.TestCase):
             ins = cycle.load(cycle.stream(value["state"]))["installations"][0]
             b = value["binding"]
             b.update(affected_surfaces=["copilot", "vscode"] if key == "user" else ["copilot"], updated_at="2026-10-28T00:00:00Z")
+            if key == "user":
+                # Historical inert capture predates creation-time user profile ownership.
+                b["native_profile_root"] = rows["fixture"]["layout"]["home"] + "/.copilot"
             proof.binding(b, ins, key, key + "-one", source, rows["fixture"]["layout"])
             for wrong in (["copilot"] if key == "user" else ["copilot", "vscode"], ["vscode"], ["copilot", "foreign"]):
                 bad = copy.deepcopy(b)
                 bad["affected_surfaces"] = wrong
                 with self.subTest(key=key, wrong=wrong), self.assertRaises(ValueError):
                     proof.binding(bad, ins, key, key + "-one", source, rows["fixture"]["layout"])
+            bad = copy.deepcopy(b)
+            bad["native_profile_root"] = ""
+            with self.subTest(key=key, wrong_profile=True), self.assertRaises(ValueError):
+                proof.binding(bad, ins, key, key + "-one", source, rows["fixture"]["layout"])
 
     def test_engine_state_requires_real_metadata_not_bare_stager_success(self):
         rows, value, source, _, _ = prepared("a")

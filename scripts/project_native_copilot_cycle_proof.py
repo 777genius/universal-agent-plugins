@@ -145,7 +145,7 @@ def binding(value, installation, key, revision, source, layout):
     values(value, {"client_binding_id": bid, "client_id": "copilot", "scope": scope, "target_locator": active, "physical_artifact_id": physical,
         "materialization": "materialized", "activation": "active" if key == "user" else "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "installation_verified", "affected_surfaces": ["copilot", "vscode"] if key == "user" else ["copilot"],
         "package_revision": {"version": version(revision), "tree_digest": source["digest"], "manifest_digest": "sha256:" + source["files"]["plugin.json"].split(":")[-1]}})
-    require(value.get("native_profile_root", "") == ("" if key == "user" else layout[key]))
+    require(value.get("native_profile_root", "") == (layout["home"] + "/.copilot" if key == "user" else layout[key]))
     instant(value["updated_at"])
     return active, data, physical
 
