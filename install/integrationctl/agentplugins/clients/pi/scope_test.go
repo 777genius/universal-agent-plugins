@@ -10,7 +10,8 @@ import (
 )
 
 func TestPiProjectOnlyAdmittedThroughSelectedAdapter(t *testing.T) {
-    root := t.TempDir()
+    root, err := filepath.EvalSymlinks(t.TempDir())
+    if err != nil { t.Fatal(err) }
     user, projectA, projectB := filepath.Join(root, "home", ".pi", "agent"), filepath.Join(root, "a"), filepath.Join(root, "b")
     for _, path := range []string{user, projectA, projectB} {
         if err := os.MkdirAll(path, 0700); err != nil { t.Fatal(err) }
@@ -42,7 +43,9 @@ func TestPiProjectOnlyAdmittedThroughSelectedAdapter(t *testing.T) {
         plan.TargetAnchor = user
         if err := validatePlan(plan); err == nil { t.Fatal("Pi adopted user root for project") }
         plan.TargetAnchor = root
-        plan.NativeRegistryRoot = filepath.Join(projectB, ".pi")
+        foreignProject := projectA
+        if project == projectA { foreignProject = projectB }
+        plan.NativeRegistryRoot = filepath.Join(foreignProject, ".pi")
         if err := validatePlan(plan); err == nil { t.Fatal("Pi accepted another project's native registry") }
         plan.NativeRegistryRoot = root
         plan.ActivePath = filepath.Join(user, "extensions", "owned-pi-extension")
@@ -51,7 +54,8 @@ func TestPiProjectOnlyAdmittedThroughSelectedAdapter(t *testing.T) {
 }
 
 func TestPiProjectRejectsAliasedDiscoveryAndUserOverlap(t *testing.T) {
-    root := t.TempDir()
+    root, err := filepath.EvalSymlinks(t.TempDir())
+    if err != nil { t.Fatal(err) }
     user := filepath.Join(root, "user", ".pi", "agent")
     project := filepath.Join(root, "project")
     for _, path := range []string{user, project} {
