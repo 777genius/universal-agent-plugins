@@ -36,13 +36,6 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Validate harness syntax and adversarial classifications
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m py_compile scripts/comparisons/uap_apm_skills_e2e.py
-          python -m unittest discover -s scripts/comparisons -p 'test_uap_apm_skills_e2e.py' -v
-
       - name: Build exact released UAP source
         shell: bash
         run: |
@@ -62,9 +55,19 @@ jobs:
           mkdir -p "$RUNNER_TEMP/apm-distribution"
           "$RUNNER_TEMP/apm-venv/bin/python" -m pip download --no-deps --dest "$RUNNER_TEMP/apm-distribution" "apm-cli==0.35.0"
           sha256sum "$RUNNER_TEMP"/apm-distribution/* > "$RUNNER_TEMP/apm-distribution-sha256.txt"
-          "$RUNNER_TEMP/apm-venv/bin/python" -m pip install --disable-pip-version-check "apm-cli==0.35.0"
+          wheel="$(find "$RUNNER_TEMP/apm-distribution" -maxdepth 1 -type f -name 'apm_cli-0.35.0-*.whl' -print -quit)"
+          test -n "$wheel"
+          "$RUNNER_TEMP/apm-venv/bin/python" -m pip install --disable-pip-version-check \
+            --report "$RUNNER_TEMP/apm-pip-install-report.json" "$wheel"
           "$RUNNER_TEMP/apm-venv/bin/apm" --version
           "$RUNNER_TEMP/apm-venv/bin/python" -m pip freeze > "$RUNNER_TEMP/apm-installed-requirements.txt"
+
+      - name: Validate bounded harness and adversarial classifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/apm-venv/bin/python" -m py_compile scripts/comparisons/uap_apm_skills_e2e.py
+          "$RUNNER_TEMP/apm-venv/bin/python" -m unittest discover -s scripts/comparisons -p 'test_uap_apm_skills_e2e.py' -v
 
       - name: Execute neutral Skill 1.0 receipts from both tools
         id: benchmark
@@ -77,7 +80,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/uap-apm-results"
           cp "$RUNNER_TEMP/apm-installed-requirements.txt" "$RUNNER_TEMP/uap-apm-results/apm-installed-requirements.txt"
           cp "$RUNNER_TEMP/apm-distribution-sha256.txt" "$RUNNER_TEMP/uap-apm-results/apm-distribution-sha256.txt"
-          python scripts/comparisons/uap_apm_skills_e2e.py \
+          cp "$RUNNER_TEMP/apm-pip-install-report.json" "$RUNNER_TEMP/uap-apm-results/apm-pip-install-report.json"
+          "$RUNNER_TEMP/apm-venv/bin/python" scripts/comparisons/uap_apm_skills_e2e.py \
             --uap "$RUNNER_TEMP/uap-bin/agentplugins" \
             --apm "$RUNNER_TEMP/apm-venv/bin/apm" \
             --fixture-commit a92e2a3c35a08327937b3facbf4b22791ae50eea \
