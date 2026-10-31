@@ -9,6 +9,7 @@ import {
   restoreSkillsQuery,
   skillsCatalogQuery,
   skillInstallCommand,
+  skillNeedsManualSelection,
   skillRepositoryUrl,
   externalListingUrl,
 } from '../utils/skillsCatalog.ts';
@@ -93,9 +94,11 @@ test('Skill metadata cannot inject shell syntax or external install sources', ()
     'a'.repeat(65),
     'bad\nname',
   ]) {
+    const untrusted = { ...skill, skillNameHint: hint };
+    assert.equal(skillNeedsManualSelection(untrusted), true, hint);
     assert.equal(
-      skillInstallCommand({ ...skill, skillNameHint: hint }, ['codex']),
-      undefined,
+      skillInstallCommand(untrusted, ['codex']),
+      'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --target codex',
       hint,
     );
   }

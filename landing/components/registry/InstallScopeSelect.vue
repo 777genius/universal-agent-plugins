@@ -6,7 +6,7 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <fieldset class="install-scope">
+  <fieldset v-if="projectAvailable || modelValue === 'project'" class="install-scope">
     <legend>{{ t('registryUi.install.scope.label') }}</legend>
     <div class="install-scope__choices">
       <button
