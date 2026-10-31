@@ -10,6 +10,7 @@ import unittest
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/package-manager-e2e.yml"
 NATIVE_WORKFLOW = WORKFLOW.with_name("agentplugins-native-clients.yml")
+RESILIENCE_WORKFLOW = WORKFLOW.with_name("package-manager-resilience.yml")
 
 
 class PackageManagerCIPolicyTests(unittest.TestCase):
@@ -54,6 +55,19 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertIn("--project-components", native)
         self.assertIn("schedule:", native)
         self.assertIn("workflow_dispatch:", native)
+
+    def test_resilience_runs_at_open_or_ready_and_targets_only_risk_changes(self):
+        resilience = RESILIENCE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("types: [opened, synchronize, reopened, ready_for_review]", resilience)
+        self.assertIn("github.event.pull_request.draft == false", resilience)
+        self.assertIn("schedule:", resilience)
+        self.assertIn("workflow_dispatch:", resilience)
+        self.assertIn("-fuzz '^FuzzVersionSelectionOrderAndPinReplay
+    unittest.main()
+", resilience)
+        self.assertIn("go test -race", resilience)
+        for path in ("environment/resolver_reliability_test.go", "processlock/reliability_test.go"):
+            self.assertIn(path, resilience)
 
 
 if __name__ == "__main__":
