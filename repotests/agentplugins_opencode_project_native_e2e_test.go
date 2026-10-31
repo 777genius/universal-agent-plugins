@@ -165,9 +165,9 @@ func openCodeProjectSameName(t *testing.T, f *openCodeProjectFixture) {
 		if origin == "" {
 			t.Fatal("same-name winner is outside exact fixture paths/bodies")
 		}
-		mcp, ok := config["mcp"].(map[string]any)
-		if !ok {
-			t.Fatal("same-name config lacks MCP object")
+		mcp, err := openCodeProjectServers(config)
+		if err != nil {
+			t.Fatal("same-name config lacks supported native MCP object", err)
 		}
 		server, ok := mcp["scope-marker"].(map[string]any)
 		if !ok {

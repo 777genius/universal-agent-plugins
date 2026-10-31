@@ -63,6 +63,30 @@ func TestOpenCodeProjectNativeConfigSourceChecks(t *testing.T) {
 		t.Fatal("removed member accepted")
 	}
 }
+func TestOpenCodeProjectV2NativeConfigRequiresExactServersLayout(t *testing.T) {
+	t.Setenv("AGENTPLUGINS_OPENCODE_VERSION", "2.2.5")
+	want := map[string]string{"marker": "http://127.0.0.1:9/A"}
+	good := []byte(`{"mcp":{"servers":{"marker":{"type":"remote","url":"http://127.0.0.1:9/A","disabled":false}}}}`)
+	value, err := openCodeProjectConfig(good)
+	if err != nil || openCodeProjectCheckConfig(value, want, nil) != nil {
+		t.Fatal("real V2 nested server schema refused", err)
+	}
+	for _, bad := range [][]byte{
+		[]byte(`{"mcp":{"marker":{"type":"remote","url":"http://127.0.0.1:9/A"}}}`),
+		[]byte(`{"mcp":{"servers":{"marker":{"type":"remote","url":"http://127.0.0.1:9/A","disabled":true}}}}`),
+		[]byte(`{"mcp":{"servers":{"marker":{"type":"remote","url":"http://127.0.0.1:9/A","disabled":"false"}}}}`),
+		[]byte(`{"mcp":{"servers":{"marker":{"type":"remote","url":"http://127.0.0.1:9/B"}}}}`),
+	} {
+		value, err := openCodeProjectConfig(bad)
+		if err == nil && openCodeProjectCheckConfig(value, want, nil) == nil {
+			t.Fatal("unsupported/disabled/foreign V2 server qualified")
+		}
+	}
+	if openCodeProjectCheckConfig(map[string]any{"mcp": map[string]any{"servers": map[string]any{"marker": map[string]any{}}}}, nil, []string{"marker"}) == nil {
+		t.Fatal("V2 configured server was misclassified as removed")
+	}
+}
+
 func TestOpenCodeProjectNativeFiniteTableAndEnvironment(t *testing.T) {
 	table := openCodeProjectCommandTable()
 	counts := map[string]int{}
