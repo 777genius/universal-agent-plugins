@@ -162,6 +162,27 @@ class NativeMatrixTests(unittest.TestCase):
         self.assertNotIn("TestAgentpluginsClaudeNativeProjectPreparedLifecycle", released.CLIENT_TESTS["claude"])
         self.assertNotIn("TestAgentpluginsClaudeNativeTrustedProjectDiscovery", released.CLIENT_TESTS["claude"])
 
+    def test_opencode_v2_is_separate_from_unchanged_v1_native_matrix(self):
+        v1_pattern, v1_required = matrix.select_native_tests("opencode", project_components=True)
+        v2_pattern, v2_required = matrix.select_native_tests(
+            "opencode", project_components=True, opencode_generation="v2")
+        self.assertEqual(v2_required, {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"})
+        self.assertIn("TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle", v2_pattern)
+        self.assertEqual(v1_required, matrix.REQUIRED_TESTS["opencode"] | v2_required)
+        self.assertNotEqual(v1_pattern, v2_pattern)
+        for target, pin in matrix.OPENCODE_V2_PINS.items():
+            self.assertIn(target, matrix.PINS)
+            self.assertEqual(pin[:3], ("github", "anomalyco/opencode", "v2.2.5"))
+            self.assertEqual(pin[-1], "opencode.exe" if target.startswith("windows") else "opencode")
+            matrix.require_verified_pin(pin[4])
+            self.assertNotEqual(pin, matrix.PINS[target]["opencode"])
+        for bad in [
+            ("claude", True, False), ("codex", True, False),
+            ("opencode", False, False), ("opencode", True, True),
+        ]:
+            with self.assertRaisesRegex(ValueError, "V2 qualification requires"):
+                matrix.select_native_tests(*bad, opencode_generation="v2")
+
     def test_source_project_proof_selects_exact_required_opencode_tests(self):
         pattern, required = matrix.select_native_tests("opencode", project_components=True)
         declared = set()
