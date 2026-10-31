@@ -153,10 +153,8 @@ for (const width of [1440, 390]) {
     await expect(panel.locator('.command-snippet--add code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00 --target codex',
     );
-    await expect(panel.getByRole('button', { name: 'This project', exact: true })).toBeDisabled();
-    await expect(panel.locator('.install-scope')).toContainText(
-      'Project installation is not available',
-    );
+    // No project-capable release remains; the unavailable selector is not shown.
+    await expect(panel.locator('.install-scope')).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 }

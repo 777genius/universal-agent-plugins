@@ -61,8 +61,10 @@ test('Skills search reveals install choices, copies the exact command and surviv
   await expect.poll(() => requests.some((query) => query.includes('q=frontend'))).toBe(true);
   await expect(page).toHaveURL(/tab=skills.*q=frontend/);
   await expect(catalog.locator('.catalog-count')).toHaveText('Showing 2 search results');
-  await expect(catalog.locator('a[href*="skills.sh"]')).toHaveCount(0);
-  await expect(catalog.locator('.skill-card').nth(1).getByRole('link')).toHaveCount(0);
+  await expect(catalog.locator('.skill-card').nth(1).getByRole('link', { name: 'View original listing' })).toHaveAttribute(
+    'href',
+    'https://skills.sh/anthropics/skills/frontend-design',
+  );
   const card = catalog.locator('.skill-card').first();
   await expect(card.getByRole('link', { name: 'GitHub source' })).toHaveAttribute(
     'href',
@@ -175,6 +177,7 @@ test('unsupported standalone source is explicit and never requests a report', as
   await page.goto('plugins/?tab=skills');
   const assessment = page.locator('.skill-card .skillspector');
   await expect(assessment).toHaveClass(/skillspector--unsupported/);
+  await expect(assessment.locator(':scope > summary')).toContainText('Not checked');
   await assessment.locator(':scope > summary').click();
   await expect(assessment).toContainText('This source type is not supported');
   await expect(assessment).not.toContainText('other plugin components');

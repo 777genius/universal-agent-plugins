@@ -31,14 +31,14 @@ test('catalog groups duplicate sources and tolerates a small typo', async ({ pag
   await expect(page.getByRole('heading', { name: 'Context7', exact: true })).toHaveCount(1);
 });
 
-test('catalog URL preserves filters through detail navigation and Reset is always available', async ({
+test('catalog URL preserves filters through detail navigation and Reset appears only for active filters', async ({
   page,
 }) => {
   await page.goto('./plugins/');
   await waitForDiscovery(page);
   const search = page.getByRole('searchbox', { name: 'Search plugins' });
   const reset = page.getByRole('button', { name: 'Reset filters', exact: true });
-  await expect(reset).toBeDisabled();
+  await expect(reset).toHaveCount(0);
 
   await search.fill('gitlab');
   await expect(page).toHaveURL(/\?q=gitlab$/);
