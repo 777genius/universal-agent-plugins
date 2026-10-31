@@ -5,11 +5,13 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
@@ -1380,4 +1382,93 @@ func (observer *countingNativeObserver) ObservePreparedIdentity(_ context.Contex
 		return domain.NativeIdentityObservation{State: domain.NativeIdentityAbsent}, nil
 	}
 	return domain.NativeIdentityObservation{State: domain.NativeIdentityManaged, Digest: managedDigest(*managed)}, nil
+}
+
+// hidesReadOnlyProjection wraps a stager so it can no longer derive the
+// installed native projection read-only, modeling the capability gap that a
+// projection failure exercises before any adapter runs.
+type hidesReadOnlyProjection struct{ ports.PackageStager }
+
+func kimiGroupInput(t *testing.T) AddInput {
+	t.Helper()
+	kimi := domain.DetectedClient{ClientID: domain.ClientKimi, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kimi-code")}
+	// A real Kimi package carries at least one native component; an empty
+	// selection would resolve to manual activation and never touch the registry.
+	input := kiroPowerInput(t, kimi, "1.0.0", "sha256:kimi-tree", "sha256:kimi-manifest")
+	input.Confirmed = true
+	return input
+}
+
+// A no-change Kimi update must rebuild and confirm the desired native
+// projection read-only from the committed package instead of re-activating.
+func TestGroupedKimiNoChangeUpdateRunsReadOnlyNativeProjection(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	input := kimiGroupInput(t)
+	if _, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{input}, Confirmed: true, OperationGroupID: "kimi-unchanged-add"}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.UpdateGroup(context.Background(), GroupInput{
+		Targets: []AddInput{input}, CompatibilityChecks: []AddInput{input}, Confirmed: true, OperationGroupID: "kimi-unchanged-update",
+	})
+	if err != nil {
+		t.Fatalf("kimi no-change update: %v", err)
+	}
+	if result.Mutated || len(result.Receipts) != 0 || result.Phase != GroupPhaseCompleted {
+		t.Fatalf("kimi no-change update = %+v", result)
+	}
+	if len(result.Targets) != 1 || !result.Targets[0].NoChange || result.Targets[0].GroupPhase != GroupTargetExternalCompleted {
+		t.Fatalf("kimi no-change target = %+v", result.Targets)
+	}
+	after, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("kimi no-change update rewrote state: %+v", after)
+	}
+}
+
+// A projection failure happens before any activation effect. The group flow
+// must report the projection error and keep the recorded lifecycle instead of
+// persisting an empty outcome that the state store then refuses.
+func TestGroupedProjectionFailurePreservesRecordedLifecycle(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	input := kimiGroupInput(t)
+	if _, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{input}, Confirmed: true, OperationGroupID: "kimi-projection-add"}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Stager = hidesReadOnlyProjection{PackageStager: service.Stager}
+	result, err := service.UpdateGroup(context.Background(), GroupInput{
+		Targets: []AddInput{input}, CompatibilityChecks: []AddInput{input}, Confirmed: true, OperationGroupID: "kimi-projection-update",
+	})
+	if err == nil || !strings.Contains(err.Error(), "stager cannot derive the installed native projection") {
+		t.Fatalf("projection failure must surface the projection error: %+v %v", result, err)
+	}
+	if strings.Contains(err.Error(), "refuse invalid state") {
+		t.Fatalf("projection failure was masked by a state refusal: %v", err)
+	}
+	if len(result.Targets) != 1 || result.Targets[0].Failure == nil || result.Targets[0].Failure.Stage == "persist" {
+		t.Fatalf("projection failure stage = %+v", result.Targets)
+	}
+	// Nothing ran, so the failed no-change attempt must not claim a mutation.
+	if result.Mutated || result.Targets[0].Mutated || !result.Targets[0].NoChange {
+		t.Fatalf("failed projection claimed a mutation: %+v", result.Targets[0])
+	}
+	after, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("projection failure rewrote the recorded lifecycle: %+v", after)
+	}
 }

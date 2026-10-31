@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/pluginmodel"
 )
@@ -31,16 +32,55 @@ func (qoderAdapter) RefineDiscovery(root string, state *pluginmodel.TargetState)
 		return nil
 	case err != nil:
 		return err
-	case len(entries) == 0:
-		return nil
-	default:
-		return fmt.Errorf("target qoder does not support %s/targets/qoder/... in phase 1: use %s/skills/** and %s/mcp/servers.yaml", authoredRoot, authoredRoot, authoredRoot)
 	}
+	for _, entry := range entries {
+		if entry.Name() == "hooks" || entry.Name() == "commands" || entry.Name() == "bin" {
+			continue
+		}
+		return fmt.Errorf("target qoder does not support %s/targets/qoder/%s: supported target-native kinds are hooks, commands, and bin", authoredRoot, entry.Name())
+	}
+	return nil
 }
 
 func (qoderAdapter) ManagedPaths(root string, graph pluginmodel.PackageGraph, state pluginmodel.TargetState) ([]string, error) {
 	// .mcp.json is adapter-generated whenever portable MCP exists and becomes
 	// stale (and must be removed) when portable MCP is dropped, otherwise a
-	// later import resurrects servers from the orphaned sidecar.
-	return []string{".mcp.json"}, nil
+	// later import resurrects servers from the orphaned sidecar. The same
+	// symmetry applies to the mirrored hooks/, commands/, and bin/ trees.
+	paths := []string{".mcp.json"}
+	for _, dir := range []string{"hooks", "commands", "bin"} {
+		found, err := existingFilesUnder(root, dir)
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, found...)
+	}
+	return paths, nil
+}
+
+func existingFilesUnder(root, dir string) ([]string, error) {
+	full := filepath.Join(root, dir)
+	if _, err := os.Stat(full); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var paths []string
+	err := filepath.WalkDir(full, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d == nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		paths = append(paths, filepath.ToSlash(rel))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(paths)
+	return paths, nil
 }

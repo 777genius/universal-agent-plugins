@@ -158,7 +158,7 @@ func rejectV1(in commands.Invocation) error {
 			for _, value := range in.Values["target"] {
 				for _, target := range strings.Split(value, ",") {
 					switch target {
-					case "claude", "codex", "gemini", "opencode", "cursor", "qoder":
+					case "claude", "codex", "gemini", "opencode", "cursor", "qoder", "grok", "kimi":
 					default:
 						supported = false
 					}

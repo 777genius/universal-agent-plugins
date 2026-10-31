@@ -731,7 +731,7 @@ Rules:
 
 Recommended workspace lock:
 
-- `<repo>/.plugin-kit-ai.lock`
+- `<repo>/.uap-integrations.lock` (renamed from `.plugin-kit-ai.lock`; the legacy name is still excluded from package digests but never read or written silently)
 
 Recommended YAML:
 

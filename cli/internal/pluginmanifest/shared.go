@@ -138,7 +138,11 @@ func addManagedCopies(set map[string]struct{}, files []string, srcDir, dstRoot s
 		if err != nil {
 			continue
 		}
-		set[filepath.ToSlash(filepath.Join(dstRoot, relPath))] = struct{}{}
+		joined := filepath.ToSlash(filepath.Join(dstRoot, relPath))
+		if _, err := containedArtifactRel(joined); err != nil {
+			continue
+		}
+		set[joined] = struct{}{}
 	}
 }
 

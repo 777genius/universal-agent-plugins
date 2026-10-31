@@ -40,7 +40,12 @@ func (qoderAdapter) Import(root string, seed ImportSeed) (ImportResult, error) {
 		}
 		result.Artifacts = append(result.Artifacts, artifact)
 	}
-	skillArtifacts, err := copyArtifactDirs(root, artifactDir{src: "skills", dst: "skills"})
+	skillArtifacts, err := copyArtifactDirs(root,
+		artifactDir{src: "skills", dst: "skills"},
+		artifactDir{src: "hooks", dst: "targets/qoder/hooks"},
+		artifactDir{src: "commands", dst: "targets/qoder/commands"},
+		artifactDir{src: "bin", dst: "targets/qoder/bin"},
+	)
 	if err != nil {
 		return ImportResult{}, err
 	}
@@ -51,7 +56,7 @@ func (qoderAdapter) Import(root string, seed ImportSeed) (ImportResult, error) {
 }
 
 func appendQoderUnsupportedAssetWarnings(result *ImportResult, root string) {
-	for _, asset := range []string{"commands", "agents", "hooks", "output-styles", "bin"} {
+	for _, asset := range []string{"agents", "output-styles"} {
 		if !fileExists(filepath.Join(root, asset)) {
 			continue
 		}

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { productRootUrl } from '~/utils/seo';
 import { localizedPath } from '~/utils/localizedRoutes';
+import { catalogVisiblePlugins } from '~/utils/filter';
 import type { KnownLocale } from '~/data/i18n';
 import { mdiArrowLeft, mdiOpenInNew } from '@mdi/js';
 import { clientLandingBySlug } from '~/data/clients';
@@ -18,7 +19,7 @@ if (!client) {
 
 const registry = await useRegistryPage({ projection: { kind: 'client', value: client.id } });
 
-const reviewedPlugins = registry.plugins.filter(
+const reviewedPlugins = catalogVisiblePlugins(registry.plugins).filter(
   (plugin) =>
     plugin.trust_state !== 'conformant_unreviewed' &&
     plugin.client_support.clients.includes(client.id),
@@ -33,7 +34,7 @@ const pageUrl = computed(() => localizedUrl(`/agents/${client.slug}/`));
 const breadcrumbId = computed(() => `${pageUrl.value}#breadcrumb`);
 const listId = computed(() => `${pageUrl.value}#plugin-list`);
 const title = computed(() => t('registryUi.agentPage.title', { name: client.name }));
-const needsLocalExample = client.id === 'grok' || client.id === 'kimi';
+const needsLocalExample = client.id === 'grok' || client.id === 'kimi' || client.id === 'pi';
 const installCommand = `npx -y universal-agent-plugins add ${needsLocalExample ? './my-plugin' : 'context7'} --target ${client.id}`;
 
 usePageSeo(title, () => t(`${client.presentationKey}.intro`), {

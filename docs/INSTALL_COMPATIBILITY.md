@@ -1,5 +1,10 @@
 # Install Compatibility Contract
 
+This is the historical download-layout contract for the retired YAML CLI's
+`plugin-kit-ai install`, not the current plugin installer command. Use
+[native CLI installation](NATIVE_INSTALL.md) for `agentplugins` itself and the
+[Use guide](https://universal-agent-plugins.com/docs/en/use/) for plugin packages.
+
 This document records the real-world-inspired compatibility boundary for `plugin-kit-ai install`.
 
 ## Scope
@@ -69,9 +74,9 @@ Compatibility evidence lives in two layers:
 
 - local fixture matrix:
   - [repotests/testdata/install_compatibility/matrix.json](../repotests/testdata/install_compatibility/matrix.json)
-  - exercised by [repotests/plugin-kit-ai_install_compatibility_test.go](../repotests/plugin-kit-ai_install_compatibility_test.go)
+  - exercised by [repotests/plugin_kit_ai_install_compatibility_test.go](../repotests/plugin_kit_ai_install_compatibility_test.go)
 - live optional smoke:
-  - [repotests/plugin-kit-ai_live_install_e2e_test.go](../repotests/plugin-kit-ai_live_install_e2e_test.go)
+  - [repotests/plugin_kit_ai_live_install_e2e_test.go](../repotests/plugin_kit_ai_live_install_e2e_test.go)
 
 The local matrix is the default compatibility proof.
 The live lane is only for release evidence and manual confidence refresh.

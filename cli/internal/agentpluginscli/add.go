@@ -17,11 +17,14 @@ import (
 func newAddCommand(app App, opts *options) *cobra.Command {
 	var activationComplete, authComplete bool
 	command := &cobra.Command{
-		Use:     "add <name-or-source>",
-		Aliases: []string{"install"},
-		Short:   "Plan and install one Agent Plugins 1.0 package for one or more clients",
-		Args:    addCommandArgs(opts),
+		Use:   "add <name-or-source>",
+		Short: "Plan and install one Agent Plugins 1.0 package for one or more clients",
+		Args:  addCommandArgs(opts),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			return executeAddCommand(cmd, app, opts, args[0], activationComplete, authComplete)
 		},
 	}
@@ -154,6 +157,10 @@ func runAddWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *o
 }
 
 func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
+	if err := rejectImperativePackageRequirements(loaded); err != nil {
+		return err
+	}
+
 	targets, err := parseTargetOption(opts.target)
 	if err != nil {
 		return err
@@ -180,7 +187,7 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 		InstallIntent: opts.installIntents[selected.ClientID],
 		Envelope:      loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Confirmed: false, Interactive: app.Terminal,
-		Hints: loaded.hints, BackendExecutable: backendExecutable(selected, detectedMap),
+		Hints: loaded.hints, BackendExecutable: backendExecutable(selected, detectedMap, app.scope()),
 		ActivationComplete: activationComplete, AuthComplete: authComplete,
 		PersistAuthoritativeObservations: true,
 		OriginMode:                       loaded.origin, DirectoryResolution: cloneDirectoryOrigin(loaded.directory),

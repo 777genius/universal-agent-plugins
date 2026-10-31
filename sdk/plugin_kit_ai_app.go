@@ -12,8 +12,13 @@ import (
 	"github.com/777genius/plugin-kit-ai/sdk/internal/descriptors/gen"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime/process"
+	"github.com/777genius/plugin-kit-ai/sdk/pi"
+	"github.com/777genius/plugin-kit-ai/sdk/qoder"
 	"github.com/777genius/plugin-kit-ai/sdk/vscodelocal"
 )
+
+// Pi returns the typed neutral Pi observation registrar.
+func (a *App) Pi() *pi.Registrar { return pi.NewRegistrar(registrarBackend{app: a}) }
 
 // Use appends middleware that wraps all subsequent handler dispatch.
 func (a *App) Use(mw Middleware) {
@@ -46,6 +51,11 @@ func (a *App) Gemini() *gemini.Registrar {
 // Cursor returns a registrar for the beta native stop observer.
 func (a *App) Cursor() *cursor.Registrar {
 	return cursor.NewRegistrar(registrarBackend{app: a})
+}
+
+// Qoder returns a registrar for Qoder plugin hook handlers.
+func (a *App) Qoder() *qoder.Registrar {
+	return qoder.NewRegistrar(registrarBackend{app: a})
 }
 
 // VSCodeLocal returns a registrar for beta Local Stop/SubagentStop observers.
@@ -97,6 +107,14 @@ func (a *App) RunContext(ctx context.Context) int {
 
 func (a *App) resolveInvocation(args []string, env runtime.Env) (runtime.Invocation, error) {
 	if inv, err := gen.ResolveInvocation(args, env); err == nil {
+		// Preserve Claude's casefold Stop alias for apps without Qoder handlers.
+		// Any Qoder registration reserves its exact lowercase invocation, even
+		// when Stop itself is missing, so mixed apps never fall back to Claude.
+		if inv.Platform == "qoder" && inv.RawName == "stop" && !a.handlers.HasPlatform("qoder") {
+			if _, ok := a.handlers.Lookup("claude", "Stop"); ok {
+				return runtime.Invocation{Platform: "claude", Event: "Stop", RawName: inv.RawName}, nil
+			}
+		}
 		return inv, nil
 	}
 	if len(args) < 2 {

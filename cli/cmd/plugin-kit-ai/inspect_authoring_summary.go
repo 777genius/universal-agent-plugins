@@ -74,6 +74,10 @@ func inspectAuthoringTargetLabel(target string) string {
 		return "Cursor workspace (cursor-workspace)"
 	case "qoder":
 		return "Qoder (qoder)"
+	case "grok":
+		return "Grok Build (grok)"
+	case "kimi":
+		return "Kimi Code (kimi)"
 	default:
 		trimmed := strings.TrimSpace(target)
 		if trimmed == "" {

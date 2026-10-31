@@ -33,7 +33,13 @@ Linux amd64/arm64 uses the v6.10 source floor's `FS_IOC_GETFSUUID` request
 pin is reopened at `.` relative to itself as O_RDONLY/DIRECTORY/NOFOLLOW/CLOEXEC;
 the opened device/inode and directory kind must match before ioctl. Length 1–16
 is retained in lowercase hex, including leading zero bytes; meaningful UUID
-bytes must be nonzero. Only ENOTTY maps this ioctl to `ErrUnsupported`. No
+bytes must be nonzero. On ENOTTY only, an ext4 fd (verified by fstatfs) uses the older read-only
+`EXT4_IOC_GETFSUUID` request `0x8008662c` with its checked 8-byte header and
+16-byte UUID buffer. Both return the same on-disk UUID and preserve the existing
+authority encoding across kernel upgrades. This supports the verified Linux 6.8
+ext4 namespace without requiring the generic 6.10 ABI. Other syscall errors and
+malformed/zero UUIDs fail closed. Unsupported drivers still return
+`ErrUnsupported`; filesystem support is capability-based, not guessed by uname. No
 procfs, block device, boot, PID, device-number or network fallback exists.
 Read-only GETFLAGS refuses case-folding directory tuples whose spelling cannot
 be resolved from Linux held handles without procfs. Other query errors fail.

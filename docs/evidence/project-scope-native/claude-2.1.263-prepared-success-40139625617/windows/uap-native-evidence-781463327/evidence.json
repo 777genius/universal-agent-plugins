@@ -1,0 +1,60 @@
+{
+  "arch": "amd64",
+  "client_sha256": "0b35df94c1307004f07b738390bfef8dfca5e9af29aaf6517f305bf086b95b03",
+  "client_version": "2.1.263 (Claude Code)",
+  "finished_utc": "2026-10-24T22:45:48.8176417Z",
+  "installer_data_retention": "passed",
+  "installer_sha256": "8dff69684ba79422b0fbad72b91c978aa76dbb9bee1c66c3d8c7acdcfd5ca76f",
+  "oauth": "not_evaluated",
+  "os": "windows",
+  "profile_root": "D:\\a\\_temp\\uap-native-hosted-wlb4x_pl\\evidence\\uap-native-evidence-781463327\\claude-config",
+  "provider": "scripted_loopback",
+  "real_model": "not_evaluated",
+  "runtime_scope": "stdio_default+stdio_explicit+HTTP+skill",
+  "scanner": {
+    "archive_sha256": "2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911",
+    "binary_sha256": "9d486e5b66875384c12a147b8a19007beebe2691bc6d23a7867bf019b70be453",
+    "platform": "windows-amd64",
+    "route": "prepopulated supported scanner cache; ordinary CLI security assessment",
+    "source_tag": "v0.1.3",
+    "version": "0.1.3"
+  },
+  "source_identity": {
+    "installer_base_commit": "428bdf5d49e63b78bc4783df6b766c87c8e678ca",
+    "installer_patch_sha256": [],
+    "installer_source_state": "committed",
+    "installer_tree": "94f69fd2a2e60040c0718dfec6ea4a778be78a6a"
+  },
+  "stages": {
+    "install": "passed",
+    "remove": "passed",
+    "repair": "passed",
+    "runtime_A": "passed",
+    "runtime_B": "passed",
+    "same_version_refresh": "passed"
+  },
+  "stdio_cwd_argv_env_data": "passed",
+  "stdio_runtime": "passed",
+  "transcript_sha256": {
+    "01-claude-version.log": "b223e2a39cb8534c8a0923ee0ec5050b0ed073905f830f89ef5b84a754e98185",
+    "02-add.log": "3d09e25e78d204599669c4bf2d4e17bc19735a28f2a0e2aafd4bd6706577becd",
+    "03-installed.log": "fa7d5a681b9679ec90048cb2debb3b80d6e19d27b6f6fd7b461dc68a38f95afa",
+    "04-runtime-A-projection.log": "fa7d5a681b9679ec90048cb2debb3b80d6e19d27b6f6fd7b461dc68a38f95afa",
+    "05-runtime-A.log": "f21172d9902ea84d92dca3175cc4f3dc0642b2b133ceddb6f026e070dd156186",
+    "06-update.log": "62deb607d232f07dc85e36cc5380473a2cc17dd19c562feb6e59b1ee70efaa02",
+    "07-runtime-B-projection.log": "c9ce322b5d49f8ed9a85f1d069c247c9f75424ee3cbfeabc94e03a3a36f7294e",
+    "08-runtime-B.log": "99134edf57d1b15eb25ed81ffcbd1f58a81ed9a72b29767ca0bdda7460e01d97",
+    "09-same-version-update.log": "20fdb76268aff018ca872048be00c42f213f1b7d84c1ed387e0e16beca205bcc",
+    "10-runtime-C-projection.log": "c9ce322b5d49f8ed9a85f1d069c247c9f75424ee3cbfeabc94e03a3a36f7294e",
+    "11-runtime-C.log": "c09e5325a0a0180c6cf282fc8118586550c3b30aabf446797a5a27df62d7cdb2",
+    "12-repair.log": "896ee80367aa463c967659092e7387e65d34fa3a24c90fe9afe8ffd917c34cf5",
+    "13-runtime-repair-projection.log": "c9ce322b5d49f8ed9a85f1d069c247c9f75424ee3cbfeabc94e03a3a36f7294e",
+    "14-runtime-repair.log": "914eb35f1661b60fdf1d4c0617d4833a29245db1fda778fa8b647dfd6b0e80e3",
+    "15-remove.log": "60ba161826a5e28ce459278fd9e76fa721e268bef27f0708d6bdbf84ce6467fc",
+    "16-removed.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "runtime-A-gateway.json": "0b6bcc549d3826263e88b445fd391ff10ea0f611be1959dc46e4d09a95aacacb",
+    "runtime-B-gateway.json": "52882fd266d75b5941b69216b44ceef1d44f509dc7f7ad47c46e7a05a7a993c5",
+    "runtime-C-gateway.json": "629b7dd8c267e7d13ceb4e452804db8d128466b2e0057c5658b25840f659e083",
+    "runtime-repair-gateway.json": "4495b169c5adb0b33738fcdbb22cb62a049418aec6dc11e78acf97bd3a2e736c"
+  }
+}

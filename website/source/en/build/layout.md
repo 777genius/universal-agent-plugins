@@ -10,6 +10,9 @@ translationRequired: true
 
 # Understand the package root
 
+**Source-build authoring:** commands on this page require the
+[authoring-enabled source build](./#build-from-source). The current installer
+release does not include `agentplugins author`.
 
 The selected directory is the package root. Authoring reads root
 `plugin.json` and its standard components. It does not search parents for a
@@ -48,7 +51,7 @@ authoring reader to execute anything.
 | --- | --- |
 | `plugin.json` | Standard package identity and metadata. |
 | `mcp.json` | MCP server configuration when the package supplies tools. |
-| `skills/<name>/SKILL.md` | One immediate Skill's identity, description, and instructions. |
+| `skills/<name>/SKILL.md` | Identity, description, and instructions for one Skill in a direct child directory of `skills/`. |
 | `README.md` | Intended use, prerequisites, validation, and remaining limits. |
 | `package.json`, `package-lock.json`, `src/server.mjs` | Node stdio scaffold inputs for separate runtime work. |
 | `LICENSE` | Explicit selected license, when supplied during init. |

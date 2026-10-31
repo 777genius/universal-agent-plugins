@@ -134,6 +134,18 @@ usePageSeo(
           </dl>
 
           <SecurityAssessmentPanel v-if="plugin.security && !discoveryStale" :plugin="plugin" />
+          <SkillSpectorAssessment
+            :applicable="plugin.components.includes('skills')"
+            :subject="{
+              kind: 'plugin',
+              repository: plugin.source.repository,
+              path: plugin.source.path,
+              revision: plugin.source.revision,
+            }"
+            :name="plugin.display_name"
+            scope="plugin"
+            expanded
+          />
         </article>
 
         <InstallPanel v-model:targets="targets" v-model:auto-detect="autoDetect" :plugin="plugin" />

@@ -1,9 +1,10 @@
 # Removal safety: what `remove` deletes, exactly
 
-The installer's removal guarantee is narrow on purpose: **`remove` deletes
-exactly the files the CLI added, and never anything else.** This document
-describes the rules that enforce that guarantee and the end-to-end evidence
-that they hold for every supported client.
+Removal is limited to objects whose recorded ownership UAP can verify. It
+preserves foreign files, unrelated configuration and externally edited managed
+content that cannot safely be removed. Plugin data and verified source caches
+can be retained intentionally. This document describes the ownership rules
+and the scope of the existing removal tests.
 
 ## The rules
 
@@ -20,24 +21,25 @@ that they hold for every supported client.
    explain how to resolve the conflict. The CLI never adopts or overwrites an
    entry it cannot prove it owns. After a refused operation the client config is
    verified unchanged, byte for byte.
-4. **Removal is idempotent and accounted.** A repeated `remove` of an already
-   removed installation is refused rather than silently accepted. E2E runs
+4. **Removal has an explicit result.** A repeated `remove` of an already
+   removed installation can be refused rather than silently accepted. E2E runs
    record the exact removal inventory — every deleted path plus its ownership
    classification — as artifacts.
-5. **Manual clients remove exactly nothing.** For clients without a supported
-   silent uninstall path (for example ChatGPT plugins, or Copilot/Grok plugins
-   removed through their own CLIs), `remove` fails closed until you confirm the
-   external uninstall with `--external-uninstalled`, and then changes exactly
-   zero files on disk.
+5. **External uninstall stays explicit.** Where a client requires its own
+   uninstall, UAP reports that action before settling the managed binding.
+   Use `--external-uninstalled` only after completing the reported action.
+   This is an attestation for that reviewed removal, not permission to delete
+   arbitrary client files. Native cleanup and UAP receipt cleanup are distinct.
 
 ## Evidence
 
-The exact-removal accounting runs as end-to-end tests: a full file inventory
+The referenced suites exercise removal accounting: a full file inventory
 (path to SHA-256) is taken before and after each real removal, every deleted
-path must be plugin-owned, no plugin-named file may survive, and foreign
+path must be plugin-owned, stale owned native projections must be absent within
+the tested footprint, and foreign
 neighbors must be byte-identical. The diffs are recorded as artifacts.
 
-| Client | What `remove` deletes | Verified in |
+| Client | Recorded fixture behavior | Test category |
 | --- | --- | --- |
 | Claude Code | managed plugin files + purge marker (8 paths in the reference run) | native e2e, real pinned client (macOS + Windows CI) |
 | Codex | managed plugin files + plugin cache/registry entry (14 paths; CLI scratch churn is classified separately) | native e2e, real pinned client (macOS + Windows CI) |
@@ -50,17 +52,24 @@ neighbors must be byte-identical. The diffs are recorded as artifacts.
 | Kimi | exactly the registry record; plugin artifacts byte-identical | removal e2e |
 | ChatGPT, Copilot, Grok | exactly nothing on disk (manual/external uninstall contract) | removal e2e, fail-closed refusal verified |
 
+This table is a map to existing fixture coverage, not a claim that every row
+was rerun for the latest release or in project scope. Path counts describe
+the reference fixture, not a fixed contract for arbitrary packages. Qoder and
+newer adapters must be evaluated against their own current tests and evidence;
+an absent row is not native runtime qualification.
+
 These suites live in `repotests/agentplugins_*_native_e2e_test.go`,
 `repotests/integrations_lifecycle_e2e_test.go`, and
 `install/integrationctl/agentplugins/clients/*/removal_inventory_test.go` (and
-the Kiro/ChatGPT lifecycle tests). The native suites run against real pinned
-client versions on macOS and Windows CI runners and emit
-`remove-inventory-diff.json` artifacts you can inspect after every run.
+the Kiro/ChatGPT lifecycle tests). Native suites can run against pinned client versions on macOS and Windows
+CI runners and emit `remove-inventory-diff.json`. To claim a pass, identify the
+successful run and retained artifact for the selected release, client, platform
+and scope. Deterministic adapter tests do not substitute for native execution.
 
 ## What this does not cover
 
 - External uninstalls performed by a client's own CLI (Copilot, Grok) are
-  verified as delegated and accounted for; the client tool itself performs its
+  delegated to the client and accounted for by the applicable contract; the client tool performs its
   part of the removal.
 - `repair` reconstructs only absent managed objects. It never "fixes" a foreign
   object that occupies a managed key — that is a refusal, by design.

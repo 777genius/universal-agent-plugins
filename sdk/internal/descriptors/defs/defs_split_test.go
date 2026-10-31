@@ -46,6 +46,11 @@ func TestEventsPreserveStableBucketOrder(t *testing.T) {
 		{platform: "cursor", event: "stop"},
 		{platform: "vscode-local", event: "Stop"},
 		{platform: "vscode-local", event: "SubagentStop"},
+		{platform: "qoder", event: "session_start"},
+		{platform: "qoder", event: "user_prompt_submit"},
+		{platform: "qoder", event: "post_tool_use"},
+		{platform: "qoder", event: "stop"},
+		{platform: "pi", event: "observation"},
 	}
 	if len(events) != len(want) {
 		t.Fatalf("events count = %d want %d", len(events), len(want))

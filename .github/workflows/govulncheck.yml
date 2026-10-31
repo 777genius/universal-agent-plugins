@@ -2,13 +2,33 @@ name: Govulncheck
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
+    # govulncheck reads only Go sources and module files. Pushes to main stay
+    # unfiltered, so every merge commit still carries the release-required
+    # govulncheck checks.
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'go.work'
+      - 'go.work.sum'
+      - '.github/workflows/govulncheck.yml'
   push:
     branches: [main, master]
   workflow_dispatch:
 
+# Replace ordinary PR/push CI; isolate manual and scheduled invocations.
+# Release validation also accepts checks from the associated merged PR head.
+concurrency:
+  group: govulncheck-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 jobs:
   govulncheck:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     strategy:
       fail-fast: false
       matrix:
@@ -27,7 +47,7 @@ jobs:
             dir: sdk
 
     name: govulncheck (${{ matrix.name }})
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     defaults:
       run:
@@ -38,7 +58,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.26.9"
+          go-version: "1.26.10"
           cache: false
 
       - name: Run govulncheck

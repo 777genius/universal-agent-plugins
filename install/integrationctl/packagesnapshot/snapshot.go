@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/domain"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )
@@ -221,7 +222,7 @@ func inspectTree(ctx context.Context, sourceRoot string, limits Limits) ([]entry
 		if dirEntry.IsDir() && base == ".git" {
 			return filepath.SkipDir
 		}
-		if !dirEntry.IsDir() && base == ".plugin-kit-ai.lock" {
+		if !dirEntry.IsDir() && domain.IsWorkspaceLockFile(base) {
 			return nil
 		}
 		if err := validateRelativePath(rel, limits.MaxDepth, portablePaths); err != nil {

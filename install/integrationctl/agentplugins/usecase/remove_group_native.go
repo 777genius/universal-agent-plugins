@@ -10,13 +10,18 @@ func (session *removeGroupSession) removeGroupNative() error {
 	externalCompleted := 0
 	for plannedIndex := range session.planned {
 		item := &session.planned[plannedIndex]
-		nativeAttempt := nativeLifecycleClient(item.input.Client.ClientID, item.client.SelectedDelivery)
+		nativeAttempt := nativeLifecycleClient(item.input.Client.ClientID, item.client.SelectedDelivery, item.input.Scope)
+		var attempt *nativeRemovalAttempt
 		if nativeAttempt {
-			if err := session.service.beginNativeAttemptWithObservation(session.installation.InstallationID, item.clientKey, domain.NativeIntentRemove, item.client.SelectedDelivery, item.client.LocalEntryObservation.Clone()); err != nil {
+			var err error
+			attempt, err = session.service.beginNativeRemovalAttempt(session.installation.InstallationID, item.clientKey, item.client, session.state)
+			if err != nil {
 				return err
 			}
 		}
 		outcome, err := session.service.deactivateWithFrozenObservation(session.ctx, session.installation.InstallationID, item.clientKey, domain.DeactivationRequest{
+			TargetContext:         session.service.targetContext(item.input.Client, item.input.Scope),
+			NativeRegistryRoot:    nativeRegistryForBinding(item.client, item.input.Client),
 			LocalEntryObservation: item.client.LocalEntryObservation.Clone(),
 			RemoveOwnedEntry:      item.client.SelectedDelivery.OwnsProfileEntry(item.client.NativeObjects),
 			SelectedDelivery:      item.client.SelectedDelivery,
@@ -31,6 +36,7 @@ func (session *removeGroupSession) removeGroupNative() error {
 		}
 		if err != nil {
 			session.markNativeDeactivationFailed(item, externalCompleted)
+			err = session.service.acknowledgeUnchangedRemoval(attempt, outcome, err)
 			return fmt.Errorf("external deactivation failed; managed materialization was retained for repair: %w", err)
 		}
 		if nativeAttempt {

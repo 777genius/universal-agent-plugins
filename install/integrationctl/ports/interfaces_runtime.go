@@ -37,18 +37,28 @@ type SafeFileMutator interface {
 }
 
 type Command struct {
-	Argv []string
-	Env  []string
-	Dir  string
+	// DiscardStdout drains ordinary command output without retaining it or
+	// applying StdoutLimitBytes. Interactive duplex exchanges own their stdout.
+	DiscardStdout bool
+	Argv          []string
+	Env           []string
+	Dir           string
 	// StdoutLimitBytes bounds captured stdout without terminating the child.
 	// Zero keeps the existing unbounded behavior for trusted callers.
 	StdoutLimitBytes int
 }
 
 type CommandResult struct {
-	ExitCode int
-	Stdout   []byte
-	Stderr   []byte
+	// NoChildStarted is positive evidence that execution failed before a process
+	// was successfully started. Zero PID or an empty result alone is not proof.
+	NoChildStarted bool
+	// CleanupComplete attests that the supervised leader was reaped, descendant
+	// cleanup succeeded, and containment was closed before returning. False is
+	// unknown; injected runners must not infer this solely from a timeout.
+	CleanupComplete bool
+	ExitCode        int
+	Stdout          []byte
+	Stderr          []byte
 }
 
 type ProcessRunner interface {

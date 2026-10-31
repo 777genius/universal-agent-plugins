@@ -58,7 +58,7 @@ const PROFILES = [
   { id: "agent-plugins/1.0.0", revision: "ff8ab5e392cc87bd88d87c060815a87490e51003", digest: "sha256:97a658b7dca3ce1b4c2266b95da300fa51d9dc4ade59d73168e5f9104272da18" },
   { id: "agent-skills/2026-09-06", revision: "69ef37e9424c0a7ea9dd2293b559e43ec8176379", digest: "sha256:b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220" },
   ...SCHEMAS.map(x => ({ ...x, revision: "1.0.0" })),
-  { id: "author-document-bounds/v1", revision: "1", digest: "sha256:93ebbf02aa70a38b18fdc720ace9e45c8f911b91d94a5c85a26b96c2d69efa46" }
+  { id: "author-document-bounds/v1", revision: "1", digest: "sha256:2bffd36f3e4ef0bdc1b25c3153b847542011a01af2f0b35ec31f2bc747952789" }
 ];
 function capabilities() {
   const rows = [
@@ -908,7 +908,7 @@ function readTerminals(root, inputRoot, pins, expected) {
   exact(host, { platform: contract.platform, architecture: contract.architecture, machine: contract.machine, target,
     observation: "whole-descendant-authoring-no-process-network/1" });
   c.keys(expected.tools, ["go", "node"], "host tools");
-  for (const [name, version] of [["go", "go1.26.9"], ["node", "v22.21.1"]]) {
+  for (const [name, version] of [["go", "go1.26.10"], ["node", "v22.21.1"]]) {
     c.keys(expected.tools[name], ["sha256", "version"], "tool pin"); sha(expected.tools[name].sha256); exact(expected.tools[name].version, version);
   }
   const result = [];
@@ -944,7 +944,7 @@ async function produce(options, signal) {
     const tool = context(path.join(options.work, "host-tool"));
     const go = await subprocess(options.go, ["env", "-json", "GOVERSION", "GOHOSTOS", "GOHOSTARCH"], tool, signal);
     exact(go.status, 0); exact(go.stderr, "");
-    exact(JSON.parse(go.stdout), { GOVERSION: "go1.26.9", GOHOSTOS: contract.goos, GOHOSTARCH: contract.goarch });
+    exact(JSON.parse(go.stdout), { GOVERSION: "go1.26.10", GOHOSTOS: contract.goos, GOHOSTARCH: contract.goarch });
     for (const p of c.PRODUCTS) {
       contexts[p] = context(path.join(options.work, p));
       const a = frozen.manifest.products[p].assets[target], bytes = c.readFile(path.join(root, p, a.file));
@@ -1033,7 +1033,7 @@ async function produce(options, signal) {
     e["host.json"] = { platform: process.platform, architecture: process.arch, machine: os.machine(), target,
       observation: "whole-descendant-authoring-no-process-network/1" };
     verifyJourney(e, pins, target);
-    const tools = { go: { sha256: options.go_sha256, version: "go1.26.9" }, node: { sha256: c.digest(c.readFile(process.execPath)), version: process.version } };
+    const tools = { go: { sha256: options.go_sha256, version: "go1.26.10" }, node: { sha256: c.digest(c.readFile(process.execPath)), version: process.version } };
     for (const file of FILES) fs.writeFileSync(path.join(options.output, file), c.encode(e[file]), { flag: "wx", mode: 0o400 });
     if (signal?.aborted) fail("cancelled before terminal");
     for (const p of c.PRODUCTS) {

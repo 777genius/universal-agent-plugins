@@ -151,3 +151,64 @@ func decode(t *testing.T, body []byte) map[string]any {
 	}
 	return out
 }
+
+// Canonical keys must remain single keys during selector changes and removal;
+// splitting a slash/dot key would silently change the dependency graph.
+func TestApplyCanonicalKeysPreserveIntentCommentsAndCRLF(t *testing.T) {
+	input := []byte("# environment\r\nschema_version = 1\r\n[dependencies]\r\n# canonical source\r\n\"acme/review.alpha\" = '^1.0' # selected version\r\n\"acme/keep.beta\" = '2.0.0' # retained source\r\n[targets]\r\ncodex = ['acme/review.alpha', 'acme/keep.beta'] # assignments\r\n")
+	out, err := Apply(input, Changes{Dependencies: []DependencyEdit{{Alias: "acme/review.alpha", Value: &Dependency{Version: "^2.0"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := decode(t, input)
+	want["dependencies"].(map[string]any)["acme/review.alpha"] = "^2.0"
+	if !reflect.DeepEqual(want, decode(t, out)) {
+		t.Fatalf("canonical update changed intent: %s", out)
+	}
+	out, err = Apply(out, Changes{Dependencies: []DependencyEdit{{Alias: "acme/review.alpha", Value: &Dependency{Registry: "uap", Distribution: "acme/review.alpha", Release: "7"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want["dependencies"].(map[string]any)["acme/review.alpha"] = map[string]any{"registry": "uap", "distribution": "acme/review.alpha", "release": "7"}
+	if !reflect.DeepEqual(want, decode(t, out)) {
+		t.Fatalf("canonical table conversion changed intent: %s", out)
+	}
+	out, err = Apply(out, Changes{Dependencies: []DependencyEdit{{Alias: "acme/review.alpha"}}, Targets: []TargetEdit{{Name: "codex", Aliases: []string{"acme/keep.beta"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(want["dependencies"].(map[string]any), "acme/review.alpha")
+	want["targets"].(map[string]any)["codex"] = []any{"acme/keep.beta"}
+	if !reflect.DeepEqual(want, decode(t, out)) {
+		t.Fatalf("canonical removal changed unrelated intent: %s", out)
+	}
+	for _, comment := range []string{"# environment", "# canonical source", "# selected version", "# retained source", "# assignments"} {
+		if !bytes.Contains(out, []byte(comment)) {
+			t.Fatalf("lost %s: %s", comment, out)
+		}
+	}
+	if bytes.Contains(bytes.ReplaceAll(out, []byte("\r\n"), nil), []byte("\n")) {
+		t.Fatalf("lost CRLF: %q", out)
+	}
+}
+
+// Replacing website intent must remove stale transport fields in both directions.
+func TestWebsiteSkillReplacement(t *testing.T) {
+	input := []byte("schema_version=1\n[dependencies.pdf]\ngit='acme/tools'\nref='main'\n[targets]\ncodex=['pdf']\n")
+	out, err := Apply(input, Changes{Dependencies: []DependencyEdit{{Alias: "pdf", Value: &Dependency{Website: "https://publisher.example", Kind: "skill", Skill: "pdf"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps := decode(t, out)["dependencies"].(map[string]any)["pdf"].(map[string]any)
+	if deps["website"] != "https://publisher.example" || deps["kind"] != "skill" || deps["skill"] != "pdf" || deps["git"] != nil || deps["ref"] != nil {
+		t.Fatal(deps)
+	}
+	out, err = Apply(out, Changes{Dependencies: []DependencyEdit{{Alias: "pdf", Value: &Dependency{Git: "acme/tools", Ref: "main"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps = decode(t, out)["dependencies"].(map[string]any)["pdf"].(map[string]any)
+	if deps["website"] != nil || deps["kind"] != nil || deps["skill"] != nil || deps["git"] != "acme/tools" {
+		t.Fatal(deps)
+	}
+}

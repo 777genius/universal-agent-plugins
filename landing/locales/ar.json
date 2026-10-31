@@ -13,7 +13,7 @@
     "docsCta": "عرض الوثائق",
     "preview": "معاينة تدفق Universal Agent Plugins",
     "latestRelease": "أحدث إصدار",
-    "status": "المكونات الإضافية الرسمية متاحة الآن",
+    "status": "إضافات من تطويرنا متاحة الآن",
     "trust": {
       "oneRepo": "مستودع واحد",
       "validated": "سير عمل واضح",
@@ -106,7 +106,7 @@
   },
   "features": {
     "sectionTitle": "مسار واضح من مستودع مكون إضافي واحد إلى وكلاء متعددين",
-    "sectionSubtitle": "صياغة مفهومة، وحدود صريحة، وسير عمل يبقى قابلًا للإدارة مع نمو المنتج."
+    "sectionSubtitle": "تعليمات واضحة، وحدود دعم صريحة، وسير عمل يبقى سهل الإدارة مع نمو المنتج."
   },
   "customLogic": {
     "eyebrow": "مسار متقدم",
@@ -151,14 +151,14 @@
       "quickstartTitle": "فتح البدء السريع",
       "quickstartBody": "أقصر مسار مدعوم من التثبيت إلى مستودع تم التحقق منه.",
       "buildTitle": "فتح دليل البناء",
-      "buildBody": "أنشئ حزم plugin.json وافحصها باستخدام agentplugins author.",
+      "buildBody": "اكتب حزم plugin.json يدويًا أو استخدم أدوات التأليف المبنية من المصدر، ثم تحقّق منها وثبّتها بالمدير المنشور.",
       "useTitle": "فتح دليل الاستخدام",
       "useBody": "ابحث عن الإضافات وعاينها وثبّتها وأدرها باستخدام agentplugins."
     }
   },
   "comparison": {
     "sectionTitle": "لماذا يعمل",
-    "sectionSubtitle": "ليست مواجهة مع المنافسين. إنها مقارنة عملية مع الطرق الثلاث التي تؤدي عادةً إلى انجراف غير ضروري لدى فرق المكونات الإضافية.",
+    "sectionSubtitle": "مقارنة عملية بين الإعداد اليدوي وتكرار الإعدادات والبرامج النصية المخصصة لمرة واحدة، وما تسببه من اختلافات غير ضرورية.",
     "feature": "سير العمل",
     "columns": {
       "pluginKitAi": "Universal Agent Plugins",
@@ -201,14 +201,37 @@
     "standard": "ابنِ حزمة Agent Plugins 1.0 قابلة للنقل حول plugin.json، مع skills/ وmcp.json اختياريًا. يعتمد دعم العملاء على الحزمة ومكوناتها.",
     "specLink": "اقرأ مواصفة Agent Plugins 1.0",
     "compatibilityLink": "توافق العملاء (بالإنجليزية)",
-    "limitations": "التوافق خاص بكل حزمة. التحقق من المخطط لا يثبت وقت التشغيل أو OAuth أو التفعيل. لا يدعم Codex بروتوكول MCP SSE المعلن؛ ويحتفظ stdio وStreamable HTTP بدعم المحولات الحالي.",
-    "versions": "تأليف Agent Plugins متاح: universal-agent-plugins; GitHub: agentplugins-v*.",
-    "availability": "تأليف Agent Plugins متاح",
-    "releaseScope": "تأليف Agent Plugins متاح في universal-agent-plugins؛ GitHub: agentplugins-v*. تم التحقق من npm وHomebrew والأرشيفات الأصلية وGitHub Releases واختبارات E2E العامة. يتضمن الإصدار التأليف الثابت؛ ولا يتضمن التنفيذ أو خوادم التطوير أو تثبيت التبعيات أو التصدير أو النشر.",
+    "limitations": "يختلف التوافق بحسب الحزمة. لا يثبت التحقق من المخطط نجاح التشغيل أو OAuth أو التفعيل. لا يدعم Codex نقل MCP المعلن عبر SSE؛ ويظل stdio وStreamable HTTP مدعومين عبر المحوّلات الحالية.",
+    "versions": "المثبّت الأصلي المتحقق منه: CLI 0.1.95؛ اسم حزمة npm هو universal-agent-plugins؛ وسوم إصدارات GitHub: agentplugins-v*.",
+    "availability": "حزم يدوية وأدوات تأليف مبنية من المصدر",
+    "releaseScope": "توفّر GitHub Releases الإصدار CLI 0.1.95، الذي يضيف واجهة API للإدارة المحلية وامتدادات Pi الأصلية ضمن نطاق المستخدم، ولا يتضمن agentplugins author. قد تتأخر إصدارات Homebrew وnpm؛ تحقّق باستخدام agentplugins version. تتطلب أوامر دليل البناء نسخة مبنية من المصدر مع تفعيل التأليف. يحتفظ مرجع API المولّد بمصدره التاريخي المرتبط بـ0.1.65؛ ولا يصف المثبّت الحالي.",
     "buildGuideLink": "افتح دليل الإنشاء"
   },
   "shell": {
+    "dependencies": {
+      "eyebrow": "تبعيات مترابطة",
+      "title": "إضافتان. تبعية مشتركة واحدة.",
+      "description": "ثبّت الإضافة مع تبعياتها. تُثبّت التبعيات المشتركة ذات الإصدار المتوافق نفسه مرة واحدة فقط.",
+      "demoPackage": "حزمة توضيحية",
+      "installed": "مثبّتة",
+      "alreadyInstalled": "مثبّتة مسبقًا",
+      "shared": "مشتركة",
+      "caption": "الحزم ومخطط التبعيات للتوضيح. تشترك الحزمتان في Playwright؛ وContext7 مثبّتة مسبقًا.",
+      "graphDescription": "تعتمد marketing-kit على Playwright وHubSpot وNotion. وتعتمد Web Design Kit على حزمة Playwright نفسها وFigma وContext7. جميع الحزم مثبّتة؛ وكانت Context7 مثبّتة مسبقًا."
+    },
+    "restore": {
+      "title": "إصدارات الإضافات نفسها. لكل فريقك.",
+      "guide": "الدليل",
+      "from": "في مشروعك",
+      "to": "زميلك في الفريق",
+      "transfer": "أضف {manifest} و{lockfile} مع مشروعك إلى Git ليستعيد زملاؤك الإصدارات نفسها.",
+      "requirements": "تتطلب الاستعادة بقاء المصادر المسجلة متاحة وعملاء تدعمهم إدارة التبعيات.",
+      "excludes": "لا تُنقل عمليات تسجيل الدخول أو الأسرار أو الإعدادات أو بيانات الإضافات.",
+      "subtitle": "ثبّت في المشروع. أضف ملف القفل إلى Git. ليستعيد زملاؤك الإصدارات نفسها.",
+      "commit": "أضف uap.toml + uap.lock إلى Git"
+    },
     "docs": {
+      "navLabel": "الوثائق",
       "englishLabel": "{label} (الوثائق باللغة الإنجليزية)"
     },
     "logo": {
@@ -226,18 +249,19 @@
       "subtitle": "تسليم أصلي",
       "intro": "تبقى الحزمة قابلة للنقل؛ ويتولى المُثبّت تنسيق كل عميل ودورة حياته.",
       "standardTitle": "المعيار أولًا",
-      "clientTitle": "واعٍ بالعملاء",
+      "clientTitle": "إعداد يناسب كل عميل",
       "clientDescription": "يتلقى Codex وCursor وClaude Code وGemini CLI وOpenCode والعملاء الآخرون التنسيق الذي يدعمونه.",
       "lifecycleTitle": "دورة حياة كاملة",
       "lifecycleDescription": "أضف مكونًا إضافيًا أو افحصه أو حدّثه أو أصلحه أو بدّل مصدره أو أزله عبر CLI نفسه.",
-      "sourceTitle": "المصدر مرئي",
+      "sourceTitle": "المصدر متاح",
       "sourceDescription": "تبقى الحزم المراجعة والاكتشافات المجتمعية موسومة بوضوح، مع إتاحة مصدرها قبل التثبيت.",
       "standardDescription": "تُقرأ الحزم من Agent Plugins 1.0 {manifest}، من دون بيان تثبيت ثانٍ."
     },
     "builtWith": {
       "title": "مشاريع بُنيت بالفعل باستخدام UAP",
       "agentNotificationsDescription": "إشعارات سطح المكتب والأصوات والانتقال إلى النافذة بنقرة لوكلاء البرمجة بالذكاء الاصطناعي.",
-      "viewRepository": "عرض على GitHub"
+      "viewRepository": "عرض على GitHub",
+      "buildWithSdk": "ابنِ باستخدام SDK"
     },
     "faq": {
       "eyebrow": "الأسئلة الشائعة",
@@ -245,7 +269,7 @@
       "items": {
         "0": {
           "question": "ما وكلاء الذكاء الاصطناعي المدعومون؟",
-          "answer": "Codex وChatGPT وCursor وGitHub Copilot CLI وVS Code وKiro وClaude Code وGemini CLI وOpenCode وCline وWindsurf مدعومة أو مُحضّرة عبر مسار صريح خاص بكل عميل. يدعم Grok Build وKimi Code أيضًا المهارات وMCP الأصليين."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: لكل عميل مسار خاص للتثبيت أو الإعداد. يعتمد التوافق على مكونات الحزمة ونطاق التثبيت ومتطلبات التفعيل."
         },
         "1": {
           "question": "هل يثبّت أمر واحد في كل وكيل؟",
@@ -257,7 +281,7 @@
         },
         "3": {
           "question": "هل يمكنني تثبيت مكون إضافي خارج هذا الدليل؟",
-          "answer": "نعم. استخدم مصدر GitHub مثبتًا يحتوي على حزمة Agent Plugins 1.0 plugin.json صالحة."
+          "answer": "نعم. ثبّت حزمة كاملة تحتوي على plugin.json من مجلد محلي أو Git عبر HTTPS أو SSH أو رابط مزوّد مدعوم أو أرشيف جاهز. تسجّل الواجهة إصدارات المصادر الدقيقة للتبعيات القابلة للحفظ."
         },
         "4": {
           "question": "هل تتم مراجعة كل المكونات الإضافية المكتشفة؟",
@@ -281,9 +305,9 @@
       "organizationDescription": "مُثبّت مفتوح المصدر متعدد الوكلاء ومدير لدورة حياة Agent Plugins 1.0."
     },
     "hero": {
-      "autoLabel": "كل الوكلاء المثبتين (موصى به)",
-      "autoSummary": "كل الوكلاء المثبتين",
-      "autoDescription": "يتم اكتشافهم عند تشغيل الأمر",
+      "autoLabel": "اختيار الوكلاء في الطرفية",
+      "autoSummary": "اختيار الوكلاء في الطرفية",
+      "autoDescription": "يتيح الأمر اختيار الوكلاء قبل التثبيت.",
       "unavailable": "غير متاح مؤقتًا",
       "refreshing": "جارٍ تحديث بيانات المكونات الإضافية",
       "chatgptSetup": "إكمال الإعداد في ChatGPT",
@@ -291,7 +315,7 @@
       "notAvailableForPlugin": "غير متاح لهذا المكون الإضافي",
       "title": "مكون إضافي واحد",
       "subtitle": "كل وكلائك",
-      "intro": "ثبّت Agent Plugins 1.0 وحدّثها وأصلحها وأزلها عبر وكلاء الذكاء الاصطناعي المدعومين باستخدام أمر واحد. دع CLI يكتشف الوكلاء المثبتين، أو اختر بدقة أين يذهب المكون الإضافي.",
+      "intro": "ثبّت Agent Plugins 1.0 وحدّثها وأصلحها وأزلها للوكلاء المدعومين بأمر واحد. دع CLI يكتشف الوكلاء المثبّتين، أو حدّد مكان تثبيت الإضافة.",
       "github": "فتح GitHub",
       "choose": "اختيار الوكلاء",
       "chooseHint": "واحد أو عدة وكلاء أو اكتشاف تلقائي",
@@ -308,7 +332,7 @@
       "exploreCount": "استكشاف {count} مكونات إضافية | استكشاف {count} مكون إضافي | استكشاف {count} مكونات إضافية",
       "delivery": {
         "managed": "تثبيت مُدار",
-        "prepared": "تم التحضير؛ ما زال استيراد العميل مطلوبًا",
+        "prepared": "تم التجهيز؛ ما زال الاستيراد داخل العميل مطلوبًا",
         "manual_activation": "يتطلب تفعيلًا يدويًا"
       },
       "sourceReason": "سبب المصدر: {reason}",
@@ -317,8 +341,8 @@
         "releaseStatus": "الإصدار {sequence} في حالة {status}",
         "missingComponents": "الإصدار {sequence} يفتقد مكونات مطلوبة",
         "unsupportedTargets": "الإصدار {sequence} لا يدعم {targets}",
-        "blockingFailure": "الإصدار {sequence} لديه فشل موثوق حاجب لـ {targets}",
-        "missingEvidence": "الإصدار {sequence} يفتقر إلى دليل توافق إيجابي حديث للحزمة (اجتياز التجسيد) لـ {targets}",
+        "blockingFailure": "سجّل فحص موثوق للإصدار {sequence} إخفاقًا يمنع التثبيت لـ {targets}",
+        "missingEvidence": "يفتقر الإصدار {sequence} إلى دليل إيجابي حديث على توافق الحزمة ونجاح تجهيزها لـ {targets}",
         "noReleases": "لا توجد إصدارات",
         "defaultIneligible": "التوزيع الافتراضي المعلن {distribution} كان غير مؤهل: {reasons}",
         "reasonSeparator": "; ",
@@ -354,13 +378,13 @@
   },
   "plugins": {
     "sectionTitle": "تبدأ إضافاتنا الأولى من هنا",
-    "sectionSubtitle": "تصفح الكتالوج الرسمي الفعلي للخدمات المتصلة بالإنترنت والأدوات المحلية. إذا كانت قيمة المنتج تكمن في كود التشغيل الخاص بك، فاستخدم مسار المنطق المخصص المتقدم بدلا من ذلك.",
+    "sectionSubtitle": "تصفح كتالوج إضافاتنا للخدمات المتصلة بالإنترنت والأدوات المحلية. إذا كانت قيمة المنتج في كود التشغيل الخاص بك، فاستخدم مسار المنطق المخصص المتقدم.",
     "supports": "يدعم",
     "openPlugin": "فتح الإضافة",
     "viewDetails": "عرض التفاصيل",
     "viewAll": "عرض الكل",
     "catalogEyebrow": "كتالوج الإضافات",
-    "catalogTitle": "كل إضافة رسمية في كتالوج واحد قابل للبحث",
+    "catalogTitle": "كل إضافة من تطويرنا في كتالوج واحد قابل للبحث",
     "catalogSubtitle": "تصفح الكتالوج الفعلي للخدمات المتصلة بالإنترنت والأدوات المحلية، ثم افتح مستودع المصدر فقط بعد أن تتأكد من أن الإضافة مناسبة للمهمة.",
     "catalogAdvancedNote": "هل تحتاج إلى خطافات أو تنسيق تشغيل أو سلوك وقت تشغيل بدلا من إضافة من الكتالوج؟",
     "catalogAdvancedLink": "افتح دليل المنطق المخصص المتقدم.",
@@ -503,7 +527,7 @@
       "selected": "{count} محدد",
       "auto": "اكتشاف تلقائي",
       "choose": "أو اختر وكلاء محددين",
-      "automaticHelp": "يتحقق CLI من توافق هذه الإضافة مع الوكلاء المثبتين، ويتجاوز الوكلاء غير المتوافقين، ثم يتيح لك تأكيد الأهداف. لا يتم تضمين ChatGPT إلا عندما توفر الإضافة اتصالا موثقا.",
+      "automaticHelp": "يتحقق CLI من توافق هذه الإضافة مع الوكلاء المثبتين، ويتجاوز الوكلاء غير المتوافقين، ثم يتيح لك تأكيد الأهداف. لا يتم تضمين ChatGPT إلا عندما توفر الإضافة اتصالًا تم التحقق منه.",
       "manualHelp": "حدد كل وكيل يجب أن يتلقى هذه الإضافة. سيبقى وكيل واحد محددا على الأقل.",
       "summary": "{label}: {summary}"
     },
@@ -532,9 +556,9 @@
       "reviewNotes": "ملاحظات المراجعة الآلية",
       "unknown": "غير معروف",
       "tooltipScope": "فحص LintAI {version} النسخة المفهرسة الدقيقة {revision}.",
-      "tooltipDisclaimer": "يبحث هذا الفحص الثابت عن الأنماط المهيأة. لا يشغل الإضافة ولا يضمن الأمان.",
+      "tooltipDisclaimer": "يبحث هذا الفحص الساكن عن الأنماط المهيأة. لا يشغل الإضافة ولا يضمن الأمان.",
       "openReview": "{label}. افتح المراجعة الكاملة لـ {name}",
-      "staticReview": "مراجعة ثابتة آلية",
+      "staticReview": "مراجعة ساكنة آلية",
       "more": "+{count} أخرى في المراجعة الكاملة",
       "fullDetails": "افتح صفحة الإضافة للاطلاع على التفاصيل الكاملة.",
       "eyebrow": "مراجعة أمان آلية",
@@ -543,7 +567,7 @@
       "before": "أمور يجب مراجعتها قبل التثبيت",
       "maintenanceCount": "ملاحظات صيانة المستودع ({count})",
       "maintenanceHelp": "تتعلق هذه النتائج بأتمتة مستودع المؤلف. إنها نصائح مفيدة لتعزيز الأمان، لكن أداة التثبيت لا تشغل مسارات العمل هذه.",
-      "truncated": "يتم عرض {shown} من أصل {total} نتيجة. الملخص العام الموقع محدود الحجم؛ وتشمل الإجماليات كل نتيجة من الفحص.",
+      "truncated": "تُعرض {shown} من أصل {total} نتيجة. الملخص العام الموقّع محدود الحجم؛ ويشمل العدد الإجمالي جميع نتائج الفحص.",
       "empty": "لم ترصد القواعد الآلية نمطا مانعا في الملفات المفحوصة.",
       "disclaimer": "تقلل الفحوصات الآلية المخاطر؛ لكنها لا تثبت أن الإضافة آمنة. راجع المصدر والأذونات قبل تثبيت برنامج لا تثق به."
     },
@@ -554,6 +578,7 @@
       "explorePlugins": "استكشف الإضافات",
       "searchByCapabilityComponentOrSource": "ابحث حسب القدرة أو المكون أو المصدر.",
       "allCategories": "كل الفئات",
+      "marketingCategory": "التسويق",
       "allComponents": "كل المكونات",
       "allSources": "كل المصادر",
       "upstreamPackages": "حزم المصدر الرئيسي",
@@ -618,24 +643,24 @@
       "unavailableSignedDirectorySnapshotExpired": "غير متاح: انتهت صلاحية لقطة Directory الموقعة",
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "غير متاح في مصدره المفهرس؛ لن يتم إنشاء أمر تثبيت.",
       "unavailableAtItsIndexedSource": "غير متاح في مصدره المفهرس",
-      "checkedAgainBeforeInstallation": "تم التحقق مرة أخرى قبل التثبيت",
-      "reviewedListing": "مراجَع",
+      "checkedAgainBeforeInstallation": "يُفحص مجددًا قبل التثبيت",
+      "reviewedListing": "مُراجَع",
       "notAvailableForChatgpt": "غير متاح لـ ChatGPT",
-      "verifiedConnectionFinishSetupInChatgpt": "اتصال موثق؛ أكمل الإعداد في ChatGPT",
-      "allInstalledAgents": "كل الوكلاء المثبتين",
+      "verifiedConnectionFinishSetupInChatgpt": "اتصال تم التحقق منه؛ أكمل الإعداد في ChatGPT",
+      "allInstalledAgents": "اختيار الوكلاء في الطرفية",
       "commandsDisabledInPreview": "الأوامر معطلة في المعاينة.",
-      "allInstalledAgentsRecommended": "كل الوكلاء المثبتين (موصى به)",
+      "allInstalledAgentsRecommended": "اختيار الوكلاء في الطرفية",
       "previewOnly": "للمعاينة فقط",
       "currentlyUnavailable": "غير متاح حاليًا",
       "agentCompatibilityCheckedWhenYouRunTheCommand": "يتم التحقق من توافق الوكيل عند تشغيل الأمر",
       "communityListing": "إدراج مجتمعي",
       "notInstallableFromAnActiveRelease": "غير قابل للتثبيت من إصدار نشط",
-      "detectedWhenYouRunTheCommand": "يتم اكتشافه عند تشغيل الأمر",
+      "detectedWhenYouRunTheCommand": "يتيح الأمر اختيار الوكلاء قبل التثبيت.",
       "commandsDisabledBecauseTheDirectoryIsTemporarilyStale": "الأوامر معطلة لأن Directory قديم مؤقتًا.",
       "unavailableReviewDataIsNotInstallationAuthority": "غير متاح: بيانات المراجعة ليست مرجعًا معتمدًا للتثبيت",
       "temporarilyPaused": "متوقف مؤقتًا",
       "communityDirect": "مجتمعي / مباشر",
-      "installCandidateComponents": "تثبيت مكونات المرشح",
+      "installCandidateComponents": "مكونات خيار التثبيت المختار",
       "add": "إضافة",
       "thisIsTheGithubRepositorySStarCountNotARatingForThisIndividualPlugin": "هذا هو عدد نجوم مستودع GitHub، وليس تقييمًا لهذه الإضافة تحديدًا.",
       "agentPlugins10": "Agent Plugins 1.0",
@@ -650,21 +675,22 @@
       "publisher": "بواسطة {publisher}",
       "upstream": "المصدر الأصلي",
       "installable": "قابل للتثبيت",
-      "unavailable": "غير متاح"
+      "unavailable": "غير متاح",
+      "reviewedListingTooltip": "تمت مراجعة البطاقة والبيانات الوصفية. لا يُعد ذلك اعتمادًا لكود الإضافة أو سلوكها أو أمانها."
     },
     "install": {
-      "allInstalledAgentsRecommended": "كل الوكلاء المثبتين (موصى به)",
+      "allInstalledAgentsRecommended": "اختيار الوكلاء في الطرفية",
       "useWithYourAgent": "استخدمه مع وكيلك",
       "notReadyToInstall": "غير جاهز للتثبيت",
-      "detectedWhenYouRunTheCommand": "يتم اكتشافه عند تشغيل الأمر",
+      "detectedWhenYouRunTheCommand": "يتيح الأمر اختيار الوكلاء قبل التثبيت.",
       "thisPackageIsNoLongerAvailableFromItsSource": "لم تعد هذه الحزمة متاحة من مصدرها.",
       "notAvailableForChatgpt": "غير متاح لـ ChatGPT",
       "unavailableSignedDirectorySnapshotExpired": "غير متاح: انتهت صلاحية لقطة Directory الموقعة",
       "noActiveReleaseSupportsThisClient": "لا يوجد إصدار نشط يدعم هذا العميل",
       "unavailableReviewDataIsNotInstallationAuthority": "غير متاح: بيانات المراجعة ليست مرجعًا معتمدًا للتثبيت",
       "thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet": "لا تدعم هذه الحزمة أيًا من الوكلاء المتاحين في المثبّت حتى الآن.",
-      "verifiedConnectionFinishSetupInChatgpt": "اتصال موثق؛ أكمل الإعداد في ChatGPT",
-      "allInstalledAgents": "كل الوكلاء المثبتين",
+      "verifiedConnectionFinishSetupInChatgpt": "اتصال تم التحقق منه؛ أكمل الإعداد في ChatGPT",
+      "allInstalledAgents": "اختيار الوكلاء في الطرفية",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "عثرنا على هذا المشروع، لكنه لا يتضمن بعد أي أدوات يستطيع المثبّت إضافتها.",
       "chooseTargetAgents": "اختيار الوكلاء المستهدفين",
       "add": "انسخ وشغّل في الطرفية",
@@ -675,14 +701,19 @@
       "runWithNpx": "التشغيل باستخدام npx",
       "thisPluginIsNotInstallableYet": "هذه الإضافة غير قابلة للتثبيت بعد",
       "viewPackageSource": "عرض مصدر الحزمة",
+      "vendorInstallerHeading": "التثبيت عبر مثبّت المنتج",
+      "vendorInstallerBody": "يُثبَّت هذا المنتج عبر مثبّته الخاص، وليس عبر CLI universal-agent-plugins. نشر المورّد الأمر أدناه؛ ولا تضمن universal-agent-plugins صحته أو أمانه.",
+      "vendorCommandLabel": "أمر التثبيت من المورّد",
+      "vendorInstallerCta": "المثبّت الرسمي",
+      "thisProductIsRetiredNewInstallsAreUnavailableAndExistingInstallsCanOnlyBeRemoved": "أُوقف هذا المنتج. لا تتوفر تثبيتات جديدة، ويمكن إزالة التثبيتات الحالية فقط.",
       "agents": "الوكلاء",
       "commandsUnavailableStaleDirectory": "الأوامر غير متاحة: Directory قديم.",
       "thisSignedSnapshotHasExpiredBrowseItsHistoryThenReturnAfterAFreshSnapshotIsPublished": "انتهت صلاحية هذه اللقطة الموقعة. تصفح سجلها، ثم عد بعد نشر لقطة جديدة.",
       "commandsUnavailableInReviewPreview": "الأوامر غير متاحة في معاينة المراجعة.",
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "البيانات غير المحسومة مخصصة للمراجعة فقط؛ تتطلب أوامر الإنتاج لقطة Directory موقعة ومنشورة.",
       "commandsUnavailable": "الأوامر غير متاحة.",
-      "automaticDetection": "اكتشاف تلقائي.",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "يتحقق CLI من هذه الإضافة مقابل الوكلاء المثبتين، ويتجاوز غير المتوافق منها، ويتيح لك تأكيد الأهداف. لا يتم تضمين ChatGPT إلا عندما توفر هذه الإضافة اتصالًا موثقًا.",
+      "automaticDetection": "اختيار الوكلاء في الطرفية",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "يتحقق CLI من هذه الإضافة مقابل الوكلاء المثبتين، ويتجاوز غير المتوافق منها، ويتيح لك تأكيد الأهداف. لا يتم تضمين ChatGPT إلا عندما توفر هذه الإضافة اتصالًا تم التحقق منه.",
       "oneStepRemainsInChatgpt": "تبقت خطوة واحدة في ChatGPT.",
       "noSingleSourceServesThisTargetSet": "لا يوجد مصدر واحد يخدم مجموعة الأهداف هذه.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "سيفشل CLI قبل إجراء أي تعديل وسيقترح تركيبات متوافقة من الأهداف والمصادر؛ ولا يخلط أبدًا توزيعات مختلفة بين العملاء.",
@@ -694,7 +725,33 @@
         "noSave": "يستخدم هذا الاختيار --no-save ولا يسجل تبعية.",
         "local": "لا تُحفظ الحزم المحلية كتبعيات قابلة للنقل.",
         "discovery": "لا تُحفظ محددات discovery كتبعيات.",
-        "chatgpt": "لا يحفظ إعداد ChatGPT تبعية."
+        "chatgpt": "لا يحفظ إعداد ChatGPT تبعية.",
+        "projectSaved": "حُفظ في ملفي uap.toml وuap.lock لهذا المشروع. للتحقق، شغّل npx -y universal-agent-plugins deps status --scope project من هذا المجلد. تؤثر الإزالة على جميع الوكلاء المحفوظين في هذا المشروع."
+      },
+      "scope": {
+        "label": "التثبيت من أجل",
+        "user": "هذا المستخدم",
+        "project": "هذا المشروع",
+        "projectHint": "شغّل هذه الأوامر من مجلد مشروعك. قد يطلب منك الوكيل الوثوق بالمشروع أو تفعيله.",
+        "projectUnavailable": "التثبيت داخل مشروع غير متاح لهذه الحزمة.",
+        "selectionUnavailable": "هذه المجموعة من الوكلاء وموقع التثبيت غير متاحة. اختر وكيلاً أو موقعًا آخر."
+      },
+      "outcome": {
+        "includes": "تتضمن:",
+        "label": "التثبيت والخطوات التالية",
+        "managed": "تدير واجهة سطر الأوامر الملفات المثبتة.",
+        "prepared": "الملفات جاهزة. أكمل الإعداد في وكيلك.",
+        "manual_activation": "فعّل الحزمة في وكيلك.",
+        "unknown": "راجع الإعداد في وكيلك.",
+        "auth": {
+          "required": "قد يظل تسجيل الدخول أو تقديم بيانات اعتماد مطلوبًا.",
+          "unknown": "تحقق من متطلبات تسجيل الدخول للحزمة."
+        },
+        "components": {
+          "skills": "مهارات",
+          "mcp": "أدوات MCP",
+          "extensions": "إضافات"
+        }
       }
     },
     "authentication": {
@@ -707,7 +764,7 @@
     },
     "delivery": {
       "managed": "تثبيت مُدار",
-      "prepared": "تم التحضير؛ تبقى خطوة الاستيراد في العميل",
+      "prepared": "تم التجهيز؛ ما زال الاستيراد داخل العميل مطلوبًا",
       "manual_activation": "يتطلب تفعيلًا يدويًا"
     },
     "reason": {
@@ -715,15 +772,16 @@
       "releaseStatus": "الإصدار {sequence} حالته {status}",
       "missingComponents": "الإصدار {sequence} يفتقد مكونات مطلوبة",
       "unsupportedTargets": "الإصدار {sequence} لا يدعم {targets}",
-      "blockingFailure": "الإصدار {sequence} يحتوي على فشل موثوق حاجب لـ {targets}",
-      "missingEvidence": "الإصدار {sequence} يفتقر إلى دليل حالي إيجابي على توافق الحزمة (اجتاز التجسيد) لـ {targets}",
+      "blockingFailure": "سجّل فحص موثوق للإصدار {sequence} إخفاقًا يمنع التثبيت لـ {targets}",
+      "missingEvidence": "يفتقر الإصدار {sequence} إلى دليل إيجابي حديث على توافق الحزمة ونجاح تجهيزها لـ {targets}",
       "noReleases": "لا توجد إصدارات",
       "invalidTargets": "يجب أن تكون الأهداف معرّفات عملاء مدعومة وفريدة",
       "defaultIneligible": "التوزيع الافتراضي المعلن {distribution} غير مؤهل: {reasons}",
       "distributionReason": "{distribution}: {reasons}",
       "noEligibleDistribution": "{name}: لا يوجد توزيع مؤهل يدعم مجموعة الأهداف الكاملة {targets}؛ {reasons}",
       "external": "السبب المقدم من المصدر: {reason}",
-      "separator": "; "
+      "separator": "; ",
+      "unsupportedScope": "الإصدار {sequence} لا يدعم موقع التثبيت المحدد للوكلاء {targets}."
     },
     "status": {
       "candidate": "مرشح",
@@ -741,17 +799,17 @@
         "activation": "اتبع أي تلميح تفعيل يطبعه CLI، ثم ابدأ جلسة Codex جديدة."
       },
       "chatgpt": {
-        "note": "اتصالات ChatGPT موثقة",
+        "note": "روابط تطبيقات تم التحقق منها وإرشادات إعداد Context7",
         "status": "الإعداد داخل التطبيق",
         "intro": "حضّر Agent Plugins 1.0 المتوافقة لـ ChatGPT مع إبقاء تفعيل التطبيق وموافقة الحساب داخل ChatGPT.",
-        "delivery": "يتحقق CLI من الحزمة المتوافقة أو ربط التطبيق المسجل ويحضره.",
-        "activation": "أكمل خطوة تفعيل التطبيق النهائية أو تسجيل الدخول في ChatGPT عند مطالبتك بذلك."
+        "delivery": "يتحقق CLI من روابط تطبيقات الناشر، ويمكنه تجهيز حزمة marketplace شخصية لـ Context7 باستخدام نقطة نهاية MCP العامة التي لا تتطلب مصادقة.",
+        "activation": "أنشئ التطبيق أو وصّله في Developer Mode، وثبّت الإضافة الشخصية المجهزة، ثم اخترها في محادثة جديدة."
       },
       "cursor": {
         "note": "حزمة Agent Plugin أصلية",
         "status": "مدعوم",
         "intro": "ثبّت Agent Plugins 1.0 في مشاريع Cursor دون تحويل كل إضافة يدويًا. يخطط CLI للحزمة الأصلية قبل تغيير الملفات.",
-        "delivery": "يكتب CLI إسقاطات إضافة Cursor والمهارات وMCP المدعومة للمشروع المحدد.",
+        "delivery": "تجهّز الواجهة مكونات الإضافة والمهارات وMCP التي يدعمها Cursor للنطاق المحدد. يستخدم أمر add نطاق المستخدم افتراضيًا؛ اختر نطاق المشروع صراحةً عند استخدام add.",
         "activation": "أعد تحميل Cursor عند الطلب، ثم تحقق من اكتشاف الإضافة."
       },
       "copilot": {
@@ -769,11 +827,11 @@
         "activation": "إذا لم يكن التفعيل التلقائي متاحًا، فاتبع الإعداد المحدد أو مسار الاستيراد الذي يطبعه CLI."
       },
       "kiro": {
-        "note": "حزمة مجلد أصلية",
+        "note": "Skills وإعدادات MCP مُدارة",
         "status": "مدعوم",
         "intro": "ثبّت Agent Plugins 1.0 لـ Kiro من الحزمة المحمولة نفسها المستخدمة مع وكلاء الذكاء الاصطناعي الآخرين.",
-        "delivery": "يحضر CLI حزمة المجلد الأصلية الخاصة بـ Kiro مع مكونات الإضافة المتوافقة.",
-        "activation": "اتبع تلميح الاستيراد أو التفعيل المطبوع عندما يتطلب Kiro خطوة نهائية من جهة العميل."
+        "delivery": "يثبّت CLI ملفات Skills وإدخالات MCP التي يملكها في Kiro، ويحافظ على الإعدادات العامة غير المرتبطة بها.",
+        "activation": "أكمل خطوة OAuth أو إعادة التشغيل المعروضة. لا يعني التجهيز على macOS وWindows التحقق التلقائي من عمل المكونات وقت التشغيل."
       },
       "claude": {
         "note": "تكوين MCP مُدار",
@@ -811,34 +869,35 @@
         "activation": "اتبع مسار التفعيل اليدوي الدقيق المطبوع بعد التحضير."
       },
       "grok": {
-        "note": "إضافة أصلية للمهارات وMCP",
+        "note": "إضافة Skills وMCP أصلية مع التحقق عبر CLI",
         "status": "مدعوم",
-        "intro": "ثبّت المهارات وخوادم MCP في Grok Build.",
-        "delivery": "ينشئ CLI إضافة أصلية ويسجلها عبر Grok CLI.",
-        "activation": "أعد تحميل Grok Build؛ ثبّت CLI وأعد update إذا كان غير متوفر."
+        "intro": "ثبّت Skills وخوادم MCP القابلة للنقل وفق Agent Plugins 1.0 لـ Grok Build باستخدام CLI نفسه المستخدم للعملاء الآخرين.",
+        "delivery": "يكتب CLI ملف بيان .grok-plugin أصليًا في مجلد إضافات مستخدم Grok، ويدير التسجيل عبر Grok CLI عند توفره.",
+        "activation": "أعد تحميل Grok Build بعد التثبيت. إذا لم يتوفر Grok CLI، فثبّته وأعد أمر update لإجراء التحقق الأصلي."
       },
       "kimi": {
-        "note": "إضافة مُدارة للمهارات وMCP",
+        "note": "إضافة مستخدم مُدارة تضم Skills وMCP",
         "status": "مدعوم",
-        "intro": "ثبّت المهارات وخوادم MCP في Kimi Code.",
-        "delivery": "يسجل CLI إضافة أصلية مع الحفاظ على إضافات Kimi الأخرى.",
-        "activation": "شغّل /reload أو /new؛ تحقق من MCP وتسجيل الدخول في Kimi Code."
+        "intro": "ثبّت Skills وخوادم MCP القابلة للنقل وفق Agent Plugins 1.0 في Kimi Code عبر إضافة مستخدم مُدارة.",
+        "delivery": "يكتب CLI ملف بيان .kimi-plugin أصليًا ويسجّل الحزمة المُدارة، مع الحفاظ على إضافات Kimi غير المرتبطة بها.",
+        "activation": "شغّل /reload أو /new في Kimi Code. ما زالت اتصالات MCP وقت التشغيل ومصادقة المزوّد بحاجة إلى تأكيد داخل Kimi."
       },
       "qoder": {
         "note": "إضافة أصلية للمهارات وMCP مع التحقق عبر CLI",
         "status": "مدعوم",
-        "intro": "ثبّت المهارات وخوادم MCP في Qoder.",
-        "delivery": "يكتب CLI ملف .qoder-plugin أصلي ويسجّل الإضافة عبر Qoder CLI.",
-        "activation": "أعد تحميل إضافات Qoder أو أعد تشغيله؛ تحقق من MCP وتسجيل الدخول في Qoder."
+        "intro": "ثبّت Skills وخوادم MCP القابلة للنقل وفق Agent Plugins 1.0 لـ Qoder باستخدام CLI نفسه المستخدم للعملاء الآخرين.",
+        "delivery": "يكتب CLI ملف بيان .qoder-plugin أصليًا ويسجّل الحزمة المُدارة عبر Qoder CLI عند توفره.",
+        "activation": "أعد تحميل إضافات Qoder أو أعد تشغيل Qoder بعد التثبيت. ما زالت اتصالات MCP وقت التشغيل ومصادقة المزوّد بحاجة إلى تأكيد داخل Qoder."
+      },
+      "pi": {
+        "note": "إضافات Pi الأصلية المُدارة فقط",
+        "status": "مدعوم",
+        "intro": "ثبّت حزم Agent Plugins 1.0 التي تعلن عن إضافة Pi أصلية. المهارات القابلة للنقل وإسقاط MCP خارج النطاق الحالي لهذا المحوّل.",
+        "delivery": "يثبّت CLI إضافة Pi المعلنة في دليل وكيل Pi ويتتبّع الحزمة المُدارة لتحديثها وإصلاحها وإزالتها.",
+        "activation": "بعد التثبيت، أعد تحميل الموارد أو أعد تشغيل Pi لتحميل الإضافة المُدارة."
       }
     },
     "directoryPage": {
-      "explorePlugins": "استكشف الإضافات",
-      "filterByCapabilitySourceAuthenticationOrSupportedAgent": "صفّ حسب الإمكانية أو المصدر أو المصادقة أو الوكيل المدعوم.",
-      "pluginDirectory": "دليل الإضافات",
-      "findAgentPlugins10": "اعثر على Agent Plugins 1.0.",
-      "useThemEverywhere": "استخدمها في كل مكان.",
-      "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "ابحث في الحزم المراجَعة وإضافات المجتمع المكتشفة من مستودعات GitHub العامة.",
       "description": "ابحث في إضافات Agent Plugins 1.0 المراجَعة والمجتمعية لـ Codex وClaude Code وCursor وGemini CLI وOpenCode وغيرها.",
       "title": "دليل Agent Plugins 1.0 {'|'} ابحث عن الإضافات",
       "listName": "حزم Agent Plugins 1.0 المراجَعة"
@@ -855,7 +914,7 @@
       "components": "المكوّنات",
       "package": "الحزمة",
       "pluginNotFound": "لم يتم العثور على الإضافة",
-      "reviewedListing": "مراجَع",
+      "reviewedListing": "مُراجَع",
       "licenseNotSpecified": "لم يتم تحديد الترخيص",
       "managedByCli": "تُدار عبر CLI",
       "requiresAFinalStepInTheApp": "تتطلب خطوة نهائية في التطبيق",
@@ -864,7 +923,8 @@
       "title": "إضافة Agent Plugin باسم {name} {'|'} Universal Agent Plugins",
       "schemaName": "إضافة Agent Plugin باسم {name}",
       "directory": "دليل الإضافات",
-      "version": "الإصدار {version}"
+      "version": "الإصدار {version}",
+      "reviewedListingTooltip": "تمت مراجعة البطاقة والبيانات الوصفية. لا يُعد ذلك اعتمادًا لكود الإضافة أو سلوكها أو أمانها."
     },
     "community": {
       "breadcrumb": "مسار التنقل",
@@ -882,7 +942,7 @@
       "communityListing": "قائمة مجتمعية",
       "lastKnownAgents": "آخر الوكلاء المعروفين",
       "worksWith": "تعمل مع",
-      "detectedAtInstallTime": "تم اكتشافه أثناء التثبيت",
+      "detectedAtInstallTime": "يُكتشف وقت التثبيت",
       "lastKnownComponents": "آخر المكوّنات المعروفة",
       "components": "المكوّنات",
       "title": "إضافة Agent Plugin باسم {name} {'|'} Universal Agent Plugins",
@@ -912,7 +972,7 @@
       "vendorDocs": "اقرأ وثائق {name}",
       "availableFor": "الإضافات المتاحة لـ {name}",
       "count": "تدعم {count} حزمة مراجَعة هذا العميل. | تدعم {count} حزم مراجَعة هذا العميل.",
-      "tryPlugin": "جرّب Context7، أو استبدل {source} بالاسم المختصر المراجَع لإضافة متوافقة أخرى أو بمصدر حزمة GitHub مثبّت.",
+      "tryPlugin": "جرّب Context7 أو استبدل {source} بالاسم المختصر المراجع لإضافة أخرى متوافقة أو بمصدر حزمة كاملة.",
       "localPackageHint": "استبدل ./my-plugin بمسار حزمة Agent Plugins 1.0 صالحة."
     },
     "components": {
@@ -936,6 +996,35 @@
       "nonEmptyOptions": "يجب أن تستخدم خيارات {component} \"{label}\" قيمًا غير فارغة",
       "unknownValue": "تلقى {component} \"{label}\" قيمة غير معروفة",
       "selectionRequired": "يتطلب {component} \"{label}\" قيمة محددة واحدة على الأقل"
+    },
+    "authenticationIndicator": {
+      "required": "المصادقة مطلوبة",
+      "not_required": "لا تتطلب مصادقة",
+      "unknown": "متطلبات المصادقة غير معروفة",
+      "varies": "تختلف حسب الوكيل",
+      "automatic": "يتم اكتشاف الوكلاء المثبتين عند تشغيل الأمر. اختر الوكلاء في قسم التثبيت لعرض متطلباتهم.",
+      "unresolved": "لم يتم تحديد خيار تثبيت لهؤلاء الوكلاء. اختر وكيلاً مدعوماً للتحقق من متطلباته.",
+      "release": "{id} · الإصدار {sequence}",
+      "requiredDetail": "قد تتطلب الحزمة حساباً أو رمزاً أو تسجيل دخول؛ هذا لا يحدد OAuth ولا يؤكد أنك سجلت الدخول.",
+      "not_requiredDetail": "لم يتم الإعلان عن مصادقة لهؤلاء الوكلاء. قد تنطبق حدود الخدمة ومتطلبات إعداد أخرى.",
+      "unknownDetail": "تحقق من متطلبات الحزمة قبل الاتصال."
+    }
+  },
+  "pluginAuthoring": {
+    "eyebrow": "بناء المكونات الإضافية",
+    "title": "استخدام المكونات الإضافية / بناء المكونات الإضافية",
+    "subtitle": "ثبّت الحزم القياسية وأدرها، أو اكتب حزمة plugin.json خاصة بك وافحصها بالأدوات المناسبة.",
+    "use": {
+      "badge": "CLI 0.1.95",
+      "title": "استخدام المكونات الإضافية",
+      "description": "ابحث عن الحزم وعاينها وثبّتها وأدرها باستخدام المثبّت المنشور.",
+      "cta": "فتح دليل الاستخدام"
+    },
+    "build": {
+      "badge": "يدويًا أو بالبناء من المصدر",
+      "title": "بناء المكونات الإضافية",
+      "description": "اكتب حزمة قياسية تحتوي على plugin.json في الجذر، مع skills/ وmcp.json اختياريين. يتحقق المثبّت المنشور منها ويثبّتها. تتطلب القوالب وفحوص التأليف بناء المصدر الموصوف في الدليل. لا تثبت الفحوص الساكنة نجاح التنفيذ أو التفعيل.",
+      "cta": "افتح دليل الإنشاء"
     }
   }
 }

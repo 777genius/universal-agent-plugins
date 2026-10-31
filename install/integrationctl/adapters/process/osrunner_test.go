@@ -48,6 +48,7 @@ func TestOSRunnerPreservesCommandOutputAndExitCode(t *testing.T) {
 		fmt.Fprint(os.Stderr, "expected stderr")
 		os.Exit(7)
 	}
+	requireOrdinaryPreflight(t)
 	environment := append([]string(nil), os.Environ()...)
 	environment = append(environment, "AGENTPLUGINS_PROCESS_OUTPUT_HELPER=1")
 	result, err := (OS{}).Run(context.Background(), ports.Command{
@@ -66,6 +67,7 @@ func TestOSRunnerCleanExitWithoutOtherGroupMembersRemainsSuccess(t *testing.T) {
 		fmt.Fprint(os.Stdout, "clean")
 		os.Exit(0)
 	}
+	requireOrdinaryPreflight(t)
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_CLEAN_EXIT_HELPER=1")
 	result, err := (OS{}).Run(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerCleanExitWithoutOtherGroupMembersRemainsSuccess"}, Env: environment,
@@ -80,6 +82,7 @@ func TestOSRunnerBoundsStdoutAndReturnsLimitError(t *testing.T) {
 		fmt.Fprint(os.Stdout, "output beyond the configured bound")
 		os.Exit(0)
 	}
+	requireOrdinaryPreflight(t)
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_STDOUT_LIMIT_HELPER=1")
 	result, err := (OS{}).Run(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerBoundsStdoutAndReturnsLimitError"}, Env: environment, StdoutLimitBytes: 6,
@@ -104,6 +107,7 @@ func TestOSRunnerStdoutLimitStopsProducerBeforeRemainingOutput(t *testing.T) {
 		_ = os.WriteFile(marker, []byte("producer completed"), 0o600)
 		os.Exit(0)
 	}
+	requireOrdinaryPreflight(t)
 	marker = filepath.Join(t.TempDir(), "completed")
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_STDOUT_LIMIT_MARKER="+marker)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -124,6 +128,7 @@ func TestOSRunnerStdoutLimitPreservesNonzeroExit(t *testing.T) {
 		_, _ = os.Stdout.Write([]byte(strings.Repeat("x", 4097)))
 		os.Exit(23)
 	}
+	requireOrdinaryPreflight(t)
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_STDOUT_LIMIT_EXIT_HELPER=1")
 	result, err := (OS{}).Run(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerStdoutLimitPreservesNonzeroExit"}, Env: environment, StdoutLimitBytes: 16,
@@ -141,6 +146,7 @@ func TestOSRunnerStdoutLimitPreservesConventionalPipeExitCodeForGenericCommands(
 		_, _ = os.Stdout.Write([]byte(strings.Repeat("x", 4097)))
 		os.Exit(141)
 	}
+	requireOrdinaryPreflight(t)
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_STDOUT_LIMIT_141_HELPER=1")
 	result, err := (OS{}).Run(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerStdoutLimitPreservesConventionalPipeExitCodeForGenericCommands"}, Env: environment, StdoutLimitBytes: 16,
@@ -966,6 +972,7 @@ func TestOSRunnerBoundsStderrWhileRetainingDiagnosticEdges(t *testing.T) {
 		fmt.Fprint(os.Stderr, ":diagnostic-end")
 		os.Exit(9)
 	}
+	requireOrdinaryPreflight(t)
 	environment := append([]string(nil), os.Environ()...)
 	environment = append(environment, "AGENTPLUGINS_PROCESS_STDERR_HELPER=1")
 	result, err := (OS{}).Run(context.Background(), ports.Command{
@@ -978,5 +985,41 @@ func TestOSRunnerBoundsStderrWhileRetainingDiagnosticEdges(t *testing.T) {
 	if result.ExitCode != 9 || len(result.Stderr) > 34*1024 || !strings.Contains(diagnostic, "diagnostic-start:") ||
 		!strings.Contains(diagnostic, ":diagnostic-end") || !strings.Contains(diagnostic, "stderr bytes omitted") {
 		t.Fatalf("bounded stderr result: exit=%d bytes=%d diagnostic=%q", result.ExitCode, len(result.Stderr), diagnostic)
+	}
+}
+
+func TestOSRunnerTimeoutAttestsClosedProcess(t *testing.T) {
+	if os.Getenv("TEST_UAP_CLOSED_TIMEOUT_HELPER") == "1" {
+		for {
+			time.Sleep(time.Hour)
+		}
+	}
+	requireOrdinaryPreflight(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	result, err := (OS{}).Run(ctx, ports.Command{Argv: []string{os.Args[0], "-test.run=^TestOSRunnerTimeoutAttestsClosedProcess$"}, Env: append(os.Environ(), "TEST_UAP_CLOSED_TIMEOUT_HELPER=1")})
+	if !errors.Is(err, context.DeadlineExceeded) || !result.CleanupComplete {
+		t.Fatalf("closure=%v error=%v", result.CleanupComplete, err)
+	}
+}
+
+func TestOSRunnerPrestartFailureProvesNoChild(t *testing.T) {
+	result, err := (OS{}).Run(context.Background(), ports.Command{})
+	if !errors.Is(err, exec.ErrNotFound) || !result.NoChildStarted {
+		t.Fatalf("invalid command lost prestart evidence: %+v %v", result, err)
+	}
+	requireOrdinaryPreflight(t)
+	result, err = (OS{}).Run(context.Background(), ports.Command{Argv: []string{os.Args[0]}, Dir: filepath.Join(t.TempDir(), "TEST-missing-working-directory")})
+	// On Linux the outer supervisor has already started when the inner
+	// command reports its startup failure. That is not a direct Cmd.Start
+	// failure and must not gain no-child or cleanup proof from its exit code.
+	if class := OrdinarySupervisorFailureClass(err); class != "" {
+		if class != "ordinary_supervisor_command_start" || result.ExitCode != 125 || result.NoChildStarted || result.CleanupComplete {
+			t.Fatalf("supervised Start failure fabricated process proof: %+v class=%s err=%v", result, class, err)
+		}
+		return
+	}
+	if err == nil || !result.NoChildStarted || result.CleanupComplete {
+		t.Fatalf("Start failure closure evidence: %+v %v", result, err)
 	}
 }

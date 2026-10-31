@@ -1,5 +1,6 @@
 import { productRoutes } from '../data/routes.ts';
 import { candidateLocales } from '../data/i18n.ts';
+import { expandLocalizedRoutes, isIndexablePath } from '../utils/localizedRoutes.ts';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -106,6 +107,22 @@ describe('manifest-driven localized SEO', () => {
     );
     assert.throws(() => productRoutes(['community'], []), /Reserved/);
     assert.throws(() => productRoutes(['same', 'same'], []), /duplicate/);
+  });
+  it('keeps temporarily unlisted products out of every indexable manifest', () => {
+    const held = productRoutes(['context7', 'agent-notifications'], ['codex']);
+    const hidden = held.find((route) => route.path === '/plugins/agent-notifications/');
+    assert.ok(hidden, 'the held-back product keeps its direct URL');
+    assert.equal(hidden.indexable, false);
+    assert.equal(held.find((route) => route.path === '/plugins/context7/')!.indexable, true);
+    assert.equal(
+      expandLocalizedRoutes(held).some(
+        (route) => route.indexable && route.path.includes('agent-notifications'),
+      ),
+      false,
+    );
+    assert.equal(isIndexablePath('/plugins/agent-notifications/', held), false);
+    assert.equal(isIndexablePath('/uk/plugins/agent-notifications/', held), false);
+    assert.equal(isIndexablePath('/plugins/context7/', held), true);
   });
 });
 

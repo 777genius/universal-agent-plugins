@@ -1,7 +1,7 @@
 package agentpluginscli
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +15,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -27,7 +28,11 @@ type environmentSnapshot struct {
 	ManifestBytes, LockBytes []byte
 }
 
-func snapshotEnvironment(cmd *cobra.Command, app App) (environmentSnapshot, error) {
+func snapshotEnvironment(cmd *cobra.Command, app App, verifyPrevious ...bool) (environmentSnapshot, error) {
+	return snapshotEnvironmentContext(cmd.Context(), app, verifyPrevious...)
+}
+
+func snapshotEnvironmentContext(ctx context.Context, app App, verifyPrevious ...bool) (environmentSnapshot, error) {
 	s := environmentSnapshot{}
 	if err := requireDependencyMutationReady(app); err != nil {
 		return s, err
@@ -35,7 +40,7 @@ func snapshotEnvironment(cmd *cobra.Command, app App) (environmentSnapshot, erro
 	if app.Installer == nil {
 		return s, errors.New("typed SDK installer is unavailable")
 	}
-	view, err := app.Installer.Inspect(cmd.Context())
+	view, err := app.Installer.Inspect(ctx)
 	if err != nil {
 		return s, err
 	}
@@ -74,57 +79,79 @@ func snapshotEnvironment(cmd *cobra.Command, app App) (environmentSnapshot, erro
 	if err != nil {
 		return s, fmt.Errorf("%s: %w", dependencyMismatch, err)
 	}
-	canonicalizeRequirementsFromLock(&s.Requirements, s.Lock)
+	if err := canonicalizeRequirementsFromLock(&s.Requirements, s.Lock); err != nil {
+		return s, err
+	}
+	if len(verifyPrevious) == 0 || verifyPrevious[0] {
+		if err := verifyDependencyDeclarations(ctx, app, s.Lock); err != nil {
+			return s, err
+		}
+	}
 	return s, nil
 }
 
 // runSavedEnvironment shares preflight, confirmation and publication with deps sync.
 // The candidate is fully validated before either intent file is published.
-func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, requirements environment.Requirements, locked environment.Lock, manifest []byte, aliases []string, attest *environment.Attestation) error {
-	if err := validateDependencyTargets(app, requirements); err != nil {
-		return err
-	}
-	if err := locked.Validate(requirements); err != nil {
-		return err
-	}
-	if err := verifyUnselectedPins(snapshot.Lock, locked, aliases); err != nil {
-		return err
-	}
-	view, err := app.Installer.Inspect(cmd.Context())
-	if err != nil {
-		return err
-	}
-	observed, err := environment.Observe(view)
-	if err != nil {
-		return err
-	}
-	prepared, err := (environment.Coordinator{}).PrepareSyncFor(requirements, locked, observed, aliases, attest)
-	if err != nil {
-		return err
-	}
-	detected, err := detectDependencyClients(cmd.Context(), app)
-	if err != nil {
-		return err
-	}
-	consent := map[string]bool{}
-	actions, err := preflightDependencyActions(cmd, app, opts, prepared.Bindings, detected, consent)
+func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, requirements environment.Requirements, locked environment.Lock, manifest []byte, aliases []string, attest *environment.Attestation, targets []string) error {
+	request, err := prepareSavedSync(cmd, app, opts, snapshot, requirements, locked, manifest, aliases, attest, targets)
 	if err != nil {
 		return err
 	}
 	if opts.dryRun {
-		return renderDependencySync(cmd, opts, actions, true)
+		return renderDependencySync(cmd, opts, request.prepared, true)
+	}
+	return applyDependencySync(cmd, app, opts, request, mutationConfirmed(app, opts))
+}
+
+func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, requirements environment.Requirements, locked environment.Lock, manifest []byte, aliases []string, attest *environment.Attestation, targets []string) (dependencySyncRequest, error) {
+	request := dependencySyncRequest{}
+	if err := validateDependencyTargets(app, requirements); err != nil {
+		return request, err
+	}
+	if err := locked.Validate(requirements); err != nil {
+		return request, err
+	}
+	if err := verifyDependencyDeclarations(cmd.Context(), app, locked); err != nil {
+		return request, err
+	}
+	aliases = savedClosureAliases(snapshot.Lock, locked, aliases)
+	if err := verifyUnselectedPins(snapshot.Lock, locked, aliases); err != nil {
+		return request, err
+	}
+	view, err := app.Installer.Inspect(cmd.Context())
+	if err != nil {
+		return request, err
+	}
+	observed, err := environment.ObserveForEnvironment(view, app.environmentID())
+	if err != nil {
+		return request, err
+	}
+	if err := renderSavedTargetNotice(cmd, opts, locked, aliases, targets); err != nil {
+		return request, err
+	}
+	prepared, err := (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncForTargets(requirements, locked, observed, aliases, attest, targets)
+	if err != nil {
+		return request, err
+	}
+	detected, err := detectDependencyClients(cmd.Context(), app)
+	if err != nil {
+		return request, err
+	}
+	consent := map[string]bool{}
+	actions, err := preflightDependencyActions(cmd, app, opts, prepared.Bindings, detected, consent)
+	if err != nil {
+		return request, err
 	}
 	body, err := json.MarshalIndent(locked, "", "  ")
 	if err != nil {
-		return err
+		return request, err
 	}
 	body = append(body, '\n')
-	// Match the established lock encoding so unchanged commands never rewrite it.
 	if equalDependencyLock(snapshot.Lock, locked) || (snapshot.Lock.LockVersion == 0 && len(requirements.Dependencies) == 0) {
 		body = snapshot.LockBytes
 	}
-	request := dependencySyncRequest{requirements: requirements, lock: locked, manifestPath: snapshot.ManifestPath, lockPath: snapshot.LockPath, manifestBytes: snapshot.ManifestBytes, lockBytes: snapshot.LockBytes, prepared: actions, detected: detected, consent: consent, candidateManifest: manifest, candidateLock: body, aliases: aliases, attestation: attest}
-	return applyDependencySync(cmd, app, opts, request, mutationConfirmed(app, opts))
+	request = dependencySyncRequest{targets: targets, requirements: requirements, lock: locked, intent: snapshot.intent(manifest, body), prepared: actions, detected: detected, consent: consent, aliases: aliases, attestation: attest}
+	return request, nil
 }
 
 // Replaced only by disposable failure-injection tests.
@@ -136,12 +163,10 @@ var publishEnvironmentFile = func(path string, body []byte) error {
 	return atomicfile.Write(path, body, mode)
 }
 
-func sameEnvironmentFile(path string, expected []byte) bool {
-	body, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return expected == nil
-	}
-	return err == nil && bytes.Equal(body, expected)
+func (snapshot environmentSnapshot) intent(manifest, lock []byte) environmentapp.Intent {
+	return environmentapp.Intent{ManifestPath: snapshot.ManifestPath, LockPath: snapshot.LockPath,
+		ManifestBytes: snapshot.ManifestBytes, LockBytes: snapshot.LockBytes,
+		CandidateManifest: manifest, CandidateLock: lock}
 }
 
 func editEnvironmentIntent(snapshot environmentSnapshot, wanted environment.Requirements) ([]byte, error) {
@@ -161,7 +186,9 @@ func editEnvironmentIntent(snapshot environmentSnapshot, wanted environment.Requ
 	if err != nil {
 		return nil, err
 	}
-	canonicalizeRequirementsFromLock(&actual, snapshot.Lock)
+	if err := canonicalizeRequirementsFromLock(&actual, snapshot.Lock); err != nil {
+		return nil, err
+	}
 	if !reflect.DeepEqual(actual, wanted) {
 		return nil, errors.New("edited manifest does not match intended requirements")
 	}
@@ -182,7 +209,12 @@ func verifyUnselectedPins(previous, locked environment.Lock, aliases []string) e
 		found := false
 		for _, pkg := range locked.Packages {
 			if old.Alias == pkg.Alias {
-				found = reflect.DeepEqual(old, pkg)
+				// The strict loader can hydrate metadata absent from a legacy flat
+				// pin. Every recorded source coordinate and digest must still match.
+				if old.Version == "" {
+					old.Version = pkg.Version
+				}
+				found = environment.SamePin(old, pkg)
 			}
 		}
 		if !found {
@@ -216,19 +248,31 @@ func dependencyIntentEdits(previous, wanted environment.Requirements) []manifest
 		edit := manifestedit.DependencyEdit{Alias: alias}
 		if ok {
 			v := &manifestedit.Dependency{}
-			if value.Git != nil {
-				v.Git = "https://github.com/" + value.Git.Repository + ".git"
+			if value.Web != nil {
+				v.Website, v.Kind, v.Skill = value.Web.URL, environment.SkillKind, value.Web.Skill
+			} else if value.Git != nil {
+				v.Git = value.Git.Endpoint()
 				v.Path = value.Git.Path
+				v.Kind, v.Skill = value.Git.Kind, value.Git.Skill
 				switch value.Git.Selector.Kind {
 				case environment.SelectorCommit:
 					v.Commit = value.Git.Selector.Value
 				case environment.SelectorRef:
 					v.Ref = value.Git.Selector.Value
 				}
+			} else if value.Archive != nil {
+				v.Archive = value.Archive.URL
+				v.SHA256 = value.Archive.SHA256
+				v.Path = value.Archive.Path
 			} else {
 				v.Registry = "uap"
 				v.Distribution = value.Registry.Distribution
-				v.Release = value.Registry.Selector.Value
+				if value.Registry.Selector.Kind == environment.SelectorVersion || value.Registry.Selector.Kind == environment.SelectorRange {
+					v.Version = value.Registry.Selector.Value
+					v.Registry, v.Distribution = "", ""
+				} else {
+					v.Release = value.Registry.Selector.Value
+				}
 			}
 			edit.Value = v
 		}

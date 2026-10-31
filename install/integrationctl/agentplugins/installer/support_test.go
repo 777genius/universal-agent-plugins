@@ -27,12 +27,15 @@ func TestLocalClientSupportAndExecutableAuthority(t *testing.T) {
 		executable bool
 	}{
 		{"codex", true}, {"claude", true}, {"cursor", true}, {"copilot", true}, {"kiro", true}, {"grok", true}, {"opencode", true},
-		{"gemini", false}, {"cline", false}, {"windsurf", false}, {"kimi", false},
+		{"gemini", false}, {"cline", false}, {"windsurf", false}, {"kimi", false}, {"pi", false},
 	}
 	for _, test := range tests {
 		t.Run(test.id, func(t *testing.T) {
 			if !engine.SupportsClient(test.id) || !ClientSupported(all.Default(), test.id) {
 				t.Fatal("local adapter excluded")
+			}
+			if engine.RequiresClientExecutable(test.id) != test.executable {
+				t.Fatal("public executable requirement differs from install authority")
 			}
 			request := Request{Operation: OpInstall, ClientID: test.id, ClientConfigRoot: filepath.Join(root, test.id)}
 			_, err := engine.detectedClient(request)
@@ -79,7 +82,7 @@ func TestLocalClientSupportAndExecutableAuthority(t *testing.T) {
 		t.Fatal("nil registry broadened")
 	}
 	metadata := engine.Discover()
-	if len(metadata) != 14 {
+	if len(metadata) != 15 {
 		t.Fatalf("Discover clients=%d", len(metadata))
 	}
 	for _, meta := range metadata {

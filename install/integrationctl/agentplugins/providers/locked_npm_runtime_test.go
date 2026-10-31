@@ -190,6 +190,155 @@ func TestLockedRuntimeRepairsMissingEntrypointWithoutDeletingOldCache(t *testing
 	}
 }
 
+func TestLockedRuntimePreparesNodeCommandVariants(t *testing.T) {
+	for _, command := range []string{"node", "node.exe", "NODE.EXE", "/usr/local/bin/node", `C:\tools\node.exe`} {
+		manager, envelope, plan, dataPath, runs := lockedRuntimeFixture(t)
+		envelope.MCP.Servers["mcp"].Decoded["command"] = command
+		if err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath); err != nil {
+			t.Fatalf("command %q: %v", command, err)
+		}
+		if got := *runs; got != 1 {
+			t.Fatalf("command %q: npm runs = %d, want 1", command, got)
+		}
+	}
+}
+
+func TestLockedRuntimeRejectsForeignCommandWithLauncher(t *testing.T) {
+	for _, command := range []any{"python3", "bun", nil, 7} {
+		manager, envelope, plan, dataPath, runs := lockedRuntimeFixture(t)
+		envelope.MCP.Servers["mcp"].Decoded["command"] = command
+		err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath)
+		if err == nil || !strings.Contains(err.Error(), "is not node") {
+			t.Fatalf("command %v: PrepareRuntime error = %v, want node-command refusal", command, err)
+		}
+		if got := *runs; got != 0 {
+			t.Fatalf("command %v: npm runs = %d, want 0 before refusal", command, got)
+		}
+		if _, statErr := os.Lstat(filepath.Join(dataPath, "npm-runtime")); statErr == nil {
+			t.Fatalf("command %v: refusal created the npm runtime store", command)
+		}
+	}
+}
+
+func TestLockedRuntimePreparesLauncherAtAnyArgumentIndex(t *testing.T) {
+	manager, envelope, plan, dataPath, runs := lockedRuntimeFixture(t)
+	server := envelope.MCP.Servers["mcp"]
+	server.Decoded["args"] = []any{"--no-warnings", lockedLauncherArg}
+	envelope.MCP.Servers["mcp"] = server
+	if err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath); err != nil {
+		t.Fatalf("PrepareRuntime: %v", err)
+	}
+	if got := *runs; got != 1 {
+		t.Fatalf("npm runs = %d, want 1", got)
+	}
+}
+
+func TestLockedRuntimeRejectsMixedServerPairingForeignCommandWithLauncher(t *testing.T) {
+	manager, envelope, plan, dataPath, runs := lockedRuntimeFixture(t)
+	locked := envelope.MCP.Servers["mcp"]
+	locked.Name = "locked"
+	locked.Decoded["args"] = []any{lockedLauncherArg}
+	foreign := locked
+	foreign.Name = "foreign"
+	foreign.Decoded = map[string]any{"command": "python3", "args": []any{lockedLauncherArg}}
+	envelope.MCP.Servers = map[string]domain.MCPServer{"locked": locked, "foreign": foreign}
+	plan.Components = []domain.ComponentDecision{
+		{Kind: domain.ComponentMCPServer, Name: "locked", Support: domain.SupportNative},
+		{Kind: domain.ComponentMCPServer, Name: "foreign", Support: domain.SupportNative},
+	}
+	err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath)
+	if err == nil || !strings.Contains(err.Error(), "is not node") {
+		t.Fatalf("PrepareRuntime error = %v, want refusal naming the foreign server", err)
+	}
+	if got := *runs; got != 0 {
+		t.Fatalf("npm runs = %d, want 0 before refusal", got)
+	}
+}
+
+func TestLockedRuntimeInterruptedPreparationLeavesNoTargetAndRetrySucceeds(t *testing.T) {
+	manager, envelope, plan, dataPath, _ := lockedRuntimeFixture(t)
+	var runs atomic.Int32
+	started := make(chan struct{}, 1)
+	manager.RunNPM = func(ctx context.Context, _ string, _ string, _ bool) error {
+		runs.Add(1)
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- manager.PrepareRuntime(ctx, envelope, plan, dataPath) }()
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		cancel()
+		t.Fatal("npm preparation never started")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("interrupted preparation reported success")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("interrupted preparation did not stop")
+	}
+	store := filepath.Join(dataPath, "npm-runtime")
+	entries, err := os.ReadDir(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		// Only staging temporaries and bridge-protocol lock artifacts may
+		// remain; a plain digest directory would be a committed runtime.
+		name := entry.Name()
+		if !strings.HasPrefix(name, ".tmp-") && !strings.Contains(name, ".lock") {
+			t.Fatalf("interrupted preparation left %q behind", name)
+		}
+	}
+	manager.RunNPM = func(_ context.Context, temporary, _ string, _ bool) error {
+		runs.Add(1)
+		entrypoint := filepath.Join(temporary, "node_modules", "@example", "mcp", "cli.js")
+		if err := os.MkdirAll(filepath.Dir(entrypoint), 0o700); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Join(temporary, "node_modules", ".bin"), 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(entrypoint, []byte("// fixture"), 0o600)
+	}
+	if err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath); err != nil {
+		t.Fatalf("retry after interruption: %v", err)
+	}
+	before := runs.Load()
+	if err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath); err != nil {
+		t.Fatalf("repeated prepared call: %v", err)
+	}
+	if got := runs.Load(); got != before {
+		t.Fatalf("prepared runtime ran npm again: %d -> %d", before, got)
+	}
+}
+
+func TestLockedRuntimePurgeDataRemovesPreparedStore(t *testing.T) {
+	manager, envelope, plan, dataPath, _ := lockedRuntimeFixture(t)
+	if err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath); err != nil {
+		t.Fatal(err)
+	}
+	receipt, _, err := manager.EnsureData(context.Background(), "installation", "backend", "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.PurgeData(context.Background(), receipt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(dataPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("purge left PLUGIN_DATA at %s: %v", dataPath, err)
+	}
+}
+
 func TestLockedRuntimeNotSelectedStaysInert(t *testing.T) {
 	manager, envelope, plan, dataPath, runs := lockedRuntimeFixture(t)
 	plan.Components[0].Support = domain.SupportUnsupported
@@ -420,17 +569,5 @@ func TestLockedRuntimeRejectsSymlinkEntrypoint(t *testing.T) {
 	if err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath); err == nil ||
 		!strings.Contains(err.Error(), "unsafe locked npm entrypoint") {
 		t.Fatalf("symlinked entrypoint accepted: %v", err)
-	}
-}
-
-func TestRuntimeStderrTailBoundsDiagnostics(t *testing.T) {
-	var writer runtimeStderrTail
-	for _, chunk := range []string{strings.Repeat("a", 900), strings.Repeat("b", 900), strings.Repeat("c", 2000)} {
-		if _, err := writer.Write([]byte(chunk)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got := string(writer.tail); got != strings.Repeat("c", 1200) {
-		t.Fatalf("stderr tail = %q", got)
 	}
 }

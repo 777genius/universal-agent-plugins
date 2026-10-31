@@ -44,6 +44,7 @@ func (s seamStager) StageWithPluginData(ctx context.Context, envelope domain.Pac
 		}
 	}
 	facts := s.facts
+	facts.TargetContext = plan.TargetContext
 	facts.ProfileAuthority = plan.ProfileAuthority()
 	facts.TargetPath = plan.ActivePath
 	facts.DataRoot = data
@@ -123,6 +124,7 @@ func projectArgs(envelope domain.PackageEnvelope, serverName string, args func(B
 }
 
 type seamActivator struct {
+	independent  bool
 	profileCheck func(context.Context) error
 	inner        providers.Activator
 	onCommitted  func(context.Context, BindingFacts) error
@@ -133,9 +135,36 @@ type seamActivator struct {
 }
 
 func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	prepared, err := a.prepareActivation(ctx, request)
+	if err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	return a.inner.Activate(ctx, prepared)
+}
+
+// Native config adapters may write the shared kernel while activating. Effect
+// isolation must be explicitly attested by the registered client adapter.
+func (a seamActivator) SupportsIndependentActivation(request domain.ActivationRequest) bool {
+	return a.independent && a.inner.SupportsIndependentActivation(request)
+}
+
+func (a seamActivator) PrepareIndependentActivation(ctx context.Context, request domain.ActivationRequest) (func(context.Context) (domain.ActivationOutcome, error), error) {
+	if !a.SupportsIndependentActivation(request) {
+		return nil, fmt.Errorf("client activation cannot run independently")
+	}
+	prepared, err := a.prepareActivation(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return func(effectContext context.Context) (domain.ActivationOutcome, error) {
+		return a.inner.Activate(effectContext, prepared)
+	}, nil
+}
+
+func (a seamActivator) prepareActivation(ctx context.Context, request domain.ActivationRequest) (domain.ActivationRequest, error) {
 	if !request.Plan.SelectedDelivery.IsZero() {
 		if _, err := a.committedFacts(request); err != nil {
-			return domain.ActivationOutcome{}, err
+			return request, err
 		}
 	}
 	// The engine reconciles a pending host handoff before resuming an existing
@@ -144,24 +173,37 @@ func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRe
 	// Selected deliveries retain their separate confirmation contract.
 	resume := request.PackageUnchanged && request.Plan.SelectedDelivery.IsZero() && a.facts.BindingID != ""
 	if resume {
-		if a.hostHandoffPending(request) {
+		if a.hostHandoffPending(request) && !keepProjectVerifyOnly(request) {
 			request.VerifyOnly = false
 		}
 	} else if a.onCommitted != nil && !request.VerifyOnly {
 		facts, err := a.committedFacts(request)
 		if err != nil {
-			return domain.ActivationOutcome{}, err
+			return request, err
 		}
 		if err := a.onCommitted(ctx, facts); err != nil {
-			return domain.ActivationOutcome{}, err
+			return request, err
 		}
 	}
 	if a.profileCheck != nil {
 		if err := a.profileCheck(ctx); err != nil {
-			return domain.ActivationOutcome{}, err
+			return request, err
 		}
 	}
-	return a.inner.Activate(ctx, request)
+	return request, nil
+}
+
+// keepProjectVerifyOnly preserves the core's existing read-only decision for
+// verified project component files. Prepared session activation alone must not
+// turn that verification back into a write. It never invents VerifyOnly.
+func keepProjectVerifyOnly(request domain.ActivationRequest) bool {
+	if !request.VerifyOnly || !request.PackageUnchanged || !request.Plan.SelectedDelivery.IsZero() ||
+		request.Plan.Scope != domain.ScopeProject || request.Plan.ClientID != request.Client.ClientID {
+		return false
+	}
+	target, err := domain.NewTargetContext(domain.ScopeProject, request.Plan.TargetContext.ProjectRoot, request.Client.ConfigRoot)
+	return err == nil && target == request.Plan.TargetContext &&
+		request.Plan.SelectedDelivery.EffectiveTraitsForScope(request.Client.ClientID, request.Plan.Scope).LifecycleKind == domain.LifecycleNativeConfig
 }
 
 func hostHandoffPending(binding domain.ClientBinding) bool {
@@ -220,6 +262,7 @@ func (a seamActivator) Deactivate(ctx context.Context, request domain.Deactivati
 
 func (a seamActivator) committedFacts(request domain.ActivationRequest) (BindingFacts, error) {
 	facts := a.facts
+	facts.TargetContext = request.Plan.TargetContext
 	if a.store == nil {
 		return uncommittedFacts(facts, request.Plan.SelectedDelivery)
 	}

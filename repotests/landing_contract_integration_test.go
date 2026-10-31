@@ -42,17 +42,23 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	if strings.Contains(docsLinks, "from '~/data/docsAvailability'") {
 		mustContain(t, docsLinks, "resolveDocsLink(id, locale.value, configured)")
 		for _, id := range []string{"home", "quickstart", "supportBoundary", "customLogicGuide"} {
-			mustContain(t, docsLinks, "link('"+id+"'")
+			invocation := regexp.MustCompile(`\blink\(\s*'` + regexp.QuoteMeta(id) + `'\s*,`)
+			if !invocation.MatchString(docsLinks) {
+				t.Fatalf("docs composable must resolve the %q page through link", id)
+			}
 		}
+		mustContain(t, docsLinks, "String(config.public.quickstartUrl || '') || ownedPageUrl('quickstart')")
 		docs := readRepoFile(t, landingRoot, "data", "docsAvailability.ts")
 		for _, contract := range []string{
 			"home: ''", "quickstart: 'guide/quickstart.html'",
 			"supportBoundary: 'build/'",
-			"customLogicGuide: 'guide/build-custom-plugin-logic.html'",
+			"customLogicGuide: 'build/checks.html'",
 			"https://777genius.github.io/universal-agent-plugins/docs/",
-			"const docsLanguages = ['en', 'ru', 'es', 'fr', 'zh'] as const",
+			"https://777genius.github.io/docs/",
+			"https://universal-agent-plugins.com/docs/",
+			"const docsLanguages = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'] as const",
 			"(docsLanguages as readonly string[]).includes(locale) ? locale : 'en'",
-			"englishFallback: locale === 'uk'",
+			"englishFallback: locale !== language",
 			"configuredUrl || defaultUrl", "source === owned",
 			"source.startsWith(owned)", "/^[?#]/.test(suffix)",
 			"return { url: source, language: null, englishFallback: false }",
@@ -63,7 +69,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	} else {
 		// Foundation checkpoint: the original docs resolver is still wired.
 		mustContain(t, docsLinks, "import type { LocaleCode } from '~/data/i18n'")
-		mustContain(t, docsLinks, `const docsLocalePattern = /\/(en|ru|es|fr|zh)(?=\/|$)/;`)
+		mustContain(t, docsLinks, `const docsLocalePattern = /\/(en|ru|uk|zh|es|hi|ar|pt|fr)(?=\/|$)/;`)
 		mustContain(t, docsLinks, "new Set<LocaleCode>(['en', 'ru', 'es', 'fr', 'zh'])")
 		for _, path := range []string{"", "guide/quickstart.html", "reference/support-boundary.html", "guide/build-custom-plugin-logic.html"} {
 			mustContain(t, docsLinks, "https://777genius.github.io/universal-agent-plugins/docs/en/"+path+"'")
@@ -300,7 +306,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		mustContain(t, pluginsPage, `usePageSeo('Agent Plugins 1.0 Directory | Find Plugins'`)
 	}
 	mustContain(t, pluginsPage, `'@type': 'ItemList'`)
-	mustContain(t, pluginsPage, `<PluginCatalog`)
+	mustContain(t, pluginsPage, `<UnifiedCatalog`)
 	mustContain(t, pluginsPage, `:plugins="registry.plugins"`)
 
 	pluginDetailPageBody, err := os.ReadFile(filepath.Join(landingRoot, "pages", "plugins", "[slug].vue"))

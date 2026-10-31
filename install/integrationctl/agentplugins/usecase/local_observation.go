@@ -141,7 +141,7 @@ func frozenPlanningBinding(input AddInput, installation *domain.Installation) (*
 		if found != nil {
 			return nil, fmt.Errorf("conflicting exact or shared client/scope bindings before planning")
 		}
-		if (!binding.SelectedDelivery.IsZero() || sharesPhysicalBackend(input.Client.ClientID, binding.SelectedDelivery)) && (binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil) {
+		if (!binding.SelectedDelivery.IsZero() || sharesPhysicalBackend(input.Client.ClientID, binding.SelectedDelivery, input.Scope)) && (binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil) {
 			return nil, fmt.Errorf("pending Local attempt forbids replacement planning")
 		}
 		if err := binding.ValidateLocalEntryObservation(); err != nil {
@@ -160,12 +160,12 @@ func matchesPlanningBinding(input AddInput, installation *domain.Installation, b
 	if binding.Scope != string(input.Scope) {
 		return false
 	}
-	if !sharesPhysicalBackend(input.Client.ClientID, binding.SelectedDelivery) {
+	if !sharesPhysicalBackend(input.Client.ClientID, binding.SelectedDelivery, input.Scope) {
 		return binding.ClientID == string(input.Client.ClientID)
 	}
 	return binding.Materialization != domain.MaterializationAbsent &&
 		binding.PhysicalArtifact == domain.ComputePhysicalArtifactID(input.Envelope.Manifest.Name, installation.InstallationID) &&
-		sameNativeBackend(domain.ClientID(binding.ClientID), input.Client.ClientID)
+		sameNativeBackend(domain.ClientID(binding.ClientID), input.Client.ClientID, input.Scope)
 }
 
 func validatePlannedObservation(plan domain.DeliveryPlan, observation *domain.LocalEntryObservation, objects []domain.NativeObjectOwnership) error {

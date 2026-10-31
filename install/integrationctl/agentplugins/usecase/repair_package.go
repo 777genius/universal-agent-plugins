@@ -15,6 +15,9 @@ func (session *repairSession) repairPackage() (AddResult, error) {
 	if !ok {
 		return session.result, fmt.Errorf("managed package integrity could not be determined; refusing repair: %w", session.verifyErr)
 	}
+	if verification.Kind == ports.VerificationDigestMismatch && domain.ClientTraitsFor(session.input.Client.ClientID).ProtectsModifiedPackage {
+		return session.result, fmt.Errorf("managed native extension was edited; preserve the changes before repair: %w", session.verifyErr)
+	}
 	beforeDigest, err := repairBeforeDigest(verification)
 	if err != nil {
 		return session.result, err
@@ -135,6 +138,9 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 			return session.result, fmt.Errorf("prepared host changed before repair commit: %w", err)
 		}
 	}
+	if err := session.verifyProjectRepairOwnership(); err != nil {
+		return session.result, err
+	}
 	// The user or client can change the native object while staging runs. Repair
 	// may replace the exact absent/digest-mismatched object reviewed above, but
 	// never a different object that appeared after preflight.
@@ -180,10 +186,13 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 }
 
 func (session *repairSession) reactivateRepaired(delivery domain.StagedDelivery, verifiedState domain.ActivationOutcome) (AddResult, error) {
-	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) {
+	if preparedProjectFileCandidate(session.input, session.plan) {
+		return session.verifyRepairedProjectFiles(delivery)
+	}
+	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
 		return session.reapplyRepairedNative(delivery)
 	}
-	if session.plan.SelectedDelivery.EffectiveTraits(session.input.Client.ClientID).UsesManagedStdioLauncher {
+	if session.plan.SelectedDelivery.EffectiveTraitsForScope(session.input.Client.ClientID, session.input.Scope).UsesManagedStdioLauncher {
 		return session.verifyRepairedLauncher(delivery)
 	}
 	_ = verifiedState

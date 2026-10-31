@@ -299,6 +299,30 @@
     "Version": ""
   },
   {
+    "ClientID": "pi",
+    "ConfigRoot": "\u003chome\u003e/.pi/agent",
+    "DetectionError": null,
+    "DisplayName": "Pi",
+    "ExecutablePath": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
+    "Status": "not_detected",
+    "Surfaces": [
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "pi_cli"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "pi_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
     "ClientID": "qoder",
     "ConfigRoot": "\u003chome\u003e/.qoder",
     "DetectionError": null,

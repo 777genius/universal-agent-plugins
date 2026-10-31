@@ -18,14 +18,22 @@ func ActivateOpenCodeNativeWithKernel(ctx context.Context, request domain.Activa
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return applyOpenCodeNativeWithKernel(request.Client.ConfigRoot, request.Delivery.ActivePath, request.PreviousNativeObjects, request.Delivery.NativeObjects, kernel)
+	layout, err := openCodeActivationLayout(request)
+	if err != nil {
+		return err
+	}
+	return applyOpenCodeNativeLayoutWithKernel(layout, request.Delivery.ActivePath, request.PreviousNativeObjects, request.Delivery.NativeObjects, kernel)
 }
 
 func DeactivateOpenCodeNativeWithKernel(ctx context.Context, request domain.DeactivationRequest, kernel nativeconfig.Kernel) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return applyOpenCodeNativeWithKernel(request.Client.ConfigRoot, "", request.NativeObjects, nil, kernel)
+	layout, err := openCodeTargetLayout(request.Client, request.TargetContext, request.NativeRegistryRoot)
+	if err != nil {
+		return err
+	}
+	return applyOpenCodeNativeLayoutWithKernel(layout, "", request.NativeObjects, nil, kernel)
 }
 
 func ApplyOpenCodeNative(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership) error {
@@ -33,7 +41,11 @@ func ApplyOpenCodeNative(configRoot, activePath string, previous, desired []doma
 }
 
 func applyOpenCodeNativeWithKernel(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
-	return applyOpenCodeNativeWithKernelAndOps(configRoot, activePath, previous, desired, kernel, shared.RenameDirectoryExclusive, os.RemoveAll)
+	return applyOpenCodeNativeLayoutWithKernel(userOpenCodeLayout(configRoot), activePath, previous, desired, kernel)
+}
+
+func applyOpenCodeNativeLayoutWithKernel(layout openCodeNativeLayout, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
+	return applyOpenCodeNativeLayoutWithOps(layout, activePath, previous, desired, kernel, shared.RenameDirectoryExclusive, os.RemoveAll)
 }
 
 func ApplyOpenCodeNativeWithRename(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, rename openCodeRenameFunc) (resultErr error) {
@@ -45,7 +57,11 @@ func ApplyOpenCodeNativeWithOps(configRoot, activePath string, previous, desired
 }
 
 func applyOpenCodeNativeWithKernelAndOps(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename openCodeRenameFunc, removeAll func(string) error) (resultErr error) {
-	prepared, err := prepareOpenCodeNativeApply(configRoot, activePath, previous, desired, kernel, rename, removeAll)
+	return applyOpenCodeNativeLayoutWithOps(userOpenCodeLayout(configRoot), activePath, previous, desired, kernel, rename, removeAll)
+}
+
+func applyOpenCodeNativeLayoutWithOps(layout openCodeNativeLayout, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename openCodeRenameFunc, removeAll func(string) error) (resultErr error) {
+	prepared, err := prepareOpenCodeNativeApplyLayout(layout, activePath, previous, desired, kernel, rename, removeAll)
 	if err != nil {
 		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
@@ -53,7 +69,7 @@ func applyOpenCodeNativeWithKernelAndOps(configRoot, activePath string, previous
 	if err != nil {
 		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
-	skills, err := installOpenCodeSkillsWithOps(configRoot, activePath, prepared.previous, prepared.desired, prepared.rename, prepared.removeAll)
+	skills, err := installOpenCodeSkillsWithLayout(layout, activePath, prepared.previous, prepared.desired, prepared.rename, prepared.removeAll)
 	if err != nil {
 		return err
 	}
@@ -77,6 +93,7 @@ func knownOpenCodePreWriteError(err error) bool {
 }
 
 type openCodeNativeApply struct {
+	layout     openCodeNativeLayout
 	rename     openCodeRenameFunc
 	removeAll  func(string) error
 	kernel     nativeconfig.Kernel
@@ -86,6 +103,14 @@ type openCodeNativeApply struct {
 }
 
 func prepareOpenCodeNativeApply(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename openCodeRenameFunc, removeAll func(string) error) (*openCodeNativeApply, error) {
+	return prepareOpenCodeNativeApplyLayout(userOpenCodeLayout(configRoot), activePath, previous, desired, kernel, rename, removeAll)
+}
+
+func prepareOpenCodeNativeApplyLayout(layout openCodeNativeLayout, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename openCodeRenameFunc, removeAll func(string) error) (*openCodeNativeApply, error) {
+	configRoot := layout.Root
+	if err := layout.validate(); err != nil {
+		return nil, err
+	}
 	if err := kernel.RequireFileIO(); err != nil {
 		return nil, err
 	}
@@ -106,20 +131,20 @@ func prepareOpenCodeNativeApply(configRoot, activePath string, previous, desired
 		if err != nil {
 			return nil, err
 		}
-		if err := validateOpenCodeProjection(configRoot, activePath, projection); err != nil {
+		if err := validateOpenCodeProjection(layout, activePath, projection); err != nil {
 			return nil, err
 		}
 	}
-	if err := preflightOpenCodeNativeApply(configRoot, activePath, projection, previous, desired); err != nil {
+	if err := preflightOpenCodeNativeApply(layout, activePath, projection, previous, desired); err != nil {
 		return nil, err
 	}
 	if err := confirmOpenCodeConfigSelection(configRoot, projection, previous, desired); err != nil {
 		return nil, err
 	}
-	return &openCodeNativeApply{rename: rename, removeAll: removeAll, kernel: kernel, projection: projection, previous: previous, desired: desired}, nil
+	return &openCodeNativeApply{layout: layout, rename: rename, removeAll: removeAll, kernel: kernel, projection: projection, previous: previous, desired: desired}, nil
 }
 
-func preflightOpenCodeNativeApply(configRoot, activePath string, projection OpenCodeProjection, previous, desired []domain.NativeObjectOwnership) error {
+func preflightOpenCodeNativeApply(layout openCodeNativeLayout, activePath string, projection OpenCodeProjection, previous, desired []domain.NativeObjectOwnership) error {
 	if crossOpenCodeDialect(previous, desired) {
 		candidate := &openCodeNativeApply{projection: projection, previous: previous, desired: desired}
 		if _, err := openCodeTransitionRequest(candidate); err != nil {
@@ -127,15 +152,15 @@ func preflightOpenCodeNativeApply(configRoot, activePath string, projection Open
 		}
 		for _, objects := range [][]domain.NativeObjectOwnership{previous, desired} {
 			for _, object := range objects {
-				if err := validateOpenCodeObject(configRoot, projection, object); err != nil {
+				if err := validateOpenCodeObject(layout, projection, object); err != nil {
 					return err
 				}
 			}
 		}
-		if err := preflightDesiredOpenCodeObjects(configRoot, projection, shared.ObjectMap(previous), shared.ObjectMap(desired)); err != nil {
+		if err := preflightDesiredOpenCodeObjects(layout, projection, shared.ObjectMap(previous), shared.ObjectMap(desired)); err != nil {
 			return err
 		}
-	} else if err := preflightOpenCodeObjects(configRoot, activePath, projection, previous, desired); err != nil {
+	} else if err := preflightOpenCodeObjects(layout, activePath, projection, previous, desired); err != nil {
 		return err
 	}
 	return nil
@@ -165,7 +190,9 @@ func confirmOpenCodeConfigSelection(configRoot string, projection OpenCodeProjec
 }
 
 func expectedOpenCodeConfig(projection OpenCodeProjection, previous []domain.NativeObjectOwnership) string {
-	if projection.ConfigPath != "" {
+	// Skills-only effects do not own the client's config selection. OpenCode
+	// may create its schema-only JSONC file while reading those Skills.
+	if len(projection.MCPServers) > 0 && projection.ConfigPath != "" {
 		return projection.ConfigPath
 	}
 	for _, object := range previous {

@@ -15,13 +15,19 @@ var (
 	_ clients.ReadOnlyVerifier   = (*Adapter)(nil)
 )
 
-// AutomaticallyActivates reports that Activate will drive the Copilot CLI.
+// AutomaticallyActivates selects repository files or the existing user CLI lane.
 func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.ActivationRequest) bool {
+	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject {
+		return request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(request.Plan.Components)
+	}
 	return shared.CopilotAutomaticallyActivates(env, request)
 }
 
-// VerifierAvailable reports that an exact Copilot listing can be observed.
-func (*Adapter) VerifierAvailable(_ domain.DetectedClient, _ domain.DeliveryPlan, backendExecutable string) bool {
+// VerifierAvailable reports exact repository configuration or user CLI inspection.
+func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
+	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject {
+		return shared.OnlyNativeComponents(plan.Components)
+	}
 	return shared.CopilotVerifierAvailable(backendExecutable)
 }
 
@@ -31,6 +37,13 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
+	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject {
+		return activateCopilotProject(ctx, env, request)
+	}
+	bound, err := userProfileEnv(env, request.Client.ConfigRoot, request.Plan.NativeRegistryRoot, request.Plan.TargetContext.UserConfigRoot)
+	if err != nil {
+		return domain.ActivationOutcome{}, err
+	}
 	outcome := shared.StartedActivation(request)
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
 		outcome.Activation = domain.ActivationManual
@@ -38,11 +51,18 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("install GitHub Copilot CLI, rerun add for the prepared package at %s, then verify with `copilot plugin list`", request.Delivery.ActivePath))
 		return outcome, nil
 	}
-	return shared.CompleteCopilotActivation(ctx, env, request, outcome)
+	return shared.CompleteCopilotActivation(ctx, bound, request, outcome)
 }
 
 // Deactivate uninstalls through the Copilot CLI after confirmation.
 func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if request.TargetContext.Scope == domain.ScopeProject {
+		return deactivateCopilotProject(ctx, env, request)
+	}
+	bound, err := userProfileEnv(env, request.Client.ConfigRoot, request.NativeRegistryRoot, request.TargetContext.UserConfigRoot)
+	if err != nil {
+		return domain.DeactivationOutcome{}, err
+	}
 	action := fmt.Sprintf("run `copilot plugin uninstall %s`, then rerun remove with `--external-uninstalled`", request.DeclaredName)
-	return shared.CompleteCopilotDeactivation(ctx, env, request, action)
+	return shared.CompleteCopilotDeactivation(ctx, bound, request, action)
 }

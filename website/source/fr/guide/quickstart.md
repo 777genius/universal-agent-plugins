@@ -1,46 +1,88 @@
 ---
 title: "Démarrage rapide"
-description: "Installez des plugins disponibles ou préparez un paquet portable Agent Plugins 1.0."
+description: "Installez des paquets publiés ou préparez votre propre paquet portable Agent Plugins 1.0."
 canonicalId: "page:guide:quickstart"
 section: "guide"
 locale: "fr"
 generated: false
 translationRequired: true
+localeDisposition: "current-translation"
 ---
 
 <a id="demarrage-rapide"></a>
 
 # Utiliser des plugins / Créer des plugins
 
-Installez des plugins disponibles ou préparez un paquet portable Agent Plugins 1.0.
+Installez un paquet pour vos agents ou créez un paquet portable Agent Plugins 1.0 avec des instructions et une configuration d’outils.
 
 ## Utiliser des plugins {#use-plugins}
 
-Disponible maintenant : installez des plugins avec Universal Agent Plugins. Avec Node.js 22+, exécutez :
+Avec Node.js 22 ou une version ultérieure :
 
 ```bash
 npx universal-agent-plugins add context7
 ```
 
-Pour une installation native sur macOS, Linux ou Windows, consultez le guide. Le CLI demande quels agents compatibles utiliser ; chaque plugin peut nécessiter son propre environnement d’exécution.
+Le CLI vous demande quels agents compatibles utiliser et indique les étapes d’activation restantes. Pour examiner et prévisualiser d’abord :
 
-[Guide d’installation](https://github.com/777genius/universal-agent-plugins#quick-start)
+```bash
+npx universal-agent-plugins info context7
+npx universal-agent-plugins add context7 --target codex,cursor --dry-run
+```
 
-La création Agent Plugins est disponible dans `universal-agent-plugins` ; version GitHub : `agentplugins-v*`.
+Le [guide d’installation native](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) fournit des exécutables pour macOS, Linux et Windows. Le gestionnaire natif ne nécessite pas Node.js, même si certains plugins ont besoin de leur propre environnement d’exécution.
 
-La compatibilité dépend du paquet. La validation du schéma ne prouve ni l’exécution, ni OAuth, ni l’activation. Codex ne prend pas en charge MCP SSE déclaré ; stdio et Streamable HTTP conservent leur prise en charge par les adaptateurs existants.
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) conserve la portée projet explicite et la sélection automatique pour `install` introduite dans 0.1.94. Il ajoute aussi une [API de gestion locale](../use/manage#local-management-api) et des [extensions natives Pi](../reference/client-compatibility#pi-native-extensions). Pour prévisualiser l’ajout d’un paquet à un projet :
 
-[Compatibilité des clients (en anglais)](https://github.com/777genius/universal-agent-plugins#supported-clients)
+```bash
+npx universal-agent-plugins add context7 --target cursor --scope project \
+  --project-root /path/to/project --dry-run
+```
+
+Choisissez un dossier de projet existant. `add` utilise par défaut la portée utilisateur : sélectionnez projet explicitement pour cette opération. Depuis [CLI natif 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), `install` sans argument de source détecte le projet uniquement si un fichier `uap.toml` ordinaire existe dans le dossier courant exact, sans recherche dans les parents. Une portée explicite reste prioritaire. Cette sélection automatique nécessite 0.1.94 ou une version ultérieure : vérifiez `agentplugins version` et utilisez l’installateur natif si votre canal est antérieur. Les canaux peuvent être mis à jour à des moments différents ; les exemples `npx` avec portée explicite de cette page restent compatibles avec 0.1.93. Examinez le plan avant d’omettre `--dry-run`. La découverte native, la confiance, l’authentification et les appels MCP réussis restent distincts de l’écriture des fichiers du paquet.
+
+[Parcours complet d’installation](../use/install) · [Compatibilité des clients et portée des tests](../reference/client-compatibility)
+
+### Restaurez des dépendances enregistrées
+
+Vérifiez ce que l’environnement utilisateur sélectionné enregistre :
+
+```bash
+npx universal-agent-plugins deps status
+```
+
+Pour un couple `uap.toml`/`uap.lock` enregistré, exportez depuis un dossier d’échange :
+
+```bash
+npx universal-agent-plugins deps export
+```
+
+Copiez le dossier sur une autre machine, installez les clients cibles, puis exécutez :
+
+```bash
+npx universal-agent-plugins deps import
+npx universal-agent-plugins install --locked --scope user
+```
+
+Seuls l’accord et le verrouillage validés sont transférés. Profils, réglages, identifiants, reçus et données du plugin restent séparés. L’installation nécessite toujours les sources exactes ou des paquets vérifiés en cache. Pour un projet, versionnez les deux fichiers et restaurez avec `install --locked --scope project` explicite. Consultez [la maintenance et la restauration](../use/manage) pour la récupération et le transfert.
 
 ## Créer des plugins {#build-plugins}
 
-Créez un paquet portable Agent Plugins 1.0 autour de plugin.json, avec skills/ et mcp.json facultatifs. La prise en charge dépend du paquet et de ses composants.
+Un paquet standard commence avec `plugin.json` à sa racine et peut inclure `skills/<name>/SKILL.md`, `mcp.json` ou les deux. Vous pouvez écrire ces fichiers à la main et valider le paquet avec l’installateur publié :
 
-**La création Agent Plugins est disponible**
+```bash
+npx universal-agent-plugins validate ./my-plugin
+npx universal-agent-plugins add ./my-plugin --target codex --dry-run
+```
 
-La création statique est disponible via `agentplugins author` dans `universal-agent-plugins` ; version GitHub : `agentplugins-v*`. npm, Homebrew, archives natives et E2E public sont vérifiés. Cette version n’exécute pas le code du paquet ni les serveurs de développement, n’installe pas les dépendances, n’exporte pas les paquets et ne les publie pas.
+Ces exemples supposent que `./my-plugin` contient déjà un paquet complet. Le [guide de création](../build/) décrit un paquet Skill manuel et les outils source de génération d’une structure initiale.
+
+**Disponibilité de la création :** l’installateur actuel npm ou natif n’inclut pas `agentplugins author`. Le code source actuel implémente la génération initiale, les vérifications statiques, les tests MCP explicites, les cycles de développement, l’installation des dépendances et la maintenance JSON. Utilisez [la préparation depuis le code source](../build/#build-from-source) pour ces commandes. Les preuves d’anciennes publications restent liées à leurs versions ; elles ne promettent pas les mêmes fonctions dans l’installateur actuel.
+
+La validation statique ne prouve ni l’exécution, ni OAuth, ni l’activation. Les transports MCP pris en charge varient aussi par client : par exemple, Codex ne prend pas en charge MCP SSE déclaré. Indiquez les prérequis du paquet et les vérifications restantes dans son README.
 
 [Spécification Agent Plugins 1.0](https://agent-plugins.org/specification)
+
 
 <!-- locale-historical-source:start
 locale-historical-frontmatter:start

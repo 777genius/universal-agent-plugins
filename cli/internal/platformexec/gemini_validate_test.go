@@ -73,6 +73,36 @@ func TestGeminiValidateReportsHookEntrypointMismatch(t *testing.T) {
 	}
 }
 
+func TestGeminiGenerateFallbackContextPassesValidateWithoutPackageMeta(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	name := filepath.Base(root)
+
+	writeGeminiValidateFile(t, filepath.Join(root, "targets", "gemini", "contexts", "GEMINI.md"), "# Gemini\n")
+
+	state := pluginmodel.NewTargetState("gemini")
+	state.AddComponent("contexts", filepath.Join("targets", "gemini", "contexts", "GEMINI.md"))
+
+	graph := pluginmodel.PackageGraph{
+		Manifest: pluginmodel.Manifest{Name: name, Version: "0.1.0", Description: "demo", Targets: []string{"gemini"}},
+	}
+	artifacts, err := (geminiAdapter{}).Generate(root, graph, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, artifact := range artifacts {
+		writeGeminiValidateFile(t, filepath.Join(root, filepath.FromSlash(artifact.RelPath)), string(artifact.Content))
+	}
+
+	diagnostics, err := (geminiAdapter{}).Validate(root, graph, state)
+	if err != nil {
+		t.Fatalf("Validate error = %v", err)
+	}
+	if joined := diagnosticsText(diagnostics); joined != "" {
+		t.Fatalf("diagnostics = %s", joined)
+	}
+}
+
 func writeGeminiValidateFile(t *testing.T, path string, body string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

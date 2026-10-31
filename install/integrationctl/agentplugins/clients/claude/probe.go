@@ -2,6 +2,7 @@ package claude
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,7 +20,8 @@ const (
 	claudeProbeMaxEnvironmentValue = 4096
 	claudeProbeMaxEnvironmentTotal = 32768
 	claudeProbeTreeExitGrace       = 5 * time.Second
-	ClaudeProbeTimeout             = 15 * time.Second
+	// Allow native CLI cold-start initialization while bounding every list probe.
+	ClaudeProbeTimeout = 60 * time.Second
 )
 
 type claudeDescendantGraceRunner interface {
@@ -33,6 +35,9 @@ type ClaudeActivationProbe struct {
 }
 
 func PrepareClaudeActivationProbe(request domain.ActivationRequest) (ClaudeActivationProbe, error) {
+	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject {
+		return prepareClaudeProjectActivationProbe(request)
+	}
 	configRoot := filepath.Clean(strings.TrimSpace(request.Client.ConfigRoot))
 	if !filepath.IsAbs(configRoot) {
 		return ClaudeActivationProbe{}, fmt.Errorf("absolute Claude Code config root is required")
@@ -63,15 +68,37 @@ func RunClaudeListCommand(ctx context.Context, runner ports.CommandRunner, comma
 	if runner == nil {
 		return legacyports.CommandResult{}, fmt.Errorf("Claude Code CLI runner is unavailable")
 	}
-	bounded, cancel := context.WithTimeout(ctx, ClaudeProbeTimeout)
+	return runClaudeListCommandWithin(ctx, runner, command, ClaudeProbeTimeout)
+}
+
+func runClaudeListCommandWithin(ctx context.Context, runner ports.CommandRunner, command legacyports.Command, budget time.Duration) (legacyports.CommandResult, error) {
+	started := time.Now()
+	bounded, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
+	var result legacyports.CommandResult
+	var err error
 	if supervised, ok := runner.(claudeDescendantGraceRunner); ok {
-		return supervised.RunWithDescendantExitGrace(bounded, command, claudeProbeTreeExitGrace)
+		result, err = supervised.RunWithDescendantExitGrace(bounded, command, claudeProbeTreeExitGrace)
+	} else {
+		result, err = runner.Run(bounded, command)
 	}
-	return runner.Run(bounded, command)
+	if err != nil && !result.CleanupComplete && !result.NoChildStarted {
+		err = &domain.UnclosedClientProbe{Operation: "Claude Code plugin listing", Err: err}
+	}
+	if err != nil && ctx.Err() == nil && errors.Is(bounded.Err(), context.DeadlineExceeded) && errors.Is(err, context.DeadlineExceeded) {
+		if result.CleanupComplete || result.NoChildStarted {
+			return result, &domain.IsolatedProbeTimeout{Operation: "Claude Code plugin listing", Budget: budget, Elapsed: time.Since(started), Err: err}
+		}
+		return result, fmt.Errorf("claude code plugin listing exceeded %s probe budget after %s; process cleanup unconfirmed: %w", budget, time.Since(started).Round(time.Millisecond), err)
+	}
+	return result, err
 }
 
 func ClaudeListCommand(executable, configRoot, activePath string) (legacyports.Command, error) {
+	return claudeListCommand(executable, configRoot, activePath, filepath.Join(filepath.Clean(configRoot), "skills"), "")
+}
+
+func claudeListCommand(executable, configRoot, activePath, skillsRoot, workingDir string) (legacyports.Command, error) {
 	executable = strings.TrimSpace(executable)
 	if executable == "" {
 		return legacyports.Command{}, fmt.Errorf("Claude Code executable is required")
@@ -82,7 +109,7 @@ func ClaudeListCommand(executable, configRoot, activePath string) (legacyports.C
 	}
 	configRoot = filepath.Clean(configRoot)
 	activePath = filepath.Clean(strings.TrimSpace(activePath))
-	if !filepath.IsAbs(activePath) || filepath.Dir(activePath) != filepath.Join(configRoot, "skills") {
+	if !filepath.IsAbs(activePath) || filepath.Dir(activePath) != skillsRoot {
 		return legacyports.Command{}, fmt.Errorf("the Claude Code managed plugin path is not an exact child of the configured skills root")
 	}
 	environment, home, err := boundedClaudeProbeEnvironment()
@@ -97,10 +124,13 @@ func ClaudeListCommand(executable, configRoot, activePath string) (legacyports.C
 	if environmentSize(environment) > claudeProbeMaxEnvironmentTotal {
 		return legacyports.Command{}, fmt.Errorf("Claude Code probe environment exceeds the bounded size")
 	}
+	if workingDir == "" {
+		workingDir = home
+	}
 	return legacyports.Command{
 		Argv: []string{executable, "plugin", "list", "--json"},
 		Env:  environment,
-		Dir:  home,
+		Dir:  workingDir,
 	}, nil
 }
 
@@ -173,3 +203,5 @@ func environmentSize(environment []string) int {
 	}
 	return total
 }
+
+func (*Adapter) NativeDiscoveryTimeout() time.Duration { return ClaudeProbeTimeout }

@@ -5,6 +5,8 @@ import (
 	internal_codex "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/codex"
 	internal_cursor "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/cursor"
 	internal_gemini "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/gemini"
+	internal_pi "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/pi"
+	internal_qoder "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/qoder"
 	internal_vscode_local "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/vscodelocal"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime"
 )
@@ -266,6 +268,41 @@ var registry = map[key]runtime.Descriptor{
 		Carrier:  runtime.CarrierStdinJSON,
 		Decode:   internal_vscode_local.DecodeSubagentStop,
 		Encode:   internal_vscode_local.EncodeObserver,
+	},
+	{platform: "qoder", event: "session_start"}: {
+		Platform: "qoder",
+		Event:    "session_start",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_qoder.DecodeSessionStart,
+		Encode:   internal_qoder.EncodeSessionStart,
+	},
+	{platform: "qoder", event: "user_prompt_submit"}: {
+		Platform: "qoder",
+		Event:    "user_prompt_submit",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_qoder.DecodeUserPromptSubmit,
+		Encode:   internal_qoder.EncodeUserPromptSubmit,
+	},
+	{platform: "qoder", event: "post_tool_use"}: {
+		Platform: "qoder",
+		Event:    "post_tool_use",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_qoder.DecodePostToolUse,
+		Encode:   internal_qoder.EncodePostToolUse,
+	},
+	{platform: "qoder", event: "stop"}: {
+		Platform: "qoder",
+		Event:    "stop",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_qoder.DecodeStop,
+		Encode:   internal_qoder.EncodeStop,
+	},
+	{platform: "pi", event: "observation"}: {
+		Platform: "pi",
+		Event:    "observation",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_pi.DecodeObservation,
+		Encode:   internal_pi.EncodeObservation,
 	},
 }
 

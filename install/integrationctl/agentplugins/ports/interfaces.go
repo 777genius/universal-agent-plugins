@@ -81,6 +81,15 @@ type PackageStager interface {
 	Verify(context.Context, string, string) error
 }
 
+// IndependentClientActivator separates serial host/state preparation from client
+// effects that may run concurrently for different clients. Returned operations
+// must never write shared installation state or call host handoff callbacks.
+// The coordinator owns publication and joins every dispatched operation.
+type IndependentClientActivator interface {
+	SupportsIndependentActivation(domain.ActivationRequest) bool
+	PrepareIndependentActivation(context.Context, domain.ActivationRequest) (func(context.Context) (domain.ActivationOutcome, error), error)
+}
+
 type ClientActivator interface {
 	Activate(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error)
 	Deactivate(context.Context, domain.DeactivationRequest) (domain.DeactivationOutcome, error)

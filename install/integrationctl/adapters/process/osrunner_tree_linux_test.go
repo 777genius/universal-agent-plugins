@@ -42,6 +42,7 @@ func TestOSRunnerSurvivesRemovedOwnExecutable(t *testing.T) {
 		}
 		os.Exit(0)
 	}
+	requireOrdinaryPreflight(t)
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -150,6 +151,7 @@ func TestOSRunnerCancellationContainsImmediateSetsidDescendant(t *testing.T) {
 		}
 	}
 
+	requireOrdinaryPreflight(t)
 	pidPath := t.TempDir() + "/escape.pid"
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -199,6 +201,7 @@ func TestDuplexCapabilityRejectsNonCgroupDelegationBeforeStart(t *testing.T) {
 }
 
 func TestOrdinaryCommandContainmentDoesNotRequireDelegatedCgroup(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	cmd := exec.Command("/bin/sh", "-c", "printf ordinary")
 	var before int
 	if err := unix.Prctl(unix.PR_GET_CHILD_SUBREAPER, uintptr(unsafe.Pointer(&before)), 0, 0, 0); err != nil {
@@ -235,6 +238,7 @@ func TestOrdinaryCommandContainmentDoesNotRequireDelegatedCgroup(t *testing.T) {
 }
 
 func TestOrdinaryRunWorksWhenDelegatedCgroupIsUnavailable(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	root := t.TempDir()
 	if _, _, err := createDelegatedCgroupAt(root); err == nil {
 		t.Fatal("test fixture unexpectedly supplied a cgroup v2 delegation")
@@ -250,6 +254,7 @@ func TestOrdinaryRunWorksWhenDelegatedCgroupIsUnavailable(t *testing.T) {
 }
 
 func TestOrdinarySupervisorDescriptorsAreClosedBeforeCommandExec(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	result, err := (OS{}).Run(context.Background(), ports.Command{
 		Argv: []string{"/bin/sh", "-c", `if printf '{"Forced":false}\n' 2>/dev/null >&5; then exit 97; fi; printf supervisor-fds-closed`},
 	})
@@ -302,15 +307,23 @@ func TestSupervisorEmptyBoundaryRequiresQuiescentErrorFreePasses(t *testing.T) {
 
 func TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage(t *testing.T) {
 	for _, test := range []struct {
-		name     string
-		identity linuxProcessIdentity
-		want     string
+		name       string
+		identity   linuxProcessIdentity
+		recheck    *linuxProcessIdentity
+		recheckErr error
+		want       string
 	}{
+		{name: "exiting child zero parent", identity: linuxProcessIdentity{pid: 41, ppid: 0, startTime: 101}, recheck: &linuxProcessIdentity{pid: 41, ppid: 0, startTime: 101, zombie: true}},
+		{name: "disappeared child zero parent", identity: linuxProcessIdentity{pid: 41, ppid: 0, startTime: 101}, recheckErr: os.ErrNotExist},
+		{name: "live child zero parent", identity: linuxProcessIdentity{pid: 41, ppid: 0, startTime: 101}, want: "live parent changed from 7 to 0"},
+		{name: "reused child after zero parent", identity: linuxProcessIdentity{pid: 41, ppid: 0, startTime: 101}, recheck: &linuxProcessIdentity{pid: 41, ppid: 0, startTime: 102, zombie: true}, want: "live parent changed from 7 to 0"},
+		{name: "uncertain child after zero parent", identity: linuxProcessIdentity{pid: 41, ppid: 0, startTime: 101}, recheckErr: os.ErrPermission, want: "live parent changed from 7 to 0"},
 		{name: "reused PID", identity: linuxProcessIdentity{pid: 41, ppid: 7, startTime: 102}, want: "start time changed"},
 		{name: "changed parent", identity: linuxProcessIdentity{pid: 41, ppid: 8, startTime: 101}, want: "live parent changed from 7 to 8"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			closed := 0
+			childReads := 0
 			ops := linuxDescendantTraversalOps{
 				directChildren: func(pid int, _ time.Time, _ int) (map[int]uint64, error) {
 					if pid != 7 {
@@ -324,6 +337,15 @@ func TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage(t *test
 					}
 					if pid != 41 {
 						t.Fatalf("unexpected identity read for process %d", pid)
+					}
+					childReads++
+					if childReads > 1 {
+						if test.recheck != nil {
+							return *test.recheck, nil
+						}
+						if test.recheckErr != nil {
+							return linuxProcessIdentity{}, test.recheckErr
+						}
 					}
 					return test.identity, nil
 				},
@@ -342,7 +364,11 @@ func TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage(t *test
 				},
 			}
 			descendants, err := linuxDescendantIdentitiesWith(7, time.Now().Add(time.Second), 4, ops)
-			if err == nil || !strings.Contains(err.Error(), test.want) {
+			if test.want == "" {
+				if err != nil {
+					t.Fatalf("naturally exited child refused: %v", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("identity revalidation error = %v, want %q", err, test.want)
 			}
 			if len(descendants) != 0 || closed != 1 {
@@ -393,6 +419,7 @@ func TestLinuxSupervisorTraversalEnforcesProcessAndDeadlineBounds(t *testing.T) 
 }
 
 func TestOSRunnerRapidSuccessfulCommandsPreserveNaturalExit(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	// /bin/true commonly becomes waitable before the runner can acquire its
 	// post-Start pidfd. Exercise that attachment boundary enough times to prove
 	// rapid natural exits remain ordinary successful command results.
@@ -406,6 +433,7 @@ func TestOSRunnerRapidSuccessfulCommandsPreserveNaturalExit(t *testing.T) {
 }
 
 func TestOSRunnerRapidShellCommandsWithShortLivedChildrenPreserveNaturalExit(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	root := t.TempDir()
 	script := root + "/client"
 	body := `#!/bin/sh
@@ -534,6 +562,7 @@ func TestOSRunnerCleansSameProcessGroupMemberAfterLeaderNaturalExit(t *testing.T
 		os.Exit(0)
 	}
 
+	requireOrdinaryPreflight(t)
 	pidPath := t.TempDir() + "/descendant.pid"
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_RUN_LEADER_PID_PATH="+pidPath)
 	_, err := (OS{}).RunWithTreeExitGrace(context.Background(), ports.Command{
@@ -580,6 +609,7 @@ func TestOSRunnerDescendantGraceAcceptsOnlyNaturalHelperExit(t *testing.T) {
 		os.Exit(0)
 	}
 
+	requireOrdinaryPreflight(t)
 	_, err := (OS{}).RunWithDescendantExitGrace(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerDescendantGraceAcceptsOnlyNaturalHelperExit"},
 		Env:  append(os.Environ(), "AGENTPLUGINS_PROCESS_GRACE_LEADER=1"),
@@ -610,6 +640,7 @@ func TestOSRunnerDescendantGraceStillRejectsForcedCleanup(t *testing.T) {
 		os.Exit(0)
 	}
 
+	requireOrdinaryPreflight(t)
 	_, err := (OS{}).RunWithDescendantExitGrace(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerDescendantGraceStillRejectsForcedCleanup"},
 		Env:  append(os.Environ(), "AGENTPLUGINS_PROCESS_GRACE_LONG_LEADER=1"),
@@ -646,6 +677,7 @@ func TestOSRunnerPreservesDiagnosticAndStatusWhileCleaningNaturalExitGroup(t *te
 		os.Exit(47)
 	}
 
+	requireOrdinaryPreflight(t)
 	pidPath := t.TempDir() + "/descendant.pid"
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_DIAGNOSTIC_LEADER_PID_PATH="+pidPath)
 	_, err := (OS{}).RunWithTreeExitGrace(context.Background(), ports.Command{
@@ -696,6 +728,7 @@ func TestOSRunnerTreeGraceCleansImmediateDescendantThatCreatesNewSession(t *test
 		os.Exit(0)
 	}
 
+	requireOrdinaryPreflight(t)
 	pidPath := t.TempDir() + "/setsid-descendant.pid"
 	_, err := (OS{}).RunWithTreeExitGrace(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerTreeGraceCleansImmediateDescendantThatCreatesNewSession"},

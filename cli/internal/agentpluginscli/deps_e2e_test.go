@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -45,6 +47,64 @@ func (s *dependencyTestSource) AcquireGitHubVerified(ctx context.Context, repo, 
 func (s *dependencyTestSource) ResolveGitHubSelector(ctx context.Context, repo, selector string) (sourceacquisition.RefResolution, error) {
 	s.lookups++
 	return s.Acquirer.ResolveGitHubSelector(ctx, repo, selector)
+}
+
+func (s *dependencyTestSource) AcquireGit(ctx context.Context, source sourcespec.Git, commit, digest string) (domain.PackageSnapshot, error) {
+	s.downloads++
+	return s.Acquirer.AcquireGit(ctx, source, commit, digest)
+}
+func (s *dependencyTestSource) ResolveGit(ctx context.Context, source sourcespec.Git, selector string, exact bool) (sourceacquisition.RefResolution, error) {
+	s.lookups++
+	return s.Acquirer.ResolveGit(ctx, source, selector, exact)
+}
+
+type dependencyStatusTestFacts map[string]bool
+
+func readDependencyStatusTestFacts(t *testing.T, body string) dependencyStatusTestFacts {
+	t.Helper()
+	var status dependencyStatus
+	if err := json.Unmarshal([]byte(body), &status); err != nil {
+		t.Fatalf("decode dependency status facts: %v\n%s", err, body)
+	}
+	facts := dependencyStatusTestFacts{}
+	for _, binding := range status.Facts {
+		for _, fact := range binding.Facts {
+			facts[fact] = true
+		}
+	}
+	return facts
+}
+
+func (facts dependencyStatusTestFacts) hasMismatch() bool {
+	for fact := range facts {
+		if strings.Contains(fact, "mismatch") {
+			return true
+		}
+	}
+	return false
+}
+
+func TestDependencyStatusTestFactsIgnoreMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		want       []string
+		mismatch   bool
+	}{
+		{"metadata is not a status fact", `{"manifest_path":"/tmp/partial/store_mismatch/uap.toml","lock_path":"/tmp/not_synced/uap.lock","facts":[{"alias":"projection_mismatch","owner":"partial","next_actions":[{"kind":"not_synced","reason":"store_mismatch"}],"facts":["auth_unverified"]}]}`, []string{"auth_unverified"}, false},
+		{"exact facts remain visible", `{"facts":[{"facts":["partial","not_synced","store_mismatch"]},{"facts":["projection_mismatch","auth_unverified"]}]}`, []string{"partial", "not_synced", "store_mismatch", "projection_mismatch", "auth_unverified"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			facts := readDependencyStatusTestFacts(t, tc.body)
+			if len(facts) != len(tc.want) || facts.hasMismatch() != tc.mismatch {
+				t.Fatalf("status metadata contaminated facts: got %v want %v", facts, tc.want)
+			}
+			for _, fact := range tc.want {
+				if !facts[fact] {
+					t.Fatalf("status fact %q missing from %v", fact, facts)
+				}
+			}
+		})
+	}
 }
 
 // Real Git acquisition, standard loader, digest store, public SDK transaction,
@@ -115,7 +175,9 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if err != nil || failedView.Recovery.Required || len(failedView.EnvironmentReceipts) != 1 {
 		t.Fatalf("expected committed recoverable lifecycle failure without pending transaction: %+v %v", failedView, err)
 	}
-	if status := run(f, "deps", "status", "--format", "json"); !strings.Contains(status, "partial") {
+	status := run(f, "deps", "status", "--format", "json")
+	facts := readDependencyStatusTestFacts(t, status)
+	if !facts["partial"] {
 		t.Fatal("failed lifecycle hidden: " + status)
 	}
 	failedProjection := failedView.Installations[0].Bindings[0].ProjectionDigest
@@ -124,7 +186,9 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if err != nil || resumedView.Installations[0].Bindings[0].Activation != string(domain.ActivationActive) || resumedView.Installations[0].Bindings[0].Verification != "installation_verified" || resumedView.Installations[0].Bindings[0].ProjectionDigest != failedProjection {
 		t.Fatalf("same-pin retry did not resume lifecycle: %+v %v", resumedView, err)
 	}
-	if status := run(f, "deps", "status", "--format", "json"); !strings.Contains(status, "auth_unverified") || strings.Contains(status, "partial") {
+	status = run(f, "deps", "status", "--format", "json")
+	facts = readDependencyStatusTestFacts(t, status)
+	if !facts["auth_unverified"] || facts["partial"] {
 		t.Fatal("unchecked authentication must remain visible: " + status)
 	}
 	beforeDownloads, beforeLookups := source.downloads, source.lookups
@@ -145,8 +209,9 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if source.lookups != beforeLookups || source.downloads != beforeDownloads {
 		t.Fatal("locked mismatch acquired source")
 	}
-	status := run(f, "deps", "status", "--format", "json")
-	if strings.Contains(status, "mismatch") || strings.Contains(status, "not_synced") {
+	status = run(f, "deps", "status", "--format", "json")
+	facts = readDependencyStatusTestFacts(t, status)
+	if facts.hasMismatch() || facts["not_synced"] {
 		t.Fatal(status)
 	}
 	state, e := f.store.Load()
@@ -175,7 +240,8 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	status = run(f, "deps", "status", "--format", "json")
-	if !strings.Contains(status, "store_mismatch") || strings.Contains(status, "projection_mismatch") {
+	facts = readDependencyStatusTestFacts(t, status)
+	if !facts["store_mismatch"] || facts["projection_mismatch"] {
 		t.Fatal("store/projection facts conflated: " + status)
 	}
 	savedLock, err := os.ReadFile(lp)
@@ -201,8 +267,9 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		}
 		lookups, downloads := source.lookups, source.downloads
 		report := run(f, "deps", "status", "--format", "json")
+		facts := readDependencyStatusTestFacts(t, report)
 		for _, fact := range []string{"not_synced", "store_mismatch", "projection_mismatch"} {
-			if !strings.Contains(report, fact) {
+			if !facts[fact] {
 				t.Fatalf("%s hid %s: %s", agreement, fact, report)
 			}
 		}
@@ -217,6 +284,48 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		}
 	}
 	if err := os.Remove(independentEdit); err != nil {
+		t.Fatal(err)
+	}
+	// Pinned bytes are verified before intact replay or repair. A corrupt store
+	// must fail closed, even when the separate client projection is intact.
+	snapshotBytes := func() map[string]string {
+		t.Helper()
+		files := map[string]string{}
+		for _, root := range []string{mp, lp, f.store.Path, managed, stored.Root} {
+			if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				if !info.IsDir() {
+					body, err := os.ReadFile(path)
+					if err != nil {
+						return err
+					}
+					files[path] = string(body)
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return files
+	}
+	beforeRefusal := snapshotBytes()
+	refusalLookups, refusalDownloads := source.lookups, source.downloads
+	if _, _, err := f.execute(false, "deps", "sync", "--locked", "--yes", "--format", "json"); err == nil {
+		t.Fatal("sync accepted corrupted pinned store bytes")
+	}
+	afterRefusal := snapshotBytes()
+	if source.lookups != refusalLookups || source.downloads != refusalDownloads || len(afterRefusal) != len(beforeRefusal) {
+		t.Fatal("corrupt store refusal acquired source or changed files")
+	}
+	for path, before := range beforeRefusal {
+		if after, exists := afterRefusal[path]; !exists || after != before {
+			t.Fatalf("corrupt store refusal changed %s", path)
+		}
+	}
+	// Undo only this test's injected corruption before continuing the lifecycle.
+	if err := os.Remove(filepath.Join(stored.Root, "store-tamper.txt")); err != nil {
 		t.Fatal(err)
 	}
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
@@ -235,7 +344,8 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		t.Fatal("exact repair performed ref lookup")
 	}
 	status = run(f, "deps", "status", "--format", "json")
-	if strings.Contains(status, "mismatch") || strings.Contains(status, "not_synced") {
+	facts = readDependencyStatusTestFacts(t, status)
+	if facts.hasMismatch() || facts["not_synced"] {
 		t.Fatal(status)
 	}
 	if _, _, e := f.execute(false, "add", githubIdentity("acme/demo", pinned.Source.Git.Commit, ""), "--target", "codex", "--no-save", "--format", "json"); e == nil {
@@ -314,7 +424,8 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	f2.app.SecurityEvaluator = dependencyTestScanner{}
 	run(f2, "deps", "sync", "--locked", "--yes", "--format", "json")
 	status = run(f2, "deps", "status", "--format", "json")
-	if strings.Contains(status, "mismatch") || strings.Contains(status, "not_synced") {
+	facts = readDependencyStatusTestFacts(t, status)
+	if facts.hasMismatch() || facts["not_synced"] {
 		t.Fatal(status)
 	}
 	if e := os.WriteFile(mp, []byte("schema_version = 1\n[targets]\n"), 0600); e != nil {
@@ -357,7 +468,7 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	run(f, "deps", "update", "demo", "--format", "json")
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
 	status = run(f, "deps", "status", "--format", "json")
-	if strings.Contains(status, "not_synced") {
+	if readDependencyStatusTestFacts(t, status)["not_synced"] {
 		t.Fatal(status)
 	}
 	// Add another target without moving the source pin, then interrupt a real
@@ -440,7 +551,8 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	}
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
 	status = run(f, "deps", "status", "--format", "json")
-	if strings.Contains(status, "mismatch") || strings.Contains(status, "not_synced") {
+	facts = readDependencyStatusTestFacts(t, status)
+	if facts.hasMismatch() || facts["not_synced"] {
 		t.Fatal(status)
 	}
 
@@ -503,7 +615,7 @@ func (m *dependencyInterruptedMutator) Apply(ctx context.Context, prepared *inst
 // evidence. No external agent is launched by this integration test.
 type dependencyClaudeListing struct {
 	root             string
-	codexID          string
+	codexIDs         map[string]bool
 	failNextCodexAdd bool
 }
 
@@ -516,13 +628,21 @@ func (r *dependencyClaudeListing) Run(_ context.Context, command legacyports.Com
 					r.failNextCodexAdd = false
 					return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("injected activation failure")}, nil
 				}
-				r.codexID = args[2]
+				if r.codexIDs == nil {
+					r.codexIDs = map[string]bool{}
+				}
+				r.codexIDs[args[2]] = true
 			}
 			if len(args) >= 2 && args[0] == "plugin" && args[1] == "list" {
 				installed := []map[string]any{}
-				if r.codexID != "" {
-					name, market, _ := strings.Cut(r.codexID, "@")
-					installed = append(installed, map[string]any{"pluginId": r.codexID, "name": name, "marketplaceName": market, "installed": true, "enabled": true})
+				ids := make([]string, 0, len(r.codexIDs))
+				for id := range r.codexIDs {
+					ids = append(ids, id)
+				}
+				sort.Strings(ids)
+				for _, id := range ids {
+					name, market, _ := strings.Cut(id, "@")
+					installed = append(installed, map[string]any{"pluginId": id, "name": name, "marketplaceName": market, "installed": true, "enabled": true})
 				}
 				body, err := json.Marshal(map[string]any{"installed": installed})
 				return legacyports.CommandResult{Stdout: body}, err

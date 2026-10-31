@@ -77,8 +77,69 @@ false. Mixed group Repair assesses each distinct
 snapshot digest once; blocking any snapshot refuses Prepare without mutation.
 Same-root group Repair assesses that snapshot once. `New`, Inspect, Discover,
 and Recover do not invoke Assess. Coarse `Config.Progress` phases are
-observational. The engine does not import Notifications types and does not
+observational. `Config.IndependentActivations` explicitly enables concurrent
+external activation for distinct Claude/Codex user targets without selected
+native delivery. Other targets and the default configuration retain sequential
+activation. Preparation, host callbacks, state writes and result publication
+remain coordinated. Per-client `ProgressEvent.Client` checkpoints report
+`external_started`, `external_completed` or `external_failed`; failures expose
+their finite stage rather than raw provider diagnostics.
+
+Claude discovery and plugin listing have a 30-second budget, capped by the
+caller deadline. A local listing timeout may leave another activation running
+only after the runner proves that no child started or that the process and its
+descendants closed. Parent cancellation and unconfirmed cleanup cancel and join
+all dispatched work before returning. Qualification version pins do not change
+these time budgets or become installed-client version restrictions.
+
+The engine does not import Notifications types and does not
 query a live Claude/Codex identity by default.
+
+### Explicit state upgrades
+
+An embedding installer should review the authoritative state after choosing its
+state paths and before planning client registrations or starting install workers:
+
+```go
+migration, err := engine.PrepareStateMigration(ctx)
+// Handle err before proceeding. For migration.Required, present SourceSchema,
+// TargetSchema, Installations, and NeedsRebind and obtain host confirmation.
+// Keep the complete plan unchanged across that confirmation.
+result, err := engine.ApplyStateMigration(ctx, migration)
+// Handle err before any client registration. result.BackupPath is also
+// populated when a backup succeeded but committing the upgrade failed.
+```
+
+`PrepareStateMigration` validates supported schema 2, 3, and 4 state without
+writing it or recovering old operations. Applying a required upgrade reuses the
+explicit CLI migrator: it takes the same mutation lock as installation, checks
+pending work and the exact reviewed digest again under the lock, writes a
+byte-exact backup, then atomically publishes the validated current schema.
+Old pending journals, receipts, and native intents require recovery using the
+corresponding previous SDK or binary before migration. Current-schema pending
+work remains the normal recovery flow's responsibility.
+
+Missing and current state return `Required=false`; applying that plan rechecks
+the observed state and returns `NoChange=true` without creating a backup or a
+lock. Corrupt and future schemas are rejected. A changed review returns
+`ErrPlanChanged`, including when the reviewed state was replaced by corrupt or
+unsupported bytes. Plans bind the state root/file, mutation lock and operations
+directory as well as the digest and may be serialized
+between a host's confirmation process and its parent apply process. A new
+review after successful migration is a no-op; replaying an old required review
+is refused. Passing a canceled context never starts migration.
+
+Read-only inspection remains compatible with old schemas. Mutation guards
+report `ErrMigrationRequired`, with `MigrationRequiredError.SourceSchema` and
+`TargetSchema` available through `errors.As`; hosts do not need to parse an
+error message or edit state JSON.
+
+For actionable refusal diagnostics, `errors.Is(err, ErrStateCorrupt)` identifies
+invalid state records or JSON, `ErrRecoveryRequired` identifies old pending work,
+and `ErrUnsupportedStateSchema` identifies an incompatible on-disk schema.
+`errors.As` into `*UnsupportedStateSchemaError` exposes `SourceSchema` and
+`TargetSchema`; a source greater than the target requires a newer SDK/binary.
+I/O and namespace errors retain their original classification.
 
 Prepare freezes the selected adapter's complete `SelectedDelivery` through the
 public Plan/DeliveryPlan and each group PlanTarget. Apply regenerates that

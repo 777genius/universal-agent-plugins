@@ -118,7 +118,7 @@ jobs:
           NODE
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: 1.26.9
+          go-version: 1.26.10
           cache: false
       - name: Acquire and extract the same checked preparation ZIP
         env:
@@ -180,7 +180,7 @@ jobs:
           retention-days: 7
   excluded-native-execution:
     if: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.host_contract).target != 'linux-amd64' && fromJSON(inputs.host_contract).target != 'linux-arm64' }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     permissions:
       contents: read
     steps:

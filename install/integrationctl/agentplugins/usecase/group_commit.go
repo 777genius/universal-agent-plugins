@@ -32,9 +32,9 @@ func (session *groupSession) upsertGroupTargetState(target plannedGroupTarget) {
 		client.AffectedSurfaces = append(client.AffectedSurfaces, target.managed.AffectedSurfaces...)
 		client.AffectedSurfaces = append(client.AffectedSurfaces, target.managed.ClientID)
 	}
-	if sharesPhysicalBackend(target.input.Client.ClientID, target.plan.SelectedDelivery) {
+	if sharesPhysicalBackend(target.input.Client.ClientID, target.plan.SelectedDelivery, target.input.Scope) {
 		client.AffectedSurfaces = append(client.AffectedSurfaces, string(target.input.Client.ClientID))
-		for _, sibling := range domain.BackendSiblings(target.input.Client.ClientID) {
+		for _, sibling := range domain.BackendSiblingsForScope(target.input.Client.ClientID, target.input.Scope) {
 			client.AffectedSurfaces = append(client.AffectedSurfaces, string(sibling))
 		}
 	}
@@ -82,12 +82,7 @@ func (session *groupSession) restoreGroupOrigin() {
 	if session.input.Switch {
 		installation := session.desired.Installations[session.installationIndex]
 		first := session.first
-		installation.Source = domain.SourceBinding{
-			SourceBindingID: session.sourceID, RequestedSource: first.Envelope.Source.RequestedSource,
-			CanonicalSource: first.Envelope.Source.CanonicalSource, Repository: first.Envelope.Source.Repository,
-			PackageSubpath: first.Envelope.Source.PackageSubpath, ResolvedRevision: first.Envelope.Source.ResolvedRevision,
-			TreeDigest: first.Envelope.TreeDigest,
-		}
+		installation.Source = sourceBindingFromEnvelope(first.Envelope, session.sourceID)
 		installation.OriginMode = normalizedOriginMode(first.OriginMode)
 		installation.Directory = cloneDirectoryOrigin(first.DirectoryResolution)
 		session.desired.Installations[session.installationIndex] = installation
@@ -104,7 +99,7 @@ func (session *groupSession) restoreGroupOrigin() {
 }
 
 func (session *groupSession) applyGroupKernel() error {
-	// Progress callbacks run after precommit observation and may change a host.
+	// Keep the prepared host authority pinned through the final kernel boundary.
 	for _, target := range session.planned {
 		if session.service.ClientPreparation != nil {
 			if err := session.service.ClientPreparation.RevalidateClient(session.ctx, target.input.Client, target.plan); err != nil {

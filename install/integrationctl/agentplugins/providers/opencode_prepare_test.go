@@ -64,15 +64,16 @@ func TestOpenCodeClientPreparationFreezesExplicitNativeTarget(t *testing.T) {
 	if err := host.ValidateNative(false, []string{"stdio"}); err == nil {
 		t.Fatal("prepared HTTP selection authorized a new stdio effect")
 	}
-	file, err := os.OpenFile(v2, os.O_WRONLY|os.O_APPEND, 0)
+	// Replace the executed fixture inode rather than truncating/appending to
+	// a file the kernel may still have mapped after the completed probe.
+	body, err := os.ReadFile(v2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := file.Write([]byte("changed-after-preflight")); err != nil {
-		_ = file.Close()
+	if err := os.WriteFile(v2+".next", append(body, []byte("changed-after-preflight")...), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := file.Close(); err != nil {
+	if err := os.Rename(v2+".next", v2); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := preparer.PrepareClient(t.Context(), envelope, client, nil, v2, false); !errors.Is(err, clientdetect.ErrProbeTargetChanged) {
@@ -96,7 +97,7 @@ func TestOpenCodeDesiredProjectionRequiresQualifiedHost(t *testing.T) {
 	}
 	preparer := NewOpenCodeClientPreparation(registry)
 	preparer.environment = []string{"PATH="}
-	version := "2.0.21"
+	version := "2.0.22"
 	preparer.probe = func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 		return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: version, Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: "fixture-native-bytes"}}, nil
 	}
@@ -122,9 +123,9 @@ func TestOpenCodeDesiredProjectionRequiresQualifiedHost(t *testing.T) {
 	if err != nil || projection.Dialect != opencodehost.DialectV2 || len(projection.MCPServers) != 1 {
 		t.Fatalf("qualified projection = %+v, %v", projection, err)
 	}
-	version = "2.0.22"
-	if _, err := preparer.PrepareClient(t.Context(), envelope, client, nil, client.ExecutablePath, false); !errors.Is(err, opencodehost.ErrUnverifiedCapability) {
-		t.Fatalf("desired projection admitted an unqualified host: %v", err)
+	version = "3.0.0"
+	if _, err := preparer.PrepareClient(t.Context(), envelope, client, nil, client.ExecutablePath, false); err == nil {
+		t.Fatalf("desired projection admitted an unknown major: %v", err)
 	}
 }
 

@@ -1,20 +1,30 @@
 name: Authoring Milestone A E2E
 
 on:
+  # Documentation and web content cannot change the packed candidate. A filter
+  # keeps the dispatch job graph at exactly the four jobs that Milestone A
+  # release admission accepts, which a job-level gate would extend.
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:
-  group: authoring-milestone-a-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: authoring-milestone-a-e2e-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   prepare:
     name: Exact candidate package
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-24.04' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 20
     outputs:
       artifact-id: ${{ steps.upload.outputs.artifact-id }}
@@ -30,7 +40,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
-          go-version: '1.26.9'
+          go-version: '1.26.10'
           cache: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
@@ -82,8 +92,8 @@ jobs:
         include:
           - {runner: ubuntu-24.04, platform: linux, arch: amd64}
           - {runner: windows-2022, platform: windows, arch: amd64}
-          - {runner: macos-14, platform: darwin, arch: arm64}
-    runs-on: ${{ matrix.runner }}
+          - {runner: macos-15, platform: darwin, arch: arm64}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.runner == 'ubuntu-24.04' && matrix.runner || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.runner || startsWith(matrix.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.runner) || matrix.runner }}
     timeout-minutes: 12
     env:
       NODE_OPTIONS: --max-old-space-size=384
@@ -111,7 +121,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         if: runner.os == 'macOS'
         with:
-          go-version: '1.26.9'
+          go-version: '1.26.10'
           cache: false
       - name: Check Darwin writable acquisition and separate read-only regressions
         if: runner.os == 'macOS'

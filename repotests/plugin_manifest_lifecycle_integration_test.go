@@ -1,6 +1,7 @@
 package pluginkitairepo_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -585,6 +586,157 @@ func mustCopyPluginLifecycleFile(t *testing.T, src, dst string) {
 	}
 	if err := os.WriteFile(dst, body, 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPluginKitAIImportGrokPackagedLayoutRoundTrip(t *testing.T) {
+	pluginKitAIBin := buildPluginKitAI(t)
+	plugRoot := t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(plugRoot, ".grok-plugin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(plugRoot, "skills", "release-checks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(plugRoot, ".grok-plugin", "plugin.json"), []byte(`{"name":"demo","version":"0.1.0","description":"demo","skills":"./skills/","mcpServers":"./.mcp.json"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(plugRoot, ".mcp.json"), []byte(`{"mcpServers":{"release-checks":{"command":"node","args":["./bin/release-checks.mjs"]}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(plugRoot, "skills", "release-checks", "SKILL.md"), []byte("---\nname: release-checks\ndescription: release checks\n---\n\nUse this skill.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	importCmd := exec.CommandContext(context.Background(), pluginKitAIBin, "import", plugRoot, "--from", "grok")
+	importCmd.Env = append(os.Environ(), "GOWORK=off")
+	out, err := importCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("plugin-kit-ai import grok: %v\n%s", err, out)
+	}
+
+	serversBody, err := os.ReadFile(filepath.Join(plugRoot, authoredRel("mcp", "servers.yaml")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(serversBody), "release-checks:") || !strings.Contains(string(serversBody), "node") {
+		t.Fatalf("imported Grok portable MCP = %q", serversBody)
+	}
+	if _, err := os.Stat(filepath.Join(plugRoot, authoredRel("skills", "release-checks", "SKILL.md"))); err != nil {
+		t.Fatalf("missing imported Grok portable skill: %v", err)
+	}
+
+	generateCmd := exec.CommandContext(context.Background(), pluginKitAIBin, "generate", plugRoot)
+	generateCmd.Env = append(os.Environ(), "GOWORK=off")
+	if out, err := generateCmd.CombinedOutput(); err != nil {
+		t.Fatalf("plugin-kit-ai generate after Grok import: %v\n%s", err, out)
+	}
+
+	generateCmd = exec.CommandContext(context.Background(), pluginKitAIBin, "generate", plugRoot, "--check")
+	generateCmd.Env = append(os.Environ(), "GOWORK=off")
+	if out, err := generateCmd.CombinedOutput(); err != nil {
+		t.Fatalf("plugin-kit-ai generate --check after Grok import: %v\n%s", err, out)
+	}
+
+	validateCmd := exec.CommandContext(context.Background(), pluginKitAIBin, "validate", plugRoot, "--platform", "grok", "--strict")
+	validateCmd.Env = append(os.Environ(), "GOWORK=off")
+	if out, err := validateCmd.CombinedOutput(); err != nil {
+		t.Fatalf("plugin-kit-ai validate after Grok import: %v\n%s", err, out)
+	}
+
+	renderedPlugin, err := os.ReadFile(filepath.Join(plugRoot, ".grok-plugin", "plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(renderedPlugin), `"mcpServers": "./.mcp.json"`) {
+		t.Fatalf("generated Grok plugin must reference the managed MCP sidecar:\n%s", renderedPlugin)
+	}
+	sidecarBody, err := os.ReadFile(filepath.Join(plugRoot, ".mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(sidecarBody), `"mcpServers"`) || !strings.Contains(string(sidecarBody), "release-checks") {
+		t.Fatalf("generated Grok MCP sidecar must wrap servers:\n%s", sidecarBody)
+	}
+}
+
+func TestPluginKitAIImportKimiPackagedLayoutRoundTrip(t *testing.T) {
+	pluginKitAIBin := buildPluginKitAI(t)
+	plugRoot := t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(plugRoot, ".kimi-plugin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(plugRoot, "skills", "release-checks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Root kimi.plugin.json wins over the packaged copy when both exist.
+	if err := os.WriteFile(filepath.Join(plugRoot, ".kimi-plugin", "plugin.json"), []byte(`{"name":"stale","version":"0.0.0","description":"stale copy"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(plugRoot, "kimi.plugin.json"), []byte(`{"name":"demo","version":"0.1.0","description":"demo","skills":"./skills/","mcpServers":{"docs":{"type":"http","url":"https://example.com/mcp"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(plugRoot, "skills", "release-checks", "SKILL.md"), []byte("---\nname: release-checks\ndescription: release checks\n---\n\nUse this skill.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	importCmd := exec.CommandContext(context.Background(), pluginKitAIBin, "import", plugRoot, "--from", "kimi")
+	importCmd.Env = append(os.Environ(), "GOWORK=off")
+	out, err := importCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("plugin-kit-ai import kimi: %v\n%s", err, out)
+	}
+
+	manifestBody, err := os.ReadFile(filepath.Join(plugRoot, authoredRel("plugin.yaml")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(manifestBody), "name: demo") {
+		t.Fatalf("import must read the root kimi.plugin.json, not the stale packaged copy:\n%s", manifestBody)
+	}
+	serversBody, err := os.ReadFile(filepath.Join(plugRoot, authoredRel("mcp", "servers.yaml")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(serversBody), "docs:") || !strings.Contains(string(serversBody), "https://example.com/mcp") {
+		t.Fatalf("imported Kimi portable MCP = %q", serversBody)
+	}
+	if _, err := os.Stat(filepath.Join(plugRoot, authoredRel("skills", "release-checks", "SKILL.md"))); err != nil {
+		t.Fatalf("missing imported Kimi portable skill: %v", err)
+	}
+
+	generateCmd := exec.CommandContext(context.Background(), pluginKitAIBin, "generate", plugRoot)
+	generateCmd.Env = append(os.Environ(), "GOWORK=off")
+	if out, err := generateCmd.CombinedOutput(); err != nil {
+		t.Fatalf("plugin-kit-ai generate after Kimi import: %v\n%s", err, out)
+	}
+
+	renderedPlugin, err := os.ReadFile(filepath.Join(plugRoot, "kimi.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(renderedPlugin), "docs") || !strings.Contains(string(renderedPlugin), `"mcpServers"`) {
+		t.Fatalf("generate must update the winning root kimi.plugin.json with inline MCP:\n%s", renderedPlugin)
+	}
+	if _, err := os.Stat(filepath.Join(plugRoot, ".kimi-plugin", "plugin.json")); err == nil {
+		t.Fatal("generate must prune the stale packaged manifest copy so the root manifest stays authoritative")
+	}
+	if _, err := os.Stat(filepath.Join(plugRoot, ".mcp.json")); err == nil {
+		t.Fatal("Kimi must not generate an MCP sidecar; servers are inline in the manifest")
+	}
+
+	generateCmd = exec.CommandContext(context.Background(), pluginKitAIBin, "generate", plugRoot, "--check")
+	generateCmd.Env = append(os.Environ(), "GOWORK=off")
+	if out, err := generateCmd.CombinedOutput(); err != nil {
+		t.Fatalf("plugin-kit-ai generate --check after Kimi import: %v\n%s", err, out)
+	}
+
+	validateCmd := exec.CommandContext(context.Background(), pluginKitAIBin, "validate", plugRoot, "--platform", "kimi", "--strict")
+	validateCmd.Env = append(os.Environ(), "GOWORK=off")
+	if out, err := validateCmd.CombinedOutput(); err != nil {
+		t.Fatalf("plugin-kit-ai validate after Kimi import: %v\n%s", err, out)
 	}
 }
 

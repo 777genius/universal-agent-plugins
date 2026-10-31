@@ -176,10 +176,10 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 	if !e.SupportsClient(req.ClientID) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: client %q is not registered for this installer", ErrUnsupported, req.ClientID)
 	}
-	if req.ClientConfigRoot == "" || !validRoot(req.ClientConfigRoot) {
+	if (req.ClientConfigRoot == "" && e.scope() != domain.ScopeProject) || (req.ClientConfigRoot != "" && !validRoot(req.ClientConfigRoot)) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientConfigRoot must be an explicit absolute clean path", ErrInvalidRequest)
 	}
-	if (req.ClientExecutable != "" && !validRoot(req.ClientExecutable)) || (req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id) && req.ClientExecutable == "") {
+	if (req.ClientExecutable != "" && !validRoot(req.ClientExecutable)) || (req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id, e.scope()) && req.ClientExecutable == "") {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientExecutable must be an explicit absolute clean path", ErrInvalidRequest)
 	}
 	root := req.ClientConfigRoot
@@ -190,7 +190,7 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 			return domain.DetectedClient{}, fmt.Errorf("%w: invalid client profile: %w", ErrInvalidRequest, err)
 		}
 	}
-	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, ExecutablePath: req.ClientExecutable}, nil
+	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, ExecutablePath: req.ClientExecutable, Version: req.ClientVersion}, nil
 }
 
 func missingRequired(envelope domain.PackageEnvelope, required []string) []string {
@@ -338,6 +338,9 @@ func (e *Engine) reuseMatchingSourceIdentity(installationID string, snapshot *do
 	if installation.Source.CanonicalSource != "" {
 		snapshot.Source.CanonicalSource = installation.Source.CanonicalSource
 	}
+	snapshot.Source.SourceKind = installation.Source.SourceKind
+	snapshot.Source.SourceURL = installation.Source.SourceURL
+	snapshot.Source.ArchiveSHA256 = installation.Source.ArchiveSHA256
 	if installation.Source.RequestedSource != "" {
 		snapshot.Source.RequestedSource = installation.Source.RequestedSource
 	}
@@ -374,16 +377,11 @@ func wrapLifecycleError(err error) error {
 
 func validateAcquiredRequest(req Request) error {
 	acquired := req.AcquiredSnapshot
-	source := acquired.Source
-	expected := "github:" + source.Repository + "@" + source.ResolvedRevision
-	if source.PackageSubpath != "" {
-		expected += "//" + source.PackageSubpath
-	}
-	if source.Repository == "" || len(source.ResolvedRevision) != 40 || (acquired.OriginMode == domain.OriginModeDirect && source.RequestedSource != expected) || source.CanonicalSource != expected {
-		return fmt.Errorf("%w: acquired source coordinates disagree", ErrInvalidRequest)
+	key, err := validateAcquiredSource(acquired, req.EnvironmentAuthority != nil)
+	if err != nil {
+		return err
 	}
 	if req.EnvironmentAuthority != nil {
-		key := "github:" + strings.ToLower(acquired.Source.Repository) + ":" + acquired.Source.PackageSubpath
 		if acquired.OriginMode == domain.OriginModeDirectory {
 			if acquired.Directory == nil {
 				return fmt.Errorf("%w: directory source is missing publication identity", ErrInvalidRequest)
@@ -423,8 +421,12 @@ func validateAcquiredExecutables(root string, files []string) error {
 
 // Native configuration adapters need only an explicit profile. CLI registries
 // and host-profile probes also require the caller's executable authority.
-func requiresExecutable(registry *clients.Registry, id domain.ClientID) bool {
-	if domain.ClientTraitsFor(id).LifecycleKind == domain.LifecycleCLIRegistry {
+func requiresExecutable(registry *clients.Registry, id domain.ClientID, scopes ...domain.InstallScope) bool {
+	scope := domain.ScopeUser
+	if len(scopes) > 0 && scopes[0] != "" {
+		scope = scopes[0]
+	}
+	if (domain.SelectedDelivery{}).EffectiveTraitsForScope(id, scope).LifecycleKind == domain.LifecycleCLIRegistry {
 		return true
 	}
 	consumer, ok := clients.As[clients.OpenCodeHostProfileConsumer](registry, id)

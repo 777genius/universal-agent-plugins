@@ -84,7 +84,7 @@ func SelectNative(profile Profile, skills bool, transports []string) ([]Selectio
 }
 
 func (h *NativePrepared) ValidateNative(skills bool, transports []string) error {
-	if h.profile.Qualification != "tested_exact" {
+	if h.profile.Family != ModernV1 && h.profile.Family != V2 {
 		return ErrUnverifiedCapability
 	}
 	_, err := SelectNative(h.profile, skills, transports)

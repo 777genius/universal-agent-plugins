@@ -1,12 +1,24 @@
 # plugin-kit-ai SDK
 
+This is the Go runtime SDK for typed client hooks. For embedding installation
+and dependency management, use the [Go installer facade](../install/integrationctl/agentplugins/installer/README.md);
+for the separate npm package `universal-agent-plugins-management-sdk`, see the
+[TypeScript Management SDK](../sdks/typescript/README.md) for engine compatibility
+and installation. These APIs have different responsibilities and release versions.
+
 Module: `github.com/777genius/plugin-kit-ai/sdk`
 
 Normal consumption path:
 
 ```bash
-go get github.com/777genius/plugin-kit-ai/sdk@v1.1.0
+go get github.com/777genius/plugin-kit-ai/sdk@v1.3.0
 ```
+
+This guide uses the published [v1.3.0 module](https://pkg.go.dev/github.com/777genius/plugin-kit-ai/sdk@v1.3.0),
+which includes `App.Qoder()`, `App.Cursor()` and `RunCursorObserver`.
+Cursor's observer remains `public-beta`; choosing this version does not promote
+it to a stable or natively qualified runtime. Source-tree support matrices can
+include later changes, so retain the module version with integration evidence.
 
 The canonical release contract for this subdirectory module is:
 
@@ -17,7 +29,7 @@ The first truthful normal-module release for this path is `v1.0.4`. `v1.0.3` rem
 
 The SDK exposes a platform-neutral runtime core with platform-specific public registrars.
 
-Current contract status in this source tree: the root SDK plus the approved Claude/Codex stable event set shipped as `public-stable` in `v1.0.0`, and Gemini's promoted 9-hook runtime surface is now also `public-stable`. Event-level support claims come from [../../docs/generated/support_matrix.md](../../docs/generated/support_matrix.md). Compatibility policy lives in [STABILITY.md](./STABILITY.md).
+Current contract status in this source tree: the root SDK plus the approved Claude/Codex stable event set shipped as `public-stable` in `v1.0.0`, and Gemini's promoted 9-hook runtime surface is now also `public-stable`. Event-level support claims come from [../docs/generated/support_matrix.md](../docs/generated/support_matrix.md). Compatibility policy lives in [STABILITY.md](./STABILITY.md).
 
 `plugin-kit-ai.Supported()` returns runtime-event metadata only. Stable Claude, Codex, and Gemini runtime paths are production-ready within the declared contract. The root `(*plugin-kit-ai.App).Gemini()` registrar remains stable, and the promoted Gemini hook-level event, response, and helper surfaces now sit inside the stable runtime promise for the current 9-hook lane.
 
@@ -30,6 +42,7 @@ Root package:
 - `(*plugin-kit-ai.App).Claude()`
 - `(*plugin-kit-ai.App).Codex()`
 - `(*plugin-kit-ai.App).Gemini()`
+- `(*plugin-kit-ai.App).Qoder()`
 - `(*plugin-kit-ai.App).Cursor()` (`public-beta`, stop only)
 - `(*plugin-kit-ai.App).RunCursorObserver(ctx)` (`public-beta`)
 - `(*plugin-kit-ai.App).Run()`
@@ -41,6 +54,7 @@ Platform packages:
 - `github.com/777genius/plugin-kit-ai/sdk/claude`
 - `github.com/777genius/plugin-kit-ai/sdk/codex`
 - `github.com/777genius/plugin-kit-ai/sdk/gemini`
+- `github.com/777genius/plugin-kit-ai/sdk/qoder`
 - `github.com/777genius/plugin-kit-ai/sdk/cursor` (`public-beta`)
 
 ## Runtime Contract Boundary
@@ -59,6 +73,10 @@ Platform packages:
   - `gemini/AfterAgent`
   - `gemini/BeforeTool`
   - `gemini/AfterTool`
+  - `qoder/SessionStart`
+  - `qoder/UserPromptSubmit`
+  - `qoder/PostToolUse`
+  - `qoder/Stop`
 - Runtime-supported but not stable:
   - `claude/SessionStart` (`public-beta`)
   - `claude/SessionEnd` (`public-beta`)
@@ -89,19 +107,29 @@ success means empty stdout and exit 0. Note on the generated support matrix: the
 legacy notify path only, and these four lifecycle events are covered by unit/app-level tests,
 not by live execution.
 
+Qoder hooks receive snake_case stdin JSON and use the exact argv names
+`session-start`, `user-prompt-submit`, `post-tool-use`, and `stop`. Lowercase
+`stop` selects Qoder whenever any Qoder handler is registered; use canonical
+`Stop` for Claude in mixed apps. Without Qoder handlers, lowercase `stop` retains
+the registered Claude Stop handler's case-insensitive behavior. Qoder runs the SDK binary
+from the installed bundle's `bin/` directory. `make test-qoder-live` exercises
+native installation and SDK hooks; completed-turn `Stop` and `PostToolUse` cases
+skip when the authenticated account has exhausted its chat quota. A passing run
+with those skips does not qualify their live execution.
+
 Host detection for multi-host binaries lives in
 `github.com/777genius/plugin-kit-ai/sdk/hostdetect` (`public-beta`): an explicit override always
 wins, unknown overrides are errors, and detection fails closed with `PlatformUnknown` instead of
 silently assuming a host. The root package also exports `plugin-kit-ai.MaxPayloadBytes`, the single
 wire limit used by runtime decoders.
-Gemini's current production-ready 9-hook runtime boundary is audited in [../../docs/GEMINI_RUNTIME_AUDIT.md](../../docs/GEMINI_RUNTIME_AUDIT.md).
+Gemini's current production-ready 9-hook runtime boundary is audited in [../docs/GEMINI_RUNTIME_AUDIT.md](../docs/GEMINI_RUNTIME_AUDIT.md).
 
 The additional `gemini/Notification` event is **public-beta**. Its native input
 shape follows official Gemini CLI v0.62.0 source (`b460678f3db508407554afd604cc9d6635becb2a`);
 SDK stdin/process checks do not qualify native CLI execution. Native qualification
 is pending. Runtime metadata now contains ten Gemini events: nine stable and one beta.
 
-Generated support matrix: [../../docs/generated/support_matrix.md](../../docs/generated/support_matrix.md)
+Generated support matrix: [../docs/generated/support_matrix.md](../docs/generated/support_matrix.md)
 
 ## Experimental Custom Claude Hooks
 

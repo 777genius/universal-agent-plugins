@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { isKnownLocale } from '~/data/i18n';
+import { isTemporarilyUnlisted } from '~/utils/filter';
 import { localizedPath } from '~/utils/localizedRoutes';
 import { productRootUrl, productSoftwareSchema } from '~/utils/seo';
 const { t, locale } = useI18n();
@@ -11,6 +12,11 @@ const registryFaqItems = computed(() =>
 );
 
 const registry = await useRegistryPage({ discovery: true });
+const showcaseAvailable = computed(() =>
+  registry.plugins.some(
+    (plugin) => plugin.name === 'agent-notifications' && !isTemporarilyUnlisted(plugin),
+  ),
+);
 const config = useRuntimeConfig();
 const { docsUrl } = useDocsLinks();
 const homePath = computed(() =>
@@ -61,9 +67,11 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
   <div class="registry-surface unified-home">
     <PageBackground />
     <RegistryHero :registry="registry" />
+    <RegistryRestore />
+    <RegistryDependencies />
     <RegistryDirectory :registry="registry" />
     <RegistryWhy />
-    <BuiltWithSection />
+    <BuiltWithSection v-if="showcaseAvailable" />
     <RegistryFaq :items="registryFaqItems" />
   </div>
 </template>

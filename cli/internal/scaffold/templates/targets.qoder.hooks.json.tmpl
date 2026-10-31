@@ -1,0 +1,62 @@
+{
+  "description": "{{.ProjectName}} Qoder lifecycle hooks",
+  "hooks": {
+    "SessionStart": [
+      {
+        "async": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${QODER_PLUGIN_ROOT}/bin/{{.ProjectName}}-hook",
+            "args": ["session-start"],
+            "name": "{{.ProjectName}}-session-start",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "async": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${QODER_PLUGIN_ROOT}/bin/{{.ProjectName}}-hook",
+            "args": ["user-prompt-submit"],
+            "name": "{{.ProjectName}}-user-prompt-submit",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "async": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${QODER_PLUGIN_ROOT}/bin/{{.ProjectName}}-hook",
+            "args": ["post-tool-use"],
+            "name": "{{.ProjectName}}-post-tool-use",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "async": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${QODER_PLUGIN_ROOT}/bin/{{.ProjectName}}-hook",
+            "args": ["stop"],
+            "name": "{{.ProjectName}}-stop",
+            "timeout": 2
+          }
+        ]
+      }
+    ]
+  }
+}

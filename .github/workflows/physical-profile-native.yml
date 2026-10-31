@@ -12,13 +12,18 @@ on:
       - '.github/workflows/physical-profile-native.yml'
   workflow_dispatch:
 
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
+concurrency:
+  group: physical-profile-native-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 permissions:
   contents: read
 
 jobs:
   native:
     name: Physical profile / ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -37,7 +42,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
-          go-version: '1.26.9'
+          go-version: '1.26.10'
           cache: false
       - name: Create canonical Windows TEST temp root
         if: runner.os == 'Windows'
@@ -103,7 +108,7 @@ jobs:
           go test -count=1 -timeout=3m -v ./installer -run '^TestPhysicalProfile(UpdateCompatibilityForwarding|SelectedCursorMCPProjection)$' 2>&1 | tee "$RUNNER_TEMP/physical-profile-sibling.log"
           grep -F 'PASS positive public Update planner + activation-preflight original-token forwarding; selected prepared-client precedence' "$RUNNER_TEMP/physical-profile-sibling.log"
           grep -F -- '--- PASS: TestPhysicalProfileSelectedCursorMCPProjection/positive' "$RUNNER_TEMP/physical-profile-sibling.log"
-          # Compare only the original seam with the same final regression fixture.
+          # Reconstruct the original projection guard while retaining current seam APIs.
           git fetch --no-tags --depth=1 origin 143c8df66267ce56f335b5f0cc73d5024921683a
           git show 143c8df66267ce56f335b5f0cc73d5024921683a:install/integrationctl/agentplugins/installer/seams.go > "$RUNNER_TEMP/cursor-mcp-original-seams.go"
           python - <<'PY_OVERLAY'
@@ -113,7 +118,14 @@ jobs:
           if hashlib.sha256(original.read_bytes()).hexdigest() != '1b17fbaeed93f97354b69749c00604bf8bc18048eaa2f30219c5ecdd497686a2':
               raise SystemExit('Original Cursor seam identity mismatch')
           source = pathlib.Path('installer/seams.go').resolve(strict=True)
-          (root / 'cursor-mcp-overlay.json').write_text(json.dumps({'Replace': {str(source): str(original)}}), encoding='utf-8')
+          current = source.read_text(encoding='utf-8')
+          historical_guard = '\tif serverName == "" || args == nil || selectedNativeOnly(facts.SelectedDelivery) {'
+          current_guard = '\tif serverName == "" || args == nil {'
+          if original.read_text(encoding='utf-8').count(historical_guard) != 1 or current.count(current_guard) != 1:
+              raise SystemExit('Cursor projection guard identity mismatch')
+          overlay = root / 'cursor-mcp-original-guard-seams.go'
+          overlay.write_text(current.replace(current_guard, historical_guard, 1), encoding='utf-8')
+          (root / 'cursor-mcp-overlay.json').write_text(json.dumps({'Replace': {str(source): str(overlay)}}), encoding='utf-8')
           PY_OVERLAY
           set +e
           go test -overlay "$RUNNER_TEMP/cursor-mcp-overlay.json" -count=1 -timeout=3m -v ./installer -run '^TestPhysicalProfileSelectedCursorMCPProjection$/^positive$' 2>&1 | tee "$RUNNER_TEMP/physical-profile-cursor-original.log"

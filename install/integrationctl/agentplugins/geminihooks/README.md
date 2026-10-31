@@ -1,9 +1,15 @@
 # Gemini USER hook planning
 
 `geminihooks` is a neutral, pure planner for named singleton command groups in
-Gemini CLI 0.62.0 USER settings. It installs only requested native events. It
+Gemini CLI USER settings (originally verified with 0.62.0). It installs only requested native events. It
 reads no filesystem, environment, authentication or discovery state, writes no
 files, and imports neither the CLI nor the YAML/legacy installer engine.
+
+Host CLI versions are not an admission policy. Exact versions in tests and
+qualification receipts make evidence reproducible; they must not become
+minimum/maximum ranges or exact-version allowlists. New CLI releases should
+continue to work when they satisfy the same hook/settings contract. Preserve
+actual schema, capability, ownership and artifact-provenance checks instead.
 
 ```go
 hooks := []geminihooks.HookSpec{
@@ -112,7 +118,7 @@ trailing commas are rejected because native settings use
 Tests cover comment-bearing fixtures and trailing-comma rejection; they do not
 claim exhaustive grammar parity with strip-json-comments.
 
-Run from the module with Go 1.26.9, `go test -p 2 ./geminihooks
+Run from the module with Go 1.26.10, `go test -p 2 ./geminihooks
 ./adapters/nativeconfig`. Tests require Node >=22.18 to execute the unchanged
 official 0.62.0 environment resolver fixture. Its supplied source provenance is
 Gemini v0.62.0 commit `b460678f3db508407554afd604cc9d6635becb2a`,

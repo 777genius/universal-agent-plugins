@@ -19,6 +19,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -42,6 +43,19 @@ func (s *savedJourneySource) ResolveGitHubRef(ctx context.Context, repo, ref str
 func (s *savedJourneySource) ResolveGitHubSelector(ctx context.Context, repo, selector string) (sourceacquisition.RefResolution, error) {
 	s.selectors++
 	return s.Acquirer.ResolveGitHubSelector(ctx, repo, selector)
+}
+
+func (s *savedJourneySource) AcquireGit(ctx context.Context, source sourcespec.Git, commit, digest string) (domain.PackageSnapshot, error) {
+	s.downloads++
+	return s.Acquirer.AcquireGit(ctx, source, commit, digest)
+}
+func (s *savedJourneySource) ResolveGit(ctx context.Context, source sourcespec.Git, selector string, exact bool) (sourceacquisition.RefResolution, error) {
+	if exact {
+		s.refs++
+	} else {
+		s.selectors++
+	}
+	return s.Acquirer.ResolveGit(ctx, source, selector, exact)
 }
 
 type savedJourneyRunner struct {
@@ -81,6 +95,15 @@ func newSavedJourney(t *testing.T, repo string) savedJourney {
 	f.app.EnvironmentStoreRoot = filepath.Join(root, "store")
 	f.app.SecurityEvaluator = dependencyTestScanner{}
 	source := &savedJourneySource{Acquirer: sourceacquisition.Acquirer{TempRoot: t.TempDir(), URLForRepo: func(string) string { return repo }}}
+	diagnostic := &dependencyGitDiagnosticRunner{delegate: sourceacquisition.OSRunner{}, report: func(phase, class, status string) {
+		t.Logf("saved-source Git diagnostic: phase=%s class=%s exit_status=%s", phase, class, status)
+	}}
+	source.Runner = diagnostic
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("saved-source Git diagnostic: delegated_failures=%d", diagnostic.failures.Load())
+		}
+	})
 	f.app.SourceAcquirer = source
 	return savedJourney{cli: f, runner: runner, source: source}
 }
@@ -543,8 +566,17 @@ func TestSavedAddRegistryPinsEligibilityAndRestore(t *testing.T) {
 	if err := os.WriteFile(freshLP, oldLock, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := fresh.cli.execute(false, "deps", "sync", "--locked", "--yes", "--format", "json"); err == nil {
-		t.Fatal("copied lock reproduced superseded release as a fresh install")
+	fresh.run(t, "deps", "sync", "--locked", "--yes", "--format", "json")
+	_, freshLock := fresh.intent(t)
+	var copiedLock environment.Lock
+	if err := json.Unmarshal(oldLock, &copiedLock); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(freshLock, copiedLock) || !bytes.Equal(oldManifest, []byte(dependencyRead(t, freshMP))) || !bytes.Equal(oldLock, []byte(dependencyRead(t, freshLP))) {
+		t.Fatal("copied superseded lock restore moved pins or rewrote the portable agreement")
+	}
+	if len(fresh.state(t).EnvironmentReceipts) != len(copiedLock.Packages) || fresh.source.refs+fresh.source.selectors != 0 {
+		t.Fatal("copied superseded lock restore omitted bindings or resolved refs")
 	}
 	j.run(t, "update", "docs", "--format", "json")
 	requirements, lock = j.intent(t)

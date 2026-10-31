@@ -9,6 +9,11 @@ on:
         type: boolean
         default: false
 
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
+concurrency:
+  group: authoring-native-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 permissions:
   contents: read
 
@@ -16,8 +21,20 @@ permissions:
 # remains an UNPROVEN release gate; the preserved read-only research profile
 # does not establish authoring support or full MVP acceptance. No Mac provisioning.
 jobs:
+  # Pull requests only. The shared classifier lets a documentation and web only
+  # diff skip both lanes; every other diff, an unavailable or oversized
+  # classification and every dispatch run them. The always-running aggregate
+  # accepts skipped lanes only for that classification.
+  changes:
+    if: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      pull-requests: read
+    uses: ./.github/workflows/pr-changes.yml
+
   native:
     name: Authoring / ${{ matrix.os }}-${{ matrix.arch }}
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.authoring != 'false') }}
     strategy:
       fail-fast: false
       matrix:
@@ -28,7 +45,7 @@ jobs:
           # data/reusables/actions/supported-github-runners.md (standard public runners).
           - {runner: ubuntu-24.04-arm, os: linux, arch: arm64}
           - {runner: windows-11-arm, os: windows, arch: arm64}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.runner == 'ubuntu-24.04' && matrix.runner || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.runner || matrix.runner == 'ubuntu-24.04-arm' && (vars.CI_LINUX_ARM_RUNNER || matrix.runner) || startsWith(matrix.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.runner) || matrix.runner }}
     timeout-minutes: 25
     defaults:
       run:
@@ -51,7 +68,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # ci.yml
         with:
-          go-version: '1.26.9'
+          go-version: '1.26.10'
           architecture: ${{ matrix.arch == 'amd64' && 'x64' || matrix.arch }}
           cache: false
       - name: Prepare disposable second NTFS filesystem on Windows ARM64
@@ -94,7 +111,7 @@ jobs:
           go env -json GOOS GOARCH GOHOSTOS GOHOSTARCH GOVERSION GOROOT > "$NATIVE_ROOT/evidence/go-env.json"
           test "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" = "$EXPECTED_OS/$EXPECTED_ARCH"
           test "$(go env GOOS)/$(go env GOARCH)" = "$EXPECTED_OS/$EXPECTED_ARCH"
-          test "$(go env GOVERSION)" = go1.26.9
+          test "$(go env GOVERSION)" = go1.26.10
           # Node is used only for generated JavaScript syntax checks (--check).
           unset NODE_OPTIONS NODE_PATH
           node --version > "$NATIVE_ROOT/evidence/node-version.txt"
@@ -187,7 +204,9 @@ jobs:
 
   packed:
     name: Authoring / packed Linux amd64
-    runs-on: ubuntu-24.04
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.authoring != 'false') }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-24.04' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 45
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -206,7 +225,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
-          go-version: '1.26.9'
+          go-version: '1.26.10'
           architecture: x64
           cache: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -237,9 +256,12 @@ jobs:
 
   acceptance:
     name: Authoring / required native and packed
-    needs: [native, packed]
-    if: always()
-    runs-on: ubuntu-24.04
+    # Status aggregation must not queue a runner for an obsolete cancelled run.
+    needs: [changes, native, packed]
+    if: always() && !cancelled()
+    # A documentation-only aggregate only checks results and structure, so it
+    # stays off the CI_LINUX_RUNNER queue.
+    runs-on: ${{ needs.changes.outputs.authoring == 'false' && 'ubuntu-24.04' || github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-24.04' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     env:
       REQUIRED_RESULTS: ${{ toJSON(needs) }}

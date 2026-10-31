@@ -216,7 +216,7 @@ func Build(command, revision string, p project.Result, release bool) Report {
 	r := New(command, revision)
 	v, f := p.Input, p.Facts
 	r.Display, r.Legacy = inspection(p), string(v.Legacy)
-	r.Identity = Identity{ScopeAlgorithm: v.Identity.ScopeID, ScopeDigest: v.Identity.Digest, TreeAlgorithm: v.Identity.TreeAlgorithm, TreeDigest: v.Identity.TreeDigest, ReadProfile: packageview.ReadProfile, TreeExclusions: []string{"root .git", "root non-directory .plugin-kit-ai.lock"}}
+	r.Identity = Identity{ScopeAlgorithm: v.Identity.ScopeID, ScopeDigest: v.Identity.Digest, TreeAlgorithm: v.Identity.TreeAlgorithm, TreeDigest: v.Identity.TreeDigest, ReadProfile: packageview.ReadProfile, TreeExclusions: []string{"root .git", "root non-directory .uap-integrations.lock"}}
 	c := f.Coverage
 	r.Coverage = Coverage{v.Coverage.ComponentsRequested, v.Coverage.SkillsEnumerated, v.Coverage.InventoryComplete, v.Coverage.TreeComplete, state(c.Plugin), state(c.MCP), state(c.Skills), state(c.Filesystem), c.Complete}
 	for _, p := range f.Profiles {
@@ -292,11 +292,18 @@ func Build(command, revision string, p project.Result, release bool) Report {
 			r.Loadability.FindingIDs = append(r.Loadability.FindingIDs, f.ID)
 		}
 	}
+	dependencies := assessment(Pass)
+	for _, diagnostic := range p.DependencyDiagnostics {
+		id := r.add(Finding{Code: diagnostic.Code, Layer: "package_management", Rule: "uap/package-dependencies", Location: diagnostic.Location, Severity: "error"})
+		dependencies.Status = Fail
+		dependencies.FindingIDs = append(dependencies.FindingIDs, id)
+	}
 	commands := r.commandsAssessment(f.Package)
-	r.Readiness.Status = combine(r.Loadability.Status, r.Conformance.Status, r.HostSafety.Status, commands.Status)
+	r.Readiness.Status = combine(r.Loadability.Status, r.Conformance.Status, r.HostSafety.Status, commands.Status, dependencies.Status)
 	if r.Readiness.Status == Pass && (!c.Complete || !v.Coverage.TreeComplete) {
 		r.Readiness.Status = NotEvaluated
 	}
+	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, dependencies.FindingIDs...)
 	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, commands.FindingIDs...)
 	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, r.Loadability.FindingIDs...)
 	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, r.Conformance.FindingIDs...)

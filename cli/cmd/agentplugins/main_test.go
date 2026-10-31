@@ -49,16 +49,16 @@ func TestMainUsesProductionDirectoryTrustAndReleaseBootstrap(t *testing.T) {
 		t.Fatalf("generated production bootstrap readiness = %v, %v", ready, err)
 	}
 	bundle, err := embedded.Verify(client.Trust)
-	if err != nil || bundle.Snapshot.Sequence != 38 || bundle.Digest != "sha256:fb1817f377adc3008bf1d20493599f688f96d08511bd33fcb5c0409867547c28" {
+	if err != nil || bundle.Snapshot.Sequence != 39 || bundle.Digest != "sha256:4d3d7755d89123aa238b28e6ffb92d01ec20b70586dbc292293d6b4d5524f532" {
 		t.Fatalf("generated production bootstrap identity: sequence=%d digest=%q err=%v", bundle.Snapshot.Sequence, bundle.Digest, err)
 	}
 	client.HTTPClient.Transport = failingRoundTripper{}
-	client.Now = func() time.Time { return time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC) }
+	client.Now = func() time.Time { return time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC) }
 	fallback, err := client.Load(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("offline release bootstrap fallback: %v", err)
 	}
-	if fallback.Snapshot.Sequence != 38 || fallback.Digest != bundle.Digest {
+	if fallback.Snapshot.Sequence != 39 || fallback.Digest != bundle.Digest {
 		t.Fatalf("offline release bootstrap identity: sequence=%d digest=%q", fallback.Snapshot.Sequence, fallback.Digest)
 	}
 }
@@ -111,7 +111,7 @@ func TestInvalidScopeAndTargetDoNotCreateDataRoot(t *testing.T) {
 			t.Setenv("AGENTPLUGINS_HOME", dataRoot)
 			os.Args = args
 			err := run()
-			if err == nil || (name == "project-scope" && !strings.Contains(err.Error(), "user scope")) {
+			if err == nil || (name == "project-scope" && !strings.Contains(err.Error(), "requires --target")) {
 				t.Fatalf("invalid invocation error = %v", err)
 			}
 			if _, statErr := os.Lstat(dataRoot); !os.IsNotExist(statErr) {
@@ -196,11 +196,11 @@ func TestOfflinePublicInstallerSecurityBoundary(t *testing.T) {
 	}
 	defer stderr.Close()
 	os.Stdout, os.Stderr = stdout, stderr
-	argv := []string{"add", source, "--target=codex", "--scope=project", "--dry-run", "--format=json"}
+	argv := []string{"add", source, "--target=chatgpt", "--scope=project", "--dry-run", "--format=json"}
 	os.Args = append([]string{"agentplugins"}, argv...)
 	var out, errout bytes.Buffer
 	err = executeRelease(context.Background(), argv, authoringcli.Streams{Out: &out, Err: &errout}, run)
-	if err == nil || out.Len() != 0 || errout.String() != "agentplugins: --scope project is not supported by the current client adapters; the public CLI supports user scope only\n" || len(transport.urls) != 0 {
+	if err == nil || out.Len() != 0 || errout.String() != "agentplugins: chatgpt does not support project scope\n" || len(transport.urls) != 0 {
 		t.Fatalf("preflight boundary: %v %q %q requests=%v", err, out.String(), errout.String(), transport.urls)
 	}
 	if !reflect.DeepEqual(beforeState, securityFixtureTree(t, state)) || !reflect.DeepEqual(beforeSource, securityFixtureTree(t, source)) || !reflect.DeepEqual(beforeHome, securityFixtureTree(t, home)) {

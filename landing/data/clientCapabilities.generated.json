@@ -202,10 +202,25 @@
     "mcp_transports": {
       "sse": "unsupported",
       "stdio": "native",
-      "streamable-http": "unsupported"
+      "streamable-http": "native"
     },
     "app_support": "unsupported",
     "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": ""
+  },
+  {
+    "id": "pi",
+    "display_name": "Pi",
+    "package_mode": "native",
+    "skill_support": "unsupported",
+    "mcp_transports": {
+      "sse": "unsupported",
+      "stdio": "unsupported",
+      "streamable-http": "unsupported"
+    },
+    "app_support": "unsupported",
+    "extension_support": "native",
     "saved_dependency": true,
     "excluded_reason": ""
   }

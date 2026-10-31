@@ -42,6 +42,9 @@ type transitionRecord struct {
 // NativeTransitions consumes only stored roots and receipt/state authority. It
 // never resolves a host and never acquires the outer operation lock itself.
 type NativeTransitions struct {
+	// ProjectRoot binds discovery and reconciliation to the selected namespace.
+	// Empty preserves user-only recovery, including legacy user receipts.
+	ProjectRoot     string `json:"-"`
 	PackageVerifier interface {
 		Verify(context.Context, string, string) error
 	}
@@ -159,6 +162,9 @@ func (t NativeTransitions) prepareTransitionAuthority(ctx context.Context, id do
 	if !reflect.DeepEqual(OpenCodeObjects(binding.NativeObjects), OpenCodeObjects(previous)) {
 		return before, binding, fmt.Errorf("native source ownership changed")
 	}
+	if _, err := t.selectedBindingLayout(binding); err != nil {
+		return before, binding, err
+	}
 	return before, binding, nil
 }
 
@@ -180,6 +186,9 @@ func transitionTargetState(before domain.StateFileV2, id domain.NativeAttemptIde
 	binding.NativeObjects = objects
 	binding.NativeActivationAttempt = ""
 	binding.Activation = domain.ActivationActive
+	if binding.Scope == string(domain.ScopeProject) {
+		binding.Activation = domain.ActivationPrepared
+	}
 	binding.Verification = domain.VerificationInstalled
 	binding.Materialization = domain.MaterializationMaterialized
 	binding.Policy = domain.PolicyAllowed
@@ -294,7 +303,7 @@ func readTransitionFile(root, path string, limit int64) ([]byte, error) {
 }
 func readTransitionRecord(root string) (transitionRecord, error) {
 	var r transitionRecord
-	if err := validateTransitionRoot(filepath.Dir(filepath.Dir(root)), root); err != nil {
+	if err := validatePrivateTransitionRoot(root); err != nil {
 		return r, err
 	}
 	path := filepath.Join(root, transitionRecordFile)
@@ -331,6 +340,9 @@ func readTransitionRecord(root string) (transitionRecord, error) {
 }
 
 func storedTransitionRoot(b domain.ClientBinding) string {
+	if b.Scope == string(domain.ScopeProject) {
+		return b.NativeProfileRoot
+	}
 	root := b.NativeProfileRoot
 	for _, o := range OpenCodeObjects(b.NativeObjects) {
 		codec, mcp, err := nativeconfig.OpenCodeCodecForKind(o.Kind)

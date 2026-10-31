@@ -16,6 +16,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 var (
@@ -252,6 +253,13 @@ func (app App) loadPackageFor(ctx context.Context, raw string, request packageRe
 	if requested == "" {
 		return loadedPackage{}, fmt.Errorf("plugin name or source is required")
 	}
+	if localArchiveInput(requested) {
+		spec, err := sourcespec.Parse(requested)
+		if err != nil {
+			return loadedPackage{}, err
+		}
+		return app.acquireDirectInput(ctx, spec)
+	}
 	if explicitLocalPath(requested) {
 		return app.acquireLocal(ctx, requested)
 	}
@@ -262,7 +270,11 @@ func (app App) loadPackageFor(ctx context.Context, raw string, request packageRe
 		return app.acquireDiscovery(ctx, requested, request)
 	}
 	if !isDirectorySelector(requested) {
-		return loadedPackage{}, fmt.Errorf("source must be a local path, an exact owner/repo@FULL_SHA[//path] source, a discovery: slug, or a Directory selector")
+		spec, err := sourcespec.Parse(requested)
+		if err != nil {
+			return loadedPackage{}, err
+		}
+		return app.acquireDirectInput(ctx, spec)
 	}
 	return app.acquireDirectory(ctx, requested, request)
 }
@@ -485,9 +497,9 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 		resolveSelector = request.Selector
 	}
 	productID, _ := directorySelectorProductID(bundle.Snapshot, resolveSelector)
-	affectedTargets := expandAffectedSurfaceTargets(request.Targets)
+	affectedTargets := expandAffectedSurfaceTargets(request.Targets, app.scope())
 	resolveRequest := domain.DirectoryResolveRequest{
-		Selector: resolveSelector, Targets: affectedTargets, Scope: domain.ScopeUser,
+		Selector: resolveSelector, Targets: affectedTargets, Scope: app.scope(),
 		InstallerVersion: app.Version, ClientVersions: environment.ClientVersions, OS: environment.OS, Architecture: environment.Architecture,
 		DependencyIdentity: environment.DependencyIdentity,
 		SchemaVersion:      "1.0.0", Operation: operation, Recorded: request.Recorded,
@@ -496,7 +508,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	preparingChatGPT := false
 	var retainedMapping *domain.ChatGPTLocalMapping
 	installation, _ := locallyMatchedInstallation(state, resolveSelector)
-	intents := lifecycleInstallIntents(installation, "user", nil)
+	intents := lifecycleInstallIntents(installation, string(app.scope()), nil)
 	for _, target := range affectedTargets {
 		if requiresPersonalMapping(target) && (productID == "context7" || app.chatGPTPreparation || intents[target] == domain.InstallIntentPrepare) {
 			preparingChatGPT = true
@@ -669,6 +681,11 @@ func (app App) loadSnapshotMode(ctx context.Context, snapshot domain.PackageSnap
 	envelope, err := load(ctx, domain.LoadInput{SnapshotRoot: snapshot.Root, TreeDigest: snapshot.TreeDigest, ExecutableFiles: snapshot.ExecutableFiles, Source: snapshot.Source})
 	if err != nil {
 		return fail(err)
+	}
+	if envelope.FormatID == domain.FormatIDAgentPluginsV1 {
+		if _, err := packageDependencyFacts(envelope); err != nil {
+			return fail(err)
+		}
 	}
 	if envelope.TreeDigest != snapshot.TreeDigest {
 		return fail(fmt.Errorf("loader changed the acquired immutable package digest"))

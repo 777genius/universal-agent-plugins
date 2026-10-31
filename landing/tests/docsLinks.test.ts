@@ -11,9 +11,13 @@ describe('docsLinks locale fallback', () => {
     assert.equal(resolveDocsLocale('zh', 'guide/quickstart'), 'zh');
   });
 
-  it('falls back to English when the target locale has no real content for that page', () => {
-    assert.equal(resolveDocsLocale('ru', 'use'), 'en');
-    assert.equal(hasRealDocsContent('ru', 'use'), false);
+  it('recognizes current Use and Build translations in every maintained docs locale', () => {
+    for (const locale of ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'] as const) {
+      for (const page of ['use', 'use/install', 'use/manage', 'build', 'build/checks']) {
+        assert.equal(resolveDocsLocale(locale, page), locale);
+        assert.equal(hasRealDocsContent(locale, page), true);
+      }
+    }
   });
 
   it('treats English as always available', () => {
@@ -38,9 +42,9 @@ describe('docsLinks locale fallback', () => {
     );
   });
 
-  it('leaves the URL on English when the locale page is an English-only fallback', () => {
-    const base = 'https://777genius.github.io/universal-agent-plugins/docs/en/use/';
-    assert.equal(replaceDocsLocale(base, 'ru', 'use'), base);
+  it('leaves the URL on English when the reference has no translated page', () => {
+    const base = 'https://777genius.github.io/universal-agent-plugins/docs/en/api/cli/prepared-authoring-v2-agentplugins-author';
+    assert.equal(replaceDocsLocale(base, 'ru', 'api/cli/prepared-authoring-v2-agentplugins-author'), base);
   });
 
   it('routes support links to the current Build landing page', () => {
@@ -50,7 +54,7 @@ describe('docsLinks locale fallback', () => {
         'ru',
         'build',
       ),
-      'https://777genius.github.io/universal-agent-plugins/docs/en/build/',
+      'https://777genius.github.io/universal-agent-plugins/docs/ru/build/',
     );
   });
 

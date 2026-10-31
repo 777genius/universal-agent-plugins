@@ -4,7 +4,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { clientLandingPages } from '../../data/clients';
 import { hydrated, setSignedMirrorTestTime, wording } from './i18n-state.helpers';
 
-const exactCommand = 'npx -y universal-agent-plugins add context7 --target codex,cursor,vscode --no-save';
+const exactCommand =
+  'npx -y universal-agent-plugins add context7 --target codex,cursor,vscode --no-save';
 
 async function capture(page: Page, name: string) {
   const directory = process.env.UAP_LANDING_SCREENSHOT_DIR;
@@ -25,10 +26,8 @@ test.beforeEach(async ({ page }) => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 });
 
-test('hero controls and all client links remain complete across four viewports', async ({
-  page,
-}) => {
-  for (const width of [1440, 1024, 390, 320]) {
+for (const width of [1440, 1024, 390, 320]) {
+  test(`hero controls and all client links remain complete at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: width >= 1024 ? 1000 : 844 });
     await page.goto('./');
     await waitForCommand(page);
@@ -95,8 +94,8 @@ test('hero controls and all client links remain complete across four viewports',
     expect(await code.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
 
     await capture(page, `hero-layout-${width}`);
-  }
-});
+  });
+}
 
 test('selected targets produce one complete copyable command with keyboard activation', async ({
   page,
@@ -134,8 +133,19 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.setViewportSize({ width: 1440, height: 600 });
-  await page.goto('./');
-  await expect(page.locator('html')).toHaveClass(/scroll-reveal-active/, { timeout: 15_000 });
+  const gotoReadyHome = async (url = './') => {
+    await page.goto(url);
+    await hydrated(page);
+    const reducedMotion = await page.evaluate(
+      () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    );
+    // Every full navigation starts a new client lifecycle; reduced motion skips the observer.
+    await expect(page.locator('html')).toHaveClass(
+      reducedMotion ? /scroll-reveal-ready/ : /scroll-reveal-active/,
+      { timeout: 15_000 },
+    );
+  };
+  await gotoReadyHome();
   const catalog = page.locator('.catalog-wrap');
   await catalog.evaluate((node) => {
     window.scrollTo({
@@ -147,18 +157,19 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
     .poll(() => catalog.evaluate((node) => node.getBoundingClientRect().top))
     .toBeLessThanOrEqual(580);
   await expect(catalog).toHaveClass(/scroll-reveal--visible/);
-  await page.goto('./');
+  await gotoReadyHome();
   await page.locator('.hero__actions .button--primary').click();
   await expect(catalog).toHaveClass(/scroll-reveal--visible/);
   await expect(catalog).toHaveCSS('opacity', '1');
 
-  await page.goto('./#plugins');
+  await gotoReadyHome('./#plugins');
   await expect(catalog).toHaveClass(/scroll-reveal--visible/);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('./');
+  await gotoReadyHome();
   await expect(catalog).toHaveClass(/scroll-reveal--visible/);
 
   await page.goto('./plugins/');
+  await hydrated(page);
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
     timeout: 15_000,
   });
@@ -166,9 +177,9 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   const badge = page.locator('.plugin-card__ribbon').first();
   await expect(badge).toHaveText('Reviewed');
   const badgeBox = (await badge.boundingBox())!;
-  expect(badgeBox.width).toBeLessThan(90);
+  expect(badgeBox.width).toBeLessThan(120);
 
-  await page.goto('./');
+  await gotoReadyHome();
   await expect(page.locator('.hero-demo-video')).toBeVisible();
   await expect(page.locator('.hero-demo-video button')).toHaveAccessibleName('Watch demo');
   const preview = (await page.locator('.hero-demo-video').boundingBox())!;

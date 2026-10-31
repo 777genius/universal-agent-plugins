@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -96,7 +97,7 @@ func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opt
 		return err
 	}
 	writeProgress(app, opts.format, "Resolving and validating one Agent Plugin package for every selected target...")
-	loaded, err := app.loadPackageFor(ctx, source, withDetectedClients(app.addResolutionRequest(source, expandAffectedSurfaceTargets(targets)), detected))
+	loaded, err := app.loadPackageFor(ctx, source, withDetectedClients(app.addResolutionRequest(source, expandAffectedSurfaceTargets(targets, app.scope())), detected))
 	if err != nil {
 		return err
 	}
@@ -107,6 +108,10 @@ func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opt
 }
 
 func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
+	if err := rejectImperativePackageRequirements(loaded); err != nil {
+		return err
+	}
+
 	applyLoadedGuidedIntents(opts, loaded, targets)
 	if err := revalidateLoadedTargetIntents(ctx, app, opts, loaded, targets, clients); err != nil {
 		return err
@@ -145,7 +150,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			return runAddLoaded(ctx, cmd, app, &selectedOptions, loaded, activationComplete, authComplete, clients, needsInstallConfirmation)
 		}
 		if state, err := app.StateStore.Load(); err == nil {
-			if installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name); ok && installationHasTarget(installation, executionTargets[0], string(domain.ScopeUser)) {
+			if installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name); ok && installationHasTarget(installation, executionTargets[0], string(app.scope())) {
 				return runAddLoaded(ctx, cmd, app, &selectedOptions, loaded, false, false, clients, needsInstallConfirmation)
 			}
 		}
@@ -173,9 +178,9 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		}
 		input := usecase.AddInput{
 			InstallIntent: opts.installIntents[client.ClientID],
-			Envelope:      clientPackage.envelope, Client: client, Scope: domain.ScopeUser,
+			Envelope:      clientPackage.envelope, Client: client, Scope: app.scope(),
 			DryRun: true, Interactive: app.Terminal, Hints: clientPackage.hints,
-			BackendExecutable:  backendExecutable(client, detected),
+			BackendExecutable:  backendExecutable(client, detected, app.scope()),
 			ActivationComplete: activationComplete, AuthComplete: authComplete,
 			PersistAuthoritativeObservations: false,
 			OriginMode:                       loaded.origin, DirectoryResolution: cloneDirectoryOrigin(loaded.directory),
@@ -434,7 +439,7 @@ func newAddAcquisitionProof(loaded loadedPackage) (addAcquisitionProof, error) {
 		ManifestDigest:   loaded.envelope.ManifestDigest,
 		ClosureDigest:    groupedAcquisitionClosureDigest(sourceKind, loaded.envelope.Source, loaded.envelope.TreeDigest, loaded.envelope.ManifestDigest),
 		SourceKind:       sourceKind,
-		Fetched:          loaded.envelope.Source.Repository != "",
+		Fetched:          loaded.envelope.Source.Repository != "" || loaded.envelope.Source.SourceKind == "git" || loaded.envelope.Source.SourceKind == "archive" && !filepath.IsAbs(loaded.envelope.Source.SourceURL),
 		Validated:        true,
 	}, nil
 }
@@ -442,6 +447,9 @@ func newAddAcquisitionProof(loaded loadedPackage) (addAcquisitionProof, error) {
 func acquisitionSourceKind(loaded loadedPackage) string {
 	if loaded.origin == domain.OriginModeDirectory {
 		return "directory"
+	}
+	if loaded.envelope.Source.SourceKind != "" {
+		return loaded.envelope.Source.SourceKind
 	}
 	if loaded.envelope.Source.Repository != "" {
 		return "github"
@@ -460,7 +468,9 @@ func acquisitionSourceKind(loaded loadedPackage) string {
 // are deliberately excluded because they may contain local, host-specific
 // paths. For local acquisitions, source kind plus the two validated package
 // identities form the closure; immutable remote acquisitions additionally bind
-// repository, subpath, and revision.
+// repository, subpath, and revision. New typed direct sources additionally bind
+// the normalized endpoint and original archive byte checksum; legacy tuples stay
+// byte-identical.
 func groupedAcquisitionClosureDigest(sourceKind string, source domain.SourceIdentity, treeDigest, manifestDigest string) string {
 	hash := sha256.New()
 	fields := []string{
@@ -471,6 +481,13 @@ func groupedAcquisitionClosureDigest(sourceKind string, source domain.SourceIden
 		strings.TrimSpace(source.ResolvedRevision),
 		strings.TrimSpace(treeDigest),
 		strings.TrimSpace(manifestDigest),
+	}
+	if source.SourceKind != "" {
+		endpoint := source.SourceURL
+		if filepath.IsAbs(endpoint) {
+			endpoint = ""
+		}
+		fields = append(fields, endpoint, source.ArchiveSHA256)
 	}
 	var size [8]byte
 	for _, field := range fields {

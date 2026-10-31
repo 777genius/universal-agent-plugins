@@ -10,20 +10,19 @@ import {
 } from '../utils/securityPresentation.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
 import { isKnownLocale } from '../data/i18n.ts';
+import { loadI18nMessages } from '../scripts/load-i18n-messages.ts';
 
-const messages = JSON.parse(
-  readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'),
-);
+const messages = loadI18nMessages('en');
 const { t } = createI18n<[LocaleMessageDictionary<VueMessageType>], string, false>({
   legacy: false,
   locale: 'en',
   fallbackLocale: false,
-  messages: { en: messages },
+  messages: { en: messages as unknown as LocaleMessageDictionary<VueMessageType> },
 }).global;
 const translate = (key: string, params: Record<string, string | number> = {}, plural?: number) =>
   plural === undefined ? t(key, params) : t(key, params, plural);
 
-test('card and detail reviewed badges render one localized word', () => {
+test('card and detail reviewed badges use one word with a listing-specific tooltip', () => {
   const expected: Record<string, string> = {
     en: 'Reviewed',
     ru: 'Проверено',
@@ -31,9 +30,9 @@ test('card and detail reviewed badges render one localized word', () => {
     zh: '已审核',
     es: 'Revisado',
     hi: 'समीक्षित',
-    ar: 'مراجَع',
+    ar: 'مُراجَع',
     pt: 'Revisado',
-    fr: 'Vérifié',
+    fr: 'Examiné',
   };
   for (const filename of readdirSync(new URL('../locales/', import.meta.url))) {
     if (!filename.endsWith('.json')) continue;
@@ -52,7 +51,8 @@ test('card and detail reviewed badges render one localized word', () => {
       const label = t(`registryUi.${surface}.reviewedListing`);
       assert.ok(expected[code], `${code}: agreed reviewed badge translation`);
       assert.equal(label, expected[code], `${code}: ${surface}`);
-      assert.doesNotMatch(label, /\s/u, `${code}: ${surface} must stay one word`);
+      assert.equal(label.trim().split(/\s+/u).length, 1, `${code}: one-word badge`);
+      assert.ok(t(`registryUi.${surface}.reviewedListingTooltip`).length > label.length);
     }
   }
 });
@@ -130,46 +130,88 @@ test('all owned presentation keys exist and technical client content remains the
     }
   }
   assert.equal(t('registryUi.directoryPage.title'), 'Agent Plugins 1.0 Directory | Find Plugins');
-  assert.equal(t('registryUi.detail.title', { name: 'GitLab' }), 'GitLab Agent Plugin | Universal Agent Plugins');
-  assert.equal(t('registryUi.agentPage.tryPlugin', { source: 'context7' }), "Try Context7, or replace context7 with another compatible plugin's reviewed short name or pinned GitHub package source.");
+  assert.equal(
+    t('registryUi.detail.title', { name: 'GitLab' }),
+    'GitLab Agent Plugin | Universal Agent Plugins',
+  );
+  assert.equal(
+    t('registryUi.agentPage.tryPlugin', { source: 'context7' }),
+    'Try Context7, or replace context7 with another compatible plugin’s reviewed short name or complete package source.',
+  );
   for (const count of [0, 1, 2, 5, 11, 21, 22, 25, 101]) {
     assert.equal(t('registryUi.multi.agents', count), `${count} agent${count === 1 ? '' : 's'}`);
-    assert.equal(t('registryUi.directory.communityCount', count), `${count} community package${count === 1 ? '' : 's'}`);
+    assert.equal(
+      t('registryUi.directory.communityCount', count),
+      `${count} community package${count === 1 ? '' : 's'}`,
+    );
   }
 });
 
 test('catalog SEO titles never promise a count before the signed feed loads', () => {
   for (const filename of readdirSync(new URL('../locales/', import.meta.url))) {
     if (!filename.endsWith('.json')) continue;
-    const locale = JSON.parse(readFileSync(new URL(`../locales/${filename}`, import.meta.url), 'utf8'));
+    const locale = loadI18nMessages(filename.replace('.json', ''));
     assert.doesNotMatch(locale.registryUi.directoryPage.title, /(?:2[\s,.]?500|2500)/, filename);
   }
 });
 
 test('owned Vue presentation compiles with no untranslated text or missing static keys', async () => {
   const { parse, compileScript, compileTemplate } = await import('vue/compiler-sfc');
-  const files = ['AppSelect', 'AppCombobox', 'AppMultiSelect', 'CommandSnippet', 'RegistryDirectory', 'PluginCatalog', 'RegistryPluginCard', 'InstallPanel', 'SecurityAssessmentBadge', 'SecurityAssessmentPanel']
-    .map(name => `components/registry/${name}.vue`)
-    .concat(['pages/plugins/index.vue', 'pages/plugins/[slug].vue', 'pages/plugins/community.vue', 'pages/agents/[client].vue']);
+  const files = [
+    'CatalogCard',
+    'CatalogSearchField',
+    'UnifiedCatalog',
+    'SkillsCatalog',
+    'SkillCard',
+    'AppSelect',
+    'AppCombobox',
+    'AppMultiSelect',
+    'CommandSnippet',
+    'RegistryDirectory',
+    'PluginCatalog',
+    'RegistryPluginCard',
+    'InstallPanel',
+    'SecurityAssessmentBadge',
+    'SecurityAssessmentPanel',
+  ]
+    .map((name) => `components/registry/${name}.vue`)
+    .concat([
+      'pages/plugins/index.vue',
+      'pages/plugins/[slug].vue',
+      'pages/plugins/community.vue',
+      'pages/agents/[client].vue',
+    ]);
   for (const filename of files) {
     const source = readFileSync(new URL(`../${filename}`, import.meta.url), 'utf8');
     const { descriptor, errors } = parse(source, { filename });
     assert.deepEqual(errors, [], filename);
     const script = compileScript(descriptor, { id: filename });
-    const template = compileTemplate({ source: descriptor.template!.content, filename, id: filename, compilerOptions: { bindingMetadata: script.bindings } });
+    const template = compileTemplate({
+      source: descriptor.template!.content,
+      filename,
+      id: filename,
+      compilerOptions: { bindingMetadata: script.bindings },
+    });
     assert.deepEqual(template.errors, [], filename);
     for (const match of source.matchAll(/(?:t\('|(keypath)="?)(registryUi\.[\w.]+)/g)) {
       const key = match[2];
-      let value = messages;
-      for (const part of key.split('.')) value = value?.[part];
+      let value: unknown = messages;
+      for (const part of key.split('.'))
+        value = (value as Record<string, unknown> | undefined)?.[part];
       assert.equal(typeof value, 'string', `${filename}: ${key}`);
     }
     function visit(node: any) {
       if (node.type === 2 && /[A-Za-z]/.test(node.content)) {
-        assert.ok(['i', 'context7'].includes(node.content.trim()), `${filename}: raw text ${node.content}`);
+        assert.ok(
+          ['i', 'context7'].includes(node.content.trim()),
+          `${filename}: raw text ${node.content}`,
+        );
       }
       for (const prop of node.props ?? []) {
-        if (prop.type === 6 && ['aria-label', 'title', 'alt', 'placeholder', 'label'].includes(prop.name)) {
+        if (
+          prop.type === 6 &&
+          ['aria-label', 'title', 'alt', 'placeholder', 'label'].includes(prop.name)
+        ) {
           assert.ok(!prop.value?.content, `${filename}: raw ${prop.name} ${prop.value?.content}`);
         }
       }

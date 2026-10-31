@@ -49,10 +49,11 @@ func (e *Engine) applyGroup(ctx context.Context, prepared *PreparedOperation) (R
 }
 
 func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending bool, got usecase.GroupResult, err error) (Result, error) {
+	result.Mutated = result.Mutated || got.Mutated
 	err = wrapLifecycleError(err)
 	result.InstallationID = firstNonEmpty(got.InstallationID, prepared.plan.InstallationID)
 	state, loadErr := e.store.Load()
-	if loadErr != nil && err == nil && !got.Mutated && !prepared.plan.NoChange {
+	if prepared.req.Scope != domain.ScopeProject && loadErr != nil && err == nil && !got.Mutated && !prepared.plan.NoChange {
 		result.Outcome = OutcomeIncomplete
 		result.Reason = "committed state is unknown"
 		return result, loadErr
@@ -64,28 +65,25 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 	}
 	attachGroupAttemptResult(&result, got)
 	if err != nil {
-		result.Outcome = OutcomeIncomplete
-		result.Reason = err.Error()
-		if errors.Is(err, ErrPlanChanged) {
-			result.Outcome = OutcomeConflict
-			result.Reason = "plan_changed"
+		return failedGroupResult(result, err)
+	}
+	if prepared.req.Scope == domain.ScopeProject {
+		if loadErr != nil {
+			result.Outcome, result.Reason = OutcomeIncomplete, "committed project state is unknown"
+			return result, loadErr
 		}
-		if strings.Contains(err.Error(), "run update separately") || errors.Is(err, usecase.ErrProjectionRefreshRequired) {
-			result.Outcome = OutcomeConflict
-			result.Reason = "update_required"
+		if completeErr := completedProjectGroup(prepared, got, state); completeErr != nil {
+			result.Outcome, result.Reason = OutcomeIncomplete, completeErr.Error()
+			return result, completeErr
 		}
-		if errors.Is(err, usecase.ErrProjectionPinChangeRequired) {
-			result.Outcome = OutcomeConflict
-			result.Reason = "pin_change_required"
-		}
-		return result, err
+		pending = false
 	}
 	if pending && e.anyGroupHostHandoffPending(prepared) {
 		result.Outcome = OutcomeIncomplete
 		result.Reason = "committed binding is not activated"
 		return result, fmt.Errorf("%s", result.Reason)
 	}
-	if !pending && (prepared.plan.NoChange || (!got.Mutated && groupPreviewUnchanged(got))) {
+	if !result.Mutated && !pending && (prepared.plan.NoChange || (!got.Mutated && groupPreviewUnchanged(got))) {
 		result.Outcome = OutcomeUnchanged
 		result.NoChange = true
 		return result, nil
@@ -98,8 +96,29 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 	return result, nil
 }
 
+func failedGroupResult(result Result, err error) (Result, error) {
+	result.Outcome = OutcomeIncomplete
+	result.Reason = err.Error()
+	if errors.Is(err, ErrPlanChanged) {
+		result.Outcome = OutcomeConflict
+		result.Reason = "plan_changed"
+	}
+	if strings.Contains(err.Error(), "run update separately") || errors.Is(err, usecase.ErrProjectionRefreshRequired) {
+		result.Outcome = OutcomeConflict
+		result.Reason = "update_required"
+	}
+	if errors.Is(err, usecase.ErrProjectionPinChangeRequired) {
+		result.Outcome = OutcomeConflict
+		result.Reason = "pin_change_required"
+	}
+	return result, err
+}
+
 func attachGroupAttemptResult(result *Result, got usecase.GroupResult) {
 	for _, target := range got.Targets {
+		if target.Plan.Scope == domain.ScopeProject {
+			result.ManualActions = append(result.ManualActions, target.Activation.UserActions...)
+		}
 		if target.Plan.ClientID == "" || target.GroupPhase == "" {
 			continue
 		}
@@ -173,6 +192,7 @@ func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (
 		Targets: inputs, CompatibilityChecks: inputs,
 		OperationGroupID: firstNonEmpty(prepared.req.OperationID, "group"),
 		Confirmed:        true, Repair: prepared.req.Operation == OpRepair,
+		Progress: e.reportGroupActivation,
 	}
 	var got usecase.GroupResult
 	switch prepared.req.Operation {
@@ -184,4 +204,18 @@ func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (
 		got, err = svc.AddGroup(ctx, group)
 	}
 	return &got, err
+}
+
+func (e *Engine) reportGroupActivation(event usecase.GroupProgressEvent) {
+	if (event.Phase != usecase.GroupProgressActivated && event.Phase != usecase.GroupProgressActivating) || e.cfg.Progress == nil {
+		return
+	}
+	item := ClientResult{ClientID: string(event.ClientID), GroupPhase: string(event.Result.GroupPhase), Activation: string(event.Result.Activation.Activation)}
+	if event.Phase == usecase.GroupProgressActivating {
+		item.GroupPhase = "external_started"
+	}
+	if event.Result.Failure != nil {
+		item.Failure = &ClientFailure{Stage: event.Result.Failure.Stage}
+	}
+	e.cfg.Progress(ProgressEvent{Phase: ProgressActivate, Client: &item})
 }

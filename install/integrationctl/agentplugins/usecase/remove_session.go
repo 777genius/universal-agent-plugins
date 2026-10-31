@@ -46,7 +46,7 @@ func (session *removeSession) loadRemoveTarget() error {
 	if err := validateDeliverySelection(client.SelectedDelivery, session.input.SelectedDelivery); err != nil {
 		return err
 	}
-	if err := validateNativeBinding(client, session.input.Client); err != nil {
+	if err := session.service.validateNativeBinding(session.ctx, client, session.input.Client); err != nil {
 		return err
 	}
 	if err := validatePurgeCoversActiveBindings(session.input.PurgeData, installation, clientKey); err != nil {
@@ -61,7 +61,7 @@ func (session *removeSession) loadRemoveTarget() error {
 		InstallationID:   installation.InstallationID,
 		Plugin:           installation.DeclaredName,
 		ClientID:         session.input.Client.ClientID,
-		AffectedSurfaces: preparedAffectedSurfaces(client, session.input.Client.ClientID, client.SelectedDelivery),
+		AffectedSurfaces: preparedAffectedSurfaces(client, session.input.Client.ClientID, client.SelectedDelivery, session.input.Scope),
 	}
 	if len(session.result.AffectedSurfaces) == 0 {
 		session.result.AffectedSurfaces = []string{client.ClientID}
@@ -70,13 +70,18 @@ func (session *removeSession) loadRemoveTarget() error {
 }
 
 func (session *removeSession) deactivateRemoveTarget() error {
-	nativeAttempt := nativeLifecycleClient(session.input.Client.ClientID, session.client.SelectedDelivery) && session.input.Confirmed && !session.input.DryRun
+	nativeAttempt := nativeLifecycleClient(session.input.Client.ClientID, session.client.SelectedDelivery, session.input.Scope) && session.input.Confirmed && !session.input.DryRun
+	var attempt *nativeRemovalAttempt
 	if nativeAttempt {
-		if err := session.service.beginNativeAttemptWithObservation(session.installation.InstallationID, session.clientKey, domain.NativeIntentRemove, session.client.SelectedDelivery, session.client.LocalEntryObservation.Clone()); err != nil {
+		var err error
+		attempt, err = session.service.beginNativeRemovalAttempt(session.installation.InstallationID, session.clientKey, session.client, session.state)
+		if err != nil {
 			return err
 		}
 	}
 	deactivation, err := session.service.deactivateWithFrozenObservation(session.ctx, session.installation.InstallationID, session.clientKey, domain.DeactivationRequest{
+		TargetContext:         session.service.targetContext(session.input.Client, session.input.Scope),
+		NativeRegistryRoot:    nativeRegistryForBinding(session.client, session.input.Client),
 		LocalEntryObservation: session.client.LocalEntryObservation.Clone(),
 		RemoveOwnedEntry:      session.client.SelectedDelivery.OwnsProfileEntry(session.client.NativeObjects),
 		SelectedDelivery:      session.client.SelectedDelivery,
@@ -90,6 +95,9 @@ func (session *removeSession) deactivateRemoveTarget() error {
 		NativeObjects:       append([]domain.NativeObjectOwnership(nil), session.client.NativeObjects...),
 	})
 	session.result.Deactivation = deactivation
+	if err != nil {
+		return session.service.acknowledgeUnchangedRemoval(attempt, deactivation, err)
+	}
 	if err == nil && nativeAttempt {
 		if persistErr := session.service.completeNativeRemoval(session.installation.InstallationID, session.clientKey, deactivation.ExternalRemovalComplete); persistErr != nil {
 			return persistErr
@@ -113,7 +121,7 @@ func (session *removeSession) reloadAfterExternalRemoval() error {
 	if err != nil {
 		return err
 	}
-	if session.result.Deactivation.ExternalRemovalComplete && !nativeLifecycleClient(session.input.Client.ClientID, session.client.SelectedDelivery) && session.client.Activation == domain.ActivationActive {
+	if session.result.Deactivation.ExternalRemovalComplete && !nativeLifecycleClient(session.input.Client.ClientID, session.client.SelectedDelivery, session.input.Scope) && session.client.Activation == domain.ActivationActive {
 		if err := session.service.markDeactivated(state, session.installationIndex, session.clientKey); err != nil {
 			return err
 		}

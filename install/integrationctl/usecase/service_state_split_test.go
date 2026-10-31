@@ -10,7 +10,7 @@ import (
 
 func TestResolveWorkspaceLockSourceResolvesRelativeToLockPath(t *testing.T) {
 	t.Parallel()
-	lockPath := filepath.Join("/repo", ".plugin-kit-ai.lock")
+	lockPath := filepath.Join("/repo", ".uap-integrations.lock")
 	got := resolveWorkspaceLockSource(lockPath, "./plugins/demo")
 	want := filepath.Join("/repo", "plugins", "demo")
 	if got != want {

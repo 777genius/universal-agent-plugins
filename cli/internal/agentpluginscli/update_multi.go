@@ -126,7 +126,7 @@ func loadUpdatePackage(ctx context.Context, app App, opts *options, installation
 	if err != nil {
 		return nil, nil, loadedPackage{}, err
 	}
-	installedClients, err := preflightInstalledBindings(installedBindingTargets(installation, opts.scope), detected)
+	installedClients, err := preflightInstalledBindings(installedBindingTargets(installation, opts.scope), detected, app.scope())
 	if err != nil {
 		return nil, nil, loadedPackage{}, err
 	}
@@ -219,8 +219,8 @@ func (prepared *preparedUpdateMany) clientInput(client domain.DetectedClient, de
 		return usecase.AddInput{}, err
 	}
 	return usecase.AddInput{
-		Envelope: clientPackage.envelope, Client: client, Scope: domain.ScopeUser,
-		Interactive: false, Hints: clientPackage.hints, BackendExecutable: backendExecutable(client, detected),
+		Envelope: clientPackage.envelope, Client: client, Scope: scopeFromProjectRoot(prepared.service.ProjectRoot),
+		Interactive: false, Hints: clientPackage.hints, BackendExecutable: backendExecutable(client, detected, scopeFromProjectRoot(prepared.service.ProjectRoot)),
 		OriginMode: prepared.loaded.origin, DirectoryResolution: cloneDirectoryOrigin(prepared.loaded.directory),
 		DistributionSuspended: prepared.loaded.distributionSuspended, ReleaseRevoked: prepared.loaded.releaseRevoked,
 		EnvironmentAuthority: authority,
@@ -372,7 +372,7 @@ func bindingSurfaceTargets(binding domain.ClientBinding) []domain.ClientID {
 	// preflight can heal omissions instead of silently perpetuating them.
 	values := append([]string(nil), binding.AffectedSurfaces...)
 	values = append(values, binding.ClientID)
-	values = appendBackendSiblings(values, domain.ClientID(binding.ClientID))
+	values = appendBackendSiblings(values, domain.ClientID(binding.ClientID), domain.InstallScope(binding.Scope))
 	result := make([]domain.ClientID, 0, len(values))
 	seen := map[domain.ClientID]struct{}{}
 	for _, value := range values {
@@ -386,8 +386,8 @@ func bindingSurfaceTargets(binding domain.ClientBinding) []domain.ClientID {
 	return result
 }
 
-func expandAffectedSurfaceTargets(targets []domain.ClientID) []domain.ClientID {
-	result := expandBackendSiblingTargets(targets)
+func expandAffectedSurfaceTargets(targets []domain.ClientID, scopes ...domain.InstallScope) []domain.ClientID {
+	result := expandBackendSiblingTargets(targets, scopes...)
 	seen := make(map[domain.ClientID]struct{}, len(result))
 	unique := result[:0]
 	for _, target := range result {

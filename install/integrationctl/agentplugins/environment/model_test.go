@@ -98,7 +98,7 @@ func TestPrepareSyncSeparatesUnchangedUpdateAndSourceChange(t *testing.T) {
 
 type countingResolver struct{ calls int }
 
-func (resolver *countingResolver) Resolve(_ context.Context, requirement Requirement, _ *LockedPackage, _ bool) (LockedPackage, error) {
+func (resolver *countingResolver) Resolve(_ context.Context, requirement Requirement, _ []string, _ *LockedPackage, _ bool) (LockedPackage, error) {
 	resolver.calls++
 	key, _ := requirement.SourceKey()
 	return LockedPackage{Alias: requirement.Alias, SourceKey: key, DigestAlgorithm: TreeDigestAlgorithm,
@@ -161,4 +161,30 @@ func TestUpdateRefCannotRefreshExactPinsOrUnrelatedAlias(t *testing.T) {
 	if _, err := coordinator.Resolve(context.Background(), requirements, Lock{}, "one"); err == nil || resolver.calls != 0 {
 		t.Fatal("exact pin update acquired bytes")
 	}
+}
+
+// Leaf facts are explicit even for fixtures whose exact pins have no children.
+func (*countingResolver) Candidates(context.Context, Requirement, []string) ([]Candidate, error) {
+	panic("unexpected candidates")
+}
+func (*countingResolver) AcquireCandidate(context.Context, Requirement, Candidate, []string) (ResolvedPackage, error) {
+	panic("unexpected candidate")
+}
+func (*countingResolver) DescribePinned(_ context.Context, pkg LockedPackage) (ResolvedPackage, error) {
+	return ResolvedPackage{Package: pkg}, nil
+}
+func (*countingResolver) Eligible(context.Context, LockedPackage, []string) (bool, error) {
+	return true, nil
+}
+
+func fixtureRequirements(deps map[string]string) map[string]Requirement {
+	out := map[string]Requirement{}
+	for distribution, expression := range deps {
+		kind := SelectorVersion
+		if strings.HasPrefix(expression, "^") {
+			kind = SelectorRange
+		}
+		out[distribution] = Requirement{Alias: distribution, Registry: &RegistrySource{Distribution: distribution, Selector: Selector{Kind: kind, Value: expression}}}
+	}
+	return out
 }

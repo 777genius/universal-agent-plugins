@@ -9,12 +9,32 @@ on:
   push:
     branches: [main, master, refactor/installer-core-clean-architecture]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
 
+# Replace ordinary PR/push CI; isolate manual and scheduled invocations.
+# Release validation also accepts checks from the associated merged PR head.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 jobs:
+  # Pull requests only: the shared classifier lets lint and the Management SDK
+  # qualification skip when none of their inputs changed. `test` never waits
+  # for it and runs on every ready pull request, because repotests also read
+  # README.md, docs/, website/, landing/ and workflow files. Pushes and an
+  # unavailable or oversized classification run every job.
+  changes:
+    if: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      pull-requests: read
+    uses: ./.github/workflows/pr-changes.yml
+
   # Separate job rather than a step in `test`: `test` is the 9-27 min critical
   # path, while the three lint matrix legs finish in a few minutes in parallel.
   lint:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.lint != 'false') }}
     permissions:
       contents: read
     uses: ./.github/workflows/lint.yml
@@ -23,8 +43,17 @@ jobs:
       # pushes are scored the same way as the WIP PR into main.
       lint-base: origin/${{ github.base_ref || 'main' }}
 
+  # One qualification definition shared with the Management SDK release.
+  management-sdk:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && (needs.changes.result != 'success' || needs.changes.outputs.management_sdk != 'false'))) }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/management-sdk.yml
+
   test:
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -41,7 +70,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.9"
+          go-version: "1.26.10"
           cache: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

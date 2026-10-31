@@ -120,7 +120,7 @@ func TestEntrypointParityAndIsolation(t *testing.T) {
 }
 
 func TestInstallerFlagsRejectedBeforeRunner(t *testing.T) {
-	for _, flag := range []string{"--scope=user", "--accept-security-risk=false", "--security-details=false"} {
+	for _, flag := range []string{"--project-root=TEST-installer-only", "--scope=user", "--accept-security-risk=false", "--security-details=false"} {
 		for _, before := range []bool{true, false} {
 			t.Run(fmt.Sprint(flag, before), func(t *testing.T) {
 				calls := 0

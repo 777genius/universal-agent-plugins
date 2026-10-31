@@ -112,14 +112,14 @@ func (session *removeGroupSession) resolveOneRemoval(targetIndex int, targetInpu
 	if err := validateDeliverySelection(client.SelectedDelivery, targetInput.SelectedDelivery); err != nil {
 		return err
 	}
-	if err := validateNativeBinding(client, targetInput.Client); err != nil {
+	if err := session.service.validateNativeBinding(session.ctx, client, targetInput.Client); err != nil {
 		return err
 	}
 	session.result.Targets[targetIndex] = RemoveResult{
 		InstallationID:   session.installation.InstallationID,
 		Plugin:           session.installation.DeclaredName,
 		ClientID:         targetInput.Client.ClientID,
-		AffectedSurfaces: preparedAffectedSurfaces(client, targetInput.Client.ClientID, client.SelectedDelivery),
+		AffectedSurfaces: preparedAffectedSurfaces(client, targetInput.Client.ClientID, client.SelectedDelivery, targetInput.Scope),
 	}
 	if prior, ok := session.byBinding[clientKey]; ok {
 		item := &session.planned[prior]
@@ -132,6 +132,8 @@ func (session *removeGroupSession) resolveOneRemoval(targetIndex int, targetInpu
 		return err
 	}
 	outcome, err := session.service.deactivateWithFrozenObservation(session.ctx, session.installation.InstallationID, clientKey, domain.DeactivationRequest{
+		TargetContext:         session.service.targetContext(targetInput.Client, targetInput.Scope),
+		NativeRegistryRoot:    nativeRegistryForBinding(client, targetInput.Client),
 		LocalEntryObservation: client.LocalEntryObservation.Clone(),
 		RemoveOwnedEntry:      client.SelectedDelivery.OwnsProfileEntry(client.NativeObjects),
 		SelectedDelivery:      client.SelectedDelivery,
@@ -158,7 +160,7 @@ func (session *removeGroupSession) lookupRemovalBinding(targetInput RemoveInput)
 		return clientKey, client, nil
 	}
 	for key, candidate := range session.installation.Clients {
-		if sameNativeBackend(domain.ClientID(candidate.ClientID), targetInput.Client.ClientID) && candidate.Scope == string(targetInput.Scope) && candidate.Materialization != domain.MaterializationAbsent {
+		if sameNativeBackend(domain.ClientID(candidate.ClientID), targetInput.Client.ClientID, targetInput.Scope) && candidate.Scope == string(targetInput.Scope) && candidate.Materialization != domain.MaterializationAbsent {
 			return key, candidate, nil
 		}
 	}
@@ -174,7 +176,7 @@ func (session *removeGroupSession) verifyRemovalOwnership(targetInput RemoveInpu
 	if err != nil {
 		return "", err
 	}
-	if sameNativeBackend(domain.ClientID(client.ClientID), targetInput.Client.ClientID) {
+	if sameNativeBackend(domain.ClientID(client.ClientID), targetInput.Client.ClientID, targetInput.Scope) {
 		target.ActivePath = client.TargetLocator
 		target.TargetRoot = filepath.Dir(client.TargetLocator)
 	}

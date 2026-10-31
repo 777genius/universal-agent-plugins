@@ -35,6 +35,8 @@ import "github.com/777genius/plugin-kit-ai/sdk"
   - func \(a \*App\) Codex\(\) \*codex.Registrar
   - func \(a \*App\) Cursor\(\) \*cursor.Registrar
   - func \(a \*App\) Gemini\(\) \*gemini.Registrar
+  - func \(a \*App\) Pi\(\) \*pi.Registrar
+  - func \(a \*App\) Qoder\(\) \*qoder.Registrar
   - func \(a \*App\) Run\(\) int
   - func \(a \*App\) RunContext\(ctx context.Context\) int
   - func \(a \*App\) RunCursorObserver\(ctx context.Context\) \(code int\)
@@ -180,6 +182,22 @@ func main() {
 }
 ```
 
+
+### func \(\*App\) Pi
+
+```go
+func (a *App) Pi() *pi.Registrar
+```
+
+Pi returns the typed neutral Pi observation registrar.
+
+### func \(\*App\) Qoder
+
+```go
+func (a *App) Qoder() *qoder.Registrar
+```
+
+Qoder returns a registrar for Qoder plugin hook handlers.
 
 ### func \(\*App\) Run
 

@@ -132,9 +132,9 @@ func (session *removeManySession) buildInputs() error {
 			session.detected[target] = client
 		}
 		inputs = append(inputs, usecase.RemoveInput{
-			Selector: session.installationSelector, Client: client, Scope: domain.ScopeUser,
+			Selector: session.installationSelector, Client: client, Scope: session.app.scope(),
 			DryRun: true, Interactive: false, ExternalUninstalled: session.opts.externalUninstalled,
-			BackendExecutable:    backendExecutable(client, session.detected),
+			BackendExecutable:    backendExecutable(client, session.detected, session.app.scope()),
 			EnvironmentAuthority: authority,
 		})
 		selected = append(selected, client)
@@ -258,7 +258,7 @@ func (session *removeManySession) recordRetainedData() {
 			Scope: receipt.Scope, State: receipt.State,
 		})
 	}
-	session.result.RetainedDataAction = fmt.Sprintf("run `agentplugins remove %s --purge-data` to delete retained plugin data", session.installation.InstallationID)
+	session.result.RetainedDataAction = fmt.Sprintf("run `%s` to delete retained plugin data", retainedDataPurgeCommand(session.app, session.installation.InstallationID))
 }
 
 func multiRemovalNeedsManualStep(result removeMultiResult) bool {

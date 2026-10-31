@@ -9,7 +9,7 @@ import (
 )
 
 func (session *repairSession) repairNative() (AddResult, error) {
-	delivery, complete, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.installation, session.client)
+	delivery, complete, _, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.installation, session.client)
 	if err != nil {
 		return session.result, err
 	}
@@ -23,10 +23,13 @@ func (session *repairSession) repairNative() (AddResult, error) {
 	}
 	verified, clientVerifyErr := session.service.verifyClientReadOnly(session.ctx, session.input, session.result, session.client)
 	if clientVerifyErr != nil {
+		if retainPreparedProjectVerificationFailure(&session.result, verified, clientVerifyErr) {
+			return session.result, clientVerifyErr
+		}
 		if session.recordedAbsenceRepairable(verified, clientVerifyErr) {
 			return session.reapplyIntactNative(delivery)
 		}
-		if !nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) || session.client.LocalEntryObservation != nil || verified.LocalEntryObservation != nil || session.ctx.Err() != nil {
+		if !nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) || session.client.LocalEntryObservation != nil || verified.LocalEntryObservation != nil || session.ctx.Err() != nil {
 			return session.result, clientVerifyErr
 		}
 		return session.reapplyIntactNative(delivery)
@@ -46,6 +49,9 @@ func (session *repairSession) reapplyIntactNative(delivery domain.StagedDelivery
 	if !session.input.Confirmed {
 		session.result.RequiresConfirmation = true
 		return session.result, nil
+	}
+	if err := session.verifyProjectRepairOwnership(); err != nil {
+		return session.result, err
 	}
 	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installation.InstallationID, session.clientKey, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.result.Plan, Delivery: delivery,
@@ -93,6 +99,10 @@ func (session *repairSession) correctIntactLifecycle(verified domain.ActivationO
 		corrected.Verification = verified.Verification
 	}
 	session.result.Activation = lifecycleOutcome(corrected)
+	// Fresh verification guidance is transient; the binding intentionally stores
+	// lifecycle values only. Preserve the current adapter's actions in this result.
+	session.result.Activation.UserActions = append([]string(nil), verified.UserActions...)
+	session.result.Activation.LocalActions = append([]string(nil), verified.LocalActions...)
 	if corrected.Materialization == session.client.Materialization && sameLifecycleOutcome(lifecycleOutcome(corrected), lifecycleOutcome(session.client)) {
 		session.result.NoChange = true
 		return session.result, nil

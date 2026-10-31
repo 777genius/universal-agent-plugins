@@ -72,7 +72,8 @@ type Finding struct{ Layer, Code, Location string }
 
 // Coverage describes acquisition only, never schema/profile/runtime evaluation.
 // TreeComplete permits only the two existing installer exclusions: exact root
-// .git and non-directory .plugin-kit-ai.lock. Legacy and unsafe omissions disable
+// .git and non-directory workspace lock (.uap-integrations.lock, or its legacy
+// .plugin-kit-ai.lock name). Legacy and unsafe omissions disable
 // it. InventoryComplete concerns physical non-following enumeration of that scope.
 type Coverage struct {
 	ComponentsRequested bool

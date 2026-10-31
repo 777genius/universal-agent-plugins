@@ -37,6 +37,11 @@ function panelState({ installable = true, autoDetect = true, current = true, sta
     ref,
     useI18n: () => i18n,
     useInstallPreferencesStore: () => ({ package: { identity: '' }, readPackage: () => ({ targetIds: [], autoDetect: true, expanded: false }), selectPackage: () => {} }),
+    usePluginInstallSelection: () => ({
+      scope: ref('user'), targetDistributions: ref(new Map()), projectAvailable: ref(false),
+      resolution: ref({ unavailable_reason: 'No compatible source.' }),
+      updateTargets() {}, updateAutoDetect() {}, updateScope() {},
+    }),
     defineProps: () => ({ plugin: { ...targetlessFixture, installable, trust_state: reviewed ? 'reviewed' : 'conformant_unreviewed' } }),
     defineModel: (name: string) => ({ value: name === 'targets' ? [] : autoDetect }),
     computed: (read: () => unknown) => ({
@@ -56,6 +61,8 @@ function panelState({ installable = true, autoDetect = true, current = true, sta
     expectedDistribution: () => undefined,
     deliveryLabel: () => '',
     pluginCommands,
+    isFullyRetired: () => false,
+    vendorInstallSource: () => undefined,
     watch: () => {},
   });
 }

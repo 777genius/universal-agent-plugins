@@ -16,6 +16,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
@@ -46,6 +47,9 @@ func (e *Engine) Inspect(ctx context.Context) (Inspection, error) {
 
 func (e *Engine) observe() (Inspection, error) {
 	out := Inspection{StateRoot: e.cfg.StateRoot}
+	if err := e.CheckProjectNamespace(); err != nil {
+		return out, err
+	}
 	state, err := e.store.Load()
 	if err != nil {
 		out.Recovery.Required = true
@@ -86,18 +90,10 @@ func (e *Engine) observe() (Inspection, error) {
 		})
 	}
 	out.Recovery.Receipts = unfinishedReceipts(state, openIDs, bindingIndex)
-	pending, err := (opencode.NativeTransitions{State: transaction.Kernel{StateStore: e.store}}).Pending()
-	if err != nil {
+	if err := e.appendPendingTransitions(&out); err != nil {
 		out.Recovery.Required = true
 		out.Recovery.Reason = err.Error()
 		return out, err
-	}
-	for _, p := range pending {
-		if p.Root == "" {
-			out.Recovery.Receipts = append(out.Recovery.Receipts, PendingReceipt{OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase})
-		} else {
-			out.Recovery.Journals = append(out.Recovery.Journals, PendingJournal{OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase, Digest: p.Digest})
-		}
 	}
 	sort.Slice(out.Recovery.Journals, func(i, j int) bool {
 		return out.Recovery.Journals[i].OperationID < out.Recovery.Journals[j].OperationID
@@ -116,6 +112,11 @@ func inspectInstallations(state domain.StateFileV2) ([]InspectedInstallation, ma
 			TreeDigest:     installation.Source.TreeDigest,
 		}
 		item.SourceKey = "github:" + strings.ToLower(installation.Source.Repository) + ":" + installation.Source.PackageSubpath
+		if installation.Source.StableSourceKey != "" {
+			item.SourceKey = installation.Source.StableSourceKey
+		} else if installation.Source.SourceKind == "git" || installation.Source.SourceKind == "archive" {
+			item.SourceKey = sourcespec.Key(sourcespec.Kind(installation.Source.SourceKind), installation.Source.SourceURL, installation.Source.PackageSubpath)
+		}
 		if installation.Directory != nil {
 			item.SourceKey = "directory:" + strings.ToLower(installation.Directory.DistributionID)
 		}
@@ -126,6 +127,7 @@ func inspectInstallations(state domain.StateFileV2) ([]InspectedInstallation, ma
 				LifecycleConverged: binding.LifecycleConverged(), ClientID: binding.ClientID, BindingID: binding.ClientBindingID, Scope: binding.Scope,
 				TargetPath: binding.TargetLocator, DataRoot: receipt.Locator,
 				TreeDigest: digest, Materialization: string(binding.Materialization), Activation: string(binding.Activation),
+				Policy: string(binding.Policy), ManagedPaths: inspectedManagedPaths(binding),
 				Authentication: string(binding.Authentication), Verification: string(binding.Verification),
 			})
 			inspected := &item.Bindings[len(item.Bindings)-1]
@@ -506,4 +508,19 @@ func populateInspectedBinding(inspected *InspectedBinding, binding domain.Client
 			inspected.Owner = &cloned
 		}
 	}
+}
+
+func (e *Engine) appendPendingTransitions(out *Inspection) error {
+	pending, err := (opencode.NativeTransitions{ProjectRoot: e.cfg.ProjectRoot, State: transaction.Kernel{StateStore: e.store}}).Pending()
+	if err != nil {
+		return err
+	}
+	for _, p := range pending {
+		if p.Root == "" {
+			out.Recovery.Receipts = append(out.Recovery.Receipts, PendingReceipt{OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase})
+		} else {
+			out.Recovery.Journals = append(out.Recovery.Journals, PendingJournal{OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase, Digest: p.Digest})
+		}
+	}
+	return nil
 }

@@ -60,6 +60,9 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 			return nil, fmt.Errorf("batched native config requests must share paths and codec")
 		}
 	}
+	if err := kernel.requireDocumentParser(requests[0].Codec); err != nil {
+		return nil, err
+	}
 	acquireLocks := kernel.acquireLocks
 	if acquireLocks == nil {
 		acquireLocks = kernel.acquireCandidateLocks
@@ -92,9 +95,11 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 	if err != nil {
 		return nil, err
 	}
-	doc, err := newDocument(file.jsonc)
+	var doc *document
 	if file.exists {
-		doc, err = parseDocument(file.body, file.jsonc)
+		doc, err = kernel.parseDocument(file.body, file.jsonc, requests[0].Codec)
+	} else {
+		doc, err = kernel.newDocument(file.jsonc, requests[0].Codec)
 	}
 	if err != nil {
 		return nil, err
@@ -247,11 +252,14 @@ func (kernel Kernel) Inspect(paths Paths, codec Codec, name string, owned *Recei
 	if err := validateRequest(probe); err != nil {
 		return false, false, err
 	}
+	if err := kernel.requireDocumentParser(codec); err != nil {
+		return false, false, err
+	}
 	file, err := kernel.resolve(paths)
 	if err != nil || !file.exists {
 		return false, false, err
 	}
-	doc, err := parseDocument(file.body, file.jsonc)
+	doc, err := kernel.parseDocument(file.body, file.jsonc, codec)
 	if err != nil {
 		return false, false, err
 	}

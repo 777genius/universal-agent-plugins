@@ -1,3 +1,15 @@
+.hero-agent-field-anchor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+// Keep the fixed decoration behind every section, above the page background.
+.unified-home {
+  isolation: isolate;
+}
+.unified-home > .page-bg {
+  z-index: -2;
+}
 .hero-agent-field {
   --orbit-duration: 36s;
   position: absolute;
@@ -5,6 +17,14 @@
   perspective: 1125px;
   pointer-events: none;
   opacity: 0.55;
+}
+.hero-agent-field--fixed {
+  position: fixed;
+  inset: auto;
+  z-index: -1;
+  translate: var(--scroll-x, 0px) var(--scroll-y, 0px);
+  filter: blur(var(--scroll-blur, 0px));
+  will-change: translate;
 }
 .hero-agent-field__plane {
   position: absolute;
@@ -121,6 +141,7 @@
   .hero-agent-field__hub img { width: 64px; height: 64px; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .hero-agent-field--fixed { translate: none; will-change: auto; }
   .hero-agent-field__plane,
   .hero-agent-field__orbit,
   .hero-agent-field__rotor { animation: none; }

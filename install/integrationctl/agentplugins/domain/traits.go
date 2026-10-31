@@ -33,11 +33,26 @@ type ClientTraits struct {
 	ReportsMCPToolNamespaceCollision  bool
 	BindsNativeProfileRoot            bool
 	TracksNativeEffects               bool
+	// RecordsUserProfileOnCreate records a selected user profile only for a new
+	// binding. It never adopts a legacy or coalesced binding with missing proof.
+	RecordsUserProfileOnCreate bool
+	// RequiresPluginData binds native extension runtime locators to an owned data receipt.
+	RequiresPluginData bool
+	// VerifiesNativeDirectory permits read-only verification of a directly discovered package.
+	VerifiesNativeDirectory bool
+	// ProtectsModifiedPackage rejects repair over edited discovery code; missing
+	// exact-owned directories remain repairable through the normal transaction.
+	ProtectsModifiedPackage bool
 	// EnforcesExplicitSkillInvocation means the client has a verified way to
 	// keep a skill out of the model's automatic choice, so an explicit-only
 	// command can be delivered. The adapter must then implement
 	// clients.ExplicitSkillDecorator. Backend siblings must agree.
 	EnforcesExplicitSkillInvocation bool
+	// DiscoversNativeHooks means staging must carry the package-root hooks/
+	// and commands/ surfaces through to the delivered tree: the client
+	// discovers them there by convention (Qoder plugin layout) instead of
+	// through the portable hooks contract other clients cannot consume.
+	DiscoversNativeHooks bool
 }
 
 // ClientTraitsFor returns the declared traits for a known client. Unknown ids
@@ -62,6 +77,14 @@ func RequiresNativeProjector(id ClientID) bool {
 		return true
 	}
 	return id == ClientVSCode
+}
+
+func RequiresNativeProjectorForScope(id ClientID, scope InstallScope) bool {
+	if scope != ScopeProject {
+		return RequiresNativeProjector(id)
+	}
+	definition, ok := ClientDefinitionFor(id)
+	return ok && definition.ProjectPolicy.Valid()
 }
 
 // Allows reports whether this client's table lists the intent. Validate still
@@ -90,15 +113,21 @@ func SharesBackend(first, second ClientID) bool {
 // not ChatGPT-style personal mapping when the intent is prepare or the
 // executable names the client.
 func ShouldReadOnlyVerify(id ClientID, executable string, intent InstallIntent) bool {
-	traits := ClientTraitsFor(id)
+	return ShouldReadOnlyVerifyForScope(id, ScopeUser, executable, intent)
+}
+
+func ShouldReadOnlyVerifyForScope(id ClientID, scope InstallScope, executable string, intent InstallIntent) bool {
+	traits := (SelectedDelivery{}).EffectiveTraitsForScope(id, scope)
 	switch {
+	case traits.VerifiesNativeDirectory:
+		return true
 	case traits.LifecycleKind == LifecycleNativeConfig:
 		return true
 	case traits.LifecycleKind == LifecycleCLIRegistry && traits.UsesManagedStdioLauncher:
 		return strings.TrimSpace(executable) != ""
 	case traits.HonorsOpenAIMCPAuthHints:
 		return strings.TrimSpace(executable) != ""
-	case len(BackendSiblings(id)) > 0:
+	case len(BackendSiblingsForScope(id, scope)) > 0:
 		return strings.TrimSpace(executable) != ""
 	case traits.Allows(InstallIntentPrepare) && !traits.RequiresPersonalMappingForPrepare:
 		if intent == InstallIntentPrepare {

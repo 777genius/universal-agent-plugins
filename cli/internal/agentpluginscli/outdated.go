@@ -13,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
 type outdatedReleaseIdentity struct {
@@ -25,6 +26,10 @@ type outdatedReleaseIdentity struct {
 }
 
 type outdatedInstallation struct {
+	Alias          string                   `json:"alias,omitempty"`
+	Source         string                   `json:"source,omitempty"`
+	Requested      *environment.Selector    `json:"requested,omitempty"`
+	RequiredBy     []environment.RequiredBy `json:"required_by,omitempty"`
 	InstallationID string                   `json:"installation_id"`
 	Name           string                   `json:"name"`
 	Status         string                   `json:"status"`
@@ -36,6 +41,9 @@ type outdatedInstallation struct {
 }
 
 type outdatedResult struct {
+	Pinned                int                    `json:"pinned"`
+	CheckUnavailable      int                    `json:"check_unavailable"`
+	Saved                 *savedUpdateCheck      `json:"saved,omitempty"`
 	ReadOnly              bool                   `json:"read_only"`
 	Snapshot              uint64                 `json:"snapshot_sequence,omitempty"`
 	SnapshotHash          string                 `json:"snapshot_digest,omitempty"`
@@ -53,9 +61,13 @@ func newOutdatedCommand(app App, opts *options) *cobra.Command {
 	var all bool
 	command := &cobra.Command{
 		Use:   "outdated [name-or-installation-id]",
-		Short: "Check immutable release identities without changing installations",
+		Short: "Check saved sources and tracked release identities without changing installations",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
@@ -69,11 +81,12 @@ func newOutdatedCommand(app App, opts *options) *cobra.Command {
 			return runOutdated(cmd.Context(), cmd, app, opts, selector)
 		},
 	}
-	command.Flags().BoolVar(&all, "all", false, "check every tracked installation")
+	command.Flags().BoolVar(&all, "all", false, "check saved dependencies and tracked installations")
 	return command
 }
 
 type outdatedSession struct {
+	savedOwned     map[string]bool
 	ctx            context.Context
 	app            App
 	opts           *options
@@ -109,8 +122,21 @@ func (session *outdatedSession) loadInstallations(selector string) error {
 	if err != nil {
 		return err
 	}
-	installations := append([]domain.Installation(nil), state.Installations...)
-	if strings.TrimSpace(selector) != "" {
+	session.state = state
+	session.result = outdatedResult{ReadOnly: true, Installations: []outdatedInstallation{}}
+	selectedSaved, err := session.loadSaved(selector)
+	if err != nil {
+		return err
+	}
+	installations := []domain.Installation{}
+	for _, item := range state.Installations {
+		if !session.savedOwned[item.InstallationID] {
+			installations = append(installations, item)
+		}
+	}
+	if selectedSaved {
+		installations = nil
+	} else if strings.TrimSpace(selector) != "" {
 		installation, err := selectInstallation(state, selector)
 		if err != nil {
 			return err
@@ -126,7 +152,6 @@ func (session *outdatedSession) loadInstallations(selector string) error {
 	})
 	session.state = state
 	session.installations = installations
-	session.result = outdatedResult{ReadOnly: true, Installations: make([]outdatedInstallation, 0, len(installations))}
 	return nil
 }
 
@@ -213,6 +238,10 @@ func (session *outdatedSession) inspectAll() {
 
 func (session *outdatedSession) countStatus(status string) {
 	switch status {
+	case "pinned":
+		session.result.Pinned++
+	case "check_unavailable":
+		session.result.CheckUnavailable++
 	case "outdated":
 		session.result.Outdated++
 	case "current":
@@ -340,7 +369,7 @@ func inspectDirectoryOutdated(
 		}
 		return item
 	}
-	return resolveDirectoryOutdated(bundle, detected, installerVersion, installation, origin, item)
+	return resolveDirectoryOutdated(bundle, detected, installerVersion, installation, origin, item, domain.InstallScope(scope))
 }
 
 func directoryOutdatedPreflight(item outdatedInstallation, detectionErr error, installation domain.Installation, scope string) (status, reason string, cloneInstalled, stop bool) {
@@ -363,6 +392,7 @@ func resolveDirectoryOutdated(
 	installation domain.Installation,
 	origin *domain.DirectoryOrigin,
 	item outdatedInstallation,
+	scopes ...domain.InstallScope,
 ) outdatedInstallation {
 	_, clientMap, err := preflightSelectedTargets(context.Background(), App{Detector: staticDetectedClientSource(detected)}, item.Targets, detectedClientValues(detected), false)
 	if err != nil {
@@ -372,7 +402,7 @@ func resolveDirectoryOutdated(
 	environment := directoryEnvironment(clientMap)
 	environment.InstallerVersion = installerVersion
 	selection, err := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{
-		Selector: origin.ProductID, Targets: expandAffectedSurfaceTargets(item.Targets), Scope: domain.ScopeUser,
+		Selector: origin.ProductID, Targets: expandAffectedSurfaceTargets(item.Targets, selectedScope(scopes)), Scope: selectedScope(scopes),
 		InstallerVersion: installerVersion, ClientVersions: environment.ClientVersions, OS: environment.OS,
 		Architecture: environment.Architecture, DependencyIdentity: environment.DependencyIdentity,
 		SchemaVersion: "1.0.0", Operation: domain.DirectoryUpdate,
@@ -428,6 +458,11 @@ func renderOutdated(writer io.Writer, result outdatedResult) error {
 		if _, err := fmt.Fprintf(writer, "%s: %s - %s\n", installation.Name, installation.Status, installation.Reason); err != nil {
 			return err
 		}
+		if installation.Installed != nil {
+			if _, err := fmt.Fprintf(writer, "  Installed: %s (%s)\n", outdatedIdentityLabel(installation.Installed), installation.Installed.Revision); err != nil {
+				return err
+			}
+		}
 		if err := renderOutdatedAvailable(writer, installation); err != nil {
 			return err
 		}
@@ -439,10 +474,21 @@ func renderOutdatedAvailable(writer io.Writer, installation outdatedInstallation
 	if installation.Available == nil {
 		return nil
 	}
-	label := fmt.Sprintf("%s release %d", installation.Available.DistributionID, installation.Available.ReleaseSequence)
-	if installation.Available.ReleaseSequence == 0 {
-		label = installation.Available.DistributionID
-	}
+	label := outdatedIdentityLabel(installation.Available)
 	_, err := fmt.Fprintf(writer, "  Available: %s (%s)\n", label, installation.Available.Revision)
 	return err
+}
+
+func outdatedIdentityLabel(identity *outdatedReleaseIdentity) string {
+	if identity == nil {
+		return "absent"
+	}
+	label := identity.PackageVersion
+	if identity.ReleaseSequence > 0 {
+		label = fmt.Sprintf("%s release %d", identity.DistributionID, identity.ReleaseSequence)
+	}
+	if label == "" {
+		label = identity.TreeDigest
+	}
+	return label
 }

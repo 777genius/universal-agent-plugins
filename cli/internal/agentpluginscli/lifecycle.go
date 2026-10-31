@@ -25,6 +25,10 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 		Short: "Safely update a tracked Agent Plugin across selected or installed clients",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
@@ -60,7 +64,7 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 			return runUpdateMany(cmd.Context(), cmd, operationApp, opts, args[0], targets)
 		},
 	}
-	command.Flags().BoolVar(&all, "all", false, "update every eligible tracked installation after one complete preflight")
+	command.Flags().BoolVar(&all, "all", false, "update saved dependencies and eligible tracked installations after one complete preflight")
 	return command
 }
 
@@ -69,6 +73,10 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 		Use: "repair <name-or-installation-id>", Short: "Explicitly restore a missing or modified managed package",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
@@ -128,7 +136,12 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return err
 	}
 	writeProgress(app, opts.format, "Resolving and validating the exact installed Agent Plugin revision...")
-	loaded, err := app.loadPackage(ctx, source)
+	var loaded loadedPackage
+	if installation.Source.SourceKind != "" {
+		loaded, err = app.loadRecordedDirect(ctx, installation, binding)
+	} else {
+		loaded, err = app.loadPackage(ctx, source)
+	}
 	if err != nil {
 		return err
 	}
@@ -152,7 +165,7 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	input := usecase.AddInput{Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope), DryRun: opts.dryRun,
 		InstallationID: installation.InstallationID, Interactive: app.Terminal, Hints: loaded.hints,
-		BackendExecutable: backendExecutable(selected, detectedMap), EnvironmentAuthority: authority}
+		BackendExecutable: backendExecutable(selected, detectedMap, app.scope()), EnvironmentAuthority: authority}
 	planned, err := service.Repair(ctx, input)
 	if err != nil {
 		if planned.Plan.Status == domain.PlanUnsupported {
@@ -299,7 +312,7 @@ func runUpdate(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	input := usecase.AddInput{
 		Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Interactive: app.Terminal, Hints: loaded.hints,
-		BackendExecutable:                backendExecutable(selected, detectedMap),
+		BackendExecutable:                backendExecutable(selected, detectedMap, app.scope()),
 		PersistAuthoritativeObservations: true,
 		EnvironmentAuthority:             authority,
 	}
@@ -354,6 +367,10 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 		Short: "Safely remove selected targets while retaining plugin data by default",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
@@ -526,7 +543,7 @@ func runRemove(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		Selector: installation.InstallationID, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Interactive: app.Terminal,
 		ExternalUninstalled:  opts.externalUninstalled,
-		BackendExecutable:    backendExecutable(selected, detectedMap),
+		BackendExecutable:    backendExecutable(selected, detectedMap, app.scope()),
 		EnvironmentAuthority: authority,
 	}
 	planned, err := service.Remove(ctx, input)
@@ -693,6 +710,12 @@ func environmentAuthorityForBinding(state domain.StateFileV2, installationID str
 }
 
 func updateSource(installation domain.Installation) string {
+	if installation.Source.SourceKind == "archive" && filepath.IsAbs(installation.Source.SourceURL) {
+		return localArchiveUpdateSource(installation.Source)
+	}
+	if installation.Source.SourceKind != "" && installation.Source.RequestedSource == "" {
+		return directSourceRequested(installation.Source)
+	}
 	if installation.Source.Repository == "" && filepath.IsAbs(installation.Source.CanonicalSource) {
 		return installation.Source.CanonicalSource
 	}
@@ -733,6 +756,14 @@ func repairSource(installation domain.Installation, binding domain.ClientBinding
 	}
 	if revision == "" {
 		return "", fmt.Errorf("the selected client binding has no exact resolved revision; refusing repair from a moving source")
+	}
+	if installation.Source.SourceKind != "" {
+		source := installation.Source
+		source.ResolvedRevision = revision
+		if source.SourceKind == "archive" {
+			source.ArchiveSHA256 = strings.TrimPrefix(revision, "sha256:")
+		}
+		return directSourceRequested(source), nil
 	}
 	if repository := strings.TrimSpace(installation.Source.Repository); repository != "" {
 		value := "github:" + repository + "@" + revision

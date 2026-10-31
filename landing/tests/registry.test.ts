@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import type { ClientID } from '../types/registry.ts';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { dirname, resolve } from 'node:path';
@@ -13,7 +14,13 @@ import {
   catalogQuery,
   restoreCatalogQuery,
 } from '../utils/filter.ts';
-import { mirroredIconPath, parseDirectoryData } from '../utils/registry.ts';
+import { clients } from '../data/clients.ts';
+import {
+  mirroredIconPath,
+  parseDirectoryData,
+  resolveDistribution,
+  vendorInstallSource,
+} from '../utils/registry.ts';
 import { projectRegistry } from '../utils/registryProjection.ts';
 import type { DiscoveryRecord, DiscoverySnapshot } from '../types/discovery.ts';
 
@@ -56,6 +63,50 @@ const discoveryRecord = {
 } satisfies DiscoveryRecord;
 
 describe('unified registry landing', () => {
+  it('accepts Directory target policies for newly advertised native clients without enabling undeclared targets', () => {
+    const fixture = structuredClone(snapshot) as {
+      distributions: {
+        id: string;
+        release_policies: {
+          targets: { client: string; authentication: string; delivery: string; scopes: string[] }[];
+        }[];
+      }[];
+    };
+    const nativeClients = clients.filter((client) => ['grok', 'kimi', 'qoder', 'pi'].includes(client.id));
+    const distribution = fixture.distributions.find((item) => item.id === '777genius/context7')!;
+    for (const policy of distribution.release_policies) {
+      policy.targets = nativeClients.map((client) => ({
+        client: client.id,
+        authentication: 'not_required',
+        delivery: 'managed',
+        scopes: ['user'],
+      }));
+    }
+    const parsed = parseDirectoryData(fixture, 'published_snapshot');
+    const context7 = parsed.plugins.find((plugin) => plugin.name === 'context7')!;
+    const community = context7.distributions.find((item) => item.id === distribution.id)!;
+    assert.deepEqual(
+      community.releases[0]!.targets.map((target) => target.client),
+      nativeClients.map((client) => client.id),
+    );
+    for (const policy of distribution.release_policies) {
+      policy.targets = policy.targets.filter((target) => target.client !== 'qoder');
+    }
+    const withoutQoder = parseDirectoryData(fixture, 'published_snapshot');
+    const unchanged = withoutQoder.plugins
+      .find((plugin) => plugin.name === 'context7')!
+      .distributions.find((item) => item.id === distribution.id)!;
+    assert.equal(
+      unchanged.releases[0]!.targets.some((target) => target.client === 'qoder'),
+      false,
+    );
+    distribution.release_policies[0]!.targets[0]!.client = 'unknown-client';
+    assert.throws(
+      () => parseDirectoryData(fixture, 'published_snapshot'),
+      /invalid or duplicate client/,
+    );
+  });
+
   it('projects only the registry data required by each static route', () => {
     const plugin = registry.plugins[0]!;
     const client = plugin.client_support.clients[0]!;
@@ -83,9 +134,144 @@ describe('unified registry landing', () => {
     assert.equal(counts.reviewed + counts.community, counts.total);
   });
 
+  it('keeps temporarily unlisted products out of every catalog surface', () => {
+    const hidden = registry.plugins.find((plugin) => plugin.name === 'agent-notifications')!;
+    assert.ok(hidden, 'the held-back product is still published in the Directory feed');
+    assert.equal(catalogVisiblePlugins([hidden]).length, 0);
+    assert.equal(catalogVisiblePlugins(registry.plugins).includes(hidden), false);
+    assert.equal(catalogTrustCounts([hidden]).total, 0);
+    const visible = registry.plugins.find(
+      (plugin) => plugin.name !== 'agent-notifications' && catalogVisiblePlugins([plugin]).length,
+    )!;
+    assert.equal(groupCatalogPlugins(catalogVisiblePlugins([hidden, visible])).length, 1);
+  });
+
+  it('derives product authentication from signed release target policies', () => {
+    const fixture = structuredClone(snapshot) as {
+      distributions: {
+        id: string;
+        product_id: string;
+        release_policies: {
+          targets: { client: string; authentication: string; delivery: string; scopes: string[] }[];
+        }[];
+      }[];
+    };
+    const distributions = fixture.distributions.filter((item) => item.product_id === 'context7');
+    assert.ok(distributions.length, 'context7 policies are present in the Directory feed');
+    for (const distribution of distributions)
+      for (const policy of distribution.release_policies)
+        for (const target of policy.targets) target.authentication = 'not_required';
+    const parse = () =>
+      parseDirectoryData(fixture, 'published_snapshot').plugins.find(
+        (plugin) => plugin.name === 'context7',
+      )!;
+    assert.equal(parse().authentication, 'none');
+    const parsed = parse();
+    const alternative = distributions.find((item) => item.id !== parsed.default_distribution)!;
+    assert.ok(alternative, 'context7 has an alternative distribution in the Directory feed');
+    for (const policy of alternative.release_policies)
+      policy.targets[0]!.authentication = 'required';
+    assert.equal(
+      parse().authentication,
+      'none',
+      'the default install path decides the product answer',
+    );
+    for (const policy of distributions.find((item) => item.id === parsed.default_distribution)!
+      .release_policies)
+      for (const target of policy.targets) target.authentication = 'required';
+    assert.equal(parse().authentication, 'unknown');
+  });
+
+  it('promotes reviewed-external materialization evidence into materialized clients', () => {
+    const fixture = structuredClone(snapshot) as {
+      snapshot?: unknown;
+      distributions: {
+        id: string;
+        releases: { sequence: number; tree_digest: string }[];
+        release_policies: {
+          release_sequence: number;
+          current_evidence: string[];
+          targets: { client: ClientID }[];
+        }[];
+      }[];
+      evidence: Record<string, unknown>[];
+    };
+    const raw = (fixture.snapshot ?? fixture) as typeof fixture;
+    assert.ok(raw.distributions.length, 'the Directory feed has distributions');
+    const pre = parseDirectoryData(fixture, 'published_snapshot');
+    let promoted = false;
+    outer: for (const distribution of raw.distributions) {
+      const plugin = pre.plugins.find((item) =>
+        item.distributions.some((view) => view.id === distribution.id),
+      );
+      if (!plugin) continue;
+      const view = plugin.distributions.find((item) => item.id === distribution.id)!;
+      for (const release of distribution.releases) {
+        const policy = distribution.release_policies.find(
+          (item) => item.release_sequence === release.sequence,
+        );
+        const releaseView = view.releases.find(
+          (item) => item.release_sequence === release.sequence,
+        );
+        if (!policy || !releaseView) continue;
+        for (const target of policy.targets) {
+          if (releaseView.materialized_clients.includes(target.client)) continue;
+          const id = 'test/reviewed-external-materialization';
+          raw.evidence.push({
+            id,
+            distribution_id: distribution.id,
+            release_sequence: release.sequence,
+            level: 'materialization',
+            outcome: 'passed',
+            client: target.client,
+            client_version: 'isolated-configuration-fixture',
+            installer_version: '0.1.87',
+            os: 'linux',
+            architecture: 'amd64',
+            observed_at: '2026-10-19T20:29:14Z',
+            package_tree_digest: release.tree_digest,
+            artifact: {
+              repository: '777genius/universal-agent-plugins-registry',
+              revision: 'a'.repeat(40),
+              path: 'evidence/test.json',
+              digest: `sha256:${'b'.repeat(64)}`,
+            },
+            trust: { kind: 'reviewed_external' },
+          });
+          policy.current_evidence.push(id);
+          const parsed = parseDirectoryData(fixture, 'published_snapshot');
+          const parsedView = parsed.plugins
+            .find((item) => item.distributions.some((view) => view.id === distribution.id))!
+            .distributions.find((item) => item.id === distribution.id)!;
+          const parsedRelease = parsedView.releases.find(
+            (item) => item.release_sequence === release.sequence,
+          )!;
+          assert.ok(
+            parsedRelease.materialized_clients.includes(target.client),
+            'reviewed-external passed materialization counts for eligibility like the signed resolver',
+          );
+          promoted = true;
+          break outer;
+        }
+      }
+    }
+    assert.ok(promoted, 'the feed has a target without materialization evidence to promote');
+  });
+
+  it('resolves the declared default once reviewed materialization evidence is trusted', () => {
+    const context7 = registry.plugins.find((plugin) => plugin.name === 'context7')!;
+    assert.ok(
+      context7.distributions.length > 1,
+      'context7 has multiple distributions in the Directory feed',
+    );
+    const resolved = resolveDistribution(context7, ['cursor']);
+    assert.equal(resolved.distribution?.id, context7.declared_default_distribution);
+    assert.equal(resolved.fallback_reason, undefined);
+  });
+
   it('intro counts collapse duplicate sources instead of counting raw records', () => {
     const reviewed = registry.plugins.find(
-      (plugin) => plugin.trust_state !== 'conformant_unreviewed',
+      (plugin) => plugin.installable && catalogVisiblePlugins([plugin]).length,
     )!;
     const alias = {
       ...reviewed,
@@ -253,6 +439,18 @@ describe('unified registry landing', () => {
     assert.match(pluginCommands(plugin, ['codex', 'cursor']).add, / --target codex,cursor$/);
   });
 
+  it('reserves a local logo for the newly published marketing kit', () => {
+    const plugin = { ...registry.plugins[0]!, name: 'marketing-kit', built_in: true };
+    assert.equal(mirroredIconPath(plugin), 'plugin-icons/marketing-kit.svg');
+    const svg = readFileSync(resolve(root, 'public/plugin-icons/marketing-kit.svg'), 'utf8');
+    assert.match(svg, /<svg\b[^>]*\bviewBox=/);
+    assert.doesNotMatch(
+      svg,
+      /<(?:script|foreignObject|image)\b|\bon\w+\s*=|(?:href|xlink:href)\s*=/i,
+    );
+    assert.equal(mirroredIconPath({ ...plugin, built_in: false }), undefined);
+  });
+
   it('gives every reviewed plugin its own local plugin or publisher logo', () => {
     const publisherAliases: Record<string, string> = {
       'chrome-devtools': 'googlechrome',
@@ -396,7 +594,7 @@ describe('unified registry landing', () => {
   });
 
   it('keeps retired registry mirrors out of the catalog without removing current sources', () => {
-    const reviewed = registry.plugins[0]!;
+    const reviewed = registry.plugins.find((plugin) => catalogVisiblePlugins([plugin]).length)!;
     const current = discoveryPlugin(
       {
         ...discoveryRecord,
@@ -418,5 +616,42 @@ describe('unified registry landing', () => {
     };
 
     assert.deepEqual(catalogVisiblePlugins([retired, current, reviewed]), [current, reviewed]);
+  });
+
+  it('hides only fully retired products; suspended ones stay in the list', () => {
+    const reviewed = registry.plugins.find((plugin) => catalogVisiblePlugins([plugin]).length)!;
+    const retired = {
+      ...reviewed,
+      name: 'retired-product',
+      distributions: reviewed.distributions.map((distribution) => ({
+        ...distribution,
+        releases: distribution.releases.map((release) => ({
+          ...release,
+          release_status: 'revoked' as const,
+        })),
+      })),
+    };
+    const paused = {
+      ...reviewed,
+      name: 'paused-product',
+      distributions: reviewed.distributions.map((distribution) => ({
+        ...distribution,
+        releases: distribution.releases.map((release, index) => ({
+          ...release,
+          release_status: (index === 0 ? 'active' : 'revoked') as 'active' | 'revoked',
+        })),
+      })),
+    };
+
+    assert.deepEqual(catalogVisiblePlugins([retired, paused, reviewed]), [paused, reviewed]);
+  });
+
+  it('offers the vendor installer override for agent-notifications only', () => {
+    const reviewed = registry.plugins[0]!;
+    assert.deepEqual(vendorInstallSource({ ...reviewed, name: 'agent-notifications' }), {
+      url: 'https://agent-notifications.com/#install',
+      command: '(set -o pipefail; curl -fsSL https://agent-notifications.com/install.sh | bash)',
+    });
+    assert.equal(vendorInstallSource(reviewed), undefined);
   });
 });

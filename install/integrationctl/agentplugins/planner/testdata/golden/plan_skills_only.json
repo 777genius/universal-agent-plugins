@@ -35,6 +35,11 @@
       "SelectedDelivery": {},
       "Status": "manual_activation_required",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/chatgpt"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/chatgpt",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -82,6 +87,11 @@
       "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/clients/claude",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/claude"
+      },
       "TargetRoot": "\u003croot\u003e/clients/claude/skills",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -117,7 +127,7 @@
       "LocalActions": null,
       "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
-      "NativeRegistryExecutable": "\u003croot\u003e/bin/cline",
+      "NativeRegistryExecutable": "",
       "NativeRegistryRoot": "\u003croot\u003e/clients/cline",
       "OpenCodeHost": null,
       "PackageMode": "native",
@@ -129,6 +139,11 @@
       "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/cline"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/cline",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -176,6 +191,11 @@
       "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/codex"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/codex",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -223,6 +243,11 @@
       "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/copilot"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/copilot",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -270,6 +295,11 @@
       "SelectedDelivery": {},
       "Status": "manual_activation_required",
       "TargetAnchor": "\u003croot\u003e/clients/cursor",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/cursor"
+      },
       "TargetRoot": "\u003croot\u003e/clients/cursor/plugins/local",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -318,6 +348,11 @@
       "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/gemini"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/gemini",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -365,6 +400,11 @@
       "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/clients/grok",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/grok"
+      },
       "TargetRoot": "\u003croot\u003e/clients/grok/plugins",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -412,6 +452,11 @@
       "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/clients/kimi",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/kimi"
+      },
       "TargetRoot": "\u003croot\u003e/clients/kimi/plugins/managed",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -459,6 +504,11 @@
       "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/kiro"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/kiro",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -506,6 +556,11 @@
       "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/opencode"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/opencode",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -514,6 +569,56 @@
       "Verification": "package_validated",
       "Warnings": [
         "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "pi": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/clients/pi/extensions/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "pi",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
+          "Support": "unsupported"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/pi",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/pi",
+      "OpenCodeHost": null,
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "PreviousNativeObjects": null,
+      "Scope": "user",
+      "SelectedDelivery": {},
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/clients/pi",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/pi"
+      },
+      "TargetRoot": "\u003croot\u003e/clients/pi/extensions",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "no_supported_components"
       ]
     }
   },
@@ -553,6 +658,11 @@
       "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/qoder"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/qoder",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -600,6 +710,11 @@
       "SelectedDelivery": {},
       "Status": "manual_activation_required",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/vscode"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/vscode",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -647,6 +762,11 @@
       "SelectedDelivery": {},
       "Status": "manual_activation_required",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/windsurf"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/windsurf",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",

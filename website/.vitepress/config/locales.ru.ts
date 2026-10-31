@@ -13,10 +13,16 @@ function readSidebar(fileName: string) {
 }
 
 export const ruLocaleConfig = {
+  title: "Agent Plugins · Документация",
+  description: "Руководства по установке, управлению и созданию Agent Plugins.",
   label: "Русский",
   lang: "ru-RU",
   link: "/ru/",
   themeConfig: {
+    langMenuLabel: "Выбрать язык",
+    lightModeSwitchTitle: "Включить светлую тему",
+    darkModeSwitchTitle: "Включить тёмную тему",
+    skipToContentLabel: "Перейти к содержимому",
     outlineTitle: "На этой странице",
     lastUpdatedText: "Обновлено",
     returnToTopLabel: "Наверх",
@@ -28,12 +34,12 @@ export const ruLocaleConfig = {
     },
     footer: {
       message: "Публичная документация для авторов плагинов и интеграторов.",
-      copyright: "Лицензия MIT"
+      copyright: "Лицензия Apache 2.0"
     },
     nav: [
       ...journeyNav("ru"),
       { text: "Быстрый старт", link: "/ru/guide/quickstart" },
-      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
+      { text: "API 0.1.65 · EN", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.ru.json"),
     editLink: {

@@ -1,11 +1,25 @@
 name: Terminal UI
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Documentation and web-only changes cannot affect the terminal matrix.
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
   workflow_dispatch:
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
+concurrency:
+  group: terminal-ui-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 permissions:
   contents: read
 jobs:
   terminal:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -20,7 +34,7 @@ jobs:
           - os: windows-2025
             target: windows-amd64
             archive: lintai-v0.1.3-x86_64-pc-windows-msvc.zip
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.os == 'ubuntu-24.04' && matrix.os || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
     env:
       GOWORK: 'off'
       GOTOOLCHAIN: local
@@ -39,7 +53,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
-          go-version: '1.26.9'
+          go-version: '1.26.10'
           cache: false
       - name: Focused contracts and frozen release build
         id: build
@@ -99,7 +113,7 @@ jobs:
       - name: Broad existing CLI contracts
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         working-directory: cli
-        run: go test ./internal/agentpluginscli ./cmd/agentplugins/...
+        run: go test -timeout=15m ./internal/agentpluginscli ./cmd/agentplugins/...
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:

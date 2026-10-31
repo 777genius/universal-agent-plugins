@@ -1,6 +1,13 @@
 # Changelog
 
-All notable changes to this repository are documented here. **CLI releases** (`plugin-kit-ai` binary built from `cli`) are versioned together with the monorepo for now; SDK history remains in [sdk/CHANGELOG.md](sdk/CHANGELOG.md).
+This log preserves repository changes across the earlier `plugin-kit-ai`
+product and the current `agentplugins` installer. The accumulated Unreleased
+section contains historical entries that have since shipped; its wording is not
+the current availability contract. Use the versioned
+[Agentplugins release notes](https://github.com/777genius/universal-agent-plugins/releases)
+and [current documentation](https://universal-agent-plugins.com/docs/en/) for
+published commands. Runtime SDK history remains in [sdk/CHANGELOG.md](sdk/CHANGELOG.md);
+TypeScript Management SDK releases are in [sdks/typescript/CHANGELOG.md](sdks/typescript/CHANGELOG.md).
 
 ## [Unreleased]
 
@@ -8,6 +15,36 @@ Changes after `v1.2.4` land here.
 
 ### Added
 
+- Unreleased source commands `agentplugins deps export` and `deps import`
+  transfer the exact validated `uap.toml` / `uap.lock` pair through the current
+  folder (or an optional directory), with a preview and confirmation for every
+  copy. `deps import --install` restores through the strict locked installer;
+  installation failures after saving retain the imported desired state.
+
+- Dependency environments now accept stable exact/caret registry versions and
+  transitive `plugin.json` dependencies, choosing one compatible minimum version
+  per source in the existing `uap.lock`. Compatible pins replay unchanged;
+  shared packages remain while required. Offline `deps tree` shows the graph,
+  and `deps update <alias>` refreshes registry ranges without changing intent.
+  Locked replay verifies pinned declarations and rejects incomplete graphs
+  before installation or repair. This remains an unreleased source workflow.
+
+- Locked install/sync fetches each missing immutable pin once per command,
+  stages verified bytes through preflight and publishes the store after
+  confirmation. Exact copied-lock restore permits superseded, non-revoked
+  registry releases without changing versions or claiming installed history;
+  publication identity, revocation, suspension and compatibility checks remain
+  enforced. Ordinary fresh registry selection still requires an active release.
+
+- `agentplugins install` is the everyday environment converge verb, matching
+  how package managers are used: a first run installs everything declared in
+  `uap.toml` and `uap.lock`, a repeat run is a successful nothing-to-do, and
+  missing or drifted environment-owned projections are repaired from their
+  recorded lock pin before converging to the locked state. It accepts
+  `--locked`, `--yes` and `--external-uninstalled` with the same fail-closed
+  meaning as `deps sync`. `install <name-or-source>` keeps the historical
+  `add` alias contract, so the bare `install` command replaces the old alias;
+  `agentplugins add` remains the canonical single-package verb.
 - The `agentplugins` lifecycle commands now accept ordered, comma-separated
   targets such as `--target codex,cursor`, with versioned batch JSON output and
   explicit partial-failure reporting that preserves successful client changes.
@@ -81,6 +118,18 @@ The following `agentplugins` changes are breaking. They ship in the next minor
   findings without changing Conformance or HostSafety. Compatibility reports a
   withheld explicit-only command as the warning `target_command_withheld`, and
   as an error only when the client gets nothing else.
+- **Workspace lock renamed to `.uap-integrations.lock`.** The workspace desired
+  state file written by `plugin-kit-ai integrations sync` is now
+  `<repo>/.uap-integrations.lock`, so its name no longer collides with the
+  legacy `plugin-kit-ai` branding or with the dependency environment lock
+  `uap.lock`. `plugin-kit-ai integrations` commands read and write only the new
+  name: a repository whose lock still carries the legacy
+  `.plugin-kit-ai.lock` name fails with rename guidance instead of silently
+  adopting or rewriting it, so migrate with `mv .plugin-kit-ai.lock
+  .uap-integrations.lock`. The legacy name remains an accepted package-tree
+  exclusion everywhere digests are computed, so existing workspaces see no
+  digest drift. Authoring reports list the tree exclusion as
+  `root non-directory .uap-integrations.lock`.
 
 ### Fixed
 

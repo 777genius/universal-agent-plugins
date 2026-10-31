@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 func routeSavedAdd(cmd *cobra.Command, app App, opts *options, source string, activation, auth bool) (bool, error) {
@@ -22,7 +24,7 @@ func routeSavedAdd(cmd *cobra.Command, app App, opts *options, source string, ac
 	switch {
 	case opts.noSave:
 		reason = "no_save_requested"
-	case explicitLocalPath(source):
+	case localArchiveInput(source) || explicitLocalPath(source):
 		reason = "local_source_not_portable"
 	case strings.HasPrefix(source, "discovery:"):
 		reason = "discovery_source_not_saved"
@@ -46,7 +48,9 @@ func routeSavedAdd(cmd *cobra.Command, app App, opts *options, source string, ac
 	}
 	matches := exactGitPattern.FindStringSubmatch(source)
 	if matches == nil && !isDirectorySelector(source) {
-		return true, errors.New("saved add requires an exact GitHub commit or Directory selector; use --no-save")
+		if _, err := sourcespec.Parse(source); err != nil {
+			return true, err
+		}
 	}
 	targets, err = savedAddTargets(cmd, app, opts, source, targets)
 	if err != nil {
@@ -70,6 +74,13 @@ func cloneSavedRequirements(value environment.Requirements) environment.Requirem
 }
 
 func resolveSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, matches []string, snapshot environmentSnapshot) (environment.Requirement, environment.LockedPackage, error) {
+	return resolveSavedAddContext(cmd.Context(), app, opts, source, targets, matches, snapshot)
+}
+
+func resolveSavedAddContext(ctx context.Context, app App, opts *options, source string, targets []domain.ClientID, matches []string, snapshot environmentSnapshot) (environment.Requirement, environment.LockedPackage, error) {
+	if matches == nil && !isDirectorySelector(source) {
+		return resolveDirectSavedAdd(ctx, app, opts, source, snapshot)
+	}
 	var requirement environment.Requirement
 	alias := ""
 	var pin environment.LockedPackage
@@ -78,7 +89,7 @@ func resolveSavedAdd(cmd *cobra.Command, app App, opts *options, source string, 
 		key := mustSourceKey(requirement)
 		for _, pkg := range snapshot.Lock.Packages {
 			if pkg.SourceKey == key {
-				alias = pkg.Alias
+				alias = dependencyRootKey(snapshot.Requirements, snapshot.Lock, pkg.Alias)
 				pin = pkg
 				break
 			}
@@ -89,9 +100,16 @@ func resolveSavedAdd(cmd *cobra.Command, app App, opts *options, source string, 
 		if err != nil {
 			return environment.Requirement{}, environment.LockedPackage{}, err
 		}
-		alias = pin.Alias
+		alias = dependencyRootKey(snapshot.Requirements, snapshot.Lock, pin.Alias)
 		if alias != "" {
 			requirement = snapshot.Requirements.Dependencies[alias]
+			if requirement.Registry == nil && pin.Source.Registry != nil {
+				source := pin.Source.Registry
+				requirement = environment.Requirement{Alias: alias, Registry: &environment.RegistrySource{
+					Distribution: source.DistributionID,
+					Selector:     environment.Selector{Kind: environment.SelectorRelease, Value: fmt.Sprint(source.ReleaseSequence)},
+				}}
+			}
 		}
 
 	}
@@ -109,16 +127,16 @@ func resolveSavedAdd(cmd *cobra.Command, app App, opts *options, source string, 
 	}
 
 	if alias == "" {
-		return acquireSavedAdd(cmd, app, opts, source, targets, matches, requirement, snapshot.Requirements)
+		return acquireSavedAdd(ctx, app, opts, source, targets, matches, requirement, snapshot.Requirements)
 	}
 	requirement.Alias = alias
 	return requirement, pin, nil
 
 }
 
-func acquireSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, matches []string, requirement environment.Requirement, requirements environment.Requirements) (environment.Requirement, environment.LockedPackage, error) {
+func acquireSavedAdd(ctx context.Context, app App, opts *options, source string, targets []domain.ClientID, matches []string, requirement environment.Requirement, requirements environment.Requirements) (environment.Requirement, environment.LockedPackage, error) {
 	var pin environment.LockedPackage
-	loaded, err := loadSavedAddPackage(cmd, app, source, targets, matches, requirement)
+	loaded, err := loadSavedAddPackage(ctx, app, source, targets, matches, requirement)
 	if err != nil {
 		return environment.Requirement{}, environment.LockedPackage{}, err
 	}
@@ -152,8 +170,9 @@ func acquireSavedAdd(cmd *cobra.Command, app App, opts *options, source string, 
 	pin.DigestAlgorithm = domain.TreeDigestAlgorithm
 	pin.TreeDigest = loaded.envelope.TreeDigest
 	pin.ManifestDigest = loaded.envelope.ManifestDigest
+	pin.Version = loaded.envelope.Manifest.Version
 	pin.ExecutableFiles = append([]string{}, loaded.envelope.ExecutableFiles...)
-	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(loaded); err != nil {
+	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(ctx, loaded, pin); err != nil {
 		return environment.Requirement{}, environment.LockedPackage{}, err
 	}
 	return requirement, pin, nil
@@ -168,12 +187,12 @@ func rejectKnownOwnedAdd(app App, source string) error {
 	if err != nil {
 		return err
 	}
-	key := ""
+	key := savedDirectSourceKey(source)
 	if matches := exactGitPattern.FindStringSubmatch(source); matches != nil {
 		key = "github:" + strings.ToLower(matches[1]) + ":" + matches[3]
 	}
 	for _, receipt := range state.EnvironmentReceipts {
-		if receipt.EnvironmentID != environment.EnvironmentUserDefault {
+		if receipt.EnvironmentID != app.environmentID() {
 			continue
 		}
 		if key != "" && receipt.SourceKey == key || isDirectorySelector(source) && receipt.SourceKey == "directory:"+strings.ToLower(source) {
@@ -193,11 +212,24 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 		var eligible []domain.DetectedClient
 		var skipped []targetSkip
 		for _, client := range clients {
-			if supportsDependencyTarget(app, string(client.ClientID)) {
-				eligible = append(eligible, client)
-			} else {
+			switch {
+			case client.DetectionError != nil:
+				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "client configuration could not be inspected safely; correct it and retry"})
+			case client.Status != domain.DetectionDetected:
+				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "client is not detected; install or configure it before selecting it"})
+			case !supportsDependencyTarget(app, string(client.ClientID)):
 				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "use --no-save"})
+			default:
+				eligible = append(eligible, client)
 			}
+		}
+		if len(eligible) > 0 {
+			var incompatible []targetSkip
+			eligible, incompatible, err = compatibleSavedAddTargets(cmd.Context(), app, source, eligible)
+			if err != nil {
+				return nil, err
+			}
+			skipped = append(skipped, incompatible...)
 		}
 		if len(eligible) > 1 {
 			if app, err = withPrompter(cmd, app, opts); err != nil {
@@ -209,6 +241,10 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 			return nil, err
 		}
 	}
+	return validateSavedAddTargets(app, opts, source, targets)
+}
+
+func validateSavedAddTargets(app App, opts *options, source string, targets []domain.ClientID) ([]domain.ClientID, error) {
 	if len(targets) == 0 {
 		return nil, errors.New("automated installation requires --target")
 	}
@@ -220,7 +256,7 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 			return nil, fmt.Errorf("target %s cannot be saved; retry agentplugins add %s --target %s --no-save", target, source, opts.target)
 		}
 	}
-	if opts.scope != "user" {
+	if opts.scope != "user" && opts.scope != "project" {
 		return nil, errors.New("saved dependencies support user scope only")
 	}
 
@@ -234,11 +270,11 @@ func seedSavedAdd(snapshot environmentSnapshot, requirement environment.Requirem
 	if pin.TreeDigest == "" {
 		return previous
 	}
-	if !reflect.DeepEqual(snapshot.Requirements.Dependencies[alias], requirement) && pin.Source.Git != nil && requirement.Git != nil && pin.Source.Git.Commit != requirement.Git.Selector.Value {
+	if !reflect.DeepEqual(snapshot.Requirements.Dependencies[alias], requirement) && pin.Source.Git != nil && requirement.Git != nil && requirement.Git.Selector.Kind == environment.SelectorCommit && pin.Source.Git.Commit != requirement.Git.Selector.Value {
 		return previous
 	}
 	for i, pkg := range previous.Packages {
-		if pkg.Alias == alias {
+		if pkg.SourceKey == pin.SourceKey {
 			previous.Packages[i] = pin
 			return previous
 		}
@@ -248,31 +284,31 @@ func seedSavedAdd(snapshot environmentSnapshot, requirement environment.Requirem
 	return previous
 }
 
-func loadSavedAddPackage(cmd *cobra.Command, app App, source string, targets []domain.ClientID, matches []string, requirement environment.Requirement) (loadedPackage, error) {
+func loadSavedAddPackage(ctx context.Context, app App, source string, targets []domain.ClientID, matches []string, requirement environment.Requirement) (loadedPackage, error) {
 	var err error
 	var loaded loadedPackage
 	if matches != nil {
-		snapshot, e := app.SourceAcquirer.AcquireGitHub(cmd.Context(), requirement.Git.Repository, requirement.Git.Selector.Value, requirement.Git.Path)
+		snapshot, e := app.acquireDependencyGit(ctx, *requirement.Git, requirement.Git.Selector.Value, "")
 		if e != nil {
 			return loadedPackage{}, e
 		}
 		identity := githubIdentity(requirement.Git.Repository, requirement.Git.Selector.Value, requirement.Git.Path)
 		snapshot.Source = domain.SourceIdentity{RequestedSource: identity, CanonicalSource: identity, Repository: requirement.Git.Repository, ResolvedRevision: requirement.Git.Selector.Value, PackageSubpath: requirement.Git.Path, SourceBindingHint: "uap-dependency-git"}
 		_, rootErr := os.Stat(filepath.Join(snapshot.Root, "plugin.json"))
-		loaded, err = app.loadStandardSnapshot(cmd.Context(), snapshot, domain.OriginModeDirect, nil, nil)
+		loaded, err = app.loadStandardSnapshot(ctx, snapshot, domain.OriginModeDirect, nil, nil)
 		if requirement.Git.Path == "" && os.IsNotExist(rootErr) {
-			paths, discoverErr := app.SourceAcquirer.DiscoverGitHubPackages(cmd.Context(), requirement.Git.Repository, requirement.Git.Selector.Value)
+			paths, discoverErr := app.SourceAcquirer.DiscoverGitHubPackages(ctx, requirement.Git.Repository, requirement.Git.Selector.Value)
 			if discoverErr != nil {
 				return loadedPackage{}, discoverErr
 			}
 			return loadedPackage{}, fmt.Errorf("choose //path for a standard package; candidates: %v", paths)
 		}
 	} else {
-		detected, detectErr := detectDependencyClients(cmd.Context(), app)
+		detected, detectErr := detectDependencyClients(ctx, app)
 		if detectErr != nil {
 			return loadedPackage{}, detectErr
 		}
-		loaded, err = app.acquireDirectory(cmd.Context(), source, withDetectedClients(packageResolutionRequest{StandardOnly: true, Operation: domain.DirectoryInstall, Targets: targets}, detected))
+		loaded, err = app.acquireDirectory(ctx, source, withDetectedClients(packageResolutionRequest{StandardOnly: true, Operation: domain.DirectoryInstall, Targets: targets}, detected))
 	}
 	if err != nil {
 		return loadedPackage{}, err
@@ -346,7 +382,7 @@ func runSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targ
 		}
 	}
 	previous := seedSavedAdd(snapshot, requirement, pin)
-	locked, err := (environment.Coordinator{Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, previous, "")
+	locked, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, previous, "")
 	if err != nil {
 		return err
 	}
@@ -359,8 +395,12 @@ func runSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targ
 		if len(targets) != 1 {
 			return errors.New("explicit lifecycle attestation requires exactly one target")
 		}
-		attest = &environment.Attestation{Alias: alias, ClientID: string(targets[0]), ActivationComplete: activation, AuthComplete: auth}
+		attest = &environment.Attestation{Alias: dependencyNodeAlias(requirements, locked, alias), ClientID: string(targets[0]), ActivationComplete: activation, AuthComplete: auth}
 	}
-	opts.environmentOutput = map[string]any{"saved": true, "alias": alias, "manifest_path": snapshot.ManifestPath, "lock_path": snapshot.LockPath, "intent_change": !reflect.DeepEqual(snapshot.Requirements, requirements)}
-	return runSavedEnvironment(cmd, app, opts, snapshot, requirements, locked, manifest, []string{alias}, attest)
+	selectedTargets := make([]string, 0, len(targets))
+	for _, target := range targets {
+		selectedTargets = append(selectedTargets, string(target))
+	}
+	opts.environmentOutput = map[string]any{"selected_targets": selectedTargets, "saved": true, "alias": alias, "manifest_path": snapshot.ManifestPath, "lock_path": snapshot.LockPath, "intent_change": !reflect.DeepEqual(snapshot.Requirements, requirements)}
+	return runSavedEnvironment(cmd, app, opts, snapshot, requirements, locked, manifest, []string{dependencyNodeAlias(requirements, locked, alias)}, attest, selectedTargets)
 }

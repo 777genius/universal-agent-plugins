@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { loadI18nMessages } from '../../scripts/load-i18n-messages.ts';
 import { expect, type Page, type Locator } from '@playwright/test';
 import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
 import { publishedLocales, type PublishedLocale } from '../../data/i18n';
@@ -6,10 +7,12 @@ import { localizedPath } from '../../utils/localizedRoutes';
 import type { DownloadOverlay } from '../../types/download';
 import { slavicPluralRule } from '../../utils/slavicPluralRule';
 import type { RegistryIndex } from '../../types/registry';
+import type { SkillSpectorManifest } from '../../types/skillSpector';
+import { skillSpectorV2ProfileDigest } from '../../utils/skillSpectorCatalog';
 
 export const locales: readonly PublishedLocale[] = publishedLocales;
 export function wording(locale: PublishedLocale) {
-  const messages = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+  const messages = loadI18nMessages(locale);
   const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], PublishedLocale, false>({ legacy: false, locale, fallbackLocale: false, pluralRules: { ru: slavicPluralRule, uk: slavicPluralRule }, messages: Object.fromEntries(publishedLocales.map(code => [code, code === locale ? messages : {}])) as Record<PublishedLocale, LocaleMessageDictionary<VueMessageType>> });
   return (key: string, params: Record<string, string | number> = {}) => {
     expect(i18n.global.te(key), `${locale}: missing ${key}`).toBe(true);
@@ -28,6 +31,8 @@ export function downloadChannelTitle(locale: PublishedLocale, channel: string) {
 }
 
 export async function hydrated(page: Page) {
+  // Theme/locale initialization runs on app:suspense:resolve, alongside Nuxt's
+  // hydration completion. A later browser idle turn is not an app lifecycle gate.
   await page.waitForFunction(() => {
     const root = document.querySelector('#__nuxt') as HTMLElement & {
       __vue_app__?: { config: { globalProperties: { $nuxt?: { isHydrating: boolean } } } };
@@ -56,6 +61,22 @@ export function deferred() {
   return { promise, release };
 }
 
+/** Unrelated UI tests have a deterministic optional-report boundary. */
+export function emptySkillSpectorManifest(): SkillSpectorManifest {
+  return {
+    schema_version: 2,
+    generated_at: '2026-01-01T00:00:00Z',
+    source_commit: 'a'.repeat(40),
+    scanner: { id: 'skillspector', version: '2.13.1', revision: 'f3b25697d76256998ca9d42c198d256258d4c035' },
+    profile: { id: 'static-only-v2', digest: skillSpectorV2ProfileDigest },
+    scope: 'selected_sources',
+    selection_digest: `sha256:${'1'.repeat(64)}`,
+    coverage: { selected: 0, reported: 0, pending: 0 },
+    shards: [],
+    plugin_coverage: [],
+  };
+}
+
 export async function offline(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -71,6 +92,8 @@ export async function offline(page: Page) {
   // Same release schema as migration-copy; every other non-local request is blocked.
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/reports/skillspector/v3/index.json')) return route.fulfill({ status: 404 });
+    if (url.pathname.endsWith('/reports/skillspector/v2/index.json')) return route.fulfill({ json: emptySkillSpectorManifest() });
     if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') return route.fallback();
     if (url.hostname === 'api.github.com' && url.pathname.endsWith('/releases/latest'))
       return route.fulfill({ json: { tag_name: 'agentplugins-v1.2.3', published_at: '2026-09-01T00:00:00Z', assets: [] } });

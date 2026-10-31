@@ -26,6 +26,7 @@ const (
 	ClientGrok     ClientID = "grok"
 	ClientKimi     ClientID = "kimi"
 	ClientQoder    ClientID = "qoder"
+	ClientPi       ClientID = "pi"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
@@ -64,6 +65,7 @@ const (
 // mutation remains in client-specific adapters and is intentionally not part
 // of this registry.
 type ClientDefinition struct {
+	ProjectPolicy         ProjectPolicy `json:"-"`
 	ID                    ClientID
 	DisplayName           string
 	BackendFamily         string
@@ -91,14 +93,14 @@ type ClientDefinition struct {
 }
 
 var clientDefinitions = []ClientDefinition{
-	clientDefinition(ClientCodex, "OpenAI Codex", "codex", "managed", "projected", true, PackageProjection, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+	withProjectScope(clientDefinition(ClientCodex, "OpenAI Codex", "codex", "managed", "projected", true, PackageProjection, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		QualifiedLocalInstallerFacade: true,
 		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:                 LifecycleCLIRegistry,
 		HonorsOpenAIMCPAuthHints:      true,
 		SupportsPreparedRecovery:      true,
 		BindsNativeProfileRoot:        true,
-	}),
+	}), LifecycleNativeConfig),
 	withoutHostPresence(withDirectoryPreparation(
 		clientDefinition(ClientChatGPT, "ChatGPT", "chatgpt", "manual_activation", "projected", false, PackageProjection, SupportProjected, SupportUnsupported, SupportUnsupported, SupportProjected, SupportUnsupported, ClientTraits{
 			InstallIntents:                    []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
@@ -106,61 +108,69 @@ var clientDefinitions = []ClientDefinition{
 			RequiresPersonalMappingForPrepare: true,
 		}),
 		DirectoryResolveContext7ChatGPTPreparation)),
-	clientDefinition(ClientCursor, "Cursor", "cursor", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
+	withProjectScope(clientDefinition(ClientCursor, "Cursor", "cursor", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
-	}),
-	withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecycleCLIRegistry,
-	})),
-	withoutCommands(clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
+	}), LifecycleNativeConfig),
+	withProjectScope(withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
+		InstallIntents:             []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:              LifecycleCLIRegistry,
+		RecordsUserProfileOnCreate: true,
+	})), LifecycleNativeConfig),
+	withProjectScope(withoutCommands(clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
 		SavedDependenciesDeferred: true,
 		InstallIntents:            []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:             LifecycleCLIRegistry,
-	})),
-	clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
+	})), LifecycleNativeConfig),
+	withProjectScope(clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:      []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
 		LifecycleKind:       LifecycleCLIRegistry,
 		TracksNativeEffects: true,
-	}),
-	withActivation(clientDefinition(ClientClaude, "Claude Code", "claude", "managed", "projected", false, PackageProjection, SupportProjected, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, ClientTraits{
+	}), LifecycleNativeConfig),
+	withProjectScope(withActivation(clientDefinition(ClientClaude, "Claude Code", "claude", "managed", "projected", false, PackageProjection, SupportProjected, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, ClientTraits{
 		QualifiedLocalInstallerFacade: true,
 		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:                 LifecycleCLIRegistry,
 		UsesManagedStdioLauncher:      true,
-	}), ActivationAutomatic),
-	clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
+	}), ActivationAutomatic), LifecycleCLIRegistry),
+	withProjectScope(clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:         []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:          LifecycleNativeConfig,
 		BindsNativeProfileRoot: true,
-	}),
-	withActivation(clientDefinition(ClientOpenCode, "OpenCode", "opencode", "managed", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+	}), LifecycleNativeConfig),
+	withProjectScope(withActivation(clientDefinition(ClientOpenCode, "OpenCode", "opencode", "managed", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:                   []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:                    LifecycleNativeConfig,
 		ReportsMCPToolNamespaceCollision: true,
-	}), ActivationAutomatic),
-	withActivation(clientDefinition(ClientCline, "Cline", "cline", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
+	}), ActivationAutomatic), LifecycleNativeConfig),
+	withProjectScope(withActivation(clientDefinition(ClientCline, "Cline", "cline", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleNativeConfig,
-	}), ActivationAutomatic),
-	clientDefinition(ClientWindsurf, "Windsurf / Devin", "windsurf", "prepared", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
+	}), ActivationAutomatic), LifecycleNativeConfig),
+	withProjectScope(clientDefinition(ClientWindsurf, "Windsurf / Devin", "windsurf", "prepared", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
 		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:            LifecycleNativeConfig,
 		UsesManagedStdioLauncher: true,
-	}),
-	clientDefinition(ClientGrok, "Grok Build", "grok", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+	}), LifecycleNativeConfig),
+	withProjectScope(clientDefinition(ClientGrok, "Grok Build", "grok", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
-	}),
-	clientDefinition(ClientKimi, "Kimi Code", "kimi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+	}), LifecyclePrepared),
+	withProjectScope(clientDefinition(ClientKimi, "Kimi Code", "kimi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleNativeConfig,
-	}),
-	stdioOnlyMCP(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecycleCLIRegistry,
-	})),
+	}), LifecycleNativeConfig),
+	withProjectScope(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:            LifecycleCLIRegistry,
+		BindsNativeProfileRoot:   true,
+		DiscoversNativeHooks:     true,
+		HonorsOpenAIMCPAuthHints: true,
+	}), LifecyclePrepared),
+	withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
+		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,
+	})), ActivationAutomatic),
 }
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {
@@ -175,13 +185,6 @@ func withActivation(definition ClientDefinition, activation ActivationMode) Clie
 // from both entries delivers commands to the family again.
 func withoutCommands(definition ClientDefinition) ClientDefinition {
 	definition.CommandSupport = SupportUnsupported
-	return definition
-}
-
-// stdioOnlyMCP withholds remote MCP transports from a client whose native
-// plugin contract only carries local stdio servers.
-func stdioOnlyMCP(definition ClientDefinition) ClientDefinition {
-	definition.Capabilities.MCPTransports["streamable-http"] = SupportUnsupported
 	return definition
 }
 
@@ -361,6 +364,9 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
+	requiresNativeProjectionRefresh bool
+
+	TargetContext              TargetContext           `json:"-"`
 	profileAuthority           *ProfileAuthority       `json:"-"`
 	profileNamespace           string                  `json:"-"`
 	PreviousNativeObjects      []NativeObjectOwnership `json:"-"`
@@ -409,11 +415,13 @@ type DeliveryPlan struct {
 // configured client roots. Persisted state must be checked against this value
 // before any destructive operation.
 type DeliveryTarget struct {
-	profileAuthority *ProfileAuthority `json:"-"`
-	profileNamespace string            `json:"-"`
-	TargetAnchor     string            `json:"-"`
-	TargetRoot       string            `json:"-"`
-	ActivePath       string            `json:"-"`
+	TargetContext      TargetContext     `json:"-"`
+	NativeRegistryRoot string            `json:"-"`
+	profileAuthority   *ProfileAuthority `json:"-"`
+	profileNamespace   string            `json:"-"`
+	TargetAnchor       string            `json:"-"`
+	TargetRoot         string            `json:"-"`
+	ActivePath         string            `json:"-"`
 }
 
 type OpenAIMCPAuthHint struct {
@@ -480,6 +488,8 @@ type ActivationOutcome struct {
 }
 
 type DeactivationRequest struct {
+	TargetContext         TargetContext           `json:"-"`
+	NativeRegistryRoot    string                  `json:"-"`
 	LocalEntryObservation *LocalEntryObservation  `json:"-"`
 	RemoveOwnedEntry      bool                    `json:"-"`
 	SelectedDelivery      SelectedDelivery        `json:"-"`
@@ -496,11 +506,14 @@ type DeactivationRequest struct {
 }
 
 type DeactivationOutcome struct {
-	Activation              ActivationState `json:"activation"`
-	ArtifactRemovalAllowed  bool            `json:"artifact_removal_allowed"`
-	ExternalRemovalComplete bool            `json:"external_removal_complete"`
-	UserActions             []string        `json:"user_actions,omitempty"`
-	LocalActions            []string        `json:"-"`
+	// NativeEffect is transient evidence of a native transaction's actual
+	// effects. An ordinary error never establishes that removal was unchanged.
+	NativeEffect            NativeEffectState `json:"-"`
+	Activation              ActivationState   `json:"activation"`
+	ArtifactRemovalAllowed  bool              `json:"artifact_removal_allowed"`
+	ExternalRemovalComplete bool              `json:"external_removal_complete"`
+	UserActions             []string          `json:"user_actions,omitempty"`
+	LocalActions            []string          `json:"-"`
 }
 
 func supportsLocalDelivery(id ClientID) bool { return id == ClientVSCode }

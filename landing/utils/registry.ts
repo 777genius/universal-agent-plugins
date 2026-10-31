@@ -1,3 +1,4 @@
+import { catalogCategories } from './catalogCategories.ts';
 import type {
   RegistryDiagnostic,
   ClientEvidence,
@@ -16,6 +17,7 @@ import type {
   TargetAuthentication,
   RegistryIndex,
   RegistryPlugin,
+  InstallScope,
 } from '../types/registry';
 
 const REPOSITORY = /^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\/[a-z0-9](?:[a-z0-9._-]{0,98}[a-z0-9])?$/;
@@ -35,6 +37,10 @@ const CLIENTS = new Set<ClientID>([
   'opencode',
   'cline',
   'windsurf',
+  'grok',
+  'kimi',
+  'qoder',
+  'pi',
 ]);
 const KINDS = new Set<DistributionKind>(['upstream', 'community_bridge', 'community']);
 const RFC3339_INSTANT =
@@ -207,6 +213,9 @@ const legacyDelivery: RegistryPlugin['client_support']['delivery'] = {
   opencode: 'managed',
   cline: 'managed',
   windsurf: 'prepared',
+  grok: 'managed',
+  kimi: 'managed',
+  qoder: 'managed',
 };
 
 function legacyAuthentication(name: string): RegistryPlugin['authentication'] {
@@ -435,8 +444,11 @@ function evidenceTrustedForEligibility(
   // On the published_snapshot call path, production receives only snapshot
   // bytes verified by the publication workflow. The Directory signer therefore
   // vouches that github_actions trust matched the repository's approved
-  // workflow and protected-ref policy; these public fields are the CLI 0.1.18
-  // projection of that reviewed decision. Review previews never enable commands.
+  // workflow and protected-ref policy. Eligibility trust mirrors the signed
+  // resolver's HasTrustedEligibilityProvenance: schema gates need reproducible
+  // workflow provenance, while materialization and client runtime gates may
+  // also use exact evidence reviewed by the Directory publisher.
+  // Review previews never enable commands.
   if (!signerVouched || !record(item.trust)) return false;
   const trust = item.trust;
   if (trust.kind === 'github_actions') {
@@ -458,7 +470,10 @@ function evidenceTrustedForEligibility(
       return false;
     return true;
   }
-  return trust.kind === 'reviewed_external' && ['discovery', 'runtime', 'oauth'].includes(level);
+  return (
+    trust.kind === 'reviewed_external' &&
+    ['materialization', 'discovery', 'runtime', 'oauth'].includes(level)
+  );
 }
 
 function evidenceFromSnapshot(
@@ -763,13 +778,7 @@ function parseSnapshot(
         };
       });
       const eligibleTargets = (release: DistributionReleaseView) =>
-        release.selectable
-          ? release.targets.filter(
-              (target) =>
-                !release.blocking_clients.includes(target.client) &&
-                (kind !== 'upstream' || release.materialized_clients.includes(target.client)),
-            )
-          : [];
+        release.selectable ? eligibleTargetPolicies(kind, release) : [];
       const selectedRelease =
         releaseViews.find((release) => eligibleTargets(release).length > 0) ?? releaseViews[0]!;
       const compatible = [
@@ -830,7 +839,10 @@ function parseSnapshot(
       description: requiredString(raw, 'description', context),
       author: productAuthor,
       license: optionalString(raw, 'license') ?? 'See source',
-      categories: stringArray(raw.categories ?? [], 'categories', context),
+      categories: catalogCategories(
+        selected.source,
+        stringArray(raw.categories ?? [], 'categories', context),
+      ),
       keywords: stringArray(raw.keywords ?? [], 'keywords', context),
       source: selected.source,
       install_source: name,
@@ -860,7 +872,11 @@ function parseSnapshot(
       distributions,
       evidence: selected.evidence,
       package_evidence: selected.package_evidence,
-      authentication: 'unknown',
+      authentication:
+        selected.targets.length > 0 &&
+        selected.targets.every((target) => target.authentication === 'not_required')
+          ? 'none'
+          : 'unknown',
       client_support: {
         resolution: 'directory',
         clients: [
@@ -946,9 +962,16 @@ export function defaultDistribution(plugin: RegistryPlugin): DistributionView {
   return distribution;
 }
 
+function supportsInstallScope(target: ReleaseTarget | undefined, scope: InstallScope): boolean {
+  // A remote app connection has no project filesystem installation. Missing
+  // scope facts cannot authorize a project command on older projections.
+  return Boolean(target?.scopes?.includes(scope) && (scope !== 'project' || !target.app_binding));
+}
+
 function eligibleRelease(
   distribution: DistributionView,
   targets: ReadonlySet<ClientID>,
+  scope?: InstallScope,
 ): { release?: DistributionReleaseView; reason?: string; diagnostic?: RegistryDiagnostic } {
   if (distribution.status !== 'active')
     return {
@@ -981,6 +1004,25 @@ function eligibleRelease(
         params: { sequence: release.release_sequence, targets: missing.join(',') },
       });
     } else {
+      const missingScope = scope
+        ? [...targets].filter(
+            (client) =>
+              !supportsInstallScope(
+                release.targets.find((target) => target.client === client),
+                scope,
+              ),
+          )
+        : [];
+      if (scope && missingScope.length) {
+        reasons.push(
+          `release ${release.release_sequence} does not support ${scope} scope for ${missingScope.sort().join(',')}`,
+        );
+        diagnostics.push({
+          code: 'unsupportedScope',
+          params: { sequence: release.release_sequence, scope, targets: missingScope.join(',') },
+        });
+        continue;
+      }
       const failures = [...targets]
         .filter((target) => release.blocking_clients.includes(target))
         .sort();
@@ -1023,6 +1065,7 @@ function eligibleRelease(
 export function resolveDistribution(
   plugin: RegistryPlugin,
   targets: readonly ClientID[],
+  scope?: InstallScope,
 ): DistributionResolution {
   if (!targets.length || new Set(targets).size !== targets.length)
     return {
@@ -1031,7 +1074,7 @@ export function resolveDistribution(
     };
   const selectedTargets = new Set(targets);
   const resolved = (distribution: DistributionView): DistributionView | undefined => {
-    const release = eligibleRelease(distribution, selectedTargets).release;
+    const release = eligibleRelease(distribution, selectedTargets, scope).release;
     return release
       ? {
           ...distribution,
@@ -1056,7 +1099,7 @@ export function resolveDistribution(
   if (!declared) throw new Error(`${plugin.name}: declared default distribution is unavailable`);
   const selectedDefault = resolved(declared);
   if (selectedDefault) return { distribution: selectedDefault };
-  const defaultEligibility = eligibleRelease(declared, selectedTargets);
+  const defaultEligibility = eligibleRelease(declared, selectedTargets, scope);
   const defaultReason = defaultEligibility.reason ?? 'no releases';
   const defaultDiagnostic = defaultEligibility.diagnostic ?? { code: 'noReleases' as const };
   const priority: Record<DistributionKind, number> = {
@@ -1085,7 +1128,7 @@ export function resolveDistribution(
     }
     ineligibleReasons.push({
       distribution_id: distribution.id,
-      reason: eligibleRelease(distribution, selectedTargets).reason ?? 'no releases',
+      reason: eligibleRelease(distribution, selectedTargets, scope).reason ?? 'no releases',
     });
   }
   const targetList = [...selectedTargets].sort().join(',');
@@ -1099,11 +1142,51 @@ export function resolveDistribution(
         code: 'distributionReason',
         params: { distribution: distribution.id },
         reasons: [
-          eligibleRelease(distribution, selectedTargets).diagnostic ?? { code: 'noReleases' },
+          eligibleRelease(distribution, selectedTargets, scope).diagnostic ?? {
+            code: 'noReleases',
+          },
         ],
       })),
     },
   };
+}
+
+export function eligibleTargetPolicies(
+  kind: DistributionKind,
+  release: Pick<DistributionReleaseView, 'targets' | 'blocking_clients' | 'materialized_clients'>,
+): ReleaseTarget[] {
+  return release.targets.filter(
+    (target) =>
+      !release.blocking_clients.includes(target.client) &&
+      (kind !== 'upstream' || release.materialized_clients.includes(target.client)),
+  );
+}
+
+/** Every policy a no-`--target` install can resolve: the signed resolver walks
+ * distributions in order and installs into whichever agents it detects, so any
+ * individually eligible (release, target) pair is reachable. */
+export function reachableTargetPolicies(
+  distributions: readonly Pick<DistributionView, 'kind' | 'status' | 'releases'>[],
+  scope?: InstallScope,
+): ReleaseTarget[] {
+  const policies: ReleaseTarget[] = [];
+  for (const distribution of distributions) {
+    if (distribution.status !== 'active') continue;
+    for (const release of distribution.releases) {
+      if (release.release_status !== 'active' || !release.meets_minimum_capabilities) continue;
+      for (const target of eligibleTargetPolicies(distribution.kind, release)) {
+        if (scope && !supportsInstallScope(target, scope)) continue;
+        if (
+          !policies.some(
+            (item) =>
+              item.client === target.client && item.authentication === target.authentication,
+          )
+        )
+          policies.push(target);
+      }
+    }
+  }
+  return policies;
 }
 
 export function expectedDistribution(
@@ -1179,12 +1262,32 @@ export function githubSourceUrl(
   return `https://github.com/${distribution.source.repository}/tree/${distribution.source.revision}/${path}`;
 }
 
+export interface VendorInstallSource {
+  url: string;
+  command: string;
+}
+
+// Products that install through their own vendor installer instead of the
+// universal-agent-plugins CLI. The command is the vendor's own published one;
+// the UI must present it as vendor-supplied, never as vouched for by UAP.
+const vendorInstallSources: Record<string, VendorInstallSource> = {
+  'agent-notifications': {
+    url: 'https://agent-notifications.com/#install',
+    command: '(set -o pipefail; curl -fsSL https://agent-notifications.com/install.sh | bash)',
+  },
+};
+
+export function vendorInstallSource(plugin: RegistryPlugin): VendorInstallSource | undefined {
+  return vendorInstallSources[plugin.name];
+}
+
 export function mirroredIconPath(plugin: RegistryPlugin): string | undefined {
   if (!plugin.built_in) return undefined;
   // Local presentation assets are owned explicitly; package metadata cannot
   // select arbitrary files or make an external discovery entry load a logo.
   const icons: Record<string, string> = {
     'agent-code-navigator': 'agent-code-navigator',
+    'agent-notifications': 'agent-notifications',
     atlassian: 'atlassian',
     'chrome-devtools': 'googlechrome',
     cloudflare: 'cloudflare',
@@ -1204,6 +1307,7 @@ export function mirroredIconPath(plugin: RegistryPlugin): string | undefined {
     'hubspot-crm': 'hubspot',
     'hubspot-developer': 'hubspot',
     linear: 'linear',
+    'marketing-kit': 'marketing-kit',
     neon: 'neon',
     notion: 'notion',
     playwright: 'playwright',

@@ -33,6 +33,11 @@
     "SelectedDelivery": {},
     "Status": "manual_activation_required",
     "TargetAnchor": "\u003croot\u003e/managed",
+    "TargetContext": {
+      "ProjectRoot": "",
+      "Scope": "user",
+      "UserConfigRoot": "\u003croot\u003e/clients/vscode"
+    },
     "TargetRoot": "\u003croot\u003e/managed/clients/vscode",
     "UserActions": [
       "verify the plugin's authentication requirements before using it",
@@ -77,6 +82,11 @@
     "SelectedDelivery": {},
     "Status": "ready",
     "TargetAnchor": "\u003croot\u003e/managed",
+    "TargetContext": {
+      "ProjectRoot": "",
+      "Scope": "user",
+      "UserConfigRoot": "\u003croot\u003e/clients/vscode"
+    },
     "TargetRoot": "\u003croot\u003e/managed/clients/vscode",
     "UserActions": [
       "verify the plugin's authentication requirements before using it",

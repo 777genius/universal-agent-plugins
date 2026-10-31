@@ -1,0 +1,128 @@
+/* Catalog modes share the existing control and card vocabulary. */
+.unified-catalog__heading {
+  max-width: none;
+  margin-bottom: 32px;
+}
+.unified-catalog__heading .catalog-heading-row {
+  flex-wrap: wrap;
+}
+.unified-catalog__heading .unified-catalog__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin: 0;
+  font-size: 2.25rem;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+.unified-catalog__heading > p {
+  max-width: 75ch;
+  margin-top: 18px;
+}
+.catalog-modes {
+  display: inline-flex;
+  align-items: stretch;
+  max-width: 100%;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-solid);
+}
+.catalog-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  color: var(--muted);
+  font: inherit;
+  text-decoration: none;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+}
+.catalog-mode:hover {
+  color: var(--text);
+  background: var(--surface-raised);
+}
+.catalog-mode--active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 19%, var(--surface));
+}
+.catalog-mode:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+.skills-catalog__controls {
+  grid-template-columns: minmax(240px, 1fr) minmax(210px, 0.4fr);
+}
+.skill-card {
+  min-height: 180px;
+}
+.skill-card .plugin-card__identity-copy {
+  width: 100%;
+}
+.skill-card h3 {
+  text-transform: none;
+}
+.skill-card__metric {
+  margin: 20px 0 12px;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.skill-card__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 24px;
+  font-size: 0.73rem;
+}
+.skill-card__links a {
+  color: var(--muted);
+  text-underline-offset: 3px;
+}
+.skill-card__links a:hover,
+.skill-card__links a:focus-visible {
+  color: var(--cyan);
+}
+.skill-card .app-multiselect__trigger {
+  width: 100%;
+}
+.skill-card--skeleton {
+  gap: 18px;
+  justify-content: center;
+  pointer-events: none;
+}
+.skill-card--skeleton div {
+  height: 14px;
+  width: 65%;
+  border-radius: 5px;
+  background: var(--surface-raised);
+}
+.skill-card--skeleton div:first-child {
+  width: 80%;
+  height: 20px;
+}
+.skill-card--skeleton div:last-child {
+  width: 100%;
+  height: 38px;
+  margin-top: 25px;
+}
+@media (max-width: 640px) {
+  .unified-catalog__heading .unified-catalog__title {
+    min-width: 0;
+    max-width: 100%;
+    font-size: 1.55rem;
+  }
+  .catalog-mode {
+    min-width: 0;
+    padding-inline: 10px;
+  }
+  .skills-catalog__controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

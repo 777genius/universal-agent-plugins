@@ -46,7 +46,7 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 	want := []ClientID{
 		ClientCodex, ClientChatGPT, ClientCursor, ClientCopilot, ClientVSCode, ClientKiro,
-		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf, ClientGrok, ClientKimi, ClientQoder,
+		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf, ClientGrok, ClientKimi, ClientQoder, ClientPi,
 	}
 	if got := SupportedClientIDs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("supported clients = %v, want %v", got, want)
@@ -60,7 +60,8 @@ func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 }
 
 // TestQoderClientDefinition pins Qoder's single identity shared by Desktop and
-// CLI: native plugin bundles, stdio-only MCP, and the single user install scope
+// CLI: native plugin bundles, stdio and remote (streamable-http) MCP with
+// OpenAI-shaped auth hints, and the single user install scope
 // the agentplugins lifecycle actually installs and verifies
 // (`qoder plugins install --scope user`).
 func TestQoderClientDefinition(t *testing.T) {
@@ -75,17 +76,20 @@ func TestQoderClientDefinition(t *testing.T) {
 	if capabilities.PackageMode != PackageNative || capabilities.SkillSupport != SupportNative {
 		t.Fatalf("Qoder native skill capability = %+v", capabilities)
 	}
-	if capabilities.MCPTransports["stdio"] != SupportNative || capabilities.MCPTransports["streamable-http"] != SupportUnsupported || capabilities.MCPTransports["sse"] != SupportUnsupported {
+	if capabilities.MCPTransports["stdio"] != SupportNative || capabilities.MCPTransports["streamable-http"] != SupportNative || capabilities.MCPTransports["sse"] != SupportUnsupported {
 		t.Fatalf("Qoder MCP transports = %v", capabilities.MCPTransports)
 	}
 	if capabilities.AppSupport != SupportUnsupported || capabilities.ExtensionSupport != SupportUnsupported {
 		t.Fatalf("Qoder app/extension support = %+v", capabilities)
 	}
-	if want := []InstallScope{ScopeUser}; !reflect.DeepEqual(capabilities.Scopes, want) {
+	if want := []InstallScope{ScopeUser, ScopeProject}; !reflect.DeepEqual(capabilities.Scopes, want) {
 		t.Fatalf("Qoder scopes = %v, want %v", capabilities.Scopes, want)
 	}
 	if definition.Traits.LifecycleKind != LifecycleCLIRegistry || !definition.Traits.Allows(InstallIntentAutomatic) {
 		t.Fatalf("Qoder traits = %+v", definition.Traits)
+	}
+	if !definition.Traits.HonorsOpenAIMCPAuthHints {
+		t.Fatal("Qoder must honor OpenAI MCP auth hints so remote OAuth servers can authenticate")
 	}
 }
 

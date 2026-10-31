@@ -1467,7 +1467,7 @@ func TestDoctorDiagnosesManagedDirectoryChangesWithRecovery(t *testing.T) {
 
 func TestDoctorBlocksRepairForExcludedOwnershipMarker(t *testing.T) {
 	t.Parallel()
-	for _, marker := range []string{".git", ".plugin-kit-ai.lock"} {
+	for _, marker := range []string{".git", ".uap-integrations.lock", ".plugin-kit-ai.lock"} {
 		t.Run(marker, func(t *testing.T) {
 			fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
 			plugin := writeCLIPlugin(t)
@@ -3493,12 +3493,13 @@ func TestOpenCodeCLIOnlinePreviewUsesPreparedServiceAuthority(t *testing.T) {
 			cursor := fixtureClient(t, domain.ClientGemini)
 			fixture := newCLIFixture(t, []domain.DetectedClient{cursor, openCode})
 			calls := 0
+			version := "1.18.34"
 			preparer, err := hostprep.New(fixture.app.ClientRegistry, func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 				calls++
 				if !native {
 					t.Fatal("metadata-only acquired host authority")
 				}
-				return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: "1.18.34", Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: "TEST-CLI-injected"}}, nil
+				return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: version, Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: "TEST-CLI-injected"}}, nil
 			}, []string{"PATH="})
 			if err != nil {
 				t.Fatal(err)
@@ -3513,6 +3514,8 @@ func TestOpenCodeCLIOnlinePreviewUsesPreparedServiceAuthority(t *testing.T) {
 			if err != nil {
 				t.Fatalf("online add: %v %s", err, stderr)
 			}
+			// A new OpenCode patch must not block the existing grouped update.
+			version = "1.18.35"
 			before := calls
 			stdout, stderr, err := fixture.execute(false, "update", "demo", "--target", "gemini,opencode", "--format", "json")
 			if err != nil || !strings.Contains(stdout, `"no_change":true`) {

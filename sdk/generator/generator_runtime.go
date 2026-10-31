@@ -15,6 +15,8 @@ func renderArtifacts(m model) []Artifact {
 		{Path: "sdk/internal/descriptors/gen/support_gen_cursor.go", Content: mustGo(renderSupportBucket(m, "cursor"))},
 		{Path: "sdk/internal/descriptors/gen/support_gen_vscodelocal.go", Content: mustGo(renderSupportBucket(m, "vscode-local"))},
 		{Path: "sdk/internal/descriptors/gen/support_gen_codex.go", Content: mustGo(renderSupportBucket(m, "codex"))},
+		{Path: "sdk/internal/descriptors/gen/support_gen_qoder.go", Content: mustGo(renderSupportBucket(m, "qoder"))},
+		{Path: "sdk/internal/descriptors/gen/support_gen_pi.go", Content: mustGo(renderSupportBucket(m, "pi"))},
 		{Path: "sdk/internal/descriptors/gen/completeness_gen_test.go", Content: mustGo(renderCompletenessTest(m))},
 		{Path: "cli/internal/scaffold/platforms_gen.go", Content: mustGo(renderScaffoldPlatforms(m))},
 		{Path: "cli/internal/validate/rules_gen.go", Content: mustGo(renderValidateRules(m))},

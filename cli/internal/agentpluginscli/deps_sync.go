@@ -15,25 +15,20 @@ import (
 )
 
 func materializeLockedPackage(ctx context.Context, app App, locked environment.LockedPackage, publish bool, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
+	if source := locked.Source.Git; source != nil && source.Kind == environment.SkillKind && source.Normalizer != environment.SkillNormalizerV1 {
+		return loadedPackage{}, errors.New("unsupported locked skill normalizer")
+	}
 	store := app.dependencyStore()
 	if pkg, err := store.Get(ctx, locked.DigestAlgorithm, locked.TreeDigest); err == nil {
 		return loadStoredDependency(ctx, app, pkg, locked, recorded, operation...)
+	} else if !errors.Is(err, environmentstore.ErrMissing) {
+		return loadedPackage{}, err
 	}
-	var repository, commit, packagePath string
-	if locked.Source.Git != nil {
-		repository, commit, packagePath = locked.Source.Git.Repository, locked.Source.Git.Commit, locked.Source.Git.Path
-	} else if locked.Source.Registry != nil {
-		repository, commit, packagePath = locked.Source.Registry.Repository, locked.Source.Registry.Commit, locked.Source.Registry.Path
-	} else {
-		return loadedPackage{}, errors.New("locked package has no source")
-	}
-	snapshot, err := app.SourceAcquirer.AcquireGitHubVerified(ctx, repository, commit, packagePath, locked.TreeDigest)
+	snapshot, err := app.acquireLockedSnapshot(ctx, locked)
 	if err != nil {
 		return loadedPackage{}, err
 	}
-	identity := githubIdentity(repository, commit, packagePath)
-	snapshot.Source = domain.SourceIdentity{RequestedSource: identity, CanonicalSource: identity, Repository: repository,
-		PackageSubpath: packagePath, ResolvedRevision: commit, SourceBindingHint: dependencySourceHint(locked)}
+	snapshot.Source = identityFromLocked(locked)
 	origin, directory := domain.OriginModeDirect, (*domain.DirectoryOrigin)(nil)
 	if locked.Source.Registry != nil {
 		origin = domain.OriginModeDirectory
@@ -49,16 +44,18 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 		_ = loaded.cleanup()
 		return loadedPackage{}, errors.New("immutable fetch does not match uap.lock")
 	}
+	checked, err := verifyLockedDirectory(ctx, app, loaded, locked, recorded, operation...)
+	if err != nil {
+		_ = loaded.cleanup()
+		return loadedPackage{}, err
+	}
+	loaded = checked
 	if publish {
 		sealed := domain.PackageSnapshot{Root: loaded.envelope.SnapshotRoot, TreeDigest: loaded.envelope.TreeDigest,
 			DigestAlgorithm: locked.DigestAlgorithm, ExecutableFiles: append([]string{}, locked.ExecutableFiles...), Source: loaded.envelope.Source}
 		_, err = store.Put(ctx, sealed)
 	} else {
-		checked, checkErr := verifyLockedDirectory(ctx, app, loaded, locked, recorded, operation...)
-		if checkErr != nil && loaded.cleanup != nil {
-			_ = loaded.cleanup()
-		}
-		return checked, checkErr
+		return loaded, nil
 	}
 	cleanupErr := loaded.cleanup()
 	if err != nil {
@@ -75,6 +72,12 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 }
 
 func dependencySourceHint(locked environment.LockedPackage) string {
+	if locked.Source.Web != nil {
+		return "uap-dependency-web-skill"
+	}
+	if locked.Source.Git != nil && locked.Source.Git.Kind == environment.SkillKind {
+		return "uap-dependency-skill"
+	}
 	if locked.Source.Registry != nil {
 		return "uap-dependency-registry"
 	}
@@ -82,18 +85,14 @@ func dependencySourceHint(locked environment.LockedPackage) string {
 }
 
 func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Package, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
-	var repository, commit, subpath string
-	if locked.Source.Git != nil {
-		repository, commit, subpath = locked.Source.Git.Repository, locked.Source.Git.Commit, locked.Source.Git.Path
-	} else {
-		repository, commit, subpath = locked.Source.Registry.Repository, locked.Source.Registry.Commit, locked.Source.Registry.Path
-	}
-	identity := githubIdentity(repository, commit, subpath)
-	pkg.Metadata.Source = domain.SourceIdentity{RequestedSource: identity, CanonicalSource: identity, Repository: repository, PackageSubpath: subpath, ResolvedRevision: commit, SourceBindingHint: dependencySourceHint(locked)}
+	pkg.Metadata.Source = identityFromLocked(locked)
 	input := domain.LoadInput{SnapshotRoot: pkg.Root, TreeDigest: pkg.Metadata.TreeDigest,
 		ExecutableFiles: append([]string{}, pkg.Metadata.ExecutableFiles...), Source: pkg.Metadata.Source}
 	envelope, err := app.loadStandardEnvelope(ctx, input)
 	if err != nil {
+		return loadedPackage{}, err
+	}
+	if _, err := packageDependencyFacts(envelope); err != nil {
 		return loadedPackage{}, err
 	}
 	if envelope.LoaderKind != domain.LoaderKindAgentPlugins || envelope.TreeDigest != locked.TreeDigest ||
@@ -127,6 +126,15 @@ func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, acti
 	if len(consent) > 0 {
 		adapter.consent = consent[0]
 	}
+	return preflightDependencyAdapter(cmd.Context(), adapter, actions)
+}
+
+func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstaller, actions []dependencyAction) ([]dependencyAction, error) {
+	state, err := adapter.app.StateStore.Load()
+	if err != nil {
+		return nil, err
+	}
+	populateDependencyBeforeFacts(state, actions)
 	claims := map[string]string{}
 	updates := map[string]*installer.PreparedOperation{}
 	defer func() {
@@ -142,19 +150,18 @@ func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, acti
 		if action.Action == environment.ActionInstall {
 			adapter.previewUpdate = updates[action.Alias]
 		}
-		prepared, err := adapter.Prepare(cmd.Context(), action)
+		prepared, err := adapter.Prepare(ctx, action)
 		if err != nil {
 			return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
 		}
 		plan := prepared.Plan()
-		if opts.dependencyComponents == nil {
-			opts.dependencyComponents = map[string][]domain.ComponentDecision{}
+		if adapter.previewExternalUninstalled != nil && action.Action == environment.ActionRemove && plan.RequiresExternalUninstalled {
+			adapter.previewExternalUninstalled[action.Alias+"\x00"+action.ClientID] = true
 		}
-		components := make([]domain.ComponentDecision, 0, len(plan.Delivery.Components))
-		for _, component := range plan.Delivery.Components {
-			components = append(components, domain.ComponentDecision{Kind: domain.ComponentKind(component.Kind), Name: component.Name, Support: domain.SupportLevel(component.Support), Reason: component.Reason, Source: component.Source, SourceName: component.SourceName})
+		if adapter.previewPaths != nil {
+			adapter.previewPaths[action.Alias+"\x00"+action.ClientID] = plan.TargetPath
 		}
-		opts.dependencyComponents[action.Alias+"\x00"+action.ClientID] = components
+		adapter.recordDependencyComponents(action, plan)
 
 		if action.Action == environment.ActionUpdate && updates[action.Alias] == nil {
 			updates[action.Alias] = prepared
@@ -170,14 +177,32 @@ func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, acti
 	return actions, nil
 }
 
+func (adapter *dependencyInstaller) recordDependencyComponents(action dependencyAction, plan installer.Plan) {
+	opts := adapter.opts
+	if opts.dependencyComponents == nil {
+		opts.dependencyComponents = map[string][]domain.ComponentDecision{}
+	}
+	components := make([]domain.ComponentDecision, 0, len(plan.Delivery.Components))
+	for _, component := range plan.Delivery.Components {
+		components = append(components, domain.ComponentDecision{Kind: domain.ComponentKind(component.Kind), Name: component.Name, Support: domain.SupportLevel(component.Support), Reason: component.Reason, Source: component.Source, SourceName: component.SourceName})
+	}
+	opts.dependencyComponents[action.Alias+"\x00"+action.ClientID] = components
+}
+
 type dependencyInstaller struct {
-	app           App
-	opts          *options
-	detected      map[domain.ClientID]domain.DetectedClient
-	cmd           *cobra.Command
-	beforeApply   func() error
-	consent       map[string]bool
-	previewUpdate *installer.PreparedOperation
+	previewExternalUninstalled map[string]bool
+	previewWarnings            *[]string
+	previewPaths               map[string]string
+	app                        App
+	opts                       *options
+	detected                   map[domain.ClientID]domain.DetectedClient
+	cmd                        *cobra.Command
+	beforeApply                func() error
+	consent                    map[string]bool
+	previewUpdate              *installer.PreparedOperation
+	operationIDs               map[string]string
+	onResult                   func(environment.PreparedBinding, installer.Result)
+	currentAction              environment.PreparedBinding
 }
 
 func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environment.PreparedBinding) (*installer.PreparedOperation, error) {
@@ -192,7 +217,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	client, ok := adapter.detected[domain.ClientID(action.ClientID)]
 	if !ok || (action.Action != environment.ActionRemove && (client.Status != domain.DetectionDetected || client.DetectionError != nil)) {
-		return nil, fmt.Errorf("target %s is not detected; nothing was changed", action.ClientID)
+		return nil, fmt.Errorf("target %s is not detected; nothing was changed: %w", action.ClientID, installer.ErrTargetFactsUnavailable)
 	}
 	view, err := adapter.app.Installer.Inspect(ctx)
 	if err != nil {
@@ -206,12 +231,17 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	if err := resolveDependencyBindingIdentity(view, &action); err != nil {
 		return nil, err
 	}
-	operationID, err := domain.NewInstallationID()
-	if err != nil {
-		return nil, err
+	operationID := adapter.operationIDs[action.Alias+"\x00"+action.ClientID]
+	if operationID == "" {
+		var err error
+		operationID, err = domain.NewInstallationID()
+		if err != nil {
+			return nil, err
+		}
 	}
-	request := installer.Request{OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
-		ClientExecutable: backendExecutable(client, adapter.detected), InstallationID: action.InstallationID,
+	adapter.currentAction = action
+	request := installer.Request{Scope: adapter.app.scope(), ProjectRoot: adapter.app.ProjectRoot, OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
+		ClientExecutable: backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
 		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete}
 	if err := adapter.populateDependencyTargets(view, action.InstallationID, &request); err != nil {
 		return nil, err
@@ -232,11 +262,15 @@ func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *install
 			return installer.Result{}, err
 		}
 	}
-	return adapter.app.Installer.Apply(ctx, prepared, installer.Decision{Confirmed: true})
+	result, err := adapter.app.Installer.Apply(ctx, prepared, installer.Decision{Confirmed: true})
+	if adapter.onResult != nil {
+		adapter.onResult(adapter.currentAction, result)
+	}
+	return result, err
 }
 
-// The lock records coordinates, never signed publication eligibility. Recheck
-// the exact requested release without granting recorded-install exceptions.
+// Recheck the exact signed publication for lock restoration. Superseded releases
+// may be restored, while installed-state exceptions still require live proof.
 func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
 	source := locked.Source.Registry
 	if source == nil {
@@ -257,8 +291,11 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	evidenceEnv.InstallerVersion = app.Version
 	evidenceEnv.DependencyIdentity = deterministicDependencyIdentity(loaded.envelope, targets)
 	request := domain.DirectoryResolveRequest{Selector: source.DistributionID, DesiredReleaseSequence: source.ReleaseSequence,
-		Operation: domain.DirectoryInstall, Scope: domain.ScopeUser, Targets: targets, SchemaVersion: "1.0.0", InstallerVersion: app.Version,
+		Operation: domain.DirectoryInstall, Scope: app.scope(), Targets: targets, SchemaVersion: "1.0.0", InstallerVersion: app.Version,
 		OS: evidenceEnv.OS, Architecture: evidenceEnv.Architecture, DependencyIdentity: evidenceEnv.DependencyIdentity}
+	if recorded == nil {
+		request.Purpose = domain.DirectoryResolveLockedRestore
+	}
 	if recorded != nil {
 		request.DesiredReleaseSequence = 0
 		request.Recorded = recorded
@@ -309,8 +346,8 @@ func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selecto
 	if !owned {
 		return false, nil
 	}
-	if opts.scope != "" && opts.scope != "user" {
-		return true, errors.New("environment repair supports user scope only")
+	if opts.scope != "" && opts.scope != "user" && opts.scope != "project" {
+		return true, errors.New("environment repair supports user or project scope")
 	}
 	if app.Installer == nil {
 		return true, errors.New("typed SDK installer is unavailable")
@@ -338,7 +375,7 @@ func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selecto
 
 func resolveDependencyBindingIdentity(view installer.Inspection, action *environment.PreparedBinding) error {
 	for _, receipt := range view.EnvironmentReceipts {
-		if receipt.EnvironmentID == environment.EnvironmentUserDefault && receipt.Alias == action.Alias {
+		if receipt.EnvironmentID == action.Authority.EnvironmentID && receipt.Alias == action.Alias {
 			if action.InstallationID == "" {
 				action.InstallationID = receipt.InstallationID
 				action.Authority.InstallationID = receipt.InstallationID
@@ -357,11 +394,14 @@ func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Ins
 			continue
 		}
 		for _, binding := range installation.Bindings {
+			if binding.ClientID == request.ClientID {
+				continue
+			}
 			sibling, ok := adapter.detected[domain.ClientID(binding.ClientID)]
 			if !ok {
 				return fmt.Errorf("installed sibling %s is not detected", binding.ClientID)
 			}
-			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, Executable: backendExecutable(sibling, adapter.detected)})
+			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, Executable: backendExecutable(sibling, adapter.detected, adapter.app.scope())})
 		}
 	}
 	return nil
@@ -375,6 +415,11 @@ func (adapter *dependencyInstaller) recordedDependencyRelease(action environment
 			return nil, err
 		}
 		installation, found := locallyMatchedInstallation(state, action.InstallationID)
+		if unboundDependencyInstall(action) && (!found || len(installation.Clients) == 0) {
+			// A reserved identity, including one retained after last-binding
+			// removal, grants no installed-release exception without a live binding.
+			return nil, nil
+		}
 		if !found || installation.Directory == nil {
 			return nil, installer.ErrPlanChanged
 		}
@@ -415,7 +460,7 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 	if adapter.consent[loaded.envelope.TreeDigest] {
 		loaded.securityAuthorized = true
 	}
-	if err := authorizeSecurityAssessment(adapter.cmd, adapter.app, adapter.opts, &loaded); err != nil {
+	if err := adapter.authorize(ctx, &loaded); err != nil {
 		return nil, err
 	}
 	if adapter.consent != nil {
@@ -435,66 +480,4 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 		return adapter.app.Installer.PreviewInstallAfterUpdate(ctx, request, adapter.previewUpdate)
 	}
 	return adapter.app.Installer.Prepare(ctx, request)
-}
-
-func buildDependencyRepairs(ctx context.Context, app App, state domain.StateFileV2, installation domain.Installation, targets []domain.ClientID) ([]dependencyAction, error) {
-	var actions []dependencyAction
-	for _, target := range targets {
-		authority, err := environmentAuthorityForBinding(state, installation.InstallationID, target, "repair")
-		if err != nil {
-			return nil, err
-		}
-		if authority == nil {
-			return nil, errors.New("mixed owned and unmanaged repair requires separate selections")
-		}
-		binding, err := selectedRepairBinding(installation, target, domain.ScopeUser)
-		if err != nil {
-			return nil, err
-		}
-		rev := binding.PackageRevision
-		if rev == nil {
-			return nil, errors.New("recorded package revision is missing")
-		}
-		pkg := environment.LockedPackage{Alias: authority.Alias, SourceKey: authority.SourceKey, DigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: rev.TreeDigest, ManifestDigest: rev.ManifestDigest, Targets: []string{string(target)}}
-		pkg.Source.Git = &environment.LockedGitSource{Repository: installation.Source.Repository, Path: installation.Source.PackageSubpath, Commit: rev.ResolvedRevision, Requested: environment.Selector{Kind: environment.SelectorCommit, Value: rev.ResolvedRevision}}
-		if installation.Directory != nil {
-			pkg.Source.Git = nil
-			pkg.Source.Registry = &environment.LockedRegistrySource{Distribution: installation.Directory.DistributionID, DistributionID: installation.Directory.DistributionID, ProductID: installation.Directory.ProductID, ReleaseSequence: rev.ReleaseSequence, Repository: installation.Source.Repository, Path: installation.Source.PackageSubpath, Commit: rev.ResolvedRevision}
-		}
-		if stored, e := app.dependencyStore().Get(ctx, pkg.DigestAlgorithm, pkg.TreeDigest); e == nil {
-			pkg.ExecutableFiles = append([]string{}, stored.Metadata.ExecutableFiles...)
-		}
-		actions = append(actions, dependencyAction{Alias: authority.Alias, ClientID: string(target), InstallationID: installation.InstallationID, BindingID: binding.ClientBindingID, Action: "repair", Package: &pkg, Authority: authority})
-	}
-	return actions, nil
-}
-
-func applyDependencyRepairs(cmd *cobra.Command, app App, opts *options, actions []dependencyAction, detected map[domain.ClientID]domain.DetectedClient) error {
-	consent := map[string]bool{}
-	if _, err := preflightDependencyActions(cmd, app, opts, actions, detected, consent); err != nil {
-		return err
-	}
-	if opts.dryRun {
-		return renderDependencySync(cmd, opts, actions, true)
-	}
-	if err := requireNonInteractiveMutation(app, opts, "repair"); err != nil {
-		return err
-	}
-	confirmed := mutationConfirmed(app, opts)
-	if !confirmed && opts.format == "human" && app.Terminal {
-		var err error
-		confirmed, err = promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), "Repair the managed package and its recorded verification state? [y/N]")
-		if err != nil {
-			return err
-		}
-	}
-	if !confirmed {
-		return renderDependencySync(cmd, opts, actions, true)
-	}
-	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent}
-	results, err := (environment.Coordinator{Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, Bindings: actions}, true)
-	if renderErr := renderDependencyResults(cmd, opts, actions, results, err); err == nil {
-		err = renderErr
-	}
-	return err
 }

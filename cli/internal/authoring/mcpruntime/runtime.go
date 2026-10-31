@@ -24,6 +24,7 @@ import (
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	icdomain "github.com/777genius/plugin-kit-ai/install/integrationctl/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -186,7 +187,7 @@ func privateCopy(ctx context.Context, o Options) (string, string, func() error, 
 		if err := ctx.Err(); err != nil {
 			return bad(err)
 		}
-		if v.path == ".git" || v.path == ".plugin-kit-ai.lock" && v.kind != "directory" {
+		if v.path == ".git" || icdomain.IsWorkspaceLockFile(v.path) && v.kind != "directory" {
 			continue
 		}
 		if !safePackagePath(v.path) {

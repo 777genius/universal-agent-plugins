@@ -55,7 +55,7 @@ env:
 jobs:
   public_inputs:
     if: ${{ inputs.mode == 'produce' }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 60
     outputs:
       matrix: ${{ steps.evidence.outputs.matrix }}
@@ -197,7 +197,7 @@ jobs:
   public_producer_complete:
     if: ${{ always() && inputs.mode == 'produce' }}
     needs: [public_inputs, public_cell]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
       - name: Require all eighteen cells and the same-live-root bridge
@@ -210,7 +210,7 @@ jobs:
           assert os.environ['INPUTS_RESULT'] == os.environ['CELLS_RESULT'] == 'success'
   public_assemble:
     if: ${{ inputs.mode == 'assemble' }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 90
     steps:
       - name: Bind canonical dispatch before checkout
@@ -279,7 +279,7 @@ jobs:
           retention-days: 7
   public_evidence_intake:
     if: ${{ inputs.mode == 'attest' }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 90
     steps:
       - name: Bind canonical dispatch before checkout
@@ -444,7 +444,7 @@ jobs:
           retention-days: 7
   public_check:
     if: ${{ inputs.mode == 'check' }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 90
     steps:
       - name: Bind canonical dispatch before checkout

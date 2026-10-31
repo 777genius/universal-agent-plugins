@@ -75,7 +75,7 @@ namespace contract, not protection against a hostile concurrent same-UID writer.
    every symlink; the containing npm fixture permits only contained symlinks
    such as installed `.bin` links. All ordinary files must have one hard link.
 
-4. Run only the packed bridge test, using installed Go **1.26.9**, offline cache,
+4. Run only the packed bridge test, using installed Go **1.26.10**, offline cache,
    private HOME/TMP/config/GOCACHE and `GOMAXPROCS=2`. Keep result in a different
    external directory from config and all observed inputs. Example from checkout:
 
@@ -141,7 +141,7 @@ Use the same offline/private environment above, without any packed opt-in vars.
 exact-SHA checkout and 45-minute ceiling. It runs `scripts/run-packed-ci.py
 "$PACKED_ROOT" "$EXPECTED_HEAD"` after setup. `PACKED_ROOT` must be absent,
 absolute and outside checkout. The runner resolves installed Go, Node and npm's
-JavaScript CLI; no root-host tool or cache paths are embedded. Go is 1.26.9,
+JavaScript CLI; no root-host tool or cache paths are embedded. Go is 1.26.10,
 Node is **22.23.2**, and npm is its bundled **10.9.8**, with no npm upgrade.
 ROOT selected this pair from the fresh official Node release index (2026-07-28
 security release). Versions and tool SHA256 hashes, including stager Node, are
@@ -165,10 +165,14 @@ of the unchanged seal. Failure artifacts retain logs and sealed inputs; the
 artifact digest index preserves relationships. Downloaded archives are audit
 material, not a fresh verification of relocated live trees.
 
-The always-running aggregate requires **native and packed success**. Its focused
-structural controls reject missing/conditional jobs, dependencies, matrix lanes
-and explicit tags. All four native lanes and all five source-harness lanes
-remain mandatory. Existing Windows concurrent-init failure remains a blocker;
+The always-running aggregate requires **native and packed success**. The only
+exception is a pull request that the shared `pr-changes.yml` classifier reports
+as documentation and web content only (`authoring=false`): both lanes are then
+skipped and the aggregate requires exactly that. An unavailable classification
+and every dispatch run both lanes. Its focused structural controls reject
+missing jobs, any other job condition, dependencies, matrix lanes and explicit
+tags. All four native lanes and all five source-harness lanes remain mandatory
+whenever the lanes run. Existing Windows concurrent-init failure remains a blocker;
 no retry or restricted diagnostic substitutes for that gate. PR167/169 and the
 writable macOS owner gate remain upstream requirements. Required-check settings
 are external: source controls do not prove GitHub enforcement. ROOT must run the

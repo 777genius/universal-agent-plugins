@@ -142,6 +142,45 @@ class NativeMatrixTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     matrix.require_hosted("darwin-arm64")
 
+    def test_source_project_proof_selects_exact_required_codex_tests(self):
+        pattern, required = matrix.select_native_tests("codex", project_components=True)
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual(required, matrix.REQUIRED_TESTS["codex"] | matrix.PROJECT_TESTS["codex"])
+        self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
+        self.assertNotIn("TestAgentpluginsCodexNativeProjectComponentsLifecycle", released.CLIENT_TESTS["codex"])
+        self.assertNotIn("TestAgentpluginsCodexNativeTrustedProjectMCP", released.CLIENT_TESTS["codex"])
+
+    def test_source_project_proof_selects_exact_required_claude_tests(self):
+        pattern, required = matrix.select_native_tests("claude", project_components=True)
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual(required, matrix.REQUIRED_TESTS["claude"] | matrix.PROJECT_TESTS["claude"])
+        self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
+        self.assertNotIn("TestAgentpluginsClaudeNativeProjectPreparedLifecycle", released.CLIENT_TESTS["claude"])
+        self.assertNotIn("TestAgentpluginsClaudeNativeTrustedProjectDiscovery", released.CLIENT_TESTS["claude"])
+
+    def test_source_project_proof_selects_exact_required_opencode_tests(self):
+        pattern, required = matrix.select_native_tests("opencode", project_components=True)
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual(required, matrix.REQUIRED_TESTS["opencode"] | {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"})
+        self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
+        self.assertNotIn("TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle", released.CLIENT_TESTS["opencode"])
+
+    def test_source_project_proof_rejects_released_and_unsupported_clients(self):
+        for client in matrix.PROJECT_TESTS:
+            with self.assertRaises(ValueError):
+                matrix.select_native_tests(client, project_components=True, released=True)
+        for client in set(matrix.REQUIRED_TESTS) - set(matrix.PROJECT_TESTS):
+            with self.assertRaises(ValueError):
+                matrix.select_native_tests(client, project_components=True)
+        for client in matrix.REQUIRED_TESTS:
+            self.assertEqual(matrix.select_native_tests(client), (matrix.PATTERNS[client], matrix.REQUIRED_TESTS[client]))
+
     def test_target_must_be_native(self):
         env = {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}
         with patch.dict(matrix.os.environ, env, clear=True), patch.object(matrix.platform, "system", return_value="Darwin"), patch.object(matrix.platform, "machine", return_value="arm64"):

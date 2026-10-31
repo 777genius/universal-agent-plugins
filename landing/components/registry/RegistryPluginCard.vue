@@ -3,14 +3,10 @@
   Content model and implementation are new for Universal Agent Plugins.
 -->
 <script setup lang="ts">
-import { useInstallPreferencesStore } from '~/stores/installPreferences';
+import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
-import {
-  authenticationState,
-  expectedDistribution,
-  githubSourceUrl,
-  resolveDistribution,
-} from '~/utils/registry';
+import { githubSourceUrl, reachableTargetPolicies, vendorInstallSource } from '~/utils/registry';
+import { authenticationIndicator } from '~/utils/authentication';
 import { pluginCommands } from '~/utils/commands';
 const { t, locale, n } = useI18n();
 const localePath = useLocalePath();
@@ -23,67 +19,33 @@ const { asset, pluginIcon, sourceUrl } = useSite();
 const { current, expired, published } = useDirectoryStatus();
 const isDiscovered = computed(() => props.plugin.trust_state === 'conformant_unreviewed');
 const discoveryStale = useDiscoveryIsStale(() => props.plugin);
-const availableClients = computed(() =>
-  clients.filter((client) => props.plugin.client_support.clients.includes(client.id)),
-);
+const selection = usePluginInstallSelection(() => props.plugin);
+const {
+  targets,
+  autoDetect,
+  scope,
+  installExpanded,
+  availableClients,
+  targetDistributions,
+  projectAvailable,
+  updateTargets,
+  updateAutoDetect,
+  updateScope,
+  toggleInstall,
+} = selection;
 const deliverySummary = computed(() => {
-  const delivery = props.plugin.client_support.delivery;
-  const managed = availableClients.value.filter(
-    (client) => delivery[client.id] === 'managed',
+  const delivery = autoDetect.value
+    ? availableClients.value.map((client) => props.plugin.client_support.delivery[client.id])
+    : (selection.resolution.value.distribution?.targets
+        .filter((target) => targets.value.includes(target.client))
+        .map((target) => target.delivery) ?? []);
+  const managed = delivery.filter((mode) => mode === 'managed').length;
+  const prepared = delivery.filter(
+    (mode) => mode === 'prepared' || mode === 'manual_activation',
   ).length;
-  const prepared = availableClients.value.filter((client) =>
-    ['prepared', 'manual_activation'].includes(delivery[client.id] ?? ''),
-  ).length;
-  if (managed + prepared < availableClients.value.length || !availableClients.value.length)
+  if (managed + prepared < delivery.length || !delivery.length)
     return t('registryUi.card.agentCompatibilityCheckedWhenYouRunTheCommand');
   return t('registryUi.card.deliverySummary', { managed: n(managed), prepared: n(prepared) });
-});
-const initialTarget =
-  availableClients.value.find((client) => client.id === 'cursor')?.id ??
-  availableClients.value[0]?.id;
-const preferences = useInstallPreferencesStore();
-if (preferences.package.identity === props.plugin.install_source) {
-  preferences.reconcilePackage(
-    props.plugin.install_source,
-    availableClients.value.map((client) => client.id),
-  );
-}
-const savedChoice = preferences.readPackage(
-  props.plugin.install_source,
-  availableClients.value.map((client) => client.id),
-);
-const targets = ref<(typeof clients)[number]['id'][]>(
-  savedChoice.targetIds.length
-    ? (savedChoice.targetIds as (typeof clients)[number]['id'][])
-    : initialTarget
-      ? [initialTarget]
-      : [],
-);
-const autoDetect = ref(savedChoice.autoDetect);
-const installExpanded = ref(savedChoice.expanded);
-function saveChoice() {
-  preferences.selectPackage(
-    props.plugin.install_source,
-    {
-      targetIds: targets.value,
-      autoDetect: autoDetect.value,
-      expanded: installExpanded.value,
-    },
-    availableClients.value.map((client) => client.id),
-  );
-}
-function toggleInstall() {
-  installExpanded.value = !installExpanded.value;
-  saveChoice();
-}
-watch(availableClients, (next) => {
-  const allowed = new Set(next.map((client) => client.id));
-  if (targets.value.some((id) => !allowed.has(id))) {
-    targets.value = next[0] ? [next[0].id] : [];
-    autoDetect.value = true;
-    if (preferences.package.identity === props.plugin.install_source)
-      preferences.reconcilePackage(props.plugin.install_source, [...allowed]);
-  }
 });
 const installPanelId = `plugin-install-${props.plugin.install_source.replace(/[^a-z0-9_-]+/gi, '-')}`;
 function diagnosticText(
@@ -100,35 +62,54 @@ function diagnosticText(
   if (diagnostic.params?.status) params.status = t(`registryUi.status.${diagnostic.params.status}`);
   return t(`registryUi.reason.${diagnostic.code}`, params);
 }
-const resolution = computed(() => resolveDistribution(props.plugin, targets.value));
+const resolution = selection.resolution;
 const selectedDistribution = computed(() =>
   isDiscovered.value || current.value ? resolution.value.distribution : undefined,
 );
-const canInstall = computed(() =>
-  isDiscovered.value
-    ? props.plugin.installable &&
-      props.plugin.discovery?.availability !== 'unavailable' &&
-      (autoDetect.value || Boolean(selectedDistribution.value))
-    : current.value &&
-      (autoDetect.value ? props.plugin.installable : Boolean(selectedDistribution.value)),
+const canChooseInstall = computed(
+  () =>
+    props.plugin.installable &&
+    props.plugin.discovery?.availability !== 'unavailable' &&
+    (isDiscovered.value || current.value),
+);
+const canInstall = computed(
+  () =>
+    (scope.value !== 'project' || !autoDetect.value) &&
+    (isDiscovered.value
+      ? props.plugin.installable &&
+        props.plugin.discovery?.availability !== 'unavailable' &&
+        (autoDetect.value || Boolean(selectedDistribution.value))
+      : current.value &&
+        (autoDetect.value ? props.plugin.installable : Boolean(selectedDistribution.value))),
 );
 const command = computed(() =>
   canInstall.value
-    ? pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value).add
+    ? pluginCommands(
+        props.plugin,
+        autoDetect.value ? undefined : targets.value,
+        undefined,
+        scope.value,
+      ).add
     : '',
 );
+const vendorInstall = computed(() => vendorInstallSource(props.plugin));
+const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
 const iconURL = computed(() => pluginIcon(props.plugin));
-const autoOption = computed(() => ({
-  label: t('registryUi.card.allInstalledAgentsRecommended'),
-  summary: t('registryUi.card.allInstalledAgents'),
-  description: t('registryUi.card.detectedWhenYouRunTheCommand'),
-}));
+const autoOption = computed(() =>
+  scope.value === 'project'
+    ? undefined
+    : {
+        label: t('registryUi.card.allInstalledAgentsRecommended'),
+        summary: t('registryUi.card.allInstalledAgents'),
+        description: t('registryUi.card.detectedWhenYouRunTheCommand'),
+      },
+);
 const targetOptions = computed(() =>
   clients.map((client) => ({
     value: client.id,
     label: client.name,
     icon: asset(`client-icons/${client.icon}`),
-    disabled: !props.plugin.client_support.clients.includes(client.id),
+    disabled: !targetDistributions.value.get(client.id) && !targets.value.includes(client.id),
     description: (() => {
       if (isDiscovered.value)
         return props.plugin.discovery?.availability === 'available'
@@ -137,7 +118,7 @@ const targetOptions = computed(() =>
       if (!published.value)
         return t('registryUi.card.unavailableReviewDataIsNotInstallationAuthority');
       if (expired.value) return t('registryUi.card.unavailableSignedDirectorySnapshotExpired');
-      const source = expectedDistribution(props.plugin, [client.id]);
+      const source = targetDistributions.value.get(client.id);
       const target = source?.targets.find((item) => item.client === client.id);
       if (client.id === 'chatgpt')
         return target?.app_binding
@@ -149,19 +130,21 @@ const targetOptions = computed(() =>
     })(),
   })),
 );
-const authLabel = computed(() =>
-  t(
-    `registryUi.authentication.${authenticationState(resolution.value.distribution, targets.value, props.plugin.authentication)}`,
+const authentication = computed(() =>
+  authenticationIndicator(
+    autoDetect.value
+      ? {
+          id: props.plugin.name,
+          targets: reachableTargetPolicies(props.plugin.distributions, 'user'),
+        }
+      : selectedDistribution.value,
+    targets.value,
+    autoDetect.value,
+    t,
   ),
 );
 const showAuthentication = computed(
-  () =>
-    !autoDetect.value &&
-    authenticationState(
-      resolution.value.distribution,
-      targets.value,
-      props.plugin.authentication,
-    ) !== 'not_required',
+  () => !autoDetect.value && authentication.value.state !== 'not_required',
 );
 const repositoryStars = computed(() =>
   new Intl.NumberFormat(locale.value, {
@@ -195,45 +178,33 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
     ? { path: localePath('/plugins/community/'), query: { source: alternative.install_source } }
     : localePath(`/plugins/${alternative.name}/`);
 }
-
-function updateTargets(values: string[]) {
-  const allowed = new Set(availableClients.value.map((client) => client.id));
-  const next = values.filter((value): value is (typeof clients)[number]['id'] =>
-    allowed.has(value as (typeof clients)[number]['id']),
-  );
-  if (next.length) {
-    targets.value = next;
-    saveChoice();
-  }
-}
-
-function updateAutoDetect(value: boolean) {
-  autoDetect.value = value;
-  saveChoice();
-}
 </script>
 
 <template>
-  <article
-    class="plugin-card"
-    :class="{ 'plugin-card--expanded': installExpanded }"
+  <CatalogCard
+    :expanded="installExpanded"
     :data-trust="isDiscovered ? 'community' : 'reviewed'"
     :data-install-source="plugin.install_source"
   >
-    <span
-      v-if="!isDiscovered"
-      class="plugin-card__ribbon"
-      :class="{ 'plugin-card__ribbon--muted': !canInstall }"
-      >{{
-        canInstall
-          ? t('registryUi.card.reviewedListing')
-          : expired
-            ? t('registryUi.card.temporarilyPaused')
-            : !published
-              ? t('registryUi.card.previewOnly')
-              : t('registryUi.card.notAvailable')
-      }}</span
-    >
+    <AppTooltip v-if="!isDiscovered" above-header>
+      <template #trigger>
+        <span
+          class="plugin-card__ribbon"
+          tabindex="0"
+          :class="{ 'plugin-card__ribbon--muted': !canInstall && !vendorAvailable }"
+          >{{
+            canInstall || vendorAvailable
+              ? t('registryUi.card.reviewedListing')
+              : expired
+                ? t('registryUi.card.temporarilyPaused')
+                : !published
+                  ? t('registryUi.card.previewOnly')
+                  : t('registryUi.card.notAvailable')
+          }}</span
+        >
+      </template>
+      <p class="app-tooltip__compact">{{ t('registryUi.card.reviewedListingTooltip') }}</p>
+    </AppTooltip>
     <div
       class="plugin-card__identity"
       :class="{
@@ -284,11 +255,24 @@ function updateAutoDetect(value: boolean) {
       </AppTooltip>
       <span aria-hidden="true"> · </span>{{ t('registryUi.card.agentPlugins10') }}
     </p>
-    <SecurityAssessmentBadge
-      v-if="plugin.security && !discoveryStale"
-      :plugin="plugin"
-      :details-to="securityDetailURL"
-    />
+    <div class="plugin-card__assessments">
+      <SecurityAssessmentBadge
+        v-if="plugin.security && !discoveryStale"
+        :plugin="plugin"
+        :details-to="securityDetailURL"
+      />
+      <SkillSpectorAssessment
+        v-if="plugin.components.includes('skills')"
+        :subject="{
+          kind: 'plugin',
+          repository: plugin.source.repository,
+          path: plugin.source.path,
+          revision: plugin.source.revision,
+        }"
+        :name="plugin.display_name"
+        scope="plugin"
+      />
+    </div>
     <p class="plugin-card__description">{{ plugin.description }}</p>
     <details v-if="alternatives.length" class="plugin-other-sources">
       <summary>
@@ -327,29 +311,43 @@ function updateAutoDetect(value: boolean) {
       </ul>
     </details>
     <div class="plugin-card__bottom">
-      <button
-        v-if="canInstall"
-        type="button"
-        class="plugin-card__install-toggle"
-        :aria-controls="installPanelId"
-        :aria-expanded="installExpanded"
-        :aria-label="t('registryUi.card.installName', { name: plugin.display_name })"
-        @click="toggleInstall"
-      >
-        {{ t('registryUi.card.install') }}
-      </button>
-      <span v-else class="plugin-card__unavailable">{{
-        isDiscovered
-          ? t('registryUi.card.unavailableAtItsIndexedSourceNoInstallCommandIsGenerated')
-          : expired
-            ? t('registryUi.card.commandsDisabledBecauseTheDirectoryIsTemporarilyStale')
-            : !published
-              ? t('registryUi.card.commandsDisabledInPreview')
-              : diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason)
-      }}</span>
+      <p v-if="!canInstall && vendorInstall" class="plugin-card__unavailable">
+        {{ t('registryUi.install.vendorInstallerHeading') }}
+      </p>
+      <div class="plugin-card__actions">
+        <button
+          v-if="canChooseInstall"
+          type="button"
+          class="plugin-card__install-toggle"
+          :aria-controls="installPanelId"
+          :aria-expanded="installExpanded"
+          :aria-label="t('registryUi.card.installName', { name: plugin.display_name })"
+          @click="toggleInstall"
+        >
+          {{ t('registryUi.card.install') }}
+        </button>
+        <a
+          v-else-if="vendorInstall"
+          class="plugin-card__vendor-install"
+          :href="vendorInstall.url"
+          target="_blank"
+          rel="noreferrer"
+          >{{ t('registryUi.install.vendorInstallerCta') }} ↗</a
+        >
+        <span v-else class="plugin-card__unavailable">{{
+          isDiscovered
+            ? t('registryUi.card.unavailableAtItsIndexedSourceNoInstallCommandIsGenerated')
+            : expired
+              ? t('registryUi.card.commandsDisabledBecauseTheDirectoryIsTemporarilyStale')
+              : !published
+                ? t('registryUi.card.commandsDisabledInPreview')
+                : diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason)
+        }}</span>
+        <AuthenticationIndicator :indicator="authentication" />
+      </div>
       <Transition name="plugin-install">
         <div
-          v-if="installExpanded && canInstall"
+          v-if="installExpanded && canChooseInstall"
           :id="installPanelId"
           class="plugin-card__install-panel"
         >
@@ -371,16 +369,17 @@ function updateAutoDetect(value: boolean) {
           >
             {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
           </p>
-          <p v-if="showAuthentication" class="plugin-card__auth">{{ authLabel }}</p>
-          <ul
+          <p v-if="showAuthentication" class="plugin-card__auth">{{ authentication.label }}</p>
+          <InstallScopeSelect
+            :model-value="scope"
+            :project-available="projectAvailable"
+            @update:model-value="updateScope"
+          />
+          <InstallOutcome
             v-if="!autoDetect && selectedDistribution"
-            class="badge-list"
-            :aria-label="t('registryUi.card.installCandidateComponents')"
-          >
-            <li v-for="component in selectedDistribution.components" :key="component">
-              {{ t(`registryUi.components.${component}`) }}
-            </li>
-          </ul>
+            :distribution="selectedDistribution"
+            :targets="targets"
+          />
           <div class="plugin-card__install">
             <AppMultiSelect
               v-if="targets.length"
@@ -393,14 +392,40 @@ function updateAutoDetect(value: boolean) {
               @update:model-value="updateTargets"
             />
             <CommandSnippet
+              v-if="canInstall"
               :label="t('registryUi.card.add')"
               kind="add"
               :command="command"
               compact
             />
+            <p v-else class="plugin-card__unavailable" role="status">
+              {{ t('registryUi.install.scope.selectionUnavailable') }}
+            </p>
           </div>
         </div>
       </Transition>
     </div>
-  </article>
+  </CatalogCard>
 </template>
+
+<style scoped lang="scss">
+.plugin-card__assessments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 12px;
+  min-width: 0;
+}
+.plugin-card__assessments :deep(.skillspector[open]) {
+  flex-basis: 100%;
+}
+.plugin-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plugin-card__actions > :is(.plugin-card__install-toggle, .plugin-card__vendor-install) {
+  flex: 1;
+  width: auto;
+}
+</style>

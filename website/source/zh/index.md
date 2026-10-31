@@ -1,24 +1,67 @@
 ---
 title: "Agent Plugins 文档"
-description: "Agent Plugins 公共文档。"
+description: "安装、管理和构建可移植 Agent Plugins 包。"
 canonicalId: "page:home"
 section: "home"
 locale: "zh"
 generated: false
 translationRequired: true
+localeDisposition: "current-translation"
 ---
 
-# 使用插件 / 构建插件
+<div class="docs-hero docs-hero--feature">
+  <p class="docs-kicker">公共文档</p>
+  <h1>Agent Plugins</h1>
+  <p class="docs-lead">为您使用的 AI 智能体安装技能和 MCP 工具，或构建自己的可移植插件包。</p>
+</div>
 
-安装现有的 Agent Plugins 1.0，或基于 `plugin.json` 构建可移植插件包。
+## 选择您的路径
 
-- [使用插件](/zh/use/)
-- [构建插件](/zh/build/)
-- [快速入门](/zh/guide/quickstart)
+<div class="docs-grid">
+  <a class="docs-card" href="./use/">
+    <h2>使用插件</h2>
+    <p>检查来源、预览变更，然后为用户账户或单个项目安装插件。</p>
+  </a>
+  <a class="docs-card" href="./build/">
+    <h2>构建插件</h2>
+    <p>使用 plugin.json、技能和 MCP 配置编写标准包，并了解源码构建中的创作工具。</p>
+  </a>
+</div>
 
-Agent Plugins 创作已通过 `universal-agent-plugins` 中的 `agentplugins author` 发布。
+## 安装第一个插件
 
-[Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
+安装 Node.js 22 或更高版本后，运行：
+
+```bash
+npx universal-agent-plugins add context7
+```
+
+CLI 会询问要使用哪些兼容客户端。检查计划，并完成结果中列出的激活或登录步骤。
+若想直接使用原生可执行文件，请阅读适用于 macOS、Linux 和 Windows 的
+[原生安装指南](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)。原生管理器本身不需要 Node.js；插件可能有自己的运行时要求。
+
+## 当前可用功能
+
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)是当前原生安装器版本，于 2026 年 10 月 29 日发布。新增本地管理 API 和用户范围的 Pi 原生扩展。请参阅[本地管理](./use/manage#local-management-api)和[Pi 兼容性](./reference/client-compatibility#pi-native-extensions)。
+
+它保留显式项目范围和锁定恢复。多数命令默认使用用户范围。自 0.1.94 起，未指定来源参数的 `install` 仅在当前目录存在普通 `uap.toml` 文件时自动选择项目；显式范围优先。add 和维护命令需明确指定 `--scope project`。请参阅[安装](./use/install)和[维护](./use/manage)。
+
+各分发渠道的版本可能不同。先用 `agentplugins version` 确认版本；要获取已验证的 0.1.95，可使用[原生安装器](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)。自动项目选择要求 0.1.94 或更高；显式项目范围从 0.1.93 起可用。
+
+当前安装器不包含 `agentplugins author`。[构建指南](./build/)同时说明手动编写标准包的方法和当前源码中实现的创作命令。
+旧版创作工具的发布证据仍对应其原始版本，不能用于说明当前安装器下载包含哪些命令。
+
+## 如何理解结果
+
+包验证、文件安装、客户端发现、MCP 工具执行和服务认证是不同的检查。
+安装文件成功后，客户端仍可能需要信任确认、重新加载或新建会话。
+原生测试只覆盖记录中的客户端版本和平台，不能证明所有插件在所有智能体中都可用。
+
+- [快速入门](./guide/quickstart)
+- [包的目录结构](./build/layout)
+- [检查与证据](./build/checks)
+- [客户端兼容性与测试边界](./reference/client-compatibility)
+- [Agent Plugins 1.0 规范](https://agent-plugins.org/specification)
 
 <!-- locale-historical-source:start
 locale-historical-frontmatter:start

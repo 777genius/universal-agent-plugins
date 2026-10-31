@@ -4,6 +4,17 @@ on:
   push:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      github_hosted:
+        description: Use the original GitHub-hosted Ubuntu runners for this manual run
+        type: boolean
+        required: false
+        default: false
+      expected_sha:
+        description: Exact lowercase 40-character source commit; required with github_hosted
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -16,9 +27,30 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.github_hosted && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
+      - name: Validate requested source commit before checkout
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          HOSTED_FALLBACK: ${{ github.event_name == 'workflow_dispatch' && inputs.github_hosted }}
+        run: |
+          set -euo pipefail
+          if [[ "$HOSTED_FALLBACK" == true && -z "$EXPECTED_SHA" ]]; then
+            echo "github_hosted requires expected_sha" >&2
+            exit 1
+          fi
+          if [[ -n "$EXPECTED_SHA" ]]; then
+            if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "expected_sha must be a full lowercase 40-character commit SHA" >&2
+              exit 1
+            fi
+            if [[ "$EXPECTED_SHA" != "$GITHUB_SHA" ]]; then
+              echo "expected_sha does not match the workflow source commit" >&2
+              exit 1
+            fi
+          fi
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -41,7 +73,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.26.9"
+          go-version: "1.26.10"
           cache: false
 
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
@@ -155,9 +187,19 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.github_hosted && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 20
     needs: build
     steps:
+      - name: Confirm requested deployment commit
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$EXPECTED_SHA" && "$EXPECTED_SHA" != "$GITHUB_SHA" ]]; then
+            echo "expected_sha does not match the deployment source commit" >&2
+            exit 1
+          fi
+
       - id: deployment
         uses: actions/deploy-pages@v5

@@ -14,6 +14,9 @@ const (
 	duplicateRecord duplicateMode = iota
 	duplicateRoot
 	duplicateAll
+	// Record only duplicate keys that influence the Agent Plugins core.
+	// Unknown top-level members and unimplemented extension payloads stay opaque.
+	duplicatePluginRecord
 )
 
 type duplicate struct{ keys []string }
@@ -111,7 +114,7 @@ func (s *jsonScanner) value(token json.Token, keys []string, depth int) error {
 				if s.mode == duplicateAll || (s.mode == duplicateRoot && depth == 1) {
 					return fmt.Errorf("JSON object contains duplicate field %q", key)
 				}
-				if s.mode == duplicateRecord {
+				if s.mode == duplicateRecord || (s.mode == duplicatePluginRecord && observedPluginDuplicate(keys)) {
 					if len(s.duplicates) >= s.limits.Diagnostics {
 						return &parseFailure{Code: "document_duplicate_limit"}
 					}
@@ -165,4 +168,17 @@ func (s *jsonScanner) value(token json.Token, keys []string, depth int) error {
 		return fmt.Errorf("unexpected JSON delimiter %q", delim)
 	}
 	return nil
+}
+
+// observedPluginDuplicate narrows reporting only, never JSON syntax or work
+// budgets. Known fields and extension namespace identities still report
+// ambiguity; opaque descendants cannot consume the finding budget.
+func observedPluginDuplicate(parents []string) bool {
+	if len(parents) == 0 {
+		return true
+	}
+	if _, known := pluginManifestFields[parents[0]]; !known {
+		return false
+	}
+	return parents[0] != "extensions" || len(parents) == 1
 }

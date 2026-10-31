@@ -5,7 +5,7 @@ name: Core fast
 # fast enough to keep a part from waiting 10-27 minutes.
 on:
   pull_request:
-    branches: [main, 'refactor/**']
+    branches: [main, 'refactor/**', 'feat/project-*', feat/source-transports-e2e]
     paths:
       - 'install/integrationctl/agentplugins/**'
       # The only ports.PathPolicy implementation lives here.
@@ -27,11 +27,38 @@ on:
 permissions:
   contents: read
 
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:
-  group: core-fast-${{ github.ref }}
-  cancel-in-progress: true
+  group: core-fast-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
+  project-contracts:
+    name: project-contracts (${{ matrix.os }})
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.os == 'ubuntu-24.04' && matrix.os || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    env:
+      GOMAXPROCS: '3'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # Embedded schema digests bind exact Git bytes on every platform.
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.10"
+          cache: false
+      - name: Verify scoped ownership, path guards and disposable project lifecycle
+        run: go test -p=2 -count=1 -timeout=8m ./install/integrationctl/agentplugins/domain ./install/integrationctl/agentplugins/adapters/statev2 ./install/integrationctl/agentplugins/adapters/nativeconfig ./install/integrationctl/agentplugins/clients/... ./install/integrationctl/agentplugins/providers ./install/integrationctl/agentplugins/planner ./install/integrationctl/agentplugins/installer ./install/integrationctl/agentplugins/environment ./install/integrationctl/agentplugins/usecase ./cli/internal/agentpluginscli ./cli/cmd/agentplugins -run 'Test(TargetContext|Project|PrepareRejectsCrossEnvironmentContext)'
+
   opencode-transition-windows:
     name: opencode-transition-windows
     runs-on: windows-2025
@@ -46,7 +73,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.9"
+          go-version: "1.26.10"
           cache: false
       - name: Qualify native Windows transition privacy and durable recovery
         working-directory: install/integrationctl/agentplugins
@@ -58,15 +85,32 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
         with:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.9"
+          go-version: "1.26.10"
           cache: false
       - name: Qualify native Windows managed stdio process-tree ownership
         working-directory: install/integrationctl/agentplugins
         run: go test -count=1 -timeout=3m -v ./managedstdio -run '^TestWindows(JobTreeCleanup|AssignFailureKillsSuspendedProcessBeforeWait)$'
+      - name: Qualify Agent Plugins reserved MCP environment rules on Windows
+        working-directory: install/integrationctl/agentplugins
+        run: go test -count=1 -timeout=4m ./domain ./clients/shared ./usecase -run '^(TestReservedStdioEnvKeyPlatformRules|TestApplyStdioDataContractRejectsPlatformReservedAliases|TestStdioPreflightReservedEnvironmentPlatformAliases|TestStdioReservedAliasPreservesHealthySkillEndToEnd)$'
+      - name: Qualify global dependency transfer and rollback on Windows
+        working-directory: cli
+        env:
+          GIT_CONFIG_NOSYSTEM: '1'
+          GIT_CONFIG_COUNT: '2'
+          GIT_CONFIG_KEY_0: core.hooksPath
+          GIT_CONFIG_VALUE_0: /dev/null
+          GIT_CONFIG_KEY_1: core.autocrlf
+          GIT_CONFIG_VALUE_1: 'false'
+        run: go test -count=1 -timeout=5m -v ./internal/agentpluginscli -run '^TestDependencyTransfer'
 
   gemini-observer-windows:
     name: gemini-observer-windows
@@ -82,7 +126,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.9"
+          go-version: "1.26.10"
           cache: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -104,7 +148,7 @@ jobs:
 
   test-core:
     name: test-core
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -113,7 +157,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.9"
+          go-version: "1.26.10"
           cache: false
 
       # Same target as the local preflight, so a green run here means the same
@@ -144,7 +188,7 @@ jobs:
 
   cross-build:
     name: cross-build (${{ matrix.goos }})
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -157,7 +201,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.9"
+          go-version: "1.26.10"
           cache: false
 
       # The core carries 39 platform-tagged files; only a real cross build
@@ -174,7 +218,7 @@ jobs:
 
   vet-all:
     name: vet-all
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -183,7 +227,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.9"
+          go-version: "1.26.10"
           cache: false
 
       # test-core does not compile the authoring commands, terminal prompts,

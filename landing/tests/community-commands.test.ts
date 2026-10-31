@@ -72,7 +72,7 @@ test('community ADD fails closed for missing or malformed source fields', () => 
 });
 
 test('community selector remains one literal shell argument with spaces, quotes, dollars, and command substitution', () => {
-  const path = "skills/team's notes/$UAP_INJECTION_SENTINEL/$(printf INJECTED); printf ESCAPED";
+  const path = 'skills/team "notes"/$UAP_INJECTION_SENTINEL/$(printf INJECTED); printf ESCAPED';
   const command = pluginCommands(community(path), ['codex']).add;
   // Replace npx with an argument printer. No CLI, installer, project mutation,
   // or provider runs; shell parsing itself is the independent contract.
@@ -89,4 +89,8 @@ test('community selector remains one literal shell argument with spaces, quotes,
     '--target',
     'codex',
   ]);
+});
+
+test('community selector with an apostrophe is refused: POSIX and PowerShell quote it differently', () => {
+  assert.throws(() => pluginCommands(community("skills/o'hare"), ['codex']), /relative package path/);
 });

@@ -1,6 +1,11 @@
 # Production Plugin Workflow
 
-This document is the canonical production authoring path for plugin authors using `plugin-kit-ai`.
+This page preserves the historical `plugin-kit-ai` production workflow. It is
+not current installation guidance for `agentplugins`. Start new standard
+packages with the [Build guide](https://universal-agent-plugins.com/docs/en/build/),
+which states the available installer and qualified/source authoring boundaries.
+
+The workflow below was the production authoring path for the YAML `plugin-kit-ai` product.
 
 If you are starting a new repo, use the job-first entry layer first:
 
@@ -20,7 +25,7 @@ Under the hood they still map into the same target system, generation contracts,
 - Gemini runtime: optional production-ready 9-hook Go runtime lane for `SessionStart`, `SessionEnd`, `BeforeModel`, `AfterModel`, `BeforeToolSelection`, `BeforeAgent`, `AfterAgent`, `BeforeTool`, and `AfterTool`, with dedicated deterministic runtime smoke and dedicated opt-in real CLI runtime smoke
 - Cursor: packaged plugin target with `.cursor-plugin/plugin.json`, root `skills/**`, and optional shared `.mcp.json`; `cursor-workspace` remains the secondary repo-local `.cursor/` subset when you explicitly need workspace files instead of a package bundle
 - OpenCode: workspace-config-only target with a stable repo-local local-plugin-loading subset for official-style plugin subtree ownership and shared package metadata, plus first-class beta standalone tools and permission-first passthrough config semantics; `custom_tools` remain beta
-- Qoder: packaged plugin target with `.qoder-plugin/plugin.json`, root `skills/**`, and optional shared `.mcp.json`; one bundle serves both Qoder Desktop and the Qoder CLI (`qoder plugins install <dir> --scope user|project|local`)
+- Qoder: packaged plugin target with `.qoder-plugin/plugin.json`, root `skills/**`, optional shared `.mcp.json`, and target-native `hooks/**` plus `commands/**` mirrors; one bundle serves both Qoder Desktop and the Qoder CLI (`qoder plugins install <dir> --scope user|project|local`)
 
 Repo-local executable runtime boundary:
 
@@ -55,7 +60,7 @@ Then run the fixture-driven smoke:
 - Claude: run `plugin-kit-ai test . --platform claude --all`; generated launcher-based Claude projects already scaffold `fixtures/claude/{Stop,PreToolUse,UserPromptSubmit}.json` and matching `goldens/claude/*`, and `--update-golden` is only needed when you intentionally want to refresh that checked-in output contract
 - Codex: run `plugin-kit-ai test . --platform codex-runtime --event Notify`; generated launcher-based Codex runtime projects already scaffold `fixtures/codex-runtime/Notify.json` and matching `goldens/codex-runtime/*`, and `--update-golden` is only needed when you intentionally want to refresh that checked-in output contract
 - Cursor: treat `generate --check` plus `validate --strict` as the packaged plugin readiness gate for `.cursor-plugin/plugin.json`, root `skills/**`, and optional shared `.mcp.json`
-- Qoder: treat `generate --check` plus `validate --strict` as the packaged plugin readiness gate for `.qoder-plugin/plugin.json`, root `skills/**`, and optional shared `.mcp.json`
+- Qoder: treat `generate --check` plus `validate --strict` as the packaged plugin readiness gate for `.qoder-plugin/plugin.json`, root `skills/**`, optional shared `.mcp.json`, and the byte-exact target-native hooks/commands mirrors
 - OpenCode: run `make test-opencode-e2e-live` for the full stable live lane, or run `make test-opencode-live` for the loader smoke, `make test-opencode-cli-live` for stable real-model local-plugin-loading evidence, `make test-opencode-tools-live` for standalone-tools beta evidence, and `make test-opencode-mcp-live` for the shared portable MCP init proof; all remain opt-in and require `opencode` in `PATH`
 
 For interpreted runtimes, add the bootstrap step before `validate --strict`:
@@ -158,9 +163,9 @@ Reference implementation:
 ## Qoder Packaged Plugin Path
 
 - Start from `plugin-kit-ai init --platform qoder` or `plugin-kit-ai import --from qoder`
-- Keep `plugin/plugin.yaml`, optional `plugin/mcp/servers.yaml`, and optional `plugin/skills/**` as the authored source of truth
-- Commit generated `.qoder-plugin/plugin.json`, generated `skills/**` when portable skills are authored, and generated `.mcp.json` when portable MCP is authored
-- Treat this lane as the packaged Qoder plugin path for both Qoder Desktop and the Qoder CLI; install the same bundle with `qoder plugins install .` (scopes `user|project|local`) and reload plugins in the client, or install it from a Qoder marketplace archive in Desktop. `commands/agents/hooks/output-styles` remain target-native future work rather than part of the portable core
+- Keep `plugin/plugin.yaml`, optional `plugin/mcp/servers.yaml`, optional `plugin/skills/**`, and optional `plugin/targets/qoder/hooks/**` plus `plugin/targets/qoder/commands/**` plus `plugin/targets/qoder/bin/**` hook runtimes as the authored source of truth
+- Commit generated `.qoder-plugin/plugin.json`, generated `skills/**` when portable skills are authored, generated `.mcp.json` when portable MCP is authored, and generated `hooks/**` plus `commands/**` plus `bin/**` mirrors when target-native hooks, commands, or hook runtimes are authored
+- Treat this lane as the packaged Qoder plugin path for both Qoder Desktop and the Qoder CLI; install the same bundle with `qoder plugins install .` (scopes `user|project|local`) and reload plugins in the client, or install it from a Qoder marketplace archive in Desktop. Target-native `hooks/**`, `commands/**`, and `bin/**` are convention-discovered from the bundle root and stay outside the portable core; `agents` and `output-styles` remain target-native future work
 
 Reference implementation:
 
@@ -176,7 +181,7 @@ Reference implementation:
 - OpenCode standalone tools beta evidence is recorded separately through the deterministic marker-based `test-opencode-tools-live` smoke path
 - OpenCode shared portable MCP initialization is evidenced through the deterministic `test-opencode-mcp-live` smoke path
 - Cursor packaged-plugin readiness is bounded to deterministic generate/import/validate behavior for `.cursor-plugin/plugin.json`, root `skills/**`, and optional shared `.mcp.json`
-- Qoder packaged-plugin readiness is bounded to deterministic generate/import/validate behavior for `.qoder-plugin/plugin.json`, root `skills/**`, and optional shared `.mcp.json`; live activation through `qoder plugins install` is an environment-dependent smoke path, not part of the deterministic gate
+- Qoder packaged-plugin readiness is bounded to deterministic generate/import/validate behavior for `.qoder-plugin/plugin.json`, root `skills/**`, optional shared `.mcp.json`, and the byte-exact target-native hooks/commands mirrors; live activation through `qoder plugins install` is an environment-dependent smoke path recorded through `make test-qoder-live`, not part of the deterministic gate
 
 ## Gemini Packaging Boundary
 

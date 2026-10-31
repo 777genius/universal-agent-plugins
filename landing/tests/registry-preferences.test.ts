@@ -1,3 +1,4 @@
+import { authenticationIndicator } from '../utils/authentication.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -9,6 +10,7 @@ import { computed, effectScope, nextTick, reactive, ref, watch } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
+import { usePluginInstallSelection } from '../composables/usePluginInstallSelection.ts';
 import { useCatalogUiStore } from '../stores/catalogUi.ts';
 import { clients } from '../data/clients.ts';
 import * as registryDomain from '../utils/registry.ts';
@@ -36,6 +38,7 @@ const common = {
   watch,
   clients,
   ...registryDomain,
+  authenticationIndicator,
   ...filters,
   pluginCommands,
   onScopeDispose: Vue.onScopeDispose,
@@ -43,6 +46,7 @@ const common = {
   useI18n: () => i18n,
   useLocalePath: () => (path: string) => path,
   useInstallPreferencesStore,
+  usePluginInstallSelection,
   useCatalogUiStore,
   useSite: () => ({
     asset: (path: string) => path,
@@ -74,9 +78,29 @@ function card(props = packageProps()) {
   return setup(
     'RegistryPluginCard',
     { defineProps: () => props, withDefaults: (value: unknown) => value },
-    'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authLabel, toggleInstall',
+    'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall, deliverySummary, updateScope',
   );
 }
+
+test('explicit card delivery summary follows the winning scoped release rather than default aggregate', () => {
+  setActivePinia(createPinia());
+  const plugin = structuredClone(fixture);
+  const fallback = structuredClone(plugin.distributions[0]);
+  fallback.id = 'project-fallback';
+  fallback.kind = 'community';
+  fallback.releases[0].targets = [{ client: 'codex', scopes: ['project'], delivery: 'prepared', authentication: 'required' }];
+  fallback.releases[0].blocking_clients = [];
+  fallback.releases[0].meets_minimum_capabilities = true;
+  fallback.releases = [fallback.releases[0]];
+  plugin.distributions.push(fallback);
+  const instance = card(packageProps(plugin));
+  instance.state.updateTargets(['codex']);
+  instance.state.updateAutoDetect(false);
+  instance.state.updateScope('project');
+  assert.equal(instance.state.deliverySummary.value, '0 installed automatically · 1 require one final step');
+  assert.match(instance.state.command.value, /--target codex --scope project$/);
+  instance.stop();
+});
 
 test('expired community card and detail produce pinned commands with compatible targets while unavailable packages stay blocked', () => {
   setActivePinia(createPinia());
@@ -138,6 +162,12 @@ test('invalid target preferences are discarded and a new package does not inheri
     packageProps({
       ...fixture,
       client_support: { ...fixture.client_support, clients: ['cursor'] },
+      distributions: fixture.distributions.map((distribution: any) => ({
+        ...distribution,
+        releases: distribution.releases.map((release: any) => ({
+          ...release, targets: release.targets.filter((target: any) => target.client === 'cursor'),
+        })),
+      })),
     }),
   );
   assert.deepEqual(Array.from(changed.state.targets.value), ['cursor']);
@@ -217,8 +247,8 @@ test('catalog Show more survives language remount and filter changes replace its
   const store = useCatalogUiStore();
   const route = reactive({
     path: '/plugins/',
-    query: {} as Record<string, string>,
-    hash: '#plugins',
+    query: { ref: 'launch' } as Record<string, string>,
+    hash: '#plugin-dependencies',
   });
   const navigations: any[] = [];
   const mount = () =>
@@ -232,6 +262,7 @@ test('catalog Show more survives language remount and filter changes replace its
           replace: (target: any) => {
             navigations.push(target);
             route.query = target.query;
+            route.hash = target.hash;
           },
         }),
         useDiscoveryStatus: () => ref({ state: 'idle' }),
@@ -252,19 +283,29 @@ test('catalog Show more survives language remount and filter changes replace its
   await nextTick();
   assert.equal(remount.state.displayLimit.value, 48);
   assert.equal(route.query.q, 'gitlab');
-  assert.equal(navigations[0].hash, '#plugins');
+  assert.equal(route.query.ref, 'launch');
+  assert.equal(navigations.length, 1);
+  assert.equal(navigations[0].path, '/uk/plugins/');
+  assert.equal(navigations[0].hash, '');
+  assert.equal(route.hash, '');
   remount.stop();
   const again = mount();
   assert.equal(again.state.query.value, 'gitlab');
   assert.equal(again.state.displayLimit.value, 48);
   again.state.showMore();
   again.stop();
-  route.query = { q: 'different' };
+  route.query = { q: 'different', ref: 'launch' };
+  route.hash = '#plugins';
   const changedInitial = mount();
   assert.equal(changedInitial.state.displayLimit.value, 48);
   changedInitial.state.query.value = 'gitlab';
   await nextTick();
   assert.equal(changedInitial.state.displayLimit.value, 48);
+  assert.equal(navigations.length, 2);
+  assert.equal(navigations[1].hash, '');
+  assert.equal(route.hash, '');
+  assert.equal(route.query.q, 'gitlab');
+  assert.equal(route.query.ref, 'launch');
   changedInitial.stop();
 });
 
@@ -351,10 +392,15 @@ test('distribution captions use stable kind and authentication visibility ignore
   instance.state.updateTargets(['codex']);
   instance.state.updateAutoDetect(false);
   const visible = instance.state.showAuthentication.value;
-  i18n.mergeLocaleMessage('en', { registryUi: { authentication: Object.fromEntries(
+  i18n.mergeLocaleMessage('en', { registryUi: { authenticationIndicator: Object.fromEntries(
     ['not_required', 'required', 'unknown', 'varies', 'oauth', 'client_managed'].map(key => [key, 'SYNTHETIC CAPTION']),
   ) } });
-  assert.equal(instance.state.authLabel.value, 'SYNTHETIC CAPTION');
+  // Node's vue-i18n composer does not invalidate computed consumers on a
+  // message merge. A normal target change refreshes this same card instance.
+  instance.state.updateTargets(['cursor']);
+  assert.equal(instance.state.authentication.value.label, 'SYNTHETIC CAPTION');
+  instance.state.updateTargets(['codex']);
+  assert.equal(instance.state.authentication.value.label, 'SYNTHETIC CAPTION');
   assert.equal(instance.state.showAuthentication.value, visible);
   i18n.setLocaleMessage('en', messages);
   instance.stop();

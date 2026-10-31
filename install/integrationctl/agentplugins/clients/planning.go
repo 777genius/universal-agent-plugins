@@ -2,9 +2,16 @@ package clients
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+// ExtensionInterpreter is a read-only namespace admission contract. It must not
+// perform I/O or execute package content; projection validates source files later.
+type ExtensionInterpreter interface {
+	InterpretExtension(namespace string, value json.RawMessage) (domain.SupportLevel, string)
+}
 
 // The planner is a fixed generic pipeline with a few named places where a
 // client may speak. Each hook below names the stage it runs in, because the
@@ -27,6 +34,12 @@ import (
 // shared.ManagedTargetRoot.
 type TargetLayout interface {
 	TargetRoot(client domain.DetectedClient, mode domain.PackageMode, managedRoot string) (anchor, root string, err error)
+}
+
+// ProjectTargetLayout is an explicit project admission and layout contract.
+// There is no fallback to user TargetLayout for project requests.
+type ProjectTargetLayout interface {
+	ProjectTargetRoot(client domain.DetectedClient, mode domain.PackageMode, managedRoot string, target domain.TargetContext) (anchor, root string, err error)
 }
 
 // NativeRegistryLayout overrides which native client registry a delivery is
@@ -83,6 +96,7 @@ type PreparationRefiner interface {
 
 // PlanInput is everything a refiner is allowed to see.
 type PlanInput struct {
+	TargetContext         domain.TargetContext           `json:"-"`
 	PreviousNativeObjects []domain.NativeObjectOwnership `json:"-"`
 	LocalEntryObservation *domain.LocalEntryObservation  `json:"-"`
 	Envelope              domain.PackageEnvelope

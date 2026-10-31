@@ -14,5 +14,9 @@ func (qoderAdapter) Validate(root string, graph pluginmodel.PackageGraph, state 
 	if err != nil {
 		return nil, err
 	}
-	return append(diagnostics, mcpDiagnostics...), nil
+	diagnostics = append(diagnostics, mcpDiagnostics...)
+	diagnostics = append(diagnostics, validateQoderHooksContract(root, state)...)
+	diagnostics = append(diagnostics, validateQoderCommandsContract(root, state)...)
+	diagnostics = append(diagnostics, validateQoderBinContract(root, state)...)
+	return diagnostics, nil
 }

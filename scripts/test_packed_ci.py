@@ -1,6 +1,8 @@
 """Synthetic controls only; no product execution and no packed acceptance claim."""
+import contextlib
 import copy
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -162,7 +164,7 @@ class TerminalControls(unittest.TestCase):
             body = (root / 'npm-pair' / file).read_bytes()
             packs[product] = dict(file=file, size=len(body), sha256=p.digest(root / 'npm-pair' / file),
                 integrity='sha512-' + p.base64.b64encode(p.hashlib.sha512(body).digest()).decode())
-        pack_tools = {key: dict(value, version='go version go1.26.9 linux/amd64' if key == 'go' else p.VERSIONS[key]) for key, value in tools.items()}
+        pack_tools = {key: dict(value, version='go version go1.26.10 linux/amd64' if key == 'go' else p.VERSIONS[key]) for key, value in tools.items()}
         pack_tools['stager_node'] = pack_tools['node']
         put('npm-pair/completion.json', dict(schema='dual-authoring-npm-completion/v1', identity=identity, status='CANDIDATE', authoring_mode=p.MODE,
             asset_scope='linux-amd64-pair', candidate_sha256=candidate_pin, packs=packs, tools=pack_tools, **claims))
@@ -365,10 +367,27 @@ class WorkflowControls(unittest.TestCase):
         text = (ROOT / '.github/workflows/authoring-native.yml').read_text()
         runner = (ROOT / 'scripts/run-packed-ci.py').read_text()
         w.check(text, runner)
-        mutations = [('  packed:\n', '  omitted:\n'), ('needs: [native, packed]', 'needs: [native]'),
-            ('    if: always()\n', '    if: success()\n'), ('  packed:\n', '  packed:\n    if: false\n'),
-            ('  native:\n', '  native:\n    if: false\n'), ('arch: arm64}', 'arch: amd64}'),
+        gate = "    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.authoring != 'false') }}\n"
+        packed_gate = '    name: Authoring / packed Linux amd64\n    needs: changes\n' + gate
+        native_gate = '    name: Authoring / ${{ matrix.os }}-${{ matrix.arch }}\n    needs: changes\n' + gate
+        mutations = [('  packed:\n', '  omitted:\n'), ('needs: [changes, native, packed]', 'needs: [native, packed]'),
+            ('needs: [changes, native, packed]', 'needs: [changes, native]'),
+            ('\n    if: always() && !cancelled()\n', '\n    if: success()\n'),
+            ('\n    if: always() && !cancelled()\n', '\n    if: always()\n'),
+            (packed_gate, packed_gate.replace(gate, '    if: false\n')),
+            (native_gate, native_gate.replace(gate, '    if: false\n')),
+            # Dropping fail-open or cancellation handling, or skipping on anything
+            # but an explicit documentation-only result, is rejected.
+            (native_gate, native_gate.replace("needs.changes.result != 'success' || ", '')),
+            (packed_gate, packed_gate.replace('!cancelled() && ', '')),
+            (packed_gate, packed_gate.replace("!= 'false'", "== 'true'")),
+            (native_gate, native_gate + '    continue-on-error: true\n'),
+            (packed_gate, packed_gate.replace('    needs: changes\n', '    needs: [changes]\n')),
+            ('    uses: ./.github/workflows/pr-changes.yml\n', '    uses: ./.github/workflows/other.yml\n'),
+            ("  changes:\n    if: ${{ github.event_name == 'pull_request' }}\n", '  changes:\n    if: true\n'),
+            ('arch: arm64}', 'arch: amd64}'),
             ('  pull_request:\n', '  pull_request:\n    paths: [scripts/**]\n'),
+            ('  pull_request:\n', '  pull_request:\n    paths-ignore: [docs/**]\n'),
             ('    timeout-minutes: 45', '    continue-on-error: true\n    timeout-minutes: 45'),
             ('scripts/check-packed-ci.py "$PACKED_ROOT"', 'scripts/missing.py "$PACKED_ROOT"'),
             ('scripts/check-packed-workflow.py --results', 'scripts/omitted.py --results'),
@@ -383,14 +402,36 @@ class WorkflowControls(unittest.TestCase):
         for before, after in [("'-tags=packedci', ", ''), ('proof.REGEX', "'^TestOther$'"), ('proof.PACKAGE_PATH', "'./wrong'"), ('proof.check(root, sha)', '')]:
             with self.assertRaises(ValueError): w.check(text, runner.replace(before, after))
 
-    def test_dependencies_must_all_succeed(self):
-        good = dict(native=dict(result='success'), packed=dict(result='success')); w.results(good)
-        for job in good:
-            for status in ('failure', 'skipped', 'cancelled', None):
-                bad = copy.deepcopy(good); bad[job]['result'] = status
-                with self.assertRaises(ValueError): w.results(bad)
-            bad = copy.deepcopy(good); del bad[job]
+    def test_lanes_succeed_unless_classified_documentation_only(self):
+        def needs(changes, lanes, authoring=None):
+            outputs = {} if authoring is None else dict(authoring=authoring)
+            return dict(changes=dict(result=changes, outputs=outputs),
+                        native=dict(result=lanes), packed=dict(result=lanes))
+        # Dispatch (classifier skipped), a relevant diff and a failed classifier
+        # all require both lanes; only an explicit documentation-only result
+        # accepts two skipped lanes.
+        # Captured: this suite runs inside the aggregate, and a stray notice
+        # would claim skipped lanes on every run. Only the documentation-only
+        # result may announce that.
+        for good in (needs('skipped', 'success'), needs('success', 'success', 'true'),
+                     needs('failure', 'success'), needs('success', 'success', ''),
+                     needs('success', 'skipped', 'false')):
+            with self.subTest(good=good), patch.dict(os.environ, {'GITHUB_STEP_SUMMARY': ''}):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output): w.results(good)
+                self.assertEqual('lanes were skipped' in output.getvalue(), good['native']['result'] == 'skipped')
+        for job in ('native', 'packed'):
+            for changes, authoring in (('skipped', None), ('success', 'true'), ('failure', None)):
+                for status in ('failure', 'skipped', 'cancelled', None):
+                    bad = needs(changes, 'success', authoring); bad[job]['result'] = status
+                    with self.subTest(job=job, changes=changes, status=status), self.assertRaises(ValueError): w.results(bad)
+            for status in ('success', 'failure', 'cancelled', None):
+                bad = needs('success', 'skipped', 'false'); bad[job]['result'] = status
+                with self.subTest(job=job, documentation_only=status), self.assertRaises(ValueError): w.results(bad)
+            bad = needs('success', 'success', 'true'); del bad[job]
             with self.assertRaises(ValueError): w.results(bad)
+        bad = needs('success', 'success', 'true'); del bad['changes']
+        with self.assertRaises(ValueError): w.results(bad)
 
 
 

@@ -2,6 +2,7 @@ package kimi
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,9 +14,27 @@ import (
 )
 
 func (*Adapter) UsesNativeRegistryExecutable() bool { return false }
-func (*Adapter) InspectNativeRegistry(ctx context.Context, _ clients.Env, _ domain.DetectedClient, p domain.DeliveryPlan, owned *domain.ClientBinding) (clients.RegistryFinding, error) {
+func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, p domain.DeliveryPlan, owned *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
+	}
+	if p.Scope == domain.ScopeProject || p.TargetContext.Scope == domain.ScopeProject {
+		root, err := kimiPlanRoot(client, p)
+		if err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		if owned != nil {
+			if owned.ClientID != "kimi" || owned.Scope != string(domain.ScopeProject) || owned.PhysicalArtifact != p.PhysicalArtifactID || owned.TargetLocator != p.ActivePath {
+				return clients.RegistryIndeterminate, fmt.Errorf("kimi project binding scope/artifact/path differs")
+			}
+			if err := New().ValidateBindingProfile(root, *owned); err != nil {
+				return clients.RegistryIndeterminate, err
+			}
+			selected := *owned
+			selected.NativeObjects = kimiNativeObjects(owned.NativeObjects)
+			owned = &selected
+		}
+		return kimiComponents(root).Inspect(p.Components, owned, env.NativeConfig)
 	}
 	if err := validateIdentity(p.NativeRegistryRoot, p.DeclaredName, p.ActivePath); err != nil {
 		return clients.RegistryIndeterminate, err
@@ -38,6 +57,13 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, _ clients.Env, _ doma
 	return clients.RegistryCollision, nil
 }
 func (*Adapter) InspectPreparedRegistry(p domain.DeliveryPlan, name string, owned bool) (clients.RegistryFinding, error) {
+	if p.Scope == domain.ScopeProject || p.TargetContext.Scope == domain.ScopeProject {
+		_, err := kimiPlanRoot(domain.DetectedClient{ConfigRoot: p.TargetContext.UserConfigRoot}, p)
+		if err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		return clients.RegistryClear, nil
+	}
 	if err := pathpolicy.RequireContainedChild(p.NativeRegistryRoot, p.TargetRoot); err != nil {
 		return clients.RegistryIndeterminate, err
 	}

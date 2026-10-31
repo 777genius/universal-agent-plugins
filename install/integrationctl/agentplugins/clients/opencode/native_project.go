@@ -26,7 +26,11 @@ func ProjectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan do
 	if empty {
 		return rejectOpenCodeProjectionCollision(root)
 	}
-	configRoot := strings.TrimSpace(plan.NativeRegistryRoot)
+	layout, err := openCodePlanLayout(plan)
+	if err != nil {
+		return err
+	}
+	configRoot := layout.Root
 	if configRoot == "" || !filepath.IsAbs(configRoot) {
 		return fmt.Errorf("OpenCode config root is unavailable")
 	}
@@ -327,7 +331,11 @@ func openCodeSkillOwnership(stagingRoot string, envelope domain.PackageEnvelope,
 	if err != nil {
 		return domain.NativeObjectOwnership{}, err
 	}
-	target := filepath.Join(plan.NativeRegistryRoot, "skills", component.Name)
+	layout, err := openCodePlanLayout(plan)
+	if err != nil {
+		return domain.NativeObjectOwnership{}, err
+	}
+	target := filepath.Join(layout.Skills, component.Name)
 	if err := pathpolicy.RequireContainedChild(plan.NativeRegistryRoot, target); err != nil {
 		return domain.NativeObjectOwnership{}, err
 	}

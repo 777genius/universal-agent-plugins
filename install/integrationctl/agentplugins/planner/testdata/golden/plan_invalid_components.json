@@ -35,6 +35,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/chatgpt"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/chatgpt",
       "UserActions": null,
       "Verification": "package_validated",
@@ -81,6 +86,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/clients/claude",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/claude"
+      },
       "TargetRoot": "\u003croot\u003e/clients/claude/skills",
       "UserActions": null,
       "Verification": "package_validated",
@@ -115,7 +125,7 @@
       "LocalActions": null,
       "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
-      "NativeRegistryExecutable": "\u003croot\u003e/bin/cline",
+      "NativeRegistryExecutable": "",
       "NativeRegistryRoot": "\u003croot\u003e/clients/cline",
       "OpenCodeHost": null,
       "PackageMode": "native",
@@ -127,6 +137,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/cline"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/cline",
       "UserActions": null,
       "Verification": "package_validated",
@@ -173,6 +188,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/codex"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/codex",
       "UserActions": null,
       "Verification": "package_validated",
@@ -219,6 +239,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/copilot"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/copilot",
       "UserActions": null,
       "Verification": "package_validated",
@@ -265,6 +290,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/clients/cursor",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/cursor"
+      },
       "TargetRoot": "\u003croot\u003e/clients/cursor/plugins/local",
       "UserActions": null,
       "Verification": "package_validated",
@@ -311,6 +341,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/gemini"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/gemini",
       "UserActions": null,
       "Verification": "package_validated",
@@ -357,6 +392,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/clients/grok",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/grok"
+      },
       "TargetRoot": "\u003croot\u003e/clients/grok/plugins",
       "UserActions": null,
       "Verification": "package_validated",
@@ -403,6 +443,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/clients/kimi",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/kimi"
+      },
       "TargetRoot": "\u003croot\u003e/clients/kimi/plugins/managed",
       "UserActions": null,
       "Verification": "package_validated",
@@ -449,6 +494,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/kiro"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/kiro",
       "UserActions": null,
       "Verification": "package_validated",
@@ -495,7 +545,63 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/opencode"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/opencode",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
+  "pi": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/clients/pi/extensions/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "pi",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/pi",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/pi",
+      "OpenCodeHost": null,
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "PreviousNativeObjects": null,
+      "Scope": "user",
+      "SelectedDelivery": {},
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/clients/pi",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/pi"
+      },
+      "TargetRoot": "\u003croot\u003e/clients/pi/extensions",
       "UserActions": null,
       "Verification": "package_validated",
       "Warnings": [
@@ -541,6 +647,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/qoder"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/qoder",
       "UserActions": null,
       "Verification": "package_validated",
@@ -587,6 +698,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/vscode"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/vscode",
       "UserActions": null,
       "Verification": "package_validated",
@@ -633,6 +749,11 @@
       "SelectedDelivery": {},
       "Status": "unsupported",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/windsurf"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/windsurf",
       "UserActions": null,
       "Verification": "package_validated",

@@ -135,13 +135,13 @@ func TestCommittedSourceAndDocsOnlyCommit(t *testing.T) {
 	dir := newSourceFixture(t)
 	first := checkoutSHA(t, dir)
 	a := filepath.Join(t.TempDir(), "a")
-	if err := export(dir, first, a); err != nil {
+	if err := exportTrees(dir, first, a, auditedAncestorFixtureTrees); err != nil {
 		t.Fatal(err)
 	}
 	writeFixture(t, dir, "docs/later.md", []byte("docs only\n"))
 	second := commitFixture(t, dir)
 	b := filepath.Join(t.TempDir(), "b")
-	if err := export(dir, second, b); err != nil {
+	if err := exportTrees(dir, second, b, auditedAncestorFixtureTrees); err != nil {
 		t.Fatal(err)
 	}
 	for _, base := range []struct{ path, sha string }{{a, first}, {b, second}} {
@@ -249,7 +249,7 @@ func TestLoadedProjectionMismatch(t *testing.T) {
 	for _, fact := range []string{"help", "flag", "markdown"} {
 		t.Run(fact, func(t *testing.T) {
 			rejectedBeforeOutput(t, dir, checkoutSHA(t, dir), "loaded documentation projection mismatch", func() ([]*cobra.Command, error) {
-				roots, err := trees()
+				roots, err := auditedAncestorFixtureTrees()
 				if err != nil {
 					return nil, err
 				}

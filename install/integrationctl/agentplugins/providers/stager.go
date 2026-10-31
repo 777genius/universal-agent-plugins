@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
@@ -17,6 +18,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
+	icdomain "github.com/777genius/plugin-kit-ai/install/integrationctl/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 )
 
@@ -119,7 +121,7 @@ func rejectExcludedOwnershipMarkers(root string) error {
 		if filepath.Clean(path) == filepath.Clean(root) {
 			return nil
 		}
-		if entry.Name() == ".git" || entry.Name() == ".plugin-kit-ai.lock" {
+		if entry.Name() == ".git" || icdomain.IsWorkspaceLockFile(entry.Name()) {
 			return &excludedOwnershipMarkerError{name: entry.Name()}
 		}
 		return nil
@@ -298,7 +300,7 @@ func (stager Stager) project(
 ) ([]domain.NativeObjectOwnership, error) {
 	projector, ok := clients.As[clients.Projector](stager.Registry, plan.ClientID)
 	if !ok {
-		if domain.RequiresNativeProjector(plan.ClientID) {
+		if domain.RequiresNativeProjectorForScope(plan.ClientID, plan.Scope) {
 			return nil, fmt.Errorf("client %q requires a native projector", plan.ClientID)
 		}
 		return nil, nil
@@ -319,21 +321,8 @@ func validateReservedStdioEnvironment(envelope domain.PackageEnvelope, plan doma
 		if server.Type != "stdio" {
 			continue
 		}
-		switch env := server.Decoded["env"].(type) {
-		case map[string]any:
-			if _, ok := env["PLUGIN_ROOT"]; ok {
-				return fmt.Errorf("stdio MCP server %s defines reserved PLUGIN_ROOT", name)
-			}
-			if _, ok := env["PLUGIN_DATA"]; ok {
-				return fmt.Errorf("stdio MCP server %s defines reserved PLUGIN_DATA", name)
-			}
-		case map[string]string:
-			if _, ok := env["PLUGIN_ROOT"]; ok {
-				return fmt.Errorf("stdio MCP server %s defines reserved PLUGIN_ROOT", name)
-			}
-			if _, ok := env["PLUGIN_DATA"]; ok {
-				return fmt.Errorf("stdio MCP server %s defines reserved PLUGIN_DATA", name)
-			}
+		if reserved := domain.ReservedStdioEnvKey(server.Decoded["env"], runtime.GOOS == "windows"); reserved != "" {
+			return fmt.Errorf("stdio MCP server %s defines reserved %s", name, reserved)
 		}
 	}
 	return nil

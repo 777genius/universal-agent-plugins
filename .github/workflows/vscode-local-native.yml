@@ -18,6 +18,11 @@ on:
           - windows
           - darwin
 
+# Replace the run for the same PR; manual runs stay independent.
+concurrency:
+  group: vscode-local-native-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
@@ -54,7 +59,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
-          go-version: '1.26.9'
+          go-version: '1.26.10'
           cache: false
       - name: Qualify exact public renderer on native system shell
         run: |
@@ -81,7 +86,7 @@ jobs:
             GOPROXY=off GOSUMDB=off GOMAXPROCS=2 U2_REQUIRE_NATIVE="$U2_REQUIRE_NATIVE")
           "${native_env[@]}" "$go_bin" env -json GOHOSTOS GOOS GOARCH GOVERSION > "$scratch/evidence/go-env.json"
           test "$("${native_env[@]}" "$go_bin" env GOHOSTOS)" = "$U2_REQUIRE_NATIVE"
-          test "$("${native_env[@]}" "$go_bin" env GOVERSION)" = go1.26.9
+          test "$("${native_env[@]}" "$go_bin" env GOVERSION)" = go1.26.10
           set +e
           "${native_env[@]}" "$go_bin" test -p 2 -count=1 -timeout=3m -json ./vscodelocalhooks \
             > "$scratch/evidence/test.json" 2> "$scratch/evidence/test.stderr"

@@ -1,3 +1,10 @@
+/** Held out of catalog surfaces and search indexing by owner request, not a retirement. */
+const temporarilyUnlistedProducts = new Set(['agent-notifications']);
+
+export function isTemporarilyUnlistedProduct(name: string): boolean {
+  return temporarilyUnlistedProducts.has(name);
+}
+
 /** HTML families only. APIs, assets and the independently built docs are never expanded. */
 export const routeFamilies = [
   { family: 'home', path: '/', indexable: true },
@@ -29,7 +36,7 @@ export function productRoutes(
     ...pluginSlugs.map((slug) => ({
       family: 'plugin' as const,
       path: `/plugins/${slug}/`,
-      indexable: true,
+      indexable: !isTemporarilyUnlistedProduct(slug),
     })),
     ...clientSlugs.map((slug) => ({
       family: 'agent' as const,

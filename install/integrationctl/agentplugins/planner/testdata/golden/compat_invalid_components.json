@@ -55,7 +55,8 @@
       },
       "PackageMode": "compatibility_projection",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "projected"
     },
@@ -95,7 +96,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -135,7 +137,8 @@
       },
       "PackageMode": "compatibility_projection",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "projected"
     },
@@ -176,7 +179,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -217,7 +221,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -258,7 +263,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -299,7 +305,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -340,7 +347,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -381,7 +389,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -422,11 +431,52 @@
       },
       "PackageMode": "prepared_package",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "prepared"
     },
     "ClientID": "opencode",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Source": "",
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "automatic",
+      "AppSupport": "unsupported",
+      "ClientID": "pi",
+      "ExtensionSupport": "native",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "unsupported",
+        "streamable-http": "unsupported"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "unsupported"
+    },
+    "ClientID": "pi",
     "Components": [
       {
         "Index": 1,
@@ -458,11 +508,12 @@
       "MCPTransports": {
         "sse": "unsupported",
         "stdio": "native",
-        "streamable-http": "unsupported"
+        "streamable-http": "native"
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -503,7 +554,8 @@
       },
       "PackageMode": "prepared_package",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "prepared"
     },
@@ -544,7 +596,8 @@
       },
       "PackageMode": "prepared_package",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "prepared"
     },

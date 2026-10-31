@@ -1,24 +1,61 @@
 ---
 title: "Documentación de Agent Plugins"
-description: "Documentación pública de Agent Plugins."
+description: "Guías públicas para instalar y crear paquetes Agent Plugins."
 canonicalId: "page:home"
 section: "home"
 locale: "es"
 generated: false
 translationRequired: true
+localeDisposition: "current-translation"
 ---
 
-# Usar plugins / Crear plugins
+<div class="docs-hero docs-hero--feature">
+  <p class="docs-kicker">DOCUMENTACIÓN PÚBLICA</p>
+  <h1>Agent Plugins</h1>
+  <p class="docs-lead">Instala Skills y herramientas MCP en tus agentes o crea tu propio paquete portable.</p>
+</div>
 
-Instala Agent Plugins 1.0 disponibles o crea paquetes portables basados en `plugin.json`.
+## Elige por dónde empezar
 
-- [Usar plugins](/es/use/)
-- [Crear plugins](/es/build/)
-- [Inicio rápido](/es/guide/quickstart)
+<div class="docs-grid">
+  <a class="docs-card" href="./use/">
+    <h2>Usar plugins</h2>
+    <p>Examina un paquete, revisa los cambios previstos e instálalo para tu cuenta o para un proyecto.</p>
+  </a>
+  <a class="docs-card" href="./build/">
+    <h2>Crear plugins</h2>
+    <p>Prepara un paquete estándar con plugin.json, Skills y configuración MCP. Conoce las herramientas de creación disponibles en el código fuente.</p>
+  </a>
+</div>
 
-La creación de Agent Plugins está disponible mediante `agentplugins author` en `universal-agent-plugins`.
+## Instala tu primer plugin
 
-[Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
+Con Node.js 22 o posterior:
+
+```bash
+npx universal-agent-plugins add context7
+```
+
+El CLI pregunta qué agentes compatibles quieres usar. Revisa el plan y completa los pasos de activación o inicio de sesión que indique. Para usar un ejecutable nativo, consulta la [guía de instalación nativa](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) para macOS, Linux o Windows. El gestor nativo no necesita Node.js.
+
+## Qué está disponible
+
+[CLI nativo 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95), publicado el 29 de octubre de 2026, es la versión actual del instalador nativo. Añade una API local de gestión y extensiones nativas de Pi en el ámbito de usuario. Consulta [la gestión local](./use/manage#local-management-api) y [la compatibilidad con Pi](./reference/client-compatibility#pi-native-extensions).
+
+El instalador ofrece selección explícita del ámbito de proyecto y restauración con archivo de bloqueo. La mayoría de los comandos usa por defecto el entorno de usuario. `agentplugins install` sin argumento de origen selecciona el proyecto si existe un `uap.toml` regular en el directorio actual exacto; un ámbito explícito tiene prioridad. Para las operaciones de mantenimiento, selecciona el ámbito de proyecto explícitamente. Comprueba `agentplugins version`: la selección automática requiere 0.1.94. Los canales de los gestores de paquetes pueden actualizarse más tarde; el instalador nativo ofrece la versión actual verificada. Los parámetros explícitos de proyecto están disponibles desde 0.1.93. Consulta [instalación](./use/install) y [mantenimiento](./use/manage).
+
+El instalador actual no incluye `agentplugins author`. La [guía de creación](./build/) explica cómo preparar paquetes a mano y usar los comandos de creación implementados en el código fuente actual. Las pruebas de versiones anteriores de las herramientas de creación conservan su alcance original; no describen el instalador que se descarga hoy.
+
+## Interpreta el resultado
+
+La validación del paquete, la instalación, la detección por el cliente, la ejecución de herramientas MCP y la autenticación del servicio se comprueban por separado. Una instalación de archivos correcta puede requerir todavía que el cliente confíe en el proyecto, se recargue o abra una sesión nueva. Las pruebas nativas cubren versiones y plataformas concretas; no certifican todos los plugins ni todos los agentes.
+
+- [Inicio rápido](./guide/quickstart)
+- [Estructura del paquete](./build/layout)
+- [Comprobaciones y pruebas](./build/checks)
+- [Compatibilidad de clientes y límites de las pruebas](./reference/client-compatibility)
+- [Especificación Agent Plugins 1.0](https://agent-plugins.org/specification)
+
 
 <!-- locale-historical-source:start
 locale-historical-frontmatter:start

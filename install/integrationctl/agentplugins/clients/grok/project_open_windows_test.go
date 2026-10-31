@@ -1,0 +1,95 @@
+//go:build windows
+
+package grok
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestProjectGrokWindowsAnchoredOpenRejectsSameObjectAncestorAlias(t *testing.T) {
+	for _, directory := range []bool{false, true} {
+		t.Run(map[bool]string{false: "manifest", true: "directory"}[directory], func(t *testing.T) {
+			base := projectTestRoot(t)
+			parent := filepath.Join(base, "parent")
+			path := filepath.Join(parent, "leaf")
+			if directory {
+				if err := os.MkdirAll(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				projectTestWrite(t, path, `{"name":"demo"}`)
+			}
+			// Check symlink capability before introducing the deterministic swap.
+			probe := filepath.Join(base, "probe")
+			if err := os.Symlink(parent, probe); err != nil {
+				t.Skipf("symlink unavailable: %v", err)
+			}
+			if err := os.Remove(probe); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err := openProjectWindows(path, directory, func() {
+				if err := os.Rename(parent, parent+"-old"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(parent+"-old", parent); err != nil {
+					t.Fatal(err)
+				}
+			})
+			if file != nil {
+				_ = file.Close()
+			}
+			if err == nil {
+				t.Fatal("same-object ancestor alias was admitted")
+			}
+			after, err := os.Stat(path)
+			if err != nil || !os.SameFile(before, after) {
+				t.Fatal("fixture failed to preserve exact same leaf object", err)
+			}
+		})
+	}
+}
+
+func TestProjectGrokWindowsReadRecheckRefusesSameObjectAncestorAlias(t *testing.T) {
+	base := projectTestRoot(t)
+	parent := filepath.Join(base, "parent")
+	path := filepath.Join(parent, "manifest.json")
+	projectTestWrite(t, path, `{"name":"demo"}`)
+	file, info, err := openProjectPath(path, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	if err := stableProjectPath(path, file, info); err != nil {
+		t.Fatal("canonical open-file recheck failed", err)
+	}
+	alias := filepath.Join(base, "alias")
+	if err := os.Symlink(parent, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	aliasPath := filepath.Join(alias, "manifest.json")
+	aliasInfo, err := os.Stat(aliasPath)
+	if err != nil || !os.SameFile(info, aliasInfo) {
+		t.Fatal("alias does not name the still-open leaf", err)
+	}
+	probe, anchorErr := openProjectHandle(aliasPath, false)
+	if probe != nil {
+		_ = probe.Close()
+	}
+	if anchorErr == nil {
+		t.Fatal("anchored open admitted the ancestor alias")
+	}
+	// Local handle-type refusals are fresh diagnostic errors, not sentinels.
+	// Pin the same anchored refusal while keeping the held-file identity proof.
+	if err := stableProjectPath(aliasPath, file, info); err == nil || err.Error() != anchorErr.Error() {
+		t.Fatalf("recheck did not return the anchored alias refusal: %v; want %v", err, anchorErr)
+	}
+	if err := stableProjectPath(path, file, info); err != nil {
+		t.Fatal("canonical descriptor changed during alias check", err)
+	}
+}

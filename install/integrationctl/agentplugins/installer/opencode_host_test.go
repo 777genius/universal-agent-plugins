@@ -34,6 +34,20 @@ func openCodeTestRoot(t *testing.T) string {
 	t.Setenv("TMPDIR", root)
 	return root
 }
+
+// Replace disposable executable inodes instead of truncating bytes that a
+// completed probe may still have mapped (ETXTBSY on Linux, signing cache on macOS).
+func replaceOpenCodeFixture(t *testing.T, executable string, body []byte) {
+	t.Helper()
+	next := executable + ".next"
+	if err := os.WriteFile(next, body, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(next, executable); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func buildOpenCodeTarget(t *testing.T, root, version, mode string) string {
 	t.Helper()
 	if err := os.MkdirAll(root, 0700); err != nil {
@@ -186,7 +200,7 @@ func TestOpenCodeMetadataOnlyPreparationNeverProbes(t *testing.T) {
 // discovery/inspection/recovery and receipt-authorized removal never probe.
 func TestOpenCodeLifecycleCopiesAndReadOnlyZeroProbes(t *testing.T) {
 	root := openCodeTestRoot(t)
-	executable := buildOpenCodeTarget(t, filepath.Join(root, "v1"), "1.18.33", "ok")
+	executable := buildOpenCodeTarget(t, filepath.Join(root, "v1"), "1.18.35", "ok")
 	calls, handoffs := 0, 0
 	env := []string{"PATH="}
 	engine := openCodeEngine(t, Config{StateRoot: filepath.Join(root, "state"), HelperExecutable: executable, OpenCodeProbeEnvironment: env,
@@ -337,9 +351,7 @@ func TestOpenCodeApplyRevalidatesBeforeEffects(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := os.WriteFile(executable, body, 0700); err != nil {
-					t.Fatal(err)
-				}
+				replaceOpenCodeFixture(t, executable, body)
 			case "symlink":
 				if err := os.Remove(selected); err != nil {
 					t.Fatal(err)
@@ -365,9 +377,7 @@ func TestOpenCodeApplyRevalidatesBeforeEffects(t *testing.T) {
 			case "failed":
 				fail = true
 			case "wrapper", "nested_wrapper":
-				if err := os.WriteFile(executable, []byte("#!/bin/sh\necho executed > \""+filepath.Join(root, "wrapper-ran")+"\"\nexec \""+replacement+"\" --version\n"), 0700); err != nil {
-					t.Fatal(err)
-				}
+				replaceOpenCodeFixture(t, executable, []byte("#!/bin/sh\necho executed > \""+filepath.Join(root, "wrapper-ran")+"\"\nexec \""+replacement+"\" --version\n"))
 			}
 			result, err := engine.Apply(testCtx(t), handle, Decision{Confirmed: true})
 			if !errors.Is(err, ErrPlanChanged) || result.Outcome != OutcomeConflict || result.Reason != "plan_changed" || effects != 0 {
@@ -442,9 +452,7 @@ func TestOpenCodePendingHandoffRevalidates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(executable, body, 0700); err != nil {
-		t.Fatal(err)
-	}
+	replaceOpenCodeFixture(t, executable, body)
 	result, err = engine.Apply(testCtx(t), retry, Decision{Confirmed: true})
 	if !errors.Is(err, ErrPlanChanged) || result.Reason != "plan_changed" || handoffs != 1 {
 		t.Fatalf("pending boundary: %+v handoffs=%d %v", result, handoffs, err)
@@ -511,17 +519,13 @@ func TestOpenCodeExistingMutationsRequireAndRevalidateTarget(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer func() { _ = handle.Close() }()
-			if err := os.WriteFile(executable, changed, 0700); err != nil {
-				t.Fatal(err)
-			}
+			replaceOpenCodeFixture(t, executable, changed)
 			effects = 0
 			result, err := engine.Apply(testCtx(t), handle, Decision{Confirmed: true})
 			if !errors.Is(err, ErrPlanChanged) || result.Reason != "plan_changed" || effects != 0 {
 				t.Fatalf("changed target: %+v effects=%d %v", result, effects, err)
 			}
-			if err := os.WriteFile(executable, original, 0700); err != nil {
-				t.Fatal(err)
-			}
+			replaceOpenCodeFixture(t, executable, original)
 		})
 	}
 }
@@ -604,9 +608,7 @@ func TestOpenCodeMetadataUpdateFencesPriorNativeEffects(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := os.WriteFile(executable, body, 0700); err != nil {
-					t.Fatal(err)
-				}
+				replaceOpenCodeFixture(t, executable, body)
 			case "root":
 				other := filepath.Join(root, "config-b")
 				if err := os.Mkdir(other, 0700); err != nil {
@@ -667,9 +669,7 @@ func TestOpenCodeMetadataUpdateFencesPriorNativeEffects(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := os.WriteFile(executable, changed, 0700); err != nil {
-					t.Fatal(err)
-				}
+				replaceOpenCodeFixture(t, executable, changed)
 				effects = 0
 				result, err = engine.Apply(testCtx(t), pending, Decision{Confirmed: true})
 				if !errors.Is(err, ErrPlanChanged) || result.Reason != "plan_changed" || effects != 0 {

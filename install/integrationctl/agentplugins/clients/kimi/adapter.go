@@ -48,12 +48,17 @@ func (*Adapter) TargetRoot(client domain.DetectedClient, _ domain.PackageMode, _
 	return client.ConfigRoot, filepath.Join(client.ConfigRoot, "plugins", "managed"), nil
 }
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if in.TargetContext.Scope == domain.ScopeProject {
+		return refineKimiProject(in, plan)
+	}
 	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, shared.OnlyNativeComponents(plan.Components))
 	plan.UserActions = shared.AppendUnique(plan.UserActions, reloadAction)
 	return nil
 }
 func (*Adapter) ManagedMCPSelection() clients.SelectionLayout {
-	return clients.SelectionLayout{File: filepath.Join(".kimi-plugin", "plugin.json"), Nested: true}
+	// The projected manifest is the Kimi MCP selection document and declares
+	// "mcpServers" only when servers were selected.
+	return clients.SelectionLayout{File: filepath.Join(".kimi-plugin", "plugin.json"), Nested: true, ServersMemberOptional: true}
 }
 
 const reloadAction = "Run /reload or /new in Kimi Code to load the installed plugin; runtime MCP connections and authentication have not been verified."

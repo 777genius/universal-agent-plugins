@@ -17,21 +17,25 @@ var (
 )
 
 func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.ActivationRequest) bool {
+	if projectRequested(request.Plan) {
+		return false
+	}
 	return shared.HasClientCLI(env, request.BackendExecutable)
 }
 
-func (*Adapter) VerifierAvailable(_ domain.DetectedClient, _ domain.DeliveryPlan, backendExecutable string) bool {
+func (*Adapter) VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
+	if projectRequested(plan) {
+		return validateProjectPlan(client, plan) == nil
+	}
 	return shared.HasListingCLI(backendExecutable)
 }
 
 func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
-	if err := shared.ActivationIdentityMismatch(request); err != nil {
-		return domain.ActivationOutcome{}, err
+	if projectRequested(request.Plan) {
+		return activateProject(ctx, env, request)
 	}
-	// Stored bindings predate every plan gate, so refuse rather than address
-	// an id that could belong to a different plugin.
-	if !qualifiedPluginName(request.DeclaredName) {
-		return domain.ActivationOutcome{}, fmt.Errorf("plugin name %q cannot form an unambiguous Qoder plugin id", request.DeclaredName)
+	if err := validateUserActivation(request); err != nil {
+		return domain.ActivationOutcome{}, err
 	}
 	outcome := shared.StartedActivation(request)
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
@@ -42,7 +46,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if request.VerifyOnly {
 		return verifyActivation(ctx, env, request, outcome)
 	}
-	entries, err := listPlugins(ctx, env, request.BackendExecutable)
+	entries, err := listPlugins(ctx, env, request.Client.ConfigRoot, request.BackendExecutable)
 	if err != nil {
 		return activationError(outcome, request, err)
 	}
@@ -61,14 +65,14 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		return unprovenVersion(outcome, request)
 	}
 	if found {
-		if _, err := shared.RunClientCommand(ctx, env.Runner, "Qoder CLI", request.BackendExecutable, "plugins", "uninstall", request.DeclaredName); err != nil {
+		if err := runQoder(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugins", "uninstall", request.DeclaredName, "--scope", "user"); err != nil {
 			return activationError(outcome, request, fmt.Errorf("uninstall previous Qoder plugin: %w", err))
 		}
-		if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
+		if err := verifyAbsent(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, request.DeclaredName); err != nil {
 			return activationError(outcome, request, fmt.Errorf("verify previous Qoder plugin removal: %w", err))
 		}
 	}
-	_, installErr := shared.RunClientCommand(ctx, env.Runner, "Qoder CLI", request.BackendExecutable, "plugins", "install", request.Delivery.ActivePath, "--scope", "user")
+	installErr := runQoder(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugins", "install", request.Delivery.ActivePath, "--scope", "user")
 	verified, verifyErr := verifyActivation(ctx, env, request, outcome)
 	if installErr != nil {
 		// A same-version update may change package content, so a stale listing
@@ -82,7 +86,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 }
 
 func verifyActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
-	entries, err := listPlugins(ctx, env, request.BackendExecutable)
+	entries, err := listPlugins(ctx, env, request.Client.ConfigRoot, request.BackendExecutable)
 	if err != nil {
 		return activationError(outcome, request, err)
 	}
@@ -126,8 +130,8 @@ func activationError(outcome domain.ActivationOutcome, request domain.Activation
 	return shared.FailedActivation(outcome, "inspect `qoder plugins list --json` and rerun agentplugins update", err)
 }
 
-func verifyAbsent(ctx context.Context, env clients.Env, executable, name string) error {
-	entries, err := listPlugins(ctx, env, executable)
+func verifyAbsent(ctx context.Context, env clients.Env, root, executable, name string) error {
+	entries, err := listPlugins(ctx, env, root, executable)
 	if err != nil {
 		return err
 	}
@@ -137,7 +141,10 @@ func verifyAbsent(ctx context.Context, env clients.Env, executable, name string)
 	return nil
 }
 
-func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if request.TargetContext.Scope == domain.ScopeProject || request.TargetContext.ProjectRoot != "" {
+		return deactivateProject(ctx, request)
+	}
 	outcome := shared.StartedDeactivation()
 	if request.ExternalUninstalled {
 		outcome.ExternalRemovalComplete = true
@@ -146,14 +153,17 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 	if !qualifiedPluginName(request.DeclaredName) {
 		return outcome, fmt.Errorf("plugin name %q cannot form an unambiguous Qoder plugin id", request.DeclaredName)
 	}
-	if !shared.HasClientCLI(env, request.BackendExecutable) {
+	if err := validateProfile(request.Client.ConfigRoot, ""); err != nil {
+		return outcome, err
+	}
+	if adapter.RequiresExternalUninstalled(env, request) {
 		return shared.RequireExternalUninstall(outcome, false, "uninstall the managed plugin in Qoder, then rerun remove with --external-uninstalled"), nil
 	}
 	if !request.Confirmed {
 		outcome.UserActions = []string{"agentplugins will uninstall the managed Qoder plugin automatically"}
 		return outcome, nil
 	}
-	entries, err := listPlugins(ctx, env, request.BackendExecutable)
+	entries, err := listPlugins(ctx, env, request.Client.ConfigRoot, request.BackendExecutable)
 	if err != nil {
 		return outcome, err
 	}
@@ -164,8 +174,8 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 	if findForeign(entries, request.DeclaredName) {
 		return outcome, fmt.Errorf("qoder plugin %q is registered from a different source; refusing to uninstall it", request.DeclaredName)
 	}
-	_, uninstallErr := shared.RunClientCommand(ctx, env.Runner, "Qoder CLI", request.BackendExecutable, "plugins", "uninstall", request.DeclaredName)
-	if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
+	uninstallErr := runQoder(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugins", "uninstall", request.DeclaredName, "--scope", "user")
+	if err := verifyAbsent(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, request.DeclaredName); err != nil {
 		if uninstallErr != nil {
 			return outcome, errors.Join(fmt.Errorf("uninstall qoder plugin: %w", uninstallErr), fmt.Errorf("verification: %w", err))
 		}
@@ -173,4 +183,19 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 	}
 	outcome.ExternalRemovalComplete = true
 	return outcome, nil
+}
+
+func validateUserActivation(request domain.ActivationRequest) error {
+	if err := shared.ActivationIdentityMismatch(request); err != nil {
+		return err
+	}
+	if err := validateProfile(request.Client.ConfigRoot, request.Plan.NativeRegistryRoot); err != nil {
+		return err
+	}
+	// Stored bindings predate every plan gate, so refuse rather than address
+	// an id that could belong to a different plugin.
+	if !qualifiedPluginName(request.DeclaredName) {
+		return fmt.Errorf("plugin name %q cannot form an unambiguous Qoder plugin id", request.DeclaredName)
+	}
+	return nil
 }

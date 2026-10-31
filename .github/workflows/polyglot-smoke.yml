@@ -4,10 +4,27 @@ on:
   push:
     branches: [main, master]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Documentation and web-only changes do not change what these lanes build
+    # or test. Required still runs the docs-alignment repotests on every ready
+    # pull request, and pushes to main stay unfiltered for release evidence.
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
   workflow_dispatch:
+
+# Replace ordinary PR/push CI; isolate manual and scheduled invocations.
+# Release validation also accepts checks from the associated merged PR head.
+concurrency:
+  group: polyglot-smoke-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   source-acquisition-smoke:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: source-acquisition-smoke (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -15,7 +32,7 @@ jobs:
         os:
           - ubuntu-latest
           - windows-latest
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.os == 'ubuntu-latest' && matrix.os || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -27,20 +44,20 @@ jobs:
         run: cd install/integrationctl/agentplugins && go test -count=1 -run '^TestOSRunnerClassifiesRealGitTreeOverflowAsSoleLimit$' ./adapters/sourceacquisition
 
   polyglot-smoke:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: polyglot-smoke (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
 
-    runs-on: ${{ matrix.os }}
-
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.os == 'ubuntu-latest' && matrix.os || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.26.9"
+          go-version: "1.26.10"
           cache: false
 
       - uses: actions/setup-node@v6

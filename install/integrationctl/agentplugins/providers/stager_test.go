@@ -618,6 +618,28 @@ func TestStagerKeepsNativePackageAndSanitizesFailureBoundaries(t *testing.T) {
 	}
 }
 
+func TestStagerCarriesNativeHooksAndCommandsForQoder(t *testing.T) {
+	t.Parallel()
+	envelope := stagingEnvelope(t)
+	hooksBody := `{"description":"demo hooks","hooks":{"Stop":[{"async":true,"hooks":[{"type":"command","command":"${QODER_PLUGIN_ROOT}/bin/run","args":["stop"],"name":"demo-stop","timeout":2}]}]}}` + "\n"
+	writeTestFile(t, filepath.Join(envelope.SnapshotRoot, "hooks", "hooks.json"), hooksBody)
+	writeTestFile(t, filepath.Join(envelope.SnapshotRoot, "commands", "ship.md"), "---\ndescription: Ship the demo\n---\nShip it.\n")
+	plan := stagingPlan(t, domain.ClientQoder, domain.PackageNative)
+	delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "operation-qoder-hooks", domain.CompatibilityHints{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body, err := os.ReadFile(filepath.Join(delivery.StagingPath, "hooks", "hooks.json")); err != nil || string(body) != hooksBody {
+		t.Fatalf("staged hooks = %q, %v", body, err)
+	}
+	if _, err := os.Stat(filepath.Join(delivery.StagingPath, "commands", "ship.md")); err != nil {
+		t.Fatalf("staged commands missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(envelope.SnapshotRoot, "hooks", "hooks.json")); err != nil {
+		t.Fatalf("source hooks were mutated: %v", err)
+	}
+}
+
 func TestStagerInvalidSkillNamedSkillsDoesNotRemoveSkillsRoot(t *testing.T) {
 	t.Parallel()
 	envelope := stagingEnvelope(t)
@@ -685,7 +707,7 @@ func TestStagerVerifiesAndSafelyDiscardsOnlyItsStagingDirectory(t *testing.T) {
 
 func TestStagerVerifyRejectsMarkersExcludedFromPortableSnapshotDigest(t *testing.T) {
 	t.Parallel()
-	for _, marker := range []string{filepath.Join(".git", "config"), filepath.Join("nested", ".plugin-kit-ai.lock")} {
+	for _, marker := range []string{filepath.Join(".git", "config"), filepath.Join("nested", ".uap-integrations.lock"), filepath.Join("nested", ".plugin-kit-ai.lock")} {
 		marker := marker
 		t.Run(marker, func(t *testing.T) {
 			envelope := stagingEnvelope(t)

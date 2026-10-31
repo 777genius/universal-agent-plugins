@@ -1,9 +1,9 @@
-.PHONY: lint lint-fix lint-baseline-check test-core test-agentplugins-resilience test test-required test-agentplugins-native-install test-plugin-manifest-workflow test-install-compat test-extended test-polyglot-smoke test-live test-live-cli test-install-live test-gemini-live test-gemini-runtime test-gemini-runtime-live test-opencode-live test-opencode-cli-live test-opencode-tools-live test-opencode-mcp-live test-opencode-e2e-live test-cursor-live test-portable-mcp-live test-context7-live test-chrome-devtools-live test-atlassian-live test-cloudflare-live test-cloudflare-bindings-live test-cloudflare-docs-live test-cloudflare-observability-live test-cloudflare-radar-live test-heroku-live test-hubspot-crm-live test-hubspot-developer-live test-neon-live test-docker-hub-live test-notion-live test-e2e-live test-govulncheck-local test-security generated-check version-sync-check removed-contract-boundary-check release-gate release-rehearsal build-plugin-kit-ai vet
+.PHONY: lint lint-fix lint-baseline-check test-core test-agentplugins-resilience test test-required test-agentplugins-native-install test-plugin-manifest-workflow test-install-compat test-extended test-polyglot-smoke test-live test-live-cli test-install-live test-gemini-live test-gemini-runtime test-gemini-runtime-live test-opencode-live test-opencode-cli-live test-opencode-tools-live test-opencode-mcp-live test-opencode-e2e-live test-cursor-live test-qoder-live test-portable-mcp-live test-context7-live test-chrome-devtools-live test-atlassian-live test-cloudflare-live test-cloudflare-bindings-live test-cloudflare-docs-live test-cloudflare-observability-live test-cloudflare-radar-live test-heroku-live test-hubspot-crm-live test-hubspot-developer-live test-neon-live test-docker-hub-live test-notion-live test-e2e-live test-govulncheck-local test-security generated-check version-sync-check removed-contract-boundary-check release-gate release-rehearsal build-plugin-kit-ai vet
 
 GOCACHE ?= /tmp/plugin-kit-ai-gocache
 export GOCACHE
 
-SECURITY_GOTOOLCHAIN ?= go1.26.9
+SECURITY_GOTOOLCHAIN ?= go1.26.10
 
 EXTENDED_TEST_ARGS ?=
 REQUIRED_TEST_TIMEOUT ?= 20m
@@ -16,10 +16,15 @@ LINT_BASE ?= origin/main
 
 # Core packages for the fast local preflight.
 CORE_TEST_TIMEOUT ?= 10m
+# Native helper startup is part of these tests; bound competing package builds
+# and test processes while preserving their assertions and deadlines.
+CORE_TEST_PARALLELISM ?= 4
 # A user-level core.hooksPath hook can reject the commits these tests create, so
 # the core lane runs git without any hooks. Same technique as
 # .github/workflows/authoring-native.yml.
-CORE_TEST_GIT_ENV = GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null
+# Native filesystem observations use physical paths (macOS /var and /tmp are
+# aliases). Give fixtures the same spelling instead of changing assertions.
+CORE_TEST_GIT_ENV = TMPDIR="$$(cd "$${TMPDIR:-/tmp}" && pwd -P)" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null
 
 # Two passes, because --new-from-* filters by changed line and funlen/gocyclo/
 # file-length-limit report on the declaration line: growing an old function would
@@ -47,9 +52,9 @@ lint-baseline-check:
 test-core:
 	# adapters/pathpolicy is outside the agentplugins tree but holds the only
 	# ports.PathPolicy implementation, so the fast gate has to run it too.
-	cd install/integrationctl && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./adapters/pathpolicy/...
-	cd install/integrationctl/agentplugins && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./...
-	cd cli && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./internal/agentpluginscli/... ./cmd/agentplugins/...
+	cd install/integrationctl && $(CORE_TEST_GIT_ENV) go test -p=$(CORE_TEST_PARALLELISM) -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./adapters/pathpolicy/...
+	cd install/integrationctl/agentplugins && $(CORE_TEST_GIT_ENV) go test -p=$(CORE_TEST_PARALLELISM) -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./...
+	cd cli && $(CORE_TEST_GIT_ENV) go test -p=$(CORE_TEST_PARALLELISM) -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./internal/agentpluginscli/... ./cmd/agentplugins/...
 
 test-agentplugins-resilience:
 	python3 scripts/run-agentplugins-resilience-e2e.py
@@ -137,6 +142,9 @@ test-opencode-e2e-live:
 
 test-cursor-live:
 	PLUGIN_KIT_AI_RUN_CURSOR_CLI=1 go test -count=1 -run '^TestCursorCLI' ./repotests $(EXTENDED_TEST_ARGS)
+
+test-qoder-live:
+	PLUGIN_KIT_AI_RUN_QODER_CLI=1 go test -count=1 -run '^TestQoderCLI' ./repotests $(EXTENDED_TEST_ARGS)
 
 test-portable-mcp-live:
 	PLUGIN_KIT_AI_RUN_PORTABLE_MCP_LIVE=1 go test -count=1 -run '^TestPortableMCPLiveAcrossConsoleAgents$$' ./repotests $(EXTENDED_TEST_ARGS)

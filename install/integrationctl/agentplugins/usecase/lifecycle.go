@@ -35,7 +35,7 @@ func (service Service) resume(
 		result.RequiresConfirmation = true
 		return result, nil
 	}
-	delivery, complete, err := service.resumeNativeDelivery(ctx, input, result.Plan, installationID, client)
+	delivery, complete, settled, err := service.resumeNativeDelivery(ctx, input, result.Plan, installationID, client)
 	if err != nil {
 		return result, err
 	}
@@ -75,7 +75,9 @@ func (service Service) resume(
 	if activationErr != nil {
 		return result, activationErr
 	}
-	result.NoChange = complete && !changed && service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome)
+	// A settled manual registration is a stable no-change outcome: this request
+	// cannot finish it, and a later one the adapter can act on will.
+	result.NoChange = !changed && (complete && (service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome) || settled) || service.verifiedPreparedObservationUnchanged(input, result.Plan, client, delivery, outcome, complete))
 	return result, nil
 }
 
@@ -89,10 +91,10 @@ func unresolvedNativeAttemptID(client domain.ClientBinding) string {
 	return ""
 }
 
-func (service Service) resumeNativeDelivery(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installationID string, client domain.ClientBinding) (domain.StagedDelivery, bool, error) {
+func (service Service) resumeNativeDelivery(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installationID string, client domain.ClientBinding) (domain.StagedDelivery, bool, bool, error) {
 	state, err := service.StateStore.Load()
 	if err != nil {
-		return domain.StagedDelivery{}, false, err
+		return domain.StagedDelivery{}, false, false, err
 	}
 	var installation domain.Installation
 	for _, item := range state.Installations {
@@ -137,6 +139,48 @@ func (service Service) verifiedRegistrationUnchanged(input AddInput, plan domain
 		outcome.Authentication == domain.AuthenticationNotChecked &&
 		(plan.Authentication == domain.AuthenticationNotChecked || plan.Authentication == domain.AuthenticationNotRequired) &&
 		!input.AuthComplete && !outcome.AuthenticationAttested && len(outcome.UserActions) == 0
+}
+
+// verifiedPreparedObservationUnchanged classifies a repeated project-only,
+// read-only observation, not lifecycle convergence. The verified existing
+// delivery is reused; every subsequent request still reobserves the client.
+func (service Service) verifiedPreparedObservationUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome, nativeComplete bool) bool {
+	if plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope).LifecycleKind == domain.LifecycleNativeConfig {
+		return nativeComplete && service.verifiedPreparedNativeConfigUnchanged(input, plan, client, delivery, outcome)
+	}
+	return input.Scope == domain.ScopeProject && !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery, input.Scope) &&
+		service.clientVerifierAvailable(input, plan) && client.Materialization == domain.MaterializationMaterialized &&
+		client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationInstalled &&
+		outcome.Activation == client.Activation && outcome.Verification == client.Verification &&
+		outcome.Authentication == client.Authentication && outcome.Policy == client.Policy &&
+		!input.ActivationComplete && !input.AuthComplete && !outcome.ActivationAttested && !outcome.AuthenticationAttested &&
+		(outcome.NativeEffect == "" || outcome.NativeEffect == domain.NativeEffectUnchanged) && len(outcome.NativeObjects) == 0 &&
+		preparedDeliveryUnchanged(client, delivery)
+}
+
+// A complete native projection can retain Prepared while exact file verification
+// succeeds. This classifies only that operation; it does not converge lifecycle.
+func (service Service) verifiedPreparedNativeConfigUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome) bool {
+	return input.Scope == domain.ScopeProject && plan.Scope == domain.ScopeProject && client.Scope == string(domain.ScopeProject) &&
+		plan.ClientID == input.Client.ClientID && client.ClientID == string(input.Client.ClientID) && delivery.ClientID == input.Client.ClientID &&
+		plan.ActivePath != "" && plan.ActivePath == client.TargetLocator &&
+		plan.SelectedDelivery.IsZero() && client.SelectedDelivery.IsZero() && service.clientVerifierAvailable(input, plan) &&
+		len(client.NativeObjects) > 0 && reflect.DeepEqual(outcome.NativeObjects, client.NativeObjects) &&
+		preparedDeliveryUnchanged(client, delivery) && preparedNativeConfigLifecycleUnchanged(input, client, outcome)
+}
+
+func preparedNativeConfigLifecycleUnchanged(input AddInput, client domain.ClientBinding, outcome domain.ActivationOutcome) bool {
+	return outcome.Policy == domain.PolicyAllowed &&
+		client.Materialization == domain.MaterializationMaterialized && client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationInstalled &&
+		outcome.Activation == client.Activation && outcome.Verification == client.Verification && outcome.Authentication == client.Authentication && outcome.Policy == client.Policy &&
+		client.NativeActivationAttempt == "" && client.PendingNativeIntent == nil && !input.ActivationComplete && !input.AuthComplete &&
+		!outcome.ActivationAttested && !outcome.AuthenticationAttested && !outcome.AuthoritativeObservation && outcome.LocalEntryObservation == nil &&
+		outcome.NativeEffect == domain.NativeEffectUnchanged
+}
+
+func preparedDeliveryUnchanged(client domain.ClientBinding, delivery domain.StagedDelivery) bool {
+	return delivery.ActivePath == client.TargetLocator && delivery.ArtifactDigest != "" &&
+		delivery.ArtifactDigest == managedDigest(client) && reflect.DeepEqual(delivery.NativeObjects, client.NativeObjects)
 }
 
 // clientVerifierAvailable asks the activator whether an exact client-side
@@ -331,7 +375,11 @@ func lifecycleOutcome(client domain.ClientBinding) domain.ActivationOutcome {
 }
 
 func (service Service) verifyClientReadOnly(ctx context.Context, input AddInput, result AddResult, client domain.ClientBinding) (domain.ActivationOutcome, error) {
-	if result.Plan.SelectedDelivery.IsZero() && !domain.ShouldReadOnlyVerify(input.Client.ClientID, input.BackendExecutable, input.InstallIntent) {
+	if preparedProjectFileCandidate(input, result.Plan) {
+		delivery := domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client), NativeObjects: client.NativeObjects}
+		return service.observePreparedProjectFiles(ctx, input, result.Plan, result.InstallationID, client, delivery)
+	}
+	if result.Plan.SelectedDelivery.IsZero() && !domain.ShouldReadOnlyVerifyForScope(input.Client.ClientID, input.Scope, input.BackendExecutable, input.InstallIntent) {
 		return domain.ActivationOutcome{}, nil
 	}
 	delivery := domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client), NativeObjects: client.NativeObjects}

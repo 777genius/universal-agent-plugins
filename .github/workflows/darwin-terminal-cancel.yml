@@ -3,12 +3,20 @@ on:
   pull_request:
     paths:
       - '.github/workflows/darwin-terminal-cancel.yml'
+      - 'scripts/check-darwin-consent-baseline.py'
+      - 'scripts/test_darwin_consent_baseline.py'
+      - 'scripts/testdata/darwin-consent-baseline/**'
       - 'cli/internal/terminalreader/**'
       - 'cli/internal/terminalprompts/**'
       - 'cli/internal/promptio/cancel_unix.go'
       - 'cli/installerui/terminal_session.go'
       - 'cli/installerui/terminal_stdin_darwin_test.go'
   workflow_dispatch:
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
+concurrency:
+  group: darwin-terminal-cancel-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 permissions:
   contents: read
 jobs:
@@ -29,8 +37,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
-          go-version: '1.26.9'
+          go-version: '1.26.10'
           cache: false
+      - name: Verify fail-closed baseline evidence controls
+        run: python3 -B -m unittest discover -s scripts -p test_darwin_consent_baseline.py
       - name: Reproduce failure on the public pre-fix library
         shell: bash
         run: |
@@ -66,13 +76,7 @@ jobs:
             echo 'Queued input regression did not reproduce'
             exit 1
           fi
-          python3 - <<'PY'
-          import json, os
-          from pathlib import Path
-          rows = [json.loads(s) for s in (Path(os.environ['RUNNER_TEMP']) / 'TEST-terminal-evidence/consent-baseline.jsonl').read_text().splitlines()]
-          assert any(r.get('Test') == 'TestDarwinVirtualTTYConsent/queued-escape-enter-next-owner' and r.get('Action') == 'fail' for r in rows)
-          assert 'next owner: "" context deadline exceeded' in ''.join(r.get('Output', '') for r in rows)
-          PY
+          python3 "$GITHUB_WORKSPACE/scripts/check-darwin-consent-baseline.py" "$RUNNER_TEMP/TEST-terminal-evidence/consent-baseline.jsonl"
       - name: Verify cancellation, restoration and next-owner reuse
         if: ${{ !cancelled() }}
         shell: bash

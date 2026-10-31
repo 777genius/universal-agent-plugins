@@ -6,6 +6,7 @@ logos are preserved repository assets; Cloudflare and HubSpot products share the
 publisher mark.
 
 - `agent-code-navigator.svg`: original code-navigation mark created for this repository, under the repository's MIT license.
+- `agent-notifications.svg`: original vector mark created for this repository from the agent-notifications brand identity, under the repository's MIT license.
 - `statsig.svg`: Statsig's official [website favicon](https://www.statsig.com/images/favicons/favicon.svg), retrieved 2026-10-04, unchanged. Statsig retains its brand rights.
 - `playwright.svg`: Microsoft's official [Playwright logo](https://github.com/microsoft/playwright.dev/blob/718ff450acfcb2fb1b006515a07c9412efe0bd88/static/img/playwright-logo.svg), unchanged. Source repository license: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - `firecrawl.svg`: official [Firecrawl logo](https://github.com/mendableai/firecrawl/blob/4244638a7041bae8b99bdd42e3c44520f9e62da1/apps/test-site/src/assets/firecrawl-logo.svg), unchanged. Source repository license: AGPL-3.0; Firecrawl retains its brand rights.
@@ -13,3 +14,5 @@ publisher mark.
 
 All artwork is served from this directory. No remote images, executable SVG
 content, or package-selected logo paths are used.
+
+- `marketing-kit.svg`: original campaign megaphone vector created for this repository, under the repository’s MIT license.

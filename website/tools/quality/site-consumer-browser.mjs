@@ -1,3 +1,4 @@
+import { docsLocales } from "../config/locales.mjs";
 import { runLocaleSmoke } from "./locale-browser.mjs";
 import { journeyNav } from "../lib/journeys.mjs";
 import assert from "node:assert/strict";
@@ -24,7 +25,7 @@ export async function runSiteConsumerSmoke(browser, base, artifactsRoot) {
   const page = await context.newPage();
   page.on("pageerror", (error) => failures.push(error.message));
   try {
-    for (const locale of ["en", "ru", "es", "fr", "zh"]) {
+    for (const locale of docsLocales) {
       await page.goto(`${base}/${locale}/`, { waitUntil: "networkidle" });
       for (const { text: label, link: route } of journeyNav(locale)) {
         const link = page.locator(".VPNavBarMenu").getByRole("link", { name: new RegExp(`^${label}`) });
@@ -35,6 +36,9 @@ export async function runSiteConsumerSmoke(browser, base, artifactsRoot) {
     await page.goto(`${base}/en/api/cli/prepared-authoring-v2-agentplugins-author`, { waitUntil: "networkidle" });
     const reference = await page.locator(".vp-doc").innerText();
     assert.match(reference, /released Agent Plugins CLI reference/i);
+    assert.match(reference, /Versioned authoring reference: CLI 0\.1\.65/);
+    assert.match(reference, /current native installer, CLI 0\.1\.95, does not include agentplugins author/);
+    assert.ok(await page.locator('.vp-doc a[href$="/en/build/"]').count() > 0);
     assert.doesNotMatch(reference, /not released|not a public release/i);
     await page.screenshot({ path: path.join(artifactsRoot, "d2b-agentplugins-author.png"), fullPage: true });
     const redirects = JSON.parse(await fs.readFile(generatedRegistryPaths.redirects, "utf8"));

@@ -7,7 +7,6 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"unsafe"
 
 	"golang.org/x/sys/unix"
 )
@@ -61,20 +60,7 @@ func linuxReadableFacts(fd int, before unix.Stat_t) (string, string, error) {
 	if opened.Dev != before.Dev || opened.Ino != before.Ino || opened.Mode&unix.S_IFMT != unix.S_IFDIR {
 		return "", "", ErrChanged
 	}
-	// Pointer audit: one fixed 17-byte object; synchronous ioctl writes exactly
-	// fsuuid2, no retained pointer. KeepAlive covers the response until return.
-	var raw [17]byte
-	// #nosec G103 -- FS_IOC_GETFSUUID 0x80111500 synchronously copies 17 bytes to owned raw on the live readable fd; no pointer retention; KeepAlive below.
-	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), linuxGetFSUUID, uintptr(unsafe.Pointer(&raw)))
-	runtime.KeepAlive(raw)
-	var err error
-	if errno != 0 {
-		err = errno
-	}
-	if err != nil {
-		return "", "", linuxUUIDError(err)
-	}
-	volume, err := decodeLinuxUUID(raw[:])
+	volume, err := linuxFilesystemUUID(fd)
 	if err != nil {
 		return "", "", err
 	}

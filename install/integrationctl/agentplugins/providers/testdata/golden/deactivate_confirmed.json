@@ -7,6 +7,7 @@
       "ArtifactRemovalAllowed": false,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": [
         "uninstall the plugin in ChatGPT Plugins, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
       ]
@@ -27,6 +28,7 @@
       "ArtifactRemovalAllowed": true,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": null
     }
   },
@@ -38,6 +40,7 @@
       "ArtifactRemovalAllowed": false,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": [
         "remove any Cline skills and MCP entries for this plugin, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
       ]
@@ -51,6 +54,7 @@
       "ArtifactRemovalAllowed": false,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": [
         "uninstall the plugin in Codex, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
       ]
@@ -78,6 +82,7 @@
       "ArtifactRemovalAllowed": true,
       "ExternalRemovalComplete": true,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": null
     }
   },
@@ -89,6 +94,7 @@
       "ArtifactRemovalAllowed": true,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": null
     }
   },
@@ -100,6 +106,7 @@
       "ArtifactRemovalAllowed": true,
       "ExternalRemovalComplete": true,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": null
     }
   },
@@ -118,6 +125,7 @@
       "ArtifactRemovalAllowed": true,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": null
     }
   },
@@ -129,6 +137,7 @@
       "ArtifactRemovalAllowed": true,
       "ExternalRemovalComplete": true,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": [
         "Run /reload or /new in Kimi Code to load the installed plugin; runtime MCP connections and authentication have not been verified."
       ]
@@ -142,6 +151,7 @@
       "ArtifactRemovalAllowed": false,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": [
         "remove the legacy custom Power in Kiro, then rerun remove with `--external-uninstalled`"
       ]
@@ -155,6 +165,19 @@
       "ArtifactRemovalAllowed": true,
       "ExternalRemovalComplete": true,
       "LocalActions": null,
+      "NativeEffect": "",
+      "UserActions": null
+    }
+  },
+  "pi": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": true,
+      "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": null
     }
   },
@@ -162,6 +185,8 @@
     "Commands": [
       [
         "\u003croot\u003e/bin/qoder",
+        "--config-dir",
+        "\u003croot\u003e/qoder/config",
         "plugins",
         "list",
         "--json"
@@ -173,6 +198,7 @@
       "ArtifactRemovalAllowed": true,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": null
     }
   },
@@ -198,6 +224,7 @@
       "ArtifactRemovalAllowed": true,
       "ExternalRemovalComplete": true,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": null
     }
   },
@@ -209,6 +236,7 @@
       "ArtifactRemovalAllowed": false,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
+      "NativeEffect": "",
       "UserActions": [
         "remove the prepared package manually, then rerun remove with `--external-uninstalled`"
       ]

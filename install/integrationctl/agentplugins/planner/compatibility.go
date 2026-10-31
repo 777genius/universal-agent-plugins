@@ -69,12 +69,13 @@ func Compatibility(registry *clients.Registry, envelope domain.PackageEnvelope, 
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	for _, id := range ids {
 		limiter, _ := clients.As[clients.CompatibilityLimiter](registry, id)
-		result = append(result, compatibilityFor(envelope, targets[id], limiter))
+		interpreter, _ := clients.As[clients.ExtensionInterpreter](registry, id)
+		result = append(result, compatibilityFor(envelope, targets[id], limiter, interpreter))
 	}
 	return result, nil
 }
 
-func compatibilityFor(envelope domain.PackageEnvelope, definition domain.ClientDefinition, limiter clients.CompatibilityLimiter) ClientCompatibility {
+func compatibilityFor(envelope domain.PackageEnvelope, definition domain.ClientDefinition, limiter clients.CompatibilityLimiter, interpreters ...clients.ExtensionInterpreter) ClientCompatibility {
 	capabilities := definition.Capabilities
 	result := newClientCompatibility(capabilities)
 	if capabilities.ActivationMode == domain.ActivationByUser {
@@ -90,7 +91,7 @@ func compatibilityFor(envelope domain.PackageEnvelope, definition domain.ClientD
 	includeMissingInvalid(&decisions, invalid)
 	decisions = append(decisions, commandCompatibility(envelope, definition)...)
 	sortCompatibilityDecisions(decisions)
-	result.Components = compatibilityComponents(envelope, limiter, decisions, invalid, invalidKind)
+	result.Components = compatibilityComponents(envelope, limiter, decisions, invalid, invalidKind, interpreters...)
 	sort.Strings(result.Limitations)
 	return result
 }
@@ -197,16 +198,16 @@ func includeMissingInvalid(decisions *[]domain.ComponentDecision, invalid map[do
 	}
 }
 
-func compatibilityComponents(envelope domain.PackageEnvelope, limiter clients.CompatibilityLimiter, decisions []domain.ComponentDecision, invalid map[domain.ComponentKind]map[string]bool, invalidKind map[domain.ComponentKind]bool) []ComponentCompatibility {
+func compatibilityComponents(envelope domain.PackageEnvelope, limiter clients.CompatibilityLimiter, decisions []domain.ComponentDecision, invalid map[domain.ComponentKind]map[string]bool, invalidKind map[domain.ComponentKind]bool, interpreters ...clients.ExtensionInterpreter) []ComponentCompatibility {
 	counts := make(map[domain.ComponentKind]int)
 	components := make([]ComponentCompatibility, 0, len(decisions))
 	for _, item := range decisions {
-		components = append(components, refineComponentCompatibility(envelope, limiter, item, invalid, invalidKind, counts))
+		components = append(components, refineComponentCompatibility(envelope, limiter, item, invalid, invalidKind, counts, interpreters...))
 	}
 	return components
 }
 
-func refineComponentCompatibility(envelope domain.PackageEnvelope, limiter clients.CompatibilityLimiter, item domain.ComponentDecision, invalid map[domain.ComponentKind]map[string]bool, invalidKind map[domain.ComponentKind]bool, counts map[domain.ComponentKind]int) ComponentCompatibility {
+func refineComponentCompatibility(envelope domain.PackageEnvelope, limiter clients.CompatibilityLimiter, item domain.ComponentDecision, invalid map[domain.ComponentKind]map[string]bool, invalidKind map[domain.ComponentKind]bool, counts map[domain.ComponentKind]int, interpreters ...clients.ExtensionInterpreter) ComponentCompatibility {
 	counts[item.Kind]++
 	component := ComponentCompatibility{Kind: item.Kind, Index: counts[item.Kind], Source: item.Source, Support: item.Support}
 	reject := func(code string) {
@@ -227,7 +228,7 @@ func refineComponentCompatibility(envelope domain.PackageEnvelope, limiter clien
 	case invalid[item.Kind][item.Name] || invalidKind[item.Kind]:
 		reject(invalidComponent)
 	}
-	applyKindCompatibility(envelope, item, reject)
+	applyKindCompatibility(envelope, item, reject, interpreters...)
 	if limiter != nil {
 		rejected, notes := limiter.ComponentLimitations(envelope, item)
 		for _, code := range rejected {
@@ -238,11 +239,14 @@ func refineComponentCompatibility(envelope domain.PackageEnvelope, limiter clien
 	return component
 }
 
-func applyKindCompatibility(envelope domain.PackageEnvelope, item domain.ComponentDecision, reject func(string)) {
+func applyKindCompatibility(envelope domain.PackageEnvelope, item domain.ComponentDecision, reject func(string), interpreters ...clients.ExtensionInterpreter) {
 	switch item.Kind {
 	case domain.ComponentExtension:
-		// The registry has no namespace-specific interpreter contract.
-		reject("extension_semantics_not_established")
+		if len(interpreters) == 0 || interpreters[0] == nil {
+			reject("extension_semantics_not_established")
+		} else if support, reason := interpreters[0].InterpretExtension(item.Name, envelope.Manifest.Extensions[item.Name]); support == domain.SupportUnsupported {
+			reject(reason)
+		}
 	case domain.ComponentMCPServer:
 		if envelope.MCP.Present && !envelope.MCP.Enabled {
 			reject("component_disabled")

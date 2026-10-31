@@ -39,13 +39,13 @@ on:
 jobs:
   live:
     name: live
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.26.9"
+          go-version: "1.26.10"
           cache: false
 
       - name: Run live evidence lane
@@ -82,7 +82,7 @@ jobs:
   npm-install:
     if: ${{ inputs.run_npm_install == '1' }}
     name: npm-install
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     env:
       TAG: ${{ inputs.notifications_tag }}
     steps:
@@ -113,7 +113,7 @@ jobs:
   pipx-install:
     if: ${{ inputs.run_pipx_install == '1' }}
     name: pipx-install
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     env:
       TAG: ${{ inputs.notifications_tag }}
     steps:
@@ -153,7 +153,7 @@ jobs:
   npm-runtime-install:
     if: ${{ inputs.run_npm_runtime_install == '1' }}
     name: npm-runtime-install
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     env:
       TAG: ${{ inputs.notifications_tag }}
     steps:
@@ -192,7 +192,7 @@ jobs:
   pypi-runtime-install:
     if: ${{ inputs.run_pypi_runtime_install == '1' }}
     name: pypi-runtime-install
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     env:
       TAG: ${{ inputs.notifications_tag }}
     steps:
