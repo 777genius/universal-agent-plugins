@@ -104,35 +104,51 @@ def make_project(root: Path) -> tuple[Path, bytes]:
     return project, data
 
 
+def safe_same_bytes(path: Path, original: bytes, boundary: Path) -> bool:
+    """Read only ordinary files within a non-symlinked disposable project tree."""
+    try:
+        relative = path.relative_to(boundary)
+        if not relative.parts or boundary.is_symlink():
+            return False
+        current = boundary
+        for part in relative.parts:
+            current = current / part
+            if current.is_symlink():
+                return False
+        return path.is_file() and path.stat().st_size == len(original) and path.read_bytes() == original
+    except (OSError, ValueError):
+        return False
+
+
 def payloads(project: Path, expected: dict[str, bytes]) -> dict:
-    # Only Codex's delivered Skill counts. An identical cached/downloaded
-    # package under apm_modules/ or .uap/ is not an installed client component.
+    # Only Codex's projected Skill counts, never acquired/cache sources.
     skill = project / ".agents" / "skills" / "benchmark-note" / "SKILL.md"
     peer = skill.parent / "references" / "fixture.txt"
-    if skill.is_symlink() or not skill.is_file() or skill.read_bytes() != expected["SKILL.md"]:
-        return {"skills": [], "references": []}
-    files = {"skills": [str(skill.relative_to(project))], "references": []}
-    if peer.is_file() and not peer.is_symlink() and peer.read_bytes() == expected["references/fixture.txt"]:
-        files["references"].append(str(peer.relative_to(project)))
+    files = {"skills": [], "references": []}
+    if safe_same_bytes(skill, expected["SKILL.md"], project):
+        files["skills"].append(str(skill.relative_to(project)))
+        if safe_same_bytes(peer, expected["references/fixture.txt"], project):
+            files["references"].append(str(peer.relative_to(project)))
     return files
 
 
 def add_result(results: list[dict], product: str, scenario: str, command: dict,
                files: dict, foreign_ok: bool, reason: str | None = None) -> None:
-    passed = (not command["timed_out"] and command["exit_code"] == 0
+    passed = (not command.get("timed_out") and command.get("exit_code") == 0
               and bool(files["skills"]) and bool(files["references"]) and foreign_ok)
     status = "PASS" if passed else "FAIL"
-    if scenario == "foreign_collision":
-        # A nonzero response with unchanged foreign data might be a correct
-        # conflict refusal OR a network/preflight failure. No automatic PASS.
-        if foreign_ok and not command["timed_out"] and not passed:
+    if scenario == "S1_foreign_collision":
+        # Non-zero + intact foreign content may be a correct refusal or a
+        # connection/manifest failure. Inspect evidence before declaring safety.
+        if foreign_ok and not command.get("timed_out") and not passed:
             status = "BLOCKED"
         elif not foreign_ok:
             status = "FAIL"
     results.append({
         "product": product, "scenario": scenario,
         "status": status,
-        "reason": reason or ("observed required bytes and preservation" if passed else "see bounded command output and observed files"),
+        "reason": reason or ("verified projected Skill and preserved foreign files"
+                             if passed else "check bounded command log and observed files"),
         "command": command, "observed": files, "foreign_neighbor_unchanged": foreign_ok,
         "native_loaded": "NOT_RUN", "oauth_or_tool_call": "NOT_RUN",
     })
