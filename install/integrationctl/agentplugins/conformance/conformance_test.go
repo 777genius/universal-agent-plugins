@@ -447,7 +447,7 @@ func TestPartialDiscoveryRetainsObservedFacts(t *testing.T) {
 func TestMCPReservedEnvironmentPlatformAdmission(t *testing.T) {
 	d := decoder(t)
 	for _, tc := range []struct {
-		name, env      string
+		name, env     string
 		alwaysInvalid bool
 	}{
 		{"canonical-root", `{"PLUGIN_ROOT":"foreign"}`, true},
