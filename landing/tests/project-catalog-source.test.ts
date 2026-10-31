@@ -63,8 +63,9 @@ test('direct project eligibility is fail-closed for unreviewed, unpinned and uns
     assert.equal(projectCatalogSelection(candidate, ['codex']).resolution.distribution, undefined);
     assert.throws(() => projectCatalogCommands(candidate, ['codex']), /No eligible/);
   }
-  assert.equal(projectCatalogSelection(reviewed(), ['cursor']).resolution.distribution, undefined);
-  assert.equal(projectCatalogSelection(reviewed(), ['codex', 'cursor']).resolution.distribution, undefined);
+  for (const unsupported of ['kiro', 'vscode', 'chatgpt', 'pi'] as const) {
+    assert.equal(projectCatalogSelection(reviewed(), [unsupported]).resolution.distribution, undefined);
+  }
   assert.equal(projectCatalogSelection(reviewed(), []).resolution.distribution, undefined);
 });
 
