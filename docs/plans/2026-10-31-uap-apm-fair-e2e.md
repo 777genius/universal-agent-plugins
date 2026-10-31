@@ -100,3 +100,38 @@ APM references:
 Standards:
 - https://agent-plugins.org/specification
 - https://agentskills.io/specification
+
+## First executable S1 admission (2026-10-31)
+
+The initial workflow is an **evidence-only experiment**, not a scored leaderboard.
+UAP is built from published `agentplugins-v0.1.95`, and APM is installed as
+published `apm-cli==0.35.0`; the report records the UAP source commit,
+both executable SHA-256 values and the APM installed Python dependency tree.
+The frozen input is `tests/fixtures/uap_apm/skills/benchmark-note/` at Git
+commit `a92e2a3c35a08327937b3facbf4b22791ae50eea`. Both original files
+are hashed independently of manager manifests and output artifacts.
+
+The first admitted target is **Codex project scope on a fresh ephemeral
+GitHub-hosted Linux VM**. UAP uses the released `skills add` command with exact
+Git commit and path; APM uses its documented GitHub Skill subpath in `apm.yml`
+followed by `apm install --target codex`. The runner records commands and
+checks the **delivered** `.agents/skills/benchmark-note/` files; cached
+downloads under `apm_modules` or `.uap` cannot qualify. Tool-specific
+manifests and lockfiles need not have identical bytes.
+
+Each product uses its own new HOME/XDG/cache/project/temporary/git-config root,
+a constant inert foreign Skill neighbor and no secrets/SSH agent. No actual
+Codex process is launched; native activation/auth/tool calls are `NOT_RUN`.
+The baseline suite observes initial install, replay, fresh locked transfer when
+the documented route actually produces one, and a separate foreign collision.
+A non-zero collision attempt that leaves foreign bytes intact is `BLOCKED`
+until independent inspection classifies the cause; it is **not** an automatic
+safety PASS. Product timeouts are recorded with their process-group cleanup
+and require manual analysis before labeling them as tool defects.
+
+Before interpreting a result, check that both selected release commands are
+actually supported by those release versions, that the selected client/target
+is comparable and that no host/network prerequisite was missing. A green
+benchmark workflow only certifies evidence capture. Other clients and whole
+Agent Plugins 1.0 remain `NOT_RUN` until separately qualified. Report all
+eligible/blocked/not-run counts; do not divide by only the successes.
