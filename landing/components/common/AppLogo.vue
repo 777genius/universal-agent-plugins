@@ -34,11 +34,9 @@ const { asset } = useSite();
 .app-logo__mark {
   width: 36px;
   height: 36px;
-  border-radius: 9px;
   flex-shrink: 0;
   display: block;
-  box-shadow: 0 8px 24px rgba(0, 240, 255, 0.2);
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .app-logo__copy {
@@ -67,10 +65,6 @@ const { asset } = useSite();
 </style>
 
 <style>
-.v-theme--light .app-logo__mark {
-  box-shadow: 0 8px 20px rgba(8, 145, 178, 0.2);
-}
-
 .v-theme--light .app-logo__text {
   background: linear-gradient(135deg, #1e293b, #0891b2);
   -webkit-background-clip: text;
