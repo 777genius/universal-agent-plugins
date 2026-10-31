@@ -120,3 +120,49 @@ func assertKiroNativeState(t *testing.T, configRoot, skillMarker, managedURL str
 		t.Fatalf("managed MCP URL = %v, want %v", managed["url"], managedURL)
 	}
 }
+
+// JSON MCP selectors are not filenames, even in Kiro's project registry.
+func TestKiroMCPJsonNameWithSpacesLifecycle(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".kiro")
+	active := filepath.Join(t.TempDir(), "prepared")
+	name := " deployment notes "
+	configPath := filepath.Join(root, "settings", "mcp.json")
+	writeTestFile(t, configPath, `{"mcpServers":{"foreign":{"url":"https://foreign.test/mcp","disabled":true}},"policy":"keep"}`)
+	var previous []domain.NativeObjectOwnership
+	for _, url := range []string{"https://managed.test/v1", "https://managed.test/v2"} {
+		server := map[string]any{"type": "streamable-http", "url": url}
+		raw, err := json.Marshal(map[string]any{"mcpServers": map[string]any{name: server}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, filepath.Join(active, "mcp.json"), string(raw))
+		next, err := buildKiroMCPObject(active, root, domain.ComponentDecision{Kind: domain.ComponentMCPServer, Name: name, Support: domain.SupportNative})
+		if err != nil {
+			t.Fatalf("Kiro JSON selector %q refused: %v", name, err)
+		}
+		desired := []domain.NativeObjectOwnership{next}
+		if err := validateKiroProjectObjects(root, desired); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyKiroNativeMutation(root, active, previous, desired); err != nil {
+			t.Fatal(err)
+		}
+		if err := VerifyNativeObjects(root, desired, false); err != nil {
+			t.Fatal(err)
+		}
+		previous = desired
+		document := readObject(t, configPath)
+		servers := document["mcpServers"].(map[string]any)
+		if servers[name].(map[string]any)["url"] != url || servers["foreign"] == nil || document["policy"] != "keep" {
+			t.Fatalf("project Kiro MCP entry or foreign data changed: %+v", document)
+		}
+	}
+	if err := applyKiroNativeMutation(root, "", previous, nil); err != nil {
+		t.Fatal(err)
+	}
+	document := readObject(t, configPath)
+	servers := document["mcpServers"].(map[string]any)
+	if _, present := servers[name]; present || servers["foreign"] == nil || document["policy"] != "keep" {
+		t.Fatalf("Kiro removal changed foreign data: %+v", document)
+	}
+}

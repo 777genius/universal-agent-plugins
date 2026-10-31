@@ -100,7 +100,9 @@ jobs:
         run: go test -count=1 -timeout=3m -v ./managedstdio -run '^TestWindows(JobTreeCleanup|AssignFailureKillsSuspendedProcessBeforeWait)$'
       - name: Qualify Agent Plugins reserved MCP environment rules on Windows
         working-directory: install/integrationctl/agentplugins
-        run: go test -count=1 -timeout=4m ./domain ./clients/shared ./usecase -run '^(TestReservedStdioEnvKeyPlatformRules|TestApplyStdioDataContractRejectsPlatformReservedAliases|TestStdioPreflightReservedEnvironmentPlatformAliases|TestStdioReservedAliasPreservesHealthySkillEndToEnd)$'
+        run: >-
+          go test -count=1 -timeout=4m ./domain ./conformance ./adapters/loader ./clients/shared ./usecase
+          -run '^(TestReservedStdioEnvKeyPlatformRules|TestApplyStdioDataContractRejectsPlatformReservedAliases|TestStdioPreflightReservedEnvironmentPlatformAliases|TestStdioReservedAliasPreservesHealthySkillEndToEnd|TestMCPReservedEnvironmentPlatformAdmission|TestStdioReservedEnvironmentTypedMaps|TestPortableMCPReservedAliasKeepsHealthyComponents)$'
       - name: Qualify global dependency transfer and rollback on Windows
         working-directory: cli
         env:

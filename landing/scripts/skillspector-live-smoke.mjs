@@ -561,9 +561,24 @@ try {
         total: new Intl.NumberFormat(locale).format(assessment.selected),
       });
       await expect(summary).toContainText(t('title'));
-      await expect(summary).toContainText(
-        t(assessment.status === 'noStaticFindings' ? 'scanComplete' : assessment.status),
-      );
+      // The published card now shows actual progress when a known plugin
+      // inventory contains both complete and incomplete Skill scans.
+      // Match that presentation precisely; never interpret it as full coverage.
+      const showProgress =
+        report.schema_version === 3 &&
+        !report.records.some((record) => record.legacy_format) &&
+        assessment.status === 'incomplete' &&
+        assessment.inventoryKnown &&
+        (assessment.fullyChecked ?? 0) > 0 &&
+        (assessment.fullyChecked ?? 0) < (assessment.selected ?? 0) &&
+        (assessment.selected ?? 0) > 1;
+      const expectedSummary = showProgress
+        ? t('coverageProgress', {
+            checked: new Intl.NumberFormat(locale).format(assessment.fullyChecked),
+            total: new Intl.NumberFormat(locale).format(assessment.selected),
+          })
+        : t(assessment.status === 'noStaticFindings' ? 'scanComplete' : assessment.status);
+      await expect(summary).toContainText(expectedSummary);
       await expect(summary).not.toContainText(fullyChecked);
       await expect(panel.locator('.skillspector__details')).toHaveCount(0);
       await summary.focus();
