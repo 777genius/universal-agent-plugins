@@ -163,3 +163,26 @@ func TestDependencyTreeEmptyLockIsExplicit(t *testing.T) {
 		t.Fatalf("empty graph should be unambiguous: %q", got)
 	}
 }
+
+func TestDependencyTreeIndentedPackageCanAlsoBeDirectRoot(t *testing.T) {
+	tree := dependencyTree{
+		Roots: []string{"a", "b"},
+		Packages: []environment.LockedPackage{
+			{Alias: "a", Version: "1.0.0"},
+			{Alias: "b", Version: "2.0.0", RequiredBy: []environment.RequiredBy{{Alias: "a"}}},
+		},
+	}
+	var out bytes.Buffer
+	if err := renderDependencyTree(&out, tree); err != nil {
+		t.Fatal(err)
+	}
+	human := out.String()
+	for _, want := range []string{
+		"a 1.0.0\n  b 2.0.0\nb 2.0.0 (reference)\n",
+		"an indented package may also be a direct dependency",
+	} {
+		if !strings.Contains(human, want) {
+			t.Fatalf("missing direct-and-indirect package relationship %q: %s", want, human)
+		}
+	}
+}
