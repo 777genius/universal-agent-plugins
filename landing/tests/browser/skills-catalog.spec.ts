@@ -183,3 +183,30 @@ test('unsupported standalone source is explicit and never requests a report', as
   await expect(assessment).not.toContainText('other plugin components');
   expect(reportRequests).toEqual([]);
 });
+
+test('unverified GitHub Skill names open the installer picker without guessing a selector', async ({
+  page,
+}) => {
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) =>
+    route.fulfill({
+      json: {
+        items: [{ ...skill(), title: 'Unverified listing', skillNameHint: 'BAD$(echo injected)' }],
+        page: 0,
+        total: 1,
+        hasMore: false,
+        view: 'popular',
+        cache: { status: 'fresh', fetchedAt: '2026-10-30T10:00:00Z' },
+      },
+    }),
+  );
+  await page.goto('plugins/?tab=skills');
+  const card = page.locator('.skills-catalog .skill-card').first();
+  await card.getByRole('button', { name: 'Install Unverified listing', exact: true }).click();
+  await expect(card.locator('.command-snippet code')).toHaveText(
+    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills',
+  );
+  await expect(card).toContainText(
+    'Select the exact Skill in the installer; this catalog name is not verified.',
+  );
+  await expect(card.locator('.command-snippet')).not.toContainText('BAD$(echo injected)');
+});
