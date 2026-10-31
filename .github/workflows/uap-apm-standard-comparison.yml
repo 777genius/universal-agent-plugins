@@ -69,8 +69,14 @@ jobs:
           # UAP requires detected client authority before preparing a project
           # installation. APM can copy Skills without installed Codex. Compare
           # delivery with the genuine client available to both managers.
+          # Prevent vendor package lifecycle scripts from running on the host.
+          # Compare the official npm distribution's published integrity with
+          # independently retained 2026-10-24 disposable research.
+          expected='sha512-TWj7UGyPRe3Pj/A3ddNAxs1te3a/W/xAd+J0LHrrFTmsSfahGMOLF/vn88D3QCIgAT3B1rm1y/Z3NYE0rx6cZQ=='
+          actual="$(npm view '@openai/codex@0.164.0' dist.integrity)"
+          test "$actual" = "$expected"
           npm install --prefix "$RUNNER_TEMP/codex-runtime" --no-save \
-            --no-audit --no-fund --no-package-lock '@openai/codex@0.164.0'
+            --ignore-scripts --no-audit --no-fund --no-package-lock '@openai/codex@0.164.0'
           codex="$RUNNER_TEMP/codex-runtime/node_modules/.bin/codex"
           test -x "$codex"
           test "$("$codex" --version)" = "codex-cli 0.164.0"
