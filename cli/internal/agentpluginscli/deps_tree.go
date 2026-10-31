@@ -96,7 +96,7 @@ func renderDependencyTree(writer io.Writer, tree dependencyTree) error {
 		}
 	}
 	if len(children) > 0 {
-		_, err := fmt.Fprintln(writer, "Indented packages are transitive dependencies. (reference) means the same locked package is shared, not installed twice.")
+		_, err := fmt.Fprintln(writer, "Indented packages are transitive dependencies. (reference) means the same locked package was already shown.")
 		return err
 	}
 	return nil
