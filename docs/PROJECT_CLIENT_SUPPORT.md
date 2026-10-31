@@ -34,6 +34,45 @@ selection, reload, trust or session work can remain.
 | ChatGPT | No supported native project filesystem installation | Explicit refusal before source acquisition, including `--no-save`; the existing user/manual path is preserved. See [ChatGPT scope](CHATGPT_PROJECT_SCOPE.md). |
 | VS Code | `.github/skills` and exact `servers` members in `.vscode/mcp.json`, including native JSONC syntax | Prepared with installed-file verification for one local folder. Open that folder and review workspace/server trust; observed metadata does not prove MCP startup or model execution. See [VS Code preparation](PROJECT_INSTALLATION.md#vs-code-project-preparation) and [pinned metadata evidence](evidence/project-scope-research/vscode-1.143.1-untrusted-workspace-linux-amd64-40188310034/README.md). |
 
+## Native project evidence matrix
+
+The table below distinguishes **project file preparation** from a **genuine native
+client run**. It describes source integrated by [PR #520](https://github.com/777genius/universal-agent-plugins/pull/520)
+on 2026-10-31, not a promise that every tested case has been published in a release.
+Native observations apply only to their pinned client versions, test modes and
+supported surfaces. A *qualified* lane proves the named behavior through
+the actual client executable, not a live vendor model or general-purpose access.
+
+| Client | Project delivery | Native project lifecycle / restart / removal | MCP observed through native client | Evidence and limit |
+| --- | --- | --- | --- | --- |
+| Claude Code | Yes | Pinned genuine native Prepared lifecycle and trusted project discovery/removal qualified | Project MCP initialize/list/call not qualified | [Native Client Runtime](https://github.com/777genius/universal-agent-plugins/actions/runs/40209659575), [guide](CLAUDE_PROJECT_INSTALLATION.md); trust and shadowing matter |
+| Codex | Yes | Pinned native project skills lifecycle and trusted MCP restart/removal qualified | Pinned native trusted project MCP initialize and direct tool-call fixture; no vendor model authentication | [Native Client Runtime](https://github.com/777genius/universal-agent-plugins/actions/runs/40209659575), [#499](https://github.com/777genius/universal-agent-plugins/pull/499) |
+| OpenCode | Yes | Public saved A/B lifecycle and genuine pinned native project skill/config discovery qualified | Native project MCP initialize/list/call not qualified; passive config observation is not MCP connection | [Native Client Runtime](https://github.com/777genius/universal-agent-plugins/actions/runs/40209659575), [gate plan](plans/project-install-e2e/opencode-project-native-gate-plan.md) |
+| Cursor | Yes | Qualified for isolated A/B lifecycle, restart and removal | Initialize and tools/list qualified; tools/call **not** qualified | [#521](https://github.com/777genius/universal-agent-plugins/pull/521) |
+| Gemini CLI | Yes | Qualified A/B lifecycle, restart and removal | Initialize, tools/list, tools/call qualified with controlled probe | [#526](https://github.com/777genius/universal-agent-plugins/pull/526) |
+| GitHub Copilot CLI | Yes | Qualified A/B lifecycle, restart and removal | Initialize, tools/list, tools/call qualified with scripted loopback provider | [#527](https://github.com/777genius/universal-agent-plugins/pull/527) |
+| Kimi Code | Yes | Qualified A/B lifecycle, restart and removal | Initialize, tools/list, tools/call qualified across **two separate same-source native lanes** | [#524](https://github.com/777genius/universal-agent-plugins/pull/524) |
+| Cline | Yes | Qualified A/B lifecycle, restart and removal | Initialize, tools/list, tools/call qualified under explicit process-wide MCP path selection | [#525](https://github.com/777genius/universal-agent-plugins/pull/525); default IDE forwarding not qualified |
+| Grok Build | Skills only | Qualified supported skills lifecycle, restart and removal | Project MCP unsupported | [#522](https://github.com/777genius/universal-agent-plugins/pull/522) |
+| Qoder | Prepared skills bundle, explicit native import | Qualified explicit skills lifecycle and restart/removal | Project MCP unsupported by this UAP route | [#523](https://github.com/777genius/universal-agent-plugins/pull/523); global native import has separate ownership |
+| Windsurf / Devin | Yes | Qualified supported project skills lifecycle, restart and removal | Not qualified | [#528](https://github.com/777genius/universal-agent-plugins/pull/528); separate strict cache-frame follow-up [#611](https://github.com/777genius/universal-agent-plugins/pull/611) |
+| Kiro | Prepared | Authenticated native lifecycle **not qualified** | Not qualified | [Draft #529](https://github.com/777genius/universal-agent-plugins/pull/529); dedicated test authentication needed |
+| VS Code | Prepared | Trusted native project lifecycle **not qualified** | Not qualified | [Deferred Draft #530](https://github.com/777genius/universal-agent-plugins/pull/530) |
+| Pi | **User only** for native Pi extensions | Project installation not supported by current adapter | Not applicable to this extension route | [Pi native extension contract](PI_NATIVE_EXTENSION_CONTRACT.md); no project qualification |
+| ChatGPT | **No** native project filesystem adapter | Not supported | Not applicable | [ChatGPT scope](CHATGPT_PROJECT_SCOPE.md); user/manual app flow is separate |
+
+All project-native lanes in this table leave **vendor authentication and real
+model execution unqualified** unless separately stated; no such qualification is
+asserted here. MCP fixture calls are real native-client/probe exchanges, not
+proof of a third-party remote service. A *Prepared* delivery is not automatically
+*Active*. Project UI/reload/trust, configuration precedence and per-client
+restrictions remain as listed above.
+
+For releases, explicit project scope first shipped in CLI 0.1.93 and automatic
+project selection for argumentless `install` in 0.1.94. The #520 integration
+postdates the published 0.1.95 tag, so use its exact Git source/CI evidence
+until a subsequent release explicitly includes it.
+
 ## What the verification establishes
 
 Local ownership checks run even when optional live native discovery is disabled.
