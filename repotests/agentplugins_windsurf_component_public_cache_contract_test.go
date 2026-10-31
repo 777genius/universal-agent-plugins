@@ -56,7 +56,49 @@ func windAssessmentActual(t *testing.T, w *windComponentFixture, scope string) (
 	if err != nil {
 		t.Fatal(err)
 	}
+	windAssessmentDiagnostic(t, w, r, cache, frames[global])
 	return raw, cache, frames
+}
+
+// Diagnostic is test-only, emits finite guard outcomes and never discloses
+// cache names, source paths, contents, timestamps or assessment values.
+func windAssessmentDiagnostic(t *testing.T, w *windComponentFixture, r *windComponentRecipe, cache windPublicCache, frame map[string]windProfileRecord) {
+	t.Helper()
+	if _, err := w.assessmentFrame(r, frame, cache); err == nil {
+		return
+	}
+	root := w.recipes["user"].StateRoot
+	before := w.trees[root]
+	old, now := before[windAssessmentDirectory], frame[windAssessmentDirectory]
+	name := windAssessmentDirectory + "/" + securityscan.CacheKey(cache.assessment.Subject, securityscan.DefaultRequirement()) + ".json"
+	file := frame[name]
+	expected := cache.assessment
+	expected.Evidence = ""
+	body, encodeErr := json.Marshal(expected)
+	actual, readErr := projectNativeRuntimeRead(filepath.Join(root, name), 1<<20)
+	prior, current := 0, 0
+	known, oldEqual := true, true
+	for key, record := range before {
+		if filepath.Dir(key) == windAssessmentDirectory {
+			prior++
+			if frame[key] != record {
+				oldEqual = false
+			}
+		}
+	}
+	for key := range frame {
+		if filepath.Dir(key) == windAssessmentDirectory {
+			current++
+			if _, existed := before[key]; !existed && key != name {
+				known = false
+			}
+		}
+	}
+	t.Logf("assessment guard outcomes: scope=%s cache=%t parent=%t parent_authority=%t parent_times=%t prior=%d current=%d unchanged_prior=%t known_new=%t cold=%t encoding=%t exact_bytes=%t file_mode=%t file_owner=%t file_device=%t file_size=%t file_hash=%t file_times=%t",
+		r.Scope, cache.validate(r) == nil, windAssessmentParent(old, now, cache.start, cache.end), windRuntimeAuthority(old, now), windRuntimeCommandTimes(now, cache.start, cache.end),
+		prior, current, oldEqual, known, before[name] == (windProfileRecord{}), encodeErr == nil, readErr == nil && string(actual) == string(body),
+		file.Kind == "file" && file.Mode == 0100600, file.UID == uint32(os.Getuid()) && file.GID == uint32(os.Getgid()) && file.Links == 1 && file.Inode > 0,
+		file.Device == now.Device, file.Size == int64(len(body)), file.SHA256 == windsurfConfigDigest(body), windRuntimeCommandTimes(file, cache.start, cache.end))
 }
 
 func TestWindsurfPublicAssessmentUsesActualCacheAndExactGlobalFrames(t *testing.T) {
