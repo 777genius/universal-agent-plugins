@@ -43,9 +43,12 @@ the final feature-source native run; each client's activation limits still apply
 
 The signed Directory v1 policy remains **user-only** for backward compatibility.
 A catalog entry that is reviewed, active and pinned to a complete Git commit
-may separately offer an explicit project **direct-source** command for Claude
-Code, Codex or OpenCode, when the release contains only portable Skills/MCP
-components and its user-scope package eligibility already passes. This is
+may separately offer an explicit project **direct-source** command for
+Claude Code, Codex, OpenCode, Cursor, Gemini CLI, GitHub Copilot CLI, Kimi Code
+and Cline, when the release contains only supported portable Skills/MCP
+components and its user-scope package eligibility already passes. Grok Build,
+Qoder and Windsurf are limited to Skills-only project packages in this catalog
+route. Kiro, VS Code, Pi and ChatGPT are not enabled by this bridge. This is
 not a newly signed project-scope Directory policy and does not change the
 behavior of an existing user-scope alias.
 
