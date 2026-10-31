@@ -42,11 +42,16 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.command-snippet code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00',
     );
+    // Switching from terminal detection selects only one initial agent.
+    await targets(page, card, ['Cursor']);
+    await expect(card.locator('.plugin-card__source-label')).toContainText(
+      'Agents: 1 automatic setup · 0 need follow-up',
+    );
     await targets(page, card, ['Codex']);
     await expect(card.locator('.plugin-card__source-label')).toContainText(
       'Agents: 1 automatic setup · 1 need follow-up',
     );
-    await expect(card.locator('.command-snippet code')).toContainText('--target cursor,codex');
+    await expect(card.locator('.command-snippet code')).toContainText('--target codex,cursor');
 
     await card.locator('.plugin-card__title-link').click();
     const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
@@ -65,7 +70,7 @@ for (const width of [1440, 390]) {
     await expect(detail.locator('.plugin-detail__client').filter({ hasText: 'Kiro' })).toHaveCount(0);
     await expect(detail.locator('.install-outcome')).toContainText('Cursor');
     await expect(detail.locator('.install-outcome')).toContainText('Codex');
-    await expect(detail.locator('.command-snippet--add code')).toContainText('--target cursor,codex');
+    await expect(detail.locator('.command-snippet--add code')).toContainText('--target codex,cursor');
     expect(errors).toEqual([]);
   });
 }
