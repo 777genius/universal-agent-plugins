@@ -122,11 +122,25 @@ func (*Adapter) StagingBase(plan domain.DeliveryPlan) string {
 func (*Adapter) ValidateTargetLayout(plan domain.DeliveryPlan) error { return validatePlan(plan) }
 
 func validatePlan(plan domain.DeliveryPlan) error {
-	if plan.ClientID != domain.ClientPi || plan.Scope != domain.ScopeUser || plan.TargetRoot != filepath.Join(plan.TargetAnchor, "extensions") || plan.NativeRegistryRoot != plan.TargetAnchor || plan.ActivePath != filepath.Join(plan.TargetRoot, plan.PhysicalArtifactID) {
-		return fmt.Errorf("pi package layout differs from selected user profile")
+	if plan.ClientID != domain.ClientPi || plan.TargetRoot != filepath.Join(plan.TargetAnchor, "extensions") || plan.NativeRegistryRoot != plan.TargetAnchor || plan.ActivePath != filepath.Join(plan.TargetRoot, plan.PhysicalArtifactID) {
+		return fmt.Errorf("pi package layout differs from selected scope")
 	}
-	if err := validateProfile(plan.TargetAnchor); err != nil {
-		return err
+	switch plan.Scope {
+	case domain.ScopeUser:
+		if err := validateProfile(plan.TargetAnchor); err != nil {
+			return err
+		}
+	case domain.ScopeProject:
+		client := domain.DetectedClient{ClientID: domain.ClientPi, ConfigRoot: plan.TargetContext.UserConfigRoot}
+		root, err := projectPiRoot(client, plan.TargetContext, plan.NativeRegistryRoot)
+		if err != nil {
+			return err
+		}
+		if root != plan.TargetAnchor {
+			return fmt.Errorf("pi project target differs from selected project")
+		}
+	default:
+		return fmt.Errorf("pi installation scope is unsupported")
 	}
 	return pathpolicy.RequireContainedChild(plan.TargetRoot, plan.ActivePath)
 }
@@ -145,17 +159,34 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 			eligible = true
 		}
 	}
+	if plan.Scope == domain.ScopeProject {
+		if _, err := projectPiRoot(in.Client, plan.TargetContext, plan.NativeRegistryRoot); err != nil {
+			return err
+		}
+		shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, eligible)
+		plan.UserActions = shared.AppendUnique(plan.UserActions, "Open or restart Pi in this project, review project trust, then reload resources; UAP does not grant trust or prove the extension was loaded.")
+		return nil
+	}
 	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, eligible)
 	plan.UserActions = shared.AppendUnique(plan.UserActions, "Reload resources or restart Pi to load the managed extension; installed files do not prove runtime activation.")
 	return nil
 }
 
 func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding) error {
-	if err := validateProfile(root); err != nil {
-		return err
-	}
-	if binding.ClientID != string(domain.ClientPi) || binding.Scope != string(domain.ScopeUser) || binding.NativeProfileRoot != root || filepath.Dir(binding.TargetLocator) != filepath.Join(root, "extensions") {
+	if binding.ClientID != string(domain.ClientPi) || binding.NativeProfileRoot != root || filepath.Dir(binding.TargetLocator) != filepath.Join(root, "extensions") {
 		return fmt.Errorf("pi binding differs from recorded physical profile")
+	}
+	switch domain.InstallScope(binding.Scope) {
+	case domain.ScopeUser:
+		if err := validateProfile(root); err != nil {
+			return err
+		}
+	case domain.ScopeProject:
+		if filepath.Base(root) != ".pi" || cleanRoot(root) != nil {
+			return fmt.Errorf("pi project binding root differs")
+		}
+	default:
+		return fmt.Errorf("pi binding scope is unsupported")
 	}
 	return pathpolicy.RequireContainedChild(root, binding.TargetLocator)
 }
@@ -203,7 +234,14 @@ func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequ
 	if err := validatePlan(request.Plan); err != nil {
 		return err
 	}
-	if request.Client.ClientID != domain.ClientPi || request.Client.ConfigRoot != request.Plan.TargetAnchor {
+	if request.Client.ClientID != domain.ClientPi {
+		return fmt.Errorf("pi activation client differs")
+	}
+	if request.Plan.Scope == domain.ScopeProject {
+		if request.Client.ConfigRoot != request.Plan.TargetContext.UserConfigRoot {
+			return fmt.Errorf("pi activation user authority differs")
+		}
+	} else if request.Client.ConfigRoot != request.Plan.TargetAnchor {
 		return fmt.Errorf("pi activation profile differs")
 	}
 	return checkDiscoveryRoot(request.Plan.TargetRoot)
@@ -220,9 +258,15 @@ func (a *Adapter) Activate(ctx context.Context, env clients.Env, request domain.
 		return out, err
 	}
 	out.Activation, out.Verification = domain.ActivationActive, domain.VerificationInstalled
+	if request.Plan.Scope == domain.ScopeProject {
+		out.Activation = domain.ActivationPrepared
+	}
 	out.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
 	out.NativeEffect = domain.NativeEffectUnchanged
 	out.UserActions = []string{"Reload resources or restart Pi to load the installed extension."}
+	if request.Plan.Scope == domain.ScopeProject {
+		out.UserActions = []string{"Review project trust in Pi and reload or restart to load the project extension; installed files are not runtime proof."}
+	}
 	return out, nil
 }
 func (*Adapter) Deactivate(ctx context.Context, _ clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
@@ -230,8 +274,15 @@ func (*Adapter) Deactivate(ctx context.Context, _ clients.Env, request domain.De
 	if err := ctx.Err(); err != nil {
 		return out, err
 	}
-	if request.Client.ClientID != domain.ClientPi || validateProfile(request.NativeRegistryRoot) != nil || filepath.Dir(request.ManagedArtifactPath) != filepath.Join(request.NativeRegistryRoot, "extensions") {
+	if request.Client.ClientID != domain.ClientPi || filepath.Dir(request.ManagedArtifactPath) != filepath.Join(request.NativeRegistryRoot, "extensions") {
 		return out, fmt.Errorf("pi removal profile differs")
+	}
+	if request.TargetContext.Scope == domain.ScopeProject {
+		if _, err := projectPiRoot(request.Client, request.TargetContext, request.NativeRegistryRoot); err != nil {
+			return out, err
+		}
+	} else if validateProfile(request.NativeRegistryRoot) != nil {
+		return out, fmt.Errorf("pi removal user profile differs")
 	}
 	out.ExternalRemovalComplete = true // The common directory transaction performs removal.
 	return out, nil
