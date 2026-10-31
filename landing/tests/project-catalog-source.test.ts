@@ -18,6 +18,14 @@ test('reviewed user-only v1 release can prepare a project from the exact pinned 
   const exact = `github:${source.repository}@${source.revision}//${source.path}`;
   assert.equal(selection.directSource, exact);
   assert.equal(selection.resolution.distribution?.id, plugin.default_distribution);
+  assert.equal(
+    selection.resolution.distribution?.targets.find((target) => target.client === 'codex')?.delivery,
+    'prepared',
+  );
+  assert.equal(
+    plugin.distributions[0]!.releases[0]!.targets.find((target) => target.client === 'codex')?.delivery,
+    'managed',
+  );
   const commands = projectCatalogCommands(plugin, ['codex']);
   assert.equal(commands.add, `npx -y universal-agent-plugins add ${exact} --target codex --scope project`);
   assert.equal(commands.update, commands.add);
