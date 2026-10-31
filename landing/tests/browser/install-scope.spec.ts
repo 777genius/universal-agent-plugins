@@ -170,10 +170,12 @@ test('reviewed user-only v1 catalog generates exact pinned project Git commands'
   const project = card.getByRole('button', { name: 'This project', exact: true });
   await expect(project).toBeEnabled();
   await project.click();
-  await expect(card.locator('.command-snippet')).toHaveCount(0); // Cursor not in the proven first wave.
-  await targets(page, card, ['Codex', 'Cursor']);
   const source = index.plugins[0]!.distributions[0]!.releases[0]!.source;
   const exact = `github:${source.repository}@${source.revision}//${source.path}`;
+  await expect(card.locator('.command-snippet code')).toHaveText(
+    `npx -y universal-agent-plugins add ${exact} --target cursor --scope project`,
+  );
+  await targets(page, card, ['Codex', 'Cursor']);
   const expected = `npx -y universal-agent-plugins add ${exact} --target codex --scope project`;
   await expect(card.locator('.command-snippet code')).toHaveText(expected);
   await card.locator('.command-snippet button').click();
