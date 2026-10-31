@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "scripts/comparisons/uap_apm_skills_e2e.py"
+      - "scripts/comparisons/test_uap_apm_skills_e2e.py"
       - "tests/fixtures/uap_apm/**"
       - ".github/workflows/uap-apm-standard-comparison.yml"
   workflow_dispatch:
@@ -34,6 +35,13 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+
+      - name: Validate harness syntax and adversarial classifications
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/comparisons/uap_apm_skills_e2e.py
+          python -m unittest discover -s scripts/comparisons -p 'test_uap_apm_skills_e2e.py' -v
 
       - name: Build exact released UAP source
         shell: bash
