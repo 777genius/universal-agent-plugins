@@ -38,6 +38,7 @@ const items = computed(() =>
 const currentName = computed(() => items.value.find(item => item.value === locale.value)?.title);
 const currentFlagIcon = computed(() => flagIconMap[locale.value] ?? "circle-flags:xx");
 const menuOpen = ref(false);
+let openedByArrowUp = false;
 watch(menuOpen, open => {
   if (!open) openedByArrowUp = false;
   emit('menu-open', open);
@@ -47,7 +48,6 @@ onBeforeUnmount(() => emit('menu-open', false));
 // ArrowUp reopening immediately after Escape can leave focus on the activator
 // while its deferred focus timer races the overlay transition. On enter,
 // guarantee the last enabled option has focus without cancelling key events.
-let openedByArrowUp = false;
 const onActivatorKeydown = (event: KeyboardEvent) => {
   if (event.key === 'ArrowUp' && !pending.value) openedByArrowUp = true;
 };
