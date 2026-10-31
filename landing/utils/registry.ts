@@ -847,6 +847,9 @@ function parseSnapshot(
       source: selected.source,
       install_source: name,
       built_in: true,
+      // Set only after the published snapshot was authenticated. Review
+      // previews and legacy projections cannot authorize direct project Git.
+      ...(mode === 'published_snapshot' ? { trust_state: 'reviewed' as const } : {}),
       installable: selected.selectable,
       components,
       ...(raw.icon === undefined
