@@ -17,7 +17,7 @@ import { normalizeInstallPlatform, recommendedInstallChannelId } from '../utils/
 import type { DownloadOverlay } from '../types/download.ts';
 
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
-const messages: typeof import('../locales/en.json') = JSON.parse(read('locales/en.json'));
+const messages: typeof import('../i18n/locales/en.json') = JSON.parse(read('i18n/locales/en.json'));
 const overlay = JSON.parse(read('content/download/en.json')) as DownloadOverlay;
 const legacy = JSON.parse(read('content/en.json'));
 
@@ -171,7 +171,7 @@ test('docs links and FAQ retain every owned base across all landing locales and 
     .replace(/import[\s\S]*?from\s*['"][^'"]+['"];\n/g, '')
     .replace('export const useDocsLinks', 'const useDocsLinks');
   const localeMessages = Object.fromEntries(
-    publishedLocales.map((locale) => [locale, JSON.parse(read(`locales/${locale}.json`))]),
+    publishedLocales.map((locale) => [locale, JSON.parse(read(`i18n/locales/${locale}.json`))]),
   ) as Record<PublishedLocale, LocaleMessageDictionary<VueMessageType>>;
   const composer = createI18n<[LocaleMessageDictionary<VueMessageType>], PublishedLocale, false>({
     legacy: false,

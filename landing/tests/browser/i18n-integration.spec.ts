@@ -32,7 +32,7 @@ for (const locale of publishedLocales) {
       await expect(page.locator('h1')).toBeVisible();
       if (family === '/') {
         const messages = JSON.parse(
-          readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'),
+          readFileSync(new URL(`../../i18n/locales/${locale}.json`, import.meta.url), 'utf8'),
         ).shell;
         const copy = messages.restore as Record<string, string>;
         const restore = page.locator('#restore-environment');
@@ -174,10 +174,10 @@ for (const locale of publishedLocales) {
     baseURL,
   }) => {
     const messages = JSON.parse(
-      readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'),
+      readFileSync(new URL(`../../i18n/locales/${locale}.json`, import.meta.url), 'utf8'),
     );
     const reference = JSON.parse(
-      readFileSync(new URL('../../locales/en.json', import.meta.url), 'utf8'),
+      readFileSync(new URL('../../i18n/locales/en.json', import.meta.url), 'utf8'),
     );
     if (locale !== 'en')
       expect(messages.publicAuthoring.title).not.toBe(reference.publicAuthoring.title);
