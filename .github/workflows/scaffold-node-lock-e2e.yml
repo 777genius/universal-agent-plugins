@@ -6,6 +6,8 @@ on:
       - 'cli/internal/authoring/scaffold/templates/package.json'
       - 'cli/internal/authoring/scaffold/templates/package-lock.json'
       - 'cli/internal/authoring/scaffold/scaffold_test.go'
+      - 'cli/internal/authoring/scaffold/templates.go'
+      - 'cli/internal/authoring/scaffold/plan.go'
       - '.github/workflows/scaffold-node-lock-e2e.yml'
   push:
     branches: [main]
@@ -13,6 +15,8 @@ on:
       - 'cli/internal/authoring/scaffold/templates/package.json'
       - 'cli/internal/authoring/scaffold/templates/package-lock.json'
       - 'cli/internal/authoring/scaffold/scaffold_test.go'
+      - 'cli/internal/authoring/scaffold/templates.go'
+      - 'cli/internal/authoring/scaffold/plan.go'
       - '.github/workflows/scaffold-node-lock-e2e.yml'
 
 permissions:
