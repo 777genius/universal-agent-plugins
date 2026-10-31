@@ -7,6 +7,7 @@ No live agents, network tools inside fixtures, credentials or destructive flags.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -320,6 +321,24 @@ def evaluate(product: str, executable: str, root: Path, commit: str,
     return results
 
 
+def write_receipt(output: Path, metadata: dict, cases: list[dict]) -> None:
+    output.mkdir(parents=True, exist_ok=True)
+    receipt = dict(metadata)
+    receipt["cases"] = cases
+    (output / "report.json").write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+    rows = ["# UAP vs APM Agent Skills 1.0 E2E (unreviewed observations)",
+            "", "| Scenario | UAP | APM |", "| --- | --- | --- |"]
+    for name in ("S1_install", "S1_repeat", "R1_cold_locked_restore", "S1_foreign_collision"):
+        states = [next((c["status"] for c in cases
+                        if c.get("product") == product and c.get("scenario") == name), "NOT_RUN")
+                  for product in ("uap", "apm")]
+        rows.append(f"| {name} | {states[0]} | {states[1]} |")
+    rows.extend(["", "No competitive winner is inferred from this raw receipt.",
+                 "Agent Plugins 1.0 whole-package, native activation and vendor OAuth were NOT_RUN.",
+                 "Environment variables alone do not prove filesystem confinement.", ""])
+    (output / "report.md").write_text("\n".join(rows))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--uap", type=Path, required=True)
@@ -330,49 +349,65 @@ def main() -> int:
     opts = parser.parse_args()
     if not PIN.fullmatch(opts.fixture_commit) or not PIN.fullmatch(opts.uap_source_sha):
         parser.error("commits must be full immutable Git SHAs")
-    opts.output.mkdir(parents=True, exist_ok=True)
     expected = {}
     for name in EXPECTED_FILES:
-        data = subprocess.check_output(["git", "show", f"{opts.fixture_commit}:{SKILL_PATH}/{name}"])
-        expected[name] = data
+        expected[name] = subprocess.check_output(
+            ["git", "show", f"{opts.fixture_commit}:{SKILL_PATH}/{name}"]
+        )
     versions = {}
     for name, executable in (("uap", opts.uap), ("apm", opts.apm)):
-        if not executable.is_file():
-            parser.error(f"missing executable {name}: {executable}")
-        versions[name] = {"executable_sha256": sha(executable.read_bytes())}
+        if not executable.is_file() or executable.is_symlink():
+            parser.error(f"missing ordinary executable {name}: {executable}")
+        versions[name] = {"entrypoint_sha256": sha(executable.read_bytes())}
+    metadata = {
+        "protocol_version": 1,
+        "collected_at_utc": datetime.now(timezone.utc).isoformat(),
+        "harness_source_commit": subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True
+        ).strip(),
+        "harness_script_sha256": sha(Path(__file__).read_bytes()),
+        "fixture_repository": REPOSITORY,
+        "fixture_git_commit": opts.fixture_commit,
+        "fixture_sha256": {name: sha(data) for name, data in expected.items()},
+        "uap_source_commit": opts.uap_source_sha,
+        "uap_artifact_kind": "source build from immutable release tag, not the published binary",
+        "apm_claimed_version": "0.35.0", "platform": "linux-amd64",
+        "executable_identity": versions,
+        "limitations": [
+            "S1 exact Codex project Skill files only, not native client loading",
+            "APM and UAP use distinct documented manager manifests and install routes",
+            "No filesystem confinement proof, only independent ephemeral HOME/XDG/project roots",
+            "P1/P2 Agent Plugins 1.0, OAuth/tool execution and other clients NOT_RUN",
+            "NOT_RUN/BLOCKED are never counted as FAIL or PASS without evidence admission",
+        ],
+    }
+    cases: list[dict] = []
+    write_receipt(opts.output, metadata, cases)  # Recoverable partial evidence from start.
+    errors = []
     with tempfile.TemporaryDirectory(prefix="uap-apm-", dir=os.environ.get("RUNNER_TEMP")) as directory:
-        base = Path(directory)
-        records = []
         for name, executable in (("uap", opts.uap), ("apm", opts.apm)):
-            root = base / name
+            root = Path(directory) / name
             root.mkdir()
-            records.extend(evaluate(name, str(executable), root, opts.fixture_commit, expected))
-        receipt = {
-            "protocol_version": 1,
-            "fixture_repository": REPOSITORY,
-            "fixture_git_commit": opts.fixture_commit,
-            "fixture_sha256": {name: sha(data) for name, data in expected.items()},
-            "uap_source_commit": opts.uap_source_sha,
-            "apm_claimed_version": "0.35.0", "platform": "linux-amd64",
-            "executable_identity": versions, "cases": records,
-            "limitations": [
-                "S1 package delivery only; no actual Codex/LLM/activation proof",
-                "APM and UAP command syntax differ by documented package-manager format",
-                "P1/P2 Agent Plugins 1.0, native verification, OAuth/tool calls and additional agents NOT_RUN",
-                "NOT_RUN is not FAIL; observed errors need human admission review before comparison claims",
-            ],
-        }
-        (opts.output / "report.json").write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
-        rows = ["# First UAP vs APM Agent Skills 1.0 E2E (unreviewed observations)",
-                "", "| Scenario | UAP | APM |", "| --- | --- | --- |"]
-        for name in ("S1_install", "S1_repeat", "R1_cold_locked_restore", "S1_foreign_collision"):
-            statuses = [next((x["status"] for x in records if x["product"] == product and x["scenario"] == name),
-                             "NOT_RUN") for product in ("uap", "apm")]
-            rows.append(f"| {name} | {statuses[0]} | {statuses[1]} |")
-        rows.extend(["", "No winner is inferred until source, native boundaries, and failure causes have been reviewed.",
-                     "No Agent Plugins whole-package or authenticated client execution was tested.", ""])
-        (opts.output / "report.md").write_text("\n".join(rows))
-    return 0  # Observation failures do not silently change test infrastructure into a score gate.
+            def progress(partial: list[dict]) -> None:
+                write_receipt(opts.output, metadata, cases + partial)
+            try:
+                cases.extend(evaluate(name, str(executable), root, opts.fixture_commit,
+                                      expected, opts.output, on_progress=progress))
+            except Exception as exc:
+                # Do not silently treat harness defects or destroyed output as product failures.
+                errors.append(name)
+                cases.append({
+                    "product": name, "scenario": "HARNESS_ERROR", "status": "BLOCKED",
+                    "reason": f"benchmark observation error ({type(exc).__name__})",
+                    "native_loaded": "NOT_RUN", "oauth_or_tool_call": "NOT_RUN",
+                })
+            write_receipt(opts.output, metadata, cases)
+    if errors:
+        print("Experiment incomplete due to harness errors:", ", ".join(errors))
+        return 1  # Upload-if-always still retains the partial report.
+    return 0  # Green means evidence captured; individual product failures remain visible.
+
+
 
 
 if __name__ == "__main__":
