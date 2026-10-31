@@ -38,11 +38,26 @@ const items = computed(() =>
 const currentName = computed(() => items.value.find(item => item.value === locale.value)?.title);
 const currentFlagIcon = computed(() => flagIconMap[locale.value] ?? "circle-flags:xx");
 const menuOpen = ref(false);
-watch(menuOpen, open => emit('menu-open', open), { flush: 'sync' });
+watch(menuOpen, open => {
+  if (!open) openedByArrowUp = false;
+  emit('menu-open', open);
+}, { flush: 'sync' });
 onBeforeUnmount(() => emit('menu-open', false));
-// Vuetify's VMenu owns native ArrowUp/ArrowDown menu activation and focus.
-// Do not intercept its activator keydown in capture phase.
-// Vuetify handles Escape/Tab; outside dismissal must retain the clicked focus target.
+// Keep Vuetify's native keyboard handler intact. In the pinned VMenu, an
+// ArrowUp reopening immediately after Escape can leave focus on the activator
+// while its deferred focus timer races the overlay transition. On enter,
+// guarantee the last enabled option has focus without cancelling key events.
+let openedByArrowUp = false;
+const onActivatorKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'ArrowUp' && !pending.value) openedByArrowUp = true;
+};
+const onMenuAfterEnter = () => {
+  if (!openedByArrowUp) return;
+  openedByArrowUp = false;
+  if (!menuOpen.value || pending.value) return;
+  const choices = menu.value?.contentEl?.querySelectorAll<HTMLElement>('[role="menuitemradio"]:not([aria-disabled="true"])');
+  choices?.[choices.length - 1]?.focus();
+};
 
 const onChange = async (value: unknown) => {
   if (typeof value !== 'string' || pending.value) return;
@@ -60,10 +75,11 @@ const onChange = async (value: unknown) => {
 
 <template>
   <!-- attach=true renders inline inside the mobile modal focus/inert boundary. -->
-  <v-menu v-model="menuOpen" ref="menu" :attach="props.containMenu || false" location="bottom end" :close-on-content-click="false">
+  <v-menu v-model="menuOpen" ref="menu" :attach="props.containMenu || false" location="bottom end" :close-on-content-click="false" @after-enter="onMenuAfterEnter">
     <template #activator="{ props: menuProps }">
       <v-btn
         v-bind="menuProps"
+        @keydown="onActivatorKeydown"
         :variant="props.compact || props.iconOnly ? 'text' : 'outlined'"
         :block="props.fullWidth"
         :size="props.compact ? 'small' : 'default'"
