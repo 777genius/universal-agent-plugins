@@ -113,8 +113,9 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:  LifecycleCLIRegistry,
 	}), LifecycleNativeConfig),
 	withProjectScope(withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecycleCLIRegistry,
+		InstallIntents:             []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:              LifecycleCLIRegistry,
+		RecordsUserProfileOnCreate: true,
 	})), LifecycleNativeConfig),
 	withProjectScope(withoutCommands(clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
 		SavedDependenciesDeferred: true,
