@@ -48,7 +48,7 @@ for (const width of [1440, 390]) {
     const errors = await offline(page);
     await projections(page, scopedFixture());
     await navigate(page, '/', 'en', '?q=i18n-state-00');
-    const card = page.locator('[data-install-source="i18n-state-00"]');
+    const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
     await card.locator('.plugin-card__install-toggle').click();
     await expect(card.locator('.command-snippet code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00',
@@ -132,7 +132,7 @@ for (const width of [1440, 390]) {
     const index = scopedFixture();
     await projections(page, index);
     await navigate(page, '/', 'en', '?q=i18n-state-00');
-    const card = page.locator('[data-install-source="i18n-state-00"]');
+    const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
     await card.locator('.plugin-card__install-toggle').click();
     await targets(page, card, ['Codex']);
     await card.getByRole('button', { name: 'This project', exact: true }).click();
@@ -165,7 +165,7 @@ test('unqualified project scope is hidden while auto agent delivery stays non-nu
   const errors = await offline(page);
   await projections(page, registryFixture());
   await navigate(page, '/', 'en', '?q=i18n-state-00');
-  const card = page.locator('[data-install-source="i18n-state-00"]');
+  const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
   // Terminal auto-detection does not know which local agents are installed.
   await expect(card.locator('.plugin-card__source-label')).toHaveCount(0);
   await card.locator('.plugin-card__install-toggle').click();
