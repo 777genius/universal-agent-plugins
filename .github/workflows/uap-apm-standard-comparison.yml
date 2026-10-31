@@ -49,6 +49,7 @@ jobs:
           set -euo pipefail
           git worktree add --detach "$RUNNER_TEMP/uap-release" agentplugins-v0.1.95
           test "$(git -C "$RUNNER_TEMP/uap-release" describe --tags --exact-match)" = agentplugins-v0.1.95
+          test "$(git -C "$RUNNER_TEMP/uap-release" rev-parse HEAD)" = ec85ee7d759944b9799e451c96bfc1859f9d5533
           mkdir -p "$RUNNER_TEMP/uap-bin"
           (cd "$RUNNER_TEMP/uap-release/cli" && go build -trimpath -o "$RUNNER_TEMP/uap-bin/agentplugins" ./cmd/agentplugins)
           "$RUNNER_TEMP/uap-bin/agentplugins" version
