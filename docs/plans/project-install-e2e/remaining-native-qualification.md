@@ -4733,3 +4733,365 @@ refusal. Native commands, Go guards, source/approval/state/probe joins, flags,
 deadlines, pins and capture bounds are unchanged. Historical captures retain
 false qualification; a fresh admitted full native packet still requires all
 independent RAW audits before lifecycle qualification.
+
+### Windsurf complete bounded profile-delta projection (2026-10-28)
+
+The genuine090b failed component capture observes15 profile changes after the
+account-free empty skills catalog. Its original three-entry projection remains
+byte-for-byte unchanged. Five fixed pages at offsets0/3/6/9/12 now expose at most
+15 independently bounded hashed details from those same held frames, each
+within the original2KiB limit. Complete counts, explicit omissions and the
+existing serialization fallback remain truthful. No extra filesystem read,
+raw private path/body, native command, artifact member or profile exception is
+introduced; the original protected/immutable and unequal-profile fatal remain.
+
+Plan0227ee9609b5efbd1232f0e11a2465e79fbbbd0b7e8538eaa081501abdeea6b6
+received root and Grok pre-code GOs. Root and the independent Qoder owner
+reviewed all five frozen files under manifest
+ba2760d3debbdd443ad4fadb427a2d5cea782a5dd00711f9447bbdeb45e81910.
+Executed exact focused Go contracts:46pass/0skip/0fail, package2.662s; Python
+contracts30pass. Affected all-enabled lint and complete root six-linter each
+report0issues. A separately recorded accidental unfiltered all-enabled lint
+invocation found existing unrelated diagnostics; it caused no source change or
+suppression and is not substituted for either required gate. The genuine090b
+14-member archive SHA60ee39861c3292730d39770c00f811158925fc8cb3743073257c102682da3185
+replays with byte-identical failed result and all qualification flagsfalse.
+
+The pure reader admits this optional field only at the actual completed failed
+native stage, with exact five-page schema, original page0, strict scalar types,
+counts/omissions, global uniqueness/order and ordinary record bounds. This
+publication remains a failed-observation diagnostic. A new genuine hosted
+capture and whole raw review must establish all actually observed profile
+changes before any narrow initialization policy or full lifecycle claim.
+
+## Windsurf sixth bounded diagnostic window (2026-10-28)
+
+Two independent Sol reviewers approved exact amendment SHA256
+`002ccf74d04c52ec6083ce0313bf1e5e89b13f7b6bdb95fe76269c85209eddc1`.
+Actual `9a762821` run `40740022136` has two complete independent RAW audits:
+14 native/25 frontend members,24 stream joins and234 pinned file hashes.
+The exact first skills listing succeeds in185ms, then the original protected
+config guard fails. The profile has16 changes; five windows expose15 unique
+entries and omit one cache addition. All qualification flags remain false.
+
+Add only the sixth fixed diagnostic offset15, retaining three details/2KiB per
+window, the same held maps, original first five projections, global counts,
+privacy, refusals and cleanup. The failed-only reader preserves historical
+five-window captures and accepts the current six with exact ordering and joins.
+Observed16/exact18/overflow19 controls preserve truthful omissions. No profile
+ownership or unknown data/cache permission follows; no native argv, source pin,
+environment, deadline, evidence member or product behavior changes. Replay old
+failed captures unchanged and require a fresh hosted observation after review.
+
+### Windsurf fixed native startup state (2026-10-29)
+
+The exactd0ac8b3c diagnostic40753719131 closes all16 profile changes. Its native
+artifact12847601802 is27524bytes/SHA256
+`17c4529fb2791381fcfb180c8538da5c2d6a95f3e54b115bab365a1dc3b244d9`;
+frontend12846173942 is26113bytes/SHA256
+`825d1e694ecdc5665c2faca465654ddb015c98c17280dc33cf6f151406800ff1`.
+Both API-bound archives have ordinary closed members and valid CRCs. The final
+omitted directory is exactly `xdg-cache\0devin` (SHA256fddb766d...). All flags
+remain false. No broader profile ownership follows from those path identities.
+
+Independent static inspection rehashes the unchanged official archive/binary.
+The binary's logger construction1e06eef..1e06faa uses the Rust format at8bb4774,
+`{}_{}_{}.log`, with literal`devin`, local-time `%Y%m%d-%H%M%S` and process PID.
+Actual `devin_20261028-195926_5805.log` joins the captured439030f9... path hash.
+The maintenance lock helper2b05ce0 opens ordinary0666/umask0644, flocks EX|NB,
+truncates and writes its decimal getpid plus LF. Actual5805LF matches1dadcee....
+The config loader186526c..5288 migrates version0 but returns version1 without
+that schema write; a valid existing36-byte installation UUID returns its
+original bytes at1a2c5dd. The telemetry cache is exactly16bytes
+`{"is_zdr":false}`, matching captured7445ff87.... These are source inspections
+and byte/hash joins, not local native execution or authentication evidence.
+
+Before the component fixture's first vendor child, author version1 beside the
+unchanged two safety fields, a valid fresh installation UUID, exact telemetry
+bytes, the empty `devin/cli/plugins/lock.json.lock`, and the finite observed
+`devin/cli` directories under XDG config/cache/data plus data logs/plugins.
+Preserve the shared updater and historical startup/diagnostic recipes. Freeze
+all new seed bytes and original raw config. No post-child semantic adoption or
+renewal of the original protected digest is authorized.
+
+For registered non-version skills/MCP reads only, allow exactly one new ordinary
+0644, current-owner, single-link `devin_TIMESTAMP_PID.log`, at most1MiB and16MiB
+cumulative, plus an ordinary bounded maintenance lock containing that same
+positive decimal PID and LF. Require a real calendar timestamp in the actual
+command interval at second precision; the current hosted UTC spelling is
+admitted conservatively, without claiming the vendor hardcodes UTC or changing
+its environment. Prior logs stay identical; only the logs directory's content
+timestamps may change while its inode/mode/owner remain fixed. Refuse every
+other addition, removal, replacement, compression, raw-config rewrite, unsafe
+entry or expired budget. Preserve the original150-second deadline and ordinary
+process cleanup. The existing first-component capture stays deliberately failed
+and all-false; supported complete lifecycle/native grammar remains required.
+
+Grok/Qoder and integration independently approved this exact plan and final
+four-file code. Review fixes bind the log window to the immediate OSRun end,
+then copy the accepted held profile frame into the expected runtime subtree;
+a later filesystem observation cannot replace authority. Late log/UUID/unknown
+mutation controls prove refusal. Five new runtime controls plus the retained
+config contracts pass in0.070s; nine Python controls pass. Affected all-enabled
+and whole-root architecture/size six-linter gates report0issues. The broader
+component suite passes with its unchanged owner-change control excluded because
+this local UID namespace cannot chown to UID1 (EINVAL); that control is not
+waived or changed. The original14-member failed capture and all24 frontend
+stream/hash joins replay unchanged/all-false. No vendor process ran locally.
+
+### Windsurf exact native telemetry timestamp rewrite (2026-10-29)
+
+Current-source run40878254890 attempt2 still stops after the first successful
+skills read. Its27-to29 profile delta contains the expected new log/maintenance
+pair and log-directory metadata, plus a changed record for the exact seeded
+`xdg-cache/devin/telemetry_state.json`: both sides remain16 bytes with SHA256
+`7445ff8769cba2e1b004c754a770a85293e7548228e4fa3d363263c96c9b6290`.
+The pinned binary's2e37ca0 helper joins XDG_CACHE_HOME, `devin` and
+`telemetry_state.json`; its2e34180 serializer uses the `is_zdr` field.
+Permit only Modified/Changed timestamp variation for that exact cache file,
+requiring unchanged device/inode/kind/mode0644/owner/group/single-link authority,
+size16 and exact fixed bytes before and after. Copy only its accepted frame record
+into the existing cache expectation; never reread or replace a protected digest.
+Keep original config/UUID/other-cache/old-log and late-write guards unchanged.
+The raw diagnostic omits inode/owner details, so it does not itself establish
+these predicates: the next genuine hosted capture must satisfy them or fail.
+Both independent plan reviews approve this limited correction; the historical
+failed capture remains failed with every qualification flag false.
+Both independent code reviews also approve the exact predicate and accepted-frame
+copy. Six focused startup/runtime controls pass in0.100s; affected all-enabled
+lint and the unfiltered six-linter architecture/size gate report0issues.
+
+### Windsurf empty native MCP storage directories (2026-10-29)
+
+Actual07756a69 run40888304062 passes the telemetry guard and reaches a successful
+account-free `mcp list`, then refuses two new ordinary0755 directories:
+`xdg-data/devin/mcp` and its empty `oauth` child. The complete seven-entry delta
+contains only those directories, the expected log/maintenance changes and fixed
+telemetry timestamps; original config is unchanged. Pinned path joins at638e237,
+638e279 and638e29e build XDG_DATA_HOME/devin/mcp/oauth; constructor7e73880 uses
+recursive0777 directory creation, yielding the observed0755 under the held umask.
+Both independent plan reviews approve adding only this empty directory chain to
+the existing initial pre-child seed. Freeze it before any vendor command, with
+no later-write exception, OAuth file, credential, approval or config mutation.
+The existing complete profile closure must reject later file/mode/identity drift;
+this failed capture and every qualification flag remain unchanged/all-false.
+
+### Windsurf exact empty native plugin lock seed (2026-10-29)
+
+The genuine e9448dd6 capture (run 40894288914) completed six native commands,
+then refused the first project-A skills read because the native client created
+`xdg-data/devin/cli/plugins/lock.json`: ordinary 0644, 57 bytes, SHA-256
+`cbce3a5464482eb4cfb7b152ad15183bcb5db5c5557c625ee0cec1edb582aa88`.
+Its failed frame and all five false qualification flags remain unchanged.
+
+One bounded reacquisition verified the exact original archive and the entire
+217494824-byte executable against the existing pins, without executing it.
+Independent static reviews confirmed the loader accepts the native serializer's
+empty `requirements`, `resolved`, and `edges` arrays, in that order, with two-space
+indentation and no trailing newline. The empty optional `resolve_failures` field
+is omitted; these source-derived bytes hash exactly to the captured file.
+
+Author only those exact 57 bytes as an ordinary 0644 file before any native child
+and the initial baseline. Preserve the existing protected digest and complete
+profile identity, content, metadata, and membership freeze without an exception.
+Static inspection does not establish that every startup path skips a rewrite:
+the next genuine capture must satisfy every unchanged predicate or still fail.
+No temporary file, same-byte rewrite, replacement, credential, approval, config,
+command, deadline, or qualification allowance is introduced. Both independent
+reviewers approved this bounded plan before implementation.
+
+### Windsurf exact empty native registry replacement (2026-10-29)
+
+The genuine cd91f247 run40900325427 still refuses empty-A skills after six
+ordinary successful commands. The seeded lock retains the exact57-byte cbce3a
+content; its record and plugins-directory record change. All six delta paths,
+source/build identity,20native/25frontend archive members and24frontend stream
+joins close. The projection does not reveal inode or owner values, and this
+failed frame retains all five false qualification flags.
+
+A bounded same-pin static RAM read verified the full executable SHA and retained
+the complete writer continuation. It derives the same-directory json.tmp path,
+writes the canonical buffer, fsyncs, closes, renames over lock.json (syscall82),
+and syncs the parent. Both independent source/plan reviews approve only this
+fixture-owned empty registry replacement, without a same-inode claim.
+
+For this exact path require before and after ordinary0644/currentUID+GID, single
+link, positive inode, same device, and exact57-byte canonical hash. After mtime
+and ctime must both fall inside the immediate OSRun start/end window. Only when
+this exact file record changes may the exact plugins parent change timestamps;
+keep its inode/device/type0755/owner/group/link/size/hash authority unchanged and
+bound both timestamps to the same command. Keep complete membership closed,
+including refusal of temporary leftovers. Preserve all original config/User/
+foreign guards, protected digest, accepted-frame-only copy and final late check.
+No arbitrary registry content, missing file, parent replacement, unknown path,
+authentication, argv, deadline or qualification allowance is introduced.
+
+### Windsurf frozen-tree refusal visibility, 2026-10-29
+
+Hosted source `69a2a190612165992fc150cd8302539a0f3e312a`, runtime
+`40920990159`, completed six ordinary commands through `empty-a-skills`.
+Its complete HOME/XDG runtime closure passed, then the independent frozen
+source/state/native/data/cwd tree equality refused a change. The failed capture
+does not identify the changed frozen entry; no path or permitted write is inferred.
+Keep that equality and all false qualification flags unchanged. On its existing
+refusal read, select a deterministic changed root and prefer a changed file over
+directory metadata. Report only root/key SHA256, finite change/count/presence
+facts, record hashes and fixed field-equality facts, bounded to 2 KiB in the
+existing fatal output. No raw path, body, extra filesystem observation, baseline
+adoption, summary-schema change or runtime-write exception is authorized.
+
+### Windsurf initial Git local-config excludes, 2026-10-29
+
+The complete audited `cf496fe0` run `40927889017` fails after six commands at
+`empty-a-skills`. The frozen-tree diagnostic identifies project A's
+`.git/info/exclude`: its file authority is stable, but bytes, size and timestamps
+change. The after-body is not uploaded and is neither inferred nor adopted.
+The original HOME/XDG closure passes; every qualification flag remains false.
+
+One bounded same-pin RAM acquisition verified the complete executable without
+executing it. Retained publisher-source excerpts establish preferred `.devin`,
+the two local filenames, same-root relative formatting, and exact existing-line
+branches that bypass each exclude writer. Both independent plan reviews approve
+only `.devin/config.local.json` and `.devin/mcp_config.local.json` before the
+initial Git/cwd freeze, immediately after the existing recorded Git initialization.
+
+Preserve all Git-generated exclude bytes and append only missing fixed LF rules.
+Require held nofollow parent/file authority, ordinary current-owned 0644 and one
+link, exact initial stat/hash, and unchanged inode/device/mode/owner/group after
+the append. Existing exact rules cause no write. Replace only the validated file
+record in the already validated fresh Git/cwd frames, then verify both live trees
+before freezing. Refuse renewed preparation of a frozen Git root. No local config
+file, runtime Git-write allowance, observed baseline adoption, native command,
+credential, trust, deadline, archive-bound or qualification change is introduced.
+The next genuine hosted capture must satisfy the unchanged full frozen guards.
+
+The next run `40954917050` stops after `git-a` at the initial exclude-authority
+predicate, before any vendor command. Its raw evidence does not disclose which
+stat field or absence caused that refusal; all qualifications remain false.
+Git's [initialization documentation](https://git-scm.com/docs/git-init) specifies
+umask-dependent permissions; upstream `copy.c` creates non-executable template
+copies with `0666` before umask. A universal `0644` requirement is unsupported.
+For a present ordinary exclude file, bind mode to its already validated fresh
+Git frame and preserve that exact mode through append and freeze. Keep full
+stat/digest joins, current ownership, single link, nofollow checks, no-write
+stability and final equality. Missing original files remain fatal; no creation
+fallback, chmod, runtime allowance or diagnosis of an actual mode is introduced.
+
+### Windsurf public snapshot scratch closure, 2026-10-30
+
+The genuine `cded02aa` run `40985280283` completes ten ordinary commands through
+the successful public User add, then refuses an original-profile change. Its
+generic fatal does not export the changed key or after-frame; no post-add state
+proof or positive native qualification is inferred. All five flags remain false.
+
+The default legacy Stager uses `packagesnapshot.Builder` with an empty TempRoot.
+Build creates a private snapshot child under the fixture's TMPDIR and Close
+removes it. Two vendor-free inert contracts exercise the actual public User add
+and the real default Build/Close path with a tiny inert HTTP recipe. The earlier
+verified runs showed final empty scratch membership and unchanged directory
+authority/size, with only its mtime and ctime changed. The complete profile
+contract showed every other original record unchanged. Reconstructed contracts
+retain that boundary; they do not qualify the original hosted stdio lifecycle.
+
+For registered public User/A/B adds only, permit those two timestamps at the
+exact TMP root when both complete TMP subtrees are empty. Keep type, device,
+inode, mode, UID/GID, link count, size and empty directory hash fixed; require
+ordinary current ownership and positive inode/link count. Both after timestamps
+must fall inside the immediate OSRun interval. Every other profile entry and
+native runtime guard remains unchanged. No TMP baseline is renewed or adopted;
+TMP belongs to the complete profile frame, not the frozen payload trees. No
+command, deadline, capture bound, approval or qualification flag changes. The
+next genuine 23-command frame still requires complete independent raw review.
+
+### Windsurf public assessment cache proof, 2026-10-30
+
+Actual `afd21339` run `41039463176` passes the public TMP closure and then
+refuses the selected state closure after ten ordinary commands through User
+add. All three raw audits close the failed prefix, with zero component proofs
+and zero probe bytes. No after-state tree or changed entry is exported, so the
+raw capture does not identify a cache path or authorize a post-add state claim.
+
+Vendor-free contracts retain the real default Cobra composer, lazy source
+acquirer, security evaluator and FileCache, replacing only the scanner with an
+inert valid report. They reproduce the exact subject/requirement cache key,
+canonical assessment with Evidence cleared, and original state-guard refusal.
+An actual AcquireLocal/recognized snapshot cleanup separately changes only the
+global state-root timestamps, leaving authority, size and all membership fixed.
+These source effects remain in the global User installer-state cache even when
+ForScope selects a separate A/B project state root.
+
+Pre-author only an empty ordinary 0700 assessments directory before baseline;
+never seed an assessment. For the three unique first-capture public adds, require
+the exact derived key absent beforehand and a strict public local_scan assessment
+bound to the held source digest, authored manifest and DefaultRequirement, with
+zero blocking findings. Admit exactly that new ordinary 0600 current-owned,
+single-link file, whose bytes equal the canonical public assessment with Evidence
+cleared. Join its hash/size and command-window timestamps to the captured frame.
+All earlier assessment records and the security parent remain unchanged. The
+assessments directory keeps its complete authority and empty hash; only its
+command-window timestamps and nonnegative size bounded by 1 MiB may change.
+Unknown entries, temporary files, cache hits and prior-file rewrites refuse.
+
+User proofs retain exactly three roots; A/B proofs add exactly the global User
+state root as their fourth. All unrelated global User/state/data records remain
+frozen. Only its exact root timestamps may change for source snapshot cleanup,
+with authority, size and hash fixed inside the actual public command interval.
+Validate these finite effects against the same captured maps as the selected
+payload proof, recheck every complete accepted frame, then clone only those
+frames into the frozen baseline. Low-level proofs without a public assessment
+admit no cache changes. Native guards, the original 23-command recipe, all capture
+bounds and false qualification flags remain unchanged pending genuine review.
+
+### Windsurf: observed metadata grammar and bounded project lifecycle
+
+The source-bound `8c4f6b3f` observation in runtime `41050724879`, selected job
+`124051233606`, completed all 23 commands and three independent installation
+proofs in 17,234 ms. Primary and both independent whole-RAW reviews closed the
+72-member native archive and 25-member frontend archive. Its deliberate final
+review stop remains failed and all qualification flags remain false. The seven
+skills catalogs, seven MCP lists and three gets establish only metadata and
+configuration visibility; the probe remained empty.
+
+The next exact mode, `windsurf-complete-project-skills-cycle`, retains that
+literal prefix and appends eight public operations plus sixteen already
+observed metadata commands, for 47 calls. Independent A/B identities, direct
+singleton repeat-add, unchanged update, intact repair, controlled A2 source
+revision, whole owned native skill-directory absence and repair, default
+removal, repeated removal refusal and remaining-scope controls are explicit.
+Removed project MCP entries expose the held original User same-name fallback.
+User skills remain unactivated; project bindings and component support remain
+Prepared. A successful complete mode may qualify only project lifecycle and
+native restart/removal, with all MCP, authentication and model flags false.
+
+A real default-composer tiny HTTP inert journey (no endpoint/process) measured
+the ten project public stages with only Scanner substituted. The scanner ledger
+was 1,2,2,2,2,3,3,3,3,3. Public security is present at adds and repeat-add only;
+A2 nevertheless writes a new cold assessment. The native recipe includes the
+original User assessment, therefore its finite final cache set has four keys.
+A2 has a closed typed raw assessment proof joined to its held source, manifest,
+DefaultRequirement, canonical Evidence-cleared bytes, exact cache key, captured
+file/parent metadata and immediate command interval. Absence of public security
+is never treated as evidence of a cache hit. Prior cache records remain frozen.
+
+New-mode command receipts expose actual UTC nanosecond start/end instants,
+integer elapsed duration, monotonic windows and original wall-span/summary
+bounds. Selected mutation.lock retains ordinary current-owned authority and
+closed positive PID/acquired_at metadata; its PID is source-attested, not joined
+to a nonexistent CommandResult leader-PID field. Repeated removal exits before
+lock acquisition and must preserve the prior lock raw bytes and full record.
+Caller marker creation is a
+separate exact fixture delta after independent data-ownership checks and before
+the first accepted complete frame, never a later whole-tree renewal.
+
+Three bounded JSONL aggregates plus the summary produce four ZIP members.
+Existing 1 MiB encoded-member, 16 MiB total, 150-second work, 180-second test,
+10-second native, 30-second public and five-second descendant-grace bounds stay
+fixed. The shared privacy helper is unchanged: each closed bounded JSONL row is
+checked, and every explicit opaque stream is independently decoded and checked.
+The full synthetic proof aggregate is below 1 MiB but exceeds that helper's
+single-document node budget, so aggregate checks use the existing per-row JSONL
+boundary rather than increasing any helper limit. A real serialized four-member
+ZIP positive must cross runtime admission, exact mode dispatch and complete
+proof validation. The historical first-observation mode and failed verdict stay
+unchanged. Genuine complete execution and all three full-RAW audits are still
+required before qualification or merge.

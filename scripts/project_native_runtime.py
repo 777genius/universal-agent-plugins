@@ -58,8 +58,8 @@ CASES = {
     "kiro": {"test": "TestAgentpluginsKiroNativeProjectRuntimeAttempt",
              "file": "repotests/agentplugins_kiro_project_native_attempt_test.go",
              "optin": "AGENTPLUGINS_KIRO_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
-    "windsurf": {"test": "TestAgentpluginsDevinNativeProjectRuntimeAttempt",
-                 "file": "repotests/agentplugins_windsurf_project_native_attempt_test.go",
+    "windsurf": {"test": "TestAgentpluginsWindsurfNativeProjectCompleteSkillsCycle",
+                 "file": "repotests/agentplugins_windsurf_cycle_fixture_test.go",
                  "optin": "AGENTPLUGINS_WINDSURF_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
 }
 CLI_ATTEMPTS = {"cursor": "2026.10.22-27dcf5f", "qoder": "1.1.78", "grok": "1.0.70", "kiro": "2.34.0", "windsurf": "3000.11.205"}
@@ -714,6 +714,11 @@ def cli_attempt_members(bodies, source, client):
             from project_native_qoder_cycle import members
         elif (client, summary["capture_mode"]) == ("cursor", "cursor-complete-mcp-cycle"):
             from project_native_cursor_cycle import members
+        elif (client, summary["capture_mode"]) == ("windsurf", "windsurf-complete-project-skills-cycle"):
+            from project_native_windsurf_cycle import members
+        elif (client, summary["capture_mode"]) == ("windsurf", "windsurf-component-listing-first-capture"):
+            import project_native_windsurf_components as windsurf_components
+            return windsurf_components.members(bodies, source, summary, strict_json)
         else:
             raise ValueError("unknown fixed native CLI capture mode")
         return members(bodies, source)
