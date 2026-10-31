@@ -288,6 +288,9 @@ export function parseSnapshot(
       source: selected.source,
       install_source: name,
       built_in: true,
+      // Only authenticated published Directory projections authorize the
+      // direct pinned-Git project path; unsigned previews remain unreviewed.
+      ...(mode === 'published_snapshot' ? { trust_state: 'reviewed' as const } : {}),
       installable: selected.selectable,
       components,
       ...(raw.icon === undefined
