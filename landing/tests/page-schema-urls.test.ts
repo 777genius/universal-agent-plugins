@@ -59,6 +59,16 @@ for (const base of ['/', '/universal-agent-plugins/']) {
             ref,
             isKnownLocale,
             catalogVisiblePlugins,
+            // URL-only fixture: the reviewed detail page's auto-imported policy
+            // adapters are inert; its schema URL construction stays under test.
+            resolveDistribution: (_plugin: unknown, targets: readonly string[]) => ({
+              distribution: { targets: targets.map((client) => ({ client, delivery: 'managed' })) },
+            }),
+            vendorInstallSource: () => undefined,
+            isFullyRetired: () => false,
+            useDirectoryStatus: () => ({
+              current: ref(true), expired: ref(false), published: ref(true),
+            }),
             localizedPath,
             productRootUrl,
             productSoftwareSchema,
