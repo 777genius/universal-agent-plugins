@@ -25,7 +25,7 @@
       "showMore": "Показать ещё навыки",
       "externalSource": "Внешний источник",
       "githubSource": "Исходники на GitHub",
-      "unsupportedSource": "Установка из этого источника пока не поддерживается.",
+      "unsupportedSource": "Для прямой установки нужен подтверждённый источник GitHub.",
       "chooseAgents": "Выберите агентов",
       "chooseInTerminal": "Выбрать агентов в терминале",
       "chooseInTerminalHelp": "Команда предложит выбрать агентов перед установкой.",
@@ -41,9 +41,11 @@
         "1h": "{count} установок · за последний час"
       },
       "pageHeading": "Найдите Agent Skills",
-      "unsupportedName": "Имя скилла в этой записи не поддерживается. Инструкции по установке смотрите в источнике.",
+      "unsupportedName": "Прямая установка из этой записи недоступна. Проверьте источник GitHub.",
       "collectionShown": "Показано {count} из {total} в этой подборке",
-      "headingPrefix": "Найдите свои"
+      "headingPrefix": "Найдите свои",
+      "viewListing": "Открыть исходную запись",
+      "manualSkillSelection": "Выберите точный навык в установщике: название из каталога не подтверждено."
     },
     "directoryPage": {
       "pluginDirectory": "Каталог плагинов",
