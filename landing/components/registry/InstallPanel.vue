@@ -2,6 +2,7 @@
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
 import type { RegistryDiagnostic, ClientID, RegistryPlugin } from '~/types/registry';
 import { pluginCommands } from '~/utils/commands';
+import { projectCatalogCommands } from '~/utils/projectCatalogSource';
 import { isFullyRetired } from '~/utils/filter';
 import { vendorInstallSource } from '~/utils/registry';
 const { t } = useI18n();
@@ -62,11 +63,9 @@ const commands = computed(() =>
   props.plugin.discovery?.availability !== 'unavailable' &&
   canUseSource.value &&
   (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
-    ? pluginCommands(
-        props.plugin,
-        autoDetect.value ? undefined : targets.value,
-        undefined,
-        scope.value,
+    ? (scope.value === 'project'
+        ? projectCatalogCommands(props.plugin, targets.value)
+        : pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
       )
     : undefined,
 );
