@@ -2,20 +2,37 @@ import { installCommands, pluginCommands, shellToken } from './commands.ts';
 import { resolveDistribution } from './registry.ts';
 import type { ClientID, DistributionResolution, RegistryPlugin } from '../types/registry.ts';
 
-// These clients have existing project preparation/lifecycle coverage. This is
-// deliberately narrower than the complete client capability matrix: a signed
-// *user* policy is not proof that arbitrary project activation works.
-const DIRECT_PROJECT_CLIENTS = new Set<ClientID>(['claude', 'codex', 'opencode']);
+// The project-native matrix in docs/PROJECT_CLIENT_SUPPORT.md qualifies
+// preparation and ownership for these clients. It does NOT claim authenticated
+// model execution or arbitrary native MCP tool calls. Do not infer project
+// eligibility from user-scope Directory policy alone.
+const PROJECT_COMPONENTS: Partial<Record<ClientID, ReadonlySet<string>>> = {
+  claude: new Set(['skills', 'mcp']),
+  codex: new Set(['skills', 'mcp']),
+  opencode: new Set(['skills', 'mcp']),
+  cursor: new Set(['skills', 'mcp']),
+  gemini: new Set(['skills', 'mcp']),
+  copilot: new Set(['skills', 'mcp']),
+  kimi: new Set(['skills', 'mcp']),
+  cline: new Set(['skills', 'mcp']),
+  // Native project MCP startup is not qualified for Windsurf.
+  windsurf: new Set(['skills']),
+  // These clients have prepared-only project skills; project MCP unsupported.
+  grok: new Set(['skills']),
+  qoder: new Set(['skills']),
+};
 const GIT_REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const FULL_REVISION = /^[0-9a-f]{40}$/;
 
 function pinnedSource(plugin: RegistryPlugin, targets: readonly ClientID[]) {
   if (plugin.trust_state !== 'reviewed' || !targets.length ||
-      targets.some((client) => !DIRECT_PROJECT_CLIENTS.has(client))) return undefined;
+      targets.some((client) => !PROJECT_COMPONENTS[client])) return undefined;
   const selected = resolveDistribution(plugin, targets, 'user');
   const distribution = selected.distribution;
   if (!distribution || !distribution.components.length ||
-      distribution.components.some((part) => part !== 'skills' && part !== 'mcp')) return undefined;
+      targets.some((client) =>
+        distribution.components.some((component) => !PROJECT_COMPONENTS[client]!.has(component)),
+      )) return undefined;
   const { repository, revision, path } = distribution.source;
   if (!GIT_REPOSITORY.test(repository) || !revision || !FULL_REVISION.test(revision) ||
       (path !== '.' && (!path || path.split('/').some(
