@@ -79,7 +79,7 @@ func TestDependencyStatusMissingManifestDoesNotClaimNoInstallations(t *testing.T
 			}
 			s := renderDependencyStatusForTest(t, status, "")
 			for _, want := range []string{"manifest_missing", "No saved uap.toml was found",
-				"does not mean other plugins are absent", "supported Registry/Git package", "agentplugins add <source> --target <agent>"} {
+				"does not mean other plugins are absent", "supported saved-dependency target", "agentplugins add <source> --target <agent>"} {
 				if !strings.Contains(s, want) {
 					t.Fatalf("missing manifest guidance lacks %q: %s", want, s)
 				}
@@ -104,7 +104,7 @@ func TestDependencyStatusGuidanceRequiresValidatedLock(t *testing.T) {
 	}
 	missing := renderDependencyStatusForTest(t, status, "")
 	if !strings.Contains(missing, "No valid uap.lock was found") ||
-		!strings.Contains(missing, "Review uap.toml") ||
+		!strings.Contains(missing, "Inspect uap.toml and uap.lock") ||
 		strings.Contains(missing, "agentplugins deps tree") ||
 		strings.Contains(missing, "agentplugins install --locked") {
 		t.Fatalf("invalid lock was described as usable: %s", missing)
