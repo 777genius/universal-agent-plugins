@@ -38,6 +38,15 @@ for (const width of [1440, 1024, 390, 320]) {
 
     const items = page.locator('.client-strip > li');
     await expect(items).toHaveCount(clientLandingPages.length);
+    // A complete strip must link the right client, not just render N cards.
+    for (const [index, client] of clientLandingPages.entries()) {
+      const item = items.nth(index);
+      await expect(item.locator('.client-strip__copy strong')).toHaveText(client.name);
+      const href = await item.locator('a').getAttribute('href');
+      const iconSrc = await item.locator('img').getAttribute('src');
+      expect(href?.endsWith(`/agents/${client.slug}/`)).toBe(true);
+      expect(iconSrc?.endsWith(`/client-icons/${client.icon}`)).toBe(true);
+    }
     const geometry = await items.evaluateAll((nodes) =>
       nodes.map((node) => {
         const rect = node.getBoundingClientRect();
