@@ -62,6 +62,21 @@ jobs:
           "$RUNNER_TEMP/apm-venv/bin/apm" --version
           "$RUNNER_TEMP/apm-venv/bin/python" -m pip freeze > "$RUNNER_TEMP/apm-installed-requirements.txt"
 
+      - name: Provision pinned genuine Codex target (no login)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # UAP requires detected client authority before preparing a project
+          # installation. APM can copy Skills without installed Codex. Compare
+          # delivery with the genuine client available to both managers.
+          npm install --prefix "$RUNNER_TEMP/codex-runtime" --no-save \
+            --no-audit --no-fund --no-package-lock '@openai/codex@0.164.0'
+          codex="$RUNNER_TEMP/codex-runtime/node_modules/.bin/codex"
+          test -x "$codex"
+          test "$("$codex" --version)" = "codex-cli 0.164.0"
+          printf '%s\n' "$RUNNER_TEMP/codex-runtime/node_modules/.bin" >> "$GITHUB_PATH"
+          npm ls --prefix "$RUNNER_TEMP/codex-runtime" --depth=0 --json > "$RUNNER_TEMP/codex-runtime-package.json"
+
       - name: Validate bounded harness and adversarial classifiers
         shell: bash
         run: |
@@ -81,6 +96,7 @@ jobs:
           cp "$RUNNER_TEMP/apm-installed-requirements.txt" "$RUNNER_TEMP/uap-apm-results/apm-installed-requirements.txt"
           cp "$RUNNER_TEMP/apm-distribution-sha256.txt" "$RUNNER_TEMP/uap-apm-results/apm-distribution-sha256.txt"
           cp "$RUNNER_TEMP/apm-pip-install-report.json" "$RUNNER_TEMP/uap-apm-results/apm-pip-install-report.json"
+          cp "$RUNNER_TEMP/codex-runtime-package.json" "$RUNNER_TEMP/uap-apm-results/codex-runtime-package.json"
           "$RUNNER_TEMP/apm-venv/bin/python" scripts/comparisons/uap_apm_skills_e2e.py \
             --uap "$RUNNER_TEMP/uap-bin/agentplugins" \
             --apm "$RUNNER_TEMP/apm-venv/bin/apm" \
