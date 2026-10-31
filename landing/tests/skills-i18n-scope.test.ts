@@ -57,7 +57,7 @@ test('Skills resources compile outside global locale includes and render in runt
   for (const locale of publishedLocales) {
     const full = loadI18nMessages(locale);
     const base = JSON.parse(
-      readFileSync(new URL(`../locales/${locale}.json`, import.meta.url), 'utf8'),
+      readFileSync(new URL(`../i18n/locales/${locale}.json`, import.meta.url), 'utf8'),
     );
     assert.equal(
       base.registryUi.skills,

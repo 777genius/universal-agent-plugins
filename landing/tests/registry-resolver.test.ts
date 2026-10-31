@@ -19,7 +19,7 @@ import type {
 } from '../types/registry.ts';
 
 const messages = JSON.parse(
-  readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('../i18n/locales/en.json', import.meta.url), 'utf8'),
 );
 const { t } = createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
 const fixture = JSON.parse(
