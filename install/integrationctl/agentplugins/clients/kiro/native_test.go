@@ -125,7 +125,7 @@ func assertKiroNativeState(t *testing.T, configRoot, skillMarker, managedURL str
 func TestKiroMCPJsonNameWithSpacesLifecycle(t *testing.T) {
 	root := filepath.Join(t.TempDir(), ".kiro")
 	active := filepath.Join(t.TempDir(), "prepared")
-	name := "deployment notes"
+	name := " deployment notes "
 	configPath := filepath.Join(root, "settings", "mcp.json")
 	writeTestFile(t, configPath, `{"mcpServers":{"foreign":{"url":"https://foreign.test/mcp","disabled":true}},"policy":"keep"}`)
 	var previous []domain.NativeObjectOwnership

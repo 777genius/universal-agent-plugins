@@ -128,7 +128,7 @@ func validateKiroObject(configRoot string, object domain.NativeObjectOwnership) 
 		}
 		expected = filepath.Join(configRoot, "skills", object.LogicalName)
 	case kiroMCPObjectKind:
-		if object.LogicalName == "" || strings.TrimSpace(object.LogicalName) != object.LogicalName {
+		if object.LogicalName == "" {
 			return fmt.Errorf("invalid Kiro MCP selector %q", object.LogicalName)
 		}
 		expected = filepath.Join(configRoot, "settings", "mcp.json")

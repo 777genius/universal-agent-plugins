@@ -254,7 +254,7 @@ func TestGeminiMCPJsonSelectorWithSpacesLifecycle(t *testing.T) {
 	base := testDirectory(t)
 	root := filepath.Join(base, ".gemini")
 	active := filepath.Join(base, "prepared")
-	name := "deployment notes"
+	name := " deployment notes "
 	settings := filepath.Join(root, "settings.json")
 	foreign, err := json.Marshal(map[string]any{
 		"mcpServers": map[string]any{"foreign": map[string]any{"url": "https://foreign.test/mcp", "disabled": true}},

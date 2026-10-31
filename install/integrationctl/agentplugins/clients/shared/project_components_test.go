@@ -213,7 +213,7 @@ func TestProjectComponentsMCPOnlyDoesNotCreateSkillTransaction(t *testing.T) {
 
 func TestProjectComponentsMCPJsonNameWithSpacesLifecycle(t *testing.T) {
 	mutation := componentFixture(t)
-	name := "deployment notes"
+	name := " deployment notes "
 	server := nativeconfig.Server{Type: "remote", URL: "https://managed.test/v1"}
 	first, err := mutation.Layout.MCPObject(name, server, mutation.Layout.ConfigPaths.JSON)
 	if err != nil {
@@ -249,7 +249,7 @@ func TestProjectComponentsMCPJsonNameWithSpacesLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(mutation.Layout.ConfigPaths.JSON)
-	if err != nil || strings.Contains(string(body), `"deployment notes"`) || !strings.Contains(string(body), `"foreign"`) {
+	if err != nil || strings.Contains(string(body), `" deployment notes "`) || !strings.Contains(string(body), `"foreign"`) {
 		t.Fatalf("owned JSON selector removal changed foreign data: %q, %v", body, err)
 	}
 }

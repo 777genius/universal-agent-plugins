@@ -278,7 +278,7 @@ func validateGeminiObject(root string, object domain.NativeObjectOwnership) erro
 		expected = filepath.Join(root, "skills", object.LogicalName)
 	case GeminiMCPObjectKind:
 		// MCP selectors are JSON member keys, never filesystem path segments.
-		if object.LogicalName == "" || strings.TrimSpace(object.LogicalName) != object.LogicalName {
+		if object.LogicalName == "" {
 			return fmt.Errorf("invalid Gemini MCP server name %q", object.LogicalName)
 		}
 	default:

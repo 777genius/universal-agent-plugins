@@ -122,7 +122,7 @@ func buildKiroSkillObject(stagingRoot, configRoot string, envelope domain.Packag
 
 func buildKiroMCPObject(stagingRoot, configRoot string, component domain.ComponentDecision) (domain.NativeObjectOwnership, error) {
 	// A server name identifies a JSON member, not a filesystem leaf.
-	if component.Name == "" || strings.TrimSpace(component.Name) != component.Name {
+	if component.Name == "" {
 		return domain.NativeObjectOwnership{}, fmt.Errorf("invalid Kiro MCP server name %q", component.Name)
 	}
 	server, err := projectedKiroMCPServer(stagingRoot, component.Name)
