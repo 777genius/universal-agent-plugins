@@ -51,6 +51,25 @@ jobs:
       contents: read
     uses: ./.github/workflows/management-sdk.yml
 
+  # Same hermetic staged-package test the release prepare step runs, in parallel with `test`.
+  staged-hermetic:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          package-manager-cache: false
+
+      - name: Run hermetic staged-package test
+        working-directory: npm/agentplugins
+        run: node --test --test-name-pattern="staged package tests are hermetic" test/stage-release.test.js
+
   test:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
@@ -78,7 +97,11 @@ jobs:
           node-version: "22.21.1"
           package-manager-cache: false
 
+      # The hermetic staged-package test reruns the whole npm suite, so it runs in the
+      # staged-hermetic job below and not on this critical path.
       - name: Run required lane
+        env:
+          AGENTPLUGINS_SKIP_STAGED_HERMETIC: "1"
         run: make test-required
 
       - name: Plugin Manifest Workflow
