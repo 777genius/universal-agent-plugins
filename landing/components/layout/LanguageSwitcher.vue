@@ -40,30 +40,8 @@ const currentFlagIcon = computed(() => flagIconMap[locale.value] ?? "circle-flag
 const menuOpen = ref(false);
 watch(menuOpen, open => emit('menu-open', open), { flush: 'sync' });
 onBeforeUnmount(() => emit('menu-open', false));
-let openingEdge: 'first' | 'last' | undefined;
-function focusOpeningItem(final = false) {
-  if (!menuOpen.value || !openingEdge) return;
-  const options = menu.value?.contentEl?.querySelectorAll<HTMLElement>('[role="menuitemradio"]');
-  const option = openingEdge === 'first' ? options?.[0] : options?.[options.length - 1];
-  if (option) {
-    option.focus();
-    // Vuetify may focus the active item later in the enter transition.
-    // Do not consume the keyboard request until the transition has settled.
-    if (final && document.activeElement === option) openingEdge = undefined;
-  }
-}
-function afterMenuEnter() {
-  // Run after the overlay's own focus management, not during the same tick.
-  nextTick(() => focusOpeningItem(true));
-}
-function onActivatorKeydown(event: KeyboardEvent) {
-  if (pending.value || !['ArrowDown', 'ArrowUp'].includes(event.key)) return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  openingEdge = event.key === 'ArrowDown' ? 'first' : 'last';
-  menuOpen.value = true;
-  nextTick(focusOpeningItem);
-}
+// Vuetify's VMenu owns native ArrowUp/ArrowDown menu activation and focus.
+// Do not intercept its activator keydown in capture phase.
 // Vuetify handles Escape/Tab; outside dismissal must retain the clicked focus target.
 
 const onChange = async (value: unknown) => {
@@ -82,7 +60,7 @@ const onChange = async (value: unknown) => {
 
 <template>
   <!-- attach=true renders inline inside the mobile modal focus/inert boundary. -->
-  <v-menu v-model="menuOpen" ref="menu" :attach="props.containMenu || false" location="bottom end" :close-on-content-click="false" @after-enter="afterMenuEnter">
+  <v-menu v-model="menuOpen" ref="menu" :attach="props.containMenu || false" location="bottom end" :close-on-content-click="false">
     <template #activator="{ props: menuProps }">
       <v-btn
         v-bind="menuProps"
@@ -93,7 +71,6 @@ const onChange = async (value: unknown) => {
         :loading="pending"
         :aria-busy="pending"
         :aria-label="`${t('language.label')}: ${currentName}`"
-        @keydown.capture="onActivatorKeydown"
       >
         <Icon :name="currentFlagIcon" class="language-switcher__flag-icon" aria-hidden="true" />
         <span v-if="!props.iconOnly" class="language-switcher__name">{{ currentName }}</span>
