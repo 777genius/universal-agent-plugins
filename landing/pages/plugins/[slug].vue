@@ -186,7 +186,11 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
               <span class="plugin-detail__type"> {{ t('registryUi.detail.agentPlugins10') }} </span>
               <AppTooltip above-header>
                 <template #trigger
-                  ><span class="plugin-detail__status" tabindex="0">{{
+                  ><span
+                    class="plugin-detail__status"
+                    :class="{ 'plugin-detail__status--muted': !installAvailable }"
+                    tabindex="0"
+                  >{{
                     trustLabel
                   }}</span></template
                 >
@@ -455,6 +459,12 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
   background: rgba(57, 255, 20, 0.1);
   color: #39ff14;
   border: 1px solid rgba(57, 255, 20, 0.2);
+}
+
+.plugin-detail__status--muted {
+  background: rgba(203, 213, 225, 0.1);
+  color: #cbd5e1;
+  border-color: rgba(203, 213, 225, 0.24);
 }
 
 .plugin-detail__category {

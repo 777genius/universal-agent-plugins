@@ -87,6 +87,7 @@ test('expired Directory disables both catalog and standalone install promises', 
   await card.locator('.plugin-card__title-link').click();
   const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
   await expect(detail.locator('.plugin-detail__status')).toHaveText('temporarily paused');
+  await expect(detail.locator('.plugin-detail__status')).toHaveClass(/plugin-detail__status--muted/);
   await expect(detail.locator('.plugin-detail__install-cta')).toHaveCount(0);
   await expect(detail.locator('.command-snippet--add')).toHaveCount(0);
   expect(errors).toEqual([]);
