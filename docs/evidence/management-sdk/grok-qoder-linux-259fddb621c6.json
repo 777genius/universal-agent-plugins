@@ -1,0 +1,112 @@
+{
+  "run_id": 40937772324,
+  "source_commit": "259fddb621c654c333ccc9b7dad78457aeca6d60",
+  "qualification": "sdk-native-lifecycle",
+  "workflow": ".github/workflows/management-sdk-packages.yml",
+  "workflow_identity_step": "Passed for both exact-source jobs; source, receipt, provision metadata and actual executable SHA-256 agree.",
+  "binary_verification_boundary": "Native and engine binaries are absent from downloaded artifacts. Verified artifact hash agreement; workflow identity step hashes actual binaries on runner. No local binary rehash claimed.",
+  "runs": [
+    {
+      "client": "grok",
+      "version": "1.0.67",
+      "duration_seconds": 10.281,
+      "operation_count": 11,
+      "operation_states": "all succeeded",
+      "native_observation_stages": [
+        "install succeeded",
+        "repair succeeded",
+        "repair succeeded",
+        "recover succeeded",
+        "remove succeeded"
+      ],
+      "native_skill_sha256": {
+        "fixture-guide": "07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0",
+        "uap-commands-fixture-echo": "455693f889350641f0c82c99cba45e9a3adc5b153879c91d517b32f35925f5be"
+      },
+      "engine_sha256": "fd2945d920a051b89ec8403ddd9cf880ef6b520c3d5ede54b6802713bc691634",
+      "native_sha256": "ce33b1a29e37901f56fe59916cda7a1149e6fd377118f918e90d89f9abb52a51",
+      "provision": {
+        "client": "grok",
+        "path": "/home/runner/work/_temp/sdk-package-proof/bin/grok",
+        "url": "https://x.ai/cli/grok-1.0.67-linux-x86_64.gz",
+        "version": "1.0.67",
+        "archive_integrity": "sha256:6bbea96cde807c13e4c66d9583d8acdd155e446d93131c2820999cf5523ed5a5",
+        "integrity_source": "measured official HTTPS versioned bytes; no separate vendor SHA256 published",
+        "archive_bytes": 76217006,
+        "binary_sha256": "ce33b1a29e37901f56fe59916cda7a1149e6fd377118f918e90d89f9abb52a51",
+        "binary_bytes": 194169184,
+        "installer_executed": false
+      },
+      "https_requests": 1,
+      "process_exit": 0,
+      "process_error": null,
+      "source_dirty": false,
+      "checks": [
+        "real grok native discovery loads exact pinned Skill bytes and portable command; explicit-only command remains withheld",
+        "targeted immutable-source update preserves the lock",
+        "reviewed repair replaces managed package drift and native discovery retains exact pinned fixture bytes",
+        "explicit reviewed repair reconstructs the missing managed package and exact native fixture bytes",
+        "lost accepted response plus owned-process SIGKILL preserves retry identity; fresh recovery verifies exact real native consumer bytes without duplicate dependency",
+        "accepted successful operation survives engine restart without replay",
+        "managed removal clears desired environment and real native Skill discovery",
+        "local create/edit/delete and restart-visible exact backup restoration use the same real Go lifecycle"
+      ],
+      "receipt_sha256": "fb0c92f1485e2249309cd52dc8060bf80d26bb2ca64b8578bd37c5c3afa298e5"
+    },
+    {
+      "client": "qoder",
+      "version": "1.1.78",
+      "duration_seconds": 40.677,
+      "operation_count": 11,
+      "operation_states": "all succeeded",
+      "native_observation_stages": [
+        "install succeeded",
+        "repair succeeded",
+        "repair succeeded",
+        "recover succeeded",
+        "remove succeeded"
+      ],
+      "native_skill_sha256": {
+        "fixture-guide": "07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0",
+        "uap-commands-fixture-echo": "455693f889350641f0c82c99cba45e9a3adc5b153879c91d517b32f35925f5be"
+      },
+      "engine_sha256": "fd2945d920a051b89ec8403ddd9cf880ef6b520c3d5ede54b6802713bc691634",
+      "native_sha256": "0da0976e13fe00bc28f725d6fe7c2f0fe9fa9a8c37eeb2ee4e80ad4c0fc58953",
+      "provision": {
+        "client": "qoder",
+        "path": "/home/runner/work/_temp/sdk-package-proof/bin/qoder",
+        "url": "https://qoder-ide.oss-accelerate.aliyuncs.com/qodercli/releases/1.1.78/qodercli-linux-x64.tar.gz",
+        "version": "1.1.78",
+        "archive_integrity": "sha256:5e3213d2d4256c86c5ad2c8bf73fd392f92ba80d0d38f822806542805a48a8ea",
+        "archive_bytes": 78115289,
+        "binary_sha256": "0da0976e13fe00bc28f725d6fe7c2f0fe9fa9a8c37eeb2ee4e80ad4c0fc58953",
+        "binary_bytes": 182982112,
+        "installer_executed": false
+      },
+      "https_requests": 1,
+      "process_exit": 0,
+      "process_error": null,
+      "source_dirty": false,
+      "checks": [
+        "real qoder native discovery loads exact pinned Skill bytes and portable command; explicit-only command remains withheld",
+        "targeted immutable-source update preserves the lock",
+        "reviewed repair replaces managed package drift and native discovery retains exact pinned fixture bytes",
+        "explicit reviewed repair reconstructs the missing managed package and exact native fixture bytes",
+        "lost accepted response plus owned-process SIGKILL preserves retry identity; fresh recovery verifies exact real native consumer bytes without duplicate dependency",
+        "accepted successful operation survives engine restart without replay",
+        "managed removal clears desired environment and real native Skill discovery",
+        "local create/edit/delete and restart-visible exact backup restoration use the same real Go lifecycle"
+      ],
+      "receipt_sha256": "d0ed44af75edfb050dae40a26f680a49fc16078b86780221f0cdf66eef79cd37"
+    }
+  ],
+  "run_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/40937772324",
+  "jobs": {
+    "grok": 123672780161,
+    "qoder": 123672780066
+  },
+  "artifact_zip_sha256": {
+    "grok": "a267e46ed8dc822cab57771fd05cf986198e156c4f02fdcd6472703feab9404d",
+    "qoder": "3c0301160a876c9b7df69c62fbc4be7157669b6fec230c8fd605b3a68276da90"
+  }
+}

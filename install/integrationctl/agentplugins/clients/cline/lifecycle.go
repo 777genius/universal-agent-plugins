@@ -14,7 +14,7 @@ import (
 func ApplyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename clineRenameFunc, capacity shared.CombinedCapacityFunc) (resultErr error) {
 	prepared, err := prepareClineNativeApply(configRoot, activePath, previous, desired, kernel, rename, capacity)
 	if err != nil {
-		return err
+		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
 	txn, err := newClineSkillTxn(prepared)
 	if err != nil {

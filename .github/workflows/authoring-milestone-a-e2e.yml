@@ -1,7 +1,16 @@
 name: Authoring Milestone A E2E
 
 on:
+  # Documentation and web content cannot change the packed candidate. A filter
+  # keeps the dispatch job graph at exactly the four jobs that Milestone A
+  # release admission accepts, which a job-level gate would extend.
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
   workflow_dispatch:
 
 permissions:

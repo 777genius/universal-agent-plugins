@@ -2,7 +2,7 @@
   "registryUi": {
     "skillSpector": {
       "loading": "Loading report",
-      "unavailable": "Scan unavailable",
+      "unavailable": "Report unavailable",
       "loadingDetails": "Loading the published assessment…",
       "unavailableDetails": "The published assessment could not be loaded. This listing’s check status is unknown.",
       "notChecked": "Not scanned yet",
@@ -94,7 +94,8 @@
       "retryblocked": "Follow-up checks blocked: {count}. Review the reasons below.",
       "retryexhausted": "Automatic retry limit reached: {count}.",
       "scanComplete": "Scan complete",
-      "selectionScanned": "Selected skills scanned"
+      "selectionScanned": "Selected skills scanned",
+      "retryLoad": "Try loading again"
     }
   }
 }

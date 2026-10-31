@@ -113,8 +113,9 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:  LifecycleCLIRegistry,
 	}), LifecycleNativeConfig),
 	withProjectScope(withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecycleCLIRegistry,
+		InstallIntents:             []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:              LifecycleCLIRegistry,
+		RecordsUserProfileOnCreate: true,
 	})), LifecycleNativeConfig),
 	withProjectScope(withoutCommands(clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
 		SavedDependenciesDeferred: true,
@@ -503,11 +504,14 @@ type DeactivationRequest struct {
 }
 
 type DeactivationOutcome struct {
-	Activation              ActivationState `json:"activation"`
-	ArtifactRemovalAllowed  bool            `json:"artifact_removal_allowed"`
-	ExternalRemovalComplete bool            `json:"external_removal_complete"`
-	UserActions             []string        `json:"user_actions,omitempty"`
-	LocalActions            []string        `json:"-"`
+	// NativeEffect is transient evidence of a native transaction's actual
+	// effects. An ordinary error never establishes that removal was unchanged.
+	NativeEffect            NativeEffectState `json:"-"`
+	Activation              ActivationState   `json:"activation"`
+	ArtifactRemovalAllowed  bool              `json:"artifact_removal_allowed"`
+	ExternalRemovalComplete bool              `json:"external_removal_complete"`
+	UserActions             []string          `json:"user_actions,omitempty"`
+	LocalActions            []string          `json:"-"`
 }
 
 func supportsLocalDelivery(id ClientID) bool { return id == ClientVSCode }

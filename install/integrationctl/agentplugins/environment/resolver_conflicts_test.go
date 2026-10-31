@@ -138,7 +138,7 @@ func TestGraphConflictingRequirements(t *testing.T) {
 func TestGraphBacktracksCandidateDependencies(t *testing.T) {
 	var firstLock []byte
 	for _, order := range [][]string{{"a", "b"}, {"b", "a"}} {
-		t.Run("overlap minimum "+strings.Join(order, ""), func(t *testing.T) {
+		t.Run("overlap highest "+strings.Join(order, ""), func(t *testing.T) {
 			req := conflictRequirements(map[string]string{})
 			for _, alias := range order {
 				req.Dependencies[alias] = conflictRequirement(alias, "1.0.0")
@@ -150,8 +150,8 @@ func TestGraphBacktracksCandidateDependencies(t *testing.T) {
 				t.Fatal(err)
 			}
 			c, ok := lock.Package("c")
-			if !ok || c.Version != "1.3.0" || len(c.RequiredBy) != 2 {
-				t.Fatalf("overlap minimum: %+v", lock)
+			if !ok || c.Version != "1.10.0" || len(c.RequiredBy) != 2 {
+				t.Fatalf("overlap highest: %+v", lock)
 			}
 			body, err := json.Marshal(lock)
 			if err != nil {
@@ -202,7 +202,7 @@ func TestGraphBacktracksCandidateDependencies(t *testing.T) {
 
 	for _, reverse := range []bool{false, true} {
 		t.Run(fmt.Sprint(reverse), func(t *testing.T) {
-			a := []ResolvedPackage{conflictPackage("a", "1.0.0", 10, map[string]string{"acme/c": "^1.0", "acme/d": "^1.0"}), conflictPackage("a", "1.1.0", 11, map[string]string{"acme/c": "^2.0"})}
+			a := []ResolvedPackage{conflictPackage("a", "1.0.0", 10, map[string]string{"acme/c": "^2.0"}), conflictPackage("a", "1.1.0", 11, map[string]string{"acme/c": "^1.0", "acme/d": "^1.0"})}
 			if reverse {
 				a[0], a[1] = a[1], a[0]
 			}
@@ -213,7 +213,7 @@ func TestGraphBacktracksCandidateDependencies(t *testing.T) {
 			}
 			selected, _ := lock.Package("a")
 			shared, _ := lock.Package("c")
-			if selected.Version != "1.1.0" || shared.Version != "2.0.0" || len(shared.RequiredBy) != 2 {
+			if selected.Version != "1.0.0" || shared.Version != "2.0.0" || len(shared.RequiredBy) != 2 {
 				t.Fatalf("wrong backtracked graph: %+v", lock)
 			}
 			if _, exists := lock.Package("d"); exists {
@@ -305,7 +305,7 @@ func TestGraphSkipsOnlyIneligibleCandidate(t *testing.T) {
 		{"untyped eligibility text", errors.New(ErrCandidateIneligible.Error()), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			resolver := &conflictGraphResolver{packages: map[string][]ResolvedPackage{"acme/a": {conflictPackage("a", "1.1.0", 2, nil), conflictPackage("a", "1.0.0", 1, nil)}}, candidateFailures: map[uint64]error{1: tc.failure}}
+			resolver := &conflictGraphResolver{packages: map[string][]ResolvedPackage{"acme/a": {conflictPackage("a", "1.1.0", 2, nil), conflictPackage("a", "1.0.0", 1, nil)}}, candidateFailures: map[uint64]error{2: tc.failure}}
 			lock, err := (Coordinator{Resolver: resolver}).Resolve(context.Background(), conflictRequirements(map[string]string{"a": "^1.0"}), Lock{}, "")
 			if !tc.skips {
 				if !errors.Is(err, tc.failure) || len(lock.Packages) != 0 || resolver.acquisitions != 1 {
@@ -313,18 +313,18 @@ func TestGraphSkipsOnlyIneligibleCandidate(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || len(lock.Packages) != 1 || lock.Packages[0].Version != "1.1.0" || resolver.acquisitions != 2 {
+			if err != nil || len(lock.Packages) != 1 || lock.Packages[0].Version != "1.0.0" || resolver.acquisitions != 2 {
 				t.Fatalf("late ineligibility blocked safe candidate: %+v %v calls=%d", lock, err, resolver.acquisitions)
 			}
 		})
 	}
 	// An exhausted child becomes a graph conflict so its parent can backtrack.
 	resolver := &conflictGraphResolver{packages: map[string][]ResolvedPackage{
-		"acme/a": {conflictPackage("a", "1.0.0", 1, map[string]string{"acme/b": "1.0.0"}), conflictPackage("a", "1.1.0", 2, nil)},
+		"acme/a": {conflictPackage("a", "1.0.0", 1, nil), conflictPackage("a", "1.1.0", 2, map[string]string{"acme/b": "1.0.0"})},
 		"acme/b": {conflictPackage("b", "1.0.0", 3, nil)},
 	}, candidateFailures: map[uint64]error{3: ErrCandidateIneligible}}
 	lock, err := (Coordinator{Resolver: resolver}).Resolve(context.Background(), conflictRequirements(map[string]string{"a": "^1.0"}), Lock{}, "")
-	if err != nil || len(lock.Packages) != 1 || lock.Packages[0].Version != "1.1.0" || resolver.acquisitions != 3 {
+	if err != nil || len(lock.Packages) != 1 || lock.Packages[0].Version != "1.0.0" || resolver.acquisitions != 3 {
 		t.Fatalf("exhausted child failed to backtrack its parent: %+v %v calls=%d", lock, err, resolver.acquisitions)
 	}
 }
