@@ -96,7 +96,7 @@ func renderDependencyTree(writer io.Writer, tree dependencyTree) error {
 		}
 	}
 	if len(children) > 0 {
-		_, err := fmt.Fprintln(writer, "Indented packages are transitive dependencies. (reference) means the same locked package was already shown.")
+		_, err := fmt.Fprintln(writer, "Indentation shows which package requires another; an indented package may also be a direct dependency. (reference) means the same locked package was already shown.")
 		return err
 	}
 	return nil
