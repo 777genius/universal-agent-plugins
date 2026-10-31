@@ -473,101 +473,101 @@ func pmAdversarialLockMetadata(t *testing.T) {
 }
 
 func pmAdversarialSymlinkMutationLock(t *testing.T) {
-    graph := pmArchiveGraph{"a": nil}
-    origin := newPMArchiveOrigin(t, graph)
-    fixture := newPMArchiveEnvironment(t, origin, false)
-    fixture.manifest(t, origin, []string{"a"}, map[string][]string{"gemini": {"a"}})
-    sentinel := filepath.Join(fixture.root, "outside-user-lock-sentinel")
-    value := "foreign user file must never be edited by the mutation lock\n"
-    dependencyWrite(t, sentinel, value)
-    lockPath := fixture.app.EnvironmentLockPath
-    if err := os.Symlink(sentinel, lockPath); err != nil {
-        if runtime.GOOS != "windows" {
-            t.Fatalf("Unix E2E requires a real symlink guard: %v", err)
-        }
-        // Windows runner accounts may not have Developer Mode symlink privilege.
-        // The same path must still refuse an occupied unsafe lock leaf.
-        if err := os.Mkdir(lockPath, 0700); err != nil {
-            t.Fatalf("create portable unsafe lock leaf: %v", err)
-        }
-    }
-    before, requests := pmEvolutionFiles(t, fixture), origin.counts()
-    _, err := fixture.executePM(t.Context(), t, "", false, "deps", "lock", "--format", "json")
-    if err == nil || !strings.Contains(err.Error(), "mutation lock") {
-        t.Fatalf("unsafe mutation lock path was not refused: %v", err)
-    }
-    pmArchiveAssertEqual(t, "unsafe lock refused before any owned effects", before, pmEvolutionFiles(t, fixture))
-    pmArchiveAssertEqual(t, "unsafe lock made no network requests", requests, origin.counts())
-    if dependencyRead(t, sentinel) != value {
-        t.Fatal("symlink/directory lock refusal changed foreign user bytes")
-    }
-    if err := os.Remove(lockPath); err != nil {
-        t.Fatal(err)
-    }
-    fixture.run(t, "deps", "lock", "--format", "json")
-    fixture.assertGraph(t, origin, graph, pmArchiveAll(graph, "gemini"))
-    fixture.run(t, "install", "--locked", "--yes", "--format", "json")
-    fixture.assertInstalled(t, pmArchiveAll(graph, "gemini"))
-    if dependencyRead(t, sentinel) != value {
-        t.Fatal("successful retry changed external user sentinel")
-    }
+	graph := pmArchiveGraph{"a": nil}
+	origin := newPMArchiveOrigin(t, graph)
+	fixture := newPMArchiveEnvironment(t, origin, false)
+	fixture.manifest(t, origin, []string{"a"}, map[string][]string{"gemini": {"a"}})
+	sentinel := filepath.Join(fixture.root, "outside-user-lock-sentinel")
+	value := "foreign user file must never be edited by the mutation lock\n"
+	dependencyWrite(t, sentinel, value)
+	lockPath := fixture.app.EnvironmentLockPath
+	if err := os.Symlink(sentinel, lockPath); err != nil {
+		if runtime.GOOS != "windows" {
+			t.Fatalf("Unix E2E requires a real symlink guard: %v", err)
+		}
+		// Windows runner accounts may not have Developer Mode symlink privilege.
+		// The same path must still refuse an occupied unsafe lock leaf.
+		if err := os.Mkdir(lockPath, 0700); err != nil {
+			t.Fatalf("create portable unsafe lock leaf: %v", err)
+		}
+	}
+	before, requests := pmEvolutionFiles(t, fixture), origin.counts()
+	_, err := fixture.executePM(t.Context(), t, "", false, "deps", "lock", "--format", "json")
+	if err == nil || !strings.Contains(err.Error(), "mutation lock") {
+		t.Fatalf("unsafe mutation lock path was not refused: %v", err)
+	}
+	pmArchiveAssertEqual(t, "unsafe lock refused before any owned effects", before, pmEvolutionFiles(t, fixture))
+	pmArchiveAssertEqual(t, "unsafe lock made no network requests", requests, origin.counts())
+	if dependencyRead(t, sentinel) != value {
+		t.Fatal("symlink/directory lock refusal changed foreign user bytes")
+	}
+	if err := os.Remove(lockPath); err != nil {
+		t.Fatal(err)
+	}
+	fixture.run(t, "deps", "lock", "--format", "json")
+	fixture.assertGraph(t, origin, graph, pmArchiveAll(graph, "gemini"))
+	fixture.run(t, "install", "--locked", "--yes", "--format", "json")
+	fixture.assertInstalled(t, pmArchiveAll(graph, "gemini"))
+	if dependencyRead(t, sentinel) != value {
+		t.Fatal("successful retry changed external user sentinel")
+	}
 }
 
 func pmAdversarialForeignSkillCollision(t *testing.T) {
-    graph := pmArchiveGraph{"a": nil}
-    origin := newPMArchiveOrigin(t, graph)
-    fixture := newPMArchiveEnvironment(t, origin, false)
-    fixture.manifest(t, origin, []string{"a"}, map[string][]string{"gemini": {"a"}})
-    foreignRoot := filepath.Join(fixture.clients["gemini"].ConfigRoot, "skills", "a")
-    if err := os.MkdirAll(foreignRoot, 0700); err != nil {
-        t.Fatal(err)
-    }
-    foreign := filepath.Join(foreignRoot, "SKILL.md")
-    value := "pre-existing native skill owned by a human; never clobber\n"
-    dependencyWrite(t, foreign, value)
-    settings := filepath.Join(fixture.clients["gemini"].ConfigRoot, "settings.json")
-    preserved := freshRestoreFiles(t, foreign, settings)
-    _, err := fixture.executePM(t.Context(), t, "", false, "install", "--yes", "--format", "json")
-    if err == nil {
-        t.Fatal("installer overwrote a pre-existing foreign native skill")
-    }
-    pmArchiveAssertEqual(t, "native skill collision retained human files", preserved, freshRestoreFiles(t, foreign, settings))
-    if err := os.RemoveAll(foreignRoot); err != nil {
-        t.Fatal(err)
-    }
-    fixture.run(t, "install", "--yes", "--format", "json")
-    fixture.assertGraph(t, origin, graph, pmArchiveAll(graph, "gemini"))
-    fixture.assertInstalled(t, pmArchiveAll(graph, "gemini"))
+	graph := pmArchiveGraph{"a": nil}
+	origin := newPMArchiveOrigin(t, graph)
+	fixture := newPMArchiveEnvironment(t, origin, false)
+	fixture.manifest(t, origin, []string{"a"}, map[string][]string{"gemini": {"a"}})
+	foreignRoot := filepath.Join(fixture.clients["gemini"].ConfigRoot, "skills", "a")
+	if err := os.MkdirAll(foreignRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	foreign := filepath.Join(foreignRoot, "SKILL.md")
+	value := "pre-existing native skill owned by a human; never clobber\n"
+	dependencyWrite(t, foreign, value)
+	settings := filepath.Join(fixture.clients["gemini"].ConfigRoot, "settings.json")
+	preserved := freshRestoreFiles(t, foreign, settings)
+	_, err := fixture.executePM(t.Context(), t, "", false, "install", "--yes", "--format", "json")
+	if err == nil {
+		t.Fatal("installer overwrote a pre-existing foreign native skill")
+	}
+	pmArchiveAssertEqual(t, "native skill collision retained human files", preserved, freshRestoreFiles(t, foreign, settings))
+	if err := os.RemoveAll(foreignRoot); err != nil {
+		t.Fatal(err)
+	}
+	fixture.run(t, "install", "--yes", "--format", "json")
+	fixture.assertGraph(t, origin, graph, pmArchiveAll(graph, "gemini"))
+	fixture.assertInstalled(t, pmArchiveAll(graph, "gemini"))
 }
 
 func pmAdversarialNativeConfigObstruction(t *testing.T) {
-    graph := pmArchiveGraph{"a": nil}
-    origin := newPMArchiveOrigin(t, graph)
-    fixture := newPMArchiveEnvironment(t, origin, false)
-    fixture.manifest(t, origin, []string{"a"}, map[string][]string{"gemini": {"a"}})
-    settings := filepath.Join(fixture.clients["gemini"].ConfigRoot, "settings.json")
-    original := dependencyRead(t, settings)
-    if err := os.Remove(settings); err != nil {
-        t.Fatal(err)
-    }
-    if err := os.Mkdir(settings, 0700); err != nil {
-        t.Fatal(err)
-    }
-    foreign := filepath.Join(settings, "human.txt")
-    value := "occupied config leaf must survive a failed install\n"
-    dependencyWrite(t, foreign, value)
-    _, err := fixture.executePM(t.Context(), t, "", false, "install", "--yes", "--format", "json")
-    if err == nil {
-        t.Fatal("installer accepted native settings.json as an occupied directory")
-    }
-    if dependencyRead(t, foreign) != value {
-        t.Fatal("native configuration refusal removed or edited foreign bytes")
-    }
-    if err := os.RemoveAll(settings); err != nil {
-        t.Fatal(err)
-    }
-    dependencyWrite(t, settings, original)
-    fixture.run(t, "install", "--yes", "--format", "json")
-    fixture.assertGraph(t, origin, graph, pmArchiveAll(graph, "gemini"))
-    fixture.assertInstalled(t, pmArchiveAll(graph, "gemini"))
+	graph := pmArchiveGraph{"a": nil}
+	origin := newPMArchiveOrigin(t, graph)
+	fixture := newPMArchiveEnvironment(t, origin, false)
+	fixture.manifest(t, origin, []string{"a"}, map[string][]string{"gemini": {"a"}})
+	settings := filepath.Join(fixture.clients["gemini"].ConfigRoot, "settings.json")
+	original := dependencyRead(t, settings)
+	if err := os.Remove(settings); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(settings, 0700); err != nil {
+		t.Fatal(err)
+	}
+	foreign := filepath.Join(settings, "human.txt")
+	value := "occupied config leaf must survive a failed install\n"
+	dependencyWrite(t, foreign, value)
+	_, err := fixture.executePM(t.Context(), t, "", false, "install", "--yes", "--format", "json")
+	if err == nil {
+		t.Fatal("installer accepted native settings.json as an occupied directory")
+	}
+	if dependencyRead(t, foreign) != value {
+		t.Fatal("native configuration refusal removed or edited foreign bytes")
+	}
+	if err := os.RemoveAll(settings); err != nil {
+		t.Fatal(err)
+	}
+	dependencyWrite(t, settings, original)
+	fixture.run(t, "install", "--yes", "--format", "json")
+	fixture.assertGraph(t, origin, graph, pmArchiveAll(graph, "gemini"))
+	fixture.assertInstalled(t, pmArchiveAll(graph, "gemini"))
 }
