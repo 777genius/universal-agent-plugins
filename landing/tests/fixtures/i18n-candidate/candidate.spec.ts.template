@@ -40,7 +40,25 @@ test('keyboard, Escape, current choice, one navigation and Back/Forward preserve
   await expect(page.getByRole('menu')).toBeHidden();
   await expect(activator(page)).toBeFocused();
   await page.keyboard.press('ArrowUp');
-  await expect(page.getByRole('menuitemradio', { name: 'Українська', exact: true })).toBeFocused();
+  const ukrainian = page.getByRole('menuitemradio', { name: 'Українська', exact: true });
+  try {
+    await expect(ukrainian).toBeFocused();
+  } catch (failure) {
+    // Keep the strict assertion; report which element actually owns focus.
+    const snapshot = await page.evaluate(() => ({
+      focused: document.activeElement?.outerHTML.slice(0, 500),
+      menu: Array.from(document.querySelectorAll('[role="menu"]')).map(element => ({
+        visible: getComputedStyle(element).display,
+        text: element.textContent?.slice(0, 100),
+      })),
+      activators: Array.from(document.querySelectorAll('button[aria-haspopup="menu"]')).map(element => ({
+        expanded: element.getAttribute('aria-expanded'),
+        focused: element === document.activeElement,
+      })),
+    }));
+    console.log('ArrowUp focus diagnostic:', JSON.stringify(snapshot));
+    throw failure;
+  }
   await page.keyboard.press('Tab');
   await expect(page.getByRole('menu')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Abort next navigation', exact: true })).toBeFocused();
