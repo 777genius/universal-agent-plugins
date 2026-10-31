@@ -1,5 +1,6 @@
 """Fail closed when the comparison harness could misclassify results."""
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -89,16 +90,72 @@ class ComparisonSafetyTests(unittest.TestCase):
     def test_portable_bytes_and_lock_identity(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
-            sha = "a" * 40
-            (project / "uap.toml").write_text("schema_version = 1\n")
-            (project / "uap.lock").write_text("revision = '" + sha + "'\n")
-            first = comparison.captured_portable(project, "uap")
-            self.assertTrue(comparison.portable_identity(first, sha)["exact_source_commit_recorded_in_lock"])
-            (project / "uap.lock").write_text("revision = '" + "b" * 40 + "'\n")
-            self.assertNotEqual(first, comparison.captured_portable(project, "uap"))
+            commit = "a" * 40
+            manifest = (
+                'schema_version = 1\n'
+                '[dependencies.benchmark]\n'
+                f'git = "{comparison.REPOSITORY}"\n'
+                f'path = "{comparison.SKILL_PATH}"\n'
+                f'commit = "{commit}"\n'
+            )
+            lock = {
+                "lock_version": 1,
+                "packages": [{
+                    "alias": "benchmark", "source": {
+                        "git": {
+                            "repository": comparison.REPOSITORY,
+                            "resolved_skill_path": comparison.SKILL_PATH,
+                            "commit": commit,
+                        },
+                    },
+                }],
+            }
+            (project / "uap.toml").write_text(manifest)
+            (project / "uap.lock").write_text(json.dumps(lock))
+            original = comparison.captured_portable(project, "uap")
+            identity = comparison.portable_identity(original, commit, "uap")
+            self.assertTrue(identity["requested_source_matches"])
+            self.assertTrue(identity["resolved_source_matches"])
+            self.assertTrue(identity["exact_source_commit_recorded_in_lock"])
+            lock["packages"][0]["source"]["git"]["commit"] = "b" * 40
+            # A SHA that merely occurs in an unrelated field must not count.
+            lock["comment"] = commit
+            (project / "uap.lock").write_text(json.dumps(lock))
+            changed = comparison.captured_portable(project, "uap")
+            self.assertNotEqual(original, changed)
             self.assertFalse(comparison.portable_identity(
-                comparison.captured_portable(project, "uap"), sha
+                changed, commit, "uap"
             )["exact_source_commit_recorded_in_lock"])
+
+    def test_apm_lock_resolved_identity_not_requested_comment(self):
+        import yaml
+
+        commit = "a" * 40
+        manifest = {
+            "dependencies": {"apm": [
+                f"{comparison.REPOSITORY}/{comparison.SKILL_PATH}#{commit}"
+            ]},
+        }
+        lock = {
+            "dependencies": [{
+                "repo_url": comparison.REPOSITORY,
+                "virtual_path": comparison.SKILL_PATH,
+                "resolved_commit": "b" * 40,
+                "comment": commit,
+            }],
+        }
+        portable = {
+            "apm.yml": yaml.safe_dump(manifest).encode(),
+            "apm.lock.yaml": yaml.safe_dump(lock).encode(),
+        }
+        self.assertFalse(comparison.portable_identity(
+            portable, commit, "apm"
+        )["exact_source_commit_recorded_in_lock"])
+        lock["dependencies"][0]["resolved_commit"] = commit
+        portable["apm.lock.yaml"] = yaml.safe_dump(lock).encode()
+        self.assertTrue(comparison.portable_identity(
+            portable, commit, "apm"
+        )["exact_source_commit_recorded_in_lock"])
 
     def test_launch_failure_is_structured(self):
         with tempfile.TemporaryDirectory() as tmp:
