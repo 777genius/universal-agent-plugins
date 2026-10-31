@@ -182,7 +182,7 @@ func openCodeProjectCheckSkills(found map[string]openCodeProjectSkill, expected 
 // independently selected fixture paths before computing the expected
 // lower-to-higher-priority MCP namespace. This proves source attribution,
 // not MCP connection, model use or native plugin activation.
-func openCodeProjectV2SourceConfig(body []byte, userDir, projectDir string, allowInline bool) (map[string]any, error) {
+func openCodeProjectV2SourceConfig(body []byte, userDir, projectDir string, allowInline, requireProject bool) (map[string]any, error) {
 	value, err := openCodeProjectJSON(body)
 	if err != nil {
 		return nil, err
@@ -282,7 +282,7 @@ func openCodeProjectV2SourceConfig(body []byte, userDir, projectDir string, allo
 			servers[name] = source
 		}
 	}
-	if !userDocument || projectDir != userDir && !projectDocument || allowInline && !inlineDocument {
+	if !userDocument || requireProject && !projectDocument || allowInline && !inlineDocument {
 		return nil, fmt.Errorf("V2 native expected config sources were not observed")
 	}
 	return map[string]any{"mcp": map[string]any{"servers": servers}}, nil
