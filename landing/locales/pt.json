@@ -666,7 +666,7 @@
       "agentPlugins10": "Agent Plugins 1.0",
       "install": "Instalar",
       "viewSource": "Ver fonte",
-      "deliverySummary": "{managed} instalados automaticamente · {prepared} exigem uma etapa final",
+      "deliverySummary": "Agentes: {managed} com configuração automática · {prepared} exigem etapas adicionais",
       "installName": "Instalar {name}",
       "chooseClients": "Escolha os clientes para {name}",
       "stars": "{count} estrelas no repositório",

@@ -97,7 +97,7 @@ test('explicit card delivery summary follows the winning scoped release rather t
   instance.state.updateTargets(['codex']);
   instance.state.updateAutoDetect(false);
   instance.state.updateScope('project');
-  assert.equal(instance.state.deliverySummary.value, '0 installed automatically · 1 require one final step');
+  assert.equal(instance.state.deliverySummary.value, 'Agents: 0 automatic setup · 1 need follow-up');
   assert.match(instance.state.command.value, /--target codex --scope project$/);
   instance.stop();
 });
