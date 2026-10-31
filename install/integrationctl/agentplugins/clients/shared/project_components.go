@@ -52,8 +52,8 @@ func (layout ProjectComponents) ValidateObjects(objects []domain.NativeObjectOwn
 	}
 	seen := map[string]bool{}
 	for _, object := range objects {
-		if strings.TrimSpace(object.LogicalName) != object.LogicalName {
-			return fmt.Errorf("project component name must not be padded")
+		if object.LogicalName == "" || strings.TrimSpace(object.LogicalName) != object.LogicalName {
+			return fmt.Errorf("project component name must be non-empty and unpadded")
 		}
 		// Skills are directory leafs; MCP server names are JSON object keys.
 		// Never impose filesystem leaf syntax on an MCP selector.
@@ -240,8 +240,8 @@ func (layout ProjectComponents) Inspect(components []domain.ComponentDecision, m
 }
 
 func (layout ProjectComponents) inspectComponent(component domain.ComponentDecision, ownership map[string]domain.NativeObjectOwnership, kernel nativeconfig.Kernel) (bool, bool, error) {
-	if strings.TrimSpace(component.Name) != component.Name {
-		return false, false, fmt.Errorf("project component name must not be padded")
+	if component.Name == "" || strings.TrimSpace(component.Name) != component.Name {
+		return false, false, fmt.Errorf("project component name must be non-empty and unpadded")
 	}
 	if component.Kind == domain.ComponentSkill {
 		if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
