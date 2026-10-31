@@ -120,6 +120,7 @@ func (kernel Kernel) mutationOwners(ctx context.Context, state domain.StateFileV
 	sort.Slice(owners, func(i, j int) bool { return owners[i].ClientBindingID < owners[j].ClientBindingID })
 	return owners, kernel.validateOwners(ctx, owners)
 }
+
 // Shared data receipts retain every physical profile in the same installation,
 // excluding the binding already added by the caller.
 func (kernel Kernel) sharedDataReceiptOwners(ctx context.Context, state domain.StateFileV2, mutation DirectoryMutation, receiptID string) ([]domain.PhysicalProfileOwner, error) {

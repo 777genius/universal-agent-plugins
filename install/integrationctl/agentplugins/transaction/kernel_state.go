@@ -23,28 +23,28 @@ func (kernel Kernel) persistCommitDecision(desired domain.StateFileV2, beforeJSO
 	if initialErr == nil {
 		return false, nil
 	}
-		observed, loadErr := kernel.StateStore.Load()
-		if loadErr != nil {
-			return false, fmt.Errorf("state save failed (%v) and commit visibility is unknown: %w", fmt.Sprint(initialErr), loadErr)
+	observed, loadErr := kernel.StateStore.Load()
+	if loadErr != nil {
+		return false, fmt.Errorf("state save failed (%v) and commit visibility is unknown: %w", fmt.Sprint(initialErr), loadErr)
+	}
+	observedJSON, marshalErr := marshalComparableState(observed)
+	if marshalErr != nil {
+		return false, fmt.Errorf("state save failed (%v) and observed state cannot be compared: %w", fmt.Sprint(initialErr), marshalErr)
+	}
+	desiredJSON, marshalErr := marshalComparableState(desired)
+	if marshalErr != nil {
+		return false, fmt.Errorf("state save failed (%v) and desired state cannot be compared: %w", fmt.Sprint(initialErr), marshalErr)
+	}
+	if bytes.Equal(observedJSON, desiredJSON) {
+		if retryErr := kernel.StateStore.Save(desired); retryErr != nil {
+			return false, fmt.Errorf("state became visible after save error (%v), but durability retry failed: %w", fmt.Sprint(initialErr), retryErr)
 		}
-		observedJSON, marshalErr := marshalComparableState(observed)
-		if marshalErr != nil {
-			return false, fmt.Errorf("state save failed (%v) and observed state cannot be compared: %w", fmt.Sprint(initialErr), marshalErr)
-		}
-		desiredJSON, marshalErr := marshalComparableState(desired)
-		if marshalErr != nil {
-			return false, fmt.Errorf("state save failed (%v) and desired state cannot be compared: %w", fmt.Sprint(initialErr), marshalErr)
-		}
-		if bytes.Equal(observedJSON, desiredJSON) {
-			if retryErr := kernel.StateStore.Save(desired); retryErr != nil {
-				return false, fmt.Errorf("state became visible after save error (%v), but durability retry failed: %w", fmt.Sprint(initialErr), retryErr)
-			}
-			return false, nil
-		}
-		if bytes.Equal(observedJSON, beforeJSON) {
-			return true, initialErr
-		}
-		return false, fmt.Errorf("state save failed and reload matched neither exact old nor desired state: %w", initialErr)
+		return false, nil
+	}
+	if bytes.Equal(observedJSON, beforeJSON) {
+		return true, initialErr
+	}
+	return false, fmt.Errorf("state save failed and reload matched neither exact old nor desired state: %w", initialErr)
 }
 
 // PersistStateDecision gives lifecycle state writes the same visibility and
