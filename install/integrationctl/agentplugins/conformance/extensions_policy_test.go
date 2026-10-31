@@ -117,7 +117,7 @@ func TestOpaqueDuplicatesDoNotConsumeDiagnosticBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	var opaque strings.Builder
-	for i := 0; i < 400; i++ {
+	for i := range 400 {
 		if i > 0 {
 			opaque.WriteByte(',')
 		}
