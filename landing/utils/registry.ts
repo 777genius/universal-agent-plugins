@@ -1,7 +1,6 @@
 // Stable catalog API: client eligibility, resolution and presentation.
 import { REPOSITORY, record, parseRFC3339Instant } from './registryDecodeCommon.ts';
 import { eligibleTargetPolicies } from './registryDecodeEvidence.ts';
-export { eligibleTargetPolicies } from './registryDecodeEvidence.ts';
 import { parseLegacyIndex } from './registryDecodeLegacy.ts';
 import { parseSnapshot } from './registryDecodeSigned.ts';
 import type {
@@ -19,6 +18,8 @@ import type {
   RegistryPlugin,
   InstallScope,
 } from '../types/registry';
+
+export { eligibleTargetPolicies } from './registryDecodeEvidence.ts';
 
 export function parseDirectoryData(
   input: unknown,
