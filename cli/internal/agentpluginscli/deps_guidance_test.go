@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -11,82 +12,110 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
-func TestDependencyStatusHumanGuidancePreservesTechnicalFacts(t *testing.T) {
-	status := dependencyStatus{
-		Scope:            "project",
-		ManifestPath:     "/private/project/uap.toml",
-		LockPath:         "/private/project/uap.lock",
-		SupportedTargets: []string{"codex"},
-		PendingRecovery:  true,
-		Facts: []dependencyStatusFact{
-			{Alias: "review", ClientID: "codex", Facts: []string{"activation_prepared", "not_synced"}},
-		},
-	}
+func renderDependencyStatusForTest(t *testing.T, status dependencyStatus, format string) string {
+	t.Helper()
 	var output bytes.Buffer
 	cmd := &cobra.Command{}
 	cmd.SetOut(&output)
-	if err := renderDependencyStatus(cmd, &options{}, status); err != nil {
+	if err := renderDependencyStatus(cmd, &options{format: format}, status); err != nil {
 		t.Fatal(err)
 	}
-	text := output.String()
+	return output.String()
+}
+
+func TestDependencyStatusPendingRecoveryNeverSuggestsOtherMutations(t *testing.T) {
+	status := dependencyStatus{
+		Scope: "project", ManifestPath: "/private/project/uap.toml",
+		LockPath: "/private/project/uap.lock", SupportedTargets: []string{"codex"},
+		PendingRecovery: true, ValidLock: true,
+		Facts: []dependencyStatusFact{
+			{Alias: "review", ClientID: "codex", Facts: []string{"activation_prepared", "not_synced"}},
+			{Facts: []string{"pending_recovery"}},
+		},
+	}
+	text := renderDependencyStatusForTest(t, status, "")
 	for _, expected := range []string{
-		"Dependency environment (project)",
-		"review/codex: activation_prepared,not_synced",
-		"Recovery is pending. Review it first: agentplugins deps recover --dry-run",
-		"agentplugins deps tree",
-		"agentplugins outdated --all",
-		"agentplugins install --locked",
-		"agentplugins deps update <alias>, then agentplugins deps sync --locked",
-		"add --scope project and the same --project-root",
+		"Dependency environment (project)", "review/codex: activation_prepared,not_synced",
+		"Recovery is pending", "agentplugins deps recover --dry-run",
+		"--scope project and the same --project-root",
 	} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("human guidance must retain %q:\n%s", expected, text)
 		}
 	}
-	for _, forbidden := range []string{"Automatically activated", "Fully ready", "No dependencies installed"} {
+	for _, forbidden := range []string{"agentplugins deps tree", "agentplugins install --locked", "Automatically activated"} {
 		if strings.Contains(text, forbidden) {
-			t.Fatalf("unverified claim %q in guidance: %s", forbidden, text)
+			t.Fatalf("recovery state suggested unrelated/unsupported action %q:\n%s", forbidden, text)
 		}
 	}
 
-	output.Reset()
-	if err := renderDependencyStatus(cmd, &options{format: "json"}, status); err != nil {
+	body := renderDependencyStatusForTest(t, status, "json")
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+		t.Fatalf("status JSON changed into prose: %v: %s", err, body)
+	}
+	keys := make([]string, 0, len(decoded))
+	for k := range decoded {
+		keys = append(keys, k)
+	}
+	if len(keys) != 7 || decoded["valid_lock"] != nil {
+		t.Fatalf("private guidance data added to public JSON: %v", keys)
+	}
+	var restored dependencyStatus
+	if err := json.Unmarshal([]byte(body), &restored); err != nil {
 		t.Fatal(err)
 	}
-	var decoded map[string]any
-	if err := json.Unmarshal(output.Bytes(), &decoded); err != nil {
-		t.Fatalf("status JSON changed into prose: %v: %s", err, output.String())
-	}
-	if decoded["scope"] != "project" || decoded["pending_recovery"] != true {
-		t.Fatalf("status JSON lost existing facts: %+v", decoded)
-	}
-	for _, forbidden := range []string{"Manage saved dependencies", "agentplugins deps tree", "Recovery is pending"} {
-		if strings.Contains(output.String(), forbidden) {
-			t.Fatalf("status JSON contains human guidance: %s", output.String())
-		}
+	if restored.Scope != status.Scope || !restored.PendingRecovery || !reflect.DeepEqual(restored.Facts, status.Facts) {
+		t.Fatalf("status JSON lost original facts: %+v", restored)
 	}
 }
 
-func TestDependencyStatusMissingManifestDoesNotSuggestLockedInstall(t *testing.T) {
+func TestDependencyStatusMissingManifestDoesNotClaimNoInstallations(t *testing.T) {
+	for _, scope := range []string{"user", "project"} {
+		t.Run(scope, func(t *testing.T) {
+			status := dependencyStatus{
+				Scope: scope, SupportedTargets: []string{},
+				Facts: []dependencyStatusFact{{Facts: []string{"manifest_missing"}}},
+			}
+			s := renderDependencyStatusForTest(t, status, "")
+			for _, want := range []string{"manifest_missing", "No saved uap.toml was found",
+				"does not mean other plugins are absent", "supported Registry/Git package", "agentplugins add <source> --target <agent>"} {
+				if !strings.Contains(s, want) {
+					t.Fatalf("missing manifest guidance lacks %q: %s", want, s)
+				}
+			}
+			if strings.Contains(s, "agentplugins install --locked") || strings.Contains(s, "agentplugins deps tree") {
+				t.Fatalf("missing manifest suggested an unavailable lock: %s", s)
+			}
+			if scope == "project" && !strings.Contains(s, "--scope project and the same --project-root") {
+				t.Fatalf("project guidance lost authority: %s", s)
+			}
+			if scope == "user" && !strings.Contains(s, "--scope user") {
+				t.Fatalf("user guidance could act on a cwd project: %s", s)
+			}
+		})
+	}
+}
+
+func TestDependencyStatusGuidanceRequiresValidatedLock(t *testing.T) {
 	status := dependencyStatus{
-		Scope:            "user",
-		SupportedTargets: []string{},
-		Facts:            []dependencyStatusFact{{Facts: []string{"manifest_missing"}}},
+		Scope: "user", SupportedTargets: []string{"codex"},
+		Facts: []dependencyStatusFact{{Alias: "review", Facts: []string{"not_synced"}}},
 	}
-	var output bytes.Buffer
-	cmd := &cobra.Command{}
-	cmd.SetOut(&output)
-	if err := renderDependencyStatus(cmd, &options{}, status); err != nil {
-		t.Fatal(err)
+	missing := renderDependencyStatusForTest(t, status, "")
+	if !strings.Contains(missing, "No valid uap.lock was found") ||
+		!strings.Contains(missing, "Review uap.toml") ||
+		strings.Contains(missing, "agentplugins deps tree") ||
+		strings.Contains(missing, "agentplugins install --locked") {
+		t.Fatalf("invalid lock was described as usable: %s", missing)
 	}
-	s := output.String()
-	for _, want := range []string{"manifest_missing", "No uap.toml is recorded", "agentplugins add <source> --target <agent>"} {
-		if !strings.Contains(s, want) {
-			t.Fatalf("missing manifest guidance lacks %q: %s", want, s)
-		}
+	status.ValidLock = true
+	valid := renderDependencyStatusForTest(t, status, "")
+	if !strings.Contains(valid, "agentplugins deps tree") || !strings.Contains(valid, "--scope user") {
+		t.Fatalf("valid lock did not surface a read-only scoped inspection: %s", valid)
 	}
-	if strings.Contains(s, "agentplugins install --locked") || strings.Contains(s, "add --scope project") {
-		t.Fatalf("missing user manifest gave inapplicable guidance: %s", s)
+	if strings.Contains(valid, "No valid uap.lock") || strings.Contains(valid, "agentplugins install") {
+		t.Fatalf("valid lock suggested an unsafe mutation: %s", valid)
 	}
 }
 
@@ -104,16 +133,18 @@ func TestDependencyTreeHumanLabelsDoNotAlterGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := output.String()
-	for _, want := range []string{"Saved dependencies (exact locked versions)", "main 1.0.0", "  helper 2.0.0", "    shared 3.1.0", "shared 3.1.0 (reference)", "not installed twice"} {
+	for _, want := range []string{"Saved dependencies (exact locked versions)", "main 1.0.0",
+		"  helper 2.0.0", "    shared 3.1.0", "shared 3.1.0 (reference)",
+		"same locked package was already shown"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("graph lacks %q: %s", want, s)
 		}
 	}
 	if count := strings.Count(s, "shared 3.1.0"); count != 2 {
-		t.Fatalf("shared lock node should be rendered once with a reference, got %d: %s", count, s)
+		t.Fatalf("shared lock node should be displayed with a reference, got %d: %s", count, s)
 	}
 	if len(tree.Packages) != 3 || len(tree.Packages[2].RequiredBy) != 2 {
-		t.Fatal("rendering changed the graph input")
+		t.Fatal("rendering changed graph input")
 	}
 }
 
