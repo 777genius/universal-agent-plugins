@@ -8,7 +8,10 @@ test('Vuetify owns ArrowUp/Down keydown and receives the forwarded activator pro
   const source = readFileSync(new URL('../components/layout/LanguageSwitcher.vue', import.meta.url), 'utf8');
   assert.match(source, /<v-menu\b[^>]*v-model="menuOpen"/);
   assert.match(source, /<v-btn\s+v-bind="menuProps"/);
-  assert.doesNotMatch(source, /@keydown\.capture|stopImmediatePropagation\(/);
+  // Capture only observes which edge was requested; Vuetify still processes
+  // the actual key and owns opening, scrolling, and focus behavior.
+  assert.match(source, /@keydown\.capture="onActivatorKeydown"/);
+  assert.doesNotMatch(source, /\.preventDefault\(|\.stopImmediatePropagation\(/);
   // The mounted real Nuxt/Vuetify keyboard and history contract is exercised in
   // tests/fixtures/i18n-candidate/candidate.spec.ts.template at both base paths.
 });
