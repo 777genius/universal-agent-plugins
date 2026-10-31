@@ -5,17 +5,24 @@ name: Package manager resilience
 on:
   schedule:
     - cron: '17 3 * * *'
+  pull_request:
+    types: [ready_for_review, synchronize, reopened]
+    paths:
+      - 'install/integrationctl/agentplugins/environment/resolver_reliability_test.go'
+      - 'install/integrationctl/agentplugins/adapters/processlock/reliability_test.go'
+      - '.github/workflows/package-manager-resilience.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: package-manager-resilience-${{ github.ref }}
-  cancel-in-progress: false
+  group: package-manager-resilience-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   reliability:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Linux race, bounded fuzz and graph benchmark
     runs-on: ubuntu-24.04
     timeout-minutes: 30

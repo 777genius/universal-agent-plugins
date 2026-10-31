@@ -143,8 +143,8 @@ highest compatible release ordering, exact-pin replay, and independent BFS
 reachability of cyclic/shared dependency graphs. The separate
 [`Package manager resilience`](../../.github/workflows/package-manager-resilience.yml)
 workflow runs these with Go race detection, two bounded fuzz campaigns and
-informational 8/24/48-node benchmark samples **nightly or manually**, not on
-every PR. The benchmark has no flaky platform-specific performance threshold;
+informational 8/24/48-node benchmark samples **nightly, manually, or on a ready
+PR that changes these very reliability tests**. Ordinary PRs do not pay for them. The benchmark has no flaky platform-specific performance threshold;
 failures in invariants/races/fuzzing are real failures.
 
 The existing [`Native Client Runtime`](../../.github/workflows/agentplugins-native-clients.yml)
