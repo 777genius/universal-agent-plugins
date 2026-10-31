@@ -5,6 +5,7 @@ Dependency-free so drafts can run without setting up Go or accounts.
 """
 
 from pathlib import Path
+import re
 import unittest
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/package-manager-e2e.yml"
@@ -40,7 +41,8 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
             "'scripts/test_package_manager_ci_policy.py'",
             "'.github/workflows/package-manager-e2e.yml'",
         ):
-            self.assertEqual(self.body.count(path), 2, path)
+            event_paths = re.findall(r"(?m)^      - " + re.escape(path) + r"$", self.body)
+            self.assertEqual(len(event_paths), 2, path)
         self.assertRegex(self.body, r"(?m)^  cancel-in-progress:.*pull_request.*push.*$")
 
 
