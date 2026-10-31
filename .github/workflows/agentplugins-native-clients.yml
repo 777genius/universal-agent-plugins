@@ -184,6 +184,59 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Keep the published V1 proof intact. V2 has a different plugin/server API,
+  # so start with the exact project A/B native discovery and lifecycle fixture.
+  opencode-v2-project:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    name: opencode V2 project runtime (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            runner: macos-15
+          - target: windows-amd64
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Verify pinned V1 and V2 selector contracts
+        shell: bash
+        run: python -m unittest discover -s scripts -p 'test_native_client*.py'
+      - name: Verify V2 project lifecycle with the genuine pinned client
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+        run: |
+          python scripts/run-native-client-matrix.py \
+            --client opencode \
+            --opencode-generation v2 \
+            --project-components \
+            --target '${{ matrix.target }}' \
+            --output '${{ runner.temp }}/native-client-v2-proof'
+      - name: Upload V2 native evidence including failures
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0 # v7.0.0
+        with:
+          name: native-client-opencode-v2-${{ matrix.target }}
+          path: ${{ runner.temp }}/native-client-v2-proof/
+          if-no-files-found: error
+          retention-days: 14
+
   sdk-linux:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.sdk_linux_only }}
     name: ${{ matrix.client }} SDK lifecycle (${{ inputs.sdk_target }})
