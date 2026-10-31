@@ -31,35 +31,41 @@ def sha(data: bytes) -> str:
 
 def run_process(argv: list[str], cwd: Path, env: dict[str, str], root: Path) -> dict:
     started = time.monotonic()
-    proc = subprocess.Popen(
-        argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        start_new_session=True,
-    )
-    timed_out = False
-    try:
-        output, _ = proc.communicate(timeout=TIMEOUT_SECONDS)
-    except subprocess.TimeoutExpired:
-        timed_out = True
+    with tempfile.TemporaryFile() as log:
+        proc = subprocess.Popen(
+            argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+            stdout=log, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        timed_out = False
+        try:
+            proc.wait(timeout=TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait(timeout=10)
+        # Bound helpers left in the selected process group, even on exit zero.
         try:
             os.killpg(proc.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-        output, _ = proc.communicate(timeout=10)
-    # Bound any helpers left in the selected process group, even on exit 0.
-    try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    # Only disposable, credential-free process output is retained.
-    text = output.decode("utf-8", "replace").replace(str(root), "<sandbox>")
+        digest = hashlib.sha256()
+        tail = b""
+        log.seek(0)
+        while chunk := log.read(64 * 1024):
+            digest.update(chunk)
+            tail = (tail + chunk)[-8192:]
+    text = tail.decode("utf-8", "replace").replace(str(root), "<sandbox>")
     text = re.sub(r"(?i)(token|password|api[_-]?key)\s*[:=]\s*\S+", r"\1=<redacted>", text)
     return {
         "argv": [str(a).replace(str(root), "<sandbox>") for a in argv],
         "exit_code": proc.returncode,
         "timed_out": timed_out,
         "duration_ms": round((time.monotonic() - started) * 1000),
-        "output_sha256": sha(output),
+        "output_sha256": digest.hexdigest(),
         "output_tail": text[-3500:],
     }
 
@@ -99,29 +105,33 @@ def make_project(root: Path) -> tuple[Path, bytes]:
 
 
 def payloads(project: Path, expected: dict[str, bytes]) -> dict:
-    skill_matches = []
-    reference_matches = []
-    for path in project.rglob("SKILL.md"):
-        if not path.is_file() or path.is_symlink():
-            continue
-        if path.read_bytes() == expected["SKILL.md"]:
-            skill_matches.append(str(path.relative_to(project)))
-            peer = path.parent / "references" / "fixture.txt"
-            if peer.is_file() and not peer.is_symlink() and peer.read_bytes() == expected["references/fixture.txt"]:
-                reference_matches.append(str(peer.relative_to(project)))
-    return {"skills": sorted(skill_matches), "references": sorted(reference_matches)}
+    # Only Codex's delivered Skill counts. An identical cached/downloaded
+    # package under apm_modules/ or .uap/ is not an installed client component.
+    skill = project / ".agents" / "skills" / "benchmark-note" / "SKILL.md"
+    peer = skill.parent / "references" / "fixture.txt"
+    if skill.is_symlink() or not skill.is_file() or skill.read_bytes() != expected["SKILL.md"]:
+        return {"skills": [], "references": []}
+    files = {"skills": [str(skill.relative_to(project))], "references": []}
+    if peer.is_file() and not peer.is_symlink() and peer.read_bytes() == expected["references/fixture.txt"]:
+        files["references"].append(str(peer.relative_to(project)))
+    return files
 
 
 def add_result(results: list[dict], product: str, scenario: str, command: dict,
                files: dict, foreign_ok: bool, reason: str | None = None) -> None:
-    passed = not command["timed_out"] and command["exit_code"] == 0
-    if scenario != "foreign_collision":
-        passed = passed and bool(files["skills"]) and bool(files["references"])
-    else:
-        passed = foreign_ok  # A safe refusal or a safe non-destructive install are both acceptable.
+    passed = (not command["timed_out"] and command["exit_code"] == 0
+              and bool(files["skills"]) and bool(files["references"]) and foreign_ok)
+    status = "PASS" if passed else "FAIL"
+    if scenario == "foreign_collision":
+        # A nonzero response with unchanged foreign data might be a correct
+        # conflict refusal OR a network/preflight failure. No automatic PASS.
+        if foreign_ok and not command["timed_out"] and not passed:
+            status = "BLOCKED"
+        elif not foreign_ok:
+            status = "FAIL"
     results.append({
         "product": product, "scenario": scenario,
-        "status": "PASS" if passed else "FAIL",
+        "status": status,
         "reason": reason or ("observed required bytes and preservation" if passed else "see bounded command output and observed files"),
         "command": command, "observed": files, "foreign_neighbor_unchanged": foreign_ok,
         "native_loaded": "NOT_RUN", "oauth_or_tool_call": "NOT_RUN",
