@@ -143,7 +143,8 @@ def payloads(project: Path, expected: dict[str, bytes]) -> dict:
 
 def add_result(results: list[dict], product: str, scenario: str, command: dict,
                files: dict, foreign_ok: bool, reason: str | None = None) -> None:
-    passed = (not command.get("timed_out") and command.get("exit_code") == 0
+    passed = (not command.get("timed_out") and not command.get("cleanup_error")
+              and command.get("exit_code") == 0
               and bool(files["skills"]) and bool(files["references"]) and foreign_ok)
     status = "PASS" if passed else "FAIL"
     if scenario == "S1_foreign_collision":
