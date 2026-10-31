@@ -69,24 +69,23 @@ jobs:
           # UAP requires detected client authority before preparing a project
           # installation. APM can copy Skills without installed Codex. Compare
           # delivery with the genuine client available to both managers.
-          # Prevent vendor package lifecycle scripts from running on the host.
-          # Compare the official npm distribution's published integrity with
-          # independently retained 2026-10-24 disposable research.
+          # Verify the actual wrapper archive before feeding it to npm.
+          # The native platform dependency is separately checked below before
+          # the first vendor executable invocation; npm scripts are disabled.
           expected='sha512-TWj7UGyPRe3Pj/A3ddNAxs1te3a/W/xAd+J0LHrrFTmsSfahGMOLF/vn88D3QCIgAT3B1rm1y/Z3NYE0rx6cZQ=='
-          actual="$(npm view '@openai/codex@0.164.0' dist.integrity)"
+          mkdir -p "$RUNNER_TEMP/codex-archive"
+          archive_name="$(npm pack --ignore-scripts --silent \
+            --pack-destination "$RUNNER_TEMP/codex-archive" '@openai/codex@0.164.0')"
+          wrapper="$RUNNER_TEMP/codex-archive/$archive_name"
+          test -f "$wrapper"
+          actual="sha512-$(openssl dgst -sha512 -binary "$wrapper" | openssl base64 -A)"
           test "$actual" = "$expected"
+          printf '%s\n' "$actual" > "$RUNNER_TEMP/codex-wrapper-integrity.txt"
           npm install --prefix "$RUNNER_TEMP/codex-runtime" --no-save \
-            --ignore-scripts --no-audit --no-fund --no-package-lock '@openai/codex@0.164.0'
+            --ignore-scripts --no-audit --no-fund --no-package-lock "$wrapper"
           codex="$RUNNER_TEMP/codex-runtime/node_modules/.bin/codex"
           test -x "$codex"
-          # The probe is read-only and must not touch the hosted user's
-          # ambient agent configuration.
-          mkdir -p "$RUNNER_TEMP/codex-probe/home/.codex"
-          observed="$(HOME="$RUNNER_TEMP/codex-probe/home" \
-            CODEX_HOME="$RUNNER_TEMP/codex-probe/home/.codex" "$codex" --version)"
-          test "$observed" = "codex-cli 0.164.0"
-          printf '%s\n' "$observed" > "$RUNNER_TEMP/codex-probe-version.txt"
-          # Verify the genuine native binary, not the Node.js launcher.
+          # Verify the exact native executable BEFORE the version probe.
           native_root="$RUNNER_TEMP/codex-runtime/node_modules/@openai/codex-linux-x64"
           test -d "$native_root"
           mapfile -d '' -t natives < <(find "$native_root" -type f -name codex -print0)
@@ -94,6 +93,12 @@ jobs:
           native_sha="$(sha256sum "${natives[0]}" | cut -d ' ' -f1)"
           test "$native_sha" = b93f6811d3f653f0fb83be4050d857fb9abbb111dfa2ce160563327daff7f306
           printf 'sha256=%s\n' "$native_sha" > "$RUNNER_TEMP/codex-native-sha256.txt"
+          # Even this read-only command uses an isolated profile.
+          mkdir -p "$RUNNER_TEMP/codex-probe/home/.codex"
+          observed="$(HOME="$RUNNER_TEMP/codex-probe/home" \
+            CODEX_HOME="$RUNNER_TEMP/codex-probe/home/.codex" "$codex" --version)"
+          test "$observed" = "codex-cli 0.164.0"
+          printf '%s\n' "$observed" > "$RUNNER_TEMP/codex-probe-version.txt"
           node --version > "$RUNNER_TEMP/codex-node-version.txt"
           npm --version > "$RUNNER_TEMP/codex-npm-version.txt"
           printf '%s\n' "$RUNNER_TEMP/codex-runtime/node_modules/.bin" >> "$GITHUB_PATH"
@@ -119,6 +124,7 @@ jobs:
           cp "$RUNNER_TEMP/apm-distribution-sha256.txt" "$RUNNER_TEMP/uap-apm-results/apm-distribution-sha256.txt"
           cp "$RUNNER_TEMP/apm-pip-install-report.json" "$RUNNER_TEMP/uap-apm-results/apm-pip-install-report.json"
           cp "$RUNNER_TEMP/codex-runtime-package.json" "$RUNNER_TEMP/uap-apm-results/codex-runtime-package.json"
+          cp "$RUNNER_TEMP/codex-wrapper-integrity.txt" "$RUNNER_TEMP/uap-apm-results/codex-wrapper-integrity.txt"
           cp "$RUNNER_TEMP/codex-probe-version.txt" "$RUNNER_TEMP/uap-apm-results/codex-probe-version.txt"
           cp "$RUNNER_TEMP/codex-native-sha256.txt" "$RUNNER_TEMP/uap-apm-results/codex-native-sha256.txt"
           cp "$RUNNER_TEMP/codex-node-version.txt" "$RUNNER_TEMP/uap-apm-results/codex-node-version.txt"
