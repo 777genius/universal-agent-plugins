@@ -344,6 +344,11 @@ func (f *openCodeProjectFixture) config(t *testing.T, label, project string, ext
 		t.Fatal("native config failed or warned; see exact evidence")
 	}
 	object, err := openCodeProjectConfig(r.Stdout)
+	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") == "2.2.5" {
+		object, err = openCodeProjectV2SourceConfig(
+			r.Stdout, filepath.Join(f.work, "xdg-config", "opencode"),
+			project, len(extra) > 0, project != f.user)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
