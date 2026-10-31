@@ -79,7 +79,7 @@ const onChange = async (value: unknown) => {
     <template #activator="{ props: menuProps }">
       <v-btn
         v-bind="menuProps"
-        @keydown="onActivatorKeydown"
+        @keydown.capture="onActivatorKeydown"
         :variant="props.compact || props.iconOnly ? 'text' : 'outlined'"
         :block="props.fullWidth"
         :size="props.compact ? 'small' : 'default'"
