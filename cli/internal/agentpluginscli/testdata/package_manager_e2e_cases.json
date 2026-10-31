@@ -46,7 +46,10 @@
     "cache-metadata-corruption",
     "malformed-state",
     "component-name-collision",
-    "stale-lock-metadata"
+    "stale-lock-metadata",
+    "symlink-lock-refusal",
+    "foreign-skill-refusal",
+    "native-config-obstruction"
   ],
   "agreement": [
     "manifest-rejections",
