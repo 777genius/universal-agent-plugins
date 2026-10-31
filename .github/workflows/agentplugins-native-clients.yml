@@ -187,7 +187,7 @@ jobs:
   # Keep the published V1 proof intact. V2 has a different plugin/server API,
   # so start with the exact project A/B native discovery and lifecycle fixture.
   opencode-v2-project:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && (github.event_name != 'workflow_dispatch' || !inputs.sdk_linux_only) }}
     name: opencode V2 project runtime (${{ matrix.target }})
     strategy:
       fail-fast: false
