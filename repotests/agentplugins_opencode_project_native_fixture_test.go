@@ -239,8 +239,14 @@ func (f *openCodeProjectFixture) setup(t *testing.T) {
 		}
 	}
 	r := f.command(t, "native", "version", f.client, f.user, f.env(), []string{"--version"})
-	if r.Exit != 0 || len(bytesTrim(r.Stderr)) != 0 || string(bytesTrim(r.Stdout)) != pinnedVersion {
-		t.Fatal("native version is not exact pin")
+	expectedOutput := pinnedVersion
+	if pinnedVersion == "2.2.5" {
+		// The pinned V2 native CLI prints its product prefix; V1 prints only
+		// the semver. Both are exact byte-for-byte native observations.
+		expectedOutput = "opencode v2.2.5"
+	}
+	if r.Exit != 0 || len(bytesTrim(r.Stderr)) != 0 || string(bytesTrim(r.Stdout)) != expectedOutput {
+		t.Fatal("native version is not exact pinned V1/V2 output")
 	}
 	f.evidence["client_version_measured"] = string(bytesTrim(r.Stdout))
 	for _, item := range []struct{ root, marker string }{{f.sourceA, "A-one"}, {f.sourceB, "B-one"}, {f.sourceUser, "USER-same"}, {f.sourceJSON, "JSON-one"}} {
