@@ -133,9 +133,10 @@ test('README retains the available installer and canonical client limitations', 
   assert.ok(text.includes('## Build plugins'));
   assert.ok(text.includes('### Quick start'));
   assert.ok(text.includes('[Build plugins](#build-plugins)'));
+  // The public entry uses the nine-language gateway, not a forced English locale.
   assert.ok(
     text.includes(
-      '[Read the documentation](https://universal-agent-plugins.com/docs/en/)',
+      '[Read the documentation](https://universal-agent-plugins.com/docs/)',
     ),
   );
   assert.ok(text.includes('Native Agent Plugins releases'));

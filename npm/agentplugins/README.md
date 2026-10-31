@@ -12,11 +12,13 @@ verified once, then prepared for every agent you selected.
 
 You need Node.js 22 or newer.
 
-The verified native baseline is CLI 0.1.95. npm and native channel versions can
-differ; check `npx universal-agent-plugins version` before relying on automatic
-current-directory project selection, which requires 0.1.94. If this channel is
-older, use the native or Homebrew installer, or the explicit project-scope
-commands supported since 0.1.93.
+The verified native baseline is CLI 0.1.95. npm and Homebrew can lag behind the
+native release; check `npx universal-agent-plugins version` or
+`agentplugins version` for the channel you installed. Automatic current-directory
+project selection requires 0.1.94. On 0.1.93, use explicit project scope instead.
+For a newer feature, install a suitable exact native version using the
+[native installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md#pinning-and-automation);
+switching to another package manager does not by itself ensure a newer version.
 
 To use the same native Go CLI without Node.js, install it with Homebrew or the
 verified scripts in the [project README](https://github.com/777genius/universal-agent-plugins#quick-start).
@@ -48,7 +50,8 @@ macOS and Windows preparation does not claim automatic runtime verification.
 
 See the [real Context7 ChatGPT and Kiro E2E evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/CONTEXT7_CHATGPT_KIRO_E2E.md).
 
-[Browse plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
+[Browse plugins](https://universal-agent-plugins.com/plugins/) ·
+[Read the documentation](https://universal-agent-plugins.com/docs/)
 
 ## What it does
 
@@ -146,14 +149,22 @@ for confirmation and recovery behavior.
 
 ## Install for one project
 
-Explicit project scope ships in CLI 0.1.93. The selected directory must exist:
+Explicit project scope ships in CLI 0.1.93. Replace `/path/to/project` with an
+existing directory and install the selected clients first. Save a registry
+dependency, then restore its recorded lock:
 
 ```bash
-npx universal-agent-plugins add ./my-plugin --target codex,claude \
+npx universal-agent-plugins add context7 --target codex,claude \
   --scope project --project-root /path/to/project
 npx universal-agent-plugins install --locked \
   --scope project --project-root /path/to/project
 ```
+
+The first command saves the project's `uap.toml` and `uap.lock` after successful
+preflight and confirmation; the second replays that saved environment. Direct
+local-path installs such as `add ./my-plugin` do not create portable dependency
+intent or the lock required by `install --locked`; use the saved dependency flow
+above for reproducible restoration.
 
 Pass the same scope on later maintenance commands. In CLI 0.1.94, argumentless
 `install` selects project scope for a regular `uap.toml` in the exact current
@@ -199,7 +210,7 @@ package. For direct native downloads, retain the companion notice file from
 the same release with the binary, including when redistributing.
 
 - [Source and documentation](https://github.com/777genius/universal-agent-plugins)
-- [Browse the plugin catalog](https://777genius.github.io/universal-agent-plugins/plugins/)
+- [Browse the plugin catalog](https://universal-agent-plugins.com/plugins/)
 - [Client E2E evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/AGENTPLUGINS_CLIENT_E2E.md)
 
 Universal Agent Plugins is an independent community project. It is not
