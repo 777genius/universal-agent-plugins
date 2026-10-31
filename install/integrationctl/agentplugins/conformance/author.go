@@ -106,7 +106,11 @@ func (d Decoder) DecodePlugin(ctx context.Context, doc Document) (Facts, error) 
 	return f, nil
 }
 func (d Decoder) structure(ctx context.Context, f *Facts, doc Document, boundary domain.FailureBoundary) ([]duplicate, Outcome, error) {
-	duplicates, err := scanJSON(ctx, doc.body, d.Limits.bounded(), duplicateRecord)
+	mode := duplicateRecord
+	if boundary == domain.BoundaryPlugin {
+		mode = duplicatePluginRecord
+	}
+	duplicates, err := scanJSON(ctx, doc.body, d.Limits.bounded(), mode)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, NotEvaluated, ctx.Err()
