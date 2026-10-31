@@ -4,40 +4,13 @@ import { stripTypeScriptTypes } from 'node:module';
 import { runInNewContext } from 'node:vm';
 import { test } from 'node:test';
 
-test('keyboard opening retries focus after hidden lazy overlay enters and cancels when closed', () => {
+test('Vuetify owns ArrowUp/Down keydown and receives the forwarded activator props', () => {
   const source = readFileSync(new URL('../components/layout/LanguageSwitcher.vue', import.meta.url), 'utf8');
-  const logic = source.slice(source.indexOf('let openingEdge:'), source.indexOf('// Vuetify handles Escape/Tab'));
-  const document: { activeElement: object | null } = { activeElement: null };
-  let visible = false;
-  const options = Array.from({ length: 3 }, () => ({
-    focus() { if (visible) document.activeElement = this; },
-  }));
-  const menuOpen = { value: false };
-  const ticks: (() => void)[] = [];
-  const state = runInNewContext(stripTypeScriptTypes(logic) + '\n({ onActivatorKeydown, focusOpeningItem, afterMenuEnter })', {
-    document, menuOpen, pending: { value: false },
-    menu: { value: { contentEl: { querySelectorAll: () => options } } },
-    nextTick: (callback: () => void) => ticks.push(callback),
-  });
-  const press = (key: string) => state.onActivatorKeydown({ key, preventDefault() {}, stopImmediatePropagation() {} });
-  press('ArrowDown');
-  ticks.shift()!();
-  assert.equal(document.activeElement, null);
-  visible = true;
-  state.afterMenuEnter(); // VMenu after-enter queues focus after Vuetify's own transition.
-  assert.equal(document.activeElement, null, 'after-enter must defer focus until next tick');
-  ticks.shift()!();
-  assert.equal(document.activeElement, options[0]);
-  document.activeElement = options[1];
-  state.focusOpeningItem();
-  assert.equal(document.activeElement, options[1], 'completed request must not steal later focus');
-  press('ArrowUp');
-  ticks.shift()!();
-  assert.equal(document.activeElement, options[2]);
-  press('ArrowDown');
-  menuOpen.value = false;
-  ticks.shift()!();
-  assert.equal(document.activeElement, options[2], 'dismissed menu must not reclaim focus');
+  assert.match(source, /<v-menu\\b[^>]*v-model="menuOpen"/);
+  assert.match(source, /<v-btn\\s+v-bind="menuProps"/);
+  assert.doesNotMatch(source, /@keydown\\.capture|stopImmediatePropagation\\(/);
+  // The mounted real Nuxt/Vuetify keyboard and history contract is exercised in
+  // tests/fixtures/i18n-candidate/candidate.spec.ts.template at both base paths.
 });
 
 test('mobile Escape reserves only an open nested menu', () => {
