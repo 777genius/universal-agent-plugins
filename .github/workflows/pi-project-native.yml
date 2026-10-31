@@ -1,0 +1,77 @@
+name: Pi Project Native Runtime
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/pi-project-native.yml'
+      - 'scripts/pi_project_native_e2e.py'
+      - 'install/integrationctl/agentplugins/clients/pi/**'
+      - 'install/integrationctl/agentplugins/clients/all/registry.go'
+      - 'install/integrationctl/agentplugins/domain/clients.go'
+      - 'install/integrationctl/agentplugins/installer/pi_project_lifecycle_test.go'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pi-project-native-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pi-project-native:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    name: pi v1.4.0 project lifecycle (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            runner: ubuntu-24.04
+          - target: darwin-arm64
+            runner: macos-15
+          - target: windows-amd64
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 22
+    env:
+      UAP_PI_NATIVE_PROJECT_E2E: '1'
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Verify scoped Pi adapter and real UAP facade before native runtime
+        working-directory: install/integrationctl/agentplugins
+        run: go test -count=1 -timeout=180s ./clients/pi ./clients/all ./planner ./installer -run 'TestPi(Project|Public|Bootstrap)'
+      - name: Verify Python runner syntax without writing into source checkout
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('scripts/pi_project_native_e2e.py').read_text(encoding='utf8')
+          compile(source, 'scripts/pi_project_native_e2e.py', 'exec')
+          PY
+      - name: Run genuine pinned native Pi project trust and A/B lifecycle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNNER_ENVIRONMENT: github-hosted
+        run: |
+          python3 scripts/pi_project_native_e2e.py \
+            '${{ matrix.target }}' \
+            '${{ runner.temp }}/pi-project-native-evidence'
+      - name: Upload native Pi evidence including failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: pi-project-${{ matrix.target }}
+          path: ${{ runner.temp }}/pi-project-native-evidence/
+          retention-days: 14
+          if-no-files-found: error
