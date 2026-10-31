@@ -63,6 +63,13 @@ const discoveryRecord = {
 } satisfies DiscoveryRecord;
 
 describe('unified registry landing', () => {
+  it('authorizes reviewed project source only for published signed Directory projections', () => {
+    assert.ok(registry.plugins.length > 0);
+    assert.ok(registry.plugins.every((plugin) => plugin.trust_state === 'reviewed'));
+    const preview = parseDirectoryData(snapshot, 'review_preview');
+    assert.ok(preview.plugins.every((plugin) => plugin.trust_state === undefined));
+  });
+
   it('accepts Directory target policies for newly advertised native clients without enabling undeclared targets', () => {
     const fixture = structuredClone(snapshot) as {
       distributions: {
