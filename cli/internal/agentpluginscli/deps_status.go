@@ -48,7 +48,7 @@ type dependencyStatus struct {
 	ManifestDigest   string                     `json:"manifest_digest,omitempty"`
 	LockDigest       string                     `json:"lock_digest,omitempty"`
 	PendingRecovery  bool                       `json:"pending_recovery"`
-	ValidLock       bool                       `json:"-"`
+	ValidLock        bool                       `json:"-"`
 	Facts            []dependencyStatusFact     `json:"facts"`
 }
 
@@ -305,9 +305,9 @@ func renderDependencyStatusGuidance(writer io.Writer, status dependencyStatus) e
 	case status.PendingRecovery:
 		explanation = "Recovery is pending. Inspect it before any other changes: agentplugins deps recover --dry-run"
 	case missing:
-		explanation = "No saved uap.toml was found. This does not mean other plugins are absent. To save a supported Registry/Git package, start with agentplugins add <source> --target <agent>"
+		explanation = "No saved uap.toml was found. This does not mean other plugins are absent. To save a Registry/Git source for a supported saved-dependency target, start with agentplugins add <source> --target <agent>"
 	case !status.ValidLock:
-		explanation = "No valid uap.lock was found. Review uap.toml before explicitly running agentplugins deps lock; locked installation is not available yet."
+		explanation = "No valid uap.lock was found. Inspect uap.toml and uap.lock before making changes; locked installation is not available yet."
 	default:
 		explanation = "Inspect exact saved versions and dependency relationships: agentplugins deps tree"
 	}
