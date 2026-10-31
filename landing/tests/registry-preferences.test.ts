@@ -16,6 +16,7 @@ import { clients } from '../data/clients.ts';
 import * as registryDomain from '../utils/registry.ts';
 import * as filters from '../utils/filter.ts';
 import { pluginCommands } from '../utils/commands.ts';
+import { projectCatalogCommands } from '../utils/projectCatalogSource.ts';
 import { discoveryPlugin } from '../utils/discovery.ts';
 import { signedDiscoveryFixture } from './fixtures/signed-discovery.ts';
 import { createMemoryHistory, createRouter, type RouteLocationRaw } from 'vue-router';
@@ -41,6 +42,7 @@ const common = {
   authenticationIndicator,
   ...filters,
   pluginCommands,
+  projectCatalogCommands,
   onScopeDispose: Vue.onScopeDispose,
   ...discoveryHelpers,
   useI18n: () => i18n,
