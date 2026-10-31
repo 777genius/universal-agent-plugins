@@ -62,9 +62,7 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertIn("github.event.pull_request.draft == false", resilience)
         self.assertIn("schedule:", resilience)
         self.assertIn("workflow_dispatch:", resilience)
-        self.assertIn("-fuzz '^FuzzVersionSelectionOrderAndPinReplay
-    unittest.main()
-", resilience)
+        self.assertIn("-fuzz '^FuzzVersionSelectionOrderAndPinReplay$'", resilience)
         self.assertIn("go test -race", resilience)
         for path in ("environment/resolver_reliability_test.go", "processlock/reliability_test.go"):
             self.assertIn(path, resilience)
