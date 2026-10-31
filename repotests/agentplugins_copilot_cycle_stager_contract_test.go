@@ -130,7 +130,7 @@ func copilotCycleStageInert(t *testing.T, c *copilotProjectCycle, key string) do
 	if key == "user" && runner.calls != 3 || key != "user" && runner.calls != 0 {
 		t.Fatal("project file activation crossed user native command seam")
 	}
-	b := domain.ClientBinding{ClientID: "copilot", Scope: copilotCycleScope(r), TargetLocator: plan.ActivePath, PhysicalArtifact: plan.PhysicalArtifactID, Materialization: domain.MaterializationMaterialized, Activation: out.Activation, Verification: out.Verification, Authentication: plan.Authentication, Policy: domain.PolicyAllowed, NativeObjects: delivery.NativeObjects, SelectedDelivery: plan.SelectedDelivery, ProfileNamespace: plan.ProfileNamespace(), ProfileAuthority: plan.ProfileAuthority(), PackageRevision: &domain.ClientPackageRevision{Version: envelope.Manifest.Version, TreeDigest: envelope.TreeDigest, ManifestDigest: envelope.ManifestDigest}}
+	b := domain.ClientBinding{ClientID: "copilot", Scope: copilotCycleScope(r), TargetLocator: plan.ActivePath, PhysicalArtifact: plan.PhysicalArtifactID, NativeProfileRoot: client.ConfigRoot, Materialization: domain.MaterializationMaterialized, Activation: out.Activation, Verification: out.Verification, Authentication: plan.Authentication, Policy: domain.PolicyAllowed, NativeObjects: delivery.NativeObjects, SelectedDelivery: plan.SelectedDelivery, ProfileNamespace: plan.ProfileNamespace(), ProfileAuthority: plan.ProfileAuthority(), PackageRevision: &domain.ClientPackageRevision{Version: envelope.Manifest.Version, TreeDigest: envelope.TreeDigest, ManifestDigest: envelope.ManifestDigest}}
 	b.ClientBindingID = domain.ComputeClientBindingID(i.InstallationID, b.ClientID, b.Scope, b.TargetLocator)
 	if key != "user" {
 		b.NativeProfileRoot = plan.NativeRegistryRoot
