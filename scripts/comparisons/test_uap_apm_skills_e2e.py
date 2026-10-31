@@ -111,6 +111,18 @@ class ComparisonSafetyTests(unittest.TestCase):
             self.assertIsNone(outcome["exit_code"])
             self.assertIsNotNone(outcome["cleanup_error"])
 
+    def test_uap_full_git_sha_source_is_not_ref_flag(self):
+        commit = "a" * 40
+        argv = comparison.tool_args("uap", "/bin/agentplugins", Path("/scratch/project"), commit)
+        self.assertNotIn("--ref", argv)
+        self.assertNotIn("--path", argv)
+        self.assertEqual(
+            argv[3],
+            f"777genius/universal-agent-plugins@{commit}//{comparison.SKILL_PATH}",
+        )
+        self.assertEqual(argv[argv.index("--scope") + 1], "project")
+        self.assertEqual(argv[argv.index("--target") + 1], "codex")
+
 
 if __name__ == "__main__":
     unittest.main()
