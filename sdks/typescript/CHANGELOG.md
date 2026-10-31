@@ -6,6 +6,40 @@ as a minor release with migration notes in this file. Each release is built
 from an immutable `management-sdk-vX.Y.Z` tag by the
 [Management SDK Release workflow](../../.github/workflows/management-sdk-release.yml).
 
+## [0.1.1]
+
+First version that the release workflow publishes through npm trusted
+publishing, with npm provenance for the `management-sdk-v0.1.1` tag.
+
+### Added
+
+- `client.checkUpdates({ all: true })` and
+  `client.checkUpdates({ aliases: [...] })` call
+  `POST /api/v1/environment/check-updates`. This explicit read-only check
+  returns `complete`, `changed` and per-entry source and dependency graph
+  facts. It does not save freshness or change installed files; an available
+  update still needs a fresh `prepare({ action: 'update', ... })` review.
+- Exported types `UpdateCheckRequest`, `UpdateCheck`, `UpdateCheckEntry` and
+  `UpdateIdentity`.
+
+### Compatibility
+
+- No runtime or wire changes for existing methods, the `/node` entry point or
+  the existing management API v1 operations. The `ManagementClient` type gains
+  `checkUpdates`, so code that implements that type itself (for example, a
+  test double) must add it.
+- `checkUpdates` needs an engine that serves the operation. CLI 0.1.95 and
+  older do not and answer `404`, which the SDK reports as a `ManagementError`
+  with `code` `HTTP_ERROR` and `status` 404; no capability entry announces the
+  operation. Use a CLI release whose release notes list it, or build the
+  engine from the `management-sdk-v0.1.1` tag (see the README). Every other
+  method still works with CLI 0.1.95 or newer.
+
+### Upgrade
+
+Run `npm install --save-exact universal-agent-plugins-management-sdk@0.1.1`.
+Code that only calls the client needs no changes.
+
 ## [0.1.0]
 
 Initial npm package.

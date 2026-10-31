@@ -86,6 +86,23 @@ class CaptureTests(unittest.TestCase):
                 research.kill_group(process)
             self.assertEqual(process.returncode, 0)
 
+    def test_transient_second_permission_error_still_signals_group(self):
+        signal_group = os.killpg
+        with subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True) as process:
+            self.wait_for_unreaped_exit(process)
+            attempts = []
+
+            def signal_during_reap(pid, signum):
+                attempts.append(pid)
+                if len(attempts) <= 2:
+                    raise PermissionError(errno.EPERM, "macOS group settling")
+                return signal_group(pid, signum)
+
+            with patch.object(research.os, "killpg", side_effect=signal_during_reap):
+                research.kill_group(process)
+            self.assertEqual(len(attempts), 3)
+            self.assertEqual(process.returncode, 0)
+
     def test_group_permission_error_remains_an_error_for_live_or_denied_group(self):
         for exited in (False, True):
             with self.subTest(exited=exited):

@@ -24,9 +24,17 @@ func (service Service) persistLifecycleState(desired domain.StateFileV2) error {
 // adapter can change client configuration. A retained marker means a previous
 // effect could not be reconciled and forbids another blind mutation.
 func (service Service) beginNativeAttemptWithObservation(installationID, bindingID string, direction domain.NativeIntentDirection, selected domain.SelectedDelivery, previousObservation *domain.LocalEntryObservation) error {
+	_, err := service.beginNativeAttemptWithPredecessor(installationID, bindingID, direction, selected, previousObservation, nil)
+	return err
+}
+
+func (service Service) beginNativeAttemptWithPredecessor(installationID, bindingID string, direction domain.NativeIntentDirection, selected domain.SelectedDelivery, previousObservation *domain.LocalEntryObservation, predecessor *domain.StateFileV2) (*nativeRemovalAttempt, error) {
 	state, err := service.StateStore.Load()
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if predecessor != nil && !reflect.DeepEqual(state, *predecessor) {
+		return nil, fmt.Errorf("native removal predecessor changed before attempt")
 	}
 	for i, installation := range state.Installations {
 		if installation.InstallationID != installationID {
@@ -34,32 +42,45 @@ func (service Service) beginNativeAttemptWithObservation(installationID, binding
 		}
 		client, ok := installation.Clients[bindingID]
 		if !ok {
-			return fmt.Errorf("client binding disappeared before native activation")
+			return nil, fmt.Errorf("client binding disappeared before native activation")
 		}
 		if !client.LocalEntryObservation.Equal(previousObservation) {
-			return fmt.Errorf("native attempt observation predecessor changed")
+			return nil, fmt.Errorf("native attempt observation predecessor changed")
 		}
 		if client.NativeActivationAttempt != "" {
-			return fmt.Errorf("native activation attempt %s is unresolved; inspect owned objects before retry or removal", client.NativeActivationAttempt)
+			return nil, fmt.Errorf("native activation attempt %s is unresolved; inspect owned objects before retry or removal", client.NativeActivationAttempt)
 		}
 		attemptID, err := newOperationID()
 		if err != nil {
-			return err
+			return nil, err
 		}
+		before := state
 		state.Installations = append([]domain.Installation(nil), state.Installations...)
 		installation.Clients = cloneClientBindings(installation.Clients)
 		client.NativeActivationAttempt = attemptID
 		if err := validateDeliverySelection(client.SelectedDelivery, selected); err != nil {
-			return err
+			return nil, err
 		}
 		if err := prepareSelectedNativeIntent(&client, attemptID, direction, selected); err != nil {
-			return err
+			return nil, err
 		}
 		installation.Clients[bindingID] = client
 		state.Installations[i] = installation
-		return service.persistLifecycleState(state)
+		if predecessor == nil {
+			return nil, service.persistLifecycleState(state)
+		}
+		attempt, err := freezeNativeRemovalAttempt(before, state, attemptID)
+		if err != nil {
+			return nil, err
+		}
+		kernel := service.Kernel
+		kernel.StateStore = service.StateStore
+		if err := kernel.PersistStateDecision(before, state); err != nil {
+			return nil, err
+		}
+		return attempt, nil
 	}
-	return fmt.Errorf("installation disappeared before native activation")
+	return nil, fmt.Errorf("installation disappeared before native activation")
 }
 
 func prepareSelectedNativeIntent(client *domain.ClientBinding, attemptID string, direction domain.NativeIntentDirection, selected domain.SelectedDelivery) error {
