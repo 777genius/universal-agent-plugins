@@ -112,20 +112,66 @@ class ComparisonSafetyTests(unittest.TestCase):
             }
             (project / "uap.toml").write_text(manifest)
             (project / "uap.lock").write_text(json.dumps(lock))
-            original = comparison.captured_portable(project, "uap")
+            original, capture_error = comparison.captured_portable(project, "uap")
+            self.assertIsNone(capture_error)
             identity = comparison.portable_identity(original, commit, "uap")
             self.assertTrue(identity["requested_source_matches"])
             self.assertTrue(identity["resolved_source_matches"])
             self.assertTrue(identity["exact_source_commit_recorded_in_lock"])
+            # Requested path does not override an explicit conflicting resolved path.
+            git = lock["packages"][0]["source"]["git"]
+            git["path"] = comparison.SKILL_PATH
+            git["resolved_skill_path"] = "moved/not-the-selected-skill"
+            (project / "uap.lock").write_text(json.dumps(lock))
+            conflicting, capture_error = comparison.captured_portable(project, "uap")
+            self.assertIsNone(capture_error)
+            self.assertFalse(comparison.portable_identity(
+                conflicting, commit, "uap"
+            )["resolved_source_matches"])
+            git["resolved_skill_path"] = comparison.SKILL_PATH
             lock["packages"][0]["source"]["git"]["commit"] = "b" * 40
             # A SHA that merely occurs in an unrelated field must not count.
             lock["comment"] = commit
             (project / "uap.lock").write_text(json.dumps(lock))
-            changed = comparison.captured_portable(project, "uap")
+            changed, capture_error = comparison.captured_portable(project, "uap")
+            self.assertIsNone(capture_error)
             self.assertNotEqual(original, changed)
             self.assertFalse(comparison.portable_identity(
                 changed, commit, "uap"
             )["exact_source_commit_recorded_in_lock"])
+
+    def test_portable_capture_rejects_symlinks_nonfiles_and_large_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "project"
+            project.mkdir()
+            (project / "uap.toml").write_bytes(b"schema_version = 1\\n")
+            lock = project / "uap.lock"
+            data, issue = comparison.captured_portable(project, "uap")
+            self.assertEqual(data, {})
+            self.assertEqual(issue, {"file": "uap.lock", "code": "missing"})
+
+            lock.write_bytes(b"x" * (2 * 1024 * 1024 + 1))
+            data, issue = comparison.captured_portable(project, "uap")
+            self.assertEqual(data, {})
+            self.assertEqual(issue, {"file": "uap.lock", "code": "too_large"})
+
+            lock.unlink()
+            lock.symlink_to("uap.toml")
+            _, issue = comparison.captured_portable(project, "uap")
+            self.assertEqual(issue, {"file": "uap.lock", "code": "symlink_path"})
+
+            lock.unlink()
+            lock.mkdir()
+            _, issue = comparison.captured_portable(project, "uap")
+            self.assertEqual(issue, {"file": "uap.lock", "code": "not_regular"})
+
+            lock.rmdir()
+            lock.write_bytes(b"{}")
+            alias = root / "project-link"
+            alias.symlink_to(project, target_is_directory=True)
+            _, issue = comparison.captured_portable(alias, "uap")
+            self.assertEqual(issue, {"file": "uap.toml", "code": "symlink_path"})
 
     def test_apm_lock_resolved_identity_not_requested_comment(self):
         import yaml
