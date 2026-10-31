@@ -33,8 +33,7 @@ const {
   toggleInstall,
 } = selection;
 const deliverySummary = computed(() => {
-  if (autoDetect.value)
-    return t('registryUi.card.agentCompatibilityCheckedWhenYouRunTheCommand');
+  if (autoDetect.value) return '';
   const delivery = selection.resolution.value.distribution?.targets
     .filter((target) => targets.value.includes(target.client))
     .map((target) => target.delivery) ?? [];
@@ -42,8 +41,7 @@ const deliverySummary = computed(() => {
   const prepared = delivery.filter(
     (mode) => mode === 'prepared' || mode === 'manual_activation',
   ).length;
-  if (managed + prepared !== targets.value.length || !delivery.length)
-    return t('registryUi.card.agentCompatibilityCheckedWhenYouRunTheCommand');
+  if (managed + prepared !== targets.value.length || !delivery.length) return '';
   return t('registryUi.card.deliverySummary', { managed: n(managed), prepared: n(prepared) });
 });
 const installPanelId = `plugin-install-${props.plugin.install_source.replace(/[^a-z0-9_-]+/gi, '-')}`;
@@ -231,7 +229,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
             {{ plugin.source.repository }}{{ plugin.source.path ? `/${plugin.source.path}` : '' }}
           </a>
         </p>
-        <p v-else-if="canInstall" class="plugin-card__source-label">
+        <p v-else-if="canInstall && deliverySummary" class="plugin-card__source-label">
           {{ deliverySummary }}
         </p>
       </div>

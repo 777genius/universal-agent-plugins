@@ -5,6 +5,7 @@ import { mdiArrowLeft, mdiDownload, mdiOpenInNew } from '@mdi/js';
 import { clientLandingById } from '~/data/clients';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '~/utils/seo';
 import { isFullyRetired } from '~/utils/filter';
+import { resolveDistribution, vendorInstallSource } from '~/utils/registry';
 import type { ClientID } from '~/types/registry';
 const { t, locale } = useI18n();
 const localePath = useLocalePath();
@@ -22,26 +23,29 @@ if (!plugin || plugin.trust_state === 'conformant_unreviewed') {
 
 const accent = '#00f0ff';
 const iconURL = pluginIcon(plugin);
-const supportedClients = clients.filter((client) =>
-  plugin.client_support.clients.includes(client.id),
-);
+const { current, expired, published } = useDirectoryStatus();
+// The card's install picker resolves each agent against an active release. Do
+// the same here: client_support is an aggregate that may include retired targets
+// or a different delivery mode from the currently selectable release.
+const userClientDelivery = clients.flatMap((client) => {
+  const distribution = resolveDistribution(plugin, [client.id], 'user').distribution;
+  const policy = distribution?.targets.find((target) => target.client === client.id);
+  return policy ? [{ client, delivery: policy.delivery }] : [];
+});
+const supportedClients = userClientDelivery.map(({ client }) => client);
 const clientGroups = computed(() =>
   [
     {
       label: t('registryUi.detail.managedByCli'),
-      clients: supportedClients.filter(
-        (client) => plugin.client_support.delivery[client.id] === 'managed',
-      ),
+      clients: userClientDelivery
+        .filter(({ delivery }) => delivery === 'managed')
+        .map(({ client }) => client),
     },
     {
       label: t('registryUi.detail.requiresAFinalStepInTheApp'),
-      clients: supportedClients.filter((client) =>
-        ['prepared', 'manual_activation'].includes(plugin.client_support.delivery[client.id] ?? ''),
-      ),
-    },
-    {
-      label: t('registryUi.detail.deliveryDetailsNotSpecified'),
-      clients: supportedClients.filter((client) => !plugin.client_support.delivery[client.id]),
+      clients: userClientDelivery
+        .filter(({ delivery }) => delivery === 'prepared' || delivery === 'manual_activation')
+        .map(({ client }) => client),
     },
   ].filter((group) => group.clients.length > 0),
 );
@@ -49,7 +53,23 @@ const initialTarget =
   supportedClients.find((client) => client.id === 'cursor')?.id ?? supportedClients[0]?.id;
 const targets = ref<ClientID[]>(initialTarget ? [initialTarget] : []);
 const autoDetect = ref(true);
-const trustLabel = computed(() => t('registryUi.detail.reviewedListing'));
+const installAvailable = computed(
+  () =>
+    current.value &&
+    !isFullyRetired(plugin) &&
+    (plugin.installable || Boolean(vendorInstallSource(plugin))),
+);
+const trustLabel = computed(() =>
+  t(
+    installAvailable.value
+      ? 'registryUi.detail.reviewedListing'
+      : expired.value
+        ? 'registryUi.card.temporarilyPaused'
+        : !published.value
+          ? 'registryUi.card.previewOnly'
+          : 'registryUi.card.notAvailable',
+  ),
+);
 const siteUrl = productRootUrl(String(config.public.siteUrl), String(config.app.baseURL)).replace(
   /\/+$/,
   '',
@@ -123,7 +143,7 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 </script>
 
 <template>
-  <div class="plugin-detail registry-surface" :style="{ '--accent': accent }">
+  <div class="plugin-detail registry-surface" :data-install-source="plugin.install_source" :style="{ '--accent': accent }">
     <PageBackground />
     <section class="plugin-detail__hero section">
       <v-container>
@@ -166,7 +186,11 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
               <span class="plugin-detail__type"> {{ t('registryUi.detail.agentPlugins10') }} </span>
               <AppTooltip above-header>
                 <template #trigger
-                  ><span class="plugin-detail__status" tabindex="0">{{
+                  ><span
+                    class="plugin-detail__status"
+                    :class="{ 'plugin-detail__status--muted': !installAvailable }"
+                    tabindex="0"
+                  >{{
                     trustLabel
                   }}</span></template
                 >
@@ -192,7 +216,7 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 
             <div class="plugin-detail__actions">
               <v-btn
-                v-if="!isFullyRetired(plugin)"
+                v-if="installAvailable"
                 size="x-large"
                 class="plugin-detail__install-cta"
                 @click="openInstallSection"
@@ -435,6 +459,12 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
   background: rgba(57, 255, 20, 0.1);
   color: #39ff14;
   border: 1px solid rgba(57, 255, 20, 0.2);
+}
+
+.plugin-detail__status--muted {
+  background: rgba(203, 213, 225, 0.1);
+  color: #cbd5e1;
+  border-color: rgba(203, 213, 225, 0.24);
 }
 
 .plugin-detail__category {

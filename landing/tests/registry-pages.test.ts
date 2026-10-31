@@ -7,7 +7,8 @@ import { computed, ref, watch, toValue } from 'vue';
 import { clients, clientLandingBySlug, clientLandingById } from '../data/clients.ts';
 import { localizedPath } from '../utils/localizedRoutes.ts';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '../utils/seo.ts';
-import { catalogVisiblePlugins } from '../utils/filter.ts';
+import { catalogVisiblePlugins, isFullyRetired } from '../utils/filter.ts';
+import { resolveDistribution, vendorInstallSource } from '../utils/registry.ts';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'));
 const discoverySource = stripTypeScriptTypes(readFileSync(new URL('../composables/useDiscoveryStatus.ts', import.meta.url), 'utf8')).replace(/^export /gm, '');
@@ -25,6 +26,8 @@ async function page(
     .replace(/^import[\s\S]*?from '[^']+';\n/gm, '');
   await runInNewContext(`(async () => { ${discoverySource}\n${stripTypeScriptTypes(source)} })()`, {
     computed, ref, watch, clients, clientLandingBySlug, clientLandingById, localizedPath, productRootUrl, seoDescription, spdxLicenseUrl, catalogVisiblePlugins,
+    resolveDistribution, vendorInstallSource, isFullyRetired,
+    useDirectoryStatus: () => ({ current: ref(true), expired: ref(false), published: ref(true) }),
     // Synthetic key markers test reactivity without creating translations.
     useI18n: () => ({ locale, t: (key: string) => `${locale.value}:${key}`, n: (value: number) => String(value) }),
     useLocalePath: () => (path: string) => localizedPath(path, locale.value as 'en' | 'uk'),
