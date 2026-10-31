@@ -102,21 +102,11 @@ func (kernel Kernel) mutationOwners(ctx context.Context, state domain.StateFileV
 		}
 		owners = append(owners, scope...)
 		if b.DataReceiptID != "" {
-			for _, installation := range state.Installations {
-				if installation.InstallationID != m.InstallationID {
-					continue
-				}
-				for key, peer := range installation.Clients {
-					if key == m.ClientBindingID || peer.DataReceiptID != b.DataReceiptID {
-						continue
-					}
-					relevant, err := kernel.bindingOwner(ctx, installation.InstallationID, key, peer)
-					if err != nil {
-						return nil, err
-					}
-					owners = append(owners, relevant...)
-				}
+			peers, err := kernel.sharedDataReceiptOwners(ctx, state, m, b.DataReceiptID)
+			if err != nil {
+				return nil, err
 			}
+			owners = append(owners, peers...)
 		}
 	}
 	unique := map[[4]string]domain.PhysicalProfileOwner{}
@@ -130,6 +120,28 @@ func (kernel Kernel) mutationOwners(ctx context.Context, state domain.StateFileV
 	sort.Slice(owners, func(i, j int) bool { return owners[i].ClientBindingID < owners[j].ClientBindingID })
 	return owners, kernel.validateOwners(ctx, owners)
 }
+// Shared data receipts retain every physical profile in the same installation,
+// excluding the binding already added by the caller.
+func (kernel Kernel) sharedDataReceiptOwners(ctx context.Context, state domain.StateFileV2, mutation DirectoryMutation, receiptID string) ([]domain.PhysicalProfileOwner, error) {
+	var owners []domain.PhysicalProfileOwner
+	for _, installation := range state.Installations {
+		if installation.InstallationID != mutation.InstallationID {
+			continue
+		}
+		for key, peer := range installation.Clients {
+			if key == mutation.ClientBindingID || peer.DataReceiptID != receiptID {
+				continue
+			}
+			relevant, err := kernel.bindingOwner(ctx, installation.InstallationID, key, peer)
+			if err != nil {
+				return nil, err
+			}
+			owners = append(owners, relevant...)
+		}
+	}
+	return owners, nil
+}
+
 func (kernel Kernel) removalOwners(ctx context.Context, removals []DirectoryRemoval) ([]domain.PhysicalProfileOwner, error) {
 	if kernel.StateStore == nil {
 		return nil, fmt.Errorf("transaction state store is required")
@@ -150,31 +162,50 @@ func (kernel Kernel) removalOwners(ctx context.Context, removals []DirectoryRemo
 		}
 	}
 	for _, r := range removals {
-		for _, o := range r.ProfileOwners {
-			_, b, err := loadClientFromState(state, o.InstallationID, o.ClientBindingID)
-			if err != nil || o.Namespace != b.ProfileNamespace || o.ClientID != b.ClientID || !domain.SameProfileAuthority(o.Authority, b.ProfileAuthority) {
-				return nil, fmt.Errorf("removal scope differs from recorded owner")
-			}
+		if err := validateRemovalScopes(state, r); err != nil {
+			return nil, err
 		}
 		add(copyOwners(r.ProfileOwners))
-		for _, installation := range state.Installations {
-			if installation.InstallationID != r.InstallationID {
-				continue
-			}
-			for key, b := range installation.Clients {
-				if (r.DataReceiptID == "" && key != r.ClientBindingID) || (r.DataReceiptID != "" && b.DataReceiptID != r.DataReceiptID) {
-					continue
-				}
-				scope, err := kernel.bindingOwner(ctx, installation.InstallationID, key, b)
-				if err != nil {
-					return nil, err
-				}
-				add(scope)
-			}
+		scopes, err := kernel.removalBindingScopes(ctx, state, r)
+		if err != nil {
+			return nil, err
 		}
+		add(scopes)
 	}
 	sort.Slice(owners, func(i, j int) bool { return owners[i].ClientBindingID < owners[j].ClientBindingID })
 	return owners, kernel.validateOwners(ctx, owners)
+}
+
+// Compare requested physical receipt owners with the recorded state before
+// mutating any managed or native directory.
+func validateRemovalScopes(state domain.StateFileV2, removal DirectoryRemoval) error {
+	for _, owner := range removal.ProfileOwners {
+		_, binding, err := loadClientFromState(state, owner.InstallationID, owner.ClientBindingID)
+		if err != nil || owner.Namespace != binding.ProfileNamespace || owner.ClientID != binding.ClientID || !domain.SameProfileAuthority(owner.Authority, binding.ProfileAuthority) {
+			return fmt.Errorf("removal scope differs from recorded owner")
+		}
+	}
+	return nil
+}
+
+func (kernel Kernel) removalBindingScopes(ctx context.Context, state domain.StateFileV2, removal DirectoryRemoval) ([]domain.PhysicalProfileOwner, error) {
+	var owners []domain.PhysicalProfileOwner
+	for _, installation := range state.Installations {
+		if installation.InstallationID != removal.InstallationID {
+			continue
+		}
+		for key, binding := range installation.Clients {
+			if (removal.DataReceiptID == "" && key != removal.ClientBindingID) || (removal.DataReceiptID != "" && binding.DataReceiptID != removal.DataReceiptID) {
+				continue
+			}
+			scope, err := kernel.bindingOwner(ctx, installation.InstallationID, key, binding)
+			if err != nil {
+				return nil, err
+			}
+			owners = append(owners, scope...)
+		}
+	}
+	return owners, nil
 }
 
 type guardedStateStore struct {
