@@ -25,7 +25,7 @@
       "showMore": "Mostrar mais Skills",
       "externalSource": "Fonte externa",
       "githubSource": "Código no GitHub",
-      "unsupportedSource": "A instalação a partir desta fonte ainda não é compatível.",
+      "unsupportedSource": "A instalação direta exige uma origem GitHub verificada.",
       "chooseAgents": "Escolher agentes",
       "chooseInTerminal": "Escolher agentes no terminal",
       "chooseInTerminalHelp": "O comando permite escolher agentes antes da instalação.",
@@ -41,9 +41,11 @@
         "1h": "{count} instalações · última hora"
       },
       "pageHeading": "Encontre Agent Skills",
-      "unsupportedName": "O nome desta skill não é compatível. Consulte a fonte para obter instruções de instalação.",
+      "unsupportedName": "A instalação direta não está disponível para esta listagem. Consulte a origem no GitHub.",
       "collectionShown": "Exibindo {count} de {total} nesta coleção",
-      "headingPrefix": "Encontre"
+      "headingPrefix": "Encontre",
+      "viewListing": "Ver listagem original",
+      "manualSkillSelection": "Selecione a Skill exata no instalador; o nome do catálogo não foi verificado."
     },
     "directoryPage": {
       "pluginDirectory": "Diretório de plugins",
