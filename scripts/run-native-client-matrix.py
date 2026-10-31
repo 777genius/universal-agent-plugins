@@ -70,7 +70,7 @@ OPENCODE_V2_PINS = {
 
 
 def selected_pin(args, name):
-    if name == "opencode" and args.opencode_generation == "v2":
+    if name == "opencode" and getattr(args, "opencode_generation", "v1") == "v2":
         return OPENCODE_V2_PINS[args.target]
     return PINS[args.target][name]
 
