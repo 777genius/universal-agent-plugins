@@ -41,11 +41,20 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
             "'**/go.mod'", "'**/go.sum'", "'scripts/package-manager-e2e.py'",
             "'scripts/package_manager_binary.py'", "'scripts/test_package_manager_e2e.py'",
             "'scripts/test_package_manager_ci_policy.py'",
+            "'.github/workflows/agentplugins-native-clients.yml'",
+            "'.github/workflows/package-manager-resilience.yml'",
             "'.github/workflows/package-manager-e2e.yml'",
         ):
             event_paths = re.findall(r"(?m)^      - " + re.escape(path) + r"$", self.body)
             self.assertEqual(len(event_paths), 2, path)
         self.assertRegex(self.body, r"(?m)^  cancel-in-progress:.*pull_request.*push.*$")
+
+    def test_each_preflight_rejection_is_an_independent_fail_closed_step(self):
+        # One native command per Actions step: Windows PowerShell must never
+        # return the second test's exit code after the first test fails.
+        for test in ("test_package_manager_e2e.py", "test_package_manager_ci_policy.py"):
+            run = "        run: python -B -m unittest discover -s scripts -p " + test
+            self.assertEqual(self.body.count(run + "\n"), 2, test)
 
     def test_native_matrix_not_lost_when_draft_becomes_ready(self):
         native = NATIVE_WORKFLOW.read_text(encoding="utf-8")

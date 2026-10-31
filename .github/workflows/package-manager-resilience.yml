@@ -46,6 +46,14 @@ jobs:
       - name: Fuzz cyclic and shared graph closure
         working-directory: install/integrationctl/agentplugins
         run: go test ./environment -run '^$' -fuzz '^FuzzDependencyClosureMatchesTraversal$' -fuzztime=20s -parallel=2 -timeout=4m
+      - name: Retain failing fuzz inputs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: resolver-fuzz-failures-${{ github.sha }}
+          path: install/integrationctl/agentplugins/environment/testdata/fuzz
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Benchmark bounded shared dependency graphs
         working-directory: install/integrationctl/agentplugins
         shell: bash
