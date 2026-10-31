@@ -66,6 +66,13 @@ func newDependencyTreeCommand(app App, opts *options) *cobra.Command {
 }
 
 func renderDependencyTree(writer io.Writer, tree dependencyTree) error {
+	if len(tree.Roots) == 0 {
+		_, err := fmt.Fprintln(writer, "No packages are recorded in this lock.")
+		return err
+	}
+	if _, err := fmt.Fprintln(writer, "Saved dependencies (exact locked versions):"); err != nil {
+		return err
+	}
 	for _, root := range tree.RootMappings {
 		if _, err := fmt.Fprintf(writer, "%s → %s (%s)\n", root.Key, root.Alias, root.SourceKey); err != nil {
 			return err
@@ -87,6 +94,10 @@ func renderDependencyTree(writer io.Writer, tree dependencyTree) error {
 		if err := renderDependencyTreeNode(writer, alias, "", packages, children, seen); err != nil {
 			return err
 		}
+	}
+	if len(children) > 0 {
+		_, err := fmt.Fprintln(writer, "Indented packages are transitive dependencies. (reference) means the same locked package is shared, not installed twice.")
+		return err
 	}
 	return nil
 }
