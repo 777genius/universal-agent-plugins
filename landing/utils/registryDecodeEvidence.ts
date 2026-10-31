@@ -1,7 +1,13 @@
 // Trusted release target and evidence decoding.
+import {
+  REPOSITORY, REVISION, DIGEST, CLIENTS, EVIDENCE_WORKFLOW, EVIDENCE_SOURCE_REF,
+  record, requiredString, optionalString, stringArray,
+} from './registryDecodeCommon.ts';
 import type {
   ClientEvidence,
   ClientID,
+  DistributionKind,
+  DistributionReleaseView,
   EvidenceLevel,
   PackageEvidence,
   ReleaseTarget,
@@ -193,5 +199,17 @@ export function evidenceFromSnapshot(
     });
   }
   return { client, package: packageEvidence };
+}
+
+
+export function eligibleTargetPolicies(
+  kind: DistributionKind,
+  release: Pick<DistributionReleaseView, 'targets' | 'blocking_clients' | 'materialized_clients'>,
+): ReleaseTarget[] {
+  return release.targets.filter(
+    (target) =>
+      !release.blocking_clients.includes(target.client) &&
+      (kind !== 'upstream' || release.materialized_clients.includes(target.client)),
+  );
 }
 

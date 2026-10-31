@@ -1,4 +1,7 @@
 // Stable catalog API: client eligibility, resolution and presentation.
+import { REPOSITORY, record, parseRFC3339Instant } from './registryDecodeCommon.ts';
+import { eligibleTargetPolicies } from './registryDecodeEvidence.ts';
+export { eligibleTargetPolicies } from './registryDecodeEvidence.ts';
 import { parseLegacyIndex } from './registryDecodeLegacy.ts';
 import { parseSnapshot } from './registryDecodeSigned.ts';
 import type {
@@ -256,17 +259,6 @@ export function resolveDistribution(
       })),
     },
   };
-}
-
-export function eligibleTargetPolicies(
-  kind: DistributionKind,
-  release: Pick<DistributionReleaseView, 'targets' | 'blocking_clients' | 'materialized_clients'>,
-): ReleaseTarget[] {
-  return release.targets.filter(
-    (target) =>
-      !release.blocking_clients.includes(target.client) &&
-      (kind !== 'upstream' || release.materialized_clients.includes(target.client)),
-  );
 }
 
 /** Every policy a no-`--target` install can resolve: the signed resolver walks

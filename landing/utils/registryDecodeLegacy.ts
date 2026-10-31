@@ -1,4 +1,8 @@
 // Legacy preview decoder; never used for signed published snapshots.
+import {
+  PLUGIN_NAME, COMPONENTS, record, requiredString, stringArray, author, source, icon,
+  clientIDs, legacyDelivery, legacyAuthentication, legacyTargetAuthentication, legacyEvidence,
+} from './registryDecodeCommon.ts';
 import type {
   ComponentID,
   DistributionKind,
