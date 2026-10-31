@@ -51,37 +51,40 @@ export function externalListingUrl(value: string): string | undefined {
     return undefined;
   }
 }
+function supportedSkillName(name: string): boolean {
+  return [...name].length <= 64 && /^[\p{Ll}\p{N}]+(?:-[\p{Ll}\p{N}]+)*$/u.test(name);
+}
+
+/** A safe repository-only command lets the CLI present its real Skill picker. */
+export function skillNeedsManualSelection(skill: SkillListing): boolean {
+  return Boolean(
+    skillRepositoryUrl(skill) &&
+      skill.availability !== 'unsupported-source' &&
+      !supportedSkillName(skill.skillNameHint),
+  );
+}
+
 export function skillInstallCommand(
   skill: SkillListing,
   targets?: readonly string[],
 ): string | undefined {
   const source = skillRepositoryUrl(skill);
-  if (
-    !source ||
-    skill.availability === 'unsupported-source' ||
-    // Match the installer's normative Skill-name grammar before offering a
-    // command. Restricting metadata also keeps copied commands safe in both
-    // POSIX shells and PowerShell, whose quote rules differ.
-    [...skill.skillNameHint].length > 64 ||
-    !/^[\p{Ll}\p{N}]+(?:-[\p{Ll}\p{N}]+)*$/u.test(skill.skillNameHint)
-  )
-    return undefined;
+  if (!source || skill.availability === 'unsupported-source') return undefined;
   const tokens = [
     'npx',
     'universal-agent-plugins@latest',
     'skills',
     'add',
     source,
-    '--skill',
-    skill.skillNameHint,
   ];
+  if (!skillNeedsManualSelection(skill)) tokens.push('--skill', skill.skillNameHint);
   if (targets !== undefined) {
     const ids = [...new Set(targets.map((id) => id.trim()).filter(Boolean))];
     if (!ids.length || ids.some((id) => !skillTargetIds.has(id))) return undefined;
     tokens.push('--target', ids.join(','));
   }
   // Every dynamic token is a validated repository, normative name or known
-  // target ID. Double quotes preserve Unicode in CMD and CSV in PowerShell;
+  // target ID. Unverified names open the CLI picker instead of being guessed. Double quotes preserve Unicode in CMD and CSV in PowerShell;
   // these identifiers cannot contain shell expansions or quote delimiters.
   return tokens
     .map((token) => (/^[A-Za-z0-9_./:@+=-]+$/.test(token) ? token : `"${token}"`))

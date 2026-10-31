@@ -347,7 +347,7 @@ watch([query, category, component, source, trust, client, authentication, owner]
         />
       </div>
     </div>
-    <div class="catalog-active-filters" :aria-label="t('registryUi.catalog.activeFilters')">
+    <div v-if="activeChips.length" class="catalog-active-filters" :aria-label="t('registryUi.catalog.activeFilters')">
       <button
         v-for="chip in activeChips"
         :key="chip.index"
@@ -361,7 +361,6 @@ watch([query, category, component, source, trust, client, authentication, owner]
       <button
         type="button"
         class="catalog-filter-reset"
-        :disabled="!activeChips.length"
         @click="clearFilters"
       >
         {{ t('registryUi.catalog.resetFilters') }}

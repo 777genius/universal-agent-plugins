@@ -72,6 +72,20 @@ const label = computed(() => {
       props.scope === 'plugin' && !assessment.value.inventoryKnown
         ? 'selectionScanned'
         : 'scanComplete';
+  // The total is only meaningful for known plugin inventories. Avoid an
+  // alarming "0 of 1 checked" headline for a single incomplete scan.
+  if (
+    !legacy.value &&
+    key === 'incomplete' &&
+    props.scope === 'plugin' &&
+    assessment.value.inventoryKnown &&
+    (assessment.value.fullyChecked ?? 0) > 0 &&
+    (assessment.value.selected ?? 0) > 1
+  )
+    return t('registryUi.skillSpector.coverageProgress', {
+      checked: n(assessment.value.fullyChecked ?? 0),
+      total: n(assessment.value.selected ?? 0),
+    });
   return t(`registryUi.skillSpector.${key}`);
 });
 const fullyChecked = computed(() =>
