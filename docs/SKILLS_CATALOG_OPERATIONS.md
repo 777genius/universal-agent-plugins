@@ -172,9 +172,13 @@ checks loading and provisioning, a stronger check than merely adapting the file.
 
 The new public route is source-derived, not an arbitrary URL proxy: the query
 takes only the canonical listing identity and Skill name, not a user-provided
-URL or Git revision. One preview can be active per process, with two tokens of
-initial capacity replenished at one per five seconds. Only a successful source
-document is cached, for ten minutes (at most 128 entries). The hosted Git
+URL or Git revision. At most four previews may be active per process (one per client),
+with four global tokens initially and one token replenished every five seconds.
+The dedicated Caddy route overwrites the client address header, preventing
+untrusted X-Forwarded-For values from bypassing per-client limits.
+Each client starts a fresh preview at most once every twenty seconds.
+Successful source documents are cached for ten minutes (at most 128 entries),
+and failed source coordinates cool down for thirty seconds. The hosted Git
 reader continues enforcing its read-only, no-credentials runtime envelope.
 HTTPS publishers use a separate public-IP-pinned TLS transport, with no
 redirects or proxy inheritance, a strict declared file list and a 64-KiB
