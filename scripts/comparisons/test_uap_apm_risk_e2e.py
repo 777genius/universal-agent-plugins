@@ -676,6 +676,65 @@ class RiskOracleTests(unittest.TestCase):
             swapped=risk.project_file_snapshot(project)
             self.assertNotEqual(changed["sha256"],swapped["sha256"])
 
+    def test_graph_foreign_directory_mode_mutation_fails_before_admission(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            def mutate_first(*_args,**_kwargs):
+                directory=root/"project/.agents/skills/foreign-neighbor"
+                old=directory.stat().st_mode & 0o777
+                directory.chmod(0o700 if old != 0o700 else 0o750)
+                return {"exit_code":0,"timed_out":False,"cleanup_error":None,
+                        "capture_complete":True}
+            with patch.object(risk.baseline,"run_process",side_effect=mutate_first):
+                row=risk.case_graph("apm","/bin/no-op",root)
+            self.assertEqual(row["status"],"FAIL")
+            self.assertEqual(row["stage"],"initial_foreign_modified")
+
+    def test_graph_bounded_second_observation_detects_late_writer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            calls=[]
+            def run_graph(*_args,**_kwargs):
+                calls.append(True)
+                project=root/"project"
+                version=b"v1" if len(calls)==1 else b"v2"
+                for name in ("risk-child","risk-parent"):
+                    p=project/f".agents/skills/{name}/SKILL.md"
+                    p.parent.mkdir(parents=True,exist_ok=True)
+                    p.write_bytes(version)
+                return {"exit_code":0,"timed_out":False,"cleanup_error":None,
+                        "capture_complete":True}
+            def delayed_change(_seconds):
+                path=root/"project/.agents/skills/foreign-neighbor/SKILL.md"
+                path.chmod(0o400)
+            with patch.object(risk.baseline,"run_process",side_effect=run_graph), \
+                 patch.object(risk,"fixture",side_effect=lambda commit,_: (
+                     b"v1" if commit in (risk.CHILD_V1,risk.PARENT_V1) else b"v2")), \
+                 patch.object(risk,"graph_lock_matches",return_value=True), \
+                 patch.object(risk.time,"sleep",side_effect=delayed_change):
+                row=risk.case_graph("apm","/bin/no-op",root)
+            self.assertEqual(row["status"],"FAIL")
+            self.assertFalse(row["foreign_unchanged"])
+            self.assertEqual(row["detached_writer_containment"],"NOT_RUN")
+
+    def test_audit_crash_is_unknown_not_proven_clean(self):
+        complete={"exit_code":-11,"timed_out":False,"cleanup_error":None,
+                  "capture_complete":True,"output_tail":"Segmentation fault"}
+        self.assertIsNone(risk.audit_problem_observed(complete))
+        self.assertFalse(risk.audit_problem_observed(dict(complete,exit_code=0)))
+        self.assertTrue(risk.audit_problem_observed(
+            dict(complete,exit_code=1,output_tail="Drift detected: orphaned")))
+
+    def test_directory_identity_catches_permissions_without_filename_changes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project=Path(temp)
+            user_dir=project/"foreign"
+            user_dir.mkdir()
+            before=risk.directory_identity(user_dir,project)
+            user_dir.chmod(0o700 if (user_dir.stat().st_mode & 0o777)!=0o700 else 0o750)
+            self.assertNotEqual(before,risk.directory_identity(user_dir,project))
+            self.assertIsNone(risk.directory_identity(project/"missing",project))
+
     def test_inert_mcp_config_does_not_prove_no_delayed_secret_writes(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)

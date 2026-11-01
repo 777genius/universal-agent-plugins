@@ -174,6 +174,25 @@ def file_identity(path: Path, boundary: Path) -> tuple | None:
         return None
 
 
+def directory_identity(path: Path, boundary: Path) -> tuple | None:
+    """Observe a user-owned directory without mutable mtime/ctime noise."""
+    try:
+        relative = path.relative_to(boundary)
+        if not relative.parts or ".." in relative.parts or boundary.is_symlink():
+            return None
+        current = boundary
+        for component in relative.parts:
+            current = current / component
+            if current.is_symlink():
+                return None
+        info = path.lstat()
+        if not stat.S_ISDIR(info.st_mode):
+            return None
+        return (info.st_mode, info.st_uid, info.st_gid, info.st_ino)
+    except (OSError, ValueError):
+        return None
+
+
 def apm_claude_skill_kind(portable: dict[str, bytes], commit: str) -> bool:
     """Only APM's native Claude Skill/bundle path tests the reported #3391 bug."""
     try:
@@ -551,12 +570,17 @@ def case_profiles(product: str, cli: str, root: Path, commit: str,
         sentinel = dest / "skills/foreign-neighbor/SKILL.md"
         sentinel.parent.mkdir(parents=True, exist_ok=True)
         sentinel.write_bytes(b"FOREIGN PROFILE DATA\n")
+        (dest / "user-owned.note").write_bytes(b"USER PROFILE NOTE: preserve\n")
     project = root / "project"
     project.mkdir()
     apm_source = f"{REPO}/{SKILL}#{commit}"
     before_a, before_b = profile_snapshot(a), profile_snapshot(b)
-    foreign_before = {p: file_identity(
-        p / "skills/foreign-neighbor/SKILL.md", home) for p in (a, b)}
+    protected_files = (
+        a / "skills/foreign-neighbor/SKILL.md",
+        b / "skills/foreign-neighbor/SKILL.md",
+        a / "user-owned.note", b / "user-owned.note",
+    )
+    foreign_before = {path: file_identity(path, home) for path in protected_files}
     results: list[dict] = []
     for index, selected in enumerate((a, b, a)):
         active = dict(env, CLAUDE_CONFIG_DIR=str(selected))
@@ -577,11 +601,8 @@ def case_profiles(product: str, cli: str, root: Path, commit: str,
             "b_snapshot": profile_snapshot(b),
             "saved_source_matches": saved_profile_source_matches(product, env, commit),
             "foreign": all(
-                identity is not None
-                and identity[0] == h(b"FOREIGN PROFILE DATA\n")
-                and file_identity(p / "skills/foreign-neighbor/SKILL.md", home)
-                    == identity
-                for p, identity in foreign_before.items()),
+                identity is not None and file_identity(path, home) == identity
+                for path, identity in foreign_before.items()),
         })
     first, second, third = results
     complete = all(complete_command(item["cmd"]) for item in results)
@@ -613,7 +634,8 @@ def case_profiles(product: str, cli: str, root: Path, commit: str,
     elif not pinned_source:
         verdict, why = "BLOCKED", "saved user-scope source pin could not be verified"
     else:
-        verdict, why = "PASS", "source-pinned Skill and both isolated profiles preserved"
+        verdict, why = "PASS", ("source-pinned Skills present in A/B; unselected profile "
+                               "snapshots and known user-owned files preserved")
     return receipt(product, "R2_claude_profiles", verdict, reason=why,
                    phases=results, verified_claude_version=claude_version,
                    verified_claude_native_sha256=claude_native_sha256,
@@ -621,7 +643,8 @@ def case_profiles(product: str, cli: str, root: Path, commit: str,
                    profile_snapshots_complete=snapshots_complete,
                    unselected_profiles_unchanged=no_cross_profile_change,
                    saved_source_matches=pinned_source,
-                   selected_uninstall="NOT_RUN (needs separate qualified ownership)") 
+                   selected_profile_other_files="NOT_RUN (new manager-controlled files not certified unchanged)",
+                   selected_uninstall="NOT_RUN (needs separate qualified ownership)")
 
 
 def root_graph(product: str, project: Path, parent_commit: str) -> None:
@@ -734,14 +757,25 @@ def case_graph(product: str, cli: str, root: Path) -> dict:
     # Capture original *identity*, including inode/mode/owner/timestamps,
     # before any manager operation. Late baselines hide prerequisite damage.
     foreign_before=file_identity(foreign_path,project)
-    if (foreign_before is None or
+    # File bytes alone miss directory permission/ownership changes.
+    foreign_directories=(
+        project / ".agents",
+        project / ".agents/skills",
+        project / ".agents/skills/foreign-neighbor",
+    )
+    directories_before=tuple(directory_identity(p,project) for p in foreign_directories)
+    def foreign_intact() -> bool:
+        return (file_identity(foreign_path,project)==foreign_before
+                and tuple(directory_identity(p,project)
+                          for p in foreign_directories)==directories_before)
+    if (foreign_before is None or any(d is None for d in directories_before) or
             foreign_before[0] != h(b"FOREIGN USER CONTENT: preserve without edits\n")):
         return receipt(product,"R3_transitive_update","BLOCKED",
                        stage="foreign_baseline_unavailable",
                        reason="original foreign-file identity could not be established")
     root_graph(product,project,PARENT_V1)
     initial=baseline.run_process(graph_command(product,cli,project),project,env,root)
-    if file_identity(foreign_path,project) != foreign_before:
+    if not foreign_intact():
         return receipt(product,"R3_transitive_update","FAIL",
                        stage="initial_foreign_modified", initial=initial,
                        reason="initial graph install changed the foreign-file identity")
@@ -762,7 +796,7 @@ def case_graph(product: str, cli: str, root: Path) -> dict:
     prelock=None
     if product=="uap":
         prelock=baseline.run_process(graph_command(product,cli,project,lock=True),project,env,root)
-        if file_identity(foreign_path,project) != foreign_before:
+        if not foreign_intact():
             return receipt(product,"R3_transitive_update","FAIL",
                            stage="pin_refresh_foreign_modified",initial=initial,
                            pin_refresh=prelock,
@@ -774,9 +808,11 @@ def case_graph(product: str, cli: str, root: Path) -> dict:
     updated=baseline.run_process(graph_command(product,cli,project,updated=True),project,env,root)
     actual=observed_file(old_skill,project)
     graph_ok=graph_lock_matches(project,product,PARENT_V2,CHILD_V2)
-    foreign_ok=(foreign_before is not None
-                and foreign_before[0] == h(b"FOREIGN USER CONTENT: preserve without edits\n")
-                and file_identity(foreign_path, project) == foreign_before)
+    immediate_foreign_ok=foreign_intact()
+    # A bounded second observation detects a subset of post-exit writers;
+    # this cannot prove containment of indefinitely detached processes.
+    time.sleep(0.25)
+    foreign_ok=immediate_foreign_ok and foreign_intact()
     did=(actual==new and graph_ok
          and observed_file(parent_skill,project)==parent_v2)
     result,reason=status(True,updated,did,"parent v2 must resolve child B once and deploy child B",
@@ -786,7 +822,9 @@ def case_graph(product: str, cli: str, root: Path) -> dict:
                    original_sha256=h(old),expected_sha256=h(new),
                    actual_sha256=h(actual) if actual is not None else None,
                    parent_v2_payload_matches=observed_file(parent_skill,project)==parent_v2,
-                   complete_parent_child_graph_locked=graph_ok)
+                   complete_parent_child_graph_locked=graph_ok,
+                   foreign_double_observation_ms=250,
+                   detached_writer_containment="NOT_RUN")
 
 
 def case_interrupted(product: str, cli: str, root: Path, commit: str) -> dict:
@@ -1054,7 +1092,10 @@ def audit_problem_observed(audit: dict | None) -> bool | None:
     if audit is None or not observed_command(audit):
         return None
     code = audit.get("exit_code")
-    if not isinstance(code, int) or isinstance(code, bool) or code <= 0:
+    if not isinstance(code, int) or isinstance(code, bool) or code < 0:
+        # Signals and abnormal exits are not clean audit diagnostics.
+        return None
+    if code == 0:
         return False
     output = audit.get("output_tail", "").lower()
     return (not any(word in output for word in (
@@ -1104,9 +1145,19 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
         return receipt(product,"R6_git_pull_removal","BLOCKED",stage="author_removal",
                        refresh=refresh,command=changed,
                        reason="author could not produce valid remaining lock")
+    # The author product may replace its lock during regeneration. Do not
+    # commit an unverified symlink, FIFO, or out-of-root portable input.
+    if any(observed_file(author/name,author) is None for name in names):
+        return receipt(product,"R6_git_pull_removal","BLOCKED",
+                       stage="author_portable_unverified",
+                       reason="regenerated portable manifest/lock is not an in-root regular file")
     git("add",*names,cwd=author,env=env)
     git("commit","-qm","drop secondary",cwd=author,env=env)
     git("pull","-q","--ff-only",cwd=teammate,env=mate_env)
+    if any(observed_file(teammate/name,teammate) is None for name in names):
+        return receipt(product,"R6_git_pull_removal","BLOCKED",
+                       stage="teammate_portable_unverified",
+                       reason="pulled portable manifest/lock is not an in-root regular file")
     postpull=observed_file(mate_path,teammate)
     audit=None
     if product=="apm":
