@@ -31,17 +31,19 @@ const search = ref(name.value);
 watch(name, (value) => { search.value = value; });
 const view = ref<SkillsView>('popular');
 const { items, loading: catalogLoading } = useSkillsCatalog(search, view);
+const listedSkill = computed(() =>
+  items.value.find((item) => item.id === listingId.value) ??
+  (selectedSkill.value?.id === listingId.value ? selectedSkill.value : undefined),
+);
+// Never preview one Skill while offering the install command for a different
+// name just because the URL's untrusted query parameter was changed.
+const documentName = computed(() => listedSkill.value?.skillNameHint ?? name.value);
 const {
   document: sourceDocument,
   loading: documentLoading,
   failed: documentFailed,
   retry: retryDocument,
-} = useSkillDocument(listingId, name);
-
-const listedSkill = computed(() =>
-  items.value.find((item) => item.id === listingId.value) ??
-  (selectedSkill.value?.id === listingId.value ? selectedSkill.value : undefined),
-);
+} = useSkillDocument(listingId, documentName);
 const resolvedDocument = computed(() => {
   const result = sourceDocument.value;
   const source = sourceIdentity.value;
