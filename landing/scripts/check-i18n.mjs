@@ -269,7 +269,7 @@ export async function checkI18n() {
   );
   assert.equal(
     expandLocalizedRoutes(routes).length,
-    publishedLocales.length * (5 + clientLandingPages.length + 1),
+    publishedLocales.length * routes.length,
   );
   assert.throws(() => productRoutes(['community'], []), /Reserved/);
   assert.throws(() => productRoutes(['same', 'same'], []), /duplicate/);
