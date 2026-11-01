@@ -658,6 +658,24 @@ class RiskOracleTests(unittest.TestCase):
             third=risk.project_file_snapshot(project)
             self.assertNotEqual(second["sha256"],third["sha256"])
 
+    def test_project_snapshot_detects_directory_mode_and_inode_change(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project=Path(temp)
+            folder=project/".agents"/"skills"
+            folder.mkdir(parents=True)
+            before=risk.project_file_snapshot(project)
+            self.assertTrue(before["complete"])
+            folder.chmod(0o700)
+            changed=risk.project_file_snapshot(project)
+            self.assertNotEqual(before["sha256"],changed["sha256"])
+            # Same directory name and mode, but replaced inode, must be seen.
+            replacement=project/".agents"/"replacement"
+            replacement.mkdir()
+            folder.rmdir()
+            replacement.rename(folder)
+            swapped=risk.project_file_snapshot(project)
+            self.assertNotEqual(changed["sha256"],swapped["sha256"])
+
     def test_inert_mcp_config_does_not_prove_no_delayed_secret_writes(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)

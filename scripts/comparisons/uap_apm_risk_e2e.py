@@ -453,7 +453,19 @@ def project_file_snapshot(project: Path, *, max_entries: int = 4096) -> dict:
                 dirs.remove(name)
                 problems.append("symlink_directory")
             else:
-                observed.append("D:" + str(path.relative_to(project)))
+                # Directory permissions, owner and inode are agent-readable
+                # trust boundaries, not merely cosmetic metadata. Ignore
+                # timestamps so an owned store write cannot cause false drift.
+                try:
+                    info = path.lstat()
+                    if not stat.S_ISDIR(info.st_mode):
+                        problems.append("nonregular_directory")
+                    else:
+                        observed.append(":".join(str(value) for value in (
+                            "D", path.relative_to(project),
+                            info.st_mode, info.st_uid, info.st_gid, info.st_ino)))
+                except OSError:
+                    problems.append("directory_metadata_error")
         for name in sorted(files):
             path = here / name
             content = observed_file(path, project)
