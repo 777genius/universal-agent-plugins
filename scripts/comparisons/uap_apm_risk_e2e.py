@@ -1025,12 +1025,10 @@ def codex_mcp_contract(project: Path, product: str = "apm") -> str:
         if product == "uap":
             # The Agent Plugins loader requires a bundled stdio command.
             # Its Codex projection must retain that executable identity.
-            bundled = project / "package" / "bin" / "risk-probe.sh"
-            if not isinstance(command, str) or not (
-                    command == str(bundled) or (
-                        Path(command).is_absolute()
-                        and Path(command).parts[-2:] == ("bin", "risk-probe.sh")
-                        and ".uap" in Path(command).parts)):
+            executable = Path(command) if isinstance(command, str) else Path(".")
+            if (not executable.is_absolute()
+                    or executable.parts[-2:] != ("bin", "risk-probe.sh")
+                    or observed_file(executable, project.parent) != b"#!/bin/sh\\nexit 0\\n"):
                 return "wrong_command"
             if arguments != []:
                 return "wrong_arguments"
