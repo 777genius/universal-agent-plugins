@@ -249,7 +249,7 @@ test('Website publisher Skills install with UAP and open their own detail page',
           '<script>alert("xss")</script>',
           '[Bad](javascript:alert(1))',
           '[Competitor](https://www.skills.sh/site/something)',
-        ].join('\\n'),
+        ].join('\n'),
       },
     }),
   );
@@ -308,7 +308,7 @@ test('A deep-linked Skill renders source instructions without relying on bounded
       json: {
         status: 'resolved', source: 'anthropics/skills',
         commit: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        markdown: '---\\nname: frontend-design\\ndescription: Design\\n---\\n## Direct source content\\n',
+        markdown: '---\nname: frontend-design\ndescription: Design\n---\n## Direct source content\n',
       },
     }),
   );
