@@ -244,13 +244,44 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 		// Stop a potentially active disposable daemon even after t.Fatal.
 		stopService()
 	})
+// OpenCode v2.2.5 renders each server as: checkmark, exact name, exact
+// status. Substrings are unsafe: "disconnected" and "not connected" also
+// contain "connected" and must never satisfy the native readiness gate.
+func openCodeV2MCPConnectedStatus(output string) bool {
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 3 && fields[0] == "✓" &&
+			fields[1] == "uap_project_fixture" && fields[2] == "connected" {
+			return true
+		}
+	}
+	return false
+}
+
+func TestOpenCodeV2NativeMCPConnectedStatusExact(t *testing.T) {
+	if !openCodeV2MCPConnectedStatus("✓ uap_project_fixture  connected\n") {
+		t.Fatal("exact native connected status refused")
+	}
+	for _, output := range []string{
+		"○ uap_project_fixture  disconnected\n",
+		"○ uap_project_fixture  not connected\n",
+		"✗ uap_project_fixture  failed: connection refused\n",
+		"✓ other  connected\n○ uap_project_fixture  disconnected\n",
+		"✓ uap_project_fixture  connected to another server\n",
+		"No MCP servers configured\n",
+	} {
+		if openCodeV2MCPConnectedStatus(output) {
+			t.Fatal("non-connected or foreign native MCP status accepted")
+		}
+	}
+}
+
 	observe := func(project string, requireConnected bool) string {
 		t.Helper()
 		var output string
 		for attempt := 0; attempt < 12; attempt++ {
 			output = runService(project, "mcp", "list")
-			if !requireConnected || (strings.Contains(output, "uap_project_fixture") &&
-				strings.Contains(output, "connected")) {
+			if !requireConnected || openCodeV2MCPConnectedStatus(output) {
 				return output
 			}
 			// Yield only while the same native service finishes registering
@@ -259,15 +290,14 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 		}
 		return output
 	}
-	if output := observe(projectA, true); !strings.Contains(output, "uap_project_fixture") ||
-		!strings.Contains(output, "connected") {
+	if output := observe(projectA, true); !openCodeV2MCPConnectedStatus(output) {
 		methods, _ := os.ReadFile(events)
 		// This run uses an isolated temp HOME and a source-authored inert
 		// fixture. Emit only finite statuses, never the vendor's raw output,
 		// project paths, credentials, or unbounded stderr.
 		t.Fatalf("native V2 MCP status refused: named=%t connected=%t empty=%t failed=%t pending=%t helper_started=%t output_bytes=%d",
 			strings.Contains(output, "uap_project_fixture"),
-			strings.Contains(output, "connected"),
+			openCodeV2MCPConnectedStatus(output),
 			strings.Contains(output, "No MCP servers configured"),
 			strings.Contains(strings.ToLower(output), "failed"),
 			strings.Contains(strings.ToLower(output), "pending"),
