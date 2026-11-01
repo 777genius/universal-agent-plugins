@@ -1,6 +1,6 @@
 ---
 name: risk-child
-description: Controlled transitive dependency, version one.
+description: Controlled transitive dependency, version two.
 ---
 
-Version A — never contact a provider.
+Version B — updated intentionally; never contact a provider.

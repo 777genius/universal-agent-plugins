@@ -1,6 +1,6 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "risk-child",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Inert child package for exact transitive dependency proof."
 }
