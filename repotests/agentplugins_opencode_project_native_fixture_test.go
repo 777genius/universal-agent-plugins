@@ -201,7 +201,7 @@ func (f *openCodeProjectFixture) command(t *testing.T, class, label, exe, cwd st
 		t.Fatal("command not in finite project table or repeated")
 	}
 	f.used[label] = class
-	if class == "native" && !reflect.DeepEqual(args, []string{"--version"}) && !reflect.DeepEqual(args, []string{"debug", "config"}) && !reflect.DeepEqual(args, []string{"debug", "skill"}) {
+	if class == "native" && !reflect.DeepEqual(args, []string{"--version"}) && !reflect.DeepEqual(args, []string{"debug", "config"}) && !reflect.DeepEqual(args, []string{"debug", "config", "--standalone"}) && !reflect.DeepEqual(args, []string{"debug", "skill"}) {
 		f.failed = true
 		t.Fatal("unreviewed native argv")
 	}
@@ -363,7 +363,15 @@ func (f *openCodeProjectFixture) binding(t *testing.T, project string) domain.Cl
 func (f *openCodeProjectFixture) config(t *testing.T, label, project string, extra []string) map[string]any {
 	t.Helper()
 	env := append(f.env(), extra...)
-	r := f.command(t, "native", label+"-config", f.client, project, env, []string{"debug", "config"})
+	argv := []string{"debug", "config"}
+	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") == "2.2.5" {
+		// V2 otherwise reuses a background server whose effective config
+		// can remain at the previous revision after UAP changes owned files.
+		// Standalone creates an isolated fresh server for this exact project
+		// observation. V1's original CLI contract remains untouched.
+		argv = []string{"debug", "config", "--standalone"}
+	}
+	r := f.command(t, "native", label+"-config", f.client, project, env, argv)
 	if r.Exit != 0 || len(bytesTrim(r.Stderr)) != 0 {
 		t.Fatal("native config failed or warned; see exact evidence")
 	}
