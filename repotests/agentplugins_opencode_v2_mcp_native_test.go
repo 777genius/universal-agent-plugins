@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -187,6 +186,10 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 	if counts["initialize"] == 0 || counts["tools/list"] == 0 ||
 		counts["tools/call"] != 0 || len(methods) > 24 {
 		t.Fatal("native V2 MCP initialize/tools-list handshake was not exact")
+	}
+	currentProjectConfig, err := os.ReadFile(configuration)
+	if err != nil || sha256.Sum256(currentProjectConfig) != baseline {
+		t.Fatal("native MCP command changed the original project config")
 	}
 	before := append([]byte(nil), methodsRaw...)
 	for _, project := range []string{projectB, projectA} {
