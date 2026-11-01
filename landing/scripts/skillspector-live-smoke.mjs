@@ -655,11 +655,11 @@ try {
       await expect(panel.locator('.skillspector__coverage')).toContainText(
         'node_modules/wrangler/config-schema.json',
       );
-      await summary.focus();
-      await page.keyboard.press('Space');
+      await panel.locator('.skillspector__dialog-close').click();
+      await expect(summary).toBeFocused();
       await expect(panel).not.toHaveAttribute('open');
       await expect(panel.locator('.skillspector__details')).toHaveCount(0);
-      await page.keyboard.press('Enter');
+      await summary.press('Enter');
       await expect(panel.locator('.skillspector__details')).toBeVisible();
       assert.deepEqual(
         await panel.locator('.skillspector__technical > div > details > pre').allTextContents(),
@@ -671,7 +671,8 @@ try {
         true,
         'No horizontal page overflow',
       );
-      await panel.screenshot({ path: resolve(output, `plugin-${locale}-${width}.png`) });
+      await panel.locator('.skillspector__dialog').screenshot({ path: resolve(output, `plugin-${locale}-${width}.png`) });
+      await panel.locator('.skillspector__dialog-close').click();
       const standaloneAssessment = skillSpectorAssessment(standalone.report, {
         kind: 'skill',
         repository: standalone.listing.source.repository,
@@ -704,7 +705,9 @@ try {
         ).map((value) => JSON.parse(value)),
         standaloneAssessment.records,
       );
-      await skill.screenshot({ path: resolve(output, `standalone-${locale}-${width}.png`) });
+      await skillPanel.locator('.skillspector__dialog').screenshot({
+        path: resolve(output, `standalone-${locale}-${width}.png`),
+      });
       const failures = (await Promise.all(responseChecks)).filter(Boolean);
       assert.deepEqual(
         failures.map((error) => error.message),

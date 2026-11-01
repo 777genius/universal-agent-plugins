@@ -86,7 +86,7 @@
       "noSkillsDetails": "Цей плагін не містить навичок. SkillSpector перевіряє лише файли навичок; інші компоненти плагіна не входять до області перевірки.",
       "title": "Перевірка скілів",
       "engine": "SkillSpector виконує статичні перевірки вихідних файлів.",
-      "outcomelimited": "Перевірено з обмеженнями",
+      "outcomelimited": "Перевірено не повністю",
       "outcomefailed": "Не вдалося перевірити",
       "outcomehistorical": "Лише застарілий звіт",
       "outcomeunscanned": "Звіту ще немає",
@@ -96,7 +96,14 @@
       "scanComplete": "Перевірку завершено",
       "selectionScanned": "Вибрані скіли перевірено",
       "retryLoad": "Спробувати завантажити знову",
-      "coverageProgress": "Проскановано {checked}/{total} · з обмеженнями: {limited}"
+      "coverageProgress": "Перевірено {checked}/{total} · {limited} не повністю",
+      "waitingProgress": "Перевірено {checked}/{total} · {waiting} очікують перевірки",
+      "statusExplanation": "Деякі файли або перевірки не вдалося підтвердити. Це не означає, що виявлено підтверджену вразливість.",
+      "openReport": "Відкрити деталі",
+      "closeReport": "Закрити",
+      "awaitingList": "Скіли без актуальної перевірки",
+      "awaitingExplanation": "Для цих скілів поки немає актуального результату. Їхня безпека невідома.",
+      "waitingWithLimitsProgress": "Перевірено {checked}/{total} · {waiting} очікують · {limited} не повністю"
     }
   }
 }

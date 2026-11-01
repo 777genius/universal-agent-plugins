@@ -86,7 +86,7 @@
       "noSkillsDetails": "Este plugin não inclui Skills. O SkillSpector verifica apenas arquivos de Skills; os outros componentes do plugin ficam fora do seu escopo.",
       "title": "Análise de Skills",
       "engine": "O SkillSpector realiza verificações estáticas dos arquivos de origem.",
-      "outcomelimited": "Analisados com limitações",
+      "outcomelimited": "Verificação incompleta",
       "outcomefailed": "Não foi possível analisar",
       "outcomehistorical": "Apenas relatório anterior",
       "outcomeunscanned": "Ainda sem relatório",
@@ -96,7 +96,14 @@
       "scanComplete": "Análise concluída",
       "selectionScanned": "Skills selecionados analisados",
       "retryLoad": "Tentar carregar novamente",
-      "coverageProgress": "{checked}/{total} analisadas · {limited} com limitações"
+      "coverageProgress": "Verificados {checked}/{total} · {limited} incompletos",
+      "waitingProgress": "Verificados {checked}/{total} · {waiting} aguardando",
+      "statusExplanation": "Alguns arquivos ou verificações não puderam ser confirmados. Isso não significa que um problema de segurança foi confirmado.",
+      "openReport": "Ver detalhes",
+      "closeReport": "Fechar",
+      "awaitingList": "Skills sem verificação atual",
+      "awaitingExplanation": "Esses Skills ainda não têm resultado de verificação atual. A segurança é desconhecida.",
+      "waitingWithLimitsProgress": "Verificados {checked}/{total} · {waiting} aguardando · {limited} incompletos"
     }
   }
 }

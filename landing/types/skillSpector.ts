@@ -237,6 +237,7 @@ export interface SkillSpectorAssessment {
   fullyChecked?: number;
   inventoryKnown?: boolean;
   selected?: number;
+  pendingIds?: string[];
   legacy?: boolean;
   reasons?: SkillSpectorReason[];
   groupCount?: number;

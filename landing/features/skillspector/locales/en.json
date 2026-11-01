@@ -86,7 +86,7 @@
       "noSkillsDetails": "This plugin does not include Skills. SkillSpector checks Skill files only; other plugin components are outside its scope.",
       "title": "Skill scan",
       "engine": "SkillSpector performs static checks of the source files.",
-      "outcomelimited": "Checked with limitations",
+      "outcomelimited": "Not fully checked",
       "outcomefailed": "Could not scan",
       "outcomehistorical": "Older report only",
       "outcomeunscanned": "No report yet",
@@ -96,7 +96,14 @@
       "scanComplete": "Scan complete",
       "selectionScanned": "Selected skills scanned",
       "retryLoad": "Try loading again",
-      "coverageProgress": "{checked}/{total} scanned · {limited} limited"
+      "coverageProgress": "{checked}/{total} checked · {limited} not fully checked",
+      "waitingProgress": "{checked}/{total} checked · {waiting} awaiting a check",
+      "statusExplanation": "A result may have gaps if some files or checks could not be verified. This does not mean a security issue was confirmed.",
+      "openReport": "Open details",
+      "closeReport": "Close",
+      "awaitingList": "Skills awaiting a current check",
+      "awaitingExplanation": "These listed Skills do not have a current result yet. Their safety is not known.",
+      "waitingWithLimitsProgress": "{checked}/{total} checked · {waiting} awaiting · {limited} not fully checked"
     }
   }
 }

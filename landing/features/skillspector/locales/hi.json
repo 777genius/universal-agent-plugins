@@ -86,7 +86,7 @@
       "noSkillsDetails": "इस प्लगइन में कोई स्किल नहीं है। SkillSpector केवल स्किल फ़ाइलों की जाँच करता है; प्लगइन के अन्य घटक इसकी जाँच के दायरे में नहीं आते।",
       "title": "स्किल जाँच",
       "engine": "SkillSpector स्रोत फ़ाइलों की स्थिर जाँच करता है।",
-      "outcomelimited": "सीमाओं के साथ जाँचा गया",
+      "outcomelimited": "जाँच पूरी नहीं हुई",
       "outcomefailed": "जाँच नहीं हो सकी",
       "outcomehistorical": "केवल पुरानी रिपोर्ट",
       "outcomeunscanned": "अभी रिपोर्ट नहीं है",
@@ -96,7 +96,14 @@
       "scanComplete": "जाँच पूरी हुई",
       "selectionScanned": "चुने गए स्किल जाँचे गए",
       "retryLoad": "फिर से लोड करें",
-      "coverageProgress": "{checked}/{total} जाँची गईं · {limited} सीमित"
+      "coverageProgress": "{checked}/{total} की जाँच हुई · {limited} अधूरे",
+      "waitingProgress": "{checked}/{total} की जाँच हुई · {waiting} प्रतीक्षारत",
+      "statusExplanation": "कुछ फ़ाइलों या जाँचों का सत्यापन नहीं हो सका। इसका अर्थ यह नहीं कि सुरक्षा समस्या की पुष्टि हुई है।",
+      "openReport": "विवरण खोलें",
+      "closeReport": "बंद करें",
+      "awaitingList": "वर्तमान जाँच की प्रतीक्षा वाले स्किल",
+      "awaitingExplanation": "इन स्किल्स की अभी तक वर्तमान जाँच का परिणाम उपलब्ध नहीं है। उनकी सुरक्षा अज्ञात है।",
+      "waitingWithLimitsProgress": "{checked}/{total} की जाँच · {waiting} प्रतीक्षारत · {limited} अधूरे"
     }
   }
 }

@@ -289,8 +289,14 @@ export function skillSpectorAssessment(
       limited: currentRecords.length - fullyChecked - failed,
       failed,
       historical: records.length - currentRecords.length,
+      // Historical-only results are still waiting for a current check.
       unscanned: Math.max(0, selected - records.length),
     };
+    const pendingIds = subject?.kind === 'plugin' && Array.isArray(state?.selected_ids)
+      ? (state.selected_ids as unknown[])
+          .filter((id): id is string => typeof id === 'string')
+          .filter((id) => !currentRecords.some((record) => record.id === id))
+      : [];
     const outOfDate = outcomes.historical > 0;
     const retries = { scheduled: 0, blocked: 0, exhausted: 0 };
     for (const record of records) {
@@ -363,6 +369,7 @@ export function skillSpectorAssessment(
       fullyChecked,
       inventoryKnown: subject?.kind === 'plugin' && typeof state?.skills_total === 'number',
       selected,
+      pendingIds,
       reasons,
       groupCount: records.some((record) => record.coverage?.grouping_complete === false)
         ? undefined

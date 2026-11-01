@@ -86,7 +86,7 @@
       "noSkillsDetails": "В этом плагине нет скиллов. SkillSpector проверяет только файлы скиллов; другие компоненты плагина не входят в область проверки.",
       "title": "Проверка скиллов",
       "engine": "SkillSpector выполняет статические проверки исходных файлов.",
-      "outcomelimited": "Проверено с ограничениями",
+      "outcomelimited": "Проверено не полностью",
       "outcomefailed": "Не удалось проверить",
       "outcomehistorical": "Только устаревший отчёт",
       "outcomeunscanned": "Отчёта пока нет",
@@ -96,7 +96,14 @@
       "scanComplete": "Проверка завершена",
       "selectionScanned": "Выбранные скиллы проверены",
       "retryLoad": "Повторить загрузку",
-      "coverageProgress": "Проверено {checked}/{total} · с ограничениями: {limited}"
+      "coverageProgress": "Проверено {checked}/{total} · {limited} не полностью",
+      "waitingProgress": "Проверено {checked}/{total} · {waiting} ожидают проверки",
+      "statusExplanation": "В некоторых результатах есть пробелы: не все файлы или проверки удалось проверить. Это не означает, что обнаружена подтверждённая уязвимость.",
+      "openReport": "Открыть подробности",
+      "closeReport": "Закрыть",
+      "awaitingList": "Скиллы без актуальной проверки",
+      "awaitingExplanation": "У этих скиллов пока нет актуального результата. Их безопасность неизвестна.",
+      "waitingWithLimitsProgress": "Проверено {checked}/{total} · {waiting} ожидают · {limited} не полностью"
     }
   }
 }

@@ -162,8 +162,7 @@ for (const mobile of [false, true]) {
       expect(sizes.body).toBeGreaterThanOrEqual(13);
       expect(sizes.code).toBeGreaterThanOrEqual(12);
       expect(sizes.height).toBeGreaterThanOrEqual(mobile ? 44 : 32);
-      await details.locator(':scope > summary').focus();
-      await page.keyboard.press('Space');
+      await details.locator('.skillspector__dialog-close').click();
       await expect(details).not.toHaveAttribute('open');
       await card.getByRole('button', { name: 'Install I18n State 00', exact: true }).click();
       await expect(card.locator('.plugin-card__install-panel pre')).toContainText(
@@ -178,6 +177,10 @@ for (const mobile of [false, true]) {
         'The current revision of this listing has not been verified.',
       );
       await expect(skill).toContainText('a'.repeat(40));
+      // The native report dialog is modal; close it before testing the install action.
+      await skill.locator('.skillspector__dialog-close').click();
+      await expect(skill.locator('.skillspector__dialog')).toHaveCount(0);
+      await expect(skill.locator('.skillspector > summary')).toBeFocused();
       await skill.getByRole('button', { name: 'Install frontend-design', exact: true }).click();
       await expect(skill.locator('.plugin-card__install-panel pre')).toContainText(
         'skills add https://github.com/anthropics/skills --skill frontend-design',

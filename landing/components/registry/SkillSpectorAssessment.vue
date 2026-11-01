@@ -25,18 +25,32 @@ const props = withDefaults(
   }>(),
   { applicable: true, subject: undefined },
 );
-const detailsOpen = ref(Boolean(props.expanded));
+const detailsOpen = ref(false);
+const reportRoot = ref<HTMLDetailsElement | null>(null);
+const reportTrigger = ref<HTMLElement | null>(null);
+const reportDialog = ref<HTMLDialogElement | null>(null);
 const reasonContextsOpen = ref(new Set<string>());
-watch(
-  () => props.expanded,
-  (expanded) => {
-    detailsOpen.value = Boolean(expanded);
-  },
-);
-const onToggle = (event: Event) => {
+const onToggle = async (event: Event) => {
   if (event.target !== event.currentTarget) return;
-  detailsOpen.value = (event.currentTarget as HTMLDetailsElement).open;
-  if (!detailsOpen.value) reasonContextsOpen.value.clear();
+  const open = (event.currentTarget as HTMLDetailsElement).open;
+  detailsOpen.value = open;
+  if (!open) {
+    reasonContextsOpen.value.clear();
+    if (reportDialog.value?.open) reportDialog.value.close();
+    return;
+  }
+  await nextTick();
+  if (reportDialog.value && !reportDialog.value.open) reportDialog.value.showModal();
+};
+const closeReport = () => reportDialog.value?.close();
+const onDialogClose = () => {
+  detailsOpen.value = false;
+  reasonContextsOpen.value.clear();
+  if (reportRoot.value) reportRoot.value.open = false;
+  nextTick(() => reportTrigger.value?.focus());
+};
+const onBackdropClick = (event: MouseEvent) => {
+  if (event.target === reportDialog.value) closeReport();
 };
 const { t, n, locale } = useI18n({ useScope: 'local' });
 const { report, status: loadedStatus, recoverable, retry: retryReport } = useSkillSpector(() =>
@@ -72,21 +86,31 @@ const label = computed(() => {
       props.scope === 'plugin' && !assessment.value.inventoryKnown
         ? 'selectionScanned'
         : 'scanComplete';
-  // Partial scan results count as scanned, but never as fully analyzed.
+  // Current records include complete and partial scans, never pending or historical records.
   const outcomes = assessment.value.outcomes;
   const scanned = (outcomes?.complete ?? 0) + (outcomes?.limited ?? 0);
-  if (!legacy.value && key === 'incomplete' && outcomes?.limited && !outcomes.failed) {
+  const waiting = (outcomes?.unscanned ?? 0) + (outcomes?.historical ?? 0);
+  if (!legacy.value && key === 'incomplete' && outcomes && !outcomes.failed) {
     if (
       props.scope === 'plugin' &&
       assessment.value.inventoryKnown &&
       (assessment.value.selected ?? 0) > 1
-    )
-      return t('registryUi.skillSpector.coverageProgress', {
-        checked: n(scanned),
-        total: n(assessment.value.selected ?? 0),
-        limited: n(outcomes.limited),
-      });
-    if (!outcomes.unscanned) return t('registryUi.skillSpector.outcomelimited');
+    ) {
+      if (waiting)
+        return t(`registryUi.skillSpector.${outcomes.limited ? 'waitingWithLimitsProgress' : 'waitingProgress'}`, {
+          checked: n(scanned),
+          total: n(assessment.value.selected ?? 0),
+          waiting: n(waiting),
+          limited: n(outcomes.limited),
+        });
+      if (outcomes.limited)
+        return t('registryUi.skillSpector.coverageProgress', {
+          checked: n(scanned),
+          total: n(assessment.value.selected ?? 0),
+          limited: n(outcomes.limited),
+        });
+    }
+    if (outcomes.limited && !waiting) return t('registryUi.skillSpector.outcomelimited');
   }
   return t(`registryUi.skillSpector.${key}`);
 });
@@ -204,17 +228,41 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
   </p>
   <details
     v-else
+    ref="reportRoot"
     class="skillspector"
     :class="`skillspector--${displayStatus}`"
-    :open="expanded || undefined"
     @toggle="onToggle"
   >
-    <summary :aria-label="`${name}: ${t('registryUi.skillSpector.title')} · ${label}`">
+    <summary
+      ref="reportTrigger"
+      aria-haspopup="dialog"
+      :aria-label="`${name}: ${t('registryUi.skillSpector.title')} · ${label}. ${t('registryUi.skillSpector.openReport')}`"
+    >
       <span class="skillspector__icon" aria-hidden="true">i</span>
       <span>{{ t('registryUi.skillSpector.title') }} · {{ label }}</span>
       <span class="skillspector__arrow" aria-hidden="true">⌄</span>
     </summary>
-    <div v-if="detailsOpen" class="skillspector__details" :aria-busy="reportStatus === 'loading'">
+    <dialog
+      v-if="detailsOpen"
+      ref="reportDialog"
+      class="skillspector__dialog"
+      :aria-label="t('registryUi.skillSpector.detailsFor', { name })"
+      @close="onDialogClose"
+      @click="onBackdropClick"
+    >
+      <div class="skillspector__dialog-frame">
+        <header class="skillspector__dialog-header">
+          <div>
+            <h2>{{ t('registryUi.skillSpector.detailsFor', { name }) }}</h2>
+            <p>{{ t('registryUi.skillSpector.statusExplanation') }}</p>
+          </div>
+          <button
+            type="button"
+            class="skillspector__dialog-close"
+            @click="closeReport"
+          >{{ t('registryUi.skillSpector.closeReport') }}</button>
+        </header>
+        <div class="skillspector__details" :aria-busy="reportStatus === 'loading'">
       <section class="skillspector__advice">
         <strong>{{ t('registryUi.skillSpector.installAdvice') }}</strong>
         <p>
@@ -250,6 +298,15 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
             )
           }}
         </p>
+        <section v-if="assessment.pendingIds?.length" class="skillspector__waiting">
+          <h3>{{ t('registryUi.skillSpector.awaitingList') }}</h3>
+          <p>{{ t('registryUi.skillSpector.awaitingExplanation') }}</p>
+          <ul>
+            <li v-for="identifier in assessment.pendingIds" :key="identifier">
+              <code :title="identifier">{{ identifier.split('/').at(-1) }}</code>
+            </li>
+          </ul>
+        </section>
         <dl v-if="coverageRows.length" class="skillspector__outcomes">
           <div v-for="[outcome, count] in coverageRows" :key="outcome">
             <dt>{{
@@ -594,7 +651,9 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
       <p v-if="assessment.records.length" class="skillspector__disclaimer">
         {{ t('registryUi.skillSpector.disclaimer') }}
       </p>
-    </div>
+        </div>
+      </div>
+    </dialog>
   </details>
 </template>
 
@@ -665,17 +724,73 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
 .skillspector--confirmedMaterialIssue > summary {
   color: #f5c451;
 }
-.skillspector__details {
-  margin-top: 8px;
-  padding: 12px;
-  border: 1px solid var(--line);
+.skillspector__dialog {
+  position: fixed;
+  inset: 0;
+  width: min(940px, calc(100vw - 28px));
+  max-width: none;
+  max-height: min(88dvh, 920px);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface-solid);
+  color: var(--text);
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.46);
+}
+.skillspector__dialog::backdrop {
+  background: rgba(2, 5, 13, 0.76);
+  backdrop-filter: blur(3px);
+}
+.skillspector__dialog-frame {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 920px);
+}
+.skillspector__dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
+}
+.skillspector__dialog-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--text);
+}
+.skillspector__dialog-header p {
+  margin: 6px 0 0;
+  color: var(--subtle);
+  max-width: 65ch;
+  font-size: 0.85rem;
+}
+.skillspector__dialog-close {
+  flex-shrink: 0;
+  min-height: 38px;
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   background: var(--surface);
   color: var(--text);
-  font-size: 0.8125rem;
-  overflow-wrap: anywhere;
-  max-height: 28rem;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+.skillspector__dialog-close:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+.skillspector__details {
+  min-height: 0;
+  padding: 20px 24px 28px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--text);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
 }
 .skillspector__details p {
   margin: 6px 0;
@@ -696,16 +811,43 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
   outline: 2px solid var(--cyan);
   outline-offset: 3px;
 }
+.skillspector__waiting h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+.skillspector__waiting ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.skillspector__waiting li {
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+}
 .skillspector__outcomes {
-  margin: 8px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
 }
 .skillspector__outcomes > div {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
 }
 .skillspector__outcomes dd {
   margin: 0;
+  font-size: 1.5rem;
+  font-weight: 750;
   font-variant-numeric: tabular-nums;
 }
 .skillspector__details a {
@@ -756,8 +898,45 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
 .skillspector__details section + section,
 .skillspector__technical {
   border-top: 1px solid var(--line);
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+}
+.skillspector__record,
+.skillspector__context-record,
+.skillspector__reason-contexts,
+.skillspector__diagnostics,
+.skillspector__technical {
+  margin-block: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.skillspector__record > summary,
+.skillspector__context-record > summary,
+.skillspector__reason-contexts > summary,
+.skillspector__diagnostics > summary,
+.skillspector__technical > summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 4px 0;
+}
+.skillspector__record[open],
+.skillspector__context-record[open],
+.skillspector__reason-contexts[open],
+.skillspector__diagnostics[open],
+.skillspector__technical[open] {
+  border-color: var(--cyan);
+}
+@media (max-width: 600px) {
+  .skillspector__dialog {
+    width: calc(100vw - 12px);
+    max-height: calc(100dvh - 12px);
+  }
+  .skillspector__dialog-frame { max-height: calc(100dvh - 12px); }
+  .skillspector__dialog-header { padding: 14px; }
+  .skillspector__details { padding: 14px; }
+  .skillspector__dialog-header h2 { font-size: 1.05rem; }
 }
 .skillspector__disclaimer {
   color: var(--subtle);

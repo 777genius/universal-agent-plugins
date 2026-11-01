@@ -103,7 +103,7 @@ async function publishedHome(page: Page, context: BrowserContext, isolated = fal
   const report = page.locator(
     `[data-install-source=${JSON.stringify(isolated ? 'i18n-state-00' : cloudflareSource)}] details.skillspector`,
   );
-  await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 scanned · 10 limited|Coverage has limits)/);
+  await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 checked · 10 not fully checked|Coverage has limits)/);
   return { report, errors, requests, registryRequests: () => registryRequests };
 }
 
@@ -134,7 +134,7 @@ test('published large reports keep closed cards unmounted after real data and ap
   expect(assessedSources).toEqual(expectedSources);
   await expect(page.locator('details.skillspector')).toHaveCount(expectedSources.length);
   await expect(page.locator('.skillspector__details')).toHaveCount(0);
-  await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 scanned · 10 limited|Coverage has limits)/);
+  await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 checked · 10 not fully checked|Coverage has limits)/);
   expect(requests.get('index.json')).toBe(1);
   for (const shard of shards) expect(requests.get(shard.path)).toBe(1);
   expect(errors).toEqual([]);
@@ -167,11 +167,11 @@ test('published report native keyboard toggles preserve cached evidence and nest
   }));
   expect(nested.open).toBe(true);
   expect(nested.visible).toBe(true);
-  await summary.focus();
-  await page.keyboard.press('Space');
+  await report.locator('.skillspector__dialog-close').click();
+  await expect(summary).toBeFocused();
   await expect(report).not.toHaveAttribute('open');
   await expect(report.locator('.skillspector__details')).toHaveCount(0);
-  await page.keyboard.press('Enter');
+  await summary.press('Enter');
   await expect(report.locator('.skillspector__details')).toBeVisible();
   const reopened = await report.evaluate((element) => ({
     open: (element as HTMLDetailsElement).open,

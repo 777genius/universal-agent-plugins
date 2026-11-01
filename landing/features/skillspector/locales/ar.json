@@ -86,7 +86,7 @@
       "noSkillsDetails": "لا تتضمن هذه الإضافة مهارات. يفحص SkillSpector ملفات المهارات فقط؛ أما مكونات الإضافة الأخرى فهي خارج نطاق فحصه.",
       "title": "فحص المهارات",
       "engine": "يجري SkillSpector فحوصًا ثابتة للملفات المصدرية.",
-      "outcomelimited": "فُحصت مع قيود",
+      "outcomelimited": "الفحص غير مكتمل",
       "outcomefailed": "تعذّر فحصها",
       "outcomehistorical": "تقرير قديم فقط",
       "outcomeunscanned": "لا يوجد تقرير بعد",
@@ -96,7 +96,14 @@
       "scanComplete": "اكتمل الفحص",
       "selectionScanned": "فُحصت المهارات المحددة",
       "retryLoad": "إعادة تحميل التقرير",
-      "coverageProgress": "فُحصت {checked}/{total} · {limited} بقيود"
+      "coverageProgress": "تم فحص {checked}/{total} · {limited} غير مكتملة",
+      "waitingProgress": "تم فحص {checked}/{total} · {waiting} بانتظار الفحص",
+      "statusExplanation": "قد توجد فجوات عندما يتعذر التحقق من بعض الملفات أو الفحوصات. هذا لا يعني تأكيد مشكلة أمنية.",
+      "openReport": "عرض التفاصيل",
+      "closeReport": "إغلاق",
+      "awaitingList": "مهارات بانتظار فحص حالي",
+      "awaitingExplanation": "لا تتوفر نتائج فحص حالية لهذه المهارات حتى الآن. سلامتها غير معروفة.",
+      "waitingWithLimitsProgress": "تم فحص {checked}/{total} · {waiting} بانتظار الفحص · {limited} غير مكتملة"
     }
   }
 }

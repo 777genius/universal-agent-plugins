@@ -86,7 +86,7 @@
       "noSkillsDetails": "此插件不包含技能。SkillSpector 仅检查技能文件；插件的其他组件不在其检查范围内。",
       "title": "技能扫描",
       "engine": "SkillSpector 对源文件进行静态检查。",
-      "outcomelimited": "检查存在限制",
+      "outcomelimited": "未完全检查",
       "outcomefailed": "无法扫描",
       "outcomehistorical": "仅有旧报告",
       "outcomeunscanned": "暂无报告",
@@ -96,7 +96,14 @@
       "scanComplete": "扫描完成",
       "selectionScanned": "已扫描选定技能",
       "retryLoad": "重新加载",
-      "coverageProgress": "已扫描 {checked}/{total} · {limited} 项有限制"
+      "coverageProgress": "已检查 {checked}/{total} · {limited} 项未完全检查",
+      "waitingProgress": "已检查 {checked}/{total} · {waiting} 项等待检查",
+      "statusExplanation": "如果部分文件或检测无法验证，结果可能存在缺口。这不代表已确认存在安全问题。",
+      "openReport": "查看详情",
+      "closeReport": "关闭",
+      "awaitingList": "尚无当前检查结果的技能",
+      "awaitingExplanation": "这些技能尚无当前检查结果，安全状态未知。",
+      "waitingWithLimitsProgress": "已检查 {checked}/{total} · {waiting} 项待检查 · {limited} 项未完全检查"
     }
   }
 }
