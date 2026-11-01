@@ -133,7 +133,7 @@ useHead({
               </div>
               <div class="skills-detail__install-body">
                 <AppMultiSelect
-                  v-model="targets"
+                  :model-value="targets"
                   :auto-selected="chooseInTerminal"
                   :auto-option="terminalOption"
                   :label="t('registryUi.skills.chooseAgents')"
