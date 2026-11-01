@@ -672,6 +672,7 @@ try {
         'No horizontal page overflow',
       );
       await panel.locator('.skillspector__dialog').screenshot({ path: resolve(output, `plugin-${locale}-${width}.png`) });
+      await panel.locator('.skillspector__dialog-close').click();
       const standaloneAssessment = skillSpectorAssessment(standalone.report, {
         kind: 'skill',
         repository: standalone.listing.source.repository,
@@ -704,7 +705,9 @@ try {
         ).map((value) => JSON.parse(value)),
         standaloneAssessment.records,
       );
-      await skill.screenshot({ path: resolve(output, `standalone-${locale}-${width}.png`) });
+      await skillPanel.locator('.skillspector__dialog').screenshot({
+        path: resolve(output, `standalone-${locale}-${width}.png`),
+      });
       const failures = (await Promise.all(responseChecks)).filter(Boolean);
       assert.deepEqual(
         failures.map((error) => error.message),

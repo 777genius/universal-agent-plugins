@@ -688,11 +688,11 @@ for (const width of [1280, 390]) {
     const screenshots = process.env.UAP_LANDING_SCREENSHOT_DIR;
     if (screenshots) {
       mkdirSync(screenshots, { recursive: true });
-      await screenshotBelowHeader(
-        card.locator('.skillspector'),
-        `${screenshots}/report-ru-${width}.png`,
-      );
+      await card.locator('.skillspector__dialog').screenshot({
+        path: `${screenshots}/report-ru-${width}.png`,
+      });
     }
+    await card.locator('.skillspector__dialog-close').click();
     await expect(card.locator('.plugin-card__ribbon')).toHaveText('Проверено');
     await card.locator('.plugin-card__ribbon').focus();
     await expect(
