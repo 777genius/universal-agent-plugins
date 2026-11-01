@@ -1,9 +1,9 @@
 name: risk-parent
-version: 1.0.0
+version: 2.0.0
 includes:
   - .apm/skills
 dependencies:
   apm:
     - git: https://github.com/777genius/universal-agent-plugins.git
       path: tests/fixtures/uap_apm/risk_graph/child
-      ref: ab81308e402e3ac64c3e1840088770d98a1b6245
+      ref: fb96f0f4d1ef62c2ea3dfc11c1880380fe3737b2
