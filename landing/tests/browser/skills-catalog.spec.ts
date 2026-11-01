@@ -289,6 +289,10 @@ test('Website publisher Skills install with UAP and open their own detail page',
   await expect(page.locator('.skills-detail__document .skill-markdown strong')).toHaveText('Important instructions');
   await expect(page.locator('.skills-detail__document .skill-markdown table')).toBeVisible();
   await expect(page.locator('.skills-detail__document .skill-markdown pre')).toBeVisible();
+  const raw = page.locator('.skill-markdown__raw');
+  await raw.locator('summary').click();
+  await expect(raw.locator('pre')).toContainText('metadata');
+  await expect(raw.locator('pre')).toContainText('name: lark-mail');
   await expect(page.locator('.skills-detail__document script')).toHaveCount(0);
   await expect(page.locator('a[href*="skills.sh"]')).toHaveCount(0);
 });
