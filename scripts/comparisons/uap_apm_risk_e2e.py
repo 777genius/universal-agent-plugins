@@ -231,6 +231,12 @@ def lock_validation_refused(command: dict, lock_name: str) -> bool:
         # Filenames/paths (including the fixture's parent directory) must not
         # donate error vocabulary to a diagnostic for a different failure.
         diagnostic_text = re.sub(r"[^\s]*[/\\][^\s]*", "<path>", line)
+        # A warning about the lock plus an unrelated command failure is not
+        # independent evidence that locked replay rejected bad bytes.
+        prefix = diagnostic_text.lstrip()
+        if prefix.startswith(("warning", "warn:", "[warn]", "[warning]",
+                              "info:", "[info]", "note:", "debug:")):
+            continue
         if (not any(word in diagnostic_text for word in nonfailure)
                 and any(key in diagnostic_text for key in expected)
                 and any(word in diagnostic_text for word in error_tokens)):
