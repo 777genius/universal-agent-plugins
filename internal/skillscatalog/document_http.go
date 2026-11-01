@@ -39,18 +39,23 @@ type documentHandler struct {
 	git     SourceResolver
 	website WebsiteDocumentReader
 	origins map[string]bool
-	mu      sync.Mutex
-	active  bool
-	tokens  float64
-	tokenAt time.Time
-	cache   map[string]cachedDocument
+	mu           sync.Mutex
+	active       int
+	clients      map[string]bool
+	nextAllowed  map[string]time.Time
+	failures     map[string]time.Time
+	tokens       float64
+	tokenAt      time.Time
+	cache        map[string]cachedDocument
 }
 
 // NewDocumentHandler exposes only bounded, text-only public previews.
 // The service-only immutable resolver remains separate and authenticated.
 func NewDocumentHandler(git SourceResolver, website WebsiteDocumentReader, origins []string) (http.Handler, error) {
 	h := &documentHandler{git: git, website: website, origins: map[string]bool{},
-		tokens: 2, tokenAt: time.Now(), cache: map[string]cachedDocument{}}
+		clients: map[string]bool{}, nextAllowed: map[string]time.Time{},
+		failures: map[string]time.Time{}, tokens: 4, tokenAt: time.Now(),
+		cache: map[string]cachedDocument{}}
 	for _, origin := range origins {
 		if !validOrigin(origin) {
 			return nil, fmt.Errorf("invalid document CORS origin")
@@ -94,52 +99,130 @@ func (h *documentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // serveDocument applies a global admission gate before any untrusted remote I/O.
+// A client may occupy only one of four slots. Failed source coordinates
+// cool down separately so repeated publisher stalls do not consume slots.
+const maxActiveDocumentPreviews = 4
+
 func (h *documentHandler) serveDocument(w http.ResponseWriter, r *http.Request, id, source, name string) {
 	key := id + "\x00" + name
-	now := time.Now()
-	h.mu.Lock()
-	if cached, ok := h.cache[key]; ok && now.Before(cached.expires) {
-		h.mu.Unlock()
-		w.Header().Set("Cache-Control", "public, max-age=300")
-		writeJSON(w, 200, cached.response)
+	if cached, ok, failed := h.lookupDocument(key); ok {
+		if failed {
+			documentUnavailable(w)
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=300")
+			writeJSON(w, 200, cached)
+		}
 		return
 	}
-	h.tokens = min(2, h.tokens + now.Sub(h.tokenAt).Seconds()/5)
-	h.tokenAt = now
-	if h.active || h.tokens < 1 {
-		h.mu.Unlock()
+	client := documentClientKey(r)
+	if !h.admitDocument(client) {
 		w.Header().Set("Retry-After", "5")
 		writeError(w, 429, "preview_busy", "Skill document preview is busy", 5)
 		return
 	}
-	h.active, h.tokens = true, h.tokens-1
-	h.mu.Unlock()
-	defer func() {
-		h.mu.Lock()
-		h.active = false
-		h.mu.Unlock()
-	}()
+	defer h.releaseDocument(client)
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 	result, err := h.load(ctx, source, name)
 	if err != nil || ctx.Err() != nil {
-		w.Header().Set("Retry-After", "30")
-		writeError(w, 503, "document_unavailable", "Skill source document is temporarily unavailable", 30)
+		h.rememberDocument(key, documentResponse{}, true)
+		documentUnavailable(w)
 		return
 	}
 	if result.Status == "resolved" {
-		h.mu.Lock()
-		if len(h.cache) >= 128 {
-			for k := range h.cache {
-				delete(h.cache, k)
-				break
-			}
-		}
-		h.cache[key] = cachedDocument{response: result, expires: time.Now().Add(10 * time.Minute)}
-		h.mu.Unlock()
+		h.rememberDocument(key, result, false)
 		w.Header().Set("Cache-Control", "public, max-age=300")
 	}
 	writeJSON(w, 200, result)
+}
+
+func documentUnavailable(w http.ResponseWriter) {
+	w.Header().Set("Retry-After", "30")
+	writeError(w, 503, "document_unavailable", "Skill source document is temporarily unavailable", 30)
+}
+
+func documentClientKey(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	// The dedicated Caddy route overwrites this header with its remote peer.
+	// Only the local reverse proxy may supply it; never trust an Internet peer.
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		if client := net.ParseIP(r.Header.Get("X-UAP-Preview-Client")); client != nil {
+			return client.String()
+		}
+	}
+	return host
+}
+
+func (h *documentHandler) lookupDocument(key string) (documentResponse, bool, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	now := time.Now()
+	if cached, ok := h.cache[key]; ok && now.Before(cached.expires) {
+		return cached.response, true, false
+	}
+	if until, ok := h.failures[key]; ok && now.Before(until) {
+		return documentResponse{}, true, true
+	}
+	return documentResponse{}, false, false
+}
+
+func (h *documentHandler) admitDocument(client string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	now := time.Now()
+	h.tokens = min(4, h.tokens + now.Sub(h.tokenAt).Seconds()/5)
+	h.tokenAt = now
+	if h.active >= maxActiveDocumentPreviews || h.clients[client] ||
+		now.Before(h.nextAllowed[client]) || h.tokens < 1 {
+		return false
+	}
+	if len(h.nextAllowed) >= 1024 {
+		for key, until := range h.nextAllowed {
+			if now.After(until) {
+				delete(h.nextAllowed, key)
+			}
+		}
+		if len(h.nextAllowed) >= 1024 {
+			return false
+		}
+	}
+	h.clients[client] = true
+	h.active++
+	h.tokens--
+	h.nextAllowed[client] = now.Add(20 * time.Second)
+	return true
+}
+
+func (h *documentHandler) releaseDocument(client string) {
+	h.mu.Lock()
+	h.active--
+	delete(h.clients, client)
+	h.mu.Unlock()
+}
+
+func (h *documentHandler) rememberDocument(key string, result documentResponse, failed bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if failed {
+		if len(h.failures) >= 128 {
+			for old := range h.failures {
+				delete(h.failures, old)
+				break
+			}
+		}
+		h.failures[key] = time.Now().Add(30 * time.Second)
+		return
+	}
+	if len(h.cache) >= 128 {
+		for old := range h.cache {
+			delete(h.cache, old)
+			break
+		}
+	}
+	h.cache[key] = cachedDocument{response: result, expires: time.Now().Add(10 * time.Minute)}
 }
 
 func parseDocumentQuery(raw string) (id, source, name string, valid bool) {
