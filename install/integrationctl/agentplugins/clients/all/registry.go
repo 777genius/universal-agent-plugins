@@ -46,12 +46,14 @@ var projectRegistry = sync.OnceValue(func() *clients.Registry { return buildRegi
 func buildRegistry(project bool) *clients.Registry {
 	var workspace clients.Adapter = vscode.New()
 	var cursorComponents clients.Adapter = cursor.New()
+	var piComponents clients.Adapter = pi.New()
 	if project {
 		workspace = vscode.NewProject()
 		cursorComponents = cursor.NewProject()
+		piComponents = pi.NewProject()
 	}
 	registry, err := clients.NewRegistry(
-		pi.New(),
+		piComponents,
 		codex.New(),
 		chatgpt.New(),
 		cursorComponents,
