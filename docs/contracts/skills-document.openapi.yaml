@@ -1,0 +1,94 @@
+openapi: 3.0.3
+info:
+  title: Public Agent Skill source document preview
+  version: 1.0.0
+  description: >-
+    Anonymous, bounded, text-only public source previews for the UAP landing.
+    Unlike the separate service-authorized Git resolution endpoint, this route
+    has strict global admission limits. It does not install or execute Skills,
+    validate semantic suitability, certify trust, or download companion files.
+servers:
+  - url: https://api.universal-agent-plugins.com
+paths:
+  /v1/skills/document:
+    get:
+      operationId: readSkillDocument
+      description: >-
+        A source-derived Skill identity is not proof of installability or
+        compatibility. GitHub sources use the existing isolated immutable
+        Git source reader; HTTPS websites use only the publisher's declared
+        complete-file index and download SKILL.md. All responses are read-only.
+        Browser CORS permits only explicitly configured origins, no credentials.
+        At most one source request is active per process, with burst two and
+        refill one per five seconds. Successful source responses cache ten
+        minutes, up to 128 entries, and include the source identity. HTTPS
+        destinations are IP-address-screened and pinned; redirects are refused.
+        Errors never expose raw upstream content.
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 1024
+            pattern: '^skills-sh:'
+          description: >-
+            Canonical provider namespaced listing id. Source is a public
+            GitHub owner/repository or a lowercase DNS publisher hostname.
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+          description: >-
+            Exact Skill-name hint. The source reader verifies the actual
+            Skill identity; a publisher website requires a normative name.
+      responses:
+        '200':
+          description: >-
+            A resolved document contains full SKILL.md text, at most 65536
+            bytes. Other statuses indicate no confirmed preview, not absence
+            of an installable Skill. Markdown is untrusted source text.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResult'
+        '400':
+          description: Malformed, duplicate, extra or unsafe query values
+        '403':
+          description: Browser origin not allowed
+        '405':
+          description: Method not allowed
+        '429':
+          description: Source preview admission limit reached
+        '503':
+          description: Source or preview runtime unavailable, with Retry-After
+components:
+  schemas:
+    DocumentResult:
+      type: object
+      additionalProperties: false
+      required: [status, source]
+      properties:
+        status:
+          type: string
+          enum: [resolved, selection_required, not_found, incomplete, unavailable]
+        source:
+          type: string
+          maxLength: 256
+        markdown:
+          type: string
+          maxLength: 65536
+          description: Exact UTF-8 bytes of SKILL.md, with no injected annotations
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        commit:
+          type: string
+          pattern: '^[a-f0-9]{40}$'
+          description: GitHub source revision when available; websites are mutable
+        hasResources:
+          type: boolean
+          description: Advisory GitHub resource inventory; resource bytes not fetched
