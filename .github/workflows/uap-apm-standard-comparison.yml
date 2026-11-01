@@ -5,7 +5,7 @@ on:
     paths:
       - "scripts/comparisons/uap_apm_skills_e2e.py"
       - "scripts/comparisons/test_uap_apm_skills_e2e.py"
-      - "tests/fixtures/uap_apm/**"
+      - "tests/fixtures/uap_apm/skills/benchmark-note/**"
       - ".github/workflows/uap-apm-standard-comparison.yml"
   workflow_dispatch:
 
@@ -132,7 +132,7 @@ jobs:
           "$RUNNER_TEMP/apm-venv/bin/python" scripts/comparisons/uap_apm_skills_e2e.py \
             --uap "$RUNNER_TEMP/uap-bin/agentplugins" \
             --apm "$RUNNER_TEMP/apm-venv/bin/apm" \
-            --fixture-commit a92e2a3c35a08327937b3facbf4b22791ae50eea \
+            --fixture-commit 69641ccb8b89f41f08901562928f5e91d568f4e4 \
             --uap-source-sha "$(git -C "$RUNNER_TEMP/uap-release" rev-parse HEAD)" \
             --output "$RUNNER_TEMP/uap-apm-results"
           cat "$RUNNER_TEMP/uap-apm-results/report.md" >> "$GITHUB_STEP_SUMMARY"
