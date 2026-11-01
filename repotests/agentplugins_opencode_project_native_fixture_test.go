@@ -27,15 +27,15 @@ const openCodeProjectLimit = 128 << 10
 const openCodeProjectEnvelopeLimit = 32 << 20
 
 type openCodePassiveRecorder struct {
-	server          *http.Server
-	listener        net.Listener
-	accepted        atomic.Int64
-	requests        atomic.Int64
-	unexpected      atomic.Int64
-	mu              sync.Mutex
-	approvedPaths   map[string]bool
-	samples         []string
-	done            chan struct{}
+	server        *http.Server
+	listener      net.Listener
+	accepted      atomic.Int64
+	requests      atomic.Int64
+	unexpected    atomic.Int64
+	mu            sync.Mutex
+	approvedPaths map[string]bool
+	samples       []string
+	done          chan struct{}
 }
 
 func newOpenCodePassiveRecorder(t *testing.T) *openCodePassiveRecorder {
