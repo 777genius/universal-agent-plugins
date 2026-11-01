@@ -1,5 +1,6 @@
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "risk-parent",
   "version": "0.1.0",
-  "skills": "./skills/"
+  "description": "Inert parent package for dependency graph E2E."
 }

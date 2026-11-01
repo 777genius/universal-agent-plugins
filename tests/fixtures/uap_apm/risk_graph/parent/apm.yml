@@ -6,4 +6,4 @@ dependencies:
   apm:
     - git: https://github.com/777genius/universal-agent-plugins.git
       path: tests/fixtures/uap_apm/risk_graph/child
-      ref: ab81308e402e3ac64c3e1840088770d98a1b6245
+      ref: 1f8759cf8a2c722627ac770828844168d50f2042
