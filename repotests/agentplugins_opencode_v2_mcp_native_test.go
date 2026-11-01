@@ -222,18 +222,44 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 		t.Fatalf("native V2 project config discovery refused: document_count=%d project_document=%t exact_server=%t",
 			documents, projectDocument, projectServer)
 	}
-	observe := func(project string) string {
+	// V2's standalone server reports HTTP readiness before its asynchronous
+	// location plugins activate. A fresh --standalone per command can return
+	// an empty MCP registry even though debug/config saw the exact document.
+	// Reuse one disposable, HOME-isolated managed service for bounded readiness
+	// observations. Each A/B/removal boundary shuts it down before starting
+	// another, so a cached project A location cannot stand in for fresh proof.
+	runService := func(project string, args ...string) string {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 32*time.Second)
 		defer cancel()
-		result := captureProjectNative(ctx, client, project, env, []string{"mcp", "list", "--standalone"}, 1<<20, 30*time.Second)
+		result := captureProjectNative(ctx, client, project, env, args, 1<<20, 30*time.Second)
 		if result.Exit != 0 || result.Error != "" || result.Deadline ||
 			result.StdoutLimit || result.StderrLimit {
-			t.Fatalf("native V2 MCP list failed (exit=%d error_kind=%s)", result.Exit, result.ErrorKind)
+			t.Fatalf("native V2 managed service command failed (exit=%d error_kind=%s)", result.Exit, result.ErrorKind)
 		}
 		return strings.TrimSpace(string(result.Stdout))
 	}
-	if output := observe(projectA); !strings.Contains(output, "uap_project_fixture") ||
+	stopService := func() { runService(projectA, "service", "stop") }
+	t.Cleanup(func() {
+		// Stop a potentially active disposable daemon even after t.Fatal.
+		stopService()
+	})
+	observe := func(project string, requireConnected bool) string {
+		t.Helper()
+		var output string
+		for attempt := 0; attempt < 12; attempt++ {
+			output = runService(project, "mcp", "list")
+			if !requireConnected || (strings.Contains(output, "uap_project_fixture") &&
+				strings.Contains(output, "connected")) {
+				return output
+			}
+			// Yield only while the same native service finishes registering
+			// its actual config MCP plugin; never manufacture server evidence.
+			time.Sleep(200 * time.Millisecond)
+		}
+		return output
+	}
+	if output := observe(projectA, true); !strings.Contains(output, "uap_project_fixture") ||
 		!strings.Contains(output, "connected") {
 		methods, _ := os.ReadFile(events)
 		// This run uses an isolated temp HOME and a source-authored inert
@@ -268,19 +294,21 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 		t.Fatal("native MCP command changed the original project config")
 	}
 	before := append([]byte(nil), methodsRaw...)
+	stopService()
 	for _, project := range []string{projectB, projectA} {
 		if project == projectA {
 			if err := os.Remove(configuration); err != nil {
 				t.Fatal(err)
 			}
 		}
-		if output := observe(project); !strings.Contains(output, "No MCP servers configured") {
+		if output := observe(project, false); !strings.Contains(output, "No MCP servers configured") {
 			t.Fatal("project B or removed project A leaked native MCP server")
 		}
 		after, err := os.ReadFile(events)
 		if err != nil || !bytes.Equal(before, after) {
 			t.Fatal("absent project opened original MCP server")
 		}
+		stopService()
 	}
 	current, err := os.ReadFile(filepath.Join(root, "xdg-config", "opencode", "opencode.json"))
 	if err == nil || !os.IsNotExist(err) || len(current) != 0 {
