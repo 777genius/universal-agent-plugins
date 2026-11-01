@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -156,6 +157,25 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 	baseline := sha256.Sum256(data)
 	env := append(nativePlatformEnvironment(root, home, filepath.Dir(client)),
 		"UAP_OPENCODE_V2_MCP_HELPER=", "UAP_OPENCODE_V2_MCP_EVENTS=")
+	// OpenCode V2 resolves location-scoped services against the project
+	// worktree. A bare directory is not the native workspace being tested:
+	// the existing V1/V2 project lifecycle fixture initializes real Git roots.
+	// Use the same boundary here, without global Git config or hooks.
+	git, err := exec.LookPath("git")
+	if err != nil || !filepath.IsAbs(git) {
+		t.Fatal("native project MCP proof requires actual Git binary")
+	}
+	for _, project := range []string{projectA, projectB} {
+		command := exec.Command(git, "-c", "core.hooksPath=/dev/null", "-C", project, "init", "--quiet")
+		command.Env = append(append([]string(nil), env...), "GIT_CONFIG_NOSYSTEM=1",
+			"GIT_CONFIG_GLOBAL="+filepath.Join(home, ".gitconfig"), "GIT_TERMINAL_PROMPT=0")
+		if err := command.Run(); err != nil {
+			t.Fatal("native MCP project Git root could not be created", err)
+		}
+		if info, err := os.Lstat(filepath.Join(project, ".git")); err != nil || !info.IsDir() {
+			t.Fatal("native MCP project Git root is not an actual directory")
+		}
+	}
 	observe := func(project string) string {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 32*time.Second)
