@@ -265,6 +265,11 @@ func (a *Adapter) Activate(ctx context.Context, env clients.Env, request domain.
 		out.Activation = domain.ActivationPrepared
 	}
 	out.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
+	if request.Plan.Scope == domain.ScopeProject && request.VerifyOnly {
+		// Project file-only verification must not invent native registration
+		// ownership. The shared directory receipt has already been verified.
+		out.NativeObjects = nil
+	}
 	out.NativeEffect = domain.NativeEffectUnchanged
 	out.UserActions = []string{"Reload resources or restart Pi to load the installed extension."}
 	if request.Plan.Scope == domain.ScopeProject {
