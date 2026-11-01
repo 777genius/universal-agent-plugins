@@ -230,7 +230,12 @@ def lock_validation_refused(command: dict, lock_name: str) -> bool:
     for line in command.get("output_tail", "").lower().splitlines():
         # Filenames/paths (including the fixture's parent directory) must not
         # donate error vocabulary to a diagnostic for a different failure.
-        diagnostic_text = re.sub(r"[^\s]*[/\\][^\s]*", "<path>", line)
+        # A private path may end in the lock basename needed to prove an
+        # actual validation refusal. Keep only known names, never parent paths.
+        def clean_path(match: re.Match[str]) -> str:
+            basename = re.split(r"[/\\]", match.group(0).rstrip(".,:;()[]{}\"'"))[-1]
+            return basename if basename in expected else "<path>"
+        diagnostic_text = re.sub(r"[^\s]*[/\\][^\s]*", clean_path, line)
         # A warning about the lock plus an unrelated command failure is not
         # independent evidence that locked replay rejected bad bytes.
         prefix = diagnostic_text.lstrip()
@@ -327,9 +332,15 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
                            for name in portable}
     portable_after, after_error = baseline.captured_portable(teammate, product)
     project_after = project_file_snapshot(teammate)
-    preserved = (foreign_before is not None
-                 and file_identity(foreign_path, teammate) == foreign_before
-                 and baseline.safe_same_bytes(foreign_path, neighbor, teammate))
+    def foreign_intact() -> bool:
+        return (foreign_before is not None
+                and file_identity(foreign_path, teammate) == foreign_before
+                and baseline.safe_same_bytes(foreign_path, neighbor, teammate))
+    preserved_immediate = foreign_intact()
+    # A bounded second observation detects some delayed writers but does
+    # not establish containment of detached sessions.
+    time.sleep(0.25)
+    preserved = preserved_immediate and foreign_intact()
     identical = (all(before.values()) and before == after and preserved
                  and all(item is not None for item in before_identity)
                  and before_identity == after_identity
@@ -369,7 +380,9 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
                                                 and project_after["complete"]),
                    excluded_project_roots=project_before.get("ignored_owned_state_roots"),
                    git_internal_metadata="NOT_RUN (excluded; not a whole-tree guarantee)",
-                   command=actual, foreign_unchanged=preserved)
+                   command=actual, foreign_unchanged=preserved,
+                   foreign_double_observation_ms=250,
+                   detached_writer_containment="NOT_RUN")
 
 
 def observed_command(command: dict) -> bool:
@@ -1169,6 +1182,19 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
         return receipt(product,"R6_git_pull_removal","BLOCKED",
                        stage="teammate_initial_install",initial=mate_first,
                        reason="second user agent installation not admitted")
+    survivor_paths=(".agents/skills/benchmark-note/SKILL.md",
+                    ".agents/skills/benchmark-note/references/fixture.txt")
+    survivor_before=tuple(file_identity(teammate/name,teammate)
+                          for name in survivor_paths)
+    survivor_dir=teammate/".agents/skills/benchmark-note"
+    survivor_dir_before=directory_identity(survivor_dir,teammate)
+    if (any(x is None for x in survivor_before) or survivor_dir_before is None
+            or any(observed_file(teammate/name,teammate) !=
+                   expected[name.removeprefix(".agents/skills/benchmark-note/")]
+                   for name in survivor_paths)):
+        return receipt(product,"R6_git_pull_removal","BLOCKED",
+                       stage="teammate_survivor_baseline_missing",
+                       reason="surviving Skill not completely observed before pull")
     two_skills_manifest(product,author,commit,include_secondary=False)
     refresh=None
     if product=="uap":
@@ -1211,12 +1237,14 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     final=("present" if "present" in (final_leaf,final_directory)
            else "unknown" if "unknown" in (final_leaf,final_directory)
            else "absent")
-    survivor_paths=(".agents/skills/benchmark-note/SKILL.md",
-                    ".agents/skills/benchmark-note/references/fixture.txt")
-    survivor_intact=all(
-        observed_file(teammate/name,teammate) ==
-        expected[name.removeprefix(".agents/skills/benchmark-note/")]
-        for name in survivor_paths)
+    survivor_after=tuple(file_identity(teammate/name,teammate)
+                         for name in survivor_paths)
+    survivor_identity_intact=(survivor_before==survivor_after
+                             and directory_identity(survivor_dir,teammate)==survivor_dir_before)
+    survivor_intact=(survivor_identity_intact and
+                     all(observed_file(teammate/name,teammate) ==
+                         expected[name.removeprefix(".agents/skills/benchmark-note/")]
+                         for name in survivor_paths))
     preserved=survivor_intact and foreign_settled
     # Audit is independent read-only evidence: a pre-sync warning cannot excuse
     # stale agent-visible files or convert an unsuccessful sync to PASS.
@@ -1230,6 +1258,7 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
                    stale_skill_state=final, stale_directory_state=final_directory,
                    audit_reported_a_problem=audit_diagnostic,
                    survivor_intact=survivor_intact,
+                   survivor_identity_unchanged=survivor_identity_intact,
                    foreign_unchanged=preserved,
                    foreign_double_observation_ms=250,
                    detached_writer_containment="NOT_RUN")

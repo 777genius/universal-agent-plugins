@@ -511,6 +511,18 @@ class RiskOracleTests(unittest.TestCase):
         ):
             self.assertFalse(risk.lock_validation_refused(other,"uap.lock"))
 
+    def test_corrupt_lock_refusal_keeps_allowlisted_basename_not_private_path(self):
+        observed={"exit_code":1,"timed_out":False,"cleanup_error":None,
+                  "capture_complete":True,
+                  "output_tail":"error: failed to parse /tmp/private/uap.lock: unexpected token"}
+        self.assertTrue(risk.lock_validation_refused(observed,"uap.lock"))
+        self.assertTrue(risk.lock_validation_refused(
+            dict(observed,output_tail=r"C:\private\apm.lock.yaml: syntax error"),
+            "apm.lock.yaml"))
+        self.assertFalse(risk.lock_validation_refused(
+            dict(observed,output_tail="failed opening /tmp/corrupt/uap.lock: file missing"),
+            "uap.lock"))
+
     def test_cold_claude_requires_actual_native_skill_package_kind(self):
         import yaml
         commit = risk.PARENT_V2
