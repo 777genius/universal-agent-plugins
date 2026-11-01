@@ -78,6 +78,10 @@ func run() error {
 func resolveHandlers() (skillscatalog.SourceResolver, http.Handler) {
 	token := os.Getenv("SKILLS_RESOLVER_SERVICE_TOKEN")
 	_ = os.Unsetenv("SKILLS_RESOLVER_SERVICE_TOKEN") // Git children never need the service capability.
+	if len(token) < 32 {
+		// Never enable outbound Git work without an explicit operator capability.
+		return nil, skillscatalog.NewResolveHandler(nil, "")
+	}
 	source, err := gitsource.NewHosted(os.Getenv("SKILLS_RESOLVER_TEMP_DIR"))
 	if err != nil {
 		log.Print("Skill Git preview unavailable: bounded runtime is not configured")
