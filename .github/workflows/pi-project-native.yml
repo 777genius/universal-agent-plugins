@@ -9,7 +9,10 @@ on:
       - 'install/integrationctl/agentplugins/clients/pi/**'
       - 'install/integrationctl/agentplugins/clients/all/registry.go'
       - 'install/integrationctl/agentplugins/domain/clients.go'
+      - 'install/integrationctl/agentplugins/domain/project_policy.go'
       - 'install/integrationctl/agentplugins/installer/pi_project_lifecycle_test.go'
+      - 'install/integrationctl/agentplugins/installer/project*.go'
+      - 'install/integrationctl/agentplugins/planner/project*.go'
   workflow_dispatch:
 
 permissions:
