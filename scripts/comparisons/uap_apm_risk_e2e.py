@@ -160,6 +160,19 @@ def clean_snapshot(project: Path, files: tuple[str, ...]) -> dict[str, str | Non
             for name in files}
 
 
+def file_identity(path: Path, boundary: Path) -> tuple | None:
+    """Observed bytes plus POSIX identity/permissions, not only content hashes."""
+    data = observed_file(path, boundary)
+    if data is None:
+        return None
+    try:
+        st = path.lstat()
+        return (h(data), st.st_mode, st.st_uid, st.st_gid, st.st_ino,
+                st.st_mtime_ns, st.st_ctime_ns)
+    except OSError:
+        return None
+
+
 def apm_claude_skill_kind(portable: dict[str, bytes], commit: str) -> bool:
     """Only APM's native Claude Skill/bundle path tests the reported #3391 bug."""
     try:
@@ -231,15 +244,19 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
     teammate = fresh_root / "clean-clone"
     git("clone", "-q", str(committed), str(teammate), cwd=fresh_root, env=fresh_env)
     before = clean_snapshot(teammate, owned)
+    before_identity = tuple(file_identity(teammate / name, teammate) for name in owned)
     portable_before, before_error = baseline.captured_portable(teammate, product)
     actual = run(product, cli, teammate, fresh_root, fresh_env,
                  commit=commit, target="claude", replay=True)
     after = clean_snapshot(teammate, owned)
+    after_identity = tuple(file_identity(teammate / name, teammate) for name in owned)
     portable_after, after_error = baseline.captured_portable(teammate, product)
     preserved = baseline.safe_same_bytes(
         teammate / ".agents/skills/foreign-neighbor/SKILL.md", neighbor, teammate)
-    identical = (all(before.values()) and before == after and preserved and
-                 profile_scan(teammate / ".claude", expected) == admitted_skills)
+    identical = (all(before.values()) and before == after and preserved
+                 and all(item is not None for item in before_identity)
+                 and before_identity == after_identity
+                 and profile_scan(teammate / ".claude", expected) == admitted_skills)
     lock_intact = (before_error is None and after_error is None and
                    portable_before == portable_after)
     outcome, why = status(
@@ -248,7 +265,7 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
         protected=identical,
     )
     return receipt(product, "R1_missing_receipts", outcome, reason=why,
-                   scenario_type="native Claude Skill already committed; fresh HOME without receipts",
+                   scenario_type="preservation of committed Claude Skill without receipts; not proof of restoring deleted files",
                    apm_claude_skill_package_kind=specific_apm_kind,
                    observed_physical_skill_path=physical,
                    initial_portable_sha256={k: h(v) for k, v in portable.items()},
@@ -578,10 +595,12 @@ def case_interrupted(product: str, cli: str, root: Path, commit: str) -> dict:
         project/".agents/skills/foreign-neighbor/SKILL.md",original,project)
     if not foreign_ok or before!=after:
         label="FAIL";reason="negative preflight unexpectedly touched foreign content/lock"
-    elif control["exit_code"]==0:
+    elif not observed_command(control):
+        label="BLOCKED";reason="preflight control outcome incomplete; no negative verification"
+    elif control["exit_code"] == 0:
         label="FAIL";reason="invalid pre-existing lock was silently accepted"
     else:
-        label="BLOCKED";reason="preflight negative passed, but no deterministic post-write crash barrier available"
+        label="BLOCKED";reason="verified preflight refusal; deterministic post-write interruption NOT_RUN"
     return receipt(product,"R4_interrupted_operation",label,reason=reason,
                    controlled_preflight=control,preflight_untouched=before==after,
                    deterministic_post_write_barrier=False,crash_recovery="NOT_RUN")
@@ -672,7 +691,7 @@ def codex_mcp_contract(project: Path) -> str:
         forwarded = server.get("env_vars")
         embedded = server.get("env", {})
         if (not isinstance(forwarded, list)
-                or MARKER not in forwarded or
+                or forwarded != [MARKER] or
                 not all(isinstance(name, str) for name in forwarded)
                 or (isinstance(embedded, dict) and MARKER in embedded)):
             return "environment_forwarding_unverified"
@@ -708,8 +727,10 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
             f'      env:\n        {MARKER}: "{placeholder}"\n')
         argv=[cli,"install","--target","codex"]
     cmd=baseline.run_process(argv,project,env,root)
-    # Ensure neither the synthetic value nor external inherited environment leaks.
-    cmd["output_tail"]=cmd.get("output_tail","").replace(sentinel,"<redacted-synthetic-marker>")
+    # Diagnostic stdout is suppressed wholesale for this synthetic-secret
+    # case: encoded, transformed and fragmented representations cannot be
+    # reliably scrubbed with single-substring replacement.
+    cmd["output_tail"] = "<suppressed: synthetic-secret scenario>"
     targets=[".codex/config.toml","uap.toml","uap.lock","apm.yml","apm.lock.yaml"]
     found=[]
     for name_path in targets:
@@ -850,7 +871,13 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
                                    teammate,mate_env,root)
     applied=baseline.run_process(removal_command(product,cli,teammate),
                                  teammate,mate_env,root)
-    final=skill_presence(mate_path,teammate)
+    final_leaf=skill_presence(mate_path,teammate)
+    final_directory=skill_presence(mate_path.parent,teammate)
+    # A missing SKILL.md with leftover resources or an empty owned directory
+    # is not a fully removed dependency.
+    final=("present" if "present" in (final_leaf,final_directory)
+           else "unknown" if "unknown" in (final_leaf,final_directory)
+           else "absent")
     survivor_paths=(".agents/skills/benchmark-note/SKILL.md",
                     ".agents/skills/benchmark-note/references/fixture.txt")
     survivor_intact=all(
@@ -862,15 +889,16 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
                foreign==b"FOREIGN USER CONTENT: preserve without edits\n")
     # Audit is independent read-only evidence: a pre-sync warning cannot excuse
     # stale agent-visible files or convert an unsuccessful sync to PASS.
-    audit_diagnostic = (None if audit is None else
-                        audit.get("exit_code") not in (None, 0))
+    audit_diagnostic = (None if audit is None or not observed_command(audit)
+                        else audit.get("exit_code") != 0)
     verdict,reason = classify_removed_result(applied, final, preserved)
     return receipt(product,"R6_git_pull_removal",verdict,reason=reason,
                    author_action=changed,teammate_install=mate_first,teammate_sync=applied,
                    audit=audit,postpull_before_install_sha256=h(postpull) if postpull else None,
                    # Unknown (symlink, unreadable) is not proven present.
                    stale_skill_still_present={"present": True, "absent": False}.get(final),
-                   stale_skill_state=final, audit_reported_a_problem=audit_diagnostic,
+                   stale_skill_state=final, stale_directory_state=final_directory,
+                   audit_reported_a_problem=audit_diagnostic,
                    survivor_intact=survivor_intact,
                    foreign_unchanged=preserved)
 
@@ -892,7 +920,9 @@ def observe_cli_identity(product: str, executable: Path, root: Path) -> dict:
     expected=("agentplugins 0.1.0-development" if product=="uap"
               else "Agent Package Manager (APM) CLI version 0.35.0")
     # The parser never silently assumes 0.1.95 from a development build.
-    verified=complete_command(command) and expected in command.get("output_tail","")
+    verified=(complete_command(command)
+              and expected in [line.strip() for line in
+                               command.get("output_tail","").splitlines()])
     return {"entrypoint_sha256":h(executable.read_bytes()),
             "observed_version":command.get("output_tail","")[-512:],
             "probe_exit_code":command.get("exit_code"),
