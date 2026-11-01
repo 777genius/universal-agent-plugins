@@ -58,7 +58,7 @@ export function skillPublisherUrl(skill: SkillListing): string | undefined {
       url.pathname !== '/' ||
       url.search ||
       url.hash ||
-      !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\\.[a-z]{2,}$/.test(host) ||
+      !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(host) ||
       raw !== `https://${host}`
     ) return undefined;
     return raw;
