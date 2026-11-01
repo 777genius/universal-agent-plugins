@@ -102,6 +102,38 @@ func appendOpenCodeV2MCPEvent(path, method string) error {
 	return closeErr
 }
 
+// OpenCode v2.2.5 renders each server as: checkmark, exact name, exact
+// status. Substrings are unsafe: "disconnected" and "not connected" also
+// contain "connected" and must never satisfy the native readiness gate.
+func openCodeV2MCPConnectedStatus(output string) bool {
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 3 && fields[0] == "✓" &&
+			fields[1] == "uap_project_fixture" && fields[2] == "connected" {
+			return true
+		}
+	}
+	return false
+}
+
+func TestOpenCodeV2NativeMCPConnectedStatusExact(t *testing.T) {
+	if !openCodeV2MCPConnectedStatus("✓ uap_project_fixture  connected\n") {
+		t.Fatal("exact native connected status refused")
+	}
+	for _, output := range []string{
+		"○ uap_project_fixture  disconnected\n",
+		"○ uap_project_fixture  not connected\n",
+		"✗ uap_project_fixture  failed: connection refused\n",
+		"✓ other  connected\n○ uap_project_fixture  disconnected\n",
+		"✓ uap_project_fixture  connected to another server\n",
+		"No MCP servers configured\n",
+	} {
+		if openCodeV2MCPConnectedStatus(output) {
+			t.Fatal("non-connected or foreign native MCP status accepted")
+		}
+	}
+}
+
 func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_OPENCODE_PROJECT_NATIVE_E2E") != "1" ||
 		os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") != "2.2.5" {
@@ -244,38 +276,6 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 		// Stop a potentially active disposable daemon even after t.Fatal.
 		stopService()
 	})
-// OpenCode v2.2.5 renders each server as: checkmark, exact name, exact
-// status. Substrings are unsafe: "disconnected" and "not connected" also
-// contain "connected" and must never satisfy the native readiness gate.
-func openCodeV2MCPConnectedStatus(output string) bool {
-	for _, line := range strings.Split(output, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 3 && fields[0] == "✓" &&
-			fields[1] == "uap_project_fixture" && fields[2] == "connected" {
-			return true
-		}
-	}
-	return false
-}
-
-func TestOpenCodeV2NativeMCPConnectedStatusExact(t *testing.T) {
-	if !openCodeV2MCPConnectedStatus("✓ uap_project_fixture  connected\n") {
-		t.Fatal("exact native connected status refused")
-	}
-	for _, output := range []string{
-		"○ uap_project_fixture  disconnected\n",
-		"○ uap_project_fixture  not connected\n",
-		"✗ uap_project_fixture  failed: connection refused\n",
-		"✓ other  connected\n○ uap_project_fixture  disconnected\n",
-		"✓ uap_project_fixture  connected to another server\n",
-		"No MCP servers configured\n",
-	} {
-		if openCodeV2MCPConnectedStatus(output) {
-			t.Fatal("non-connected or foreign native MCP status accepted")
-		}
-	}
-}
-
 	observe := func(project string, requireConnected bool) string {
 		t.Helper()
 		var output string
