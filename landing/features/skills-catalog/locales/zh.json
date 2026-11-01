@@ -57,7 +57,7 @@
         "command": "命令",
         "prompt": "提示词",
         "promptText": "使用 Universal Agent Plugins 安装此技能。执行以下命令前请检查来源及更改：\n{command}",
-        "exactNameUnavailable": "无法验证安装所需的准确名称，请查看原始页面。",
+        "exactNameUnavailable": "无法验证安装所需的准确名称，请检查发布方源代码。",
         "security": "安全检查",
         "installs": "安装次数",
         "source": "来源",
