@@ -236,6 +236,27 @@ class RiskOracleTests(unittest.TestCase):
             self.assertTrue(initial["complete"])
             (root/"skills"/"unexpected.toml").write_bytes(b"mutation")
             self.assertNotEqual(initial,risk.profile_snapshot(root))
+            same_bytes=root/"skills"/"unexpected.toml"
+            before=risk.profile_snapshot(root)
+            same_bytes.chmod(0o400)
+            self.assertNotEqual(before,risk.profile_snapshot(root))
+            same_bytes.chmod(0o600)
+            before=risk.profile_snapshot(root)
+            identical_content=same_bytes.read_bytes()
+            same_bytes.unlink()
+            same_bytes.write_bytes(identical_content)
+            self.assertNotEqual(before,risk.profile_snapshot(root))
+
+    def test_cold_clone_file_identity_includes_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            file=root/"committed.md"
+            file.write_bytes(b"committed exact bytes")
+            before=risk.file_identity(file,root)
+            self.assertIsNotNone(before)
+            file.chmod(0o400)
+            self.assertEqual(file.read_bytes(),b"committed exact bytes")
+            self.assertNotEqual(before,risk.file_identity(file,root))
 
     def test_failure_negative_control_is_not_mislabeled_crash_e2e(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -246,6 +267,35 @@ class RiskOracleTests(unittest.TestCase):
             self.assertEqual(row["status"],"BLOCKED")
             self.assertFalse(row["deterministic_post_write_barrier"])
             self.assertEqual(row["crash_recovery"],"NOT_RUN")
+
+    def test_unobserved_preflight_never_claims_negative_gate_passed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            incomplete={"exit_code":1,"timed_out":False,"cleanup_error":None,
+                        "capture_complete":False}
+            with patch.object(risk.baseline,"run_process",return_value=incomplete):
+                row=risk.case_interrupted("uap","/bin/fake",root,"a"*40)
+            self.assertEqual(row["status"],"BLOCKED")
+            self.assertIn("incomplete",row["reason"])
+            complete=dict(incomplete,capture_complete=True)
+            with patch.object(risk.baseline,"run_process",return_value=complete):
+                row=risk.case_interrupted("uap","/bin/fake",root,"a"*40)
+            self.assertEqual(row["status"],"BLOCKED")
+            self.assertIn("verified preflight refusal",row["reason"])
+            self.assertFalse(row["deterministic_post_write_barrier"])
+
+    def test_residual_removed_skill_directory_is_not_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            directory=root/".agents/skills/benchmark-secondary"
+            directory.mkdir(parents=True)
+            (directory/"references.txt").write_bytes(b"orphaned reference")
+            self.assertEqual(risk.skill_presence(directory,root),"present")
+            self.assertEqual(risk.skill_presence(directory/"SKILL.md",root),"absent")
+            self.assertEqual(risk.classify_removed_result(
+                {"exit_code":0,"timed_out":False,"cleanup_error":None,
+                 "capture_complete":True},
+                "present",True)[0],"FAIL")
 
     def test_post_pull_never_passes_with_stale_visible_skill(self):
         succeeded = {"exit_code": 0, "timed_out": False, "cleanup_error": None,
@@ -375,6 +425,19 @@ class RiskOracleTests(unittest.TestCase):
                 self.assertEqual(row["status"], "BLOCKED")
                 self.assertIn("pinned real Claude", row["reason"])
 
+    def test_CLAUDE_identity_cannot_be_attested_just_by_caller_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            with patch.object(risk.shutil,"which",return_value=None):
+                row=risk.case_profiles(
+                    "apm","/bin/unused",root,"a"*40,
+                    {"SKILL.md":b"x","references/fixture.txt":b"y"},
+                    claude_available=True,claude_version="2.1.263 (Claude Code)",
+                    claude_native_sha256="26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba",
+                )
+            self.assertEqual(row["status"],"BLOCKED")
+            self.assertIn("actual selected Claude",row["reason"])
+
     def test_MCP_config_rejects_empty_or_unrelated_server(self):
         with tempfile.TemporaryDirectory() as tmp:
             project=Path(tmp)
@@ -390,6 +453,10 @@ class RiskOracleTests(unittest.TestCase):
                             'args = ["-e", "process.exit(0)"]\n'
                             'env_vars = ["UAP_APM_SECRET_CANARY"]\n')
             self.assertEqual(risk.codex_mcp_contract(project),"match")
+            toml.write_text('[mcp_servers.riskcanary]\ncommand = "node"\n'
+                            'args = ["-e", "process.exit(0)"]\n'
+                            'env_vars = ["UAP_APM_SECRET_CANARY", "UNRELATED_ENV"]\n')
+            self.assertEqual(risk.codex_mcp_contract(project),"environment_forwarding_unverified")
             toml.write_text('[mcp_servers.riskcanary]\ncommand = "wrong-tool"\n'
                             'args = ["-e", "process.exit(0)"]\n'
                             'env_vars = ["UAP_APM_SECRET_CANARY"]\n')
@@ -408,6 +475,10 @@ class RiskOracleTests(unittest.TestCase):
             self.assertTrue(identity["probe_verified"])
             self.assertTrue(identity["source_build_not_published_binary"])
             self.assertEqual(identity["entrypoint_sha256"],risk.h(b"fixture-executable"))
+            false_substring=dict(complete,output_tail="wrapper "+complete["output_tail"]+" and other text")
+            with patch.object(risk.baseline,"run_process",return_value=false_substring):
+                identity=risk.observe_cli_identity("uap",executable,root/"probe")
+            self.assertFalse(identity["probe_verified"])
             for changed in ({"capture_complete":False},{"timed_out":True},
                             {"cleanup_error":"lost child"},
                             {"output_tail":"not-the-manager"},
