@@ -36,9 +36,9 @@ type cachedDocument struct {
 }
 
 type documentHandler struct {
-	git     SourceResolver
-	website WebsiteDocumentReader
-	origins map[string]bool
+	git          SourceResolver
+	website      WebsiteDocumentReader
+	origins      map[string]bool
 	mu           sync.Mutex
 	active       int
 	clients      map[string]bool
