@@ -54,6 +54,8 @@ Our [installer automation principle](docs/INSTALLER_AUTOMATION_PRINCIPLE.md) is 
 [Read the documentation](https://universal-agent-plugins.com/docs/) ·
 [Browse plugins](https://universal-agent-plugins.com/plugins/)
 
+<a href="https://universal-agent-plugins.com/#demo"><img width="480" height="270" alt="Watch demo — play the Universal Agent Plugins installation video" src="assets/readme-demo.svg" /></a>
+
 <a href="https://universal-agent-plugins.com/"><img width="495" height="285" alt="image" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
 <img width="423" height="234" alt="image" src="https://github.com/user-attachments/assets/3f8786ea-bb3a-4869-aabe-99b245364b3d" />
 <img width="1079" height="584" alt="image" src="https://github.com/user-attachments/assets/898d66b9-3942-4725-9a26-ec2fe01ad7c0" />
