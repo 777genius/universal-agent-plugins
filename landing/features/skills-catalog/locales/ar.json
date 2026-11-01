@@ -66,7 +66,8 @@
         "sourceDocumentNotice": "تعليمات الناشر · المحتوى غير متحقق منه. راجعه قبل الاستخدام.",
         "documentUnavailable": "تعذر تحميل SKILL.md من الناشر. يمكنك فحص المصدر مباشرة.",
         "viewPublisher": "عرض مصدر الناشر",
-        "revision": "مراجعة المصدر"
+        "revision": "مراجعة المصدر",
+        "rawDocument": "عرض ملف SKILL.md الأصلي بالكامل"
       }
     },
     "directoryPage": {
