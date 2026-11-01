@@ -482,7 +482,7 @@ test('omitted groups with zero published signals never render a clean result or 
 test('n8n known inventory distinguishes six incomplete checks from nine missing current results', async ({ page }) => {
   const { assessment, errors } = await setup(page, 'n8nPending');
   await expect(assessment.locator(':scope > summary')).toContainText(
-    '6/15 checked · 9 awaiting a check',
+    '6/15 checked · 9 awaiting · 6 not fully checked',
   );
   await assessment.locator(':scope > summary').click();
   const dialog = assessment.locator('.skillspector__dialog');
@@ -508,7 +508,7 @@ for (const mode of ['singleLimited', 'pendingLimited'] as const) {
       await expect(assessment.locator(':scope > summary')).toContainText(
         mode === 'singleLimited'
           ? 'Skill scan · Not fully checked'
-          : 'Skill scan · 1/5 checked · 4 awaiting a check',
+          : 'Skill scan · 1/5 checked · 4 awaiting · 1 not fully checked',
       );
       await expect(assessment.locator(':scope > summary')).not.toContainText('Incomplete check');
       await assessment.locator(':scope > summary').click();

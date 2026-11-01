@@ -102,7 +102,8 @@
       "openReport": "Відкрити деталі",
       "closeReport": "Закрити",
       "awaitingList": "Скіли без актуальної перевірки",
-      "awaitingExplanation": "Для цих скілів поки немає актуального результату. Їхня безпека невідома."
+      "awaitingExplanation": "Для цих скілів поки немає актуального результату. Їхня безпека невідома.",
+      "waitingWithLimitsProgress": "Перевірено {checked}/{total} · {waiting} очікують · {limited} не повністю"
     }
   }
 }

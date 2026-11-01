@@ -102,7 +102,8 @@
       "openReport": "Открыть подробности",
       "closeReport": "Закрыть",
       "awaitingList": "Скиллы без актуальной проверки",
-      "awaitingExplanation": "У этих скиллов пока нет актуального результата. Их безопасность неизвестна."
+      "awaitingExplanation": "У этих скиллов пока нет актуального результата. Их безопасность неизвестна.",
+      "waitingWithLimitsProgress": "Проверено {checked}/{total} · {waiting} ожидают · {limited} не полностью"
     }
   }
 }

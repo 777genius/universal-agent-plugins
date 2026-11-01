@@ -102,7 +102,8 @@
       "openReport": "Voir les détails",
       "closeReport": "Fermer",
       "awaitingList": "Skills sans vérification actuelle",
-      "awaitingExplanation": "Ces Skills n'ont pas encore de résultat actuel. Leur sécurité est inconnue."
+      "awaitingExplanation": "Ces Skills n'ont pas encore de résultat actuel. Leur sécurité est inconnue.",
+      "waitingWithLimitsProgress": "Vérifiés {checked}/{total} · {waiting} en attente · {limited} incomplets"
     }
   }
 }

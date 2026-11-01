@@ -290,7 +290,7 @@ export function skillSpectorAssessment(
       failed,
       historical: records.length - currentRecords.length,
       // Historical-only results are still waiting for a current check.
-      unscanned: Math.max(0, selected - currentRecords.length),
+      unscanned: Math.max(0, selected - records.length),
     };
     const pendingIds = subject?.kind === 'plugin' && Array.isArray(state?.selected_ids)
       ? (state.selected_ids as unknown[])

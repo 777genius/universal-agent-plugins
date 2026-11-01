@@ -95,17 +95,19 @@ const label = computed(() => {
   // Current records include complete and partial scans, never pending or historical records.
   const outcomes = assessment.value.outcomes;
   const scanned = (outcomes?.complete ?? 0) + (outcomes?.limited ?? 0);
+  const waiting = (outcomes?.unscanned ?? 0) + (outcomes?.historical ?? 0);
   if (!legacy.value && key === 'incomplete' && outcomes && !outcomes.failed) {
     if (
       props.scope === 'plugin' &&
       assessment.value.inventoryKnown &&
       (assessment.value.selected ?? 0) > 1
     ) {
-      if (outcomes.unscanned)
-        return t('registryUi.skillSpector.waitingProgress', {
+      if (waiting)
+        return t(`registryUi.skillSpector.${outcomes.limited ? 'waitingWithLimitsProgress' : 'waitingProgress'}`, {
           checked: n(scanned),
           total: n(assessment.value.selected ?? 0),
-          waiting: n(outcomes.unscanned),
+          waiting: n(waiting),
+          limited: n(outcomes.limited),
         });
       if (outcomes.limited)
         return t('registryUi.skillSpector.coverageProgress', {
@@ -114,7 +116,7 @@ const label = computed(() => {
           limited: n(outcomes.limited),
         });
     }
-    if (outcomes.limited && !outcomes.unscanned) return t('registryUi.skillSpector.outcomelimited');
+    if (outcomes.limited && !waiting) return t('registryUi.skillSpector.outcomelimited');
   }
   return t(`registryUi.skillSpector.${key}`);
 });

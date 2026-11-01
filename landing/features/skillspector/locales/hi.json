@@ -102,7 +102,8 @@
       "openReport": "विवरण खोलें",
       "closeReport": "बंद करें",
       "awaitingList": "वर्तमान जाँच की प्रतीक्षा वाले स्किल",
-      "awaitingExplanation": "इन स्किल्स की अभी तक वर्तमान जाँच का परिणाम उपलब्ध नहीं है। उनकी सुरक्षा अज्ञात है।"
+      "awaitingExplanation": "इन स्किल्स की अभी तक वर्तमान जाँच का परिणाम उपलब्ध नहीं है। उनकी सुरक्षा अज्ञात है।",
+      "waitingWithLimitsProgress": "{checked}/{total} की जाँच · {waiting} प्रतीक्षारत · {limited} अधूरे"
     }
   }
 }

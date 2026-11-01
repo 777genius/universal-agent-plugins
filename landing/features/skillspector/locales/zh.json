@@ -102,7 +102,8 @@
       "openReport": "查看详情",
       "closeReport": "关闭",
       "awaitingList": "尚无当前检查结果的技能",
-      "awaitingExplanation": "这些技能尚无当前检查结果，安全状态未知。"
+      "awaitingExplanation": "这些技能尚无当前检查结果，安全状态未知。",
+      "waitingWithLimitsProgress": "已检查 {checked}/{total} · {waiting} 项待检查 · {limited} 项未完全检查"
     }
   }
 }
