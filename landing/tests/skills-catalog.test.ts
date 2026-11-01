@@ -163,6 +163,10 @@ test('Detail identity uses only a canonical source, never the listing-page URL',
     kind: 'external',
     url: 'https://open.feishu.cn',
   });
+  assert.deepEqual(skillIdentityFromId('skills-sh:Open.Feishu.Cn:lark-mail'), {
+    kind: 'external',
+    url: 'https://open.feishu.cn',
+  });
   assert.deepEqual(skillIdentityFromId('skills-sh:anthropics/skills:frontend-design'), {
     kind: 'github',
     repository: 'anthropics/skills',
