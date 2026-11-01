@@ -589,6 +589,33 @@ def scan_synthetic_canary(roots: tuple[Path, ...], synthetic: str,
             "complete": not unknown, "incomplete_reasons": sorted(set(unknown))}
 
 
+def codex_mcp_contract(project: Path) -> str:
+    """Require the exact server and Codex's explicit env-forwarding contract."""
+    raw = observed_file(project / ".codex/config.toml", project)
+    if raw is None:
+        return "missing_config"
+    try:
+        config = tomllib.loads(raw.decode("utf-8"))
+        servers = config.get("mcp_servers", {})
+        server = servers.get("riskcanary") if isinstance(servers, dict) else None
+        if not isinstance(server, dict):
+            return "missing_server"
+        if server.get("command") != "node":
+            return "wrong_command"
+        if server.get("args") != ["-e", "process.exit(0)"]:
+            return "wrong_arguments"
+        forwarded = server.get("env_vars")
+        embedded = server.get("env", {})
+        if (not isinstance(forwarded, list)
+                or MARKER not in forwarded or
+                not all(isinstance(name, str) for name in forwarded)
+                or (isinstance(embedded, dict) and MARKER in embedded)):
+            return "environment_forwarding_unverified"
+        return "match"
+    except (ValueError, UnicodeError, AttributeError, TypeError):
+        return "invalid_toml"
+
+
 def case_secret(product: str, cli: str, root: Path) -> dict:
     env=baseline.isolated_env(root)
     project,foreign=baseline.make_project(root)
@@ -634,6 +661,7 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
     protected=baseline.safe_same_bytes(project/".agents/skills/foreign-neighbor/SKILL.md",
                                       foreign,project)
     config=next((row for row in found if row["file"]==".codex/config.toml"),None)
+    contract=codex_mcp_contract(project)
     if leak or not protected:
         verdict="FAIL";reason="synthetic canary persisted or foreign content was changed"
     elif not scan["complete"]:
@@ -642,12 +670,17 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
         verdict="BLOCKED";reason="MCP project command could not be observed completely"
     elif cmd["exit_code"] != 0:
         verdict="BLOCKED";reason="MCP project route refused, check safe local prerequisite in receipt"
-    elif config is None:
-        verdict="FAIL";reason="successful MCP install did not materialize project Codex config"
+    elif config is None or contract in (
+            "missing_config", "missing_server", "wrong_command",
+            "wrong_arguments", "invalid_toml"):
+        verdict="FAIL";reason="successful install did not materialize the exact requested MCP server"
+    elif contract != "match":
+        verdict="BLOCKED";reason="requested MCP environment forwarding cannot be verified"
     else:
-        verdict="PASS";reason="no synthetic canary in scanned project/profile files; native forwarding NOT_RUN"
+        verdict="PASS";reason="exact MCP config and safe named-root persistence verified; native tools/call NOT_RUN"
     output = receipt(product,"R5_mcp_env_secret",verdict,reason=reason,
                      command=cmd,config_files=found,filesystem_scan=scan,
+                     mcp_config_contract=contract,
                      foreign_unchanged=protected, native_mcp_call="NOT_RUN")
     # Never serialize a synthetic secret to an Actions artifact, including
     # when the observed program happens to put it in a filename or log.
