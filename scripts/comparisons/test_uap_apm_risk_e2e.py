@@ -752,6 +752,32 @@ class RiskOracleTests(unittest.TestCase):
             self.assertTrue(after["complete"])
             self.assertNotEqual(before["sha256"],after["sha256"])
 
+    def test_preflight_detects_original_lock_and_foreign_metadata_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            def mutate(*_args,**_kwargs):
+                path=root/"project/.agents/skills/foreign-neighbor/SKILL.md"
+                path.chmod(0o400)
+                return {"exit_code":1,"timed_out":False,"cleanup_error":None,
+                        "capture_complete":True,"output_tail":"invalid uap.lock syntax"}
+            with patch.object(risk.baseline,"run_process",side_effect=mutate):
+                result=risk.case_interrupted("uap","/bin/no-op",root,"a"*40)
+            self.assertEqual(result["status"],"FAIL")
+            self.assertFalse(result["preflight_identity_untouched"])
+
+    def test_mcp_secret_scenario_rejects_foreign_metadata_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            def mutate(*_args,**_kwargs):
+                path=root/"project/.agents/skills/foreign-neighbor/SKILL.md"
+                path.chmod(0o400)
+                return {"exit_code":1,"timed_out":False,"cleanup_error":None,
+                        "capture_complete":True,"output_tail":"safely refused"}
+            with patch.object(risk.baseline,"run_process",side_effect=mutate):
+                result=risk.case_secret("uap","/bin/no-op",root)
+            self.assertEqual(result["status"],"FAIL")
+            self.assertFalse(result["foreign_unchanged"])
+
     def test_inert_mcp_config_does_not_prove_no_delayed_secret_writes(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)

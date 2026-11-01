@@ -356,10 +356,13 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
                    before=before, after=after, lock_identical=lock_intact,
                    corrupted_lock_refused=corrupt_lock_rejected,
                    corrupted_lock_command=negative_result,
-                   claude_profile_unchanged=not extra_profile_mutation,
-                   nonmanaged_project_unchanged=project_before == project_after,
-                   nonmanaged_project_observed=(project_before["complete"]
+                   project_claude_projection_unchanged=not extra_profile_mutation,
+                   user_scope_claude_profile="NOT_RUN",
+                   observed_nonmanager_project_files_unchanged=project_before == project_after,
+                   nonmanager_project_observed=(project_before["complete"]
                                                 and project_after["complete"]),
+                   excluded_project_roots=project_before.get("ignored_owned_state_roots"),
+                   git_internal_metadata="NOT_RUN (excluded; not a whole-tree guarantee)",
                    command=actual, foreign_unchanged=preserved)
 
 
@@ -847,14 +850,14 @@ def case_interrupted(product: str, cli: str, root: Path, commit: str) -> dict:
     # A safe isolated error is introduced via a malformed existing lock.
     file=project / ("uap.lock" if product=="uap" else "apm.lock.yaml")
     file.write_text("{invalid: unresolved: [\n")
-    before=clean_snapshot(project,(str(file.relative_to(project)),
-                        ".agents/skills/foreign-neighbor/SKILL.md"))
+    protected_paths=(file, project/".agents/skills/foreign-neighbor/SKILL.md")
+    before=tuple(file_identity(path,project) for path in protected_paths)
     control=baseline.run_process(argv,project,env,root)
-    after=clean_snapshot(project,(str(file.relative_to(project)),
-                        ".agents/skills/foreign-neighbor/SKILL.md"))
-    foreign_ok=baseline.safe_same_bytes(
-        project/".agents/skills/foreign-neighbor/SKILL.md",original,project)
-    if not foreign_ok or before!=after:
+    after=tuple(file_identity(path,project) for path in protected_paths)
+    foreign_ok=(before[1] is not None
+                and before[1][0] == h(original)
+                and after[1] == before[1])
+    if not foreign_ok or before[0] is None or before != after:
         label="FAIL";reason="negative preflight unexpectedly touched foreign content/lock"
     elif not observed_command(control):
         label="BLOCKED";reason="preflight control outcome incomplete; no negative verification"
@@ -865,7 +868,7 @@ def case_interrupted(product: str, cli: str, root: Path, commit: str) -> dict:
     else:
         label="BLOCKED";reason="verified preflight refusal; deterministic post-write interruption NOT_RUN"
     return receipt(product,"R4_interrupted_operation",label,reason=reason,
-                   controlled_preflight=control,preflight_untouched=before==after,
+                   controlled_preflight=control,preflight_identity_untouched=(before==after),
                    deterministic_post_write_barrier=False,crash_recovery="NOT_RUN")
 
 
@@ -974,6 +977,8 @@ def codex_mcp_contract(project: Path) -> str:
 def case_secret(product: str, cli: str, root: Path) -> dict:
     env=baseline.isolated_env(root)
     project,foreign=baseline.make_project(root)
+    foreign_path=project/".agents/skills/foreign-neighbor/SKILL.md"
+    foreign_before=file_identity(foreign_path,project)
     name="riskcanary"
     sentinel="risk-" + secrets.token_hex(24)
     placeholder="$"+"{"+MARKER+"}"
@@ -1015,8 +1020,9 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
     # This does not establish protection from writes outside the sandbox.
     scan = scan_synthetic_canary((root,), sentinel)
     leak=scan["canary_found"] or any(row["synthetic_plaintext_present"] for row in found)
-    protected=baseline.safe_same_bytes(project/".agents/skills/foreign-neighbor/SKILL.md",
-                                      foreign,project)
+    protected=(foreign_before is not None and
+               foreign_before[0] == h(foreign) and
+               file_identity(foreign_path,project) == foreign_before)
     config=next((row for row in found if row["file"]==".codex/config.toml"),None)
     contract=codex_mcp_contract(project)
     if leak or not protected:
@@ -1137,6 +1143,18 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     sibling.parent.mkdir(parents=True, exist_ok=True)
     sibling.write_bytes(b"FOREIGN USER CONTENT: preserve without edits\n")
     foreign_before = file_identity(sibling, teammate)
+    foreign_directories=(
+        teammate/".agents",teammate/".agents/skills",
+        teammate/".agents/skills/foreign-neighbor")
+    directories_before=tuple(directory_identity(path,teammate)
+                             for path in foreign_directories)
+    def foreign_intact() -> bool:
+        return (foreign_before is not None
+                and foreign_before[0] == h(b"FOREIGN USER CONTENT: preserve without edits\n")
+                and all(item is not None for item in directories_before)
+                and file_identity(sibling,teammate) == foreign_before
+                and tuple(directory_identity(path,teammate)
+                          for path in foreign_directories) == directories_before)
     teammate_root=root/"teammate-iso"
     mate_env=baseline.isolated_env(teammate_root)
     mate_first=baseline.run_process(removal_command(product,cli,teammate),teammate,mate_env,root)
@@ -1175,6 +1193,11 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
                                    teammate,mate_env,root)
     applied=baseline.run_process(removal_command(product,cli,teammate),
                                  teammate,mate_env,root)
+    foreign_immediate=foreign_intact()
+    # Observe once again after a bounded interval; indefinite detached
+    # process containment is not established by this experiment.
+    time.sleep(0.25)
+    foreign_settled=foreign_immediate and foreign_intact()
     final_leaf=skill_presence(mate_path,teammate)
     final_directory=skill_presence(mate_path.parent,teammate)
     # A missing SKILL.md with leftover resources or an empty owned directory
@@ -1188,11 +1211,7 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
         observed_file(teammate/name,teammate) ==
         expected[name.removeprefix(".agents/skills/benchmark-note/")]
         for name in survivor_paths)
-    foreign=observed_file(sibling,teammate)
-    preserved=(survivor_intact and
-               foreign==b"FOREIGN USER CONTENT: preserve without edits\n"
-               and foreign_before is not None
-               and foreign_before == file_identity(sibling,teammate))
+    preserved=survivor_intact and foreign_settled
     # Audit is independent read-only evidence: a pre-sync warning cannot excuse
     # stale agent-visible files or convert an unsuccessful sync to PASS.
     audit_diagnostic = audit_problem_observed(audit)
@@ -1205,7 +1224,9 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
                    stale_skill_state=final, stale_directory_state=final_directory,
                    audit_reported_a_problem=audit_diagnostic,
                    survivor_intact=survivor_intact,
-                   foreign_unchanged=preserved)
+                   foreign_unchanged=preserved,
+                   foreign_double_observation_ms=250,
+                   detached_writer_containment="NOT_RUN")
 
 
 def observe_cli_identity(product: str, executable: Path, root: Path) -> dict:
