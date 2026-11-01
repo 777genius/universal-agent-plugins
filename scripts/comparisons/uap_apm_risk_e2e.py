@@ -421,6 +421,13 @@ def graph_lock_matches(project: Path, product: str,
             if (source(p) not in {(r, PARENT, parent_commit) for r in source_aliases}
                     or source(c) not in {(r, CHILD, child_commit) for r in source_aliases}):
                 return False
+            # Recorded coordinates alone are insufficient. UAP replays the
+            # requested selector, so a stale v1 intent paired with v2 bytes
+            # must never qualify as an exact graph update.
+            for node, expected in ((p, parent_commit), (c, child_commit)):
+                selector = node.get("source", {}).get("git", {}).get("requested")
+                if selector != {"kind": "commit", "value": expected}:
+                    return False
             parent_alias = p.get("alias")
             child_alias = c.get("alias")
             if (not isinstance(parent_alias, str) or not parent_alias
@@ -811,7 +818,8 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     return receipt(product,"R6_git_pull_removal",verdict,reason=reason,
                    author_action=changed,teammate_install=mate_first,teammate_sync=applied,
                    audit=audit,postpull_before_install_sha256=h(postpull) if postpull else None,
-                   stale_skill_still_present=final != "absent",
+                   # Unknown (symlink, unreadable) is not proven present.
+                   stale_skill_still_present={"present": True, "absent": False}.get(final),
                    stale_skill_state=final, audit_reported_a_problem=audit_diagnostic,
                    survivor_intact=survivor_intact,
                    foreign_unchanged=preserved)
