@@ -3,7 +3,6 @@ import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
 
-const muxOrigin = 'https://player.mux.com';
 const fakePlayer = `<!doctype html><html><body><script>
   window.addEventListener('message', (event) => {
     const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
