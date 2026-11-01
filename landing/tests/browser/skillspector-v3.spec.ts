@@ -59,6 +59,8 @@ async function setup(
     | 'completeResolved'
     | 'pending'
     | 'unselected'
+    | 'singleLimited'
+    | 'pendingLimited'
     | 'truncated'
     | 'unsupportedSource' = 'mixed',
   reportGate?: Promise<void>,
@@ -206,6 +208,24 @@ async function setup(
       Object.assign(manifest.plugin_states[0]!, { skills_total: 1, selected_ids: [record.id] });
     }
   }
+  if (mode === 'singleLimited' || mode === 'pendingLimited') {
+    const selected = mode === 'singleLimited' ? 1 : 5;
+    shard.records = [shard.records[0]];
+    manifest.coverage = {
+      selected,
+      reported: 1,
+      complete: 0,
+      partial: 1,
+      error: 0,
+      pending: selected - 1,
+      stale: 0,
+    };
+    manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
+    Object.assign(manifest.plugin_states[0]!, {
+      skills_total: selected,
+      selected_ids: manifest.plugin_states[0]!.selected_ids.slice(0, selected),
+    });
+  }
   if (mode === 'truncated') {
     shard.records = shard.records
       .filter((record: { status: string }) => record.status === 'complete')
@@ -332,24 +352,24 @@ async function setup(
   };
 }
 for (const width of [1280, 390]) {
-  test(`v3 reports 3 of 13 fully checked and puts review context before technical details (${width})`, async ({
+  test(`v3 reports 13 scanned and 10 limited and puts review context before technical details (${width})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
     const { assessment, errors } = await setup(page);
     await expect(assessment).toHaveClass(/skillspector--incomplete/);
     await expect(assessment.locator(':scope > summary')).toContainText(
-      'Skill scan · 3/13 fully checked',
+      'Skill scan · 13/13 scanned · 10 limited',
     );
     await expect(assessment.locator(':scope > summary')).not.toContainText('Findings:');
     await assessment.locator(':scope > summary').click();
     await expect(assessment.locator('.skillspector__advice')).toContainText(
-      'Skills fully checked: 3 of 13',
+      'Skills scanned: 13 of 13',
     );
     await expect(assessment.locator('.skillspector__outcomes')).toContainText(
       'Checked with limitations',
     );
-    await expect(assessment.locator('.skillspector__outcomes dd')).toHaveText(['10']);
+    await expect(assessment.locator('.skillspector__outcomes dd')).toHaveText(['3', '10']);
     await expect(assessment.locator('.skillspector__details')).toHaveCSS('font-size', '13px');
     await expect(assessment.locator('.skillspector__advice')).toContainText('before installing');
     const order = await assessment
@@ -436,6 +456,39 @@ test('omitted groups with zero published signals never render a clean result or 
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
+for (const mode of ['singleLimited', 'pendingLimited'] as const) {
+  for (const width of [1280, 390]) {
+    test(`v3 distinguishes executed partial scans from pending Skills (${mode}, ${width}px)`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const { assessment, errors } = await setup(page, mode);
+      await expect(assessment).toHaveClass(/skillspector--incomplete/);
+      await expect(assessment.locator(':scope > summary')).toContainText(
+        mode === 'singleLimited'
+          ? 'Skill scan · Checked with limitations'
+          : 'Skill scan · 1/5 scanned · 1 limited',
+      );
+      await expect(assessment.locator(':scope > summary')).not.toContainText('Incomplete check');
+      await assessment.locator(':scope > summary').click();
+      await expect(assessment.locator('.skillspector__advice')).toContainText(
+        `Skills scanned: 1 of ${mode === 'singleLimited' ? 1 : 5}`,
+      );
+      await expect(assessment.locator('.skillspector__outcomes')).toContainText(
+        'Checked with limitations',
+      );
+      if (mode === 'pendingLimited') {
+        await expect(assessment.locator('.skillspector__outcomes')).toContainText(
+          'No report yet',
+        );
+        await expect(assessment.locator('.skillspector__outcomes dd')).toHaveText(['1', '4']);
+      } else {
+        await expect(assessment.locator('.skillspector__outcomes dd')).toHaveText(['1']);
+      }
+      expect(errors).toEqual([]);
+    });
+  }
+}
 for (const mode of ['pending', 'unselected'] as const) {
   test(`unscanned ${mode} source has a clear card and truthful automatic-check explanation`, async ({
     page,
@@ -467,7 +520,7 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
     await assessment.locator(':scope > summary').click();
     if (mode === 'stale') {
       await expect(assessment.locator('.skillspector__advice')).toContainText(
-        'Selected Skills fully checked: 0 of 13',
+        'Selected Skills scanned: 0 of 13',
       );
       await expect(assessment.locator('.skillspector__outcomes')).toContainText(
         'Older report only',
@@ -512,9 +565,9 @@ test('v3 report recovers from 503 in the same open card without losing coverage'
       : route.fulfill({ body, contentType: 'application/json' });
   });
   await retry.click();
-  await expect(assessment.locator(':scope > summary')).toContainText('3/13 fully checked');
+  await expect(assessment.locator(':scope > summary')).toContainText('13/13 scanned · 10 limited');
   await expect(assessment.locator('.skillspector__advice')).toContainText(
-    'Skills fully checked: 3 of 13',
+    'Skills scanned: 13 of 13',
   );
   await expect(retry).toHaveCount(0);
   expect(requests).toEqual(['manifest', 'shard']);
@@ -529,10 +582,10 @@ test('v3 detail page opens install advice before installation and explains the m
   const assessment = page.locator('.plugin-detail .skillspector');
   await expect(assessment).toHaveAttribute('open', '');
   await expect(assessment.locator(':scope > summary')).toContainText(
-    'Skill scan · 3/13 fully checked',
+    'Skill scan · 13/13 scanned · 10 limited',
   );
   await expect(assessment.locator('.skillspector__advice')).toContainText(
-    'Skills fully checked: 3 of 13',
+    'Skills scanned: 13 of 13',
   );
   await expect(assessment.locator('.skillspector__advice')).toContainText('Before installing');
   await expect(assessment.locator('.skillspector__advice')).toContainText(
@@ -557,11 +610,11 @@ test('v3 detail page opens install advice before installation and explains the m
 test('v3 distinguishes selected roots from known complete plugin inventory', async ({ page }) => {
   const { assessment, errors } = await setup(page, 'selected');
   await expect(assessment.locator(':scope > summary')).toContainText(
-    'Skill scan · Incomplete check',
+    'Skill scan · Coverage has limits',
   );
   await assessment.locator(':scope > summary').click();
   await expect(assessment.locator('.skillspector__advice')).toContainText(
-    'Selected Skills fully checked: 3 of 13',
+    'Selected Skills scanned: 13 of 13',
   );
   expect(errors).toEqual([]);
 });

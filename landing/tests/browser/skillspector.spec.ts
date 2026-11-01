@@ -135,7 +135,7 @@ for (const mobile of [false, true]) {
       const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
       const details = card.locator('.skillspector');
       await expect(details).toHaveClass(/skillspector--incomplete/);
-      await expect(details.locator(':scope > summary')).toContainText('Incomplete check');
+      await expect(details.locator(':scope > summary')).toContainText('Coverage has limits');
       await details.locator(':scope > summary').focus();
       await page.keyboard.press('Enter');
       await expect(details).toHaveAttribute('open', '');
@@ -321,7 +321,7 @@ test('partial reports explain coverage and link the visible finding count to sca
   await projections(page, index);
   await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
   const details = page.locator('.plugin-card[data-install-source="i18n-state-00"] .skillspector');
-  await expect(details.locator(':scope > summary')).toContainText('Incomplete check');
+  await expect(details.locator(':scope > summary')).toContainText('Coverage has limits');
   await details.locator(':scope > summary').click();
   await expect(details).toContainText('static_parse_limit');
   await expect(details).toContainText('reference_missing');

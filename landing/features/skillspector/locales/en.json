@@ -8,7 +8,7 @@
       "notChecked": "Not checked",
       "noFindings": "No findings",
       "findingsCount": "Findings: {count}",
-      "partial": "Incomplete check",
+      "partial": "Coverage has limits",
       "error": "Could not check",
       "detailsFor": "SkillSpector details for {name}",
       "pluginScope": "Scope: Skill files in this plugin. Other plugin components are not checked by SkillSpector.",
@@ -19,7 +19,7 @@
       "scanner": "Static checks only · SkillSpector {version}",
       "disclaimer": "This report covers only the listed Skill files at the recorded revision. It does not run code or guarantee safety.",
       "unverified": "The current revision of this listing has not been verified.",
-      "incomplete": "Incomplete check",
+      "incomplete": "Coverage has limits",
       "source": "Source files",
       "findings": "Findings",
       "errors": "Check errors",
@@ -39,7 +39,7 @@
       "confirmedMaterialIssue": "Confirmed material issue",
       "stale": "Previous check",
       "unsupported": "Not checked",
-      "fullyChecked": "Skills fully checked: {checked} of {total}",
+      "fullyChecked": "Skills scanned: {checked} of {total}",
       "installAdvice": "Before installing",
       "adviceConfirmed": "A material issue has been confirmed. Review the evidence and remediation before installing.",
       "adviceReview": "Review the reported signals and their context before installing. Automated findings have not been confirmed by a reviewer.",
@@ -68,7 +68,7 @@
       "acceptedSignal": "Accepted signal",
       "classificationExplanation": "This classification is a narrowly matched registry rule, not a human security audit.",
       "limitedGroups": "The published report contains only the displayed groups. The total number of distinct findings is unknown.",
-      "selectedFullyChecked": "Selected Skills fully checked: {checked} of {total}",
+      "selectedFullyChecked": "Selected Skills scanned: {checked} of {total}",
       "skillRemoved": "The previously checked Skill file was removed at the newly examined source revision. The old report remains available as history; no current content was checked.",
       "acquisitionTransferLimit": "Source retrieval reached this scan profile’s transfer limit. Files that were not retrieved were not inspected.",
       "loadingAdvice": "SkillSpector is loading. Coverage is unknown; review the source before installing.",
@@ -96,7 +96,7 @@
       "scanComplete": "Scan complete",
       "selectionScanned": "Selected skills scanned",
       "retryLoad": "Try loading again",
-      "coverageProgress": "{checked}/{total} fully checked"
+      "coverageProgress": "{checked}/{total} scanned · {limited} limited"
     }
   }
 }

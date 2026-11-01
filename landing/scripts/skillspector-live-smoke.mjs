@@ -561,23 +561,29 @@ try {
         total: new Intl.NumberFormat(locale).format(assessment.selected),
       });
       await expect(summary).toContainText(t('title'));
-      // The published card now shows actual progress when a known plugin
-      // inventory contains both complete and incomplete Skill scans.
-      // Match that presentation precisely; never interpret it as full coverage.
+      // Match scanned and limited counts to the exact published v3 evidence.
+      const outcomes = assessment.outcomes;
+      const scanned = (outcomes?.complete ?? 0) + (outcomes?.limited ?? 0);
       const showProgress =
         report.schema_version === 3 &&
         !report.records.some((record) => record.legacy_format) &&
         assessment.status === 'incomplete' &&
         assessment.inventoryKnown &&
-        (assessment.fullyChecked ?? 0) > 0 &&
-        (assessment.fullyChecked ?? 0) < (assessment.selected ?? 0) &&
+        (outcomes?.limited ?? 0) > 0 &&
+        (outcomes?.failed ?? 0) === 0 &&
         (assessment.selected ?? 0) > 1;
       const expectedSummary = showProgress
         ? t('coverageProgress', {
-            checked: new Intl.NumberFormat(locale).format(assessment.fullyChecked),
+            checked: new Intl.NumberFormat(locale).format(scanned),
             total: new Intl.NumberFormat(locale).format(assessment.selected),
+            limited: new Intl.NumberFormat(locale).format(outcomes.limited),
           })
-        : t(assessment.status === 'noStaticFindings' ? 'scanComplete' : assessment.status);
+        : assessment.status === 'incomplete' &&
+            (outcomes?.limited ?? 0) > 0 &&
+            (outcomes?.failed ?? 0) === 0 &&
+            (outcomes?.unscanned ?? 0) === 0
+          ? t('outcomelimited')
+          : t(assessment.status === 'noStaticFindings' ? 'scanComplete' : assessment.status);
       await expect(summary).toContainText(expectedSummary);
       await expect(summary).not.toContainText(fullyChecked);
       await expect(panel.locator('.skillspector__details')).toHaveCount(0);
