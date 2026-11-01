@@ -100,7 +100,9 @@
       "waitingProgress": "已检查 {checked}/{total} · {waiting} 项等待检查",
       "statusExplanation": "如果部分文件或检测无法验证，结果可能存在缺口。这不代表已确认存在安全问题。",
       "openReport": "查看详情",
-      "closeReport": "关闭"
+      "closeReport": "关闭",
+      "awaitingList": "尚无当前检查结果的技能",
+      "awaitingExplanation": "这些技能尚无当前检查结果，安全状态未知。"
     }
   }
 }

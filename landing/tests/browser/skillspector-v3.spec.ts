@@ -61,6 +61,7 @@ async function setup(
     | 'unselected'
     | 'singleLimited'
     | 'pendingLimited'
+    | 'n8nPending'
     | 'truncated'
     | 'unsupportedSource' = 'mixed',
   reportGate?: Promise<void>,
@@ -207,6 +208,26 @@ async function setup(
       manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
       Object.assign(manifest.plugin_states[0]!, { skills_total: 1, selected_ids: [record.id] });
     }
+  }
+  if (mode === 'n8nPending') {
+    shard.records = shard.records.filter((record: { status: string }) => record.status === 'partial').slice(0, 6);
+    manifest.coverage = {
+      selected: 15,
+      reported: 6,
+      complete: 0,
+      partial: 6,
+      error: 0,
+      pending: 9,
+      stale: 0,
+    };
+    manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
+    Object.assign(manifest.plugin_states[0]!, {
+      skills_total: 15,
+      selected_ids: [
+        ...shard.records.map((record: { id: string }) => record.id),
+        ...Array.from({ length: 9 }, (_, index) => `plugin:fixture/n8n/waiting-${index + 1}`),
+      ],
+    });
   }
   if (mode === 'singleLimited' || mode === 'pendingLimited') {
     const selected = mode === 'singleLimited' ? 1 : 5;
@@ -458,6 +479,24 @@ test('omitted groups with zero published signals never render a clean result or 
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
+test('n8n known inventory distinguishes six incomplete checks from nine missing current results', async ({ page }) => {
+  const { assessment, errors } = await setup(page, 'n8nPending');
+  await expect(assessment.locator(':scope > summary')).toContainText(
+    '6/15 checked · 9 awaiting a check',
+  );
+  await assessment.locator(':scope > summary').click();
+  const dialog = assessment.locator('.skillspector__dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.skillspector__outcomes dd')).toHaveText(['6', '9']);
+  await expect(dialog.locator('.skillspector__waiting li')).toHaveCount(9);
+  await expect(dialog.locator('.skillspector__waiting')).toContainText('waiting-9');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(assessment.locator(':scope > summary')).toBeFocused();
+  await expect(assessment).not.toHaveAttribute('open');
+  expect(errors).toEqual([]);
+});
+
 for (const mode of ['singleLimited', 'pendingLimited'] as const) {
   for (const width of [1280, 390]) {
     test(`v3 distinguishes executed partial scans from pending Skills (${mode}, ${width}px)`, async ({

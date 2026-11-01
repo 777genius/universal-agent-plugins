@@ -100,7 +100,9 @@
       "waitingProgress": "تم فحص {checked}/{total} · {waiting} بانتظار الفحص",
       "statusExplanation": "قد توجد فجوات عندما يتعذر التحقق من بعض الملفات أو الفحوصات. هذا لا يعني تأكيد مشكلة أمنية.",
       "openReport": "عرض التفاصيل",
-      "closeReport": "إغلاق"
+      "closeReport": "إغلاق",
+      "awaitingList": "مهارات بانتظار فحص حالي",
+      "awaitingExplanation": "لا تتوفر نتائج فحص حالية لهذه المهارات حتى الآن. سلامتها غير معروفة."
     }
   }
 }

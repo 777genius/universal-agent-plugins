@@ -100,7 +100,9 @@
       "waitingProgress": "{checked}/{total} checked · {waiting} awaiting a check",
       "statusExplanation": "A result may have gaps if some files or checks could not be verified. This does not mean a security issue was confirmed.",
       "openReport": "Open details",
-      "closeReport": "Close"
+      "closeReport": "Close",
+      "awaitingList": "Skills awaiting a current check",
+      "awaitingExplanation": "These listed Skills do not have a current result yet. Their safety is not known."
     }
   }
 }

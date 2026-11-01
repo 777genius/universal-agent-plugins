@@ -303,6 +303,15 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
             )
           }}
         </p>
+        <section v-if="assessment.pendingIds?.length" class="skillspector__waiting">
+          <h3>{{ t('registryUi.skillSpector.awaitingList') }}</h3>
+          <p>{{ t('registryUi.skillSpector.awaitingExplanation') }}</p>
+          <ul>
+            <li v-for="identifier in assessment.pendingIds" :key="identifier">
+              <code :title="identifier">{{ identifier.split('/').at(-1) }}</code>
+            </li>
+          </ul>
+        </section>
         <dl v-if="coverageRows.length" class="skillspector__outcomes">
           <div v-for="[outcome, count] in coverageRows" :key="outcome">
             <dt>{{
@@ -806,6 +815,24 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
 .skillspector__retry:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 3px;
+}
+.skillspector__waiting h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+.skillspector__waiting ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.skillspector__waiting li {
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
 }
 .skillspector__outcomes {
   display: grid;

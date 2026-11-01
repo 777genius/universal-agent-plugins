@@ -100,7 +100,9 @@
       "waitingProgress": "Comprobados {checked}/{total} · {waiting} pendientes",
       "statusExplanation": "Algunos archivos o controles no pudieron verificarse. Esto no significa que se haya confirmado un problema de seguridad.",
       "openReport": "Ver detalles",
-      "closeReport": "Cerrar"
+      "closeReport": "Cerrar",
+      "awaitingList": "Skills sin comprobación actual",
+      "awaitingExplanation": "Estos Skills aún no tienen un resultado actual. Se desconoce su seguridad."
     }
   }
 }

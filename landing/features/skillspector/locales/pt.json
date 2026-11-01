@@ -100,7 +100,9 @@
       "waitingProgress": "Verificados {checked}/{total} · {waiting} aguardando",
       "statusExplanation": "Alguns arquivos ou verificações não puderam ser confirmados. Isso não significa que um problema de segurança foi confirmado.",
       "openReport": "Ver detalhes",
-      "closeReport": "Fechar"
+      "closeReport": "Fechar",
+      "awaitingList": "Skills sem verificação atual",
+      "awaitingExplanation": "Esses Skills ainda não têm resultado de verificação atual. A segurança é desconhecida."
     }
   }
 }
