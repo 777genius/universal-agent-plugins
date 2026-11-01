@@ -47,8 +47,10 @@ in 0.1.94. It also adds a [local management API](../use/manage#local-management-
 and [native Pi extensions](../reference/client-compatibility#pi-native-extensions).
 To preview adding a package to a project:
 
+For a compatible reviewed catalog entry, copy its exact commit-pinned Git source and supported target. Directory v1 aliases such as `context7` remain user-scoped. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA`, and `PACKAGE_PATH`; omit `//PACKAGE_PATH` for a repository-root package.
+
 ```bash
-npx universal-agent-plugins add context7 --target cursor --scope project \
+npx universal-agent-plugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
   --project-root /path/to/project --dry-run
 ```
 

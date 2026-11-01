@@ -49,8 +49,10 @@ Node.js не потрібен, хоча окремі плагіни можуть
 та [нативні розширення Pi](../reference/client-compatibility#pi-native-extensions).
 Щоб переглянути план додавання пакета до проєкту:
 
+Для проєкту скопіюйте з перевіреної картки каталогу точне Git-джерело з повним SHA коміту та сумісний агент. Псевдоніми Directory v1 (наприклад, `context7`) діють лише в області користувача. Замініть `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` і `PACKAGE_PATH`; для пакета в корені репозиторію приберіть `//PACKAGE_PATH`.
+
 ```bash
-npx universal-agent-plugins add context7 --target cursor --scope project \
+npx universal-agent-plugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
   --project-root /path/to/project --dry-run
 ```
 

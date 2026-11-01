@@ -155,8 +155,10 @@ agentplugins skills add owner/repository --skill review --skill pdf \
 [CLI 0.1.93 і новіших версіях](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
 Оберіть наявний каталог і вказуйте область у кожній команді:
 
+Для проєкту скопіюйте з перевіреної картки каталогу точне Git-джерело з повним SHA коміту та сумісний агент. Псевдоніми Directory v1 (наприклад, `context7`) діють лише в області користувача. Замініть `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` і `PACKAGE_PATH`; для пакета в корені репозиторію приберіть `//PACKAGE_PATH`.
+
 ```bash
-agentplugins add context7 --target cursor --scope project \
+agentplugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
   --project-root /path/to/project --dry-run
 agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project
