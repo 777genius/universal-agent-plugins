@@ -85,6 +85,33 @@ def observed_file(path: Path, boundary: Path, limit: int = 2 * 1024 * 1024) -> b
         return None
 
 
+def skill_presence(path: Path, boundary: Path) -> str:
+    """The removed Skill is absent, present, or unobservable (never PASS)."""
+    try:
+        rel = path.relative_to(boundary)
+        if not rel.parts or ".." in rel.parts or boundary.is_symlink():
+            return "unknown"
+        cursor = boundary
+        for component in rel.parts[:-1]:
+            cursor = cursor / component
+            if cursor.is_symlink():
+                return "unknown"
+            try:
+                if not stat.S_ISDIR(cursor.lstat().st_mode):
+                    return "unknown"
+            except FileNotFoundError:
+                return "absent"
+        leaf = cursor / rel.parts[-1]
+        if leaf.is_symlink():
+            return "unknown"
+        leaf.lstat()
+    except FileNotFoundError:
+        return "absent"
+    except (OSError, ValueError):
+        return "unknown"
+    return "present"
+
+
 def status(eligible: bool, command: dict | None, invariant: bool, reason: str,
            *, protected: bool = True, provenance: bool = True) -> tuple[str, str]:
     if not eligible:
@@ -203,9 +230,15 @@ def profile_scan(root: Path, expected: bytes) -> dict[str, str]:
 
 
 def case_profiles(product: str, cli: str, root: Path, commit: str, expected: dict[str, bytes],
-                  *, claude_available: bool) -> dict:
-    if not claude_available:
-        return receipt(product, "R2_claude_profiles", "BLOCKED", reason="genuine pinned Claude CLI not available")
+                  *, claude_available: bool, claude_version: str | None = None,
+                  claude_native_sha256: str | None = None) -> dict:
+    verified=(claude_available and bool(claude_version)
+              and "2.1.263" in claude_version
+              and claude_native_sha256 ==
+                  "26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba")
+    if not verified:
+        return receipt(product, "R2_claude_profiles", "BLOCKED",
+                       reason="verified native Claude 2.1.263 version and hash unavailable")
     env = baseline.isolated_env(root)
     home = Path(env["HOME"])
     a, b = home / ".claude", home / "profiles" / "b"
@@ -247,7 +280,8 @@ def case_profiles(product: str, cli: str, root: Path, commit: str, expected: dic
     else:
         verdict="PASS";reason="both profiles retained exact Skill and foreign bytes"
     return receipt(product,"R2_claude_profiles",verdict,reason=reason,
-                   phases=outcome,claude_version_verified=True,
+                   phases=outcome,verified_claude_version=claude_version,
+                   verified_claude_native_sha256=claude_native_sha256,
                    selected_uninstall="NOT_RUN (separate unsafe deletion path requires verified ownership)")
 
 
@@ -366,8 +400,12 @@ def scan_synthetic_canary(roots: tuple[Path, ...], synthetic: str,
         if not root.is_dir() or root.is_symlink():
             unknown.append("root_not_regular")
             continue
-        for current, dirs, files in os.walk(root, followlinks=False):
+        for current, dirs, files in os.walk(
+                root, followlinks=False,
+                onerror=lambda error: unknown.append("unlistable_directory")):
             here = Path(current)
+            if synthetic in str(here.relative_to(root)):
+                hits.append(h(str(here.relative_to(root)).encode("utf-8")))
             if here.is_symlink():
                 unknown.append("symlink_directory")
                 dirs[:] = []
@@ -375,11 +413,15 @@ def scan_synthetic_canary(roots: tuple[Path, ...], synthetic: str,
             # Unverified symlinked directories are not silently ignored.
             for directory in dirs[:]:
                 candidate = here / directory
+                if synthetic in str(candidate.relative_to(root)):
+                    hits.append(h(str(candidate.relative_to(root)).encode("utf-8")))
                 if candidate.is_symlink():
                     unknown.append("symlink_directory")
                     dirs.remove(directory)
             for name in files:
                 file = here / name
+                if synthetic in str(file.relative_to(root)):
+                    hits.append(h(str(file.relative_to(root)).encode("utf-8")))
                 inspected += 1
                 if inspected > max_files:
                     unknown.append("too_many_files")
@@ -511,15 +553,17 @@ def removal_command(product: str, cli: str, project: Path, *, lock: bool=False) 
     return [cli,"install","--target","codex"]
 
 
-def classify_removed_result(command: dict, stale_skill_present: bool,
+def classify_removed_result(command: dict, stale_skill_state: str,
                             protected_files_intact: bool) -> tuple[str, str]:
     """A failed sync or pre-sync audit cannot make a visible orphan PASS."""
     if not protected_files_intact:
         return "FAIL", "surviving Skill or foreign file unexpectedly modified"
     if command.get("timed_out") or command.get("cleanup_error") or command.get("exit_code") != 0:
         return "BLOCKED", "sync not fully successful; no cleanup PASS can be inferred"
-    if stale_skill_present:
+    if stale_skill_state == "present":
         return "FAIL", "removed dependency remains agent-visible after successful sync"
+    if stale_skill_state != "absent":
+        return "BLOCKED", "removed Skill is unobservable; no cleanup PASS"
     return "PASS", "removed dependency cleaned and surviving Skill intact"
 
 
@@ -572,21 +616,26 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
                                    teammate,mate_env,root)
     applied=baseline.run_process(removal_command(product,cli,teammate),
                                  teammate,mate_env,root)
-    final=observed_file(mate_path,teammate)
-    original=observed_file(teammate/".agents/skills/benchmark-note/SKILL.md",teammate)
+    final=skill_presence(mate_path,teammate)
+    survivor_paths=(".agents/skills/benchmark-note/SKILL.md",
+                    ".agents/skills/benchmark-note/references/fixture.txt")
+    survivor_intact=all(
+        observed_file(teammate/name,teammate) ==
+        expected[name.removeprefix(".agents/skills/benchmark-note/")]
+        for name in survivor_paths)
     foreign=observed_file(teammate/".agents/skills/foreign-neighbor/SKILL.md",teammate)
-    preserved=(original==expected["SKILL.md"] and
+    preserved=(survivor_intact and
                foreign==b"FOREIGN USER CONTENT: preserve without edits\n")
     # Audit is independent read-only evidence: a pre-sync warning cannot excuse
     # stale agent-visible files or convert an unsuccessful sync to PASS.
     audit_diagnostic = bool(audit and audit.get("exit_code") not in (None, 0))
-    verdict,reason = classify_removed_result(applied, final is not None, preserved)
+    verdict,reason = classify_removed_result(applied, final, preserved)
     return receipt(product,"R6_git_pull_removal",verdict,reason=reason,
                    author_action=changed,teammate_install=mate_first,teammate_sync=applied,
                    audit=audit,postpull_before_install_sha256=h(postpull) if postpull else None,
-                   stale_skill_still_present=final is not None,
-                   audit_reported_a_problem=audit_diagnostic,
-                   survivor_intact=original==expected["SKILL.md"],
+                   stale_skill_still_present=final != "absent",
+                   stale_skill_state=final, audit_reported_a_problem=audit_diagnostic,
+                   survivor_intact=survivor_intact,
                    foreign_unchanged=preserved)
 
 
@@ -599,6 +648,8 @@ def main() -> int:
     parser.add_argument("--group",choices=sorted(GROUPS),required=True)
     parser.add_argument("--output",type=Path,required=True)
     parser.add_argument("--claude-verified",action="store_true")
+    parser.add_argument("--claude-version",default=None)
+    parser.add_argument("--claude-native-sha256",default=None)
     o=parser.parse_args()
     if not all(baseline.PIN.fullmatch(v) for v in
                [o.fixture_commit,o.uap_source_sha,PARENT_V1,PARENT_V2,CHILD_V1,CHILD_V2]):
@@ -640,7 +691,9 @@ def main() -> int:
                         entry=case_cold(product,cli,root,o.fixture_commit,expected)
                     elif scenario=="R2_claude_profiles":
                         entry=case_profiles(product,cli,root,o.fixture_commit,expected,
-                                            claude_available=o.claude_verified)
+                                            claude_available=o.claude_verified,
+                                            claude_version=o.claude_version,
+                                            claude_native_sha256=o.claude_native_sha256)
                     elif scenario=="R3_transitive_update":
                         entry=case_graph(product,cli,root)
                     elif scenario=="R4_interrupted_operation":
