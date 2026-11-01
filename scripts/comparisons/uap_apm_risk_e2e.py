@@ -796,7 +796,8 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
                foreign==b"FOREIGN USER CONTENT: preserve without edits\n")
     # Audit is independent read-only evidence: a pre-sync warning cannot excuse
     # stale agent-visible files or convert an unsuccessful sync to PASS.
-    audit_diagnostic = bool(audit and audit.get("exit_code") not in (None, 0))
+    audit_diagnostic = (None if audit is None else
+                        audit.get("exit_code") not in (None, 0))
     verdict,reason = classify_removed_result(applied, final, preserved)
     return receipt(product,"R6_git_pull_removal",verdict,reason=reason,
                    author_action=changed,teammate_install=mate_first,teammate_sync=applied,
@@ -805,6 +806,33 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
                    stale_skill_state=final, audit_reported_a_problem=audit_diagnostic,
                    survivor_intact=survivor_intact,
                    foreign_unchanged=preserved)
+
+
+def observe_cli_identity(product: str, executable: Path, root: Path) -> dict:
+    """Observe actual binary and version; the separately pinned source tag is not CLI output.
+
+    UAP's bare Go build intentionally reports 0.1.0-development even when its
+    verified source came from immutable 0.1.95 tag. Do not rewrite that fact.
+    """
+    if not executable.is_file() or executable.is_symlink():
+        raise ValueError("expected regular executable for " + product)
+    if not 0 < executable.stat().st_size <= 128 * 1024 * 1024:
+        raise ValueError("executable too large or empty")
+    env=baseline.isolated_env(root)
+    command=baseline.run_process(
+        [str(executable), "version" if product=="uap" else "--version"],
+        root,env,root)
+    expected=("agentplugins 0.1.0-development" if product=="uap"
+              else "Agent Package Manager (APM) CLI version 0.35.0")
+    # The parser never silently assumes 0.1.95 from a development build.
+    verified=complete_command(command) and expected in command.get("output_tail","")
+    return {"entrypoint_sha256":h(executable.read_bytes()),
+            "observed_version":command.get("output_tail","")[-512:],
+            "probe_exit_code":command.get("exit_code"),
+            "probe_capture_complete":command.get("capture_complete"),
+            "expected_observed_version":expected,
+            "probe_verified":verified,
+            "source_build_not_published_binary":product=="uap"}
 
 
 def main() -> int:
@@ -825,11 +853,24 @@ def main() -> int:
     for name,exe in [("uap",o.uap),("apm",o.apm)]:
         if not exe.is_file() or exe.is_symlink():
             parser.error(f"missing regular {name} executable")
+    # CLI output is observed, not inferred from the workflow's requested pins.
+    # The workflow separately checks the tag/source and APM wheel digest.
+    with tempfile.TemporaryDirectory(prefix="uap-apm-cli-identity-",
+                                     dir=os.environ.get("RUNNER_TEMP")) as version_temp:
+        identities={}
+        for product, executable in (("uap",o.uap),("apm",o.apm)):
+            verify_root=Path(version_temp)/product
+            verify_root.mkdir()
+            identities[product]=observe_cli_identity(product,executable,verify_root)
+    if not all(identity["probe_verified"] for identity in identities.values()):
+        parser.error("real CLI version probe incomplete or inconsistent")
     cases=[]
     meta={"schema_version":1,"group":o.group,"fixture_commit":o.fixture_commit,
           "uap_release_source_sha":o.uap_source_sha,
           "harness_sha256":h(Path(__file__).read_bytes()),
-          "released_versions":{"uap":"0.1.95 (source build)","apm":"0.35.0"},
+          "released_source_targets":{"uap":"agentplugins-v0.1.95 source tag",
+                                     "apm":"apm-cli==0.35.0 pinned wheel"},
+          "observed_cli_identities":identities,
           "limitations":["No production credentials or model calls",
                          "No native agent session / MCP tools/call",
                          "Risk cases with missing prerequisites are BLOCKED, not product FAIL",
