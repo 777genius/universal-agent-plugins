@@ -45,7 +45,28 @@
       "collectionShown": "عرض {count} من {total} في هذه المجموعة",
       "headingPrefix": "اعثر على",
       "viewListing": "عرض الإدراج الأصلي",
-      "manualSkillSelection": "اختر المهارة الدقيقة في أداة التثبيت؛ اسمها الوارد في الفهرس غير مُتحقَّق منه."
+      "manualSkillSelection": "اختر المهارة الدقيقة في أداة التثبيت؛ اسمها الوارد في الفهرس غير مُتحقَّق منه.",
+      "publisherSource": "مصدر الناشر",
+      "invalidPublisherName": "يتطلب الناشر اسم Skill دقيقًا. راجع الصفحة الأصلية.",
+      "detail": {
+        "breadcrumb": "التنقل بين المهارات",
+        "skill": "Agent Skill",
+        "notFound": "لم يُعثر على المهارة",
+        "notFoundHelp": "هذا الإدراج غير متاح الآن. ارجع إلى دليل المهارات.",
+        "backToSkills": "العودة إلى المهارات",
+        "installation": "التثبيت",
+        "command": "الأمر",
+        "prompt": "الموجه",
+        "promptText": "ثبّت هذه المهارة باستخدام Universal Agent Plugins. راجع المصدر والتغييرات قبل تشغيل:\n{command}",
+        "exactNameUnavailable": "تعذّر التحقق من اسم التثبيت الدقيق. راجع الإدراج الأصلي.",
+        "documentNotice": "يوفر الدليل بيانات المصدر والتثبيت، لكنه لا يحتوي على محتوى SKILL.md متحقق منه. اقرأ التعليمات الأصلية قبل التثبيت.",
+        "readInstructions": "اقرأ SKILL.md في الصفحة الأصلية",
+        "security": "فحوص الأمان",
+        "installs": "التثبيتات",
+        "source": "المصدر",
+        "listing": "الإدراج الأصلي",
+        "metricsNotice": "أعداد التثبيت من الدليل الخارجي ولم تُتحقق بشكل مستقل."
+      }
     },
     "directoryPage": {
       "pluginDirectory": "دليل الإضافات",
