@@ -22,25 +22,26 @@ import (
 // os/exec writes stderr from its copy goroutine. Limit bytes while the
 // native child is alive, and read the buffer only after Wait has joined it.
 type openCodeV2BoundedStderr struct {
-	bytes.Buffer
+	data      bytes.Buffer
 	truncated bool
 }
 
 func (w *openCodeV2BoundedStderr) Write(body []byte) (int, error) {
 	incoming := len(body)
-	remaining := openCodeProjectLimit - w.Len()
+	remaining := max(0, openCodeProjectLimit-w.data.Len())
 	if remaining < len(body) {
 		w.truncated = true
-		if remaining < 0 {
-			remaining = 0
-		}
 		body = body[:remaining]
 	}
-	if _, err := w.Buffer.Write(body); err != nil {
+	if _, err := w.data.Write(body); err != nil {
 		return 0, err
 	}
 	return incoming, nil
 }
+
+func (w *openCodeV2BoundedStderr) Len() int      { return w.data.Len() }
+func (w *openCodeV2BoundedStderr) Bytes() []byte { return w.data.Bytes() }
+func (w *openCodeV2BoundedStderr) String() string { return w.data.String() }
 
 // V2 removed "debug skill". Its official /api/skill endpoint exposes the
 // actual process-local skill registry. Never replace this proof with a file
@@ -64,6 +65,7 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string, r
 	ctx, cancel := context.WithTimeout(f.ctx, 16*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, f.client, "serve", "--hostname", "127.0.0.1", "--port", strconv.Itoa(port))
+	command.WaitDelay = time.Second
 	command.Dir = project
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
@@ -133,6 +135,23 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string, r
 		case <-time.After(110 * time.Millisecond):
 		}
 	}
+	// This proof uses a one-time Basic Auth secret and must not silently
+	// pass if the public skill endpoint is exposed without authentication.
+	if lastError == nil {
+		unauthenticated, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, http.NoBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := httpClient.Do(unauthenticated)
+		if err != nil {
+			t.Fatal("native V2 unauthenticated skill negative control failed", err)
+		}
+		_, readErr := io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+		closeErr := response.Body.Close()
+		if readErr != nil || closeErr != nil || response.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("native V2 skill API did not reject missing Basic Auth (status %d)", response.StatusCode)
+		}
+	}
 	// Wait for the child's stderr copier before reading or hashing any
 	// captured bytes, even on a successful HTTP API observation.
 	_ = command.Process.Kill()
@@ -168,6 +187,20 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string, r
 		t.Fatal(err)
 	}
 	return parsed
+}
+
+// The collector must not bypass Write through an embedded ReaderFrom or
+// retain unbounded child output before the post-Wait evidence checks.
+func TestOpenCodeV2BoundedStderrNeverStoresBeyondLimit(t *testing.T) {
+	var output openCodeV2BoundedStderr
+	chunk := bytes.Repeat([]byte("x"), openCodeProjectLimit+257)
+	n, err := output.Write(chunk)
+	if err != nil || n != len(chunk) || output.Len() != openCodeProjectLimit || !output.truncated {
+		t.Fatal("native V2 stderr writer did not cap input")
+	}
+	if n, err := output.Write([]byte("late")); err != nil || n != 4 || output.Len() != openCodeProjectLimit {
+		t.Fatal("native V2 stderr writer exceeded cap after overflow")
+	}
 }
 
 func openCodeProjectV2Skills(body []byte, project string) (map[string]openCodeProjectSkill, error) {
