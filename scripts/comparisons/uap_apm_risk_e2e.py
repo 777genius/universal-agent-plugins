@@ -192,6 +192,24 @@ def apm_claude_skill_kind(portable: dict[str, bytes], commit: str) -> bool:
         return False
 
 
+def lock_validation_refused(command: dict, lock_name: str) -> bool:
+    """No-op, unrelated failure or process crash cannot validate lock authority."""
+    if not observed_command(command):
+        return False
+    code = command.get("exit_code")
+    if not isinstance(code, int) or isinstance(code, bool) or code <= 0:
+        # Negative codes mean a terminating POSIX signal, not a normal refusal.
+        return False
+    expected = (lock_name.lower(), "lockfile")
+    error_tokens = ("invalid", "malform", "pars", "syntax", "corrupt",
+                    "reject", "error", "fail", "cannot", "unexpected")
+    for line in command.get("output_tail", "").lower().splitlines():
+        if any(key in line for key in expected) and any(
+                diagnostic in line for diagnostic in error_tokens):
+            return True
+    return False
+
+
 def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[str, bytes]) -> dict:
     """Cold clone containing already committed Claude Skill, without receipts.
 
@@ -255,8 +273,7 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
     (negative_clone / lock_name).write_bytes(b"\x00malformed-lock-no-authority\n")
     negative_result = run(product, cli, negative_clone, negative_root, negative_env,
                           commit=commit, target="claude", replay=True)
-    corrupt_lock_rejected = (observed_command(negative_result) and
-                             negative_result["exit_code"] != 0)
+    corrupt_lock_rejected = lock_validation_refused(negative_result, lock_name)
     before = clean_snapshot(teammate, owned)
     claude_before = profile_snapshot(teammate / ".claude")
     portable_meta_before = {name: file_identity(teammate / name, teammate)
