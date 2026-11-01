@@ -472,7 +472,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "unsupported"
     },
