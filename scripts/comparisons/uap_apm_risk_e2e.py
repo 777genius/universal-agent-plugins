@@ -119,10 +119,10 @@ def status(eligible: bool, command: dict | None, invariant: bool, reason: str,
         return "BLOCKED", "documented prerequisite or supported route not established: " + reason
     if not protected:
         return "FAIL", "a protected or foreign file changed: " + reason
-    if command is None or not complete_command(command):
-        return "BLOCKED", "process outcome incomplete or refused: " + reason
-    if command.get("exit_code") != 0:
-        return "BLOCKED" if invariant else "FAIL", "command refused: " + reason
+    if command is None or not observed_command(command):
+        return "BLOCKED", "process outcome incomplete: " + reason
+    if command["exit_code"] != 0:
+        return "BLOCKED" if invariant else "FAIL", "fully observed command refused: " + reason
     if not invariant or not provenance:
         return "FAIL", reason
     return "PASS", reason
@@ -256,12 +256,17 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
                    command=actual, foreign_unchanged=preserved)
 
 
-def complete_command(command: dict) -> bool:
-    """Zero exit alone is not trustworthy when a process or pipe was lost."""
-    return (command.get("exit_code") == 0
+def observed_command(command: dict) -> bool:
+    """Receipt is complete even if the tool deliberately refused to apply."""
+    return (command.get("exit_code") is not None
             and command.get("timed_out") is False
             and not command.get("cleanup_error")
             and command.get("capture_complete") is True)
+
+
+def complete_command(command: dict) -> bool:
+    """Successful, completely observed process; zero exit alone is not proof."""
+    return observed_command(command) and command.get("exit_code") == 0
 
 
 def profile_scan(root: Path, expected: dict[str, bytes]) -> dict[str, dict]:
