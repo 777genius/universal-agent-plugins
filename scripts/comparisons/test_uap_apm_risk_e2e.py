@@ -100,6 +100,40 @@ class RiskOracleTests(unittest.TestCase):
             self.assertFalse(risk.graph_lock_matches(
                 project,"uap",risk.PARENT_V1,risk.CHILD_V1))
 
+    def test_graph_lock_symlinks_never_certify_source_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            parent=Path(tmp)
+            project=parent/"project"
+            project.mkdir()
+            p={"alias":"parent","source":{"git":{
+                "repository":risk.REPO,"path":risk.PARENT,
+                "commit":risk.PARENT_V1,"requested":{
+                    "kind":"commit","value":risk.PARENT_V1}}}}
+            c={"alias":"child","source":{"git":{
+                "repository":risk.REPO,"path":risk.CHILD,
+                "commit":risk.CHILD_V1,"requested":{
+                    "kind":"commit","value":risk.CHILD_V1}}},
+                "required_by":[{"alias":"parent","selector":{
+                    "kind":"commit","value":risk.CHILD_V1}}]}
+            outside=parent/"real.lock"
+            outside.write_text(json.dumps({"packages":[p,c]}))
+            (project/"uap.lock").symlink_to(outside)
+            self.assertFalse(risk.graph_lock_matches(
+                project,"uap",risk.PARENT_V1,risk.CHILD_V1))
+            (project/"uap.lock").unlink()
+            (project/"uap.lock").write_bytes(outside.read_bytes())
+            self.assertTrue(risk.graph_lock_matches(
+                project,"uap",risk.PARENT_V1,risk.CHILD_V1))
+            apm={"dependencies":[
+                {"repo_url":risk.REPO,"virtual_path":risk.PARENT,
+                 "resolved_commit":risk.PARENT_V1},
+                {"repo_url":risk.REPO,"virtual_path":risk.CHILD,
+                 "resolved_commit":risk.CHILD_V1,"resolved_by":risk.REPO}]}
+            outside.write_text(json.dumps(apm))
+            (project/"apm.lock.yaml").symlink_to(outside)
+            self.assertFalse(risk.graph_lock_matches(
+                project,"apm",risk.PARENT_V1,risk.CHILD_V1))
+
     def test_UAP_graph_rejects_stale_requested_pins(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
@@ -376,6 +410,19 @@ class RiskOracleTests(unittest.TestCase):
             self.assertFalse(found["complete"])
             self.assertIn("unlistable_directory",found["incomplete_reasons"])
 
+    def test_canary_common_text_encodings_are_detected_without_exposing_value(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            value="risk-"+("c"*48)
+            file=root/"encoded-trace"
+            for data in (risk.base64.b64encode(value.encode()),
+                         value.encode().hex().encode(), value.upper().encode()):
+                file.write_bytes(data)
+                observed=risk.scan_synthetic_canary((root,),value)
+                self.assertTrue(observed["canary_found"])
+                self.assertTrue(observed["complete"])
+                self.assertNotIn(value,json.dumps(observed))
+
     def test_path_only_canary_is_detected_without_leaking_its_name(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
@@ -453,6 +500,16 @@ class RiskOracleTests(unittest.TestCase):
                             'args = ["-e", "process.exit(0)"]\n'
                             'env_vars = ["UAP_APM_SECRET_CANARY"]\n')
             self.assertEqual(risk.codex_mcp_contract(project),"match")
+            toml.write_text('[mcp_servers.riskcanary]\ncommand = "node"\n'
+                            'args = ["-e", "process.exit(0)"]\n'
+                            'env_vars = ["UAP_APM_SECRET_CANARY"]\n'
+                            '[mcp_servers.riskcanary.env]\nOTHER_TOKEN = "embedded"\n')
+            self.assertEqual(risk.codex_mcp_contract(project),"environment_forwarding_unverified")
+            toml.write_text('[mcp_servers.riskcanary]\ncommand = "node"\n'
+                            'args = ["-e", "process.exit(0)"]\n'
+                            'env_vars = ["UAP_APM_SECRET_CANARY"]\n'
+                            'env = ["unexpected"]\n')
+            self.assertEqual(risk.codex_mcp_contract(project),"environment_forwarding_unverified")
             toml.write_text('[mcp_servers.riskcanary]\ncommand = "node"\n'
                             'args = ["-e", "process.exit(0)"]\n'
                             'env_vars = ["UAP_APM_SECRET_CANARY", "UNRELATED_ENV"]\n')
