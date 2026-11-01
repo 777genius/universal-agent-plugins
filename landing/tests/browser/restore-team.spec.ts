@@ -2,8 +2,8 @@ import { expect, test } from '@playwright/test';
 import { hydrated } from './i18n-state.helpers';
 
 const commands = [
-  'agentplugins add <git-url> --scope project',
-  'agentplugins install',
+  'agentplugins add github:brunoborges/javaevolved@4bfa3c268a4abb026b16c136330e389fb9cce091//agent-plugins/modern-java-development --target codex --scope project',
+  'agentplugins install --locked',
 ];
 
 // Exercise actual page geometry: long translations, both themes, and the four
@@ -45,14 +45,26 @@ for (const theme of ['dark', 'light']) {
           await monitors.first().getAttribute('src'),
         ].map((src) => new URL(src!, page.url()).href),
       );
-      await expect(section.locator('pre code')).toHaveText(commands);
+      await expect(section.locator('.registry-restore__package')).toHaveCount(2);
+      await expect(section.locator('.registry-restore__package span')).toHaveText([
+        'modern-java-development',
+        'modern-java-development',
+      ]);
+      await expect(section.locator('.registry-restore__package strong')).toHaveText([
+        'v1.0.0',
+        'v1.0.0',
+      ]);
+      await expect(section.locator('.registry-restore__locked-version')).toHaveText('v1.0.0');
+      await expect(section.locator('pre code')).toHaveCount(2);
+      await expect(section.locator('pre code').first()).toContainText('agentplugins add');
+      await expect(section.locator('pre code').last()).toHaveText('agentplugins install --locked');
       expect(
         await section.locator('.registry-restore__screen').evaluateAll((screens) =>
           screens.flatMap((screen) => {
             const bounds = screen.getBoundingClientRect();
             return [
               ...screen.querySelectorAll(
-                'pre, button, .registry-restore__stage-label, .registry-restore__commit',
+                'pre, button, .registry-restore__stage-label, .registry-restore__package, .registry-restore__commit',
               ),
             ]
               .filter((element) => {
@@ -77,8 +89,15 @@ for (const theme of ['dark', 'light']) {
         .evaluateAll((elements) =>
           elements.map((element) => element.getBoundingClientRect().toJSON()),
         );
-      if (width === 1440) expect(machines[0]!.top).toBeCloseTo(machines[1]!.top, 0);
-      else expect(machines[1]!.top).toBeGreaterThan(machines[0]!.bottom);
+      if (width === 1440) {
+        expect(machines[0]!.top).toBeCloseTo(machines[1]!.top, 0);
+      } else {
+        expect(machines[1]!.top).toBeGreaterThan(machines[0]!.bottom);
+        // Stacked monitors should not dominate a wide viewport.
+        if (width > 480) {
+          for (const machine of machines) expect(machine.width).toBeLessThanOrEqual(501);
+        }
+      }
     });
   }
 }
