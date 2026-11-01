@@ -57,7 +57,7 @@
         "command": "Comando",
         "prompt": "Prompt",
         "promptText": "Instala este Skill con Universal Agent Plugins. Revisa la fuente y los cambios antes de ejecutar:\n{command}",
-        "exactNameUnavailable": "No se pudo validar el nombre exacto para instalar. Revisa la ficha original.",
+        "exactNameUnavailable": "No se pudo validar el nombre exacto de instalación. Revisa la fuente del editor.",
         "security": "Comprobaciones de seguridad",
         "installs": "Instalaciones",
         "source": "Fuente",
