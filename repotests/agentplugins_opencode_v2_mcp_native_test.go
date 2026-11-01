@@ -169,7 +169,17 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 	}
 	if output := observe(projectA); !strings.Contains(output, "uap_project_fixture") ||
 		!strings.Contains(output, "connected") {
-		t.Fatal("native V2 client failed to initialize project MCP fixture")
+		methods, _ := os.ReadFile(events)
+		// This run uses an isolated temp HOME and a source-authored inert
+		// fixture. Emit only finite statuses, never the vendor's raw output,
+		// project paths, credentials, or unbounded stderr.
+		t.Fatalf("native V2 MCP status refused: named=%t connected=%t empty=%t failed=%t pending=%t helper_started=%t output_bytes=%d",
+			strings.Contains(output, "uap_project_fixture"),
+			strings.Contains(output, "connected"),
+			strings.Contains(output, "No MCP servers configured"),
+			strings.Contains(strings.ToLower(output), "failed"),
+			strings.Contains(strings.ToLower(output), "pending"),
+			len(methods) > 0, len(output))
 	}
 	methodsRaw, err := os.ReadFile(events)
 	if err != nil || len(methodsRaw) > 2048 {
