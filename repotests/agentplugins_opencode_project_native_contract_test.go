@@ -122,12 +122,12 @@ func TestOpenCodeProjectV2NativeSourceInventoryBindsExactUserAndSelectedProject(
 		t.Fatal(err)
 	}
 	for name, altered := range map[string][]any{
-		"missing-user": rows[1:],
-		"missing-project": rows[:2],
-		"duplicate-project": append(append([]any{}, rows...), rows[2]),
+		"missing-user":       rows[1:],
+		"missing-project":    rows[:2],
+		"duplicate-project":  append(append([]any{}, rows...), rows[2]),
 		"unrequested-inline": append(append([]any{}, rows...), map[string]any{"type": "document", "info": config("inline", "INLINE")}),
-		"foreign-path": []any{rows[0], rows[1], map[string]any{"type": "document", "path": filepath.Join(root, "foreign", "opencode.jsonc"), "info": config("managed", "PROJECT")}, rows[3]},
-		"flat-v2": []any{rows[0], rows[1], map[string]any{"type": "document", "path": projectPath, "info": map[string]any{"mcp": map[string]any{"managed": map[string]any{"url": "http://127.0.0.1:9/PROJECT"}}}}, rows[3]},
+		"foreign-path":       []any{rows[0], rows[1], map[string]any{"type": "document", "path": filepath.Join(root, "foreign", "opencode.jsonc"), "info": config("managed", "PROJECT")}, rows[3]},
+		"flat-v2":            []any{rows[0], rows[1], map[string]any{"type": "document", "path": projectPath, "info": map[string]any{"mcp": map[string]any{"managed": map[string]any{"url": "http://127.0.0.1:9/PROJECT"}}}}, rows[3]},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := openCodeProjectV2SourceConfig(encode(altered), user, project, false, true); err == nil {
