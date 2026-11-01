@@ -167,10 +167,10 @@ var clientDefinitions = []ClientDefinition{
 		DiscoversNativeHooks:     true,
 		HonorsOpenAIMCPAuthHints: true,
 	}), LifecyclePrepared),
-	withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
+	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
 		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,
-	})), ActivationAutomatic), LifecyclePrepared),
+	})), ActivationAutomatic), LifecyclePrepared), SupportNative, SupportNative),
 }
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {
