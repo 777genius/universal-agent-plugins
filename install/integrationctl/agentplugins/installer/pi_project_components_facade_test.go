@@ -154,6 +154,9 @@ func TestPiProjectNativeSkillsMCPFacadeAAndB(t *testing.T) {
 	skill("Second revision.")
 	write(skillA, "---\nname: pi-managed\ndescription: Project-native Pi Skills/MCP E2E\n---\nSecond revision.\n")
 	do(a, request(OpRemove, projectA, firstA.InstallationID))
+	if actual, err := os.ReadFile(mcpA); err != nil || bytes.Contains(actual, []byte(`"pi-managed"`)) || !bytes.Contains(actual, []byte(`"foreign"`)) {
+		t.Fatal("Pi project A MCP removal did not remove exactly its owned server", err)
+	}
 	if _, err := os.Stat(skillA); !os.IsNotExist(err) {
 		t.Fatal("owned Pi project Skill survived removal", err)
 	}
