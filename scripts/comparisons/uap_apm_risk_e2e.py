@@ -211,78 +211,162 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
                    command=actual, foreign_unchanged=preserved)
 
 
-def profile_scan(root: Path, expected: bytes) -> dict[str, str]:
-    """Only enumerate a small fixed Skills subtree; no symlink traversal."""
+def complete_command(command: dict) -> bool:
+    """Zero exit alone is not trustworthy when a process or pipe was lost."""
+    return (command.get("exit_code") == 0
+            and command.get("timed_out") is False
+            and not command.get("cleanup_error")
+            and command.get("capture_complete") is True)
+
+
+def profile_scan(root: Path, expected: dict[str, bytes]) -> dict[str, dict]:
+    """Admit only complete, ordinary Skill + reference bytes in one directory."""
     folder = root / "skills"
-    result: dict[str, str] = {}
+    result: dict[str, dict] = {}
     if not folder.is_dir() or folder.is_symlink():
         return result
-    for subdir in sorted(folder.iterdir()):
-        if subdir.is_symlink() or not subdir.is_dir():
-            continue
-        skill = subdir / "SKILL.md"
-        data = observed_file(skill, root)
-        if data == expected:
-            result[str(skill.relative_to(root))] = h(data)
-        if len(result) > 32:
-            return {}
+    try:
+        for subdir in sorted(folder.iterdir()):
+            if subdir.is_symlink() or not subdir.is_dir():
+                continue
+            skill = observed_file(subdir / "SKILL.md", root)
+            reference = observed_file(subdir / "references/fixture.txt", root)
+            if skill == expected["SKILL.md"] and reference == expected["references/fixture.txt"]:
+                result[str(subdir.relative_to(root))] = {
+                    "skill_sha256": h(skill),
+                    "reference_sha256": h(reference),
+                }
+            if len(result) > 32:
+                return {}
+    except OSError:
+        return {}
     return result
 
 
-def case_profiles(product: str, cli: str, root: Path, commit: str, expected: dict[str, bytes],
-                  *, claude_available: bool, claude_version: str | None = None,
+def profile_snapshot(root: Path, *, max_entries: int = 2048) -> dict:
+    """Hash the selected disposable native profile; no sensitive file bodies."""
+    entries: list[str] = []
+    unknown: list[str] = []
+    if root.is_symlink() or not root.is_dir():
+        return {"sha256": None, "count": 0, "complete": False}
+    for current, dirs, files in os.walk(
+            root, followlinks=False,
+            onerror=lambda error: unknown.append("unlistable")):
+        here = Path(current)
+        for dirname in sorted(dirs[:]):
+            child = here / dirname
+            if child.is_symlink():
+                unknown.append("symlink_directory")
+                dirs.remove(dirname)
+            else:
+                entries.append("D:" + str(child.relative_to(root)))
+        for filename in sorted(files):
+            child = here / filename
+            data = observed_file(child, root)
+            if data is None:
+                unknown.append("unreadable")
+            else:
+                entries.append("F:" + str(child.relative_to(root)) + ":" + h(data))
+        if len(entries) > max_entries:
+            unknown.append("too_many_entries")
+            break
+    return {"sha256": h("\n".join(sorted(entries)).encode("utf-8")),
+            "count": len(entries), "complete": not unknown}
+
+
+def saved_profile_source_matches(product: str, env: dict[str, str], commit: str) -> bool:
+    """Source identity comes from the manager's *user scope lock*, not file names."""
+    managed = (Path(env["AGENTPLUGINS_HOME"]) if product == "uap"
+               else Path(env["HOME"]) / ".apm")
+    portable, err = baseline.captured_portable(managed, product)
+    return (err is None and bool(portable) and
+            baseline.portable_identity(portable, commit, product)
+                ["exact_source_commit_recorded_in_lock"])
+
+
+def case_profiles(product: str, cli: str, root: Path, commit: str,
+                  expected: dict[str, bytes], *, claude_available: bool,
+                  claude_version: str | None = None,
                   claude_native_sha256: str | None = None) -> dict:
-    verified=(claude_available and bool(claude_version)
-              and "2.1.263" in claude_version
-              and claude_native_sha256 ==
-                  "26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba")
+    verified = (claude_available and bool(claude_version)
+                and "2.1.263" in claude_version
+                and claude_native_sha256 ==
+                    "26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba")
     if not verified:
         return receipt(product, "R2_claude_profiles", "BLOCKED",
-                       reason="verified native Claude 2.1.263 version and hash unavailable")
+                       reason="pinned real Claude version and native digest unavailable")
     env = baseline.isolated_env(root)
     home = Path(env["HOME"])
     a, b = home / ".claude", home / "profiles" / "b"
     for dest in (a, b):
-        (dest / "skills" / "foreign-neighbor").mkdir(parents=True, exist_ok=True)
-        (dest / "skills" / "foreign-neighbor" / "SKILL.md").write_bytes(b"FOREIGN PROFILE DATA\n")
+        sentinel = dest / "skills/foreign-neighbor/SKILL.md"
+        sentinel.parent.mkdir(parents=True, exist_ok=True)
+        sentinel.write_bytes(b"FOREIGN PROFILE DATA\n")
     project = root / "project"
     project.mkdir()
     apm_source = f"{REPO}/{SKILL}#{commit}"
-    outcome: list[dict] = []
-    for index, chosen in enumerate((a, b, a)):
-        active = dict(env, CLAUDE_CONFIG_DIR=str(chosen))
+    before_a, before_b = profile_snapshot(a), profile_snapshot(b)
+    results: list[dict] = []
+    for index, selected in enumerate((a, b, a)):
+        active = dict(env, CLAUDE_CONFIG_DIR=str(selected))
         if product == "uap":
             argv = [cli, "skills", "add", f"{REPO}@{commit}//{SKILL}",
-                    "--target", "claude", "--scope", "user", "--no-ui", "--yes", "--format", "json"]
+                    "--target", "claude", "--scope", "user", "--no-ui",
+                    "--yes", "--format", "json"]
         elif index == 0:
             argv = [cli, "install", apm_source, "--global", "--target", "claude"]
         else:
             argv = [cli, "install", "--global", "--target", "claude"]
-        cmd = baseline.run_process(argv, project, active, root)
-        outcome.append({"phase":index, "selected":"A" if chosen==a else "B", "cmd":cmd,
-                        "a":profile_scan(a, expected["SKILL.md"]),
-                        "b":profile_scan(b, expected["SKILL.md"]),
-                        "foreign": all(baseline.safe_same_bytes(
-                          p / "skills/foreign-neighbor/SKILL.md", b"FOREIGN PROFILE DATA\n", home)
-                          for p in (a,b))})
-    first, second, third = outcome
-    if not first["a"] or first["cmd"]["exit_code"] != 0:
-        verdict="BLOCKED"
-        reason="first user-scope Claude installation not admitted (runtime/prerequisite/format)"
-    elif not second["foreign"] or not third["foreign"]:
-        verdict="FAIL";reason="foreign profile sentinel changed"
-    elif not second["a"] or not third["a"]:
-        verdict="FAIL";reason="a later install removed or altered profile A's Skill"
-    elif any(x["cmd"]["exit_code"] != 0 for x in outcome[1:]):
-        verdict="BLOCKED";reason="safe refusal or unsupported multi-profile operation"
-    elif not second["b"] or not third["b"]:
-        verdict="FAIL";reason="profile B installation was missing after successful command"
+        command = baseline.run_process(argv, project, active, root)
+        results.append({
+            "phase": index, "selected": "A" if selected == a else "B",
+            "cmd": command, "a": profile_scan(a, expected),
+            "b": profile_scan(b, expected),
+            "a_snapshot": profile_snapshot(a),
+            "b_snapshot": profile_snapshot(b),
+            "saved_source_matches": saved_profile_source_matches(product, env, commit),
+            "foreign": all(baseline.safe_same_bytes(
+                p / "skills/foreign-neighbor/SKILL.md", b"FOREIGN PROFILE DATA\n", home)
+                for p in (a, b)),
+        })
+    first, second, third = results
+    complete = all(complete_command(item["cmd"]) for item in results)
+    intact = all(item["foreign"] for item in results)
+    snapshots_complete = all(
+        item["a_snapshot"]["complete"] and item["b_snapshot"]["complete"]
+        for item in results) and before_a["complete"] and before_b["complete"]
+    # The unselected native profile must be byte-identical throughout each
+    # different selected-profile operation. A never authorized writes into B.
+    no_cross_profile_change = (
+        first["b_snapshot"] == before_b
+        and second["a_snapshot"] == first["a_snapshot"]
+        and third["b_snapshot"] == second["b_snapshot"])
+    exact_delivery = (
+        len(first["a"]) == 1 and not first["b"]
+        and len(second["a"]) == 1 and len(second["b"]) == 1
+        and len(third["a"]) == 1 and len(third["b"]) == 1)
+    pinned_source = all(item["saved_source_matches"] for item in results)
+    if not intact:
+        verdict, why = "FAIL", "foreign profile sentinel was modified"
+    elif not snapshots_complete:
+        verdict, why = "BLOCKED", "native profile observation incomplete"
+    elif not no_cross_profile_change:
+        verdict, why = "FAIL", "operation wrote into the unselected Claude profile"
+    elif not complete:
+        verdict, why = "BLOCKED", "Claude install had incomplete, failed or timed-out process evidence"
+    elif not exact_delivery:
+        verdict, why = "FAIL", "selected Claude profiles lack exact Skill and reference bytes"
+    elif not pinned_source:
+        verdict, why = "BLOCKED", "saved user-scope source pin could not be verified"
     else:
-        verdict="PASS";reason="both profiles retained exact Skill and foreign bytes"
-    return receipt(product,"R2_claude_profiles",verdict,reason=reason,
-                   phases=outcome,verified_claude_version=claude_version,
+        verdict, why = "PASS", "source-pinned Skill and both isolated profiles preserved"
+    return receipt(product, "R2_claude_profiles", verdict, reason=why,
+                   phases=results, verified_claude_version=claude_version,
                    verified_claude_native_sha256=claude_native_sha256,
-                   selected_uninstall="NOT_RUN (separate unsafe deletion path requires verified ownership)")
+                   profile_snapshots_complete=snapshots_complete,
+                   unselected_profiles_unchanged=no_cross_profile_change,
+                   saved_source_matches=pinned_source,
+                   selected_uninstall="NOT_RUN (needs separate qualified ownership)") 
 
 
 def root_graph(product: str, project: Path, parent_commit: str) -> None:
