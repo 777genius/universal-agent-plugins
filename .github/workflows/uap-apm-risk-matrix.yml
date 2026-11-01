@@ -108,6 +108,9 @@ jobs:
           mkdir -p "$RUNNER_TEMP/claude-probe"
           observed="$(HOME="$RUNNER_TEMP/claude-probe" CLAUDE_CONFIG_DIR="$RUNNER_TEMP/claude-probe" "${natives[0]}" --version)"
           [[ "$observed" == *2.1.263* ]]
+          [[ "$observed" != *$'\n'* && "$observed" != *$'\r'* ]]
+          printf '%s\n' "$observed" > "$RUNNER_TEMP/claude-probe/verified-version.txt"
+          printf '%s\n' "$(sha256sum "${natives[0]}" | cut -d ' ' -f1)" > "$RUNNER_TEMP/claude-probe/verified-native-sha256.txt"
           # No npm-installed directories enter the job-wide PATH.
           ln -s "${natives[0]}" "$RUNNER_TEMP/verified-client-bin/claude"
       - name: Validate fail-closed observer classifiers
@@ -128,7 +131,9 @@ jobs:
           cp "$RUNNER_TEMP/apm-pip-report.json" "$output/apm-pip-report.json"
           args=()
           if [[ "${{ matrix.group }}" == "cold-profile" ]]; then
-            args+=(--claude-verified)
+            args+=(--claude-verified
+                   --claude-version "$(cat "$RUNNER_TEMP/claude-probe/verified-version.txt")"
+                   --claude-native-sha256 "$(cat "$RUNNER_TEMP/claude-probe/verified-native-sha256.txt")")
           fi
           # The directory contains only verified codex/claude symlinks.
           # Use it for this subprocess alone, after all hash/probe checks.
