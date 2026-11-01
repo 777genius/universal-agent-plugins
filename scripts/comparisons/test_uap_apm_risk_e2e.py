@@ -311,7 +311,8 @@ class RiskOracleTests(unittest.TestCase):
                 row=risk.case_interrupted("uap","/bin/fake",root,"a"*40)
             self.assertEqual(row["status"],"BLOCKED")
             self.assertIn("incomplete",row["reason"])
-            complete=dict(incomplete,capture_complete=True)
+            complete=dict(incomplete,capture_complete=True,
+                          output_tail="error: invalid uap.lock syntax")
             # Each negative-control run owns a fresh fixture. Reusing the
             # same root would collide with the prior foreign-neighbor dir.
             with patch.object(risk.baseline,"run_process",return_value=complete):
@@ -589,6 +590,56 @@ class RiskOracleTests(unittest.TestCase):
         self.assertNotEqual(risk.PARENT_V1,risk.PARENT_V2)
         self.assertNotEqual(risk.CHILD_V1,risk.CHILD_V2)
 
+
+
+    def test_lock_control_rejects_fixture_path_words_without_real_diagnostic(self):
+        control={"exit_code":1,"timed_out":False,"cleanup_error":None,
+                 "capture_complete":True,
+                 "output_tail":"failed opening /tmp/corrupt-lock-clone/uap.lock: file missing"}
+        self.assertFalse(risk.lock_validation_refused(control,"uap.lock"))
+        control["output_tail"]="uap.lock: invalid syntax"
+        self.assertTrue(risk.lock_validation_refused(control,"uap.lock"))
+
+    def test_project_snapshot_detects_unaccounted_user_files_but_ignores_manager_store(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project=Path(temp)
+            first=risk.project_file_snapshot(project)
+            (project/".uap").mkdir()
+            (project/".uap"/"state.json").write_text('{"owned": true}')
+            second=risk.project_file_snapshot(project)
+            self.assertTrue(first["complete"])
+            self.assertEqual(first,second)
+            (project/"AGENTS.md").write_text("unexpected generated instructions")
+            third=risk.project_file_snapshot(project)
+            self.assertNotEqual(second["sha256"],third["sha256"])
+
+    def test_inert_mcp_config_does_not_prove_no_delayed_secret_writes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            def successful_install(*_args,**_kwargs):
+                config=root/"project"/".codex"/"config.toml"
+                config.parent.mkdir(parents=True,exist_ok=True)
+                config.write_text(
+                    '[mcp_servers.riskcanary]\ncommand = "node"\n'
+                    'args = ["-e", "process.exit(0)"]\n'
+                    'env_vars = ["UAP_APM_SECRET_CANARY"]\n')
+                return {"exit_code":0,"timed_out":False,"cleanup_error":None,
+                        "capture_complete":True,"output_tail":""}
+            with patch.object(risk.baseline,"run_process",side_effect=successful_install):
+                entry=risk.case_secret("apm","/bin/fake",root)
+            self.assertEqual(entry["status"],"BLOCKED")
+            self.assertEqual(entry["native_mcp_call"],"NOT_RUN")
+            self.assertEqual(entry["filesystem_scan"]["other_transformations"],"NOT_RUN")
+            self.assertFalse(entry["filesystem_scan"]["canary_found"])
+
+    def test_audit_reporting_excludes_unrelated_failures_and_signals(self):
+        report={"exit_code":1,"timed_out":False,"cleanup_error":None,
+                "capture_complete":True,"output_tail":"Drift detected: one file"}
+        self.assertTrue(risk.audit_problem_observed(report))
+        for bad in (-11,-9,0):
+            self.assertFalse(risk.audit_problem_observed({**report,"exit_code":bad}))
+        self.assertFalse(risk.audit_problem_observed({**report,"output_tail":"unknown option"}))
+        self.assertIsNone(risk.audit_problem_observed({**report,"capture_complete":False}))
 
 if __name__=="__main__":
     unittest.main()

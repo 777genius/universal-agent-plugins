@@ -209,9 +209,12 @@ def lock_validation_refused(command: dict, lock_name: str) -> bool:
     nonfailure = ("parsed successfully", "parse succeeded", "no error",
                   "without error", "validation passed")
     for line in command.get("output_tail", "").lower().splitlines():
-        if (not any(word in line for word in nonfailure)
-                and any(key in line for key in expected)
-                and any(diagnostic in line for diagnostic in error_tokens)):
+        # Filenames/paths (including the fixture's parent directory) must not
+        # donate error vocabulary to a diagnostic for a different failure.
+        diagnostic_text = re.sub(r"[^\s]*[/\\][^\s]*", "<path>", line)
+        if (not any(word in diagnostic_text for word in nonfailure)
+                and any(key in diagnostic_text for key in expected)
+                and any(word in diagnostic_text for word in error_tokens)):
             return True
     return False
 
@@ -271,12 +274,13 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
     # A second, disjoint clone with a corrupted lock proves that the selected
     # frozen command actually consults its portable authority. No-op managers
     # cannot qualify merely because the fixture was already on disk.
-    negative_root = fresh_root / "corrupt-lock-test"
+    negative_root = fresh_root / "lock-authority-control"
     negative_env = baseline.isolated_env(negative_root)
-    negative_clone = fresh_root / "corrupt-lock-clone"
+    negative_clone = fresh_root / "lock-authority-clone"
     git("clone", "-q", str(committed), str(negative_clone), cwd=fresh_root, env=fresh_env)
     lock_name = "uap.lock" if product == "uap" else "apm.lock.yaml"
-    (negative_clone / lock_name).write_bytes(b"\x00malformed-lock-no-authority\n")
+    # Bytes carry no diagnostic words; they must be diagnosed by the CLI.
+    (negative_clone / lock_name).write_bytes(b"\x00\x01\x02\x03\n")
     negative_result = run(product, cli, negative_clone, negative_root, negative_env,
                           commit=commit, target="claude", replay=True)
     corrupt_lock_rejected = lock_validation_refused(negative_result, lock_name)
@@ -286,6 +290,9 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
                             for name in portable}
     before_identity = tuple(file_identity(teammate / name, teammate) for name in owned)
     portable_before, before_error = baseline.captured_portable(teammate, product)
+    foreign_path = teammate / ".agents/skills/foreign-neighbor/SKILL.md"
+    foreign_before = file_identity(foreign_path, teammate)
+    project_before = project_file_snapshot(teammate)
     actual = run(product, cli, teammate, fresh_root, fresh_env,
                  commit=commit, target="claude", replay=True)
     after = clean_snapshot(teammate, owned)
@@ -294,8 +301,10 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
     portable_meta_after = {name: file_identity(teammate / name, teammate)
                            for name in portable}
     portable_after, after_error = baseline.captured_portable(teammate, product)
-    preserved = baseline.safe_same_bytes(
-        teammate / ".agents/skills/foreign-neighbor/SKILL.md", neighbor, teammate)
+    project_after = project_file_snapshot(teammate)
+    preserved = (foreign_before is not None
+                 and file_identity(foreign_path, teammate) == foreign_before
+                 and baseline.safe_same_bytes(foreign_path, neighbor, teammate))
     identical = (all(before.values()) and before == after and preserved
                  and all(item is not None for item in before_identity)
                  and before_identity == after_identity
@@ -312,7 +321,11 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
     extra_profile_mutation = (not claude_before["complete"]
                               or not claude_after["complete"]
                               or claude_before != claude_after)
-    if outcome == "PASS" and not corrupt_lock_rejected:
+    if outcome == "PASS" and not (project_before["complete"] and project_after["complete"]):
+        outcome, why = "BLOCKED", "whole-project observer incomplete; manager-owned state excluded"
+    elif outcome == "PASS" and project_before != project_after:
+        outcome, why = "FAIL", "unaccounted project file or metadata changed during cold replay"
+    elif outcome == "PASS" and not corrupt_lock_rejected:
         outcome, why = "BLOCKED", "corrupted locked replay was not independently refused"
     elif outcome == "PASS" and extra_profile_mutation:
         outcome, why = "BLOCKED", "unaccounted Claude files or metadata changed during cold replay"
@@ -325,6 +338,9 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
                    corrupted_lock_refused=corrupt_lock_rejected,
                    corrupted_lock_command=negative_result,
                    claude_profile_unchanged=not extra_profile_mutation,
+                   nonmanaged_project_unchanged=project_before == project_after,
+                   nonmanaged_project_observed=(project_before["complete"]
+                                                and project_after["complete"]),
                    command=actual, foreign_unchanged=preserved)
 
 
@@ -412,6 +428,54 @@ def profile_snapshot(root: Path, *, max_entries: int = 2048) -> dict:
             "count": len(entries), "complete": not unknown}
 
 
+def project_file_snapshot(project: Path, *, max_entries: int = 4096) -> dict:
+    """Hash observed user files outside known manager-only state directories.
+
+    Root/directory timestamps are intentionally not treated as independent
+    user files: creating a documented manager-state directory changes parent
+    metadata without altering an agent-readable project file. Every regular
+    non-manager file is checked for byte, inode, owner, mode and timestamp drift.
+    """
+    ignored = {".git", ".uap", ".apm-local", "apm_modules"}
+    observed: list[str] = []
+    problems: list[str] = []
+    if project.is_symlink() or not project.is_dir():
+        return {"sha256": None, "count": 0, "complete": False}
+    for current, dirs, files in os.walk(
+            project, followlinks=False,
+            onerror=lambda err: problems.append("unlistable_directory")):
+        here = Path(current)
+        if here == project:
+            dirs[:] = [name for name in dirs if name not in ignored]
+        for name in sorted(dirs[:]):
+            path = here / name
+            if path.is_symlink():
+                dirs.remove(name)
+                problems.append("symlink_directory")
+            else:
+                observed.append("D:" + str(path.relative_to(project)))
+        for name in sorted(files):
+            path = here / name
+            content = observed_file(path, project)
+            if content is None:
+                problems.append("unreadable_or_nonregular_file")
+                continue
+            try:
+                info = path.lstat()
+                observed.append(":".join(str(value) for value in (
+                    "F", path.relative_to(project), h(content),
+                    info.st_mode, info.st_uid, info.st_gid, info.st_ino,
+                    info.st_mtime_ns, info.st_ctime_ns)))
+            except OSError:
+                problems.append("metadata_error")
+        if len(observed) > max_entries:
+            problems.append("too_many_entries")
+            break
+    return {"sha256": h("\n".join(sorted(observed)).encode("utf-8")),
+            "count": len(observed), "complete": not problems,
+            "ignored_owned_state_roots": sorted(ignored)}
+
+
 def saved_profile_source_matches(product: str, env: dict[str, str], commit: str) -> bool:
     """Source identity comes from the manager's *user scope lock*, not file names."""
     managed = (Path(env["AGENTPLUGINS_HOME"]) if product == "uap"
@@ -441,7 +505,8 @@ def observe_native_claude(root: Path) -> dict | None:
             return None
         probe_root = root / "claude-proof"
         proof_env = baseline.isolated_env(probe_root)
-        probe = baseline.run_process([executable, "--version"],
+        # Execute the exact canonical file whose bytes were hash-verified.
+        probe = baseline.run_process([str(native), "--version"],
                                      probe_root, proof_env, root)
         output = probe.get("output_tail", "").strip()
         if not complete_command(probe) or re.search(
@@ -478,6 +543,8 @@ def case_profiles(product: str, cli: str, root: Path, commit: str,
     project.mkdir()
     apm_source = f"{REPO}/{SKILL}#{commit}"
     before_a, before_b = profile_snapshot(a), profile_snapshot(b)
+    foreign_before = {p: file_identity(
+        p / "skills/foreign-neighbor/SKILL.md", home) for p in (a, b)}
     results: list[dict] = []
     for index, selected in enumerate((a, b, a)):
         active = dict(env, CLAUDE_CONFIG_DIR=str(selected))
@@ -497,9 +564,12 @@ def case_profiles(product: str, cli: str, root: Path, commit: str,
             "a_snapshot": profile_snapshot(a),
             "b_snapshot": profile_snapshot(b),
             "saved_source_matches": saved_profile_source_matches(product, env, commit),
-            "foreign": all(baseline.safe_same_bytes(
-                p / "skills/foreign-neighbor/SKILL.md", b"FOREIGN PROFILE DATA\n", home)
-                for p in (a, b)),
+            "foreign": all(
+                identity is not None
+                and identity[0] == h(b"FOREIGN PROFILE DATA\n")
+                and file_identity(p / "skills/foreign-neighbor/SKILL.md", home)
+                    == identity
+                for p, identity in foreign_before.items()),
         })
     first, second, third = results
     complete = all(complete_command(item["cmd"]) for item in results)
@@ -671,11 +741,14 @@ def case_graph(product: str, cli: str, root: Path) -> dict:
             return receipt(product,"R3_transitive_update","BLOCKED",
                            stage="pin_refresh",initial=initial,pin_refresh=prelock,
                            reason="UAP initial source pin refresh incomplete or refused")
+    foreign_path = project / ".agents/skills/foreign-neighbor/SKILL.md"
+    foreign_before = file_identity(foreign_path, project)
     updated=baseline.run_process(graph_command(product,cli,project,updated=True),project,env,root)
     actual=observed_file(old_skill,project)
     graph_ok=graph_lock_matches(project,product,PARENT_V2,CHILD_V2)
-    foreign_ok=baseline.safe_same_bytes(project/".agents/skills/foreign-neighbor/SKILL.md",
-                                       b"FOREIGN USER CONTENT: preserve without edits\n",project)
+    foreign_ok=(foreign_before is not None
+                and foreign_before[0] == h(b"FOREIGN USER CONTENT: preserve without edits\n")
+                and file_identity(foreign_path, project) == foreign_before)
     did=(actual==new and graph_ok
          and observed_file(parent_skill,project)==parent_v2)
     result,reason=status(True,updated,did,"parent v2 must resolve child B once and deploy child B",
@@ -711,6 +784,8 @@ def case_interrupted(product: str, cli: str, root: Path, commit: str) -> dict:
         label="BLOCKED";reason="preflight control outcome incomplete; no negative verification"
     elif control["exit_code"] == 0:
         label="FAIL";reason="invalid pre-existing lock was silently accepted"
+    elif not lock_validation_refused(control, file.name):
+        label="BLOCKED";reason="preflight refusal cause unverified; post-write interruption NOT_RUN"
     else:
         label="BLOCKED";reason="verified preflight refusal; deterministic post-write interruption NOT_RUN"
     return receipt(product,"R4_interrupted_operation",label,reason=reason,
@@ -788,7 +863,9 @@ def scan_synthetic_canary(roots: tuple[Path, ...], synthetic: str,
                 break
     return {"inspected_files": inspected, "inspected_bytes": seen_bytes,
             "canary_found": bool(hits), "matching_path_hashes": hits[:16],
-            "complete": not unknown, "incomplete_reasons": sorted(set(unknown))}
+            "complete": not unknown, "incomplete_reasons": sorted(set(unknown)),
+            "encodings_probed": ["utf8", "uppercase", "standard_base64", "lowercase_hex"],
+            "other_transformations": "NOT_RUN"}
 
 
 def codex_mcp_contract(project: Path) -> str:
@@ -881,7 +958,12 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
     elif contract != "match":
         verdict="BLOCKED";reason="requested MCP environment forwarding cannot be verified"
     else:
-        verdict="PASS";reason="exact MCP config and safe named-root persistence verified; native tools/call NOT_RUN"
+        # A process may have detached a writer and closed its output pipes.
+        # One post-exit scan proves only a point-in-time absence, not
+        # containment or that it cannot persist the canary after observation.
+        verdict="BLOCKED";reason=("exact MCP config observed and no canary in scanned "
+                                   "encodings at exit; detached writers unverified; "
+                                   "native tools/call NOT_RUN")
     output = receipt(product,"R5_mcp_env_secret",verdict,reason=reason,
                      command=cmd,config_files=found,filesystem_scan=scan,
                      mcp_config_contract=contract,
@@ -939,6 +1021,20 @@ def classify_removed_result(command: dict, stale_skill_state: str,
     return "PASS", "removed dependency cleaned and surviving Skill intact"
 
 
+def audit_problem_observed(audit: dict | None) -> bool | None:
+    """Only a completed ordinary audit diagnostic is evidence of a problem."""
+    if audit is None or not observed_command(audit):
+        return None
+    code = audit.get("exit_code")
+    if not isinstance(code, int) or isinstance(code, bool) or code <= 0:
+        return False
+    output = audit.get("output_tail", "").lower()
+    return (not any(word in output for word in (
+                "unknown option", "unknown command", "traceback", "usage:"))
+            and any(term in output for term in (
+                "drift detected", "orphaned", "policy violation", "lockfile mismatch")))
+
+
 def case_removed(product: str, cli: str, root: Path, commit: str,
                  expected: dict[str,bytes]) -> dict:
     env=baseline.isolated_env(root)
@@ -949,7 +1045,7 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     secondary=author/".agents/skills/benchmark-secondary/SKILL.md"
     second_body=fixture(commit,SKILL_SECOND+"/SKILL.md")
     if (not complete_command(start) or observed_file(secondary,author)!=second_body
-        or any(not (author/name).is_file() for name in names)):
+        or any(observed_file(author/name,author) is None for name in names)):
         return receipt(product,"R6_git_pull_removal","BLOCKED",
                        stage="two_dependencies_initial_admission",initial=start,
                        reason="two pinned Skills did not form a supported source graph")
@@ -961,6 +1057,7 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     sibling = teammate / ".agents/skills/foreign-neighbor/SKILL.md"
     sibling.parent.mkdir(parents=True, exist_ok=True)
     sibling.write_bytes(b"FOREIGN USER CONTENT: preserve without edits\n")
+    foreign_before = file_identity(sibling, teammate)
     teammate_root=root/"teammate-iso"
     mate_env=baseline.isolated_env(teammate_root)
     mate_first=baseline.run_process(removal_command(product,cli,teammate),teammate,mate_env,root)
@@ -1002,13 +1099,14 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
         observed_file(teammate/name,teammate) ==
         expected[name.removeprefix(".agents/skills/benchmark-note/")]
         for name in survivor_paths)
-    foreign=observed_file(teammate/".agents/skills/foreign-neighbor/SKILL.md",teammate)
+    foreign=observed_file(sibling,teammate)
     preserved=(survivor_intact and
-               foreign==b"FOREIGN USER CONTENT: preserve without edits\n")
+               foreign==b"FOREIGN USER CONTENT: preserve without edits\n"
+               and foreign_before is not None
+               and foreign_before == file_identity(sibling,teammate))
     # Audit is independent read-only evidence: a pre-sync warning cannot excuse
     # stale agent-visible files or convert an unsuccessful sync to PASS.
-    audit_diagnostic = (None if audit is None or not observed_command(audit)
-                        else audit.get("exit_code") != 0)
+    audit_diagnostic = audit_problem_observed(audit)
     verdict,reason = classify_removed_result(applied, final, preserved)
     return receipt(product,"R6_git_pull_removal",verdict,reason=reason,
                    author_action=changed,teammate_install=mate_first,teammate_sync=applied,

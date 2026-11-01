@@ -3,7 +3,9 @@ name: UAP APM six-risk E2E (evidence only)
 on:
   pull_request:
     paths:
+      - "scripts/comparisons/uap_apm_skills_e2e.py"
       - "scripts/comparisons/uap_apm_risk_e2e.py"
+      - "scripts/comparisons/apm-cli-0.35.0-requirements.lock"
       - "scripts/comparisons/test_uap_apm_risk_e2e.py"
       - "tests/fixtures/uap_apm/**"
       - ".github/workflows/uap-apm-risk-matrix.yml"
@@ -60,7 +62,13 @@ jobs:
           wheel="$(find "$RUNNER_TEMP/apm-dist" -maxdepth 1 -type f -name 'apm_cli-0.35.0-*.whl' -print -quit)"
           test -n "$wheel"
           test "$(sha256sum "$wheel" | cut -d ' ' -f1)" = 535f9478fdfeb7acf586af96cbf1428ef128f76fdf89a9c084df04b88bebc1af
-          "$RUNNER_TEMP/apm-venv/bin/python" -m pip install --disable-pip-version-check --report "$RUNNER_TEMP/apm-pip-report.json" "$wheel"
+          # Every resolved wheel uses a pinned version and exact archived
+          # SHA-256 from the previously measured Linux/Python 3.13 release lane.
+          # Missing or changed upstream bytes fail closed before importing APM.
+          "$RUNNER_TEMP/apm-venv/bin/python" -m pip install --disable-pip-version-check \
+            --only-binary=:all: --require-hashes --find-links "$RUNNER_TEMP/apm-dist" \
+            --report "$RUNNER_TEMP/apm-pip-report.json" \
+            -r scripts/comparisons/apm-cli-0.35.0-requirements.lock
           "$RUNNER_TEMP/apm-venv/bin/apm" --version
       - name: Provision genuine pinned Codex target without login
         shell: bash
