@@ -160,26 +160,61 @@ def clean_snapshot(project: Path, files: tuple[str, ...]) -> dict[str, str | Non
             for name in files}
 
 
+def apm_claude_skill_kind(portable: dict[str, bytes], commit: str) -> bool:
+    """Only APM's native Claude Skill/bundle path tests the reported #3391 bug."""
+    try:
+        import yaml
+        lock = yaml.safe_load(portable["apm.lock.yaml"])
+        deps = lock.get("dependencies", [])
+        return any(
+            isinstance(row, dict)
+            and row.get("repo_url") == REPO
+            and row.get("virtual_path") == SKILL
+            and row.get("resolved_commit") == commit
+            and row.get("package_type") in ("claude_skill", "skill_bundle")
+            for row in deps
+        )
+    except (KeyError, TypeError, ValueError, ImportError, AttributeError):
+        return False
+
+
 def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[str, bytes]) -> dict:
+    """Cold clone containing already committed Claude Skill, without receipts.
+
+    This directly covers the previously untested APM claude_skill/skill_bundle
+    failure shape (#3391), rather than re-labeling #617's passing Codex case.
+    """
     env = baseline.isolated_env(root)
     project, foreign = baseline.make_project(root)
-    prepare_project(product, project, commit)
-    initial = run(product, cli, project, root, env, commit=commit)
-    delivered = baseline.payloads(project, expected)
+    if product == "apm":
+        (project / "apm.yml").write_text(
+            "name: cold-claude-skills\nversion: 1.0.0\ntargets:\n  - claude\n"
+            "dependencies:\n  apm:\n"
+            f"    - {REPO}/{SKILL}#{commit}\n"
+        )
+    initial = run(product, cli, project, root, env, commit=commit, target="claude")
+    admitted_skills = profile_scan(project / ".claude", expected)
     portable, capture_error = baseline.captured_portable(project, product)
-    first_good = (initial["exit_code"] == 0 and not initial["timed_out"]
-                  and not initial["cleanup_error"] and delivered["skills"]
-                  and delivered["references"] and bool(portable) and capture_error is None
-                  and baseline.portable_identity(portable, commit, product)
-                    ["exact_source_commit_recorded_in_lock"])
-    if not first_good:
+    provenance = bool(portable) and capture_error is None and (
+        baseline.portable_identity(portable, commit, product)
+            ["exact_source_commit_recorded_in_lock"])
+    specific_apm_kind = (product != "apm" or
+                         apm_claude_skill_kind(portable, commit))
+    foreign_initial = baseline.safe_same_bytes(
+        project / ".agents/skills/foreign-neighbor/SKILL.md", foreign, project)
+    if not (complete_command(initial) and len(admitted_skills) == 1 and
+            provenance and specific_apm_kind and foreign_initial):
         return receipt(product, "R1_missing_receipts", "BLOCKED",
-                       stage="initial_source_admission", initial=initial,
-                       reason="initial complete package and source lock unavailable")
-    # Recreate a committed *deployed* Skill with no project-local receipt/cache.
-    # This is stronger than PR #617's empty destination cold restore.
-    owned = (".agents/skills/benchmark-note/SKILL.md",
-             ".agents/skills/benchmark-note/references/fixture.txt")
+                       stage="initial_claude_skill_admission", initial=initial,
+                       observed_claude_skill_count=len(admitted_skills),
+                       source_locked=provenance,
+                       apm_claude_skill_package_kind=specific_apm_kind,
+                       foreign_initial_intact=foreign_initial,
+                       reason="full Claude Skill bytes and exact native source/lock not admitted")
+    # The full measured destination is authoritative, not a guessed client
+    # directory; changes in physical naming during restore are detected.
+    physical = next(iter(admitted_skills))
+    owned = tuple(f".claude/{physical}/{name}" for name in baseline.EXPECTED_FILES)
     fresh_root = root / "cold"
     fresh_env = baseline.isolated_env(fresh_root)
     committed, neighbor = baseline.make_project(fresh_root)
@@ -188,26 +223,35 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
     for name in owned:
         dest = committed / name
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(expected[name.removeprefix(".agents/skills/benchmark-note/")])
+        payload = name.removeprefix(f".claude/{physical}/")
+        dest.write_bytes(expected[payload])
     git("init", "-q", cwd=committed, env=fresh_env)
     git("add", "-A", cwd=committed, env=fresh_env)
-    git("commit", "-qm", "pinned portable inputs and committed Skill", cwd=committed, env=fresh_env)
+    git("commit", "-qm", "pinned portable inputs and committed Claude Skill", cwd=committed, env=fresh_env)
     teammate = fresh_root / "clean-clone"
     git("clone", "-q", str(committed), str(teammate), cwd=fresh_root, env=fresh_env)
     before = clean_snapshot(teammate, owned)
-    portable_before, err = baseline.captured_portable(teammate, product)
-    # A fresh HOME makes any old user receipts unavailable.
-    actual = run(product, cli, teammate, fresh_root, fresh_env, commit=commit, replay=True)
+    portable_before, before_error = baseline.captured_portable(teammate, product)
+    actual = run(product, cli, teammate, fresh_root, fresh_env,
+                 commit=commit, target="claude", replay=True)
     after = clean_snapshot(teammate, owned)
-    portable_after, after_err = baseline.captured_portable(teammate, product)
+    portable_after, after_error = baseline.captured_portable(teammate, product)
     preserved = baseline.safe_same_bytes(
         teammate / ".agents/skills/foreign-neighbor/SKILL.md", neighbor, teammate)
-    intact = before == after and all(after.values()) and preserved
-    lock_intact = (err is None and after_err is None and portable_before == portable_after)
-    outcome, why = status(True, actual, intact and lock_intact, "cold clone must not delete or rewrite committed Skill/lock", protected=intact)
+    identical = (all(before.values()) and before == after and preserved and
+                 profile_scan(teammate / ".claude", expected) == admitted_skills)
+    lock_intact = (before_error is None and after_error is None and
+                   portable_before == portable_after)
+    outcome, why = status(
+        True, actual, identical and lock_intact,
+        "cold-cloned committed Claude Skill and portable lock must stay byte-identical",
+        protected=identical,
+    )
     return receipt(product, "R1_missing_receipts", outcome, reason=why,
-                   scenario_type="committed deployed files + clean HOME and receipts",
-                   initial_portable_sha256={k:h(v) for k,v in portable.items()},
+                   scenario_type="native Claude Skill already committed; fresh HOME without receipts",
+                   apm_claude_skill_package_kind=specific_apm_kind,
+                   observed_physical_skill_path=physical,
+                   initial_portable_sha256={k: h(v) for k, v in portable.items()},
                    before=before, after=after, lock_identical=lock_intact,
                    command=actual, foreign_unchanged=preserved)
 
