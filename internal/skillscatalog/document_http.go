@@ -188,13 +188,13 @@ func (h *documentHandler) load(ctx context.Context, source, name string) (docume
 		}
 		return result, nil
 	}
-	if h.website == nil {
-		return result, fmt.Errorf("website preview unavailable")
-	}
-	// The external name must satisfy the exact same grammar as the installer.
+	// Reject malformed selection before entering the publisher transport.
 	if !validDocumentSkillName(name) {
 		result.Status = "selection_required"
 		return result, nil
+	}
+	if h.website == nil {
+		return result, fmt.Errorf("website preview unavailable")
 	}
 	markdown, err := h.website.PreviewHTTPSkill(ctx, "https://"+source, name)
 	if err != nil {
@@ -256,6 +256,13 @@ var deniedPublisherRanges = []netip.Prefix{
 	netip.MustParsePrefix("2001:10::/28"),
 	netip.MustParsePrefix("2001:20::/28"),
 	netip.MustParsePrefix("2001:db8::/32"),
+	netip.MustParsePrefix("::/96"),
+	netip.MustParsePrefix("::ffff:0:0:0/96"),
+	netip.MustParsePrefix("100::/64"),
+	netip.MustParsePrefix("2001:2::/48"),
+	netip.MustParsePrefix("2002::/16"),
+	netip.MustParsePrefix("3fff::/20"),
+	netip.MustParsePrefix("5f00::/16"),
 }
 
 func publicPublisherIP(ip net.IP) bool {
