@@ -157,8 +157,10 @@ O escopo de projeto explícito está disponível na
 [CLI 0.1.93 e posteriores](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
 Escolha um diretório existente e selecione o escopo em cada comando:
 
+Para uma entrada revisada e compatível do catálogo, copie a origem Git fixada em um SHA completo e o cliente adequado. Os aliases do Directory v1, como `context7`, continuam limitados ao escopo do usuário. Substitua `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` e `PACKAGE_PATH`; se o pacote estiver na raiz do repositório, omita `//PACKAGE_PATH`.
+
 ```bash
-agentplugins add context7 --target cursor --scope project \
+agentplugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
   --project-root /path/to/project --dry-run
 agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project

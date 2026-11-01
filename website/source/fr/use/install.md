@@ -105,8 +105,10 @@ Les constats de sécurité automatiques peuvent bloquer l’installation. `--sec
 
 La portée projet explicite est disponible à partir de [CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93). Choisissez un dossier existant et indiquez la portée à chaque commande :
 
+Pour une entrée vérifiée et compatible du catalogue, copiez sa source Git épinglée à un SHA complet et le client adapté. Les alias du Directory v1, comme `context7`, restent réservés à la portée utilisateur. Remplacez `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` et `PACKAGE_PATH` ; si le paquet est à la racine du dépôt, omettez `//PACKAGE_PATH`.
+
 ```bash
-agentplugins add context7 --target cursor --scope project \
+agentplugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
   --project-root /path/to/project --dry-run
 agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project

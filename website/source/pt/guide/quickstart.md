@@ -51,8 +51,10 @@ introduzida na 0.1.94. Ela também adiciona uma
 [extensões nativas do Pi](../reference/client-compatibility#pi-native-extensions).
 Para conferir o plano de adição de um pacote a um projeto:
 
+Para uma entrada revisada e compatível do catálogo, copie a origem Git fixada em um SHA completo e o cliente adequado. Os aliases do Directory v1, como `context7`, continuam limitados ao escopo do usuário. Substitua `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` e `PACKAGE_PATH`; se o pacote estiver na raiz do repositório, omita `//PACKAGE_PATH`.
+
 ```bash
-npx universal-agent-plugins add context7 --target cursor --scope project \
+npx universal-agent-plugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
   --project-root /path/to/project --dry-run
 ```
 

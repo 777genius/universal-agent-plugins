@@ -105,8 +105,10 @@ agentplugins skills add owner/repository --skill review --skill pdf \
 
 يتوفر نطاق المشروع الصريح في [CLI 0.1.93 وأحدث](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93). اختر مجلدًا موجودًا وحدّد النطاق في كل أمر:
 
+لإدخال تمت مراجعته ومتوافق في الفهرس، انسخ مصدر Git المثبّت بمعرّف commit كامل والعميل المتوافق. تظل أسماء Directory v1 المختصرة مثل `context7` مخصّصة لنطاق المستخدم فقط. استبدل `OWNER/REPOSITORY` و`FULL_COMMIT_SHA` و`PACKAGE_PATH`؛ وإذا كانت الحزمة في جذر المستودع فاحذف `//PACKAGE_PATH`.
+
 ```bash
-agentplugins add context7 --target cursor --scope project \
+agentplugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
   --project-root /path/to/project --dry-run
 agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project
