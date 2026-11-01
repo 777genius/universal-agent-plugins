@@ -511,6 +511,18 @@ def removal_command(product: str, cli: str, project: Path, *, lock: bool=False) 
     return [cli,"install","--target","codex"]
 
 
+def classify_removed_result(command: dict, stale_skill_present: bool,
+                            protected_files_intact: bool) -> tuple[str, str]:
+    """A failed sync or pre-sync audit cannot make a visible orphan PASS."""
+    if not protected_files_intact:
+        return "FAIL", "surviving Skill or foreign file unexpectedly modified"
+    if command.get("timed_out") or command.get("cleanup_error") or command.get("exit_code") != 0:
+        return "BLOCKED", "sync not fully successful; no cleanup PASS can be inferred"
+    if stale_skill_present:
+        return "FAIL", "removed dependency remains agent-visible after successful sync"
+    return "PASS", "removed dependency cleaned and surviving Skill intact"
+
+
 def case_removed(product: str, cli: str, root: Path, commit: str,
                  expected: dict[str,bytes]) -> dict:
     env=baseline.isolated_env(root)
@@ -565,20 +577,10 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     foreign=observed_file(teammate/".agents/skills/foreign-neighbor/SKILL.md",teammate)
     preserved=(original==expected["SKILL.md"] and
                foreign==b"FOREIGN USER CONTENT: preserve without edits\n")
-    # Audit is a separate read-only observation. A pre-sync warning or the word
-    # "orphan" anywhere in an error cannot excuse stale agent-visible bytes after
-    # a supposedly successful sync, or convert a failed sync into PASS.
+    # Audit is independent read-only evidence: a pre-sync warning cannot excuse
+    # stale agent-visible files or convert an unsuccessful sync to PASS.
     audit_diagnostic = bool(audit and audit.get("exit_code") not in (None, 0))
-    safe_execution = (not applied.get("timed_out") and
-                      not applied.get("cleanup_error"))
-    if not preserved:
-        verdict="FAIL";reason="surviving Skill or foreign file unexpectedly modified"
-    elif safe_execution and applied["exit_code"]==0 and final is not None:
-        verdict="FAIL";reason="removed dependency remains agent-visible after successful sync"
-    elif safe_execution and applied["exit_code"]==0 and final is None:
-        verdict="PASS";reason="removed dependency cleaned and surviving Skill intact"
-    else:
-        verdict="BLOCKED";reason="sync not fully successful; no cleanup PASS can be inferred"
+    verdict,reason = classify_removed_result(applied, final is not None, preserved)
     return receipt(product,"R6_git_pull_removal",verdict,reason=reason,
                    author_action=changed,teammate_install=mate_first,teammate_sync=applied,
                    audit=audit,postpull_before_install_sha256=h(postpull) if postpull else None,
