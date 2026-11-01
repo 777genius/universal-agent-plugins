@@ -63,7 +63,7 @@ def observed_file(path: Path, boundary: Path, limit: int = 2 * 1024 * 1024) -> b
     """A missing, nonregular, oversize or symlinked file never counts as content."""
     try:
         rel = path.relative_to(boundary)
-        if not rel.parts:
+        if not rel.parts or ".." in rel.parts:
             return None
         cursor = boundary
         if cursor.is_symlink():
@@ -402,13 +402,13 @@ def scan_synthetic_canary(roots: tuple[Path, ...], synthetic: str,
                         break
                     if synthetic.encode("utf-8") in data:
                         # Only a relative location, never data or a private root.
-                        hits.append(str(file.relative_to(root)))
+                        hits.append(h(str(file.relative_to(root)).encode("utf-8")))
                 except (OSError, ValueError):
                     unknown.append("scan_error")
             if inspected > max_files or seen_bytes > max_bytes:
                 break
     return {"inspected_files": inspected, "inspected_bytes": seen_bytes,
-            "canary_found": bool(hits), "matching_relative_paths": hits[:16],
+            "canary_found": bool(hits), "matching_path_hashes": hits[:16],
             "complete": not unknown, "incomplete_reasons": sorted(set(unknown))}
 
 
@@ -449,7 +449,10 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
             found.append({"file":name_path,"synthetic_plaintext_present":sentinel.encode() in data,
                           "literal_placeholder_present":placeholder.encode() in data,
                           "sha256":h(data)})
-    scan = scan_synthetic_canary((project, Path(env["HOME"])), sentinel)
+    # Inspect the complete *named disposable experiment root*, including
+    # temporary/cache/managed storage, not only five selected output paths.
+    # This does not establish protection from writes outside the sandbox.
+    scan = scan_synthetic_canary((root,), sentinel)
     leak=scan["canary_found"] or any(row["synthetic_plaintext_present"] for row in found)
     protected=baseline.safe_same_bytes(project/".agents/skills/foreign-neighbor/SKILL.md",
                                       foreign,project)
@@ -466,10 +469,16 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
         verdict="FAIL";reason="successful MCP install did not materialize project Codex config"
     else:
         verdict="PASS";reason="no synthetic canary in scanned project/profile files; native forwarding NOT_RUN"
-    return receipt(product,"R5_mcp_env_secret",verdict,reason=reason,
-                   command=cmd,config_files=found,filesystem_scan=scan,
-                   foreign_unchanged=protected, native_mcp_call="NOT_RUN",
-                   synthetic_value_not_in_artifact="verified by final report check")
+    output = receipt(product,"R5_mcp_env_secret",verdict,reason=reason,
+                     command=cmd,config_files=found,filesystem_scan=scan,
+                     foreign_unchanged=protected, native_mcp_call="NOT_RUN")
+    # Never serialize a synthetic secret to an Actions artifact, including
+    # when the observed program happens to put it in a filename or log.
+    if sentinel in json.dumps(output, ensure_ascii=False):
+        return receipt(product,"R5_mcp_env_secret","BLOCKED",
+                       reason="observer could not safely redact recorded data",
+                       stage="evidence_redaction_failure", native_mcp_call="NOT_RUN")
+    return output
 
 
 def two_skills_manifest(product: str, project: Path, commit: str,
