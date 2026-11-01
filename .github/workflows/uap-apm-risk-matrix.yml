@@ -88,7 +88,7 @@ jobs:
           test "${#natives[@]}" -eq 1
           test "$(sha256sum "${natives[0]}" | cut -d ' ' -f1)" = b93f6811d3f653f0fb83be4050d857fb9abbb111dfa2ce160563327daff7f306
           mkdir -p "$RUNNER_TEMP/codex-probe/.codex"
-          observed="$(HOME="$RUNNER_TEMP/codex-probe" CODEX_HOME="$RUNNER_TEMP/codex-probe/.codex" "$RUNNER_TEMP/codex-runtime/node_modules/.bin/codex" --version)"
+          observed="$(HOME="$RUNNER_TEMP/codex-probe" CODEX_HOME="$RUNNER_TEMP/codex-probe/.codex" "${natives[0]}" --version)"
           test "$observed" = "codex-cli 0.164.0"
           # Only the verified native executable is exposed to the actual
           # comparison subprocess. Never add npm package .bin trees to a
