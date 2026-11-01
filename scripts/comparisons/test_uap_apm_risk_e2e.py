@@ -134,6 +134,47 @@ class RiskOracleTests(unittest.TestCase):
             self.assertFalse(risk.graph_lock_matches(
                 project,"apm",risk.PARENT_V1,risk.CHILD_V1))
 
+    def test_graph_initial_install_never_hides_foreign_mode_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            def mutate_first(*_args, **_kwargs):
+                foreign=root/"project/.agents/skills/foreign-neighbor/SKILL.md"
+                foreign.chmod(0o400)
+                return {"exit_code":0,"timed_out":False,"cleanup_error":None,
+                        "capture_complete":True}
+            with patch.object(risk.baseline,"run_process",side_effect=mutate_first):
+                row=risk.case_graph("apm","/bin/no-op",root)
+            self.assertEqual(row["status"],"FAIL")
+            self.assertEqual(row["stage"],"initial_foreign_modified")
+
+    def test_graph_pin_refresh_never_hides_foreign_inode_replacement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            operations=[]
+            def mutate_refresh(*_args, **_kwargs):
+                operations.append(True)
+                project=root/"project"
+                if len(operations)==1:
+                    for name in ("risk-child","risk-parent"):
+                        p=project/f".agents/skills/{name}/SKILL.md"
+                        p.parent.mkdir(parents=True,exist_ok=True)
+                        p.write_bytes(b"v1")
+                if len(operations)==2:
+                    foreign=project/".agents/skills/foreign-neighbor/SKILL.md"
+                    contents=foreign.read_bytes()
+                    foreign.unlink()
+                    foreign.write_bytes(contents)
+                return {"exit_code":0,"timed_out":False,"cleanup_error":None,
+                        "capture_complete":True}
+            with patch.object(risk.baseline,"run_process",side_effect=mutate_refresh), \
+                 patch.object(risk,"fixture",side_effect=lambda commit,_: (
+                     b"v1" if commit in (risk.CHILD_V1,risk.PARENT_V1) else b"v2")), \
+                 patch.object(risk,"graph_lock_matches",return_value=True):
+                row=risk.case_graph("uap","/bin/no-op",root)
+            self.assertEqual(row["status"],"FAIL")
+            self.assertEqual(row["stage"],"pin_refresh_foreign_modified")
+            self.assertEqual(len(operations),2)
+
     def test_UAP_graph_rejects_stale_requested_pins(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)

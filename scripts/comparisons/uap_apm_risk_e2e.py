@@ -718,8 +718,21 @@ def graph_lock_matches(project: Path, product: str,
 def case_graph(product: str, cli: str, root: Path) -> dict:
     env=baseline.isolated_env(root)
     project,_=baseline.make_project(root)
+    foreign_path=project / ".agents/skills/foreign-neighbor/SKILL.md"
+    # Capture original *identity*, including inode/mode/owner/timestamps,
+    # before any manager operation. Late baselines hide prerequisite damage.
+    foreign_before=file_identity(foreign_path,project)
+    if (foreign_before is None or
+            foreign_before[0] != h(b"FOREIGN USER CONTENT: preserve without edits\n")):
+        return receipt(product,"R3_transitive_update","BLOCKED",
+                       stage="foreign_baseline_unavailable",
+                       reason="original foreign-file identity could not be established")
     root_graph(product,project,PARENT_V1)
     initial=baseline.run_process(graph_command(product,cli,project),project,env,root)
+    if file_identity(foreign_path,project) != foreign_before:
+        return receipt(product,"R3_transitive_update","FAIL",
+                       stage="initial_foreign_modified", initial=initial,
+                       reason="initial graph install changed the foreign-file identity")
     old=fixture(CHILD_V1,CHILD+"/skills/risk-child/SKILL.md")
     new=fixture(CHILD_V2,CHILD+"/skills/risk-child/SKILL.md")
     old_skill=project / ".agents/skills/risk-child/SKILL.md"
@@ -737,12 +750,15 @@ def case_graph(product: str, cli: str, root: Path) -> dict:
     prelock=None
     if product=="uap":
         prelock=baseline.run_process(graph_command(product,cli,project,lock=True),project,env,root)
+        if file_identity(foreign_path,project) != foreign_before:
+            return receipt(product,"R3_transitive_update","FAIL",
+                           stage="pin_refresh_foreign_modified",initial=initial,
+                           pin_refresh=prelock,
+                           reason="pin refresh changed the original foreign-file identity")
         if not complete_command(prelock):
             return receipt(product,"R3_transitive_update","BLOCKED",
                            stage="pin_refresh",initial=initial,pin_refresh=prelock,
                            reason="UAP initial source pin refresh incomplete or refused")
-    foreign_path = project / ".agents/skills/foreign-neighbor/SKILL.md"
-    foreign_before = file_identity(foreign_path, project)
     updated=baseline.run_process(graph_command(product,cli,project,updated=True),project,env,root)
     actual=observed_file(old_skill,project)
     graph_ok=graph_lock_matches(project,product,PARENT_V2,CHILD_V2)
