@@ -389,7 +389,7 @@ class RiskOracleTests(unittest.TestCase):
             def execute(_argv, project, _env, _root):
                 calls.append(_argv)
                 if len(calls)==1:
-                    (project/"uap.lock").write_bytes(b"{}\\n")
+                    (project/"uap.lock").write_bytes(b"{}\n")
                     return complete_bootstrap
                 return {**control,"argv":_argv}
             return execute
@@ -425,7 +425,7 @@ class RiskOracleTests(unittest.TestCase):
             self.assertEqual(server["command"],"./bin/risk-probe.sh")
             self.assertEqual(server["args"],[])
             probe=package/"bin"/"risk-probe.sh"
-            self.assertEqual(probe.read_bytes(),b"#!/bin/sh\\nexit 0\\n")
+            self.assertEqual(probe.read_bytes(),b"#!/bin/sh\nexit 0\n")
             self.assertNotEqual(probe.stat().st_mode & 0o100,0)
             self.assertEqual(row["status"],"BLOCKED")
             self.assertFalse(row["filesystem_scan"]["canary_found"])
@@ -438,15 +438,15 @@ class RiskOracleTests(unittest.TestCase):
             config.parent.mkdir(parents=True)
             executable=project/"package"/"bin"/"risk-probe.sh"
             executable.parent.mkdir(parents=True)
-            executable.write_bytes(b"#!/bin/sh\\nexit 0\\n")
+            executable.write_bytes(b"#!/bin/sh\nexit 0\n")
             config.write_text(
-                "[mcp_servers.riskcanary]\\n"
-                f'command = "{executable}"\\n'
-                'args = []\\n'
-                'env_vars = ["UAP_APM_SECRET_CANARY"]\\n'
+                "[mcp_servers.riskcanary]\n"
+                f'command = "{executable}"\n'
+                'args = []\n'
+                'env_vars = ["UAP_APM_SECRET_CANARY"]\n'
             )
             self.assertEqual(risk.codex_mcp_contract(project,"uap"),"match")
-            executable.write_bytes(b"#!/bin/sh\\nexit 1\\n")
+            executable.write_bytes(b"#!/bin/sh\nexit 1\n")
             self.assertEqual(risk.codex_mcp_contract(project,"uap"),"wrong_command")
 
     def test_uap_portable_mcp_secret_reference_absence_is_not_product_failure(self):
@@ -461,11 +461,11 @@ class RiskOracleTests(unittest.TestCase):
                 config.parent.mkdir(parents=True)
                 executable=project/"package"/"bin"/"risk-probe.sh"
                 config.write_text(
-                    "[mcp_servers.riskcanary]\\n"
-                    f'command = "{executable}"\\n'
-                    "args = []\\n"
-                    "[mcp_servers.riskcanary.env]\\n"
-                    f'{risk.MARKER} = "{placeholder}"\\n'
+                    "[mcp_servers.riskcanary]\n"
+                    f'command = "{executable}"\n'
+                    "args = []\n"
+                    "[mcp_servers.riskcanary.env]\n"
+                    f'{risk.MARKER} = "{placeholder}"\n'
                 )
                 return {"exit_code":0,"timed_out":False,"cleanup_error":None,
                         "capture_complete":True,"output_tail":"installed"}
@@ -910,13 +910,24 @@ class RiskOracleTests(unittest.TestCase):
     def test_preflight_detects_original_lock_and_foreign_metadata_changes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
-            def mutate(*_args,**_kwargs):
-                path=root/"project/.agents/skills/foreign-neighbor/SKILL.md"
+            calls=[]
+            def mutate(_argv, project, _env, _root):
+                calls.append(_argv)
+                if len(calls)==1:
+                    # R4 first proves a valid installed lock is observable.
+                    (project/"uap.lock").write_bytes(b"{}\n")
+                    return {"exit_code":0,"timed_out":False,"cleanup_error":None,
+                            "capture_complete":True,"output_tail":"bootstrap installed"}
+                # A metadata-only foreign mutation during the actual locked
+                # control must be FAIL even when the CLI safely refuses.
+                path=project/".agents/skills/foreign-neighbor/SKILL.md"
                 path.chmod(0o400)
                 return {"exit_code":1,"timed_out":False,"cleanup_error":None,
                         "capture_complete":True,"output_tail":"invalid uap.lock syntax"}
             with patch.object(risk.baseline,"run_process",side_effect=mutate):
                 result=risk.case_interrupted("uap","/bin/no-op",root,"a"*40)
+            self.assertEqual(len(calls),2)
+            self.assertIn("--locked",calls[1])
             self.assertEqual(result["status"],"FAIL")
             self.assertFalse(result["preflight_identity_untouched"])
 
