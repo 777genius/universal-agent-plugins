@@ -61,10 +61,8 @@ test('Skills search reveals install choices, copies the exact command and surviv
   await expect.poll(() => requests.some((query) => query.includes('q=frontend'))).toBe(true);
   await expect(page).toHaveURL(/tab=skills.*q=frontend/);
   await expect(catalog.locator('.catalog-count')).toHaveText('Showing 2 search results');
-  await expect(catalog.locator('.skill-card').nth(1).getByRole('link', { name: 'View original listing' })).toHaveAttribute(
-    'href',
-    'https://skills.sh/anthropics/skills/frontend-design',
-  );
+  // Provider ranking metadata must never create a competitor outbound link.
+  await expect(catalog.locator('a[href*="skills.sh"]')).toHaveCount(0);
   const card = catalog.locator('.skill-card').first();
   await expect(card.getByRole('link', { name: 'GitHub source' })).toHaveAttribute(
     'href',
@@ -238,6 +236,23 @@ test('Website publisher Skills install with UAP and open their own detail page',
       },
     }),
   );
+  await page.route('https://api.universal-agent-plugins.com/v1/skills/document?**', (route) =>
+    route.fulfill({
+      json: {
+        status: 'resolved',
+        source: 'open.feishu.cn',
+        markdown: [
+          '---', 'name: lark-mail', 'description: Mail', '---',
+          '# Mail', '', '**Important instructions**', '',
+          '| Action | Command |', '| --- | --- |', '| Read | open |', '',
+          '```bash', 'echo hello', '```', '',
+          '<script>alert("xss")</script>',
+          '[Bad](javascript:alert(1))',
+          '[Competitor](https://www.skills.sh/site/something)',
+        ].join('\\n'),
+      },
+    }),
+  );
   await page.goto('plugins/?tab=skills');
   const card = page.locator('.skills-catalog .skill-card');
   await expect(card).not.toContainText('No verified install source');
@@ -258,6 +273,11 @@ test('Website publisher Skills install with UAP and open their own detail page',
     'Review the source',
   );
   await page.getByRole('tab', { name: 'Command' }).click();
+  await page.getByRole('tab', { name: 'Command' }).press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Prompt' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'skills-prompt-tab');
+  await page.getByRole('tab', { name: 'Prompt' }).press('Home');
+  await expect(page.getByRole('tab', { name: 'Command' })).toHaveAttribute('aria-selected', 'true');
   await page.locator('.skills-detail__install-body').getByRole('button', { name: 'Copy command' }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
     'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
@@ -265,5 +285,37 @@ test('Website publisher Skills install with UAP and open their own detail page',
   await page.reload();
   await expect(page.getByRole('heading', { level: 1, name: 'lark-mail' })).toBeVisible();
   await expect(page.locator('.skills-detail__sidebar')).toContainText('open.feishu.cn');
-  await expect(page.locator('.skills-detail__document')).toContainText('SKILL.md');
+  await expect(page.locator('.skills-detail__document .skill-markdown h1')).toHaveText('Mail');
+  await expect(page.locator('.skills-detail__document .skill-markdown strong')).toHaveText('Important instructions');
+  await expect(page.locator('.skills-detail__document .skill-markdown table')).toBeVisible();
+  await expect(page.locator('.skills-detail__document .skill-markdown pre')).toBeVisible();
+  await expect(page.locator('.skills-detail__document script')).toHaveCount(0);
+  await expect(page.locator('a[href*="skills.sh"]')).toHaveCount(0);
+});
+
+
+test('A deep-linked Skill renders source instructions without relying on bounded search', async ({ page }) => {
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) =>
+    route.fulfill({
+      json: {
+        items: [], page: 0, hasMore: false, view: 'popular',
+        cache: { status: 'fresh', fetchedAt: '2026-11-01T10:00:00Z' },
+      },
+    }),
+  );
+  await page.route('https://api.universal-agent-plugins.com/v1/skills/document?**', (route) =>
+    route.fulfill({
+      json: {
+        status: 'resolved', source: 'anthropics/skills',
+        commit: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        markdown: '---\\nname: frontend-design\\ndescription: Design\\n---\\n## Direct source content\\n',
+      },
+    }),
+  );
+  await page.goto('skills/?id=skills-sh%3Aanthropics%2Fskills%3Afrontend-design&q=frontend-design');
+  await expect(page.getByRole('heading', { level: 1, name: 'frontend-design' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Installation' })).toBeVisible();
+  await expect(page.locator('.skills-detail__document h2')).toContainText('Direct source content');
+  await expect(page.locator('.skills-detail__facts')).not.toContainText('Installs');
+  await expect(page.locator('a[href*="skills.sh"]')).toHaveCount(0);
 });
