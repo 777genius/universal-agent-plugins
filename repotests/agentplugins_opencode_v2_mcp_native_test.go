@@ -176,6 +176,52 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 			t.Fatal("native MCP project Git root is not an actual directory")
 		}
 	}
+	// V2's debug/config endpoint reports source documents rather than a
+	// flattened effective config. Prove the actual native standalone server
+	// discovered the exact project document before claiming MCP readiness.
+	ctx, cancel := context.WithTimeout(context.Background(), 32*time.Second)
+	configCapture := captureProjectNative(ctx, client, projectA, env,
+		[]string{"debug", "config", "--standalone"}, 1<<20, 30*time.Second)
+	cancel()
+	if configCapture.Exit != 0 || configCapture.Error != "" || configCapture.Deadline ||
+		configCapture.StdoutLimit || configCapture.StderrLimit {
+		t.Fatalf("native V2 source listing failed (exit=%d error_kind=%s)",
+			configCapture.Exit, configCapture.ErrorKind)
+	}
+	var sourceEntries []map[string]any
+	if err := json.Unmarshal(configCapture.Stdout, &sourceEntries); err != nil ||
+		len(sourceEntries) == 0 || len(sourceEntries) > 16 {
+		t.Fatal("native V2 config sources are not a bounded document inventory")
+	}
+	projectDocument, projectServer, documents := false, false, 0
+	for _, entry := range sourceEntries {
+		if entry["type"] != "document" {
+			continue
+		}
+		documents++
+		if entry["path"] != configuration {
+			continue
+		}
+		projectDocument = true
+		info, ok := entry["info"].(map[string]any)
+		if !ok {
+			continue
+		}
+		mcp, ok := info["mcp"].(map[string]any)
+		if !ok {
+			continue
+		}
+		servers, ok := mcp["servers"].(map[string]any)
+		if !ok {
+			continue
+		}
+		_, projectServer = servers["uap_project_fixture"]
+	}
+	if !projectDocument || !projectServer {
+		// No source values, credentials or home directories reach CI output.
+		t.Fatalf("native V2 project config discovery refused: document_count=%d project_document=%t exact_server=%t",
+			documents, projectDocument, projectServer)
+	}
 	observe := func(project string) string {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 32*time.Second)
