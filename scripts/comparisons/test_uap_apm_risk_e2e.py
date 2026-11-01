@@ -93,6 +93,50 @@ class RiskOracleTests(unittest.TestCase):
             self.assertFalse(row["deterministic_post_write_barrier"])
             self.assertEqual(row["crash_recovery"],"NOT_RUN")
 
+    def test_post_pull_never_passes_with_stale_visible_skill(self):
+        succeeded = {"exit_code": 0, "timed_out": False, "cleanup_error": None}
+        failed = {"exit_code": 1, "timed_out": False, "cleanup_error": None}
+        timeout = {"exit_code": 0, "timed_out": True, "cleanup_error": None}
+        self.assertEqual(risk.classify_removed_result(succeeded, True, True)[0], "FAIL")
+        self.assertEqual(risk.classify_removed_result(failed, True, True)[0], "BLOCKED")
+        self.assertEqual(risk.classify_removed_result(failed, False, True)[0], "BLOCKED")
+        self.assertEqual(risk.classify_removed_result(timeout, False, True)[0], "BLOCKED")
+        self.assertEqual(risk.classify_removed_result(succeeded, False, False)[0], "FAIL")
+        self.assertEqual(risk.classify_removed_result(succeeded, False, True)[0], "PASS")
+
+    def test_synthetic_canary_detected_outside_project_and_never_serialized(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            synthetic = "risk-" + "4" * 48
+            def simulate_install(*_args, **_kwargs):
+                # The named config is clean, but a tool stores a secret in TMPDIR.
+                file = root / "tmp" / "cache-trace"
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text(synthetic)
+                config = root / "project" / ".codex" / "config.toml"
+                config.parent.mkdir(parents=True, exist_ok=True)
+                config.write_text('[mcp_servers.riskcanary]\\ncommand = "node"\\n')
+                return {"exit_code":0,"timed_out":False,"cleanup_error":None,
+                        "output_tail":f"debug={synthetic}"}
+            with patch.object(risk.secrets,"token_hex",return_value="4"*48), \
+                 patch.object(risk.baseline,"run_process",side_effect=simulate_install):
+                observed = risk.case_secret("uap","/bin/test-client",root)
+            self.assertEqual(observed["status"],"FAIL")
+            self.assertTrue(observed["filesystem_scan"]["canary_found"])
+            self.assertNotIn("matching_relative_paths",observed["filesystem_scan"])
+            self.assertNotIn(synthetic,json.dumps(observed))
+
+    def test_canary_path_and_file_bodies_never_appear_in_scan_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            value = "risk-" + "8" * 48
+            secret_path = root / ("log-" + value)
+            secret_path.write_text(value)
+            observation = risk.scan_synthetic_canary((root,), value)
+            self.assertTrue(observation["canary_found"])
+            self.assertTrue(observation["complete"])
+            self.assertNotIn(value,json.dumps(observation))
+
     def test_risk_file_does_not_embed_live_credentials(self):
         self.assertNotIn("sk-",str(risk.GROUPS))
         self.assertNotEqual(risk.PARENT_V1,risk.PARENT_V2)
