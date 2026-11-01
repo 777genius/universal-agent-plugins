@@ -491,23 +491,25 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     foreign=observed_file(teammate/".agents/skills/foreign-neighbor/SKILL.md",teammate)
     preserved=(original==expected["SKILL.md"] and
                foreign==b"FOREIGN USER CONTENT: preserve without edits\n")
-    explicitly_reported=bool(audit and audit.get("exit_code")!=0
-                             and "orphan" in audit.get("output_tail","").lower())
-    # No silent, still agent-visible orphan is allowed after reported success.
-    if applied["exit_code"]==0 and final is not None and not explicitly_reported:
-        verdict="FAIL";reason="removed dependency silently remains agent-visible after pull/sync"
-    elif not preserved:
+    # Audit is a separate read-only observation. A pre-sync warning or the word
+    # "orphan" anywhere in an error cannot excuse stale agent-visible bytes after
+    # a supposedly successful sync, or convert a failed sync into PASS.
+    audit_diagnostic = bool(audit and audit.get("exit_code") not in (None, 0))
+    safe_execution = (not applied.get("timed_out") and
+                      not applied.get("cleanup_error"))
+    if not preserved:
         verdict="FAIL";reason="surviving Skill or foreign file unexpectedly modified"
-    elif applied["exit_code"]==0 and final is None:
+    elif safe_execution and applied["exit_code"]==0 and final is not None:
+        verdict="FAIL";reason="removed dependency remains agent-visible after successful sync"
+    elif safe_execution and applied["exit_code"]==0 and final is None:
         verdict="PASS";reason="removed dependency cleaned and surviving Skill intact"
-    elif explicitly_reported:
-        verdict="PASS";reason="orphan explicitly diagnosed (deletion not claimed)"
     else:
-        verdict="BLOCKED";reason="cleanup rejected or missing evidence; inspect command"
+        verdict="BLOCKED";reason="sync not fully successful; no cleanup PASS can be inferred"
     return receipt(product,"R6_git_pull_removal",verdict,reason=reason,
                    author_action=changed,teammate_install=mate_first,teammate_sync=applied,
                    audit=audit,postpull_before_install_sha256=h(postpull) if postpull else None,
                    stale_skill_still_present=final is not None,
+                   audit_reported_a_problem=audit_diagnostic,
                    survivor_intact=original==expected["SKILL.md"],
                    foreign_unchanged=preserved)
 
