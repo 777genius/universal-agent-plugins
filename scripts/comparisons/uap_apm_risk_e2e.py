@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shutil
 import signal
@@ -289,7 +290,7 @@ def case_profiles(product: str, cli: str, root: Path, commit: str,
                   claude_version: str | None = None,
                   claude_native_sha256: str | None = None) -> dict:
     verified = (claude_available and bool(claude_version)
-                and "2.1.263" in claude_version
+                and re.search(r"(?<![0-9])2\.1\.263(?![0-9])", claude_version) is not None
                 and claude_native_sha256 ==
                     "26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba")
     if not verified:
