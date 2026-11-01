@@ -2,7 +2,7 @@
 import type { SkillListing, SkillsView } from '~/types/skillsCatalog';
 import { skillClients } from '~/data/skillClients';
 import {
-  externalListingUrl,
+  skillIdentityFromId,
   skillInstallCommand,
   skillNeedsManualSelection,
   skillPublisherUrl,
@@ -16,33 +16,64 @@ const { asset } = useSite();
 const selectedSkill = useState<SkillListing | null>('skills-catalog:selected-skill', () => null);
 
 const listingId = computed(() => {
-  const raw = route.query.id;
-  return typeof raw === 'string' && raw.startsWith('skills-sh:') && raw.length <= 1024
-    ? raw
-    : '';
+  const value = route.query.id;
+  return typeof value === 'string' && skillIdentityFromId(value) ? value : '';
 });
-function searchTerm() {
-  const explicit = route.query.q;
-  if (typeof explicit === 'string' && explicit.trim().length >= 2 && explicit.length <= 200)
-    return explicit.trim();
-  return listingId.value.split(':').at(-1)?.slice(0, 200) ?? '';
+const sourceIdentity = computed(() => skillIdentityFromId(listingId.value));
+function queryName(): string {
+  const value = route.query.q;
+  if (typeof value === 'string' && value.trim() && value.length <= 512) return value.trim();
+  return listingId.value.split(':').at(-1) ?? '';
 }
-const search = ref(searchTerm());
+const name = ref(queryName());
+watch(() => route.query, () => { name.value = queryName(); });
+const search = ref(name.value);
+watch(name, (value) => { search.value = value; });
 const view = ref<SkillsView>('popular');
-watch(() => route.query, () => { search.value = searchTerm(); });
-const { items, loading, failed, retry } = useSkillsCatalog(search, view);
-const skill = computed(() =>
+const { items, loading: catalogLoading } = useSkillsCatalog(search, view);
+const {
+  document: sourceDocument,
+  loading: documentLoading,
+  failed: documentFailed,
+  retry: retryDocument,
+} = useSkillDocument(listingId, name);
+
+const listedSkill = computed(() =>
   items.value.find((item) => item.id === listingId.value) ??
   (selectedSkill.value?.id === listingId.value ? selectedSkill.value : undefined),
 );
+const resolvedDocument = computed(() => {
+  const result = sourceDocument.value;
+  const source = sourceIdentity.value;
+  if (!result || !source || result.source !== (source.repository ?? new URL(source.url).hostname))
+    return undefined;
+  return result;
+});
+// The catalog search may omit an existing Skill. A successful source read
+// still supplies a valid install identity, without fabricating install metrics.
+const fallbackSkill = computed<SkillListing | undefined>(() => {
+  if (resolvedDocument.value?.status !== 'resolved' || !sourceIdentity.value) return undefined;
+  return {
+    id: listingId.value,
+    providerId: 'skills-sh',
+    providerUrl: '',
+    title: name.value,
+    skillNameHint: name.value,
+    source: sourceIdentity.value,
+    metrics: { installs: 0, window: 'all-time' },
+    availability: 'unverified',
+  };
+});
+const skill = computed(() => listedSkill.value ?? fallbackSkill.value);
 const repositoryUrl = computed(() => skill.value ? skillRepositoryUrl(skill.value) : undefined);
 const publisherUrl = computed(() => skill.value ? skillPublisherUrl(skill.value) : undefined);
-const listingUrl = computed(() => skill.value ? externalListingUrl(skill.value.providerUrl) : undefined);
 const sourceUrl = computed(() => repositoryUrl.value ?? publisherUrl.value);
 const sourceName = computed(() =>
-  skill.value?.source.repository ?? publisherUrl.value?.replace('https://', '') ?? t('registryUi.skills.externalSource'),
+  skill.value?.source.repository ??
+  publisherUrl.value?.replace('https://', '') ??
+  t('registryUi.skills.externalSource'),
 );
-
+const isBusy = computed(() => !skill.value && (catalogLoading.value || documentLoading.value));
 const chooseInTerminal = ref(true);
 const targets = ref<string[]>(['codex']);
 const activeTab = ref<'command' | 'prompt'>('command');
@@ -68,6 +99,18 @@ function updateTargets(values: string[]) {
   const next = values.filter((value) => supported.has(value));
   if (next.length) targets.value = next;
 }
+function selectTab(tab: 'command' | 'prompt', focus = false) {
+  activeTab.value = tab;
+  if (focus) void nextTick(() => document.getElementById('skills-' + tab + '-tab')?.focus());
+}
+function onTabKeydown(event: KeyboardEvent) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const next = event.key === 'Home' ? 'command' :
+    event.key === 'End' ? 'prompt' :
+      activeTab.value === 'command' ? 'prompt' : 'command';
+  selectTab(next, true);
+}
 
 useHead({
   title: computed(() =>
@@ -92,14 +135,14 @@ useHead({
         <span>{{ skill?.title ?? t('registryUi.skills.detail.skill') }}</span>
       </nav>
 
-      <div v-if="!skill && loading" class="skills-detail__panel" role="status">
+      <div v-if="isBusy" class="skills-detail__panel" role="status">
         {{ t('registryUi.skills.loading') }}
       </div>
       <div v-else-if="!skill" class="skills-detail__panel skills-detail__empty">
         <h1>{{ t('registryUi.skills.detail.notFound') }}</h1>
-        <p>{{ t(failed ? 'registryUi.skills.unavailableHelp' : 'registryUi.skills.detail.notFoundHelp') }}</p>
+        <p>{{ t(documentFailed ? 'registryUi.skills.detail.documentUnavailable' : 'registryUi.skills.detail.notFoundHelp') }}</p>
         <div class="skills-detail__actions">
-          <button v-if="failed" type="button" class="button button--secondary" @click="retry">
+          <button v-if="documentFailed" type="button" class="button button--secondary" @click="retryDocument">
             {{ t('registryUi.skills.retry') }}
           </button>
           <NuxtLink class="button button--secondary" :to="localePath({ path: '/plugins/', query: { tab: 'skills' } })">
@@ -123,15 +166,35 @@ useHead({
           <section id="skill-install" class="skills-detail__panel">
             <h2>{{ t('registryUi.skills.detail.installation') }}</h2>
             <template v-if="command">
-              <div class="skills-detail__tabs" role="tablist" :aria-label="t('registryUi.skills.detail.installation')">
-                <button type="button" role="tab" :aria-selected="activeTab === 'command'" :class="{ 'skills-detail__tab--active': activeTab === 'command' }" @click="activeTab = 'command'">
-                  {{ t('registryUi.skills.detail.command') }}
-                </button>
-                <button type="button" role="tab" :aria-selected="activeTab === 'prompt'" :class="{ 'skills-detail__tab--active': activeTab === 'prompt' }" @click="activeTab = 'prompt'">
-                  {{ t('registryUi.skills.detail.prompt') }}
-                </button>
+              <div class="skills-detail__tabs" role="tablist" :aria-label="t('registryUi.skills.detail.installation')" @keydown="onTabKeydown">
+                <button
+                  id="skills-command-tab"
+                  type="button"
+                  role="tab"
+                  aria-controls="skills-install-panel"
+                  :aria-selected="activeTab === 'command'"
+                  :tabindex="activeTab === 'command' ? 0 : -1"
+                  :class="{ 'skills-detail__tab--active': activeTab === 'command' }"
+                  @click="selectTab('command')"
+                >{{ t('registryUi.skills.detail.command') }}</button>
+                <button
+                  id="skills-prompt-tab"
+                  type="button"
+                  role="tab"
+                  aria-controls="skills-install-panel"
+                  :aria-selected="activeTab === 'prompt'"
+                  :tabindex="activeTab === 'prompt' ? 0 : -1"
+                  :class="{ 'skills-detail__tab--active': activeTab === 'prompt' }"
+                  @click="selectTab('prompt')"
+                >{{ t('registryUi.skills.detail.prompt') }}</button>
               </div>
-              <div class="skills-detail__install-body">
+              <div
+                id="skills-install-panel"
+                role="tabpanel"
+                tabindex="0"
+                :aria-labelledby="'skills-' + activeTab + '-tab'"
+                class="skills-detail__install-body"
+              >
                 <AppMultiSelect
                   :model-value="targets"
                   :auto-selected="chooseInTerminal"
@@ -153,20 +216,27 @@ useHead({
                 <p class="skills-detail__hint">{{ t('registryUi.skills.checkedBeforeInstall') }}</p>
               </div>
             </template>
-            <div v-else class="skills-detail__install-body">
-              <p>{{ t(sourceUrl ? 'registryUi.skills.detail.exactNameUnavailable' : 'registryUi.skills.unsupportedSource') }}</p>
-              <a v-if="listingUrl" :href="listingUrl" target="_blank" rel="noopener noreferrer">
-                {{ t('registryUi.skills.viewListing') }} <span aria-hidden="true">↗</span>
-              </a>
-            </div>
+            <p v-else class="skills-detail__hint">
+              {{ t('registryUi.skills.detail.exactNameUnavailable') }}
+            </p>
           </section>
 
           <section class="skills-detail__panel skills-detail__document">
             <h2>SKILL.md</h2>
-            <p>{{ t('registryUi.skills.detail.documentNotice') }}</p>
-            <a v-if="listingUrl" :href="listingUrl" target="_blank" rel="noopener noreferrer">
-              {{ t('registryUi.skills.detail.readInstructions') }} <span aria-hidden="true">↗</span>
-            </a>
+            <p v-if="documentLoading" role="status" class="skills-detail__hint">{{ t('registryUi.skills.detail.loadingDocument') }}</p>
+            <template v-else-if="resolvedDocument?.status === 'resolved' && resolvedDocument.markdown">
+              <p class="skills-detail__hint skills-detail__document-caption">{{ t('registryUi.skills.detail.sourceDocumentNotice') }}</p>
+              <SkillMarkdown :markdown="resolvedDocument.markdown" />
+            </template>
+            <div v-else class="skills-detail__document-empty">
+              <p>{{ t('registryUi.skills.detail.documentUnavailable') }}</p>
+              <button v-if="documentFailed" type="button" class="button button--secondary" @click="retryDocument">
+                {{ t('registryUi.skills.retry') }}
+              </button>
+              <a v-if="sourceUrl" :href="sourceUrl" target="_blank" rel="noopener noreferrer">
+                {{ t('registryUi.skills.detail.viewPublisher') }} <span aria-hidden="true">↗</span>
+              </a>
+            </div>
           </section>
 
           <section class="skills-detail__panel">
@@ -185,10 +255,10 @@ useHead({
         <aside class="skills-detail__sidebar">
           <div class="skills-detail__panel skills-detail__facts">
             <dl>
-              <div>
+              <div v-if="listedSkill">
                 <dt>{{ t('registryUi.skills.detail.installs') }}</dt>
-                <dd>{{ n(skill.metrics.installs) }}</dd>
-                <p class="skills-detail__hint">{{ t('registryUi.skills.metric.' + skill.metrics.window, { count: n(skill.metrics.installs) }) }}</p>
+                <dd>{{ n(listedSkill.metrics.installs) }}</dd>
+                <p class="skills-detail__hint">{{ t('registryUi.skills.metric.' + listedSkill.metrics.window, { count: n(listedSkill.metrics.installs) }) }}</p>
               </div>
               <div>
                 <dt>{{ t('registryUi.skills.detail.source') }}</dt>
@@ -197,16 +267,12 @@ useHead({
                   <span v-else>{{ sourceName }}</span>
                 </dd>
               </div>
-              <div>
-                <dt>{{ t('registryUi.skills.detail.listing') }}</dt>
-                <dd>
-                  <a v-if="listingUrl" :href="listingUrl" target="_blank" rel="noopener noreferrer">
-                    skills.sh ↗
-                  </a>
-                </dd>
+              <div v-if="resolvedDocument?.commit">
+                <dt>{{ t('registryUi.skills.detail.revision') }}</dt>
+                <dd><code>{{ resolvedDocument.commit.slice(0, 12) }}</code></dd>
               </div>
             </dl>
-            <p class="skills-detail__hint">{{ t('registryUi.skills.detail.metricsNotice') }}</p>
+            <p v-if="listedSkill" class="skills-detail__hint">{{ t('registryUi.skills.detail.metricsNotice') }}</p>
           </div>
         </aside>
       </div>
