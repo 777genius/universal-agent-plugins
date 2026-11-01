@@ -126,7 +126,10 @@ func TestPiProjectNativeSkillsMCPFacadeAAndB(t *testing.T) {
 	if data, err := os.ReadFile(mcpB); err != nil || !bytes.Equal(data, beforeMCPB) {
 		t.Fatal("Pi project B MCP changed with A", err)
 	}
-	if err := os.Remove(skillA); err != nil {
+	// A missing managed Skill means the entire owned directory is absent.
+	// Deleting only SKILL.md leaves an edited directory, which correctly
+	// fails closed instead of silently adopting its remaining foreign files.
+	if err := os.RemoveAll(filepath.Dir(skillA)); err != nil {
 		t.Fatal(err)
 	}
 	do(a, request(OpRepair, projectA, firstA.InstallationID))
