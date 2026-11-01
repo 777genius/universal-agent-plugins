@@ -107,11 +107,15 @@ func TestOpenCodeProjectV2NativeSourceInventoryBindsExactUserAndSelectedProject(
 	encode := func(items []any) []byte {
 		t.Helper()
 		body, err := json.Marshal(items)
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		return body
 	}
 	actual, err := openCodeProjectV2SourceConfig(encode(rows), user, project, false, true)
-	if err != nil { t.Fatal("true V2 source inventory refused", err) }
+	if err != nil {
+		t.Fatal("true V2 source inventory refused", err)
+	}
 	if err := openCodeProjectCheckConfig(actual, map[string]string{
 		"user": "http://127.0.0.1:9/USER", "managed": "http://127.0.0.1:9/PROJECT",
 	}, nil); err != nil { t.Fatal(err) }
@@ -121,7 +125,7 @@ func TestOpenCodeProjectV2NativeSourceInventoryBindsExactUserAndSelectedProject(
 		"duplicate-project": append(append([]any{}, rows...), rows[2]),
 		"unrequested-inline": append(append([]any{}, rows...), map[string]any{"type": "document", "info": config("inline", "INLINE")}),
 		"foreign-path": []any{rows[0], rows[1], map[string]any{"type": "document", "path": filepath.Join(root, "foreign", "opencode.jsonc"), "info": config("managed", "PROJECT")}, rows[3]},
-		"flat-v2": []any{rows[0], rows[1], map[string]any{"type": "document", "path": projectPath, "info": map[string]any{"mcp": map[string]any{"managed": map[string]any{"url":"http://127.0.0.1:9/PROJECT"}}}}, rows[3]},
+		"flat-v2": []any{rows[0], rows[1], map[string]any{"type": "document", "path": projectPath, "info": map[string]any{"mcp": map[string]any{"managed": map[string]any{"url": "http://127.0.0.1:9/PROJECT"}}}}, rows[3]},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := openCodeProjectV2SourceConfig(encode(altered), user, project, false, true); err == nil {
@@ -131,8 +135,12 @@ func TestOpenCodeProjectV2NativeSourceInventoryBindsExactUserAndSelectedProject(
 	}
 	inline := append(append([]any{}, rows...), map[string]any{"type": "document", "info": config("managed", "INLINE")})
 	merged, err := openCodeProjectV2SourceConfig(encode(inline), user, project, true, true)
-	if err != nil { t.Fatal("authorized V2 inline document refused", err) }
-	if err := openCodeProjectCheckConfig(merged, map[string]string{"managed": "http://127.0.0.1:9/INLINE"}, nil); err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal("authorized V2 inline document refused", err)
+	}
+	if err := openCodeProjectCheckConfig(merged, map[string]string{"managed": "http://127.0.0.1:9/INLINE"}, nil); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestOpenCodeProjectNativeFiniteTableAndEnvironment(t *testing.T) {
