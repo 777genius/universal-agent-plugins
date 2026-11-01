@@ -176,7 +176,7 @@ class NativeMatrixTests(unittest.TestCase):
         self.assertNotIn("TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake", v1_pattern)
         declared = set()
         for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
-            declared.update(re.findall(r"^func (Test\\w+)\\(t \\*testing\\.T\\)", path.read_text(encoding="utf-8"), re.M))
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
         self.assertEqual({name for name in declared if re.search(v2_pattern, name)}, v2_required)
         self.assertNotEqual(v1_pattern, v2_pattern)
         for target, pin in matrix.OPENCODE_V2_PINS.items():
