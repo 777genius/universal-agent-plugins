@@ -7,6 +7,7 @@ BLOCKED, UNSUPPORTED or NOT_RUN per product and scenario, not a leaderboard.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -520,7 +521,10 @@ def graph_lock_matches(project: Path, product: str,
     """
     try:
         if product == "uap":
-            lock = json.loads((project / "uap.lock").read_bytes())
+            raw = observed_file(project / "uap.lock", project)
+            if raw is None:
+                return False
+            lock = json.loads(raw)
             nodes = lock.get("packages", [])
             if not isinstance(nodes, list) or len(nodes) != 2:
                 return False
@@ -564,7 +568,10 @@ def graph_lock_matches(project: Path, product: str,
                     and selector.get("kind") == "commit"
                     and selector.get("value") == child_commit)
         import yaml
-        lock = yaml.safe_load((project / "apm.lock.yaml").read_bytes())
+        raw = observed_file(project / "apm.lock.yaml", project)
+        if raw is None:
+            return False
+        lock = yaml.safe_load(raw)
         nodes = lock.get("dependencies", [])
         if not isinstance(nodes, list) or len(nodes) != 2 or any(
                 not isinstance(n, dict) for n in nodes):
@@ -666,6 +673,12 @@ def scan_synthetic_canary(roots: tuple[Path, ...], synthetic: str,
     ambient runner home. The synthetic canary is never serialized.
     """
     inspected, seen_bytes, hits, unknown = 0, 0, [], []
+    token = synthetic.encode("utf-8")
+    # The experiment checks a bounded set of direct and common textual
+    # encodings; it cannot prove the absence of arbitrary transformations.
+    variants = tuple(sorted({token, token.upper(), base64.b64encode(token),
+                             token.hex().encode("ascii")}))
+    path_markers = tuple(value.decode("ascii") for value in variants)
     for root in roots:
         if not root.is_dir() or root.is_symlink():
             unknown.append("root_not_regular")
@@ -674,7 +687,7 @@ def scan_synthetic_canary(roots: tuple[Path, ...], synthetic: str,
                 root, followlinks=False,
                 onerror=lambda error: unknown.append("unlistable_directory")):
             here = Path(current)
-            if synthetic in str(here.relative_to(root)):
+            if any(value in str(here.relative_to(root)) for value in path_markers):
                 hits.append(h(str(here.relative_to(root)).encode("utf-8")))
             if here.is_symlink():
                 unknown.append("symlink_directory")
@@ -683,14 +696,14 @@ def scan_synthetic_canary(roots: tuple[Path, ...], synthetic: str,
             # Unverified symlinked directories are not silently ignored.
             for directory in dirs[:]:
                 candidate = here / directory
-                if synthetic in str(candidate.relative_to(root)):
+                if any(value in str(candidate.relative_to(root)) for value in path_markers):
                     hits.append(h(str(candidate.relative_to(root)).encode("utf-8")))
                 if candidate.is_symlink():
                     unknown.append("symlink_directory")
                     dirs.remove(directory)
             for name in files:
                 file = here / name
-                if synthetic in str(file.relative_to(root)):
+                if any(value in str(file.relative_to(root)) for value in path_markers):
                     hits.append(h(str(file.relative_to(root)).encode("utf-8")))
                 inspected += 1
                 if inspected > max_files:
@@ -712,8 +725,8 @@ def scan_synthetic_canary(roots: tuple[Path, ...], synthetic: str,
                     if seen_bytes > max_bytes:
                         unknown.append("too_many_bytes")
                         break
-                    if synthetic.encode("utf-8") in data:
-                        # Only a relative location, never data or a private root.
+                    if any(value in data for value in variants):
+                        # Only a relative location hash, never data or a private root.
                         hits.append(h(str(file.relative_to(root)).encode("utf-8")))
                 except (OSError, ValueError):
                     unknown.append("scan_error")
@@ -744,7 +757,7 @@ def codex_mcp_contract(project: Path) -> str:
         if (not isinstance(forwarded, list)
                 or forwarded != [MARKER] or
                 not all(isinstance(name, str) for name in forwarded)
-                or (isinstance(embedded, dict) and MARKER in embedded)):
+                or not isinstance(embedded, dict) or embedded):
             return "environment_forwarding_unverified"
         return "match"
     except (ValueError, UnicodeError, AttributeError, TypeError):
