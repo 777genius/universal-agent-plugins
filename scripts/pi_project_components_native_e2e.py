@@ -133,7 +133,7 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
             # installer action, real user profile or project B is trusted.
             write(user,"trust.json",json.dumps({
                 str(project_a.resolve()):True, str(project_b.resolve()):False
-            },sort_keys=True)+"\\n")
+            },sort_keys=True)+chr(10))
             # The official v1.4.0 shell grammar is "pi mcp list --json";
             # placing --approve before mcp routes to the generic CLI parser
             # and rejects --json before any native MCP exchange.
