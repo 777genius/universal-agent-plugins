@@ -3,7 +3,9 @@ package pluginkitairepo_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/json"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -41,7 +43,24 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string) m
 	defer cancel()
 	command := exec.CommandContext(ctx, f.client, "serve", "--hostname", "127.0.0.1", "--port", strconv.Itoa(port))
 	command.Dir = project
-	command.Env = f.env()
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		t.Fatal(err)
+	}
+	password := hex.EncodeToString(key)
+	// This invocation proves Skills, not MCP transport. Suppress the two
+	// known fixture remote MCP entries in the process-only V2 overlay so
+	// their initial connection attempts cannot masquerade as a skill result.
+	disabled := map[string]any{"type": "remote", "url": "http://127.0.0.1:9/disabled", "disabled": true}
+	overlay, err := json.Marshal(map[string]any{
+		"mcp": map[string]any{"servers": map[string]any{
+			"scope-marker": disabled, "uap-user-control": disabled,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	command.Env = append(f.env(), "OPENCODE_PASSWORD="+password, "OPENCODE_CONFIG_CONTENT="+string(overlay))
 	command.Stdout = io.Discard
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
@@ -65,6 +84,7 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string) m
 		if err != nil {
 			t.Fatal(err)
 		}
+		request.SetBasicAuth("opencode", password)
 		response, err := httpClient.Do(request)
 		if err == nil {
 			body, err = io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
