@@ -6,8 +6,8 @@ const commands = [
   'agentplugins install --locked',
 ];
 
-// Exercise actual page geometry: long translations, both themes, and the four
-// agreed breakpoints. Text must stay inside the display, including Copy controls.
+// Exercise actual page geometry: long translations, both themes, narrow
+// phones, and the desktop-to-stacked transition. All visible text stays on screen.
 for (const theme of ['dark', 'light']) {
   for (const [locale, width] of [
     ['en', 1440],
@@ -17,9 +17,14 @@ for (const theme of ['dark', 'light']) {
     ['en', 768],
     ['en', 540],
     ['en', 390],
+    ['en', 320],
+    ['en', 280],
     ['fr', 390],
+    ['fr', 320],
     ['ru', 390],
+    ['ru', 320],
     ['ar', 390],
+    ['ar', 320],
   ] as const) {
     test(`team restore ${locale} ${theme} at ${width}px`, async ({ page, context }) => {
       await page.setViewportSize({ width, height: 1100 });
@@ -71,6 +76,7 @@ for (const theme of ['dark', 'light']) {
               ),
             ]
               .filter((element) => {
+                if (getComputedStyle(element).display === 'none') return false;
                 const box = element.getBoundingClientRect();
                 return (
                   box.left < bounds.left - 1 ||
