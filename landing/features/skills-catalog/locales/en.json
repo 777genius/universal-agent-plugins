@@ -45,7 +45,28 @@
       "collectionShown": "Showing {count} of {total} in this collection",
       "headingPrefix": "Find your",
       "viewListing": "View original listing",
-      "manualSkillSelection": "Select the exact Skill in the installer; this catalog name is not verified."
+      "manualSkillSelection": "Select the exact Skill in the installer; this catalog name is not verified.",
+      "publisherSource": "Publisher source",
+      "invalidPublisherName": "The publisher requires an exact Skill name. Check the original listing.",
+      "detail": {
+        "breadcrumb": "Skill navigation",
+        "skill": "Agent Skill",
+        "notFound": "Skill not found",
+        "notFoundHelp": "This listing is not available from the catalog. Return to Skills and search again.",
+        "backToSkills": "Back to Skills",
+        "installation": "Installation",
+        "command": "Command",
+        "prompt": "Prompt",
+        "promptText": "Install this Skill with Universal Agent Plugins. Review the source and the planned changes before running the following command:\n{command}",
+        "exactNameUnavailable": "The exact install selector could not be validated. Check the original listing before installing.",
+        "documentNotice": "The catalog currently provides source and installation metadata, but not verified SKILL.md contents. Read the full instructions on the original listing before installation.",
+        "readInstructions": "Read SKILL.md on the original listing",
+        "security": "Security checks",
+        "installs": "Installs",
+        "source": "Source",
+        "listing": "Original listing",
+        "metricsNotice": "Install counts are reported by the external directory, not independently verified."
+      }
     },
     "directoryPage": {
       "pluginDirectory": "Plugin directory",
