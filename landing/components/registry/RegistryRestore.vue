@@ -58,7 +58,7 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
                 <span class="registry-restore__source" :title="pluginSource"
                   >github:brunoborges/javaevolved…</span
                 >
-                <span class="registry-restore__source-compact" aria-hidden="true">github:brunoborges/…</span>{{ ' ' }}
+                <span class="registry-restore__source-compact">github:brunoborges/…</span>{{ ' ' }}
                 <span class="registry-restore__argument"
                   ><span class="registry-restore__accent">--target</span> codex{{ ' ' }}
                   <span class="registry-restore__accent">--scope</span> project</span
