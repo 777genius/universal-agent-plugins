@@ -31,7 +31,7 @@ func TestProviderNormalizationAndSafeLocators(t *testing.T) {
 		source string
 		github bool
 	}{
-		{"vercel-labs/skills", true}, {"owner/repo/tree/main", false}, {"https://github.com/owner/repo", false}, {"owner/..", false}, {"owner/repo.git", false}, {"owner/repo#frag", false}, {"evil:payload", false},
+		{"vercel-labs/skills", true}, {"open.feishu.cn", false}, {"uizze.sh", false}, {"owner/repo/tree/main", false}, {"https://github.com/owner/repo", false}, {"owner/..", false}, {"owner/repo.git", false}, {"owner/repo#frag", false}, {"evil:payload", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.source, func(t *testing.T) {
@@ -55,6 +55,11 @@ func TestProviderNormalizationAndSafeLocators(t *testing.T) {
 			}
 			if tc.github {
 				if i.Source.URL != "https://github.com/vercel-labs/skills" || i.Source.Repository != "vercel-labs/skills" || i.Availability != "unverified" {
+					t.Fatal(i)
+				}
+			} else if sourceDomain.MatchString(tc.source) && !strings.Contains(tc.source, "/") {
+				if i.Source.Kind != "external" || i.Source.Repository != "" || i.Availability != "unverified" ||
+					i.Source.URL != "https://"+tc.source || !strings.HasPrefix(i.ProviderURL, skillsOrigin+"/site/") {
 					t.Fatal(i)
 				}
 			} else {
