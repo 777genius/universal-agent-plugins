@@ -33,6 +33,7 @@ selection, reload, trust or session work can remain.
 | Kimi Code | `.kimi-code/skills` and `.kimi-code/mcp.json` | Prepared; new delivery requires observed `kimi` 2.3.1 and the selected skill directory's nearest Git root. The user plugin registry stays separate. |
 | ChatGPT | No supported native project filesystem installation | Explicit refusal before source acquisition, including `--no-save`; the existing user/manual path is preserved. See [ChatGPT scope](CHATGPT_PROJECT_SCOPE.md). |
 | VS Code | `.github/skills` and exact `servers` members in `.vscode/mcp.json`, including native JSONC syntax | Prepared with installed-file verification for one local folder. Open that folder and review workspace/server trust; observed metadata does not prove MCP startup or model execution. See [VS Code preparation](PROJECT_INSTALLATION.md#vs-code-project-preparation) and [pinned metadata evidence](evidence/project-scope-research/vscode-1.143.1-untrusted-workspace-linux-amd64-40188310034/README.md). |
+| Pi | Managed native project extension in `.pi/extensions/<artifact>` | **Extensions only**: Prepared until Pi independently grants project trust. No automatic trust change. Project Skills and `.pi/mcp.json` are not yet UAP-managed. [Project qualification #631](https://github.com/777genius/universal-agent-plugins/pull/631). |
 
 ## Native project evidence matrix
 
@@ -58,7 +59,7 @@ the actual client executable, not a live vendor model or general-purpose access.
 | Windsurf / Devin | Yes | Qualified supported project skills lifecycle, restart and removal | Not qualified | [#528](https://github.com/777genius/universal-agent-plugins/pull/528); separate strict cache-frame follow-up [#611](https://github.com/777genius/universal-agent-plugins/pull/611) |
 | Kiro | Prepared | Authenticated native lifecycle **not qualified** | Not qualified | [Draft #529](https://github.com/777genius/universal-agent-plugins/pull/529); dedicated test authentication needed |
 | VS Code | Prepared | Trusted native project lifecycle **not qualified** | Not qualified | [Deferred Draft #530](https://github.com/777genius/universal-agent-plugins/pull/530) |
-| Pi | **User only** for native Pi extensions | Project installation not supported by current adapter | Not applicable to this extension route | [Pi native extension contract](PI_NATIVE_EXTENSION_CONTRACT.md); no project qualification |
+| Pi | Native Pi extension only under `.pi/extensions/<artifact>` | Real Pi v1.4.0 A/B trust, fresh load, update and removal verified on Linux/macOS/Windows; **Prepared**, not automatic trust or Active | Skills/MCP project installation and MCP initialize/list/call not implemented by this route | [Project E2E #631](https://github.com/777genius/universal-agent-plugins/pull/631), [Pi contract](PI_NATIVE_EXTENSION_CONTRACT.md); native extension qualification is not Skills/MCP support |
 | ChatGPT | **No** native project filesystem adapter | Not supported | Not applicable | [ChatGPT scope](CHATGPT_PROJECT_SCOPE.md); user/manual app flow is separate |
 
 All project-native lanes in this table leave **vendor authentication and real
