@@ -312,8 +312,10 @@ class RiskOracleTests(unittest.TestCase):
             self.assertEqual(row["status"],"BLOCKED")
             self.assertIn("incomplete",row["reason"])
             complete=dict(incomplete,capture_complete=True)
+            # Each negative-control run owns a fresh fixture. Reusing the
+            # same root would collide with the prior foreign-neighbor dir.
             with patch.object(risk.baseline,"run_process",return_value=complete):
-                row=risk.case_interrupted("uap","/bin/fake",root,"a"*40)
+                row=risk.case_interrupted("uap","/bin/fake",root/"complete","a"*40)
             self.assertEqual(row["status"],"BLOCKED")
             self.assertIn("verified preflight refusal",row["reason"])
             self.assertFalse(row["deterministic_post_write_barrier"])
