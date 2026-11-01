@@ -1023,8 +1023,9 @@ def codex_mcp_contract(project: Path, product: str = "apm") -> str:
         command = server.get("command")
         arguments = server.get("args", [])
         if product == "uap":
-            # The Agent Plugins loader requires a bundled stdio command.
-            # Its Codex projection must retain that executable identity.
+            # This fixture chooses a bundled command for exact-byte
+            # reproducibility. The loader also permits bare commands;
+            # that was not proven to be the earlier refusal cause.
             executable = Path(command) if isinstance(command, str) else Path(".")
             if (not executable.is_absolute()
                     or executable.parts[-2:] != ("bin", "risk-probe.sh")
@@ -1063,8 +1064,9 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
     if product=="uap":
         package=project / "package"
         package.mkdir()
-        # A bare PATH 'node' is not a valid Agent Plugins 1.0 stdio
-        # command. Use an inert, executable plugin-relative entrypoint.
+        # Use a self-contained executable to isolate source and path
+        # ownership from ambient PATH. Bare stdio commands are supported;
+        # their earlier refusal cause remains unproven.
         bundled = package / "bin" / "risk-probe.sh"
         bundled.parent.mkdir()
         bundled.write_bytes(b"#!/bin/sh\nexit 0\n")
