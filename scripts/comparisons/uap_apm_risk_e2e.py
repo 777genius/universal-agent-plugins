@@ -118,8 +118,8 @@ def status(eligible: bool, command: dict | None, invariant: bool, reason: str,
         return "BLOCKED", "documented prerequisite or supported route not established: " + reason
     if not protected:
         return "FAIL", "a protected or foreign file changed: " + reason
-    if command is None or command.get("timed_out") or command.get("cleanup_error"):
-        return "BLOCKED", "process outcome incomplete: " + reason
+    if command is None or not complete_command(command):
+        return "BLOCKED", "process outcome incomplete or refused: " + reason
     if command.get("exit_code") != 0:
         return "BLOCKED" if invariant else "FAIL", "command refused: " + reason
     if not invariant or not provenance:
@@ -422,7 +422,13 @@ def graph_lock_matches(project: Path, product: str,
                     or source(c) not in {(r, CHILD, child_commit) for r in source_aliases}):
                 return False
             parent_alias = p.get("alias")
-            if not isinstance(parent_alias, str) or not parent_alias:
+            child_alias = c.get("alias")
+            if (not isinstance(parent_alias, str) or not parent_alias
+                    or not isinstance(child_alias, str) or not child_alias
+                    or parent_alias == child_alias
+                    or p.get("required_by")):
+                # Parent must be a direct root. A reverse edge is an invalid
+                # two-node cycle, not an admissible source closure.
                 return False
             edges = c.get("required_by")
             if not isinstance(edges, list) or len(edges) != 1:
@@ -467,7 +473,7 @@ def case_graph(product: str, cli: str, root: Path) -> dict:
     first=(observed_file(old_skill,project)==old
            and observed_file(parent_skill,project)==parent_v1
            and graph_lock_matches(project,product,PARENT_V1,CHILD_V1))
-    if initial["exit_code"]!=0 or not first:
+    if not complete_command(initial) or not first:
         return receipt(product,"R3_transitive_update","BLOCKED",stage="initial_graph_admission",
                        reason="two-package transitive graph did not reach expected native source state",
                        initial=initial,child_v1_seen=first)
@@ -475,6 +481,10 @@ def case_graph(product: str, cli: str, root: Path) -> dict:
     prelock=None
     if product=="uap":
         prelock=baseline.run_process(graph_command(product,cli,project,lock=True),project,env,root)
+        if not complete_command(prelock):
+            return receipt(product,"R3_transitive_update","BLOCKED",
+                           stage="pin_refresh",initial=initial,pin_refresh=prelock,
+                           reason="UAP initial source pin refresh incomplete or refused")
     updated=baseline.run_process(graph_command(product,cli,project,updated=True),project,env,root)
     actual=observed_file(old_skill,project)
     graph_ok=graph_lock_matches(project,product,PARENT_V2,CHILD_V2)
@@ -484,8 +494,6 @@ def case_graph(product: str, cli: str, root: Path) -> dict:
          and observed_file(parent_skill,project)==parent_v2)
     result,reason=status(True,updated,did,"parent v2 must resolve child B once and deploy child B",
                          protected=foreign_ok)
-    if prelock is not None and prelock["exit_code"]!=0 and result=="PASS":
-        result="BLOCKED";reason="UAP root intent pin update refused before apply"
     return receipt(product,"R3_transitive_update",result,reason=reason,initial=initial,
                    pin_refresh=prelock,command=updated,foreign_unchanged=foreign_ok,
                    original_sha256=h(old),expected_sha256=h(new),
@@ -726,7 +734,7 @@ def classify_removed_result(command: dict, stale_skill_state: str,
     """A failed sync or pre-sync audit cannot make a visible orphan PASS."""
     if not protected_files_intact:
         return "FAIL", "surviving Skill or foreign file unexpectedly modified"
-    if command.get("timed_out") or command.get("cleanup_error") or command.get("exit_code") != 0:
+    if not complete_command(command):
         return "BLOCKED", "sync not fully successful; no cleanup PASS can be inferred"
     if stale_skill_state == "present":
         return "FAIL", "removed dependency remains agent-visible after successful sync"
@@ -744,7 +752,7 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     names=("uap.toml","uap.lock") if product=="uap" else ("apm.yml","apm.lock.yaml")
     secondary=author/".agents/skills/benchmark-secondary/SKILL.md"
     second_body=fixture(commit,SKILL_SECOND+"/SKILL.md")
-    if (start["exit_code"]!=0 or observed_file(secondary,author)!=second_body
+    if (not complete_command(start) or observed_file(secondary,author)!=second_body
         or any(not (author/name).is_file() for name in names)):
         return receipt(product,"R6_git_pull_removal","BLOCKED",
                        stage="two_dependencies_initial_admission",initial=start,
@@ -761,7 +769,7 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     mate_env=baseline.isolated_env(teammate_root)
     mate_first=baseline.run_process(removal_command(product,cli,teammate),teammate,mate_env,root)
     mate_path=teammate/".agents/skills/benchmark-secondary/SKILL.md"
-    if mate_first["exit_code"]!=0 or observed_file(mate_path,teammate)!=second_body:
+    if not complete_command(mate_first) or observed_file(mate_path,teammate)!=second_body:
         return receipt(product,"R6_git_pull_removal","BLOCKED",
                        stage="teammate_initial_install",initial=mate_first,
                        reason="second user agent installation not admitted")
@@ -770,7 +778,8 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     if product=="uap":
         refresh=baseline.run_process(removal_command(product,cli,author,lock=True),author,env,root)
     changed=baseline.run_process(removal_command(product,cli,author),author,env,root)
-    if changed["exit_code"]!=0 or refresh is not None and refresh["exit_code"]!=0:
+    if not complete_command(changed) or (refresh is not None and
+                                         not complete_command(refresh)):
         return receipt(product,"R6_git_pull_removal","BLOCKED",stage="author_removal",
                        refresh=refresh,command=changed,
                        reason="author could not produce valid remaining lock")
