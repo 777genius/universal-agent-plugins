@@ -629,12 +629,12 @@ for (const width of [1280, 390]) {
     await navigate(page, '/plugins/', 'ru', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
     await expect(card.locator('.skillspector > summary')).toContainText(
-      'Проверка скиллов · Полностью проверено: 3/13',
+      'Проверка скиллов · Проверено 13/13 · с ограничениями: 10',
     );
     await card.locator('.skillspector > summary').focus();
     await page.keyboard.press('Enter');
     await expect(card.locator('.skillspector__advice')).toContainText(
-      'Скиллы проверены полностью: 3 из 13',
+      'Скиллов проверено: 13 из 13',
     );
     await expect(card.locator('.skillspector__advice')).toContainText(
       'SkillSpector не проверяет другие компоненты плагина.',
