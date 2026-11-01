@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/777genius/plugin-kit-ai/internal/skillsresolve"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/internal/skillsresolve"
 )
 
 type WebsiteDocumentReader interface {
@@ -22,12 +22,12 @@ type WebsiteDocumentReader interface {
 }
 
 type documentResponse struct {
-	Status      string `json:"status"`
-	Markdown    string `json:"markdown,omitempty"`
-	SHA256      string `json:"sha256,omitempty"`
-	Commit      string `json:"commit,omitempty"`
-	Source      string `json:"source"`
-	HasResources bool  `json:"hasResources,omitempty"`
+	Status       string `json:"status"`
+	Markdown     string `json:"markdown,omitempty"`
+	SHA256       string `json:"sha256,omitempty"`
+	Commit       string `json:"commit,omitempty"`
+	Source       string `json:"source"`
+	HasResources bool   `json:"hasResources,omitempty"`
 }
 
 type cachedDocument struct {
