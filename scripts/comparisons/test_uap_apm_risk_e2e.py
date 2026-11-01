@@ -162,8 +162,12 @@ class RiskOracleTests(unittest.TestCase):
                 if len(operations)==2:
                     foreign=project/".agents/skills/foreign-neighbor/SKILL.md"
                     contents=foreign.read_bytes()
-                    foreign.unlink()
-                    foreign.write_bytes(contents)
+                    # Build the replacement while the original inode
+                    # remains allocated, then atomically swap identical bytes.
+                    # Unlink-and-recreate alone can reuse the same inode.
+                    replacement=foreign.with_name("replacement-for-inode-test")
+                    replacement.write_bytes(contents)
+                    replacement.replace(foreign)
                 return {"exit_code":0,"timed_out":False,"cleanup_error":None,
                         "capture_complete":True}
             with patch.object(risk.baseline,"run_process",side_effect=mutate_refresh), \
