@@ -66,7 +66,8 @@
         "sourceDocumentNotice": "发布方说明 · 内容未经验证。使用前请检查。",
         "documentUnavailable": "无法从发布方加载 SKILL.md。你可以直接查看其源代码。",
         "viewPublisher": "查看发布方源代码",
-        "revision": "源代码修订版"
+        "revision": "源代码修订版",
+        "rawDocument": "查看完整 SKILL.md 原文"
       }
     },
     "directoryPage": {
