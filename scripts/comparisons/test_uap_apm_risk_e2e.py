@@ -523,6 +523,36 @@ class RiskOracleTests(unittest.TestCase):
             dict(observed,output_tail="failed opening /tmp/corrupt/uap.lock: file missing"),
             "uap.lock"))
 
+    def test_tool_prefixed_and_structured_warnings_cannot_prove_lock_refusal(self):
+        valid={"exit_code":1,"timed_out":False,"cleanup_error":None,
+               "capture_complete":True,"output_tail":"error: invalid uap.lock syntax"}
+        self.assertTrue(risk.lock_validation_refused(valid,"uap.lock"))
+        for message in (
+            "agentplugins: WARNING malformed uap.lock\nerror: target unavailable",
+            '{"level":"warning","message":"invalid uap.lock"}\nerror: target unavailable',
+            "2026-11-01 INFO cannot parse uap.lock\nerror: unexpected provider state",
+        ):
+            self.assertFalse(risk.lock_validation_refused(
+                {**valid,"output_tail":message},"uap.lock"))
+
+    def test_survivor_directory_entry_sets_reject_added_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project=Path(tmp)
+            skill=project/"surviving"
+            ref=skill/"references"
+            ref.mkdir(parents=True)
+            (skill/"SKILL.md").write_bytes(b"original")
+            (ref/"fixture.txt").write_bytes(b"reference")
+            initial=risk.directory_identity(skill,project,with_entries=True)
+            reference_initial=risk.directory_identity(ref,project,with_entries=True)
+            self.assertIsNotNone(initial)
+            self.assertIsNotNone(reference_initial)
+            (skill/"foreign-extra.md").write_bytes(b"not expected")
+            self.assertNotEqual(initial,risk.directory_identity(skill,project,with_entries=True))
+            (skill/"foreign-extra.md").unlink()
+            (ref/"untracked.txt").write_bytes(b"unexpected nested file")
+            self.assertNotEqual(reference_initial,risk.directory_identity(ref,project,with_entries=True))
+
     def test_cold_claude_requires_actual_native_skill_package_kind(self):
         import yaml
         commit = risk.PARENT_V2

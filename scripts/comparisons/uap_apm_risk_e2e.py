@@ -174,7 +174,7 @@ def file_identity(path: Path, boundary: Path) -> tuple | None:
         return None
 
 
-def directory_identity(path: Path, boundary: Path) -> tuple | None:
+def directory_identity(path: Path, boundary: Path, *, with_entries: bool = False) -> tuple | None:
     """Observe a user-owned directory without mutable mtime/ctime noise."""
     try:
         relative = path.relative_to(boundary)
@@ -188,7 +188,16 @@ def directory_identity(path: Path, boundary: Path) -> tuple | None:
         info = path.lstat()
         if not stat.S_ISDIR(info.st_mode):
             return None
-        return (info.st_mode, info.st_uid, info.st_gid, info.st_ino)
+        identity = (info.st_mode, info.st_uid, info.st_gid, info.st_ino)
+        if with_entries:
+            # A fixed fixture's child set must not acquire untracked files.
+            # Never follow children; they are compared separately by the
+            # exact expected byte/identity observer.
+            children = tuple(sorted(child.name for child in path.iterdir()))
+            if len(children) > 64:
+                return None
+            return identity + (children,)
+        return identity
     except (OSError, ValueError):
         return None
 
@@ -239,8 +248,14 @@ def lock_validation_refused(command: dict, lock_name: str) -> bool:
         # A warning about the lock plus an unrelated command failure is not
         # independent evidence that locked replay rejected bad bytes.
         prefix = diagnostic_text.lstrip()
-        if prefix.startswith(("warning", "warn:", "[warn]", "[warning]",
-                              "info:", "[info]", "note:", "debug:")):
+        # Tool prefixes and structured logging may place a WARNING level
+        # after a timestamp, binary name or JSON key. Any such line is not
+        # proof of a rejected lock, even if it contains error vocabulary.
+        # Over-rejection means BLOCKED; accepting a warning risks false PASS.
+        if (prefix.startswith(("warning", "warn:", "[warn]", "[warning]",
+                               "info:", "[info]", "note:", "debug:"))
+                or re.search(r"\b(?:warn(?:ing)?|info|note|debug|trace|notice)\b",
+                             diagnostic_text)):
             continue
         if (not any(word in diagnostic_text for word in nonfailure)
                 and any(key in diagnostic_text for key in expected)
@@ -1187,8 +1202,11 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     survivor_before=tuple(file_identity(teammate/name,teammate)
                           for name in survivor_paths)
     survivor_dir=teammate/".agents/skills/benchmark-note"
-    survivor_dir_before=directory_identity(survivor_dir,teammate)
-    if (any(x is None for x in survivor_before) or survivor_dir_before is None
+    survivor_dirs=(survivor_dir, survivor_dir/"references")
+    survivor_dirs_before=tuple(directory_identity(p,teammate,with_entries=True)
+                               for p in survivor_dirs)
+    if (any(x is None for x in survivor_before)
+            or any(x is None for x in survivor_dirs_before)
             or any(observed_file(teammate/name,teammate) !=
                    expected[name.removeprefix(".agents/skills/benchmark-note/")]
                    for name in survivor_paths)):
@@ -1240,7 +1258,8 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     survivor_after=tuple(file_identity(teammate/name,teammate)
                          for name in survivor_paths)
     survivor_identity_intact=(survivor_before==survivor_after
-                             and directory_identity(survivor_dir,teammate)==survivor_dir_before)
+                             and tuple(directory_identity(p,teammate,with_entries=True)
+                                       for p in survivor_dirs)==survivor_dirs_before)
     survivor_intact=(survivor_identity_intact and
                      all(observed_file(teammate/name,teammate) ==
                          expected[name.removeprefix(".agents/skills/benchmark-note/")]
