@@ -92,14 +92,6 @@ export function skillDetailRoute(skill: SkillListing) {
   };
 }
 
-export function externalListingUrl(value: string): string | undefined {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && !url.username && !url.password ? url.href : undefined;
-  } catch {
-    return undefined;
-  }
-}
 function supportedSkillName(name: string): boolean {
   return [...name].length <= 64 && /^[\p{Ll}\p{N}]+(?:-[\p{Ll}\p{N}]+)*$/u.test(name);
 }
