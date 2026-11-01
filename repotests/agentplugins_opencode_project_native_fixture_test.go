@@ -217,14 +217,21 @@ func (f *openCodeProjectFixture) command(t *testing.T, class, label, exe, cwd st
 	f.keep(t, errName, result.Stderr)
 	digest := func(body []byte) string { sum := sha256.Sum256(body); return hex.EncodeToString(sum[:]) }
 	f.records = append(f.records, map[string]any{"class": class, "label": label, "argv": append([]string{exe}, args...), "cwd": cwd, "exit": result.Exit, "error": result.Error, "error_kind": result.ErrorKind, "deadline": result.Deadline, "stdout_limit": result.StdoutLimit, "stderr_limit": result.StderrLimit, "elapsed_ms": result.ElapsedMS, "stdout_file": outName, "stderr_file": errName, "stdout_bytes": len(result.Stdout), "stderr_bytes": len(result.Stderr), "stdout_sha256": digest(result.Stdout), "stderr_sha256": digest(result.Stderr), "recorder_before": before, "recorder_after": after})
-	// The pinned V2 skill API is the only lane allowed to initiate an MCP
-	// transport attempt. Its requests were independently bounded and checked
-	// by skillsV2. Other native/UAP/git commands must leave those counters
-	// unchanged, rather than falsely requiring their accumulated total to
-	// return to zero. V1 retains its exact zero-traffic contract.
+	// V2's MCP connection attempts can retry asynchronously after the
+	// native skill subprocess has exited. Attribute only what was actually
+	// observed: every request must match one of the fixture's exact paths and
+	// approved POST method, and the total remains bounded across the entire
+	// lifecycle. A passing UAP command is not proof of zero network activity.
+	// V1 retains its original strict zero-contact contract.
 	v2 := os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") == "2.2.5"
-	if before != after || (!v2 && before != [2]int64{}) ||
-		f.recorder.unexpected.Load() != 0 ||
+	unexpectedTraffic := f.recorder.unexpected.Load() != 0
+	if v2 {
+		unexpectedTraffic = unexpectedTraffic || after[0] < before[0] || after[1] < before[1] ||
+			after[0] > 128 || after[1] > 128
+	} else {
+		unexpectedTraffic = unexpectedTraffic || before != [2]int64{} || after != before
+	}
+	if unexpectedTraffic ||
 		projectNativeCaptureAdmission(result, class == "uap" && label == "repeat-remove-A") != nil {
 		f.failed = true
 		t.Fatal("child deadline/output limit or unexpected MCP connection; see bounded evidence")
