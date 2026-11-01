@@ -115,7 +115,7 @@ func TestPublisherIPRefusesLocalReservedAndMappedAddresses(t *testing.T) {
 		"64:ff9b::a00:1", "64:ff9b:1::1", "2001::1", "2001:10::1",
 		"::127.0.0.1", "::169.254.169.254", "::ffff:0:169.254.169.254",
 		"2002:7f00:1::1", "2002:a9fe:a9fe::1", "100::1", "2001:2::1",
-		"3fff::1", "5f00::1",
+		"3fff::1", "5f00::1", "fec0::1",
 	} {
 		if publicPublisherIP(net.ParseIP(candidate)) {
 			t.Fatalf("accepted unsafe destination %s", candidate)
