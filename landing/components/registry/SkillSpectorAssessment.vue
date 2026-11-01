@@ -72,33 +72,36 @@ const label = computed(() => {
       props.scope === 'plugin' && !assessment.value.inventoryKnown
         ? 'selectionScanned'
         : 'scanComplete';
-  // The total is only meaningful for known plugin inventories. Avoid an
-  // alarming "0 of 1 checked" headline for a single incomplete scan.
-  if (
-    !legacy.value &&
-    key === 'incomplete' &&
-    props.scope === 'plugin' &&
-    assessment.value.inventoryKnown &&
-    (assessment.value.fullyChecked ?? 0) > 0 &&
-    (assessment.value.fullyChecked ?? 0) < (assessment.value.selected ?? 0) &&
-    (assessment.value.selected ?? 0) > 1
-  )
-    return t('registryUi.skillSpector.coverageProgress', {
-      checked: n(assessment.value.fullyChecked ?? 0),
-      total: n(assessment.value.selected ?? 0),
-    });
+  // Partial scan results count as scanned, but never as fully analyzed.
+  const outcomes = assessment.value.outcomes;
+  const scanned = (outcomes?.complete ?? 0) + (outcomes?.limited ?? 0);
+  if (!legacy.value && key === 'incomplete' && outcomes?.limited && !outcomes.failed) {
+    if (
+      props.scope === 'plugin' &&
+      assessment.value.inventoryKnown &&
+      (assessment.value.selected ?? 0) > 1
+    )
+      return t('registryUi.skillSpector.coverageProgress', {
+        checked: n(scanned),
+        total: n(assessment.value.selected ?? 0),
+        limited: n(outcomes.limited),
+      });
+    if (!outcomes.unscanned) return t('registryUi.skillSpector.outcomelimited');
+  }
   return t(`registryUi.skillSpector.${key}`);
 });
-const fullyChecked = computed(() =>
-  assessment.value.selected ? assessment.value.fullyChecked : undefined,
+const scannedSkills = computed(() =>
+  assessment.value.selected
+    ? assessment.value.outcomes
+      ? assessment.value.outcomes.complete + assessment.value.outcomes.limited
+      : assessment.value.fullyChecked
+    : undefined,
 );
 const findingsIncomplete = computed(() =>
   assessment.value.records.some(hasIncompleteSkillSpectorFindings),
 );
 const coverageRows = computed(() =>
-  Object.entries(assessment.value.outcomes ?? {}).filter(
-    ([outcome, count]) => outcome !== 'complete' && count > 0,
-  ),
+  Object.entries(assessment.value.outcomes ?? {}).filter(([, count]) => count > 0),
 );
 const retryRows = computed(() =>
   Object.entries(assessment.value.retries ?? {}).filter(([, count]) => count > 0),
@@ -236,12 +239,12 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
         >
           {{ t('registryUi.skillSpector.retryLoad') }}
         </button>
-        <p v-if="fullyChecked !== undefined">
+        <p v-if="scannedSkills !== undefined">
           {{
             t(
               `registryUi.skillSpector.${assessment.inventoryKnown ? 'fullyChecked' : 'selectedFullyChecked'}`,
               {
-                checked: n(fullyChecked),
+                checked: n(scannedSkills),
                 total: n(assessment.selected ?? 0),
               },
             )
@@ -249,7 +252,9 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
         </p>
         <dl v-if="coverageRows.length" class="skillspector__outcomes">
           <div v-for="[outcome, count] in coverageRows" :key="outcome">
-            <dt>{{ t(`registryUi.skillSpector.outcome${outcome}`) }}</dt>
+            <dt>{{
+              t(`registryUi.skillSpector.${outcome === 'complete' ? 'scanComplete' : `outcome${outcome}`}`)
+            }}</dt>
             <dd>{{ n(count) }}</dd>
           </div>
         </dl>

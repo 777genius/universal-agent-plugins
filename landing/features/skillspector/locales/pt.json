@@ -8,7 +8,7 @@
       "notChecked": "Não verificado",
       "noFindings": "Nenhum resultado",
       "findingsCount": "Resultados: {count}",
-      "partial": "Verificação incompleta",
+      "partial": "Verificação com limitações",
       "error": "Não foi possível verificar",
       "detailsFor": "Detalhes do SkillSpector para {name}",
       "pluginScope": "Escopo: arquivos de Skills deste plugin. O SkillSpector não verifica os outros componentes do plugin.",
@@ -19,7 +19,7 @@
       "scanner": "Apenas verificações estáticas · SkillSpector {version}",
       "disclaimer": "Este relatório abrange apenas os arquivos de Skills indicados na revisão registrada. Ele não executa código nem garante segurança.",
       "unverified": "A revisão atual deste item não foi verificada.",
-      "incomplete": "Verificação incompleta",
+      "incomplete": "Verificação com limitações",
       "source": "Arquivos de origem",
       "findings": "Resultados",
       "errors": "Erros de verificação",
@@ -39,7 +39,7 @@
       "confirmedMaterialIssue": "Problema substancial confirmado",
       "stale": "Verificação anterior",
       "unsupported": "Não verificado",
-      "fullyChecked": "Skills totalmente verificadas: {checked} de {total}",
+      "fullyChecked": "Skills analisadas: {checked} de {total}",
       "installAdvice": "Antes de instalar",
       "adviceConfirmed": "Um problema substancial foi confirmado. Revise as evidências e a correção antes de instalar.",
       "adviceReview": "Revise os sinais e seu contexto antes de instalar. Os achados automáticos ainda não foram confirmados por um revisor.",
@@ -68,7 +68,7 @@
       "acceptedSignal": "Sinal aceito",
       "classificationExplanation": "Esta classificação segue uma regra específica do registro e não constitui uma auditoria de segurança humana.",
       "limitedGroups": "O relatório publicado contém apenas os grupos exibidos. O total de achados distintos é desconhecido.",
-      "selectedFullyChecked": "Skills selecionadas totalmente verificadas: {checked} de {total}",
+      "selectedFullyChecked": "Skills selecionadas analisadas: {checked} de {total}",
       "skillRemoved": "O arquivo de habilidade verificado anteriormente foi removido na nova revisão examinada. O relatório anterior permanece como histórico; nenhum conteúdo atual foi verificado.",
       "acquisitionTransferLimit": "A obtenção do código atingiu o limite de transferência deste perfil. Os arquivos não obtidos não foram inspecionados.",
       "loadingAdvice": "SkillSpector está carregando. A cobertura é desconhecida; revise o código antes de instalar.",
@@ -96,7 +96,7 @@
       "scanComplete": "Análise concluída",
       "selectionScanned": "Skills selecionados analisados",
       "retryLoad": "Tentar carregar novamente",
-      "coverageProgress": "Totalmente verificados: {checked}/{total}"
+      "coverageProgress": "{checked}/{total} analisadas · {limited} com limitações"
     }
   }
 }

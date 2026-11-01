@@ -8,7 +8,7 @@
       "notChecked": "未检查",
       "noFindings": "未发现问题",
       "findingsCount": "发现问题：{count}",
-      "partial": "检查未完成",
+      "partial": "检查存在限制",
       "error": "无法完成检查",
       "detailsFor": "{name} 的 SkillSpector 详情",
       "pluginScope": "检查范围：此插件中的技能文件。SkillSpector 不检查插件的其他组件。",
@@ -19,7 +19,7 @@
       "scanner": "仅静态检查 · SkillSpector {version}",
       "disclaimer": "此报告仅涵盖所记录修订版本中的指定技能文件。它不会运行代码，也不保证安全。",
       "unverified": "此条目的当前修订版本尚未验证。",
-      "incomplete": "检查未完成",
+      "incomplete": "检查存在限制",
       "source": "源文件",
       "findings": "发现的问题",
       "errors": "检查错误",
@@ -39,7 +39,7 @@
       "confirmedMaterialIssue": "已确认实质问题",
       "stale": "此前的检查",
       "unsupported": "未检查",
-      "fullyChecked": "已完整检查的技能：{checked} / {total}",
+      "fullyChecked": "已扫描技能：{checked} / {total}",
       "installAdvice": "安装前须知",
       "adviceConfirmed": "已确认存在实质问题。安装前请查看证据及修复方法。",
       "adviceReview": "安装前请查看所报告的信号及其上下文。自动发现项尚未经人工确认。",
@@ -68,7 +68,7 @@
       "acceptedSignal": "已接受的信号",
       "classificationExplanation": "此分类基于严格匹配的注册表规则，并非人工安全审计。",
       "limitedGroups": "已发布的报告仅包含显示的分组。不同发现项的总数未知。",
-      "selectedFullyChecked": "已完整检查的所选技能：{checked} / {total}",
+      "selectedFullyChecked": "已扫描所选技能：{checked} / {total}",
       "skillRemoved": "先前检查的技能文件已在新检查的源代码版本中删除。旧报告作为历史记录保留；尚未检查当前内容。",
       "acquisitionTransferLimit": "获取源文件时已达到此扫描配置的传输限制。未获取的文件未被检查。",
       "loadingAdvice": "SkillSpector 正在加载。检查覆盖范围未知；安装前请审查源代码。",
@@ -96,7 +96,7 @@
       "scanComplete": "扫描完成",
       "selectionScanned": "已扫描选定技能",
       "retryLoad": "重新加载",
-      "coverageProgress": "完全检查：{checked}/{total}"
+      "coverageProgress": "已扫描 {checked}/{total} · {limited} 项有限制"
     }
   }
 }

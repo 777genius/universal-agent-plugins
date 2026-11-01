@@ -556,30 +556,37 @@ try {
       // Keep assertions at Playwright's ordinary 5-second budget.
       await expect(panel).toHaveClass(new RegExp(`skillspector--${assessment.status}(?:\\s|$)`));
       const summary = panel.locator(':scope > summary');
-      const fullyChecked = t('fullyChecked', {
-        checked: new Intl.NumberFormat(locale).format(assessment.fullyChecked),
+      // Keep the actual fully-checked count in the evidence, while the card
+      // reports the number scanned with explicit limited coverage.
+      const outcomes = assessment.outcomes;
+      const scanned = (outcomes?.complete ?? 0) + (outcomes?.limited ?? 0);
+      const scannedLabel = t('fullyChecked', {
+        checked: new Intl.NumberFormat(locale).format(scanned),
         total: new Intl.NumberFormat(locale).format(assessment.selected),
       });
       await expect(summary).toContainText(t('title'));
-      // The published card now shows actual progress when a known plugin
-      // inventory contains both complete and incomplete Skill scans.
-      // Match that presentation precisely; never interpret it as full coverage.
       const showProgress =
         report.schema_version === 3 &&
         !report.records.some((record) => record.legacy_format) &&
         assessment.status === 'incomplete' &&
         assessment.inventoryKnown &&
-        (assessment.fullyChecked ?? 0) > 0 &&
-        (assessment.fullyChecked ?? 0) < (assessment.selected ?? 0) &&
+        (outcomes?.limited ?? 0) > 0 &&
+        (outcomes?.failed ?? 0) === 0 &&
         (assessment.selected ?? 0) > 1;
       const expectedSummary = showProgress
         ? t('coverageProgress', {
-            checked: new Intl.NumberFormat(locale).format(assessment.fullyChecked),
+            checked: new Intl.NumberFormat(locale).format(scanned),
             total: new Intl.NumberFormat(locale).format(assessment.selected),
+            limited: new Intl.NumberFormat(locale).format(outcomes.limited),
           })
-        : t(assessment.status === 'noStaticFindings' ? 'scanComplete' : assessment.status);
+        : assessment.status === 'incomplete' &&
+            (outcomes?.limited ?? 0) > 0 &&
+            (outcomes?.failed ?? 0) === 0 &&
+            (outcomes?.unscanned ?? 0) === 0
+          ? t('outcomelimited')
+          : t(assessment.status === 'noStaticFindings' ? 'scanComplete' : assessment.status);
       await expect(summary).toContainText(expectedSummary);
-      await expect(summary).not.toContainText(fullyChecked);
+      await expect(summary).not.toContainText(scannedLabel);
       await expect(panel.locator('.skillspector__details')).toHaveCount(0);
       await summary.focus();
       await page.keyboard.press('Enter');
@@ -596,15 +603,13 @@ try {
         ],
       );
       await expect(panel.locator('.skillspector__advice')).toContainText(t('installAdvice'));
-      await expect(panel.locator('.skillspector__advice')).toContainText(fullyChecked);
-      const outcomes = Object.entries(assessment.outcomes).filter(
-        ([outcome, count]) => outcome !== 'complete' && count > 0,
-      );
+      await expect(panel.locator('.skillspector__advice')).toContainText(scannedLabel);
+      const outcomeRows = Object.entries(assessment.outcomes).filter(([, count]) => count > 0);
       await expect(panel.locator('.skillspector__outcomes dt')).toHaveText(
-        outcomes.map(([outcome]) => t(`outcome${outcome}`)),
+        outcomeRows.map(([outcome]) => t(outcome === 'complete' ? 'scanComplete' : `outcome${outcome}`)),
       );
       await expect(panel.locator('.skillspector__outcomes dd')).toHaveText(
-        outcomes.map(([, count]) => new Intl.NumberFormat(locale).format(count)),
+        outcomeRows.map(([, count]) => new Intl.NumberFormat(locale).format(count)),
       );
       await expect(panel.locator('.skillspector__signals')).toContainText(t('signalExplanation'));
       const technicalRecords = await panel

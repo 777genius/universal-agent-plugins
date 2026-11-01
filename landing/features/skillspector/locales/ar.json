@@ -8,7 +8,7 @@
       "notChecked": "لم يُفحص",
       "noFindings": "لا توجد ملاحظات",
       "findingsCount": "الملاحظات: {count}",
-      "partial": "فحص غير مكتمل",
+      "partial": "فحص مع قيود",
       "error": "تعذّر الفحص",
       "detailsFor": "تفاصيل SkillSpector لـ {name}",
       "pluginScope": "نطاق الفحص: ملفات المهارات في هذه الإضافة. لا يفحص SkillSpector مكونات الإضافة الأخرى.",
@@ -19,7 +19,7 @@
       "scanner": "فحوص ثابتة فقط · SkillSpector {version}",
       "disclaimer": "يغطي هذا التقرير ملفات المهارات المدرجة فقط في المراجعة المسجلة. لا يشغّل الشيفرة ولا يضمن الأمان.",
       "unverified": "لم يتم التحقق من المراجعة الحالية لهذا العنصر.",
-      "incomplete": "فحص غير مكتمل",
+      "incomplete": "فحص مع قيود",
       "source": "ملفات المصدر",
       "findings": "الملاحظات",
       "errors": "أخطاء الفحص",
@@ -39,7 +39,7 @@
       "confirmedMaterialIssue": "مشكلة جوهرية مؤكدة",
       "stale": "فحص سابق",
       "unsupported": "لم يُفحص",
-      "fullyChecked": "المهارات المفحوصة بالكامل: {checked} من {total}",
+      "fullyChecked": "المهارات المفحوصة: {checked} من {total}",
       "installAdvice": "قبل التثبيت",
       "adviceConfirmed": "تم تأكيد مشكلة جوهرية. راجع الأدلة والمعالجة قبل التثبيت.",
       "adviceReview": "راجع الإشارات وسياقها قبل التثبيت. لم يؤكد مراجع النتائج الآلية بعد.",
@@ -68,7 +68,7 @@
       "acceptedSignal": "إشارة مقبولة",
       "classificationExplanation": "يستند هذا التصنيف إلى قاعدة مطابقة دقيقة في السجل ولا يمثل تدقيقا أمنيا بشريا.",
       "limitedGroups": "يحتوي التقرير المنشور على المجموعات المعروضة فقط. العدد الإجمالي للنتائج المختلفة غير معروف.",
-      "selectedFullyChecked": "المهارات المحددة المفحوصة بالكامل: {checked} من {total}",
+      "selectedFullyChecked": "المهارات المحددة المفحوصة: {checked} من {total}",
       "skillRemoved": "تم حذف ملف المهارة المفحوص سابقا في مراجعة المصدر الجديدة التي جرى فحصها. يبقى التقرير القديم كسجل تاريخي؛ ولم يتم فحص أي محتوى حالي.",
       "acquisitionTransferLimit": "بلغ جلب المصدر حد النقل لملف الفحص هذا. لم يتم فحص الملفات التي لم يتم جلبها.",
       "loadingAdvice": "جارٍ تحميل SkillSpector. التغطية غير معروفة؛ راجع المصدر قبل التثبيت.",
@@ -96,7 +96,7 @@
       "scanComplete": "اكتمل الفحص",
       "selectionScanned": "فُحصت المهارات المحددة",
       "retryLoad": "إعادة تحميل التقرير",
-      "coverageProgress": "فُحص بالكامل {checked} من أصل {total}"
+      "coverageProgress": "فُحصت {checked}/{total} · {limited} بقيود"
     }
   }
 }
