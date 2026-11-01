@@ -44,10 +44,9 @@
       "unsupportedName": "Direct install is not available for this listing. Review the GitHub source.",
       "collectionShown": "Showing {count} of {total} in this collection",
       "headingPrefix": "Find your",
-      "viewListing": "View original listing",
       "manualSkillSelection": "Select the exact Skill in the installer; this catalog name is not verified.",
       "publisherSource": "Publisher source",
-      "invalidPublisherName": "The publisher requires an exact Skill name. Check the original listing.",
+      "invalidPublisherName": "An exact Skill name is needed. Check the publisher's source.",
       "detail": {
         "breadcrumb": "Skill navigation",
         "skill": "Agent Skill",
@@ -59,13 +58,15 @@
         "prompt": "Prompt",
         "promptText": "Install this Skill with Universal Agent Plugins. Review the source and the planned changes before running the following command:\n{command}",
         "exactNameUnavailable": "The exact install selector could not be validated. Check the original listing before installing.",
-        "documentNotice": "The catalog currently provides source and installation metadata, but not verified SKILL.md contents. Read the full instructions on the original listing before installation.",
-        "readInstructions": "Read SKILL.md on the original listing",
         "security": "Security checks",
         "installs": "Installs",
         "source": "Source",
-        "listing": "Original listing",
-        "metricsNotice": "Install counts are reported by the external directory, not independently verified."
+        "metricsNotice": "Install counts are reported by the external directory, not independently verified.",
+        "loadingDocument": "Loading source instructions…",
+        "sourceDocumentNotice": "Published source instructions · unverified content. Review before using.",
+        "documentUnavailable": "The publisher's SKILL.md could not be loaded. You can inspect its source directly.",
+        "viewPublisher": "View publisher source",
+        "revision": "Source revision"
       }
     },
     "directoryPage": {
