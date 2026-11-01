@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/pi-project-native.yml'
       - 'scripts/pi_project_native_e2e.py'
+      - 'scripts/pi_project_components_native_e2e.py'
       - 'install/integrationctl/agentplugins/clients/pi/**'
       - 'install/integrationctl/agentplugins/clients/all/registry.go'
       - 'install/integrationctl/agentplugins/domain/clients.go'
@@ -64,6 +65,8 @@ jobs:
           from pathlib import Path
           source = Path('scripts/pi_project_native_e2e.py').read_text(encoding='utf8')
           compile(source, 'scripts/pi_project_native_e2e.py', 'exec')
+          components = Path('scripts/pi_project_components_native_e2e.py').read_text(encoding='utf8')
+          compile(components, 'scripts/pi_project_components_native_e2e.py', 'exec')
           PY
       - name: Run genuine pinned native Pi project trust and A/B lifecycle
         shell: bash
@@ -82,3 +85,20 @@ jobs:
           path: ${{ runner.temp }}/pi-project-native-evidence/
           retention-days: 14
           if-no-files-found: error
+      - name: Run real Pi project Skills discovery and MCP stdio handshake
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNNER_ENVIRONMENT: github-hosted
+        run: |
+          python3 scripts/pi_project_components_native_e2e.py \
+            '${{ matrix.target }}' \
+            '${{ runner.temp }}/pi-project-components-native-evidence'
+      - name: Upload Pi Skills/MCP evidence including failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: pi-project-components-${{ matrix.target }}
+          path: ${{ runner.temp }}/pi-project-components-native-evidence/
+          retention-days: 14
+          if-no-files-found: ignore
