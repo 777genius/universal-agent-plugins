@@ -375,12 +375,31 @@ img {
   color: var(--primary-bright);
 }
 .hero-demo-video img,
-.hero-demo-video iframe {
+.hero-demo-video iframe,
+.hero-demo-video mux-player,
+.hero-demo-video__player,
+.hero-demo-video__player-host {
   width: 100%;
   height: 100%;
   display: block;
   border: 0;
   object-fit: cover;
+}
+.hero-demo-video img {
+  filter: blur(2px);
+  transform: scale(1.025);
+}
+.hero-demo-video:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+}
+.hero-demo-video:fullscreen .hero-demo-video__player {
+  width: 100%;
+  height: 100%;
 }
 .hero-demo-video button {
   position: absolute;
@@ -395,8 +414,8 @@ img {
   color: var(--primary);
   background: rgba(4, 7, 15, 0.34);
   cursor: pointer;
-  // Triple the original 18px label at 480px; shrink proportionally on mobile.
-  font-size: 11.25cqw;
+  // One sixth smaller than the previous label, retaining responsive containment.
+  font-size: 9.375cqw;
   line-height: 1.1;
   font-weight: 750;
 }
