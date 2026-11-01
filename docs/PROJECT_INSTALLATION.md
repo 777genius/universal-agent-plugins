@@ -50,7 +50,9 @@ components and its user-scope package eligibility already passes. Grok Build,
 Qoder and Windsurf are limited to Skills-only project packages in this catalog
 route. Kiro, VS Code, Pi and ChatGPT are not enabled by this bridge. This is
 not a newly signed project-scope Directory policy and does not change the
-behavior of an existing user-scope alias.
+behavior of an existing user-scope alias. Copy the pinned direct-source command,
+not the catalog's short user-only alias: `add context7 --scope project` is not
+an equivalent installation and may be refused by Directory v1.
 
 From the exact project root, the generated command takes the form:
 

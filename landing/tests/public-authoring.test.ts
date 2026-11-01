@@ -127,6 +127,30 @@ test('quickstarts use released installer commands and link source authoring sepa
   }
 });
 
+test('project examples require pinned complete sources, not user-only Directory v1 aliases', () => {
+  const paths = [
+    'README.md',
+    'npm/agentplugins/README.md',
+    ...locales.flatMap((locale) => [
+      'website/source/' + locale + '/guide/quickstart.md',
+      'website/source/' + locale + '/use/install.md',
+    ]),
+  ];
+  for (const path of paths) {
+    const source = read(path).split('<!-- locale-historical-source:start')[0];
+    const chunks = source.split('```');
+    const projectBlocks = chunks.filter((chunk) =>
+      (chunk.startsWith('sh\n') || chunk.startsWith('bash\n')) && chunk.includes('--scope project'));
+    assert.ok(projectBlocks.length, path + ': missing project command');
+    assert.ok(projectBlocks.some((chunk) =>
+      chunk.includes('github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH')),
+      path + ': missing exact pinned project source');
+    for (const chunk of projectBlocks) {
+      assert.ok(!chunk.includes('add context7'), path + ': user-only alias offered for project');
+    }
+  }
+});
+
 test('README retains the available installer and canonical client limitations', () => {
   const text = read('README.md');
   assert.ok(text.includes('## Use plugins'));

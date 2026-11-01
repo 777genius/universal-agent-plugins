@@ -201,13 +201,18 @@ picker and saved dependencies are included.
 
 ## Install for one project
 
-**Released in CLI 0.1.93:** select project scope explicitly. Replace
-`/path/to/project` with an existing project directory. The first command saves
-a registry dependency; the second restores its recorded lock. For the separate
-Skills command, replace `owner/repository` with a real Skills source:
+**Released in CLI 0.1.93:** explicit project scope accepts complete package
+sources. Signed Directory v1 registry aliases (for example `context7`) remain
+**user-only**: for a compatible reviewed package, copy the exact pinned Git
+source from the [catalog](https://universal-agent-plugins.com/plugins/) instead
+of reusing its registry alias. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` and
+`PACKAGE_PATH` with the selected source (omit `//PACKAGE_PATH` for a package at
+the repository root), and `/path/to/project` with an existing directory. The
+first command saves the direct-source dependency and its lock; the second
+restores it. For standalone Skills, replace `owner/repository` with a real source:
 
 ```sh
-agentplugins add context7 --target cursor \
+agentplugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex \
   --scope project --project-root /path/to/project
 agentplugins install --locked --scope project --project-root /path/to/project
 agentplugins skills add owner/repository --ui \
