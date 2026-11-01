@@ -162,8 +162,7 @@ for (const mobile of [false, true]) {
       expect(sizes.body).toBeGreaterThanOrEqual(13);
       expect(sizes.code).toBeGreaterThanOrEqual(12);
       expect(sizes.height).toBeGreaterThanOrEqual(mobile ? 44 : 32);
-      await details.locator(':scope > summary').focus();
-      await page.keyboard.press('Space');
+      await details.locator('.skillspector__dialog-close').click();
       await expect(details).not.toHaveAttribute('open');
       await card.getByRole('button', { name: 'Install I18n State 00', exact: true }).click();
       await expect(card.locator('.plugin-card__install-panel pre')).toContainText(
