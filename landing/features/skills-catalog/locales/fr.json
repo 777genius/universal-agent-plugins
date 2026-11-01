@@ -57,7 +57,7 @@
         "command": "Commande",
         "prompt": "Prompt",
         "promptText": "Installe ce Skill avec Universal Agent Plugins. Vérifie la source et les modifications avant d’exécuter :\n{command}",
-        "exactNameUnavailable": "Le nom exact pour l’installation n’a pas pu être vérifié. Consultez la fiche d’origine.",
+        "exactNameUnavailable": "Le nom exact pour l'installation n'a pas pu être vérifié. Consultez la source de l'éditeur.",
         "security": "Contrôles de sécurité",
         "installs": "Installations",
         "source": "Source",
