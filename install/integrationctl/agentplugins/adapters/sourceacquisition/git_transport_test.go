@@ -226,7 +226,7 @@ func TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL(t *testing.T) {
 	}
 	nativeFixtureGit(t, work, "add", ".gitattributes", "payload", "explicit.txt")
 	nativeFixtureGit(t, work, "-c", "user.name=777genius",
-		"-c", "user.email=iliyazelenkog@gmail.com",
+		"-c", "user.email=fixture@example.invalid",
 		"commit", "--quiet", "-m", "test: textual attribute source")
 	commit := nativeFixtureGit(t, work, "rev-parse", "HEAD")
 	nativeFixtureGit(t, work, "push", "--quiet", filepath.Join(root, "repo.git"), "HEAD")
