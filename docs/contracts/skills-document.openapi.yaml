@@ -19,8 +19,11 @@ paths:
         Git source reader; HTTPS websites use only the publisher's declared
         complete-file index and download SKILL.md. All responses are read-only.
         Browser CORS permits only explicitly configured origins, no credentials.
-        At most one source request is active per process, with burst two and
-        refill one per five seconds. Successful source responses cache ten
+        Up to four source requests may be active per process, with a single
+        slot per client, burst four and refill one per five seconds.
+        A client may start a fresh preview at most once every twenty seconds.
+        Failed source responses cool down thirty seconds. Successful source
+        responses cache ten
         minutes, up to 128 entries, and include the source identity. HTTPS
         destinations are IP-address-screened and pinned; redirects are refused.
         Errors never expose raw upstream content.
