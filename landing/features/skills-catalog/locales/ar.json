@@ -57,7 +57,7 @@
         "command": "الأمر",
         "prompt": "الموجه",
         "promptText": "ثبّت هذه المهارة باستخدام Universal Agent Plugins. راجع المصدر والتغييرات قبل تشغيل:\n{command}",
-        "exactNameUnavailable": "تعذّر التحقق من اسم التثبيت الدقيق. راجع الإدراج الأصلي.",
+        "exactNameUnavailable": "تعذّر التحقق من اسم التثبيت الدقيق. راجع مصدر الناشر.",
         "security": "فحوص الأمان",
         "installs": "التثبيتات",
         "source": "المصدر",
