@@ -39,8 +39,8 @@ func (w *openCodeV2BoundedStderr) Write(body []byte) (int, error) {
 	return incoming, nil
 }
 
-func (w *openCodeV2BoundedStderr) Len() int      { return w.data.Len() }
-func (w *openCodeV2BoundedStderr) Bytes() []byte { return w.data.Bytes() }
+func (w *openCodeV2BoundedStderr) Len() int       { return w.data.Len() }
+func (w *openCodeV2BoundedStderr) Bytes() []byte  { return w.data.Bytes() }
 func (w *openCodeV2BoundedStderr) String() string { return w.data.String() }
 
 // V2 removed "debug skill". Its official /api/skill endpoint exposes the
