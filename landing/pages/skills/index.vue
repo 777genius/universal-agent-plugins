@@ -228,7 +228,10 @@ useHead({
             <p v-if="documentLoading" role="status" class="skills-detail__hint">{{ t('registryUi.skills.detail.loadingDocument') }}</p>
             <template v-else-if="resolvedDocument?.status === 'resolved' && resolvedDocument.markdown">
               <p class="skills-detail__hint skills-detail__document-caption">{{ t('registryUi.skills.detail.sourceDocumentNotice') }}</p>
-              <SkillMarkdown :markdown="resolvedDocument.markdown" />
+              <SkillMarkdown
+                :markdown="resolvedDocument.markdown"
+                :raw-label="t('registryUi.skills.detail.rawDocument')"
+              />
             </template>
             <div v-else class="skills-detail__document-empty">
               <p>{{ t('registryUi.skills.detail.documentUnavailable') }}</p>
