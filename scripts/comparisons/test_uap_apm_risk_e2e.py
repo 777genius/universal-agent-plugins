@@ -278,6 +278,38 @@ class RiskOracleTests(unittest.TestCase):
             self.assertFalse(risk.graph_lock_matches(
                 project,"apm",risk.PARENT_V1,risk.CHILD_V1))
 
+    def test_Claude_profile_observer_admits_exact_APM_and_UAP_projection_only(self):
+        skill=b"---\nname: benchmark-note\ndescription: test\n---\nbody"
+        ref=b"exact reference"
+        expected={"SKILL.md":skill,"references/fixture.txt":ref}
+        with tempfile.TemporaryDirectory() as tmp:
+            profile=Path(tmp)
+            a=profile/"skills"/"apm-native"
+            u=profile/"skills"/"uap-physical"/".agentplugins-runtime"/"skills"/"benchmark-note"
+            for p in (a,u):
+                (p/"references").mkdir(parents=True)
+                (p/"SKILL.md").write_bytes(skill)
+                (p/"references"/"fixture.txt").write_bytes(ref)
+            apm=risk.profile_scan(profile,expected,product="apm")
+            uap=risk.profile_scan(profile,expected,product="uap")
+            self.assertEqual(set(apm),{"skills/apm-native"})
+            self.assertEqual(set(uap),{"skills/uap-physical"})
+            self.assertNotEqual(apm,uap)
+            (u/"SKILL.md").unlink()
+            (u/"SKILL.md").symlink_to(a/"SKILL.md")
+            self.assertFalse(risk.profile_scan(profile,expected,product="uap"))
+            self.assertEqual(set(risk.profile_scan(profile,expected,product="apm")),
+                             {"skills/apm-native"})
+
+    def test_risk_graph_fixtures_use_required_plugin_schema(self):
+        for part in ("child","parent"):
+            plugin=Path("tests/fixtures/uap_apm/risk_graph")/part/"plugin.json"
+            data=json.loads(plugin.read_text())
+            self.assertEqual(data["$schema"],
+                "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json")
+            self.assertEqual(data["name"],"risk-"+part)
+            self.assertNotIn("skills",data)
+
     def test_profile_observer_needs_skill_and_reference_and_no_symlink(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)

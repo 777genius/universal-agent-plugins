@@ -149,7 +149,7 @@ jobs:
             "$RUNNER_TEMP/apm-venv/bin/python" scripts/comparisons/uap_apm_risk_e2e.py \
             --uap "$RUNNER_TEMP/uap-bin/agentplugins" \
             --apm "$RUNNER_TEMP/apm-venv/bin/apm" \
-            --fixture-commit 73c417b0c845aebc5452e8d9c57d25d4eb2ae246 \
+            --fixture-commit 58e11fc3799361d5e05ef2468c62f846fff8d723 \
             --uap-source-sha ec85ee7d759944b9799e451c96bfc1859f9d5533 \
             --group "${{ matrix.group }}" --output "$output" "${args[@]}"
           cat "$output/report.md" >> "$GITHUB_STEP_SUMMARY"

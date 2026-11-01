@@ -29,10 +29,10 @@ SKILL = baseline.SKILL_PATH
 SKILL_SECOND = "tests/fixtures/uap_apm/skills/benchmark-secondary"
 PARENT = "tests/fixtures/uap_apm/risk_graph/parent"
 CHILD = "tests/fixtures/uap_apm/risk_graph/child"
-PARENT_V1 = "25bc7b7cc56f97761eaf76b00448e0c4ec4ee244"
-PARENT_V2 = "73c417b0c845aebc5452e8d9c57d25d4eb2ae246"
-CHILD_V1 = "ab81308e402e3ac64c3e1840088770d98a1b6245"
-CHILD_V2 = "fb96f0f4d1ef62c2ea3dfc11c1880380fe3737b2"
+PARENT_V1 = "c2bd373a06f1059f55ca1e22eeaaa3ac24e602bb"
+PARENT_V2 = "58e11fc3799361d5e05ef2468c62f846fff8d723"
+CHILD_V1 = "1f8759cf8a2c722627ac770828844168d50f2042"
+CHILD_V2 = "23b565afdec292963c82d0030eb087dfd4d24989"
 SOURCE = "https://github.com/777genius/universal-agent-plugins.git"
 GROUPS = {
     "cold-profile": ("R1_missing_receipts", "R2_claude_profiles"),
@@ -279,7 +279,7 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
             f"    - {REPO}/{SKILL}#{commit}\n"
         )
     initial = run(product, cli, project, root, env, commit=commit, target="claude")
-    admitted_skills = profile_scan(project / ".claude", expected)
+    admitted_skills = profile_scan(project / ".claude", expected, product=product)
     portable, capture_error = baseline.captured_portable(project, product)
     provenance = bool(portable) and capture_error is None and (
         baseline.portable_identity(portable, commit, product)
@@ -300,7 +300,9 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
     # The full measured destination is authoritative, not a guessed client
     # directory; changes in physical naming during restore are detected.
     physical = next(iter(admitted_skills))
-    owned = tuple(f".claude/{physical}/{name}" for name in baseline.EXPECTED_FILES)
+    nested = "/.agentplugins-runtime/skills/benchmark-note" if product == "uap" else ""
+    owned = tuple(f".claude/{physical}{nested}/{name}"
+                  for name in baseline.EXPECTED_FILES)
     fresh_root = root / "cold"
     fresh_env = baseline.isolated_env(fresh_root)
     committed, neighbor = baseline.make_project(fresh_root)
@@ -309,7 +311,7 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
     for name in owned:
         dest = committed / name
         dest.parent.mkdir(parents=True, exist_ok=True)
-        payload = name.removeprefix(f".claude/{physical}/")
+        payload = name.removeprefix(f".claude/{physical}{nested}/")
         dest.write_bytes(expected[payload])
     git("init", "-q", cwd=committed, env=fresh_env)
     git("add", "-A", cwd=committed, env=fresh_env)
@@ -359,7 +361,8 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
     identical = (all(before.values()) and before == after and preserved
                  and all(item is not None for item in before_identity)
                  and before_identity == after_identity
-                 and profile_scan(teammate / ".claude", expected) == admitted_skills)
+                 and profile_scan(teammate / ".claude", expected,
+                                  product=product) == admitted_skills)
     lock_intact = (before_error is None and after_error is None and
                    portable_before == portable_after and
                    all(value is not None for value in portable_meta_before.values()) and
@@ -413,8 +416,15 @@ def complete_command(command: dict) -> bool:
     return observed_command(command) and command.get("exit_code") == 0
 
 
-def profile_scan(root: Path, expected: dict[str, bytes]) -> dict[str, dict]:
-    """Admit only complete, ordinary Skill + reference bytes in one directory."""
+def profile_scan(root: Path, expected: dict[str, bytes], *,
+                 product: str = "apm") -> dict[str, dict]:
+    """Observe exact target delivery, never a cache or arbitrary nested Skill.
+
+    APM deploys native Skills directly. UAP's Claude adapter projects a
+    package whose Skill sits under .agentplugins-runtime/skills/<skill>.
+    """
+    if product not in ("uap", "apm"):
+        return {}
     folder = root / "skills"
     result: dict[str, dict] = {}
     if not folder.is_dir() or folder.is_symlink():
@@ -423,8 +433,10 @@ def profile_scan(root: Path, expected: dict[str, bytes]) -> dict[str, dict]:
         for subdir in sorted(folder.iterdir()):
             if subdir.is_symlink() or not subdir.is_dir():
                 continue
-            skill = observed_file(subdir / "SKILL.md", root)
-            reference = observed_file(subdir / "references/fixture.txt", root)
+            selected = (subdir / ".agentplugins-runtime" / "skills" / "benchmark-note"
+                        if product == "uap" else subdir)
+            skill = observed_file(selected / "SKILL.md", root)
+            reference = observed_file(selected / "references/fixture.txt", root)
             if skill == expected["SKILL.md"] and reference == expected["references/fixture.txt"]:
                 result[str(subdir.relative_to(root))] = {
                     "skill_sha256": h(skill),
@@ -632,6 +644,12 @@ def case_profiles(product: str, cli: str, root: Path, commit: str,
     for index, selected in enumerate((a, b, a)):
         active = dict(env, CLAUDE_CONFIG_DIR=str(selected))
         if product == "uap":
+            # UAP 0.1.95 binds one target per dependency environment.
+            # Each Claude profile therefore needs its own manager authority;
+            # do not reuse A's installation receipt to mutate B's root.
+            active["AGENTPLUGINS_HOME"] = str(
+                home / ("agentplugins-a" if selected == a else "agentplugins-b"))
+        if product == "uap":
             argv = [cli, "skills", "add", f"{REPO}@{commit}//{SKILL}",
                     "--target", "claude", "--scope", "user", "--no-ui",
                     "--yes", "--format", "json"]
@@ -642,11 +660,11 @@ def case_profiles(product: str, cli: str, root: Path, commit: str,
         command = baseline.run_process(argv, project, active, root)
         results.append({
             "phase": index, "selected": "A" if selected == a else "B",
-            "cmd": command, "a": profile_scan(a, expected),
-            "b": profile_scan(b, expected),
+            "cmd": command, "a": profile_scan(a, expected, product=product),
+            "b": profile_scan(b, expected, product=product),
             "a_snapshot": profile_snapshot(a),
             "b_snapshot": profile_snapshot(b),
-            "saved_source_matches": saved_profile_source_matches(product, env, commit),
+            "saved_source_matches": saved_profile_source_matches(product, active, commit),
             "foreign": all(
                 identity is not None and file_identity(path, home) == identity
                 for path, identity in foreign_before.items()),
@@ -690,6 +708,8 @@ def case_profiles(product: str, cli: str, root: Path, commit: str,
                    profile_snapshots_complete=snapshots_complete,
                    unselected_profiles_unchanged=no_cross_profile_change,
                    saved_source_matches=pinned_source,
+                   manager_state_topology=("one UAP_HOME per Claude profile"
+                                          if product=="uap" else "shared APM user manifest"),
                    selected_profile_other_files="NOT_RUN (new manager-controlled files not certified unchanged)",
                    selected_uninstall="NOT_RUN (needs separate qualified ownership)")
 
@@ -1022,10 +1042,14 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
         package=project / "package"
         package.mkdir()
         (package/"plugin.json").write_text(json.dumps({
-            "name":"risk-mcp", "version":"0.1.0", "mcpServers":"./mcp.json"})+"\n")
-        (package/"mcp.json").write_text(json.dumps({"mcpServers":{
-            name:{"command":command[0],"args":command[1:],
-                  "env":{MARKER:placeholder}}}})+"\n")
+            "$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name":"risk-mcp", "version":"0.1.0",
+            "description":"Disposable, inert MCP secret handling fixture."})+"\n")
+        (package/"mcp.json").write_text(json.dumps({
+            "$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+            "mcpServers":{
+                name:{"type":"stdio","command":command[0],"args":command[1:],
+                      "env":{MARKER:placeholder}}}})+"\n")
         argv=[cli,"add",str(package),"--target","codex","--scope","project",
               "--project-root",str(project),"--yes","--format","json"]
     else:
