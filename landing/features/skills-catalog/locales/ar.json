@@ -44,10 +44,9 @@
       "unsupportedName": "التثبيت المباشر غير متاح لهذا الإدراج. راجع المصدر على GitHub.",
       "collectionShown": "عرض {count} من {total} في هذه المجموعة",
       "headingPrefix": "اعثر على",
-      "viewListing": "عرض الإدراج الأصلي",
       "manualSkillSelection": "اختر المهارة الدقيقة في أداة التثبيت؛ اسمها الوارد في الفهرس غير مُتحقَّق منه.",
       "publisherSource": "مصدر الناشر",
-      "invalidPublisherName": "يتطلب الناشر اسم Skill دقيقًا. راجع الصفحة الأصلية.",
+      "invalidPublisherName": "يلزم اسم Skill الدقيق. راجع مصدر الناشر.",
       "detail": {
         "breadcrumb": "التنقل بين المهارات",
         "skill": "Agent Skill",
@@ -59,13 +58,15 @@
         "prompt": "الموجه",
         "promptText": "ثبّت هذه المهارة باستخدام Universal Agent Plugins. راجع المصدر والتغييرات قبل تشغيل:\n{command}",
         "exactNameUnavailable": "تعذّر التحقق من اسم التثبيت الدقيق. راجع الإدراج الأصلي.",
-        "documentNotice": "يوفر الدليل بيانات المصدر والتثبيت، لكنه لا يحتوي على محتوى SKILL.md متحقق منه. اقرأ التعليمات الأصلية قبل التثبيت.",
-        "readInstructions": "اقرأ SKILL.md في الصفحة الأصلية",
         "security": "فحوص الأمان",
         "installs": "التثبيتات",
         "source": "المصدر",
-        "listing": "الإدراج الأصلي",
-        "metricsNotice": "أعداد التثبيت من الدليل الخارجي ولم تُتحقق بشكل مستقل."
+        "metricsNotice": "أعداد التثبيت من الدليل الخارجي ولم تُتحقق بشكل مستقل.",
+        "loadingDocument": "جارٍ تحميل تعليمات المصدر…",
+        "sourceDocumentNotice": "تعليمات الناشر · المحتوى غير متحقق منه. راجعه قبل الاستخدام.",
+        "documentUnavailable": "تعذر تحميل SKILL.md من الناشر. يمكنك فحص المصدر مباشرة.",
+        "viewPublisher": "عرض مصدر الناشر",
+        "revision": "مراجعة المصدر"
       }
     },
     "directoryPage": {
