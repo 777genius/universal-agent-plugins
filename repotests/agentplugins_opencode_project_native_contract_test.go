@@ -118,7 +118,9 @@ func TestOpenCodeProjectV2NativeSourceInventoryBindsExactUserAndSelectedProject(
 	}
 	if err := openCodeProjectCheckConfig(actual, map[string]string{
 		"user": "http://127.0.0.1:9/USER", "managed": "http://127.0.0.1:9/PROJECT",
-	}, nil); err != nil { t.Fatal(err) }
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
 	for name, altered := range map[string][]any{
 		"missing-user": rows[1:],
 		"missing-project": rows[:2],
