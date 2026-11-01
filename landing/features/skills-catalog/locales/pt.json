@@ -44,10 +44,9 @@
       "unsupportedName": "A instalação direta não está disponível para esta listagem. Consulte a origem no GitHub.",
       "collectionShown": "Exibindo {count} de {total} nesta coleção",
       "headingPrefix": "Encontre",
-      "viewListing": "Ver listagem original",
       "manualSkillSelection": "Selecione a Skill exata no instalador; o nome do catálogo não foi verificado.",
       "publisherSource": "Fonte do editor",
-      "invalidPublisherName": "É necessário o nome exato da Skill. Confira a ficha original.",
+      "invalidPublisherName": "É necessário o nome exato da Skill. Confira a fonte do editor.",
       "detail": {
         "breadcrumb": "Navegação da Skill",
         "skill": "Agent Skill",
@@ -59,13 +58,15 @@
         "prompt": "Prompt",
         "promptText": "Instale esta Skill com Universal Agent Plugins. Revise a fonte e as alterações antes de executar:\n{command}",
         "exactNameUnavailable": "Não foi possível validar o nome exato para instalação. Veja a ficha original.",
-        "documentNotice": "O catálogo fornece metadados de origem e instalação, mas não o conteúdo verificado de SKILL.md. Leia as instruções na ficha original antes de instalar.",
-        "readInstructions": "Ler SKILL.md na ficha original",
         "security": "Verificações de segurança",
         "installs": "Instalações",
         "source": "Fonte",
-        "listing": "Ficha original",
-        "metricsNotice": "As contagens são fornecidas pelo catálogo externo e não foram verificadas independentemente."
+        "metricsNotice": "As contagens são fornecidas pelo catálogo externo e não foram verificadas independentemente.",
+        "loadingDocument": "Carregando instruções da fonte…",
+        "sourceDocumentNotice": "Instruções do editor · conteúdo não verificado. Revise antes de usar.",
+        "documentUnavailable": "Não foi possível carregar SKILL.md do editor. Você pode consultar a fonte diretamente.",
+        "viewPublisher": "Ver fonte do editor",
+        "revision": "Revisão da fonte"
       }
     },
     "directoryPage": {
