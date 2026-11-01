@@ -125,3 +125,50 @@ func TestPublisherIPRefusesLocalReservedAndMappedAddresses(t *testing.T) {
 		}
 	}
 }
+
+func TestDocumentPreviewPerClientAdmissionAndFailureCooldown(t *testing.T) {
+	handler, err := NewDocumentHandler(documentGitStub{}, &documentWebsiteStub{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := handler.(*documentHandler)
+	// A caller cannot hold multiple slots by changing the requested Skill.
+	if !h.admitDocument("203.0.113.1") || h.admitDocument("203.0.113.1") {
+		t.Fatal("same caller occupied more than one preview slot")
+	}
+	for _, other := range []string{"203.0.113.2", "203.0.113.3", "203.0.113.4"} {
+		if !h.admitDocument(other) {
+			t.Fatalf("available pool slot refused for %s", other)
+		}
+	}
+	if h.admitDocument("203.0.113.5") {
+		t.Fatal("bounded concurrency exceeded")
+	}
+	for _, client := range []string{"203.0.113.1", "203.0.113.2", "203.0.113.3", "203.0.113.4"} {
+		h.releaseDocument(client)
+	}
+	// The same caller must cool down even after its request releases a slot.
+	if h.admitDocument("203.0.113.1") {
+		t.Fatal("client can monopolize source requests")
+	}
+	key := "skills-sh:publisher.example:mail\x00mail"
+	h.rememberDocument(key, documentResponse{}, true)
+	if _, found, failed := h.lookupDocument(key); !found || !failed {
+		t.Fatal("failed source was not temporarily memoized")
+	}
+}
+
+func TestDocumentClientIdentityCannotBeSpoofedByForwardedHeader(t *testing.T) {
+	proxied := httptest.NewRequest(http.MethodGet, "/v1/skills/document", nil)
+	proxied.RemoteAddr = "127.0.0.1:23012"
+	proxied.Header.Set("X-UAP-Preview-Client", "198.51.100.25")
+	if got := documentClientKey(proxied); got != "198.51.100.25" {
+		t.Fatalf("proxy-provided client identity ignored: %s", got)
+	}
+	direct := httptest.NewRequest(http.MethodGet, "/v1/skills/document", nil)
+	direct.RemoteAddr = "198.51.100.35:23012"
+	direct.Header.Set("X-UAP-Preview-Client", "198.51.100.25")
+	if got := documentClientKey(direct); got != "198.51.100.35" {
+		t.Fatalf("untrusted peer spoofed client identity: %s", got)
+	}
+}
