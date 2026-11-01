@@ -201,11 +201,17 @@ def lock_validation_refused(command: dict, lock_name: str) -> bool:
         # Negative codes mean a terminating POSIX signal, not a normal refusal.
         return False
     expected = (lock_name.lower(), "lockfile")
-    error_tokens = ("invalid", "malform", "pars", "syntax", "corrupt",
-                    "reject", "error", "fail", "cannot", "unexpected")
+    # Parsing/success wording is not rejection evidence. Require a
+    # diagnostic of a failed lock validation, not an ambiguous stem.
+    error_tokens = ("invalid", "malformed", "parse error", "syntax error",
+                    "corrupt", "rejected", "failed to parse", "cannot parse",
+                    "unexpected token")
+    nonfailure = ("parsed successfully", "parse succeeded", "no error",
+                  "without error", "validation passed")
     for line in command.get("output_tail", "").lower().splitlines():
-        if any(key in line for key in expected) and any(
-                diagnostic in line for diagnostic in error_tokens):
+        if (not any(word in line for word in nonfailure)
+                and any(key in line for key in expected)
+                and any(diagnostic in line for diagnostic in error_tokens)):
             return True
     return False
 
