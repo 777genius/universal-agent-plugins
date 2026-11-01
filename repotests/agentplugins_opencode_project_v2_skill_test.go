@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/json"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -48,19 +47,11 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string) m
 		t.Fatal(err)
 	}
 	password := hex.EncodeToString(key)
-	// This invocation proves Skills, not MCP transport. Suppress the two
-	// known fixture remote MCP entries in the process-only V2 overlay so
-	// their initial connection attempts cannot masquerade as a skill result.
-	disabled := map[string]any{"type": "remote", "url": "http://127.0.0.1:9/disabled", "disabled": true}
-	overlay, err := json.Marshal(map[string]any{
-		"mcp": map[string]any{"servers": map[string]any{
-			"scope-marker": disabled, "uap-user-control": disabled,
-		}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	command.Env = append(f.env(), "OPENCODE_PASSWORD="+password, "OPENCODE_CONFIG_CONTENT="+string(overlay))
+	// V2 eagerly POSTs to configured MCP servers while the native skill API
+	// starts. Preserve the real layered project/user configuration; the
+	// loopback recorder verifies every attempted route, but a 503 response
+	// cannot qualify MCP initialize or tool execution.
+	command.Env = append(f.env(), "OPENCODE_PASSWORD="+password)
 	command.Stdout = io.Discard
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
@@ -133,8 +124,9 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string) m
 		"recorder_before": before, "recorder_after": f.recorder.counts(),
 		"native_observation": "official_V2_api_skill_not_file_inventory",
 	})
-	if before != [2]int64{} || f.recorder.counts() != [2]int64{} {
-		t.Fatal("V2 skill-only native observation unexpectedly contacted passive MCP probe")
+	after := f.recorder.counts()
+	if after[0] < before[0] || after[1] < before[1] || after[0] > 128 || after[1] > 128 || f.recorder.unexpected.Load() != 0 {
+		t.Fatal("native V2 startup accessed an unregistered MCP endpoint or exceeded its bound")
 	}
 	parsed, err := openCodeProjectV2Skills(body, project)
 	if err != nil {
