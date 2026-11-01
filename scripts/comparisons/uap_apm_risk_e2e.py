@@ -1127,7 +1127,17 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
             "wrong_arguments", "invalid_toml"):
         verdict="FAIL";reason="successful install did not materialize the exact requested MCP server"
     elif contract != "match":
-        verdict="BLOCKED";reason="requested MCP environment forwarding cannot be verified"
+        if product == "uap" and contract == "environment_forwarding_unverified":
+            # Agent Plugins 1.0 expands only PLUGIN_ROOT / PLUGIN_DATA.
+            # ${CANARY} is a literal portable value, NOT a credential ref.
+            # Codex env_vars is an additional native-specific capability.
+            # A safe, fully observed portable install must not be scored FAIL
+            # merely for not implementing undocumented secret interpolation.
+            verdict="UNSUPPORTED"
+            reason=("Agent Plugins 1.0 has no portable arbitrary-env credential "
+                    "reference; native Codex env_vars forwarding was not authored")
+        else:
+            verdict="BLOCKED";reason="requested MCP environment forwarding cannot be verified"
     else:
         # A process may have detached a writer and closed its output pipes.
         # One post-exit scan proves only a point-in-time absence, not
@@ -1138,6 +1148,8 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
     output = receipt(product,"R5_mcp_env_secret",verdict,reason=reason,
                      command=cmd,config_files=found,filesystem_scan=scan,
                      mcp_config_contract=contract,
+                     portable_credential_reference=("UNSUPPORTED" if product == "uap"
+                                                    else "APM-only fixture manifest"),
                      foreign_unchanged=protected, native_mcp_call="NOT_RUN")
     # Never serialize a synthetic secret to an Actions artifact, including
     # when the observed program happens to put it in a filename or log.
