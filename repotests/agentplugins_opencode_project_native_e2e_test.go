@@ -191,7 +191,15 @@ func openCodeProjectSameName(t *testing.T, f *openCodeProjectFixture) {
 	}
 	f.keepJSON(t, "same-name-winners.json", winners)
 	nativeAttempt(f.stages, "inline_precedence", "opencode-project-evidence.json")
-	inline, err := json.Marshal(map[string]any{"mcp": map[string]any{"scope-marker": map[string]any{"type": "remote", "url": f.recorder.url("INLINE"), "enabled": true}}})
+	inlineServer := map[string]any{"type": "remote", "url": f.recorder.url("INLINE"), "enabled": true}
+	inlineServers := map[string]any{"scope-marker": inlineServer}
+	inlineMCP := inlineServers
+	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") == "2.2.5" {
+		delete(inlineServer, "enabled")
+		inlineServer["disabled"] = false
+		inlineMCP = map[string]any{"servers": inlineServers}
+	}
+	inline, err := json.Marshal(map[string]any{"mcp": inlineMCP})
 	if err != nil {
 		t.Fatal(err)
 	}
