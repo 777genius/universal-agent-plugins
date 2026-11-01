@@ -45,7 +45,28 @@
       "collectionShown": "Mostrando {count} de {total} en esta colección",
       "headingPrefix": "Encuentra tus",
       "viewListing": "Ver ficha original",
-      "manualSkillSelection": "Selecciona la Skill exacta en el instalador; el nombre del catálogo no está verificado."
+      "manualSkillSelection": "Selecciona la Skill exacta en el instalador; el nombre del catálogo no está verificado.",
+      "publisherSource": "Fuente del editor",
+      "invalidPublisherName": "Se requiere el nombre exacto del Skill. Revisa la ficha original.",
+      "detail": {
+        "breadcrumb": "Navegación de Skill",
+        "skill": "Agent Skill",
+        "notFound": "Skill no encontrado",
+        "notFoundHelp": "Esta ficha no está disponible. Vuelve al catálogo de Skills.",
+        "backToSkills": "Volver a Skills",
+        "installation": "Instalación",
+        "command": "Comando",
+        "prompt": "Prompt",
+        "promptText": "Instala este Skill con Universal Agent Plugins. Revisa la fuente y los cambios antes de ejecutar:\n{command}",
+        "exactNameUnavailable": "No se pudo validar el nombre exacto para instalar. Revisa la ficha original.",
+        "documentNotice": "El catálogo ofrece metadatos de instalación, pero no el contenido verificado de SKILL.md. Lee las instrucciones originales antes de instalar.",
+        "readInstructions": "Leer SKILL.md en la ficha original",
+        "security": "Comprobaciones de seguridad",
+        "installs": "Instalaciones",
+        "source": "Fuente",
+        "listing": "Ficha original",
+        "metricsNotice": "Los recuentos proceden del catálogo externo y no se verifican de forma independiente."
+      }
     },
     "directoryPage": {
       "pluginDirectory": "Directorio de complementos",
