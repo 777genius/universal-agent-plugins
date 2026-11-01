@@ -11,8 +11,11 @@ const commands = [
 for (const theme of ['dark', 'light']) {
   for (const [locale, width] of [
     ['en', 1440],
+    ['en', 1110],
+    ['en', 1100],
     ['en', 1024],
     ['en', 768],
+    ['en', 540],
     ['en', 390],
     ['fr', 390],
     ['ru', 390],
@@ -89,7 +92,7 @@ for (const theme of ['dark', 'light']) {
         .evaluateAll((elements) =>
           elements.map((element) => element.getBoundingClientRect().toJSON()),
         );
-      if (width === 1440) {
+      if (width > 1100) {
         expect(machines[0]!.top).toBeCloseTo(machines[1]!.top, 0);
       } else {
         expect(machines[1]!.top).toBeGreaterThan(machines[0]!.bottom);
