@@ -177,6 +177,10 @@ for (const mobile of [false, true]) {
         'The current revision of this listing has not been verified.',
       );
       await expect(skill).toContainText('a'.repeat(40));
+      // The native report dialog is modal; close it before testing the install action.
+      await skill.locator('.skillspector__dialog-close').click();
+      await expect(skill.locator('.skillspector__dialog')).toHaveCount(0);
+      await expect(skill.locator('.skillspector > summary')).toBeFocused();
       await skill.getByRole('button', { name: 'Install frontend-design', exact: true }).click();
       await expect(skill.locator('.plugin-card__install-panel pre')).toContainText(
         'skills add https://github.com/anthropics/skills --skill frontend-design',
