@@ -17,17 +17,17 @@ import (
 
 const (
 	piProjectSkillKind = "pi_project_skill_directory"
-	piProjectMCPKind = "pi_project_mcp_server"
+	piProjectMCPKind   = "pi_project_mcp_server"
 )
 
 func piProjectComponents(root string) shared.ProjectComponents {
 	return shared.ProjectComponents{
 		ProjectRoot: filepath.Dir(root),
-		SkillsRoot: filepath.Join(root, "skills"),
+		SkillsRoot:  filepath.Join(root, "skills"),
 		ConfigPaths: nativeconfig.Paths{JSON: filepath.Join(root, "mcp.json")},
-		Codec: nativeconfig.CodecMCPServers,
-		SkillKind: piProjectSkillKind,
-		MCPKind: piProjectMCPKind,
+		Codec:       nativeconfig.CodecMCPServers,
+		SkillKind:   piProjectSkillKind,
+		MCPKind:     piProjectMCPKind,
 	}
 }
 
@@ -166,7 +166,7 @@ func piProjectServer(root, name string) (nativeconfig.Server, error) {
 	}
 	servers, ok := document["mcpServers"].(map[string]any)
 	if !ok {
-		return nativeconfig.Server{}, fmt.Errorf("Pi project MCP document has no mcpServers object")
+		return nativeconfig.Server{}, fmt.Errorf("pi project MCP document has no mcpServers object")
 	}
 	entry, ok := servers[name].(map[string]any)
 	if !ok {
