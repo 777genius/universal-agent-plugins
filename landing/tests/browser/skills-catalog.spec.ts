@@ -315,7 +315,7 @@ test('A deep-linked Skill renders source instructions without relying on bounded
   await page.goto('skills/?id=skills-sh%3Aanthropics%2Fskills%3Afrontend-design&q=frontend-design');
   await expect(page.getByRole('heading', { level: 1, name: 'frontend-design' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Installation' })).toBeVisible();
-  await expect(page.locator('.skills-detail__document h2')).toContainText('Direct source content');
+  await expect(page.locator('.skills-detail__document .skill-markdown h2')).toContainText('Direct source content');
   await expect(page.locator('.skills-detail__facts')).not.toContainText('Installs');
   await expect(page.locator('a[href*="skills.sh"]')).toHaveCount(0);
 });
