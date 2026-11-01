@@ -14,6 +14,7 @@ from pathlib import Path
 import secrets
 import shutil
 import signal
+import stat
 import subprocess
 import tempfile
 import time
@@ -65,13 +66,19 @@ def observed_file(path: Path, boundary: Path, limit: int = 2 * 1024 * 1024) -> b
         if not rel.parts:
             return None
         cursor = boundary
+        if cursor.is_symlink():
+            return None
         for part in rel.parts:
             cursor = cursor / part
             if cursor.is_symlink():
                 return None
-        if not path.is_file() or path.stat().st_size > limit:
+        if not stat.S_ISREG(path.lstat().st_mode):
             return None
-        with path.open("rb") as source:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as source:
+            state = os.fstat(source.fileno())
+            if not stat.S_ISREG(state.st_mode) or state.st_size > limit:
+                return None
             result = source.read(limit + 1)
         return result if len(result) <= limit else None
     except (ValueError, OSError):
@@ -397,7 +404,7 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
         verdict="PASS";reason="synthetic canary not persisted; native env forwarding remains unqualified"
     return receipt(product,"R5_mcp_env_secret",verdict,reason=reason,
                    command=cmd,config_files=found,foreign_unchanged=protected,
-                   native_mcp_call="NOT_RUN",secret_value_retained=False)
+                   native_mcp_call="NOT_RUN",synthetic_value_not_in_artifact=True)
 
 
 def two_skills_manifest(product: str, project: Path, commit: str,
@@ -449,9 +456,12 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     git("commit","-qm","two deps",cwd=author,env=env)
     teammate=root/"teammate"
     git("clone","-q",str(author),str(teammate),cwd=root,env=env)
+    sibling = teammate / ".agents/skills/foreign-neighbor/SKILL.md"
+    sibling.parent.mkdir(parents=True, exist_ok=True)
+    sibling.write_bytes(b"FOREIGN USER CONTENT: preserve without edits\n")
     teammate_root=root/"teammate-iso"
     mate_env=baseline.isolated_env(teammate_root)
-    mate_first=baseline.run_process(removal_command(product,cli,teammate),teammate,mate_env,teammate_root)
+    mate_first=baseline.run_process(removal_command(product,cli,teammate),teammate,mate_env,root)
     mate_path=teammate/".agents/skills/benchmark-secondary/SKILL.md"
     if mate_first["exit_code"]!=0 or observed_file(mate_path,teammate)!=second_body:
         return receipt(product,"R6_git_pull_removal","BLOCKED",
@@ -473,14 +483,14 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     audit=None
     if product=="apm":
         audit=baseline.run_process([cli,"audit","--ci","--no-policy"],
-                                   teammate,mate_env,teammate_root)
+                                   teammate,mate_env,root)
     applied=baseline.run_process(removal_command(product,cli,teammate),
-                                 teammate,mate_env,teammate_root)
+                                 teammate,mate_env,root)
     final=observed_file(mate_path,teammate)
     original=observed_file(teammate/".agents/skills/benchmark-note/SKILL.md",teammate)
     foreign=observed_file(teammate/".agents/skills/foreign-neighbor/SKILL.md",teammate)
     preserved=(original==expected["SKILL.md"] and
-               foreign in (None, b"FOREIGN USER CONTENT: preserve without edits\n"))
+               foreign==b"FOREIGN USER CONTENT: preserve without edits\n")
     explicitly_reported=bool(audit and audit.get("exit_code")!=0
                              and "orphan" in audit.get("output_tail","").lower())
     # No silent, still agent-visible orphan is allowed after reported success.
@@ -569,7 +579,9 @@ def main() -> int:
                                   reason=f"observer failed closed: {type(exc).__name__}")
                 cases.append(entry)
                 save()
-    return 0  # CI only asserts receipts exist, never treats FAIL as green product.
+    # Observer exceptions are infrastructure failures; product FAIL/BLOCKED
+    # are evidence statuses and must not turn the workflow itself red.
+    return 1 if any(row.get("stage")=="observer_exception" for row in cases) else 0
 
 
 if __name__=="__main__":
