@@ -55,8 +55,8 @@ func TestOpenCodeV2MCPStdioResponder(t *testing.T) {
 		case "initialize":
 			result = map[string]any{
 				"protocolVersion": "2025-11-25",
-				"capabilities": map[string]any{"tools": map[string]any{}},
-				"serverInfo": map[string]string{"name": "uap-native-mcp-fixture", "version": "1.0.0"},
+				"capabilities":    map[string]any{"tools": map[string]any{}},
+				"serverInfo":      map[string]string{"name": "uap-native-mcp-fixture", "version": "1.0.0"},
 			}
 		case "tools/list":
 			result = map[string]any{"tools": []any{
@@ -198,11 +198,14 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 		t.Fatal("native project MCP proof requires actual Git binary")
 	}
 	for _, project := range []string{projectA, projectB} {
-		command := exec.Command(git, "-c", "core.hooksPath=/dev/null", "-C", project, "init", "--quiet")
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		command := exec.CommandContext(ctx, git, "-c", "core.hooksPath=/dev/null", "-C", project, "init", "--quiet")
 		command.Env = append(append([]string(nil), env...), "GIT_CONFIG_NOSYSTEM=1",
 			"GIT_CONFIG_GLOBAL="+filepath.Join(home, ".gitconfig"), "GIT_TERMINAL_PROMPT=0")
-		if err := command.Run(); err != nil {
-			t.Fatal("native MCP project Git root could not be created", err)
+		runErr := command.Run()
+		cancel()
+		if runErr != nil {
+			t.Fatal("native MCP project Git root could not be created", runErr)
 		}
 		if info, err := os.Lstat(filepath.Join(project, ".git")); err != nil || !info.IsDir() {
 			t.Fatal("native MCP project Git root is not an actual directory")
@@ -279,7 +282,7 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 	observe := func(project string, requireConnected bool) string {
 		t.Helper()
 		var output string
-		for attempt := 0; attempt < 12; attempt++ {
+		for range 12 {
 			output = runService(project, "mcp", "list")
 			if !requireConnected || openCodeV2MCPConnectedStatus(output) {
 				return output
