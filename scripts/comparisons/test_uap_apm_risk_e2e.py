@@ -380,23 +380,55 @@ class RiskOracleTests(unittest.TestCase):
             self.assertEqual(row["crash_recovery"],"NOT_RUN")
 
     def test_unobserved_preflight_never_claims_negative_gate_passed(self):
+        # A negative control must first create a real lock. The fake process
+        # models that prerequisite and then the frozen replay refusal.
+        complete_bootstrap={"exit_code":0,"timed_out":False,
+                            "cleanup_error":None,"capture_complete":True}
+        def run_with_control(control):
+            calls=[]
+            def execute(_argv, project, _env, _root):
+                calls.append(_argv)
+                if len(calls)==1:
+                    (project/"uap.lock").write_bytes(b"{}\\n")
+                    return complete_bootstrap
+                return control
+            return execute
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             incomplete={"exit_code":1,"timed_out":False,"cleanup_error":None,
                         "capture_complete":False}
-            with patch.object(risk.baseline,"run_process",return_value=incomplete):
+            with patch.object(risk.baseline,"run_process",
+                              side_effect=run_with_control(incomplete)):
                 row=risk.case_interrupted("uap","/bin/fake",root,"a"*40)
             self.assertEqual(row["status"],"BLOCKED")
             self.assertIn("incomplete",row["reason"])
             complete=dict(incomplete,capture_complete=True,
                           output_tail="error: invalid uap.lock syntax")
-            # Each negative-control run owns a fresh fixture. Reusing the
-            # same root would collide with the prior foreign-neighbor dir.
-            with patch.object(risk.baseline,"run_process",return_value=complete):
+            with patch.object(risk.baseline,"run_process",
+                              side_effect=run_with_control(complete)):
                 row=risk.case_interrupted("uap","/bin/fake",root/"complete","a"*40)
             self.assertEqual(row["status"],"BLOCKED")
             self.assertIn("verified preflight refusal",row["reason"])
+            self.assertEqual(row["bootstrap"]["exit_code"],0)
+            self.assertIn("--locked",row["controlled_preflight"]["argv"])
             self.assertFalse(row["deterministic_post_write_barrier"])
+
+    def test_uap_mcp_risk_fixture_requires_bundled_executable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            refused={"exit_code":1,"timed_out":False,"cleanup_error":None,
+                     "capture_complete":True,"output_tail":"fixture rejected"}
+            with patch.object(risk.baseline,"run_process",return_value=refused):
+                row=risk.case_secret("uap","/bin/fake",root)
+            package=root/"project"/"package"
+            server=json.loads((package/"mcp.json").read_text())["mcpServers"]["riskcanary"]
+            self.assertEqual(server["command"],"./bin/risk-probe.sh")
+            self.assertEqual(server["args"],[])
+            probe=package/"bin"/"risk-probe.sh"
+            self.assertEqual(probe.read_bytes(),b"#!/bin/sh\\nexit 0\\n")
+            self.assertNotEqual(probe.stat().st_mode & 0o100,0)
+            self.assertEqual(row["status"],"BLOCKED")
+            self.assertFalse(row["filesystem_scan"]["canary_found"])
 
     def test_residual_removed_skill_directory_is_not_absent(self):
         with tempfile.TemporaryDirectory() as tmp:
