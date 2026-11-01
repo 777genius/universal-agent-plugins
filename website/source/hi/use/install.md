@@ -105,8 +105,12 @@ agentplugins skills add owner/repository --skill review --skill pdf \
 
 स्पष्ट प्रोजेक्ट स्कोप [CLI 0.1.93 और उसके बाद](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93) उपलब्ध है। मौजूदा डायरेक्टरी चुनें और हर कमांड में स्कोप दें:
 
+संगत और समीक्षा की गई कैटलॉग प्रविष्टि के लिए पूरा commit SHA वाला Git स्रोत और उपयुक्त एजेंट चुनें। Directory v1 के `context7` जैसे उपनाम केवल user scope में मान्य हैं। `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` और `PACKAGE_PATH` बदलें; पैकेज रिपॉज़िटरी की जड़ में हो तो `//PACKAGE_PATH` हटाएँ।
+
+टेम्पलेट: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`। नीचे दिया कमांड GitLab के वास्तविक ऐतिहासिक कमिट का उदाहरण है; इसका अर्थ यह नहीं कि वह संस्करण अभी कैटलॉग में समीक्षित है। नई स्थापना के लिए कैटलॉग से मौजूदा समीक्षित स्रोत लें।
+
 ```bash
-agentplugins add context7 --target cursor --scope project \
+agentplugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex --scope project \
   --project-root /path/to/project --dry-run
 agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project

@@ -149,12 +149,18 @@ for confirmation and recovery behavior.
 
 ## Install for one project
 
-Explicit project scope ships in CLI 0.1.93. Replace `/path/to/project` with an
-existing directory and install the selected clients first. Save a registry
-dependency, then restore its recorded lock:
+Explicit project scope ships in CLI 0.1.93. Signed Directory v1 aliases such
+as `context7` are **user-only**; use an eligible reviewed catalog entry's exact
+commit-pinned Git source or another verified complete package source for project
+scope. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA`, `PACKAGE_PATH` and
+`/path/to/project` with real values (omit `//PACKAGE_PATH` for a root package),
+select only compatible installed clients, then restore the recorded lock.
+The command below demonstrates an existing historical GitLab commit, **not a
+current catalog review**. For real use copy today's reviewed pin and compatible
+target from the catalog; the placeholder format is `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`:
 
 ```bash
-npx universal-agent-plugins add context7 --target codex,claude \
+npx universal-agent-plugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex \
   --scope project --project-root /path/to/project
 npx universal-agent-plugins install --locked \
   --scope project --project-root /path/to/project

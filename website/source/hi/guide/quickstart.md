@@ -36,8 +36,12 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 
 [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) में स्पष्ट प्रोजेक्ट स्कोप और 0.1.94 में आया स्वचालित `install` चयन उपलब्ध रहता है। इसमें [लोकल मैनेजमेंट API](../use/manage#local-management-api) और [Pi के नेटिव एक्सटेंशन](../reference/client-compatibility#pi-native-extensions) भी जोड़े गए हैं। प्रोजेक्ट में पैकेज जोड़ने का पूर्वावलोकन देखें:
 
+संगत और समीक्षा की गई कैटलॉग प्रविष्टि के लिए पूरा commit SHA वाला Git स्रोत और उपयुक्त एजेंट चुनें। Directory v1 के `context7` जैसे उपनाम केवल user scope में मान्य हैं। `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` और `PACKAGE_PATH` बदलें; पैकेज रिपॉज़िटरी की जड़ में हो तो `//PACKAGE_PATH` हटाएँ।
+
+टेम्पलेट: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`। नीचे दिया कमांड GitLab के वास्तविक ऐतिहासिक कमिट का उदाहरण है; इसका अर्थ यह नहीं कि वह संस्करण अभी कैटलॉग में समीक्षित है। नई स्थापना के लिए कैटलॉग से मौजूदा समीक्षित स्रोत लें।
+
 ```bash
-npx universal-agent-plugins add context7 --target cursor --scope project \
+npx universal-agent-plugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex --scope project \
   --project-root /path/to/project --dry-run
 ```
 

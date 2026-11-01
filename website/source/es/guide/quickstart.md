@@ -34,8 +34,12 @@ La [guía de instalación nativa](https://github.com/777genius/universal-agent-p
 
 [CLI nativo 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) conserva el ámbito de proyecto explícito y la selección automática de `install` introducida en 0.1.94. También añade una [API local de gestión](../use/manage#local-management-api) y [extensiones nativas de Pi](../reference/client-compatibility#pi-native-extensions). Para previsualizar una instalación de proyecto:
 
+Para una entrada revisada y compatible del catálogo, copia su origen Git fijado a un SHA completo y el cliente adecuado. Los alias de Directory v1, como `context7`, solo sirven en el ámbito de usuario. Sustituye `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` y `PACKAGE_PATH`; si el paquete está en la raíz del repositorio, omite `//PACKAGE_PATH`.
+
+Plantilla: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. El comando siguiente usa un commit histórico real de GitLab; no demuestra que esa revisión siga aprobada en el catálogo. Para una instalación nueva, copia la fuente revisada actual del catálogo.
+
 ```bash
-npx universal-agent-plugins add context7 --target cursor --scope project \
+npx universal-agent-plugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex --scope project \
   --project-root /path/to/project --dry-run
 ```
 

@@ -36,8 +36,12 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 
 يحتفظ [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) بنطاق المشروع الصريح والاختيار التلقائي في `install` الذي أُضيف في 0.1.94. ويضيف أيضًا [واجهة API للإدارة المحلية](../use/manage#local-management-api) و[امتدادات Pi الأصلية](../reference/client-compatibility#pi-native-extensions). لمعاينة إضافة حزمة إلى مشروع:
 
+لإدخال تمت مراجعته ومتوافق في الفهرس، انسخ مصدر Git المثبّت بمعرّف commit كامل والعميل المتوافق. تظل أسماء Directory v1 المختصرة مثل `context7` مخصّصة لنطاق المستخدم فقط. استبدل `OWNER/REPOSITORY` و`FULL_COMMIT_SHA` و`PACKAGE_PATH`؛ وإذا كانت الحزمة في جذر المستودع فاحذف `//PACKAGE_PATH`.
+
+القالب: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. يستخدم الأمر أدناه commit تاريخيًا حقيقيًا لحزمة GitLab، لكنه لا يثبت أن هذا الإصدار ما زال معتمدًا في الفهرس. للتثبيت الجديد، انسخ المصدر المثبّت والمراجع حاليًا من الفهرس.
+
 ```bash
-npx universal-agent-plugins add context7 --target cursor --scope project \
+npx universal-agent-plugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex --scope project \
   --project-root /path/to/project --dry-run
 ```
 
