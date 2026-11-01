@@ -449,6 +449,34 @@ class RiskOracleTests(unittest.TestCase):
             executable.write_bytes(b"#!/bin/sh\\nexit 1\\n")
             self.assertEqual(risk.codex_mcp_contract(project,"uap"),"wrong_command")
 
+    def test_uap_portable_mcp_secret_reference_absence_is_not_product_failure(self):
+        # Agent Plugins 1.0 does not support arbitrary ${ENV_VAR} expansion.
+        # A safe Codex projection with literal interpolation must be diagnosed
+        # as unsupported forwarding, not as a security leak or a silent PASS.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            placeholder="$"+"{"+risk.MARKER+"}"
+            def install(_argv, project, _env, _root):
+                config=project/".codex"/"config.toml"
+                config.parent.mkdir(parents=True)
+                executable=project/"package"/"bin"/"risk-probe.sh"
+                config.write_text(
+                    "[mcp_servers.riskcanary]\\n"
+                    f'command = "{executable}"\\n'
+                    "args = []\\n"
+                    "[mcp_servers.riskcanary.env]\\n"
+                    f'{risk.MARKER} = "{placeholder}"\\n'
+                )
+                return {"exit_code":0,"timed_out":False,"cleanup_error":None,
+                        "capture_complete":True,"output_tail":"installed"}
+            with patch.object(risk.baseline,"run_process",side_effect=install):
+                row=risk.case_secret("uap","/bin/fake",root)
+            self.assertEqual(row["status"],"UNSUPPORTED")
+            self.assertEqual(row["portable_credential_reference"],"UNSUPPORTED")
+            self.assertEqual(row["mcp_config_contract"],"environment_forwarding_unverified")
+            self.assertFalse(row["filesystem_scan"]["canary_found"])
+            self.assertEqual(row["native_mcp_call"],"NOT_RUN")
+
     def test_residual_removed_skill_directory_is_not_absent(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
