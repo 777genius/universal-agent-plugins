@@ -3,72 +3,57 @@ const { t } = useI18n();
 const config = useRuntimeConfig();
 const playbackId = computed(() => config.public.muxPlaybackId.trim());
 const playing = ref(false);
-const fallback = ref(false);
 const demoContainer = ref<HTMLElement | null>(null);
-const playerHost = ref<HTMLElement | null>(null);
+const playerFrame = ref<HTMLIFrameElement | null>(null);
 const thumbnailUrl = computed(
   () => `https://image.mux.com/${playbackId.value}/thumbnail.webp?time=1&width=640`,
 );
 const playerUrl = computed(() => `https://player.mux.com/${playbackId.value}?autoplay=true`);
-// Pinned official player, loaded only if the visitor requests playback.
-// The iframe fallback plays normally but cannot observe a cross-origin ended event.
-const muxPlayerScript = 'https://cdn.jsdelivr.net/npm/@mux/mux-player@3.14.1';
-let playerLoader: Promise<void> | undefined;
+const muxOrigin = 'https://player.mux.com';
 
-function loadPlayer() {
-  if (customElements.get('mux-player')) return Promise.resolve();
-  if (!playerLoader)
-    playerLoader = new Promise<void>((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = muxPlayerScript;
-      script.async = true;
-      script.onload = () => void customElements.whenDefined('mux-player').then(resolve, reject);
-      script.onerror = () => reject(new Error('Mux player unavailable'));
-      document.head.appendChild(script);
-    });
-  return playerLoader;
-}
-
-const onEnded = () => {
-  if (document.fullscreenElement === demoContainer.value)
-    void document.exitFullscreen().catch(() => {});
-  playing.value = false;
-};
-
-async function startPlayer() {
-  await nextTick();
+// Mux iframe embeds support Player.js. We subscribe to 'ended' without loading
+// any third-party JavaScript into our page, and only accept messages from our
+// own iframe at Mux's fixed origin.
+function onPlayerMessage(event: MessageEvent) {
+  if (event.origin !== muxOrigin || event.source !== playerFrame.value?.contentWindow) return;
+  let message: Record<string, unknown>;
   try {
-    await loadPlayer();
-    if (!playing.value || !playerHost.value) return;
-    const element = document.createElement('mux-player') as HTMLElement & {
-      play?: () => Promise<void>;
-    };
-    element.setAttribute('playback-id', playbackId.value);
-    element.setAttribute('autoplay', '');
-    element.setAttribute('metadata-video-title', t('shell.hero.demoVideoTitle'));
-    element.addEventListener('ended', onEnded, { once: true });
-    playerHost.value.replaceChildren(element);
-    void element.play?.().catch(() => {
-      // A browser may require a second gesture; native player controls remain available.
-    });
+    message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+    if (!message || typeof message !== 'object' || message.context !== 'player.js') return;
   } catch {
-    // Preserve playback if the optional player script cannot load.
-    fallback.value = true;
+    return;
+  }
+  if (message.event === 'ready') {
+    playerFrame.value?.contentWindow?.postMessage(
+      JSON.stringify({
+        context: 'player.js',
+        version: '0.0.11',
+        method: 'addEventListener',
+        value: 'ended',
+        listener: 'uap-demo-ended',
+      }),
+      muxOrigin,
+    );
+  }
+  if (message.event === 'ended') {
+    if (document.fullscreenElement === demoContainer.value)
+      void document.exitFullscreen().catch(() => {});
+    playing.value = false;
   }
 }
 
-const playDemo = () => {
+function playDemo() {
   if (!playbackId.value) return;
-  playing.value = true;
-  fallback.value = false;
-  // Fullscreen must be requested synchronously while the user's gesture is active.
+  // Must request fullscreen in the same synchronous user-gesture call stack.
   const request = demoContainer.value?.requestFullscreen?.();
   if (request) void request.catch(() => {});
-  void startPlayer();
-};
+  playing.value = true;
+}
 
+onMounted(() => window.addEventListener('message', onPlayerMessage));
 onBeforeUnmount(() => {
-  if (typeof document !== 'undefined' && document.fullscreenElement === demoContainer.value)
+  window.removeEventListener('message', onPlayerMessage);
+  if (document.fullscreenElement === demoContainer.value)
     void document.exitFullscreen().catch(() => {});
 });
 </script>
@@ -80,16 +65,14 @@ onBeforeUnmount(() => {
     class="hero-demo-video"
     :aria-label="t('shell.hero.demoVideoTitle')"
   >
-    <div v-if="playing" class="hero-demo-video__player">
-      <iframe
-        v-if="fallback"
-        :src="playerUrl"
-        :title="t('shell.hero.demoVideoTitle')"
-        allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-        allowfullscreen
-      />
-      <div v-else ref="playerHost" class="hero-demo-video__player-host" />
-    </div>
+    <iframe
+      v-if="playing"
+      ref="playerFrame"
+      :src="playerUrl"
+      :title="t('shell.hero.demoVideoTitle')"
+      allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+      allowfullscreen
+    />
     <template v-else-if="playbackId">
       <img :src="thumbnailUrl" :alt="t('shell.hero.demoVideoTitle')" loading="lazy" />
       <button type="button" :aria-label="t('shell.hero.watchDemo')" @click="playDemo">

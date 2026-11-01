@@ -3,23 +3,26 @@ import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
 
-const muxPlayerScript = 'https://cdn.jsdelivr.net/npm/@mux/mux-player@3.14.1';
-const fakePlayer = `
-  class TestMuxPlayer extends HTMLElement {
-    play() { this.setAttribute('data-playing', 'true'); return Promise.resolve(); }
-  }
-  customElements.define('mux-player', TestMuxPlayer);
-`;
+const muxOrigin = 'https://player.mux.com';
+const fakePlayer = `<!doctype html><html><body><script>
+  window.addEventListener('message', (event) => {
+    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+    if (data?.context === 'player.js' && data?.method === 'addEventListener' && data?.value === 'ended') {
+      document.body.dataset.subscribed = 'ended';
+    }
+  });
+  parent.postMessage(JSON.stringify({
+    context: 'player.js', version: '0.0.11', event: 'ready',
+  }), '*');
+</script></body></html>`;
 
 for (const width of [1440, 390, 320]) {
-  test(`demo at ${width}px is responsive, enters fullscreen on activation and leaves it on media end`, async ({
-    page,
-  }) => {
+  test(`demo at ${width}px opens fullscreen and restores the poster on authenticated Mux media end`, async ({ page }) => {
     await setSignedMirrorTestTime(page);
     const requests: string[] = [];
-    await page.route(muxPlayerScript, (route) => {
+    await page.route('https://player.mux.com/**', (route) => {
       requests.push(route.request().url());
-      return route.fulfill({ contentType: 'application/javascript', body: fakePlayer });
+      return route.fulfill({ contentType: 'text/html', body: fakePlayer });
     });
     await page.setViewportSize({ width, height: 1000 });
     await page.goto('./');
@@ -27,7 +30,7 @@ for (const width of [1440, 390, 320]) {
     const demo = page.locator('.hero-demo-video');
     const button = demo.getByRole('button', { name: 'Watch demo' });
     await expect(button).toBeVisible();
-    await expect(demo.locator('mux-player, iframe')).toHaveCount(0);
+    await expect(demo.locator('iframe')).toHaveCount(0);
     expect(requests).toHaveLength(0);
     const installBefore = (await page.locator('.hero__window').boundingBox())!;
     const before = (await demo.boundingBox())!;
@@ -51,27 +54,37 @@ for (const width of [1440, 390, 320]) {
     expect(overlay.contained).toBe(true);
     await button.focus();
     await page.keyboard.press('Enter');
-    const player = demo.locator('mux-player');
-    await expect(player).toHaveAttribute('playback-id', /[a-zA-Z0-9]+/);
-    await expect(player).toHaveAttribute('data-playing', 'true');
+    const frame = demo.locator('iframe');
+    await expect(frame).toBeVisible();
+    await expect(frame).toHaveAttribute('allowfullscreen', '');
+    await expect(frame).toHaveAttribute('src', /^https:\/\/player\.mux\.com\/[a-zA-Z0-9]+\?autoplay=true$/);
+    await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body').getAttribute('data-subscribed')).toBe('ended');
     expect(requests).toHaveLength(1);
+    // Cross-origin frames cannot be trusted without both origin and source.
+    await page.evaluate(() => window.postMessage({
+      context: 'player.js', event: 'ended',
+    }, '*'));
+    await expect(frame).toBeVisible();
     if (await demo.evaluate((element) => document.fullscreenElement === element)) {
       await expect(demo).toHaveCSS('height', /.+/);
     }
-    await player.evaluate((element) => element.dispatchEvent(new Event('ended')));
+    await page.frameLocator('.hero-demo-video iframe').locator('body').evaluate(() =>
+      window.parent.postMessage(JSON.stringify({
+        context: 'player.js', version: '0.0.11', event: 'ended', listener: 'uap-demo-ended',
+      }), '*'),
+    );
     await expect(button).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBe(null);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const installAfter = (await page.locator('.hero__window').boundingBox())!;
     expect(Math.abs(installAfter.y - installBefore.y)).toBeLessThan(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
 
-test('fullscreen denial or optional player load failure does not block playback', async ({ page }) => {
+test('fullscreen denial still plays the iframe and accepts genuine completion', async ({ page }) => {
   await setSignedMirrorTestTime(page);
-  await page.route(muxPlayerScript, (route) => route.abort());
   await page.route('https://player.mux.com/**', (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<html><body>Fallback player</body></html>' }),
+    route.fulfill({ contentType: 'text/html', body: fakePlayer }),
   );
   await page.addInitScript(() => {
     HTMLElement.prototype.requestFullscreen = () => Promise.reject(new Error('denied'));
@@ -79,14 +92,17 @@ test('fullscreen denial or optional player load failure does not block playback'
   await page.goto('./');
   await hydrated(page);
   await page.getByRole('button', { name: 'Watch demo' }).click();
-  const fallback = page.locator('.hero-demo-video iframe');
-  await expect(fallback).toBeVisible();
-  await expect(fallback).toHaveAttribute('src', /^https:\/\/player\.mux\.com\/[a-zA-Z0-9]+\?autoplay=true$/);
-  await expect(fallback).toHaveAttribute('allowfullscreen', '');
+  const frame = page.locator('.hero-demo-video iframe');
+  await expect(frame).toBeVisible();
+  await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body').getAttribute('data-subscribed')).toBe('ended');
+  await page.frameLocator('.hero-demo-video iframe').locator('body').evaluate(() => window.parent.postMessage(JSON.stringify({
+    context: 'player.js', version: '0.0.11', event: 'ended',
+  }), '*'));
+  await expect(page.getByRole('button', { name: 'Watch demo' })).toBeVisible();
 });
 
 test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ page }) => {
-  test.skip(process.env.UAP_E2E_LIVE_VIDEO !== '1', 'Explicit live CDN check; offline tests mock Mux player.');
+  test.skip(process.env.UAP_E2E_LIVE_VIDEO !== '1', 'Explicit live CDN check; offline tests mock Player.js protocol.');
   test.setTimeout(120_000);
   await setSignedMirrorTestTime(page);
   for (const width of [1440, 390]) {
@@ -104,22 +120,17 @@ test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ pa
       await page.screenshot({ path: resolve(directory, `hero-video-poster-${width}.png`) });
     }
     await demo.getByRole('button', { name: 'Watch demo' }).click();
-    const player = demo.locator('mux-player');
-    await expect(player).toBeVisible({ timeout: 30_000 });
-    await expect.poll(() => player.evaluate(
-      (element: HTMLElement & { currentTime: number }) => element.currentTime,
-    ), { timeout: 30_000 }).toBeGreaterThan(1);
-    const media = await player.evaluate((element: HTMLElement & {
-      duration: number; error?: { code: number }; paused: boolean
-    }) => ({
-      duration: element.duration,
-      error: element.error?.code ?? null,
-      paused: element.paused,
+    const video = page.frameLocator('.hero-demo-video iframe').locator('video');
+    await expect(video).toBeAttached({ timeout: 30_000 });
+    await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.currentTime),
+      { timeout: 30_000 }).toBeGreaterThan(1);
+    const media = await video.evaluate((element: HTMLVideoElement) => ({
+      duration: element.duration, error: element.error?.code ?? null, paused: element.paused,
     }));
     expect(Math.abs(media.duration - 2638 / 30)).toBeLessThan(0.25);
     expect(media.error).toBeNull();
     expect(media.paused).toBe(false);
     if (directory) await page.screenshot({ path: resolve(directory, `hero-video-playing-${width}.png`) });
-    await player.evaluate((element: HTMLElement & { pause: () => void }) => element.pause());
+    await video.evaluate((element: HTMLVideoElement) => element.pause());
   }
 });
