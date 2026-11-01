@@ -124,7 +124,7 @@ func TestQualificationTerminalFault(t *testing.T) {
 	fmt.Fprintln(os.Stdout, "QUALIFICATION_REUSE_READY")
 	// Wait for the PTY owner to inspect the restored terminal modes before
 	// starting a new reader. Darwin ReadLine sets PENDIN temporarily, so an
-	// immediate next read races the *previous* owner\'s restoration oracle.
+	// immediate next read races the *previous* owner's restoration oracle.
 	gate := os.Getenv("UAP_QUALIFICATION_TRIGGER") + ".reuse"
 	deadline := time.Now().Add(3 * time.Second)
 	for {
