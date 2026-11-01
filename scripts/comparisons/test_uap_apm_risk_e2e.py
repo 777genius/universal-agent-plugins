@@ -505,8 +505,8 @@ class RiskOracleTests(unittest.TestCase):
             dict(valid,timed_out=True),
             dict(valid,capture_complete=False),
             dict(valid,output_tail="error: unknown flag in source package"),
-            dict(valid,output_tail="warning: invalid uap.lock syntax\\nerror: target unavailable"),
-            dict(valid,output_tail="[WARN] malformed uap.lock\\nerror: no detected Codex"),
+            dict(valid,output_tail="warning: invalid uap.lock syntax\nerror: target unavailable"),
+            dict(valid,output_tail="[WARN] malformed uap.lock\nerror: no detected Codex"),
             dict(valid,output_tail="uap.lock parsed successfully"),
         ):
             self.assertFalse(risk.lock_validation_refused(other,"uap.lock"))
