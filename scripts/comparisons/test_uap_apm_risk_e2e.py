@@ -52,36 +52,103 @@ class RiskOracleTests(unittest.TestCase):
             self.assertIsNone(risk.observed_file(linked/"missing",root))
             self.assertIsNone(risk.observed_file(root,"../",limit=1))
 
-    def test_graph_lock_does_not_accept_sha_in_unrelated_field(self):
+    def test_exact_two_node_graph_rejects_wrong_repo_stale_parent_and_duplicate_child(self):
         with tempfile.TemporaryDirectory() as tmp:
             project=Path(tmp)
-            v=risk.CHILD_V2
-            (project/"uap.lock").write_text(json.dumps({"packages":[{
-                "source":{"git":{"path":risk.CHILD,"commit":risk.CHILD_V1}},
-                "comment":v
-            }]}))
-            self.assertFalse(risk.child_lock(project,"uap",v))
-            (project/"uap.lock").write_text(json.dumps({"packages":[{
-                "source":{"git":{"path":risk.CHILD,"commit":v}}
-            }]}))
-            self.assertTrue(risk.child_lock(project,"uap",v))
-            (project/"uap.lock").write_text(json.dumps({"packages":[{
-                "source":{"git":{"path":"different/plugin","commit":v}}
-            }]}))
-            self.assertFalse(risk.child_lock(project,"uap",v))
+            parent={"alias":"risk-parent","source":{"git":{
+                "repository":risk.REPO, "path":risk.PARENT,
+                "commit":risk.PARENT_V1}}}
+            child={"alias":"risk-child","source":{"git":{
+                "repository":risk.REPO,"path":risk.CHILD,
+                "commit":risk.CHILD_V1}},
+                "required_by":[{"alias":"risk-parent","selector":{
+                    "kind":"commit","value":risk.CHILD_V1}}]}
+            base={"packages":[parent,child]}
+            def write(lock):
+                (project/"uap.lock").write_text(json.dumps(lock))
+            write(base)
+            self.assertTrue(risk.graph_lock_matches(
+                project,"uap",risk.PARENT_V1,risk.CHILD_V1))
+            bad=json.loads(json.dumps(base))
+            bad["packages"][0]["source"]["git"]["commit"]=risk.PARENT_V2
+            write(bad)
+            self.assertFalse(risk.graph_lock_matches(
+                project,"uap",risk.PARENT_V1,risk.CHILD_V1))
+            bad=json.loads(json.dumps(base))
+            bad["packages"][1]["source"]["git"]["repository"]="wrong/repo"
+            write(bad)
+            self.assertFalse(risk.graph_lock_matches(
+                project,"uap",risk.PARENT_V1,risk.CHILD_V1))
+            bad=json.loads(json.dumps(base))
+            bad["packages"].append(bad["packages"][1])
+            write(bad)
+            self.assertFalse(risk.graph_lock_matches(
+                project,"uap",risk.PARENT_V1,risk.CHILD_V1))
+            bad=json.loads(json.dumps(base))
+            bad["packages"][1]["required_by"][0]["alias"]="unrelated"
+            write(bad)
+            self.assertFalse(risk.graph_lock_matches(
+                project,"uap",risk.PARENT_V1,risk.CHILD_V1))
 
-    def test_profile_observer_does_not_admit_wrong_body_or_symlinks(self):
+    def test_apm_graph_requires_real_resolved_by_relation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project=Path(tmp)
+            package={"repo_url":risk.REPO,"virtual_path":risk.PARENT,
+                     "resolved_commit":risk.PARENT_V1}
+            child={"repo_url":risk.REPO,"virtual_path":risk.CHILD,
+                   "resolved_commit":risk.CHILD_V1,
+                   "resolved_by":risk.REPO}
+            source={"dependencies":[package,child]}
+            (project/"apm.lock.yaml").write_text(json.dumps(source))
+            self.assertTrue(risk.graph_lock_matches(
+                project,"apm",risk.PARENT_V1,risk.CHILD_V1))
+            child["resolved_by"]="wrong/repo"
+            (project/"apm.lock.yaml").write_text(json.dumps(source))
+            self.assertFalse(risk.graph_lock_matches(
+                project,"apm",risk.PARENT_V1,risk.CHILD_V1))
+            child["resolved_by"]=risk.REPO
+            source["dependencies"].append(dict(child))
+            (project/"apm.lock.yaml").write_text(json.dumps(source))
+            self.assertFalse(risk.graph_lock_matches(
+                project,"apm",risk.PARENT_V1,risk.CHILD_V1))
+
+    def test_profile_observer_needs_skill_and_reference_and_no_symlink(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             skill=root/"skills"/"risk"
             skill.mkdir(parents=True)
             (skill/"SKILL.md").write_bytes(b"body")
-            self.assertTrue(risk.profile_scan(root,b"body"))
-            self.assertFalse(risk.profile_scan(root,b"different"))
+            expected={"SKILL.md":b"body","references/fixture.txt":b"reference"}
+            self.assertFalse(risk.profile_scan(root,expected))
+            (skill/"references").mkdir()
+            (skill/"references/fixture.txt").write_bytes(b"reference")
+            self.assertEqual(len(risk.profile_scan(root,expected)),1)
+            expected["SKILL.md"]=b"different"
+            self.assertFalse(risk.profile_scan(root,expected))
+            expected["SKILL.md"]=b"body"
             (skill/"SKILL.md").unlink()
             (skill/"SKILL.md").symlink_to(root/"other")
             (root/"other").write_bytes(b"body")
-            self.assertFalse(risk.profile_scan(root,b"body"))
+            self.assertFalse(risk.profile_scan(root,expected))
+
+    def test_incomplete_zero_exit_cannot_qualify_Claude_profile(self):
+        valid={"exit_code":0,"timed_out":False,"cleanup_error":None,
+               "capture_complete":True}
+        self.assertTrue(risk.complete_command(valid))
+        for change in ({"timed_out":True},{"cleanup_error":"pipe leaked"},
+                       {"capture_complete":False},{"exit_code":1}):
+            bad=dict(valid,**change)
+            self.assertFalse(risk.complete_command(bad))
+        self.assertFalse(risk.complete_command({"exit_code":0}))
+
+    def test_unselected_native_profile_snapshot_detects_mutations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/"skills").mkdir()
+            initial=risk.profile_snapshot(root)
+            self.assertTrue(initial["complete"])
+            (root/"skills"/"unexpected.toml").write_bytes(b"mutation")
+            self.assertNotEqual(initial,risk.profile_snapshot(root))
 
     def test_failure_negative_control_is_not_mislabeled_crash_e2e(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -186,6 +253,26 @@ class RiskOracleTests(unittest.TestCase):
                                        {"SKILL.md":b"fixture"},claude_available=True)
             self.assertEqual(result["status"],"BLOCKED")
             self.assertNotIn("claude_version_verified",result)
+
+    def test_MCP_config_rejects_empty_or_unrelated_server(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project=Path(tmp)
+            toml=project/".codex/config.toml"
+            toml.parent.mkdir()
+            self.assertEqual(risk.codex_mcp_contract(project),"missing_config")
+            toml.write_text('[mcp_servers.some_other_server]\ncommand = "node"\n')
+            self.assertEqual(risk.codex_mcp_contract(project),"missing_server")
+            toml.write_text('[mcp_servers.riskcanary]\ncommand = "node"\n'
+                            'args = ["-e", "process.exit(0)"]\n')
+            self.assertEqual(risk.codex_mcp_contract(project),"environment_forwarding_unverified")
+            toml.write_text('[mcp_servers.riskcanary]\ncommand = "node"\n'
+                            'args = ["-e", "process.exit(0)"]\n'
+                            'env_vars = ["UAP_APM_SECRET_CANARY"]\n')
+            self.assertEqual(risk.codex_mcp_contract(project),"match")
+            toml.write_text('[mcp_servers.riskcanary]\ncommand = "wrong-tool"\n'
+                            'args = ["-e", "process.exit(0)"]\n'
+                            'env_vars = ["UAP_APM_SECRET_CANARY"]\n')
+            self.assertEqual(risk.codex_mcp_contract(project),"wrong_command")
 
     def test_risk_file_does_not_embed_live_credentials(self):
         self.assertNotIn("sk-",str(risk.GROUPS))
