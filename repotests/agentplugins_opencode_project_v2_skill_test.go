@@ -22,7 +22,7 @@ import (
 // V2 removed "debug skill". Its official /api/skill endpoint exposes the
 // actual process-local skill registry. Never replace this proof with a file
 // inventory or a synthetic successful native response.
-func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string) map[string]openCodeProjectSkill {
+func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string, required ...string) map[string]openCodeProjectSkill {
 	t.Helper()
 	commandLabel := label + "-skill"
 	if f.table[commandLabel] != "native" || f.used[commandLabel] != "" || len(f.used) >= 60 {
@@ -83,14 +83,22 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string) m
 				err = closeErr
 			}
 			if err == nil && response.StatusCode == http.StatusOK && len(body) <= 1<<20 {
-				// A 200 response may precede asynchronous ConfigSkillPlugin
-				// registration. Never certify the startup-empty registry.
+				// V2 registers two built-in skills before project/user
+				// resources finish loading. A nonempty registry therefore
+				// proves nothing: require every source-bound expected skill
+				// before observing the native project result.
 				registered, observed := openCodeProjectV2Skills(body, project)
-				if observed == nil && len(registered) > 0 {
+				ready := observed == nil && len(required) > 0
+				for _, name := range required {
+					if registered[name].Name == "" {
+						ready = false
+					}
+				}
+				if ready {
 					lastError = nil
 					break
 				}
-				lastError = fmt.Errorf("V2 skill registry not yet populated or malformed: %v", observed)
+				lastError = fmt.Errorf("V2 source-bound project skills not yet registered or malformed: %v", observed)
 			} else {
 				lastError = fmt.Errorf("native V2 skill route not ready (status %d)", response.StatusCode)
 			}
