@@ -899,11 +899,19 @@ def case_interrupted(product: str, cli: str, root: Path, commit: str) -> dict:
     env=baseline.isolated_env(root)
     project,original=baseline.make_project(root)
     prepare_project(product,project,commit)
-    argv=baseline.tool_args(product,cli,project,commit)
-    # Preflight is a *separate* real negative control, not a forged crash proof.
-    # A safe isolated error is introduced via a malformed existing lock.
+    # First obtain an actual lock from the released CLI, then corrupt it.
+    # The previous 'skills add' preflight never read the invalid lock.
+    bootstrap=run(product,cli,project,root,env,commit=commit)
     file=project / ("uap.lock" if product=="uap" else "apm.lock.yaml")
-    file.write_text("{invalid: unresolved: [\n")
+    if not complete_command(bootstrap) or observed_file(file,project) is None:
+        return receipt(product,"R4_interrupted_operation","BLOCKED",
+                       stage="initial_locked_state_unavailable",bootstrap=bootstrap,
+                       reason="real initial install and lock were not established",
+                       deterministic_post_write_barrier=False,crash_recovery="NOT_RUN")
+    # The frozen replay must reject an invalid lock before any managed effect.
+    # This remains a preflight control, NOT post-write crash evidence.
+    file.write_text("{invalid: unresolved: [\\n")
+    argv=baseline.tool_args(product,cli,project,commit,replay=True)
     protected_paths=(file, project/".agents/skills/foreign-neighbor/SKILL.md")
     before=tuple(file_identity(path,project) for path in protected_paths)
     control=baseline.run_process(argv,project,env,root)
@@ -922,7 +930,7 @@ def case_interrupted(product: str, cli: str, root: Path, commit: str) -> dict:
     else:
         label="BLOCKED";reason="verified preflight refusal; deterministic post-write interruption NOT_RUN"
     return receipt(product,"R4_interrupted_operation",label,reason=reason,
-                   controlled_preflight=control,preflight_identity_untouched=(before==after),
+                   bootstrap=bootstrap, controlled_preflight=control,preflight_identity_untouched=(before==after),
                    deterministic_post_write_barrier=False,crash_recovery="NOT_RUN")
 
 
@@ -1001,7 +1009,7 @@ def scan_synthetic_canary(roots: tuple[Path, ...], synthetic: str,
             "other_transformations": "NOT_RUN"}
 
 
-def codex_mcp_contract(project: Path) -> str:
+def codex_mcp_contract(project: Path, product: str = "apm") -> str:
     """Require the exact server and Codex's explicit env-forwarding contract."""
     raw = observed_file(project / ".codex/config.toml", project)
     if raw is None:
@@ -1012,16 +1020,32 @@ def codex_mcp_contract(project: Path) -> str:
         server = servers.get("riskcanary") if isinstance(servers, dict) else None
         if not isinstance(server, dict):
             return "missing_server"
-        if server.get("command") != "node":
+        command = server.get("command")
+        arguments = server.get("args", [])
+        if product == "uap":
+            # The Agent Plugins loader requires a bundled stdio command.
+            # Its Codex projection must retain that executable identity.
+            bundled = project / "package" / "bin" / "risk-probe.sh"
+            if not isinstance(command, str) or not (
+                    command == str(bundled) or (
+                        Path(command).is_absolute()
+                        and Path(command).parts[-2:] == ("bin", "risk-probe.sh")
+                        and ".uap" in Path(command).parts)):
+                return "wrong_command"
+            if arguments != []:
+                return "wrong_arguments"
+        elif command != "node":
             return "wrong_command"
-        if server.get("args") != ["-e", "process.exit(0)"]:
+        elif arguments != ["-e", "process.exit(0)"]:
             return "wrong_arguments"
         forwarded = server.get("env_vars")
         embedded = server.get("env", {})
         if (not isinstance(forwarded, list)
-                or forwarded != [MARKER] or
-                not all(isinstance(name, str) for name in forwarded)
-                or not isinstance(embedded, dict) or embedded):
+                or forwarded != [MARKER]
+                or not all(isinstance(name, str) for name in forwarded)
+                or not isinstance(embedded, dict)
+                or any(name not in ("PLUGIN_ROOT", "PLUGIN_DATA") for name in embedded)
+                or any(not isinstance(value, str) for value in embedded.values())):
             return "environment_forwarding_unverified"
         return "match"
     except (ValueError, UnicodeError, AttributeError, TypeError):
@@ -1041,6 +1065,13 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
     if product=="uap":
         package=project / "package"
         package.mkdir()
+        # A bare PATH 'node' is not a valid Agent Plugins 1.0 stdio
+        # command. Use an inert, executable plugin-relative entrypoint.
+        bundled = package / "bin" / "risk-probe.sh"
+        bundled.parent.mkdir()
+        bundled.write_bytes(b"#!/bin/sh\nexit 0\n")
+        bundled.chmod(0o700)
+        command=["./bin/risk-probe.sh"]
         (package/"plugin.json").write_text(json.dumps({
             "$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
             "name":"risk-mcp", "version":"0.1.0",
@@ -1082,7 +1113,7 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
                foreign_before[0] == h(foreign) and
                file_identity(foreign_path,project) == foreign_before)
     config=next((row for row in found if row["file"]==".codex/config.toml"),None)
-    contract=codex_mcp_contract(project)
+    contract=codex_mcp_contract(project, product)
     if leak or not protected:
         verdict="FAIL";reason="synthetic canary persisted or foreign content was changed"
     elif not scan["complete"]:
