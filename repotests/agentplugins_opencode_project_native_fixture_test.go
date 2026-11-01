@@ -363,10 +363,10 @@ func (f *openCodeProjectFixture) config(t *testing.T, label, project string, ext
 	}
 	return object
 }
-func (f *openCodeProjectFixture) skills(t *testing.T, label, project string, precedence bool) map[string]openCodeProjectSkill {
+func (f *openCodeProjectFixture) skills(t *testing.T, label, project string, precedence bool, required ...string) map[string]openCodeProjectSkill {
 	t.Helper()
 	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") == "2.2.5" {
-		return f.skillsV2(t, label, project)
+		return f.skillsV2(t, label, project, required...)
 	}
 	r := f.command(t, "native", label+"-skill", f.client, project, f.env(), []string{"debug", "skill"})
 	if r.Exit != 0 {
@@ -426,7 +426,11 @@ func (f *openCodeProjectFixture) observe(t *testing.T, label, project, source, m
 	if err := openCodeProjectCheckConfig(f.config(t, label, project, nil), urls, absent); err != nil {
 		t.Fatal(err)
 	}
-	if err := openCodeProjectCheckSkills(f.skills(t, label, project, false), expected, forbidden); err != nil {
+	required := make([]string, 0, len(expected))
+	for name := range expected {
+		required = append(required, name)
+	}
+	if err := openCodeProjectCheckSkills(f.skills(t, label, project, false, required...), expected, forbidden); err != nil {
 		t.Fatal(err)
 	}
 }
