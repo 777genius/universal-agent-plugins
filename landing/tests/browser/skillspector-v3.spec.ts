@@ -610,8 +610,10 @@ test('v3 detail page opens install advice before installation and explains the m
 
 test('v3 distinguishes selected roots from known complete plugin inventory', async ({ page }) => {
   const { assessment, errors } = await setup(page, 'selected');
+  // Every selected Skill has an executed partial or complete scan. The absent
+  // package inventory changes the denominator's provenance, not the result.
   await expect(assessment.locator(':scope > summary')).toContainText(
-    'Skill scan · Coverage has limits',
+    'Skill scan · Checked with limitations',
   );
   await assessment.locator(':scope > summary').click();
   await expect(assessment.locator('.skillspector__advice')).toContainText(
