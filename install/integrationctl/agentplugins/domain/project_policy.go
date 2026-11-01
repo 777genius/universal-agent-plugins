@@ -4,11 +4,11 @@ package domain
 // value enables nothing. Client stacks add it together with project layouts;
 // user traits and physical backend sharing remain unchanged.
 type ProjectPolicy struct {
-	LifecycleKind      LifecycleKind `json:"-"`
-	BackendFamily      string        `json:"-"`
-	SkillSupport       SupportLevel  `json:"-"`
-	MCPSupport         SupportLevel  `json:"-"`
-	TracksNativeEffects bool        `json:"-"`
+	LifecycleKind       LifecycleKind `json:"-"`
+	BackendFamily       string        `json:"-"`
+	SkillSupport        SupportLevel  `json:"-"`
+	MCPSupport          SupportLevel  `json:"-"`
+	TracksNativeEffects bool          `json:"-"`
 }
 
 func (policy ProjectPolicy) Valid() bool {
