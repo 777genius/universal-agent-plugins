@@ -1,2 +1,4 @@
 name: risk-child
 version: 1.0.0
+includes:
+  - .apm/skills
