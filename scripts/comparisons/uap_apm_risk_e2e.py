@@ -311,10 +311,19 @@ def profile_scan(root: Path, expected: dict[str, bytes]) -> dict[str, dict]:
 
 
 def profile_snapshot(root: Path, *, max_entries: int = 2048) -> dict:
-    """Hash the selected disposable native profile; no sensitive file bodies."""
+    """Observe profile content, modes and identities, not just byte payloads."""
     entries: list[str] = []
     unknown: list[str] = []
     if root.is_symlink() or not root.is_dir():
+        return {"sha256": None, "count": 0, "complete": False}
+    def stamp(path: Path) -> str:
+        value = path.lstat()
+        return ":".join(str(v) for v in (
+            value.st_mode, value.st_uid, value.st_gid, value.st_ino,
+            value.st_mtime_ns, value.st_ctime_ns))
+    try:
+        entries.append("ROOT:" + stamp(root))
+    except OSError:
         return {"sha256": None, "count": 0, "complete": False}
     for current, dirs, files in os.walk(
             root, followlinks=False,
@@ -326,14 +335,21 @@ def profile_snapshot(root: Path, *, max_entries: int = 2048) -> dict:
                 unknown.append("symlink_directory")
                 dirs.remove(dirname)
             else:
-                entries.append("D:" + str(child.relative_to(root)))
+                try:
+                    entries.append("D:" + str(child.relative_to(root)) + ":" + stamp(child))
+                except OSError:
+                    unknown.append("unreadable_directory")
         for filename in sorted(files):
             child = here / filename
             data = observed_file(child, root)
             if data is None:
                 unknown.append("unreadable")
             else:
-                entries.append("F:" + str(child.relative_to(root)) + ":" + h(data))
+                try:
+                    entries.append("F:" + str(child.relative_to(root)) + ":" +
+                                   h(data) + ":" + stamp(child))
+                except OSError:
+                    unknown.append("unreadable_file_metadata")
         if len(entries) > max_entries:
             unknown.append("too_many_entries")
             break
@@ -351,6 +367,36 @@ def saved_profile_source_matches(product: str, env: dict[str, str], commit: str)
                 ["exact_source_commit_recorded_in_lock"])
 
 
+def observe_native_claude(root: Path) -> dict | None:
+    """Independently hash and version-probe the actual PATH-selected client."""
+    executable = shutil.which("claude")
+    if not executable:
+        return None
+    try:
+        native = Path(executable).resolve(strict=True)
+        st = native.lstat()
+        if not stat.S_ISREG(st.st_mode) or not 0 < st.st_size <= 512 * 1024 * 1024:
+            return None
+        digest = hashlib.sha256()
+        with native.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        observed_hash = digest.hexdigest()
+        if observed_hash != "26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba":
+            return None
+        probe_root = root / "claude-proof"
+        proof_env = baseline.isolated_env(probe_root)
+        probe = baseline.run_process([executable, "--version"],
+                                     probe_root, proof_env, root)
+        output = probe.get("output_tail", "").strip()
+        if not complete_command(probe) or re.search(
+                r"(?<![0-9])2\.1\.263(?![0-9])", output) is None:
+            return None
+        return {"native_sha256": observed_hash, "observed_version": output}
+    except (OSError, ValueError):
+        return None
+
+
 def case_profiles(product: str, cli: str, root: Path, commit: str,
                   expected: dict[str, bytes], *, claude_available: bool,
                   claude_version: str | None = None,
@@ -362,6 +408,10 @@ def case_profiles(product: str, cli: str, root: Path, commit: str,
     if not verified:
         return receipt(product, "R2_claude_profiles", "BLOCKED",
                        reason="pinned real Claude version and native digest unavailable")
+    native_proof = observe_native_claude(root)
+    if native_proof is None or native_proof["observed_version"] != claude_version.strip():
+        return receipt(product, "R2_claude_profiles", "BLOCKED",
+                       reason="actual selected Claude native executable/version not verified")
     env = baseline.isolated_env(root)
     home = Path(env["HOME"])
     a, b = home / ".claude", home / "profiles" / "b"
@@ -430,6 +480,7 @@ def case_profiles(product: str, cli: str, root: Path, commit: str,
     return receipt(product, "R2_claude_profiles", verdict, reason=why,
                    phases=results, verified_claude_version=claude_version,
                    verified_claude_native_sha256=claude_native_sha256,
+                   independently_verified_claude=native_proof,
                    profile_snapshots_complete=snapshots_complete,
                    unselected_profiles_unchanged=no_cross_profile_change,
                    saved_source_matches=pinned_source,
