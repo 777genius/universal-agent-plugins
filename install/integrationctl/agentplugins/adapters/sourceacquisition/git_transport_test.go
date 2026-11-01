@@ -201,7 +201,7 @@ func (runner *forcedCRLFCheckoutRunner) Run(ctx context.Context, command Command
 		config.Env = isolatedGitEnvironment(os.Environ(), command.Dir)
 		output, e := config.Output()
 		if e != nil || strings.TrimSpace(string(output)) != "lf" {
-			return nil, fmt.Errorf("immutable checkout did not override OS-dependent core.eol: %q (%v)", output, e)
+			return nil, fmt.Errorf("immutable checkout did not override OS-dependent core.eol: %q: %w", output, e)
 		}
 		runner.checked = true
 	}
