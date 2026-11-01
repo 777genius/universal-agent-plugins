@@ -391,7 +391,7 @@ class RiskOracleTests(unittest.TestCase):
                 if len(calls)==1:
                     (project/"uap.lock").write_bytes(b"{}\\n")
                     return complete_bootstrap
-                return control
+                return {**control,"argv":_argv}
             return execute
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
@@ -429,6 +429,25 @@ class RiskOracleTests(unittest.TestCase):
             self.assertNotEqual(probe.stat().st_mode & 0o100,0)
             self.assertEqual(row["status"],"BLOCKED")
             self.assertFalse(row["filesystem_scan"]["canary_found"])
+
+    def test_uap_mcp_projection_requires_real_bounded_script_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            project=root/"project"
+            config=project/".codex"/"config.toml"
+            config.parent.mkdir(parents=True)
+            executable=project/"package"/"bin"/"risk-probe.sh"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"#!/bin/sh\\nexit 0\\n")
+            config.write_text(
+                "[mcp_servers.riskcanary]\\n"
+                f'command = "{executable}"\\n'
+                'args = []\\n'
+                'env_vars = ["UAP_APM_SECRET_CANARY"]\\n'
+            )
+            self.assertEqual(risk.codex_mcp_contract(project,"uap"),"match")
+            executable.write_bytes(b"#!/bin/sh\\nexit 1\\n")
+            self.assertEqual(risk.codex_mcp_contract(project,"uap"),"wrong_command")
 
     def test_residual_removed_skill_directory_is_not_absent(self):
         with tempfile.TemporaryDirectory() as tmp:
