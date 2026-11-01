@@ -274,6 +274,34 @@ class RiskOracleTests(unittest.TestCase):
                             'env_vars = ["UAP_APM_SECRET_CANARY"]\n')
             self.assertEqual(risk.codex_mcp_contract(project),"wrong_command")
 
+    def test_tool_version_requires_observed_complete_process(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            executable=root/"manager"
+            executable.write_bytes(b"fixture-executable")
+            complete={"exit_code":0,"timed_out":False,"cleanup_error":None,
+                      "capture_complete":True,
+                      "output_tail":"agentplugins 0.1.0-development"}
+            with patch.object(risk.baseline,"run_process",return_value=complete):
+                identity=risk.observe_cli_identity("uap",executable,root/"probe")
+            self.assertTrue(identity["probe_verified"])
+            self.assertTrue(identity["source_build_not_published_binary"])
+            self.assertEqual(identity["entrypoint_sha256"],risk.h(b"fixture-executable"))
+            for changed in ({"capture_complete":False},{"timed_out":True},
+                            {"cleanup_error":"lost child"},
+                            {"output_tail":"not-the-manager"},
+                            {"exit_code":1}):
+                bad=dict(complete,**changed)
+                with patch.object(risk.baseline,"run_process",return_value=bad):
+                    identity=risk.observe_cli_identity("uap",executable,root/"probe")
+                self.assertFalse(identity["probe_verified"])
+
+    def test_unknown_audit_requires_null_evidence(self):
+        # A UAP run without the APM audit cannot assert that audit passed.
+        record={"audit":None,"audit_reported_a_problem":None}
+        self.assertIsNone(record["audit_reported_a_problem"])
+        self.assertIsNone(record["audit"])
+
     def test_risk_file_does_not_embed_live_credentials(self):
         self.assertNotIn("sk-",str(risk.GROUPS))
         self.assertNotEqual(risk.PARENT_V1,risk.PARENT_V2)
