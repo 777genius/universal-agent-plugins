@@ -393,19 +393,63 @@ def graph_command(product: str, cli: str, project: Path,
     return [cli, "install", "--target", "codex", *(["--update"] if updated else [])]
 
 
-def child_lock(project: Path, product: str, commit: str) -> bool:
+def graph_lock_matches(project: Path, product: str,
+                       parent_commit: str, child_commit: str) -> bool:
+    """Require the exact two-node graph and actual parent-child provenance.
+
+    One valid child entry is not enough: stale/duplicate pins or a missing
+    dependency edge make the test unable to claim a correct full update.
+    """
     try:
         if product == "uap":
             lock = json.loads((project / "uap.lock").read_bytes())
-            return any(isinstance(n,dict)
-                       and (g:=n.get("source",{}).get("git",{})).get("resolved_skill_path",g.get("path")) == CHILD
-                       and g.get("commit")==commit
-                       for n in lock.get("packages",[]))
+            nodes = lock.get("packages", [])
+            if not isinstance(nodes, list) or len(nodes) != 2:
+                return False
+            def source(node: dict) -> tuple[str, str, str]:
+                git = node.get("source", {}).get("git", {})
+                return (git.get("repository") or git.get("url"),
+                        git.get("path"), git.get("commit"))
+            if any(not isinstance(node, dict) for node in nodes):
+                return False
+            parent = [n for n in nodes if source(n)[1] == PARENT]
+            child = [n for n in nodes if source(n)[1] == CHILD]
+            if len(parent) != 1 or len(child) != 1:
+                return False
+            p, c = parent[0], child[0]
+            source_aliases = {REPO, SOURCE, f"https://github.com/{REPO}"}
+            if (source(p) not in {(r, PARENT, parent_commit) for r in source_aliases}
+                    or source(c) not in {(r, CHILD, child_commit) for r in source_aliases}):
+                return False
+            parent_alias = p.get("alias")
+            if not isinstance(parent_alias, str) or not parent_alias:
+                return False
+            edges = c.get("required_by")
+            if not isinstance(edges, list) or len(edges) != 1:
+                return False
+            edge = edges[0]
+            selector = edge.get("selector", {}) if isinstance(edge, dict) else {}
+            return (edge.get("alias") == parent_alias
+                    and selector.get("kind") == "commit"
+                    and selector.get("value") == child_commit)
         import yaml
-        lock=yaml.safe_load((project / "apm.lock.yaml").read_bytes())
-        return any(isinstance(n,dict) and n.get("virtual_path")==CHILD
-                   and n.get("resolved_commit")==commit for n in lock.get("dependencies",[]))
-    except (OSError,ValueError,TypeError,KeyError,ImportError):
+        lock = yaml.safe_load((project / "apm.lock.yaml").read_bytes())
+        nodes = lock.get("dependencies", [])
+        if not isinstance(nodes, list) or len(nodes) != 2 or any(
+                not isinstance(n, dict) for n in nodes):
+            return False
+        parent = [n for n in nodes if n.get("virtual_path") == PARENT]
+        child = [n for n in nodes if n.get("virtual_path") == CHILD]
+        if len(parent) != 1 or len(child) != 1:
+            return False
+        p, c = parent[0], child[0]
+        repos = {REPO, SOURCE, f"https://github.com/{REPO}"}
+        return (p.get("repo_url") in repos and c.get("repo_url") in repos
+                and p.get("resolved_commit") == parent_commit
+                and c.get("resolved_commit") == child_commit
+                and c.get("resolved_by") == p.get("repo_url")
+                and not p.get("resolved_by"))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, ImportError):
         return False
 
 
@@ -417,7 +461,12 @@ def case_graph(product: str, cli: str, root: Path) -> dict:
     old=fixture(CHILD_V1,CHILD+"/skills/risk-child/SKILL.md")
     new=fixture(CHILD_V2,CHILD+"/skills/risk-child/SKILL.md")
     old_skill=project / ".agents/skills/risk-child/SKILL.md"
-    first=observed_file(old_skill,project)==old and child_lock(project,product,CHILD_V1)
+    parent_skill=project / ".agents/skills/risk-parent/SKILL.md"
+    parent_v1=fixture(PARENT_V1,PARENT+"/skills/risk-parent/SKILL.md")
+    parent_v2=fixture(PARENT_V2,PARENT+"/skills/risk-parent/SKILL.md")
+    first=(observed_file(old_skill,project)==old
+           and observed_file(parent_skill,project)==parent_v1
+           and graph_lock_matches(project,product,PARENT_V1,CHILD_V1))
     if initial["exit_code"]!=0 or not first:
         return receipt(product,"R3_transitive_update","BLOCKED",stage="initial_graph_admission",
                        reason="two-package transitive graph did not reach expected native source state",
@@ -428,10 +477,11 @@ def case_graph(product: str, cli: str, root: Path) -> dict:
         prelock=baseline.run_process(graph_command(product,cli,project,lock=True),project,env,root)
     updated=baseline.run_process(graph_command(product,cli,project,updated=True),project,env,root)
     actual=observed_file(old_skill,project)
-    graph_ok=child_lock(project,product,CHILD_V2)
+    graph_ok=graph_lock_matches(project,product,PARENT_V2,CHILD_V2)
     foreign_ok=baseline.safe_same_bytes(project/".agents/skills/foreign-neighbor/SKILL.md",
                                        b"FOREIGN USER CONTENT: preserve without edits\n",project)
-    did=actual==new and graph_ok
+    did=(actual==new and graph_ok
+         and observed_file(parent_skill,project)==parent_v2)
     result,reason=status(True,updated,did,"parent v2 must resolve child B once and deploy child B",
                          protected=foreign_ok)
     if prelock is not None and prelock["exit_code"]!=0 and result=="PASS":
@@ -440,7 +490,8 @@ def case_graph(product: str, cli: str, root: Path) -> dict:
                    pin_refresh=prelock,command=updated,foreign_unchanged=foreign_ok,
                    original_sha256=h(old),expected_sha256=h(new),
                    actual_sha256=h(actual) if actual is not None else None,
-                   child_v2_locked=graph_ok)
+                   parent_v2_payload_matches=observed_file(parent_skill,project)==parent_v2,
+                   complete_parent_child_graph_locked=graph_ok)
 
 
 def case_interrupted(product: str, cli: str, root: Path, commit: str) -> dict:
