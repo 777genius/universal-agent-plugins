@@ -60,10 +60,10 @@ class RiskOracleTests(unittest.TestCase):
             project=Path(tmp)
             parent={"alias":"risk-parent","source":{"git":{
                 "repository":risk.REPO, "path":risk.PARENT,
-                "commit":risk.PARENT_V1}}}
+                "commit":risk.PARENT_V1,"requested":{"kind":"commit","value":risk.PARENT_V1}}}
             child={"alias":"risk-child","source":{"git":{
                 "repository":risk.REPO,"path":risk.CHILD,
-                "commit":risk.CHILD_V1}},
+                "commit":risk.CHILD_V1,"requested":{"kind":"commit","value":risk.CHILD_V1}}},
                 "required_by":[{"alias":"risk-parent","selector":{
                     "kind":"commit","value":risk.CHILD_V1}}]}
             base={"packages":[parent,child]}
@@ -93,15 +93,51 @@ class RiskOracleTests(unittest.TestCase):
             self.assertFalse(risk.graph_lock_matches(
                 project,"uap",risk.PARENT_V1,risk.CHILD_V1))
 
+    def test_UAP_graph_rejects_stale_requested_pins(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            def locked(commit, requested, path, alias, required_by=None):
+                node = {"alias": alias, "source": {"git": {
+                    "repository": risk.REPO, "path": path, "commit": commit,
+                    "requested": {"kind": "commit", "value": requested},
+                }}}
+                if required_by is not None:
+                    node["required_by"] = required_by
+                return node
+            parent = locked(risk.PARENT_V2, risk.PARENT_V2, risk.PARENT, "parent")
+            child = locked(risk.CHILD_V2, risk.CHILD_V2, risk.CHILD, "child",
+                           [{"alias": "parent", "selector": {
+                               "kind": "commit", "value": risk.CHILD_V2}}])
+            path = project / "uap.lock"
+            data = {"packages": [parent, child]}
+            path.write_text(json.dumps(data))
+            self.assertTrue(risk.graph_lock_matches(
+                project, "uap", risk.PARENT_V2, risk.CHILD_V2))
+            # An inconsistent lock with correct source coordinates but stale
+            # consumer intent must not receive a false full-graph PASS.
+            child["source"]["git"]["requested"]["value"] = risk.CHILD_V1
+            path.write_text(json.dumps(data))
+            self.assertFalse(risk.graph_lock_matches(
+                project, "uap", risk.PARENT_V2, risk.CHILD_V2))
+            child["source"]["git"]["requested"]["value"] = risk.CHILD_V2
+            parent["source"]["git"]["requested"]["value"] = risk.PARENT_V1
+            path.write_text(json.dumps(data))
+            self.assertFalse(risk.graph_lock_matches(
+                project, "uap", risk.PARENT_V2, risk.CHILD_V2))
+            parent["source"]["git"].pop("requested")
+            path.write_text(json.dumps(data))
+            self.assertFalse(risk.graph_lock_matches(
+                project, "uap", risk.PARENT_V2, risk.CHILD_V2))
+
     def test_UAP_graph_rejects_reverse_edges_and_same_alias(self):
         with tempfile.TemporaryDirectory() as tmp:
             project=Path(tmp)
             parent={"alias":"parent","source":{"git":{
                 "repository":risk.REPO,"path":risk.PARENT,
-                "commit":risk.PARENT_V1}}}
+                "commit":risk.PARENT_V1,"requested":{"kind":"commit","value":risk.PARENT_V1}}}
             child={"alias":"child","source":{"git":{
                 "repository":risk.REPO,"path":risk.CHILD,
-                "commit":risk.CHILD_V1}},
+                "commit":risk.CHILD_V1,"requested":{"kind":"commit","value":risk.CHILD_V1}}},
                 "required_by":[{"alias":"parent","selector":{
                     "kind":"commit","value":risk.CHILD_V1}}]}
             data={"packages":[parent,child]}
@@ -349,6 +385,18 @@ class RiskOracleTests(unittest.TestCase):
         record={"audit":None,"audit_reported_a_problem":None}
         self.assertIsNone(record["audit_reported_a_problem"])
         self.assertIsNone(record["audit"])
+
+    def test_removed_unknown_is_not_reported_as_confirmed_orphan(self):
+        for observed, expected in (("present", True), ("absent", False),
+                                   ("unknown", None)):
+            self.assertEqual(
+                {"present": True, "absent": False}.get(observed), expected)
+            completed = {"exit_code": 0, "timed_out": False,
+                         "cleanup_error": None, "capture_complete": True}
+            if observed == "unknown":
+                self.assertEqual(
+                    risk.classify_removed_result(completed, observed, True)[0],
+                    "BLOCKED")
 
     def test_risk_file_does_not_embed_live_credentials(self):
         self.assertNotIn("sk-",str(risk.GROUPS))
