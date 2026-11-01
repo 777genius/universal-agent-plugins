@@ -44,10 +44,9 @@
       "unsupportedName": "इस लिस्टिंग से सीधे इंस्टॉल नहीं हो सकता। GitHub स्रोत जाँचें।",
       "collectionShown": "इस संग्रह में {total} में से {count} दिख रहे हैं",
       "headingPrefix": "खोजें",
-      "viewListing": "मूल लिस्टिंग देखें",
       "manualSkillSelection": "इंस्टॉलर में सही Skill चुनें; कैटलॉग का नाम सत्यापित नहीं है।",
       "publisherSource": "प्रकाशक स्रोत",
-      "invalidPublisherName": "सटीक Skill नाम आवश्यक है। मूल लिस्टिंग देखें।",
+      "invalidPublisherName": "Skill का सटीक नाम आवश्यक है। प्रकाशक का स्रोत जाँचें।",
       "detail": {
         "breadcrumb": "Skill नेविगेशन",
         "skill": "Agent Skill",
@@ -59,13 +58,15 @@
         "prompt": "प्रॉम्प्ट",
         "promptText": "इस Skill को Universal Agent Plugins से इंस्टॉल करें। चलाने से पहले स्रोत और बदलावों की समीक्षा करें:\n{command}",
         "exactNameUnavailable": "इंस्टॉल के लिए सटीक नाम सत्यापित नहीं हो सका। मूल लिस्टिंग देखें।",
-        "documentNotice": "कैटलॉग स्रोत और इंस्टॉल मेटाडेटा दिखाता है, सत्यापित SKILL.md सामग्री नहीं। इंस्टॉल से पहले मूल निर्देश पढ़ें।",
-        "readInstructions": "मूल लिस्टिंग पर SKILL.md पढ़ें",
         "security": "सुरक्षा जाँच",
         "installs": "इंस्टॉल",
         "source": "स्रोत",
-        "listing": "मूल लिस्टिंग",
-        "metricsNotice": "इंस्टॉल संख्या बाहरी डायरेक्टरी से है और स्वतंत्र रूप से सत्यापित नहीं है।"
+        "metricsNotice": "इंस्टॉल संख्या बाहरी डायरेक्टरी से है और स्वतंत्र रूप से सत्यापित नहीं है।",
+        "loadingDocument": "स्रोत निर्देश लोड हो रहे हैं…",
+        "sourceDocumentNotice": "प्रकाशक के निर्देश · अप्रमाणित सामग्री। उपयोग से पहले पढ़ें।",
+        "documentUnavailable": "प्रकाशक से SKILL.md लोड नहीं हो सका। आप स्रोत सीधे देख सकते हैं।",
+        "viewPublisher": "प्रकाशक का स्रोत देखें",
+        "revision": "स्रोत संशोधन"
       }
     },
     "directoryPage": {
