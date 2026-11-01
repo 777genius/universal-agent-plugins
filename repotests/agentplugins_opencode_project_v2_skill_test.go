@@ -175,9 +175,9 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string, r
 	f.records = append(f.records, map[string]any{
 		"class": "native", "label": commandLabel,
 		"argv": []string{filepath.Base(f.client), "serve", "--hostname", "127.0.0.1", "--port", "<bound-port>"},
-		"cwd": project, "exit": 0, "elapsed_ms": time.Since(started).Milliseconds(),
-		"stdout_file": commandLabel+".stdout.log", "stdout_bytes": len(body),
-		"stdout_sha256": digest(body), "stderr_file": commandLabel+".stderr.log",
+		"cwd":  project, "exit": 0, "elapsed_ms": time.Since(started).Milliseconds(),
+		"stdout_file": commandLabel + ".stdout.log", "stdout_bytes": len(body),
+		"stdout_sha256": digest(body), "stderr_file": commandLabel + ".stderr.log",
 		"stderr_bytes": stderr.Len(), "stderr_sha256": digest(stderr.Bytes()),
 		"recorder_before": before, "recorder_after": f.recorder.counts(),
 		"native_observation": "official_V2_api_skill_not_file_inventory",
