@@ -19,6 +19,29 @@ import (
 	"time"
 )
 
+// os/exec writes stderr from its copy goroutine. Limit bytes while the
+// native child is alive, and read the buffer only after Wait has joined it.
+type openCodeV2BoundedStderr struct {
+	bytes.Buffer
+	truncated bool
+}
+
+func (w *openCodeV2BoundedStderr) Write(body []byte) (int, error) {
+	incoming := len(body)
+	remaining := openCodeProjectLimit - w.Len()
+	if remaining < len(body) {
+		w.truncated = true
+		if remaining < 0 {
+			remaining = 0
+		}
+		body = body[:remaining]
+	}
+	if _, err := w.Buffer.Write(body); err != nil {
+		return 0, err
+	}
+	return incoming, nil
+}
+
 // V2 removed "debug skill". Its official /api/skill endpoint exposes the
 // actual process-local skill registry. Never replace this proof with a file
 // inventory or a synthetic successful native response.
@@ -53,7 +76,7 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string, r
 	// cannot qualify MCP initialize or tool execution.
 	command.Env = append(f.env(), "OPENCODE_PASSWORD="+password)
 	command.Stdout = io.Discard
-	var stderr bytes.Buffer
+	var stderr openCodeV2BoundedStderr
 	command.Stderr = &stderr
 	started := time.Now()
 	if err := command.Start(); err != nil {
@@ -110,8 +133,12 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string, r
 		case <-time.After(110 * time.Millisecond):
 		}
 	}
-	if lastError != nil || len(body) == 0 || len(body) > 1<<20 {
-		t.Fatalf("V2 native skill HTTP observation failed: %v; bounded startup stderr: %q", lastError, strings.TrimSpace(stderr.String()))
+	// Wait for the child's stderr copier before reading or hashing any
+	// captured bytes, even on a successful HTTP API observation.
+	_ = command.Process.Kill()
+	_ = command.Wait()
+	if lastError != nil || len(body) == 0 || len(body) > 1<<20 || stderr.truncated {
+		t.Fatalf("V2 native skill HTTP observation failed: %v (stderr overflow=%t); bounded startup stderr: %q", lastError, stderr.truncated, strings.TrimSpace(stderr.String()))
 	}
 	f.keep(t, commandLabel+".stdout.log", body)
 	if len(stderr.Bytes()) > openCodeProjectLimit {
