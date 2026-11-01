@@ -29,7 +29,7 @@ const targetlessFixture = {
   discovery: { availability: 'available' },
 };
 
-const messages = JSON.parse(readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'));
+const messages = JSON.parse(readFileSync(new URL('../i18n/locales/en.json', import.meta.url), 'utf8'));
 const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
 
 function panelState({ installable = true, autoDetect = true, current = true, stale = false, reviewed = false } = {}) {

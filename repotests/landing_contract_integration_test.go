@@ -167,7 +167,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		}
 	}
 
-	enLocaleBody, err := os.ReadFile(filepath.Join(landingRoot, "locales", "en.json"))
+	enLocaleBody, err := os.ReadFile(filepath.Join(landingRoot, "i18n", "locales", "en.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustNotContain(t, enLocale, `"hookplex":`)
 	mustNotContain(t, enLocale, `"generate": "generate"`)
 
-	ruLocaleBody, err := os.ReadFile(filepath.Join(landingRoot, "locales", "ru.json"))
+	ruLocaleBody, err := os.ReadFile(filepath.Join(landingRoot, "i18n", "locales", "ru.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +210,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustNotContain(t, ruLocale, `"generate": "generate"`)
 
 	for _, localeFile := range []string{"es.json", "fr.json", "zh.json"} {
-		if _, err := os.Stat(filepath.Join(landingRoot, "locales", localeFile)); err != nil {
+		if _, err := os.Stat(filepath.Join(landingRoot, "i18n", "locales", localeFile)); err != nil {
 			t.Fatalf("expected locale file %s: %v", localeFile, err)
 		}
 		if _, err := os.Stat(filepath.Join(landingRoot, "content", localeFile)); err != nil {
@@ -390,7 +390,7 @@ func scanRemovedBranding(root string) ([]string, error) {
 		filepath.Join(root, "components"),
 		filepath.Join(root, "content"),
 		filepath.Join(root, "composables"),
-		filepath.Join(root, "locales"),
+		filepath.Join(root, "i18n", "locales"),
 		filepath.Join(root, "types"),
 	}
 	if _, err := exec.LookPath("rg"); err == nil {
@@ -506,7 +506,7 @@ func assertLandingLocaleModel(t *testing.T, root, source string) {
 	}
 	for code := range required {
 		var dictionary map[string]interface{}
-		if err := json.Unmarshal([]byte(readRepoFile(t, root, "locales", code+".json")), &dictionary); err != nil {
+		if err := json.Unmarshal([]byte(readRepoFile(t, root, "i18n", "locales", code+".json")), &dictionary); err != nil {
 			t.Fatalf("%s dictionary: %v", code, err)
 		}
 		if len(dictionary) == 0 {

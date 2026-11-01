@@ -38,29 +38,26 @@ const items = computed(() =>
 const currentName = computed(() => items.value.find(item => item.value === locale.value)?.title);
 const currentFlagIcon = computed(() => flagIconMap[locale.value] ?? "circle-flags:xx");
 const menuOpen = ref(false);
-watch(menuOpen, open => emit('menu-open', open), { flush: 'sync' });
+let openedByArrowUp = false;
+watch(menuOpen, open => {
+  if (!open) openedByArrowUp = false;
+  emit('menu-open', open);
+}, { flush: 'sync' });
 onBeforeUnmount(() => emit('menu-open', false));
-let openingEdge: 'first' | 'last' | undefined;
-function focusOpeningItem() {
-  if (!menuOpen.value || !openingEdge) return;
-  const options = menu.value?.contentEl?.querySelectorAll<HTMLElement>('[role="menuitemradio"]');
-  const option = openingEdge === 'first' ? options?.[0] : options?.[options.length - 1];
-  if (option) {
-    option.focus();
-    // Lazy overlay content can exist while its enter transition still hides it.
-    // Keep the request until focus succeeds; after-enter retries at visibility.
-    if (document.activeElement === option) openingEdge = undefined;
-  }
-}
-function onActivatorKeydown(event: KeyboardEvent) {
-  if (pending.value || !['ArrowDown', 'ArrowUp'].includes(event.key)) return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  openingEdge = event.key === 'ArrowDown' ? 'first' : 'last';
-  menuOpen.value = true;
-  nextTick(focusOpeningItem);
-}
-// Vuetify handles Escape/Tab; outside dismissal must retain the clicked focus target.
+// Keep Vuetify's native keyboard handler intact. In the pinned VMenu, an
+// ArrowUp reopening immediately after Escape can leave focus on the activator
+// while its deferred focus timer races the overlay transition. On enter,
+// guarantee the last enabled option has focus without cancelling key events.
+const onActivatorKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'ArrowUp' && !pending.value) openedByArrowUp = true;
+};
+const onMenuAfterEnter = () => {
+  if (!openedByArrowUp) return;
+  openedByArrowUp = false;
+  if (!menuOpen.value || pending.value) return;
+  const choices = menu.value?.contentEl?.querySelectorAll<HTMLElement>('[role="menuitemradio"]:not([aria-disabled="true"])');
+  choices?.[choices.length - 1]?.focus();
+};
 
 const onChange = async (value: unknown) => {
   if (typeof value !== 'string' || pending.value) return;
@@ -78,10 +75,11 @@ const onChange = async (value: unknown) => {
 
 <template>
   <!-- attach=true renders inline inside the mobile modal focus/inert boundary. -->
-  <v-menu v-model="menuOpen" ref="menu" :attach="props.containMenu || false" location="bottom end" :close-on-content-click="false" @after-enter="focusOpeningItem">
+  <v-menu v-model="menuOpen" ref="menu" :attach="props.containMenu || false" location="bottom end" :close-on-content-click="false" @after-enter="onMenuAfterEnter">
     <template #activator="{ props: menuProps }">
       <v-btn
         v-bind="menuProps"
+        @keydown.capture="onActivatorKeydown"
         :variant="props.compact || props.iconOnly ? 'text' : 'outlined'"
         :block="props.fullWidth"
         :size="props.compact ? 'small' : 'default'"
@@ -89,7 +87,6 @@ const onChange = async (value: unknown) => {
         :loading="pending"
         :aria-busy="pending"
         :aria-label="`${t('language.label')}: ${currentName}`"
-        @keydown.capture="onActivatorKeydown"
       >
         <Icon :name="currentFlagIcon" class="language-switcher__flag-icon" aria-hidden="true" />
         <span v-if="!props.iconOnly" class="language-switcher__name">{{ currentName }}</span>

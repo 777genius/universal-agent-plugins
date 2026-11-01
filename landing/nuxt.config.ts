@@ -158,16 +158,11 @@ export default defineNuxtConfig({
   },
   i18n: {
     vueI18n: './i18n.config.ts',
-    restructureDir: false,
     locales: [...supportedLocales],
     defaultLocale: 'en',
     strategy: 'prefix_except_default',
     trailingSlash: true,
-    lazy: true,
     langDir: 'locales',
-    bundle: {
-      optimizeTranslationDirective: false,
-    },
     // Published locales have explicit URLs. Keep the requested route instead
     // of redirecting automatically from the browser's language preference.
     detectBrowserLanguage: false,

@@ -34,12 +34,12 @@ test('card and detail reviewed badges use one word with a listing-specific toolt
     pt: 'Revisado',
     fr: 'Examiné',
   };
-  for (const filename of readdirSync(new URL('../locales/', import.meta.url))) {
+  for (const filename of readdirSync(new URL('../i18n/locales/', import.meta.url))) {
     if (!filename.endsWith('.json')) continue;
     const code = filename.replace('.json', '');
     assert.ok(isKnownLocale(code), `${filename}: supported locale`);
     const messages = JSON.parse(
-      readFileSync(new URL(`../locales/${filename}`, import.meta.url), 'utf8'),
+      readFileSync(new URL(`../i18n/locales/${filename}`, import.meta.url), 'utf8'),
     );
     const { t } = createI18n<[LocaleMessageDictionary<VueMessageType>], string, false>({
       legacy: false,
@@ -148,7 +148,7 @@ test('all owned presentation keys exist and technical client content remains the
 });
 
 test('catalog SEO titles never promise a count before the signed feed loads', () => {
-  for (const filename of readdirSync(new URL('../locales/', import.meta.url))) {
+  for (const filename of readdirSync(new URL('../i18n/locales/', import.meta.url))) {
     if (!filename.endsWith('.json')) continue;
     const locale = loadI18nMessages(filename.replace('.json', ''));
     assert.doesNotMatch(locale.registryUi.directoryPage.title, /(?:2[\s,.]?500|2500)/, filename);
