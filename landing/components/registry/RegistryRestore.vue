@@ -54,13 +54,14 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
             </p>
             <div class="registry-restore__screen-body">
               <CommandSnippet :command="addCommand" inline>
-                agentplugins <span class="registry-restore__accent">add</span>
+                agentplugins <span class="registry-restore__accent">add</span>{{ ' ' }}
                 <span class="registry-restore__source" :title="pluginSource"
                   >github:brunoborges/javaevolved…</span
                 >
-                <span class="registry-restore__source-compact" aria-hidden="true">…</span>
+                <span class="registry-restore__source-compact" aria-hidden="true">github:brunoborges/…</span>{{ ' ' }}
                 <span class="registry-restore__argument"
-                  ><span class="registry-restore__accent">--scope</span> project</span
+                  ><span class="registry-restore__accent">--target</span> codex{{ ' ' }}
+                  <span class="registry-restore__accent">--scope</span> project</span
                 >
               </CommandSnippet>
               <p class="registry-restore__commit" dir="auto">{{ t('shell.restore.commit') }}</p>
@@ -118,7 +119,7 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
             </p>
             <div class="registry-restore__screen-body">
               <CommandSnippet :command="restoreCommand" inline>
-                agentplugins <span class="registry-restore__accent">install</span>
+                agentplugins <span class="registry-restore__accent">install</span>{{ ' ' }}
                 <span class="registry-restore__accent">--locked</span>
               </CommandSnippet>
             </div>
