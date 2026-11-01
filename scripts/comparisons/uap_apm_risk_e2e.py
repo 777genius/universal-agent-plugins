@@ -1029,7 +1029,7 @@ def codex_mcp_contract(project: Path, product: str = "apm") -> str:
             executable = Path(command) if isinstance(command, str) else Path(".")
             if (not executable.is_absolute()
                     or executable.parts[-2:] != ("bin", "risk-probe.sh")
-                    or observed_file(executable, project.parent) != b"#!/bin/sh\\nexit 0\\n"):
+                    or observed_file(executable, project.parent) != b"#!/bin/sh\nexit 0\n"):
                 return "wrong_command"
             if arguments != []:
                 return "wrong_arguments"
