@@ -671,9 +671,14 @@ class RiskOracleTests(unittest.TestCase):
             # Same directory name and mode, but replaced inode, must be seen.
             replacement=project/".agents"/"replacement"
             replacement.mkdir()
+            # Match the original directory's permissions so the comparison
+            # requires inode evidence, not a coincidental mode difference.
+            replacement.chmod(folder.stat().st_mode & 0o777)
             folder.rmdir()
             replacement.rename(folder)
             swapped=risk.project_file_snapshot(project)
+            self.assertTrue(changed["complete"])
+            self.assertTrue(swapped["complete"])
             self.assertNotEqual(changed["sha256"],swapped["sha256"])
 
     def test_graph_foreign_directory_mode_mutation_fails_before_admission(self):
@@ -734,6 +739,18 @@ class RiskOracleTests(unittest.TestCase):
             user_dir.chmod(0o700 if (user_dir.stat().st_mode & 0o777)!=0o700 else 0o750)
             self.assertNotEqual(before,risk.directory_identity(user_dir,project))
             self.assertIsNone(risk.directory_identity(project/"missing",project))
+
+    def test_project_snapshot_detects_project_root_permission_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project=Path(tmp)/"project"
+            project.mkdir()
+            before=risk.project_file_snapshot(project)
+            self.assertTrue(before["complete"])
+            permissions=project.stat().st_mode & 0o777
+            project.chmod(0o700 if permissions != 0o700 else 0o750)
+            after=risk.project_file_snapshot(project)
+            self.assertTrue(after["complete"])
+            self.assertNotEqual(before["sha256"],after["sha256"])
 
     def test_inert_mcp_config_does_not_prove_no_delayed_secret_writes(self):
         with tempfile.TemporaryDirectory() as temp:

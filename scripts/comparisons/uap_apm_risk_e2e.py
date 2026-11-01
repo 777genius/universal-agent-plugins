@@ -460,6 +460,16 @@ def project_file_snapshot(project: Path, *, max_entries: int = 4096) -> dict:
     problems: list[str] = []
     if project.is_symlink() or not project.is_dir():
         return {"sha256": None, "count": 0, "complete": False}
+    # The selected project root itself is a user-owned trust boundary. A
+    # chmod, owner change or replace-in-place must not be certified unchanged.
+    # Ignore only timestamps that can change from legitimate owned store writes.
+    try:
+        root_info = project.lstat()
+        observed.append(":".join(str(value) for value in (
+            "ROOT", root_info.st_mode, root_info.st_uid,
+            root_info.st_gid, root_info.st_ino)))
+    except OSError:
+        return {"sha256": None, "count": 0, "complete": False}
     for current, dirs, files in os.walk(
             project, followlinks=False,
             onerror=lambda err: problems.append("unlistable_directory")):
