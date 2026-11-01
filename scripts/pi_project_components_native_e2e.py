@@ -127,12 +127,29 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
             if sum(1 for x in trusted if x.get("source")=="skill" and x.get("name")=="skill:pi-managed")!=1:
                 raise RuntimeError("trusted Pi did not discover managed project Skill")
             state["stages"].append("real_Pi_trust_gated_skill_discovery")
-            # The CLI connects the project server itself, independently of
-            # UAP's static config and of direct fixture protocol calls.
-            args=[str(pi),"--approve","mcp","list","--json"]
+            # The "pi mcp" shell subcommand bypasses session-only --approve
+            # and reads its own trust store. Explicitly authorize ONLY
+            # disposable project A in the disposable test profile; no UAP
+            # installer action, real user profile or project B is trusted.
+            write(user,"trust.json",json.dumps({
+                str(project_a.resolve()):True, str(project_b.resolve()):False
+            },sort_keys=True)+"\\n")
+            # The official v1.4.0 shell grammar is "pi mcp list --json";
+            # placing --approve before mcp routes to the generic CLI parser
+            # and rejects --json before any native MCP exchange.
+            args=[str(pi),"mcp","list","--json"]
             output=run(args,project_a,env=env,timeout=55)
-            if len(output)>1<<20 or b"pi-managed" not in output or b"echo" not in output:
-                raise RuntimeError("real Pi did not enumerate native project MCP tool")
+            if len(output)>1<<20:
+                raise RuntimeError("native project MCP inventory exceeds limit")
+            catalog=json.loads(output)
+            entries=catalog.get("servers",[])
+            matching=[entry for entry in entries if entry.get("name")=="pi-managed"]
+            if len(matching)!=1 or matching[0].get("scope")!="project" or (
+                matching[0].get("state")!="connected") or "echo" not in matching[0].get("tools",[]):
+                raise RuntimeError("real Pi did not connect and enumerate exact project MCP tool")
+            other=json.loads(run(args,project_b,env=env,timeout=55))
+            if any(entry.get("name")=="pi-managed" for entry in other.get("servers",[])):
+                raise RuntimeError("untrusted Pi project B discovered project A MCP server")
             methods_path=project_a/".uap/plugin-data"
             logs=list(methods_path.glob("**/pi-mcp-methods.log"))
             if len(logs)!=1: raise RuntimeError("real Pi stdio MCP method log absent")
