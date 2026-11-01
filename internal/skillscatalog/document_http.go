@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/internal/skillsresolve"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 type WebsiteDocumentReader interface {
@@ -200,18 +201,7 @@ func (h *documentHandler) load(ctx context.Context, source, name string) (docume
 	return result, nil
 }
 
-func validDocumentSkillName(name string) bool {
-	if len([]rune(name)) > 64 {
-		return false
-	}
-	for i, r := range name {
-		if r == '-' && (i == 0 || i == len(name)-1) {
-			return false
-		}
-	}
-	// Match the CLI's Unicode-lowercase, numeric and single-hyphen grammar.
-	return validWebDocumentName(name)
-}
+func validDocumentSkillName(name string) bool { return domain.ValidSkillName(name) }
 
 // SafePublisherClient pins every HTTPS connection to a resolved public IP.
 // Rejecting private/reserved destinations before dialing prevents an upstream
