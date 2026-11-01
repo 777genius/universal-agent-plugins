@@ -358,6 +358,11 @@ func publicPublisherIP(ip net.IP) bool {
 		addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() {
 		return false
 	}
+	// Current globally routed IPv6 unicast lives in 2000::/3. Refuse
+	// unallocated/legacy/translated ranges even before the explicit denylist.
+	if addr.Is6() && !netip.MustParsePrefix("2000::/3").Contains(addr) {
+		return false
+	}
 	for _, block := range deniedPublisherRanges {
 		if block.Contains(addr) {
 			return false
