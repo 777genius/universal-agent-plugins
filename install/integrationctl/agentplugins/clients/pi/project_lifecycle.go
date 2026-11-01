@@ -174,12 +174,22 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 			if !shared.CommittedNativeDeactivationCleanup(&out, err) {
 				return out, err
 			}
+			out.NativeEffect = domain.NativeEffectCommitted
+		} else {
+			out.NativeEffect = domain.NativeEffectCommitted
 		}
+	} else {
+		out.NativeEffect = domain.NativeEffectUnchanged
 	}
 	legacy, err := adapter.Adapter.Deactivate(ctx, env, request)
 	if err != nil {
 		return out, err
 	}
+	// The legacy extension path proves only directory removal authority.
+	// Preserve the independent Skills/MCP effect and any degraded-cleanup
+	// action so the common removal kernel can safely complete or reconcile.
+	legacy.NativeEffect = out.NativeEffect
+	legacy.UserActions = append(out.UserActions, legacy.UserActions...)
 	legacy.UserActions = append(legacy.UserActions, "Restart Pi to clear previously loaded project Skills and MCP connections.")
 	return legacy, nil
 }
