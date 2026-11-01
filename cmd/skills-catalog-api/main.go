@@ -14,10 +14,10 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/internal/skillscatalog"
 	"github.com/777genius/plugin-kit-ai/internal/skillsresolve"
 	"github.com/777genius/plugin-kit-ai/internal/skillsresolve/gitsource"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 )
 
 func env(name, fallback string) string {
