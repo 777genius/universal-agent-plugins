@@ -67,6 +67,24 @@ export function skillPublisherUrl(skill: SkillListing): string | undefined {
   }
 }
 
+/** Derive a source solely from a bounded, canonical catalog identity. */
+export function skillIdentityFromId(id: string): SkillListing['source'] | undefined {
+  const match = /^skills-sh:([^:]+):([^:]+)$/.exec(id);
+  if (!match || id.length > 1024) return undefined;
+  const source = match[1]!;
+  if (/^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(source)) {
+    return { kind: 'github', repository: source, url: `https://github.com/${source}` };
+  }
+  if (
+    source.length <= 253 &&
+    source === source.toLowerCase() &&
+    /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(source)
+  ) {
+    return { kind: 'external', url: `https://${source}` };
+  }
+  return undefined;
+}
+
 export function skillDetailRoute(skill: SkillListing) {
   return {
     path: '/skills/',
