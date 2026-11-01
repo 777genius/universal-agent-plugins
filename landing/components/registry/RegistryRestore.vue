@@ -481,6 +481,15 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
     &__commit {
       display: none;
     }
+    // Move Copy beside the stage, clear of the version badge.
+    &__screen-body :deep(.command-snippet__header) {
+      bottom: calc(100% + 17px);
+    }
+    &__screen-body :deep(.command-snippet button) {
+      padding: 1px 2px;
+      font-size: 8px;
+      line-height: 1.1;
+    }
   }
 }
 
