@@ -120,8 +120,10 @@ agentplugins skills add owner/repository --skill review --skill pdf \
 [CLI 0.1.93 及以后版本](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93)支持显式项目范围。
 选择已存在的目录，并在每条命令中指定范围：
 
+对于符合条件的已审核目录条目，请复制其固定到完整 Git 提交 SHA 的来源和兼容客户端。Directory v1 的别名（如 `context7`）仅适用于用户范围。请替换 `OWNER/REPOSITORY`、`FULL_COMMIT_SHA` 和 `PACKAGE_PATH`；如果包位于仓库根目录，请省略 `//PACKAGE_PATH`。
+
 ```bash
-agentplugins add context7 --target cursor --scope project \
+agentplugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
   --project-root /path/to/project --dry-run
 agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project

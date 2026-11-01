@@ -105,8 +105,10 @@ Los hallazgos automáticos de seguridad pueden bloquear la instalación. `--secu
 
 El ámbito de proyecto explícito está disponible desde [CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93). Elige un directorio existente e indica el ámbito en cada comando:
 
+Para una entrada revisada y compatible del catálogo, copia su origen Git fijado a un SHA completo y el cliente adecuado. Los alias de Directory v1, como `context7`, solo sirven en el ámbito de usuario. Sustituye `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` y `PACKAGE_PATH`; si el paquete está en la raíz del repositorio, omite `//PACKAGE_PATH`.
+
 ```bash
-agentplugins add context7 --target cursor --scope project \
+agentplugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
   --project-root /path/to/project --dry-run
 agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project
