@@ -45,7 +45,28 @@
       "collectionShown": "本合集显示 {count} 个，共 {total} 个",
       "headingPrefix": "发现你的",
       "viewListing": "查看原始条目",
-      "manualSkillSelection": "请在安装器中选择准确的技能；目录中的名称尚未核实。"
+      "manualSkillSelection": "请在安装器中选择准确的技能；目录中的名称尚未核实。",
+      "publisherSource": "发布方来源",
+      "invalidPublisherName": "发布方需要准确的技能名称，请查看原始页面。",
+      "detail": {
+        "breadcrumb": "技能导航",
+        "skill": "Agent Skill",
+        "notFound": "未找到技能",
+        "notFoundHelp": "当前无法获取此条目，请返回技能目录重新搜索。",
+        "backToSkills": "返回技能目录",
+        "installation": "安装",
+        "command": "命令",
+        "prompt": "提示词",
+        "promptText": "使用 Universal Agent Plugins 安装此技能。执行以下命令前请检查来源及更改：\n{command}",
+        "exactNameUnavailable": "无法验证安装所需的准确名称，请查看原始页面。",
+        "documentNotice": "目录目前仅提供来源和安装元数据，未提供已验证的 SKILL.md 内容。安装前请阅读原始页面中的完整说明。",
+        "readInstructions": "在原始页面阅读 SKILL.md",
+        "security": "安全检查",
+        "installs": "安装次数",
+        "source": "来源",
+        "listing": "原始页面",
+        "metricsNotice": "安装量由外部目录提供，未经独立验证。"
+      }
     },
     "directoryPage": {
       "pluginDirectory": "插件目录",
