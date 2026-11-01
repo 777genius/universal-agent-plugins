@@ -338,6 +338,20 @@ class RiskOracleTests(unittest.TestCase):
             self.assertEqual(result["status"],"BLOCKED")
             self.assertNotIn("claude_version_verified",result)
 
+    def test_Claude_version_requires_exact_numeric_token(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for version in ("12.1.2634", "2.1.2634", "12.1.263",
+                            "2.1.2630", "not-the-native-client"):
+                row = risk.case_profiles(
+                    "apm", "/bin/unavailable", root, "a" * 40,
+                    {"SKILL.md": b"fixture", "references/fixture.txt": b"ref"},
+                    claude_available=True, claude_version=version,
+                    claude_native_sha256="26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba",
+                )
+                self.assertEqual(row["status"], "BLOCKED")
+                self.assertIn("pinned real Claude", row["reason"])
+
     def test_MCP_config_rejects_empty_or_unrelated_server(self):
         with tempfile.TemporaryDirectory() as tmp:
             project=Path(tmp)
