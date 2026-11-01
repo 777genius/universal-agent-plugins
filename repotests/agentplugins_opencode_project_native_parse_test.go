@@ -224,7 +224,7 @@ func openCodeProjectV2SourceConfig(body []byte, userDir, projectDir string, allo
 			seen[path] = true
 			continue
 		}
-		if len(entry) != 3 && !(len(entry) == 2 && !hasPath) {
+		if len(entry) != 3 && (len(entry) != 2 || hasPath) {
 			return nil, fmt.Errorf("V2 native config document has unexpected members")
 		}
 		info, ok := entry["info"].(map[string]any)
