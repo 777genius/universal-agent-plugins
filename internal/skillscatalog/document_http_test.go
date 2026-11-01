@@ -99,9 +99,11 @@ func TestDocumentPreviewGitAndNameRefusal(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	w = httptest.NewRecorder()
-	handler.ServeHTTP(w, documentRequest("skills-sh:open.feishu.cn:lark-mail", "BAD$(echo attack)", ""))
-	if w.Code != 429 && w.Code != 200 {
-		t.Fatal(w.Code)
+	invalid := documentRequest("skills-sh:open.feishu.cn:lark-mail", "BAD$(echo attack)", "")
+	invalid.RemoteAddr = "198.51.100.77:1234"
+	handler.ServeHTTP(w, invalid)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "selection_required") {
+		t.Fatal(w.Code, w.Body.String())
 	}
 }
 
