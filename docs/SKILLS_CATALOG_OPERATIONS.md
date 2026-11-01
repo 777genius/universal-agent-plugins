@@ -8,6 +8,15 @@ remain on GitHub Pages. The API contract is
 The optional service-only source preview has a separate
 [skills-resolve.openapi.yaml](contracts/skills-resolve.openapi.yaml) contract;
 it does not alter the anonymous listing DTO or landing pages.
+The anonymous source-only `GET /v1/skills/document` endpoint uses the
+[skills-document.openapi.yaml](contracts/skills-document.openapi.yaml) contract.
+It exposes at most 64 KiB of exact `SKILL.md` UTF-8 directly from the publisher,
+never install resources, without relying on the listing provider's detail API.
+Git previews require the existing isolated resolver runtime, and HTTPS publishers
+must have their own complete-file discovery index. Missing, nonconformant,
+ambiguous or unavailable source content is reported honestly rather than guessed.
+Browsers render the text with HTML disabled, image embeds disabled, only safe
+absolute links, and no third-party directory backlinks.
 
 Regenerate the landing DTOs after changing the contract:
 
@@ -158,6 +167,37 @@ as routine operational telemetry.
 
 Caddy's [validation command](https://caddyserver.com/docs/command-line#caddy-validate)
 checks loading and provisioning, a stronger check than merely adapting the file.
+
+## Public Skill document preview checks
+
+The new public route is source-derived, not an arbitrary URL proxy: the query
+takes only the canonical listing identity and Skill name, not a user-provided
+URL or Git revision. At most four previews may be active per process (one per client),
+with four global tokens initially and one token replenished every five seconds.
+The dedicated Caddy route overwrites the client address header, preventing
+untrusted X-Forwarded-For values from bypassing per-client limits.
+Each client starts a fresh preview at most once every twenty seconds.
+Successful source documents are cached for ten minutes (at most 128 entries),
+and failed source coordinates cool down for thirty seconds. The hosted Git
+reader continues enforcing its read-only, no-credentials runtime envelope.
+HTTPS publishers use a separate public-IP-pinned TLS transport, with no
+redirects or proxy inheritance, a strict declared file list and a 64-KiB
+document limit. Raw text is untrusted and does not imply security or installability.
+
+Verify the exact deployed binary and route together:
+
+```sh
+curl --fail --silent --show-error --dump-header - \
+  -H 'Origin: https://universal-agent-plugins.com' \
+  'https://api.universal-agent-plugins.com/v1/skills/document?id=skills-sh%3Aopen.feishu.cn%3Alark-mail&name=lark-mail'
+```
+
+The response may truthfully be a limited/failed preview when publisher content
+or runtime availability changes. A 200 with `status: resolved` must contain
+source-accurate Markdown; verify a known GitHub Skill and a known HTTPS
+publisher, as well as invalid-origin 403, unsafe-ID 400, overload 429,
+unavailable 503 and absence of all credentials/cookies in outbound reads.
+No remote writes are performed by this operation.
 
 ## Persistence, limits, and normal operations
 

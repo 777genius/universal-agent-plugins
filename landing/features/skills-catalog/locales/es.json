@@ -44,8 +44,31 @@
       "unsupportedName": "Esta ficha no permite la instalación directa. Revisa el código fuente en GitHub.",
       "collectionShown": "Mostrando {count} de {total} en esta colección",
       "headingPrefix": "Encuentra tus",
-      "viewListing": "Ver ficha original",
-      "manualSkillSelection": "Selecciona la Skill exacta en el instalador; el nombre del catálogo no está verificado."
+      "manualSkillSelection": "Selecciona la Skill exacta en el instalador; el nombre del catálogo no está verificado.",
+      "publisherSource": "Fuente del editor",
+      "invalidPublisherName": "Se necesita el nombre exacto de la Skill. Revisa la fuente del editor.",
+      "detail": {
+        "breadcrumb": "Navegación de Skill",
+        "skill": "Agent Skill",
+        "notFound": "Skill no encontrado",
+        "notFoundHelp": "Esta ficha no está disponible. Vuelve al catálogo de Skills.",
+        "backToSkills": "Volver a Skills",
+        "installation": "Instalación",
+        "command": "Comando",
+        "prompt": "Prompt",
+        "promptText": "Instala este Skill con Universal Agent Plugins. Revisa la fuente y los cambios antes de ejecutar:\n{command}",
+        "exactNameUnavailable": "No se pudo validar el nombre exacto de instalación. Revisa la fuente del editor.",
+        "security": "Comprobaciones de seguridad",
+        "installs": "Instalaciones",
+        "source": "Fuente",
+        "metricsNotice": "Los recuentos proceden del catálogo externo y no se verifican de forma independiente.",
+        "loadingDocument": "Cargando las instrucciones de origen…",
+        "sourceDocumentNotice": "Instrucciones del editor · contenido no verificado. Revísalas antes de usarlas.",
+        "documentUnavailable": "No se pudo cargar SKILL.md del editor. Puedes revisar la fuente directamente.",
+        "viewPublisher": "Ver fuente del editor",
+        "revision": "Revisión de origen",
+        "rawDocument": "Ver el archivo SKILL.md completo"
+      }
     },
     "directoryPage": {
       "pluginDirectory": "Directorio de complementos",

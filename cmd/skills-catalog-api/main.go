@@ -12,7 +12,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/internal/skillscatalog"
 	"github.com/777genius/plugin-kit-ai/internal/skillsresolve"
 	"github.com/777genius/plugin-kit-ai/internal/skillsresolve/gitsource"
@@ -48,8 +50,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	serviceResolver, protected := resolveHandlers()
+	documents, err := skillscatalog.NewDocumentHandler(serviceResolver,
+		sourceacquisition.Acquirer{HTTPClient: skillscatalog.SafePublisherClient()}, configured)
+	if err != nil {
+		return err
+	}
 	mux := http.NewServeMux()
-	mux.Handle("/v1/skills/resolve", resolveHandler())
+	mux.Handle("/v1/skills/resolve", protected)
+	mux.Handle("/v1/skills/document", documents)
 	mux.Handle("/", handler)
 	server := &http.Server{Addr: *listen, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 35 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -67,16 +76,20 @@ func run() error {
 	return nil
 }
 
-func resolveHandler() http.Handler {
+func resolveHandlers() (skillscatalog.SourceResolver, http.Handler) {
 	token := os.Getenv("SKILLS_RESOLVER_SERVICE_TOKEN")
 	_ = os.Unsetenv("SKILLS_RESOLVER_SERVICE_TOKEN") // Git children never need the service capability.
-	if token == "" {
-		return skillscatalog.NewResolveHandler(nil, "")
+	if len(token) < 32 || len(token) > 512 ||
+		strings.TrimSpace(token) != token || strings.ContainsFunc(token, unicode.IsControl) {
+		// The hosted Git reader and public Git previews share the explicitly
+		// provisioned, validated resolver capability. Invalid credentials disable both.
+		return nil, skillscatalog.NewResolveHandler(nil, "")
 	}
 	source, err := gitsource.NewHosted(os.Getenv("SKILLS_RESOLVER_TEMP_DIR"))
 	if err != nil {
-		log.Print("Skill source resolution unavailable: bounded runtime is not configured")
-		return skillscatalog.NewResolveHandler(nil, "")
+		log.Print("Skill Git preview unavailable: bounded runtime is not configured")
+		return nil, skillscatalog.NewResolveHandler(nil, "")
 	}
-	return skillscatalog.NewResolveHandler(skillsresolve.New(source), token)
+	resolver := skillsresolve.New(source)
+	return resolver, skillscatalog.NewResolveHandler(resolver, token)
 }

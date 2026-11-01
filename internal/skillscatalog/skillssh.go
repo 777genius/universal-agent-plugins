@@ -156,6 +156,12 @@ func normalize(raw upstreamPage, view View) (Page, error) {
 		if repository(source) {
 			item.Source = Source{Kind: "github", Repository: source, URL: "https://github.com/" + source}
 			item.Availability = "unverified"
+		} else if !strings.Contains(source, "/") && sourceDomain.MatchString(source) {
+			// The listing page is never an install URL. Publisher discovery uses
+			// its own HTTPS origin and the CLI requires an exact --skill name.
+			// This is an unverified source hint, not a security endorsement.
+			item.Source.URL = "https://" + strings.ToLower(source)
+			item.Availability = "unverified"
 		}
 		if seen[item.ID] {
 			return Page{}, &ProviderError{}

@@ -43,14 +43,54 @@ export function skillRepositoryUrl(skill: SkillListing): string | undefined {
     ? `https://github.com/${repository}`
     : undefined;
 }
-export function externalListingUrl(value: string): string | undefined {
+/** A publisher root, never the third-party catalog's detail URL. */
+export function skillPublisherUrl(skill: SkillListing): string | undefined {
+  if (skill.source.kind !== 'external' || skill.availability !== 'unverified') return undefined;
+  const raw = skill.source.url;
   try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && !url.username && !url.password ? url.href : undefined;
+    const url = new URL(raw);
+    const host = url.hostname;
+    if (
+      url.protocol !== 'https:' ||
+      url.host !== host ||
+      url.username ||
+      url.password ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash ||
+      !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(host) ||
+      raw !== `https://${host}`
+    ) return undefined;
+    return raw;
   } catch {
     return undefined;
   }
 }
+
+/** Derive a source solely from a bounded, canonical catalog identity. */
+export function skillIdentityFromId(id: string): SkillListing['source'] | undefined {
+  const match = /^skills-sh:([^:]+):([^:]+)$/.exec(id);
+  if (!match || id.length > 1024) return undefined;
+  const source = match[1]!;
+  if (/^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(source)) {
+    return { kind: 'github', repository: source, url: `https://github.com/${source}` };
+  }
+  if (
+    source.length <= 253 &&
+    /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/i.test(source)
+  ) {
+    return { kind: 'external', url: `https://${source.toLowerCase()}` };
+  }
+  return undefined;
+}
+
+export function skillDetailRoute(skill: SkillListing) {
+  return {
+    path: '/skills/',
+    query: { id: skill.id, q: skill.skillNameHint },
+  };
+}
+
 function supportedSkillName(name: string): boolean {
   return [...name].length <= 64 && /^[\p{Ll}\p{N}]+(?:-[\p{Ll}\p{N}]+)*$/u.test(name);
 }
@@ -68,8 +108,10 @@ export function skillInstallCommand(
   skill: SkillListing,
   targets?: readonly string[],
 ): string | undefined {
-  const source = skillRepositoryUrl(skill);
+  const source = skillRepositoryUrl(skill) ?? skillPublisherUrl(skill);
   if (!source || skill.availability === 'unsupported-source') return undefined;
+  // A website has no Git selector/picker: it must use a safe exact Skill name.
+  if (skill.source.kind === 'external' && !supportedSkillName(skill.skillNameHint)) return undefined;
   const tokens = ['npx', 'universal-agent-plugins@latest', 'skills', 'add', source];
   if (!skillNeedsManualSelection(skill)) tokens.push('--skill', skill.skillNameHint);
   if (targets !== undefined) {

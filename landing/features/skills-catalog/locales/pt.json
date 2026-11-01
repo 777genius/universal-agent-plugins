@@ -44,8 +44,31 @@
       "unsupportedName": "A instalação direta não está disponível para esta listagem. Consulte a origem no GitHub.",
       "collectionShown": "Exibindo {count} de {total} nesta coleção",
       "headingPrefix": "Encontre",
-      "viewListing": "Ver listagem original",
-      "manualSkillSelection": "Selecione a Skill exata no instalador; o nome do catálogo não foi verificado."
+      "manualSkillSelection": "Selecione a Skill exata no instalador; o nome do catálogo não foi verificado.",
+      "publisherSource": "Fonte do editor",
+      "invalidPublisherName": "É necessário o nome exato da Skill. Confira a fonte do editor.",
+      "detail": {
+        "breadcrumb": "Navegação da Skill",
+        "skill": "Agent Skill",
+        "notFound": "Skill não encontrada",
+        "notFoundHelp": "Esta ficha não está disponível. Volte ao catálogo de Skills.",
+        "backToSkills": "Voltar às Skills",
+        "installation": "Instalação",
+        "command": "Comando",
+        "prompt": "Prompt",
+        "promptText": "Instale esta Skill com Universal Agent Plugins. Revise a fonte e as alterações antes de executar:\n{command}",
+        "exactNameUnavailable": "Não foi possível validar o nome exato para instalação. Consulte a fonte do editor.",
+        "security": "Verificações de segurança",
+        "installs": "Instalações",
+        "source": "Fonte",
+        "metricsNotice": "As contagens são fornecidas pelo catálogo externo e não foram verificadas independentemente.",
+        "loadingDocument": "Carregando instruções da fonte…",
+        "sourceDocumentNotice": "Instruções do editor · conteúdo não verificado. Revise antes de usar.",
+        "documentUnavailable": "Não foi possível carregar SKILL.md do editor. Você pode consultar a fonte diretamente.",
+        "viewPublisher": "Ver fonte do editor",
+        "revision": "Revisão da fonte",
+        "rawDocument": "Ver o SKILL.md completo"
+      }
     },
     "directoryPage": {
       "pluginDirectory": "Diretório de plugins",

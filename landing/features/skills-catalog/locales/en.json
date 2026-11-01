@@ -44,8 +44,31 @@
       "unsupportedName": "Direct install is not available for this listing. Review the GitHub source.",
       "collectionShown": "Showing {count} of {total} in this collection",
       "headingPrefix": "Find your",
-      "viewListing": "View original listing",
-      "manualSkillSelection": "Select the exact Skill in the installer; this catalog name is not verified."
+      "manualSkillSelection": "Select the exact Skill in the installer; this catalog name is not verified.",
+      "publisherSource": "Publisher source",
+      "invalidPublisherName": "An exact Skill name is needed. Check the publisher's source.",
+      "detail": {
+        "breadcrumb": "Skill navigation",
+        "skill": "Agent Skill",
+        "notFound": "Skill not found",
+        "notFoundHelp": "This listing is not available from the catalog. Return to Skills and search again.",
+        "backToSkills": "Back to Skills",
+        "installation": "Installation",
+        "command": "Command",
+        "prompt": "Prompt",
+        "promptText": "Install this Skill with Universal Agent Plugins. Review the source and the planned changes before running the following command:\n{command}",
+        "exactNameUnavailable": "The exact install selector could not be validated. Check the publisher's source.",
+        "security": "Security checks",
+        "installs": "Installs",
+        "source": "Source",
+        "metricsNotice": "Install counts are reported by the external directory, not independently verified.",
+        "loadingDocument": "Loading source instructions…",
+        "sourceDocumentNotice": "Published source instructions · unverified content. Review before using.",
+        "documentUnavailable": "The publisher's SKILL.md could not be loaded. You can inspect its source directly.",
+        "viewPublisher": "View publisher source",
+        "revision": "Source revision",
+        "rawDocument": "View complete SKILL.md source"
+      }
     },
     "directoryPage": {
       "pluginDirectory": "Plugin directory",

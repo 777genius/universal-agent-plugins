@@ -44,8 +44,31 @@
       "unsupportedName": "此条目暂不支持直接安装，请查看 GitHub 来源。",
       "collectionShown": "本合集显示 {count} 个，共 {total} 个",
       "headingPrefix": "发现你的",
-      "viewListing": "查看原始条目",
-      "manualSkillSelection": "请在安装器中选择准确的技能；目录中的名称尚未核实。"
+      "manualSkillSelection": "请在安装器中选择准确的技能；目录中的名称尚未核实。",
+      "publisherSource": "发布方来源",
+      "invalidPublisherName": "安装需要准确的技能名称，请检查发布方源代码。",
+      "detail": {
+        "breadcrumb": "技能导航",
+        "skill": "Agent Skill",
+        "notFound": "未找到技能",
+        "notFoundHelp": "当前无法获取此条目，请返回技能目录重新搜索。",
+        "backToSkills": "返回技能目录",
+        "installation": "安装",
+        "command": "命令",
+        "prompt": "提示词",
+        "promptText": "使用 Universal Agent Plugins 安装此技能。执行以下命令前请检查来源及更改：\n{command}",
+        "exactNameUnavailable": "无法验证安装所需的准确名称，请检查发布方源代码。",
+        "security": "安全检查",
+        "installs": "安装次数",
+        "source": "来源",
+        "metricsNotice": "安装量由外部目录提供，未经独立验证。",
+        "loadingDocument": "正在加载源文件说明…",
+        "sourceDocumentNotice": "发布方说明 · 内容未经验证。使用前请检查。",
+        "documentUnavailable": "无法从发布方加载 SKILL.md。你可以直接查看其源代码。",
+        "viewPublisher": "查看发布方源代码",
+        "revision": "源代码修订版",
+        "rawDocument": "查看完整 SKILL.md 原文"
+      }
     },
     "directoryPage": {
       "pluginDirectory": "插件目录",

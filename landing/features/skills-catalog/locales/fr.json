@@ -44,8 +44,31 @@
       "unsupportedName": "L’installation directe n’est pas disponible pour cette fiche. Consultez la source GitHub.",
       "collectionShown": "Affichage de {count} sur {total} dans cette collection",
       "headingPrefix": "Trouvez vos",
-      "viewListing": "Voir la fiche d’origine",
-      "manualSkillSelection": "Choisissez la Skill exacte dans l’installateur ; le nom du catalogue n’est pas vérifié."
+      "manualSkillSelection": "Choisissez la Skill exacte dans l’installateur ; le nom du catalogue n’est pas vérifié.",
+      "publisherSource": "Source de l’éditeur",
+      "invalidPublisherName": "Le nom exact du Skill est requis. Consultez la source de l’éditeur.",
+      "detail": {
+        "breadcrumb": "Navigation Skill",
+        "skill": "Agent Skill",
+        "notFound": "Skill introuvable",
+        "notFoundHelp": "Cette fiche n’est pas disponible. Revenez au catalogue des Skills.",
+        "backToSkills": "Retour aux Skills",
+        "installation": "Installation",
+        "command": "Commande",
+        "prompt": "Prompt",
+        "promptText": "Installe ce Skill avec Universal Agent Plugins. Vérifie la source et les modifications avant d’exécuter :\n{command}",
+        "exactNameUnavailable": "Le nom exact pour l'installation n'a pas pu être vérifié. Consultez la source de l'éditeur.",
+        "security": "Contrôles de sécurité",
+        "installs": "Installations",
+        "source": "Source",
+        "metricsNotice": "Les chiffres d’installation proviennent d’un annuaire externe et ne sont pas vérifiés indépendamment.",
+        "loadingDocument": "Chargement des instructions de la source…",
+        "sourceDocumentNotice": "Instructions de l’éditeur · contenu non vérifié. Examinez-le avant utilisation.",
+        "documentUnavailable": "Le SKILL.md de l’éditeur n’a pas pu être chargé. Consultez directement sa source.",
+        "viewPublisher": "Voir la source de l’éditeur",
+        "revision": "Révision de la source",
+        "rawDocument": "Afficher le contenu source complet de SKILL.md"
+      }
     },
     "directoryPage": {
       "pluginDirectory": "Répertoire des plugins",
