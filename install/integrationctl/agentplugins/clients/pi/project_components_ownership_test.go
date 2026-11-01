@@ -150,8 +150,8 @@ func assertForeignPiProjectState(t *testing.T, a, b, user string, original []byt
 		t.Fatal(err)
 	}
 	var document struct {
-		MCPServers map[string]json.RawMessage `json:"mcpServers"`
-		ForeignRootKey string `json:"foreignRootKey"`
+		MCPServers     map[string]json.RawMessage `json:"mcpServers"`
+		ForeignRootKey string                     `json:"foreignRootKey"`
 	}
 	if err := json.Unmarshal(body, &document); err != nil {
 		t.Fatal(err)
