@@ -353,6 +353,65 @@ def case_interrupted(product: str, cli: str, root: Path, commit: str) -> dict:
                    deterministic_post_write_barrier=False,crash_recovery="NOT_RUN")
 
 
+def scan_synthetic_canary(roots: tuple[Path, ...], synthetic: str,
+                          *, max_files: int = 8192,
+                          max_bytes: int = 64 * 1024 * 1024) -> dict:
+    """Bounded named-root survey: a missing proof cannot become a secrecy PASS.
+
+    Never follow symbolic links, include file bodies in output, or scan the
+    ambient runner home. The synthetic canary is never serialized.
+    """
+    inspected, seen_bytes, hits, unknown = 0, 0, [], []
+    for root in roots:
+        if not root.is_dir() or root.is_symlink():
+            unknown.append("root_not_regular")
+            continue
+        for current, dirs, files in os.walk(root, followlinks=False):
+            here = Path(current)
+            if here.is_symlink():
+                unknown.append("symlink_directory")
+                dirs[:] = []
+                continue
+            # Unverified symlinked directories are not silently ignored.
+            for directory in dirs[:]:
+                candidate = here / directory
+                if candidate.is_symlink():
+                    unknown.append("symlink_directory")
+                    dirs.remove(directory)
+            for name in files:
+                file = here / name
+                inspected += 1
+                if inspected > max_files:
+                    unknown.append("too_many_files")
+                    break
+                try:
+                    state = file.lstat()
+                    if not stat.S_ISREG(state.st_mode):
+                        unknown.append("nonregular_file")
+                        continue
+                    if state.st_size > 2 * 1024 * 1024:
+                        unknown.append("large_file")
+                        continue
+                    data = observed_file(file, root)
+                    if data is None:
+                        unknown.append("unreadable_file")
+                        continue
+                    seen_bytes += len(data)
+                    if seen_bytes > max_bytes:
+                        unknown.append("too_many_bytes")
+                        break
+                    if synthetic.encode("utf-8") in data:
+                        # Only a relative location, never data or a private root.
+                        hits.append(str(file.relative_to(root)))
+                except (OSError, ValueError):
+                    unknown.append("scan_error")
+            if inspected > max_files or seen_bytes > max_bytes:
+                break
+    return {"inspected_files": inspected, "inspected_bytes": seen_bytes,
+            "canary_found": bool(hits), "matching_relative_paths": hits[:16],
+            "complete": not unknown, "incomplete_reasons": sorted(set(unknown))}
+
+
 def case_secret(product: str, cli: str, root: Path) -> dict:
     env=baseline.isolated_env(root)
     project,foreign=baseline.make_project(root)
@@ -390,21 +449,27 @@ def case_secret(product: str, cli: str, root: Path) -> dict:
             found.append({"file":name_path,"synthetic_plaintext_present":sentinel.encode() in data,
                           "literal_placeholder_present":placeholder.encode() in data,
                           "sha256":h(data)})
-    leak=any(row["synthetic_plaintext_present"] for row in found)
+    scan = scan_synthetic_canary((project, Path(env["HOME"])), sentinel)
+    leak=scan["canary_found"] or any(row["synthetic_plaintext_present"] for row in found)
     protected=baseline.safe_same_bytes(project/".agents/skills/foreign-neighbor/SKILL.md",
                                       foreign,project)
     config=next((row for row in found if row["file"]==".codex/config.toml"),None)
     if leak or not protected:
-        verdict="FAIL";reason="synthetic canary escaped or foreign content was changed"
+        verdict="FAIL";reason="synthetic canary persisted or foreign content was changed"
+    elif not scan["complete"]:
+        verdict="BLOCKED";reason="bounded project/profile scan incomplete; no secrecy PASS"
+    elif cmd.get("timed_out") or cmd.get("cleanup_error"):
+        verdict="BLOCKED";reason="MCP project command could not be observed completely"
     elif cmd["exit_code"] != 0:
         verdict="BLOCKED";reason="MCP project route refused, check safe local prerequisite in receipt"
     elif config is None:
         verdict="FAIL";reason="successful MCP install did not materialize project Codex config"
     else:
-        verdict="PASS";reason="synthetic canary not persisted; native env forwarding remains unqualified"
+        verdict="PASS";reason="no synthetic canary in scanned project/profile files; native forwarding NOT_RUN"
     return receipt(product,"R5_mcp_env_secret",verdict,reason=reason,
-                   command=cmd,config_files=found,foreign_unchanged=protected,
-                   native_mcp_call="NOT_RUN",synthetic_value_not_in_artifact=True)
+                   command=cmd,config_files=found,filesystem_scan=scan,
+                   foreign_unchanged=protected, native_mcp_call="NOT_RUN",
+                   synthetic_value_not_in_artifact="verified by final report check")
 
 
 def two_skills_manifest(product: str, project: Path, commit: str,
