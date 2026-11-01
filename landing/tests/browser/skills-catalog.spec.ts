@@ -210,3 +210,60 @@ test('unverified GitHub Skill names open the installer picker without guessing a
   );
   await expect(card.locator('.command-snippet')).not.toContainText('BAD$(echo injected)');
 });
+
+
+test('Website publisher Skills install with UAP and open their own detail page', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const website = {
+    ...skill(),
+    id: 'skills-sh:open.feishu.cn:lark-mail',
+    providerUrl: 'https://www.skills.sh/site/open.feishu.cn/lark-mail',
+    title: 'lark-mail',
+    skillNameHint: 'lark-mail',
+    source: { kind: 'external', url: 'https://open.feishu.cn' },
+    availability: 'unverified',
+  };
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) =>
+    route.fulfill({
+      json: {
+        items: [website],
+        page: 0,
+        total: 1,
+        hasMore: false,
+        view: 'popular',
+        cache: { status: 'fresh', fetchedAt: '2026-10-31T10:00:00Z' },
+      },
+    }),
+  );
+  await page.goto('plugins/?tab=skills');
+  const card = page.locator('.skills-catalog .skill-card');
+  await expect(card).not.toContainText('No verified install source');
+  await expect(card.getByRole('link', { name: 'Publisher source' })).toHaveAttribute(
+    'href',
+    'https://open.feishu.cn',
+  );
+  await card.getByRole('button', { name: 'Install lark-mail' }).click();
+  await expect(card.locator('.command-snippet code')).toContainText(
+    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
+  );
+  await card.getByRole('link', { name: 'lark-mail', exact: true }).click();
+  await expect(page).toHaveURL(/\/skills\/\?id=skills-sh/);
+  await expect(page.getByRole('heading', { level: 1, name: 'lark-mail' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Installation' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Prompt' }).click();
+  await expect(page.locator('.skills-detail__install-body .command-snippet')).toContainText(
+    'Review the source',
+  );
+  await page.getByRole('tab', { name: 'Command' }).click();
+  await page.locator('.skills-detail__install-body').getByRole('button', { name: 'Copy command' }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
+    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
+  );
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1, name: 'lark-mail' })).toBeVisible();
+  await expect(page.locator('.skills-detail__sidebar')).toContainText('open.feishu.cn');
+  await expect(page.locator('.skills-detail__document')).toContainText('SKILL.md');
+});
