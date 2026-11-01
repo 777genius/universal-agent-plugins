@@ -25,17 +25,11 @@ const props = withDefaults(
   }>(),
   { applicable: true, subject: undefined },
 );
-const detailsOpen = ref(Boolean(props.expanded));
+const detailsOpen = ref(false);
 const reportRoot = ref<HTMLDetailsElement | null>(null);
 const reportTrigger = ref<HTMLElement | null>(null);
 const reportDialog = ref<HTMLDialogElement | null>(null);
 const reasonContextsOpen = ref(new Set<string>());
-watch(
-  () => props.expanded,
-  (expanded) => {
-    if (reportRoot.value) reportRoot.value.open = Boolean(expanded);
-  },
-);
 const onToggle = async (event: Event) => {
   if (event.target !== event.currentTarget) return;
   const open = (event.currentTarget as HTMLDetailsElement).open;
@@ -237,7 +231,6 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
     ref="reportRoot"
     class="skillspector"
     :class="`skillspector--${displayStatus}`"
-    :open="expanded || undefined"
     @toggle="onToggle"
   >
     <summary

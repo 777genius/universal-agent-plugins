@@ -621,10 +621,12 @@ test('v3 detail page opens install advice before installation and explains the m
   const { plugin, errors } = await setup(page);
   await navigate(page, `/plugins/${plugin.name}/`, 'en');
   const assessment = page.locator('.plugin-detail .skillspector');
-  await expect(assessment).toHaveAttribute('open', '');
+  await expect(assessment).not.toHaveAttribute('open');
   await expect(assessment.locator(':scope > summary')).toContainText(
     'Skill scan · 13/13 checked · 10 not fully checked',
   );
+  await assessment.locator(':scope > summary').click();
+  await expect(assessment.locator('.skillspector__dialog')).toBeVisible();
   await expect(assessment.locator('.skillspector__advice')).toContainText(
     'Skills scanned: 13 of 13',
   );
@@ -901,8 +903,10 @@ test('community card navigation preserves the source-bound pending Skill report 
   });
   const detailReport = page.locator('.community-plugin-page .skillspector');
   await expect(detailReport).toHaveClass(/skillspector--pending/);
-  await expect(detailReport).toHaveAttribute('open', '');
+  await expect(detailReport).not.toHaveAttribute('open');
   await expect(detailReport.locator(':scope > summary')).toHaveText(summary ?? '');
+  await detailReport.locator(':scope > summary').click();
+  await expect(detailReport.locator('.skillspector__dialog')).toBeVisible();
   await expect(detailReport).toContainText(
     'No current scan report has been published for these Skill files.',
   );
@@ -946,7 +950,9 @@ for (const outcome of ['mixed', 'unavailable'] as const) {
     await expect(report).toHaveClass(
       outcome === 'mixed' ? /skillspector--incomplete/ : /skillspector--unavailable/,
     );
-    await expect(report).toHaveAttribute('open', '');
+    await expect(report).not.toHaveAttribute('open');
+    await report.locator(':scope > summary').click();
+    await expect(report.locator('.skillspector__dialog')).toBeVisible();
     await expect(report.locator('.skillspector__advice')).toContainText('Before installing');
     if (outcome === 'unavailable') await expect(report).toContainText('could not be loaded');
     expect(errors).toEqual([]);
