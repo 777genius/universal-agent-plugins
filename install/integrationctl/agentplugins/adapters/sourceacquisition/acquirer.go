@@ -305,10 +305,10 @@ func (acquirer Acquirer) acquireGitTransport(ctx context.Context, url, repositor
 		return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "configure repository remote")
 	}
 	// Pin the default worktree line ending independently of the runner OS.
-\t// core.autocrlf=false alone still permits text=auto attributes to use
-\t// core.eol=native (CRLF on Windows, LF elsewhere). Explicit per-path
-\t// .gitattributes eol=crlf remains authoritative.
-\tfor _, setting := range [][]string{{"core.autocrlf", "false"}, {"core.eol", "lf"}, {"core.filemode", "true"}, {"core.symlinks", "true"}, {"fetch.recurseSubmodules", "false"}} {
+	// core.autocrlf=false alone still permits text=auto attributes to use
+	// core.eol=native (CRLF on Windows, LF elsewhere). Explicit per-path
+	// .gitattributes eol=crlf remains authoritative.
+	for _, setting := range [][]string{{"core.autocrlf", "false"}, {"core.eol", "lf"}, {"core.filemode", "true"}, {"core.symlinks", "true"}, {"fetch.recurseSubmodules", "false"}} {
 		if _, err := run("-C", repoRoot, "config", setting[0], setting[1]); err != nil {
 			return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "configure isolated repository")
 		}
