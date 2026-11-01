@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SkillListing } from '~/types/skillsCatalog';
 import { skillClients } from '~/data/skillClients';
-import { externalListingUrl, skillDetailRoute, skillInstallCommand, skillNeedsManualSelection, skillPublisherUrl, skillRepositoryUrl } from '~/utils/skillsCatalog';
+import { skillDetailRoute, skillInstallCommand, skillNeedsManualSelection, skillPublisherUrl, skillRepositoryUrl } from '~/utils/skillsCatalog';
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 
 const props = defineProps<{ skill: SkillListing }>();
@@ -19,7 +19,6 @@ const chooseInTerminal = ref(saved.autoDetect);
 const targets = ref(saved.targetIds.length ? saved.targetIds : ['codex']);
 const repositoryUrl = computed(() => skillRepositoryUrl(props.skill));
 const publisherUrl = computed(() => skillPublisherUrl(props.skill));
-const listingUrl = computed(() => externalListingUrl(props.skill.providerUrl));
 const needsManualSelection = computed(() => skillNeedsManualSelection(props.skill));
 const command = computed(() =>
   skillInstallCommand(props.skill, chooseInTerminal.value ? undefined : targets.value),
@@ -72,7 +71,6 @@ function updateTerminal(value: boolean) {
             skill.source.repository
           }}</a>
           <a v-else-if="publisherUrl" :href="publisherUrl" target="_blank" rel="noreferrer noopener">{{ publisherUrl.replace('https://', '') }}</a>
-          <a v-else-if="listingUrl" :href="listingUrl" target="_blank" rel="noreferrer noopener">{{ t('registryUi.skills.viewListing') }}</a>
           <span v-else>{{ t('registryUi.skills.externalSource') }}</span>
         </p>
       </div>
