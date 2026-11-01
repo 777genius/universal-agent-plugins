@@ -2,6 +2,7 @@ package pluginkitairepo_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -63,6 +64,87 @@ func TestOpenCodeProjectNativeConfigSourceChecks(t *testing.T) {
 		t.Fatal("removed member accepted")
 	}
 }
+func TestOpenCodeProjectV2NativeConfigRequiresExactServersLayout(t *testing.T) {
+	t.Setenv("AGENTPLUGINS_OPENCODE_VERSION", "2.2.5")
+	want := map[string]string{"marker": "http://127.0.0.1:9/A"}
+	good := []byte(`{"mcp":{"servers":{"marker":{"type":"remote","url":"http://127.0.0.1:9/A","disabled":false}}}}`)
+	value, err := openCodeProjectConfig(good)
+	if err != nil || openCodeProjectCheckConfig(value, want, nil) != nil {
+		t.Fatal("real V2 nested server schema refused", err)
+	}
+	for _, bad := range [][]byte{
+		[]byte(`{"mcp":{"marker":{"type":"remote","url":"http://127.0.0.1:9/A"}}}`),
+		[]byte(`{"mcp":{"servers":{"marker":{"type":"remote","url":"http://127.0.0.1:9/A","disabled":true}}}}`),
+		[]byte(`{"mcp":{"servers":{"marker":{"type":"remote","url":"http://127.0.0.1:9/A","disabled":"false"}}}}`),
+		[]byte(`{"mcp":{"servers":{"marker":{"type":"remote","url":"http://127.0.0.1:9/B"}}}}`),
+	} {
+		value, err := openCodeProjectConfig(bad)
+		if err == nil && openCodeProjectCheckConfig(value, want, nil) == nil {
+			t.Fatal("unsupported/disabled/foreign V2 server qualified")
+		}
+	}
+	if openCodeProjectCheckConfig(map[string]any{"mcp": map[string]any{"servers": map[string]any{"marker": map[string]any{}}}}, nil, []string{"marker"}) == nil {
+		t.Fatal("V2 configured server was misclassified as removed")
+	}
+}
+
+func TestOpenCodeProjectV2NativeSourceInventoryBindsExactUserAndSelectedProject(t *testing.T) {
+	t.Setenv("AGENTPLUGINS_OPENCODE_VERSION", "2.2.5")
+	root := t.TempDir()
+	user, project := filepath.Join(root, "global", "opencode"), filepath.Join(root, "project")
+	userPath, projectPath := filepath.Join(user, "opencode.jsonc"), filepath.Join(project, "opencode.jsonc")
+	config := func(name, marker string) map[string]any {
+		return map[string]any{"mcp": map[string]any{"servers": map[string]any{
+			name: map[string]any{"type": "remote", "url": "http://127.0.0.1:9/" + marker, "disabled": false},
+		}}}
+	}
+	rows := []any{
+		map[string]any{"type": "document", "path": userPath, "info": config("user", "USER")},
+		map[string]any{"type": "directory", "path": user},
+		map[string]any{"type": "document", "path": projectPath, "info": config("managed", "PROJECT")},
+		map[string]any{"type": "directory", "path": filepath.Join(project, ".opencode")},
+	}
+	encode := func(items []any) []byte {
+		t.Helper()
+		body, err := json.Marshal(items)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return body
+	}
+	actual, err := openCodeProjectV2SourceConfig(encode(rows), user, project, false, true)
+	if err != nil {
+		t.Fatal("true V2 source inventory refused", err)
+	}
+	if err := openCodeProjectCheckConfig(actual, map[string]string{
+		"user": "http://127.0.0.1:9/USER", "managed": "http://127.0.0.1:9/PROJECT",
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	for name, altered := range map[string][]any{
+		"missing-user":       rows[1:],
+		"missing-project":    rows[:2],
+		"duplicate-project":  append(append([]any{}, rows...), rows[2]),
+		"unrequested-inline": append(append([]any{}, rows...), map[string]any{"type": "document", "info": config("inline", "INLINE")}),
+		"foreign-path":       []any{rows[0], rows[1], map[string]any{"type": "document", "path": filepath.Join(root, "foreign", "opencode.jsonc"), "info": config("managed", "PROJECT")}, rows[3]},
+		"flat-v2":            []any{rows[0], rows[1], map[string]any{"type": "document", "path": projectPath, "info": map[string]any{"mcp": map[string]any{"managed": map[string]any{"url": "http://127.0.0.1:9/PROJECT"}}}}, rows[3]},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := openCodeProjectV2SourceConfig(encode(altered), user, project, false, true); err == nil {
+				t.Fatal("unauthorized V2 source or hidden merge admitted")
+			}
+		})
+	}
+	inline := append(append([]any{}, rows...), map[string]any{"type": "document", "info": config("managed", "INLINE")})
+	merged, err := openCodeProjectV2SourceConfig(encode(inline), user, project, true, true)
+	if err != nil {
+		t.Fatal("authorized V2 inline document refused", err)
+	}
+	if err := openCodeProjectCheckConfig(merged, map[string]string{"managed": "http://127.0.0.1:9/INLINE"}, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestOpenCodeProjectNativeFiniteTableAndEnvironment(t *testing.T) {
 	table := openCodeProjectCommandTable()
 	counts := map[string]int{}

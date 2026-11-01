@@ -150,7 +150,7 @@ func openCodeProjectSameName(t *testing.T, f *openCodeProjectFixture) {
 	known["B"] = f.expected(t, f.B, f.sourceB, "echo")
 	for _, item := range []struct{ label, root string }{{"user", f.user}, {"A", f.A}, {"B", f.B}} {
 		config := f.config(t, "same-"+item.label, item.root, nil)
-		skills := f.skills(t, "same-"+item.label, item.root, true)
+		skills := f.skills(t, "same-"+item.label, item.root, true, commandsGuideSkill)
 		guide, ok := skills[commandsGuideSkill]
 		if !ok {
 			t.Fatal("same-name phase has no valid winner")
@@ -165,9 +165,9 @@ func openCodeProjectSameName(t *testing.T, f *openCodeProjectFixture) {
 		if origin == "" {
 			t.Fatal("same-name winner is outside exact fixture paths/bodies")
 		}
-		mcp, ok := config["mcp"].(map[string]any)
-		if !ok {
-			t.Fatal("same-name config lacks MCP object")
+		mcp, err := openCodeProjectServers(config)
+		if err != nil {
+			t.Fatal("same-name config lacks supported native MCP object", err)
 		}
 		server, ok := mcp["scope-marker"].(map[string]any)
 		if !ok {
@@ -191,7 +191,15 @@ func openCodeProjectSameName(t *testing.T, f *openCodeProjectFixture) {
 	}
 	f.keepJSON(t, "same-name-winners.json", winners)
 	nativeAttempt(f.stages, "inline_precedence", "opencode-project-evidence.json")
-	inline, err := json.Marshal(map[string]any{"mcp": map[string]any{"scope-marker": map[string]any{"type": "remote", "url": f.recorder.url("INLINE"), "enabled": true}}})
+	inlineServer := map[string]any{"type": "remote", "url": f.recorder.url("INLINE"), "enabled": true}
+	inlineServers := map[string]any{"scope-marker": inlineServer}
+	inlineMCP := inlineServers
+	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") == "2.2.5" {
+		delete(inlineServer, "enabled")
+		inlineServer["disabled"] = false
+		inlineMCP = map[string]any{"servers": inlineServers}
+	}
+	inline, err := json.Marshal(map[string]any{"mcp": inlineMCP})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +224,7 @@ func openCodeProjectJSONCase(t *testing.T, f *openCodeProjectFixture) {
 	if err := openCodeProjectCheckConfig(f.config(t, "json-installed", f.short, nil), map[string]string{"scope-marker": f.recorder.url("JSON-one")}, nil); err != nil {
 		t.Fatal(err)
 	}
-	f.skills(t, "json-installed", f.short, true)
+	f.skills(t, "json-installed", f.short, true, commandsGuideSkill)
 	f.binding(t, f.short)
 	if _, err := os.Lstat(filepath.Join(f.short, "opencode.jsonc")); !os.IsNotExist(err) {
 		t.Fatal("JSON route invented a JSONC sibling")
@@ -228,7 +236,7 @@ func openCodeProjectJSONCase(t *testing.T, f *openCodeProjectFixture) {
 	if err := openCodeProjectCheckConfig(config, map[string]string{"scope-marker": f.recorder.url("USER-same")}, nil); err != nil {
 		t.Fatal(err)
 	}
-	rows := f.skills(t, "json-removed", f.short, true)
+	rows := f.skills(t, "json-removed", f.short, true, "uap-user-control")
 	for _, row := range rows {
 		if strings.HasPrefix(row.Location, f.short+string(os.PathSeparator)) {
 			t.Fatal("removed JSON project skill remains natively listed")

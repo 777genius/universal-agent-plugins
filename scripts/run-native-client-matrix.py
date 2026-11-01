@@ -59,6 +59,22 @@ PINS = {
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-x86_64-pc-windows-msvc.zip", "sha256:2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911", "lintai.exe"),
     },
 }
+# Current-source V2 qualification uses official GitHub release assets. Retain
+# the independently pinned V1 PINS above as a separate regression lane.
+OPENCODE_V2_PINS = {
+    "linux-amd64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-linux-x64.tar.gz", "sha256:09f44302c10fd036912f59c81fd1aef5df45dd06f649197f9dfc9bbe2a79614e", "opencode"),
+    "linux-arm64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-linux-arm64.tar.gz", "sha256:5a528f42caf576c6cdece6a191eb273d3db54effa5518e0402684d8f8026aeb6", "opencode"),
+    "darwin-arm64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-darwin-arm64.zip", "sha256:25ba9908979fa7d764792c82589b4b5768ab1511154e0317d98aa77d216ce767", "opencode"),
+    "windows-amd64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-windows-x64.zip", "sha256:2f3bfd6b3527c60c2a882557b20ddc9ba6bdff4b5a8fe61c853da8fcfb3076e8", "opencode.exe"),
+}
+
+
+def selected_pin(args, name):
+    if name == "opencode" and getattr(args, "opencode_generation", "v1") == "v2":
+        return OPENCODE_V2_PINS[args.target]
+    return PINS[args.target][name]
+
+
 # Exact, anchored selections: every selected test is required and every
 # required test is selected (scripts/test_native_client_matrix.py checks both
 # against the Go sources).
@@ -79,8 +95,15 @@ PROJECT_TESTS = {
 }
 
 
-def select_native_tests(client, project_components=False, released=False):
+def select_native_tests(client, project_components=False, released=False, opencode_generation="v1"):
     """Keep current-source project proof separate from released user evidence."""
+    if opencode_generation == "v2":
+        if client != "opencode" or not project_components or released:
+            raise ValueError("V2 qualification requires current-source OpenCode project scope")
+        required = PROJECT_TESTS["opencode"]
+        return "^(?:" + "|".join(re.escape(name) for name in sorted(required)) + ")$", required
+    if opencode_generation != "v1":
+        raise ValueError("unknown OpenCode generation")
     if not project_components:
         return PATTERNS[client], REQUIRED_TESTS[client]
     if released or client not in PROJECT_TESTS:
@@ -285,7 +308,7 @@ def prepared_release(source, args):
         tool_dir.mkdir()
         tools = {}
         for name in (args.client, 'lintai', 'rg'):
-            pin = PINS[args.target][name]
+            pin = selected_pin(args, name)
             path, evidence = provision(pin, tool_dir, name)
             tools[name] = dict(path=path.relative_to(root).as_posix(),
                                pin=list(pin), evidence=evidence)
@@ -325,7 +348,7 @@ def load_prepared(args):
     tools = record.get('tools', {})
     draft.require(set(tools) == {args.client, 'lintai', 'rg'}, 'missing prepared tools')
     for name, tool in tools.items():
-        pin = PINS[args.target][name]
+        pin = selected_pin(args, name)
         require_verified_pin(pin[4])
         draft.require(tool['pin'] == list(pin), 'prepared tool pin mismatch')
         draft.require(tool['path'] in record['files'] and
@@ -338,7 +361,7 @@ def prepared_tools(args, directory):
     """Keep standalone acquisition, but consume only frozen bytes when supplied."""
     names = (args.client, 'lintai', 'rg')
     if args.prepared_input is None:
-        return {name: provision(PINS[args.target][name], directory, name) for name in names}
+        return {name: provision(selected_pin(args, name), directory, name) for name in names}
     record = load_prepared(args)
     root = args.prepared_input.resolve()
     result = {}
@@ -370,8 +393,11 @@ def main():
     parser.add_argument("--prepared-input", type=Path)
     parser.add_argument("--target-scope", choices=('historical-nine', 'linux-amd64'), default='historical-nine')
     parser.add_argument("--project-components", action="store_true", help="also require current-source project lifecycle evidence with explicit discovery limits; never released/draft proof")
+    parser.add_argument("--opencode-generation", choices=("v1", "v2"), default="v1", help="select pinned OpenCode native generation; V2 requires current-source project proof")
     args = parser.parse_args()
     draft.validate(args)
+    if args.opencode_generation == "v2" and (args.client != "opencode" or not args.project_components or args.release_tag or args.release_state != "public" or args.prepared_input or args.prepare_only):
+        parser.error("V2 requires non-prepared current-source OpenCode --project-components")
     if args.release_state == "draft" and args.producer_source is None:
         parser.error("draft mode requires --producer-source")
     if args.release_state == "public" and args.producer_source is not None:
@@ -380,7 +406,7 @@ def main():
         parser.error("--release-tag and --release-commit must be supplied together")
     try:
         pattern, required_tests = select_native_tests(args.client, args.project_components,
-            bool(args.release_tag) or args.release_state == "draft" or bool(args.prepared_input) or args.prepare_only)
+            bool(args.release_tag) or args.release_state == "draft" or bool(args.prepared_input) or args.prepare_only, args.opencode_generation)
     except ValueError as error:
         parser.error(str(error))
     require_hosted(args.target)
@@ -406,13 +432,15 @@ def main():
         if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=source):
             raise RuntimeError("native proof must build a clean exact checkout")
         for key in (args.client, "lintai", "rg"):
-            require_verified_pin(PINS[args.target][key][4])
+            require_verified_pin(selected_pin(args, key)[4])
         binary_dir = scratch / "bin"
         binary_dir.mkdir()
         tools = prepared_tools(args, binary_dir)
         client, client_evidence = tools[args.client]
         scanner, scanner_evidence = tools["lintai"]
         identity["client_asset"] = client_evidence
+        if args.client == "opencode":
+            identity["opencode_generation"] = args.opencode_generation
         identity["scanner_asset"] = scanner_evidence
         _, identity["ripgrep_asset"] = tools["rg"]
         suffix = ".exe" if os.name == "nt" else ""
@@ -488,7 +516,7 @@ def main():
             env[prefix + "_PROJECT_NATIVE_E2E"] = "1"
         env[prefix + "_BIN"] = str(client)
         env[prefix + "_SHA256"] = client_evidence["binary_sha256"]
-        env[prefix + "_VERSION"] = {"codex": "0.153.4", "claude": "2.1.263 (Claude Code)", "opencode": "1.18.34"}[args.client]
+        env[prefix + "_VERSION"] = "2.2.5" if args.client == "opencode" and args.opencode_generation == "v2" else {"codex": "0.153.4", "claude": "2.1.263 (Claude Code)", "opencode": "1.18.34"}[args.client]
         command = [str(tests), "-test.v", "-test.timeout=15m", "-test.run=" + pattern]
         identity["test_command"] = command
         identity["required_tests"] = sorted(required_tests)
