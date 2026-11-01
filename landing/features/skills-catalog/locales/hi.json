@@ -66,7 +66,8 @@
         "sourceDocumentNotice": "प्रकाशक के निर्देश · अप्रमाणित सामग्री। उपयोग से पहले पढ़ें।",
         "documentUnavailable": "प्रकाशक से SKILL.md लोड नहीं हो सका। आप स्रोत सीधे देख सकते हैं।",
         "viewPublisher": "प्रकाशक का स्रोत देखें",
-        "revision": "स्रोत संशोधन"
+        "revision": "स्रोत संशोधन",
+        "rawDocument": "पूरा SKILL.md स्रोत देखें"
       }
     },
     "directoryPage": {
