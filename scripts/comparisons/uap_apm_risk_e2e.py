@@ -910,7 +910,7 @@ def case_interrupted(product: str, cli: str, root: Path, commit: str) -> dict:
                        deterministic_post_write_barrier=False,crash_recovery="NOT_RUN")
     # The frozen replay must reject an invalid lock before any managed effect.
     # This remains a preflight control, NOT post-write crash evidence.
-    file.write_text("{invalid: unresolved: [\\n")
+    file.write_text("{invalid: unresolved: [\n")
     argv=baseline.tool_args(product,cli,project,commit,replay=True)
     protected_paths=(file, project/".agents/skills/foreign-neighbor/SKILL.md")
     before=tuple(file_identity(path,project) for path in protected_paths)
