@@ -13,6 +13,7 @@ import {
   skillRepositoryUrl,
   skillPublisherUrl,
   skillDetailRoute,
+  skillIdentityFromId,
 } from '../utils/skillsCatalog.ts';
 import { catalogQuery, restoreCatalogQuery } from '../utils/filter.ts';
 
@@ -155,6 +156,29 @@ test('HTTPS publishers use their origin and exact names, never a listing page or
   }
   assert.equal(skillInstallCommand({ ...website, skillNameHint: 'BAD$(echo injected)' }), undefined);
   assert.equal(skillInstallCommand({ ...website, availability: 'unsupported-source' }), undefined);
+});
+
+test('Detail identity uses only a canonical source, never the listing-page URL', () => {
+  assert.deepEqual(skillIdentityFromId('skills-sh:open.feishu.cn:lark-mail'), {
+    kind: 'external',
+    url: 'https://open.feishu.cn',
+  });
+  assert.deepEqual(skillIdentityFromId('skills-sh:anthropics/skills:frontend-design'), {
+    kind: 'github',
+    repository: 'anthropics/skills',
+    url: 'https://github.com/anthropics/skills',
+  });
+  for (const id of [
+    'skills-sh:127.0.0.1:lark-mail',
+    'skills-sh:https://example.com:secret',
+    'skills-sh:owner/repo/tree/main:bad',
+    'skills-sh:open.feishu.cn:bad:extra',
+    'not-a-skill',
+    'skills-sh:bad\nsource:other',
+    'skills-sh:open.feishu.cn:',
+  ]) {
+    assert.equal(skillIdentityFromId(id), undefined, id);
+  }
 });
 
 test('Skill agents come only from generated saved-dependency and skill capabilities', () => {
