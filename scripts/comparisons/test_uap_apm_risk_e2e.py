@@ -20,11 +20,14 @@ class RiskOracleTests(unittest.TestCase):
 
     def test_unobserved_success_never_qualifies(self):
         self.assertEqual(risk.status(True,None,True,"unobserved")[0],"BLOCKED")
-        self.assertEqual(risk.status(True,{"exit_code":0},False,"wrong bytes")[0],"FAIL")
-        self.assertEqual(risk.status(True,{"exit_code":0},True,"unproven lock",
+        complete={"exit_code":0,"timed_out":False,"cleanup_error":None,
+                  "capture_complete":True}
+        self.assertEqual(risk.status(True,complete,False,"wrong bytes")[0],"FAIL")
+        self.assertEqual(risk.status(True,complete,True,"unproven lock",
                                      provenance=False)[0],"FAIL")
-        self.assertEqual(risk.status(True,{"exit_code":0},True,"foreign changed",
+        self.assertEqual(risk.status(True,complete,True,"foreign changed",
                                      protected=False)[0],"FAIL")
+        self.assertEqual(risk.status(True,{"exit_code":0},True,"unobserved pipe")[0],"BLOCKED")
 
     def test_safe_refusal_vs_verified_loss(self):
         self.assertEqual(risk.status(True,{"exit_code":1},True,"refusal")[0],"BLOCKED")
@@ -89,6 +92,47 @@ class RiskOracleTests(unittest.TestCase):
             write(bad)
             self.assertFalse(risk.graph_lock_matches(
                 project,"uap",risk.PARENT_V1,risk.CHILD_V1))
+
+    def test_UAP_graph_rejects_reverse_edges_and_same_alias(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project=Path(tmp)
+            parent={"alias":"parent","source":{"git":{
+                "repository":risk.REPO,"path":risk.PARENT,
+                "commit":risk.PARENT_V1}}}
+            child={"alias":"child","source":{"git":{
+                "repository":risk.REPO,"path":risk.CHILD,
+                "commit":risk.CHILD_V1}},
+                "required_by":[{"alias":"parent","selector":{
+                    "kind":"commit","value":risk.CHILD_V1}}]}
+            data={"packages":[parent,child]}
+            def write():
+                (project/"uap.lock").write_text(json.dumps(data))
+            write()
+            self.assertTrue(risk.graph_lock_matches(
+                project,"uap",risk.PARENT_V1,risk.CHILD_V1))
+            parent["required_by"]=[{"alias":"child","selector":{
+                "kind":"commit","value":risk.PARENT_V1}}]
+            write()
+            self.assertFalse(risk.graph_lock_matches(
+                project,"uap",risk.PARENT_V1,risk.CHILD_V1))
+            del parent["required_by"]
+            child["alias"]="parent"
+            write()
+            self.assertFalse(risk.graph_lock_matches(
+                project,"uap",risk.PARENT_V1,risk.CHILD_V1))
+
+    def test_incomplete_prerequisite_zero_exit_rejected_before_install(self):
+        success={"exit_code":0,"timed_out":False,"cleanup_error":None,
+                 "capture_complete":True}
+        for bad in ({"capture_complete":False},{"cleanup_error":"lost pipe"},
+                    {"timed_out":True},{"exit_code":1}):
+            command=dict(success,**bad)
+            self.assertFalse(risk.complete_command(command))
+            self.assertEqual(risk.classify_removed_result(
+                command,"absent",True)[0],"BLOCKED")
+            self.assertEqual(risk.status(True,command,True,
+                                         "child not verified")[0],"BLOCKED")
+        self.assertTrue(risk.complete_command(success))
 
     def test_apm_graph_requires_real_resolved_by_relation(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -161,9 +205,12 @@ class RiskOracleTests(unittest.TestCase):
             self.assertEqual(row["crash_recovery"],"NOT_RUN")
 
     def test_post_pull_never_passes_with_stale_visible_skill(self):
-        succeeded = {"exit_code": 0, "timed_out": False, "cleanup_error": None}
-        failed = {"exit_code": 1, "timed_out": False, "cleanup_error": None}
-        timeout = {"exit_code": 0, "timed_out": True, "cleanup_error": None}
+        succeeded = {"exit_code": 0, "timed_out": False, "cleanup_error": None,
+                     "capture_complete": True}
+        failed = {"exit_code": 1, "timed_out": False, "cleanup_error": None,
+                  "capture_complete": True}
+        timeout = {"exit_code": 0, "timed_out": True, "cleanup_error": None,
+                   "capture_complete": True}
         self.assertEqual(risk.classify_removed_result(succeeded, "present", True)[0], "FAIL")
         self.assertEqual(risk.classify_removed_result(failed, "present", True)[0], "BLOCKED")
         self.assertEqual(risk.classify_removed_result(failed, "absent", True)[0], "BLOCKED")
@@ -221,7 +268,8 @@ class RiskOracleTests(unittest.TestCase):
             self.assertEqual(risk.skill_presence(skill,root),"present")
             skill.unlink()
             self.assertEqual(risk.skill_presence(skill,root),"absent")
-        ok={"exit_code":0,"timed_out":False,"cleanup_error":None}
+        ok={"exit_code":0,"timed_out":False,"cleanup_error":None,
+            "capture_complete":True}
         self.assertEqual(risk.classify_removed_result(ok,"unknown",True)[0],"BLOCKED")
 
     def test_synthetic_canary_not_missed_when_directory_cannot_be_read(self):
