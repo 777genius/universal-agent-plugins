@@ -223,7 +223,7 @@ async function setup(
     manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
     Object.assign(manifest.plugin_states[0]!, {
       skills_total: selected,
-      selected_ids: manifest.plugin_states[0]!.selected_ids.slice(0, selected),
+      selected_ids: (manifest.plugin_states[0]!.selected_ids as string[]).slice(0, selected),
     });
   }
   if (mode === 'truncated') {
