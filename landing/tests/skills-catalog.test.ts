@@ -11,6 +11,8 @@ import {
   skillInstallCommand,
   skillNeedsManualSelection,
   skillRepositoryUrl,
+  skillPublisherUrl,
+  skillDetailRoute,
   externalListingUrl,
 } from '../utils/skillsCatalog.ts';
 import { catalogQuery, restoreCatalogQuery } from '../utils/filter.ts';
@@ -124,6 +126,38 @@ test('Skill metadata cannot inject shell syntax or external install sources', ()
   );
   assert.equal(externalListingUrl('javascript:alert(1)'), undefined);
   assert.equal(externalListingUrl('https://name:password@example.com/'), undefined);
+});
+
+test('HTTPS publishers use their origin and exact names, never a listing page or guessed selector', () => {
+  const website: SkillListing = {
+    ...skill,
+    id: 'skills-sh:open.feishu.cn:lark-mail',
+    providerUrl: 'https://www.skills.sh/site/open.feishu.cn/lark-mail',
+    title: 'lark-mail',
+    skillNameHint: 'lark-mail',
+    source: { kind: 'external', url: 'https://open.feishu.cn' },
+  };
+  assert.equal(skillPublisherUrl(website), 'https://open.feishu.cn');
+  assert.equal(
+    skillInstallCommand(website, ['codex']),
+    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail --target codex',
+  );
+  assert.deepEqual(skillDetailRoute(website), {
+    path: '/skills/',
+    query: { id: website.id, q: 'lark-mail' },
+  });
+  for (const url of [
+    'https://www.skills.sh/site/open.feishu.cn/lark-mail',
+    'https://open.feishu.cn/lark-cli/skills/regular',
+    'https://open.feishu.cn:443',
+    'https://open.feishu.cn?next=evil',
+    'https://name:pass@open.feishu.cn',
+    'https://127.0.0.1',
+  ]) {
+    assert.equal(skillInstallCommand({ ...website, source: { kind: 'external', url } }), undefined, url);
+  }
+  assert.equal(skillInstallCommand({ ...website, skillNameHint: 'BAD$(echo injected)' }), undefined);
+  assert.equal(skillInstallCommand({ ...website, availability: 'unsupported-source' }), undefined);
 });
 
 test('Skill agents come only from generated saved-dependency and skill capabilities', () => {
