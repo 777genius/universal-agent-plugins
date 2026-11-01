@@ -356,6 +356,9 @@ func (f *openCodeProjectFixture) config(t *testing.T, label, project string, ext
 }
 func (f *openCodeProjectFixture) skills(t *testing.T, label, project string, precedence bool) map[string]openCodeProjectSkill {
 	t.Helper()
+	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") == "2.2.5" {
+		return f.skillsV2(t, label, project)
+	}
 	r := f.command(t, "native", label+"-skill", f.client, project, f.env(), []string{"debug", "skill"})
 	if r.Exit != 0 {
 		t.Fatal("native skill command failed; see exact evidence")
