@@ -90,6 +90,11 @@ func (h *documentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_request", "Invalid Skill document request", 0)
 		return
 	}
+	h.serveDocument(w, r, id, source, name)
+}
+
+// serveDocument applies a global admission gate before any untrusted remote I/O.
+func (h *documentHandler) serveDocument(w http.ResponseWriter, r *http.Request, id, source, name string) {
 	key := id + "\x00" + name
 	now := time.Now()
 	h.mu.Lock()
