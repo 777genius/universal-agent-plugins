@@ -60,7 +60,7 @@ class RiskOracleTests(unittest.TestCase):
             project=Path(tmp)
             parent={"alias":"risk-parent","source":{"git":{
                 "repository":risk.REPO, "path":risk.PARENT,
-                "commit":risk.PARENT_V1,"requested":{"kind":"commit","value":risk.PARENT_V1}}}
+                "commit":risk.PARENT_V1,"requested":{"kind":"commit","value":risk.PARENT_V1}}}}
             child={"alias":"risk-child","source":{"git":{
                 "repository":risk.REPO,"path":risk.CHILD,
                 "commit":risk.CHILD_V1,"requested":{"kind":"commit","value":risk.CHILD_V1}}},
@@ -134,7 +134,7 @@ class RiskOracleTests(unittest.TestCase):
             project=Path(tmp)
             parent={"alias":"parent","source":{"git":{
                 "repository":risk.REPO,"path":risk.PARENT,
-                "commit":risk.PARENT_V1,"requested":{"kind":"commit","value":risk.PARENT_V1}}}
+                "commit":risk.PARENT_V1,"requested":{"kind":"commit","value":risk.PARENT_V1}}}}
             child={"alias":"child","source":{"git":{
                 "repository":risk.REPO,"path":risk.CHILD,
                 "commit":risk.CHILD_V1,"requested":{"kind":"commit","value":risk.CHILD_V1}}},
