@@ -19,7 +19,7 @@ type ProjectAdapter struct{ *Adapter }
 func NewProject() *ProjectAdapter { return &ProjectAdapter{Adapter: New()} }
 
 var (
-	_ clients.ProjectTargetLayout = (*ProjectAdapter)(nil)
+	_ clients.ProjectTargetLayout  = (*ProjectAdapter)(nil)
 	_ clients.NativeRegistryLayout = (*ProjectAdapter)(nil)
 )
 
