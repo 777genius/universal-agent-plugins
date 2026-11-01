@@ -30,11 +30,18 @@ class RiskOracleTests(unittest.TestCase):
         self.assertEqual(risk.status(True,{"exit_code":0},True,"unobserved pipe")[0],"BLOCKED")
 
     def test_safe_refusal_vs_verified_loss(self):
-        self.assertEqual(risk.status(True,{"exit_code":1},True,"refusal")[0],"BLOCKED")
-        self.assertEqual(risk.status(True,{"exit_code":1},False,"bytes deleted")[0],"FAIL")
-        self.assertEqual(risk.status(True,{"exit_code":0,"timed_out":True},
-                                     True,"late success")[0],"BLOCKED")
-        self.assertEqual(risk.status(False,{"exit_code":0},True,"unsupported")[0],"BLOCKED")
+        refusal={"exit_code":1,"timed_out":False,"cleanup_error":None,
+                 "capture_complete":True}
+        self.assertTrue(risk.observed_command(refusal))
+        self.assertFalse(risk.complete_command(refusal))
+        self.assertEqual(risk.status(True,refusal,True,"refusal")[0],"BLOCKED")
+        self.assertEqual(risk.status(True,refusal,False,"bytes deleted")[0],"FAIL")
+        incomplete=dict(refusal,capture_complete=False)
+        self.assertFalse(risk.observed_command(incomplete))
+        self.assertEqual(risk.status(True,incomplete,False,"unknown state")[0],"BLOCKED")
+        timed_out=dict(refusal,exit_code=0,timed_out=True)
+        self.assertEqual(risk.status(True,timed_out,True,"late success")[0],"BLOCKED")
+        self.assertEqual(risk.status(False,refusal,True,"unsupported")[0],"BLOCKED")
 
     def test_read_observer_rejects_missing_symlink_directory_and_large(self):
         with tempfile.TemporaryDirectory() as tmp:
