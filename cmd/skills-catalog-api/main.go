@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/777genius/plugin-kit-ai/internal/skillscatalog"
 	"github.com/777genius/plugin-kit-ai/internal/skillsresolve"
@@ -78,8 +79,10 @@ func run() error {
 func resolveHandlers() (skillscatalog.SourceResolver, http.Handler) {
 	token := os.Getenv("SKILLS_RESOLVER_SERVICE_TOKEN")
 	_ = os.Unsetenv("SKILLS_RESOLVER_SERVICE_TOKEN") // Git children never need the service capability.
-	if len(token) < 32 {
-		// Never enable outbound Git work without an explicit operator capability.
+	if len(token) < 32 || len(token) > 512 ||
+		strings.TrimSpace(token) != token || strings.ContainsFunc(token, unicode.IsControl) {
+		// The hosted Git reader and public Git previews share the explicitly
+		// provisioned, validated resolver capability. Invalid credentials disable both.
 		return nil, skillscatalog.NewResolveHandler(nil, "")
 	}
 	source, err := gitsource.NewHosted(os.Getenv("SKILLS_RESOLVER_TEMP_DIR"))
