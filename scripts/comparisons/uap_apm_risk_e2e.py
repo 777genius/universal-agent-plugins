@@ -111,8 +111,7 @@ def run(product: str, cli: str, project: Path, root: Path, env: dict[str, str],
                     "--target", target, "--scope", "project",
                     "--project-root", str(project), "--no-ui", "--yes", "--format", "json"]
     else:
-        argv = [cli, "install", "--frozen" if replay else "--target", target] if replay else [
-            cli, "install", "--target", target]
+        argv = [cli, "install", *(["--frozen"] if replay else []), "--target", target]
     return baseline.run_process(argv, project, env, root)
 
 
@@ -481,7 +480,7 @@ def case_removed(product: str, cli: str, root: Path, commit: str,
     original=observed_file(teammate/".agents/skills/benchmark-note/SKILL.md",teammate)
     foreign=observed_file(teammate/".agents/skills/foreign-neighbor/SKILL.md",teammate)
     preserved=(original==expected["SKILL.md"] and
-               foreign is None or foreign==b"FOREIGN USER CONTENT: preserve without edits\n")
+               foreign in (None, b"FOREIGN USER CONTENT: preserve without edits\n"))
     explicitly_reported=bool(audit and audit.get("exit_code")!=0
                              and "orphan" in audit.get("output_tail","").lower())
     # No silent, still agent-visible orphan is allowed after reported success.
@@ -561,7 +560,9 @@ def main() -> int:
                     elif scenario=="R5_mcp_env_secret":
                         entry=case_secret(product,cli,root)
                     else:
-                        entry=case_removed(product,cli,root,o.fixture_commit,expected)
+                        # The second Skill was introduced after the original
+                        # #617 fixture SHA. Use a later immutable source commit.
+                        entry=case_removed(product,cli,root,PARENT_V2,expected)
                 except Exception as exc:
                     entry=receipt(product,scenario,"BLOCKED",
                                   stage="observer_exception",
