@@ -45,7 +45,7 @@ const listedSkill = computed(() =>
 const resolvedDocument = computed(() => {
   const result = sourceDocument.value;
   const source = sourceIdentity.value;
-  if (!result || !source || result.source !== (source.repository ?? new URL(source.url).hostname))
+  if (!result || !source || result.source.toLowerCase() !== (source.repository ?? new URL(source.url).hostname).toLowerCase())
     return undefined;
   return result;
 });
