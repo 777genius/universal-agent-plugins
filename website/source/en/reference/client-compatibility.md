@@ -53,16 +53,24 @@ certification or a claim of universal production readiness.
 
 CLI 0.1.95 accepts `--target pi` for packages declaring a
 [native Pi extension](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md).
-This provider supports user-scope native extensions; portable Skills and MCP
-projection are outside its current scope. Reload resources or restart Pi after
-installation.
+The published 0.1.95 CLI supports **user-scope** native Pi extensions. A
+[later main-source change (#631)](https://github.com/777genius/universal-agent-plugins/pull/631)
+also adds **project-scoped extension installation** under the selected
+`.pi/extensions/<artifact>`; this newer capability must not be attributed to
+0.1.95 until a later release includes it. Use an explicit project selection
+(`--scope project --project-root /path/to/workspace`) with a Pi extension
+package, then review Pi's project trust prompt and reload or restart. UAP never
+grants project trust automatically or reports a prepared extension as loaded.
 
-The [recorded native evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md)
-covers Pi 1.4.0 on Linux, including native discovery and selected extension
-execution, update, missing-package repair, removal and foreign-extension
-preservation. It does not establish macOS/Windows execution, desktop
-notifications, audio or terminal focus. Installation success alone does not
-prove that a running Pi session loaded the extension.
+The [project E2E matrix](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
+records real Pi v1.4.0 Linux, macOS and Windows project A/B loading, update
+and removal qualification, separate from the
+[historical user-scope Linux evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md).
+**Portable Skills, `.pi/mcp.json` ownership and MCP initialize/list/call are
+not currently UAP-managed by the Pi adapter**; see
+[follow-up #623](https://github.com/777genius/universal-agent-plugins/issues/623).
+These tests do not establish desktop notifications, audio, terminal focus or
+third-party model authorization.
 
 ## Historical draft installer 0.1.55
 
