@@ -7,7 +7,8 @@ const html = computed(() => renderSkillMarkdown(props.markdown));
 
 <template>
   <div class="skill-markdown">
-    <!-- Only Markdown-it's HTML-disabled, protocol-filtered output reaches v-html. -->
+    <!-- The only HTML comes from Markdown-it with raw HTML and images disabled. -->
+    <!-- eslint-disable-next-line vue/no-v-html -->
     <div class="skill-markdown__rendered" v-html="html" />
     <details class="skill-markdown__raw">
       <summary>{{ rawLabel }}</summary>
