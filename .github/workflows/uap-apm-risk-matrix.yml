@@ -107,7 +107,7 @@ jobs:
           test "$(sha256sum "${natives[0]}" | cut -d ' ' -f1)" = 26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba
           mkdir -p "$RUNNER_TEMP/claude-probe"
           observed="$(HOME="$RUNNER_TEMP/claude-probe" CLAUDE_CONFIG_DIR="$RUNNER_TEMP/claude-probe" "${natives[0]}" --version)"
-          [[ "$observed" == *2.1.263* ]]
+          [[ "$observed" =~ (^|[^0-9])2[.]1[.]263([^0-9]|$) ]]
           [[ "$observed" != *$'\n'* && "$observed" != *$'\r'* ]]
           printf '%s\n' "$observed" > "$RUNNER_TEMP/claude-probe/verified-version.txt"
           printf '%s\n' "$(sha256sum "${natives[0]}" | cut -d ' ' -f1)" > "$RUNNER_TEMP/claude-probe/verified-native-sha256.txt"
