@@ -156,9 +156,11 @@ func parseDocumentQuery(raw string) (id, source, name string, valid bool) {
 	if len(slug) > 256 || !safeText(slug, 256) {
 		return "", "", "", false
 	}
-	if repository(source) || (len(source) <= 253 && source == strings.ToLower(source) &&
-		!strings.Contains(source, "/") && sourceDomain.MatchString(source)) {
+	if repository(source) {
 		return id, source, name, true
+	}
+	if len(source) <= 253 && !strings.Contains(source, "/") && sourceDomain.MatchString(source) {
+		return id, strings.ToLower(source), name, true
 	}
 	return "", "", "", false
 }
