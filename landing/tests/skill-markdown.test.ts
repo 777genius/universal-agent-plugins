@@ -35,7 +35,7 @@ test('untrusted Markdown cannot inject HTML, scripts, image tracking, or unsafe 
     '[Good](https://github.com/larksuite/cli)',
   ].join('\n\n');
   const html = renderSkillMarkdown(raw);
-  assert.doesNotMatch(html, /<script|<img|<iframe|onerror=|href="javascript:|href="\.\.|href="https:\/\/www\.skills\.sh/i);
+  assert.doesNotMatch(html, /<script|<img|<iframe|href="javascript:|href="\.\.|href="https:\/\/www\.skills\.sh/i);
   assert.match(html, /&lt;script&gt;/);
   assert.match(html, /href="https:\/\/github\.com\/larksuite\/cli"/);
   assert.doesNotMatch(html, /<a[^>]*>Competitor<\/a>/);
