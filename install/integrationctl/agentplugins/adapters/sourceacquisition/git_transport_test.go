@@ -172,7 +172,7 @@ func configureNativeFixtureCredentials(t *testing.T, home, origin string, privat
 	}
 }
 
- // forcedCRLFCheckoutRunner emulates a Windows-style checkout default on every
+// forcedCRLFCheckoutRunner emulates a Windows-style checkout default on every
 // CI platform. It changes only an isolated, newly initialized Git fixture;
 // production still performs the real fetch, checkout and sealed snapshot.
 type forcedCRLFCheckoutRunner struct {
