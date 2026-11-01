@@ -16,6 +16,8 @@ api.universal-agent-plugins.com {
 		reverse_proxy 127.0.0.1:13120 {
 			header_up -Authorization
 			header_up -Cookie
+			# Replace any caller-supplied value with the direct client address.
+			header_up X-UAP-Preview-Client {remote_host}
 			transport http {
 				dial_timeout 2s
 				response_header_timeout 35s
