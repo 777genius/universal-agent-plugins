@@ -97,12 +97,12 @@ class RiskOracleTests(unittest.TestCase):
         succeeded = {"exit_code": 0, "timed_out": False, "cleanup_error": None}
         failed = {"exit_code": 1, "timed_out": False, "cleanup_error": None}
         timeout = {"exit_code": 0, "timed_out": True, "cleanup_error": None}
-        self.assertEqual(risk.classify_removed_result(succeeded, True, True)[0], "FAIL")
-        self.assertEqual(risk.classify_removed_result(failed, True, True)[0], "BLOCKED")
-        self.assertEqual(risk.classify_removed_result(failed, False, True)[0], "BLOCKED")
-        self.assertEqual(risk.classify_removed_result(timeout, False, True)[0], "BLOCKED")
-        self.assertEqual(risk.classify_removed_result(succeeded, False, False)[0], "FAIL")
-        self.assertEqual(risk.classify_removed_result(succeeded, False, True)[0], "PASS")
+        self.assertEqual(risk.classify_removed_result(succeeded, "present", True)[0], "FAIL")
+        self.assertEqual(risk.classify_removed_result(failed, "present", True)[0], "BLOCKED")
+        self.assertEqual(risk.classify_removed_result(failed, "absent", True)[0], "BLOCKED")
+        self.assertEqual(risk.classify_removed_result(timeout, "absent", True)[0], "BLOCKED")
+        self.assertEqual(risk.classify_removed_result(succeeded, "absent", False)[0], "FAIL")
+        self.assertEqual(risk.classify_removed_result(succeeded, "absent", True)[0], "PASS")
 
     def test_synthetic_canary_detected_outside_project_and_never_serialized(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -136,6 +136,56 @@ class RiskOracleTests(unittest.TestCase):
             self.assertTrue(observation["canary_found"])
             self.assertTrue(observation["complete"])
             self.assertNotIn(value,json.dumps(observation))
+
+    def test_unreadable_or_nonregular_removed_skill_never_looks_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            skill=root/".agents/skills/benchmark-secondary/SKILL.md"
+            skill.parent.mkdir(parents=True)
+            original=root/"stored.md"
+            original.write_bytes(b"still here")
+            skill.symlink_to(original)
+            self.assertEqual(risk.skill_presence(skill,root),"unknown")
+            skill.unlink()
+            skill.mkdir()
+            self.assertEqual(risk.skill_presence(skill,root),"present")
+            skill.rmdir()
+            skill.write_bytes(b"x"*(3*1024*1024))
+            self.assertEqual(risk.skill_presence(skill,root),"present")
+            skill.unlink()
+            self.assertEqual(risk.skill_presence(skill,root),"absent")
+        ok={"exit_code":0,"timed_out":False,"cleanup_error":None}
+        self.assertEqual(risk.classify_removed_result(ok,"unknown",True)[0],"BLOCKED")
+
+    def test_synthetic_canary_not_missed_when_directory_cannot_be_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            def deny_walk(_root, **kwargs):
+                kwargs["onerror"](PermissionError("unlistable fixture"))
+                return iter(())
+            with patch.object(risk.os,"walk",side_effect=deny_walk):
+                found=risk.scan_synthetic_canary((root,),"risk-synthetic")
+            self.assertFalse(found["complete"])
+            self.assertIn("unlistable_directory",found["incomplete_reasons"])
+
+    def test_path_only_canary_is_detected_without_leaking_its_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            marker="risk-"+("a"*48)
+            (root/("log-"+marker)).write_bytes(b"body contains no synthetic token")
+            (root/("empty-"+marker)).mkdir()
+            scan=risk.scan_synthetic_canary((root,),marker)
+            self.assertTrue(scan["canary_found"])
+            self.assertTrue(scan["complete"])
+            self.assertNotIn(marker,json.dumps(scan))
+
+    def test_claude_provenance_must_include_observed_version_and_digest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            result=risk.case_profiles("apm","/bin/no-op",root,"a"*40,
+                                       {"SKILL.md":b"fixture"},claude_available=True)
+            self.assertEqual(result["status"],"BLOCKED")
+            self.assertNotIn("claude_version_verified",result)
 
     def test_risk_file_does_not_embed_live_credentials(self):
         self.assertNotIn("sk-",str(risk.GROUPS))
