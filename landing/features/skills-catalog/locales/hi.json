@@ -57,7 +57,7 @@
         "command": "कमांड",
         "prompt": "प्रॉम्प्ट",
         "promptText": "इस Skill को Universal Agent Plugins से इंस्टॉल करें। चलाने से पहले स्रोत और बदलावों की समीक्षा करें:\n{command}",
-        "exactNameUnavailable": "इंस्टॉल के लिए सटीक नाम सत्यापित नहीं हो सका। मूल लिस्टिंग देखें।",
+        "exactNameUnavailable": "इंस्टॉल के लिए सटीक नाम सत्यापित नहीं हो सका। प्रकाशक का स्रोत देखें।",
         "security": "सुरक्षा जाँच",
         "installs": "इंस्टॉल",
         "source": "स्रोत",
