@@ -66,6 +66,26 @@ for (const theme of ['dark', 'light']) {
       await expect(section.locator('pre code')).toHaveCount(2);
       await expect(section.locator('pre code').first()).toContainText('agentplugins add');
       await expect(section.locator('pre code').last()).toHaveText('agentplugins install --locked');
+      if (width <= 340) {
+        // Copy must not cover either the package name or the version badge.
+        const collisions = await section.locator('.registry-restore__screen').evaluateAll((screens) =>
+          screens.flatMap((screen, index) => {
+            const copy = screen.querySelector('button')!.getBoundingClientRect();
+            return [...screen.querySelectorAll('.registry-restore__package > *')]
+              .filter((element) => {
+                const target = element.getBoundingClientRect();
+                return (
+                  copy.left < target.right &&
+                  copy.right > target.left &&
+                  copy.top < target.bottom &&
+                  copy.bottom > target.top
+                );
+              })
+              .map((element) => `screen ${index + 1}: ${element.textContent}`);
+          }),
+        );
+        expect(collisions).toEqual([]);
+      }
       expect(
         await section.locator('.registry-restore__screen').evaluateAll((screens) =>
           screens.flatMap((screen) => {
