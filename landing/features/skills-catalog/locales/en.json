@@ -57,7 +57,7 @@
         "command": "Command",
         "prompt": "Prompt",
         "promptText": "Install this Skill with Universal Agent Plugins. Review the source and the planned changes before running the following command:\n{command}",
-        "exactNameUnavailable": "The exact install selector could not be validated. Check the original listing before installing.",
+        "exactNameUnavailable": "The exact install selector could not be validated. Check the publisher's source.",
         "security": "Security checks",
         "installs": "Installs",
         "source": "Source",
