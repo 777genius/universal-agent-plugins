@@ -53,8 +53,10 @@ Para conferir o plano de adição de um pacote a um projeto:
 
 Para uma entrada revisada e compatível do catálogo, copie a origem Git fixada em um SHA completo e o cliente adequado. Os aliases do Directory v1, como `context7`, continuam limitados ao escopo do usuário. Substitua `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` e `PACKAGE_PATH`; se o pacote estiver na raiz do repositório, omita `//PACKAGE_PATH`.
 
+Modelo: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. O comando abaixo usa um commit histórico real do GitLab, não uma confirmação de revisão atual no catálogo. Para uma nova instalação, copie a origem verificada atual do catálogo.
+
 ```bash
-npx universal-agent-plugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
+npx universal-agent-plugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex --scope project \
   --project-root /path/to/project --dry-run
 ```
 

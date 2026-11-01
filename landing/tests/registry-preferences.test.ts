@@ -25,7 +25,7 @@ const fixture = JSON.parse(
   readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
 ).plugins[0];
 const messages = JSON.parse(
-  readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('../i18n/locales/en.json', import.meta.url), 'utf8'),
 );
 const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], string, false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
 const discoveryStatus = ref({ state: 'current', count: 0 });

@@ -107,8 +107,10 @@ La portée projet explicite est disponible à partir de [CLI 0.1.93](https://git
 
 Pour une entrée vérifiée et compatible du catalogue, copiez sa source Git épinglée à un SHA complet et le client adapté. Les alias du Directory v1, comme `context7`, restent réservés à la portée utilisateur. Remplacez `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` et `PACKAGE_PATH` ; si le paquet est à la racine du dépôt, omettez `//PACKAGE_PATH`.
 
+Modèle : `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. La commande ci-dessous utilise un commit GitLab historique réel ; cela ne prouve pas que cette révision est actuellement vérifiée dans le catalogue. Pour une nouvelle installation, copiez la source vérifiée actuelle depuis le catalogue.
+
 ```bash
-agentplugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
+agentplugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex --scope project \
   --project-root /path/to/project --dry-run
 agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project

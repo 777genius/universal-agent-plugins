@@ -40,8 +40,10 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 
 对于符合条件的已审核目录条目，请复制其固定到完整 Git 提交 SHA 的来源和兼容客户端。Directory v1 的别名（如 `context7`）仅适用于用户范围。请替换 `OWNER/REPOSITORY`、`FULL_COMMIT_SHA` 和 `PACKAGE_PATH`；如果包位于仓库根目录，请省略 `//PACKAGE_PATH`。
 
+语法模板：`github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`。下面的命令使用一个真实的 GitLab 历史提交，并不代表该版本目前仍通过目录审核。实际安装时请从目录复制当前已审核的固定来源。
+
 ```bash
-npx universal-agent-plugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
+npx universal-agent-plugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex --scope project \
   --project-root /path/to/project --dry-run
 ```
 

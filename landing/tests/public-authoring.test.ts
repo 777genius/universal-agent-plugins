@@ -9,7 +9,7 @@ const root = new URL('../../', import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), 'utf8');
 const locales = ['en', 'ru', 'uk', 'es', 'fr', 'zh', 'ar', 'hi', 'pt'] as const;
 const renderedCopy = (locale: (typeof locales)[number]) => {
-  const messages = JSON.parse(read(`landing/locales/${locale}.json`));
+  const messages = JSON.parse(read(`landing/i18n/locales/${locale}.json`));
   // Render each dictionary in an isolated EN test host.
   const { t } = createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({
     legacy: false,
@@ -25,7 +25,7 @@ const renderedCopy = (locale: (typeof locales)[number]) => {
 test('all authoring messages compile and distinguish installer, source tools and historical API', (context) => {
   const errors = context.mock.method(console, 'error', () => {});
   for (const locale of locales) {
-    const source = JSON.parse(read(`landing/locales/${locale}.json`)).publicAuthoring;
+    const source = JSON.parse(read(`landing/i18n/locales/${locale}.json`)).publicAuthoring;
     const rendered = renderedCopy(locale);
     for (const key of Object.keys(source)) {
       assert.equal(rendered[key], source[key].replaceAll("{'@'}", '@'), `${locale}:${key}`);
@@ -81,7 +81,7 @@ test('landing FAQ translated copy avoids retired public docs', () => {
   const section = read('landing/components/sections/FAQSection.vue');
   assert.doesNotMatch(section, /guide\/python-runtime|reference\/support-boundary/);
   for (const locale of locales) {
-    const links = JSON.parse(read(`landing/locales/${locale}.json`)).faq.quickLinks;
+    const links = JSON.parse(read(`landing/i18n/locales/${locale}.json`)).faq.quickLinks;
     for (const key of ['quickstartTitle', 'quickstartBody', 'buildTitle', 'buildBody', 'useTitle', 'useBody']) {
       assert.equal(typeof links[key], 'string', `${locale}:${key}`);
       assert.ok(links[key].length > 0, `${locale}:${key}`);
@@ -143,7 +143,7 @@ test('project examples require pinned complete sources, not user-only Directory 
       (chunk.startsWith('sh\n') || chunk.startsWith('bash\n')) && chunk.includes('--scope project'));
     assert.ok(projectBlocks.length, path + ': missing project command');
     assert.ok(projectBlocks.some((chunk) =>
-      chunk.includes('github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH')),
+      chunk.includes('github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab')),
       path + ': missing exact pinned project source');
     for (const chunk of projectBlocks) {
       assert.ok(!chunk.includes('add context7'), path + ': user-only alias offered for project');

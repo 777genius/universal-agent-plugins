@@ -157,8 +157,10 @@ agentplugins skills add owner/repository --skill review --skill pdf \
 
 Для проєкту скопіюйте з перевіреної картки каталогу точне Git-джерело з повним SHA коміту та сумісний агент. Псевдоніми Directory v1 (наприклад, `context7`) діють лише в області користувача. Замініть `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` і `PACKAGE_PATH`; для пакета в корені репозиторію приберіть `//PACKAGE_PATH`.
 
+Шаблон: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. Команда нижче використовує справжній історичний коміт GitLab, а не підтвердження поточної перевірки в каталозі. Для нової інсталяції скопіюйте актуальне перевірене джерело з каталогу.
+
 ```bash
-agentplugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
+agentplugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex --scope project \
   --project-root /path/to/project --dry-run
 agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project

@@ -50,8 +50,10 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 
 Для проекта возьмите из проверенной карточки каталога точный Git-источник с полным SHA коммита и совместимый агент. Псевдонимы Directory v1 (например, `context7`) предназначены только для пользовательской области. Замените `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` и `PACKAGE_PATH`; для пакета в корне репозитория уберите `//PACKAGE_PATH`.
 
+Шаблон: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. Команда ниже использует реальный исторический коммит GitLab, а не подтверждение текущей проверки в каталоге. Для новой установки скопируйте актуальный проверенный источник из каталога.
+
 ```bash
-npx universal-agent-plugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex --scope project \
+npx universal-agent-plugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex --scope project \
   --project-root /path/to/project --dry-run
 ```
 

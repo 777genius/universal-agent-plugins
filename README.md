@@ -209,10 +209,13 @@ of reusing its registry alias. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` and
 `PACKAGE_PATH` with the selected source (omit `//PACKAGE_PATH` for a package at
 the repository root), and `/path/to/project` with an existing directory. The
 first command saves the direct-source dependency and its lock; the second
-restores it. For standalone Skills, replace `owner/repository` with a real source:
+restores it. The command below uses a historical GitLab commit as a real syntax
+example, **not a current catalog review**. For an actual setup copy the current
+reviewed source and compatible target; the placeholder format is `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`.
+For standalone Skills, replace `owner/repository` with a real source:
 
 ```sh
-agentplugins add 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH' --target codex \
+agentplugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex \
   --scope project --project-root /path/to/project
 agentplugins install --locked --scope project --project-root /path/to/project
 agentplugins skills add owner/repository --ui \
