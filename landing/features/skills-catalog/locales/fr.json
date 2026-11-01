@@ -45,7 +45,28 @@
       "collectionShown": "Affichage de {count} sur {total} dans cette collection",
       "headingPrefix": "Trouvez vos",
       "viewListing": "Voir la fiche d’origine",
-      "manualSkillSelection": "Choisissez la Skill exacte dans l’installateur ; le nom du catalogue n’est pas vérifié."
+      "manualSkillSelection": "Choisissez la Skill exacte dans l’installateur ; le nom du catalogue n’est pas vérifié.",
+      "publisherSource": "Source de l’éditeur",
+      "invalidPublisherName": "Le nom exact du Skill est requis. Consultez la fiche d’origine.",
+      "detail": {
+        "breadcrumb": "Navigation Skill",
+        "skill": "Agent Skill",
+        "notFound": "Skill introuvable",
+        "notFoundHelp": "Cette fiche n’est pas disponible. Revenez au catalogue des Skills.",
+        "backToSkills": "Retour aux Skills",
+        "installation": "Installation",
+        "command": "Commande",
+        "prompt": "Prompt",
+        "promptText": "Installe ce Skill avec Universal Agent Plugins. Vérifie la source et les modifications avant d’exécuter :\n{command}",
+        "exactNameUnavailable": "Le nom exact pour l’installation n’a pas pu être vérifié. Consultez la fiche d’origine.",
+        "documentNotice": "Le catalogue fournit les métadonnées de source et d’installation, mais pas le contenu SKILL.md vérifié. Lisez les instructions d’origine avant l’installation.",
+        "readInstructions": "Lire SKILL.md sur la fiche d’origine",
+        "security": "Contrôles de sécurité",
+        "installs": "Installations",
+        "source": "Source",
+        "listing": "Fiche d’origine",
+        "metricsNotice": "Les chiffres d’installation proviennent d’un annuaire externe et ne sont pas vérifiés indépendamment."
+      }
     },
     "directoryPage": {
       "pluginDirectory": "Répertoire des plugins",
