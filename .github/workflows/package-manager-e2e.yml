@@ -98,7 +98,45 @@ jobs:
         run: python -B scripts/package-manager-e2e.py --output "${{ runner.temp }}/package-manager-e2e"
       - name: Verify immutable Git EOL bytes across platforms
         working-directory: install/integrationctl/agentplugins
-        run: go test -v -count=1 -timeout=5m ./adapters/sourceacquisition -run TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -json -count=1 -timeout=5m ./adapters/sourceacquisition -run '^TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL
+      - name: Retain execution evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-manager-e2e-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/package-manager-e2e/report.json
+            ${{ runner.temp }}/package-manager-e2e/*.stdout
+            ${{ runner.temp }}/package-manager-e2e/*.stderr
+          if-no-files-found: error
+          retention-days: 14
+ | python -c '
+          import json, sys
+          events = [json.loads(line) for line in sys.stdin if line.strip()]
+          pkg = "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
+          name = "TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL"
+          matches = lambda action, test: any(
+              e.get("Package") == pkg and e.get("Test") == test and e.get("Action") == action
+              for e in events
+          )
+          package_pass = any(
+              e.get("Package") == pkg and e.get("Action") == "pass" and "Test" not in e
+              for e in events
+          )
+          ok = matches("run", name) and matches("pass", name) and package_pass and not any(
+              matches(action, name) for action in ("fail", "skip")
+          )
+          if not ok:
+              for e in events:
+                  if e.get("Action") == "output" and e.get("Package") == pkg:
+                      sys.stderr.write(e.get("Output", ""))
+              sys.stderr.write("Exact Git EOL oracle did not run and pass.\\n")
+              sys.exit(1)
+          print("Confirmed exact Go run+pass events, package pass, no skip: " + name)
+          '
       - name: Retain execution evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
