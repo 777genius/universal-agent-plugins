@@ -38,7 +38,7 @@ func (*ProjectAdapter) NativeRegistry(in clients.PlanInput) (string, string) {
 
 func (*ProjectAdapter) ProjectTargetRoot(client domain.DetectedClient, mode domain.PackageMode, _ string, target domain.TargetContext) (string, string, error) {
 	if mode != domain.PackageNative {
-		return "", "", fmt.Errorf("Pi project extensions require native package delivery")
+		return "", "", fmt.Errorf("pi project extensions require native package delivery")
 	}
 	root, err := projectPiRoot(client, target, "")
 	if err != nil {
@@ -54,14 +54,14 @@ func projectPiRoot(client domain.DetectedClient, target domain.TargetContext, pl
 	}
 	if client.ClientID != domain.ClientPi || scoped.Scope != domain.ScopeProject ||
 		scoped.UserConfigRoot != client.ConfigRoot || client.ConfigRoot == "" {
-		return "", fmt.Errorf("Pi project selection differs from the original user profile")
+		return "", fmt.Errorf("pi project selection differs from the original user profile")
 	}
 	if err := validateProfile(client.ConfigRoot); err != nil {
-		return "", fmt.Errorf("Pi project requires a canonical original user profile: %w", err)
+		return "", fmt.Errorf("pi project requires a canonical original user profile: %w", err)
 	}
 	root := filepath.Join(scoped.ProjectRoot, ".pi")
 	if planned != "" && planned != root {
-		return "", fmt.Errorf("Pi project registry differs from selected workspace")
+		return "", fmt.Errorf("pi project registry differs from selected workspace")
 	}
 	if err := pathpolicy.RequireContainedChild(scoped.ProjectRoot, root); err != nil {
 		return "", err
@@ -69,13 +69,13 @@ func projectPiRoot(client domain.DetectedClient, target domain.TargetContext, pl
 	user := client.ConfigRoot
 	if user != "" && (root == user || strings.HasPrefix(root, user+string(filepath.Separator)) ||
 		strings.HasPrefix(user, root+string(filepath.Separator))) {
-		return "", fmt.Errorf("Pi project and user profile overlap")
+		return "", fmt.Errorf("pi project and user profile overlap")
 	}
 	for _, path := range []string{root, filepath.Join(root, "extensions")} {
 		info, err := os.Lstat(path)
 		if err == nil {
 			if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-				return "", fmt.Errorf("Pi project discovery directory is not a real directory")
+				return "", fmt.Errorf("pi project discovery directory is not a real directory")
 			}
 		} else if !os.IsNotExist(err) {
 			return "", err
@@ -86,7 +86,7 @@ func projectPiRoot(client domain.DetectedClient, target domain.TargetContext, pl
 
 func (*ProjectAdapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
 	if in.TargetContext.Scope != domain.ScopeProject || plan.Scope != domain.ScopeProject {
-		return fmt.Errorf("Pi project adapter requires explicit project scope")
+		return fmt.Errorf("pi project adapter requires explicit project scope")
 	}
 	root, err := projectPiRoot(in.Client, in.TargetContext, plan.NativeRegistryRoot)
 	if err != nil {
