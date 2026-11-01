@@ -338,6 +338,22 @@ class RiskOracleTests(unittest.TestCase):
             self.assertEqual(result["status"],"BLOCKED")
             self.assertNotIn("claude_version_verified",result)
 
+    def test_cold_claude_requires_actual_native_skill_package_kind(self):
+        import yaml
+        commit = risk.PARENT_V2
+        def portable(kind):
+            lock = {"dependencies": [{
+                "repo_url": risk.REPO, "virtual_path": risk.SKILL,
+                "resolved_commit": commit, "package_type": kind,
+            }]}
+            return {"apm.lock.yaml": yaml.safe_dump(lock).encode()}
+        self.assertTrue(risk.apm_claude_skill_kind(portable("claude_skill"), commit))
+        self.assertTrue(risk.apm_claude_skill_kind(portable("skill_bundle"), commit))
+        for kind in ("apm_package", "marketplace_plugin", "", None):
+            self.assertFalse(risk.apm_claude_skill_kind(portable(kind), commit))
+        self.assertFalse(risk.apm_claude_skill_kind(portable("claude_skill"), risk.PARENT_V1))
+        self.assertFalse(risk.apm_claude_skill_kind({}, commit))
+
     def test_Claude_version_requires_exact_numeric_token(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
