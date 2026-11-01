@@ -55,8 +55,28 @@ def run(argv, cwd, env=None, input_bytes=None, timeout=80, max_output=1 << 20):
 def checked_release(root, target, acquire_env):
     archive, digest, basename = PINS[target]
     path = root / archive
-    run(["gh", "release", "download", VERSION, "--repo", REPO, "--pattern",
-         archive, "--dir", str(root)], root, env=acquire_env, timeout=240)
+    try:
+        run(["gh", "release", "download", VERSION, "--repo", REPO, "--pattern",
+             archive, "--dir", str(root)], root, env=acquire_env, timeout=240)
+    except RuntimeError:
+        # A subset of Windows hosted runners cannot reach api.github.com even
+        # when github.com release assets are available. Both routes are pinned
+        # to the identical signed-off upstream tag and SHA-256 bytes.
+        import urllib.request
+        official = f"https://github.com/{REPO}/releases/download/{VERSION}/{archive}"
+        request = urllib.request.Request(official, headers={"User-Agent": "uap-pi-native-e2e"})
+        count = 0
+        with urllib.request.urlopen(request, timeout=45) as response, path.open("wb") as output:
+            if not response.url.startswith("https://"):
+                raise RuntimeError("Pi release redirected to a non-HTTPS resource")
+            while True:
+                chunk = response.read(1 << 20)
+                if not chunk:
+                    break
+                count += len(chunk)
+                if count > 175 << 20:
+                    raise RuntimeError("Pi release archive exceeds bounded size")
+                output.write(chunk)
     body = path.read_bytes()
     if len(digest) != 71 or "sha256:" + hashlib.sha256(body).hexdigest() != digest:
         raise RuntimeError("official Pi release archive SHA-256 mismatch")
