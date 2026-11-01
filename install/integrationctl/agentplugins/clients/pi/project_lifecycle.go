@@ -93,7 +93,7 @@ func (adapter *ProjectAdapter) Activate(ctx context.Context, env clients.Env, re
 	if err := ctx.Err(); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	if err := adapter.Adapter.PreflightActivation(env, request); err != nil {
+	if err := adapter.PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
 	if request.ActivationComplete {
@@ -112,11 +112,11 @@ func (adapter *ProjectAdapter) Activate(ctx context.Context, env clients.Env, re
 	}
 	layout := piProjectComponents(request.Plan.NativeRegistryRoot)
 	out, err := shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
-		Automatic: request.Plan.InstallIntent == domain.InstallIntentAutomatic,
+		Automatic:         request.Plan.InstallIntent == domain.InstallIntentAutomatic,
 		UnavailableAction: piProjectComponentAction,
-		RepairAction: "repair exact owned Pi project components",
-		RetryAction: "retry exact Pi project Skills/MCP installation",
-		CompletedAction: piProjectComponentAction,
+		RepairAction:      "repair exact owned Pi project components",
+		RetryAction:       "retry exact Pi project Skills/MCP installation",
+		CompletedAction:   piProjectComponentAction,
 		Verify: func() error {
 			return layout.Verify(objects, false, env.NativeConfig)
 		},
