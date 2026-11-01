@@ -54,7 +54,9 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string, r
 	}
 	f.used[commandLabel] = "native"
 	before := f.recorder.counts()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	ctx, cancel := context.WithTimeout(f.ctx, 16*time.Second)
+	defer cancel()
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,8 +64,6 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string, r
 	if err := listener.Close(); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(f.ctx, 16*time.Second)
-	defer cancel()
 	command := exec.CommandContext(ctx, f.client, "serve", "--hostname", "127.0.0.1", "--port", strconv.Itoa(port))
 	command.WaitDelay = time.Second
 	command.Dir = project
@@ -123,7 +123,11 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string, r
 					lastError = nil
 					break
 				}
-				lastError = fmt.Errorf("V2 source-bound project skills not yet registered or malformed: %v", observed)
+				if observed != nil {
+					lastError = fmt.Errorf("V2 source-bound project skills not yet registered or malformed: %w", observed)
+				} else {
+					lastError = fmt.Errorf("V2 source-bound project skills not yet registered")
+				}
 			} else {
 				lastError = fmt.Errorf("native V2 skill route not ready (status %d)", response.StatusCode)
 			}
