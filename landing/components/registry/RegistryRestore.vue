@@ -462,4 +462,37 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
     }
   }
 }
+
+@media (max-width: 340px) {
+  .registry-restore {
+    // Keep the installed source and copy control legible on narrow phones.
+    // The commit instruction is repeated in the handoff immediately below.
+    &__stage-label {
+      gap: 2cqw;
+      font-size: 10px;
+    }
+    &__step {
+      font-size: 5cqw;
+    }
+    &__package,
+    &__screen-body {
+      margin-block-start: 1cqw;
+    }
+    &__commit {
+      display: none;
+    }
+  }
+}
+
+@media (max-width: 300px) {
+  .registry-restore {
+    &__package {
+      font-size: 9px;
+    }
+    &__screen-body :deep(pre) {
+      font-size: 9px;
+      line-height: 1.25;
+    }
+  }
+}
 </style>
