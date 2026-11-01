@@ -366,9 +366,10 @@ for (const width of [1280, 390]) {
     await expect(assessment.locator('.skillspector__advice')).toContainText(
       'Skills scanned: 13 of 13',
     );
-    await expect(assessment.locator('.skillspector__outcomes')).toContainText(
+    await expect(assessment.locator('.skillspector__outcomes dt')).toHaveText([
+      'Scan complete',
       'Checked with limitations',
-    );
+    ]);
     await expect(assessment.locator('.skillspector__outcomes dd')).toHaveText(['3', '10']);
     await expect(assessment.locator('.skillspector__details')).toHaveCSS('font-size', '13px');
     await expect(assessment.locator('.skillspector__advice')).toContainText('before installing');
