@@ -210,7 +210,7 @@ func (runner *forcedCRLFCheckoutRunner) Run(ctx context.Context, command Command
 
 // Git's core.autocrlf=false is not sufficient with .gitattributes text=auto:
 // core.eol=crlf materializes CRLF from the same committed LF blob. Compare a
-// genuine immutable HTTPS acquisition against that adversarial local default.
+// actual immutable Git acquisition against that adversarial local default.
 // Explicit per-path eol=crlf remains respected rather than rewritten to LF.
 func TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL(t *testing.T) {
 	root, work, _ := nativeFixtureRepository(t)
@@ -231,13 +231,19 @@ func TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL(t *testing.T) {
 	commit := nativeFixtureGit(t, work, "rev-parse", "HEAD")
 	nativeFixtureGit(t, work, "push", "--quiet", filepath.Join(root, "repo.git"), "HEAD")
 
-	server := nativeHTTPSFixture(t, root, false)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", home)
-	configureNativeFixtureCredentials(t, home, server.URL, false)
-	source := sourcespec.Git{URL: server.URL + "/repo.git"}
-	baseline, err := (Acquirer{TempRoot: t.TempDir(), Runner: OSRunner{}}).
+	// Keep the real Git fetch/checkout and its hardened process runner, but
+	// replace only the remote transport with the already-supported local
+	// fixture seam. Platform-specific self-signed TLS is tested separately;
+	// an HTTPS certificate failure must not masquerade as an EOL regression.
+	source := sourcespec.Git{URL: "https://github.com/example/portable-eol.git"}
+	bare := filepath.Join(root, "repo.git")
+	fixtureEndpoint := func(repository string) string {
+		if repository != "example/portable-eol" {
+			t.Fatalf("unexpected fixture repository %q", repository)
+		}
+		return bare
+	}
+	baseline, err := (Acquirer{TempRoot: t.TempDir(), Runner: OSRunner{}, URLForRepo: fixtureEndpoint}).
 		AcquireGit(t.Context(), source, commit, "")
 	if err != nil {
 		t.Fatal(err)
@@ -245,7 +251,7 @@ func TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL(t *testing.T) {
 	defer func() { _ = packagedigest.Remove(baseline) }()
 
 	forced := &forcedCRLFCheckoutRunner{delegate: OSRunner{}}
-	got, err := (Acquirer{TempRoot: t.TempDir(), Runner: forced}).
+	got, err := (Acquirer{TempRoot: t.TempDir(), Runner: forced, URLForRepo: fixtureEndpoint}).
 		AcquireGit(t.Context(), source, commit, "")
 	if err != nil {
 		t.Fatal(err)
@@ -253,6 +259,10 @@ func TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL(t *testing.T) {
 	defer func() { _ = packagedigest.Remove(got) }()
 	if !forced.injected || !forced.checked {
 		t.Fatal("disposable CRLF control or real immutable Git checkout was not observed")
+	}
+	if baseline.Source.SourceURL != source.URL || got.Source.SourceURL != source.URL ||
+		baseline.Source.ResolvedRevision != commit || got.Source.ResolvedRevision != commit {
+		t.Fatalf("disposable Git fixture changed the requested source identity: baseline=%+v forced=%+v", baseline.Source, got.Source)
 	}
 	if got.TreeDigest == "" || got.TreeDigest != baseline.TreeDigest {
 		t.Fatalf("OS checkout changed source tree identity: baseline=%q forced=%q",
