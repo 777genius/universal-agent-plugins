@@ -66,7 +66,8 @@
         "sourceDocumentNotice": "Instrucciones del editor · contenido no verificado. Revísalas antes de usarlas.",
         "documentUnavailable": "No se pudo cargar SKILL.md del editor. Puedes revisar la fuente directamente.",
         "viewPublisher": "Ver fuente del editor",
-        "revision": "Revisión de origen"
+        "revision": "Revisión de origen",
+        "rawDocument": "Ver el archivo SKILL.md completo"
       }
     },
     "directoryPage": {
