@@ -10,7 +10,7 @@ const playerUrl = computed(() => `https://player.mux.com/${playbackId.value}?aut
 </script>
 
 <template>
-  <figure class="hero-demo-video" :aria-label="t('shell.hero.demoVideoTitle')">
+  <figure id="demo" class="hero-demo-video" :aria-label="t('shell.hero.demoVideoTitle')">
     <iframe
       v-if="playing"
       :src="playerUrl"

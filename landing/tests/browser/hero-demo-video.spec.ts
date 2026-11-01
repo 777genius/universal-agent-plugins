@@ -22,12 +22,36 @@ for (const width of [1440, 390, 320]) {
     const demo = page.locator('.hero-demo-video');
     const button = demo.getByRole('button', { name: 'Watch demo' });
     await expect(button).toBeVisible();
+    await expect(demo).toHaveAttribute('id', 'demo');
     await expect(demo.locator('iframe')).toHaveCount(0);
     expect(playerRequests).toHaveLength(0);
     const installBefore = (await page.locator('.hero__window').boundingBox())!;
     const demoBefore = (await demo.boundingBox())!;
     expect(demoBefore.width).toBeLessThanOrEqual(480);
     expect(installBefore.y - (demoBefore.y + demoBefore.height)).toBeGreaterThanOrEqual(27);
+    const overlay = await button.evaluate((element) => {
+      const video = element.closest('.hero-demo-video')!.getBoundingClientRect();
+      const label = element.querySelector('span')!.getBoundingClientRect();
+      const play = element.querySelector('svg')!.getBoundingClientRect();
+      return {
+        fontSize: parseFloat(getComputedStyle(element).fontSize),
+        playSize: play.width,
+        stacked: label.top >= play.bottom,
+        contained:
+          play.top >= video.top &&
+          play.bottom <= video.bottom &&
+          label.left >= video.left &&
+          label.right <= video.right &&
+          label.top >= video.top &&
+          label.bottom <= video.bottom,
+      };
+    });
+    // At 480px, the original 18px label and 36px play circle are 3x larger.
+    // Container-relative sizing preserves the same proportions without mobile clipping.
+    expect(overlay.fontSize).toBeCloseTo((demoBefore.width - 2) * 0.1125, 0);
+    expect(overlay.playSize).toBeCloseTo((demoBefore.width - 2) * 0.225, 0);
+    expect(overlay.stacked).toBe(true);
+    expect(overlay.contained).toBe(true);
     if (width === 1440) {
       const header = (await page.getByRole('banner').boundingBox())!;
       const topGap = demoBefore.y - (header.y + header.height);
