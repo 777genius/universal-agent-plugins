@@ -2,6 +2,7 @@ package pi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -160,8 +161,19 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 		if err := (shared.ProjectComponentMutation{
 			Layout: piProjectComponents(request.NativeRegistryRoot),
 			Previous: objects, Kernel: env.NativeConfig,
-		}).Apply(ctx); err != nil && !shared.CommittedNativeDeactivationCleanup(&out, err) {
-			return out, err
+		}).Apply(ctx); err != nil {
+			// A rejected foreign edit is proven to have caused no native
+			// mutation. Let the common removal attempt roll back its pending
+			// intent so the owner can restore the original bytes and retry.
+			// Unknown or partly committed effects still require recovery.
+			var observed *shared.NativeEffectError
+			if errors.As(err, &observed) && observed.Effect == domain.NativeEffectUnchanged {
+				out.NativeEffect = domain.NativeEffectUnchanged
+				return out, err
+			}
+			if !shared.CommittedNativeDeactivationCleanup(&out, err) {
+				return out, err
+			}
 		}
 	}
 	legacy, err := adapter.Adapter.Deactivate(ctx, env, request)
