@@ -108,8 +108,9 @@ func TestDocumentPreviewGitAndNameRefusal(t *testing.T) {
 func TestPublisherIPRefusesLocalReservedAndMappedAddresses(t *testing.T) {
 	for _, candidate := range []string{
 		"127.0.0.1", "10.1.2.3", "169.254.169.254", "192.168.0.1",
-		"100.64.1.1", "192.0.2.11", "198.18.1.1",
+		"0.1.2.3", "100.64.1.1", "192.0.2.11", "192.88.99.1", "198.18.1.1",
 		"::1", "fc00::12", "::ffff:127.0.0.1", "2001:db8::2",
+		"64:ff9b::a00:1", "64:ff9b:1::1", "2001::1", "2001:10::1",
 	} {
 		if publicPublisherIP(net.ParseIP(candidate)) {
 			t.Fatalf("accepted unsafe destination %s", candidate)
