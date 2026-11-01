@@ -92,10 +92,17 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string) m
 				err = closeErr
 			}
 			if err == nil && response.StatusCode == http.StatusOK && len(body) <= 1<<20 {
-				lastError = nil
-				break
+				// A 200 response may precede asynchronous ConfigSkillPlugin
+				// registration. Never certify the startup-empty registry.
+				registered, observed := openCodeProjectV2Skills(body, project)
+				if observed == nil && len(registered) > 0 {
+					lastError = nil
+					break
+				}
+				lastError = fmt.Errorf("V2 skill registry not yet populated or malformed: %v", observed)
+			} else {
+				lastError = fmt.Errorf("native V2 skill route not ready (status %d)", response.StatusCode)
 			}
-			lastError = fmt.Errorf("native V2 skill route not ready (status %d)", response.StatusCode)
 		} else {
 			lastError = err
 		}
@@ -129,21 +136,29 @@ func (f *openCodeProjectFixture) skillsV2(t *testing.T, label, project string) m
 	if before != [2]int64{} || f.recorder.counts() != [2]int64{} {
 		t.Fatal("V2 skill-only native observation unexpectedly contacted passive MCP probe")
 	}
-	parsed, err := openCodeProjectV2Skills(body)
+	parsed, err := openCodeProjectV2Skills(body, project)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return parsed
 }
 
-func openCodeProjectV2Skills(body []byte) (map[string]openCodeProjectSkill, error) {
+func openCodeProjectV2Skills(body []byte, project string) (map[string]openCodeProjectSkill, error) {
 	value, err := openCodeProjectJSON(body)
 	if err != nil {
 		return nil, err
 	}
-	rows, ok := value.([]any)
+	envelope, ok := value.(map[string]any)
+	if !ok || len(envelope) != 2 {
+		return nil, fmt.Errorf("V2 native skill API did not return a source-bound envelope")
+	}
+	location, ok := envelope["location"].(map[string]any)
+	if !ok || len(location) != 1 || location["directory"] != project {
+		return nil, fmt.Errorf("V2 native skill API selected another project")
+	}
+	rows, ok := envelope["data"].([]any)
 	if !ok || len(rows) > 200 {
-		return nil, fmt.Errorf("V2 native skill API response is not a bounded array")
+		return nil, fmt.Errorf("V2 native skill API data is not a bounded skill array")
 	}
 	result := make(map[string]openCodeProjectSkill, len(rows))
 	for _, raw := range rows {
