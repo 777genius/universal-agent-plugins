@@ -223,6 +223,8 @@ def main():
             installed_b = project_operation(driver, b / ".uap", user, b, package, "install", file_b)
             for project, row in ((a, installed_a), (b, installed_b)):
                 binding = row.get("binding", {})
+                if binding.get("scope") != "project":
+                    raise RuntimeError("UAP Pi native install receipt lost selected project scope")
                 active = Path(binding.get("TargetPath") or binding.get("target_path") or "")
                 if active.parent != project / ".pi/extensions" or not (active / "index.ts").is_file():
                     raise RuntimeError("UAP public project install did not produce Pi native discovery leaf")
