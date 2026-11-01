@@ -442,6 +442,25 @@ class RiskOracleTests(unittest.TestCase):
             self.assertEqual(result["status"],"BLOCKED")
             self.assertNotIn("claude_version_verified",result)
 
+    def test_corrupt_lock_control_rejects_signals_and_unrelated_failure(self):
+        valid={"exit_code":1, "timed_out":False, "cleanup_error":None,
+               "capture_complete":True, "output_tail":"Error: invalid uap.lock syntax"}
+        self.assertTrue(risk.lock_validation_refused(valid,"uap.lock"))
+        self.assertTrue(risk.lock_validation_refused(
+            dict(valid,output_tail="apm.lock.yaml: parse error near line 1"),
+            "apm.lock.yaml"))
+        for other in (
+            dict(valid,exit_code=0),
+            dict(valid,exit_code=-11),
+            dict(valid,exit_code=-9),
+            dict(valid,cleanup_error="pipe left open"),
+            dict(valid,timed_out=True),
+            dict(valid,capture_complete=False),
+            dict(valid,output_tail="error: unknown flag in source package"),
+            dict(valid,output_tail="uap.lock parsed successfully"),
+        ):
+            self.assertFalse(risk.lock_validation_refused(other,"uap.lock"))
+
     def test_cold_claude_requires_actual_native_skill_package_kind(self):
         import yaml
         commit = risk.PARENT_V2
