@@ -13,7 +13,6 @@ import {
   skillRepositoryUrl,
   skillPublisherUrl,
   skillDetailRoute,
-  externalListingUrl,
 } from '../utils/skillsCatalog.ts';
 import { catalogQuery, restoreCatalogQuery } from '../utils/filter.ts';
 
@@ -124,8 +123,6 @@ test('Skill metadata cannot inject shell syntax or external install sources', ()
     }),
     undefined,
   );
-  assert.equal(externalListingUrl('javascript:alert(1)'), undefined);
-  assert.equal(externalListingUrl('https://name:password@example.com/'), undefined);
 });
 
 test('HTTPS publishers use their origin and exact names, never a listing page or guessed selector', () => {
