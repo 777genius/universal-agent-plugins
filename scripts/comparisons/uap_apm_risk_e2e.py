@@ -244,13 +244,32 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
     git("commit", "-qm", "pinned portable inputs and committed Claude Skill", cwd=committed, env=fresh_env)
     teammate = fresh_root / "clean-clone"
     git("clone", "-q", str(committed), str(teammate), cwd=fresh_root, env=fresh_env)
+    # A second, disjoint clone with a corrupted lock proves that the selected
+    # frozen command actually consults its portable authority. No-op managers
+    # cannot qualify merely because the fixture was already on disk.
+    negative_root = fresh_root / "corrupt-lock-test"
+    negative_env = baseline.isolated_env(negative_root)
+    negative_clone = fresh_root / "corrupt-lock-clone"
+    git("clone", "-q", str(committed), str(negative_clone), cwd=fresh_root, env=fresh_env)
+    lock_name = "uap.lock" if product == "uap" else "apm.lock.yaml"
+    (negative_clone / lock_name).write_bytes(b"\x00malformed-lock-no-authority\n")
+    negative_result = run(product, cli, negative_clone, negative_root, negative_env,
+                          commit=commit, target="claude", replay=True)
+    corrupt_lock_rejected = (observed_command(negative_result) and
+                             negative_result["exit_code"] != 0)
     before = clean_snapshot(teammate, owned)
+    claude_before = profile_snapshot(teammate / ".claude")
+    portable_meta_before = {name: file_identity(teammate / name, teammate)
+                            for name in portable}
     before_identity = tuple(file_identity(teammate / name, teammate) for name in owned)
     portable_before, before_error = baseline.captured_portable(teammate, product)
     actual = run(product, cli, teammate, fresh_root, fresh_env,
                  commit=commit, target="claude", replay=True)
     after = clean_snapshot(teammate, owned)
     after_identity = tuple(file_identity(teammate / name, teammate) for name in owned)
+    claude_after = profile_snapshot(teammate / ".claude")
+    portable_meta_after = {name: file_identity(teammate / name, teammate)
+                           for name in portable}
     portable_after, after_error = baseline.captured_portable(teammate, product)
     preserved = baseline.safe_same_bytes(
         teammate / ".agents/skills/foreign-neighbor/SKILL.md", neighbor, teammate)
@@ -259,18 +278,30 @@ def case_cold(product: str, cli: str, root: Path, commit: str, expected: dict[st
                  and before_identity == after_identity
                  and profile_scan(teammate / ".claude", expected) == admitted_skills)
     lock_intact = (before_error is None and after_error is None and
-                   portable_before == portable_after)
+                   portable_before == portable_after and
+                   all(value is not None for value in portable_meta_before.values()) and
+                   portable_meta_before == portable_meta_after)
     outcome, why = status(
         True, actual, identical and lock_intact,
-        "cold-cloned committed Claude Skill and portable lock must stay byte-identical",
+        "cold-cloned committed Claude Skill and portable lock must stay unchanged",
         protected=identical,
     )
+    extra_profile_mutation = (not claude_before["complete"]
+                              or not claude_after["complete"]
+                              or claude_before != claude_after)
+    if outcome == "PASS" and not corrupt_lock_rejected:
+        outcome, why = "BLOCKED", "corrupted locked replay was not independently refused"
+    elif outcome == "PASS" and extra_profile_mutation:
+        outcome, why = "BLOCKED", "unaccounted Claude files or metadata changed during cold replay"
     return receipt(product, "R1_missing_receipts", outcome, reason=why,
                    scenario_type="preservation of committed Claude Skill without receipts; not proof of restoring deleted files",
                    apm_claude_skill_package_kind=specific_apm_kind,
                    observed_physical_skill_path=physical,
                    initial_portable_sha256={k: h(v) for k, v in portable.items()},
                    before=before, after=after, lock_identical=lock_intact,
+                   corrupted_lock_refused=corrupt_lock_rejected,
+                   corrupted_lock_command=negative_result,
+                   claude_profile_unchanged=not extra_profile_mutation,
                    command=actual, foreign_unchanged=preserved)
 
 
