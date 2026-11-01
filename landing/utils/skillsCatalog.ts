@@ -77,10 +77,9 @@ export function skillIdentityFromId(id: string): SkillListing['source'] | undefi
   }
   if (
     source.length <= 253 &&
-    source === source.toLowerCase() &&
-    /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(source)
+    /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/i.test(source)
   ) {
-    return { kind: 'external', url: `https://${source}` };
+    return { kind: 'external', url: `https://${source.toLowerCase()}` };
   }
   return undefined;
 }
