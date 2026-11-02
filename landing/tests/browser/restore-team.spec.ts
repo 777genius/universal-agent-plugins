@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { hydrated } from './i18n-state.helpers';
 
 const addCommand = 'npx -y universal-agent-plugins install --scope project';
-const restoreCommand = 'agentplugins install --locked';
+const restoreCommand = 'agentplugins install --locked --scope project';
 const manifest = `schema_version = 1
 
 [dependencies]
