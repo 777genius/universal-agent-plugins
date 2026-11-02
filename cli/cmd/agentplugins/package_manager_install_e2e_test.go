@@ -13,15 +13,16 @@ var pmInstallCaseInventory []byte
 
 func TestPackageManagerInstallE2E(t *testing.T) {
 	cases := map[string]func(*testing.T){
-		"no-save-first-repeat-remove":    pmInstallNoSaveLifecycle,
-		"selected-target-ownership":      pmInstallSelectedTargetOwnership,
-		"component-set-replacement":      pmInstallComponentReplacement,
-		"foreign-skill-collision":        pmInstallForeignSkillCollision,
-		"foreign-disabled-mcp-collision": pmInstallForeignDisabledMCPCollision,
-		"malformed-native-config":        pmInstallMalformedNativeConfig,
-		"drift-recorded-pin-repair":      pmInstallDriftRecordedPinRepair,
-		"preview-and-decline":            pmInstallPreviewAndDecline,
-		"rich-cold-restore-isolation":    pmInstallRichColdRestoreIsolation,
+		"no-save-first-repeat-remove":          pmInstallNoSaveLifecycle,
+		"selected-target-ownership":            pmInstallSelectedTargetOwnership,
+		"component-set-replacement":            pmInstallComponentReplacement,
+		"foreign-skill-collision":              pmInstallForeignSkillCollision,
+		"cross-target-foreign-skill-collision": pmInstallCrossTargetForeignSkillCollision,
+		"foreign-disabled-mcp-collision":       pmInstallForeignDisabledMCPCollision,
+		"malformed-native-config":              pmInstallMalformedNativeConfig,
+		"drift-recorded-pin-repair":            pmInstallDriftRecordedPinRepair,
+		"preview-and-decline":                  pmInstallPreviewAndDecline,
+		"rich-cold-restore-isolation":          pmInstallRichColdRestoreIsolation,
 	}
 	var ids []string
 	if err := json.Unmarshal(pmInstallCaseInventory, &ids); err != nil {
