@@ -48,6 +48,21 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(section.locator('.typed-command').first()).toHaveAttribute('data-complete', 'true');
       await expect(section.locator('.typed-command').last()).toHaveAttribute('data-complete', 'true');
       await expect(section.locator('.registry-restore__copy')).toHaveCount(2);
+      if (width <= 340) {
+        const overlaps = await section.locator('.registry-restore__screen').evaluateAll((screens) =>
+          screens.flatMap((screen, index) => {
+            const copy = screen.querySelector('.registry-restore__copy')!.getBoundingClientRect();
+            return [...screen.querySelectorAll('.registry-restore__package > *')]
+              .filter((node) => {
+                const badge = node.getBoundingClientRect();
+                return copy.left < badge.right && copy.right > badge.left &&
+                  copy.top < badge.bottom && copy.bottom > badge.top;
+              })
+              .map((node) => `screen ${index + 1}: copy overlaps ${node.textContent}`);
+          }),
+        );
+        expect(overlaps).toEqual([]);
+      }
 
       // Only visibly laid out elements contribute; no text is clipped or shifted
       // outside the picture's reserved screen area at any breakpoint.
