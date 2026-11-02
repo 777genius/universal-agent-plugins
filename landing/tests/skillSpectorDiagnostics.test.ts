@@ -78,6 +78,7 @@ describe('SkillSpector AI diagnostic export', () => {
       displayStatus: 'unavailable',
     }));
     assert.equal(exported.publication, null);
+    assert.equal(exported.assessment, null);
     assert.deepEqual(exported.records, []);
     assert.deepEqual(exported.source_states, []);
     assert.equal(exported.listing.report_load_status, 'unavailable');
@@ -97,5 +98,6 @@ describe('SkillSpector AI diagnostic export', () => {
     assert.equal(exported.listing.displayed_status, 'unsupported');
     assert.deepEqual(exported.records, []);
     assert.equal(exported.publication, null);
+    assert.equal(exported.assessment, null);
   });
 });

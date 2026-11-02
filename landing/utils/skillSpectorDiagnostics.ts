@@ -80,7 +80,8 @@ export function serializeSkillSpectorDiagnostics(input: SkillSpectorDiagnosticIn
         displayed_status: input.displayStatus,
       },
       publication,
-      assessment: summary,
+      // No successfully loaded report means no derived scan assessment is authoritative.
+      assessment: input.reportStatus === 'ready' && report ? summary : null,
       source_states: relevantStates,
       repository_aliases: aliases,
       records,
