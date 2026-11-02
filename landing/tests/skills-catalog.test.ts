@@ -464,3 +464,25 @@ test('manual sources never convert unverified listings into inferred install sel
     assert.equal(skillManualSourceCommand(input, 'safe-name'), undefined, input);
   }
 });
+
+
+test('missing or malformed publisher selectors fail closed even for unverified source URLs', () => {
+  const publisher = {
+    ...skill,
+    source: { kind: 'external' as const, url: 'https://open.feishu.cn' },
+    availability: 'unverified' as const,
+  };
+  assert.equal(skillInstallCommand({ ...publisher, skillNameHint: '' }), undefined);
+  assert.equal(
+    skillInstallCommand({ ...publisher, skillNameHint: undefined as unknown as string }),
+    undefined,
+  );
+  assert.equal(
+    skillInstallCommand({ ...publisher, skillNameHint: null as unknown as string }),
+    undefined,
+  );
+  assert.equal(
+    skillNeedsManualSelection({ ...skill, skillNameHint: undefined as unknown as string }),
+    true,
+  );
+});

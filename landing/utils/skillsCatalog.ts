@@ -147,7 +147,7 @@ export function skillDetailRoute(skill: SkillListing) {
 }
 
 function supportedSkillName(name: string): boolean {
-  return [...name].length <= 64 && /^[\p{Ll}\p{N}]+(?:-[\p{Ll}\p{N}]+)*$/u.test(name);
+  return typeof name === 'string' && [...name].length <= 64 && /^[\p{Ll}\p{N}]+(?:-[\p{Ll}\p{N}]+)*$/u.test(name);
 }
 
 /** A safe repository-only command lets the CLI present its real Skill picker. */
