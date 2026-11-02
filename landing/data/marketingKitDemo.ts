@@ -20,8 +20,6 @@ gemini = ["777genius/marketing-kit"]`;
 
 /** The published marketing-kit 0.1.0 Directory policy is user-only. */
 export const marketingKitInstallCommand = 'npx -y universal-agent-plugins install --scope user';
-/** Reserved for a future signed project release with qualified dependencies. */
-export const marketingKitProjectInstallCommand = 'npx -y universal-agent-plugins install --scope project';
 /** Export the saved user environment's portable manifest and lockfile. */
 export const marketingKitExportCommand = 'agentplugins deps export';
 /** Import a portable user environment and install its recorded exact pins. */
