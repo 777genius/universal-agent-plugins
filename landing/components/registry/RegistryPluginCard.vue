@@ -1,9 +1,9 @@
-import { isReviewedMarketingKit } from '~/data/marketingKitDemo';
 <!--
   Card composition adapted from plugin-kit-ai landing/components/plugins/PluginCard.vue (MIT).
   Content model and implementation are new for Universal Agent Plugins.
 -->
 <script setup lang="ts">
+import { isReviewedMarketingKit } from '~/data/marketingKitDemo';
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { githubSourceUrl, reachableTargetPolicies, vendorInstallSource } from '~/utils/registry';
