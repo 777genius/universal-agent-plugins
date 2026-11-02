@@ -44,7 +44,9 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(section.locator('.registry-restore__terminal')).toHaveCount(2);
       await expect(section.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', addCommand);
       await expect(section.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', restoreCommand);
-      await expect(section.locator('.typed-command')).toHaveAttribute('data-complete', 'true');
+      await expect(section.locator('.typed-command')).toHaveCount(2);
+      await expect(section.locator('.typed-command').first()).toHaveAttribute('data-complete', 'true');
+      await expect(section.locator('.typed-command').last()).toHaveAttribute('data-complete', 'true');
       await expect(section.locator('.registry-restore__copy')).toHaveCount(2);
 
       // Only visibly laid out elements contribute; no text is clipped or shifted
