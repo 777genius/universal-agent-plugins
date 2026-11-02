@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	crashProcessRootEnv = "UAP_TEST_TRANSACTION_CRASH_ROOT_20261102"
+	crashProcessRootEnv  = "UAP_TEST_TRANSACTION_CRASH_ROOT_20261102"
 	crashProcessExitCode = 83
 )
 
@@ -33,20 +33,20 @@ func runPostWriteCrashChild(root string) {
 	installation := state.Installations[0]
 	binding := onlyClient(installation)
 	mutation := DirectoryMutation{
-		OperationID: "crash-after-activated",
-		InstallationID: installation.InstallationID,
+		OperationID:     "crash-after-activated",
+		InstallationID:  installation.InstallationID,
 		ClientBindingID: binding.ClientBindingID,
-		Sequence: 1,
-		OwnedBase: filepath.Join(root, "managed"),
-		ActivePath: filepath.Join(root, "managed", "plugin"),
-		StagingPath: filepath.Join(root, "managed", "plugin.staging"),
-		VerifyBefore: verifyTransactionBody("old"),
-		Verify: verifyTransactionBody("new"),
-		Activation: domain.ActivationPrepared,
-		Authentication: domain.AuthenticationNotRequired,
-		Policy: domain.PolicyAllowed,
-		Verification: domain.VerificationInstalled,
-		DesiredState: state,
+		Sequence:        1,
+		OwnedBase:       filepath.Join(root, "managed"),
+		ActivePath:      filepath.Join(root, "managed", "plugin"),
+		StagingPath:     filepath.Join(root, "managed", "plugin.staging"),
+		VerifyBefore:    verifyTransactionBody("old"),
+		Verify:          verifyTransactionBody("new"),
+		Activation:      domain.ActivationPrepared,
+		Authentication:  domain.AuthenticationNotRequired,
+		Policy:          domain.PolicyAllowed,
+		Verification:    domain.VerificationInstalled,
+		DesiredState:    state,
 	}
 	kernel := Kernel{StateStore: store, Directory: dirswap.Manager{
 		JournalDir: filepath.Join(root, "operations-v2"),
@@ -108,7 +108,7 @@ func TestDirectoryProcessCrashAfterActivationRecovers(t *testing.T) {
 	// process is available to authorize ownership or decide commit-vs-rollback.
 	restarted := Kernel{
 		StateStore: statev2.Store{Path: store.Path},
-		Directory: dirswap.Manager{JournalDir: filepath.Join(root, "operations-v2")},
+		Directory:  dirswap.Manager{JournalDir: filepath.Join(root, "operations-v2")},
 	}
 	if err := restarted.Recover(t.Context()); err != nil {
 		t.Fatalf("recover on a new kernel: %v", err)
