@@ -18,12 +18,12 @@ claude = ["777genius/marketing-kit"]
 codex = ["777genius/marketing-kit"]
 gemini = ["777genius/marketing-kit"]`;
 
-/** The published marketing-kit 0.1.0 Directory policy is user-only. */
-export const marketingKitInstallCommand = 'npx -y universal-agent-plugins install --scope user';
-/** Export the saved user environment's portable manifest and lockfile. */
-export const marketingKitExportCommand = 'npx -y universal-agent-plugins deps export';
-/** Import a portable user environment and install its recorded exact pins. */
-export const marketingKitRestoreCommand = 'npx -y universal-agent-plugins deps import --install';
+// Source argument installs the published Marketing Kit and its dependencies.
+// Exact 0.1.0 belongs in the manifest and resulting lock; CLI does not expose
+// a marketing-kit@0.1.0 positional selector. Signed policies are user-only.
+export const marketingKitInstallCommand = 'npx -y universal-agent-plugins install marketing-kit --scope user';
+// Import uap.toml + uap.lock into this user environment first, then converge.
+export const marketingKitRestoreCommand = 'npx -y universal-agent-plugins install --scope user';
 
 /** Names denote declared compatible targets, never detection of local installs. */
 export const marketingKitTargetIDs = ['claude', 'codex', 'gemini'] as const;
