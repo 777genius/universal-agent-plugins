@@ -29,13 +29,13 @@ const fixtures = [
     providerUrl: 'https://www.skills.sh/' },
   { source: 'https://uizze.sh', skill: 'ui-taste',
     id: 'skills-sh:uizze.sh:ui-taste',
-    providerUrl: 'https://www.skills.sh/' },
+    providerUrl: 'https://www.skills.sh/site/uizze.sh/ui-taste' },
   { source: 'https://uizze.com', skill: 'ui-radar',
-    id: 'skills-sh:https://uizze.com:ui-radar',
-    providerUrl: 'https://www.skills.sh/' },
+    id: 'skills-sh:uizze.com:ui-radar',
+    providerUrl: 'https://www.skills.sh/site/uizze.com/ui-radar' },
   { source: 'https://open.feishu.cn', skill: 'lark-mail',
-    id: 'skills-sh:https://open.feishu.cn:lark-mail',
-    providerUrl: 'https://www.skills.sh/' },
+    id: 'skills-sh:open.feishu.cn:lark-mail',
+    providerUrl: 'https://www.skills.sh/site/open.feishu.cn/lark-mail' },
 ] as const;
 type Evidence = { id: string; source: string; skill: string; command: string; exit_code: number | null;
   installed: boolean; lock_written: boolean; native_skill_present: boolean; resources: number;
@@ -46,10 +46,14 @@ const report = {
 };
 const runRoot = mkdtempSync(join(tmpdir(), 'uap-live-skills-'));
 function listing(fixture: typeof fixtures[number]): SkillListing {
+  // Model the API's actual website DTOs rather than inventing unsupported
+  // source metadata: one current origin form and two legacy listing-page forms.
+  const currentPublisher = fixture.source === 'https://uizze.sh';
   return {
     id: fixture.id, providerId: 'skills-sh', providerUrl: fixture.providerUrl,
-    title: fixture.skill, skillNameHint: fixture.skill, availability: 'unsupported-source',
-    source: { kind: 'external', url: fixture.providerUrl },
+    title: fixture.skill, skillNameHint: fixture.skill,
+    availability: currentPublisher ? 'unverified' : 'unsupported-source',
+    source: { kind: 'external', url: currentPublisher ? fixture.source : fixture.providerUrl },
     metrics: { installs: 1, window: 'all-time' },
   };
 }
