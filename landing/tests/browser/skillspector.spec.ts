@@ -145,7 +145,7 @@ for (const mobile of [false, true]) {
       await expect(details).toContainText(source.revision!);
       await expect(details).toContainText('A selected child check failed.');
       await expect(details).toContainText(
-        'This report is historical or describes a different source revision or analysis policy.',
+        'Previous results remain visible as history. They do not count as checks of the current revision or scan policy.',
       );
       const sizes = await details.evaluate((element) => {
         const summary = element.querySelector('summary')!;

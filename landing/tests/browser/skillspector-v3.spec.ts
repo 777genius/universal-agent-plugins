@@ -593,7 +593,7 @@ for (const mode of ['singleLimited', 'pendingLimited'] as const) {
       await expect(assessment).toHaveClass(/skillspector--incomplete/);
       await expect(assessment.locator(':scope > summary')).toContainText(
         mode === 'singleLimited'
-          ? 'Skill scan · Not fully checked'
+          ? 'Skill scan · Coverage has limits'
           : 'Skill scan · 1/5 checked · 4 awaiting · 1 not fully checked',
       );
       await expect(assessment.locator(':scope > summary')).not.toContainText('Incomplete check');
@@ -645,8 +645,9 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
     );
     await expect(assessment.locator(':scope > summary')).not.toContainText('No static findings');
     if (mode === 'stale') {
-      await expect(assessment.locator(':scope > summary')).toContainText('0/13 current');
-      await expect(assessment.locator(':scope > summary')).toContainText('13 previous checks');
+      // A source revision mismatch has no verified current inventory denominator.
+      // Report prior evidence without implying that the old 13 roots are current.
+      await expect(assessment.locator(':scope > summary')).toContainText('Previous check');
     }
     await assessment.locator(':scope > summary').click();
     if (mode === 'stale') {
@@ -746,7 +747,7 @@ test('v3 distinguishes selected roots from known complete plugin inventory', asy
   // Every selected Skill has an executed partial or complete scan. The absent
   // package inventory changes the denominator's provenance, not the result.
   await expect(assessment.locator(':scope > summary')).toContainText(
-    'Skill scan · Not fully checked',
+    'Skill scan · Coverage has limits',
   );
   await assessment.locator(':scope > summary').click();
   await expect(assessment.locator('.skillspector__advice')).toContainText(
