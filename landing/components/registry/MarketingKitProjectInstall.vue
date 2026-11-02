@@ -37,7 +37,9 @@ async function copyManifest() {
       :label="t('registryUi.card.install')"
       :command="marketingKitInstallCommand"
       compact
-    />
+    >
+      <TypedCommand :lines="['npx -y universal-agent-plugins', 'install --scope project']" :delay="220" />
+    </CommandSnippet>
     <p class="marketing-kit-project__help">{{ t('registryUi.install.marketingKitProject.help') }}</p>
   </div>
 </template>
