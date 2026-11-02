@@ -90,7 +90,22 @@ const label = computed(() => {
   const outcomes = assessment.value.outcomes;
   const scanned = (outcomes?.complete ?? 0) + (outcomes?.limited ?? 0);
   const waiting = (outcomes?.unscanned ?? 0) + (outcomes?.historical ?? 0);
-  if (!legacy.value && key === 'incomplete' && outcomes && !outcomes.failed) {
+  if (
+    !legacy.value &&
+    ['incomplete', 'unavailable'].includes(key) &&
+    outcomes &&
+    props.scope === 'plugin' &&
+    assessment.value.inventoryKnown &&
+    (assessment.value.selected ?? 0) > 1
+  ) {
+    if (outcomes.failed)
+      return t('registryUi.skillSpector.progressWithFailures', {
+        checked: n(scanned),
+        total: n(assessment.value.selected ?? 0),
+        failed: n(outcomes.failed),
+        waiting: n(waiting),
+        limited: n(outcomes.limited),
+      });
     if (
       props.scope === 'plugin' &&
       assessment.value.inventoryKnown &&

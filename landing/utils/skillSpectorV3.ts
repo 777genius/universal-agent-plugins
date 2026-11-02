@@ -238,6 +238,9 @@ const scanner = (value: unknown) => {
 };
 // Full v3 inventory includes signed community package roots; transport and per-package
 // limits below remain independent of this global coverage budget.
+// Keep the consumer's v3 aggregate bound aligned with the Registry publisher.
+// V2 retains its separate 256-MiB policy.
+const maximumTotalV3ShardBytes = 512 * (1 << 20);
 const maximumInventoryRoots = 20_000;
 // Listing observations may coexist with inventory roots not present in the listing.
 const maximumSourceStates = maximumInventoryRoots + 10_000;
@@ -311,7 +314,7 @@ export function decodeSkillSpectorManifestV3(
     records += s.record_count;
     bytes += s.bytes;
   }
-  if (records !== c.reported || bytes > 256 << 20) fail();
+  if (records !== c.reported || bytes > maximumTotalV3ShardBytes) fail();
   const plugins = new Set<string>();
   for (const value of m.plugin_coverage) {
     const p = obj(value);

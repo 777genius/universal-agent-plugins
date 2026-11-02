@@ -307,7 +307,8 @@ export function skillSpectorAssessment(
     if (state?.reason) reasons.push({ code: String(state.reason), message: String(state.reason) });
     if (Array.isArray(state?.candidates) && state.candidates.length)
       reasons.push({ code: 'source_candidates', message: state.candidates.join(', ') });
-    const retainedUnreviewedCount = records.reduce(
+    const currentFindingCount = currentRecords.reduce((sum, record) => sum + record.finding_count, 0);
+    const retainedUnreviewedCount = currentRecords.reduce(
       (sum, record) =>
         sum +
         record.findings
@@ -317,7 +318,7 @@ export function skillSpectorAssessment(
     );
     const unreviewedCount =
       retainedUnreviewedCount +
-      records.reduce(
+      currentRecords.reduce(
         (sum, record) =>
           sum +
           Math.max(
@@ -327,7 +328,7 @@ export function skillSpectorAssessment(
           ),
         0,
       );
-    const confirmed = records.some((record) =>
+    const confirmed = currentRecords.some((record) =>
       record.findings.some(
         (finding) =>
           finding.review_status === 'confirmed' && ['HIGH', 'CRITICAL'].includes(finding.severity),
@@ -341,22 +342,22 @@ export function skillSpectorAssessment(
           : coverage?.pending || (Array.isArray(state?.selected_ids) && state.selected_ids.length)
             ? 'pending'
             : 'notChecked'
-      : confirmed
-        ? 'confirmedMaterialIssue'
-        : outOfDate
-          ? 'stale'
-          : outcomes.failed === records.length
+      : currentRecords.length === 0
+        ? 'stale'
+        : confirmed
+          ? 'confirmedMaterialIssue'
+          : outcomes.failed === currentRecords.length
             ? 'unavailable'
             : fullyChecked < selected ||
-                records.some(
+                currentRecords.some(
                   (record) =>
                     record.coverage?.status !== 'complete' ||
                     record.execution?.state !== 'completed',
                 )
               ? 'incomplete'
-              : unreviewedCount || records.some(hasIncompleteSkillSpectorFindings)
+              : unreviewedCount || currentRecords.some(hasIncompleteSkillSpectorFindings)
                 ? 'unreviewedFindings'
-                : findingCount
+                : currentFindingCount
                   ? 'reviewedFindings'
                   : 'noStaticFindings';
     return {

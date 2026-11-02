@@ -78,6 +78,28 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.deepEqual(decoded.source_states, published.source_states);
   });
 
+  it('accepts up to 512 MiB of bounded v3 report metadata and rejects higher totals', () => {
+    const rolling = structuredClone(manifest);
+    const grow = (length: number) => {
+      rolling.shards = Array.from({ length }, (_, index) => {
+        const suffix = index.toString(16).padStart(64, '0');
+        return { repository: descriptor.repository, path: `shards/${suffix}.json`,
+          digest: `sha256:${suffix}`, bytes: 8 << 20, record_count: 1 };
+      });
+      rolling.coverage = { selected: length, reported: length, pending: 0,
+        complete: length - 10, partial: 10, error: 0, stale: 0 };
+    };
+    grow(33);
+    assert.equal(decodeSkillSpectorManifestV3(rolling).shards.length, 33);
+    grow(64);
+    assert.equal(decodeSkillSpectorManifestV3(rolling).coverage.reported, 64);
+    grow(65);
+    assert.throws(() => decodeSkillSpectorManifestV3(rolling), /invalid/);
+    grow(33);
+    rolling.shards[0]!.bytes++;
+    assert.throws(() => decodeSkillSpectorManifestV3(rolling), /invalid/);
+  });
+
   it('bounds v3 global and plugin coverage at 20,000 roots while preserving arithmetic', () => {
     const bounded = structuredClone(manifest);
     const addedRoots = 20_000 - bounded.coverage.selected;
@@ -451,7 +473,7 @@ describe('SkillSpector v3 exact producer contract', () => {
     };
     Object.assign(report.plugin_states[0]!, { skills_total: 15 });
     const result = skillSpectorAssessment(report, subject);
-    assert.equal(result.status, 'stale');
+    assert.equal(result.status, 'incomplete');
     assert.equal(result.outcomes!.historical, 1);
     assert.equal(result.outcomes!.failed, 1);
     assert.equal(result.outcomes!.unscanned, 2);
@@ -471,6 +493,24 @@ describe('SkillSpector v3 exact producer contract', () => {
       ).length,
     );
   });
+  it('keeps current coverage visible beside historical evidence without upgrading old findings', () => {
+    const report = display();
+    report.records[0]!.freshness = 'historical';
+    const oldFinding = report.records[0]!.findings[0]!;
+    oldFinding.review_status = 'confirmed';
+    oldFinding.severity = 'CRITICAL';
+    const mixed = skillSpectorAssessment(report, subject);
+    assert.equal(mixed.status, 'incomplete');
+    assert.equal(mixed.outcomes!.historical, 1);
+    assert.equal(mixed.outcomes!.complete + mixed.outcomes!.limited, 12);
+    assert.notEqual(mixed.status, 'confirmedMaterialIssue');
+    for (const record of report.records) record.freshness = 'historical';
+    const oldOnly = skillSpectorAssessment(report, subject);
+    assert.equal(oldOnly.status, 'stale');
+    assert.equal(oldOnly.fullyChecked, 0);
+    assert.equal(oldOnly.unreviewedCount, 0);
+  });
+
   it('keeps omitted finding groups unresolved even when retained groups were classified', () => {
     const report = display();
     const record = report.records[0]!;
