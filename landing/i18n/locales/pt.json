@@ -227,9 +227,9 @@
       "transfer": "Exporte {manifest} e {lockfile}, compartilhe os dois arquivos e importe-os para restaurar as mesmas versões.",
       "requirements": "O Marketing Kit publicado oferece suporte ao ambiente do usuário; o escopo de projeto ainda não está qualificado. As fontes e os agentes compatíveis devem permanecer disponíveis.",
       "excludes": "Logins, segredos, configurações e dados dos plugins não são transferidos.",
-      "subtitle": "Fixe Marketing Kit 0.1.0 neste computador. Exporte o ambiente para restaurar as mesmas versões no computador de um colega.",
+      "subtitle": "Declare Marketing Kit 0.1.0 no uap.toml do usuário antes de instalar. Exporte o arquivo de bloqueio para que um colega restaure as mesmas versões.",
       "commit": "Exportar versões exatas",
-      "manifestPreview": "Prévia do uap.toml",
+      "manifestPreview": "Prévia do uap.toml do usuário",
       "closePreview": "Fechar prévia"
     },
     "docs": {

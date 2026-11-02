@@ -38,6 +38,7 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(section.locator('.registry-restore__wallpaper')).toHaveAttribute(
         'src', /restore-teammate-wallpaper/,
       );
+      if (locale === 'en') await expect(section.locator('.registry-restore__subtitle')).toContainText('before installing');
       await expect(section.locator('.registry-restore__package strong')).toHaveText(['v0.1.0', 'v0.1.0']);
       await expect(section.locator('.registry-restore__package span')).toHaveText(['marketing-kit', 'marketing-kit']);
       await expect(section.locator('.registry-restore__locked-version')).toHaveText('v0.1.0');
@@ -118,6 +119,7 @@ test('manifest morph opens by focus and tap, closes with Escape, and preserves v
   const handoff = page.locator('#restore-environment .registry-restore__handoff');
   await handoff.scrollIntoViewIfNeeded();
   const file = handoff.getByRole('button', { name: /uap.toml/i });
+  await expect(file).toHaveAccessibleName(/user environment uap\.toml/i);
   await expect(file).toHaveAttribute('aria-expanded', 'false');
   await file.focus();
   await file.press('Enter');
@@ -129,10 +131,12 @@ test('manifest morph opens by focus and tap, closes with Escape, and preserves v
     animations: 'disabled',
   });
   await file.press('Escape');
+  await expect(file).toHaveAccessibleName(/user environment uap\.toml/i);
   await expect(file).toHaveAttribute('aria-expanded', 'false');
   await file.click();
   await expect(preview).toBeVisible();
   await handoff.locator('.registry-restore__locked-version').click();
+  await expect(file).toHaveAccessibleName(/user environment uap\.toml/i);
   await expect(file).toHaveAttribute('aria-expanded', 'false');
 });
 
@@ -149,6 +153,7 @@ test('manifest unfolds on first view, folds into icon and reopens on hover', asy
   await file.hover();
   await expect(file).toHaveAttribute('aria-expanded', 'true');
   await page.mouse.move(0, 0);
+  await expect(file).toHaveAccessibleName(/user environment uap\.toml/i);
   await expect(file).toHaveAttribute('aria-expanded', 'false');
 });
 

@@ -364,9 +364,9 @@
       "transfer": "导出 {manifest} 和 {lockfile}，将两个文件交给队友并导入，即可恢复相同版本。",
       "requirements": "当前发布的 Marketing Kit 仅支持用户环境，尚未验证项目范围安装。恢复时需要可用的固定来源和兼容代理。",
       "excludes": "不会传输登录状态、机密信息、设置或插件数据。",
-      "subtitle": "在这台电脑上固定 Marketing Kit 0.1.0。导出环境，让队友恢复完全相同的版本。",
+      "subtitle": "安装前先在用户的 uap.toml 中声明 Marketing Kit 0.1.0，再导出锁文件，让队友恢复相同的版本。",
       "commit": "导出精确版本",
-      "manifestPreview": "预览项目 uap.toml",
+      "manifestPreview": "预览用户环境的 uap.toml",
       "closePreview": "关闭文件预览"
     },
     "docs": {

@@ -364,9 +364,9 @@
       "transfer": "Exportez {manifest} et {lockfile}, partagez les deux fichiers et importez-les chez votre collègue pour restaurer les mêmes versions.",
       "requirements": "La publication Marketing Kit ne prend en charge que l’environnement utilisateur ; le projet n’est pas encore qualifié. Les sources et agents compatibles doivent rester disponibles.",
       "excludes": "Les connexions aux comptes, secrets, réglages et données des plugins ne sont pas transférés.",
-      "subtitle": "Épinglez Marketing Kit 0.1.0 sur cet ordinateur. Exportez l’environnement pour retrouver les mêmes versions chez un collègue.",
+      "subtitle": "Déclarez Marketing Kit 0.1.0 dans votre uap.toml utilisateur avant l’installation. Exportez le fichier de verrouillage pour qu’un collègue retrouve les mêmes versions.",
       "commit": "Exporter les versions exactes",
-      "manifestPreview": "Aperçu du fichier uap.toml",
+      "manifestPreview": "Aperçu du fichier uap.toml utilisateur",
       "closePreview": "Fermer l’aperçu"
     },
     "docs": {

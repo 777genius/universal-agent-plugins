@@ -8,7 +8,7 @@ import type { RegistryPlugin } from '../types/registry';
 export const marketingKitName = 'marketing-kit';
 export const marketingKitVersion = '0.1.0';
 export const marketingKitDependency = '777genius/marketing-kit';
-export const marketingKitProjectManifest = `schema_version = 1
+export const marketingKitUserManifest = `schema_version = 1
 
 [dependencies]
 "777genius/marketing-kit" = "0.1.0"

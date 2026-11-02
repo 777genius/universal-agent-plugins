@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
-import { marketingKitProjectManifest } from '~/data/marketingKitDemo';
+import { marketingKitUserManifest } from '~/data/marketingKitDemo';
 
 const props = withDefaults(defineProps<{ autoCollapse?: boolean }>(), { autoCollapse: true });
 const { t } = useI18n();
@@ -105,7 +105,7 @@ onBeforeUnmount(() => {
           <strong>uap.toml</strong>
           <button type="button" :aria-label="t('shell.restore.closePreview')" @click="closeAndFocus">×</button>
         </div>
-        <pre dir="ltr"><code>{{ marketingKitProjectManifest }}</code></pre>
+        <pre dir="ltr"><code>{{ marketingKitUserManifest }}</code></pre>
       </div>
     </Transition>
   </div>
