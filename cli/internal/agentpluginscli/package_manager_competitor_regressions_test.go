@@ -252,3 +252,48 @@ func pmAgreementLockOnlyPreservesInstalled(t *testing.T) {
 	pmArchiveAssertEqual(t, "unchanged lock bytes and metadata", stableLock, freshRestoreFiles(t, lockPath))
 	pmArchiveAssertEqual(t, "unchanged native and managed files", before, fixture.activeFiles(t))
 }
+
+// APM #1935: changing the source behind a stable dependency alias must not
+// accidentally authorize a new publisher to replace the installed package.
+// Use identical archive bytes at two different URLs to prove source ownership,
+// not a content difference, is the decisive invariant.
+func pmAgreementSourceRebindingRequiresExplicitTransfer(t *testing.T) {
+	origin := newPMArchiveOrigin(t, pmArchiveGraph{"a": nil})
+	fixture := newPMArchiveEnvironment(t, origin, false)
+	fixture.manifest(t, origin, []string{"a"}, map[string][]string{"gemini": {"a"}})
+	fixture.run(t, "install", "--yes", "--format", "json")
+	before := fixture.activeFiles(t)
+	manifestPath, lockPath := fixture.app.dependencyPaths()
+	previousLock := dependencyRead(t, lockPath)
+
+	// A second distribution endpoint serves byte-for-byte identical content.
+	// No unrelated TLS or network origin is involved in this fixture.
+	origin.mu.Lock()
+	origin.payloads["/renamed-a.zip"] = origin.payloads["/a.zip"]
+	origin.mu.Unlock()
+	renamedURL := origin.server.URL + "/renamed-a.zip"
+	dependencyWrite(t, manifestPath, fmt.Sprintf(
+		"schema_version = 1\n[dependencies.a]\narchive = %q\n[targets]\ngemini = [\"a\"]\n",
+		renamedURL,
+	))
+
+	// The graph may refuse incompatible prior pins at lock time, or it may
+	// publish the new desired agreement and refuse rebind during install.
+	// Both are safe, but a silent successful install is a security regression.
+	_, lockErr := fixture.executePM(t.Context(), t, "", false, "deps", "lock", "--format", "json")
+	if lockErr == nil {
+		locked := fixture.lock(t)
+		pin, found := locked.Package("a")
+		if !found || pin.Source.Archive == nil || pin.Source.Archive.URL != renamedURL {
+			t.Fatalf("source switch silently retained old lock identity: %+v", locked.Packages)
+		}
+		_, installErr := fixture.executePM(t.Context(), t, "", false, "install", "--locked", "--yes", "--format", "json")
+		if installErr == nil {
+			t.Fatal("an identical-byte but different-origin dependency silently replaced the installed owner")
+		}
+	} else if dependencyRead(t, lockPath) != previousLock {
+		t.Fatal("refused source change rewrote the existing portable lock")
+	}
+
+	pmArchiveAssertEqual(t, "changed publisher must not mutate managed files, native Skill, foreign settings or ownership", before, fixture.activeFiles(t))
+}
