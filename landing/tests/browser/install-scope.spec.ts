@@ -171,12 +171,13 @@ for (const width of [1440, 390]) {
       'aria-pressed',
       'true',
     );
-    await expect(panel.locator('.app-multiselect__trigger')).toContainText('Codex');
+    await expect(panel.locator('.app-multiselect__trigger')).toContainText(detailAutoSummary);
     await expect(panel.locator('.command-snippet')).toHaveCount(0);
-    await expect(panel.getByRole('status').first()).toContainText('combination of agents');
+    // The removed project policy must not produce a user-scope fallback command,
+    // even though this choice remains visible to let the user recover.
     await panel.getByRole('button', { name: 'This computer', exact: true }).click();
     await expect(panel.locator('.command-snippet--add code')).toHaveText(
-      'npx -y universal-agent-plugins add i18n-state-00 --target codex',
+      'npx -y universal-agent-plugins add i18n-state-00',
     );
     // No project-capable release remains; the unavailable selector is not shown.
     await expect(panel.locator('.install-scope')).toHaveCount(0);
