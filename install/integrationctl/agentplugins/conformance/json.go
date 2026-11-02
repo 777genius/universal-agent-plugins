@@ -69,3 +69,11 @@ func rejectDuplicateJSONKeys(body []byte) error {
 	_, err := scanJSON(context.Background(), body, Limits{}, duplicateAll)
 	return err
 }
+
+// rejectDuplicateJSONKeysFolded is for authority documents decoded into
+// fixed JSON structs. encoding/json v1 also matches struct keys ignoring case;
+// "SOURCE_KEY" and "source_key" must not overwrite each other in a lock.
+func rejectDuplicateJSONKeysFolded(body []byte) error {
+	_, err := scanJSON(context.Background(), body, Limits{}, duplicateAllFold)
+	return err
+}
