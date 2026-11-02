@@ -90,7 +90,7 @@ Pour un nouvel environnement, lancez `agentplugins deps init`, modifiez le manif
 
 Depuis CLI 0.1.93, les installations distantes éligibles enregistrent les dépendances par défaut. `--no-save`, les sources locales, les sélecteurs littéraux `discovery:` et la préparation de ChatGPT sont exclus de cet enregistrement portable. Si une sélection mêle ChatGPT à d’autres cibles, séparez-la ou utilisez `--no-save`. Ne supposez pas qu’une ancienne installation impérative figure dans l’accord : vérifiez `deps status` et les fichiers réels avant de les transférer.
 
-## Restaurez sur une autre machine
+## Restaurez sur une autre machine {#restore-on-another-machine}
 
 Transférez un environnement utilisateur enregistré avec un dossier d’échange. Depuis ce dossier sur la machine source :
 
