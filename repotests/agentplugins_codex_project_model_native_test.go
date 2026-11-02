@@ -105,7 +105,7 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 	}
 	var input struct {
 		Tools []codexProjectModelTool `json:"tools"`
-		Input []json.RawMessage `json:"input"`
+		Input []json.RawMessage       `json:"input"`
 	}
 	if json.Unmarshal(body, &input) != nil || len(input.Tools) > 128 || len(input.Input) > 128 {
 		reject("invalid model request shape", http.StatusBadRequest)
