@@ -10,7 +10,9 @@ import { skillInstallCommand } from '../utils/skillsCatalog.ts';
 // Every installation uses a disposable project and home, not runner profiles.
 assert.equal(process.env.UAP_E2E_LIVE_SKILLS, '1');
 const published = process.env.UAP_E2E_PUBLISHED_CLI === '1';
-const binary = resolve(process.env.UAP_E2E_SKILLS_BIN || '');
+const binaryPath = process.env.UAP_E2E_SKILLS_BIN;
+if (!published) assert.ok(binaryPath, 'UAP_E2E_SKILLS_BIN must point to the built CLI');
+const binary = resolve(binaryPath || '');
 if (!published) assert.ok(existsSync(binary), 'Build the actual CLI before this test');
 const reportRoot = process.env.UAP_SKILLS_INSTALL_REPORT_DIR || join(tmpdir(), 'uap-native-skills-report');
 mkdirSync(reportRoot, { recursive: true });
