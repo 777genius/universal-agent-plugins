@@ -856,62 +856,40 @@ for (const locale of ['en', 'ru'] as const) {
   }
 }
 
-test('unsupported standalone sources retain their explanation and do not imply an empty completed check', async ({
+test('unsupported standalone listings are hidden, not misrepresented as clean scans', async ({
   page,
 }) => {
-  const { assessment, errors } = await setup(page, 'unsupportedSource');
-  await expect(assessment).toHaveClass(/skillspector--unsupported/);
-  await expect(assessment.locator(':scope > summary')).toContainText('Not checked');
-  await expect(assessment.locator('.skillspector__summary-coverage')).toHaveCount(0);
-  await assessment.locator(':scope > summary').focus();
-  await page.keyboard.press('Enter');
-  await expect(assessment).toContainText(
-    'This source type is not supported by static SkillSpector checks. Its files have not been checked.',
-  );
-  await expect(assessment.locator('.skillspector--noSkills')).toHaveCount(0);
+  const { errors } = await setup(page, 'unsupportedSource');
+  await expect(page.locator('.skills-catalog .skill-card')).toHaveCount(0);
+  await expect(page.locator('.skills-catalog .skillspector')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
-test('external standalone Skills remain unsupported without fetching a report or claiming there are no Skills', async ({
+test('unsupported standalone sources do not render cards or fetch reports', async ({
   page,
 }) => {
   const errors = await offline(page);
   const requests: string[] = [];
-  page.on('request', (request) => {
+  page.on('request', request => {
     if (request.url().includes('/reports/skillspector/')) requests.push(request.url());
   });
-  await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) =>
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', route =>
     route.fulfill({
       json: {
-        items: [
-          {
-            id: 'external-source',
-            providerId: 'skills-sh',
-            providerUrl: 'https://skills.sh/example/external',
-            title: 'External Skill',
-            skillNameHint: 'external',
-            source: { kind: 'external', url: 'https://skills.sh/example/external' },
-            metrics: { installs: 1, window: 'all-time' },
-            availability: 'unsupported-source',
-          },
-        ],
-        page: 0,
-        total: 1,
-        hasMore: false,
-        view: 'popular',
+        items: [{ id: 'external-source', providerId: 'skills-sh',
+          providerUrl: 'https://skills.sh/example/external',
+          title: 'External Skill', skillNameHint: 'external',
+          source: { kind: 'external', url: 'https://skills.sh/example/external' },
+          metrics: { installs: 1, window: 'all-time' },
+          availability: 'unsupported-source' }],
+        page: 0, total: 1, hasMore: false, view: 'popular',
         cache: { status: 'fresh', fetchedAt: fixture.generated_at },
       },
     }),
   );
   await projections(page, registryFixture());
   await navigate(page, '/plugins/', 'en', '?tab=skills');
-  const assessment = page.locator('.skill-card .skillspector');
-  await expect(assessment).toHaveClass(/skillspector--unsupported/);
-  await assessment.locator(':scope > summary').focus();
-  await page.keyboard.press('Enter');
-  await expect(assessment).toContainText(
-    'This source type is not supported by static SkillSpector checks. Its files have not been checked.',
-  );
+  await expect(page.locator('.skill-card')).toHaveCount(0);
   await expect(page.locator('.skillspector--noSkills')).toHaveCount(0);
   expect(requests).toEqual([]);
   expect(errors).toEqual([]);

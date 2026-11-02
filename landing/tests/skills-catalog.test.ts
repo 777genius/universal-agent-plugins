@@ -345,14 +345,18 @@ function catalogHarness() {
     await new Promise<void>((resolve) => setImmediate(resolve));
     await nextTick();
   };
-  async function respond(index: number, count = 1, page = 0, status = 200) {
+  async function respond(index: number, count = 1, page = 0, status = 200, unavailable = 0) {
     requests[index]!.resolve({
       ok: status === 200,
       json: async () => ({
-        items: Array.from({ length: count }, (_, i) => ({
-          ...skill,
-          id: `${skill.id}-${page}-${i}`,
-        })),
+        items: Array.from({ length: count }, (_, i) => i < unavailable
+          ? {
+              ...skill, id: `skills-sh:unknown/path/subfolder:${page}-${i}`,
+              source: { kind: 'external', url: 'https://www.skills.sh/' },
+              providerUrl: 'https://www.skills.sh/',
+              availability: 'unsupported-source',
+            }
+          : { ...skill, id: `${skill.id}-${page}-${i}` }),
         page,
         hasMore: page === 0,
         view: 'popular',
@@ -413,5 +417,87 @@ test('Skill pagination shows only 48 new items at a partial page boundary and re
   await retry;
   assert.equal(catalog.state.displayed.value.length, 248);
   assert.equal(catalog.state.failed.value, false);
+  catalog.stop();
+});
+
+
+test('legacy source variants produce CLI commands without using directory pages as origins', () => {
+  const unknown = (raw: string, hint = 'frontend-design'): SkillListing => ({
+    ...skill,
+    id: `skills-sh:${raw}:frontend-design`,
+    title: hint,
+    skillNameHint: hint,
+    providerUrl: 'https://www.skills.sh/',
+    source: { kind: 'external', url: 'https://www.skills.sh/' },
+    availability: 'unsupported-source',
+  });
+  const supported = [
+    ['owner/repo/tree/main/skills/frontend-design', 'https://github.com/owner/repo/tree/main/skills/frontend-design'],
+    ['https://github.com/owner/repo/blob/main/skills/frontend-design/SKILL.md', 'https://github.com/owner/repo/blob/main/skills/frontend-design/SKILL.md'],
+    ['https://github.com/owner/repo.git', 'https://github.com/owner/repo'],
+    ['git+https://github.com/owner/repo.git', 'https://github.com/owner/repo'],
+    ['git@github.com:owner/repo.git', 'https://github.com/owner/repo'],
+    ['github.com/owner/repo', 'https://github.com/owner/repo'],
+    ['owner/repo.git', 'https://github.com/owner/repo'],
+  ] as const;
+  for (const [raw, source] of supported) {
+    const listing = unknown(raw);
+    assert.equal(skillRepositoryUrl(listing), source, raw);
+    assert.equal(skillIdentityFromId(listing.id)?.kind, 'github', raw);
+    assert.equal(
+      skillInstallCommand(listing),
+      `npx universal-agent-plugins@latest skills add ${source} --skill frontend-design`,
+      raw,
+    );
+  }
+  const publisher = unknown('https://open.feishu.cn', 'lark-mail');
+  assert.equal(skillPublisherUrl(publisher), 'https://open.feishu.cn');
+  assert.equal(
+    skillInstallCommand(publisher),
+    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
+  );
+  assert.equal(
+    skillInstallCommand(unknown('https://github.com/owner/repo', 'UPPER')),
+    'npx universal-agent-plugins@latest skills add https://github.com/owner/repo',
+  );
+  for (const raw of [
+    'owner/repo#main', 'owner/repo/tree', 'owner/repo/tree/../secret',
+    'owner/repo/blob/main/not-skill.txt', 'https://gitlab.com/owner/repo',
+    'https://github.com/owner/repo?ref=main', 'https://github.com/owner/repo/tree/main/../../x',
+    'https://github.com/owner/repo;touch-hack', 'git@evil.example:owner/repo',
+    'https://evil.com/owner/repo', 'https://www.skills.sh/site/owner/repo',
+    'https://localhost', 'https://127.0.0.1', 'https://xn--a.example',
+    'https://publisher.internal', 'owner/repo/tree/main/$hack',
+  ]) {
+    assert.equal(skillInstallCommand(unknown(raw)), undefined, raw);
+  }
+});
+
+test('installable filtering skips unsupported records and bounds upstream pagination', async () => {
+  const catalog = catalogHarness();
+  const first = catalog.respond(0, 200, 0, 200, 175);
+  await first;
+  assert.equal(catalog.requests.length, 2);
+  assert.equal(catalog.requests[1]!.url.searchParams.get('page'), '1');
+  await catalog.respond(1, 200, 1, 200, 0);
+  assert.equal(catalog.state.items.value.length, 225);
+  assert.equal(catalog.state.displayed.value.length, 48);
+  assert.ok(catalog.state.displayed.value.every((item: SkillListing) => skillInstallCommand(item)));
+  catalog.stop();
+});
+
+test('empty unsupported pages stop at a bounded hop limit until the next user action', async () => {
+  const catalog = catalogHarness();
+  for (let page = 0; page < 5; page++) {
+    await catalog.respond(page, 200, page, 200, 200);
+  }
+  assert.equal(catalog.requests.length, 5);
+  assert.equal(catalog.state.displayed.value.length, 0);
+  assert.equal(catalog.state.hasMore.value, true);
+  catalog.state.showMore();
+  assert.equal(catalog.requests.length, 6);
+  await catalog.respond(5, 200, 5, 200, 0);
+  assert.equal(catalog.state.displayed.value.length, 48);
+  assert.equal(catalog.requests.length, 6);
   catalog.stop();
 });

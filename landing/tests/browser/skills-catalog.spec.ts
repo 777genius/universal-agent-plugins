@@ -60,11 +60,8 @@ test('Skills search reveals install choices, copies the exact command and surviv
   await catalog.getByRole('searchbox', { name: 'Search Skills', exact: true }).fill('frontend');
   await expect.poll(() => requests.some((query) => query.includes('q=frontend'))).toBe(true);
   await expect(page).toHaveURL(/tab=skills.*q=frontend/);
-  await expect(catalog.locator('.catalog-count')).toHaveText('Showing 2 search results');
-  await expect(catalog.locator('.skill-card .skillspector')).toHaveCount(2);
-  await expect(catalog.locator('.skill-card').last().locator('.skillspector')).toHaveClass(
-    /skillspector--unsupported/,
-  );
+  await expect(catalog.locator('.catalog-count')).toHaveText('Showing 1 search results');
+  await expect(catalog.locator('.skill-card .skillspector')).toHaveCount(1);
   // Provider ranking metadata must never create a competitor outbound link.
   await expect(catalog.locator('a[href*="skills.sh"]')).toHaveCount(0);
   const card = catalog.locator('.skill-card').first();
@@ -128,9 +125,7 @@ test('Skills renders in 48-item increments and requests the next upstream page o
   await page.goto('plugins/?tab=skills');
   const catalog = page.locator('.skills-catalog');
   await expect(catalog.locator('.skill-card')).toHaveCount(48);
-  await expect(catalog.locator('.catalog-count')).toHaveText(
-    'Showing 48 of 9,911 in this collection',
-  );
+  await expect(catalog.locator('.catalog-count')).toHaveText('Showing 48 Skills');
   await expect(catalog.locator('a[href*="skills.sh"]')).toHaveCount(0);
   await expect(catalog.getByRole('button', { name: /Show more Skills/ })).toHaveCount(1);
   await expect(catalog.locator('.catalog-meta button')).toHaveCount(0);
@@ -140,9 +135,7 @@ test('Skills renders in 48-item increments and requests the next upstream page o
       .last()
       .click();
     await expect(catalog.locator('.skill-card')).toHaveCount(count);
-    await expect(catalog.locator('.catalog-count')).toHaveText(
-      `Showing ${count} of 9,911 in this collection`,
-    );
+    await expect(catalog.locator('.catalog-count')).toHaveText(`Showing ${count} Skills`);
     expect(pages).toEqual([0]);
   }
   await catalog
@@ -153,40 +146,24 @@ test('Skills renders in 48-item increments and requests the next upstream page o
   expect(pages).toEqual([0, 1]);
 });
 
-test('unsupported standalone source is explicit and never requests a report', async ({ page }) => {
-  const reportRequests: string[] = [];
-  page.on('request', (request) => {
-    if (request.url().includes('/reports/skillspector/')) reportRequests.push(request.url());
+test('unresolvable external Skills are hidden without fetching SkillSpector reports', async ({ page }) => {
+  const reports: string[] = [];
+  page.on('request', request => {
+    if (request.url().includes('/reports/skillspector/')) reports.push(request.url());
   });
-  await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) =>
-    route.fulfill({
-      json: {
-        items: [
-          {
-            ...skill(),
-            source: { kind: 'external', url: 'https://skills.sh/example/external' },
-            availability: 'unsupported-source',
-          },
-        ],
-        page: 0,
-        total: 1,
-        hasMore: false,
-        view: 'popular',
-        cache: { status: 'fresh', fetchedAt: '2026-10-28T10:00:00Z' },
-      },
-    }),
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', route =>
+    route.fulfill({ json: {
+      items: [{ ...skill(), source: { kind: 'external', url: 'https://www.skills.sh/' },
+        providerUrl: 'https://www.skills.sh/', availability: 'unsupported-source',
+        id: 'skills-sh:owner/repo/path:unusable' }],
+      page: 0, total: 1, hasMore: false, view: 'popular',
+      cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' },
+    } }),
   );
   await page.goto('plugins/?tab=skills');
-  const unsupportedCard = page.locator('.skill-card').first();
-  await expect(unsupportedCard.locator('h3')).toHaveText('frontend-design');
-  await expect(unsupportedCard.getByRole('link', { name: 'frontend-design', exact: true })).toHaveCount(0);
-  const assessment = page.locator('.skill-card .skillspector');
-  await expect(assessment).toHaveClass(/skillspector--unsupported/);
-  await expect(assessment.locator(':scope > summary')).toContainText('Not checked');
-  await assessment.locator(':scope > summary').click();
-  await expect(assessment).toContainText('This source type is not supported');
-  await expect(assessment).not.toContainText('other plugin components');
-  expect(reportRequests).toEqual([]);
+  await expect(page.locator('.skills-catalog .skill-card')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'No matching Skills' })).toBeVisible();
+  expect(reports).toEqual([]);
 });
 
 test('legacy API website publisher offers safe Install while malformed sources remain unavailable', async ({ page }) => {
@@ -237,7 +214,7 @@ test('legacy API website publisher offers safe Install while malformed sources r
 
   await page.goto('plugins/?tab=skills');
   const cards = page.locator('.skills-catalog .skill-card');
-  await expect(cards).toHaveCount(3);
+  await expect(cards).toHaveCount(1);
   const recovered = cards.first();
   await expect(recovered.getByRole('link', { name: 'Publisher source' })).toHaveAttribute(
     'href', 'https://open.feishu.cn',
@@ -247,14 +224,6 @@ test('legacy API website publisher offers safe Install while malformed sources r
     'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
   );
   await expect(recovered.locator('.command-snippet code')).not.toContainText('skills.sh');
-  const unavailable = cards.nth(1);
-  const malformed = cards.last();
-  await expect(malformed.getByRole('button', { name: /Install/ })).toHaveCount(0);
-  await expect(malformed.locator('h3')).toHaveText('Malformed publisher');
-  await expect(unavailable.getByRole('button', { name: /Install/ })).toHaveCount(0);
-  await expect(unavailable).toContainText('No verified install source');
-  await expect(unavailable.getByRole('link', { name: 'Unrecoverable source' })).toHaveCount(0);
-
   await recovered.getByRole('link', { name: 'lark-mail', exact: true }).click();
   await expect(page).toHaveURL(/\/skills\/\?id=skills-sh/);
   await expect(page.getByRole('heading', { level: 1, name: 'lark-mail' })).toBeVisible();
@@ -425,4 +394,53 @@ test('A deep-linked Skill renders source instructions without relying on bounded
   await expect(page.locator('.skills-detail__document .skill-markdown h2')).toContainText('Direct source content');
   await expect(page.locator('.skills-detail__facts')).not.toContainText('Installs');
   await expect(page.locator('a[href*="skills.sh"]')).toHaveCount(0);
+});
+
+
+test('catalog backfills 48 installable Skills across real upstream pages', async ({ page }) => {
+  const requested: number[] = [];
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', route => {
+    const pageNumber = Number(new URL(route.request().url()).searchParams.get('page'));
+    requested.push(pageNumber);
+    const items = Array.from({ length: 200 }, (_, index) =>
+      pageNumber === 0 && index < 175
+        ? { ...skill(index), id: `skills-sh:unknown/path/subfolder:${index}`,
+            source: { kind: 'external', url: 'https://www.skills.sh/' },
+            providerUrl: 'https://www.skills.sh/', availability: 'unsupported-source' }
+        : skill(index + pageNumber * 200));
+    return route.fulfill({
+      json: { items, page: pageNumber, total: 9911,
+        hasMore: pageNumber === 0, view: 'popular',
+        cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' } },
+    });
+  });
+  await page.goto('plugins/?tab=skills');
+  const cards = page.locator('.skills-catalog .skill-card');
+  await expect(cards).toHaveCount(48);
+  expect(requested).toEqual([0, 1]);
+  await expect(page.locator('.catalog-count')).toHaveText('Showing 48 Skills');
+  await expect(cards.filter({ hasText: 'External source' })).toHaveCount(0);
+  await expect(cards.first().getByRole('button', { name: /Install/ })).toHaveCount(1);
+});
+
+test('explicit legacy GitHub URL sources display a safe install command', async ({ page }) => {
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', route =>
+    route.fulfill({ json: {
+      items: [{ ...skill(), id: 'skills-sh:https://github.com/anthropics/skills:frontend-design',
+        source: { kind: 'external', url: 'https://www.skills.sh/' },
+        providerUrl: 'https://www.skills.sh/', availability: 'unsupported-source' }],
+      page: 0, total: 1, hasMore: false, view: 'popular',
+      cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' },
+    } }),
+  );
+  await page.goto('plugins/?tab=skills');
+  const card = page.locator('.skills-catalog .skill-card').first();
+  await expect(card).toHaveCount(1);
+  await card.getByRole('button', { name: 'Install frontend-design' }).click();
+  await expect(card.locator('.command-snippet code')).toHaveText(
+    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design',
+  );
+  await expect(card.getByRole('link', { name: 'GitHub source' })).toHaveAttribute(
+    'href', 'https://github.com/anthropics/skills',
+  );
 });
