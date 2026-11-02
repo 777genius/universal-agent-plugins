@@ -2,7 +2,9 @@ name: Skills install live API
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
+      - "cli/**"
       - "landing/utils/skillsCatalog.ts"
       - "landing/scripts/skills-install-api-probe.ts"
       - "landing/scripts/skills-install-coverage-audit.ts"
