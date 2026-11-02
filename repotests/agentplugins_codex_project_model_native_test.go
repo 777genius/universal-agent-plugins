@@ -460,4 +460,3 @@ func codexAssertForeignProjectMCP(t *testing.T, path, original string, managed b
 		t.Fatal("Codex project configuration changed foreign TOML values")
 	}
 }
-
