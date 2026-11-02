@@ -5,6 +5,10 @@ on:
     paths:
       - "landing/utils/skillsCatalog.ts"
       - "landing/scripts/skills-install-api-probe.ts"
+      - "landing/scripts/skills-install-coverage-audit.ts"
+      - "landing/scripts/skills-install-native-live-e2e.ts"
+      - "landing/composables/useSkillsCatalog.ts"
+      - "landing/tests/skills-catalog.test.ts"
       - ".github/workflows/skills-install-live-api.yml"
   workflow_dispatch:
 
@@ -42,5 +46,39 @@ jobs:
         with:
           name: skills-install-real-api
           path: ${{ runner.temp }}/skills-install-api-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+  native-install:
+    name: Native real GitHub and HTTPS install
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:live-skills')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Build actual public CLI
+        run: go build -trimpath -o "${RUNNER_TEMP}/uap-skills-cli" ./cli/cmd/agentplugins
+      - name: Install genuine nested GitHub and HTTPS publisher Skills in isolated projects
+        timeout-minutes: 10
+        env:
+          UAP_E2E_LIVE_SKILLS: '1'
+          UAP_E2E_SKILLS_BIN: ${{ runner.temp }}/uap-skills-cli
+          UAP_SKILLS_INSTALL_REPORT_DIR: ${{ runner.temp }}/skills-native-live-report
+        run: node --experimental-strip-types landing/scripts/skills-install-native-live-e2e.ts
+      - name: Retain native source-install evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: skills-install-native-live
+          path: ${{ runner.temp }}/skills-native-live-report/
           if-no-files-found: warn
           retention-days: 7
