@@ -298,8 +298,8 @@ test("maintained-route HTML redirects preserve query and deep fragments at the c
 
 test("configured canonical base and new source links retain their identities", () => {
   const expectedDocsBase = new URL(
-    process.env.DOCS_BASE_PATH || "/universal-agent-plugins/docs/",
-    process.env.DOCS_HOSTNAME || "https://777genius.github.io",
+    process.env.DOCS_BASE_PATH || "/docs/",
+    process.env.DOCS_HOSTNAME || "https://universal-agent-plugins.com",
   ).toString();
   assert.equal(docsBaseUrl, expectedDocsBase);
   assert.equal(repoBrowserUrl("cli:x"), "https://github.com/777genius/universal-agent-plugins/tree/main/cli");

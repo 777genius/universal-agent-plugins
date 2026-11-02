@@ -1,4 +1,5 @@
 import { docsLocaleEntries, localePathField } from "../../tools/config/locales.mjs";
+import { docsBasePath, docsHostname } from "../../tools/config/site.mjs";
 import { searchLocales } from "./search";
 import { requirePublicationBoundary } from "../../tools/lib/journeys.mjs";
 import { isRetiredArchive } from "../../tools/lib/public-routes.mjs";
@@ -22,8 +23,7 @@ function readJson<T>(fileName: string, fallback: T): T {
   return JSON.parse(fs.readFileSync(full, "utf8")) as T;
 }
 
-export const docsBasePath = process.env.DOCS_BASE_PATH || "/docs/";
-export const docsHostname = process.env.DOCS_HOSTNAME || "https://universal-agent-plugins.com";
+export { docsBasePath, docsHostname };
 const docsBaseUrl = new URL(docsBasePath, docsHostname).toString();
 const socialImageUrl = new URL("og-docs.svg", docsBaseUrl).toString();
 const entities = readJson<RegistryEntity[]>("entities.json", []);
