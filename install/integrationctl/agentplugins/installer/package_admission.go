@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )

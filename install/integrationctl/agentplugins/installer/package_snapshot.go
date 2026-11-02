@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
