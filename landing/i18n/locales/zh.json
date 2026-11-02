@@ -492,7 +492,8 @@
           "superseded": "已替代",
           "revoked": "已撤销"
         }
-      }
+      },
+      "closeDemo": "关闭演示"
     },
     "header": {
       "plugins": "插件",

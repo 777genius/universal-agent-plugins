@@ -23,6 +23,7 @@ import zipfile
 
 import project_native_research as shared
 import project_native_cline_cycle as cline_cycle_success
+import project_native_kiro_auth as kiro_auth
 
 SOURCE = shared.SOURCE
 CASES = {
@@ -1875,7 +1876,7 @@ def kimi_call_members(bodies, source):
     return result
 
 
-def admit_runtime(path, client, source):
+def admit_runtime(path, client, source, kiro_key=""):
     body = ordinary_bytes(path, MAX_ZIP)
     bodies, total = {}, 0
     with zipfile.ZipFile(io.BytesIO(body)) as archive:
@@ -1897,6 +1898,7 @@ def admit_runtime(path, client, source):
             value.decode("utf-8", errors="strict")
             bodies[name] = value
             total += len(value)
+    kiro_auth.reject_private(bodies, kiro_key)
     if client == "kimi-call":
         result = kimi_call_members(bodies, source)
     elif client == "cline":
@@ -2041,6 +2043,8 @@ def prepare(selector, ctx):
         selected_env["AGENTPLUGINS_PROJECT_NATIVE_PYTHON"] = str(python)
     if node is not None:
         selected_env["AGENTPLUGINS_NODE_BIN"] = str(node)
+    if client == "kiro" and getattr(ctx, "kiro_api_key", ""):
+        selected_env["KIRO_API_KEY"] = ctx.kiro_api_key
     return tests, selected_env, native_output
 
 
@@ -2252,6 +2256,7 @@ def cursor_admission_refusal(error):
 
 def run(client, output):
     shared.native.require_hosted("linux-amd64")
+    kiro_key = kiro_auth.snapshot(client)
     if client == "cline":
         cline_host()
     if client not in CASES or not any(row["client"] == client for row in selected_cases()["include"]):
@@ -2268,6 +2273,8 @@ def run(client, output):
     try:
         with shared.Budget(480) as budget:
             ctx = shared.Context(output, summary, budget)
+            if client == "kiro":
+                kiro_auth.register(ctx, kiro_key)
             tests, env, native_output = prepare(client, ctx)
             stdout, stderr = capture(ctx, "build-source-clean", ["/usr/bin/git", "status", "--porcelain", "--untracked-files=normal"], SOURCE, ctx.env, 10)
             if stdout or stderr:
@@ -2299,7 +2306,7 @@ def run(client, output):
         with shared.Budget(60):
             if native_output is not None:
                 try:
-                    admitted, result = admit_runtime(native_output / "research.zip", client, summary)
+                    admitted, result = admit_runtime(native_output / "research.zip", client, summary, kiro_key)
                     summary["runtime_artifact_admitted"] = True
                     summary["runtime_test_failed"] = result["test_failed"]
                     if result["test_failed"]:

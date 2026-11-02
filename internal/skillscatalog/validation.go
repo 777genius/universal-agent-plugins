@@ -60,7 +60,21 @@ func validSource(source Source, availability string) bool {
 	case "github":
 		return repository(source.Repository) && source.URL == "https://github.com/"+source.Repository && availability == "unverified"
 	case "external":
-		return source.Repository == "" && safeHTTPSURL(source.URL) && availability == "unsupported-source"
+		if source.Repository != "" || !safeHTTPSURL(source.URL) {
+			return false
+		}
+		if availability == "unsupported-source" {
+			return strings.HasPrefix(source.URL, skillsOrigin+"/")
+		}
+		if availability != "unverified" {
+			return false
+		}
+		// Only a canonical publisher origin is installable: never accept
+		// a skills.sh listing, an untrusted path, credentials, or a custom port.
+		u, err := url.Parse(source.URL)
+		return err == nil && u.Host == u.Hostname() &&
+			sourceDomain.MatchString(u.Hostname()) &&
+			source.URL == "https://"+strings.ToLower(u.Hostname())
 	default:
 		return false
 	}

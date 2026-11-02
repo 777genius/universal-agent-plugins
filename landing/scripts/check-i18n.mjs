@@ -123,6 +123,9 @@ const reviewedCaptions = {
     'registryUi.community.source': 'Source',
     'registryUi.agentPage.activation': 'Activation',
     'registryUi.components.extensions': 'extensions',
+    // French words are identical to English at these exact UI captions.
+    'registryUi.skills.detail.installation': 'Installation',
+    'registryUi.skills.detail.source': 'Source',
   },
   hi: { 'registryUi.components.mcp': 'mcp' },
   pt: {
@@ -269,7 +272,7 @@ export async function checkI18n() {
   );
   assert.equal(
     expandLocalizedRoutes(routes).length,
-    publishedLocales.length * (5 + clientLandingPages.length + 1),
+    publishedLocales.length * routes.length,
   );
   assert.throws(() => productRoutes(['community'], []), /Reserved/);
   assert.throws(() => productRoutes(['same', 'same'], []), /duplicate/);

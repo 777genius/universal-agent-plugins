@@ -7,6 +7,7 @@ import type {
 } from '~/types/skillSpector';
 import {
   skillSpectorAssessment,
+  isLegacySkillSpectorReport,
   hasIncompleteSkillSpectorFindings,
   groupSkillSpectorReasons,
   skillSpectorFindingLocation,
@@ -58,12 +59,10 @@ const { report, status: loadedStatus, recoverable, retry: retryReport } = useSki
 );
 const reportStatus = computed(() => (props.applicable === false ? 'ready' : loadedStatus.value));
 const assessment = computed(() => skillSpectorAssessment(report.value, props.subject));
-const legacy = computed(() =>
-  Boolean(
-    report.value &&
-    (report.value.schema_version !== 3 ||
-      report.value.records.some((record) => record.legacy_format)),
-  ),
+const legacy = computed(() => isLegacySkillSpectorReport(report.value));
+const hasLegacyEvidence = computed(
+  () => report.value?.schema_version === 3 &&
+    assessment.value.records.some((record) => record.legacy_format),
 );
 const displayStatus = computed(() => {
   if (props.applicable === false) return 'unsupported';
@@ -89,8 +88,30 @@ const label = computed(() => {
   // Current records include complete and partial scans, never pending or historical records.
   const outcomes = assessment.value.outcomes;
   const scanned = (outcomes?.complete ?? 0) + (outcomes?.limited ?? 0);
-  const waiting = (outcomes?.unscanned ?? 0) + (outcomes?.historical ?? 0);
-  if (!legacy.value && key === 'incomplete' && outcomes && !outcomes.failed) {
+  const waiting = outcomes?.unscanned ?? 0;
+  const previous = outcomes?.historical ?? 0;
+  if (
+    !legacy.value &&
+    ['incomplete', 'unavailable', 'stale'].includes(key) &&
+    outcomes &&
+    props.scope === 'plugin' &&
+    assessment.value.inventoryKnown &&
+    (assessment.value.selected ?? 0) > 1
+  ) {
+    if (previous && !scanned && !outcomes.failed && !waiting)
+      return t('registryUi.skillSpector.historyProgress', {
+        total: n(assessment.value.selected ?? 0),
+        previous: n(previous),
+      });
+    if (outcomes.failed || previous)
+      return t('registryUi.skillSpector.progressWithFailures', {
+        checked: n(scanned),
+        total: n(assessment.value.selected ?? 0),
+        failed: n(outcomes.failed),
+        previous: n(previous),
+        waiting: n(waiting),
+        limited: n(outcomes.limited),
+      });
     if (
       props.scope === 'plugin' &&
       assessment.value.inventoryKnown &&
@@ -324,6 +345,7 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
         </p>
         <p>{{ t('registryUi.skillSpector.engine') }}</p>
         <p v-if="legacy">{{ t('registryUi.skillSpector.legacyCoverage') }}</p>
+        <p v-else-if="hasLegacyEvidence">{{ t('registryUi.skillSpector.legacyEvidence') }}</p>
         <p v-if="assessment.outOfDate">{{ t('registryUi.skillSpector.older') }}</p>
         <p v-if="scope === 'skill' && assessment.records.length">
           {{ t('registryUi.skillSpector.unverified') }}

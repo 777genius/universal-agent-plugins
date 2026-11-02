@@ -47,6 +47,8 @@ async function setup(
   page: Page,
   mode:
     | 'mixed'
+    | 'historicalMixed'
+    | 'foreignLegacy'
     | 'stale'
     | 'unavailable'
     | 'invalid'
@@ -142,6 +144,59 @@ async function setup(
       stale: 0,
     };
     manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
+  }
+  if (mode === 'historicalMixed') {
+    // A v3 publication may retain a previous v2 check next to current v3
+    // results. It must not put the entire plugin into legacy display mode.
+    const old = shard.records[0];
+    old.freshness = 'historical';
+    old.legacy_format = 2;
+    old.profile = { id: 'static-only-v2', digest: `sha256:${'a'.repeat(64)}` };
+    const oldStatus = old.status as 'complete' | 'partial' | 'error';
+    manifest.coverage = {
+      ...manifest.coverage,
+      [oldStatus]: manifest.coverage[oldStatus] - 1,
+      pending: manifest.coverage.pending + 1,
+      stale: manifest.coverage.stale + 1,
+    };
+    manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
+  }
+  if (mode === 'foreignLegacy') {
+    // Another plugin in this same repository has an old report. It must not
+    // claim that the viewed plugin has any imported legacy Skill evidence.
+    const old = structuredClone(shard.records[0]);
+    old.id = `${old.id}-foreign`;
+    old.plugin_path = 'plugins/foreign';
+    old.source.path = 'plugins/foreign/skills/agents-sdk';
+    old.freshness = 'historical';
+    old.legacy_format = 2;
+    old.profile = { id: 'static-only-v2', digest: `sha256:${'a'.repeat(64)}` };
+    shard.records.push(old);
+    manifest.coverage = {
+      ...manifest.coverage,
+      selected: manifest.coverage.selected + 1,
+      reported: manifest.coverage.reported + 1,
+      pending: 1,
+      stale: 1,
+    };
+    manifest.plugin_coverage.push({
+      ...manifest.plugin_coverage[0]!,
+      plugin_path: old.plugin_path,
+      selected: 1,
+      reported: 1,
+      pending: 1,
+      stale: 1,
+      complete: 0,
+      partial: 0,
+      error: 0,
+    });
+    manifest.plugin_states.push({
+      ...manifest.plugin_states[0]!,
+      id: 'foreign-legacy',
+      plugin_path: old.plugin_path,
+      skills_total: 1,
+      selected_ids: [old.id],
+    });
   }
   const standalone = mode === 'completeResolved' || mode === 'unsupportedSource';
   const complete = mode === 'completeExternal' || standalone;
@@ -479,6 +534,37 @@ test('omitted groups with zero published signals never render a clean result or 
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
+for (const width of [1280, 390]) {
+  test(`v3 mixed previous and current SkillSpector evidence remains understandable (${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const { assessment, errors } = await setup(page, 'historicalMixed');
+    await expect(assessment).toHaveClass(/skillspector--incomplete/);
+    const summary = assessment.locator(':scope > summary');
+    await expect(summary).toContainText('12/13 scanned');
+    await expect(summary).toContainText('1 previous');
+    await expect(summary).not.toContainText('Skill scan · Previous check');
+    await summary.click();
+    await expect(assessment.locator('.skillspector__advice')).toContainText(
+      'Some Skill results were imported from older scan formats',
+    );
+    await expect(assessment.locator('.skillspector__outcomes')).toContainText('Older report only');
+    await expect(assessment.locator('.skillspector__outcomes')).toContainText('Not fully checked');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('a different plugin’s legacy Skill never marks the viewed plugin as legacy', async ({ page }) => {
+  const { assessment, errors } = await setup(page, 'foreignLegacy');
+  await expect(assessment).toHaveClass(/skillspector--incomplete/);
+  await expect(assessment.locator(':scope > summary')).toContainText('13/13 checked');
+  await assessment.locator(':scope > summary').click();
+  await expect(assessment.locator('.skillspector__advice')).not.toContainText(
+    'Some Skill results were imported from older scan formats',
+  );
+  expect(errors).toEqual([]);
+});
+
 test('n8n known inventory distinguishes six incomplete checks from nine missing current results', async ({ page }) => {
   const { assessment, errors } = await setup(page, 'n8nPending');
   await expect(assessment.locator(':scope > summary')).toContainText(
@@ -507,7 +593,7 @@ for (const mode of ['singleLimited', 'pendingLimited'] as const) {
       await expect(assessment).toHaveClass(/skillspector--incomplete/);
       await expect(assessment.locator(':scope > summary')).toContainText(
         mode === 'singleLimited'
-          ? 'Skill scan · Not fully checked'
+          ? 'Skill scan · Coverage has limits'
           : 'Skill scan · 1/5 checked · 4 awaiting · 1 not fully checked',
       );
       await expect(assessment.locator(':scope > summary')).not.toContainText('Incomplete check');
@@ -558,6 +644,11 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
       new RegExp(`skillspector--${mode === 'invalid' ? 'unavailable' : mode}`),
     );
     await expect(assessment.locator(':scope > summary')).not.toContainText('No static findings');
+    if (mode === 'stale') {
+      // A source revision mismatch has no verified current inventory denominator.
+      // Report prior evidence without implying that the old 13 roots are current.
+      await expect(assessment.locator(':scope > summary')).toContainText('Previous check');
+    }
     await assessment.locator(':scope > summary').click();
     if (mode === 'stale') {
       await expect(assessment.locator('.skillspector__advice')).toContainText(
@@ -656,7 +747,7 @@ test('v3 distinguishes selected roots from known complete plugin inventory', asy
   // Every selected Skill has an executed partial or complete scan. The absent
   // package inventory changes the denominator's provenance, not the result.
   await expect(assessment.locator(':scope > summary')).toContainText(
-    'Skill scan · Not fully checked',
+    'Skill scan · Coverage has limits',
   );
   await assessment.locator(':scope > summary').click();
   await expect(assessment.locator('.skillspector__advice')).toContainText(

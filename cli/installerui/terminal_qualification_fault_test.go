@@ -122,6 +122,22 @@ func TestQualificationTerminalFault(t *testing.T) {
 	// An independent fresh reader on the very same inherited descriptor proves
 	// that cleanup joined the old read and left subsequent input available.
 	fmt.Fprintln(os.Stdout, "QUALIFICATION_REUSE_READY")
+	// Wait for the PTY owner to inspect the restored terminal modes before
+	// starting a new reader. Darwin ReadLine sets PENDIN temporarily, so an
+	// immediate next read races the *previous* owner's restoration oracle.
+	gate := os.Getenv("UAP_QUALIFICATION_TRIGGER") + ".reuse"
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if _, statErr := os.Stat(gate); statErr == nil {
+			break
+		} else if !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("inspect terminal reuse gate: %v", statErr)
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("terminal reuse gate not acknowledged")
+		}
+		time.Sleep(time.Millisecond)
+	}
 	reuseCtx, reuseCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer reuseCancel()
 	line, err := promptio.ReadLine(reuseCtx, os.Stdin)

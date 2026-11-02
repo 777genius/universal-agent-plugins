@@ -238,6 +238,9 @@ const scanner = (value: unknown) => {
 };
 // Full v3 inventory includes signed community package roots; transport and per-package
 // limits below remain independent of this global coverage budget.
+// Keep the consumer's v3 aggregate bound aligned with the Registry publisher.
+// V2 retains its separate 256-MiB policy.
+const maximumTotalV3ShardBytes = 512 * (1 << 20);
 const maximumInventoryRoots = 20_000;
 // Listing observations may coexist with inventory roots not present in the listing.
 const maximumSourceStates = maximumInventoryRoots + 10_000;
@@ -311,7 +314,7 @@ export function decodeSkillSpectorManifestV3(
     records += s.record_count;
     bytes += s.bytes;
   }
-  if (records !== c.reported || bytes > 256 << 20) fail();
+  if (records !== c.reported || bytes > maximumTotalV3ShardBytes) fail();
   const plugins = new Set<string>();
   for (const value of m.plugin_coverage) {
     const p = obj(value);
@@ -472,7 +475,9 @@ export function decodeSkillSpectorShardV3(
     profile(r.profile);
     if (
       r.legacy_format !== undefined &&
-      (r.freshness !== 'historical' || !['static-only-v1', 'static-only-v2'].includes(r.profile.id))
+      (![1, 2].includes(r.legacy_format) ||
+        r.freshness !== 'historical' ||
+        !['static-only-v1', 'static-only-v2'].includes(r.profile.id))
     )
       fail();
     if (
@@ -483,9 +488,16 @@ export function decodeSkillSpectorShardV3(
         r.scanner.revision !== manifest.scanner.revision)
     )
       fail();
+    // Historical v3 results retain the policy digest of their original run.
+    // Only current records must match a profile in this publication's manifest.
     if (
       !manifest.profiles.some((p) => p.id === r.profile.id && p.digest === r.profile.digest) &&
-      !(r.freshness === 'historical' && ['static-only-v1', 'static-only-v2'].includes(r.profile.id))
+      !(
+        r.freshness === 'historical' &&
+        ['static-only-v1', 'static-only-v2', 'static-standard-v3', 'static-extended-v3'].includes(
+          r.profile.id,
+        )
+      )
     )
       fail();
     if (!['complete', 'partial', 'not_started'].includes(c.status)) fail();

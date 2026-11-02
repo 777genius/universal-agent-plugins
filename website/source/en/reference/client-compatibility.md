@@ -66,9 +66,23 @@ The [project E2E matrix](https://github.com/777genius/universal-agent-plugins/bl
 records real Pi v1.4.0 Linux, macOS and Windows project A/B loading, update
 and removal qualification, separate from the
 [historical user-scope Linux evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md).
-**Portable Skills, `.pi/mcp.json` ownership and MCP initialize/list/call are
-not currently UAP-managed by the Pi adapter**; see
-[follow-up #623](https://github.com/777genius/universal-agent-plugins/issues/623).
+
+A later source-only [Pi Skills/MCP integration (#640)](https://github.com/777genius/universal-agent-plugins/pull/640)
+also manages exact owned project Skills in `.pi/skills` and individual stdio or
+Streamable HTTP server entries in `.pi/mcp.json`; user-profile and other-project
+configuration stays separate. Its pinned real Pi project E2E observes trusted
+Skill discovery and native stdio MCP `initialize`/`tools/list`. A subsequent
+[source-only native Pi `tools/call` E2E (#656)](https://github.com/777genius/universal-agent-plugins/pull/656)
+also proved exactly one real Pi-driven tool execution and its result on Linux,
+macOS and Windows using a local scripted model. **Neither this nor the earlier
+handshake establishes vendor-model authorization or automatic project trust.**
+UAP retains the Prepared state until a separate native observation establishes
+activation. Neither this nor #631 is included in release 0.1.95.
+
+OpenCode has separate [V1/V2 native project lifecycle evidence (#626)](https://github.com/777genius/universal-agent-plugins/pull/626)
+and source-bound [V2 MCP handshake qualification (#638)](https://github.com/777genius/universal-agent-plugins/pull/638).
+The latter confirms real V2 client `initialize` and `tools/list` with a
+controlled stdio server; `tools/call` and real-model use remain unqualified.
 These tests do not establish desktop notifications, audio, terminal focus or
 third-party model authorization.
 

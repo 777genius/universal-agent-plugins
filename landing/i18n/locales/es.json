@@ -492,7 +492,8 @@
           "superseded": "reemplazado",
           "revoked": "revocado"
         }
-      }
+      },
+      "closeDemo": "Cerrar demostración"
     },
     "header": {
       "plugins": "Complementos",

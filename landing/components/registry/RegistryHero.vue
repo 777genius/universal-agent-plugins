@@ -284,7 +284,6 @@ function updateTargets(values: string[]) {
       </div>
 
       <div class="hero__demo">
-        <HeroDemoVideo />
         <div class="hero__install">
           <HeroAgentField />
           <div class="hero__window">
@@ -350,5 +349,8 @@ function updateTargets(values: string[]) {
         </p>
       </div>
     </div>
+  </section>
+  <section class="demo-showcase" :aria-label="t('shell.hero.demoVideoTitle')">
+    <HeroDemoVideo />
   </section>
 </template>

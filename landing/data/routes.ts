@@ -9,6 +9,7 @@ export function isTemporarilyUnlistedProduct(name: string): boolean {
 export const routeFamilies = [
   { family: 'home', path: '/', indexable: true },
   { family: 'catalog', path: '/plugins/', indexable: true },
+  { family: 'skills', path: '/skills/', indexable: false },
   { family: 'download', path: '/download/', indexable: true },
   { family: 'create', path: '/create-plugin/', indexable: false },
   { family: 'community', path: '/plugins/community/', indexable: false },
