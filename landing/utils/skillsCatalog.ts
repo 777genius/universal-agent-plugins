@@ -66,6 +66,11 @@ function legacyPublisherUrl(skill: SkillListing): string | undefined {
   const source = skillIdentityFromId(skill.id);
   if (!parts || source?.kind !== 'external') return undefined;
 
+  // Chromium accepts some malformed IDNA hosts rejected by Node (xn--a).
+  // Until the original publisher is verified, reject all punycode legacy IDs
+  // rather than exposing a browser-only Install action.
+  if (/(?:^|\.)xn--/i.test(parts[1]!)) return undefined;
+
   try {
     const publisher = new URL(source.url);
     const legacyListing = `https://www.skills.sh/site/${publisher.hostname}/${encodeURIComponent(parts[2]!.toLowerCase())}`;
