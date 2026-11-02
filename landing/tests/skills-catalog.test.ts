@@ -208,7 +208,7 @@ test('legacy Skills API website records recover only canonical publisher install
       providerUrl: 'https://www.skills.sh/site/xn--a.example/lark-mail',
       source: { kind: 'external' as const, url: 'https://www.skills.sh/site/xn--a.example/lark-mail' },
     },
-    { ...legacy, id: 'skills-sh:open.feishu.cn:\\ud800' },
+    { ...legacy, id: 'skills-sh:open.feishu.cn:\ud800' },
   ]) {
     assert.equal(skillPublisherUrl(invalid), undefined);
     assert.equal(skillInstallCommand(invalid), undefined);
