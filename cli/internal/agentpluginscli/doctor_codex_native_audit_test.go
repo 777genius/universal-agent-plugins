@@ -32,7 +32,7 @@ func codexDoctorFixture(t *testing.T) (domain.Installation, string) {
 		"codex": {
 			ClientID: "codex", Scope: string(domain.ScopeProject),
 			Materialization: domain.MaterializationMaterialized,
-			Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled,
+			Activation:      domain.ActivationPrepared, Verification: domain.VerificationInstalled,
 			NativeProfileRoot: project,
 			NativeObjects: []domain.NativeObjectOwnership{
 				{ObjectID: "skill:demo", Kind: "codex_project_skill_directory", LogicalName: "demo", ProtectionClass: "managed", Path: skill},
@@ -70,7 +70,7 @@ func TestCodexDoctorReadsOwnedProjectWithoutMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		findings := doctorSingleProject(t, inst)
 		if len(findings) != 0 {
 			t.Fatalf("healthy native file structure incorrectly degraded: %+v", findings)

@@ -242,7 +242,6 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	report.ProjectReadiness = projectReadinessRecords(state, selected)
 	report.Findings = doctorFindings(ctx, app, clients, state, open, selected)
 	report.Findings = append(report.Findings, doctorCodexNativeFindings(state, selected)...)
-	sortDoctorFindings(report.Findings)
 	safety, err := doctorDirectorySafetyFindings(ctx, app, state, selected, report.Installation)
 	if err != nil {
 		return fmt.Errorf("inspect signed Directory: %w", err)
@@ -256,6 +255,7 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		}
 		report.Findings = append(filtered, safety...)
 	}
+	sortDoctorFindings(report.Findings)
 	if opts.format == "json" {
 		return writeJSONOutput(cmd.OutOrStdout(), "doctor", report)
 	}

@@ -11,17 +11,17 @@ import (
 // This presentation-only view never changes the authoritative state or probes a
 // client, and therefore cannot promote a prepared binding to an active one.
 type projectReadinessRecord struct {
-	InstallationID  string                     `json:"installation_id"`
-	BindingID       string                     `json:"binding_id"`
-	ClientID        string                     `json:"client_id"`
-	Status          string                     `json:"status"`
+	InstallationID  string                      `json:"installation_id"`
+	BindingID       string                      `json:"binding_id"`
+	ClientID        string                      `json:"client_id"`
+	Status          string                      `json:"status"`
 	Materialization domain.MaterializationState `json:"materialization"`
 	Activation      domain.ActivationState      `json:"activation"`
 	Authentication  domain.AuthenticationState  `json:"authentication"`
 	Policy          domain.PolicyState          `json:"policy"`
 	Verification    domain.VerificationState    `json:"verification"`
-	NativeEvidence  string                     `json:"native_evidence"`
-	NextActions     []string                   `json:"next_actions"`
+	NativeEvidence  string                      `json:"native_evidence"`
+	NextActions     []string                    `json:"next_actions"`
 }
 
 // projectReadinessRecords deliberately contains no native paths, TOML or JSON

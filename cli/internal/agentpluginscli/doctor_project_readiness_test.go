@@ -1,7 +1,6 @@
 package agentpluginscli
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"reflect"
@@ -53,9 +52,9 @@ func TestProjectReadinessStatusPrecedence(t *testing.T) {
 	t.Parallel()
 	base := projectReadinessFixture(domain.ActivationPrepared)
 	cases := []struct {
-		name string
+		name   string
 		change func(*domain.Installation, *domain.ClientBinding)
-		want string
+		want   string
 	}{
 		{"prepared", func(*domain.Installation, *domain.ClientBinding) {}, "prepared_native_unverified"},
 		{"needs rebind", func(i *domain.Installation, _ *domain.ClientBinding) { i.NeedsRebind = true }, "source_rebind_required"},
@@ -99,9 +98,9 @@ func TestProjectReadinessSortedAndScopedAcrossPopularClients(t *testing.T) {
 		}},
 	}}
 	expected := []string{"a/claude/b", "a/opencode/c", "b/codex/a", "b/pi/z"}
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		records := projectReadinessRecords(state, nil)
-		keys := []string{}
+		keys := make([]string, 0, len(records))
 		for _, entry := range records {
 			keys = append(keys, entry.InstallationID+"/"+entry.ClientID+"/"+entry.BindingID)
 		}
@@ -209,5 +208,4 @@ func TestProjectReadinessOnlyDependsOnRecordedState(t *testing.T) {
 	if strings.Contains(string(raw), "should-not-appear") || strings.Contains(string(raw), "secret/user") || strings.Contains(string(raw), "localhost:") {
 		t.Fatalf("status report disclosed native profile or provider data: %s", raw)
 	}
-	_ = context.Background()
 }
