@@ -59,6 +59,8 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.command-snippet code')).toHaveText(autoAdd);
     await card.locator('.app-multiselect__trigger').click();
     await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('checkbox', { name: /^Cursor(?:\s|$)/ })).toBeDisabled();
+    await expect(page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ })).toBeEnabled();
     await page.keyboard.press('Escape');
     // An explicit checkbox switches to manual mode; no implicit Cursor selection.
     await targets(page, card, ['Codex']);

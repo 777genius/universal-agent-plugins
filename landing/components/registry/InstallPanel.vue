@@ -36,7 +36,10 @@ const targetOptions = computed(() =>
     value: client.id,
     label: client.name,
     icon: asset(`client-icons/${client.icon}`),
-    disabled: !targetDistributions.value.get(client.id) && !targets.value.includes(client.id),
+    // Keep invalid explicitly saved selections visible for recovery, but an
+    // auto-detected project must never make a stale Cursor placeholder selectable.
+    disabled: !targetDistributions.value.get(client.id) &&
+      (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
       if (isDiscovered.value)
         return props.plugin.discovery?.availability === 'available'
