@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { hydrated } from './i18n-state.helpers';
 
-const addCommand = 'npx -y universal-agent-plugins install --scope project';
-const restoreCommand = 'agentplugins install --locked --scope project';
+const addCommand = 'npx -y universal-agent-plugins install --scope user';
+const restoreCommand = 'agentplugins deps import --install';
 const manifest = `schema_version = 1
 
 [dependencies]
@@ -44,7 +44,10 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(section.locator('.registry-restore__terminal')).toHaveCount(2);
       await expect(section.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', addCommand);
       await expect(section.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', restoreCommand);
-      await expect(section.locator('.typed-command')).toHaveCount(2);
+      await expect(section.locator('.typed-command')).toHaveCount(3);
+      await expect(section.locator('.registry-restore__export')).toHaveAttribute(
+        'data-command', 'agentplugins deps export',
+      );
       await expect(section.locator('.typed-command').first()).toHaveAttribute('data-complete', 'true');
       await expect(section.locator('.typed-command').last()).toHaveAttribute('data-complete', 'true');
       await expect(section.locator('.registry-restore__copy')).toHaveCount(2);
