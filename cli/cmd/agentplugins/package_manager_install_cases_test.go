@@ -185,7 +185,20 @@ func pmInstallCrossTargetForeignSkillCollision(t *testing.T) {
 	if o.count() <= requests || f.security.calls == 0 {
 		t.Fatal("cross-target collision never reached real acquisition and assessment")
 	}
-	pmInstallEqual(t, "cross-target refusal preserved both native roots and portable agreement", before, f.activeSnapshot(t, f.a))
+	// The installer may create an empty internal staging directory before
+	// rejecting a foreign native Skill. It is not an active installation,
+	// portable agreement or native client side effect. Reject all other
+	// persisted paths in that namespace, including leftover staging files.
+	after := f.activeSnapshot(t, f.a)
+	namespace := f.namespace(f.a)
+	delete(before, namespace)
+	delete(after, namespace)
+	pmInstallEqual(t, "cross-target refusal preserved both native roots and portable agreement", before, after)
+	for path, entry := range pmInstallStableTree(t, namespace) {
+		if path != "." && path != "installer-tmp" || path == "installer-tmp" && !strings.HasPrefix(entry, "d") {
+			t.Fatalf("cross-target refusal left unexpected managed or staging path %q: %s", path, entry)
+		}
+	}
 	f.noActive(t, f.a)
 	projectJourneyAbsent(t, filepath.Join(f.a, "uap.toml"), filepath.Join(f.a, "uap.lock"))
 	projectJourneyAbsent(t, filepath.Join(f.native(f.a, "cursor"), "skills", "docs", "SKILL.md"))
