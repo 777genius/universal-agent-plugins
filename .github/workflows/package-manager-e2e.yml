@@ -96,83 +96,27 @@ jobs:
         run: python -B -m unittest discover -s scripts -p test_package_manager_ci_policy.py
       - name: Execute the full portable catalog
         run: python -B scripts/package-manager-e2e.py --output "${{ runner.temp }}/package-manager-e2e"
-      - name: Verify Unicode Win32 device aliases across ZIP, TAR and source paths
+      - name: Verify Win32 Unicode aliases across ZIP, TAR, source and snapshot
         shell: bash
         run: |
           set -euo pipefail
-          go test -count=1 -timeout=5m -json \
-            ./install/integrationctl/adapters/pathpolicy \
-            ./install/integrationctl/agentplugins/adapters/packagedigest \
-            ./install/integrationctl/agentplugins/adapters/sourceacquisition \
-            ./install/integrationctl/agentplugins/sourcespec \
-            -run '^(TestPortableSegmentsRejectSuperscriptDeviceAliases|TestArchiveRefusesUnicodeDeviceAliasesAcrossFormats|TestArchiveRetainsValidUnicodeOutsideDeviceNamespace|TestSnapshotPathValidationRejectsSuperscriptDevices|TestGitAndArchiveSubpathRejectWindowsUnicodeDeviceNames)        working-directory: install/integrationctl/agentplugins
-        shell: bash
-        run: |
-          set -euo pipefail
-          go test -json -count=1 -timeout=5m ./transaction -run TestDirectoryProcessCrashAfterActivationRecovers | python -c '
-          import json, sys
-          events = [json.loads(line) for line in sys.stdin if line.strip()]
-          pkg = "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
-          name = "TestDirectoryProcessCrashAfterActivationRecovers"
-          matches = lambda action: any(
-              e.get("Package") == pkg and e.get("Test") == name and e.get("Action") == action
-              for e in events
-          )
-          package_pass = any(
-              e.get("Package") == pkg and e.get("Action") == "pass" and "Test" not in e
-              for e in events
-          )
-          if not (matches("run") and matches("pass") and package_pass) or matches("fail") or matches("skip"):
-              for e in events:
-                  if e.get("Action") == "output" and e.get("Package") == pkg:
-                      sys.stderr.write(e.get("Output", ""))
-              print("Exact post-write OS crash/recovery oracle did not run and pass.", file=sys.stderr)
-              sys.exit(1)
-          print("Confirmed actual crash/recovery run+pass events, package pass, no skip: " + name)
-          '
-      - name: Verify immutable Git EOL bytes across platforms
-        working-directory: install/integrationctl/agentplugins
-        shell: bash
-        run: |
-          set -euo pipefail
-          go test -json -count=1 -timeout=5m ./adapters/sourceacquisition -run TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL | python -c '
-          import json, sys
-          events = [json.loads(line) for line in sys.stdin if line.strip()]
-          pkg = "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
-          name = "TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL"
-          matches = lambda action, test: any(
-              e.get("Package") == pkg and e.get("Test") == test and e.get("Action") == action
-              for e in events
-          )
-          package_pass = any(
-              e.get("Package") == pkg and e.get("Action") == "pass" and "Test" not in e
-              for e in events
-          )
-          ok = matches("run", name) and matches("pass", name) and package_pass and not any(
-              matches(action, name) for action in ("fail", "skip")
-          )
-          if not ok:
-              for e in events:
-                  if e.get("Action") == "output" and e.get("Package") == pkg:
-                      sys.stderr.write(e.get("Output", ""))
-              print("Exact Git EOL oracle did not run and pass.", file=sys.stderr)
-              sys.exit(1)
-          print("Confirmed exact Go run+pass events, package pass, no skip: " + name)
-          '
-      - name: Retain execution evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: package-manager-e2e-${{ matrix.os }}-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/package-manager-e2e/report.json
-            ${{ runner.temp }}/package-manager-e2e/*.stdout
-            ${{ runner.temp }}/package-manager-e2e/*.stderr
-          if-no-files-found: error
-          retention-days: 14
- | python -c '
-          import json, sys
-          events = [json.loads(line) for line in sys.stdin if line.strip()]
+          events="$RUNNER_TEMP/uap-unicode-tests.json"
+          : > "$events"
+          (
+            cd install/integrationctl
+            go test -count=1 -timeout=5m -json ./adapters/pathpolicy -run '^TestPortableSegmentsRejectSuperscriptDeviceAliases$'
+          ) >> "$events"
+          (
+            cd install/integrationctl/agentplugins
+            go test -count=1 -timeout=5m -json \
+              ./adapters/packagedigest ./adapters/sourceacquisition ./sourcespec \
+              -run '^(TestArchiveRefusesUnicodeDeviceAliasesAcrossFormats|TestArchiveRetainsValidUnicodeOutsideDeviceNamespace|TestSnapshotPathValidationRejectsSuperscriptDevices|TestGitAndArchiveSubpathRejectWindowsUnicodeDeviceNames)$'
+          ) >> "$events"
+          python - "$events" <<'PY'
+          import json
+          import sys
+          with open(sys.argv[1], encoding="utf-8") as fh:
+              events = [json.loads(line) for line in fh if line.strip()]
           tests = {
               "TestPortableSegmentsRejectSuperscriptDeviceAliases",
               "TestArchiveRefusesUnicodeDeviceAliasesAcrossFormats",
@@ -181,16 +125,17 @@ jobs:
               "TestGitAndArchiveSubpathRejectWindowsUnicodeDeviceNames",
           }
           for name in sorted(tests):
-              seen = [e["Action"] for e in events if e.get("Test") == name]
-              if "run" not in seen or "pass" not in seen or "fail" in seen or "skip" in seen:
-                  raise SystemExit(f"exact run/pass missing for {name}: {seen}")
-          packages = {e["Package"] for e in events if e.get("Test") in tests}
-          if len(packages) != 4 or any(not any(e.get("Package") == pkg and
-                  e.get("Action") == "pass" and not e.get("Test")
-                  for e in events) for pkg in packages):
-              raise SystemExit(f"expected four successful Go packages, got {packages}")
-          print("Confirmed five exact Unicode tests and four packages ran and passed; no skips")
-          '
+              matched = [e for e in events if e.get("Test") == name]
+              actions = {e.get("Action") for e in matched}
+              if not {"run", "pass"}.issubset(actions) or actions.intersection({"fail", "skip"}):
+                  raise SystemExit(f"{name} lacks real run/pass: {sorted(actions)}")
+              package = next(e["Package"] for e in matched if e.get("Action") == "pass")
+              if not any(e.get("Package") == package and e.get("Test") is None and e.get("Action") == "pass" for e in events):
+                  raise SystemExit(f"Go package {package} did not pass")
+          if any(e.get("Action") in ("fail", "skip") for e in events):
+              raise SystemExit("A Unicode admission test failed or skipped")
+          print("All five tests truly ran and passed in passing Go packages with no skips")
+          PY
       - name: Verify actual process crash and durable transaction recovery
         working-directory: install/integrationctl/agentplugins
         shell: bash
