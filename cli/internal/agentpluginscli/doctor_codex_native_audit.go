@@ -57,133 +57,150 @@ func sortDoctorFindings(findings []doctorFinding) {
 	})
 }
 
-func doctorCodexBindingFindings(installation domain.Installation, binding domain.ClientBinding) []doctorFinding {
-	report := func(status, code, explanation string) doctorFinding {
-		action := "Inspect the original project-native object receipts and use an explicit, reviewed repair with --scope project --project-root <PROJECT_ROOT>; do not adopt foreign files"
-		return scopedFinding(status, code, installation, binding.ClientID, explanation, action)
-	}
-	// Older records may not contain these facts. Missing evidence is an unknown
-	// qualification state, not a fabricated corruption or successful scan.
-	if binding.NativeProfileRoot == "" || len(binding.NativeObjects) == 0 {
-		return []doctorFinding{report("unknown", "codex_project_receipts_unavailable", "exact project-native ownership evidence is missing; no native files were read")}
-	}
-	rootPath := binding.NativeProfileRoot
-	if !filepath.IsAbs(rootPath) || filepath.Clean(rootPath) != rootPath {
-		return []doctorFinding{report("degraded", "codex_project_root_invalid", "the recorded project root is not a canonical absolute path")}
-	}
-	fi, err := os.Lstat(rootPath)
-	if err != nil || !fi.IsDir() || fi.Mode()&os.ModeSymlink != 0 {
-		return []doctorFinding{report("unknown", "codex_project_root_unavailable", "the recorded project root cannot be safely inspected as a regular directory")}
-	}
-	root, err := os.OpenRoot(rootPath)
-	if err != nil {
-		return []doctorFinding{report("unknown", "codex_project_root_unavailable", "the selected native project root could not be opened safely")}
-	}
-	defer root.Close()
+// One observer is scoped to exactly one Codex project binding and never exposes
+// raw native configuration, paths or credentials in a finding.
+type codexDoctorInspection struct {
+	installation domain.Installation
+	binding      domain.ClientBinding
+	rootPath     string
+	root         *os.Root
+	seen         map[string]bool
+	mcpNames     []string
+	findings     []doctorFinding
+}
 
-	var findings []doctorFinding
-	appendCode := func(status, code, explanation string) {
-		findings = append(findings, report(status, code, explanation))
+func (d *codexDoctorInspection) add(status, code, explanation string) {
+	d.findings = append(d.findings, scopedFinding(status, code, d.installation, d.binding.ClientID,
+		explanation, "Inspect the original project-native object receipts and use an explicit, reviewed repair with --scope project --project-root <PROJECT_ROOT>; do not adopt foreign files"))
+}
+
+func doctorCodexBindingFindings(installation domain.Installation, binding domain.ClientBinding) []doctorFinding {
+	d := &codexDoctorInspection{installation: installation, binding: binding,
+		rootPath: binding.NativeProfileRoot, seen: map[string]bool{}}
+	if d.rootPath == "" || len(binding.NativeObjects) == 0 {
+		d.add("unknown", "codex_project_receipts_unavailable",
+			"exact project-native ownership evidence is missing; no native files were read")
+		return d.findings
 	}
+	if !filepath.IsAbs(d.rootPath) || filepath.Clean(d.rootPath) != d.rootPath {
+		d.add("degraded", "codex_project_root_invalid",
+			"the recorded project root is not a canonical absolute path")
+		return d.findings
+	}
+	info, err := os.Lstat(d.rootPath)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		d.add("unknown", "codex_project_root_unavailable",
+			"the recorded project root cannot be safely inspected as a regular directory")
+		return d.findings
+	}
+	d.root, err = os.OpenRoot(d.rootPath)
+	if err != nil {
+		d.add("unknown", "codex_project_root_unavailable",
+			"the selected native project root could not be opened safely")
+		return d.findings
+	}
+	defer func() { _ = d.root.Close() }()
 	if len(binding.NativeObjects) > doctorNativeObjectMax {
-		appendCode("unknown", "codex_project_inventory_too_large", "project-native object inventory exceeds the safe observational bound")
-		return findings
+		d.add("unknown", "codex_project_inventory_too_large",
+			"project-native object inventory exceeds the safe observational bound")
+		return d.findings
 	}
-	seen := map[string]bool{}
-	seenPaths := map[string]bool{}
-	var mcpNames []string
-	var mcpPath string
 	for _, object := range binding.NativeObjects {
-		var expected string
-		var wantDirectory bool
-		switch object.Kind {
-		case "codex_project_skill_directory":
-			wantDirectory = true
-			if !doctorNativeLeafName(object.LogicalName) {
-				appendCode("degraded", "codex_project_invalid_skill_receipt", "a recorded project Skill identity is not a single native Skill name")
-				continue
-			}
-			expected = filepath.Join(rootPath, ".agents", "skills", object.LogicalName)
-		case "codex_project_mcp_server":
-			if !doctorNativeLeafName(object.LogicalName) {
-				appendCode("degraded", "codex_project_invalid_mcp_receipt", "a recorded project MCP identity is not a single native server name")
-				continue
-			}
-			expected = filepath.Join(rootPath, ".codex", "config.toml")
-			mcpNames = append(mcpNames, object.LogicalName)
-			mcpPath = expected
-		default:
-			continue // The user's foreign and other client-native objects are not ours.
+		d.inspectObject(object)
+	}
+	d.inspectMCP()
+	return d.findings
+}
+
+func (d *codexDoctorInspection) inspectObject(object domain.NativeObjectOwnership) {
+	var expected string
+	var directory bool
+	switch object.Kind {
+	case "codex_project_skill_directory":
+		if !doctorNativeLeafName(object.LogicalName) {
+			d.add("degraded", "codex_project_invalid_skill_receipt",
+				"a recorded project Skill identity is not a single native Skill name")
+			return
 		}
-		key := object.Kind + "\x00" + object.LogicalName
-		if seen[key] {
-			appendCode("degraded", "codex_project_duplicate_receipt", "recorded project-native object identities are duplicated")
-			continue
+		expected, directory = filepath.Join(d.rootPath, ".agents", "skills", object.LogicalName), true
+	case "codex_project_mcp_server":
+		if !doctorNativeLeafName(object.LogicalName) {
+			d.add("degraded", "codex_project_invalid_mcp_receipt",
+				"a recorded project MCP identity is not a single native server name")
+			return
 		}
-		seen[key] = true
-		if object.ProtectionClass != "managed" && object.ProtectionClass != "managed_entry" {
-			appendCode("unknown", "codex_project_ownership_unverified", "the project-native object has no supported manager ownership class")
-			continue
-		}
-		if object.Path != expected {
-			appendCode("degraded", "codex_project_path_mismatch", "the recorded native object does not match Codex's exact project-local path")
-			continue
-		}
-		pathKey := object.Kind + "\x00" + object.Path
-		if seenPaths[pathKey] {
-			// Several MCP server members intentionally share one TOML document.
-			if object.Kind == "codex_project_mcp_server" {
-				continue
-			}
-			appendCode("degraded", "codex_project_duplicate_path", "multiple Skill identities claim the same native path")
-			continue
-		}
-		seenPaths[pathKey] = true
-		rel, err := filepath.Rel(rootPath, expected)
-		if err != nil {
-			appendCode("degraded", "codex_project_path_mismatch", "the native object cannot be resolved beneath its selected project")
-			continue
-		}
-		code := doctorNativePathStatus(root, rel, wantDirectory)
-		if code != "" {
-			appendCode(doctorNativeStatusSeverity(code), "codex_project_"+code, "the recorded native component is missing, inaccessible, linked or has the wrong filesystem type")
-			continue
-		}
-		if wantDirectory {
-			skillPath := filepath.Join(rel, "SKILL.md")
-			if issue := doctorNativePathStatus(root, skillPath, false); issue != "" {
-				appendCode(doctorNativeStatusSeverity(issue), "codex_project_skill_"+issue, "the recorded project Skill lacks a safe, regular SKILL.md file")
-			}
+		expected = filepath.Join(d.rootPath, ".codex", "config.toml")
+		d.mcpNames = append(d.mcpNames, object.LogicalName)
+	default:
+		return // Foreign objects and unrelated client surfaces are not ours.
+	}
+	identity := object.Kind + "\x00" + object.LogicalName
+	if d.seen[identity] {
+		d.add("degraded", "codex_project_duplicate_receipt",
+			"recorded project-native object identities are duplicated")
+		return
+	}
+	d.seen[identity] = true
+	if object.ProtectionClass != "managed" && object.ProtectionClass != "managed_entry" {
+		d.add("unknown", "codex_project_ownership_unverified",
+			"the project-native object has no supported manager ownership class")
+		return
+	}
+	if object.Path != expected {
+		d.add("degraded", "codex_project_path_mismatch",
+			"the recorded native object does not match Codex's exact project-local path")
+		return
+	}
+	relative, err := filepath.Rel(d.rootPath, expected)
+	if err != nil {
+		d.add("degraded", "codex_project_path_mismatch",
+			"the native object cannot be resolved beneath its selected project")
+		return
+	}
+	if issue := doctorNativePathStatus(d.root, relative, directory); issue != "" {
+		d.add(doctorNativeStatusSeverity(issue), "codex_project_"+issue,
+			"the recorded native component is missing, inaccessible, linked or has the wrong filesystem type")
+		return
+	}
+	if directory {
+		if issue := doctorNativePathStatus(d.root, filepath.Join(relative, "SKILL.md"), false); issue != "" {
+			d.add(doctorNativeStatusSeverity(issue), "codex_project_skill_"+issue,
+				"the recorded project Skill lacks a safe, regular SKILL.md file")
 		}
 	}
-	if len(mcpNames) > 0 && mcpPath != "" {
-		rel, err := filepath.Rel(rootPath, mcpPath)
-		if err != nil {
-			appendCode("degraded", "codex_project_path_mismatch", "recorded MCP configuration is outside the selected project")
-		} else if doctorNativePathStatus(root, rel, false) == "" {
-			contents, issue := doctorNativeRead(root, rel)
-			if issue != "" {
-				appendCode(doctorNativeStatusSeverity(issue), "codex_project_mcp_"+issue, "project MCP configuration cannot be inspected safely")
-			} else {
-				var document map[string]any
-				if err := toml.Unmarshal(contents, &document); err != nil {
-					appendCode("degraded", "codex_project_mcp_invalid", "the recorded project MCP TOML configuration is invalid")
-				} else {
-					servers, ok := document["mcp_servers"].(map[string]any)
-					if !ok {
-						appendCode("degraded", "codex_project_mcp_missing", "the project MCP server table is missing")
-					} else {
-						for _, name := range mcpNames {
-							if _, exists := servers[name]; !exists {
-								appendCode("degraded", "codex_project_mcp_member_missing", "a recorded project MCP server member is missing from native configuration")
-							}
-						}
-					}
-				}
-			}
+}
+
+func (d *codexDoctorInspection) inspectMCP() {
+	if len(d.mcpNames) == 0 {
+		return
+	}
+	relative := filepath.Join(".codex", "config.toml")
+	if doctorNativePathStatus(d.root, relative, false) != "" {
+		return // Per-object path diagnostics already reported the missing native file.
+	}
+	contents, issue := doctorNativeRead(d.root, relative)
+	if issue != "" {
+		d.add(doctorNativeStatusSeverity(issue), "codex_project_mcp_"+issue,
+			"project MCP configuration cannot be inspected safely")
+		return
+	}
+	var document map[string]any
+	if err := toml.Unmarshal(contents, &document); err != nil {
+		d.add("degraded", "codex_project_mcp_invalid",
+			"the recorded project MCP TOML configuration is invalid")
+		return
+	}
+	servers, ok := document["mcp_servers"].(map[string]any)
+	if !ok {
+		d.add("degraded", "codex_project_mcp_missing", "the project MCP server table is missing")
+		return
+	}
+	for _, name := range d.mcpNames {
+		if _, found := servers[name]; !found {
+			d.add("degraded", "codex_project_mcp_member_missing",
+				"a recorded project MCP server member is missing from native configuration")
 		}
 	}
-	return findings
 }
 
 func doctorNativeLeafName(name string) bool {
@@ -195,37 +212,56 @@ func doctorNativeLeafName(name string) bool {
 // Inspect each prefix to reject even in-root symlinks and Windows reparse-point
 // redirections, then open only through the same root handle.
 func doctorNativePathStatus(root *os.Root, relative string, directory bool) string {
-	if relative == "" || filepath.IsAbs(relative) || filepath.Clean(relative) != relative ||
-		relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+	if !doctorNativeRelativePathValid(relative) {
 		return "path_invalid"
 	}
-	segments := strings.Split(relative, string(filepath.Separator))
-	if len(segments) > 32 {
-		return "path_invalid"
-	}
-	walk := ""
-	for i, segment := range segments {
-		if segment == "" || segment == "." || segment == ".." {
-			return "path_invalid"
-		}
-		walk = filepath.Join(walk, segment)
-		info, err := root.Lstat(walk)
-		switch {
-		case errors.Is(err, os.ErrNotExist):
-			return "component_missing"
-		case err != nil:
-			return "component_unreadable"
-		case info.Mode()&os.ModeSymlink != 0 || info.Mode()&os.ModeIrregular != 0:
-			return "component_symlink"
-		case i < len(segments)-1 && !info.IsDir():
-			return "component_wrong_type"
-		case i == len(segments)-1 && directory && !info.IsDir():
-			return "component_wrong_type"
-		case i == len(segments)-1 && !directory && !info.Mode().IsRegular():
-			return "component_wrong_type"
+	parts := strings.Split(relative, string(filepath.Separator))
+	path := ""
+	for index, part := range parts {
+		path = filepath.Join(path, part)
+		if issue := doctorNativeEntryStatus(root, path, index == len(parts)-1, directory); issue != "" {
+			return issue
 		}
 	}
 	return ""
+}
+
+func doctorNativeRelativePathValid(relative string) bool {
+	if relative == "" || relative == "." || relative == ".." || filepath.IsAbs(relative) ||
+		filepath.Clean(relative) != relative || strings.HasPrefix(relative, ".."+string(filepath.Separator)) ||
+		len(relative) > 4096 {
+		return false
+	}
+	parts := strings.Split(relative, string(filepath.Separator))
+	if len(parts) > 32 {
+		return false
+	}
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func doctorNativeEntryStatus(root *os.Root, path string, last, directory bool) string {
+	info, err := root.Lstat(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return "component_missing"
+	case err != nil:
+		return "component_unreadable"
+	case info.Mode()&os.ModeSymlink != 0 || info.Mode()&os.ModeIrregular != 0:
+		return "component_symlink"
+	case !last && !info.IsDir():
+		return "component_wrong_type"
+	case last && directory && !info.IsDir():
+		return "component_wrong_type"
+	case last && !directory && !info.Mode().IsRegular():
+		return "component_wrong_type"
+	default:
+		return ""
+	}
 }
 
 func doctorNativeRead(root *os.Root, path string) ([]byte, string) {
@@ -233,7 +269,7 @@ func doctorNativeRead(root *os.Root, path string) ([]byte, string) {
 	if err != nil {
 		return nil, "component_unreadable"
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	body, err := io.ReadAll(io.LimitReader(file, doctorNativeFileMax+1))
 	if err != nil {
 		return nil, "component_unreadable"
