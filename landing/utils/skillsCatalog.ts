@@ -35,12 +35,17 @@ export function skillsCatalogQuery(
   else delete next.skillView;
   return next;
 }
-export function skillRepositoryUrl(skill: SkillListing): string | undefined {
-  const repository = skill.source.repository;
-  return skill.source.kind === 'github' &&
-    repository &&
-    /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repository)
+function canonicalGitHubRepositoryUrl(repository: string | undefined): string | undefined {
+  return repository &&
+    /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repository) &&
+    !repository.endsWith('.git')
     ? `https://github.com/${repository}`
+    : undefined;
+}
+
+export function skillRepositoryUrl(skill: SkillListing): string | undefined {
+  return skill.source.kind === 'github'
+    ? canonicalGitHubRepositoryUrl(skill.source.repository)
     : undefined;
 }
 /**
@@ -82,12 +87,8 @@ function legacyPublisherUrl(skill: SkillListing): string | undefined {
   }
 }
 
-/** A publisher root, never the third-party catalog's detail URL. */
-export function skillPublisherUrl(skill: SkillListing): string | undefined {
-  const legacy = legacyPublisherUrl(skill);
-  if (legacy) return legacy;
-  if (skill.source.kind !== 'external' || skill.availability !== 'unverified') return undefined;
-  const raw = skill.source.url;
+/** A canonical publisher origin, without paths, ports, credentials or query strings. */
+function canonicalPublisherOrigin(raw: string): string | undefined {
   try {
     const url = new URL(raw);
     const host = url.hostname;
@@ -106,6 +107,15 @@ export function skillPublisherUrl(skill: SkillListing): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** A publisher root, never the third-party catalog's detail URL. */
+export function skillPublisherUrl(skill: SkillListing): string | undefined {
+  const legacy = legacyPublisherUrl(skill);
+  if (legacy) return legacy;
+  return skill.source.kind === 'external' && skill.availability === 'unverified'
+    ? canonicalPublisherOrigin(skill.source.url)
+    : undefined;
 }
 
 /** Derive a source solely from a bounded, canonical catalog identity. */
@@ -150,17 +160,15 @@ export function skillNeedsManualSelection(skill: SkillListing): boolean {
   );
 }
 
-export function skillInstallCommand(
-  skill: SkillListing,
+/** Share command rendering and target validation with the user-supplied source flow. */
+function buildInstallCommand(
+  source: string,
+  exactName: string | undefined,
   targets?: readonly string[],
 ): string | undefined {
-  const source = skillRepositoryUrl(skill) ?? skillPublisherUrl(skill);
-  if (!source || (skill.availability === 'unsupported-source' && !legacyPublisherUrl(skill)))
-    return undefined;
-  // A website has no Git selector/picker: it must use a safe exact Skill name.
-  if (skill.source.kind === 'external' && !supportedSkillName(skill.skillNameHint)) return undefined;
+  if (exactName !== undefined && !supportedSkillName(exactName)) return undefined;
   const tokens = ['npx', 'universal-agent-plugins@latest', 'skills', 'add', source];
-  if (!skillNeedsManualSelection(skill)) tokens.push('--skill', skill.skillNameHint);
+  if (exactName) tokens.push('--skill', exactName);
   if (targets !== undefined) {
     const ids = [...new Set(targets.map((id) => id.trim()).filter(Boolean))];
     if (!ids.length || ids.some((id) => !skillTargetIds.has(id))) return undefined;
@@ -173,4 +181,55 @@ export function skillInstallCommand(
   return tokens
     .map((token) => (/^[A-Za-z0-9_./:@+=-]+$/.test(token) ? token : `"${token}"`))
     .join(' ');
+}
+
+
+/**
+ * Manual recovery is distinct from catalog provenance: a user supplies an
+ * independent source and the CLI checks it. A GitHub repository opens the
+ * interactive Skill picker; HTTPS publishers require a user-entered exact
+ * normative Skill name. Never infer the name from the untrusted catalog title.
+ */
+export function skillManualSourceCommand(
+  input: string,
+  exactName = '',
+  targets?: readonly string[],
+): string | undefined {
+  if (input.length === 0 || input.length > 256 || input !== input.trim()) return undefined;
+
+  if (input.startsWith('https://github.com/')) {
+    const repository = input.slice('https://github.com/'.length);
+    const source = canonicalGitHubRepositoryUrl(repository);
+    return source === input ? buildInstallCommand(source, undefined, targets) : undefined;
+  }
+
+  const source = canonicalPublisherOrigin(input);
+  if (!source) return undefined;
+  const hostname = new URL(source).hostname;
+  // Directory pages, internal hosts and IDNA variations are not user-controlled
+  // Skill publisher origins. The CLI still validates a valid origin's index.
+  if (
+    hostname === 'skills.sh' || hostname === 'www.skills.sh' ||
+    /(?:^|\.)xn--/i.test(hostname) ||
+    /\.(?:local|localhost|internal|test|example|invalid)$/i.test(hostname)
+  ) return undefined;
+  return buildInstallCommand(source, exactName, targets);
+}
+
+export function skillInstallCommand(
+  skill: SkillListing,
+  targets?: readonly string[],
+): string | undefined {
+  const source = skillRepositoryUrl(skill) ?? skillPublisherUrl(skill);
+  if (!source || (skill.availability === 'unsupported-source' && !legacyPublisherUrl(skill)))
+    return undefined;
+  // GitHub can open the picker for an unverified listing selector.
+  if (skill.source.kind === 'github')
+    return buildInstallCommand(
+      source,
+      skillNeedsManualSelection(skill) ? undefined : skill.skillNameHint,
+      targets,
+    );
+  // Website publishers do not have the GitHub picker.
+  return buildInstallCommand(source, skill.skillNameHint, targets);
 }
