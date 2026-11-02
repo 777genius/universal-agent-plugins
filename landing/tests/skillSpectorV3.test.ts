@@ -100,6 +100,15 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.throws(() => decodeSkillSpectorManifestV3(rolling), /invalid/);
   });
 
+  it('rejects forged nonnumeric legacy markers in historical v3 records', () => {
+    const forged = structuredClone(shard);
+    const record = forged.records[0];
+    record.freshness = 'historical';
+    record.profile = { id: 'static-only-v2', digest: `sha256:${'a'.repeat(64)}` };
+    record.legacy_format = true;
+    assert.throws(() => decodeSkillSpectorShardV3(forged, manifest, descriptor), /invalid/);
+  });
+
   it('bounds v3 global and plugin coverage at 20,000 roots while preserving arithmetic', () => {
     const bounded = structuredClone(manifest);
     const addedRoots = 20_000 - bounded.coverage.selected;
