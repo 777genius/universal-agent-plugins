@@ -106,7 +106,13 @@ func TestProjectDependencyLockNeverCrossesUserProjectScopeE2E(t *testing.T) {
 	if _, err := os.Lstat(missing); !os.IsNotExist(err) {
 		t.Fatalf("unselected project path unexpectedly appeared: %v", err)
 	}
-	u2, b2 := capture(user), capture(b)
+	// A rejected command must preserve *every* root, including the selected
+	// project from the contradictory arguments, not just user and sibling B.
+	u2, a3, b2 := capture(user), capture(a), capture(b)
+	same("user manifest after refusals", u0.manifest, u2.manifest)
 	same("user lock after refusals", u0.lock, u2.lock)
+	same("project A manifest after refusals", a2.manifest, a3.manifest)
+	same("project A lock after refusals", a2.lock, a3.lock)
+	same("project B manifest after refusals", b0.manifest, b2.manifest)
 	same("project B lock after refusals", b0.lock, b2.lock)
 }
