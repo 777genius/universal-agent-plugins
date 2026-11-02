@@ -222,6 +222,7 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		InstallationCount  int                    `json:"installation_count"`
 		OpenOperationCount int                    `json:"open_operation_count"`
 		Installation       *publicInstallation    `json:"installation,omitempty"`
+		ProjectReadiness   []projectReadinessRecord `json:"project_readiness"`
 		Findings           []doctorFinding        `json:"findings"`
 	}{ReadOnly: true, ToolVersion: normalizedToolVersion(app.Version), SupportedClients: doctorSupportedClients(), Clients: publicClients,
 		InstallationCount: len(publicInstallations(state, false)), OpenOperationCount: len(open)}
@@ -238,7 +239,10 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		report.Installation = &value
 		selected = &installation
 	}
+	report.ProjectReadiness = projectReadinessRecords(state, selected)
 	report.Findings = doctorFindings(ctx, app, clients, state, open, selected)
+	report.Findings = append(report.Findings, doctorCodexNativeFindings(state, selected)...)
+	sortDoctorFindings(report.Findings)
 	safety, err := doctorDirectorySafetyFindings(ctx, app, state, selected, report.Installation)
 	if err != nil {
 		return fmt.Errorf("inspect signed Directory: %w", err)
@@ -262,6 +266,15 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %d\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Tracked installations"), report.InstallationCount)
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %d\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Open recovery operations"), report.OpenOperationCount)
+	if len(report.ProjectReadiness) > 0 {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Project readiness (recorded facts, not live client execution):")
+		for _, item := range report.ProjectReadiness {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s/%s: %s (native: %s)\n", item.InstallationID, item.ClientID, item.Status, item.NativeEvidence)
+			for _, action := range item.NextActions {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "    Next:", action)
+			}
+		}
+	}
 	for _, finding := range report.Findings {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  [%s] %s: %s\n", finding.Status, finding.Code, finding.Message)
 		if finding.InstallationID != "" {
@@ -346,8 +359,22 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 			if visible && client.Status == domain.DetectionDetected && bindingClient == nativeCLIRegistryOwner(bindingClient, domain.InstallScope(binding.Scope)) && sharesPhysicalBackend(bindingClient, domain.InstallScope(binding.Scope)) && strings.TrimSpace(client.ExecutablePath) == "" {
 				findings = append(findings, scopedFinding("degraded", "copilot_cli_missing", installation, binding.ClientID, "GitHub Copilot CLI is unavailable for automatic Copilot activation", "install GitHub Copilot CLI, ensure copilot is on PATH, and rerun doctor"))
 			}
+			if binding.Scope == string(domain.ScopeProject) {
+				switch binding.Policy {
+				case domain.PolicyBlocked:
+					findings = append(findings, scopedFinding("degraded", "project_policy_blocked", installation, binding.ClientID, "native policy blocks this project binding", projectReadinessActions(binding.ClientID, "policy_blocked")[0]))
+				case domain.PolicyApprovalRequired:
+					findings = append(findings, scopedFinding("unknown", "project_policy_approval_required", installation, binding.ClientID, "native policy requires explicit approval", projectReadinessActions(binding.ClientID, "policy_approval_required")[0]))
+				}
+			}
 			switch binding.Activation {
-			case domain.ActivationManual, domain.ActivationPrepared:
+			case domain.ActivationPrepared:
+				if binding.Scope == string(domain.ScopeProject) {
+					findings = append(findings, projectPreparedFinding(installation, binding))
+				} else {
+					findings = append(findings, scopedFinding("degraded", "activation_pending", installation, binding.ClientID, "client activation is not complete", fmt.Sprintf("complete the displayed external activation step, then rerun the same `agentplugins add ... --target %s%s` command", binding.ClientID, doctorScopeFlag(binding))))
+				}
+			case domain.ActivationManual:
 				findings = append(findings, scopedFinding("degraded", "activation_pending", installation, binding.ClientID, "client activation is not complete", fmt.Sprintf("complete the displayed external activation step, then rerun the same `agentplugins add ... --target %s%s` command", binding.ClientID, doctorScopeFlag(binding))))
 			case domain.ActivationFailed:
 				findings = append(findings, scopedFinding("degraded", "activation_failed", installation, binding.ClientID, "client activation failed", fmt.Sprintf("resolve the client-reported activation error, then rerun the same `agentplugins add ... --target %s%s` command", binding.ClientID, doctorScopeFlag(binding))))
@@ -485,7 +512,7 @@ func repairAction(installation domain.Installation, binding domain.ClientBinding
 
 func doctorScopeFlag(binding domain.ClientBinding) string {
 	if binding.Scope == string(domain.ScopeProject) {
-		return " --scope project"
+		return " --scope project --project-root <PROJECT_ROOT>"
 	}
 	return ""
 }
