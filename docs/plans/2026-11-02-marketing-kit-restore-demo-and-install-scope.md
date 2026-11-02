@@ -12,7 +12,7 @@ Revise the landing's restore demo and the Marketing Kit catalog install journey 
 - `[dependencies]
 "777genius/marketing-kit" = "0.1.0"` is the supported exact-version requirement form in `uap.toml`.
 - Actual UAP target ID for Claude Code is **`claude`**; Codex `codex`, Gemini `gemini`. Never show `claude-code` as a TOML target.
-- This version is *package* metadata; the lock pins exact source, publication and digest. `marketing-kit@0.1.0` as a positional `add` argument is **not proven CLI syntax**: never advertise it until independently exercised in the released CLI. Current CLI's project `add` path requires concrete project agent selection and the v1 Directory policy is user-only. Prefer demonstrably supported manifest-first project install with `agentplugins install --scope project` and `agentplugins install --locked` for teammates, without a fake target-free `add` command. In browser copy buttons, surface the full valid command only.
+- This version is *package* metadata; the lock pins exact source, publication and digest. `marketing-kit@0.1.0` as a positional `add` argument is **not proven CLI syntax**: never advertise it until independently exercised in the released CLI. Current CLI's project `add` path requires concrete project agent selection and the v1 Directory policy is user-only. Prefer demonstrably supported manifest-first project install with `agentplugins install --scope project` and `agentplugins install --locked --scope project` for teammates, without a fake target-free `add` command. In browser copy buttons, surface the full valid command only.
 - A static landing page cannot read which agents are installed on a visitor's computer. Present choices as capability, not observed installation.
 
 ## UI
