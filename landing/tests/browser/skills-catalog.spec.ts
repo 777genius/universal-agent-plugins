@@ -167,12 +167,12 @@ test('unresolvable external Skills are hidden without fetching SkillSpector repo
 });
 
 test('legacy API website publisher offers safe Install while malformed sources remain unavailable', async ({ page }) => {
-  const legacyUrl = 'https://www.skills.sh/site/open.feishu.cn/lark-mail';
+  const legacyUrl = 'https://www.skills.sh/site/uizze.com/ui-radar';
   const legacy = {
     ...skill(),
-    id: 'skills-sh:open.feishu.cn:lark-mail',
-    title: 'lark-mail',
-    skillNameHint: 'lark-mail',
+    id: 'skills-sh:uizze.com:ui-radar',
+    title: 'ui-radar',
+    skillNameHint: 'ui-radar',
     providerUrl: legacyUrl,
     source: { kind: 'external', url: legacyUrl },
     availability: 'unsupported-source',
@@ -196,10 +196,10 @@ test('legacy API website publisher offers safe Install while malformed sources r
           },
           {
             ...skill(2),
-            id: 'skills-sh:xn--a.example:lark-mail',
+            id: 'skills-sh:xn--a.example:ui-radar',
             title: 'Malformed publisher',
-            source: { kind: 'external', url: 'https://www.skills.sh/site/xn--a.example/lark-mail' },
-            providerUrl: 'https://www.skills.sh/site/xn--a.example/lark-mail',
+            source: { kind: 'external', url: 'https://www.skills.sh/site/xn--a.example/ui-radar' },
+            providerUrl: 'https://www.skills.sh/site/xn--a.example/ui-radar',
             availability: 'unsupported-source',
           },
         ],
@@ -217,19 +217,38 @@ test('legacy API website publisher offers safe Install while malformed sources r
   await expect(cards).toHaveCount(1);
   const recovered = cards.first();
   await expect(recovered.getByRole('link', { name: 'Publisher source' })).toHaveAttribute(
-    'href', 'https://open.feishu.cn',
+    'href', 'https://uizze.com',
   );
-  await recovered.getByRole('button', { name: 'Install lark-mail' }).click();
+  await recovered.getByRole('button', { name: 'Install ui-radar' }).click();
   await expect(recovered.locator('.command-snippet code')).toHaveText(
-    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
+    'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar',
   );
   await expect(recovered.locator('.command-snippet code')).not.toContainText('skills.sh');
-  await recovered.getByRole('link', { name: 'lark-mail', exact: true }).click();
+  await recovered.getByRole('link', { name: 'ui-radar', exact: true }).click();
   await expect(page).toHaveURL(/\/skills\/\?id=skills-sh/);
-  await expect(page.getByRole('heading', { level: 1, name: 'lark-mail' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'ui-radar' })).toBeVisible();
   await expect(page.locator('.skills-detail__install-body .command-snippet')).toContainText(
-    'https://open.feishu.cn --skill lark-mail',
+    'https://uizze.com --skill ui-radar',
   );
+});
+
+test('known non-installable Feishu sources are hidden even with canonical HTTPS URLs', async ({ page }) => {
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', route =>
+    route.fulfill({ json: {
+      items: ['open.feishu.cn', 'open.feishu.cn/lark-cli/skills/regular'].map(source => ({
+        ...skill(), id: `skills-sh:${source}:lark-mail`,
+        skillNameHint: 'lark-mail', title: 'lark-mail',
+        providerUrl: 'https://www.skills.sh/',
+        source: { kind: 'external', url: 'https://www.skills.sh/' },
+        availability: 'unsupported-source',
+      })),
+      page: 0, total: 2, hasMore: false, view: 'popular',
+      cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' },
+    } }),
+  );
+  await page.goto('plugins/?tab=skills');
+  await expect(page.locator('.skills-catalog .skill-card')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'No matching Skills' })).toBeVisible();
 });
 
 test('malformed publisher deep link degrades without crashing document rendering', async ({ page }) => {
@@ -289,11 +308,11 @@ test('Website publisher Skills install with UAP and open their own detail page',
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const website = {
     ...skill(),
-    id: 'skills-sh:open.feishu.cn:lark-mail',
-    providerUrl: 'https://www.skills.sh/site/open.feishu.cn/lark-mail',
-    title: 'lark-mail',
-    skillNameHint: 'lark-mail',
-    source: { kind: 'external', url: 'https://open.feishu.cn' },
+    id: 'skills-sh:uizze.com:ui-radar',
+    providerUrl: 'https://www.skills.sh/site/uizze.com/ui-radar',
+    title: 'ui-radar',
+    skillNameHint: 'ui-radar',
+    source: { kind: 'external', url: 'https://uizze.com' },
     availability: 'unverified',
   };
   await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) =>
@@ -312,10 +331,10 @@ test('Website publisher Skills install with UAP and open their own detail page',
     route.fulfill({
       json: {
         status: 'resolved',
-        source: 'open.feishu.cn',
+        source: 'uizze.com',
         markdown: [
-          '---', 'name: lark-mail', 'description: Mail', '---',
-          '# Mail', '', '**Important instructions**', '',
+          '---', 'name: ui-radar', 'description: UI radar', '---',
+          '# UI Radar', '', '**Important instructions**', '',
           '| Action | Command |', '| --- | --- |', '| Read | open |', '',
           '```bash', 'echo hello', '```', '',
           '<script>alert("xss")</script>',
@@ -330,15 +349,15 @@ test('Website publisher Skills install with UAP and open their own detail page',
   await expect(card).not.toContainText('No verified install source');
   await expect(card.getByRole('link', { name: 'Publisher source' })).toHaveAttribute(
     'href',
-    'https://open.feishu.cn',
+    'https://uizze.com',
   );
-  await card.getByRole('button', { name: 'Install lark-mail' }).click();
+  await card.getByRole('button', { name: 'Install ui-radar' }).click();
   await expect(card.locator('.command-snippet code')).toContainText(
-    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
+    'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar',
   );
-  await card.getByRole('link', { name: 'lark-mail', exact: true }).click();
+  await card.getByRole('link', { name: 'ui-radar', exact: true }).click();
   await expect(page).toHaveURL(/\/skills\/\?id=skills-sh/);
-  await expect(page.getByRole('heading', { level: 1, name: 'lark-mail' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'ui-radar' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Installation' })).toBeVisible();
   await page.getByRole('tab', { name: 'Prompt' }).click();
   await expect(page.locator('.skills-detail__install-body .command-snippet')).toContainText(
@@ -352,19 +371,19 @@ test('Website publisher Skills install with UAP and open their own detail page',
   await expect(page.getByRole('tab', { name: 'Command' })).toHaveAttribute('aria-selected', 'true');
   await page.locator('.skills-detail__install-body').getByRole('button', { name: 'Copy command' }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
-    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
+    'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar',
   );
   await page.reload();
-  await expect(page.getByRole('heading', { level: 1, name: 'lark-mail' })).toBeVisible();
-  await expect(page.locator('.skills-detail__sidebar')).toContainText('open.feishu.cn');
-  await expect(page.locator('.skills-detail__document .skill-markdown h1')).toHaveText('Mail');
+  await expect(page.getByRole('heading', { level: 1, name: 'ui-radar' })).toBeVisible();
+  await expect(page.locator('.skills-detail__sidebar')).toContainText('uizze.com');
+  await expect(page.locator('.skills-detail__document .skill-markdown h1')).toHaveText('UI Radar');
   await expect(page.locator('.skills-detail__document .skill-markdown strong')).toHaveText('Important instructions');
   await expect(page.locator('.skills-detail__document .skill-markdown table')).toBeVisible();
   await expect(page.locator('.skills-detail__document .skill-markdown__rendered pre')).toBeVisible();
   const raw = page.locator('.skill-markdown__raw');
   await raw.locator('summary').click();
-  await expect(raw.locator('pre')).toContainText('description: Mail');
-  await expect(raw.locator('pre')).toContainText('name: lark-mail');
+  await expect(raw.locator('pre')).toContainText('description: UI radar');
+  await expect(raw.locator('pre')).toContainText('name: ui-radar');
   await expect(page.locator('.skills-detail__document script')).toHaveCount(0);
   await expect(page.locator('a[href*="skills.sh"]')).toHaveCount(0);
 });

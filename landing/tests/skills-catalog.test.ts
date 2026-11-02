@@ -139,8 +139,15 @@ test('HTTPS publishers use their origin and exact names, never a listing page or
   assert.equal(skillPublisherUrl(website), 'https://open.feishu.cn');
   assert.equal(
     skillInstallCommand(website, ['codex']),
-    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail --target codex',
+    undefined,
   );
+  const supported = { ...website,
+    id: 'skills-sh:uizze.com:ui-radar',
+    skillNameHint: 'ui-radar',
+    source: { kind: 'external' as const, url: 'https://uizze.com' },
+  };
+  assert.equal(skillInstallCommand(supported, ['codex']),
+    'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar --target codex');
   assert.deepEqual(skillDetailRoute(website), {
     path: '/skills/',
     query: { id: website.id, q: 'lark-mail' },
@@ -172,14 +179,16 @@ test('legacy Skills API website records recover only canonical publisher install
     availability: 'unsupported-source',
   };
   assert.equal(skillPublisherUrl(legacy), 'https://open.feishu.cn');
-  assert.equal(
-    skillInstallCommand(legacy),
-    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
-  );
-  assert.equal(
-    skillInstallCommand(legacy, ['codex', 'claude']),
-    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail --target "codex,claude"',
-  );
+  assert.equal(skillInstallCommand(legacy), undefined);
+  assert.equal(skillInstallCommand(legacy, ['codex', 'claude']), undefined);
+  // The real Uizze well-known publisher supports the same legacy DTO shape.
+  const uizze = { ...legacy,
+    id: 'skills-sh:uizze.com:ui-radar', title: 'ui-radar', skillNameHint: 'ui-radar',
+    providerUrl: 'https://www.skills.sh/site/uizze.com/ui-radar',
+    source: { kind: 'external' as const, url: 'https://www.skills.sh/site/uizze.com/ui-radar' },
+  };
+  assert.equal(skillInstallCommand(uizze),
+    'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar');
 
   // Do not broaden the recovery into trusting arbitrary directory or publisher
   // URLs: the canonical listing ID, origin, slug and source must all agree.
@@ -466,7 +475,7 @@ test('legacy source variants produce CLI commands without using directory pages 
   assert.equal(skillPublisherUrl(bareScoped), 'https://open.feishu.cn/lark-cli/skills/regular');
   assert.equal(
     skillInstallCommand(bareScoped),
-    'npx universal-agent-plugins@latest skills add https://open.feishu.cn/lark-cli/skills/regular --skill lark-mail',
+    undefined,
   );
   const canonicalBareHost = unknown('Open.Feishu.Cn/lark-cli/skills/regular', 'lark-mail');
   assert.equal(skillPublisherUrl(canonicalBareHost), 'https://open.feishu.cn/lark-cli/skills/regular');
@@ -474,7 +483,7 @@ test('legacy source variants produce CLI commands without using directory pages 
   assert.equal(skillPublisherUrl(publisher), 'https://open.feishu.cn');
   assert.equal(
     skillInstallCommand(publisher),
-    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
+    undefined,
   );
   assert.equal(
     skillInstallCommand(unknown('https://github.com/owner/repo', 'UPPER')),

@@ -95,8 +95,10 @@ try {
     const command = skillInstallCommand(listing(fixture)) ?? '';
     const expectedCommand = 'npx universal-agent-plugins@latest skills add ' + fixture.source +
       ' --skill ' + fixture.skill;
-    if (command !== expectedCommand) {
-      failures.push('Catalog command/source mismatch for ' + fixture.id);
+    const knownUnavailable = fixture.skill === 'lark-mail' &&
+      fixture.source.startsWith('https://open.feishu.cn');
+    if (knownUnavailable ? Boolean(command) : command !== expectedCommand) {
+      failures.push('Catalog command/source eligibility mismatch for ' + fixture.id);
     }
     const env = { ...process.env, HOME: home, USERPROFILE: home, CODEX_HOME: join(home, '.codex'),
       XDG_CONFIG_HOME: config, XDG_DATA_HOME: data, XDG_CACHE_HOME: cache, GIT_CONFIG_NOSYSTEM: '1',
@@ -123,7 +125,18 @@ try {
     };
     report.results.push(evidence);
     console.log(JSON.stringify(evidence));
-    if (!evidence.installed) failures.push('Native public Skill install failed for ' + fixture.id);
+    if (knownUnavailable) {
+      // These two are REAL negative network cases, not skipped fixtures. The
+      // target is a genuine installed Codex CLI; a target-detection failure
+      // cannot masquerade as successful proof that the source is unusable.
+      const diagnostic = evidence.stdout_tail + '\n' + evidence.stderr_tail;
+      if (evidence.exit_code === 0 || evidence.lock_written || evidence.native_skill_present ||
+          evidence.error || /TARGET_UNAVAILABLE|target codex is not detected/i.test(diagnostic)) {
+        failures.push('Feishu source refusal unproven or unexpectedly installable: ' + fixture.id);
+      }
+    } else if (!evidence.installed) {
+      failures.push('Native public Skill install failed for ' + fixture.id);
+    }
     if (lockWritten && !readFileSync(join(project, 'uap.lock'), 'utf8').includes(fixture.skill)) {
       failures.push('Lock does not preserve selected Skill for ' + fixture.id);
     }

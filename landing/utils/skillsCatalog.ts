@@ -253,6 +253,19 @@ export function skillNeedsManualSelection(skill: SkillListing): boolean {
   );
 }
 
+/**
+ * Known real-source refusals: Feishu's lark-mail uses non-string nested YAML
+ * metadata, and the scoped Vercel URL lacks a scoped UAP discovery index.
+ * These are NOT successes merely because their publisher URL is parseable.
+ * Keep both hidden until the published CLI can actually install them.
+ */
+function unavailablePublisherSkill(source: string, name: string): boolean {
+  return name === 'lark-mail' && (
+    source === 'https://open.feishu.cn' ||
+    source === 'https://open.feishu.cn/lark-cli/skills/regular'
+  );
+}
+
 export function skillInstallCommand(
   skill: SkillListing,
   targets?: readonly string[],
@@ -261,6 +274,7 @@ export function skillInstallCommand(
       typeof skill.id !== 'string' || typeof skill.source.kind !== 'string')
     return undefined;
   const source = skillRepositoryUrl(skill) ?? skillPublisherUrl(skill);
+  if (source && unavailablePublisherSkill(source, skill.skillNameHint)) return undefined;
   const compatible = legacySource(skill);
   if (!source || (skill.availability === 'unsupported-source' && !legacyPublisherUrl(skill) &&
       !compatible)) return undefined;
