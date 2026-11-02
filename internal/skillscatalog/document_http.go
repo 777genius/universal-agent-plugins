@@ -36,17 +36,17 @@ type cachedDocument struct {
 }
 
 type documentHandler struct {
-	git	SourceResolver
-	website	WebsiteDocumentReader
-	origins	map[string]bool
-	mu	sync.Mutex
-	active	int
-	clients	map[string]bool
-	nextAllowed	map[string]time.Time
-	failures	map[string]time.Time
-	tokens	float64
-	tokenAt	time.Time
-	cache	map[string]cachedDocument
+	git         SourceResolver
+	website     WebsiteDocumentReader
+	origins     map[string]bool
+	mu          sync.Mutex
+	active      int
+	clients     map[string]bool
+	nextAllowed map[string]time.Time
+	failures    map[string]time.Time
+	tokens      float64
+	tokenAt     time.Time
+	cache       map[string]cachedDocument
 }
 
 // NewDocumentHandler exposes only bounded, text-only public previews.
