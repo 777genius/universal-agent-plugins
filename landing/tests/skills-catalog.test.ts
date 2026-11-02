@@ -14,6 +14,7 @@ import {
   skillPublisherUrl,
   skillDetailRoute,
   skillIdentityFromId,
+  skillMatchesSelection,
 } from '../utils/skillsCatalog.ts';
 import { catalogQuery, restoreCatalogQuery } from '../utils/filter.ts';
 
@@ -156,6 +157,12 @@ test('HTTPS publishers use their origin and exact names, never a listing page or
   }
   assert.equal(skillInstallCommand({ ...website, skillNameHint: 'BAD$(echo injected)' }), undefined);
   assert.equal(skillInstallCommand({ ...website, availability: 'unsupported-source' }), undefined);
+});
+
+test('Direct Skill selection never reuses stale details for a different name', () => {
+  assert.equal(skillMatchesSelection(skill, skill.id, 'frontend-design'), true);
+  assert.equal(skillMatchesSelection(skill, skill.id, 'different-name'), false);
+  assert.equal(skillMatchesSelection(skill, 'skills-sh:other/repo:frontend-design', 'frontend-design'), false);
 });
 
 test('Detail identity uses only a canonical source, never the listing-page URL', () => {

@@ -84,6 +84,11 @@ export function skillIdentityFromId(id: string): SkillListing['source'] | undefi
   return undefined;
 }
 
+/** Do not reuse a catalog entry when the direct-link Skill selector changes. */
+export function skillMatchesSelection(skill: SkillListing, id: string, name: string): boolean {
+  return skill.id === id && skill.skillNameHint === name;
+}
+
 export function skillDetailRoute(skill: SkillListing) {
   return {
     path: '/skills/',

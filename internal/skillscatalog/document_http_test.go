@@ -146,6 +146,14 @@ func TestDocumentPreviewPerClientAdmissionAndFailureCooldown(t *testing.T) {
 	if h.admitDocument("203.0.113.5") {
 		t.Fatal("bounded concurrency exceeded")
 	}
+	// Rejected callers must not be asked to retry before admission can reopen.
+	rejected := documentRequest("skills-sh:open.feishu.cn:lark-mail", "lark-mail", "")
+	rejected.RemoteAddr = "203.0.113.5:1234"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, rejected)
+	if w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") != "20" {
+		t.Fatalf("incorrect admission retry guidance: status=%d retry-after=%q", w.Code, w.Header().Get("Retry-After"))
+	}
 	for _, client := range []string{"203.0.113.1", "203.0.113.2", "203.0.113.3", "203.0.113.4"} {
 		h.releaseDocument(client)
 	}

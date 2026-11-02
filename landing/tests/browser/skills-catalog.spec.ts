@@ -173,6 +173,9 @@ test('unsupported standalone source is explicit and never requests a report', as
     }),
   );
   await page.goto('plugins/?tab=skills');
+  const unsupportedCard = page.locator('.skill-card').first();
+  await expect(unsupportedCard.locator('h3')).toHaveText('frontend-design');
+  await expect(unsupportedCard.getByRole('link', { name: 'frontend-design', exact: true })).toHaveCount(0);
   const assessment = page.locator('.skill-card .skillspector');
   await expect(assessment).toHaveClass(/skillspector--unsupported/);
   await expect(assessment.locator(':scope > summary')).toContainText('Not checked');

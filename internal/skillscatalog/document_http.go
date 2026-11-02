@@ -116,8 +116,8 @@ func (h *documentHandler) serveDocument(w http.ResponseWriter, r *http.Request, 
 	}
 	client := documentClientKey(r)
 	if !h.admitDocument(client) {
-		w.Header().Set("Retry-After", "5")
-		writeError(w, 429, "preview_busy", "Skill document preview is busy", 5)
+		w.Header().Set("Retry-After", "20")
+		writeError(w, 429, "preview_busy", "Skill document preview is busy", 20)
 		return
 	}
 	defer h.releaseDocument(client)

@@ -65,7 +65,14 @@ function updateTerminal(value: boolean) {
   <CatalogCard :expanded="expanded" class="skill-card" :data-skill-id="skill.id">
     <div class="plugin-card__identity">
       <div class="plugin-card__identity-copy">
-        <h3 :title="skill.title"><NuxtLink :to="localePath(skillDetailRoute(skill))" @click="rememberSkill">{{ skill.title }}</NuxtLink></h3>
+        <h3 :title="skill.title">
+          <NuxtLink
+            v-if="skill.availability !== 'unsupported-source'"
+            :to="localePath(skillDetailRoute(skill))"
+            @click="rememberSkill"
+          >{{ skill.title }}</NuxtLink>
+          <span v-else>{{ skill.title }}</span>
+        </h3>
         <p class="plugin-card__source-label">
           <a v-if="repositoryUrl" :href="repositoryUrl" target="_blank" rel="noreferrer">{{
             skill.source.repository

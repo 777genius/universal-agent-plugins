@@ -3,6 +3,7 @@ import type { SkillListing, SkillsView } from '~/types/skillsCatalog';
 import { skillClients } from '~/data/skillClients';
 import {
   skillIdentityFromId,
+  skillMatchesSelection,
   skillInstallCommand,
   skillNeedsManualSelection,
   skillPublisherUrl,
@@ -32,8 +33,9 @@ watch(name, (value) => { search.value = value; });
 const view = ref<SkillsView>('popular');
 const { items, loading: catalogLoading } = useSkillsCatalog(search, view);
 const listedSkill = computed(() =>
-  items.value.find((item) => item.id === listingId.value) ??
-  (selectedSkill.value?.id === listingId.value ? selectedSkill.value : undefined),
+  items.value.find((item) => skillMatchesSelection(item, listingId.value, name.value)) ??
+  (selectedSkill.value && skillMatchesSelection(selectedSkill.value, listingId.value, name.value)
+    ? selectedSkill.value : undefined),
 );
 // Never preview one Skill while offering the install command for a different
 // name just because the URL's untrusted query parameter was changed.
