@@ -131,7 +131,7 @@ func (m *claudeProjectScriptedModel) respond(w http.ResponseWriter, r *http.Requ
 	emit("message_start", map[string]any{"type": "message_start", "message": map[string]any{
 		"id": "msg_uap_claude_project", "type": "message", "role": "assistant", "model": "claude-sonnet-4-5",
 		"content": []any{}, "stop_reason": nil, "stop_sequence": nil,
-		"usage": map[string]int{"input_tokens": 100,"output_tokens": 0},
+		"usage": map[string]int{"input_tokens": 100, "output_tokens": 0},
 	}})
 	block := map[string]any{"type": "text", "text": ""}
 	delta := map[string]any{"type": "text_delta", "text": "Local project MCP E2E complete."}
@@ -144,7 +144,7 @@ func (m *claudeProjectScriptedModel) respond(w http.ResponseWriter, r *http.Requ
 	emit("content_block_start", map[string]any{"type": "content_block_start", "index": 0, "content_block": block})
 	emit("content_block_delta", map[string]any{"type": "content_block_delta", "index": 0, "delta": delta})
 	emit("content_block_stop", map[string]any{"type": "content_block_stop", "index": 0})
-	emit("message_delta", map[string]any{"type": "message_delta", "delta": map[string]any{"stop_reason": stop,"stop_sequence": nil}, "usage": map[string]int{"output_tokens": 10}})
+	emit("message_delta", map[string]any{"type": "message_delta", "delta": map[string]any{"stop_reason": stop, "stop_sequence": nil}, "usage": map[string]int{"output_tokens": 10}})
 	emit("message_stop", map[string]any{"type": "message_stop"})
 	if flusher, ok := w.(http.Flusher); ok {
 		flusher.Flush()
@@ -199,8 +199,8 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	evidence["native_surface"] = "pinned real Claude native project MCP tool call with local model, foreign config retained; not UAP-managed MCP or vendor auth"
 	defer f.writeEvidence(t, evidence, stages)
 	trust, err := json.Marshal(map[string]any{"projects": map[string]any{
-		filepath.ToSlash(f.project):map[string]any{"hasTrustDialogAccepted": true},
-		filepath.ToSlash(f.otherProject):map[string]any{"hasTrustDialogAccepted": true},
+		filepath.ToSlash(f.project):      map[string]any{"hasTrustDialogAccepted": true},
+		filepath.ToSlash(f.otherProject): map[string]any{"hasTrustDialogAccepted": true},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -219,9 +219,9 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	// it is launched by Claude Code, never called directly by this test.
 	nativeJSON(t, filepath.Join(f.project, ".mcp.json"), map[string]any{
 		"mcpServers": map[string]any{"uap_project_fixture": map[string]any{
-			"type": "stdio",
+			"type":    "stdio",
 			"command": executable,
-			"args": []string{"-test.run=^TestOpenCodeV2MCPStdioResponder$"},
+			"args":    []string{"-test.run=^TestOpenCodeV2MCPStdioResponder$"},
 			"env": map[string]string{
 				"UAP_OPENCODE_V2_MCP_HELPER": "1",
 				"UAP_OPENCODE_V2_MCP_EVENTS": events,
