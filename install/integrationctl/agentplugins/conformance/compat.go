@@ -30,6 +30,7 @@ func DecodeJSONObject(body []byte) (map[string]json.RawMessage, map[string]any, 
 func DecodeJSON(body []byte, target any) error          { return decodeJSON(body, target) }
 func DecodeRawJSONObject(body []byte, target any) error { return decodeRawJSONObject(body, target) }
 func RejectDuplicateJSONKeys(body []byte) error         { return rejectDuplicateJSONKeys(body) }
+func RejectDuplicateJSONKeysFolded(body []byte) error   { return rejectDuplicateJSONKeysFolded(body) }
 
 func sortedKeys[T any](values map[string]T) []string {
 	keys := make([]string, 0, len(values))

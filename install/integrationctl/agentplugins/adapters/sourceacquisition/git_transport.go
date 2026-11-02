@@ -39,6 +39,7 @@ func nativeGitOptions(workspace string) []string {
 		"-c", "core.hooksPath=" + filepath.Join(workspace, "disabled-hooks"),
 		"-c", "core.fsmonitor=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0",
 		"-c", "fetch.recurseSubmodules=false", "-c", "submodule.recurse=false",
+		"-c", "safe.bareRepository=explicit", "-c", "credential.interactive=never",
 		"-c", "http.sslVerify=true", "-c", "protocol.allow=never",
 		"-c", "protocol.https.allow=always", "-c", "protocol.ssh.allow=always",
 	}

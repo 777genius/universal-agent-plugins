@@ -63,7 +63,7 @@ def load_case_inventories():
 
 def validate_go_events(path, required, package, exit_code):
     """Accept only complete successful executions, including every selected case."""
-    passed, skipped, failed, package_pass = set(), set(), set(), False
+    started, passed, skipped, failed, package_pass = set(), set(), set(), set(), False
     with path.open(encoding="utf-8") as stream:
         for number, line in enumerate(stream, 1):
             try:
@@ -75,6 +75,8 @@ def validate_go_events(path, required, package, exit_code):
             if event.get("Package") != package:
                 continue
             name, action = event.get("Test"), event["Action"]
+            if name and action == "run":
+                started.add(name)
             if name and action == "pass":
                 passed.add(name)
             if action == "skip":
@@ -83,13 +85,15 @@ def validate_go_events(path, required, package, exit_code):
                 failed.add(name or "<package>")
             if not name and action == "pass":
                 package_pass = True
-    missing = sorted(set(required) - passed)
-    if exit_code != 0 or not package_pass or missing or skipped or failed:
+    missing_run = sorted(set(required) - started)
+    missing_pass = sorted(set(required) - passed)
+    if exit_code != 0 or not package_pass or missing_run or missing_pass or skipped or failed:
         raise ValueError(
             f"Go proof incomplete: exit={exit_code}, package_pass={package_pass}, "
-            f"missing={missing}, skipped={sorted(skipped)}, failed={sorted(failed)}"
+            f"missing_run={missing_run}, missing_pass={missing_pass}, "
+            f"skipped={sorted(skipped)}, failed={sorted(failed)}"
         )
-    return sorted(passed)
+    return {"started_tests": sorted(started), "passed_tests": sorted(passed)}
 
 
 def isolated_environment(root, caches):
@@ -235,7 +239,7 @@ class Run:
                     stop_owned_process(process)
                     raise RuntimeError("owned command timed out") from None
             if required is not None:
-                row["passed_tests"] = validate_go_events(stdout, required, package, row["exit_code"])
+                row.update(validate_go_events(stdout, required, package, row["exit_code"]))
             elif (row["exit_code"] == 0) != expected_success:
                 raise RuntimeError(f"unexpected exit code {row['exit_code']}")
             row["status"] = "pass"
