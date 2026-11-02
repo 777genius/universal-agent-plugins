@@ -47,6 +47,7 @@ async function setup(
   page: Page,
   mode:
     | 'mixed'
+    | 'historicalMixed'
     | 'stale'
     | 'unavailable'
     | 'invalid'
@@ -140,6 +141,22 @@ async function setup(
       partial: 0,
       error: 13,
       stale: 0,
+    };
+    manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
+  }
+  if (mode === 'historicalMixed') {
+    // A v3 publication may retain a previous v2 check next to current v3
+    // results. It must not put the entire plugin into legacy display mode.
+    const old = shard.records[0];
+    old.freshness = 'historical';
+    old.legacy_format = true;
+    old.profile = { id: 'static-only-v2', digest: `sha256:${'a'.repeat(64)}` };
+    const oldStatus = old.status as 'complete' | 'partial' | 'error';
+    manifest.coverage = {
+      ...manifest.coverage,
+      [oldStatus]: manifest.coverage[oldStatus] - 1,
+      pending: manifest.coverage.pending + 1,
+      stale: manifest.coverage.stale + 1,
     };
     manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
   }
@@ -479,6 +496,26 @@ test('omitted groups with zero published signals never render a clean result or 
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
+for (const width of [1280, 390]) {
+  test(`v3 mixed previous and current SkillSpector evidence remains understandable (${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const { assessment, errors } = await setup(page, 'historicalMixed');
+    await expect(assessment).toHaveClass(/skillspector--incomplete/);
+    const summary = assessment.locator(':scope > summary');
+    await expect(summary).toContainText('12/13 scanned');
+    await expect(summary).toContainText('1 previous');
+    await expect(summary).not.toContainText('Skill scan · Previous check');
+    await summary.click();
+    await expect(assessment.locator('.skillspector__advice')).toContainText(
+      'Some Skill results were imported from older scan formats',
+    );
+    await expect(assessment.locator('.skillspector__outcomes')).toContainText('Older report only');
+    await expect(assessment.locator('.skillspector__outcomes')).toContainText('Not fully checked');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}
+
 test('n8n known inventory distinguishes six incomplete checks from nine missing current results', async ({ page }) => {
   const { assessment, errors } = await setup(page, 'n8nPending');
   await expect(assessment.locator(':scope > summary')).toContainText(
