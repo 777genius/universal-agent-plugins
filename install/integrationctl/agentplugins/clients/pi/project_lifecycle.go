@@ -159,7 +159,7 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 	}
 	if len(objects) > 0 {
 		if err := (shared.ProjectComponentMutation{
-			Layout: piProjectComponents(request.NativeRegistryRoot),
+			Layout:   piProjectComponents(request.NativeRegistryRoot),
 			Previous: objects, Kernel: env.NativeConfig,
 		}).Apply(ctx); err != nil {
 			// A rejected foreign edit is proven to have caused no native
