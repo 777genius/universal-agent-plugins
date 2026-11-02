@@ -44,12 +44,20 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(section.locator('.registry-restore__terminal')).toHaveCount(2);
       await expect(section.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', addCommand);
       await expect(section.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', restoreCommand);
-      await expect(section.locator('.typed-command')).toHaveCount(3);
+      const typed = section.locator('.typed-command');
+      await expect(typed).toHaveCount(3);
       await expect(section.locator('.registry-restore__export')).toHaveAttribute(
         'data-command', 'agentplugins deps export',
       );
-      await expect(section.locator('.typed-command').first()).toHaveAttribute('data-complete', 'true');
-      await expect(section.locator('.typed-command').last()).toHaveAttribute('data-complete', 'true');
+      await expect(typed.first()).toHaveAttribute('data-complete', 'true');
+      await expect(typed.last()).toHaveAttribute('data-complete', 'true');
+      await expect(typed.locator('.typed-command__visible')).toHaveText([
+        addCommand, 'agentplugins deps export', restoreCommand,
+      ]);
+      // A visually wrapped command must still be one executable CLI command.
+      for (const element of await typed.all()) {
+        await expect(element.locator('.typed-command__visible > .typed-command__line')).toHaveCount(0);
+      }
       await expect(section.locator('.registry-restore__copy')).toHaveCount(2);
       if (width <= 340) {
         const overlaps = await section.locator('.registry-restore__screen').evaluateAll((screens) =>
@@ -160,4 +168,7 @@ test('typing is sequential and always copies complete commands', async ({ page, 
   }
   await expect(section.locator('.typed-command').first()).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });
   await expect(section.locator('.typed-command').last()).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });
+  await expect(section.locator('.typed-command__visible')).toHaveText([
+    addCommand, 'agentplugins deps export', restoreCommand,
+  ]);
 });
