@@ -595,6 +595,10 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
       new RegExp(`skillspector--${mode === 'invalid' ? 'unavailable' : mode}`),
     );
     await expect(assessment.locator(':scope > summary')).not.toContainText('No static findings');
+    if (mode === 'stale') {
+      await expect(assessment.locator(':scope > summary')).toContainText('0/13 current');
+      await expect(assessment.locator(':scope > summary')).toContainText('13 previous checks');
+    }
     await assessment.locator(':scope > summary').click();
     if (mode === 'stale') {
       await expect(assessment.locator('.skillspector__advice')).toContainText(
