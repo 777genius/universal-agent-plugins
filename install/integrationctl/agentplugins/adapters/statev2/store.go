@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
