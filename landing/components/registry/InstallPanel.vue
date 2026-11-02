@@ -33,6 +33,7 @@ const autoOption = computed(() =>
         description: t('registryUi.install.detectedWhenYouRunTheCommand'),
       },
 );
+const marketingProjectBlocked = computed(() => isReviewedMarketingKit(props.plugin) && scope.value === 'project' && !projectAvailable.value);
 const targetOptions = computed(() =>
   clients.map((client) => ({
     value: client.id,
@@ -59,6 +60,7 @@ const targetOptions = computed(() =>
   })),
 );
 const commands = computed(() =>
+  !marketingProjectBlocked.value &&
   (scope.value !== 'project' || !autoDetect.value) &&
   props.plugin.installable &&
   props.plugin.discovery?.availability !== 'unavailable' &&
@@ -86,7 +88,7 @@ function diagnosticText(
 }
 const resolution = selection.resolution;
 const expectedSource = computed(() =>
-  canUseSource.value ? resolution.value.distribution : undefined,
+  canUseSource.value && !marketingProjectBlocked.value ? resolution.value.distribution : undefined,
 );
 const expectedSourceLabel = computed(() =>
   expectedSource.value ? t(`registryUi.distribution.${expectedSource.value.kind}`) : '',
@@ -179,6 +181,7 @@ const vendorInstall = computed(() =>
         <div class="target-select">
           <span>{{ t('registryUi.install.agents') }}</span
           ><AppMultiSelect
+            v-if="!marketingProjectBlocked"
             :model-value="targets"
             :auto-selected="autoDetect"
             :auto-option="autoOption"
