@@ -89,7 +89,8 @@ const label = computed(() => {
   // Current records include complete and partial scans, never pending or historical records.
   const outcomes = assessment.value.outcomes;
   const scanned = (outcomes?.complete ?? 0) + (outcomes?.limited ?? 0);
-  const waiting = (outcomes?.unscanned ?? 0) + (outcomes?.historical ?? 0);
+  const waiting = outcomes?.unscanned ?? 0;
+  const previous = outcomes?.historical ?? 0;
   if (
     !legacy.value &&
     ['incomplete', 'unavailable'].includes(key) &&
@@ -98,11 +99,17 @@ const label = computed(() => {
     assessment.value.inventoryKnown &&
     (assessment.value.selected ?? 0) > 1
   ) {
-    if (outcomes.failed)
+    if (previous && !scanned && !outcomes.failed)
+      return t('registryUi.skillSpector.historyProgress', {
+        total: n(assessment.value.selected ?? 0),
+        previous: n(previous),
+      });
+    if (outcomes.failed || previous)
       return t('registryUi.skillSpector.progressWithFailures', {
         checked: n(scanned),
         total: n(assessment.value.selected ?? 0),
         failed: n(outcomes.failed),
+        previous: n(previous),
         waiting: n(waiting),
         limited: n(outcomes.limited),
       });
