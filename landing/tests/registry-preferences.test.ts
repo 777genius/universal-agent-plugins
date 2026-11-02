@@ -16,6 +16,7 @@ import { clients } from '../data/clients.ts';
 import * as registryDomain from '../utils/registry.ts';
 import * as filters from '../utils/filter.ts';
 import { pluginCommands } from '../utils/commands.ts';
+import { isReviewedMarketingKit } from '../data/marketingKitDemo.ts';
 import { projectCatalogCommands } from '../utils/projectCatalogSource.ts';
 import { discoveryPlugin } from '../utils/discovery.ts';
 import { signedDiscoveryFixture } from './fixtures/signed-discovery.ts';
@@ -42,6 +43,7 @@ const common = {
   authenticationIndicator,
   ...filters,
   pluginCommands,
+  isReviewedMarketingKit,
   projectCatalogCommands,
   onScopeDispose: Vue.onScopeDispose,
   ...discoveryHelpers,
@@ -80,7 +82,7 @@ function card(props = packageProps()) {
   return setup(
     'RegistryPluginCard',
     { defineProps: () => props, withDefaults: (value: unknown) => value },
-    'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall, deliverySummary, updateScope',
+    'targets, autoDetect, scope, projectAvailable, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall, deliverySummary, updateScope',
   );
 }
 
