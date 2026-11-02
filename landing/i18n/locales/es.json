@@ -736,6 +736,7 @@
         "project": "Este proyecto",
         "projectHint": "Ejecuta estos comandos desde la carpeta del proyecto. Tu agente puede pedirte que confíes en el proyecto o lo actives.",
         "projectUnavailable": "La instalación en un proyecto no está disponible para este paquete.",
+        "marketingKitProjectUnavailable": "Marketing Kit necesita Notion, HubSpot y Playwright, aún no validados para proyectos.",
         "selectionUnavailable": "Esta combinación de agentes y ubicación no está disponible. Elige otro agente o ubicación."
       },
       "outcome": {

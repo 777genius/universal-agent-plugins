@@ -242,7 +242,7 @@ test('Marketing Kit does not advertise unsupported signed project scope or force
   await expect(computer).toHaveAttribute('aria-pressed', 'true');
   await expect(project).toBeDisabled();
   await expect(card.locator('.marketing-kit-project')).toHaveCount(0);
-  await expect(card).toContainText('Project installation is not available for this package.');
+  await expect(card).toContainText('Marketing Kit requires Notion, HubSpot and Playwright, which are not project-qualified yet.');
   await expect(card.locator('.command-snippet--add code')).toHaveText(
     'npx -y universal-agent-plugins add marketing-kit',
   );
@@ -251,6 +251,7 @@ test('Marketing Kit does not advertise unsupported signed project scope or force
   await card.locator('.plugin-card__title-link').click();
   const panel = page.locator('.install-panel');
   await expect(panel.getByRole('button', { name: 'This project', exact: true })).toBeDisabled();
+  await expect(panel).toContainText('not project-qualified yet');
   await expect(panel.locator('.marketing-kit-project')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

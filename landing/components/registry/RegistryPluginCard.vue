@@ -373,6 +373,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
             :model-value="scope"
             :project-available="projectAvailable"
             :always-show="isReviewedMarketingKit(plugin)"
+            :unavailable-reason="isReviewedMarketingKit(plugin) && !projectAvailable ? t('registryUi.install.scope.marketingKitProjectUnavailable') : undefined"
             @update:model-value="updateScope"
           />
           <InstallOutcome

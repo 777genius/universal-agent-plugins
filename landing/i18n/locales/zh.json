@@ -736,6 +736,7 @@
         "project": "此项目",
         "projectHint": "请在项目文件夹中运行这些命令。代理可能会要求您信任或激活该项目。",
         "projectUnavailable": "此软件包不支持项目安装。",
+        "marketingKitProjectUnavailable": "Marketing Kit 依赖 Notion、HubSpot 和 Playwright，目前尚未验证其项目安装。",
         "selectionUnavailable": "所选代理与安装位置的组合不可用。请选择其他代理或位置。"
       },
       "outcome": {

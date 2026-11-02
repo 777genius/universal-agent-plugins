@@ -174,7 +174,8 @@ const vendorInstall = computed(() =>
       <InstallScopeSelect
         :model-value="scope"
         :project-available="projectAvailable"
-            :always-show="isReviewedMarketingKit(plugin)"
+        :always-show="isReviewedMarketingKit(plugin)"
+        :unavailable-reason="isReviewedMarketingKit(plugin) && !projectAvailable ? t('registryUi.install.scope.marketingKitProjectUnavailable') : undefined"
         @update:model-value="updateScope"
       />
       <div v-if="!marketingProjectBlocked" class="install-command-row">

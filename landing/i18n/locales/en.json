@@ -753,6 +753,7 @@
         "project": "This project",
         "projectHint": "Run these commands from your project folder. Your agent may ask you to trust or activate the project.",
         "projectUnavailable": "Project installation is not available for this package.",
+        "marketingKitProjectUnavailable": "Marketing Kit requires Notion, HubSpot and Playwright, which are not project-qualified yet.",
         "selectionUnavailable": "This combination of agents and install location is unavailable. Choose another agent or location."
       },
       "outcome": {
