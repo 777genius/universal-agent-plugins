@@ -22,7 +22,7 @@ const cases = [
 
 for (const theme of ['dark', 'light'] as const) {
   for (const [locale, width] of cases) {
-    test(`marketing-kit restore ${locale} ${theme} at ${width}px`, async ({ page, context }) => {
+    test(`marketing-kit restore ${locale} ${theme} at ${width}px`, async ({ page, context }, testInfo) => {
       await page.setViewportSize({ width, height: 1000 });
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await context.addInitScript((value) => localStorage.setItem('theme', value), theme);
@@ -66,6 +66,13 @@ for (const theme of ['dark', 'light'] as const) {
         }),
       )).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      if (theme === 'dark' && ((locale === 'en' && [1440, 390, 280].includes(width)) ||
+        (locale === 'ar' && width === 390))) {
+        await section.screenshot({
+          path: testInfo.outputPath(`marketing-kit-restore-${locale}-${width}.png`),
+          animations: 'disabled',
+        });
+      }
       const machines = await section.locator('.registry-restore__machine').evaluateAll(
         (nodes) => nodes.map((node) => node.getBoundingClientRect().toJSON()),
       );
@@ -78,7 +85,7 @@ for (const theme of ['dark', 'light'] as const) {
   }
 }
 
-test('manifest morph opens by focus and tap, closes with Escape, and preserves valid TOML', async ({ page }) => {
+test('manifest morph opens by focus and tap, closes with Escape, and preserves valid TOML', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('./');
   await hydrated(page);
@@ -91,6 +98,10 @@ test('manifest morph opens by focus and tap, closes with Escape, and preserves v
   await expect(file).toHaveAttribute('aria-expanded', 'true');
   const preview = handoff.getByRole('region');
   await expect(preview).toContainText(manifest);
+  await handoff.screenshot({
+    path: testInfo.outputPath('marketing-kit-manifest-expanded.png'),
+    animations: 'disabled',
+  });
   await file.press('Escape');
   await expect(file).toHaveAttribute('aria-expanded', 'false');
   await file.click();
