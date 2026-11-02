@@ -10,7 +10,7 @@ import {
 } from '~/data/marketingKitDemo';
 
 const { t } = useI18n();
-const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
+const { userRestoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
 const copied = ref<1 | 2 | null>(null);
 let reset: ReturnType<typeof setTimeout> | undefined;
 onBeforeUnmount(() => { if (reset) clearTimeout(reset); });
@@ -52,7 +52,7 @@ async function copyCommand(which: 1 | 2) {
     <div class="registry-restore__panel">
       <header class="registry-restore__header">
         <h2 id="restore-title">{{ t('shell.restore.title') }}</h2>
-        <a class="registry-restore__guide" :href="restoreGuideUrl" target="_blank" rel="noreferrer">
+        <a class="registry-restore__guide" :href="userRestoreGuideUrl" target="_blank" rel="noreferrer">
           {{ docsLabel(t('shell.restore.guide'), restoreGuideEnglishFallback) }}
           <span aria-hidden="true">↗</span>
         </a>
