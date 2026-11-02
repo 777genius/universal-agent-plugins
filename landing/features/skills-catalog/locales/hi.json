@@ -49,7 +49,7 @@
       "invalidPublisherName": "Skill का सटीक नाम आवश्यक है। प्रकाशक का स्रोत जाँचें।",
       "detail": {
         "breadcrumb": "Skill नेविगेशन",
-        "skill": "Agent Skill",
+        "skill": "एजेंट कौशल",
         "notFound": "Skill नहीं मिली",
         "notFoundHelp": "यह लिस्टिंग उपलब्ध नहीं है। Skills कैटलॉग पर लौटें।",
         "backToSkills": "Skills पर वापस जाएँ",

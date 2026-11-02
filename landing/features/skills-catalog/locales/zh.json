@@ -49,7 +49,7 @@
       "invalidPublisherName": "安装需要准确的技能名称，请检查发布方源代码。",
       "detail": {
         "breadcrumb": "技能导航",
-        "skill": "Agent Skill",
+        "skill": "智能体技能",
         "notFound": "未找到技能",
         "notFoundHelp": "当前无法获取此条目，请返回技能目录重新搜索。",
         "backToSkills": "返回技能目录",

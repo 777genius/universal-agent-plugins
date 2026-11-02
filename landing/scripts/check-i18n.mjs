@@ -123,6 +123,9 @@ const reviewedCaptions = {
     'registryUi.community.source': 'Source',
     'registryUi.agentPage.activation': 'Activation',
     'registryUi.components.extensions': 'extensions',
+    // French words are identical to English at these exact UI captions.
+    'registryUi.skills.detail.installation': 'Installation',
+    'registryUi.skills.detail.source': 'Source',
   },
   hi: { 'registryUi.components.mcp': 'mcp' },
   pt: {

@@ -49,7 +49,7 @@
       "invalidPublisherName": "يلزم اسم Skill الدقيق. راجع مصدر الناشر.",
       "detail": {
         "breadcrumb": "التنقل بين المهارات",
-        "skill": "Agent Skill",
+        "skill": "مهارة الوكيل",
         "notFound": "لم يُعثر على المهارة",
         "notFoundHelp": "هذا الإدراج غير متاح الآن. ارجع إلى دليل المهارات.",
         "backToSkills": "العودة إلى المهارات",
