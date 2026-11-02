@@ -7,34 +7,49 @@ const props = withDefaults(defineProps<{
   millisecondsPerCharacter?: number;
 }>(), { delay: 150, millisecondsPerCharacter: 39 });
 
-const host = ref<HTMLElement | null>(null);
+// Fragments are visual line-breaking hints, not separate shell commands.
+// The terminal displays one executable command; the invisible full string
+// reserves its final line-height so typing never shifts nearby elements.
+const command = computed(() => props.lines.join(' '));
+const characters = ref(0);
 const started = ref(false);
 const complete = ref(false);
 const reducedMotion = ref(false);
-let observer: IntersectionObserver | undefined;
-let completionTimer: ReturnType<typeof setTimeout> | undefined;
-
-const sequence = computed(() => {
-  let offset = props.delay;
-  return props.lines.map((text) => {
-    const line = { text, delay: offset, duration: Math.max(180, text.length * props.millisecondsPerCharacter) };
-    offset += line.duration + 120;
-    return line;
-  });
-});
-const totalDuration = computed(() =>
-  sequence.value.reduce((total, line) => Math.max(total, line.delay + line.duration), 0),
+const visibleCommand = computed(() =>
+  reducedMotion.value ? command.value : command.value.slice(0, characters.value),
 );
+const host = ref<HTMLElement | null>(null);
+let observer: IntersectionObserver | undefined;
+let delayTimer: ReturnType<typeof setTimeout> | undefined;
+let typingTimer: ReturnType<typeof setInterval> | undefined;
+
+function finish() {
+  characters.value = command.value.length;
+  complete.value = true;
+  if (typingTimer) {
+    clearInterval(typingTimer);
+    typingTimer = undefined;
+  }
+}
 function begin() {
   if (started.value) return;
   started.value = true;
   observer?.disconnect();
-  completionTimer = setTimeout(() => { complete.value = true; }, totalDuration.value + 120);
+  delayTimer = setTimeout(() => {
+    if (!command.value.length) {
+      finish();
+      return;
+    }
+    typingTimer = setInterval(() => {
+      characters.value += 1;
+      if (characters.value >= command.value.length) finish();
+    }, Math.max(18, props.millisecondsPerCharacter));
+  }, props.delay);
 }
 onMounted(() => {
   reducedMotion.value = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (reducedMotion.value || !('IntersectionObserver' in window)) {
-    complete.value = true;
+    finish();
     return;
   }
   observer = new IntersectionObserver((entries) => {
@@ -44,7 +59,8 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   observer?.disconnect();
-  if (completionTimer) clearTimeout(completionTimer);
+  if (delayTimer) clearTimeout(delayTimer);
+  if (typingTimer) clearInterval(typingTimer);
 });
 </script>
 
@@ -52,67 +68,55 @@ onBeforeUnmount(() => {
   <span
     ref="host"
     class="typed-command"
-    :class="{ 'typed-command--started': started && !reducedMotion }"
-    :data-complete="complete || reducedMotion ? 'true' : 'false'"
+    :data-complete="complete ? 'true' : 'false'"
+    :data-command="command"
   >
-    <span
-      v-for="(line, index) in sequence"
-      :key="index"
-      class="typed-command__line"
-      :style="{
-        '--characters': String(line.text.length),
-        '--duration': `${line.duration}ms`,
-        '--delay': `${line.delay}ms`,
-      }"
-    >{{ line.text }}</span>
+    <span class="typed-command__measure" aria-hidden="true">{{ command }}</span>
+    <span class="typed-command__visible" aria-hidden="true">
+      {{ visibleCommand }}<span
+        v-if="started && !complete && !reducedMotion"
+        class="typed-command__caret"
+      />
+    </span>
+    <span class="sr-only">{{ command }}</span>
   </span>
 </template>
 
 <style scoped>
 .typed-command {
   display: block;
+  position: relative;
   min-width: 0;
   direction: ltr;
   text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font: inherit;
 }
-.typed-command__line {
+.typed-command__measure {
   display: block;
-  position: relative;
-  width: max-content;
-  max-width: 100%;
-  min-height: 1.4em;
-  overflow: hidden;
-  white-space: pre;
+  visibility: hidden;
   font: inherit;
 }
-.typed-command--started .typed-command__line {
-  width: 0;
-  border-inline-end: 1px solid transparent;
-  animation: typed-reveal var(--duration) steps(var(--characters), end) var(--delay) forwards;
-}
-.typed-command--started .typed-command__line::after {
-  content: '';
+.typed-command__visible {
+  display: block;
   position: absolute;
-  inset-inline-end: 0;
-  top: .15em;
-  width: 1px;
+  inset: 0;
+  white-space: inherit;
+  overflow-wrap: inherit;
+  font: inherit;
+}
+.typed-command__caret {
+  display: inline-block;
   height: 1.05em;
-  background: #00f0ff;
-  animation: typed-caret .65s steps(1, end) infinite;
+  border-inline-end: 2px solid #00f0ff;
+  vertical-align: -.13em;
+  animation: typed-caret-blink .65s steps(1, end) infinite;
 }
-@keyframes typed-reveal {
-  to { width: calc(var(--characters) * 1ch); }
-}
-@keyframes typed-caret {
+@keyframes typed-caret-blink {
   50% { opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .typed-command--started .typed-command__line {
-    width: max-content;
-    animation: none;
-    border: 0;
-  }
-  .typed-command--started .typed-command__line::after { display: none; }
+  .typed-command__caret { display: none; animation: none; }
 }
 </style>
