@@ -26,6 +26,12 @@ function closeAndFocus() {
   collapse();
   trigger.value?.focus();
 }
+function onEscape(event: KeyboardEvent) {
+  if (!open.value) return;
+  event.stopPropagation();
+  event.preventDefault();
+  closeAndFocus();
+}
 function outside(event: PointerEvent) {
   if (root.value && !root.value.contains(event.target as Node)) collapse();
 }
@@ -75,7 +81,7 @@ onBeforeUnmount(() => {
     @mouseenter="show"
     @mouseleave="autoCollapse && collapse()"
     @focusout="onFocusOut"
-    @keydown.esc.stop.prevent="collapse"
+    @keydown.esc="onEscape"
   >
     <button
       ref="trigger"

@@ -145,6 +145,13 @@ test('manifest morph opens by focus and tap, closes with Escape, and preserves v
   await expect(file).toHaveAttribute('aria-expanded', 'false');
   await file.click();
   await expect(preview).toBeVisible();
+  const dismiss = preview.getByRole('button', { name: /close file preview/i });
+  await dismiss.focus();
+  await dismiss.press('Escape');
+  await expect(file).toBeFocused();
+  await expect(file).toHaveAttribute('aria-expanded', 'false');
+  await file.click();
+  await expect(preview).toBeVisible();
   await handoff.locator('.registry-restore__locked-version').click();
   await expect(file).toHaveAccessibleName(/user environment uap\.toml/i);
   await expect(file).toHaveAttribute('aria-expanded', 'false');
@@ -188,6 +195,30 @@ test('typing is sequential and always copies complete commands', async ({ page, 
   await expect(section.locator('.typed-command__visible')).toHaveText([
     addCommand, 'npx -y universal-agent-plugins deps export', restoreCommand,
   ]);
+});
+
+test('clipboard denial announces failure and restores copy-button focus', async ({ page }) => {
+  await page.goto('./');
+  await hydrated(page);
+  const section = page.locator('#restore-environment');
+  await section.scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async () => { throw new Error('Permission denied'); } },
+    });
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: () => false,
+    });
+  });
+  const copy = section.locator('.registry-restore__copy').first();
+  await copy.focus();
+  await copy.press('Enter');
+  await expect(copy).toBeFocused();
+  await expect(copy).toHaveText('Copy failed');
+  await expect(section.locator('.registry-restore__copy-status')).toContainText('Copy failed: My computer');
+  await expect(copy).toHaveAccessibleName('Copy failed: My computer');
 });
 
 test('teammate wallpaper is served from the same deployment base', async ({ request }) => {

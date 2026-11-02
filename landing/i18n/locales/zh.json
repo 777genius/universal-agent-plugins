@@ -540,6 +540,7 @@
       "copyLabel": "复制命令",
       "copied": "已复制",
       "copy": "复制",
+      "copyFailed": "复制失败",
       "announcement": "命令已复制到剪贴板"
     },
     "directory": {

@@ -540,6 +540,7 @@
       "copyLabel": "انسخ الأمر",
       "copied": "تم النسخ",
       "copy": "نسخ",
+      "copyFailed": "تعذر النسخ",
       "announcement": "تم نسخ الأمر إلى الحافظة"
     },
     "directory": {

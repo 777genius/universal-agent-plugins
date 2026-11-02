@@ -540,6 +540,7 @@
       "copyLabel": "Copier la commande",
       "copied": "Copié",
       "copy": "Copier",
+      "copyFailed": "Échec de la copie",
       "announcement": "Commande copiée dans le presse-papiers"
     },
     "directory": {

@@ -13,6 +13,7 @@ const { t } = useI18n();
 const { asset } = useSite();
 const { userRestoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
 const copied = ref<1 | 2 | null>(null);
+const copyFailed = ref<1 | 2 | null>(null);
 let reset: ReturnType<typeof setTimeout> | undefined;
 onBeforeUnmount(() => { if (reset) clearTimeout(reset); });
 
@@ -23,6 +24,7 @@ async function copyCommand(which: 1 | 2) {
     await navigator.clipboard.writeText(command);
     success = true;
   } catch {
+    const previouslyFocused = document.activeElement;
     const field = document.createElement('textarea');
     field.value = command;
     field.style.cssText = 'position:fixed;opacity:0';
@@ -34,12 +36,13 @@ async function copyCommand(which: 1 | 2) {
       success = false;
     } finally {
       field.remove();
+      if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus();
     }
   }
-  if (!success) return;
-  copied.value = which;
+  copied.value = success ? which : null;
+  copyFailed.value = success ? null : which;
   if (reset) clearTimeout(reset);
-  reset = setTimeout(() => { copied.value = null; }, 1600);
+  reset = setTimeout(() => { copied.value = null; copyFailed.value = null; }, 1600);
 }
 </script>
 
@@ -78,9 +81,9 @@ async function copyCommand(which: 1 | 2) {
                 <span class="registry-restore__step" aria-hidden="true">01</span>
                 {{ t('shell.restore.from') }}
               </p>
-              <button type="button" class="registry-restore__copy" :aria-label="t('registryUi.command.copyLabel') + ': ' + t('shell.restore.from')"
+              <button type="button" class="registry-restore__copy" :aria-label="t(copyFailed === 1 ? 'registryUi.command.copyFailed' : copied === 1 ? 'registryUi.command.copiedLabel' : 'registryUi.command.copyLabel') + ': ' + t('shell.restore.from')"
                 @click="copyCommand(1)"
-              >{{ copied === 1 ? t('registryUi.command.copied') : t('registryUi.command.copy') }}</button>
+              >{{ copyFailed === 1 ? t('registryUi.command.copyFailed') : copied === 1 ? t('registryUi.command.copied') : t('registryUi.command.copy') }}</button>
             </div>
             <p class="registry-restore__package" dir="ltr">
               <span>{{ marketingKitName }}</span><strong>v{{ marketingKitVersion }}</strong>
@@ -147,9 +150,9 @@ async function copyCommand(which: 1 | 2) {
                 <span class="registry-restore__step" aria-hidden="true">02</span>
                 {{ t('shell.restore.to') }}
               </p>
-              <button type="button" class="registry-restore__copy" :aria-label="t('registryUi.command.copyLabel') + ': ' + t('shell.restore.to')"
+              <button type="button" class="registry-restore__copy" :aria-label="t(copyFailed === 2 ? 'registryUi.command.copyFailed' : copied === 2 ? 'registryUi.command.copiedLabel' : 'registryUi.command.copyLabel') + ': ' + t('shell.restore.to')"
                 @click="copyCommand(2)"
-              >{{ copied === 2 ? t('registryUi.command.copied') : t('registryUi.command.copy') }}</button>
+              >{{ copyFailed === 2 ? t('registryUi.command.copyFailed') : copied === 2 ? t('registryUi.command.copied') : t('registryUi.command.copy') }}</button>
             </div>
             <p class="registry-restore__package" dir="ltr">
               <span>{{ marketingKitName }}</span><strong>v{{ marketingKitVersion }}</strong>
@@ -163,7 +166,7 @@ async function copyCommand(which: 1 | 2) {
       </div>
 
       <span class="sr-only registry-restore__copy-status" role="status" aria-live="polite">
-        {{ copied === null ? '' : t('registryUi.command.copied') + ': ' + t(copied === 1 ? 'shell.restore.from' : 'shell.restore.to') }}
+        {{ copied === null && copyFailed === null ? '' : t(copyFailed === null ? 'registryUi.command.copied' : 'registryUi.command.copyFailed') + ': ' + t((copyFailed ?? copied) === 1 ? 'shell.restore.from' : 'shell.restore.to') }}
       </span>
       <p class="registry-restore__boundary">
         {{ t('shell.restore.requirements') }} {{ t('shell.restore.excludes') }}

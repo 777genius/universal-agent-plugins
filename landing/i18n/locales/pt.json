@@ -540,6 +540,7 @@
       "copyLabel": "Copiar comando",
       "copied": "Copiado",
       "copy": "Copiar",
+      "copyFailed": "Falha ao copiar",
       "announcement": "Comando copiado para a área de transferência"
     },
     "directory": {

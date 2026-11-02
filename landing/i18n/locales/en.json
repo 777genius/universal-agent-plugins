@@ -557,6 +557,7 @@
       "copyLabel": "Copy command",
       "copied": "Copied",
       "copy": "Copy",
+      "copyFailed": "Copy failed",
       "announcement": "Command copied to clipboard"
     },
     "directory": {

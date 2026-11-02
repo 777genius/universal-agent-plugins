@@ -540,6 +540,7 @@
       "copyLabel": "Copiar comando",
       "copied": "Copiado",
       "copy": "Copiar",
+      "copyFailed": "No se pudo copiar",
       "announcement": "Comando copiado al portapapeles"
     },
     "directory": {
