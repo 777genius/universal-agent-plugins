@@ -62,12 +62,12 @@ func (adapter *ProjectAdapter) Project(ctx context.Context, in clients.Projectio
 		}
 	}
 	if err := shared.ProjectMCPServers(shared.MCPProjection{
-		Root: in.StagingPath,
-		Envelope: in.Envelope,
-		Names: shared.SupportedMCPNames(in.Plan),
-		Dialect: shared.MCPDialectKiro,
+		Root:       in.StagingPath,
+		Envelope:   in.Envelope,
+		Names:      shared.SupportedMCPNames(in.Plan),
+		Dialect:    shared.MCPDialectKiro,
 		PluginRoot: in.Plan.ActivePath,
-		DataPath: in.PluginDataPath,
+		DataPath:   in.PluginDataPath,
 	}); err != nil {
 		return nil, err
 	}
