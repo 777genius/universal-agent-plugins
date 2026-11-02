@@ -174,6 +174,7 @@ const vendorInstall = computed(() =>
       <InstallScopeSelect
         :model-value="scope"
         :project-available="projectAvailable"
+            :always-show="isReviewedMarketingKit(plugin)"
         @update:model-value="updateScope"
       />
       <MarketingKitProjectInstall v-if="marketingKitProject" />
