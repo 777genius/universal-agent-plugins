@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/environmentstore"
@@ -41,6 +42,10 @@ func readValidatedDependencyLock(path string, requirements environment.Requireme
 }
 
 func decodeDependencyLockBytes(body []byte, requirements environment.Requirements, compatible bool) (environment.Lock, error) {
+	// Portable lock identities must not be silently normalized from invalid UTF-8.
+	if !utf8.Valid(body) {
+		return environment.Lock{}, errors.New("decode uap.lock: invalid UTF-8")
+	}
 	// encoding/json permits repeated object keys even with DisallowUnknownFields.
 	// A lock is an authority document: reject ambiguous nested and escaped keys
 	// before any pin or installer state can be interpreted.
