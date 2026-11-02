@@ -25,6 +25,7 @@ func packageManagerRegistryCases() map[string]func(*testing.T) {
 		"partial-commit-locked-retry": TestDependencyEnvironmentCLIEndToEnd,
 		"mixed-source-target-union":   TestDependencyTOMLMixedSourceLifecycleAndRestore,
 		"portable-cold-restore":       TestDependencyFreshRestoreFromPortableFiles,
+		"skill-typo-retains-installed":  TestSkillsMisspelledSelectionRetainsInstalledSkill,
 	}
 }
 
