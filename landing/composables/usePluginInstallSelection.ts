@@ -1,4 +1,4 @@
-import { isReviewedMarketingKit } from '../data/marketingKitDemo';
+import { isReviewedMarketingKit, marketingKitTargetIDs } from '../data/marketingKitDemo';
 import { computed, ref, watch, type Ref } from 'vue';
 import { clients } from '../data/clients.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
@@ -30,9 +30,13 @@ export function usePluginInstallSelection(
       ),
   );
   const projectAvailable = computed(() =>
-    availableClients.value.some((client) =>
-      Boolean(projectCatalogSelection(plugin(), [client.id]).resolution.distribution),
-    ),
+    isReviewedMarketingKit(plugin())
+      ? marketingKitTargetIDs.every((client) =>
+          Boolean(projectCatalogSelection(plugin(), [client]).resolution.distribution),
+        )
+      : availableClients.value.some((client) =>
+          Boolean(projectCatalogSelection(plugin(), [client.id]).resolution.distribution),
+        ),
   );
   const resolution = computed(() => select(targets.value));
   let choicePending = false;
