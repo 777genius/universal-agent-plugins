@@ -1,4 +1,4 @@
-import { isReviewedMarketingKit, marketingKitTargetIDs } from '../data/marketingKitDemo';
+import { isReviewedMarketingKit, marketingKitTargetIDs } from '../data/marketingKitDemo.ts';
 import { computed, ref, watch, type Ref } from 'vue';
 import { clients } from '../data/clients.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
