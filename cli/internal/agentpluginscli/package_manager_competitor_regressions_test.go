@@ -89,6 +89,12 @@ func pmEvolutionOldCacheNewLock(t *testing.T) {
 			if got := dependencyRead(t, filepath.Join(binding.TargetPath, "marker.txt")); got != newMarker {
 				t.Fatalf("old managed bytes survived first replay: %q", got)
 			}
+			if got := dependencyRead(t, filepath.Join(binding.TargetPath, "plugin.json")); got != v2 {
+				t.Fatalf("materialized package manifest differs from v2: %q", got)
+			}
+			if got := dependencyRead(t, filepath.Join(binding.TargetPath, "skills", "a", "SKILL.md")); got != newSkill {
+				t.Fatalf("materialized Skill differs from exact v2 bytes: %q", got)
+			}
 		}
 	}
 	if bindings != 1 {
@@ -112,9 +118,53 @@ func pmEvolutionOldCacheNewLock(t *testing.T) {
 	pmArchiveAssertEqual(t, "repeat source requests", requests, origin.counts())
 }
 
+// A failed install can retain a partial package receipt. Check persisted
+// native-object claims independently of the existing Skill bytes: only the
+// original package can own "shared" and a cold profile must not own it at all.
+func pmAssertSharedNativeOwnership(t *testing.T, f pmArchiveEnvironment, expectedAlias string) {
+	t.Helper()
+	state, err := f.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]string{}
+	for _, receipt := range state.EnvironmentReceipts {
+		if receipt.ClientID == "gemini" {
+			ids[receipt.Alias] = receipt.InstallationID
+		}
+	}
+	count := 0
+	for _, installation := range state.Installations {
+		for _, binding := range installation.Clients {
+			if binding.ClientID != "gemini" {
+				continue
+			}
+			for _, object := range binding.NativeObjects {
+				if object.LogicalName != "shared" {
+					continue
+				}
+				count++
+				wantPath := filepath.Join(f.clients["gemini"].ConfigRoot, "skills", "shared")
+				if expectedAlias == "" || installation.InstallationID != ids[expectedAlias] ||
+					object.Path != wantPath {
+					t.Fatalf("unexpected shared Skill native claim: installation=%q object=%+v expected alias=%q",
+						installation.InstallationID, object, expectedAlias)
+				}
+			}
+		}
+	}
+	wantCount := 0
+	if expectedAlias != "" {
+		wantCount = 1
+	}
+	if count != wantCount || expectedAlias != "" && ids[expectedAlias] == "" {
+		t.Fatalf("shared Skill claims=%d, want=%d; expected alias receipt=%q", count, wantCount, ids[expectedAlias])
+	}
+}
+
 // Two independently selected sources contain the same native Skill. Neither
 // same bytes nor absence of user receipts grants authority to adopt or delete
-// a committed Skill in a new checkout.
+// a committed Skill in a fresh disposable profile.
 func pmAdversarialColdSharedSkillOwners(t *testing.T) {
 	origin := newPMArchiveOrigin(t, pmArchiveGraph{"a": nil, "b": nil})
 	const shared = "---\nname: shared\ndescription: Shared source Skill\n---\nIdentical and independently retained.\n"
@@ -130,14 +180,17 @@ func pmAdversarialColdSharedSkillOwners(t *testing.T) {
 	if body := dependencyRead(t, sharedPath); body != shared {
 		t.Fatalf("first owner did not materialize common native Skill: %q", body)
 	}
+	pmAssertSharedNativeOwnership(t, original, "a")
 	before := freshRestoreFiles(t, sharedPath)
 	original.manifest(t, origin, []string{"a", "b"}, map[string][]string{"gemini": {"a", "b"}})
 	original.run(t, "deps", "lock", "--format", "json")
 	original.assertGraph(t, origin, pmArchiveGraph{"a": nil, "b": nil},
 		pmArchiveTargets{"a": {"gemini"}, "b": {"gemini"}})
-	if _, err := original.executePM(t.Context(), t, "", false, "install", "--locked", "--yes", "--format", "json"); err == nil {
-		t.Fatal("two sources silently adopted identical native Skill")
+	if _, err := original.executePM(t.Context(), t, "", false, "install", "--locked", "--yes", "--format", "json"); err == nil ||
+		!strings.Contains(err.Error(), "Gemini skill \"shared\" already exists without agentplugins ownership") {
+		t.Fatalf("the shared-Skill ownership guard was not the actual refusal: %v", err)
 	}
+	pmAssertSharedNativeOwnership(t, original, "a")
 	pmArchiveAssertEqual(t, "original owner remained intact", before, freshRestoreFiles(t, sharedPath))
 
 	cold := newPMArchiveEnvironment(t, origin, false)
@@ -148,15 +201,17 @@ func pmAdversarialColdSharedSkillOwners(t *testing.T) {
 	}
 	dependencyWrite(t, coldShared, shared)
 	if _, err := os.Lstat(cold.store.Path); !os.IsNotExist(err) {
-		t.Fatalf("new checkout unexpectedly has receipts: %v", err)
+		t.Fatalf("cold profile unexpectedly has receipts: %v", err)
 	}
 	mp, lp := cold.app.dependencyPaths()
 	portable := freshRestoreFiles(t, mp, lp)
 	settings := filepath.Join(cold.clients["gemini"].ConfigRoot, "settings.json")
 	native := freshRestoreFiles(t, coldShared, settings)
-	if _, err := cold.executePM(t.Context(), t, "", false, "install", "--locked", "--yes", "--format", "json"); err == nil {
-		t.Fatal("cold clone adopted committed Skill merely because its bytes match")
+	if _, err := cold.executePM(t.Context(), t, "", false, "install", "--locked", "--yes", "--format", "json"); err == nil ||
+		!strings.Contains(err.Error(), "Gemini skill \"shared\" already exists without agentplugins ownership") {
+		t.Fatalf("cold profile did not refuse an independently supplied shared Skill by ownership: %v", err)
 	}
+	pmAssertSharedNativeOwnership(t, cold, "")
 	pmArchiveAssertEqual(t, "committed Skill and unrelated settings", native, freshRestoreFiles(t, coldShared, settings))
 	pmArchiveAssertEqual(t, "cold portable agreement", portable, freshRestoreFiles(t, mp, lp))
 }
