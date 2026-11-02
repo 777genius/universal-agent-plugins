@@ -59,9 +59,18 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	reject := func(reason string, status int) {
+		m.mu.Lock()
+		if stage := m.current; stage != nil {
+			stage.invalid = append(stage.invalid, reason)
+			stage.once.Do(func() { close(stage.done) })
+		}
+		m.mu.Unlock()
+		http.Error(w, reason, status)
+	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, (1<<20)+1))
 	if err != nil || len(body) > 1<<20 {
-		http.Error(w, "invalid bounded model request", http.StatusRequestEntityTooLarge)
+		reject("invalid bounded model request", http.StatusRequestEntityTooLarge)
 		return
 	}
 	var input struct {
@@ -71,7 +80,7 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 		Input []json.RawMessage `json:"input"`
 	}
 	if json.Unmarshal(body, &input) != nil || len(input.Tools) > 128 || len(input.Input) > 128 {
-		http.Error(w, "invalid model request shape", http.StatusBadRequest)
+		reject("invalid model request shape", http.StatusBadRequest)
 		return
 	}
 	advertised := false
@@ -88,7 +97,7 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 			Output json.RawMessage `json:"output"`
 		}
 		if json.Unmarshal(raw, &item) != nil {
-			http.Error(w, "invalid input item", http.StatusBadRequest)
+			reject("invalid input item", http.StatusBadRequest)
 			return
 		}
 		if item.Type == "function_call_output" {
@@ -161,6 +170,33 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 	}
 	if !sendCall {
 		stage.once.Do(func() { close(stage.done) })
+	}
+}
+
+func TestCodexProjectModelRejectsMalformedRequests(t *testing.T) {
+	for _, test := range []struct {
+		name, body, reason string
+		status             int
+	}{
+		{"too large", strings.Repeat("a", (1<<20)+1), "invalid bounded model request", http.StatusRequestEntityTooLarge},
+		{"invalid JSON", "{", "invalid model request shape", http.StatusBadRequest},
+		{"invalid input", "{\"input\":[42]}", "invalid input item", http.StatusBadRequest},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			m := &codexProjectModel{}
+			stage := m.begin(true)
+			request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(test.body))
+			response := httptest.NewRecorder()
+			m.respond(response, request)
+			if response.Code != test.status || len(stage.invalid) != 1 || stage.invalid[0] != test.reason {
+				t.Fatalf("scripted model rejection not recorded: status=%d reasons=%v", response.Code, stage.invalid)
+			}
+			select {
+			case <-stage.done:
+			default:
+				t.Fatal("scripted model request rejection left E2E waiting")
+			}
+		})
 	}
 }
 
