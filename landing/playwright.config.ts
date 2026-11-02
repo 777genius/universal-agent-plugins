@@ -11,6 +11,9 @@ export default defineConfig({
   timeout: 30_000,
   use: {
     baseURL: `http://127.0.0.1:4173/${repositoryBase ? `${repositoryBase}/` : ''}`,
+    // Real Mux HLS playback needs H.264 codecs; Playwright's headless shell
+    // cannot reliably qualify video decoding. Hosted CI supplies Chrome.
+    channel: process.env.UAP_E2E_LIVE_VIDEO === '1' ? 'chrome' : undefined,
     trace: 'retain-on-failure',
   },
   webServer: {

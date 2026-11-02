@@ -104,8 +104,20 @@ jobs:
         working-directory: landing
         run: pnpm run test:browser
 
+      # Explicitly enabled for visual media changes. This checks actual Mux
+      # playback progression after one click, not just iframe construction.
+      - name: Verify real Mux playback after one click
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:live-demo')
+        id: live-demo-e2e
+        env:
+          UAP_E2E_REPOSITORY_BASE: universal-agent-plugins
+          UAP_E2E_WEB_ROOT: .e2e-pages
+          UAP_E2E_LIVE_VIDEO: '1'
+        working-directory: landing
+        run: pnpm exec playwright test tests/browser/hero-demo-video.spec.ts --grep 'owner-uploaded Mux film actually plays'
+
       - name: Preserve failed browser traces
-        if: failure() && steps.browser-e2e.outcome == 'failure'
+        if: failure() && (steps.browser-e2e.outcome == 'failure' || steps.live-demo-e2e.outcome == 'failure')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: landing-browser-failure

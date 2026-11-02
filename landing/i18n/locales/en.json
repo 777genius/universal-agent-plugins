@@ -507,7 +507,8 @@
           "superseded": "superseded",
           "revoked": "revoked"
         }
-      }
+      },
+      "closeDemo": "Close demo"
     },
     "header": {
       "plugins": "Plugins",

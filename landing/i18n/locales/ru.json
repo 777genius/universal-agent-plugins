@@ -490,7 +490,8 @@
           "superseded": "заменён",
           "revoked": "отозван"
         }
-      }
+      },
+      "closeDemo": "Закрыть видео"
     },
     "header": {
       "plugins": "Плагины",

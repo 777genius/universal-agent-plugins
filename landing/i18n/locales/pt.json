@@ -353,7 +353,8 @@
           "superseded": "substituída",
           "revoked": "revogada"
         }
-      }
+      },
+      "closeDemo": "Fechar demonstração"
     },
     "header": {
       "plugins": "Plugins",
