@@ -49,9 +49,15 @@ const {
 const resolvedDocument = computed(() => {
   const result = sourceDocument.value;
   const source = sourceIdentity.value;
-  if (!result || !source || result.source.toLowerCase() !== (source.repository ?? new URL(source.url).hostname).toLowerCase())
+  if (!result || !source || typeof result.source !== 'string') return undefined;
+  // An untrusted listing ID can look like a domain yet fail IDNA parsing.
+  // It must not crash a directly linked Skill page or leak another source.
+  try {
+    const expectedSource = source.repository ?? new URL(source.url).hostname;
+    return result.source.toLowerCase() === expectedSource.toLowerCase() ? result : undefined;
+  } catch {
     return undefined;
-  return result;
+  }
 });
 // The catalog search may omit an existing Skill. A successful source read
 // still supplies a valid install identity, without fabricating install metrics.
