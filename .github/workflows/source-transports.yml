@@ -70,13 +70,22 @@ jobs:
             and any(.[]; .Action == "pass" and (.Test == null))
             and all(.[]; .Action != "fail" and .Action != "skip")
           ' native-git-hardening.json
-      - name: Verify native Git SSH and host authentication
+      - name: Verify native SSH host authentication and two-host isolation
         working-directory: install/integrationctl/agentplugins
         shell: bash
         run: |
           set -euo pipefail
-          go test -count=1 -timeout=3m -json ./adapters/sourceacquisition -run '^TestNativeSSHGitWithIsolatedKeysAndHostVerification$' | tee native-ssh.json
-          jq -s -e 'any(.[]; .Action == "pass" and .Test == "TestNativeSSHGitWithIsolatedKeysAndHostVerification") and all(.[]; .Action != "skip")' native-ssh.json
+          go test -count=1 -timeout=5m -json ./adapters/sourceacquisition \
+            -run '^(TestNativeSSHGitWithIsolatedKeysAndHostVerification|TestNativeSSHGitTwoHostCredentialIsolation)$' | tee native-ssh.json
+          jq -s -e '
+            . as $events
+            | (all(["TestNativeSSHGitWithIsolatedKeysAndHostVerification", "TestNativeSSHGitTwoHostCredentialIsolation"][];
+                . as $name
+                | any($events[]; .Action == "run" and .Test == $name)
+                and any($events[]; .Action == "pass" and .Test == $name)))
+              and any($events[]; .Action == "pass" and (.Test == null))
+              and all($events[]; .Action != "skip" and .Action != "fail")
+          ' native-ssh.json
       - name: Verify saved CLI SSH URL and SCP lifecycle
         working-directory: cli
         shell: bash
