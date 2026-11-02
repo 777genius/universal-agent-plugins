@@ -88,7 +88,7 @@ func TestPublicDocumentPreviewSourceAuthorityCachingAndCORS(t *testing.T) {
 }
 
 func TestDocumentPreviewGitAndNameRefusal(t *testing.T) {
-	handler, err := NewDocumentHandler(documentGitStub{}, nil, http.NoBody)
+	handler, err := NewDocumentHandler(documentGitStub{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestPublisherIPRefusesLocalReservedAndMappedAddresses(t *testing.T) {
 }
 
 func TestDocumentPreviewPerClientAdmissionAndFailureCooldown(t *testing.T) {
-	handler, err := NewDocumentHandler(documentGitStub{}, &documentWebsiteStub{}, http.NoBody)
+	handler, err := NewDocumentHandler(documentGitStub{}, &documentWebsiteStub{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
