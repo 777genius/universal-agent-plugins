@@ -353,7 +353,8 @@
           "superseded": "تم تجاوزه",
           "revoked": "ملغى"
         }
-      }
+      },
+      "closeDemo": "إغلاق العرض"
     },
     "header": {
       "plugins": "المكونات الإضافية",
