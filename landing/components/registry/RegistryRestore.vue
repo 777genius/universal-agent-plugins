@@ -5,6 +5,7 @@ import {
   marketingKitName,
   marketingKitVersion,
   marketingKitInstallCommand,
+  marketingKitExportCommand,
   marketingKitRestoreCommand,
 } from '~/data/marketingKitDemo';
 
@@ -86,7 +87,7 @@ async function copyCommand(which: 1 | 2) {
             <div class="registry-restore__terminal" dir="ltr" :data-command="marketingKitInstallCommand">
               <span class="registry-restore__prompt" aria-hidden="true">$</span>
               <TypedCommand
-                :lines="['npx -y', 'universal-agent-plugins', 'install --scope project']"
+                :lines="['npx -y', 'universal-agent-plugins', 'install --scope user']"
                 :delay="180"
               />
             </div>
@@ -106,6 +107,9 @@ async function copyCommand(which: 1 | 2) {
             </span>
           </div>
           <code class="registry-restore__locked-version" dir="ltr">v{{ marketingKitVersion }}</code>
+          <div class="registry-restore__export" dir="ltr" :data-command="marketingKitExportCommand">
+            <TypedCommand :lines="['agentplugins deps export']" :delay="1700" />
+          </div>
           <svg class="registry-restore__arrow" viewBox="0 0 160 36" fill="none" aria-hidden="true">
             <path d="M4 26C36 26 46 12 84 12h52" stroke-dasharray="3.5 7" />
             <path d="M138 5 157 12 138 19 141.5 12Z" fill="currentColor" stroke="none" />
@@ -151,7 +155,7 @@ async function copyCommand(which: 1 | 2) {
             </p>
             <div class="registry-restore__terminal" dir="ltr" :data-command="marketingKitRestoreCommand">
               <span class="registry-restore__prompt" aria-hidden="true">$</span>
-              <TypedCommand :lines="['agentplugins install', '--locked --scope project']" :delay="330" />
+              <TypedCommand :lines="['agentplugins deps import', '--install']" :delay="330" />
             </div>
           </div>
         </div>
@@ -350,6 +354,12 @@ async function copyCommand(which: 1 | 2) {
       stroke-linejoin: round;
     }
     code { color: var(--text); }
+  }
+  &__export {
+    min-width: 0;
+    max-width: 100%;
+    font: 600 clamp(9px, .85vw, 12px)/1.35 'JetBrains Mono', monospace;
+    color: var(--text);
   }
   &__locked-version {
     color: var(--primary-bright);
