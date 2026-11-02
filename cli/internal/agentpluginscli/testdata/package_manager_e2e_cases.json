@@ -52,6 +52,7 @@
     "symlink-lock-refusal",
     "foreign-skill-refusal",
     "cold-shared-skill-owners",
+    "cross-target-foreign-skill",
     "native-config-obstruction"
   ],
   "agreement": [
