@@ -79,6 +79,14 @@ function legacySource(skill: SkillListing): LegacySource | undefined {
   return publisher ? { kind: 'publisher', url: publisher } : undefined;
 }
 
+function hasForbiddenAscii(value: string, includeSpace: boolean): boolean {
+  const bound = includeSpace ? 0x20 : 0x1f;
+  return [...value].some(char => {
+    const code = char.charCodeAt(0);
+    return code <= bound || code === 0x7f;
+  });
+}
+
 /** Parse the source and selector boundaries without assuming a colon-free URL. */
 function catalogSourceIdentity(id: string): { raw: string; slug: string } | undefined {
   if (typeof id !== 'string' || !id.startsWith('skills-sh:') || id.length > 1024)
@@ -88,7 +96,7 @@ function catalogSourceIdentity(id: string): { raw: string; slug: string } | unde
   const raw = id.slice('skills-sh:'.length, separator);
   const slug = id.slice(separator + 1);
   if (raw.length > 512 || slug.length > 256 ||
-      /[\x00-\x20\x7f]/.test(raw) || /[\x00-\x1f\x7f]/.test(slug)) return undefined;
+      hasForbiddenAscii(raw, true) || hasForbiddenAscii(slug, false)) return undefined;
   return { raw, slug };
 }
 
