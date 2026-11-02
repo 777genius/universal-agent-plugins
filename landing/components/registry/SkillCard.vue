@@ -18,6 +18,8 @@ const expanded = ref(saved.expanded);
 const chooseInTerminal = ref(saved.autoDetect);
 const targets = ref(saved.targetIds.length ? saved.targetIds : ['codex']);
 const repositoryUrl = computed(() => skillRepositoryUrl(props.skill));
+const repositoryName = computed(() => props.skill.source.repository ??
+  /^https:\/\/github\.com\/([^/]+\/[^/]+)/.exec(repositoryUrl.value ?? '')?.[1]);
 const publisherUrl = computed(() => skillPublisherUrl(props.skill));
 const needsManualSelection = computed(() => skillNeedsManualSelection(props.skill));
 const command = computed(() =>
@@ -75,7 +77,7 @@ function updateTerminal(value: boolean) {
         </h3>
         <p class="plugin-card__source-label">
           <a v-if="repositoryUrl" :href="repositoryUrl" target="_blank" rel="noreferrer">{{
-            skill.source.repository ?? repositoryUrl.replace('https://github.com/', '')
+            repositoryName
           }}</a>
           <a v-else-if="publisherUrl" :href="publisherUrl" target="_blank" rel="noreferrer noopener">{{ publisherUrl.replace('https://', '') }}</a>
           <span v-else>{{ t('registryUi.skills.externalSource') }}</span>
@@ -84,11 +86,11 @@ function updateTerminal(value: boolean) {
     </div>
     <SkillSpectorAssessment
       :subject="
-        skill.source.kind === 'github' && skill.source.repository
-          ? { kind: 'skill', repository: skill.source.repository, name: skill.skillNameHint }
+        repositoryName
+          ? { kind: 'skill', repository: repositoryName, name: skill.skillNameHint }
           : undefined
       "
-      :applicable="skill.source.kind === 'github' && Boolean(skill.source.repository)"
+      :applicable="Boolean(repositoryName)"
       :name="skill.title"
       scope="skill"
     />
