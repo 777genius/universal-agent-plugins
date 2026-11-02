@@ -104,6 +104,18 @@ jobs:
         working-directory: landing
         run: pnpm run test:browser
 
+      # Opt-in real public Skills API payloads exercised by the staged Pages
+      # UI. The localhost-only CORS bridge passes through actual response bytes.
+      - name: Verify real Skills API against staged install UI
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:live-skills')
+        id: live-skills-e2e
+        env:
+          UAP_E2E_REPOSITORY_BASE: universal-agent-plugins
+          UAP_E2E_WEB_ROOT: .e2e-pages
+          UAP_E2E_LIVE_SKILLS: '1'
+        working-directory: landing
+        run: pnpm exec playwright test tests/browser/skills-live-api.spec.ts
+
       # Explicitly enabled for visual media changes. This checks actual Mux
       # playback progression after one click, not just iframe construction.
       - name: Verify real Mux playback after one click
@@ -117,7 +129,7 @@ jobs:
         run: pnpm exec playwright test tests/browser/hero-demo-video.spec.ts --grep 'owner-uploaded Mux film actually plays'
 
       - name: Preserve failed browser traces
-        if: failure() && (steps.browser-e2e.outcome == 'failure' || steps.live-demo-e2e.outcome == 'failure')
+        if: failure() && (steps.browser-e2e.outcome == 'failure' || steps.live-demo-e2e.outcome == 'failure' || steps.live-skills-e2e.outcome == 'failure')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: landing-browser-failure
