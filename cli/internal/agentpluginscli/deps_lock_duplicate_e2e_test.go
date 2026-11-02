@@ -14,14 +14,14 @@ func pmAgreementDuplicateJSONKeysFailClosed(t *testing.T) {
 	for _, tc := range []struct {
 		name, anchor, injected, expectedError string
 	}{
-		{"root-same-value", "\"lock_version\":", "\"lock_version\": 1, "},
-		{"root-escaped-equivalent", "\"lock_version\":", "\"loc\\u006b_version\": 1, "},
-		{"root-different-value", "\"manifest_digest\":", "\"manifest_digest\": \"invalid\", "},
-		{"package-source-key", "\"source_key\":", "\"source_key\": \"foreign-owner\", "},
-		{"package-tree-digest", "\"tree_digest\":", "\"tree_digest\": \"sha256:untrusted\", "},
-		{"nested-source-object", "\"source\":", "\"source\": null, "},
-		{"nested-archive-checksum", "\"sha256\":", "\"sha256\": \"invalid\", "},
-		{"invalid-utf8-identity", "\"manifest_digest\": \"", "\"manifest_digest\": \""+string([]byte{0xff}), "UTF-8"},
+		{"root-same-value", "\"lock_version\":", "\"lock_version\": 1, ", ""},
+		{"root-escaped-equivalent", "\"lock_version\":", "\"loc\\u006b_version\": 1, ", ""},
+		{"root-different-value", "\"manifest_digest\":", "\"manifest_digest\": \"invalid\", ", ""},
+		{"package-source-key", "\"source_key\":", "\"source_key\": \"foreign-owner\", ", ""},
+		{"package-tree-digest", "\"tree_digest\":", "\"tree_digest\": \"sha256:untrusted\", ", ""},
+		{"nested-source-object", "\"source\":", "\"source\": null, ", ""},
+		{"nested-archive-checksum", "\"sha256\":", "\"sha256\": \"invalid\", ", ""},
+		{"invalid-utf8-identity", "\"manifest_digest\": \"", string([]byte{0xff}), "UTF-8"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			origin := newPMArchiveOrigin(t, pmArchiveGraph{"a": nil})
@@ -35,7 +35,12 @@ func pmAgreementDuplicateJSONKeysFailClosed(t *testing.T) {
 			if !strings.Contains(lock, tc.anchor) {
 				t.Fatalf("fixture no longer has security-relevant field %q", tc.anchor)
 			}
-			tampered := strings.Replace(lock, tc.anchor, tc.injected+tc.anchor, 1)
+			replacement := tc.injected + tc.anchor
+			if tc.expectedError == "UTF-8" {
+				// Preserve otherwise-valid JSON; only the authored byte is unsafe.
+				replacement = tc.anchor + tc.injected
+			}
+			tampered := strings.Replace(lock, tc.anchor, replacement, 1)
 			dependencyWrite(t, lockPath, tampered)
 			networkBefore := origin.counts()
 			_, err := fixture.executePM(t.Context(), t, "", false,
