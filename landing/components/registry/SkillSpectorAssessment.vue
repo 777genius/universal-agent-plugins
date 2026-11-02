@@ -15,6 +15,7 @@ import {
   skillSpectorSourceUrl,
 } from '~/utils/skillSpector';
 import { formatSecurityDate } from '~/utils/securityPresentation';
+import { serializeSkillSpectorDiagnostics } from '~/utils/skillSpectorDiagnostics';
 
 const props = withDefaults(
   defineProps<{
@@ -27,6 +28,8 @@ const props = withDefaults(
   { applicable: true, subject: undefined },
 );
 const detailsOpen = ref(false);
+const copyState = ref<'idle' | 'copied' | 'failed'>('idle');
+const copying = ref(false);
 const reportRoot = ref<HTMLDetailsElement | null>(null);
 const reportTrigger = ref<HTMLElement | null>(null);
 const reportDialog = ref<HTMLDialogElement | null>(null);
@@ -45,6 +48,7 @@ const onToggle = async (event: Event) => {
 };
 const closeReport = () => reportDialog.value?.close();
 const onDialogClose = () => {
+  copyState.value = 'idle';
   detailsOpen.value = false;
   reasonContextsOpen.value.clear();
   if (reportRoot.value) reportRoot.value.open = false;
@@ -227,6 +231,34 @@ const reasonMessage = (reason: { code: string; message: string }) =>
       ? t('registryUi.skillSpector.acquisitionTransferLimit')
       : reason.message;
 const json = (value: unknown) => JSON.stringify(value, null, 2);
+
+watch([report, reportStatus], () => {
+  copyState.value = 'idle';
+});
+
+async function copyDiagnostics() {
+  if (copying.value || reportStatus.value === 'loading') return;
+  copying.value = true;
+  copyState.value = 'idle';
+  try {
+    const text = serializeSkillSpectorDiagnostics({
+      name: props.name,
+      scope: props.scope,
+      subject: props.subject,
+      report: report.value,
+      reportStatus: reportStatus.value,
+      displayStatus: displayStatus.value,
+      assessment: assessment.value,
+    });
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+    await navigator.clipboard.writeText(text);
+    copyState.value = 'copied';
+  } catch {
+    copyState.value = 'failed';
+  } finally {
+    copying.value = false;
+  }
+}
 </script>
 
 <template>
@@ -274,15 +306,37 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
     >
       <div class="skillspector__dialog-frame">
         <header class="skillspector__dialog-header">
-          <div>
+          <div class="skillspector__dialog-intro">
             <h2>{{ t('registryUi.skillSpector.detailsFor', { name }) }}</h2>
+            <p class="skillspector__headline-status">
+              <span class="skillspector__status-dot" aria-hidden="true"></span>
+              {{ t('registryUi.skillSpector.title') }} · {{ label }}
+            </p>
             <p>{{ t('registryUi.skillSpector.statusExplanation') }}</p>
+            <p v-if="copyState !== 'idle'" class="skillspector__copy-feedback" role="status" aria-live="polite">
+              {{ t(`registryUi.skillSpector.${copyState === 'copied' ? 'copyDiagnosticsSuccess' : 'copyDiagnosticsError'}`) }}
+            </p>
           </div>
-          <button
-            type="button"
-            class="skillspector__dialog-close"
-            @click="closeReport"
-          >{{ t('registryUi.skillSpector.closeReport') }}</button>
+          <div class="skillspector__dialog-actions">
+            <button
+              type="button"
+              class="skillspector__copy"
+              :disabled="copying || reportStatus === 'loading'"
+              :title="t('registryUi.skillSpector.copyDiagnosticsHelp')"
+              @click="copyDiagnostics"
+            >
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="8" y="8" width="12" height="12" rx="2" />
+                <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+              </svg>
+              {{ t(`registryUi.skillSpector.${copyState === 'copied' ? 'copiedDiagnostics' : 'copyDiagnostics'}`) }}
+            </button>
+            <button
+              type="button"
+              class="skillspector__dialog-close"
+              @click="closeReport"
+            >{{ t('registryUi.skillSpector.closeReport') }}</button>
+          </div>
         </header>
         <div class="skillspector__details" :aria-busy="reportStatus === 'loading'">
       <section class="skillspector__advice">
@@ -781,7 +835,58 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
   justify-content: space-between;
   gap: 16px;
   padding: 18px 22px;
-  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.skillspector__dialog-intro {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.skillspector__dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.skillspector__headline-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--cyan) !important;
+}
+.skillspector__status-dot {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentcolor;
+}
+.skillspector__copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--cyan);
+  border-radius: 9px;
+  background: var(--surface-solid);
+  color: var(--cyan);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 750;
+}
+.skillspector__copy:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+.skillspector__copy:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+.skillspector__copy-feedback {
+  color: var(--text) !important;
+  font-weight: 700;
 }
 .skillspector__dialog-header h2 {
   margin: 0;
@@ -813,11 +918,29 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
 .skillspector__details {
   min-height: 0;
   padding: 20px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   overflow-y: auto;
   overscroll-behavior: contain;
   color: var(--text);
   font-size: 0.875rem;
   overflow-wrap: anywhere;
+}
+.skillspector__details > section {
+  min-width: 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+.skillspector__details > section > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 1rem;
+}
+.skillspector__advice {
+  border-inline-start: 3px solid var(--cyan);
 }
 .skillspector__details p {
   margin: 6px 0;
@@ -906,9 +1029,7 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
   margin: 12px 0;
 }
 .skillspector__records > li + li {
-  border-top: 1px solid var(--line);
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 14px;
 }
 .skillspector__coverage,
 .skillspector__findings {
@@ -922,11 +1043,8 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
   overflow-wrap: anywhere;
   font-size: 0.75rem;
 }
-.skillspector__details section + section,
 .skillspector__technical {
-  border-top: 1px solid var(--line);
-  margin-top: 18px;
-  padding-top: 18px;
+  margin-top: 2px;
 }
 .skillspector__record,
 .skillspector__context-record,
@@ -961,8 +1079,12 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
     max-height: calc(100dvh - 12px);
   }
   .skillspector__dialog-frame { max-height: calc(100dvh - 12px); }
-  .skillspector__dialog-header { padding: 14px; }
-  .skillspector__details { padding: 14px; }
+  .skillspector__dialog-header { padding: 14px; gap: 10px; }
+  .skillspector__dialog-actions { width: 100%; flex-wrap: nowrap; }
+  .skillspector__copy { flex: 1 1 auto; min-width: 0; }
+  .skillspector__dialog-close { min-height: 44px; }
+  .skillspector__details { padding: 14px; gap: 12px; }
+  .skillspector__details > section { padding: 14px; }
   .skillspector__dialog-header h2 { font-size: 1.05rem; }
 }
 .skillspector__disclaimer {
