@@ -96,6 +96,7 @@
       "scanComplete": "Análisis completo",
       "selectionScanned": "Skills seleccionados analizados",
       "retryLoad": "Volver a cargar",
+      "progressWithFailures": "{checked}/{total} analizados · {failed} fallidos · {waiting} pendientes · {limited} parciales",
       "coverageProgress": "Comprobados {checked}/{total} · {limited} sin completar",
       "waitingProgress": "Comprobados {checked}/{total} · {waiting} pendientes",
       "statusExplanation": "Algunos archivos o controles no pudieron verificarse. Esto no significa que se haya confirmado un problema de seguridad.",
