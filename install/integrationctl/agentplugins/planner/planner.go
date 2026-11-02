@@ -120,11 +120,12 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 		return domain.DeliveryPlan{}, err
 	}
 	plan.TargetAnchor, plan.TargetRoot, plan.ActivePath = target.TargetAnchor, target.TargetRoot, target.ActivePath
-	plan.Components = componentDecisions(request.Envelope, definition.Capabilities)
+	capabilities := definition.ScopedCapabilities(request.Scope)
+	plan.Components = componentDecisions(request.Envelope, capabilities)
 	interpreter, _ := clients.As[clients.ExtensionInterpreter](planner.Registry, plan.ClientID)
 	interpretExtensionDecisions(request.Envelope, plan.Components, interpreter)
 	commandsWithheld := applyCommandDecisions(&plan, request.Envelope, definition)
-	if err := planner.qualify(input, definition.Capabilities, commandsWithheld, &plan); err != nil {
+	if err := planner.qualify(input, capabilities, commandsWithheld, &plan); err != nil {
 		return plan, err
 	}
 	if plan.Status == domain.PlanUnsupported {
@@ -154,7 +155,7 @@ func (planner Planner) startPlan(ctx context.Context, request domain.PlanRequest
 	if !ok {
 		return domain.ClientDefinition{}, domain.DeliveryPlan{}, fmt.Errorf("unsupported client %q", request.Client.ClientID)
 	}
-	capabilities := definition.Capabilities
+	capabilities := definition.ScopedCapabilities(request.Scope)
 	targetContext, err := planner.requestContext(request)
 	if err != nil {
 		return definition, domain.DeliveryPlan{}, err
