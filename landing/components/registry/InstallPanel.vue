@@ -1,5 +1,5 @@
-import { isReviewedMarketingKit } from '~/data/marketingKitDemo';
 <script setup lang="ts">
+import { isReviewedMarketingKit } from '~/data/marketingKitDemo';
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
 import type { RegistryDiagnostic, ClientID, RegistryPlugin } from '~/types/registry';
 import { pluginCommands } from '~/utils/commands';
