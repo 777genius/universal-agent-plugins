@@ -19,6 +19,30 @@ import (
 const codexForeignProjectNamespace = "mcp__foreign_fixture"
 const codexForeignProjectTool = "uap_ping"
 const codexForeignProjectCallID = "call_uap_codex_project_foreign"
+const codexForeignProjectSearchID = "search_uap_codex_project_foreign"
+
+// Model-visible MCP tools are namespaced, including after deferred search.
+type codexProjectModelTool struct {
+	Name  string `json:"name"`
+	Type  string `json:"type"`
+	Tools []struct {
+		Name string `json:"name"`
+	} `json:"tools"`
+}
+
+func codexProjectModelHasForeign(tools []codexProjectModelTool) bool {
+	for _, tool := range tools {
+		if tool.Type != "namespace" || tool.Name != codexForeignProjectNamespace {
+			continue
+		}
+		for _, child := range tool.Tools {
+			if child.Name == codexForeignProjectTool {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // Only the model is scripted. A real pinned Codex app-server must discover the
 // project MCP child, execute its tools/call, and return the result to Responses.
@@ -32,6 +56,8 @@ type codexProjectModelStage struct {
 	wantCall   bool
 	requests   int
 	advertised int
+	searches    int
+	searchHits  int
 	issued     int
 	results    int
 	invalid    []string
@@ -75,45 +101,44 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Tools []struct {
-			Name  string `json:"name"`
-			Type  string `json:"type"`
-			Tools []struct {
-				Name string `json:"name"`
-			} `json:"tools"`
-		} `json:"tools"`
+		Tools []codexProjectModelTool `json:"tools"`
 		Input []json.RawMessage `json:"input"`
 	}
 	if json.Unmarshal(body, &input) != nil || len(input.Tools) > 128 || len(input.Input) > 128 {
 		reject("invalid model request shape", http.StatusBadRequest)
 		return
 	}
-	advertised := false
+	advertised := codexProjectModelHasForeign(input.Tools)
+	searchAvailable := false
 	for _, tool := range input.Tools {
-		if tool.Name == codexForeignProjectNamespace && tool.Type == "namespace" {
-			for _, member := range tool.Tools {
-				if member.Name == codexForeignProjectTool {
-					advertised = true
-				}
-			}
+		if tool.Type == "tool_search" {
+			searchAvailable = true
 		}
 	}
-	resultSeen, wrongResult := false, false
+	resultSeen, searchFound, wrongResult, wrongSearch := false, false, false, false
 	for _, raw := range input.Input {
 		var item struct {
-			Type   string          `json:"type"`
-			CallID string          `json:"call_id"`
-			Output json.RawMessage `json:"output"`
+			Type   string                  `json:"type"`
+			CallID string                  `json:"call_id"`
+			Output json.RawMessage         `json:"output"`
+			Tools  []codexProjectModelTool `json:"tools"`
 		}
 		if json.Unmarshal(raw, &item) != nil {
 			reject("invalid input item", http.StatusBadRequest)
 			return
 		}
-		if item.Type == "function_call_output" {
+		switch item.Type {
+		case "function_call_output":
 			if item.CallID == codexForeignProjectCallID && bytes.Contains(item.Output, []byte("uap-pong")) {
 				resultSeen = true
 			} else {
 				wrongResult = true
+			}
+		case "tool_search_output":
+			if item.CallID == codexForeignProjectSearchID && codexProjectModelHasForeign(item.Tools) {
+				searchFound = true
+			} else {
+				wrongSearch = true
 			}
 		}
 	}
@@ -129,26 +154,39 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 	if advertised {
 		stage.advertised++
 	}
+	if searchFound {
+		stage.searchHits++
+	}
 	if wrongResult {
 		stage.invalid = append(stage.invalid, "wrong function_call_output")
 	}
-	sendCall := false
-	if stage.requests > 8 {
+	if wrongSearch {
+		stage.invalid = append(stage.invalid, "wrong tool_search_output")
+	}
+	sendSearch, sendCall := false, false
+	switch {
+	case stage.requests > 8:
 		stage.invalid = append(stage.invalid, "model request budget exceeded")
-	} else if stage.wantCall {
-		switch {
-		case resultSeen:
-			stage.results++
-		case advertised && stage.issued == 0:
-			stage.issued++
-			sendCall = true
-		case !advertised:
-			stage.invalid = append(stage.invalid, "native Codex did not advertise foreign project tool")
-		default:
-			stage.invalid = append(stage.invalid, "model requested again without MCP result")
+	case !stage.wantCall:
+		if advertised || searchFound || resultSeen {
+			stage.invalid = append(stage.invalid, "project B received project A tool or result")
 		}
-	} else if advertised || resultSeen {
-		stage.invalid = append(stage.invalid, "project B received project A tool or result")
+	case resultSeen:
+		if stage.issued != 1 {
+			stage.invalid = append(stage.invalid, "result received without exactly one tool call")
+		} else {
+			stage.results++
+		}
+	case stage.issued > 0:
+		stage.invalid = append(stage.invalid, "model requested again without MCP result")
+	case advertised || (searchFound && stage.searches == 1):
+		stage.issued++
+		sendCall = true
+	case stage.searches == 0 && searchAvailable:
+		stage.searches++
+		sendSearch = true
+	default:
+		stage.invalid = append(stage.invalid, "foreign project MCP not available from tool_search")
 	}
 	m.mu.Unlock()
 
@@ -159,7 +197,13 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data)
 	}
 	emit("response.created", map[string]any{"type": "response.created", "response": map[string]string{"id": "resp_uap_codex_project"}})
-	if sendCall {
+	if sendSearch {
+		emit("response.output_item.done", map[string]any{"type": "response.output_item.done", "item": map[string]any{
+			"type": "tool_search_call", "call_id": codexForeignProjectSearchID,
+			"execution": "client",
+			"arguments": map[string]any{"query": "foreign_fixture uap_ping project MCP", "limit": 8},
+		}})
+	} else if sendCall {
 		emit("response.output_item.done", map[string]any{"type": "response.output_item.done", "item": map[string]string{
 			"type": "function_call", "call_id": codexForeignProjectCallID,
 			"namespace": codexForeignProjectNamespace, "name": codexForeignProjectTool, "arguments": "{}",
@@ -177,9 +221,36 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 	if flush, ok := w.(http.Flusher); ok {
 		flush.Flush()
 	}
-	if !sendCall {
+	if !sendCall && !sendSearch {
 		stage.once.Do(func() { close(stage.done) })
 	}
+}
+
+func TestCodexProjectModelDeferredMCPToolSearch(t *testing.T) {
+	m := &codexProjectModel{}
+	stage := m.begin(true)
+	send := func(body string) string {
+		t.Helper()
+		response := httptest.NewRecorder()
+		m.respond(response, httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(body)))
+		if response.Code != http.StatusOK {
+			t.Fatalf("fixture rejected valid Responses request: %d", response.Code)
+		}
+		return response.Body.String()
+	}
+	first := send(`{"tools":[{"type":"tool_search","name":"tool_search"}],"input":[]}`)
+	if !strings.Contains(first, `"tool_search_call"`) || !strings.Contains(first, codexForeignProjectSearchID) {
+		t.Fatal("first Responses turn did not request real Codex deferred MCP search")
+	}
+	second := send(`{"tools":[{"type":"tool_search","name":"tool_search"}],"input":[{"type":"tool_search_output","call_id":"search_uap_codex_project_foreign","tools":[{"type":"namespace","name":"mcp__foreign_fixture","tools":[{"type":"function","name":"uap_ping"}]}]}]}`)
+	if !strings.Contains(second, `"function_call"`) || !strings.Contains(second, `"namespace":"mcp__foreign_fixture"`) {
+		t.Fatal("pinned namespaced MCP function call missing after tool_search result")
+	}
+	third := send(`{"tools":[{"type":"tool_search","name":"tool_search"}],"input":[{"type":"function_call_output","call_id":"call_uap_codex_project_foreign","output":"uap-pong"}]}`)
+	if !strings.Contains(third, `"message"`) {
+		t.Fatal("function call result did not complete model turn")
+	}
+	m.verify(t, stage)
 }
 
 func TestCodexProjectModelRejectsMalformedRequests(t *testing.T) {
@@ -222,8 +293,8 @@ func (m *codexProjectModel) verify(t *testing.T, stage *codexProjectModelStage) 
 		t.Fatalf("invalid Codex model requests: total=%d kinds=%v", stage.requests, stage.invalid)
 	}
 	if stage.wantCall {
-		if stage.advertised == 0 || stage.issued != 1 || stage.results != 1 {
-			t.Fatalf("native Codex did not call and return foreign MCP tool: advertised=%d calls=%d results=%d", stage.advertised, stage.issued, stage.results)
+		if (stage.advertised == 0 && stage.searchHits == 0) || stage.issued != 1 || stage.results != 1 || stage.searches > 1 {
+			t.Fatalf("native Codex did not call and return foreign MCP tool: advertised=%d searches=%d hits=%d calls=%d results=%d", stage.advertised, stage.searches, stage.searchHits, stage.issued, stage.results)
 		}
 	} else if stage.advertised != 0 || stage.issued != 0 || stage.results != 0 {
 		t.Fatalf("project B leaked foreign MCP: advertised=%d calls=%d results=%d", stage.advertised, stage.issued, stage.results)
