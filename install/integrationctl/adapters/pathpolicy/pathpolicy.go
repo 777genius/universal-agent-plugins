@@ -22,6 +22,9 @@ var windowsReservedLeafIDs = map[string]struct{}{
 	"CON": {}, "PRN": {}, "AUX": {}, "NUL": {}, "CLOCK$": {},
 	"COM1": {}, "COM2": {}, "COM3": {}, "COM4": {}, "COM5": {}, "COM6": {}, "COM7": {}, "COM8": {}, "COM9": {},
 	"LPT1": {}, "LPT2": {}, "LPT3": {}, "LPT4": {}, "LPT5": {}, "LPT6": {}, "LPT7": {}, "LPT8": {}, "LPT9": {},
+	// Win32 also recognizes ISO-8859-1 superscript 1, 2 and 3 in device names.
+	// Keep these in the same rule used by ZIP/TAR, Git and local snapshots.
+	"COM¹": {}, "COM²": {}, "COM³": {}, "LPT¹": {}, "LPT²": {}, "LPT³": {},
 }
 
 // ValidatePortablePathSegment validates one package-tree path component while
