@@ -101,7 +101,6 @@ func projectReadinessStatus(installation domain.Installation, binding domain.Cli
 // source-only doctor has executed a vendor binary. Wording deliberately avoids
 // requiring a new UAP add/update for a correct Prepared installation.
 func projectReadinessActions(clientID, status string) []string {
-	actions := []string{}
 	switch status {
 	case "source_rebind_required":
 		return []string{"Review the original immutable source identity; do not adopt a different project or source automatically"}
@@ -116,59 +115,58 @@ func projectReadinessActions(clientID, status string) []string {
 	case "materialization_pending":
 		return []string{"Finish or recover the existing installation transaction before checking native activation"}
 	}
+	var explanation string
 	if status == "runtime_verified_in_record_only" {
-		actions = append(actions, "A previous runtime observation is recorded; rerun a fresh native-client session for current proof")
+		explanation = "A previous runtime observation is recorded; rerun a fresh native-client session for current proof"
 	} else {
-		actions = append(actions, "The project files are not proof of effective native discovery, model tool use, workspace trust or authentication")
+		explanation = "The project files are not proof of effective native discovery, model tool use, workspace trust or authentication"
 	}
-	switch clientID {
-	case "codex":
-		actions = append(actions,
-			"Start Codex in the selected project, review workspace trust and effective native settings",
-			"Check .agents/skills and the project .codex/config.toml; inspect codex mcp list --json in a fresh session")
-	case "claude":
-		actions = append(actions,
-			"Start Claude Code in the selected project and review the native trust/plugin state",
-			"Inspect /plugin and /mcp, then use /reload-plugins or restart after accepting project trust")
-	case "opencode":
-		actions = append(actions,
-			"Preserve the existing OpenCode v1/v2 installation; never switch generations implicitly",
-			"Start the selected OpenCode generation in this project and inspect effective config, skills and MCP with native debug/mcp commands")
-	case "gemini":
-		actions = append(actions,
-			"Start Gemini CLI in the selected project and review workspace trust and .gemini/settings.json",
-			"Inspect native skill discovery and MCP status in the current Gemini CLI session")
-	case "copilot":
-		actions = append(actions,
-			"Start GitHub Copilot CLI in the selected project and review native trust and MCP configuration",
-			"Confirm project .github/skills and project MCP loading in a fresh Copilot CLI session")
-	case "cursor":
-		actions = append(actions,
-			"Open the selected project in Cursor and review workspace trust, project Skills and MCP settings",
-			"Verify tool visibility and MCP server status inside Cursor; file preparation alone is not activation")
-	case "pi":
-		actions = append(actions,
-			"Start Pi in the project and explicitly review project trust before loading its extensions and Skills",
-			"Check native extension loading and project MCP tool use in a fresh Pi session")
-	case "kimi":
-		actions = append(actions,
-			"Start Kimi Code from the selected project Git root and inspect selected Skill directories",
-			"Check effective project .kimi-code/mcp.json loading and trust in a fresh session")
-	case "windsurf":
-		actions = append(actions, "Review the installed Devin Local/Windsurf client generation, project Skill selection and MCP import before use")
-	case "kiro":
-		actions = append(actions, "Inspect Kiro's project workspace, native trust, Skills and MCP selection in its own application")
-	case "cline":
-		actions = append(actions, "Review Cline project Skills and the explicitly selected native MCP settings; no default IDE forwarding is claimed")
-	case "vscode":
-		actions = append(actions, "Open the exact VS Code project folder and review workspace trust, project Skills and .vscode/mcp.json")
-	default:
-		actions = append(actions, "Open the supported client in the selected project and check its own trust, Skills and MCP discovery")
-	}
+	actions := append([]string{explanation}, projectNativeClientActions(clientID)...)
 	if status == "manual_activation_required" {
 		actions = append(actions, "Perform the documented manual native activation; do not treat this as automatic installation")
 	}
 	return actions
+}
+
+// Keep the per-client instructions apart from status policy so adding a client
+// cannot accidentally promote its project files to verified runtime execution.
+func projectNativeClientActions(clientID string) []string {
+	switch clientID {
+	case "codex":
+		return []string{"Start Codex in the selected project, review workspace trust and effective native settings",
+			"Check .agents/skills and the project .codex/config.toml; inspect codex mcp list --json in a fresh session"}
+	case "claude":
+		return []string{"Start Claude Code in the selected project and review the native trust/plugin state",
+			"Inspect /plugin and /mcp, then use /reload-plugins or restart after accepting project trust"}
+	case "opencode":
+		return []string{"Preserve the existing OpenCode v1/v2 installation; never switch generations implicitly",
+			"Start the selected OpenCode generation in this project and inspect effective config, skills and MCP with native debug/mcp commands"}
+	case "gemini":
+		return []string{"Start Gemini CLI in the selected project and review workspace trust and .gemini/settings.json",
+			"Inspect native skill discovery and MCP status in the current Gemini CLI session"}
+	case "copilot":
+		return []string{"Start GitHub Copilot CLI in the selected project and review native trust and MCP configuration",
+			"Confirm project .github/skills and project MCP loading in a fresh Copilot CLI session"}
+	case "cursor":
+		return []string{"Open the selected project in Cursor and review workspace trust, project Skills and MCP settings",
+			"Verify tool visibility and MCP server status inside Cursor; file preparation alone is not activation"}
+	case "pi":
+		return []string{"Start Pi in the project and explicitly review project trust before loading its extensions and Skills",
+			"Check native extension loading and project MCP tool use in a fresh Pi session"}
+	case "kimi":
+		return []string{"Start Kimi Code from the selected project Git root and inspect selected Skill directories",
+			"Check effective project .kimi-code/mcp.json loading and trust in a fresh session"}
+	case "windsurf":
+		return []string{"Review the installed Devin Local/Windsurf client generation, project Skill selection and MCP import before use"}
+	case "kiro":
+		return []string{"Inspect Kiro's project workspace, native trust, Skills and MCP selection in its own application"}
+	case "cline":
+		return []string{"Review Cline project Skills and the explicitly selected native MCP settings; no default IDE forwarding is claimed"}
+	case "vscode":
+		return []string{"Open the exact VS Code project folder and review workspace trust, project Skills and .vscode/mcp.json"}
+	default:
+		return []string{"Open the supported client in the selected project and check its own trust, Skills and MCP discovery"}
+	}
 }
 
 func projectPreparedFinding(installation domain.Installation, binding domain.ClientBinding) doctorFinding {
