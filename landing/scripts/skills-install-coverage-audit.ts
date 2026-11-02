@@ -37,7 +37,7 @@ for (const view of views) {
           signal: AbortSignal.timeout(15000),
         },
       );
-      if (!response.ok()) {
+      if (!response.ok) {
         report.incomplete.push(`${view.name}/${page}: HTTP ${response.status}`);
         break;
       }
@@ -45,7 +45,10 @@ for (const view of views) {
       assert.equal(result.view, view.name);
       assert.equal(result.page, page);
       assert.ok(Array.isArray(result.items) && result.items.length <= 200);
-      report.pages.push({ view: view.name, page, count: result.items.length, total: result.total });
+      report.pages.push({
+        view: view.name, page, count: result.items.length,
+        ...(typeof result.total === 'number' ? { total: result.total } : {}),
+      });
       for (const item of result.items) {
         if (seen.has(item.id)) continue;
         seen.add(item.id);

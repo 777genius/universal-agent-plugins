@@ -229,6 +229,9 @@ export function skillInstallCommand(
       skillNeedsManualSelection(skill) ? undefined : skill.skillNameHint,
       targets,
     );
-  // Website publishers do not have the GitHub picker.
+  // Website publishers do not have the GitHub picker, so an exact name
+  // remains mandatory even if the public API unexpectedly omits that field.
+  if (typeof skill.skillNameHint !== 'string' || !supportedSkillName(skill.skillNameHint))
+    return undefined;
   return buildInstallCommand(source, skill.skillNameHint, targets);
 }
