@@ -754,11 +754,6 @@
           "mcp": "Ferramentas MCP",
           "extensions": "Extensões"
         }
-      },
-      "marketingKitProject": {
-        "intro": "Salve primeiro este uap.toml no projeto e instale a versão exata.",
-        "agents": "Para Claude Code, Codex e Gemini CLI, quando instalados.",
-        "help": "Execute na pasta do projeto. Talvez seja preciso ativar agentes e entrar nos serviços."
       }
     },
     "authentication": {

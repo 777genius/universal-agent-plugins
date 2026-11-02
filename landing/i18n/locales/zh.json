@@ -754,11 +754,6 @@
           "mcp": "MCP 工具",
           "extensions": "扩展"
         }
-      },
-      "marketingKitProject": {
-        "intro": "请先将此 uap.toml 保存到项目，再安装指定版本。",
-        "agents": "适用于已安装的 Claude Code、Codex 和 Gemini CLI。",
-        "help": "请在项目目录运行。代理激活和服务登录可能仍需单独完成。"
       }
     },
     "authentication": {
