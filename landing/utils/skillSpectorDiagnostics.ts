@@ -21,6 +21,8 @@ export interface SkillSpectorDiagnosticInput {
  */
 export function serializeSkillSpectorDiagnostics(input: SkillSpectorDiagnosticInput): string {
   const { report, subject, assessment } = input;
+  // Keep original records once; the summary and the raw records are distinct data.
+  const { records, ...summary } = assessment;
   const repository = subject?.repository.toLowerCase();
   const aliases = report?.schema_version === 3 && repository
     ? report.repository_aliases.filter((alias) =>
@@ -78,10 +80,10 @@ export function serializeSkillSpectorDiagnostics(input: SkillSpectorDiagnosticIn
         displayed_status: input.displayStatus,
       },
       publication,
-      assessment,
+      assessment: summary,
       source_states: relevantStates,
       repository_aliases: aliases,
-      records: assessment.records,
+      records,
     },
     null,
     2,

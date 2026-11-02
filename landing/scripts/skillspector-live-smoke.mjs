@@ -640,7 +640,8 @@ try {
       assert.equal(pluginDiagnostics.listing.source.repository, plugin.source.repository);
       assert.equal(pluginDiagnostics.listing.displayed_status, assessment.status);
       assert.deepEqual(pluginDiagnostics.records, assessment.records);
-      assert.deepEqual(pluginDiagnostics.assessment.records, assessment.records);
+      assert.deepEqual(pluginDiagnostics.assessment.outcomes, assessment.outcomes);
+      assert.equal(Object.hasOwn(pluginDiagnostics.assessment, 'records'), false);
       assert.ok(
         pluginDiagnostics.records.some((record) => record.coverage?.ledger_exceptions?.length),
         'Original coverage diagnostics must survive clipboard export',

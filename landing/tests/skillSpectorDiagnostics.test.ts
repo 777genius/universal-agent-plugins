@@ -57,7 +57,8 @@ describe('SkillSpector AI diagnostic export', () => {
     assert.equal(exported.listing.source.path, subject.path);
     assert.equal(exported.publication.schema_version, 3);
     assert.deepEqual(exported.records, assessment.records);
-    assert.deepEqual(exported.assessment, JSON.parse(JSON.stringify(assessment)));
+    assert.deepEqual(exported.assessment.outcomes, assessment.outcomes);
+    assert.equal(Object.hasOwn(exported.assessment, 'records'), false);
     assert.ok(exported.records.length > 0);
     assert.ok(exported.records.every((record: { plugin_path: string }) =>
       record.plugin_path === subject.path));

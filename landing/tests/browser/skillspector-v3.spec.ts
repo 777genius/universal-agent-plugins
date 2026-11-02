@@ -1177,7 +1177,10 @@ for (const width of [1280, 390]) {
     expect(diagnostic.listing.report_load_status).toBe('ready');
     expect(diagnostic.listing.displayed_status).toBe('incomplete');
     expect(diagnostic.publication.schema_version).toBe(3);
-    expect(diagnostic.records).toEqual(diagnostic.assessment.records);
+    expect(diagnostic.assessment).not.toHaveProperty('records');
+    expect(diagnostic.assessment.outcomes).toEqual({
+      complete: 3, limited: 10, failed: 0, historical: 0, unscanned: 0,
+    });
     expect(diagnostic.records.length).toBe(13);
     expect(diagnostic.records.some((record: { coverage?: { ledger_exceptions?: unknown[] } }) =>
       Boolean(record.coverage?.ledger_exceptions?.length))).toBe(true);
