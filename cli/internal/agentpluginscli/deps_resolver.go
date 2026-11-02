@@ -78,15 +78,23 @@ func decodeDependencyLockBytes(body []byte, requirements environment.Requirement
 	return lock, nil
 }
 
-func writeDependencyLock(path string, lock environment.Lock) error {
+func encodeDependencyLockBytes(lock environment.Lock) ([]byte, error) {
 	body, err := json.MarshalIndent(lock, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)+1) > maxDependencyLockBytes {
+		return nil, fmt.Errorf("encode uap.lock: exceeds %d bytes", maxDependencyLockBytes)
+	}
+	return append(body, '\n'), nil
+}
+
+func writeDependencyLock(path string, lock environment.Lock) error {
+	body, err := encodeDependencyLockBytes(lock)
 	if err != nil {
 		return err
 	}
-	if int64(len(body)+1) > maxDependencyLockBytes {
-		return fmt.Errorf("encode uap.lock: exceeds %d bytes", maxDependencyLockBytes)
-	}
-	return atomicfile.Write(path, append(body, '\n'), 0o600)
+	return atomicfile.Write(path, body, 0o600)
 }
 
 func (resolver dependencyResolver) Resolve(ctx context.Context, requirement environment.Requirement, targets []string, previous *environment.LockedPackage, update bool) (environment.LockedPackage, error) {

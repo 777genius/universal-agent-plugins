@@ -107,7 +107,7 @@ jobs:
             go test -count=1 -timeout=5m -json ./adapters/pathpolicy -run '^TestValidateLeafID$'
           ) >> "$events"
           go test -count=1 -timeout=8m -json ./cli/internal/agentpluginscli \
-            -run '^(TestDependencyAgreementOversizedBytesFailClosed|TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized|TestDependencyAgreementReaderRejectsSymlinkAndKeepsTarget|TestDependencyIntentFilesRejectOversizedWriteWithoutMutation|TestSkillsReviewForeignDestinationSafeGuidance|TestSkillsReviewManagedSkillChanged|TestDependencyCandidateSizePreflightProtectsManifestAndLock|TestDependencyManagementRecoveryReaderIsBounded)$' >> "$events"
+            -run '^(TestDependencyAgreementOversizedBytesFailClosed|TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized|TestDependencyAgreementReaderRejectsSymlinkAndKeepsTarget|TestDependencyIntentFilesRejectOversizedWriteWithoutMutation|TestSkillsReviewForeignDestinationSafeGuidance|TestSkillsReviewManagedSkillChanged|TestDependencyCandidateSizePreflightProtectsManifestAndLock|TestDependencyManagementRecoveryReaderIsBounded|TestGeneratedOversizedLockRefusesBeforeStorePublication)$' >> "$events"
           python - "$events" <<'PY'
           import json
           import sys
@@ -123,6 +123,7 @@ jobs:
               "TestSkillsReviewManagedSkillChanged",
               "TestDependencyCandidateSizePreflightProtectsManifestAndLock",
               "TestDependencyManagementRecoveryReaderIsBounded",
+              "TestGeneratedOversizedLockRefusesBeforeStorePublication",
           }
           for name in sorted(tests):
               actions = {item.get("Action") for item in events if item.get("Test") == name}
@@ -135,7 +136,7 @@ jobs:
                   raise SystemExit(f"Go package {package} failed")
           if any(item.get("Action") in {"fail", "skip"} for item in events):
               raise SystemExit("agreement boundary suite failed or skipped")
-          print("Nine policy tests executed and passed; no false-green or skipped checks")
+          print("Ten policy tests executed and passed; no false-green or skipped checks")
           PY
       - name: Verify Win32 Unicode aliases across ZIP, TAR, source and snapshot
         shell: bash

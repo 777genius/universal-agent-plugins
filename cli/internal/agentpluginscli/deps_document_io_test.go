@@ -168,6 +168,31 @@ func TestDependencyManagementRecoveryReaderIsBounded(t *testing.T) {
 	}
 }
 
+func TestGeneratedOversizedLockRefusesBeforeStorePublication(t *testing.T) {
+	root := t.TempDir()
+	manifestPath := filepath.Join(root, "uap.toml")
+	lockPath := filepath.Join(root, "uap.lock")
+	manifest := []byte("schema_version = 1\n[dependencies]\n[targets]\n")
+	if err := os.WriteFile(manifestPath, manifest, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	app := App{ManagedRoot: filepath.Join(root, "managed"), EnvironmentStoreRoot: filepath.Join(root, "store")}
+	lock := environment.Lock{LockVersion: environment.LockVersion, ManifestDigest: strings.Repeat("x", int(maxDependencyLockBytes))}
+	err := publishResolvedDependencyLock(t.Context(), app, manifestPath, lockPath, manifest, nil, lock, true)
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("generated oversized lock was not rejected before publication: %v", err)
+	}
+	got, err := os.ReadFile(manifestPath)
+	if err != nil || !bytes.Equal(got, manifest) {
+		t.Fatalf("refused lock mutated source manifest: %q, %v", got, err)
+	}
+	for _, path := range []string{lockPath, app.EnvironmentStoreRoot} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatalf("refused oversized lock created state at %s: %v", path, err)
+		}
+	}
+}
+
 func TestDependencyAgreementReaderRejectsSymlinkAndKeepsTarget(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "foreign.toml")
