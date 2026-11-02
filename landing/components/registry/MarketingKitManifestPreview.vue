@@ -16,7 +16,9 @@ function collapse() {
   if (timer) clearTimeout(timer);
   open.value = false;
 }
-function toggle() { open.value ? collapse() : show(); }
+// Hover may already have opened the file before the click fires. Click always
+// opens it; Escape, outside click, mouse leave and the close button dismiss.
+function toggle() { show(); }
 function outside(event: PointerEvent) {
   if (root.value && !root.value.contains(event.target as Node)) collapse();
 }
