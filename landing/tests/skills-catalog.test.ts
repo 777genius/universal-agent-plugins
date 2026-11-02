@@ -9,6 +9,7 @@ import {
   restoreSkillsQuery,
   skillsCatalogQuery,
   skillInstallCommand,
+  skillManualSourceCommand,
   skillNeedsManualSelection,
   skillRepositoryUrl,
   skillPublisherUrl,
@@ -413,4 +414,53 @@ test('Skill pagination shows only 48 new items at a partial page boundary and re
   assert.equal(catalog.state.displayed.value.length, 248);
   assert.equal(catalog.state.failed.value, false);
   catalog.stop();
+});
+
+
+test('manual sources never convert unverified listings into inferred install selectors', () => {
+  assert.equal(
+    skillManualSourceCommand('https://github.com/anthropics/skills', 'UNTRUSTED $(echo injected)'),
+    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills',
+  );
+  assert.equal(
+    skillManualSourceCommand('https://open.feishu.cn', 'lark-mail', ['codex', 'claude']),
+    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail --target "codex,claude"',
+  );
+  assert.equal(
+    skillManualSourceCommand('https://uizze.sh', 'web-design'),
+    'npx universal-agent-plugins@latest skills add https://uizze.sh --skill web-design',
+  );
+  assert.equal(skillManualSourceCommand('https://open.feishu.cn', ''), undefined);
+  assert.equal(skillManualSourceCommand('https://open.feishu.cn', 'BAD NAME'), undefined);
+  assert.equal(skillManualSourceCommand('https://open.feishu.cn', 'skill', ['unknown']), undefined);
+  assert.equal(skillManualSourceCommand('https://github.com/owner/repo', '', []), undefined);
+  for (const input of [
+    '',
+    'owner/repo',
+    'http://github.com/owner/repo',
+    'https://github.com',
+    'https://github.com/owner/repo.git',
+    'https://github.com/owner/repo/tree/main',
+    'https://github.com/owner/repo?ref=main',
+    'https://github.com/owner/repo#x',
+    'https://github.com/owner/repo;echo x',
+    'https://github.com/owner/..',
+    'https://user:pass@github.com/owner/repo',
+    'https://www.skills.sh',
+    'https://skills.sh',
+    'https://publisher.example',
+    'https://publisher.local',
+    'https://xn--a.example.com',
+    'https://publisher.com/skill',
+    'https://publisher.com/',
+    'https://publisher.com:443',
+    'https://publisher.com?next=evil',
+    'https://127.0.0.1',
+    'https://user:pass@publisher.com',
+    'https://publisher.com\"$(echo injected)',
+    ' https://publisher.com',
+    'https://publisher.com\\n',
+  ]) {
+    assert.equal(skillManualSourceCommand(input, 'safe-name'), undefined, input);
+  }
 });
