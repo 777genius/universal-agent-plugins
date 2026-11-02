@@ -862,7 +862,7 @@ describe('SkillSpector v3 exact producer contract', () => {
     record.finding_count = 603;
     record.findings_truncated = true;
     const result = skillSpectorAssessment(report, subject);
-    assert.equal(result.status, 'stale');
+    assert.equal(result.status, 'incomplete');
     assert.equal(result.groupCount, undefined);
     assert.ok(result.fullyChecked! < 13);
   });
