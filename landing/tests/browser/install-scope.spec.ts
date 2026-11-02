@@ -149,7 +149,7 @@ for (const width of [1440, 390]) {
     await expect(panel.locator('.app-multiselect__trigger')).toContainText('Codex');
     await expect(panel.locator('.command-snippet')).toHaveCount(0);
     await expect(panel.getByRole('status').first()).toContainText('combination of agents');
-    await panel.getByRole('button', { name: 'This user', exact: true }).click();
+    await panel.getByRole('button', { name: 'This computer', exact: true }).click();
     await expect(panel.locator('.command-snippet--add code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00 --target codex',
     );
@@ -186,7 +186,7 @@ test('reviewed user-only v1 catalog generates exact pinned project Git commands'
   await expect(panel.locator('.command-snippet--update code')).toHaveText(expected);
   await expect(panel.locator('.command-snippet--remove code'))
     .toHaveText('npx -y universal-agent-plugins remove i18n-state-00 --scope project');
-  await panel.getByRole('button', { name: 'This user', exact: true }).click();
+  await panel.getByRole('button', { name: 'This computer', exact: true }).click();
   await expect(panel.locator('.command-snippet--add code'))
     .toHaveText('npx -y universal-agent-plugins add i18n-state-00 --target codex');
   expect(errors).toEqual([]);
@@ -208,5 +208,43 @@ test('unqualified project scope is hidden while auto agent delivery stays non-nu
   );
   await card.locator('.plugin-card__title-link').click();
   await expect(page.locator('.plugin-detail .install-scope')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('Marketing Kit project mode uses three-agent TOML and does not force Cursor', async ({ page }) => {
+  const errors = await offline(page);
+  const index = scopedFixture();
+  const plugin = index.plugins[0]!;
+  plugin.name = 'marketing-kit';
+  plugin.install_source = 'marketing-kit';
+  plugin.display_name = 'Marketing Kit';
+  plugin.trust_state = 'reviewed';
+  await projections(page, index);
+  await navigate(page, '/', 'en', '?q=marketing-kit');
+  const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
+  await card.locator('.plugin-card__install-toggle').click();
+  await expect(card.getByRole('button', { name: 'This computer', exact: true })).toBeVisible();
+  const project = card.getByRole('button', { name: 'This project', exact: true });
+  await project.click();
+  await expect(project).toHaveAttribute('aria-pressed', 'true');
+  const kit = card.locator('.marketing-kit-project');
+  await expect(kit).toBeVisible();
+  await expect(card.locator('.app-multiselect__trigger')).toHaveCount(0);
+  await expect(card.locator('.install-outcome')).toHaveCount(0);
+  await expect(kit.locator('pre code')).toContainText('"777genius/marketing-kit" = "0.1.0"');
+  for (const client of ['claude', 'codex', 'gemini']) {
+    await expect(kit.locator('pre code')).toContainText(`${client} = ["777genius/marketing-kit"]`);
+  }
+  await expect(kit.locator('.command-snippet--add code')).toHaveText(
+    'npx -y universal-agent-plugins install --scope project',
+  );
+  await expect(kit.locator('.command-snippet--add code')).not.toContainText('--target');
+  await expect(kit).not.toContainText('Cursor:');
+  await card.getByRole('button', { name: 'This computer', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'This computer', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(card.locator('.marketing-kit-project')).toHaveCount(0);
+  await expect(card.locator('.command-snippet--add code')).toHaveText(
+    'npx -y universal-agent-plugins add marketing-kit',
+  );
   expect(errors).toEqual([]);
 });
