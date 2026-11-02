@@ -37,8 +37,7 @@ export function skillsCatalogQuery(
 }
 function canonicalGitHubRepositoryUrl(repository: string | undefined): string | undefined {
   return repository &&
-    /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repository) &&
-    !repository.endsWith('.git')
+    /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repository)
     ? `https://github.com/${repository}`
     : undefined;
 }
@@ -183,7 +182,6 @@ function buildInstallCommand(
     .join(' ');
 }
 
-
 /**
  * Manual recovery is distinct from catalog provenance: a user supplies an
  * independent source and the CLI checks it. A GitHub repository opens the
@@ -199,7 +197,7 @@ export function skillManualSourceCommand(
 
   if (input.startsWith('https://github.com/')) {
     const repository = input.slice('https://github.com/'.length);
-    const source = canonicalGitHubRepositoryUrl(repository);
+    const source = repository.endsWith('.git') ? undefined : canonicalGitHubRepositoryUrl(repository);
     return source === input ? buildInstallCommand(source, undefined, targets) : undefined;
   }
 
@@ -210,6 +208,7 @@ export function skillManualSourceCommand(
   // Skill publisher origins. The CLI still validates a valid origin's index.
   if (
     hostname === 'skills.sh' || hostname === 'www.skills.sh' ||
+    hostname === 'github.com' || hostname === 'www.github.com' ||
     /(?:^|\.)xn--/i.test(hostname) ||
     /\.(?:local|localhost|internal|test|example|invalid)$/i.test(hostname)
   ) return undefined;
