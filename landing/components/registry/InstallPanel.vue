@@ -1,3 +1,4 @@
+import { isReviewedMarketingKit } from '~/data/marketingKitDemo';
 <script setup lang="ts">
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
 import type { RegistryDiagnostic, ClientID, RegistryPlugin } from '~/types/registry';
@@ -57,7 +58,7 @@ const targetOptions = computed(() =>
     })(),
   })),
 );
-const marketingKitProject = computed(() => props.plugin.name === 'marketing-kit' && scope.value === 'project');
+const marketingKitProject = computed(() => isReviewedMarketingKit(props.plugin) && scope.value === 'project');
 const commands = computed(() =>
   !marketingKitProject.value &&
   (scope.value !== 'project' || !autoDetect.value) &&
