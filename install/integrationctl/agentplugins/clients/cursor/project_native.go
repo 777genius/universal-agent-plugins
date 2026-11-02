@@ -54,11 +54,12 @@ func cursorProjectObjects(stagingRoot string, envelope domain.PackageEnvelope, p
 }
 
 func cursorProjectObject(layout shared.ProjectComponents, stagingRoot string, envelope domain.PackageEnvelope, component domain.ComponentDecision) (*domain.NativeObjectOwnership, error) {
-	if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
-		return nil, err
-	}
 	switch component.Kind {
 	case domain.ComponentSkill:
+		// Skill names are filesystem leafs; MCP names remain JSON member keys.
+		if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
+			return nil, err
+		}
 		skill, ok := envelope.Skills[component.Name]
 		if !ok {
 			return nil, fmt.Errorf("planned Cursor skill %q is missing", component.Name)

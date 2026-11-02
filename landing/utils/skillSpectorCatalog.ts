@@ -3,9 +3,10 @@ import type {
   SkillSpectorManifest,
   SkillSpectorManifestV3,
   SkillSpectorRecord,
+  SkillSpectorReport,
   SkillSpectorShardDescriptor,
 } from '../types/skillSpector.ts';
-import { decodeSkillSpectorRecords, loadSkillSpectorReport } from './skillSpector.ts';
+import { decodeSkillSpectorRecords, decodeSkillSpectorReport } from './skillSpector.ts';
 import { decodeSkillSpectorManifestV3, decodeSkillSpectorShardV3 } from './skillSpectorV3.ts';
 
 const revision = /^[0-9a-f]{40}$/;
@@ -186,7 +187,27 @@ class HttpError extends Error {
     this.status = status;
   }
 }
-async function readBytes(
+class NetworkError extends Error {
+  constructor() {
+    super('SkillSpector request was interrupted');
+  }
+}
+function networkError(error: unknown): never {
+  if (
+    error instanceof TypeError ||
+    (error instanceof DOMException && ['AbortError', 'TimeoutError'].includes(error.name))
+  )
+    throw new NetworkError();
+  throw error;
+}
+/** Only recoverable transport failures qualify for an explicit UI retry. */
+export function isTransientSkillSpectorError(error: unknown): boolean {
+  return (
+    error instanceof NetworkError ||
+    (error instanceof HttpError && [408, 429, 500, 502, 503, 504].includes(error.status))
+  );
+}
+async function readBytesOnce(
   url: string,
   maximum: number,
   fetcher: typeof fetch,
@@ -195,10 +216,10 @@ async function readBytes(
     headers: { Accept: 'application/json' },
     credentials: 'omit',
     signal: AbortSignal.timeout(15_000),
-  });
+  }).catch(networkError);
   if (!response.ok) throw new HttpError(response.status);
   if (Number(response.headers.get('content-length')) > maximum || !response.body) {
-    await response.body?.cancel();
+    await response.body?.cancel().catch(() => undefined);
     invalid();
   }
   const reader = response.body.getReader();
@@ -210,11 +231,13 @@ async function readBytes(
       if (done) break;
       length += value.byteLength;
       if (length > maximum) {
-        await reader.cancel();
+        await reader.cancel().catch(() => undefined);
         invalid();
       }
       chunks.push(value);
     }
+  } catch (error) {
+    networkError(error);
   } finally {
     reader.releaseLock();
   }
@@ -226,11 +249,51 @@ async function readBytes(
   }
   return bytes;
 }
+async function readBytes(url: string, maximum: number, fetcher: typeof fetch) {
+  try {
+    return await readBytesOnce(url, maximum, fetcher);
+  } catch (error) {
+    // Rate limits wait for a later request after the cache cooldown. Other
+    // transient failures get one retry; validation failures never retry.
+    if (
+      !isTransientSkillSpectorError(error) ||
+      (error instanceof HttpError && error.status === 429)
+    )
+      throw error;
+    await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    return readBytesOnce(url, maximum, fetcher);
+  }
+}
 function parse(bytes: Uint8Array): unknown {
   return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
 }
 
-/** A session cache; only requested repositories download findings. Failed promises remain isolated. */
+type CachedRequest<T> = { promise: Promise<T>; retryAt?: number };
+function cachedRequest<T>(
+  cache: Map<string, CachedRequest<T>>,
+  key: string,
+  work: () => Promise<T>,
+): Promise<T> {
+  const existing = cache.get(key);
+  if (existing && (existing.retryAt === undefined || Date.now() < existing.retryAt))
+    return existing.promise;
+  const entry: CachedRequest<T> = {
+    promise: Promise.resolve()
+      .then(work)
+      .catch((error) => {
+        if (isTransientSkillSpectorError(error)) entry.retryAt = Date.now() + 30_000;
+        throw error;
+      }),
+  };
+  cache.set(key, entry);
+  return entry.promise;
+}
+
+function dropTransientFailures<T>(cache: Map<string, CachedRequest<T>>): void {
+  for (const [key, entry] of cache) if (entry.retryAt !== undefined) cache.delete(key);
+}
+
+/** Shared session cache; transient failures recover on explicit retry or later demand. */
 export function createSkillSpectorClient(
   manifestUrl: string,
   legacyUrl: string,
@@ -242,19 +305,28 @@ export function createSkillSpectorClient(
       .then((bytes) => decodeSkillSpectorManifest(parse(bytes)))
       .catch(async (error) => {
         if (error instanceof HttpError && error.status === 404)
-          return loadSkillSpectorReport(legacyUrl, fetcher);
+          return readBytes(legacyUrl, 8 << 20, fetcher).then((bytes) =>
+            decodeSkillSpectorReport(parse(bytes)),
+          );
         throw error;
       });
-  const manifests = v3ManifestUrl
-    ? readBytes(v3ManifestUrl, 16 << 20, fetcher)
-        .then((bytes) => decodeSkillSpectorManifestV3(parse(bytes)))
-        .catch((error) => {
-          if (error instanceof HttpError && error.status === 404) return legacyManifest();
-          throw error;
-        })
-    : legacyManifest();
-  const repositories = new Map<string, Promise<SkillSpectorDisplayReport>>();
-  const shards = new Map<string, Promise<SkillSpectorRecord[]>>();
+  const manifests = new Map<
+    string,
+    CachedRequest<SkillSpectorReport | SkillSpectorManifest | SkillSpectorManifestV3>
+  >();
+  const loadManifest = () =>
+    cachedRequest(manifests, 'manifest', () =>
+      v3ManifestUrl
+        ? readBytes(v3ManifestUrl, 16 << 20, fetcher)
+            .then((bytes) => decodeSkillSpectorManifestV3(parse(bytes)))
+            .catch((error) => {
+              if (error instanceof HttpError && error.status === 404) return legacyManifest();
+              throw error;
+            })
+        : legacyManifest(),
+    );
+  const repositories = new Map<string, CachedRequest<SkillSpectorDisplayReport>>();
+  const shards = new Map<string, CachedRequest<SkillSpectorRecord[]>>();
   let active = 0;
   const waiting: (() => void)[] = [];
   async function limited<T>(work: () => Promise<T>): Promise<T> {
@@ -272,9 +344,8 @@ export function createSkillSpectorClient(
     manifest: SkillSpectorManifest | SkillSpectorManifestV3,
     descriptor: SkillSpectorShardDescriptor,
   ) {
-    let pending = shards.get(descriptor.path);
-    if (!pending) {
-      pending = limited(async () => {
+    return cachedRequest(shards, descriptor.path, () =>
+      limited(async () => {
         const bytes = await readBytes(
           new URL(descriptor.path, manifest.schema_version === 3 ? v3ManifestUrl! : manifestUrl)
             .href,
@@ -290,67 +361,66 @@ export function createSkillSpectorClient(
         return manifest.schema_version === 3
           ? decodeSkillSpectorShardV3(parse(bytes), manifest, descriptor)
           : decodeSkillSpectorShard(parse(bytes), manifest, descriptor);
-      });
-      shards.set(descriptor.path, pending);
-    }
-    return pending;
+      }),
+    );
   }
-  return {
-    async reportFor(repositoryName: string): Promise<SkillSpectorDisplayReport> {
+  const reportFor = async (repositoryName: string): Promise<SkillSpectorDisplayReport> => {
       const key = repositoryName.toLowerCase();
-      let pending = repositories.get(key);
-      if (!pending) {
-        pending = (async () => {
-          const manifest = await manifests;
-          if (manifest.schema_version === 1) return manifest;
-          const canonical =
-            manifest.schema_version === 3
-              ? String(
-                  manifest.repository_aliases.find(
-                    (alias) => String(alias.repository).toLowerCase() === key,
-                  )?.canonical_repository ?? key,
-                ).toLowerCase()
-              : key;
-          const descriptors = manifest.shards.filter(
-            (shard) => shard.repository.toLowerCase() === canonical,
-          );
-          const records = (
-            await Promise.all(descriptors.map((descriptor) => loadShard(manifest, descriptor)))
-          ).flat();
-          const ids = new Set<string>();
-          const subjects = new Set<string>();
-          for (const record of records) {
-            const subject = JSON.stringify([
-              record.kind,
-              record.source.repository.toLowerCase(),
-              record.source.revision,
-              record.source.path,
-              record.plugin_path,
-            ]);
-            if (ids.has(record.id) || subjects.has(subject)) invalid();
-            ids.add(record.id);
-            subjects.add(subject);
-          }
-          const pluginCounts = new Map<string, number>();
-          for (const record of records) {
-            if (record.kind === 'plugin_skill')
-              pluginCounts.set(
-                record.plugin_path!,
-                (pluginCounts.get(record.plugin_path!) ?? 0) + 1,
-              );
-          }
-          for (const plugin of manifest.plugin_coverage.filter(
-            (item) => item.repository.toLowerCase() === canonical,
-          )) {
-            if ((pluginCounts.get(plugin.plugin_path) ?? 0) !== plugin.reported) invalid();
-            pluginCounts.delete(plugin.plugin_path);
-          }
-          if (pluginCounts.size) invalid();
-          return { ...manifest, records };
-        })();
-        repositories.set(key, pending);
-      }
-      return pending;
+      return cachedRequest(repositories, key, async () => {
+        const manifest = await loadManifest();
+        if (manifest.schema_version === 1) return manifest;
+        const canonical =
+          manifest.schema_version === 3
+            ? String(
+                manifest.repository_aliases.find(
+                  (alias) => String(alias.repository).toLowerCase() === key,
+                )?.canonical_repository ?? key,
+              ).toLowerCase()
+            : key;
+        const descriptors = manifest.shards.filter(
+          (shard) => shard.repository.toLowerCase() === canonical,
+        );
+        const records = (
+          await Promise.all(descriptors.map((descriptor) => loadShard(manifest, descriptor)))
+        ).flat();
+        const ids = new Set<string>();
+        const subjects = new Set<string>();
+        for (const record of records) {
+          const subject = JSON.stringify([
+            record.kind,
+            record.source.repository.toLowerCase(),
+            record.source.revision,
+            record.source.path,
+            record.plugin_path,
+          ]);
+          if (ids.has(record.id) || subjects.has(subject)) invalid();
+          ids.add(record.id);
+          subjects.add(subject);
+        }
+        const pluginCounts = new Map<string, number>();
+        for (const record of records) {
+          if (record.kind === 'plugin_skill')
+            pluginCounts.set(record.plugin_path!, (pluginCounts.get(record.plugin_path!) ?? 0) + 1);
+        }
+        for (const plugin of manifest.plugin_coverage.filter(
+          (item) => item.repository.toLowerCase() === canonical,
+        )) {
+          if ((pluginCounts.get(plugin.plugin_path) ?? 0) !== plugin.reported) invalid();
+          pluginCounts.delete(plugin.plugin_path);
+        }
+        if (pluginCounts.size) invalid();
+        return { ...manifest, records };
+      });
+  };
+  return {
+    reportFor,
+    retryReportFor(repositoryName: string): Promise<SkillSpectorDisplayReport> {
+      // Preserve validated successful results and requests still in flight.
+      // Only previously failed transport requests are eligible for re-fetch.
+      dropTransientFailures(manifests);
+      dropTransientFailures(shards);
+      dropTransientFailures(repositories);
+      return reportFor(repositoryName);
     },
   };
 }

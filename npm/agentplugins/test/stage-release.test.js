@@ -260,8 +260,10 @@ test("historical schema-v2 staging rejects missing notices before mutations or p
   assert.deepEqual(snapshot(), before);
 });
 
+// The Required workflow runs this one in its own parallel job and sets
+// AGENTPLUGINS_SKIP_STAGED_HERMETIC=1 for the main lane, because it reruns this whole suite.
 test("staged package tests are hermetic to repository layout and caller cwd", {
-  skip: process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1"
+  skip: process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1" || process.env.AGENTPLUGINS_SKIP_STAGED_HERMETIC === "1"
 }, async (t) => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-hermetic-stage-"));
   t.after(() => fsp.rm(root, { recursive: true, force: true }));

@@ -172,6 +172,121 @@ func configureNativeFixtureCredentials(t *testing.T, home, origin string, privat
 	}
 }
 
+// forcedCRLFCheckoutRunner emulates a Windows-style checkout default on every
+// CI platform. It changes only an isolated, newly initialized Git fixture;
+// production still performs the real fetch, checkout and sealed snapshot.
+type forcedCRLFCheckoutRunner struct {
+	delegate Runner
+	injected bool
+	checked  bool
+}
+
+func (runner *forcedCRLFCheckoutRunner) Run(ctx context.Context, command Command) ([]byte, error) {
+	out, err := runner.delegate.Run(ctx, command)
+	if err != nil {
+		return out, err
+	}
+	if len(command.Args) == 3 && command.Args[0] == "init" && command.Args[1] == "--quiet" {
+		// Simulate the native Windows CRLF default before production applies
+		// its own isolated repository configuration.
+		config := exec.CommandContext(ctx, "git", "-C", command.Args[2], "config", "core.eol", "crlf")
+		config.Env = isolatedGitEnvironment(os.Environ(), command.Dir)
+		if output, e := config.CombinedOutput(); e != nil {
+			return nil, fmt.Errorf("configure disposable CRLF control: %w: %s", e, output)
+		}
+		runner.injected = true
+	}
+	if len(command.Args) >= 4 && command.Args[0] == "-C" && command.Args[2] == "checkout" {
+		config := exec.CommandContext(ctx, "git", "-C", command.Args[1], "config", "--get", "core.eol")
+		config.Env = isolatedGitEnvironment(os.Environ(), command.Dir)
+		output, e := config.Output()
+		if e != nil || strings.TrimSpace(string(output)) != "lf" {
+			return nil, fmt.Errorf("immutable checkout did not override OS-dependent core.eol: %q: %w", output, e)
+		}
+		runner.checked = true
+	}
+	return out, nil
+}
+
+// Git's core.autocrlf=false is not sufficient with .gitattributes text=auto:
+// core.eol=crlf materializes CRLF from the same committed LF blob. Compare a
+// actual immutable Git acquisition against that adversarial local default.
+// Explicit per-path eol=crlf remains respected rather than rewritten to LF.
+func TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL(t *testing.T) {
+	root, work, _ := nativeFixtureRepository(t)
+	if err := os.WriteFile(filepath.Join(work, ".gitattributes"),
+		[]byte("payload text=auto\nexplicit.txt text eol=crlf\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "payload"), []byte("first\nsecond\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "explicit.txt"), []byte("explicit\nwindows\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	nativeFixtureGit(t, work, "add", ".gitattributes", "payload", "explicit.txt")
+	nativeFixtureGit(t, work, "-c", "user.name=777genius",
+		"-c", "user.email=fixture@example.invalid",
+		"commit", "--quiet", "-m", "test: textual attribute source")
+	commit := nativeFixtureGit(t, work, "rev-parse", "HEAD")
+	nativeFixtureGit(t, work, "push", "--quiet", filepath.Join(root, "repo.git"), "HEAD")
+
+	// Keep the real Git fetch/checkout and its hardened process runner, but
+	// replace only the remote transport with the already-supported local
+	// fixture seam. Platform-specific self-signed TLS is tested separately;
+	// an HTTPS certificate failure must not masquerade as an EOL regression.
+	source := sourcespec.Git{URL: "https://github.com/example/portable-eol.git"}
+	bare := filepath.Join(root, "repo.git")
+	fixtureEndpoint := func(repository string) string {
+		if repository != "example/portable-eol" {
+			t.Fatalf("unexpected fixture repository %q", repository)
+		}
+		return bare
+	}
+	baseline, err := (Acquirer{TempRoot: t.TempDir(), Runner: OSRunner{}, URLForRepo: fixtureEndpoint}).
+		AcquireGit(t.Context(), source, commit, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = packagedigest.Remove(baseline) }()
+
+	forced := &forcedCRLFCheckoutRunner{delegate: OSRunner{}}
+	got, err := (Acquirer{TempRoot: t.TempDir(), Runner: forced, URLForRepo: fixtureEndpoint}).
+		AcquireGit(t.Context(), source, commit, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = packagedigest.Remove(got) }()
+	if !forced.injected || !forced.checked {
+		t.Fatal("disposable CRLF control or real immutable Git checkout was not observed")
+	}
+	if baseline.Source.SourceURL != source.URL || got.Source.SourceURL != source.URL ||
+		baseline.Source.ResolvedRevision != commit || got.Source.ResolvedRevision != commit {
+		t.Fatalf("disposable Git fixture changed the requested source identity: baseline=%+v forced=%+v", baseline.Source, got.Source)
+	}
+	if got.TreeDigest == "" || got.TreeDigest != baseline.TreeDigest {
+		t.Fatalf("OS checkout changed source tree identity: baseline=%q forced=%q",
+			baseline.TreeDigest, got.TreeDigest)
+	}
+	for _, tc := range []struct {
+		name, expected string
+	}{
+		{name: "payload", expected: "first\nsecond\n"},
+		{name: "explicit.txt", expected: "explicit\r\nwindows\r\n"},
+	} {
+		plain, e := os.ReadFile(filepath.Join(baseline.Root, tc.name))
+		if e != nil || string(plain) != tc.expected {
+			t.Fatalf("baseline %s bytes differ from Git attribute contract: %q %v",
+				tc.name, plain, e)
+		}
+		acquired, e := os.ReadFile(filepath.Join(got.Root, tc.name))
+		if e != nil || string(acquired) != tc.expected {
+			t.Fatalf("forced-CRLF %s bytes differ from immutable source: %q %v",
+				tc.name, acquired, e)
+		}
+	}
+}
+
 func TestNativeGitBrowserSlashRefAndAmbiguity(t *testing.T) {
 	root, work, commit := nativeFixtureRepository(t)
 	nativeFixtureGit(t, work, "branch", "feature/a")

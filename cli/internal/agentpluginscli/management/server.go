@@ -92,6 +92,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/skills/catalog/{catalogId}", s.discardSkillsCatalog)
 	mux.HandleFunc("GET /api/v1/skills/catalog/{catalogId}/candidates/{candidateId}/preview", s.skillsPreview)
 	mux.HandleFunc("GET /api/v1/environment", s.environment)
+	mux.HandleFunc("POST /api/v1/environment/check-updates", s.checkUpdates)
 	mux.HandleFunc("POST /api/v1/plans", s.prepare)
 	mux.HandleFunc("POST /api/v1/plans/{id}/apply", s.apply)
 	mux.HandleFunc("DELETE /api/v1/plans/{id}", s.discardPlan)

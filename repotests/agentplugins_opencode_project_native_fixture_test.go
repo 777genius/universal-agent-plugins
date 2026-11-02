@@ -27,13 +27,15 @@ const openCodeProjectLimit = 128 << 10
 const openCodeProjectEnvelopeLimit = 32 << 20
 
 type openCodePassiveRecorder struct {
-	server   *http.Server
-	listener net.Listener
-	accepted atomic.Int64
-	requests atomic.Int64
-	mu       sync.Mutex
-	samples  []string
-	done     chan struct{}
+	server        *http.Server
+	listener      net.Listener
+	accepted      atomic.Int64
+	requests      atomic.Int64
+	unexpected    atomic.Int64
+	mu            sync.Mutex
+	approvedPaths map[string]bool
+	samples       []string
+	done          chan struct{}
 }
 
 func newOpenCodePassiveRecorder(t *testing.T) *openCodePassiveRecorder {
@@ -44,7 +46,7 @@ func newOpenCodePassiveRecorder(t *testing.T) *openCodePassiveRecorder {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := &openCodePassiveRecorder{listener: listener, done: make(chan struct{})}
+	r := &openCodePassiveRecorder{listener: listener, done: make(chan struct{}), approvedPaths: make(map[string]bool)}
 	r.server = &http.Server{ReadHeaderTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second, IdleTimeout: time.Second,
 		ConnState: func(c net.Conn, s http.ConnState) {
 			if s == http.StateNew {
@@ -55,6 +57,9 @@ func newOpenCodePassiveRecorder(t *testing.T) *openCodePassiveRecorder {
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
 			r.requests.Add(1)
 			r.mu.Lock()
+			if q.Method != http.MethodPost || q.URL.RawQuery != "" || !r.approvedPaths[q.URL.EscapedPath()] {
+				r.unexpected.Add(1)
+			}
 			if len(r.samples) < 8 {
 				sample := q.Method + " " + q.URL.EscapedPath()
 				if len(sample) > 256 {
@@ -72,7 +77,11 @@ func (r *openCodePassiveRecorder) counts() [2]int64 {
 	return [2]int64{r.accepted.Load(), r.requests.Load()}
 }
 func (r *openCodePassiveRecorder) url(marker string) string {
-	return "http://" + r.listener.Addr().String() + "/" + marker
+	path := "/" + marker
+	r.mu.Lock()
+	r.approvedPaths[path] = true
+	r.mu.Unlock()
+	return "http://" + r.listener.Addr().String() + path
 }
 func (r *openCodePassiveRecorder) close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -192,7 +201,7 @@ func (f *openCodeProjectFixture) command(t *testing.T, class, label, exe, cwd st
 		t.Fatal("command not in finite project table or repeated")
 	}
 	f.used[label] = class
-	if class == "native" && !reflect.DeepEqual(args, []string{"--version"}) && !reflect.DeepEqual(args, []string{"debug", "config"}) && !reflect.DeepEqual(args, []string{"debug", "skill"}) {
+	if class == "native" && !reflect.DeepEqual(args, []string{"--version"}) && !reflect.DeepEqual(args, []string{"debug", "config"}) && !reflect.DeepEqual(args, []string{"debug", "config", "--standalone"}) && !reflect.DeepEqual(args, []string{"debug", "skill"}) {
 		f.failed = true
 		t.Fatal("unreviewed native argv")
 	}
@@ -208,7 +217,22 @@ func (f *openCodeProjectFixture) command(t *testing.T, class, label, exe, cwd st
 	f.keep(t, errName, result.Stderr)
 	digest := func(body []byte) string { sum := sha256.Sum256(body); return hex.EncodeToString(sum[:]) }
 	f.records = append(f.records, map[string]any{"class": class, "label": label, "argv": append([]string{exe}, args...), "cwd": cwd, "exit": result.Exit, "error": result.Error, "error_kind": result.ErrorKind, "deadline": result.Deadline, "stdout_limit": result.StdoutLimit, "stderr_limit": result.StderrLimit, "elapsed_ms": result.ElapsedMS, "stdout_file": outName, "stderr_file": errName, "stdout_bytes": len(result.Stdout), "stderr_bytes": len(result.Stderr), "stdout_sha256": digest(result.Stdout), "stderr_sha256": digest(result.Stderr), "recorder_before": before, "recorder_after": after})
-	if before != [2]int64{} || after != [2]int64{} || projectNativeCaptureAdmission(result, class == "uap" && label == "repeat-remove-A") != nil {
+	// V2's MCP connection attempts can retry asynchronously after the
+	// native skill subprocess has exited. Attribute only what was actually
+	// observed: every request must match one of the fixture's exact paths and
+	// approved POST method, and the total remains bounded across the entire
+	// lifecycle. A passing UAP command is not proof of zero network activity.
+	// V1 retains its original strict zero-contact contract.
+	v2 := os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") == "2.2.5"
+	unexpectedTraffic := f.recorder.unexpected.Load() != 0
+	if v2 {
+		unexpectedTraffic = unexpectedTraffic || after[0] < before[0] || after[1] < before[1] ||
+			after[0] > 128 || after[1] > 128
+	} else {
+		unexpectedTraffic = unexpectedTraffic || before != [2]int64{} || after != before
+	}
+	if unexpectedTraffic ||
+		projectNativeCaptureAdmission(result, class == "uap" && label == "repeat-remove-A") != nil {
 		f.failed = true
 		t.Fatal("child deadline/output limit or unexpected MCP connection; see bounded evidence")
 	}
@@ -221,8 +245,9 @@ func (f *openCodeProjectFixture) setup(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.evidence["source_identity"] = identity
-	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") != "1.18.34" || nativeSHA(t, f.client) != os.Getenv("AGENTPLUGINS_OPENCODE_SHA256") {
-		t.Fatal("missing/exact OpenCode pin mismatch")
+	pinnedVersion := os.Getenv("AGENTPLUGINS_OPENCODE_VERSION")
+	if (pinnedVersion != "1.18.34" && pinnedVersion != "2.2.5") || nativeSHA(t, f.client) != os.Getenv("AGENTPLUGINS_OPENCODE_SHA256") {
+		t.Fatal("missing/exact OpenCode V1/V2 pin mismatch")
 	}
 	f.evidence["client_sha256"] = nativeSHA(t, f.client)
 	f.evidence["installer_sha256"] = nativeSHA(t, f.installer)
@@ -238,8 +263,14 @@ func (f *openCodeProjectFixture) setup(t *testing.T) {
 		}
 	}
 	r := f.command(t, "native", "version", f.client, f.user, f.env(), []string{"--version"})
-	if r.Exit != 0 || len(bytesTrim(r.Stderr)) != 0 || string(bytesTrim(r.Stdout)) != "1.18.34" {
-		t.Fatal("native version is not exact pin")
+	expectedOutput := pinnedVersion
+	if pinnedVersion == "2.2.5" {
+		// The pinned V2 native CLI prints its product prefix; V1 prints only
+		// the semver. Both are exact byte-for-byte native observations.
+		expectedOutput = "opencode v2.2.5"
+	}
+	if r.Exit != 0 || len(bytesTrim(r.Stderr)) != 0 || string(bytesTrim(r.Stdout)) != expectedOutput {
+		t.Fatal("native version is not exact pinned V1/V2 output")
 	}
 	f.evidence["client_version_measured"] = string(bytesTrim(r.Stdout))
 	for _, item := range []struct{ root, marker string }{{f.sourceA, "A-one"}, {f.sourceB, "B-one"}, {f.sourceUser, "USER-same"}, {f.sourceJSON, "JSON-one"}} {
@@ -332,18 +363,34 @@ func (f *openCodeProjectFixture) binding(t *testing.T, project string) domain.Cl
 func (f *openCodeProjectFixture) config(t *testing.T, label, project string, extra []string) map[string]any {
 	t.Helper()
 	env := append(f.env(), extra...)
-	r := f.command(t, "native", label+"-config", f.client, project, env, []string{"debug", "config"})
+	argv := []string{"debug", "config"}
+	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") == "2.2.5" {
+		// V2 otherwise reuses a background server whose effective config
+		// can remain at the previous revision after UAP changes owned files.
+		// Standalone creates an isolated fresh server for this exact project
+		// observation. V1's original CLI contract remains untouched.
+		argv = []string{"debug", "config", "--standalone"}
+	}
+	r := f.command(t, "native", label+"-config", f.client, project, env, argv)
 	if r.Exit != 0 || len(bytesTrim(r.Stderr)) != 0 {
 		t.Fatal("native config failed or warned; see exact evidence")
 	}
 	object, err := openCodeProjectConfig(r.Stdout)
+	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") == "2.2.5" {
+		object, err = openCodeProjectV2SourceConfig(
+			r.Stdout, filepath.Join(f.work, "xdg-config", "opencode"),
+			project, len(extra) > 0, project != f.user)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
 	return object
 }
-func (f *openCodeProjectFixture) skills(t *testing.T, label, project string, precedence bool) map[string]openCodeProjectSkill {
+func (f *openCodeProjectFixture) skills(t *testing.T, label, project string, precedence bool, required ...string) map[string]openCodeProjectSkill {
 	t.Helper()
+	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") == "2.2.5" {
+		return f.skillsV2(t, label, project, required...)
+	}
 	r := f.command(t, "native", label+"-skill", f.client, project, f.env(), []string{"debug", "skill"})
 	if r.Exit != 0 {
 		t.Fatal("native skill command failed; see exact evidence")
@@ -402,7 +449,11 @@ func (f *openCodeProjectFixture) observe(t *testing.T, label, project, source, m
 	if err := openCodeProjectCheckConfig(f.config(t, label, project, nil), urls, absent); err != nil {
 		t.Fatal(err)
 	}
-	if err := openCodeProjectCheckSkills(f.skills(t, label, project, false), expected, forbidden); err != nil {
+	required := make([]string, 0, len(expected))
+	for name := range expected {
+		required = append(required, name)
+	}
+	if err := openCodeProjectCheckSkills(f.skills(t, label, project, false, required...), expected, forbidden); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -460,9 +511,23 @@ func (f *openCodeProjectFixture) finish(t *testing.T) {
 		f.failed = true
 		t.Error("passive recorder cleanup exceeded independent deadline")
 	}
-	if f.recorder.counts() != [2]int64{} {
+	counts := f.recorder.counts()
+	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") == "2.2.5" {
+		// V2 initializes configured MCP servers on native startup, including
+		// while querying /api/skill. The passive 503 fixture proves an
+		// attempted HTTP transport, never initialize/tools/list/tools/call.
+		// Refuse any unregistered project endpoint, unexpected HTTP method,
+		// or unbounded traffic rather than disguising it as skill evidence.
+		if counts[0] == 0 || counts[1] == 0 || counts[0] > 128 || counts[1] > 128 || f.recorder.unexpected.Load() != 0 {
+			f.failed = true
+			f.stages["v2_mcp_transport_attempt"] = nativeStage{Status: "failed", Reason: "native V2 startup did not stay within declared loopback project endpoints"}
+			t.Error("unexpected native V2 MCP traffic")
+		} else {
+			f.stages["v2_mcp_transport_attempt"] = nativeStage{Status: "passed", Reason: "bounded POST attempts to exact selected loopback endpoints; MCP handshake and real model remain unqualified"}
+		}
+	} else if counts != [2]int64{} {
 		f.failed = true
-		f.stages["unexpected_mcp_connection"] = nativeStage{Status: "failed", Reason: "passive endpoint observed accepted TCP/HTTP; no handshake qualification"}
+		f.stages["unexpected_mcp_connection"] = nativeStage{Status: "failed", Reason: "V1 passive endpoint observed accepted TCP/HTTP; no handshake qualification"}
 		t.Error("late passive recorder connection/request observed")
 	}
 	f.evidence["finished_utc"] = time.Now().UTC().Format(time.RFC3339Nano)

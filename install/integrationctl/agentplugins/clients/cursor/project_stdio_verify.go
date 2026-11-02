@@ -36,9 +36,12 @@ func validateCursorProjectStdio(root string, envelope domain.PackageEnvelope, pl
 		if err != nil {
 			return err
 		}
-		prefix := managedstdio.Arguments(plan.ActivePath, dataPath, resolvedCWD, cwd.Anchor, "", nil)[:6]
-		if len(server.Args) < 7 || !slices.Equal(server.Args[:6], prefix) {
+		prefix := managedstdio.Arguments(plan.ActivePath, dataPath, resolvedCWD, cwd.Anchor, "", nil)[:5]
+		if len(server.Args) < 7 || !slices.Equal(server.Args[:5], prefix) {
 			return fmt.Errorf("%w: Cursor launcher package/data/cwd arguments differ from selected locators", domain.ErrProjectionRefreshRequired)
+		}
+		if _, err := managedstdio.DecodeCommandArguments(server.Args[5], server.Args[6:]); err != nil {
+			return fmt.Errorf("%w: Cursor launcher child argument transport differs", domain.ErrProjectionRefreshRequired)
 		}
 	}
 	return nil

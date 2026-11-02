@@ -3,48 +3,12 @@ import { computed, onMounted, ref } from "vue";
 import { withBase } from "vitepress";
 
 import { preferredLocale as selectLocale } from "./locale-routes.mjs";
-
-type LocaleEntry = {
-  code: string;
-  title: string;
-  description: string;
-  href: string;
-};
+import { docsLocaleEntries } from "../../../tools/config/locales.mjs";
 
 const storageKey = "plugin-kit-ai-docs-locale";
-
-const locales: LocaleEntry[] = [
-  {
-    code: "EN",
-    title: "English",
-    description: "Public documentation for the global Agent Plugins community.",
-    href: withBase("/en/")
-  },
-  {
-    code: "RU",
-    title: "Русский",
-    description: "Публичная документация Agent Plugins для русскоязычных пользователей.",
-    href: withBase("/ru/")
-  },
-  {
-    code: "ES",
-    title: "Español",
-    description: "Documentación pública para equipos que trabajan en español.",
-    href: withBase("/es/")
-  },
-  {
-    code: "FR",
-    title: "Français",
-    description: "Documentation publique Agent Plugins pour les équipes francophones.",
-    href: withBase("/fr/")
-  },
-  {
-    code: "ZH",
-    title: "简体中文",
-    description: "面向中文团队的 Agent Plugins 公共文档。",
-    href: withBase("/zh/")
-  }
-];
+const locales = docsLocaleEntries.map((locale) => ({
+  ...locale, title: locale.label, href: withBase(`/${locale.code}/`)
+}));
 
 const preferredCode = ref("");
 const manualMode = ref(false);
@@ -52,7 +16,7 @@ const preferredLocale = computed(() => locales.find((locale) => locale.code.toLo
 
 onMounted(() => {
   try {
-    preferredCode.value = window.localStorage.getItem(storageKey) || "";
+    preferredCode.value = (window.localStorage.getItem(storageKey) || "").toLowerCase();
   } catch {
     preferredCode.value = "";
   }
@@ -97,14 +61,11 @@ function redirectToPreferredLocale() {
       <p class="language-gateway__eyebrow">Agent Plugins docs</p>
       <h1>Choose your language</h1>
       <p>
-        This gateway stays minimal on purpose. Pick a locale to enter the public documentation.
-      </p>
-      <p v-if="manualMode" class="language-gateway__hint">
-        Automatic locale detection is paused on this manual gateway view.
+        Install, manage and build plugins. Read the guides in your language.
       </p>
       <div v-if="preferredLocale" class="language-gateway__preferred">
-        <span>Saved locale: {{ preferredLocale.title }}</span>
-        <a :href="preferredLocale.href">Open preferred locale</a>
+        <span>Your preferred language: {{ preferredLocale.title }}</span>
+        <a :href="preferredLocale.href">Continue in {{ preferredLocale.title }}</a>
       </div>
     </div>
     <div class="language-gateway__grid">
@@ -113,10 +74,13 @@ function redirectToPreferredLocale() {
         :key="locale.code"
         :href="locale.href"
         class="language-gateway__card"
+        :lang="locale.lang"
+        :dir="locale.dir"
+        :hreflang="locale.lang"
         @click="rememberLocale(locale.code)"
       >
-        <strong>{{ locale.code }}</strong>
-        <span>{{ locale.title }}</span>
+        <span class="language-gateway__code">{{ locale.code.toUpperCase() }}</span>
+        <strong>{{ locale.title }}</strong>
         <small>{{ locale.description }}</small>
       </a>
     </div>

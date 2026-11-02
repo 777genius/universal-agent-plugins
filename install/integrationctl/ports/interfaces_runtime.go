@@ -37,9 +37,12 @@ type SafeFileMutator interface {
 }
 
 type Command struct {
-	Argv []string
-	Env  []string
-	Dir  string
+	// DiscardStdout drains ordinary command output without retaining it or
+	// applying StdoutLimitBytes. Interactive duplex exchanges own their stdout.
+	DiscardStdout bool
+	Argv          []string
+	Env           []string
+	Dir           string
 	// StdoutLimitBytes bounds captured stdout without terminating the child.
 	// Zero keeps the existing unbounded behavior for trusted callers.
 	StdoutLimitBytes int

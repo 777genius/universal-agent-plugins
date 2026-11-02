@@ -122,7 +122,7 @@ func validateUpdateTargets(installation domain.Installation, scope string, targe
 
 func loadUpdatePackage(ctx context.Context, app App, opts *options, installation domain.Installation, targets []domain.ClientID, probeVersion bool) (map[domain.ClientID]domain.DetectedClient, []domain.DetectedClient, loadedPackage, error) {
 	allTargets := installationTargets(installation, opts.scope)
-	_, detected, err := preflightSelectedTargets(ctx, app, targets, nil, probeVersion && installation.OriginMode == domain.OriginModeDirectory, lifecycleInstallIntents(installation, opts.scope, nil))
+	_, detected, err := preflightProjectLifecycleTargets(ctx, app, opts, targets, nil, probeVersion && installation.OriginMode == domain.OriginModeDirectory, lifecycleInstallIntents(installation, opts.scope, nil))
 	if err != nil {
 		return nil, nil, loadedPackage{}, err
 	}

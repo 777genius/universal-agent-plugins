@@ -1,9 +1,10 @@
+import { authoredAnchors } from "./lib/anchors.mjs";
 import { requireAuthoringSource } from "./lib/source-contract.mjs";
 import { pathToFileURL } from "node:url";
 import { requireGenerationPrerequisites } from "./lib/preflight.mjs";
 import fs from "node:fs/promises";
 import { buildRedirects } from "./lib/redirects.mjs";
-import { bindGeneratedPaths, isCurrentJourney, journeyLabels, journeySidebar, requirePublicationBoundary } from "./lib/journeys.mjs";
+import { docsLocales, localePathField, bindGeneratedPaths, isCurrentJourney, journeyLabels, journeySidebar, requirePublicationBoundary } from "./lib/journeys.mjs";
 import { isRetiredArchive } from "./lib/public-routes.mjs";
 import path from "node:path";
 import { extractCLI } from "./extractors/cli.mjs";
@@ -15,7 +16,6 @@ import { generatedRoot, generatedRegistryPaths, runtimeRoot, sourceRoot, website
 import { copyTree, ensureDir, listMarkdownFiles, rimraf, writeFile, writeJson } from "./lib/fs.mjs";
 import { readFrontmatter } from "./lib/site-model.mjs";
 
-const docsLocales = ["en", "ru", "es", "fr", "zh"];
 const sourceLocales = docsLocales;
 const mirroredGeneratedLocales = ["es", "fr", "zh"];
 
@@ -49,6 +49,7 @@ export async function assembleBundles(bundles) {
 
   for (const locale of docsLocales) {
     await rimraf(path.join(generatedRoot, locale));
+    await ensureDir(path.join(generatedRoot, locale));
   }
   await ensureDir(path.join(generatedRoot, "registries"));
 
@@ -62,11 +63,9 @@ export async function assembleBundles(bundles) {
   );
   requirePublicationBoundary(allEntities);
   await writeJson(generatedRegistryPaths.entities, allEntities);
-  await writeJson(generatedRegistryPaths.sidebarsEn, buildSidebar("en", allEntities));
-  await writeJson(generatedRegistryPaths.sidebarsRu, buildSidebar("ru", allEntities));
-  await writeJson(path.join(generatedRoot, "registries", "sidebars.es.json"), buildSidebar("es", allEntities));
-  await writeJson(path.join(generatedRoot, "registries", "sidebars.fr.json"), buildSidebar("fr", allEntities));
-  await writeJson(path.join(generatedRoot, "registries", "sidebars.zh.json"), buildSidebar("zh", allEntities));
+  for (const locale of docsLocales) {
+    await writeJson(path.join(generatedRoot, "registries", `sidebars.${locale}.json`), buildSidebar(locale, allEntities));
+  }
   const inventory = JSON.parse(await fs.readFile(new URL("./config/routes.json", import.meta.url), "utf8"));
   const sourceFiles = await listMarkdownFiles(sourceRoot);
   const routes = [...sourceFiles.map((file) => path.relative(sourceRoot, file)), ...generatedPages.map((page) => page.relativePath)]
@@ -94,6 +93,7 @@ export async function scanSourceEntities() {
     const files = await listMarkdownFiles(path.join(sourceRoot, locale));
     for (const filePath of files) {
       const meta = await readFrontmatter(filePath);
+      const anchors = authoredAnchors(await fs.readFile(filePath, "utf8"));
       if (!meta.canonicalId) {
         continue;
       }
@@ -104,6 +104,7 @@ export async function scanSourceEntities() {
       const localeKey = localePathField(locale);
       if (existing) {
         existing[localeKey] = targetPath;
+        existing.anchorsByLocale[locale] = anchors;
         continue;
       }
       const currentJourney = isCurrentJourney(relative);
@@ -120,11 +121,8 @@ export async function scanSourceEntities() {
         ...(currentJourney ? { status: "released", released: true } : {}),
         sourceKind: "hand-authored",
         sourceRef: relative,
-        pathEn: locale === "en" ? targetPath : "",
-        pathRu: locale === "ru" ? targetPath : "",
-        pathEs: locale === "es" ? targetPath : "",
-        pathFr: locale === "fr" ? targetPath : "",
-        pathZh: locale === "zh" ? targetPath : "",
+        anchorsByLocale: { [locale]: anchors },
+        ...Object.fromEntries(docsLocales.map((code) => [localePathField(code), code === locale ? targetPath : ""])),
         relatedIds: [],
         searchTerms: [meta.title || relative]
       });
@@ -139,22 +137,6 @@ async function copyCurrentPages(fromRoot, toRoot, locale) {
     if (isRetiredArchive(path.join(locale, relative))) continue;
     await writeFile(path.join(toRoot, relative), await fs.readFile(file, "utf8"));
   }
-}
-
-function localePathField(locale) {
-  if (locale === "en") {
-    return "pathEn";
-  }
-  if (locale === "ru") {
-    return "pathRu";
-  }
-  if (locale === "es") {
-    return "pathEs";
-  }
-  if (locale === "fr") {
-    return "pathFr";
-  }
-  return "pathZh";
 }
 
 export function buildSidebar(locale, entities) {
@@ -182,6 +164,13 @@ export function buildSidebar(locale, entities) {
 }
 
 function localeLabels(locale) {
+  const current = {
+    uk: { guideStart: "Початок", quickstart: "Швидкий початок" },
+    hi: { guideStart: "शुरुआत", quickstart: "त्वरित शुरुआत" },
+    ar: { guideStart: "البداية", quickstart: "البدء السريع" },
+    pt: { guideStart: "Começar", quickstart: "Início rápido" }
+  };
+  if (current[locale]) return current[locale];
   if (locale === "es") {
     return {
       guide: "Guía",

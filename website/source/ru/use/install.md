@@ -150,8 +150,12 @@ agentplugins skills add owner/repository --skill review --skill pdf \
 [CLI 0.1.93 и новее](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
 Выберите существующую папку и указывайте область в каждой команде:
 
+Для проекта возьмите из проверенной карточки каталога точный Git-источник с полным SHA коммита и совместимый агент. Псевдонимы Directory v1 (например, `context7`) предназначены только для пользовательской области. Замените `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` и `PACKAGE_PATH`; для пакета в корне репозитория уберите `//PACKAGE_PATH`.
+
+Шаблон: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. Команда ниже использует реальный исторический коммит GitLab, а не подтверждение текущей проверки в каталоге. Для новой установки скопируйте актуальный проверенный источник из каталога.
+
 ```bash
-agentplugins add context7 --target cursor --scope project \
+agentplugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex --scope project \
   --project-root /path/to/project --dry-run
 agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project
@@ -161,8 +165,8 @@ agentplugins skills add owner/repository --ui --scope project \
 открывает выбор с областью проекта и может применить выбор пользователя.
 Без `--project-root` явная область проекта использует текущую папку, не ищет
 родительские каталоги. Добавление и обслуживание в остальных случаях используют
-пользовательскую область. В CLI 0.1.94 `install` без источника выбирает проект
-при обычном `uap.toml` в точной текущей папке; явная область имеет приоритет.
+пользовательскую область. В CLI 0.1.94 `install` без аргумента источника выбирает проект
+при обычном `uap.toml` непосредственно в текущей папке; явная область имеет приоритет.
 Правила строгой работы с lock-файлом см. в [восстановлении](./manage).
 
 Клиент должен поддерживать запрошенные проектные компоненты. Установка в проект

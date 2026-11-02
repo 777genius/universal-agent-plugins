@@ -17,17 +17,21 @@ import (
 func TestProjectKimiRequiresCurrentObservedHarnessAndNearestGit(t *testing.T) {
 	f := newKimiProjectFixture(t, false, false)
 	p := planner.Planner{Registry: f.registry, Paths: pathpolicy.Policy{}, ProjectRoot: f.project, ManagedRoot: filepath.Join(f.project, ".uap", "managed")}
-	qualified, err := p.Plan(context.Background(), domain.PlanRequest{Envelope: f.envelope, Client: f.request.Client, Scope: domain.ScopeProject, ProjectRoot: f.project, PhysicalArtifactID: f.request.Plan.PhysicalArtifactID})
-	if err != nil || qualified.Status != domain.PlanReady {
-		t.Fatalf("current observed Kimi harness did not qualify: %+v, %v", qualified, err)
+	for _, version := range []string{"2.3.1", "2.3.2"} {
+		client := f.request.Client
+		client.Version = version
+		qualified, err := p.Plan(context.Background(), domain.PlanRequest{Envelope: f.envelope, Client: client, Scope: domain.ScopeProject, ProjectRoot: f.project, PhysicalArtifactID: f.request.Plan.PhysicalArtifactID})
+		if err != nil || qualified.Status != domain.PlanReady {
+			t.Fatalf("current observed Kimi %s harness did not qualify: %+v, %v", version, qualified, err)
+		}
 	}
 	for _, change := range []func(*domain.DetectedClient){
-		func(c *domain.DetectedClient) { c.Version = "" }, func(c *domain.DetectedClient) { c.Version = "2.3.0" }, func(c *domain.DetectedClient) { c.Version = "2.3.1-alpha" }, func(c *domain.DetectedClient) { c.ExecutablePath = filepath.Join(f.base, "kimi-cli") },
+		func(c *domain.DetectedClient) { c.Version = "" }, func(c *domain.DetectedClient) { c.Version = "2.3.0" }, func(c *domain.DetectedClient) { c.Version = "2.3.1-alpha" }, func(c *domain.DetectedClient) { c.Version = "2.3.3" }, func(c *domain.DetectedClient) { c.Version = "2.3.2-alpha" }, func(c *domain.DetectedClient) { c.Version = "2.3.20" }, func(c *domain.DetectedClient) { c.Version = "v2.3.2" }, func(c *domain.DetectedClient) { c.Version = "2.3.2 " }, func(c *domain.DetectedClient) { c.Version = "2.3.2\n" }, func(c *domain.DetectedClient) { c.ExecutablePath = filepath.Join(f.base, "kimi-cli") }, func(c *domain.DetectedClient) { c.ExecutablePath = "kimi" }, func(c *domain.DetectedClient) { c.ExecutablePath = f.base + "/./kimi" },
 	} {
 		client := f.request.Client
 		change(&client)
 		before := projectGeminiInventory(t, f.base)
-		if _, err := p.Plan(context.Background(), domain.PlanRequest{Envelope: f.envelope, Client: client, Scope: domain.ScopeProject, ProjectRoot: f.project, PhysicalArtifactID: f.request.Plan.PhysicalArtifactID}); err == nil || !strings.Contains(err.Error(), "require the explicitly selected current Kimi Code 2.3.1 executable/version") {
+		if _, err := p.Plan(context.Background(), domain.PlanRequest{Envelope: f.envelope, Client: client, Scope: domain.ScopeProject, ProjectRoot: f.project, PhysicalArtifactID: f.request.Plan.PhysicalArtifactID}); err == nil || !strings.Contains(err.Error(), "require the explicitly selected current Kimi Code 2.3.1 or 2.3.2 executable/version") {
 			t.Fatalf("unobserved current Kimi harness refusal = %v", err)
 		}
 		if !reflect.DeepEqual(before, projectGeminiInventory(t, f.base)) {

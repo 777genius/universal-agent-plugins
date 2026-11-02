@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"unicode/utf8"
 )
 
 func decodeJSONObject(body []byte) (map[string]json.RawMessage, map[string]any, error) {
@@ -41,6 +42,11 @@ func decodeRawJSONObject(body []byte, target any) error {
 }
 
 func decodeJSONUnchecked(body []byte, target any) error {
+	// encoding/json silently replaces malformed UTF-8 with U+FFFD. Portable
+	// JSON must preserve authored keys and values, never silently rename them.
+	if !utf8.Valid(body) {
+		return fmt.Errorf("JSON document contains invalid UTF-8")
+	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.UseNumber()
 	if err := decoder.Decode(target); err != nil {

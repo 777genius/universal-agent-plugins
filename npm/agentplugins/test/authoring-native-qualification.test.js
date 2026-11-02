@@ -185,7 +185,7 @@ const scenario = cfg.scenario;
 ${publicClientFixture.toString()}
 const publicInstallationChanges = {${Object.entries(publicInstallationChanges).map(([key, fn]) => JSON.stringify(key) + ":" + fn.toString()).join(",")}};
 const publicInfoChanges = {${Object.entries(publicInfoChanges).map(([key, fn]) => JSON.stringify(key) + ":" + fn.toString()).join(",")}};
-const profiles = [{"id": "agent-plugins/1.0.0", "revision": "ff8ab5e392cc87bd88d87c060815a87490e51003", "digest": "sha256:97a658b7dca3ce1b4c2266b95da300fa51d9dc4ade59d73168e5f9104272da18"}, {"id": "agent-skills/2026-09-06", "revision": "69ef37e9424c0a7ea9dd2293b559e43ec8176379", "digest": "sha256:b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220"}, {"id": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "revision": "1.0.0", "digest": "sha256:0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883"}, {"id": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "revision": "1.0.0", "digest": "sha256:6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb"}, {"id": "author-document-bounds/v1", "revision": "1", "digest": "sha256:93ebbf02aa70a38b18fdc720ace9e45c8f911b91d94a5c85a26b96c2d69efa46"}];
+const profiles = [{"id": "agent-plugins/1.0.0", "revision": "ff8ab5e392cc87bd88d87c060815a87490e51003", "digest": "sha256:97a658b7dca3ce1b4c2266b95da300fa51d9dc4ade59d73168e5f9104272da18"}, {"id": "agent-skills/2026-09-06", "revision": "69ef37e9424c0a7ea9dd2293b559e43ec8176379", "digest": "sha256:b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220"}, {"id": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "revision": "1.0.0", "digest": "sha256:0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883"}, {"id": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "revision": "1.0.0", "digest": "sha256:6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb"}, {"id": "author-document-bounds/v1", "revision": "1", "digest": "sha256:2bffd36f3e4ef0bdc1b25c3153b847542011a01af2f0b35ec31f2bc747952789"}];
 function output(value, status=0) {
   if(scenario.startsWith('installation-rebind') && ['add','info','update'].includes(value.command) && !value.data.dry_run)
     fs.writeFileSync(cfg.log+'.registration-'+value.command,fs.readFileSync(path.join(process.env.AGENTPLUGINS_HOME,'state-v2.json')));
@@ -1143,6 +1143,7 @@ test("independent package identity uses content framing and portable executable 
 
 test("fixed profile and schema pins agree with preserved domain contracts", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, () => {
   const n = internal().test, root = path.resolve(__dirname, "../../..");
+  assert.deepEqual(n.PROFILES, require("../scripts/public-authoring-acceptance").PROFILES);
   for (const schema of n.capabilities().schemas) {
     const name = schema.id.endsWith("/plugin.schema.json") ? "plugin" : "mcp";
     const file = path.join(root, `install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/${name}.schema.json`);

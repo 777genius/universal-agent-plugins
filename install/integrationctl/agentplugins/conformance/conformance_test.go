@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -440,5 +441,68 @@ func TestPartialDiscoveryRetainsObservedFacts(t *testing.T) {
 	f, e := d.Decode(context.Background(), i)
 	if e != nil || f.Conformance != NotEvaluated {
 		t.Fatal("failed discovery is not a normative failure", f, e)
+	}
+}
+
+func TestMCPReservedEnvironmentPlatformAdmission(t *testing.T) {
+	d := decoder(t)
+	for _, tc := range []struct {
+		name, env     string
+		alwaysInvalid bool
+	}{
+		{"canonical-root", `{"PLUGIN_ROOT":"foreign"}`, true},
+		{"canonical-data", `{"PLUGIN_DATA":"foreign"}`, true},
+		{"lowercase-root", `{"plugin_root":"foreign"}`, false},
+		{"mixed-case-data", `{"Plugin_Data":"foreign"}`, false},
+		{"unrelated", `{"ORDINARY":"literal"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			invalid := tc.alwaysInvalid || runtime.GOOS == "windows" && tc.name != "unrelated"
+			body := mcpBody(`{"selected":{"type":"stdio","command":"node","env":` + tc.env +
+				`},"healthy":{"type":"streamable-http","url":"https://example.test/mcp"}}`)
+			input := mcpInput(body)
+			input.SkillsRoot = Present
+			input.Skills = []SkillInput{skillInput("healthy", "")}
+			facts, err := d.Decode(context.Background(), input)
+			if err != nil || facts.Package == nil {
+				t.Fatalf("decode: %v, facts=%+v", err, facts)
+			}
+			_, selected := facts.Package.MCP.Servers["selected"]
+			_, healthy := facts.Package.MCP.Servers["healthy"]
+			if !healthy || len(facts.Package.Skills) != 1 || selected == invalid {
+				t.Fatalf("component isolation: selected=%v invalid=%v healthy=%v skills=%d", selected, invalid, healthy, len(facts.Package.Skills))
+			}
+			if invalid {
+				// The portable schema already excludes exact reserved keys;
+				// platform-only casing aliases reach the semantic check.
+				findingCode := "stdio_env_reserved"
+				if tc.alwaysInvalid {
+					findingCode = "server_schema"
+				}
+				if !hasFinding(facts, findingCode, Normative, domain.BoundaryMCPServer) {
+					t.Fatalf("missing %s finding: %+v", findingCode, facts.Findings)
+				}
+			}
+			loaded, _ := (InstallerDecoder{Registry: d.Registry}).MCP([]byte(body), domain.PluginSchemaV1,
+				func(config map[string]any) (*domain.StdioRequirement, error) {
+					return ParseStdio(config, normativeCommand, normativeCWD)
+				})
+			_, loadedSelected := loaded.Servers["selected"]
+			if loadedSelected == invalid || len(loaded.Servers) != map[bool]int{true: 1, false: 2}[invalid] {
+				t.Fatalf("installer and author admissions diverged: %+v", loaded)
+			}
+		})
+	}
+}
+
+func TestStdioReservedEnvironmentTypedMaps(t *testing.T) {
+	for _, env := range []any{
+		map[string]any{"plugin_root": "foreign"},
+		map[string]string{"Plugin_Data": "foreign"},
+	} {
+		_, err := ParseStdio(map[string]any{"command": "node", "env": env}, normativeCommand, normativeCWD)
+		if (err != nil) != (runtime.GOOS == "windows") {
+			t.Fatalf("platform-specific typed env admission: %v", err)
+		}
 	}
 }

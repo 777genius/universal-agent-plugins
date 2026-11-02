@@ -1,0 +1,14 @@
+import reference from './en.json';
+
+// Real i18n 10 lazy-loader rejection, controlled by Playwright; no translated copy.
+export default defineI18nLocale(async locale => {
+  // Nuxt i18n 10 otherwise executes this fixture on Nitro and serves cached
+  // messages through its endpoint, bypassing the browser rejection/gate.
+  // Its documented useNuxtApp() marker keeps this loader in the Nuxt app.
+  useNuxtApp();
+  if (import.meta.client) {
+    const base = useRuntimeConfig().app.baseURL;
+    await $fetch(`${base}fixture-messages/${locale}`, { retry: 0 });
+  }
+  return reference;
+});

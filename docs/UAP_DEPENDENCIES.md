@@ -91,12 +91,25 @@ dependencies. An invalid or unreadable TOML is an error.
 
 Only the selected root assigns `[targets]`. Each dependency inherits the union
 of its consumers' targets, including any direct assignments of its own. One
-canonical source has one version across the environment. A fresh lock chooses
-the lowest compatible stable version, then the lowest release sequence for equal
-versions, subject to signed Directory policy for every required target. It tries
-later candidates when an earlier candidate has incompatible dependencies;
-exhausted conflicts report the package, consumers and selectors without applying
-a partial graph. Existing compatible pins take priority over fresh minimums.
+canonical source has one version across the environment.
+
+**Current development source (not yet released):** ordinary resolution first tries
+compatible existing pins. For a Registry node without a usable pin, it prefers the
+highest eligible stable version, then the highest signed release sequence at that
+version. The complete graph and every required target must remain compatible;
+a conflicting or ineligible candidate can fall back to a lower one. Transport,
+authenticity and integrity failures remain errors, not permission to try other
+bytes. This is candidate ordering, not a global maximum-version optimization.
+Existing released versions used lowest-compatible fresh ordering. See the
+[accepted decision and implementation plan](plans/fresh-highest-compatible-20261030.md).
+
+An exact semantic version such as `1.2.3` can have multiple publication sequences:
+fresh resolution chooses its highest eligible sequence, but a compatible lock
+keeps the recorded sequence and bytes. An exact `release` selects that publication
+and does not enter version ranking. Unchanged locked install/sync never selects
+new content, even after a newer version is published. A corrupt or revoked pin
+fails rather than being silently replaced. Exhausted graph conflicts report the
+package, consumers and selectors without applying a partial graph.
 
 Package-local targets are structurally checked and then ignored by consumers;
 they are neither a compatibility allowlist nor permission to install into the

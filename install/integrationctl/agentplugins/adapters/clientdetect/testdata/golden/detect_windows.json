@@ -72,6 +72,11 @@
         "Detected": true,
         "Evidence": "configuration_directory",
         "ID": "cline_cursor_config"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "cline_cli"
       }
     ],
     "Version": ""

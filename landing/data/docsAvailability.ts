@@ -18,7 +18,7 @@ const ownedDocsRoots = [
   'https://777genius.github.io/docs/',
   'https://universal-agent-plugins.com/docs/',
 ];
-const docsLanguages = ['en', 'ru', 'es', 'fr', 'zh'] as const;
+const docsLanguages = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'] as const;
 
 export function resolveDocsLink(id: DocsPageId, locale: string, configuredUrl?: string) {
   const language = (docsLanguages as readonly string[]).includes(locale) ? locale : 'en';

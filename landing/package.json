@@ -19,12 +19,12 @@
     "test:browser": "playwright test",
     "lint": "eslint \"app.vue\" \"error.vue\" \"components/**/*.{vue,ts}\" \"composables/**/*.{ts,js}\" \"data/**/*.{ts,js}\" \"layouts/**/*.vue\" \"pages/**/*.vue\" \"plugins/**/*.{ts,js}\" \"server/**/*.{ts,js}\" \"stores/**/*.{ts,js}\" \"types/**/*.ts\" \"utils/**/*.{ts,js}\" \"nuxt.config.ts\" --no-error-on-unmatched-pattern",
     "lint:fix": "pnpm run lint -- --fix",
-    "format": "prettier --check app.vue error.vue assets/styles/main.scss components composables content data features layouts locales pages plugins server stores types utils nuxt.config.ts package.json",
-    "format:fix": "prettier --write app.vue error.vue assets/styles/main.scss components composables content data features layouts locales pages plugins server stores types utils nuxt.config.ts package.json"
+    "format": "prettier --check app.vue error.vue assets/styles/main.scss components composables content data features layouts i18n pages plugins server stores types utils nuxt.config.ts package.json",
+    "format:fix": "prettier --write app.vue error.vue assets/styles/main.scss components composables content data features layouts i18n pages plugins server stores types utils nuxt.config.ts package.json"
   },
   "dependencies": {
     "@mdi/js": "^7.4.47",
-    "@nuxtjs/i18n": "^9.5.6",
+    "@nuxtjs/i18n": "10.6.0",
     "@pinia/nuxt": "^0.11.3",
     "@vueuse/nuxt": "^10.11.1",
     "bowser": "2.14.1",
@@ -34,7 +34,7 @@
     "reka-ui": "2.10.4",
     "swiper": "^12.2.0",
     "vue": "^3.5.40",
-    "vue-i18n": "11.4.8",
+    "vue-i18n": "11.4.14",
     "vue-router": "^4.6.4",
     "vuetify": "^3.12.11"
   },

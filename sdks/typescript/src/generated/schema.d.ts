@@ -84,6 +84,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/environment/check-updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Explicit read-only network check. Source and graph facts are observations; a complete candidate still requires a fresh mutation review. Does not persist freshness. */
+        post: operations["checkUpdates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plans": {
         parameters: {
             query?: never;
@@ -541,6 +558,49 @@ export interface components {
             rootId: string;
             skillName: string;
         };
+        /** @description Select unique declared aliases or all; both and empty selection are invalid. */
+        UpdateCheckRequest: {
+            aliases?: string[];
+            all?: boolean;
+        };
+        UpdateIdentity: {
+            version: string;
+            revision: string;
+            treeDigest: string;
+            manifestDigest: string;
+            distributionId?: string;
+            /** @description Decimal signed release sequence; a string preserves the exact integer identity. */
+            releaseSequence?: string;
+        };
+        UpdateSelector: {
+            kind: string;
+            value: string;
+        };
+        UpdateOwner: {
+            alias: string;
+            selector: components["schemas"]["UpdateSelector"];
+        };
+        UpdateCheckEntry: {
+            alias: string;
+            declared: boolean;
+            selected: boolean;
+            source: string;
+            requested?: components["schemas"]["UpdateSelector"];
+            /** @enum {string} */
+            status: "current" | "available" | "pinned" | "blocked" | "check_unavailable";
+            reason: string;
+            installed?: components["schemas"]["UpdateIdentity"];
+            available?: components["schemas"]["UpdateIdentity"];
+            requiredBy: components["schemas"]["UpdateOwner"][];
+        };
+        /** @description Complete describes the whole selected graph. A current root may have changed shared dependencies listed separately. Unavailable facts never mean current or approved. */
+        UpdateCheck: {
+            contextId: string;
+            complete: boolean;
+            changed: boolean;
+            entries: components["schemas"]["UpdateCheckEntry"][];
+            diagnostics: components["schemas"]["Diagnostic"][];
+        };
     };
     responses: {
         /** @description Request refused or observation failed. No assumption about effects of an earlier accepted request. */
@@ -668,6 +728,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Environment"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    checkUpdates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Complete or unavailable update check with per-entry facts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateCheck"];
                 };
             };
             default: components["responses"]["Error"];

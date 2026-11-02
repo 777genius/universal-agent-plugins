@@ -61,8 +61,10 @@ test('Skills search reveals install choices, copies the exact command and surviv
   await expect.poll(() => requests.some((query) => query.includes('q=frontend'))).toBe(true);
   await expect(page).toHaveURL(/tab=skills.*q=frontend/);
   await expect(catalog.locator('.catalog-count')).toHaveText('Showing 2 search results');
-  await expect(catalog.locator('a[href*="skills.sh"]')).toHaveCount(0);
-  await expect(catalog.locator('.skill-card').nth(1).getByRole('link')).toHaveCount(0);
+  await expect(catalog.locator('.skill-card').nth(1).getByRole('link', { name: 'View original listing' })).toHaveAttribute(
+    'href',
+    'https://skills.sh/anthropics/skills/frontend-design',
+  );
   const card = catalog.locator('.skill-card').first();
   await expect(card.getByRole('link', { name: 'GitHub source' })).toHaveAttribute(
     'href',
@@ -175,8 +177,36 @@ test('unsupported standalone source is explicit and never requests a report', as
   await page.goto('plugins/?tab=skills');
   const assessment = page.locator('.skill-card .skillspector');
   await expect(assessment).toHaveClass(/skillspector--unsupported/);
+  await expect(assessment.locator(':scope > summary')).toContainText('Not checked');
   await assessment.locator(':scope > summary').click();
   await expect(assessment).toContainText('This source type is not supported');
   await expect(assessment).not.toContainText('other plugin components');
   expect(reportRequests).toEqual([]);
+});
+
+test('unverified GitHub Skill names open the installer picker without guessing a selector', async ({
+  page,
+}) => {
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) =>
+    route.fulfill({
+      json: {
+        items: [{ ...skill(), title: 'Unverified listing', skillNameHint: 'BAD$(echo injected)' }],
+        page: 0,
+        total: 1,
+        hasMore: false,
+        view: 'popular',
+        cache: { status: 'fresh', fetchedAt: '2026-10-30T10:00:00Z' },
+      },
+    }),
+  );
+  await page.goto('plugins/?tab=skills');
+  const card = page.locator('.skills-catalog .skill-card').first();
+  await card.getByRole('button', { name: 'Install Unverified listing', exact: true }).click();
+  await expect(card.locator('.command-snippet code')).toHaveText(
+    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills',
+  );
+  await expect(card).toContainText(
+    'Select the exact Skill in the installer; this catalog name is not verified.',
+  );
+  await expect(card.locator('.command-snippet')).not.toContainText('BAD$(echo injected)');
 });

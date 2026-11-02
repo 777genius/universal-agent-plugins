@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { stripTypeScriptTypes } from 'node:module';
 import { runInNewContext } from 'node:vm';
-import { pluginCommands } from '../utils/commands.ts';
+import { installCommands, pluginCommands } from '../utils/commands.ts';
 import { applyCliInvocation } from '../utils/cliInvocation.ts';
 import {
   dependencyAddFlag,
@@ -136,6 +136,7 @@ test('catalog selection generator preserves released bytes and saves eligible us
       dependencySaveMode,
       dependencyAddFlag,
       isPinnedGitSource,
+      installCommands,
     },
   );
   const spec = api.getResolvedPluginInstallSpec('gitlab');
@@ -178,8 +179,8 @@ test('catalog selection generator preserves released bytes and saves eligible us
     for (const action of ['update', 'repair', 'remove'] as const) {
       assert.equal(
         all[action],
-        released && action === 'update'
-          ? 'npx -y universal-agent-plugins update gitlab'
+        released && action !== 'repair'
+          ? `npx -y universal-agent-plugins ${action} gitlab`
           : `npx -y universal-agent-plugins ${action} gitlab --target claude,codex,gemini,opencode,cursor`,
       );
       assert.doesNotMatch(all[action], /--target(?:\s*$|\s+--)/);

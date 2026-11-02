@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -32,13 +33,12 @@ func DeliverManagedStdio(deliver func(root string) error, root string, envelope 
 // at the package's future active root and its plugin data directory.
 // PLUGIN_ROOT and PLUGIN_DATA are client-managed: an authored package that sets
 // either of them is rejected rather than overwritten, because the override
-// would silently redirect the server outside the managed tree. The portable
-// authoring token ${package.root} resolves to the same managed package root;
-// leaving it literal would hand the client an unrunnable server path.
+// would silently redirect the server outside the managed tree. Argument and
+// environment values expand only the two standard tokens, once; unknown tokens
+// such as ${package.root} remain literal (Agent Plugins 1.0 section 9.2).
 //
-// The command keeps client-managed placeholders verbatim: the managed launcher
-// resolves command form itself and rejects rewritten commands, so only the
-// authoring token ${package.root} is resolved there.
+// The standard command is never expanded, including legacy-looking tokens.
+// Legacy authoring conversion is a separate format, not an MCP loader rule.
 //
 // observationRoot is where the paths are checked to exist. During staging that
 // is the staging tree, while pluginRoot is the location the entry has to
@@ -47,7 +47,6 @@ func ApplyStdioDataContract(config map[string]any, pluginRoot, dataPath string, 
 	expand := strings.NewReplacer(
 		"${PLUGIN_ROOT}", pluginRoot,
 		"${PLUGIN_DATA}", dataPath,
-		"${package.root}", pluginRoot,
 	).Replace
 	if err := applyStdioEnvironment(config, pluginRoot, dataPath, expand); err != nil {
 		return err
@@ -55,7 +54,7 @@ func ApplyStdioDataContract(config map[string]any, pluginRoot, dataPath string, 
 	expandStdioArguments(config, expand)
 	command, _ := config["command"].(string)
 	cwd, _ := config["cwd"].(string)
-	resolvedCommand, resolvedCWD, err := ResolveStdioPaths(strings.ReplaceAll(command, "${package.root}", pluginRoot), cwd, pluginRoot, dataPath, observationRoot...)
+	resolvedCommand, resolvedCWD, err := ResolveStdioPaths(command, cwd, pluginRoot, dataPath, observationRoot...)
 	if err != nil {
 		return err
 	}
@@ -66,7 +65,7 @@ func ApplyStdioDataContract(config map[string]any, pluginRoot, dataPath string, 
 func applyStdioEnvironment(config map[string]any, pluginRoot, dataPath string, expand func(string) string) error {
 	switch env := config["env"].(type) {
 	case map[string]any:
-		if err := rejectReservedStdioKeys(func(key string) bool { _, exists := env[key]; return exists }); err != nil {
+		if err := rejectReservedStdioKeys(env); err != nil {
 			return err
 		}
 		for key, value := range env {
@@ -76,7 +75,7 @@ func applyStdioEnvironment(config map[string]any, pluginRoot, dataPath string, e
 		}
 		env["PLUGIN_ROOT"], env["PLUGIN_DATA"] = pluginRoot, dataPath
 	case map[string]string:
-		if err := rejectReservedStdioKeys(func(key string) bool { _, exists := env[key]; return exists }); err != nil {
+		if err := rejectReservedStdioKeys(env); err != nil {
 			return err
 		}
 		for key, value := range env {
@@ -91,11 +90,9 @@ func applyStdioEnvironment(config map[string]any, pluginRoot, dataPath string, e
 	return nil
 }
 
-func rejectReservedStdioKeys(present func(key string) bool) error {
-	for _, reserved := range []string{"PLUGIN_ROOT", "PLUGIN_DATA"} {
-		if present(reserved) {
-			return fmt.Errorf("%s is reserved and client-managed", reserved)
-		}
+func rejectReservedStdioKeys(env any) error {
+	if reserved := domain.ReservedStdioEnvKey(env, runtime.GOOS == "windows"); reserved != "" {
+		return fmt.Errorf("%s is reserved and client-managed", reserved)
 	}
 	return nil
 }

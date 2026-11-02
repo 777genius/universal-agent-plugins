@@ -217,26 +217,30 @@ type releaseWorkflow struct {
 			Cron string `yaml:"cron"`
 		} `yaml:"schedule"`
 	} `yaml:"on"`
+	Permissions map[string]string     `yaml:"permissions"`
+	Jobs        map[string]releaseJob `yaml:"jobs"`
+}
+
+type releaseJob struct {
+	If          string            `yaml:"if"`
+	Uses        string            `yaml:"uses"`
+	RunsOn      any               `yaml:"runs-on"`
+	Needs       any               `yaml:"needs"`
+	Environment any               `yaml:"environment"`
+	Env         map[string]string `yaml:"env"`
+	Outputs     map[string]string `yaml:"outputs"`
+	With        map[string]any    `yaml:"with"`
 	Permissions map[string]string `yaml:"permissions"`
-	Jobs        map[string]struct {
-		If          string            `yaml:"if"`
-		Needs       any               `yaml:"needs"`
-		Environment any               `yaml:"environment"`
-		Env         map[string]string `yaml:"env"`
-		Outputs     map[string]string `yaml:"outputs"`
-		With        map[string]any    `yaml:"with"`
-		Permissions map[string]string `yaml:"permissions"`
-		Steps       []struct {
-			ID       string            `yaml:"id"`
-			Name     string            `yaml:"name"`
-			If       string            `yaml:"if"`
-			Continue bool              `yaml:"continue-on-error"`
-			Uses     string            `yaml:"uses"`
-			Run      string            `yaml:"run"`
-			With     map[string]any    `yaml:"with"`
-			Env      map[string]string `yaml:"env"`
-		} `yaml:"steps"`
-	} `yaml:"jobs"`
+	Steps       []struct {
+		ID       string            `yaml:"id"`
+		Name     string            `yaml:"name"`
+		If       string            `yaml:"if"`
+		Continue bool              `yaml:"continue-on-error"`
+		Uses     string            `yaml:"uses"`
+		Run      string            `yaml:"run"`
+		With     map[string]any    `yaml:"with"`
+		Env      map[string]string `yaml:"env"`
+	} `yaml:"steps"`
 }
 
 func parseReleaseWorkflow(t *testing.T, name string) releaseWorkflow {
@@ -651,7 +655,9 @@ func evaluateReleaseCondition(t *testing.T, expression string, values map[string
 			expression = strings.ReplaceAll(expression, fn+"()", strconv.FormatBool(value.(bool)))
 		}
 	}
-	words := regexp.MustCompile(`'[^']*'|[a-zA-Z_][a-zA-Z0-9_.]*`)
+	// Job IDs such as needs.verify-source contain hyphens; GitHub expressions
+	// have no subtraction operator, so a hyphen is always part of a name.
+	words := regexp.MustCompile(`'[^']*'|[a-zA-Z_][a-zA-Z0-9_.-]*`)
 	expression = words.ReplaceAllStringFunc(expression, func(word string) string {
 		if strings.HasPrefix(word, "'") {
 			return strconv.Quote(word[1 : len(word)-1])

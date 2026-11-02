@@ -207,17 +207,8 @@ func stdioRuntimeUnavailable(message string) *domain.ComponentReadinessError {
 }
 
 func rejectReservedStdioEnv(decoded map[string]any) error {
-	for _, key := range []string{"PLUGIN_ROOT", "PLUGIN_DATA"} {
-		reserved := false
-		switch env := decoded["env"].(type) {
-		case map[string]any:
-			_, reserved = env[key]
-		case map[string]string:
-			_, reserved = env[key]
-		}
-		if reserved {
-			return &domain.ComponentReadinessError{Code: "stdio_reserved_environment", Message: "stdio environment defines reserved " + key}
-		}
+	if reserved := domain.ReservedStdioEnvKey(decoded["env"], runtime.GOOS == "windows"); reserved != "" {
+		return &domain.ComponentReadinessError{Code: "stdio_reserved_environment", Message: "stdio environment defines reserved " + reserved}
 	}
 	return nil
 }

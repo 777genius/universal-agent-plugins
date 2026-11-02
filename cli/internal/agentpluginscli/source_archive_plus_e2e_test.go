@@ -37,5 +37,5 @@ func TestArchiveLiteralPlusSelectorSavedAndColdRestore(t *testing.T) {
 	if err := os.RemoveAll(fixture.app.EnvironmentStoreRoot); err != nil {
 		t.Fatal(err)
 	}
-	directColdRestore(t, fixture, transport, pin)
+	directColdRestore(t, fixture, transport, pin, directExpectedPackage(t, packagePath))
 }

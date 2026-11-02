@@ -39,12 +39,12 @@ test("production publication requires released metadata and maintained locale ro
   const released = sourceEntities.find((entry) => entry.status === "released");
   assert.ok(released);
   assert.throws(() => requirePublicationBoundary([{ ...released, released: false }], {}), /unreleased preparation/);
-  assert.throws(() => requirePublicationBoundary([{ ...released, pathZh: "" }], {}), /maintained-locale/);
+  for (const locale of docsLocales) assert.throws(() => requirePublicationBoundary([{ ...released, [localePathField(locale)]: "" }], {}), /maintained-locale/);
   assert.equal(requirePublicationBoundary([], { DOCS_PREPARATION_PREVIEW: "1" }), "disposable-preview");
   assert.throws(() => requirePublicationBoundary([], { DOCS_PREPARATION_PREVIEW: "true" }), /non-empty/);
 });
 
-test("all five navigations expose real Use and Build journeys with truthful English fallback", async () => {
+test("all nine navigations expose real Use and Build journeys with truthful English fallback", async () => {
   const released = sourceEntities.filter((entry) => entry.status === "released");
   const requiredJourneys = ["use:index", "use:install", "use:manage", "build:index", "build:skill",
     "build:mcp-remote", "build:mcp-stdio", "build:hybrid", "build:skills", "build:layout",
@@ -86,7 +86,7 @@ test("locale registry fields require actual generated pages; explicit translated
   assert.equal(bound.pathEs, "/es/api/translated");
   assert.equal(bound.pathFr, "/fr/api/a");
   assert.equal(bound.pathRu, "");
-  assert.equal(bound.pathZh, "");
+  for (const locale of ["zh", "uk", "hi", "ar", "pt"]) assert.equal(bound[localePathField(locale)], "");
   assert.equal(entityPath(bound, "zh"), "/en/api/a");
 });
 
@@ -188,7 +188,7 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
     assert.match(page.content, /Released Agent Plugins CLI reference/);
     assert.match(page.content, /::: warning Versioned authoring reference: CLI 0\.1\.65/);
     assert.match(page.content, /immutable `agentplugins-v0\.1\.65` source/);
-    assert.match(page.content, /current native installer, CLI 0\.1\.94, does not include `agentplugins author`/);
+    assert.match(page.content, /current native installer, CLI 0\.1\.95, does not include `agentplugins author`/);
     assert.match(page.content, /current source-build setup[\s\S]*\[Build guide\]\(\/en\/build\/\)/);
     assert.match(page.content, /does not describe current-source runtime or development commands/);
     assert.doesNotMatch(page.content, /Milestone A/);

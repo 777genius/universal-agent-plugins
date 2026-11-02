@@ -14,6 +14,10 @@ type managedSelectionReader interface {
 	ManagedMCPNames(context.Context, domain.ClientID, string, string) ([]string, error)
 }
 
+type scopedManagedSelectionReader interface {
+	ManagedMCPNamesForScope(context.Context, domain.ClientID, domain.InstallScope, string, string) ([]string, error)
+}
+
 func installationIfExisting(state domain.StateFileV2, index int, existing bool) *domain.Installation {
 	if !existing {
 		return nil
@@ -26,7 +30,7 @@ func (service Service) preflightTargetComponents(ctx context.Context, input AddI
 	if prior == nil {
 		return service.preflightComponents(input.Envelope, plan, false)
 	}
-	names, unverified, err := service.recordedManagedMCPNames(ctx, input, prior, repair, updating)
+	names, unverified, err := service.recordedManagedMCPNames(ctx, input, plan.Scope, prior, repair, updating)
 	if err != nil {
 		return err
 	}
@@ -65,9 +69,13 @@ func priorManagedBinding(installation *domain.Installation, plan *domain.Deliver
 	return nil
 }
 
-func (service Service) recordedManagedMCPNames(ctx context.Context, input AddInput, prior *domain.ClientBinding, repair, updating bool) ([]string, bool, error) {
-	reader, ok := service.Stager.(managedSelectionReader)
-	if !ok {
+func (service Service) recordedManagedMCPNames(ctx context.Context, input AddInput, scope domain.InstallScope, prior *domain.ClientBinding, repair, updating bool) ([]string, bool, error) {
+	if (scope != domain.ScopeUser && scope != domain.ScopeProject) || prior.Scope != string(scope) || (input.Scope != "" && input.Scope != scope) {
+		return nil, false, fmt.Errorf("managed MCP selection scope differs from the selected binding")
+	}
+	_, scoped := service.Stager.(scopedManagedSelectionReader)
+	_, legacy := service.Stager.(managedSelectionReader)
+	if !scoped && !legacy {
 		return nil, false, nil
 	}
 	if service.Targets == nil {
@@ -75,14 +83,14 @@ func (service Service) recordedManagedMCPNames(ctx context.Context, input AddInp
 	}
 	client := input.Client
 	client.ClientID = domain.ClientID(prior.ClientID)
-	target, err := service.Targets.ResolveTarget(ctx, client, input.Scope, prior.PhysicalArtifact)
+	target, err := service.Targets.ResolveTarget(ctx, client, scope, prior.PhysicalArtifact)
 	if err != nil {
 		return nil, false, err
 	}
 	if err := service.Paths.RequireExactPath(target.ActivePath, prior.TargetLocator); err != nil {
 		return nil, false, fmt.Errorf("untrusted persisted target while reading managed MCP selection: %w", err)
 	}
-	names, err := reader.ManagedMCPNames(ctx, client.ClientID, prior.TargetLocator, managedDigest(*prior))
+	names, err := readManagedSelection(ctx, service.Stager, client.ClientID, scope, prior.TargetLocator, managedDigest(*prior))
 	if err == nil {
 		return names, false, nil
 	}
@@ -97,6 +105,16 @@ func (service Service) recordedManagedMCPNames(ctx context.Context, input AddInp
 		operation = "update"
 	}
 	return nil, false, fmt.Errorf("managed package was changed or is missing; refusing silent %s before previous MCP selection can be verified: %w", operation, err)
+}
+
+func readManagedSelection(ctx context.Context, stager ports.PackageStager, client domain.ClientID, scope domain.InstallScope, root, digest string) ([]string, error) {
+	if reader, ok := stager.(scopedManagedSelectionReader); ok {
+		return reader.ManagedMCPNamesForScope(ctx, client, scope, root, digest)
+	}
+	if reader, ok := stager.(managedSelectionReader); ok {
+		return reader.ManagedMCPNames(ctx, client, root, digest)
+	}
+	return nil, nil
 }
 
 func describeUnsupportedManagedSelection(plan *domain.DeliveryPlan, names []string, repair, updating bool) error {

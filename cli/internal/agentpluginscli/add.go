@@ -112,7 +112,7 @@ func executePromptedAdd(cmd *cobra.Command, app App, opts *options, source strin
 	if err != nil {
 		return fmt.Errorf("detect selected AI clients: %w", err)
 	}
-	_, detected, err := preflightSelectedTargets(cmd.Context(), app, selection, detectedClients, false)
+	_, detected, err := preflightProjectLifecycleTargets(cmd.Context(), app, opts, selection, detectedClients, false)
 	if err != nil {
 		return err
 	}

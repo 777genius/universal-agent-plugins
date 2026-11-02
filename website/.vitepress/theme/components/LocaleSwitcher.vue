@@ -1,19 +1,17 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useData, useRoute, withBase } from "vitepress";
 import { localeDestination, localeFromPath as routeLocale } from "./locale-routes.mjs";
+import { docsLocaleEntries } from "../../../tools/config/locales.mjs";
 import entities from "../../../generated/registries/entities.json";
 
 type Variant = "navbar" | "screen";
-type LocaleCode = "en" | "ru" | "es" | "fr" | "zh";
+type LocaleCode = "en" | "ru" | "uk" | "zh" | "es" | "hi" | "ar" | "pt" | "fr";
 type RegistryEntity = {
   canonicalId?: string;
-  pathEn?: string;
-  pathRu?: string;
-  pathEs?: string;
-  pathFr?: string;
-  pathZh?: string;
-};
+  anchorsByLocale?: Partial<Record<LocaleCode, string[]>>;
+} & Partial<Record<`path${Capitalize<LocaleCode>}`, string>>;
+
 
 const props = withDefaults(
   defineProps<{
@@ -32,16 +30,13 @@ const entityByCanonicalId = new Map(
 
 const { page, site } = useData();
 const route = useRoute();
+const currentHash = ref("");
+function syncHash() { currentHash.value = window.location.hash; }
 const open = ref(false);
+const openedByHover = ref(false);
 const rootEl = ref<HTMLElement | null>(null);
 
-const locales = [
-  { code: "en" as const, title: "English", shortTitle: "EN", basePath: "/en/" },
-  { code: "ru" as const, title: "Русский", shortTitle: "RU", basePath: "/ru/" },
-  { code: "es" as const, title: "Español", shortTitle: "ES", basePath: "/es/" },
-  { code: "fr" as const, title: "Français", shortTitle: "FR", basePath: "/fr/" },
-  { code: "zh" as const, title: "简体中文", shortTitle: "ZH", basePath: "/zh/" }
-];
+const locales = docsLocaleEntries.map((locale) => ({ ...locale, title: locale.label, shortTitle: locale.code.toUpperCase() }));
 
 const currentLocale = computed(() => {
   const code = localeFromPath(route.path);
@@ -53,16 +48,11 @@ const currentEntity = computed(() => {
   return typeof canonicalId === "string" ? entityByCanonicalId.get(canonicalId) ?? null : null;
 });
 
-const fallbackLabels = {
-  en: "Translation unavailable — English", ru: "Перевод недоступен — English",
-  es: "Traducción no disponible — English", fr: "Traduction indisponible — English",
-  zh: "暂无译文 — English"
-};
 const localeLinks = computed(() => locales.map((locale) => {
-  const target = localeDestination(currentEntity.value, locale.code);
+  const target = localeDestination(currentEntity.value, locale.code, currentHash.value);
   return { ...locale, href: withBase(target.path), language: target.language,
-    title: target.fallback ? `${locale.title} · ${fallbackLabels[locale.code]}`
-      : target.home ? `${locale.title} · Home` : locale.title };
+    title: target.fallback ? `${locale.title} · ${locale.fallback}`
+      : target.home ? `${locale.title} · ${locale.home}` : locale.title };
 }));
 
 const buttonLabel = computed(() => currentLocale.value?.title || "Language");
@@ -73,12 +63,21 @@ function localeFromPath(path: string): LocaleCode | null {
   return routeLocale(path, site.value.base) as LocaleCode | null;
 }
 
-function toggle() {
-  open.value = !open.value;
+function toggle(event: MouseEvent) {
+  syncHash();
+  if (event.detail > 0 && openedByHover.value) openedByHover.value = false;
+  else open.value = !open.value;
+}
+function enter() {
+  if (props.variant !== "navbar") return;
+  syncHash();
+  if (!open.value) openedByHover.value = true;
+  open.value = true;
 }
 
 function close() {
   open.value = false;
+  openedByHover.value = false;
 }
 
 function handleDocumentClick(event: MouseEvent) {
@@ -90,18 +89,27 @@ function handleDocumentClick(event: MouseEvent) {
   }
 }
 
+function handleFocusOut(event: FocusEvent) {
+  if (!rootEl.value?.contains(event.relatedTarget as Node | null)) close();
+}
+
 function handleEscape(event: KeyboardEvent) {
-  if (event.key === "Escape") {
+  if (event.key === "Escape" && open.value) {
     close();
+    rootEl.value?.querySelector("button")?.focus();
   }
 }
 
 onMounted(() => {
+  syncHash();
+  watch(() => route.path, syncHash, { flush: "post" });
+  window.addEventListener("hashchange", syncHash);
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("keydown", handleEscape);
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener("hashchange", syncHash);
   document.removeEventListener("click", handleDocumentClick);
   document.removeEventListener("keydown", handleEscape);
 });
@@ -111,8 +119,10 @@ onBeforeUnmount(() => {
   <div
     ref="rootEl"
     :class="['locale-switcher', `locale-switcher--${props.variant}`, { 'is-open': open }]"
-    @mouseenter="props.variant === 'navbar' ? (open = true) : undefined"
-    @mouseleave="props.variant === 'navbar' ? (open = false) : undefined"
+    @keydown.down.prevent="syncHash(); open = true"
+    @focusout="handleFocusOut"
+    @mouseenter="enter"
+    @mouseleave="props.variant === 'navbar' ? close() : undefined"
   >
     <button
       type="button"
@@ -138,6 +148,7 @@ onBeforeUnmount(() => {
           :class="{ 'is-active': locale.code === currentLocaleCode }"
           :href="locale.href"
           :lang="locale.language"
+          :dir="locale.language === 'ar' ? 'rtl' : 'ltr'"
           :hreflang="locale.language"
           @click="close"
         >
@@ -154,6 +165,7 @@ onBeforeUnmount(() => {
         :class="{ 'is-active': locale.code === currentLocaleCode }"
         :href="locale.href"
         :lang="locale.language"
+        :dir="locale.language === 'ar' ? 'rtl' : 'ltr'"
         :hreflang="locale.language"
         @click="close"
       >

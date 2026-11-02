@@ -50,7 +50,7 @@ export interface SkillSpectorReference {
   column: number;
   evidence: string;
   target_path: string | null;
-  status: 'resolved' | 'missing' | 'ambiguous' | 'rejected';
+  status: 'resolved' | 'missing' | 'ambiguous' | 'rejected' | 'uninspected';
   disposition: 'analyzed' | 'partial' | 'failed' | 'out_of_scope';
   reference_kind:
     | 'markdown_image'
@@ -237,9 +237,18 @@ export interface SkillSpectorAssessment {
   fullyChecked?: number;
   inventoryKnown?: boolean;
   selected?: number;
+  pendingIds?: string[];
   legacy?: boolean;
   reasons?: SkillSpectorReason[];
   groupCount?: number;
   rawCount?: number;
   unreviewedCount?: number;
+  outcomes?: {
+    complete: number;
+    limited: number;
+    failed: number;
+    historical: number;
+    unscanned: number;
+  };
+  retries?: { scheduled: number; blocked: number; exhausted: number };
 }

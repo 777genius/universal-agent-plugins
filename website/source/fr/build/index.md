@@ -15,7 +15,7 @@ Un paquet Agent Plugins 1.0 est un dossier avec `plugin.json` à sa racine et de
 
 ## Disponibilité
 
-L’installateur natif actuel, [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), peut valider et installer des paquets standard. **Il n’inclut pas `agentplugins author`.** Les commandes de création de ce parcours décrivent des **compilations du code source actuel** où la création est activée. Les preuves de publication des outils de création 0.1.65 restent propres à cette version et ne décrivent pas l’installateur actuel.
+L’installateur natif actuel, [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95), peut valider et installer des paquets standard. Les versions peuvent varier selon le canal ; vérifiez la version installée avec `agentplugins version`. **Il n’inclut pas `agentplugins author`.** Les commandes de création de ce parcours décrivent des **compilations du code source actuel** où la création est activée. Les preuves de publication des outils de création 0.1.65 restent propres à cette version et ne décrivent pas l’installateur actuel.
 
 Vous pouvez écrire les fichiers à la main et utiliser l’installateur publié, ou compiler les outils ci-dessous pour créer une structure initiale, effectuer des vérifications statiques et lancer explicitement un cycle MCP. Une vérification statique réussie ne prouve ni l’activation par un client natif ni le bon fonctionnement d’une connexion à un service.
 
@@ -38,7 +38,7 @@ Définissez l’identité du paquet dans `plugin.json` :
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "review-helper",
   "version": "0.1.0",
-  "description": "Review documentation changes for clarity and evidence"
+  "description": "Vérifier la clarté et les éléments justificatifs des modifications de documentation"
 }
 ```
 
@@ -69,7 +69,7 @@ Examinez le plan et consultez [Utiliser des plugins](../use/install) pour l’ap
 
 ## Préparez les outils de création depuis le code source {#build-from-source}
 
-Cette préparation pour développeurs compile le contrat public de création du code source actuel. Elle nécessite Git et la version de Go déclarée par le dépôt, actuellement Go 1.26.10. Notez le commit extrait lorsque vous partagez des résultats.
+Les commandes suivantes compilent la CLI actuelle avec les outils de création activés. Elle nécessite Git et la version de Go déclarée par le dépôt, actuellement Go 1.26.10. Notez le commit extrait lorsque vous partagez des résultats.
 
 ```bash
 git clone https://github.com/777genius/universal-agent-plugins.git

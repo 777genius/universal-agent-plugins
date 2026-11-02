@@ -11,6 +11,10 @@ import (
 )
 
 type dependencyActionDTO struct {
+	FromVersion      string                     `json:"from_version,omitempty"`
+	ToVersion        string                     `json:"to_version,omitempty"`
+	FromRevision     string                     `json:"from_revision,omitempty"`
+	FromDigest       string                     `json:"from_digest,omitempty"`
 	ComponentSupport []domain.ComponentDecision `json:"component_support,omitempty"`
 	Alias            string                     `json:"alias"`
 	ClientID         string                     `json:"client_id"`
@@ -25,10 +29,11 @@ type dependencyActionDTO struct {
 func dependencyActionOutput(actions []dependencyAction, support map[string][]domain.ComponentDecision) []dependencyActionDTO {
 	out := make([]dependencyActionDTO, 0, len(actions))
 	for _, action := range actions {
-		item := dependencyActionDTO{ComponentSupport: support[action.Alias+"\x00"+action.ClientID], Alias: action.Alias, ClientID: action.ClientID, InstallationID: action.InstallationID, BindingID: action.BindingID, Action: string(action.Action), Reason: action.Reason}
+		item := dependencyActionDTO{FromVersion: action.FromVersion, FromRevision: action.FromRevision, FromDigest: action.FromDigest, ComponentSupport: support[action.Alias+"\x00"+action.ClientID], Alias: action.Alias, ClientID: action.ClientID, InstallationID: action.InstallationID, BindingID: action.BindingID, Action: string(action.Action), Reason: action.Reason}
 		if action.Package != nil {
+			item.ToVersion = action.Package.Version
 			item.PackageDigest = action.Package.TreeDigest
-			item.Revision = lockedCommit(*action.Package)
+			item.Revision = savedPinIdentity(*action.Package).Revision
 		}
 		out = append(out, item)
 	}
@@ -74,6 +79,9 @@ func renderDependencyResults(cmd *cobra.Command, opts *options, actions []depend
 }
 
 func renderDependencyHumanResults(cmd *cobra.Command, opts *options, actions []dependencyAction, out []dependencyResultDTO) error {
+	if err := renderDependencyTransitions(cmd, actions); err != nil {
+		return err
+	}
 	if err := renderDependencyComponents(cmd, opts, actions); err != nil {
 		return err
 	}
@@ -138,4 +146,47 @@ func dependencyResultOutput(results []installer.Result) []dependencyResultDTO {
 		out = append(out, item)
 	}
 	return out
+}
+
+func populateDependencyBeforeFacts(state domain.StateFileV2, actions []dependencyAction) {
+	for i := range actions {
+		action := &actions[i]
+		for _, installation := range state.Installations {
+			if installation.InstallationID != action.InstallationID {
+				continue
+			}
+			for _, binding := range installation.Clients {
+				if binding.ClientID != action.ClientID {
+					continue
+				}
+				action.FromVersion, action.FromRevision, action.FromDigest = installation.Package.Version, installation.Source.ResolvedRevision, installation.Source.TreeDigest
+				if binding.PackageRevision != nil {
+					action.FromVersion, action.FromRevision, action.FromDigest = binding.PackageRevision.Version, binding.PackageRevision.ResolvedRevision, binding.PackageRevision.TreeDigest
+				}
+			}
+		}
+	}
+}
+func renderDependencyTransitions(cmd *cobra.Command, actions []dependencyAction) error {
+	for _, action := range dependencyActionOutput(actions, nil) {
+		if action.Action != string(environment.ActionUpdate) {
+			continue
+		}
+		from, to := dependencyTransition(action)
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s/%s: %s → %s\n", action.Alias, action.ClientID, from, to); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func dependencyTransition(action dependencyActionDTO) (from, to string) {
+	from, to = action.FromVersion, action.ToVersion
+	if from == "" || to == "" || from == to {
+		from, to = action.FromRevision, action.Revision
+	}
+	if from == "" || to == "" || from == to {
+		from, to = action.FromDigest, action.PackageDigest
+	}
+	return from, to
 }

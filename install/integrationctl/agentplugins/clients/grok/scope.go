@@ -91,7 +91,7 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
 	if in.Client.ExecutablePath == "" {
 		plan.Status = domain.PlanUnsupported
 		plan.Warnings = append(plan.Warnings, "pinned_grok_inspect_required")
-		plan.UserActions = append(plan.UserActions, "Grok Build 1.0.67 CLI is required for read-only project source checks")
+		plan.UserActions = append(plan.UserActions, "Grok Build 1.0.67 or 1.0.70 CLI is required for read-only project source checks")
 	}
 	return nil
 }
@@ -108,7 +108,7 @@ func (*Adapter) QualifyPlan(in clients.PlanInput, plan *domain.DeliveryPlan) err
 	for i := range plan.Components {
 		if plan.Components[i].Kind == domain.ComponentMCPServer {
 			plan.Components[i].Support = domain.SupportUnsupported
-			plan.Components[i].Reason = "Grok project bundled MCP initialization and tools are unqualified at pinned 1.0.67"
+			plan.Components[i].Reason = "Grok project bundled MCP initialization and tools are unqualified at pinned 1.0.67 and 1.0.70"
 		}
 	}
 	return nil

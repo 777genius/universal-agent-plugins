@@ -49,16 +49,16 @@ func TestMainUsesProductionDirectoryTrustAndReleaseBootstrap(t *testing.T) {
 		t.Fatalf("generated production bootstrap readiness = %v, %v", ready, err)
 	}
 	bundle, err := embedded.Verify(client.Trust)
-	if err != nil || bundle.Snapshot.Sequence != 39 || bundle.Digest != "sha256:4d3d7755d89123aa238b28e6ffb92d01ec20b70586dbc292293d6b4d5524f532" {
+	if err != nil || bundle.Snapshot.Sequence != 43 || bundle.Digest != "sha256:7ffb6078ac08e7ed00575dbf9a871b0dba53c755591d8983dd9399bfdc4edaf6" {
 		t.Fatalf("generated production bootstrap identity: sequence=%d digest=%q err=%v", bundle.Snapshot.Sequence, bundle.Digest, err)
 	}
 	client.HTTPClient.Transport = failingRoundTripper{}
-	client.Now = func() time.Time { return time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC) }
+	client.Now = func() time.Time { return time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC) }
 	fallback, err := client.Load(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("offline release bootstrap fallback: %v", err)
 	}
-	if fallback.Snapshot.Sequence != 39 || fallback.Digest != bundle.Digest {
+	if fallback.Snapshot.Sequence != 43 || fallback.Digest != bundle.Digest {
 		t.Fatalf("offline release bootstrap identity: sequence=%d digest=%q", fallback.Snapshot.Sequence, fallback.Digest)
 	}
 }

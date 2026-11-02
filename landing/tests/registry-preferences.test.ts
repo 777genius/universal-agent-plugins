@@ -10,11 +10,13 @@ import { computed, effectScope, nextTick, reactive, ref, watch } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
+import { usePluginInstallSelection } from '../composables/usePluginInstallSelection.ts';
 import { useCatalogUiStore } from '../stores/catalogUi.ts';
 import { clients } from '../data/clients.ts';
 import * as registryDomain from '../utils/registry.ts';
 import * as filters from '../utils/filter.ts';
 import { pluginCommands } from '../utils/commands.ts';
+import { projectCatalogCommands } from '../utils/projectCatalogSource.ts';
 import { discoveryPlugin } from '../utils/discovery.ts';
 import { signedDiscoveryFixture } from './fixtures/signed-discovery.ts';
 import { createMemoryHistory, createRouter, type RouteLocationRaw } from 'vue-router';
@@ -23,7 +25,7 @@ const fixture = JSON.parse(
   readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
 ).plugins[0];
 const messages = JSON.parse(
-  readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('../i18n/locales/en.json', import.meta.url), 'utf8'),
 );
 const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], string, false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
 const discoveryStatus = ref({ state: 'current', count: 0 });
@@ -40,11 +42,13 @@ const common = {
   authenticationIndicator,
   ...filters,
   pluginCommands,
+  projectCatalogCommands,
   onScopeDispose: Vue.onScopeDispose,
   ...discoveryHelpers,
   useI18n: () => i18n,
   useLocalePath: () => (path: string) => path,
   useInstallPreferencesStore,
+  usePluginInstallSelection,
   useCatalogUiStore,
   useSite: () => ({
     asset: (path: string) => path,
@@ -76,9 +80,33 @@ function card(props = packageProps()) {
   return setup(
     'RegistryPluginCard',
     { defineProps: () => props, withDefaults: (value: unknown) => value },
-    'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall',
+    'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall, deliverySummary, updateScope',
   );
 }
+
+test('explicit card delivery summary follows the winning scoped release rather than default aggregate', () => {
+  setActivePinia(createPinia());
+  const plugin = structuredClone(fixture);
+  const fallback = structuredClone(plugin.distributions[0]);
+  fallback.id = 'project-fallback';
+  fallback.kind = 'community';
+  fallback.releases[0].targets = [{ client: 'codex', scopes: ['project'], delivery: 'prepared', authentication: 'required' }];
+  fallback.releases[0].blocking_clients = [];
+  fallback.releases[0].meets_minimum_capabilities = true;
+  fallback.releases = [fallback.releases[0]];
+  plugin.distributions.push(fallback);
+  const instance = card(packageProps(plugin));
+  assert.equal(instance.state.deliverySummary.value, '', 'terminal detection cannot claim agent status');
+  instance.state.updateTargets(['codex']);
+  instance.state.updateAutoDetect(false);
+  instance.state.updateScope('project');
+  assert.equal(instance.state.deliverySummary.value, 'Agents: 0 automatic setup · 1 need follow-up');
+  assert.match(instance.state.command.value, /--target codex --scope project$/);
+  instance.state.updateScope('user');
+  instance.state.updateAutoDetect(true);
+  assert.equal(instance.state.deliverySummary.value, '', 'switching back to terminal hides agent status');
+  instance.stop();
+});
 
 test('expired community card and detail produce pinned commands with compatible targets while unavailable packages stay blocked', () => {
   setActivePinia(createPinia());
@@ -140,6 +168,12 @@ test('invalid target preferences are discarded and a new package does not inheri
     packageProps({
       ...fixture,
       client_support: { ...fixture.client_support, clients: ['cursor'] },
+      distributions: fixture.distributions.map((distribution: any) => ({
+        ...distribution,
+        releases: distribution.releases.map((release: any) => ({
+          ...release, targets: release.targets.filter((target: any) => target.client === 'cursor'),
+        })),
+      })),
     }),
   );
   assert.deepEqual(Array.from(changed.state.targets.value), ['cursor']);

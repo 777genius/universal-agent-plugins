@@ -90,6 +90,26 @@ paths:
                 $ref: '#/components/schemas/Environment'
         default:
           $ref: '#/components/responses/Error'
+  /api/v1/environment/check-updates:
+    post:
+      operationId: checkUpdates
+      description: Explicit read-only network check. Source and graph facts are observations;
+        a complete candidate still requires a fresh mutation review. Does not persist freshness.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCheckRequest'
+      responses:
+        '200':
+          description: Complete or unavailable update check with per-entry facts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateCheck'
+        default:
+          $ref: '#/components/responses/Error'
   /api/v1/plans:
     post:
       operationId: preparePlan
@@ -1443,3 +1463,106 @@ components:
           type: string
           minLength: 1
           maxLength: 255
+    UpdateCheckRequest:
+      type: object
+      additionalProperties: false
+      description: Select unique declared aliases or all; both and empty selection are invalid.
+      properties:
+        aliases:
+          type: array
+          maxItems: 2000
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+        all:
+          type: boolean
+          x-go-type-skip-optional-pointer: true
+    UpdateIdentity:
+      type: object
+      additionalProperties: false
+      required: [version, revision, treeDigest, manifestDigest]
+      properties:
+        version:
+          type: string
+        revision:
+          type: string
+        treeDigest:
+          type: string
+        manifestDigest:
+          type: string
+        distributionId:
+          type: string
+          x-go-type-skip-optional-pointer: true
+        releaseSequence:
+          type: string
+          description: Decimal signed release sequence; a string preserves the exact integer identity.
+          x-go-type-skip-optional-pointer: true
+    UpdateSelector:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties:
+        kind:
+          type: string
+        value:
+          type: string
+    UpdateOwner:
+      type: object
+      additionalProperties: false
+      required: [alias, selector]
+      properties:
+        alias:
+          type: string
+        selector:
+          $ref: '#/components/schemas/UpdateSelector'
+    UpdateCheckEntry:
+      type: object
+      additionalProperties: false
+      required: [alias, declared, selected, source, status, reason, requiredBy]
+      properties:
+        alias:
+          type: string
+        declared:
+          type: boolean
+        selected:
+          type: boolean
+        source:
+          type: string
+        requested:
+          $ref: '#/components/schemas/UpdateSelector'
+        status:
+          type: string
+          enum: [current, available, pinned, blocked, check_unavailable]
+        reason:
+          type: string
+        installed:
+          $ref: '#/components/schemas/UpdateIdentity'
+        available:
+          $ref: '#/components/schemas/UpdateIdentity'
+        requiredBy:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpdateOwner'
+    UpdateCheck:
+      type: object
+      additionalProperties: false
+      required: [contextId, complete, changed, entries, diagnostics]
+      description: Complete describes the whole selected graph. A current root may have changed
+        shared dependencies listed separately. Unavailable facts never mean current or approved.
+      properties:
+        contextId:
+          type: string
+        complete:
+          type: boolean
+        changed:
+          type: boolean
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpdateCheckEntry'
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/Diagnostic'

@@ -9,10 +9,14 @@ import (
 )
 
 // Adapter implements the client contract for Cursor.
-type Adapter struct{}
+type Adapter struct{ projectComponents bool }
 
 // New builds the adapter. The composition root registers it in clients/all.
 func New() *Adapter { return &Adapter{} }
+
+// NewProject selects project components using either the editor or Agent
+// surface. It does not qualify native discovery or replace editor identity.
+func NewProject() *Adapter { return &Adapter{projectComponents: true} }
 
 var (
 	_ clients.Adapter      = (*Adapter)(nil)
@@ -25,7 +29,7 @@ func (*Adapter) ID() domain.ClientID { return domain.ClientCursor }
 // DetectSurfaces reports editor and agent binary presence separately. The
 // retained package preparation contract is for the editor; neither presence
 // nor a leftover directory qualifies native agent plugins or Stop events.
-func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
+func (adapter *Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	configRoot, err := detectedProfileRoot(host)
 	if err != nil {
 		return clients.Detection{Err: err}
@@ -43,10 +47,14 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	} else if host.GOOS() == "linux" {
 		surfaces = append(surfaces, host.LinuxDesktopSurface("cursor_desktop", "cursor.desktop"))
 	}
+	selection := []string{"cursor_editor", "cursor_desktop"}
+	if adapter.projectComponents {
+		selection = append(selection, "cursor_agent")
+	}
 	return clients.Detection{
 		ConfigRoot:          configRoot,
 		ExecutablePath:      editor,
 		Surfaces:            surfaces,
-		SelectionSurfaceIDs: []string{"cursor_editor", "cursor_desktop"},
+		SelectionSurfaceIDs: selection,
 	}
 }

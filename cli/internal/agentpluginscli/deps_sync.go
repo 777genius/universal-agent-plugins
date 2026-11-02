@@ -123,6 +123,9 @@ func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Pac
 
 func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, actions []dependencyAction, detected map[domain.ClientID]domain.DetectedClient, consent ...map[string]bool) ([]dependencyAction, error) {
 	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd}
+	if err := adapter.preflightProjectVersions(cmd.Context(), actions); err != nil {
+		return nil, err
+	}
 	if len(consent) > 0 {
 		adapter.consent = consent[0]
 	}
@@ -130,7 +133,11 @@ func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, acti
 }
 
 func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstaller, actions []dependencyAction) ([]dependencyAction, error) {
-	opts := adapter.opts
+	state, err := adapter.app.StateStore.Load()
+	if err != nil {
+		return nil, err
+	}
+	populateDependencyBeforeFacts(state, actions)
 	claims := map[string]string{}
 	updates := map[string]*installer.PreparedOperation{}
 	defer func() {
@@ -157,14 +164,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		if adapter.previewPaths != nil {
 			adapter.previewPaths[action.Alias+"\x00"+action.ClientID] = plan.TargetPath
 		}
-		if opts.dependencyComponents == nil {
-			opts.dependencyComponents = map[string][]domain.ComponentDecision{}
-		}
-		components := make([]domain.ComponentDecision, 0, len(plan.Delivery.Components))
-		for _, component := range plan.Delivery.Components {
-			components = append(components, domain.ComponentDecision{Kind: domain.ComponentKind(component.Kind), Name: component.Name, Support: domain.SupportLevel(component.Support), Reason: component.Reason, Source: component.Source, SourceName: component.SourceName})
-		}
-		opts.dependencyComponents[action.Alias+"\x00"+action.ClientID] = components
+		adapter.recordDependencyComponents(action, plan)
 
 		if action.Action == environment.ActionUpdate && updates[action.Alias] == nil {
 			updates[action.Alias] = prepared
@@ -178,6 +178,39 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		claims[key] = action.Alias
 	}
 	return actions, nil
+}
+
+func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context, actions []dependencyAction) error {
+	if adapter.app.scope() != domain.ScopeProject || adapter.opts.dryRun {
+		return nil
+	}
+	var targets []domain.ClientID
+	for _, action := range actions {
+		if action.Action == environment.ActionUnchanged {
+			continue
+		}
+		id := domain.ClientID(action.ClientID)
+		client, ok := adapter.detected[id]
+		if !ok || (action.Action != environment.ActionRemove && (client.Status != domain.DetectionDetected || client.DetectionError != nil)) {
+			return fmt.Errorf("target %s is not detected; nothing was changed", action.ClientID)
+		}
+		if action.Action == environment.ActionInstall || action.Action == environment.ActionUpdate || action.Action == "repair" {
+			targets = append(targets, id)
+		}
+	}
+	return ensureSelectedProjectVersions(ctx, adapter.app, adapter.opts, targets, adapter.detected)
+}
+
+func (adapter *dependencyInstaller) recordDependencyComponents(action dependencyAction, plan installer.Plan) {
+	opts := adapter.opts
+	if opts.dependencyComponents == nil {
+		opts.dependencyComponents = map[string][]domain.ComponentDecision{}
+	}
+	components := make([]domain.ComponentDecision, 0, len(plan.Delivery.Components))
+	for _, component := range plan.Delivery.Components {
+		components = append(components, domain.ComponentDecision{Kind: domain.ComponentKind(component.Kind), Name: component.Name, Support: domain.SupportLevel(component.Support), Reason: component.Reason, Source: component.Source, SourceName: component.SourceName})
+	}
+	opts.dependencyComponents[action.Alias+"\x00"+action.ClientID] = components
 }
 
 type dependencyInstaller struct {

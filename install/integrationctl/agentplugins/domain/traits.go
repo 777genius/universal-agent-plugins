@@ -33,6 +33,9 @@ type ClientTraits struct {
 	ReportsMCPToolNamespaceCollision  bool
 	BindsNativeProfileRoot            bool
 	TracksNativeEffects               bool
+	// RecordsUserProfileOnCreate records a selected user profile only for a new
+	// binding. It never adopts a legacy or coalesced binding with missing proof.
+	RecordsUserProfileOnCreate bool
 	// RequiresPluginData binds native extension runtime locators to an owned data receipt.
 	RequiresPluginData bool
 	// VerifiesNativeDirectory permits read-only verification of a directly discovered package.

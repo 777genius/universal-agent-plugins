@@ -59,7 +59,9 @@ func managementBindingInProfile(binding domain.ClientBinding, root string) bool 
 func managementProjectionInProfile(binding domain.ClientBinding, root string) bool {
 	proved := managementPathInProfile(binding.TargetLocator, root)
 	for _, object := range binding.NativeObjects {
-		if object.ProtectionClass != "managed" {
+		switch object.ProtectionClass {
+		case "managed", "managed_entry":
+		default:
 			continue
 		}
 		if object.Kind == "managed_package_directory" && object.Path == binding.TargetLocator {

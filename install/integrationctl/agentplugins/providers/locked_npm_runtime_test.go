@@ -571,15 +571,3 @@ func TestLockedRuntimeRejectsSymlinkEntrypoint(t *testing.T) {
 		t.Fatalf("symlinked entrypoint accepted: %v", err)
 	}
 }
-
-func TestRuntimeStderrTailBoundsDiagnostics(t *testing.T) {
-	var writer runtimeStderrTail
-	for _, chunk := range []string{strings.Repeat("a", 900), strings.Repeat("b", 900), strings.Repeat("c", 2000)} {
-		if _, err := writer.Write([]byte(chunk)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got := string(writer.tail); got != strings.Repeat("c", 1200) {
-		t.Fatalf("stderr tail = %q", got)
-	}
-}

@@ -31,6 +31,20 @@ agentplugins outdated --all
 | El cliente necesita confianza, activación o inicio de sesión | Sigue las instrucciones indicadas para ese destino. |
 | Falla la validación de un paquete local | Entrega al autor el informe y la [guía de comprobaciones](../build/checks). |
 
+## API local de gestión (CLI 0.1.95) {#local-management-api}
+
+[CLI nativo 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) añade `agentplugins manage serve` para aplicaciones que integran el instalador y `agentplugins manage discover` para descubrir clientes y perfiles locales sin modificarlos. La detección no ejecuta clientes, consulta sus versiones, descarga orígenes ni cambia archivos.
+
+`manage serve` es un proceso controlado por la aplicación integradora, con un contexto capturado al arrancar y una API privada autenticada en el loopback IPv4. La aplicación proporciona JSON por stdin y mantiene privados la URL inicial y la credencial bearer. Comprueba la ayuda de los comandos antes de integrar:
+
+```bash
+agentplugins version
+agentplugins manage serve --help
+agentplugins manage discover --help
+```
+
+Consulta el [contrato del protocolo de gestión](https://github.com/777genius/universal-agent-plugins/blob/main/contracts/management/README.md) para conocer las reglas de arranque y ciclo de vida. El [TypeScript Management SDK](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md) se versiona de forma independiente con el nombre de paquete `universal-agent-plugins-management-sdk`. Consulta su README para conocer las versiones compatibles del motor `agentplugins` y las instrucciones de instalación del paquete. Elige una versión publicada en npm o, para trabajar con cambios aún no publicados, compila y prueba un paquete a partir de un commit específico del código fuente. Fija tanto la versión del SDK como la del motor.
+
 ## Actualiza de forma deliberada
 
 ```bash
@@ -61,7 +75,7 @@ agentplugins remove context7 --target codex,cursor --dry-run
 agentplugins remove context7 --target codex,cursor
 ```
 
-Revisa el primer plan antes de ejecutar el segundo comando. La eliminación usa la propiedad registrada por el CLI. No revoca cuentas de servicios, elimina entornos de ejecución ajenos ni borra el código fuente del autor. Por defecto, eliminar una instalación de proyecto conserva los datos del plugin y el almacén compartido de contenido verificado.
+Revisa el primer plan antes de ejecutar el segundo comando. La eliminación usa la propiedad registrada por el CLI. No revoca cuentas de servicios ni elimina entornos de ejecución ajenos ni borra el código fuente del autor. Por defecto, eliminar una instalación de proyecto conserva los datos del plugin y el almacén compartido de contenido verificado.
 
 ## Usa un entorno de dependencias guardado
 
@@ -128,7 +142,7 @@ agentplugins repair review --target cursor --scope project --project-root /path/
 agentplugins deps recover --scope project --project-root /path/to/project
 ```
 
-Si un nombre es ambiguo, usa la identidad de instalación que devuelve `list`. `add` y los comandos de mantenimiento usan por defecto el ámbito de usuario; selecciona el proyecto explícitamente. Desde 0.1.94, `install` sin argumentos puede seleccionarlo automáticamente como se explica a continuación. `--scope project` explícito, sin `--project-root`, usa solo el directorio de ejecución.
+Si un nombre es ambiguo, usa la identidad de instalación que devuelve `list`. `add` y los comandos de mantenimiento usan por defecto el ámbito de usuario; selecciona el proyecto explícitamente. Desde 0.1.94, `install` sin argumento de origen puede seleccionarlo automáticamente como se explica a continuación. `--scope project` explícito, sin `--project-root`, usa solo el directorio de ejecución.
 
 Conserva localmente los recibos, diarios de recuperación y datos de `.uap/`. Restaura los componentes nativos desde el acuerdo portable y sigue las instrucciones del cliente sobre confianza o activación. Los orígenes y el acceso a los privados deben seguir disponibles. Consulta la [instalación de proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) y los [límites por cliente](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md).
 
@@ -142,7 +156,7 @@ agentplugins version
 
 Necesitas 0.1.94 o posterior para este comportamiento. Los canales pueden actualizarse en momentos distintos; si el tuyo aún ofrece una versión anterior, usa [el instalador nativo](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) o Homebrew. Los ejemplos anteriores con ámbito explícito siguen funcionando con 0.1.93.
 
-`agentplugins install` sin argumentos selecciona el ámbito de proyecto si existe un `uap.toml` regular en el directorio actual exacto. No busca en directorios superiores. Un ámbito explícito tiene prioridad; sin ese manifiesto local, se selecciona el entorno de usuario.
+`agentplugins install` sin argumento de origen selecciona el ámbito de proyecto si existe un `uap.toml` regular en el directorio actual exacto. No busca en directorios superiores. Durante la selección automática se rechaza un directorio o enlace simbólico llamado `uap.toml`; indica el ámbito explícitamente para resolver la ambigüedad. Un ámbito explícito tiene prioridad; sin ese manifiesto local, se selecciona el entorno de usuario.
 
 Un `uap.lock` existente se valida estrictamente antes de cambiar nada, incluso sin `--locked`: no se vuelven a resolver sus revisiones fijadas. Solo la ausencia del bloqueo permite resolver las dependencias iniciales y crear uno. `--locked` exige un bloqueo válido existente. Usa `update` para avanzar las revisiones fijadas; no uses una instalación ordinaria para cambiarlas. Los ejemplos anteriores con ámbito explícito y `--locked` siguen siendo una forma reproducible de restaurar el proyecto.
 

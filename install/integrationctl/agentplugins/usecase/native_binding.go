@@ -209,6 +209,16 @@ func (s profileStager) ManagedMCPNames(ctx context.Context, id domain.ClientID, 
 	return nil, nil
 }
 
+func (s profileStager) ManagedMCPNamesForScope(ctx context.Context, id domain.ClientID, scope domain.InstallScope, path, digest string) ([]string, error) {
+	if err := s.check(); err != nil {
+		return nil, err
+	}
+	if scope != domain.ScopeUser && scope != domain.ScopeProject {
+		return nil, fmt.Errorf("managed MCP selection requires an explicit user or project scope")
+	}
+	return readManagedSelection(ctx, s.PackageStager, id, scope, path, digest)
+}
+
 type profileData struct {
 	PluginDataManager
 	check func() error

@@ -1,0 +1,11 @@
+[
+  "no-save-first-repeat-remove",
+  "selected-target-ownership",
+  "component-set-replacement",
+  "foreign-skill-collision",
+  "foreign-disabled-mcp-collision",
+  "malformed-native-config",
+  "drift-recorded-pin-repair",
+  "preview-and-decline",
+  "rich-cold-restore-isolation"
+]

@@ -55,7 +55,7 @@ test('production registry loader decodes octet-stream and fails closed before st
   const globals = {
     $fetch: decoder,
     useRuntimeConfig: () => ({ public: { baseURL } }),
-    useI18n: () => createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({ legacy: false, locale: 'en', messages: { en: JSON.parse(readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8')) } }).global,
+    useI18n: () => createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({ legacy: false, locale: 'en', messages: { en: JSON.parse(readFileSync(new URL('../i18n/locales/en.json', import.meta.url), 'utf8')) } }).global,
     onScopeDispose,
     watch,
     useState: (key: string, init?: () => unknown) => {

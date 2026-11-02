@@ -13,10 +13,16 @@ function readSidebar(fileName: string) {
 }
 
 export const enLocaleConfig = {
+  title: "Agent Plugins Docs",
+  description: "Public guides for installing, managing and building Agent Plugins.",
   label: "English",
   lang: "en-US",
   link: "/en/",
   themeConfig: {
+    langMenuLabel: "Change language",
+    lightModeSwitchTitle: "Switch to light theme",
+    darkModeSwitchTitle: "Switch to dark theme",
+    skipToContentLabel: "Skip to content",
     outlineTitle: "On this page",
     lastUpdatedText: "Updated",
     returnToTopLabel: "Return to top",

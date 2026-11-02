@@ -1,0 +1,631 @@
+{
+  "/pt/": [
+    {
+      "text": "Usar plugins",
+      "items": [
+        {
+          "text": "Visão geral",
+          "link": "/pt/use/"
+        },
+        {
+          "text": "Instalar",
+          "link": "/pt/use/install"
+        },
+        {
+          "text": "Gerenciar",
+          "link": "/pt/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Criar plugins",
+      "items": [
+        {
+          "text": "Visão geral",
+          "link": "/pt/build/"
+        },
+        {
+          "text": "Um Skill",
+          "link": "/pt/build/skill"
+        },
+        {
+          "text": "MCP remoto",
+          "link": "/pt/build/mcp-remote"
+        },
+        {
+          "text": "MCP local",
+          "link": "/pt/build/mcp-stdio"
+        },
+        {
+          "text": "Plugin híbrido",
+          "link": "/pt/build/hybrid"
+        },
+        {
+          "text": "Vários Skills",
+          "link": "/pt/build/skills"
+        },
+        {
+          "text": "Estrutura",
+          "link": "/pt/build/layout"
+        },
+        {
+          "text": "Verificações",
+          "link": "/pt/build/checks"
+        },
+        {
+          "text": "Entrega",
+          "link": "/pt/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · referência 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/pt/use/": [
+    {
+      "text": "Usar plugins",
+      "items": [
+        {
+          "text": "Visão geral",
+          "link": "/pt/use/"
+        },
+        {
+          "text": "Instalar",
+          "link": "/pt/use/install"
+        },
+        {
+          "text": "Gerenciar",
+          "link": "/pt/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Criar plugins",
+      "items": [
+        {
+          "text": "Visão geral",
+          "link": "/pt/build/"
+        },
+        {
+          "text": "Um Skill",
+          "link": "/pt/build/skill"
+        },
+        {
+          "text": "MCP remoto",
+          "link": "/pt/build/mcp-remote"
+        },
+        {
+          "text": "MCP local",
+          "link": "/pt/build/mcp-stdio"
+        },
+        {
+          "text": "Plugin híbrido",
+          "link": "/pt/build/hybrid"
+        },
+        {
+          "text": "Vários Skills",
+          "link": "/pt/build/skills"
+        },
+        {
+          "text": "Estrutura",
+          "link": "/pt/build/layout"
+        },
+        {
+          "text": "Verificações",
+          "link": "/pt/build/checks"
+        },
+        {
+          "text": "Entrega",
+          "link": "/pt/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · referência 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/pt/build/": [
+    {
+      "text": "Usar plugins",
+      "items": [
+        {
+          "text": "Visão geral",
+          "link": "/pt/use/"
+        },
+        {
+          "text": "Instalar",
+          "link": "/pt/use/install"
+        },
+        {
+          "text": "Gerenciar",
+          "link": "/pt/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Criar plugins",
+      "items": [
+        {
+          "text": "Visão geral",
+          "link": "/pt/build/"
+        },
+        {
+          "text": "Um Skill",
+          "link": "/pt/build/skill"
+        },
+        {
+          "text": "MCP remoto",
+          "link": "/pt/build/mcp-remote"
+        },
+        {
+          "text": "MCP local",
+          "link": "/pt/build/mcp-stdio"
+        },
+        {
+          "text": "Plugin híbrido",
+          "link": "/pt/build/hybrid"
+        },
+        {
+          "text": "Vários Skills",
+          "link": "/pt/build/skills"
+        },
+        {
+          "text": "Estrutura",
+          "link": "/pt/build/layout"
+        },
+        {
+          "text": "Verificações",
+          "link": "/pt/build/checks"
+        },
+        {
+          "text": "Entrega",
+          "link": "/pt/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · referência 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/pt/api/cli/prepared-authoring-v2": [
+    {
+      "text": "Usar plugins",
+      "items": [
+        {
+          "text": "Visão geral",
+          "link": "/pt/use/"
+        },
+        {
+          "text": "Instalar",
+          "link": "/pt/use/install"
+        },
+        {
+          "text": "Gerenciar",
+          "link": "/pt/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Criar plugins",
+      "items": [
+        {
+          "text": "Visão geral",
+          "link": "/pt/build/"
+        },
+        {
+          "text": "Um Skill",
+          "link": "/pt/build/skill"
+        },
+        {
+          "text": "MCP remoto",
+          "link": "/pt/build/mcp-remote"
+        },
+        {
+          "text": "MCP local",
+          "link": "/pt/build/mcp-stdio"
+        },
+        {
+          "text": "Plugin híbrido",
+          "link": "/pt/build/hybrid"
+        },
+        {
+          "text": "Vários Skills",
+          "link": "/pt/build/skills"
+        },
+        {
+          "text": "Estrutura",
+          "link": "/pt/build/layout"
+        },
+        {
+          "text": "Verificações",
+          "link": "/pt/build/checks"
+        },
+        {
+          "text": "Entrega",
+          "link": "/pt/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · referência 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/pt/guide/quickstart": [
+    {
+      "text": "Começar",
+      "items": [
+        {
+          "text": "Usar plugins",
+          "link": "/pt/use/"
+        },
+        {
+          "text": "Criar plugins",
+          "link": "/pt/build/"
+        },
+        {
+          "text": "Início rápido",
+          "link": "/pt/guide/quickstart"
+        }
+      ]
+    }
+  ],
+  "/pt/reference/client-compatibility": [
+    {
+      "text": "Usar plugins",
+      "items": [
+        {
+          "text": "Visão geral",
+          "link": "/pt/use/"
+        },
+        {
+          "text": "Instalar",
+          "link": "/pt/use/install"
+        },
+        {
+          "text": "Gerenciar",
+          "link": "/pt/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Criar plugins",
+      "items": [
+        {
+          "text": "Visão geral",
+          "link": "/pt/build/"
+        },
+        {
+          "text": "Um Skill",
+          "link": "/pt/build/skill"
+        },
+        {
+          "text": "MCP remoto",
+          "link": "/pt/build/mcp-remote"
+        },
+        {
+          "text": "MCP local",
+          "link": "/pt/build/mcp-stdio"
+        },
+        {
+          "text": "Plugin híbrido",
+          "link": "/pt/build/hybrid"
+        },
+        {
+          "text": "Vários Skills",
+          "link": "/pt/build/skills"
+        },
+        {
+          "text": "Estrutura",
+          "link": "/pt/build/layout"
+        },
+        {
+          "text": "Verificações",
+          "link": "/pt/build/checks"
+        },
+        {
+          "text": "Entrega",
+          "link": "/pt/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · referência 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (Em inglês)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ]
+}

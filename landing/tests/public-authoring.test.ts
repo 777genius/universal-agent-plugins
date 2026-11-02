@@ -9,7 +9,7 @@ const root = new URL('../../', import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), 'utf8');
 const locales = ['en', 'ru', 'uk', 'es', 'fr', 'zh', 'ar', 'hi', 'pt'] as const;
 const renderedCopy = (locale: (typeof locales)[number]) => {
-  const messages = JSON.parse(read(`landing/locales/${locale}.json`));
+  const messages = JSON.parse(read(`landing/i18n/locales/${locale}.json`));
   // Render each dictionary in an isolated EN test host.
   const { t } = createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({
     legacy: false,
@@ -25,14 +25,14 @@ const renderedCopy = (locale: (typeof locales)[number]) => {
 test('all authoring messages compile and distinguish installer, source tools and historical API', (context) => {
   const errors = context.mock.method(console, 'error', () => {});
   for (const locale of locales) {
-    const source = JSON.parse(read(`landing/locales/${locale}.json`)).publicAuthoring;
+    const source = JSON.parse(read(`landing/i18n/locales/${locale}.json`)).publicAuthoring;
     const rendered = renderedCopy(locale);
     for (const key of Object.keys(source)) {
       assert.equal(rendered[key], source[key].replaceAll("{'@'}", '@'), `${locale}:${key}`);
     }
     assert.ok(rendered.versions.includes('universal-agent-plugins'), locale);
     assert.ok(rendered.versions.includes('agentplugins-v*'), locale);
-    for (const fact of ['0.1.94', 'agentplugins author', '0.1.65'])
+    for (const fact of ['0.1.95', 'agentplugins author', '0.1.65'])
       assert.ok(rendered.releaseScope.includes(fact), `${locale}:${fact}`);
     assert.doesNotMatch(rendered.releaseScope, /E2E|production-ready/i, locale);
     assert.doesNotMatch(rendered.releaseScope, /plugin-kit-ai|PyPI|pipx/i, locale);
@@ -51,14 +51,14 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
   assert.ok(page.includes("robots: 'noindex, follow'"));
   assert.ok(page.includes('npx -y universal-agent-plugins add context7'));
   const keys = [...page.matchAll(/(?:t|usePageSeo)\('publicAuthoring\.([^']+)'/g)].map((m) => m[1]);
-  for (const locale of ['en', 'ru', 'uk', 'es', 'fr', 'zh'] as const) {
+  for (const locale of locales) {
     const copy = renderedCopy(locale);
     for (const key of [...keys, 'intro', 'availability', 'releaseScope', 'buildGuideLink'])
       assert.equal(typeof copy[key], 'string', `${locale}:${key}`);
     assert.ok(copy.standard.includes('plugin.json'));
     assert.doesNotMatch(copy.releaseScope, /plugin-kit-ai|PyPI|pipx|1\.2\.4/i);
     assert.ok(copy.versions.includes('agentplugins-v*'));
-    assert.ok(copy.versions.includes('0.1.94'));
+    assert.ok(copy.versions.includes('0.1.95'));
     assert.ok(copy.releaseScope.includes('0.1.65'));
     assert.ok(copy.releaseScope.includes('agentplugins author'));
     assert.equal(Object.hasOwn(copy, 'history'), false);
@@ -69,10 +69,10 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
     assert.doesNotMatch(copy.releaseScope, /(?:0\.1\.61|2\.0\.1)/);
     assert.ok(copy.limitations.includes('SSE'));
   }
-  for (const locale of ['en', 'ru', 'uk', 'es', 'fr', 'zh']) {
+  for (const locale of locales) {
     assert.equal(
       resolveDocsLink('quickstart', locale).url,
-      `https://777genius.github.io/universal-agent-plugins/docs/${locale === 'uk' ? 'en' : locale}/guide/quickstart.html`,
+      `https://777genius.github.io/universal-agent-plugins/docs/${locale}/guide/quickstart.html`,
     );
   }
 });
@@ -81,7 +81,7 @@ test('landing FAQ translated copy avoids retired public docs', () => {
   const section = read('landing/components/sections/FAQSection.vue');
   assert.doesNotMatch(section, /guide\/python-runtime|reference\/support-boundary/);
   for (const locale of locales) {
-    const links = JSON.parse(read(`landing/locales/${locale}.json`)).faq.quickLinks;
+    const links = JSON.parse(read(`landing/i18n/locales/${locale}.json`)).faq.quickLinks;
     for (const key of ['quickstartTitle', 'quickstartBody', 'buildTitle', 'buildBody', 'useTitle', 'useBody']) {
       assert.equal(typeof links[key], 'string', `${locale}:${key}`);
       assert.ok(links[key].length > 0, `${locale}:${key}`);
@@ -93,14 +93,14 @@ test('landing FAQ translated copy avoids retired public docs', () => {
 });
 
 test('quickstarts use released installer commands and link source authoring separately', () => {
-  for (const locale of ['en', 'ru', 'es', 'fr', 'zh'] as const) {
+  for (const locale of locales) {
     const text = read(`website/source/${locale}/guide/quickstart.md`);
     const preservation = text.indexOf('<!-- locale-historical-source:start');
     const publishedText = preservation === -1 ? text : text.slice(0, preservation);
     assert.ok(text.includes('canonicalId: "page:guide:quickstart"'));
     assert.match(publishedText, /^description: .*Agent Plugins 1\.0.*$/m);
     assert.doesNotMatch(publishedText, /^description: .*plugin-kit-ai.*$/m);
-    for (const fact of ['universal-agent-plugins', 'agentplugins-v0.1.94', 'agentplugins author'])
+    for (const fact of ['universal-agent-plugins', 'agentplugins-v0.1.95', '0.1.94', 'agentplugins author'])
       assert.ok(publishedText.includes(fact), `${locale}:${fact}`);
     assert.ok(publishedText.includes('../build/#build-from-source'), locale);
     assert.doesNotMatch(publishedText, /plugin-kit-ai|PyPI|pipx|historical-v1/i);
@@ -116,7 +116,7 @@ test('quickstarts use released installer commands and link source authoring sepa
     // Installer onboarding must not run commands omitted from the released binary.
     assert.ok(commands.every((block) => !/agentplugins author/.test(block)), locale);
     assert.doesNotMatch(publishedText, /npm install[^\n]*universal-agent-plugins[\s\S]{0,80}agentplugins author init/);
-    for (const match of publishedText.matchAll(/\]\(\/(en|ru|es|fr|zh)\/([^#)]+)(?:#[^)]*)?\)/g)) {
+    for (const match of publishedText.matchAll(/\]\(\/(en|ru|uk|zh|es|hi|ar|pt|fr)\/([^#)]+)(?:#[^)]*)?\)/g)) {
       const target = `website/source/${match[1]}/${match[2]}`.replace(/\/$/, '');
       assert.ok(
         existsSync(fileURLToPath(new URL(`${target}.md`, root))) ||
@@ -127,15 +127,40 @@ test('quickstarts use released installer commands and link source authoring sepa
   }
 });
 
+test('project examples require pinned complete sources, not user-only Directory v1 aliases', () => {
+  const paths = [
+    'README.md',
+    'npm/agentplugins/README.md',
+    ...locales.flatMap((locale) => [
+      'website/source/' + locale + '/guide/quickstart.md',
+      'website/source/' + locale + '/use/install.md',
+    ]),
+  ];
+  for (const path of paths) {
+    const source = read(path).split('<!-- locale-historical-source:start')[0];
+    const chunks = source.split('```');
+    const projectBlocks = chunks.filter((chunk) =>
+      (chunk.startsWith('sh\n') || chunk.startsWith('bash\n')) && chunk.includes('--scope project'));
+    assert.ok(projectBlocks.length, path + ': missing project command');
+    assert.ok(projectBlocks.some((chunk) =>
+      chunk.includes('github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab')),
+      path + ': missing exact pinned project source');
+    for (const chunk of projectBlocks) {
+      assert.ok(!chunk.includes('add context7'), path + ': user-only alias offered for project');
+    }
+  }
+});
+
 test('README retains the available installer and canonical client limitations', () => {
   const text = read('README.md');
   assert.ok(text.includes('## Use plugins'));
   assert.ok(text.includes('## Build plugins'));
   assert.ok(text.includes('### Quick start'));
   assert.ok(text.includes('[Build plugins](#build-plugins)'));
+  // The public entry uses the nine-language gateway, not a forced English locale.
   assert.ok(
     text.includes(
-      '[Read the documentation](https://universal-agent-plugins.com/docs/en/)',
+      '[Read the documentation](https://universal-agent-plugins.com/docs/)',
     ),
   );
   assert.ok(text.includes('Native Agent Plugins releases'));

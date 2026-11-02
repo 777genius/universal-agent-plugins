@@ -19,7 +19,7 @@ localeDisposition: "current-translation"
 ## Доступность
 
 Текущий нативный установщик,
-[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94),
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95),
 проверяет и устанавливает стандартные пакеты. Пакетные каналы могут
 обновляться позднее; узнайте установленную версию через `agentplugins version`.
 В нём **нет**
@@ -84,9 +84,9 @@ agentplugins add ./review-helper --target codex --dry-run
 
 ## Сборка из исходного кода {#build-from-source}
 
-Эта инструкция для разработчика собирает текущий публичный интерфейс средств
-создания пакетов. Нужны Git и версия Go из репозитория — сейчас Go 1.26.10.
-Сохраняйте commit собранной версии вместе с результатами проверок.
+Следующие команды собирают текущую CLI со средствами создания пакетов.
+Нужны Git и версия Go из репозитория — сейчас Go 1.26.10.
+Сохраняйте коммит собранной версии вместе с результатами проверок.
 
 ```bash
 git clone https://github.com/777genius/universal-agent-plugins.git

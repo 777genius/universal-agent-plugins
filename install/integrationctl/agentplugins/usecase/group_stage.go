@@ -23,6 +23,7 @@ func (session *groupSession) stageGroupDeliveries() error {
 	for targetIndex := range session.planned {
 		target := &session.planned[targetIndex]
 		if err := session.reportGroupProgress(*target, GroupProgressPreparing); err != nil {
+			session.cleanupStaged()
 			return err
 		}
 		if target.noChange {

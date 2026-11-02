@@ -42,14 +42,17 @@ for macOS, Linux or Windows; the native manager itself does not require Node.js.
 
 ## What is available
 
-[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)
-is the current native installer release. It includes explicit project scope and locked
-restoration. Most commands default to your user environment. An `install` without
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+is the current native installer release. It adds a local management API and
+user-scope native Pi extensions. See [local management](./use/manage#local-management-api)
+and [Pi compatibility](./reference/client-compatibility#pi-native-extensions).
+It retains explicit project scope and locked restoration. Most commands default
+to your user environment. An `install` without
 a source argument selects the current project when that exact folder contains a
 regular `uap.toml`; explicit scope wins. Select project scope on maintenance
 commands. Check `agentplugins version`: automatic selection requires 0.1.94.
-If your package-manager channel is older, use the native installer or Homebrew,
-or retain explicit project flags supported since 0.1.93. See
+Package-manager channels may lag; use the native installer for the verified
+release, or retain explicit project flags supported since 0.1.93. See
 [installation](./use/install) and [maintenance](./use/manage).
 
 The current installer does not include `agentplugins author`. The

@@ -2,8 +2,10 @@ package conformance_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
@@ -29,6 +31,8 @@ func TestExtensionsAuthorAndLoadingPolicy(t *testing.T) {
 		{"container-string", `,"extensions":"opaque"`, "plugin_extensions_ignored", false, true},
 		{"container-array", `,"extensions":[]`, "plugin_extensions_ignored", false, true},
 		{"unknown-object", `,"extensions":{"com.example.future":{"nested":[null,1]}}`, "", true, true},
+		{"unknown-object-nested-duplicate", `,"extensions":{"com.example.future":{"nested":[{"key":1,"key":2}]}}`, "", true, true},
+		{"unknown-top-level-nested-duplicate", `,"future":{"key":1,"key":2}`, "plugin_unknown_field", false, true},
 		{"unknown-scalar-disputed", `,"extensions":{"com.example.future":"opaque"}`, "", false, false},
 		{"unknown-null-disputed", `,"extensions":{"com.example.future":null}`, "", false, false},
 		{"unknown-array-disputed", `,"extensions":{"com.example.future":[]}`, "", false, false},
@@ -92,5 +96,40 @@ func TestExtensionsAuthorAndLoadingPolicy(t *testing.T) {
 				t.Fatalf("healthy components lost: skills=%d mcp=%d", len(pkg.Skills), len(pkg.MCP.Servers))
 			}
 		})
+	}
+}
+
+func TestDuplicateExtensionNamespaceIsNotSilentlySelected(t *testing.T) {
+	registry, err := specregistry.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte(`{"$schema":"` + domain.PluginSchemaV1 + `","name":"extension-policy","extensions":{"com.example.future":{},"com.example.future":{"different":true}}}`)
+	_, _, _, err = (conformance.InstallerDecoder{Registry: registry}).Plugin(body)
+	if err == nil {
+		t.Fatal("duplicate extension namespace was silently selected")
+	}
+}
+
+func TestOpaqueDuplicatesDoNotConsumeDiagnosticBudget(t *testing.T) {
+	registry, err := specregistry.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var opaque strings.Builder
+	for i := range 400 {
+		if i > 0 {
+			opaque.WriteByte(',')
+		}
+		fmt.Fprintf(&opaque, `"field-%d":1,"field-%d":2`, i, i)
+	}
+	body := []byte(`{"$schema":"` + domain.PluginSchemaV1 + `","name":"valid-opaque","extensions":{"com.example.future":{` + opaque.String() + `}}}`)
+	facts, err := (conformance.Decoder{Registry: registry}).DecodePlugin(context.Background(), conformance.NewDocument("plugin.json", conformance.Present, body))
+	if err != nil || facts.Coverage.Plugin != conformance.Pass || facts.Package == nil {
+		t.Fatalf("opaque duplicate budget blocked valid plugin: err=%v findings=%+v", err, facts.Findings)
+	}
+	_, _, _, err = (conformance.InstallerDecoder{Registry: registry}).Plugin(body)
+	if err != nil {
+		t.Fatalf("installer rejected valid opaque extension: %v", err)
 	}
 }

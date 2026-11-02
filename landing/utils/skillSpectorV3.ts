@@ -137,7 +137,7 @@ function referenceContext(value: unknown, status: string, legacy: boolean) {
       typeof reference.evidence !== 'string' ||
       reference.evidence.length > 8 << 20 ||
       !(reference.target_path === null || containedReferencePath(reference.target_path)) ||
-      !['resolved', 'missing', 'ambiguous', 'rejected'].includes(reference.status) ||
+      !['resolved', 'missing', 'ambiguous', 'rejected', 'uninspected'].includes(reference.status) ||
       !['analyzed', 'partial', 'failed', 'out_of_scope'].includes(reference.disposition) ||
       ![
         'markdown_image',
@@ -152,9 +152,10 @@ function referenceContext(value: unknown, status: string, legacy: boolean) {
           !/^[0-9a-f]{64}$/.test(reference.source_sha256)))
     )
       fail();
-    if ((reference.target_path !== null) !== (reference.status === 'resolved')) fail();
+    if ((reference.target_path !== null) !== ['resolved', 'uninspected'].includes(reference.status)) fail();
+    if (reference.status === 'uninspected' && reference.disposition !== 'partial') fail();
     if (
-      (['missing', 'ambiguous'].includes(reference.status) ||
+      (['missing', 'ambiguous', 'uninspected'].includes(reference.status) ||
         (reference.status === 'resolved' && reference.disposition !== 'analyzed')) &&
       (status === 'complete' || c.status === 'complete')
     )
@@ -287,7 +288,7 @@ export function decodeSkillSpectorManifestV3(
     !Array.isArray(m.shards) ||
     m.shards.length > 10_000 ||
     !Array.isArray(m.plugin_coverage) ||
-    m.plugin_coverage.length > 10_000
+    m.plugin_coverage.length > maximumInventoryRoots
   )
     fail();
   let records = 0,
@@ -329,7 +330,12 @@ export function decodeSkillSpectorManifestV3(
   for (const key of ['source_states', 'plugin_states', 'repository_aliases'])
     if (
       !Array.isArray(m[key]) ||
-      m[key].length > (key === 'source_states' ? maximumSourceStates : 10_000)
+      m[key].length >
+        (key === 'source_states'
+          ? maximumSourceStates
+          : key === 'plugin_states'
+            ? maximumInventoryRoots
+            : 10_000)
     )
       fail();
   const aliases = new Map<string, string>();

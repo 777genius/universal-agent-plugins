@@ -183,6 +183,8 @@ type Attestation struct {
 }
 
 type PreparedBinding struct {
+	// Observed before facts are presentation only; authority remains receipt-based.
+	FromVersion, FromRevision, FromDigest      string
 	ActivationComplete, AuthComplete           bool
 	Alias, ClientID, InstallationID, BindingID string
 	Action                                     DesiredAction
