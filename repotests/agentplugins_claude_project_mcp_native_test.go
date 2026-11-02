@@ -64,6 +64,12 @@ func (m *claudeProjectScriptedModel) invalidSummary() []string {
 }
 
 func (m *claudeProjectScriptedModel) respond(w http.ResponseWriter, r *http.Request) {
+	// Genuine pinned Claude Code probes the endpoint before a model turn. This
+	// exact HEAD health probe is not a model message, MCP call, or E2E proof.
+	if r.Method == http.MethodHead && r.URL.Path == "/api/hello" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	// Standard Anthropic-compatible model discovery is a separate, harmless
 	// GET route. It neither fabricates an MCP call nor counts as a model turn.
 	if r.Method == http.MethodGet && r.URL.Path == "/v1/models" {
