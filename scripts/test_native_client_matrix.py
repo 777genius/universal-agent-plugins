@@ -161,6 +161,7 @@ class NativeMatrixTests(unittest.TestCase):
         self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
         self.assertNotIn("TestAgentpluginsClaudeNativeProjectPreparedLifecycle", released.CLIENT_TESTS["claude"])
         self.assertNotIn("TestAgentpluginsClaudeNativeTrustedProjectDiscovery", released.CLIENT_TESTS["claude"])
+        self.assertNotIn("TestAgentpluginsClaudeNativeTrustedProjectMCPCall", released.CLIENT_TESTS["claude"])
 
     def test_opencode_v2_is_separate_from_unchanged_v1_native_matrix(self):
         v1_pattern, v1_required = matrix.select_native_tests("opencode", project_components=True)
