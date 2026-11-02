@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SkillListing } from '~/types/skillsCatalog';
 import { skillClients } from '~/data/skillClients';
-import { skillDetailRoute, skillInstallCommand, skillNeedsManualSelection, skillPublisherUrl, skillRepositoryUrl } from '~/utils/skillsCatalog';
+import { skillDetailIdAvailable, skillDetailRoute, skillInstallCommand, skillNeedsManualSelection, skillPublisherUrl, skillRepositoryUrl } from '~/utils/skillsCatalog';
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 
 const props = defineProps<{ skill: SkillListing }>();
@@ -24,8 +24,7 @@ const repositoryName = computed(() =>
   /^https:\/\/(?:github\.com|raw\.githubusercontent\.com)\/([^/]+\/[^/]+)/.exec(repositoryUrl.value ?? '')?.[1]);
 const publisherUrl = computed(() => skillPublisherUrl(props.skill));
 const detailAvailable = computed(() =>
-  Boolean(repositoryUrl.value || publisherUrl.value) &&
-  /^skills-sh:(?:[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+|[A-Za-z0-9.-]+\.[A-Za-z]{2,}):[^:]+$/.test(props.skill.id),
+  Boolean(repositoryUrl.value || publisherUrl.value) && skillDetailIdAvailable(props.skill.id),
 );
 const needsManualSelection = computed(() => skillNeedsManualSelection(props.skill));
 const command = computed(() =>
