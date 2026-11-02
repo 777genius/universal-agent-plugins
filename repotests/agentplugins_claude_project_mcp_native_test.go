@@ -60,6 +60,13 @@ func (m *claudeProjectScriptedModel) invalidSummary() []string {
 }
 
 func (m *claudeProjectScriptedModel) respond(w http.ResponseWriter, r *http.Request) {
+	// Standard Anthropic-compatible model discovery is a separate, harmless
+	// GET route. It neither fabricates an MCP call nor counts as a model turn.
+	if r.Method == http.MethodGet && r.URL.Path == "/v1/models" {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[{"type":"model","id":"claude-sonnet-4-5","display_name":"UAP local scripted model"}],"first_id":"claude-sonnet-4-5","last_id":"claude-sonnet-4-5","has_more":false}`)
+		return
+	}
 	if r.Method == http.MethodPost && r.URL.Path == "/v1/messages/count_tokens" {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"input_tokens": 100}`)
