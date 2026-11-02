@@ -148,6 +148,10 @@ function publisherBase(raw: string): string | undefined {
         /\.(?:local|localhost|internal|test|example|invalid)$/.test(host) ||
         host === 'skills.sh' || host === 'www.skills.sh' ||
         host === 'github.com' || host === 'www.github.com' ||
+        // Git repositories on other forges are not HTTPS Skill publishers.
+        host === 'gitlab.com' || host === 'www.gitlab.com' ||
+        host === 'bitbucket.org' || host === 'www.bitbucket.org' ||
+        host === 'codeberg.org' || host === 'www.codeberg.org' ||
         (scope !== '' && (!/^\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*$/.test(scope) ||
           scope.split('/').some(part => part === '.' || part === '..'))))
       return undefined;

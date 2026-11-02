@@ -482,7 +482,7 @@ test('legacy source variants produce CLI commands without using directory pages 
   );
   for (const raw of [
     'owner/repo#main', 'owner/repo/tree', 'owner/repo/tree/../secret',
-    'owner/repo/blob/main/not-skill.txt', 'https://gitlab.com/owner/repo',
+    'owner/repo/blob/main/not-skill.txt', 'https://gitlab.com/owner/repo', 'https://bitbucket.org/owner/repo', 'https://codeberg.org/owner/repo',
     'https://github.com/owner/repo?ref=main', 'https://github.com/owner/repo/tree/main/../../x',
     'https://github.com/owner/repo;touch-hack', 'git@evil.example:owner/repo',
     'https://evil.com/owner/repo', 'https://www.skills.sh/site/owner/repo',
@@ -546,7 +546,7 @@ test('Skill search honors API page-zero-only contract even if response advertise
   catalog.stop();
 });
 
-test('legacy GitHub picker does not interpolate unsafe catalog-supplied Skill names', () => {
+test('legacy GitHub DTO disagreement never interpolates unsafe Skill selectors', () => {
   const legacy = {
     ...skill,
     id: 'skills-sh:https://github.com/anthropics/skills:some-skill',
@@ -555,11 +555,9 @@ test('legacy GitHub picker does not interpolate unsafe catalog-supplied Skill na
     source: { kind: 'external' as const, url: 'https://www.skills.sh/' },
     availability: 'unsupported-source' as const,
   };
-  assert.equal(skillNeedsManualSelection(legacy), true);
-  assert.equal(
-    skillInstallCommand(legacy),
-    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills',
-  );
+  // A mismatched source-ID selector is not a valid installation candidate.
+  assert.equal(skillNeedsManualSelection(legacy), false);
+  assert.equal(skillInstallCommand(legacy), undefined);
 });
 
 test('malformed DTOs disable their own Install action without crashing the catalog', () => {
