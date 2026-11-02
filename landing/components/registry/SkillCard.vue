@@ -18,7 +18,9 @@ const expanded = ref(saved.expanded);
 const chooseInTerminal = ref(saved.autoDetect);
 const targets = ref(saved.targetIds.length ? saved.targetIds : ['codex']);
 const repositoryUrl = computed(() => skillRepositoryUrl(props.skill));
-const repositoryName = computed(() => props.skill.source.repository ??
+// Use only the URL already validated by skillRepositoryUrl; never pass an
+// arbitrary upstream DTO field to the public SkillSpector repository lookup.
+const repositoryName = computed(() =>
   /^https:\/\/(?:github\.com|raw\.githubusercontent\.com)\/([^/]+\/[^/]+)/.exec(repositoryUrl.value ?? '')?.[1]);
 const publisherUrl = computed(() => skillPublisherUrl(props.skill));
 const detailAvailable = computed(() =>
