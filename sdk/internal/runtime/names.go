@@ -28,29 +28,63 @@ func CanonicalInvocationName(platform PlatformID, raw string) string {
 		case strings.EqualFold(raw, "CodexPermissionRequest"):
 			return "PermissionRequest"
 		}
-	case "gemini":
-		switch {
-		case strings.EqualFold(raw, "GeminiSessionStart"):
-			return "SessionStart"
-		case strings.EqualFold(raw, "GeminiSessionEnd"):
-			return "SessionEnd"
-		case strings.EqualFold(raw, "GeminiBeforeModel"):
-			return "BeforeModel"
-		case strings.EqualFold(raw, "GeminiAfterModel"):
-			return "AfterModel"
-		case strings.EqualFold(raw, "GeminiBeforeToolSelection"):
-			return "BeforeToolSelection"
-		case strings.EqualFold(raw, "GeminiBeforeAgent"):
-			return "BeforeAgent"
-		case strings.EqualFold(raw, "GeminiAfterAgent"):
-			return "AfterAgent"
-		case strings.EqualFold(raw, "GeminiBeforeTool"):
-			return "BeforeTool"
-		case strings.EqualFold(raw, "GeminiAfterTool"):
-			return "AfterTool"
-		case strings.EqualFold(raw, "GeminiNotification"):
-			return "Notification"
+	case "cursor":
+		if strings.EqualFold(raw, "CursorStop") {
+			return "stop"
 		}
+	case "qoder":
+		// Qoder argv subcommands are lowercase kebab; the wire hook_event_name
+		// keeps the Claude-derived PascalCase spelling.
+		switch strings.ToLower(raw) {
+		case "session-start":
+			return "SessionStart"
+		case "user-prompt-submit":
+			return "UserPromptSubmit"
+		case "post-tool-use":
+			return "PostToolUse"
+		case "stop":
+			return "Stop"
+		}
+	case "vscode-local":
+		return canonicalVSCodeLocalInvocationName(raw)
+	case "gemini":
+		return canonicalGeminiInvocationName(raw)
+	}
+	return raw
+}
+
+func canonicalVSCodeLocalInvocationName(raw string) string {
+	switch {
+	case strings.EqualFold(raw, "VSCodeLocalStop"):
+		return "Stop"
+	case strings.EqualFold(raw, "VSCodeLocalSubagentStop"):
+		return "SubagentStop"
+	}
+	return raw
+}
+
+func canonicalGeminiInvocationName(raw string) string {
+	switch {
+	case strings.EqualFold(raw, "GeminiSessionStart"):
+		return "SessionStart"
+	case strings.EqualFold(raw, "GeminiSessionEnd"):
+		return "SessionEnd"
+	case strings.EqualFold(raw, "GeminiBeforeModel"):
+		return "BeforeModel"
+	case strings.EqualFold(raw, "GeminiAfterModel"):
+		return "AfterModel"
+	case strings.EqualFold(raw, "GeminiBeforeToolSelection"):
+		return "BeforeToolSelection"
+	case strings.EqualFold(raw, "GeminiBeforeAgent"):
+		return "BeforeAgent"
+	case strings.EqualFold(raw, "GeminiAfterAgent"):
+		return "AfterAgent"
+	case strings.EqualFold(raw, "GeminiBeforeTool"):
+		return "BeforeTool"
+	case strings.EqualFold(raw, "GeminiAfterTool"):
+		return "AfterTool"
+	case strings.EqualFold(raw, "GeminiNotification"):
+		return "Notification"
 	}
 	return raw
 }

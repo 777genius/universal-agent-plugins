@@ -1,0 +1,6 @@
+package: management
+generate:
+  models: true
+output: ../../cli/internal/agentpluginscli/management/apitypes.gen.go
+output-options:
+  skip-prune: true

@@ -12,9 +12,11 @@ import (
 )
 
 type document struct {
-	ast   hujson.Value
-	root  *hujson.Object
-	jsonc bool
+	ast           hujson.Value
+	root          *hujson.Object
+	jsonc         bool
+	commentsOnly  bool
+	codexDocument CodexDocument
 }
 
 func parseDocument(body []byte, jsonc bool) (*document, error) {
@@ -35,7 +37,12 @@ func parseDocument(body []byte, jsonc bool) (*document, error) {
 	return &document{ast: ast, root: root, jsonc: jsonc}, nil
 }
 
-func newDocument(jsonc bool) (*document, error) { return parseDocument([]byte("{}\n"), jsonc) }
+func (kernel Kernel) newDocument(jsonc bool, codec Codec) (*document, error) {
+	if codec == CodecCodex {
+		return kernel.parseDocument(nil, jsonc, codec)
+	}
+	return kernel.parseDocument([]byte("{}\n"), jsonc, codec)
+}
 
 func rejectDuplicateKeys(value *hujson.Value, path string) error {
 	switch node := value.Value.(type) {
@@ -75,7 +82,11 @@ func objectMember(obj *hujson.Object, key string) (*hujson.ObjectMember, int) {
 }
 
 func collection(doc *document, key string, create bool) (*hujson.Object, error) {
-	member, _ := objectMember(doc.root, key)
+	return objectCollection(doc.root, key, create)
+}
+
+func objectCollection(parent *hujson.Object, key string, create bool) (*hujson.Object, error) {
+	member, _ := objectMember(parent, key)
 	if member != nil {
 		obj, ok := member.Value.Value.(*hujson.Object)
 		if !ok {
@@ -90,9 +101,17 @@ func collection(doc *document, key string, create bool) (*hujson.Object, error) 
 	if err != nil {
 		return nil, err
 	}
-	appendMember(doc.root, key, value)
-	member, _ = objectMember(doc.root, key)
+	appendMember(parent, key, value)
+	member, _ = objectMember(parent, key)
 	return member.Value.Value.(*hujson.Object), nil
+}
+
+func codecCollection(doc *document, codec Codec, create bool) (*hujson.Object, error) {
+	entries, err := collection(doc, codecCollectionKey(codec), create)
+	if err != nil || entries == nil || codec != CodecOpenCodeV2 {
+		return entries, err
+	}
+	return objectCollection(entries, "servers", create)
 }
 
 func jsonValue(value any) (hujson.Value, error) {
@@ -134,11 +153,23 @@ func removeEntry(obj *hujson.Object, name string) bool {
 }
 
 func (doc *document) render() ([]byte, error) {
+	if doc.codexDocument != nil {
+		return doc.renderCodexDocument()
+	}
+	if doc.commentsOnly {
+		geminiRemoveTrailingCommas(&doc.ast)
+	}
 	body := doc.ast.Pack()
 	if !doc.jsonc && !json.Valid(body) {
 		return nil, fmt.Errorf("rendered native config is not strict JSON")
 	}
-	if _, err := parseDocument(body, doc.jsonc); err != nil {
+	var err error
+	if doc.commentsOnly {
+		_, err = parseCodecDocument(body, false, CodecGemini)
+	} else {
+		_, err = parseDocument(body, doc.jsonc)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("validate rendered native config: %w", err)
 	}
 	return body, nil

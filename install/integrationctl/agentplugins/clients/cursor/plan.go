@@ -27,11 +27,17 @@ func (adapter *Adapter) TargetRoot(client domain.DetectedClient, mode domain.Pac
 	return root, filepath.Join(root, "plugins", "local"), nil
 }
 
-func (*Adapter) RefinePlan(ctx context.Context, _ clients.PlanInput, plan *domain.DeliveryPlan) error {
+func (*Adapter) RefinePlan(ctx context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if plan.Status == domain.PlanUnsupported {
+		return nil
+	}
+	if in.TargetContext.Scope == domain.ScopeProject {
+		shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, shared.OnlyNativeComponents(plan.Components))
+		plan.Activation = domain.ActivationPrepared
+		plan.UserActions = shared.AppendUnique(plan.UserActions, "project skill directories and MCP entries can be configured automatically; discovery, enablement, approval and policy require observation in Cursor")
 		return nil
 	}
 	plan.Status = domain.PlanManualActivationRequired

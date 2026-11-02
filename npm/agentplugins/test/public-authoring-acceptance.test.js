@@ -156,7 +156,7 @@ function semanticFixture(f) {
       const manifest = snapshots[w.product].entries.find(x => x.path === `${w.lane}/plugin.json`);
       data.identity = { scope_algorithm: 'agentplugins-captured-input-sha256-v1', scope_digest: 'sha256:' + H(w.lane), tree_algorithm: 'agentplugins-tree-sha256-v1',
         tree_digest: a.generatedTreeIdentity(snapshots[w.product].entries, w.lane, j.cell), manifest_digest: 'sha256:' + manifest.sha256,
-        read_profile: `packageview-local-${a.matrix.find(c => c.key === j.cell).target.split('-')[0]}-v1`, tree_exclusions: ['root .git', 'root non-directory .plugin-kit-ai.lock'] };
+        read_profile: `packageview-local-${a.matrix.find(c => c.key === j.cell).target.split('-')[0]}-v1`, tree_exclusions: ['root .git', 'root non-directory .uap-integrations.lock'] };
       for (const k of ['loadability', 'normative_conformance', 'host_safety', 'authoring_readiness']) data[k] = assessment(malformed && ['normative_conformance', 'authoring_readiness'].includes(k) ? 'fail' : 'pass');
       data.inspection = { name: w.lane, version: '0.1.0', schema: a.PROFILES[2].id, components: data.components.map(x =>
         ({ id: x.id, type: x.type, name: x.id === 'sha256:' + H('skill:extra-skill') ? 'extra-skill' : w.lane })) };
@@ -715,7 +715,7 @@ if (require.main === module) {
     }
     assert.throws(() => a.verifyResults(f.j, extraRoot), /only generated lane entries/);
     // Independently rendered scaffold fixtures and ordinary v1 framing pins.
-    const golden = {"skill": "sha256:383668d78b12a5ad868c895183a6d86b3441c6fedc833371250eecd8e40d9754", "mcp-remote": "sha256:2aeaa18441a1e66f8b31c9beee438f88205c9dd24a4d73dd3fc24ebfce50c005", "mcp-stdio": "sha256:e4d6984f241f470f60c6e8fc37348f522a08fd0bc8b910b29ed5a6aae16ddadc", "hybrid-remote": "sha256:66fa98b22663011eb77e8ffbe4b73f056eb94b2706fe9f9a58244d32e0935bdb", "hybrid-stdio": "sha256:0327b7f2f6d407368bfa416cb07a04a0926e26e9ad62d393509500450d10334a"};
+    const golden = {"skill": "sha256:383668d78b12a5ad868c895183a6d86b3441c6fedc833371250eecd8e40d9754", "mcp-remote": "sha256:2aeaa18441a1e66f8b31c9beee438f88205c9dd24a4d73dd3fc24ebfce50c005", "mcp-stdio": "sha256:d87979cafa42fc61b80426a35212f2efe0f1da4914da1cb09f2584a2b84fd4e2", "hybrid-remote": "sha256:66fa98b22663011eb77e8ffbe4b73f056eb94b2706fe9f9a58244d32e0935bdb", "hybrid-stdio": "sha256:bbd568c1215999640dbd1702b80ffcd525923b2db847e577258be654fe8494fa"};
     for (const lane of bridge.LANES) {
       const entries = f.evidence['projects.json'].agentplugins.entries;
       for (const cell of a.matrix) {

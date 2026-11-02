@@ -118,7 +118,7 @@ func TestPartialDirectoryUpdateConvergesToAlreadyAcceptedDesiredRelease(t *testi
 	rollout := newRolloutDirectoryFixture(t,
 		[]domain.ClientID{domain.ClientCodex, domain.ClientCursor},
 		[]domain.ClientID{domain.ClientCodex, domain.ClientCursor})
-	if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "codex,cursor"); err != nil {
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "codex,cursor"); err != nil {
 		t.Fatal(err)
 	}
 	rollout.publishV2()
@@ -154,7 +154,7 @@ func TestCurrentDirectoryUpdateResolvesRecordedReleaseInsteadOfFailing(t *testin
 		[]domain.ClientID{domain.ClientCodex, domain.ClientCursor},
 		[]domain.ClientID{domain.ClientCodex, domain.ClientCursor})
 	rollout.retainV1Only()
-	if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "codex,cursor"); err != nil {
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "codex,cursor"); err != nil {
 		t.Fatal(err)
 	}
 	before, err := rollout.cli.store.Load()
@@ -196,7 +196,7 @@ func TestCurrentDirectoryUpdateStillRejectsRevokedRecordedRelease(t *testing.T) 
 	t.Parallel()
 	rollout := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCursor}, []domain.ClientID{domain.ClientCursor})
 	rollout.retainV1Only()
-	if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "cursor"); err != nil {
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "cursor"); err != nil {
 		t.Fatal(err)
 	}
 	before, err := rollout.cli.store.Load()
@@ -222,7 +222,7 @@ func TestDesiredReleaseConvergenceStillRejectsRevokedRelease(t *testing.T) {
 	rollout := newRolloutDirectoryFixture(t,
 		[]domain.ClientID{domain.ClientCodex, domain.ClientCursor},
 		[]domain.ClientID{domain.ClientCodex, domain.ClientCursor})
-	if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "codex,cursor"); err != nil {
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "codex,cursor"); err != nil {
 		t.Fatal(err)
 	}
 	rollout.publishV2()
@@ -252,7 +252,7 @@ func TestDirectoryInvalidDeliveryFailsBeforeAcquisitionOrMutation(t *testing.T) 
 		t.Run(test.name, func(t *testing.T) {
 			rollout := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCursor}, []domain.ClientID{domain.ClientCursor})
 			rollout.directory.bundle.Snapshot.Distributions[0].ReleasePolicies[0].Targets[0].Delivery = test.delivery
-			if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "cursor"); err == nil || !strings.Contains(err.Error(), "delivery") {
+			if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "cursor"); err == nil || !strings.Contains(err.Error(), "delivery") {
 				t.Fatalf("delivery %q error = %v", test.delivery, err)
 			}
 			state, err := rollout.cli.store.Load()
@@ -271,7 +271,7 @@ func TestSharedSurfaceUpdateRejectsDirectoryPolicyThatOmitsCopilot(t *testing.T)
 	rollout := newRolloutDirectoryFixture(t,
 		[]domain.ClientID{domain.ClientCopilot, domain.ClientVSCode},
 		[]domain.ClientID{domain.ClientVSCode})
-	if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "copilot,vscode"); err != nil {
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "copilot,vscode"); err != nil {
 		t.Fatal(err)
 	}
 	rollout.publishV2()
@@ -296,7 +296,7 @@ func TestSingleVSCodeAddRequiresDirectoryCompatibilityForCopilotSurface(t *testi
 	rollout.directory.bundle.Snapshot.Distributions[0].ReleasePolicies[0].Targets = []domain.DirectoryTarget{{
 		Client: domain.ClientVSCode, Scopes: []domain.InstallScope{domain.ScopeUser}, Delivery: "prepared",
 	}}
-	if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "vscode"); err == nil || !strings.Contains(err.Error(), "missing copilot") {
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "vscode"); err == nil || !strings.Contains(err.Error(), "missing copilot") {
 		t.Fatalf("single-surface add accepted incomplete shared policy: %v", err)
 	}
 	state, err := rollout.cli.store.Load()
@@ -324,7 +324,7 @@ func TestInteractiveSharedSurfaceAddRequiresSignedPeerEligibilityBeforeAcquisiti
 			rollout.directory.bundle.Snapshot.Distributions[0].ReleasePolicies[0].Targets = []domain.DirectoryTarget{{
 				Client: test.selected, Scopes: []domain.InstallScope{domain.ScopeUser}, Delivery: delivery,
 			}}
-			if stdout, _, err := rollout.cli.executeInput(true, test.input, "add", "rollout-demo"); err == nil || !strings.Contains(stdout, "the catalog has no compatible release") {
+			if stdout, _, err := rollout.cli.executeInput(true, test.input, "add", "--no-save", "rollout-demo"); err == nil || !strings.Contains(stdout, "the catalog has no compatible release") {
 				t.Fatalf("interactive %s selection accepted incomplete peer policy: %v", test.selected, err)
 			}
 			state, err := rollout.cli.store.Load()
@@ -348,7 +348,7 @@ func TestInteractiveDirectoryAddOffersOnlyOneCompleteSignedTargetSet(t *testing.
 	rollout.cli.app.Detector = staticDetector{clients: []domain.DetectedClient{
 		fixtureClient(t, domain.ClientCodex), fixtureClient(t, domain.ClientCursor),
 	}}
-	stdout, _, err := rollout.cli.executeInput(true, "\n", "add", "rollout-demo", "--dry-run")
+	stdout, _, err := rollout.cli.executeInput(true, "\n", "add", "--no-save", "rollout-demo", "--dry-run")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,7 +390,7 @@ func TestInteractiveDirectoryAddOffersKiroGuidedPreparation(t *testing.T) {
 	}}
 	rollout.cli.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: &cliRunOnlyRunner{}})
 
-	stdout, _, err := rollout.cli.executeInput(true, "\n", "add", "rollout-demo", "--dry-run")
+	stdout, _, err := rollout.cli.executeInput(true, "\n", "add", "--no-save", "rollout-demo", "--dry-run")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,7 +414,7 @@ func TestInteractiveDirectoryAddOffersKiroGuidedPreparation(t *testing.T) {
 
 func TestDirectoryRepairRejectsRecordedTuplePackageSourceRebindBeforeAcquisition(t *testing.T) {
 	rollout := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCursor}, []domain.ClientID{domain.ClientCursor})
-	if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "cursor"); err != nil {
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "cursor"); err != nil {
 		t.Fatal(err)
 	}
 	before, err := rollout.cli.store.Load()
@@ -472,7 +472,7 @@ func TestDirectoryRepairRejectsRecordedImmutableIdentityRebindsBeforeAcquisition
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			rollout := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCursor}, []domain.ClientID{domain.ClientCursor})
-			if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "cursor"); err != nil {
+			if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "cursor"); err != nil {
 				t.Fatal(err)
 			}
 			beforeState, err := rollout.cli.store.Load()
@@ -513,7 +513,7 @@ func TestDirectoryRepairRejectsRecordedImmutableIdentityRebindsBeforeAcquisition
 
 func TestDirectoryUpdateAllowsHigherReleaseOwnImmutableSourceIdentity(t *testing.T) {
 	rollout := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCursor}, []domain.ClientID{domain.ClientCursor})
-	if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "cursor"); err != nil {
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "cursor"); err != nil {
 		t.Fatal(err)
 	}
 	rollout.publishV2()
@@ -537,7 +537,7 @@ func TestRetainedDirectoryNewTargetRejectsRecordedTuplePackageSourceRebind(t *te
 	rollout := newRolloutDirectoryFixture(t,
 		[]domain.ClientID{domain.ClientCursor, domain.ClientKiro},
 		[]domain.ClientID{domain.ClientCursor, domain.ClientKiro})
-	if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "cursor"); err != nil {
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "cursor"); err != nil {
 		t.Fatal(err)
 	}
 	before, err := rollout.cli.store.Load()
@@ -550,7 +550,7 @@ func TestRetainedDirectoryNewTargetRejectsRecordedTuplePackageSourceRebind(t *te
 	rollout.directory.bundle.Snapshot.Distributions[0].Releases[0].PackageSource.Revision = rebound
 	rollout.acquirer.revisionRoots[rebound] = rollout.v1.root
 	rollout.acquirer.verifiedCalls = 0
-	if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "kiro"); err == nil || !strings.Contains(err.Error(), "package-source revision") {
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "kiro"); err == nil || !strings.Contains(err.Error(), "package-source revision") {
 		t.Fatalf("new-target add accepted rebound package source: %v", err)
 	}
 	after, err := rollout.cli.store.Load()
@@ -570,7 +570,7 @@ func TestSharedVSCodeRepairRequiresDirectoryCompatibilityForCopilotSurface(t *te
 	rollout := newRolloutDirectoryFixture(t,
 		[]domain.ClientID{domain.ClientCopilot, domain.ClientVSCode},
 		[]domain.ClientID{domain.ClientCopilot, domain.ClientVSCode})
-	if _, _, err := rollout.cli.execute(false, "add", "rollout-demo", "--target", "vscode"); err != nil {
+	if _, _, err := rollout.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "vscode"); err != nil {
 		t.Fatal(err)
 	}
 	state, err := rollout.cli.store.Load()

@@ -827,6 +827,61 @@ func TestHTTPDeadlineCleansPrivateRoots(t *testing.T) {
 	}
 }
 
+// An expired caller must be classified even when preparation stops before
+// transport setup; the old early return exposed only a raw context error.
+func TestPreparationHonorsCallerCancellationAndDeadline(t *testing.T) {
+	for _, tc := range []struct {
+		name, code string
+		cause      error
+	}{
+		{"canceled", "runtime_canceled", context.Canceled},
+		{"expired", "runtime_deadline_exceeded", context.DeadlineExceeded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int64
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			defer server.Close()
+			root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": server.URL}, nil)
+			ctx, cancel := context.WithCancel(context.Background())
+			if errors.Is(tc.cause, context.DeadlineExceeded) {
+				cancel()
+				ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			} else {
+				cancel()
+			}
+			defer cancel()
+			_, err := Run(ctx, Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: time.Second, Projects: service})
+			if !hasErrorCode(err, tc.code) || !errors.Is(err, tc.cause) {
+				t.Fatalf("preparation result: %v; want %s and %v", err, tc.code, tc.cause)
+			}
+			if requests.Load() != 0 {
+				t.Fatal("canceled preparation reached the network")
+			}
+			if entries, readErr := os.ReadDir(service.Scratch); readErr != nil || len(entries) != 0 {
+				t.Fatalf("canceled preparation retained private roots: %v %v", entries, readErr)
+			}
+		})
+	}
+}
+
+func TestPreparationCancellationPreservesCleanupFailure(t *testing.T) {
+	root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": "https://example.invalid/mcp"}, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	cleanupFailure := errors.New("synthetic cleanup failure")
+	_, err := Run(ctx, Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: time.Second, Projects: service, removeAll: func(string) error { return cleanupFailure }})
+	var primary *Error
+	if !errors.As(err, &primary) || primary.Code != "runtime_cleanup_failed" || !hasErrorCode(err, "runtime_canceled") || !errors.Is(err, context.Canceled) || !errors.Is(err, cleanupFailure) {
+		t.Fatalf("cleanup did not retain primary failure and cancellation: %v", err)
+	}
+	if entries, readErr := os.ReadDir(service.Scratch); readErr != nil || len(entries) != 1 {
+		t.Fatalf("failed cleanup did not retain its private fixture: %v %v", entries, readErr)
+	}
+}
+
 func TestLongLivedSSEHonorsDeadlineAndCleansPrivateRoots(t *testing.T) {
 	requestCanceled := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -844,7 +899,7 @@ func TestLongLivedSSEHonorsDeadlineAndCleansPrivateRoots(t *testing.T) {
 	}))
 	defer server.Close()
 	root, service, p := writeProject(t, map[string]any{"type": "streamable-http", "url": server.URL}, nil)
-	_, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: 50 * time.Millisecond, Projects: service})
+	_, err := Run(context.Background(), Options{SourceRoot: root, Scratch: service.Scratch, Project: p, Server: "selected", AllowNetwork: true, Deadline: 500 * time.Millisecond, Projects: service})
 	if !hasErrorCode(err, "runtime_deadline_exceeded") {
 		t.Fatalf("deadline result: %v", err)
 	}

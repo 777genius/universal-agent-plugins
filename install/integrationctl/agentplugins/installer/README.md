@@ -3,8 +3,13 @@
 Public process-local installer API for a standard local Agent Plugins package
 (`plugin.json` + MCP/skills). Constructor, inspect, Recover, and prepare/apply
 for **install**, **update**, **repair**, **refresh_projection**, and **remove** are published. One
-client uses `Request.ClientID`. Claude+Codex together uses `Request.Targets`
-with the same operation verb. `install-group` as an operation name is invalid.
+client uses `Request.ClientID`. Two explicitly registered clients use
+`Request.Targets` for install/update/repair with the same operation verb.
+OpenCode install/update/repair groups return `ErrUnsupported` before preparation:
+per-target native host snapshots are not part of the group handle yet. Single-target
+OpenCode keeps its explicit Prepare/Apply host authority contract.
+Historical group removal retains its Claude/Codex boundary. Selected removal
+requires the explicitly registered adapter's typed native-intent reconciler. `install-group` as an operation name is invalid.
 Two PackageRoot values in one install or update group stay unpublished.
 Repair of mixed live revisions uses per-target PackageRoot so each binding
 keeps its exact recorded digest. Group Repair with one PackageRoot across
@@ -33,6 +38,23 @@ activation. If that handoff fails, a repeat with the same package and args
 resumes the pending lifecycle without another directory receipt. Group
 projection refresh is not supported.
 
+`Engine.SupportsClient` and `Discover` preserve explicit SDK registry membership,
+including existing VS Code APIs. Saved dependency admission uses the separate
+`ClientSupported` policy: eleven qualified local adapters, with hostless ChatGPT
+preparation and owner-deferred VS Code excluded from that workflow. Existing SDK
+and imperative capabilities remain available. Registration alone never claims
+automatic activation or support for every component. `ClientMetadata.Capabilities` reports
+the existing domain capability contract. `Plan.Delivery.Components` carries actual
+package support decisions, including unsupported components in a mixed package.
+A package with no supported components is refused before installed effects.
+
+CLI-registry adapters require `ClientExecutable` on install; OpenCode also needs
+it for bounded host preparation. Native config clients Gemini, Cline, Windsurf
+and Kimi need only an explicit profile. Any supplied executable, including known
+sibling target facts, must be an absolute clean path. Existing group and historical
+removal boundaries above are unchanged; broader single-target qualification does
+not expand the separately qualified local-file CLI route.
+
 ## Contract
 
 ```go
@@ -55,8 +77,113 @@ false. Mixed group Repair assesses each distinct
 snapshot digest once; blocking any snapshot refuses Prepare without mutation.
 Same-root group Repair assesses that snapshot once. `New`, Inspect, Discover,
 and Recover do not invoke Assess. Coarse `Config.Progress` phases are
-observational. The engine does not import Notifications types and does not
+observational. `Config.IndependentActivations` explicitly enables concurrent
+external activation for distinct Claude/Codex user targets without selected
+native delivery. Other targets and the default configuration retain sequential
+activation. Preparation, host callbacks, state writes and result publication
+remain coordinated. Per-client `ProgressEvent.Client` checkpoints report
+`external_started`, `external_completed` or `external_failed`; failures expose
+their finite stage rather than raw provider diagnostics.
+
+Claude discovery and plugin listing have a 30-second budget, capped by the
+caller deadline. A local listing timeout may leave another activation running
+only after the runner proves that no child started or that the process and its
+descendants closed. Parent cancellation and unconfirmed cleanup cancel and join
+all dispatched work before returning. Qualification version pins do not change
+these time budgets or become installed-client version restrictions.
+
+The engine does not import Notifications types and does not
 query a live Claude/Codex identity by default.
+
+### Explicit state upgrades
+
+An embedding installer should review the authoritative state after choosing its
+state paths and before planning client registrations or starting install workers:
+
+```go
+migration, err := engine.PrepareStateMigration(ctx)
+// Handle err before proceeding. For migration.Required, present SourceSchema,
+// TargetSchema, Installations, and NeedsRebind and obtain host confirmation.
+// Keep the complete plan unchanged across that confirmation.
+result, err := engine.ApplyStateMigration(ctx, migration)
+// Handle err before any client registration. result.BackupPath is also
+// populated when a backup succeeded but committing the upgrade failed.
+```
+
+`PrepareStateMigration` validates supported schema 2, 3, and 4 state without
+writing it or recovering old operations. Applying a required upgrade reuses the
+explicit CLI migrator: it takes the same mutation lock as installation, checks
+pending work and the exact reviewed digest again under the lock, writes a
+byte-exact backup, then atomically publishes the validated current schema.
+Old pending journals, receipts, and native intents require recovery using the
+corresponding previous SDK or binary before migration. Current-schema pending
+work remains the normal recovery flow's responsibility.
+
+Missing and current state return `Required=false`; applying that plan rechecks
+the observed state and returns `NoChange=true` without creating a backup or a
+lock. Corrupt and future schemas are rejected. A changed review returns
+`ErrPlanChanged`, including when the reviewed state was replaced by corrupt or
+unsupported bytes. Plans bind the state root/file, mutation lock and operations
+directory as well as the digest and may be serialized
+between a host's confirmation process and its parent apply process. A new
+review after successful migration is a no-op; replaying an old required review
+is refused. Passing a canceled context never starts migration.
+
+Read-only inspection remains compatible with old schemas. Mutation guards
+report `ErrMigrationRequired`, with `MigrationRequiredError.SourceSchema` and
+`TargetSchema` available through `errors.As`; hosts do not need to parse an
+error message or edit state JSON.
+
+For actionable refusal diagnostics, `errors.Is(err, ErrStateCorrupt)` identifies
+invalid state records or JSON, `ErrRecoveryRequired` identifies old pending work,
+and `ErrUnsupportedStateSchema` identifies an incompatible on-disk schema.
+`errors.As` into `*UnsupportedStateSchemaError` exposes `SourceSchema` and
+`TargetSchema`; a source greater than the target requires a newer SDK/binary.
+I/O and namespace errors retain their original classification.
+
+Prepare freezes the selected adapter's complete `SelectedDelivery` through the
+public Plan/DeliveryPlan and each group PlanTarget. Apply regenerates that
+adapter plan before effects, repeats all-target and recorded-binding checks after
+preflight/stage observers before mutation locks or native discovery, and guards
+the use case's subsequent replan too. Changed mode, physical/profile identity, tuple, components, digests or owned
+selector authority returns `ErrPlanChanged`. The prepared installation identity
+is reused for the commit. These typed fields use `json:"-"`: diagnostic JSON
+cannot be replayed as confirmation authority. The existing digest-bound content
+assessment remains a separate decision.
+
+`BindingFacts` in `OnCommittedBinding`, and Result binding/client selections,
+come from committed state; activation checks the matching committed selection,
+including its staged projection digest. Empty selections retain historical
+behavior. This is a public contract checkpoint with injected TEST adapters;
+the default registry and actual NewLocal availability are unchanged. It grants
+no native VS Code, Windows or macOS qualification.
+
+Selected single/group removal freezes the complete persisted binding and data
+receipt through Plan, BindingFacts, result and RemoveInput. It validates every
+profile, target, managed digest and native scope before observers and repeats
+validation after them, under the one service lock, and at native dispatch and
+return. Constructor facts never replace removal authority. A historical adapter
+without the typed reconciler and read-only native registry capability refuses a
+persisted Local selection before commands. CLI registry inspection is ineligible
+for selected removal; the registered adapter reads its exact persisted profile.
+
+Inspect includes exact `Recovery.NativeIntents`: installation/binding/profile,
+pending direction/attempt, complete selected tuple/components/selector and a
+digest of the persisted binding. It acquires no mutation or profile lock. Recover
+requires that exact typed observation and StateRoot, revalidates under one retained
+process lock, and invokes the selected Service reconciler with persisted facts.
+`Recovery.StateDigest` binds all state scopes; each complete journal is hashed.
+Checks before and after every reconciler and before kernel reads/acknowledgement
+reject new journals, changed receipts and foreign bindings. Only successful
+existing kernel/service transitions advance the retained expected scope.
+Journal recovery remains supported; stale/missing/foreign scopes and uncertain
+attempts stay unresolved. Native intent diagnostic JSON exposes existing domain
+facts, but a JSON round trip cannot restore the operational typed observation.
+
+A complete selected Local plan without MCP needs no absent managed helper and
+skips host MCP argument projection, including a package with no MCP server.
+Selected MCP, historical plans and explicitly configured helper paths retain
+helper validation. No Local adapter is automatically registered by this seam.
 
 Prepare copies `Request` and reports canonical `Plan.TreeDigest` with algorithm
 `agentplugins-tree-sha256-v1`. That value is the packagedigest source identity,
@@ -100,7 +227,7 @@ Client.Activation stay separate fields.
 
 Confirmed Apply re-reads live target/ownership before mutation and returns
 `plan_changed` instead of applying a stale confirmation. Discover reports
-supported Claude/Codex user-scope metadata, executable presence, and current
+registered local-client user-scope metadata and component capabilities, executable presence, and current
 bindings without creating state or executing found files. Inspect after a group
 install reports both live bindings and TreeDigest without mutating state or
 running a helper; Recover of that clean observation is `already_recovered`.
@@ -114,9 +241,9 @@ required components. The external sample's flagged path runs install → inspect
 uses `Request.Targets` for the same verbs on Claude+Codex together.
 
 Codex artifact removal requires `Request.ExternalUninstalled`. Confirmed Apply
-does not invent that attestation. A missing or relative helper is rejected
+does not invent that attestation. A required missing helper or relative configured helper is rejected
 before the state file is written. Confirmed Apply returns `recovery_required`
-when Inspect sees a pending journal or unfinished receipt; it does not recover
+when Inspect sees a pending journal, unfinished receipt or native intent; it does not recover
 as a side effect of install/remove. Close during Apply returns `ErrHandleBusy`
 without releasing the sealed snapshot. Install of a different TreeDigest for an
 active binding returns `ErrUpdateRequired` before mutation. Update of one live

@@ -3,6 +3,7 @@ package workspacelock
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -20,12 +21,28 @@ func (s Store) Path() string {
 	return s.File
 }
 
+// legacyNamePresent refuses a workspace lock under its retired name instead of
+// silently adopting or ignoring it: the file is workspace state, and renaming
+// is the user's explicit action.
+func (s Store) legacyNamePresent(ctx context.Context) error {
+	legacy := filepath.Join(filepath.Dir(s.File), domain.LegacyWorkspaceLockFileName)
+	_, err := s.FS.ReadFile(ctx, legacy)
+	if err == nil {
+		return fmt.Errorf("workspace lock uses the legacy name %q; rename it to %q (for example: mv %s %s)",
+			domain.LegacyWorkspaceLockFileName, domain.WorkspaceLockFileName, legacy, s.File)
+	}
+	return nil
+}
+
 func (s Store) Load(ctx context.Context) (domain.WorkspaceLock, error) {
 	if s.File == "" {
 		return domain.WorkspaceLock{}, errors.New("workspace lock path required")
 	}
 	body, err := s.FS.ReadFile(ctx, s.File)
 	if err != nil {
+		if legacyErr := s.legacyNamePresent(ctx); legacyErr != nil {
+			return domain.WorkspaceLock{}, legacyErr
+		}
 		return domain.WorkspaceLock{}, err
 	}
 	var out domain.WorkspaceLock

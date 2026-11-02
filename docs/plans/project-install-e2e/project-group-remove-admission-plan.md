@@ -1,0 +1,93 @@
+# Project group removal admission — R1
+
+The actual composed SDK Cline+Codex project lifecycle now passes install,
+read-only replay/unchanged update, successful/failed host callback, changed
+update and typed missing native-directory repair. Its final grouped removal is
+blocked before effects by installer/group_remove.go's historical beta guard:
+zero-selected group removal permits only Claude/Codex. Both single removals
+already work and core RemoveGroup supports scoped per-client deactivation.
+
+This slice admits the already supported project clients at that SDK guard only.
+Preserve the user-scope historical guard, selected-delivery authority, exactly-two
+SDK target cardinality and OpenCode host-snapshot restrictions. No new client
+capability, native command, data purge, schema, interface or release claim.
+
+## Existing authority chain
+
+Public Prepare first validates request scope/project root against the configured
+engine and ClientScopeSupported for every requested project client; this checks
+both the declared policy and concrete project layout/native-root hooks. Group
+validation then checks the existing cardinality, duplicate IDs and registry.
+planRemoveGroup finds each saved binding and always calls removalPreflight for
+a present target. That verifies binding scope/client/profile, selected native
+entry, recorded managed digest, independently resolved exact target and owned
+PLUGIN_DATA. Apply repeats removalPreflight, confirms exact frozen bindings and
+profiles, and calls core RemoveGroup. The core resolves exact scoped bindings,
+rechecks directory/receipt ownership and deactivation before transaction commit.
+No new admission can bypass those checks.
+
+## Minimal change
+
+Replace only the historical non-Claude/Codex refusal with a positive project
+exception: explicit request ScopeProject, a nonempty selected project root equal
+to the configured engine root, and ClientScopeSupported for the current target.
+Use the existing capability API, no new list of agent IDs. Keep the full original
+condition otherwise. Do not infer scope from a saved path or counterfeit HOME.
+Absent qualified project targets may retain the existing NoChange path; a present
+binding must still pass all existing preflight/frozen-binding checks. Nonzero
+selected delivery retains the original behavior and authority checks.
+
+The helper is pure capability/context admission; do not add filesystem reads,
+profile discovery, effects or new fallback. The public boundary already performs
+canonical project validation. Preserve errors and all user-scope behavior.
+
+## Finite acceptance
+
+- Real SDK Cline+Codex project group install, reopen and remove must remove only
+  owned native skills/MCP entries and managed packages, with original user, B and
+  unrelated A files preserved and forbidden runner called zero times.
+- Repeated group remove and a group with one already absent target preserve
+  truthful Unchanged/Mutated facts and do not create extra mutation journals.
+- A changed managed package, foreign native object, changed project/request
+  scope, missing/unsupported project capability, and stale binding after Prepare
+  must refuse before deactivation/publication. Retain real pending-journal and
+  PLUGIN_DATA refusal tests.
+- A user-scope non-Claude/Codex zero-selected group is still rejected by the same
+  historical guard. Selected-delivery tests retain their existing behavior.
+- Integrate grouped remove into the full project lifecycle once this independent
+  slice is approved; the handoff correction itself can finish its current cleanup
+  through the already supported per-client Remove operations.
+
+Use focused installer tests and changed-source/static architecture checks only.
+Two independent plan rounds and two frozen code reviews are required. No
+production group-removal source has been edited for this plan.
+
+## R2 — current target capability and unchanged historical contract
+
+APM and Claude independently gave R1 architecture GO on exact
+be90b4ac05617dba3a697208778831cd16ea1d8e after reading the actual public
+scope validation, historical boolean guard and removal preflight/core paths.
+Their refinements are explicit constraints on implementation:
+
+- Apply the exception only when the original historical refusal condition is
+  true. Keep that original expression, its parentheses, found/absent handling,
+  selectedCapable discovery and nonzero SelectedDelivery semantics unchanged.
+- Qualify the current iterated target, never the first group target: explicit
+  request ScopeProject, nonempty canonical request ProjectRoot equal to the
+  configured engine ProjectRoot, and existing ClientScopeSupported for that
+  target and project scope. Missing/mixed/mismatched roots or capability grant
+  no exception; the public context validator continues to reject them first.
+- Present targets always pass the existing removalPreflight during Prepare and
+  Apply, exact frozen binding confirmation and core scoped ownership checks.
+  A swapped or changed saved profile/binding cannot borrow another target's
+  admission. Absent targets create no synthetic binding, receipt or context,
+  retain the original NoChange path and do not dispatch deactivation.
+- Keep user zero-selected guard/error, nonzero selected behavior, exactly-two
+  target cardinality and OpenCode host snapshot restrictions unchanged.
+
+The finite negative acceptance snapshots saved state and untouched user/B files
+for each refusal, including a changed binding/profile after Prepare. Existing
+pending-journal, selected-delivery and missing/changed PLUGIN_DATA cases remain
+required. The positive actual Cline/Codex end-to-end test will switch its final
+per-client cleanup to group removal only with this independently reviewed slice.
+Both final plan GOs precede source edits. No group-removal source has changed.

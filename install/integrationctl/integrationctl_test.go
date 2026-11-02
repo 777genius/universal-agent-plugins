@@ -83,7 +83,7 @@ func TestNewServiceUsesHomeAndRepoDerivedPaths(t *testing.T) {
 	if !ok {
 		t.Fatalf("WorkspaceLock type = %T", svc.WorkspaceLock)
 	}
-	if want := filepath.Join(actualRepo, ".plugin-kit-ai.lock"); lockStore.File != want {
+	if want := filepath.Join(actualRepo, ".uap-integrations.lock"); lockStore.File != want {
 		t.Fatalf("WorkspaceLock.File = %q want %q", lockStore.File, want)
 	}
 

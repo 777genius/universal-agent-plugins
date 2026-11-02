@@ -8,6 +8,13 @@ allowBuilds:
   vue-demi: true
 
 overrides:
+  # Nuxt i18n aliases these packages globally. Keep its four direct
+  # Intlify runtime dependencies on the same tested patch as vue-i18n;
+  # otherwise Vite resolves @intlify/shared@11.4.10 for vue-i18n@11.4.14.
+  '@nuxtjs/i18n>@intlify/core': 11.4.14
+  '@nuxtjs/i18n>@intlify/message-compiler': 11.4.14
+  '@nuxtjs/i18n>@intlify/shared': 11.4.14
+  '@nuxtjs/i18n>vue-i18n': 11.4.14
   brace-expansion@>=1.0.0 <1.1.21: 1.1.21
   brace-expansion@>=2.0.0 <2.1.7: 2.1.7
   brace-expansion@>=4.0.0 <5.0.12: 5.0.12

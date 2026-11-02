@@ -449,7 +449,7 @@ func TestLegacyNeverOpenedIncludingAliases(t *testing.T) {
 }
 
 func TestOpaqueInstallerRestrictionsKeepDocuments(t *testing.T) {
-	for _, name := range []string{"CON.txt", "trailing.", "a:b", "README", "e\u0301", "bad\xff", "line\nbreak", "nested/.git/file", ".plugin-kit-ai.lock/child", "pointer"} {
+	for _, name := range []string{"CON.txt", "trailing.", "a:b", "README", "e\u0301", "bad\xff", "line\nbreak", "nested/.git/file", ".uap-integrations.lock/child", ".plugin-kit-ai.lock/child", "pointer"} {
 		t.Run(fmt.Sprintf("%x", name), func(t *testing.T) {
 			root, r := fixture(t)
 			body := "opaque"
@@ -627,7 +627,8 @@ func TestFullDigestParityOnSafePrivateBytes(t *testing.T) {
 	}
 	link(t, root, "link", "a")
 	put(t, root, ".git/never-read", "excluded")
-	link(t, root, ".plugin-kit-ai.lock", "../never-resolve")
+	link(t, root, ".uap-integrations.lock", "../never-resolve")
+	link(t, root, ".plugin-kit-ai.lock", "../never-resolve-legacy")
 	l := open(t, r, root, nil)
 	v := capture(t, l)
 	if !v.Coverage.TreeComplete {

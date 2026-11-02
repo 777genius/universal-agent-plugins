@@ -28,3 +28,15 @@ func (r *HandlerRegistry) Lookup(platform PlatformID, event EventID) (TypedHandl
 	h, ok := r.handlers[handlerKey{platform: platform, event: event}]
 	return h, ok
 }
+
+// HasPlatform reports whether any handler is registered for the platform.
+func (r *HandlerRegistry) HasPlatform(platform PlatformID) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for key := range r.handlers {
+		if key.platform == platform {
+			return true
+		}
+	}
+	return false
+}

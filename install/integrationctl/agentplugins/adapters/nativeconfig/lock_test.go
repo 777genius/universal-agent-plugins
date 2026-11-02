@@ -141,3 +141,34 @@ func TestClineLockReleaseReportsLostDirectory(t *testing.T) {
 		t.Fatalf("lost lock directory was not surfaced: %v", err)
 	}
 }
+
+// The identity must retain the directory's file ID after its original path
+// disappears. Windows Lstat alone lazily reopens that vanished path in SameFile.
+func TestClineLockDirectoryIdentitySurvivesRename(t *testing.T) {
+	root := t.TempDir()
+	staging, published := filepath.Join(root, "staging"), filepath.Join(root, "published")
+	if err := os.Mkdir(staging, 0700); err != nil {
+		t.Fatal(err)
+	}
+	identity, err := clineLockDirectoryIdentity(staging)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(staging, published); err != nil {
+		t.Fatal(err)
+	}
+	current, err := os.Lstat(published)
+	if err != nil || !os.SameFile(identity, current) {
+		t.Fatalf("published identity lost: %v", err)
+	}
+	if err := os.Rename(published, filepath.Join(root, "retired")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(published, 0700); err != nil {
+		t.Fatal(err)
+	}
+	foreign, err := os.Lstat(published)
+	if err != nil || os.SameFile(identity, foreign) {
+		t.Fatalf("foreign replacement accepted: %v", err)
+	}
+}

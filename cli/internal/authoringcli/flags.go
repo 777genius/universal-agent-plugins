@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-var installerOnly = [...]string{"scope", "accept-security-risk", "security-details"}
+var installerOnly = [...]string{"scope", "project-root", "accept-security-risk", "security-details"}
 
 // flagSets includes ancestor definitions even when a child shadows a name.
 func flagSets(cmd *cobra.Command, visit func(*pflag.FlagSet)) {

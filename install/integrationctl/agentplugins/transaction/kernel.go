@@ -1,162 +1,23 @@
 package transaction
 
+// Directory mutation orchestration; state, ownership and proof helpers live in focused files.
+
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-const (
-	ReceiptPhaseStateCommitted = "state_committed"
-	ReceiptPhaseCommitted      = "committed"
-)
-
-type GroupFailurePhase string
-
-const (
-	GroupFailureUnchanged  GroupFailurePhase = "managed_unchanged"
-	GroupFailureRolledBack GroupFailurePhase = "managed_rolled_back"
-	GroupFailureUnknown    GroupFailurePhase = "managed_commit_unknown"
-	GroupFailureCommitted  GroupFailurePhase = "managed_committed"
-)
-
-// GroupError carries the kernel's durable observation of a failed operation
-// group. Callers must not infer rollback merely from an empty receipt slice:
-// an empty slice can also mean that the first mutation never started.
-type GroupError struct {
-	Phase GroupFailurePhase
-	Err   error
-}
-
-func (err *GroupError) Error() string { return err.Err.Error() }
-func (err *GroupError) Unwrap() error { return err.Err }
-
-func groupError(phase GroupFailurePhase, err error) error {
-	return &GroupError{Phase: phase, Err: err}
-}
-
-func FailurePhase(err error) GroupFailurePhase {
-	var groupErr *GroupError
-	if errors.As(err, &groupErr) {
-		return groupErr.Phase
-	}
-	return GroupFailureUnchanged
-}
-
-type StateStore interface {
-	Load() (domain.StateFileV2, error)
-	Save(domain.StateFileV2) error
-}
-
-type DirectoryMutation struct {
-	OperationID     string
-	InstallationID  string
-	ClientBindingID string
-	Sequence        int
-	OwnedBase       string
-	ActivePath      string
-	StagingPath     string
-	BeforeDigest    string
-	AfterDigest     string
-	NativeObjects   []domain.NativeObjectOwnership
-	Activation      domain.ActivationState
-	Authentication  domain.AuthenticationState
-	Policy          domain.PolicyState
-	Verification    domain.VerificationState
-	// DesiredState is the fully validated state that becomes authoritative only
-	// after the staged directory is active and verified. Keeping it in memory
-	// closes the crash window that would otherwise persist "prepared" state
-	// before a durable directory intent exists.
-	DesiredState domain.StateFileV2
-	Verify       func(context.Context, string) error
-	// RequireAbsent rejects this mutation, before any journal write or
-	// filesystem mutation, if ActivePath already exists. See dirswap.Input's
-	// field of the same name.
-	RequireAbsent bool
-	// VerifyBefore proves caller ownership at the active and moved backup paths.
-	VerifyBefore func(context.Context, string) error
-}
-
-type DirectoryRemoval struct {
-	OperationGroupID string
-	OperationID      string
-	InstallationID   string
-	ClientBindingID  string
-	Sequence         int
-	OwnedBase        string
-	ActivePath       string
-	BeforeDigest     string
-	// Standalone records a removal receipt at state-file level. This is used
-	// when the same commit decision removes the owning binding/installation.
-	Standalone bool
-	Verify     func(context.Context, string) error
-}
-
-// DirectoryGroup is one commit decision for a fully preflighted set of
-// physical backends. Every directory is activated and verified before state is
-// made authoritative. A failure before that decision rolls all activated
-// directories back in reverse order.
-type DirectoryGroup struct {
-	OperationGroupID string
-	Mutations        []DirectoryMutation
-	DesiredState     domain.StateFileV2
-	// PostApplyVerify runs once every mutation in the group has been applied and
-	// individually verified, and before the group's state commit decision. It
-	// exists for verification that depends on the whole group's restored
-	// filesystem state at once (for example, a native client registry that must
-	// observe every reconstructed path together before any single one can be
-	// confirmed). A returned error rolls back every applied mutation in the
-	// group; no state or native side effect from this group is ever committed.
-	PostApplyVerify func(context.Context) error
-}
-
-type DirectoryRemovalGroup struct {
-	OperationGroupID string
-	Removals         []DirectoryRemoval
-	DesiredState     domain.StateFileV2
-}
-
-type appliedGroupMutation struct {
-	receipt dirswap.Receipt
-	state   domain.MutationReceipt
-}
-
-type Kernel struct {
-	StateStore StateStore
-	Directory  dirswap.Manager
-}
-
-// A directory commit confirms only the managed package bytes. External native
-// receipts remain the last confirmed effect until the client adapter reports
-// its own result after this transaction.
-func committedDirectoryObjects(before domain.StateFileV2, installationID, bindingID string, projected []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
-	var objects []domain.NativeObjectOwnership
-	for _, object := range projected {
-		if object.Kind == "managed_package_directory" {
-			objects = append(objects, object)
-		}
-	}
-	for _, installation := range before.Installations {
-		if installation.InstallationID != installationID {
-			continue
-		}
-		for _, object := range installation.Clients[bindingID].NativeObjects {
-			if object.Kind != "managed_package_directory" {
-				objects = append(objects, object)
-			}
-		}
-		break
-	}
-	return objects
-}
-
 func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutation) (domain.MutationReceipt, error) {
+	owners, err := kernel.mutationOwners(ctx, mutation.DesiredState, []DirectoryMutation{mutation})
+	if err != nil {
+		return domain.MutationReceipt{}, err
+	}
+	kernel = kernel.guardOwners(ctx, owners)
 	if kernel.StateStore == nil {
 		return domain.MutationReceipt{}, fmt.Errorf("transaction state store is required")
 	}
@@ -182,7 +43,7 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 	if err != nil {
 		return domain.MutationReceipt{}, err
 	}
-	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{
+	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{EnvironmentID: environmentID(mutation.EnvironmentAuthority), ProfileOwners: neutralOwners(owners),
 		OperationID: mutation.OperationID, ClientBindingID: mutation.ClientBindingID, Sequence: mutation.Sequence,
 		OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, StagingPath: mutation.StagingPath,
 		RequireAbsent: mutation.RequireAbsent, VerifyActive: mutation.VerifyBefore,
@@ -209,18 +70,19 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 	if err := kernel.Directory.VerifyPending(directoryReceipt); err != nil {
 		return domain.MutationReceipt{}, rollback(err)
 	}
-	receipt := domain.MutationReceipt{
-		OperationID:      mutation.OperationID,
-		OperationGroupID: mutation.OperationID,
-		Sequence:         mutation.Sequence,
-		MutationType:     "directory_swap",
-		ClientBindingID:  mutation.ClientBindingID,
-		ActivePath:       directoryReceipt.ActivePath,
-		StagingPath:      directoryReceipt.StagingPath,
-		BackupPath:       directoryReceipt.BackupPath,
-		BeforeDigest:     mutation.BeforeDigest,
-		AfterDigest:      mutation.AfterDigest,
-		Phase:            ReceiptPhaseStateCommitted,
+	receipt := domain.MutationReceipt{DirectoryProof: directoryProof(directoryReceipt), ProfileOwners: copyOwners(owners), DataReceiptID: directoryReceipt.DataReceiptID,
+		OperationID:          mutation.OperationID,
+		OperationGroupID:     mutation.OperationID,
+		Sequence:             mutation.Sequence,
+		MutationType:         "directory_swap",
+		ClientBindingID:      mutation.ClientBindingID,
+		ActivePath:           directoryReceipt.ActivePath,
+		StagingPath:          directoryReceipt.StagingPath,
+		BackupPath:           directoryReceipt.BackupPath,
+		BeforeDigest:         mutation.BeforeDigest,
+		AfterDigest:          mutation.AfterDigest,
+		EnvironmentAuthority: mutation.EnvironmentAuthority,
+		Phase:                ReceiptPhaseStateCommitted,
 	}
 	client.Receipts = append(client.Receipts, receipt)
 	client.NativeObjects = committedDirectoryObjects(beforeState, mutation.InstallationID, mutation.ClientBindingID, mutation.NativeObjects)
@@ -253,6 +115,11 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 }
 
 func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGroup) ([]domain.MutationReceipt, error) {
+	owners, err := kernel.mutationOwners(ctx, group.DesiredState, group.Mutations)
+	if err != nil {
+		return nil, err
+	}
+	kernel = kernel.guardOwners(ctx, owners)
 	if kernel.StateStore == nil {
 		return nil, fmt.Errorf("transaction state store is required")
 	}
@@ -322,7 +189,7 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 		if err != nil {
 			return nil, err
 		}
-		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{
+		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{EnvironmentID: environmentID(mutation.EnvironmentAuthority), ProfileOwners: neutralOwners(owners),
 			OperationID: mutation.OperationID, ClientBindingID: mutation.ClientBindingID, Sequence: mutation.Sequence,
 			OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, StagingPath: mutation.StagingPath,
 			RequireAbsent: mutation.RequireAbsent, VerifyActive: mutation.VerifyBefore,
@@ -348,10 +215,11 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 				return nil, groupError(GroupFailureRolledBack, fmt.Errorf("verify grouped directory mutation: %w", err))
 			}
 		}
-		receipt := domain.MutationReceipt{OperationID: mutation.OperationID, OperationGroupID: group.OperationGroupID,
+		receipt := domain.MutationReceipt{DirectoryProof: directoryProof(directoryReceipt), ProfileOwners: copyOwners(owners), DataReceiptID: directoryReceipt.DataReceiptID, OperationID: mutation.OperationID, OperationGroupID: group.OperationGroupID,
 			Sequence: mutation.Sequence, MutationType: "directory_swap", ClientBindingID: mutation.ClientBindingID,
 			ActivePath: directoryReceipt.ActivePath, StagingPath: directoryReceipt.StagingPath, BackupPath: directoryReceipt.BackupPath,
 			BeforeDigest: mutation.BeforeDigest, AfterDigest: mutation.AfterDigest, Phase: ReceiptPhaseStateCommitted}
+		receipt.EnvironmentAuthority = mutation.EnvironmentAuthority
 		client.Receipts = append(client.Receipts, receipt)
 		client.NativeObjects = committedDirectoryObjects(before, mutation.InstallationID, mutation.ClientBindingID, mutation.NativeObjects)
 		client.Materialization, client.Activation, client.Authentication = domain.MaterializationMaterialized, mutation.Activation, mutation.Authentication
@@ -415,17 +283,12 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 	return result, nil
 }
 
-func groupReceipts(items []appliedGroupMutation) []domain.MutationReceipt {
-	result := make([]domain.MutationReceipt, 0, len(items))
-	for _, item := range items {
-		if item.state.OperationID != "" {
-			result = append(result, item.state)
-		}
-	}
-	return result
-}
-
 func (kernel Kernel) RemoveDirectory(ctx context.Context, removal DirectoryRemoval) (domain.MutationReceipt, error) {
+	owners, err := kernel.removalOwners(ctx, []DirectoryRemoval{removal})
+	if err != nil {
+		return domain.MutationReceipt{}, err
+	}
+	kernel = kernel.guardOwners(ctx, owners)
 	if kernel.StateStore == nil {
 		return domain.MutationReceipt{}, fmt.Errorf("transaction state store is required")
 	}
@@ -451,8 +314,8 @@ func (kernel Kernel) RemoveDirectory(ctx context.Context, removal DirectoryRemov
 			return domain.MutationReceipt{}, fmt.Errorf("verify directory before removal: %w", err)
 		}
 	}
-	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{
-		OperationID: removal.OperationID, ClientBindingID: removal.ClientBindingID, Sequence: removal.Sequence,
+	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{EnvironmentID: environmentID(removal.EnvironmentAuthority), ProfileOwners: neutralOwners(owners),
+		DataReceiptID: removal.DataReceiptID, OperationID: removal.OperationID, ClientBindingID: dataBindingID(removal, owners), Sequence: removal.Sequence,
 		OwnedBase: removal.OwnedBase, ActivePath: removal.ActivePath, Remove: true, VerifyActive: removal.Verify,
 	})
 	if err != nil {
@@ -469,16 +332,17 @@ func (kernel Kernel) RemoveDirectory(ctx context.Context, removal DirectoryRemov
 		}
 		return domain.MutationReceipt{}, err
 	}
-	receipt := domain.MutationReceipt{
-		OperationID:      removal.OperationID,
-		OperationGroupID: firstNonEmpty(removal.OperationGroupID, removal.OperationID),
-		Sequence:         removal.Sequence,
-		MutationType:     "directory_remove",
-		ClientBindingID:  removal.ClientBindingID,
-		ActivePath:       directoryReceipt.ActivePath,
-		BackupPath:       directoryReceipt.BackupPath,
-		BeforeDigest:     removal.BeforeDigest,
-		Phase:            ReceiptPhaseStateCommitted,
+	receipt := domain.MutationReceipt{DirectoryProof: directoryProof(directoryReceipt), ProfileOwners: copyOwners(owners), DataReceiptID: directoryReceipt.DataReceiptID,
+		OperationID:          removal.OperationID,
+		OperationGroupID:     firstNonEmpty(removal.OperationGroupID, removal.OperationID),
+		Sequence:             removal.Sequence,
+		MutationType:         "directory_remove",
+		ClientBindingID:      directoryReceipt.ClientBindingID,
+		ActivePath:           directoryReceipt.ActivePath,
+		BackupPath:           directoryReceipt.BackupPath,
+		BeforeDigest:         removal.BeforeDigest,
+		Phase:                ReceiptPhaseStateCommitted,
+		EnvironmentAuthority: removal.EnvironmentAuthority,
 	}
 	client.Receipts = append(client.Receipts, receipt)
 	client.NativeObjects = nil
@@ -511,6 +375,11 @@ func (kernel Kernel) RemoveDirectory(ctx context.Context, removal DirectoryRemov
 }
 
 func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRemovalGroup) ([]domain.MutationReceipt, error) {
+	owners, err := kernel.removalOwners(ctx, group.Removals)
+	if err != nil {
+		return nil, err
+	}
+	kernel = kernel.guardOwners(ctx, owners)
 	if kernel.StateStore == nil || len(group.Removals) == 0 || group.OperationGroupID == "" {
 		return nil, fmt.Errorf("complete directory removal group is required")
 	}
@@ -584,7 +453,7 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 				return nil, loadErr
 			}
 		}
-		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{OperationID: removal.OperationID, ClientBindingID: removal.ClientBindingID,
+		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{EnvironmentID: environmentID(removal.EnvironmentAuthority), ProfileOwners: neutralOwners(owners), DataReceiptID: removal.DataReceiptID, OperationID: removal.OperationID, ClientBindingID: dataBindingID(removal, owners),
 			Sequence: removal.Sequence, OwnedBase: removal.OwnedBase, ActivePath: removal.ActivePath, Remove: true, VerifyActive: removal.Verify})
 		if err != nil {
 			if directoryReceipt.OperationID != "" {
@@ -598,10 +467,11 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 			}
 			return nil, groupError(GroupFailureUnchanged, err)
 		}
-		receipt := domain.MutationReceipt{OperationID: removal.OperationID, OperationGroupID: group.OperationGroupID,
-			Sequence: removal.Sequence, MutationType: "directory_remove", ClientBindingID: removal.ClientBindingID,
+		receipt := domain.MutationReceipt{DirectoryProof: directoryProof(directoryReceipt), ProfileOwners: copyOwners(owners), DataReceiptID: directoryReceipt.DataReceiptID, OperationID: removal.OperationID, OperationGroupID: group.OperationGroupID,
+			Sequence: removal.Sequence, MutationType: "directory_remove", ClientBindingID: directoryReceipt.ClientBindingID,
 			ActivePath: directoryReceipt.ActivePath, BackupPath: directoryReceipt.BackupPath, BeforeDigest: removal.BeforeDigest,
 			Phase: ReceiptPhaseStateCommitted}
+		receipt.EnvironmentAuthority = removal.EnvironmentAuthority
 		recordedInBinding := false
 		if installationIndex >= 0 {
 			// The final desired state may intentionally have removed this binding;
@@ -685,10 +555,16 @@ func (kernel Kernel) Recover(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	kernel.Directory.Namespace = kernel.Namespace
 	open, err := kernel.Directory.ListOpen()
 	if err != nil {
 		return err
 	}
+	owners, err := kernel.pendingOwners(ctx, state, open)
+	if err != nil {
+		return err
+	}
+	kernel = kernel.guardOwners(ctx, owners)
 	changed := false
 	openOperations := make(map[string]struct{}, len(open))
 	for _, directoryReceipt := range open {
@@ -753,192 +629,159 @@ func (kernel Kernel) Recover(ctx context.Context) error {
 		state.Installations[installationIndex] = installation
 	}
 	if changed {
-		return kernel.StateStore.Save(state)
+		if err := kernel.StateStore.Save(state); err != nil {
+			return err
+		}
+	}
+	if kernel.NativeRecovery != nil {
+		return kernel.NativeRecovery.Recover(ctx)
 	}
 	return nil
 }
 
-// persistCommitDecision handles the ambiguous failure window where an atomic
-// state rename is visible but syncing its parent directory reports an error.
-// The caller may roll back only when a reload proves the exact old state is
-// still authoritative. A visible desired state is re-saved successfully before
-// the native directory transaction is allowed to commit. All other outcomes
-// leave the directory journal and backup intact for recovery.
-func (kernel Kernel) persistCommitDecision(desired domain.StateFileV2, beforeJSON []byte) (oldState bool, err error) {
-	if err := kernel.StateStore.Save(desired); err == nil {
-		return false, nil
-	} else {
-		initialErr := err
-		observed, loadErr := kernel.StateStore.Load()
-		if loadErr != nil {
-			return false, fmt.Errorf("state save failed (%v) and commit visibility is unknown: %w", initialErr, loadErr)
+func (kernel Kernel) pendingOwners(ctx context.Context, state domain.StateFileV2, open []dirswap.Receipt) ([]domain.PhysicalProfileOwner, error) {
+	var owners []domain.PhysicalProfileOwner
+	add := func(scope []domain.PhysicalProfileOwner) error {
+		if err := kernel.validateOwners(ctx, scope); err != nil {
+			return err
 		}
-		observedJSON, marshalErr := marshalComparableState(observed)
-		if marshalErr != nil {
-			return false, fmt.Errorf("state save failed (%v) and observed state cannot be compared: %w", initialErr, marshalErr)
-		}
-		desiredJSON, marshalErr := marshalComparableState(desired)
-		if marshalErr != nil {
-			return false, fmt.Errorf("state save failed (%v) and desired state cannot be compared: %w", initialErr, marshalErr)
-		}
-		if bytes.Equal(observedJSON, desiredJSON) {
-			if retryErr := kernel.StateStore.Save(desired); retryErr != nil {
-				return false, fmt.Errorf("state became visible after save error (%v), but durability retry failed: %w", initialErr, retryErr)
+		owners = append(owners, scope...)
+		return nil
+	}
+	for _, j := range open {
+		if j.SchemaVersion == 5 || j.SchemaVersion == 7 {
+			_, _, _, matched := findReceipt(state, j)
+			switch j.Phase {
+			case dirswap.PhaseIntent, dirswap.PhaseBackupPending, dirswap.PhaseOldBackedUp, dirswap.PhaseActivationPending, dirswap.PhaseRollbackPending, dirswap.PhaseRolledBack:
+				if matched {
+					return nil, fmt.Errorf("durable state references unrecoverable physical journal phase %q", j.Phase)
+				}
+			case dirswap.PhaseCommitPending, dirswap.PhaseCommitted:
+				if !matched {
+					return nil, fmt.Errorf("physical journal committed without durable state receipt")
+				}
+			case dirswap.PhaseActivated:
+			default:
+				return nil, fmt.Errorf("unsupported physical journal phase %q", j.Phase)
 			}
-			return false, nil
-		}
-		if bytes.Equal(observedJSON, beforeJSON) {
-			return true, initialErr
-		}
-		return false, fmt.Errorf("state save failed and reload matched neither exact old nor desired state: %w", initialErr)
-	}
-}
-
-// PersistStateDecision gives lifecycle state writes the same visibility and
-// durability handling as directory commit decisions.
-func (kernel Kernel) PersistStateDecision(before, desired domain.StateFileV2) error {
-	beforeJSON, err := marshalComparableState(before)
-	if err != nil {
-		return err
-	}
-	_, err = kernel.persistCommitDecision(desired, beforeJSON)
-	return err
-}
-
-func marshalComparableState(state domain.StateFileV2) ([]byte, error) {
-	state.Installations = append([]domain.Installation(nil), state.Installations...)
-	sort.Slice(state.Installations, func(i, j int) bool {
-		return state.Installations[i].InstallationID < state.Installations[j].InstallationID
-	})
-	return json.Marshal(state)
-}
-
-func loadClientFromState(state domain.StateFileV2, installationID, clientBindingID string) (int, domain.ClientBinding, error) {
-	if state.SchemaVersion != domain.StateSchemaVersion {
-		return -1, domain.ClientBinding{}, fmt.Errorf("desired transaction state schema_version must be %d", domain.StateSchemaVersion)
-	}
-	for index, installation := range state.Installations {
-		if installation.InstallationID != installationID {
-			continue
-		}
-		client, ok := installation.Clients[clientBindingID]
-		if !ok {
-			return -1, domain.ClientBinding{}, fmt.Errorf("client binding %q not found in desired transaction state", clientBindingID)
-		}
-		return index, client, nil
-	}
-	return -1, domain.ClientBinding{}, fmt.Errorf("installation %q not found in desired transaction state", installationID)
-}
-
-func (kernel Kernel) loadClient(installationID, clientBindingID string) (domain.StateFileV2, int, domain.ClientBinding, error) {
-	state, err := kernel.StateStore.Load()
-	if err != nil {
-		return domain.StateFileV2{}, -1, domain.ClientBinding{}, err
-	}
-	for index, installation := range state.Installations {
-		if installation.InstallationID != installationID {
-			continue
-		}
-		client, ok := installation.Clients[clientBindingID]
-		if !ok {
-			return domain.StateFileV2{}, -1, domain.ClientBinding{}, fmt.Errorf("client binding %q not found", clientBindingID)
-		}
-		return state, index, client, nil
-	}
-	return domain.StateFileV2{}, -1, domain.ClientBinding{}, fmt.Errorf("installation %q not found", installationID)
-}
-
-func replaceReceipt(client domain.ClientBinding, receipt domain.MutationReceipt) domain.ClientBinding {
-	for index := range client.Receipts {
-		if client.Receipts[index].OperationID == receipt.OperationID {
-			client.Receipts[index] = receipt
-			return client
-		}
-	}
-	client.Receipts = append(client.Receipts, receipt)
-	return client
-}
-
-func findReceipt(state domain.StateFileV2, directory dirswap.Receipt) (int, string, int, bool) {
-	mutationType := "directory_swap"
-	if directory.Operation == dirswap.OperationRemove {
-		mutationType = "directory_remove"
-	}
-	for receiptIndex, receipt := range state.TransactionReceipts {
-		if receipt.OperationID == directory.OperationID && receipt.ClientBindingID == directory.ClientBindingID &&
-			receipt.Sequence == directory.Sequence && receipt.MutationType == mutationType &&
-			receipt.ActivePath == directory.ActivePath && receipt.StagingPath == directory.StagingPath && receipt.BackupPath == directory.BackupPath &&
-			(receipt.Phase == ReceiptPhaseStateCommitted || receipt.Phase == ReceiptPhaseCommitted) {
-			return -1, "", receiptIndex, true
-		}
-	}
-	for installationIndex, installation := range state.Installations {
-		for clientKey, client := range installation.Clients {
-			for receiptIndex, receipt := range client.Receipts {
-				if receipt.OperationID == directory.OperationID &&
-					receipt.ClientBindingID == directory.ClientBindingID && clientKey == directory.ClientBindingID &&
-					receipt.Sequence == directory.Sequence && receipt.MutationType == mutationType &&
-					receipt.ActivePath == directory.ActivePath && receipt.StagingPath == directory.StagingPath && receipt.BackupPath == directory.BackupPath &&
-					(receipt.Phase == ReceiptPhaseStateCommitted || receipt.Phase == ReceiptPhaseCommitted) {
-					return installationIndex, clientKey, receiptIndex, true
+			if !matched {
+				var receipts []domain.MutationReceipt
+				receipts = append(receipts, state.TransactionReceipts...)
+				for _, i := range state.Installations {
+					for _, b := range i.Clients {
+						receipts = append(receipts, b.Receipts...)
+					}
+				}
+				for _, r := range receipts {
+					if r.OperationID == j.OperationID && (r.Phase == ReceiptPhaseStateCommitted || r.Phase == ReceiptPhaseCommitted) {
+						return nil, fmt.Errorf("physical journal and durable state receipt disagree")
+					}
 				}
 			}
 		}
+		var scope []domain.PhysicalProfileOwner
+		for _, o := range j.ProfileOwners {
+			token, err := profileauthority.FromNeutral(*o.Authority)
+			if err != nil {
+				return nil, err
+			}
+			scope = append(scope, domain.PhysicalProfileOwner{Namespace: o.Namespace, InstallationID: o.InstallationID, ClientID: o.ClientID, ClientBindingID: o.ClientBindingID, Authority: &token})
+		}
+		if err := add(scope); err != nil {
+			return nil, err
+		}
 	}
-	return -1, "", -1, false
-}
-
-func operationIDExists(state domain.StateFileV2, operationID string) bool {
-	for _, receipt := range state.TransactionReceipts {
-		if receipt.OperationID == operationID {
-			return true
+	for _, r := range state.TransactionReceipts {
+		if r.Phase == ReceiptPhaseStateCommitted {
+			if err := kernel.verifyReceiptProof(r); err != nil {
+				return nil, err
+			}
+			if err := add(r.ProfileOwners); err != nil {
+				return nil, err
+			}
 		}
 	}
 	for _, installation := range state.Installations {
-		for _, client := range installation.Clients {
-			for _, receipt := range client.Receipts {
-				if receipt.OperationID == operationID {
-					return true
+		for key, b := range installation.Clients {
+			for _, r := range b.Receipts {
+				if r.Phase != ReceiptPhaseStateCommitted {
+					continue
+				}
+				{
+					scope, err := kernel.bindingOwner(ctx, installation.InstallationID, key, b)
+					if err != nil {
+						return nil, err
+					}
+					if len(scope) > 0 {
+						found := false
+						for _, o := range r.ProfileOwners {
+							if o.Namespace == b.ProfileNamespace && o.InstallationID == installation.InstallationID && o.ClientID == b.ClientID && o.ClientBindingID == key && domain.SameProfileAuthority(o.Authority, b.ProfileAuthority) {
+								found = true
+							}
+						}
+						if !found {
+							return nil, fmt.Errorf("pending receipt differs from recorded physical owner")
+						}
+					}
+					if err := kernel.verifyReceiptProof(r); err != nil {
+						return nil, err
+					}
+					if b.ProfileAuthority != nil && len(r.ProfileOwners) == 0 {
+						return nil, fmt.Errorf("pending opted receipt lacks physical owners")
+					}
+					if err := add(r.ProfileOwners); err != nil {
+						return nil, err
+					}
+				}
+			}
+			for _, j := range open {
+				if j.ClientBindingID == key {
+					scope, err := kernel.bindingOwner(ctx, installation.InstallationID, key, b)
+					if err != nil {
+						return nil, err
+					}
+					if len(scope) > 0 {
+						found := false
+						for _, o := range j.ProfileOwners {
+							if o.InstallationID == installation.InstallationID && o.ClientBindingID == key && o.ClientID == b.ClientID && o.Namespace == b.ProfileNamespace && o.Authority != nil {
+								token, err := profileauthority.FromNeutral(*o.Authority)
+								found = err == nil && token.Equal(*b.ProfileAuthority)
+							}
+						}
+						if !found {
+							return nil, fmt.Errorf("opted journal differs from recorded physical owner")
+						}
+					}
+				}
+			}
+			if b.PendingNativeIntent != nil || b.NativeActivationAttempt != "" {
+				if b.PendingNativeIntent != nil {
+					if err := b.PendingNativeIntent.Validate(b); err != nil {
+						return nil, err
+					}
+				}
+				scope, err := kernel.bindingOwner(ctx, installation.InstallationID, key, b)
+				if err != nil {
+					return nil, err
+				}
+				if err := add(scope); err != nil {
+					return nil, err
 				}
 			}
 		}
 	}
-	return false
-}
-
-func requireMutationReady(store StateStore) error {
-	if guard, ok := store.(interface{ RequireMutationReady() error }); ok {
-		return guard.RequireMutationReady()
-	}
-	return nil
-}
-
-func operationGroupIDExists(state domain.StateFileV2, operationGroupID string) bool {
-	for _, receipt := range state.TransactionReceipts {
-		if receipt.OperationGroupID == operationGroupID {
-			return true
+	// The same owner may appear in several pending decisions; retain one immutable scope.
+	unique := map[[4]string]domain.PhysicalProfileOwner{}
+	for _, o := range owners {
+		key := [4]string{o.Namespace, o.InstallationID, o.ClientID, o.ClientBindingID}
+		if old, ok := unique[key]; ok && !domain.SameProfileAuthority(old.Authority, o.Authority) {
+			return nil, fmt.Errorf("pending owners disagree")
 		}
+		unique[key] = o
 	}
-	for _, installation := range state.Installations {
-		if installation.OperationGroupID == operationGroupID {
-			return true
-		}
-		for _, client := range installation.Clients {
-			for _, receipt := range client.Receipts {
-				if receipt.OperationGroupID == operationGroupID {
-					return true
-				}
-			}
-		}
+	owners = nil
+	for _, o := range unique {
+		owners = append(owners, o)
 	}
-	return false
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
+	return owners, nil
 }

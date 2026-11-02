@@ -15,12 +15,18 @@ var (
 
 // Activate reports manual preparation. A reload or operator attestation cannot
 // establish native discovery, CLI capability, or genuine Stop qualification.
-func (*Adapter) Activate(ctx context.Context, _ clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
+	}
+	if err := adapter.PreflightActivation(env, request); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if request.Plan.Scope == domain.ScopeProject {
+		return adapter.activateProject(ctx, env, request)
 	}
 	outcome := shared.StartedActivation(request)
 	outcome.Activation = domain.ActivationManual
@@ -35,9 +41,12 @@ func (*Adapter) Activate(ctx context.Context, _ clients.Env, request domain.Acti
 }
 
 // Deactivate has nothing to unwind: Cursor never received a managed CLI entry.
-func (*Adapter) Deactivate(ctx context.Context, _ clients.Env, _ domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.DeactivationOutcome{}, err
+	}
+	if request.TargetContext.Scope == domain.ScopeProject {
+		return deactivateCursorProject(ctx, env, request)
 	}
 	return shared.StartedDeactivation(), nil
 }

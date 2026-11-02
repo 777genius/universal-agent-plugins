@@ -84,10 +84,11 @@ var contractExternalModules = []string{
 // and stays permanently blind to a dependency gated behind any other
 // platform's file - exactly the class of drift this test exists to catch.
 // adapters/atomicfile is stdlib-only on every GOOS, including
-// syncdir_windows.go. GOARCH is fixed at amd64 because none of these
-// packages carry architecture-specific files today; CgoEnabled is off
-// because none use cgo.
-var platformSweep = []string{"linux", "darwin", "windows"}
+// syncdir_windows.go. Darwin arm64 includes the explicit Plain ExactFile
+// backend, so sweep it separately. CgoEnabled is off because none use cgo.
+var platformSweep = []struct{ os, arch string }{
+	{"linux", "amd64"}, {"darwin", "amd64"}, {"windows", "amd64"}, {"darwin", "arm64"},
+}
 
 // TestContractLayerDependencyClosure is the guard test from plan §12.1.G: it
 // fails the moment domain, ports, clients, or any package they already reach,
@@ -102,15 +103,15 @@ func TestContractLayerDependencyClosure(t *testing.T) {
 	closure := map[string]bool{}
 	external := map[string]bool{}
 
-	for _, goos := range platformSweep {
+	for _, platform := range platformSweep {
 		ctxt := build.Default
-		ctxt.GOOS = goos
-		ctxt.GOARCH = "amd64"
+		ctxt.GOOS = platform.os
+		ctxt.GOARCH = platform.arch
 		ctxt.CgoEnabled = false
 
 		snapshot, err := computeContractSnapshot(root, ctxt)
 		if err != nil {
-			t.Fatalf("GOOS=%s: %v", goos, err)
+			t.Fatalf("GOOS=%s GOARCH=%s: %v", platform.os, platform.arch, err)
 		}
 		for source, targets := range snapshot.nonTestEdges {
 			gotNonTestEdges[source] = append(gotNonTestEdges[source], targets...)

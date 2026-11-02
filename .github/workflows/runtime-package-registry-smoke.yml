@@ -21,7 +21,7 @@ on:
 jobs:
   resolve:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
       run_npm: ${{ steps.resolve.outputs.run_npm }}
@@ -79,7 +79,7 @@ jobs:
   npm-runtime-registry-smoke:
     needs: resolve
     if: needs.resolve.outputs.run_npm == '1'
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     env:
       TAG: ${{ needs.resolve.outputs.tag }}
     steps:
@@ -125,7 +125,7 @@ jobs:
   pypi-runtime-registry-smoke:
     needs: resolve
     if: needs.resolve.outputs.run_pypi == '1'
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     env:
       TAG: ${{ needs.resolve.outputs.tag }}
     steps:

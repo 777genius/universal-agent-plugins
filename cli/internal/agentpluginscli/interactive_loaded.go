@@ -96,8 +96,8 @@ func (session *loadedTargetSession) classify(client domain.DetectedClient) (doma
 	if err := prepareLoadedPackageForClient(&candidate, client.ClientID); err != nil {
 		return client, &targetSkip{client.ClientID, "package binding preparation failed; ask the package publisher to check its client mapping"}, false
 	}
-	plan, err := session.app.Planner.Plan(session.ctx, domain.PlanRequest{
-		Envelope: candidate.envelope, Client: client, Scope: domain.ScopeUser, PhysicalArtifactID: session.physicalID,
+	plan, err := session.app.Planner.Plan(session.ctx, domain.PlanRequest{ProjectRoot: session.app.ProjectRoot,
+		Envelope: candidate.envelope, Client: client, Scope: session.app.scope(), PhysicalArtifactID: session.physicalID,
 		Detected: session.clientMap,
 	})
 	if err != nil || plan.Status == domain.PlanUnsupported {
@@ -142,7 +142,7 @@ func (session *loadedTargetSession) preflight(client domain.DetectedClient, plan
 		return client, nil, true
 	}
 	err := session.preflighter.PreflightActivation(domain.ActivationRequest{
-		Client: client, Plan: plan, BackendExecutable: backendExecutable(client, session.clientMap), VerifyOnly: true,
+		Client: client, Plan: plan, BackendExecutable: backendExecutable(client, session.clientMap, session.app.scope()), VerifyOnly: true,
 	})
 	if err == nil {
 		return client, nil, true

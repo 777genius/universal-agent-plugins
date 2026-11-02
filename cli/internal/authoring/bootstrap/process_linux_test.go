@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/authoring/bootstrap"
+	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
 	"golang.org/x/sys/unix"
 )
 
@@ -120,6 +121,7 @@ func TestFinalVerificationToLaunchReplacementUsesCapturedStaging(t *testing.T) {
 }
 
 func TestDefaultRunnerKeepsCapturedStagingAndContainsSetsidDescendant(t *testing.T) {
+	requireOrdinaryBootstrapPreflight(t)
 	root, project := generated(t)
 	plan, err := (bootstrap.Service{}).Plan(root, project)
 	if err != nil {
@@ -332,6 +334,7 @@ func TestDefaultRunnerKeepsCapturedStagingAndContainsSetsidDescendant(t *testing
 }
 
 func TestDefaultRunnerExecutesOnlyLockedCommandWithSanitizedEnvironment(t *testing.T) {
+	requireOrdinaryBootstrapPreflight(t)
 	root, project := generated(t)
 	plan, err := (bootstrap.Service{}).Plan(root, project)
 	if err != nil {
@@ -393,6 +396,7 @@ test -z "${npm_config_proxy:-}"
 }
 
 func TestDefaultRunnerCancellationStopsDescendants(t *testing.T) {
+	requireOrdinaryBootstrapPreflight(t)
 	root, project := generated(t)
 	plan, err := (bootstrap.Service{}).Plan(root, project)
 	if err != nil {
@@ -949,4 +953,14 @@ func stopLinuxProcessHandle(handle linuxProcessHandle, timeout time.Duration) er
 func linuxPidfdAlive(pidfd int) bool {
 	err := unix.PidfdSendSignal(pidfd, 0, nil, 0)
 	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
+func requireOrdinaryBootstrapPreflight(t *testing.T) {
+	t.Helper()
+	if err := (processadapter.OS{}).OrdinaryPreflight(); err != nil {
+		if errors.Is(err, processadapter.ErrOrdinaryContainmentUnsupported) {
+			t.Skipf("ordinary containment runtime is not qualified on this host: %v", err)
+		}
+		t.Fatalf("ordinary containment preflight failed: %v", err)
+	}
 }

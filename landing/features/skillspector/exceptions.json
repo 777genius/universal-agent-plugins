@@ -1,0 +1,38 @@
+{
+  "source": {
+    "repository": "777genius/universal-agent-plugins-registry",
+    "revision": "4d7d8e075e1b0d899965496bacf2811be5d94091",
+    "path": "plugins/cloudflare/skills/cloudflare",
+    "content_digest": "sha256:3fc80ceeefbdc9ac0184a6188d6bb8fc1cba8133f92c854e3ad2d52c7f610d6d"
+  },
+  "scanner_revision": "f3b25697d76256998ca9d42c198d256258d4c035",
+  "reason": "This exact match names a Cloudflare static asset upload session. The surrounding heading or validity table describes uploading Worker assets, not agent conversation history. SkillSpector 2.13.1 E4 matches the words 'Upload Session' without requiring conversation context. This registry annotation retains the original finding.",
+  "exceptions": [
+    {
+      "id": "cloudflare-upload-session-heading-v1",
+      "path": "references/workers-for-platforms/api.md",
+      "line": 93,
+      "match_fingerprint": "d4f64bba95c41458d45421eebf46825971fb8098c1cd89a407143ab54d19206a",
+      "snippet_digest": "sha256:c188fd7050d743b445fc087519d6fcd33a0a8b25ebba4ef93910e47c5d65b754",
+      "code_snippet": "\n**3-step process:** Create session → Upload files → Deploy Worker\n\n### 1. Create Upload Session\n```bash\ncurl -X POST \".../scripts/$SCRIPT_NAME/assets-upload-session\" \\\n  -H \"Authorization: Bearer $API_TOKEN\" \\"
+    },
+    {
+      "id": "cloudflare-upload-session-validity-v1",
+      "path": "references/workers-for-platforms/gotchas.md",
+      "line": 110,
+      "match_fingerprint": "fdcf74bb61343ce2f2d1b6553c77e65339da98c0a7cd0d551f800df6468ba150",
+      "snippet_digest": "sha256:cf0cc64aa91db29ea06a9d9acdaea8b3ad912f1b444cffb65b2945b8eccbeca7",
+      "code_snippet": "\n| Limit | Value | Notes |\n|-------|-------|-------|\n| Upload session JWT validity | 1 hour | Must complete upload within this time |\n| Completion token validity | 1 hour | Must deploy within this time after upload |\n| Asset hash format | First 16 bytes SHA-256 | 32 hex characters |\n| Base64 encoding | Required | For binary files |"
+    }
+  ],
+  "profiles": [
+    {
+      "digest": "sha256:a73e7c4a9fa0ac563a885c541d207e90dde2e248ca426f7824cf429d725db921",
+      "id": "static-standard-v3"
+    },
+    {
+      "digest": "sha256:6dff52b5c0f60a670827c3fdaf08a7d8c14778a84900e4a1c961913c0d480407",
+      "id": "static-extended-v3"
+    }
+  ]
+}

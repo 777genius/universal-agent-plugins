@@ -106,6 +106,12 @@ func driftPackage(root string, target string) ([]string, error) {
 		}
 		if !artifactContentEqual(body, artifact.Content) {
 			drift = append(drift, artifact.RelPath)
+			continue
+		}
+		if mode := generatedArtifactMode(artifact.RelPath); mode != 0o644 {
+			if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(artifact.RelPath))); err != nil || info.Mode().Perm() != mode {
+				drift = append(drift, artifact.RelPath)
+			}
 		}
 	}
 	drift = append(drift, result.StalePaths...)

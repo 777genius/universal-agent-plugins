@@ -4,12 +4,17 @@ on:
   pull_request:
     branches: [main, master]
 
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
+concurrency:
+  group: dependency-review-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 permissions:
   contents: read
 
 jobs:
   dependency-review:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v6
 

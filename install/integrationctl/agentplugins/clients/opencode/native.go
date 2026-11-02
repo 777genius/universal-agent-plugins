@@ -8,20 +8,24 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 )
 
 const (
-	OpenCodeProjectionFile = ".agentplugins-opencode.json"
-	OpenCodeMCPObjectKind  = nativeconfig.OpenCodeMCPObjectKind
-	openCodeSkillKind      = "opencode_global_skill_directory"
+	OpenCodeProjectionFile  = ".agentplugins-opencode.json"
+	OpenCodeMCPObjectKind   = nativeconfig.OpenCodeMCPObjectKind
+	OpenCodeV2MCPObjectKind = nativeconfig.OpenCodeV2MCPObjectKind
+	openCodeSkillKind       = "opencode_global_skill_directory"
 )
 
 type OpenCodeProjection struct {
 	ResolvedCWD map[string]bool                `json:"resolved_cwd,omitempty"`
+	Dialect     opencodehost.Dialect           `json:"dialect,omitempty"`
 	Version     int                            `json:"version"`
 	ConfigPath  string                         `json:"config_path"`
 	ConfigJSON  string                         `json:"config_json"`
@@ -82,10 +86,13 @@ func decodeOpenCodeProjection(body []byte) (OpenCodeProjection, error) {
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.DisallowUnknownFields()
 	var projection OpenCodeProjection
-	if err := decoder.Decode(&projection); err != nil || projection.Version != 1 {
+	if err := decoder.Decode(&projection); err != nil {
 		return OpenCodeProjection{}, fmt.Errorf("decode OpenCode native projection")
 	}
 	if err := requireJSONEOF(decoder); err != nil {
+		return OpenCodeProjection{}, err
+	}
+	if _, err := projectionCodec(projection); err != nil {
 		return OpenCodeProjection{}, err
 	}
 	return projection, nil
@@ -131,20 +138,52 @@ func openCodeConfigPresence(configRoot string) (jsonExists, jsoncExists bool, er
 }
 
 func sameOpenCodeMCPObject(left, right domain.NativeObjectOwnership) bool {
-	return left.ObjectID == right.ObjectID && left.Kind == OpenCodeMCPObjectKind && right.Kind == OpenCodeMCPObjectKind &&
+	return left.ObjectID == right.ObjectID && left.Kind == right.Kind &&
 		left.LogicalName == right.LogicalName && shared.SameCleanPath(left.Path, right.Path) && left.ManagedDigest == right.ManagedDigest
 }
 
-func receiptFromOpenCodeObject(object domain.NativeObjectOwnership) nativeconfig.Receipt {
-	return nativeconfig.Receipt{Version: "1", Path: object.Path, Codec: nativeconfig.CodecOpenCode, Name: object.LogicalName, Digest: object.ManagedDigest}
+func receiptFromOpenCodeObject(object domain.NativeObjectOwnership) (nativeconfig.Receipt, error) {
+	codec, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind)
+	if err != nil {
+		return nativeconfig.Receipt{}, err
+	}
+	if !mcp {
+		return nativeconfig.Receipt{}, fmt.Errorf("OpenCode object is not an MCP receipt")
+	}
+	return nativeconfig.Receipt{Version: "1", Path: object.Path, Codec: codec, Name: object.LogicalName, Digest: object.ManagedDigest}, nil
 }
 
 func OpenCodeObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
 	var result []domain.NativeObjectOwnership
 	for _, object := range objects {
-		if object.Kind == OpenCodeMCPObjectKind || object.Kind == openCodeSkillKind {
+		if _, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind); mcp || err != nil || object.Kind == openCodeSkillKind {
 			result = append(result, object)
 		}
 	}
 	return result
+}
+
+// DesiredOpenCodeCodec reads only the immutable prepared profile. Missing or
+// unknown authority never selects a default dialect for desired effects.
+func DesiredOpenCodeCodec(host domain.OpenCodeHostAuthority) (nativeconfig.Codec, error) {
+	return clients.DesiredOpenCodeCodec(host)
+}
+func projectionCodec(projection OpenCodeProjection) (nativeconfig.Codec, error) {
+	switch projection.Version {
+	case 1:
+		if projection.Dialect != "" {
+			return "", fmt.Errorf("legacy OpenCode projection must not declare dialect")
+		}
+		return nativeconfig.CodecOpenCode, nil
+	case 2:
+		return nativeconfig.OpenCodeCodecForDialect(string(projection.Dialect))
+	default:
+		return "", fmt.Errorf("unknown OpenCode projection version")
+	}
+}
+func openCodeMCPKind(codec nativeconfig.Codec) string {
+	if codec == nativeconfig.CodecOpenCodeV2 {
+		return OpenCodeV2MCPObjectKind
+	}
+	return OpenCodeMCPObjectKind
 }

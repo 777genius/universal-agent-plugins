@@ -6,8 +6,8 @@ cd "$ROOT"
 
 source "$ROOT/scripts/version-contract.env"
 
-if [[ -z "${GO_SDK_VERSION:-}" || -z "${RUNTIME_PACKAGE_VERSION:-}" ]]; then
-  echo "version contract is incomplete; expected GO_SDK_VERSION and RUNTIME_PACKAGE_VERSION" >&2
+if [[ -z "${GO_SDK_VERSION:-}" || -z "${RUNTIME_PACKAGE_VERSION:-}" || -z "${GO_SDK_GUIDE_VERSION:-}" ]]; then
+  echo "version contract is incomplete; expected GO_SDK_VERSION, RUNTIME_PACKAGE_VERSION and GO_SDK_GUIDE_VERSION" >&2
   exit 1
 fi
 
@@ -26,13 +26,13 @@ check_rg_matches() {
   local out
   local status
   if command -v rg >/dev/null 2>&1; then
-    if out="$(env RG_GUARD_DISABLE=1 RIPGREP_CONFIG_PATH= rg --no-config -n -o -- "$pattern" "${files[@]}")"; then
+    if out="$(env RG_GUARD_DISABLE=1 RIPGREP_CONFIG_PATH= rg --no-config -H -n -o -- "$pattern" "${files[@]}")"; then
       status=0
     else
       status=$?
     fi
   else
-    if out="$(grep -n -E -o -- "$pattern" "${files[@]}" 2>/dev/null)"; then
+    if out="$(grep -H -n -E -o -- "$pattern" "${files[@]}" 2>/dev/null)"; then
       status=0
     else
       status=$?
@@ -58,7 +58,6 @@ check_rg_matches() {
 go_sdk_files=(
   README.md
   cli/README.md
-  sdk/README.md
   examples/starters/README.md
   examples/starters/codex-go-starter/README.md
   examples/starters/codex-go-starter/go.mod
@@ -93,6 +92,7 @@ runtime_package_files=(
 
 check_rg_matches "Go SDK direct module refs" 'github\.com/777genius/plugin-kit-ai/sdk@v[0-9]+\.[0-9]+\.[0-9]+' "github.com/777genius/plugin-kit-ai/sdk@${GO_SDK_VERSION}" "${go_sdk_files[@]}"
 check_rg_matches "Go SDK go.mod refs" 'github\.com/777genius/plugin-kit-ai/sdk v[0-9]+\.[0-9]+\.[0-9]+' "github.com/777genius/plugin-kit-ai/sdk ${GO_SDK_VERSION}" "${go_sdk_files[@]}"
+check_rg_matches "Go SDK guide module refs" 'github\.com/777genius/plugin-kit-ai/sdk@v[0-9]+\.[0-9]+\.[0-9]+' "github.com/777genius/plugin-kit-ai/sdk@${GO_SDK_GUIDE_VERSION}" sdk/README.md
 check_rg_matches "Runtime package command pins" '--runtime-package-version [0-9]+\.[0-9]+\.[0-9]+' "--runtime-package-version ${RUNTIME_PACKAGE_VERSION}" README.md cli/README.md docs/CHOOSING_HELPER_DELIVERY_MODE.md
 check_rg_matches "Runtime package pip pins" 'plugin-kit-ai-runtime==[0-9]+\.[0-9]+\.[0-9]+' "plugin-kit-ai-runtime==${RUNTIME_PACKAGE_VERSION}" "${runtime_package_files[@]}"
 check_rg_matches "Runtime package npm pins" 'plugin-kit-ai-runtime@[0-9]+\.[0-9]+\.[0-9]+' "plugin-kit-ai-runtime@${RUNTIME_PACKAGE_VERSION}" "${runtime_package_files[@]}"

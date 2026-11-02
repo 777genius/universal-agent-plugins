@@ -11,6 +11,15 @@
   "Objects": [
     {
       "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
       "Kind": "managed_package_directory",
       "LogicalName": "demo",
       "ManagedDigest": "${ARTIFACT}",
@@ -22,6 +31,15 @@
     },
     {
       "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
       "Kind": "windsurf_mcp_entry",
       "LogicalName": "notion",
       "ManagedDigest": "sha256:4443d4d779f26274dc224b786b09ca4c43840ed93d35b2a17bf41e686dc77e0c",

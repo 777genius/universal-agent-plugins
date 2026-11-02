@@ -1,0 +1,7 @@
+{
+  "description": "Qoder packaged plugin example",
+  "mcpServers": "./.mcp.json",
+  "name": "qoder-basic",
+  "skills": "./skills/",
+  "version": "0.1.0"
+}

@@ -33,7 +33,7 @@ func reconcileInstalledInfo(ctx context.Context, app App, installation domain.In
 			}
 		}
 	}
-	clients, err := detectClientsForInfoReconciliation(ctx, app.Detector, probeTargets)
+	clients, err := detectClientsForInfoReconciliation(ctx, app.Detector, probeTargets, app.scope())
 	if err != nil {
 		return err
 	}
@@ -95,11 +95,11 @@ func bindingMatchesSelectedSurface(view publicClient, binding domain.ClientBindi
 
 func reconciliationClientsForBinding(binding domain.ClientBinding, detected map[domain.ClientID]domain.DetectedClient) (domain.DetectedClient, domain.DetectedClient, bool) {
 	owner := domain.ClientID(binding.ClientID)
-	if !sharesPhysicalBackend(owner) {
+	if !sharesPhysicalBackend(owner, domain.InstallScope(binding.Scope)) {
 		client, ok := detected[owner]
 		return client, client, ok
 	}
-	registryOwner := nativeCLIRegistryOwner(owner)
+	registryOwner := nativeCLIRegistryOwner(owner, domain.InstallScope(binding.Scope))
 	copilot, ok := detected[registryOwner]
 	if !ok || copilot.Status != domain.DetectionDetected || strings.TrimSpace(copilot.ExecutablePath) == "" {
 		return domain.DetectedClient{ClientID: owner}, domain.DetectedClient{ClientID: owner}, false
@@ -118,10 +118,10 @@ type clientIdentityReconciliation struct {
 	evidence                  *publicNativeDiscoveryEvidence
 }
 
-func detectClientsForInfoReconciliation(ctx context.Context, detector ports.ClientDetector, targets []domain.ClientID) ([]domain.DetectedClient, error) {
+func detectClientsForInfoReconciliation(ctx context.Context, detector ports.ClientDetector, targets []domain.ClientID, scopes ...domain.InstallScope) ([]domain.DetectedClient, error) {
 	probeSet := make(map[domain.ClientID]struct{}, len(targets))
 	for _, target := range targets {
-		probeSet[nativeCLIRegistryOwner(target)] = struct{}{}
+		probeSet[nativeCLIRegistryOwner(target, scopes...)] = struct{}{}
 	}
 	probeTargets := make([]domain.ClientID, 0, len(probeSet))
 	for target := range probeSet {
@@ -165,7 +165,7 @@ func reconcileClientIdentity(ctx context.Context, app App, installation domain.I
 		ClientID:      bindingClient.ClientID, Scope: domain.InstallScope(binding.Scope), DeclaredName: installation.DeclaredName,
 		DeclaredVersion:    declaredVersion,
 		PhysicalArtifactID: expectedArtifact, TargetAnchor: target.TargetAnchor, TargetRoot: target.TargetRoot, ActivePath: target.ActivePath,
-		NativeRegistryRoot: observerClient.ConfigRoot, NativeRegistryExecutable: observerClient.ExecutablePath,
+		TargetContext: target.TargetContext, NativeRegistryRoot: target.NativeRegistryRoot, NativeRegistryExecutable: observerClient.ExecutablePath,
 	}
 	observation, observeErr := app.Lifecycle.NativeObserver.ObserveNativeIdentity(ctx, observerClient, plan, &binding)
 	result.receiptReconciled = observation.ReceiptReconciled
@@ -177,7 +177,7 @@ func reconcileClientIdentity(ctx context.Context, app App, installation domain.I
 		return result
 	}
 	if observation.NativeDiscoveryAttempted {
-		result.evidence = nativeCommandEvidence(observerClient, installation.DeclaredName, expectedArtifact, result.clientVersion, result.nativeDiscoveryReconciled)
+		result.evidence = nativeCommandEvidence(observerClient, installation.DeclaredName, expectedArtifact, result.clientVersion, result.nativeDiscoveryReconciled, domain.InstallScope(binding.Scope))
 	}
 	if result.state == domain.NativeIdentityManaged && !result.nativeDiscoveryReconciled && observation.NativeDiscoveryState != "" {
 		result.state = observation.NativeDiscoveryState
@@ -221,12 +221,12 @@ func hasReconciledOwnershipReceipt(binding domain.ClientBinding, physicalArtifac
 	return latestSequence > 0 && latestDigest == digest && latestPhase == "committed"
 }
 
-func nativeCommandEvidence(client domain.DetectedClient, declaredName, physicalArtifact, version string, discovered bool) *publicNativeDiscoveryEvidence {
-	if !sharesPhysicalBackend(client.ClientID) ||
+func nativeCommandEvidence(client domain.DetectedClient, declaredName, physicalArtifact, version string, discovered bool, scopes ...domain.InstallScope) *publicNativeDiscoveryEvidence {
+	if !sharesPhysicalBackend(client.ClientID, scopes...) ||
 		strings.TrimSpace(client.ExecutablePath) == "" || strings.TrimSpace(physicalArtifact) == "" {
 		return nil
 	}
-	cli := string(nativeCLIRegistryOwner(client.ClientID))
+	cli := string(nativeCLIRegistryOwner(client.ClientID, scopes...))
 	return &publicNativeDiscoveryEvidence{
 		Basis: "native_client_command",
 		VersionOperation: publicVersionOperation{

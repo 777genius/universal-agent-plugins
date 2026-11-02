@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -481,5 +482,47 @@ func TestClaudeMissingHelperRetainsPreviouslySelectedStdio(t *testing.T) {
 	}}
 	if err := service.preflightComponents(envelope, &plan, true, map[string]bool{"local": true, "remote": true}); err == nil || !strings.Contains(err.Error(), "retaining the entire installed package") {
 		t.Fatalf("previous selection silently withdrawn: %v", err)
+	}
+}
+
+func TestStdioPreflightReservedEnvironmentPlatformAliases(t *testing.T) {
+	for _, env := range []any{
+		map[string]any{"plugin_root": "foreign"},
+		map[string]string{"plugin_data": "foreign"},
+	} {
+		err := rejectReservedStdioEnv(map[string]any{"env": env})
+		if runtime.GOOS == "windows" {
+			if err == nil || !strings.Contains(err.Error(), "stdio environment defines reserved") {
+				t.Fatalf("Windows preflight accepted a reserved environment alias: %v", err)
+			}
+		} else if err != nil {
+			t.Fatalf("Unix preflight rejected a distinct lowercase key: %v", err)
+		}
+	}
+}
+
+func TestStdioReservedAliasPreservesHealthySkillEndToEnd(t *testing.T) {
+	service, _, client := serviceFixture(t)
+	input := clinePackageInput(t, client, "1.0.0", "sha256:alias-tree", "sha256:alias-manifest", "sh")
+	server := input.Envelope.MCP.Servers["docs"]
+	server.Decoded["env"] = map[string]any{"plugin_root": "foreign"}
+	input.Envelope.MCP.Servers["docs"] = server
+	input.Confirmed = true
+
+	result, err := service.Add(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(result.Plan.ActivePath, "skills", "docs", "SKILL.md")); err != nil {
+		t.Fatalf("healthy Skill was not installed: %v", err)
+	}
+	selected := domain.SelectedMCPNames(result.Plan)
+	if runtime.GOOS == "windows" {
+		if len(selected) != 0 || len(result.Plan.Diagnostics) != 1 ||
+			result.Plan.Diagnostics[0].Code != "stdio_reserved_environment" {
+			t.Fatalf("Windows alias did not skip only its MCP server: selected=%v diagnostics=%+v", selected, result.Plan.Diagnostics)
+		}
+	} else if len(selected) != 1 || selected[0] != "docs" {
+		t.Fatalf("Unix distinct lowercase key incorrectly skipped MCP: %v", selected)
 	}
 }

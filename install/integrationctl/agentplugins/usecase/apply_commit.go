@@ -42,6 +42,10 @@ func (session *applySession) stageAndCommit() (AddResult, error) {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return session.result, fmt.Errorf("MCP namespace changed before commit: %w", err)
 	}
+	if err := session.service.revalidateHost(session.ctx, session.input.Client); err != nil {
+		_ = session.service.Stager.Discard(context.Background(), delivery)
+		return session.result, err
+	}
 	previousClient := domain.ClientBinding{}
 	if session.existing {
 		previousClient = session.state.Installations[session.installationIndex].Clients[session.clientBindingID]
@@ -77,7 +81,7 @@ func (session *applySession) prepareCommitResources() (operationID string, dataR
 }
 
 func (session *applySession) stageOwnedDelivery(operationID string, dataReceipt domain.DataReceipt, dataCreated bool) (domain.StagedDelivery, error) {
-	delivery, err := session.service.stagePackage(session.ctx, session.input.Envelope, session.plan, operationID, session.input.Hints, dataReceipt.Locator)
+	delivery, err := session.service.stagePackage(session.ctx, session.input.Envelope, cloneLocalObservationPlan(session.plan), operationID, session.input.Hints, dataReceipt.Locator)
 	if err != nil {
 		if dataCreated {
 			_ = session.service.PluginData.PurgeData(context.Background(), dataReceipt)
@@ -85,6 +89,9 @@ func (session *applySession) stageOwnedDelivery(operationID string, dataReceipt 
 		return domain.StagedDelivery{}, err
 	}
 	delivery, err = bindStagedDeliveryToPhysicalOwner(delivery, session.plan, session.managedBinding)
+	if err == nil && session.managedBinding != nil {
+		delivery.NativeObjects, err = retainRecordedLocalSelector(session.plan.SelectedDelivery, *session.managedBinding, delivery.NativeObjects)
+	}
 	if err != nil {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		if dataCreated {
@@ -92,11 +99,24 @@ func (session *applySession) stageOwnedDelivery(operationID string, dataReceipt 
 		}
 		return domain.StagedDelivery{}, err
 	}
+	if err := sealStagedSelection(&session.plan, delivery); err != nil {
+		_ = session.service.Stager.Discard(context.Background(), delivery)
+		if dataCreated {
+			_ = session.service.PluginData.PurgeData(context.Background(), dataReceipt)
+		}
+		return domain.StagedDelivery{}, err
+	}
+	session.result.Plan = session.plan
 	return delivery, nil
 }
 
 func (session *applySession) bindDataReceipt(dataReceipt *domain.DataReceipt) {
 	session.state, session.installationIndex = upsertPreparedInstallation(session.state, session.installationIndex, session.existing, session.input, session.plan, session.installationID, session.clientBindingID, session.sourceBindingID, session.service.now())
+	if session.input.EnvironmentAuthority != nil {
+		_ = transaction.UpsertEnvironmentReceipt(&session.state, session.input.EnvironmentAuthority, session.installationID,
+			session.clientBindingID, firstEnvironmentSourceKey(session.input.EnvironmentAuthority, session.sourceBindingID), session.input.Envelope.TreeDigest, session.plan.ProfileAuthority(),
+			"committed")
+	}
 	if dataReceipt.DataReceiptID == "" {
 		for _, retained := range session.state.Installations[session.installationIndex].DataReceipts {
 			if retained.PhysicalBackend == session.plan.PhysicalArtifactID && retained.Scope == string(session.input.Scope) {
@@ -118,6 +138,7 @@ func (session *applySession) bindDataReceipt(dataReceipt *domain.DataReceipt) {
 	installation.Clients[session.clientBindingID] = client
 	installation.DataRetained = false
 	session.state.Installations[session.installationIndex] = installation
+
 }
 
 func (session *applySession) commitDirectory(operationID string, delivery domain.StagedDelivery, previousClient domain.ClientBinding) error {
@@ -147,6 +168,7 @@ func (session *applySession) commitDirectory(operationID string, delivery domain
 		Verify: func(verifyContext context.Context, activePath string) error {
 			return session.service.Stager.Verify(verifyContext, activePath, delivery.ArtifactDigest)
 		},
+		EnvironmentAuthority: session.input.EnvironmentAuthority,
 	})
 	session.result.Receipt = receipt
 	if applyErr != nil {
@@ -157,6 +179,7 @@ func (session *applySession) commitDirectory(operationID string, delivery domain
 }
 
 func (session *applySession) activateCommitted(delivery domain.StagedDelivery, previousClient domain.ClientBinding) (AddResult, error) {
+	previousObservation := session.plan.LocalEntryObservation.Clone()
 	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installationID, session.clientBindingID, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.plan, Delivery: domain.StagedDelivery{
 			ClientID: delivery.ClientID, OwnedBase: delivery.OwnedBase, ActivePath: delivery.ActivePath,
@@ -176,7 +199,7 @@ func (session *applySession) activateCommitted(delivery domain.StagedDelivery, p
 		}
 		session.result.Activation = outcome
 	}
-	if _, updateErr := session.service.updateActivationResult(session.installationID, session.clientBindingID, outcome, activationErr, previousClient.NativeObjects); updateErr != nil {
+	if _, updateErr := session.service.updateActivationResultWithObservation(session.installationID, session.clientBindingID, outcome, activationErr, previousClient.NativeObjects, previousObservation); updateErr != nil {
 		if activationErr != nil {
 			return session.result, fmt.Errorf("activate client: %w; persist activation state: %w", activationErr, updateErr)
 		}

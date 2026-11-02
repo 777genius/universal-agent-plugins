@@ -24,10 +24,15 @@ const (
 var fullLowercaseSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 type Store struct {
-	Path string
+	// ProjectRoot is operational context; machine state copied across projects is rejected.
+	ProjectRoot string `json:"-"`
+	Path        string
 }
 
 func (store Store) SchemaVersion() (int, error) {
+	if err := store.validateProjectPaths(); err != nil {
+		return 0, err
+	}
 	body, err := os.ReadFile(store.Path)
 	if os.IsNotExist(err) {
 		return domain.StateSchemaVersion, nil
@@ -39,7 +44,7 @@ func (store Store) SchemaVersion() (int, error) {
 		SchemaVersion int `json:"schema_version"`
 	}
 	if err := json.Unmarshal(body, &header); err != nil {
-		return 0, fmt.Errorf("decode state header: %w", err)
+		return 0, fmt.Errorf("%w: decode state header: %w", ErrStateCorrupt, err)
 	}
 	return header.SchemaVersion, nil
 }
@@ -49,16 +54,31 @@ func (store Store) RequireMutationReady() error {
 	if err != nil {
 		return err
 	}
-	if version == domain.LegacyStateSchemaVersion || version == domain.PreviousStateSchemaVersion {
-		return fmt.Errorf("state schema %d requires explicit migration; run agentplugins migrate-state --dry-run, then agentplugins migrate-state", version)
+	if version >= domain.LegacyStateSchemaVersion && version < domain.StateSchemaVersion {
+		return &MigrationRequiredError{SourceSchema: version, TargetSchema: domain.StateSchemaVersion}
 	}
 	if version != domain.StateSchemaVersion {
-		return fmt.Errorf("unsupported state schema_version %d", version)
+		return &UnsupportedStateSchemaError{SourceSchema: version, TargetSchema: domain.StateSchemaVersion}
 	}
 	return nil
 }
 
+func managedBindingDigest(binding domain.ClientBinding) string {
+	if binding.PackageRevision != nil && binding.PackageRevision.TreeDigest != "" {
+		return binding.PackageRevision.TreeDigest
+	}
+	for _, object := range binding.NativeObjects {
+		if object.ManagedDigest != "" {
+			return object.ManagedDigest
+		}
+	}
+	return ""
+}
+
 func (store Store) Load() (domain.StateFileV2, error) {
+	if err := store.validateProjectPaths(); err != nil {
+		return domain.StateFileV2{}, err
+	}
 	if strings.TrimSpace(store.Path) == "" {
 		return domain.StateFileV2{}, fmt.Errorf("state v2 path is required")
 	}
@@ -73,7 +93,7 @@ func (store Store) Load() (domain.StateFileV2, error) {
 		SchemaVersion int `json:"schema_version"`
 	}
 	if err := json.Unmarshal(body, &header); err != nil {
-		return domain.StateFileV2{}, fmt.Errorf("decode state v2 header: %w", err)
+		return domain.StateFileV2{}, fmt.Errorf("%w: decode state v2 header: %w", ErrStateCorrupt, err)
 	}
 	var state domain.StateFileV2
 	switch header.SchemaVersion {
@@ -83,21 +103,34 @@ func (store Store) Load() (domain.StateFileV2, error) {
 	case domain.PreviousStateSchemaVersion:
 		state, err = decodeLegacyStateV3(body)
 		normalizeCurrentState(&state)
+	case domain.PreviousStateSchemaV4:
+		err = decodeStrictJSON(body, &state)
+		if len(state.EnvironmentReceipts) != 0 {
+			return domain.StateFileV2{}, fmt.Errorf("%w: schema 4 cannot contain environment ownership", ErrStateCorrupt)
+		}
+		state.SchemaVersion = domain.StateSchemaVersion
+		normalizeCurrentState(&state)
 	case domain.StateSchemaVersion:
 		err = decodeStrictJSON(body, &state)
 	default:
-		return domain.StateFileV2{}, fmt.Errorf("unsupported state schema_version %d; this build reads %d, %d, and %d and writes only %d", header.SchemaVersion, domain.LegacyStateSchemaVersion, domain.PreviousStateSchemaVersion, domain.StateSchemaVersion, domain.StateSchemaVersion)
+		return domain.StateFileV2{}, &UnsupportedStateSchemaError{SourceSchema: header.SchemaVersion, TargetSchema: domain.StateSchemaVersion}
 	}
 	if err != nil {
-		return domain.StateFileV2{}, err
+		return domain.StateFileV2{}, fmt.Errorf("%w: %w", ErrStateCorrupt, err)
 	}
 	if err := Validate(state); err != nil {
-		return domain.StateFileV2{}, fmt.Errorf("validate state: %w", err)
+		return domain.StateFileV2{}, fmt.Errorf("%w: validate state: %w", ErrStateCorrupt, err)
+	}
+	if err := store.validateProject(state); err != nil {
+		return domain.StateFileV2{}, err
 	}
 	return state, nil
 }
 
 func (store Store) Save(state domain.StateFileV2) error {
+	if err := store.validateProjectPaths(); err != nil {
+		return err
+	}
 	if strings.TrimSpace(store.Path) == "" {
 		return fmt.Errorf("state v2 path is required")
 	}
@@ -107,6 +140,9 @@ func (store Store) Save(state domain.StateFileV2) error {
 	normalizeCurrentState(&state)
 	if err := Validate(state); err != nil {
 		return fmt.Errorf("refuse invalid state: %w", err)
+	}
+	if err := store.validateProject(state); err != nil {
+		return err
 	}
 	state.Installations = append([]domain.Installation(nil), state.Installations...)
 	sort.Slice(state.Installations, func(i, j int) bool {
@@ -144,6 +180,9 @@ func normalizeCurrentState(state *domain.StateFileV2) {
 }
 
 func decodeStrictJSON(body []byte, target any) error {
+	if err := rejectShadowedObservations(body); err != nil {
+		return err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
@@ -163,6 +202,48 @@ func Validate(state domain.StateFileV2) error {
 	sourceBindingIDs := map[string]struct{}{}
 	clientBindingIDs := map[string]struct{}{}
 	operationIDs := map[string]struct{}{}
+	environmentKeys := map[string]struct{}{}
+	environmentBindings := map[string]struct{}{}
+	installationsByID := make(map[string]domain.Installation, len(state.Installations))
+	clientBindingsByID := make(map[string]domain.ClientBinding)
+	for _, installation := range state.Installations {
+		installationsByID[installation.InstallationID] = installation
+		for _, client := range installation.Clients {
+			clientBindingsByID[client.ClientBindingID] = client
+		}
+	}
+	for index, receipt := range state.EnvironmentReceipts {
+		prefix := fmt.Sprintf("environment_receipts[%d]", index)
+		if receipt.ReceiptID == "" || receipt.EnvironmentID == "" || receipt.Alias == "" || receipt.ClientID == "" ||
+			receipt.InstallationID == "" || receipt.ClientBindingID == "" || receipt.SourceKey == "" ||
+			receipt.PackageDigest == "" || receipt.DesiredAction == "" || receipt.Phase == "" {
+			return fmt.Errorf("%s is incomplete", prefix)
+		}
+		key := receipt.EnvironmentID + "\x00" + receipt.Alias + "\x00" + receipt.ClientID
+		if _, duplicate := environmentKeys[key]; duplicate {
+			return fmt.Errorf("duplicate environment receipt for %s/%s/%s", receipt.EnvironmentID, receipt.Alias, receipt.ClientID)
+		}
+		environmentKeys[key] = struct{}{}
+		if _, duplicate := environmentBindings[receipt.ClientBindingID]; duplicate {
+			return fmt.Errorf("%s binding has multiple environment owners", prefix)
+		}
+		environmentBindings[receipt.ClientBindingID] = struct{}{}
+
+		installation, ok := installationsByID[receipt.InstallationID]
+		if !ok {
+			return fmt.Errorf("%s references unknown installation", prefix)
+		}
+		binding, ok := clientBindingsByID[receipt.ClientBindingID]
+		if !ok || binding.ClientID != receipt.ClientID || installation.Clients[binding.ClientBindingID].ClientBindingID != binding.ClientBindingID {
+			return fmt.Errorf("%s references unknown client binding", prefix)
+		}
+		if receipt.SourceKey != installedSourceKey(installation) {
+			return fmt.Errorf("%s source key does not match installed identity", prefix)
+		}
+		if receipt.PackageDigest != installation.Source.TreeDigest && receipt.PackageDigest != managedBindingDigest(binding) {
+			return fmt.Errorf("%s package digest does not match installed state", prefix)
+		}
+	}
 	for index, installation := range state.Installations {
 		if mapping := installation.LocalChatGPTMapping; mapping != nil {
 			if err := mapping.Validate(); err != nil && !mapping.IsLegacyContext7Registration() {
@@ -265,6 +346,9 @@ func Validate(state domain.StateFileV2) error {
 			}
 		}
 		for mapKey, client := range installation.Clients {
+			if err := validateObservationLinkage(client); err != nil {
+				return err
+			}
 			if mapKey == "" || mapKey != client.ClientBindingID {
 				return fmt.Errorf("%s client map key does not match client_binding_id", prefix)
 			}
@@ -276,7 +360,9 @@ func Validate(state domain.StateFileV2) error {
 			}
 			clientBindingIDs[client.ClientBindingID] = struct{}{}
 			if client.InstallIntent == domain.InstallIntentPrepare && client.Scope != string(domain.ScopeUser) {
-				return fmt.Errorf("prepare binding requires user scope")
+				if client.Scope != string(domain.ScopeProject) || !(domain.SelectedDelivery{}).EffectiveTraitsForScope(domain.ClientID(client.ClientID), domain.ScopeProject).Allows(domain.InstallIntentPrepare) {
+					return fmt.Errorf("prepare binding requires a supported scope")
+				}
 			}
 			if err := client.InstallIntent.Validate(domain.ClientID(client.ClientID)); err != nil {
 				return err
@@ -358,8 +444,14 @@ func Validate(state domain.StateFileV2) error {
 		if err := pathpolicy.ValidateLeafID(receipt.OperationID); err != nil {
 			return fmt.Errorf("%s has invalid operation id: %w", prefix, err)
 		}
-		if strings.TrimSpace(receipt.ClientBindingID) == "" || receipt.Sequence < 1 || strings.TrimSpace(receipt.MutationType) == "" {
+		sharedData := receipt.ClientBindingID == "" && receipt.DataReceiptID != "" && receipt.MutationType == "directory_remove" && len(receipt.ProfileOwners) > 0 && len(receipt.DirectoryProof) > 0
+		if (strings.TrimSpace(receipt.ClientBindingID) == "" && !sharedData) || receipt.Sequence < 1 || strings.TrimSpace(receipt.MutationType) == "" {
 			return fmt.Errorf("%s is incomplete", prefix)
+		}
+		if receipt.DataReceiptID != "" {
+			if err := pathpolicy.ValidateLeafID(receipt.DataReceiptID); err != nil {
+				return fmt.Errorf("%s has invalid data receipt id: %w", prefix, err)
+			}
 		}
 		if !validReceiptPhase(receipt.Phase) {
 			return fmt.Errorf("%s has invalid phase %q", prefix, receipt.Phase)
@@ -375,70 +467,4 @@ func Validate(state domain.StateFileV2) error {
 		operationIDs[receipt.OperationID] = struct{}{}
 	}
 	return nil
-}
-
-func validReceiptPhase(value string) bool {
-	return value == receiptPhaseStateCommitted || value == receiptPhaseCommitted
-}
-
-func validMaterializationState(value domain.MaterializationState) bool {
-	switch value {
-	case domain.MaterializationAbsent,
-		domain.MaterializationStaged,
-		domain.MaterializationMaterialized,
-		domain.MaterializationDegraded:
-		return true
-	default:
-		return false
-	}
-}
-
-func validActivationState(value domain.ActivationState) bool {
-	switch value {
-	case domain.ActivationNotRequired,
-		domain.ActivationPrepared,
-		domain.ActivationManual,
-		domain.ActivationActive,
-		domain.ActivationFailed:
-		return true
-	default:
-		return false
-	}
-}
-
-func validAuthenticationState(value domain.AuthenticationState) bool {
-	switch value {
-	case domain.AuthenticationNotRequired,
-		domain.AuthenticationNotChecked,
-		domain.AuthenticationPending,
-		domain.AuthenticationComplete,
-		domain.AuthenticationFailed:
-		return true
-	default:
-		return false
-	}
-}
-
-func validPolicyState(value domain.PolicyState) bool {
-	switch value {
-	case domain.PolicyAllowed,
-		domain.PolicyBlocked,
-		domain.PolicyApprovalRequired:
-		return true
-	default:
-		return false
-	}
-}
-
-func validVerificationState(value domain.VerificationState) bool {
-	switch value {
-	case domain.VerificationNotRun,
-		domain.VerificationPackageValid,
-		domain.VerificationInstalled,
-		domain.VerificationRuntime,
-		domain.VerificationFailed:
-		return true
-	default:
-		return false
-	}
 }

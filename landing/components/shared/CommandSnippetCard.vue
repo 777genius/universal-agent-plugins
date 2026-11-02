@@ -34,10 +34,13 @@ const fallbackCopy = async (text: string) => {
   textarea.setAttribute('readonly', '');
   textarea.style.position = 'absolute';
   textarea.style.left = '-9999px';
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand('copy');
-  document.body.removeChild(textarea);
+  try {
+    document.body.appendChild(textarea);
+    textarea.select();
+    return document.execCommand('copy');
+  } finally {
+    textarea.remove();
+  }
 };
 
 const copyCommand = async () => {
@@ -45,22 +48,27 @@ const copyCommand = async () => {
     return;
   }
 
+  copied.value = false;
+  if (copiedTimer) clearTimeout(copiedTimer);
   const text = props.command.trim();
-
+  let success = false;
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
-    } else {
-      await fallbackCopy(text);
+      success = true;
     }
   } catch {
-    await fallbackCopy(text);
+    // Try the browser's legacy copy path when clipboard access is denied.
   }
-
+  if (!success) {
+    try {
+      success = await fallbackCopy(text);
+    } catch {
+      return;
+    }
+  }
+  if (!success) return;
   copied.value = true;
-  if (copiedTimer) {
-    clearTimeout(copiedTimer);
-  }
   copiedTimer = setTimeout(() => {
     copied.value = false;
   }, 1800);

@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import re
 import tarfile
 import tempfile
 import sys
@@ -15,6 +16,9 @@ import zipfile
 SPEC = importlib.util.spec_from_file_location("native_matrix", Path(__file__).with_name("run-native-client-matrix.py"))
 matrix = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(matrix)
+RELEASED_SPEC = importlib.util.spec_from_file_location("released_native_evidence", Path(__file__).with_name("verify-released-native-evidence.py"))
+released = importlib.util.module_from_spec(RELEASED_SPEC)
+RELEASED_SPEC.loader.exec_module(released)
 
 
 class NativeMatrixTests(unittest.TestCase):
@@ -112,11 +116,100 @@ class NativeMatrixTests(unittest.TestCase):
     def test_extended_runtime_is_required_for_opencode_proof(self):
         self.assertIn("TestAgentpluginsOpenCodeNativeRuntimeExtended", matrix.REQUIRED_TESTS["opencode"])
 
+    def test_command_lifecycle_is_required_for_every_client(self):
+        for client, test in {"codex": "TestAgentpluginsCodexNativeCommandsLifecycle",
+                             "claude": "TestAgentpluginsClaudeNativeCommandsLifecycle",
+                             "opencode": "TestAgentpluginsOpenCodeNativeCommandsLifecycle"}.items():
+            self.assertIn(test, matrix.REQUIRED_TESTS[client])
+
+    def test_patterns_select_exactly_the_required_tests(self):
+        # The Go suite is the source of truth: a pattern that misses a required
+        # test fails the run late, and one that selects an unrequired test lets
+        # a skip or an unreviewed test into the proof.
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual(set(matrix.PATTERNS), set(matrix.REQUIRED_TESTS))
+        self.assertEqual(released.CLIENT_TESTS, matrix.REQUIRED_TESTS)
+        for client, pattern in matrix.PATTERNS.items():
+            self.assertTrue(pattern.startswith("^") and pattern.endswith("$"), client)
+            selected = {name for name in declared if re.search(pattern, name)}
+            self.assertEqual(selected, matrix.REQUIRED_TESTS[client], client)
+
     def test_runtime_rejects_ambient_and_self_hosted_machine(self):
         for env in [{}, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "self-hosted", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}]:
             with patch.dict(matrix.os.environ, env, clear=True):
                 with self.assertRaises(RuntimeError):
                     matrix.require_hosted("darwin-arm64")
+
+    def test_source_project_proof_selects_exact_required_codex_tests(self):
+        pattern, required = matrix.select_native_tests("codex", project_components=True)
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual(required, matrix.REQUIRED_TESTS["codex"] | matrix.PROJECT_TESTS["codex"])
+        self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
+        self.assertNotIn("TestAgentpluginsCodexNativeProjectComponentsLifecycle", released.CLIENT_TESTS["codex"])
+        self.assertNotIn("TestAgentpluginsCodexNativeTrustedProjectMCP", released.CLIENT_TESTS["codex"])
+
+    def test_source_project_proof_selects_exact_required_claude_tests(self):
+        pattern, required = matrix.select_native_tests("claude", project_components=True)
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual(required, matrix.REQUIRED_TESTS["claude"] | matrix.PROJECT_TESTS["claude"])
+        self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
+        self.assertNotIn("TestAgentpluginsClaudeNativeProjectPreparedLifecycle", released.CLIENT_TESTS["claude"])
+        self.assertNotIn("TestAgentpluginsClaudeNativeTrustedProjectDiscovery", released.CLIENT_TESTS["claude"])
+
+    def test_opencode_v2_is_separate_from_unchanged_v1_native_matrix(self):
+        v1_pattern, v1_required = matrix.select_native_tests("opencode", project_components=True)
+        v2_pattern, v2_required = matrix.select_native_tests(
+            "opencode", project_components=True, opencode_generation="v2")
+        self.assertEqual(v2_required, {
+            "TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle",
+            "TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake",
+        })
+        self.assertIn("TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle", v2_pattern)
+        self.assertIn("TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake", v2_pattern)
+        self.assertEqual(v1_required, matrix.REQUIRED_TESTS["opencode"] | matrix.PROJECT_TESTS["opencode"])
+        self.assertNotIn("TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake", v1_pattern)
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual({name for name in declared if re.search(v2_pattern, name)}, v2_required)
+        self.assertNotEqual(v1_pattern, v2_pattern)
+        for target, pin in matrix.OPENCODE_V2_PINS.items():
+            self.assertIn(target, matrix.PINS)
+            self.assertEqual(pin[:3], ("github", "anomalyco/opencode", "v2.2.5"))
+            self.assertEqual(pin[-1], "opencode.exe" if target.startswith("windows") else "opencode")
+            matrix.require_verified_pin(pin[4])
+            self.assertNotEqual(pin, matrix.PINS[target]["opencode"])
+        for bad in [
+            ("claude", True, False), ("codex", True, False),
+            ("opencode", False, False), ("opencode", True, True),
+        ]:
+            with self.assertRaisesRegex(ValueError, "V2 qualification requires"):
+                matrix.select_native_tests(*bad, opencode_generation="v2")
+
+    def test_source_project_proof_selects_exact_required_opencode_tests(self):
+        pattern, required = matrix.select_native_tests("opencode", project_components=True)
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual(required, matrix.REQUIRED_TESTS["opencode"] | {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"})
+        self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
+        self.assertNotIn("TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle", released.CLIENT_TESTS["opencode"])
+
+    def test_source_project_proof_rejects_released_and_unsupported_clients(self):
+        for client in matrix.PROJECT_TESTS:
+            with self.assertRaises(ValueError):
+                matrix.select_native_tests(client, project_components=True, released=True)
+        for client in set(matrix.REQUIRED_TESTS) - set(matrix.PROJECT_TESTS):
+            with self.assertRaises(ValueError):
+                matrix.select_native_tests(client, project_components=True)
+        for client in matrix.REQUIRED_TESTS:
+            self.assertEqual(matrix.select_native_tests(client), (matrix.PATTERNS[client], matrix.REQUIRED_TESTS[client]))
 
     def test_target_must_be_native(self):
         env = {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}

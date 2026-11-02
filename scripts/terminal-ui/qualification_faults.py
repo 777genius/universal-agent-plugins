@@ -66,6 +66,10 @@ def unix_case(binary, case, root, evidence, timeout):
         session.wait(r'QUALIFICATION_REUSE_READY', 'same-process-reuse')
         check(termios.tcgetattr(session.slave) == session.before,
               'terminal modes not restored before inherited input reuse')
+        # Only now release the next read owner. On Darwin a fresh ReadLine
+        # toggles PENDIN until its own cleanup; starting it before this
+        # pre-input assertion made a restored previous owner appear broken.
+        Path(str(trigger) + '.reuse').write_text('modes-checked\n')
         session.send(b'qualification-reuse\n')
         session.wait(r'QUALIFICATION_REUSE_OK', 'same-process-reused')
         session.finish()

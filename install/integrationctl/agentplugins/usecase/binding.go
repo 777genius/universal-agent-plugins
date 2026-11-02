@@ -268,7 +268,8 @@ func (service Service) commitBindingChange(state domain.StateFileV2, index int, 
 
 func sourceBindingFromEnvelope(envelope domain.PackageEnvelope, sourceID string) domain.SourceBinding {
 	return domain.SourceBinding{
-		SourceBindingID: sourceID, RequestedSource: envelope.Source.RequestedSource,
+		StableSourceKey: envelope.Source.StableSourceKey, SourceBindingID: sourceID, RequestedSource: envelope.Source.RequestedSource,
+		SourceKind: envelope.Source.SourceKind, SourceURL: envelope.Source.SourceURL, ArchiveSHA256: envelope.Source.ArchiveSHA256,
 		CanonicalSource: envelope.Source.CanonicalSource, Repository: envelope.Source.Repository,
 		PackageSubpath: envelope.Source.PackageSubpath, ResolvedRevision: envelope.Source.ResolvedRevision,
 		TreeDigest: envelope.TreeDigest,

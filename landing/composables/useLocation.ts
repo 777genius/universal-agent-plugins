@@ -37,8 +37,8 @@ export async function switchLocaleTransaction(code: unknown, adapter: {
   try {
     const path = adapter.destination(code);
     if (!path) throw new Error('Missing localized route');
-    // i18n 9 catches loader rejection and resolves with an empty dictionary.
-    // Preflight through its supported API, then inspect the target directly:
+    // A failed lazy load can be logged as a warning without throwing.
+    // Preflight through the supported API, then inspect the target directly:
     // translated-key lookup could succeed through the English fallback.
     await adapter.loadMessages(code);
     if (!Object.keys(adapter.messages(code)).length) throw new Error('Locale messages unavailable');

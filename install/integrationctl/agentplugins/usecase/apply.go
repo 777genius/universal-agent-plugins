@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 // applySession carries the locals apply() used to thread through one add or
@@ -94,6 +95,28 @@ func (session *applySession) resolveInstallation() error {
 }
 
 func (session *applySession) validateApplyTransitions() error {
+	action, allowCreate := "install", true
+	if session.replace {
+		action, allowCreate = "update", false
+	}
+	bindingID := ""
+	if session.existing {
+		for _, binding := range session.state.Installations[session.installationIndex].Clients {
+			if binding.ClientID == string(session.input.Client.ClientID) {
+				bindingID = binding.ClientBindingID
+				allowCreate = false
+				break
+			}
+		}
+	}
+	guardInstallationID := session.installationID
+	if !session.existing {
+		guardInstallationID = ""
+	}
+	if err := transaction.AuthorizeEnvironmentMutation(session.state, session.input.EnvironmentAuthority, action,
+		guardInstallationID, bindingID, session.sourceBindingID, allowCreate); err != nil {
+		return err
+	}
 	if err := session.validateExistingPackage(); err != nil {
 		return err
 	}
@@ -108,14 +131,15 @@ func (session *applySession) validateExistingPackage() error {
 	// update" diagnostic. A same-release digest conflict is a supply-chain
 	// failure regardless of whether the caller happened to be adding a target.
 	installation := session.state.Installations[session.installationIndex]
-	if err := validatePackageTransition(installation, session.input.Envelope); err != nil {
+	managedDirect := managedDirectSource(installation, session.input)
+	if err := validatePackageTransition(installation, session.input.Envelope); err != nil && !managedDirect {
 		return err
 	}
 	if err := validateDirectoryTransition(installation, session.input); err != nil {
 		return err
 	}
 	if session.replace {
-		if installation.OriginMode == domain.OriginModeDirect && immutableDirectGit(installation.Source) {
+		if installation.OriginMode == domain.OriginModeDirect && immutableDirectGit(installation.Source) && !managedDirect {
 			return fmt.Errorf("direct full-SHA installations have no update channel; use switch --to with a new full SHA")
 		}
 		return nil
@@ -172,7 +196,7 @@ func (session *applySession) planAndPreflight() error {
 	}
 	session.plan = plan
 	session.result.Plan = plan
-	return rejectNativeNameCollision(session.state, session.installationID, session.input.Envelope.Manifest.Name, session.input.Client.ClientID)
+	return rejectNativeNameCollision(session.state, session.installationID, session.input.Envelope.Manifest.Name, session.input.Client.ClientID, session.input.Scope)
 }
 
 func (session *applySession) resolveBinding() error {
@@ -182,7 +206,7 @@ func (session *applySession) resolveBinding() error {
 	session.registrationMigration = session.existing && session.input.Envelope.LocalChatGPTMapping != nil && session.state.Installations[session.installationIndex].LocalChatGPTMapping != nil && session.state.Installations[session.installationIndex].LocalChatGPTMapping.IsLegacyContext7Registration() && *session.state.Installations[session.installationIndex].LocalChatGPTMapping != *session.input.Envelope.LocalChatGPTMapping
 	if session.isMaterialized {
 		binding := session.state.Installations[session.installationIndex].Clients[session.clientBindingID]
-		if err := validateNativeBinding(binding, session.input.Client); err != nil {
+		if err := session.service.validateNativeBinding(session.ctx, binding, session.input.Client); err != nil {
 			return err
 		}
 		session.managedBinding = &binding
@@ -202,11 +226,11 @@ func (session *applySession) resolveBinding() error {
 }
 
 func (session *applySession) adoptSharedBinding() {
-	if !session.existing || !sharesPhysicalBackend(session.input.Client.ClientID) {
+	if !session.existing || !sharesPhysicalBackend(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
 		return
 	}
 	for key, binding := range session.state.Installations[session.installationIndex].Clients {
-		if binding.Scope != string(session.input.Scope) || binding.Materialization == domain.MaterializationAbsent || binding.PhysicalArtifact != session.plan.PhysicalArtifactID || !sameNativeBackend(domain.ClientID(binding.ClientID), session.input.Client.ClientID) {
+		if binding.Scope != string(session.input.Scope) || binding.Materialization == domain.MaterializationAbsent || binding.PhysicalArtifact != session.plan.PhysicalArtifactID || !sameNativeBackend(domain.ClientID(binding.ClientID), session.input.Client.ClientID, session.input.Scope) {
 			continue
 		}
 		session.clientBindingID = key
@@ -243,6 +267,11 @@ func (session *applySession) dryRunPath() (AddResult, error) {
 		if !session.replace && !packageRevisionMatches(current.PackageRevision, session.input.Envelope) {
 			return session.result, fmt.Errorf("plugin is already materialized for %s at a different revision; use update", session.input.Client.ClientID)
 		}
+		if !session.replace {
+			if err := session.service.requireCurrentCommandProjection(session.ctx, session.input, session.plan, session.state.Installations[session.installationIndex], current); err != nil {
+				return session.result, err
+			}
+		}
 		session.result.NoChange = !session.replace && !session.registrationMigration && lifecycleConverged(current)
 	}
 	return session.result, nil
@@ -271,7 +300,7 @@ func (session *applySession) noChangeOrResume() (bool, AddResult, error) {
 		if err := session.service.observeNativeIdentity(session.ctx, session.input.Client, session.plan, session.managedBinding); err != nil {
 			return true, session.result, err
 		}
-		if !requiresComponentRemoval(session.plan) && packageRevisionMatches(previousClient.PackageRevision, session.input.Envelope) && previousClient.PackageRevision.ResolvedRevision == session.input.Envelope.Source.ResolvedRevision {
+		if !session.registrationMigration && !session.plan.RequiresNativeProjectionRefresh() && !requiresComponentRemoval(session.plan) && packageRevisionMatches(previousClient.PackageRevision, session.input.Envelope) && previousClient.PackageRevision.ResolvedRevision == session.input.Envelope.Source.ResolvedRevision {
 			return session.finishExistingLifecycle(previousClient, "")
 		}
 	}
@@ -298,12 +327,12 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 			return true, session.result, err
 		}
 	}
-	if nativeLifecycleClient(session.input.Client.ClientID) {
-		_, complete, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.state.Installations[session.installationIndex], current)
+	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
+		_, complete, _, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.state.Installations[session.installationIndex], current)
 		if err != nil {
 			return true, session.result, err
 		}
-		if !complete || current.NativeActivationAttempt != "" {
+		if !complete || current.NativeActivationAttempt != "" || current.PendingNativeIntent != nil {
 			result, err := session.service.resume(session.ctx, session.input, session.result, session.installationID, session.clientBindingID, current)
 			return true, result, err
 		}
@@ -312,8 +341,18 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 }
 
 func (session *applySession) persistReadOnlyObservation(current domain.ClientBinding) (bool, AddResult, error) {
+	if !session.result.Plan.SelectedDelivery.IsZero() {
+		plan, err := session.service.readOnlyObservationPlan(current, session.result.Plan)
+		if err != nil {
+			return true, session.result, err
+		}
+		session.result.Plan = plan
+	}
 	verified, verifyErr := session.service.verifyClientReadOnly(session.ctx, session.input, session.result, current)
 	if verifyErr != nil {
+		if retainPreparedProjectVerificationFailure(&session.result, verified, verifyErr) {
+			return true, session.result, verifyErr
+		}
 		if verified.Activation != "" && !session.input.DryRun && (session.input.Confirmed || session.input.PersistAuthoritativeObservations && verified.AuthoritativeObservation) {
 			session.result.Activation = verified
 			changed, updateErr := session.service.persistAuthoritativeObservation(session.ctx, session.input, session.installationID, session.clientBindingID, current, verified)

@@ -78,7 +78,9 @@ func TestWindowsAncestorEpochBoundary(t *testing.T) {
 				if boundary == "outside" {
 					bootstrapCheck(t, "outside-root sibling must not invalidate acquisition", err)
 					// All retained records still participate in global verification.
+					recordIndex := 0
 					for _, o := range s.records {
+						recordIndex++
 						if os.SameFile(identity, o.info) {
 							data, e := (&pinned{file: o.file, info: o.info}).reopen(true)
 							if data != nil {
@@ -89,7 +91,9 @@ func TestWindowsAncestorEpochBoundary(t *testing.T) {
 							}
 						}
 						if !same(o.info, o.info) {
-							t.Fatal("retained record failed verification")
+							current, metadataErr := winMeta(o.file)
+							t.Fatalf("retained record failed verification: index=%d name=%q traversalOnly=%t recorded=%+v current=%+v metadataErr=%v",
+								recordIndex, o.info.Name(), o.traversalOnly, o.meta, current, metadataErr)
 						}
 					}
 					p, err := s.pin("sub/original", false)
@@ -172,12 +176,25 @@ func TestWindowsAncestorEpochMetadataGuards(t *testing.T) {
 		func(b *winSnapshot) { b.Attributes |= windows.FILE_ATTRIBUTE_REPARSE_POINT },
 		func(b *winSnapshot) { b.Attributes |= windows.FILE_ATTRIBUTE_OFFLINE },
 		func(b *winSnapshot) { b.Attributes |= windows.FILE_ATTRIBUTE_RECALL_ON_OPEN },
-		func(b *winSnapshot) { b.Size++ }, func(b *winSnapshot) { b.Creation++ },
+		func(b *winSnapshot) { b.Creation++ },
 	} {
 		b := a
 		mutate(&b)
 		if winUnchanged(a, b, true) {
 			t.Fatalf("ancestor metadata guard weakened: %+v", b)
+		}
+	}
+	// An ancestor's directory index can grow without changing its held identity.
+	sized := a
+	sized.Size = 8192
+	if !winUnchanged(a, sized, true) || winUnchanged(a, sized, false) {
+		t.Fatal("directory index size lost traversal/source boundary")
+	}
+	for _, attributes := range []uint32{0, windows.FILE_ATTRIBUTE_DIRECTORY | windows.FILE_ATTRIBUTE_REPARSE_POINT} {
+		original, changed := a, sized
+		original.Attributes, changed.Attributes = attributes, attributes
+		if winUnchanged(original, changed, true) {
+			t.Fatal("file or reparse gained directory index size exception")
 		}
 	}
 	b := a

@@ -10,6 +10,9 @@ translationRequired: true
 
 # Build a remote MCP package
 
+**Source-build authoring:** commands on this page require the
+[authoring-enabled source build](./#build-from-source). The current installer
+release does not include `agentplugins author`.
 
 Choose remote MCP when the server already exists and the package should describe
 how an agent connects to it. Authoring records the URL without contacting it.
@@ -23,7 +26,7 @@ Replace it with your service's real MCP endpoint when preparing your own package
 The authoring command accepts the URL as configuration; it does not verify that
 the address serves MCP or that your account can use it.
 
-Run the released authoring command:
+With the authoring-enabled source build:
 
 ```bash
 agentplugins author init ./docs-service \

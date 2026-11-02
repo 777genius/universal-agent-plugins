@@ -18,6 +18,9 @@ var (
 // takes MCP servers through its local configuration, while skills stay in the
 // prepared package and are never reported as activated.
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if in.TargetContext.Scope == domain.ScopeProject || plan.Scope == domain.ScopeProject {
+		return refineProjectPlan(in, plan)
+	}
 	hasMCP := shared.ComponentKindPresent(plan.Components, domain.ComponentMCPServer)
 	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, hasMCP)
 	action := "select exactly one legacy Windsurf channel and import the prepared MCP configuration manually"

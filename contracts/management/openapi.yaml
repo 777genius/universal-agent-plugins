@@ -1,0 +1,1568 @@
+# Canonical editable management wire contract. Regenerate Go and TS models after changes.
+openapi: 3.0.3
+info:
+  title: UAP Management API
+  version: 1.0.0
+  description: One process captures one immutable host context. All endpoints require the private bootstrap
+    bearer capability and the exact bootstrap Origin. Arrays in responses are never null. Prepared authority
+    and installation effects remain in Go; DTOs are diagnostic. New optional response fields may be added
+    within v1.
+security:
+- sessionCapability: []
+paths:
+  /api/v1/session:
+    get:
+      operationId: getSession
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/catalog:
+    get:
+      operationId: getCatalog
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Catalog'
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: query
+        in: query
+        schema:
+          type: string
+          maxLength: 256
+  /api/v1/catalog/{id}:
+    get:
+      operationId: getCatalogEntry
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogEntry'
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 256
+          minLength: 1
+  /api/v1/skills/catalog:
+    post:
+      operationId: discoverSkills
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillCatalog'
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceRequest'
+  /api/v1/environment:
+    get:
+      operationId: getEnvironment
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Environment'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/environment/check-updates:
+    post:
+      operationId: checkUpdates
+      description: Explicit read-only network check. Source and graph facts are observations;
+        a complete candidate still requires a fresh mutation review. Does not persist freshness.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCheckRequest'
+      responses:
+        '200':
+          description: Complete or unavailable update check with per-entry facts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateCheck'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/plans:
+    post:
+      operationId: preparePlan
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeRequest'
+  /api/v1/plans/{id}/apply:
+    post:
+      operationId: applyPlan
+      responses:
+        '202':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyRequest'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 256
+          minLength: 1
+      description: Accept the retained plan. Deduplicate a previously accepted request before checking
+        whether its plan still exists. Same request and plan return its existing operation; different
+        input conflicts.
+  /api/v1/operations/{id}:
+    get:
+      operationId: getOperation
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 256
+          minLength: 1
+  /api/v1/operations/{id}/cancel:
+    post:
+      operationId: cancelOperation
+      responses:
+        default:
+          $ref: '#/components/responses/Error'
+        '202':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 256
+          minLength: 1
+      description: Request cooperative cancellation. Completion may win the race. This does not promise
+        rollback; observe the returned operation and poll for its terminal outcome.
+  /api/v1/skills/catalog/{catalogId}:
+    delete:
+      operationId: discardSkillCatalog
+      description: Release a discovery session and its source workspace when its dialog closes or the source changes. Already absent catalogs return 204. Independently prepared plans remain valid.
+      parameters:
+      - name: catalogId
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 256
+      responses:
+        '204':
+          description: Discovery session released or already absent.
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/skills/catalog/{catalogId}/candidates/{candidateId}/preview:
+    get:
+      operationId: getSkillPreview
+      parameters:
+      - name: catalogId
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 256
+      - name: candidateId
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 256
+      responses:
+        '200':
+          description: Read-only preview of a retained Skill candidate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillPreview'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/plans/{id}:
+    delete:
+      operationId: discardPlan
+      description: Release an unaccepted retained review and its acquired source resources. Absent or
+        already discarded plans return 204. Accepted plans return 409; their durable operation is observed
+        separately.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 256
+      responses:
+        '204':
+          description: Review released or already absent.
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/skills/local/plans:
+    post:
+      operationId: prepareLocalSkillPlan
+      description: 'Prepare bounded local authoring changes. Returns an ordinary opaque plan: use the
+        shared apply, discard, operation, and cancellation routes. JSON body is bounded to 16 MiB; at
+        most 200 changes and 10 MiB decoded replacement bytes.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalSkillRequest'
+      responses:
+        '200':
+          description: A retained local Skill review.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    sessionCapability:
+      type: http
+      scheme: bearer
+      description: Private 256-bit capability from the stdout bootstrap. Never put in URLs, command arguments,
+        renderer state or logs.
+  responses:
+    Error:
+      description: Request refused or observation failed. No assumption about effects of an earlier accepted
+        request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+  schemas:
+    ProtocolVersion:
+      type: integer
+      enum:
+      - 1
+    ChangeAction:
+      type: string
+      enum:
+      - install
+      - install_skills
+      - update
+      - sync
+      - repair
+      - remove
+      - recover
+      - local_skill
+    Scope:
+      type: string
+      enum:
+      - user
+      - project
+      - local
+    DetectionStatus:
+      type: string
+      enum:
+      - detected
+      - not_detected
+      x-enum-varnames:
+      - ClientDetected
+      - ClientNotDetected
+    StartupTarget:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - client
+      - configRoot
+      properties:
+        id:
+          type: string
+          maxLength: 256
+          minLength: 1
+        client:
+          type: string
+          maxLength: 128
+          minLength: 1
+        configRoot:
+          type: string
+          maxLength: 4096
+          minLength: 1
+        executable:
+          type: string
+          maxLength: 4096
+          x-go-type-skip-optional-pointer: true
+        detectionStatus:
+          $ref: '#/components/schemas/DetectionStatus'
+          x-go-type-skip-optional-pointer: true
+          description: Optional passive discovery observation. Omission preserves explicit host capture
+            behavior. A not_detected profile retains inspection and removal authority but cannot be
+            selected for a new installation.
+    DiscoveredTarget:
+      type: object
+      additionalProperties: false
+      required:
+      - client
+      - label
+      - detectionStatus
+      - available
+      properties:
+        client:
+          type: string
+          maxLength: 128
+          minLength: 1
+        label:
+          type: string
+          maxLength: 256
+          minLength: 1
+        detectionStatus:
+          $ref: '#/components/schemas/DetectionStatus'
+        available:
+          type: boolean
+        reason:
+          type: string
+          maxLength: 4096
+          x-go-type-skip-optional-pointer: true
+        profile:
+          $ref: '#/components/schemas/StartupTarget'
+      description: Private host observation. A profile is emitted only for a qualified user-scope
+        client whose authority could be canonicalized safely, including when it is not currently
+        detected. Missing profiles are display-only observations and must never become startup
+        authority. Labels and reasons contain static application-owned guidance.
+    TargetDiscovery:
+      type: object
+      additionalProperties: false
+      required:
+      - apiVersion
+      - engineVersion
+      - targets
+      properties:
+        apiVersion:
+          $ref: '#/components/schemas/ProtocolVersion'
+        engineVersion:
+          type: string
+          maxLength: 128
+          minLength: 1
+        targets:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/DiscoveredTarget'
+      description: One bounded JSON document from the Node-only manage discover subprocess. No
+        client, root, executable or project inputs are accepted. The owning host keeps private
+        profile locators out of renderer state and logs. Discovery never executes a client,
+        probes versions, acquires sources or writes client/UAP state. This is not an HTTP response.
+    Startup:
+      type: object
+      additionalProperties: false
+      required:
+      - scope
+      - targets
+      properties:
+        contextId:
+          type: string
+          maxLength: 256
+          minLength: 1
+          x-go-type-skip-optional-pointer: true
+          description: Optional host label. The authoritative contextId returned by the engine is derived
+            from captured roots and targets, not from this label.
+        stateRoot:
+          type: string
+          maxLength: 4096
+          minLength: 1
+          x-go-type-skip-optional-pointer: true
+          description: Optional absolute override for isolated or alternate environments. Omission resolves
+            the canonical existing UAP home in the Go executable composition, never in an SDK.
+        dependenciesRoot:
+          type: string
+          maxLength: 4096
+          minLength: 1
+          x-go-type-skip-optional-pointer: true
+          description: Optional absolute override for isolated or alternate environments. Omission resolves
+            the canonical existing UAP home in the Go executable composition, never in an SDK.
+        scope:
+          $ref: '#/components/schemas/Scope'
+        projectRoot:
+          type: string
+          maxLength: 4096
+          x-go-type-skip-optional-pointer: true
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/StartupTarget'
+          minItems: 1
+          maxItems: 128
+        authoringRoots:
+          type: array
+          maxItems: 64
+          items:
+            $ref: '#/components/schemas/LocalSkillRoot'
+          x-go-type-skip-optional-pointer: true
+      description: Trusted host configuration, sent as one bounded JSON line on stdin before bootstrap.
+        Roots and executable paths are absolute. Targets are captured for this process; one target per
+        client in v1. Unsupported scopes fail explicitly. This is not an HTTP request.
+    Bootstrap:
+      type: object
+      additionalProperties: false
+      required:
+      - apiVersion
+      - url
+      - origin
+      - token
+      - engineVersion
+      - contextId
+      properties:
+        apiVersion:
+          $ref: '#/components/schemas/ProtocolVersion'
+        url:
+          type: string
+          maxLength: 256
+        origin:
+          type: string
+          maxLength: 256
+        token:
+          type: string
+          maxLength: 128
+          minLength: 32
+        engineVersion:
+          type: string
+          maxLength: 128
+          minLength: 1
+        contextId:
+          type: string
+          maxLength: 256
+          minLength: 1
+      description: Exactly one private JSON line on stdout. URL and Origin are the same IPv4 loopback
+        origin with an ephemeral port. No token in the URL. The owning host keeps stdin open; EOF requests
+        graceful shutdown. Never forward this document to a renderer or logs.
+    Capability:
+      type: object
+      additionalProperties: false
+      required:
+      - action
+      - supported
+      properties:
+        action:
+          type: string
+          maxLength: 128
+          minLength: 1
+        supported:
+          type: boolean
+        reason:
+          type: string
+          maxLength: 4096
+          x-go-type-skip-optional-pointer: true
+    Target:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - client
+      - label
+      - scope
+      - displayPath
+      - available
+      properties:
+        id:
+          type: string
+          maxLength: 256
+          minLength: 1
+        client:
+          type: string
+          maxLength: 128
+        label:
+          type: string
+          maxLength: 256
+        scope:
+          $ref: '#/components/schemas/Scope'
+        displayPath:
+          type: string
+          maxLength: 4096
+        available:
+          type: boolean
+        detectionStatus:
+          $ref: '#/components/schemas/DetectionStatus'
+          x-go-type-skip-optional-pointer: true
+        reason:
+          type: string
+          maxLength: 4096
+          x-go-type-skip-optional-pointer: true
+    Session:
+      type: object
+      additionalProperties: false
+      required:
+      - apiVersion
+      - engineVersion
+      - contextId
+      - scope
+      - targets
+      - capabilities
+      - environmentId
+      properties:
+        apiVersion:
+          $ref: '#/components/schemas/ProtocolVersion'
+        engineVersion:
+          type: string
+          maxLength: 128
+        contextId:
+          type: string
+          maxLength: 256
+          minLength: 1
+        scope:
+          $ref: '#/components/schemas/Scope'
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Target'
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Capability'
+        environmentId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Stable engine-derived identity of the mutation environment. Changes to target labels
+            or executable paths do not hide retained operations. contextId identifies the immutable capture
+            used for this session or operation.
+        authoringRoots:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocalSkillRoot'
+          x-go-type-skip-optional-pointer: true
+    Diagnostic:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - message
+      - severity
+      properties:
+        code:
+          type: string
+          maxLength: 128
+        message:
+          type: string
+          maxLength: 4096
+        severity:
+          type: string
+          enum:
+          - info
+          - warning
+          - error
+        alias:
+          type: string
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+        targetId:
+          type: string
+          maxLength: 256
+          minLength: 1
+          x-go-type-skip-optional-pointer: true
+    CatalogEntry:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - name
+      - description
+      - kind
+      - source
+      - targets
+      - available
+      properties:
+        id:
+          type: string
+          maxLength: 256
+          minLength: 1
+        name:
+          type: string
+          maxLength: 256
+        description:
+          type: string
+          maxLength: 4096
+        kind:
+          type: string
+          enum:
+          - plugin
+          - skill
+        source:
+          type: string
+          maxLength: 2048
+        version:
+          type: string
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+        distributionId:
+          type: string
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+        targets:
+          type: array
+          items:
+            type: string
+            maxLength: 128
+        available:
+          type: boolean
+        reason:
+          type: string
+          maxLength: 4096
+          x-go-type-skip-optional-pointer: true
+        readmeMarkdown:
+          type: string
+          maxLength: 1048576
+          x-go-type-skip-optional-pointer: true
+        homepage:
+          type: string
+          maxLength: 2048
+          x-go-type-skip-optional-pointer: true
+    Catalog:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - freshness
+      - diagnostics
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogEntry'
+        freshness:
+          type: string
+          enum:
+          - current
+          - cached
+          - unavailable
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/Diagnostic'
+      description: Verified directory results; unavailable freshness is never reported as current. Policy
+        refusals stay attached to entries.
+    SourceRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - source
+      properties:
+        source:
+          type: string
+          maxLength: 2048
+          minLength: 1
+        ref:
+          type: string
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+        path:
+          type: string
+          maxLength: 4096
+          x-go-type-skip-optional-pointer: true
+      description: A supported source reference, optional revision and relative Skill scope. No arbitrary
+        command execution.
+    SkillCandidate:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - name
+      - description
+      - path
+      - available
+      properties:
+        id:
+          type: string
+          maxLength: 256
+          minLength: 1
+        name:
+          type: string
+          maxLength: 256
+        description:
+          type: string
+          maxLength: 4096
+        path:
+          type: string
+          maxLength: 4096
+        available:
+          type: boolean
+        reason:
+          type: string
+          maxLength: 4096
+          x-go-type-skip-optional-pointer: true
+    SkillCatalog:
+      type: object
+      additionalProperties: false
+      required:
+      - catalogId
+      - source
+      - candidates
+      - diagnostics
+      properties:
+        catalogId:
+          type: string
+          maxLength: 256
+          minLength: 1
+        source:
+          type: string
+          maxLength: 2048
+        sourceRevision:
+          type: string
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/SkillCandidate'
+          maxItems: 2000
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/Diagnostic'
+    Readiness:
+      type: object
+      additionalProperties: false
+      required:
+      - materialization
+      - activation
+      - authentication
+      - policy
+      - verification
+      properties:
+        materialization:
+          type: string
+          maxLength: 128
+        activation:
+          type: string
+          maxLength: 128
+        authentication:
+          type: string
+          maxLength: 128
+        policy:
+          type: string
+          maxLength: 128
+        verification:
+          type: string
+          maxLength: 128
+    Binding:
+      type: object
+      additionalProperties: false
+      required:
+      - targetId
+      - client
+      - scope
+      - status
+      - managedPaths
+      properties:
+        targetId:
+          type: string
+          maxLength: 256
+          minLength: 1
+        client:
+          type: string
+          maxLength: 128
+        scope:
+          $ref: '#/components/schemas/Scope'
+        status:
+          type: string
+          maxLength: 128
+        managedPaths:
+          type: array
+          items:
+            type: string
+            maxLength: 4096
+        readiness:
+          $ref: '#/components/schemas/Readiness'
+      description: Managed paths come from authoritative installer ownership inspection. Hosts must not
+        infer ownership from a directory name.
+    EnvironmentEntry:
+      type: object
+      additionalProperties: false
+      required:
+      - alias
+      - kind
+      - source
+      - updateStatus
+      - bindings
+      - declared
+      properties:
+        alias:
+          type: string
+          maxLength: 256
+        kind:
+          type: string
+          enum:
+          - plugin
+          - skill
+        source:
+          type: string
+          maxLength: 2048
+        version:
+          type: string
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+        updateStatus:
+          type: string
+          enum:
+          - current
+          - available
+          - pinned
+          - blocked
+          - check_unavailable
+        bindings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Binding'
+        declared:
+          type: boolean
+          description: True when this alias is a directly declared manifest dependency. Transitive dependencies
+            are inspected here but changed through their declared parent.
+    Environment:
+      type: object
+      additionalProperties: false
+      required:
+      - contextId
+      - entries
+      - diagnostics
+      properties:
+        contextId:
+          type: string
+          maxLength: 256
+          minLength: 1
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/EnvironmentEntry'
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/Diagnostic'
+        pendingOperations:
+          type: array
+          description: Unresolved accepted work from the durable ledger, including interrupted or partially
+            failed work after restart; completed and explicitly reconciled history is omitted.
+          items:
+            $ref: '#/components/schemas/Operation'
+          x-go-type-skip-optional-pointer: true
+        localSkillBackups:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/LocalSkillBackup'
+          x-go-type-skip-optional-pointer: true
+          description: Up to 100 latest available local Skill backups from durable accepted-operation
+            observations. Display-only; restoring always prepares and revalidates the named retained backup.
+    ChangeRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - action
+      properties:
+        action:
+          $ref: '#/components/schemas/ChangeAction'
+        source:
+          type: string
+          maxLength: 2048
+          x-go-type-skip-optional-pointer: true
+        ref:
+          type: string
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+        alias:
+          type: string
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+        aliases:
+          type: array
+          items:
+            type: string
+            maxLength: 256
+          maxItems: 2000
+          uniqueItems: true
+          x-go-type-skip-optional-pointer: true
+        all:
+          type: boolean
+          x-go-type-skip-optional-pointer: true
+        targetIds:
+          type: array
+          items:
+            type: string
+            maxLength: 256
+            minLength: 1
+          maxItems: 128
+          uniqueItems: true
+          x-go-type-skip-optional-pointer: true
+        catalogId:
+          type: string
+          maxLength: 256
+          minLength: 1
+          x-go-type-skip-optional-pointer: true
+        candidateIds:
+          type: array
+          items:
+            type: string
+            maxLength: 256
+            minLength: 1
+          maxItems: 2000
+          uniqueItems: true
+          x-go-type-skip-optional-pointer: true
+        operationId:
+          type: string
+          maxLength: 256
+          minLength: 1
+          x-go-type-skip-optional-pointer: true
+        externalUninstalled:
+          type: boolean
+          x-go-type-skip-optional-pointer: true
+      description: Typed intent; action-specific combinations are validated by Go. install uses source/alias;
+        install_skills uses the retained catalogId and candidateIds; update uses aliases or all; sync
+        restores locked intent; repair/remove select aliases; recover uses an interrupted operationId
+        as a lookup hint, never as executable authority. targetIds refer only to captured startup targets.
+        externalUninstalled is an explicit host attestation, never an SDK default. Preparation has no
+        persistent installer effects.
+    PlanAction:
+      type: object
+      additionalProperties: false
+      required:
+      - action
+      - alias
+      - targetId
+      - description
+      properties:
+        action:
+          type: string
+          maxLength: 128
+        alias:
+          type: string
+          maxLength: 256
+        targetId:
+          type: string
+          maxLength: 256
+          minLength: 1
+        description:
+          type: string
+          maxLength: 4096
+        destinationPath:
+          type: string
+          maxLength: 4096
+          x-go-type-skip-optional-pointer: true
+        fromVersion:
+          type: string
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+        toVersion:
+          type: string
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+    Plan:
+      type: object
+      additionalProperties: false
+      required:
+      - planId
+      - contextId
+      - expiresAt
+      - action
+      - confirmable
+      - actions
+      - warnings
+      - conflicts
+      properties:
+        planId:
+          type: string
+          maxLength: 256
+          minLength: 1
+        contextId:
+          type: string
+          maxLength: 256
+          minLength: 1
+        expiresAt:
+          type: string
+          format: date-time
+        action:
+          $ref: '#/components/schemas/ChangeAction'
+        confirmable:
+          type: boolean
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanAction'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Diagnostic'
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Diagnostic'
+        restorePoint:
+          $ref: '#/components/schemas/LocalSkillBackup'
+          description: Selected retained local Skill backup, bound to the validated restore operation
+            and root/Skill identity. Display-only; the prepared backend remains the authority to restore.
+      description: Diagnostic review of a retained Go prepared object. Cannot be replayed as authority.
+        An unaccepted handle expires and is invalid after restart. Apply rechecks current facts.
+    ApplyRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - requestId
+      properties:
+        requestId:
+          type: string
+          maxLength: 128
+          minLength: 16
+          pattern: ^[A-Za-z0-9_-]+$
+      description: Caller-generated stable ID, e.g. a UUID. Retain it before apply. Repeat the same accepted
+        request to recover a lost response; never generate another ID automatically. Deduplication precedes
+        plan lookup/expiry checks. Different accepted input conflicts.
+    NextAction:
+      type: object
+      additionalProperties: false
+      required:
+      - kind
+      - reason
+      properties:
+        kind:
+          type: string
+          maxLength: 128
+        reason:
+          type: string
+          maxLength: 4096
+        targetId:
+          type: string
+          maxLength: 256
+          minLength: 1
+          x-go-type-skip-optional-pointer: true
+        alias:
+          type: string
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+    OperationItem:
+      type: object
+      additionalProperties: false
+      required:
+      - alias
+      - targetId
+      - status
+      properties:
+        alias:
+          type: string
+          maxLength: 256
+        targetId:
+          type: string
+          maxLength: 256
+          minLength: 1
+        status:
+          type: string
+          maxLength: 128
+        message:
+          type: string
+          maxLength: 4096
+          x-go-type-skip-optional-pointer: true
+        destinationPath:
+          type: string
+          maxLength: 4096
+          x-go-type-skip-optional-pointer: true
+    OperationResult:
+      type: object
+      additionalProperties: false
+      required:
+      - outcome
+      - mutated
+      - items
+      - nextActions
+      - message
+      properties:
+        outcome:
+          type: string
+          maxLength: 128
+        mutated:
+          type: boolean
+        dataRetained:
+          type: boolean
+          x-go-type-skip-optional-pointer: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationItem'
+        nextActions:
+          type: array
+          items:
+            $ref: '#/components/schemas/NextAction'
+        message:
+          type: string
+          maxLength: 4096
+        localSkillBackup:
+          $ref: '#/components/schemas/LocalSkillBackup'
+      description: Authoritative result when effects are known. An interrupted operation with uncertain
+        effects omits result until inspected; mutated=false must never stand for unknown. Partial outcomes
+        do not imply global rollback.
+    Progress:
+      type: object
+      additionalProperties: false
+      required:
+      - phase
+      - message
+      - completed
+      - total
+      properties:
+        phase:
+          type: string
+          maxLength: 128
+        message:
+          type: string
+          maxLength: 4096
+        completed:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationItem'
+          x-go-type-skip-optional-pointer: true
+    OperationState:
+      type: string
+      enum:
+      - queued
+      - running
+      - succeeded
+      - partial
+      - failed
+      - canceled
+      - interrupted
+    Operation:
+      type: object
+      additionalProperties: false
+      required:
+      - operationId
+      - planId
+      - requestId
+      - contextId
+      - state
+      - phase
+      - completed
+      - total
+      - items
+      - diagnostics
+      - createdAt
+      - updatedAt
+      - environmentId
+      - action
+      properties:
+        operationId:
+          type: string
+          maxLength: 256
+          minLength: 1
+        planId:
+          type: string
+          maxLength: 256
+          minLength: 1
+        requestId:
+          type: string
+          maxLength: 256
+          minLength: 1
+        contextId:
+          type: string
+          maxLength: 256
+          minLength: 1
+        state:
+          $ref: '#/components/schemas/OperationState'
+        phase:
+          type: string
+          maxLength: 128
+        completed:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationItem'
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/Diagnostic'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        result:
+          $ref: '#/components/schemas/OperationResult'
+        resolvedBy:
+          type: string
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+          description: Operation ID of a later completed recovery that reconciles this historical unresolved
+            operation. Its original outcome is not rewritten.
+        environmentId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Stable engine-derived identity of the mutation environment. Changes to target labels
+            or executable paths do not hide retained operations. contextId identifies the immutable capture
+            used for this session or operation.
+        action:
+          $ref: '#/components/schemas/ChangeAction'
+        localSkill:
+          $ref: '#/components/schemas/LocalSkillIdentity'
+      description: Authoritative operation snapshot. Accepted work outlives its HTTP request. Waiting
+        cancellation does not cancel effects. interrupted requires fresh inspection/recovery, not automatic
+        replay. Records are retained at least 30 days; a full retained-record budget refuses new work
+        rather than dropping live identity.
+    APIError:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - message
+      - retryable
+      properties:
+        code:
+          type: string
+          maxLength: 128
+        message:
+          type: string
+          maxLength: 4096
+        retryable:
+          type: boolean
+      description: Structured failure before acceptance or while observing. retryable never authorizes
+        generating a fresh ID for an uncertain mutation.
+    SkillPreview:
+      type: object
+      additionalProperties: false
+      required:
+      - catalogId
+      - candidateId
+      - markdown
+      - diagnostics
+      properties:
+        catalogId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        candidateId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        markdown:
+          type: string
+          maxLength: 1048576
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/Diagnostic'
+    LocalSkillRoot:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - path
+      - scope
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        path:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        scope:
+          $ref: '#/components/schemas/Scope'
+        targetId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+      description: An explicit trusted-host Skill authoring root, captured on stdin before the session.
+        It is not accepted from an HTTP request. root IDs and paths cannot be changed inside a session.
+        Authoring scope may be user or project independently of the native installation scope; this does
+        not enable project-scope UAP installation.
+    LocalSkillFile:
+      type: object
+      additionalProperties: false
+      required:
+      - relativePath
+      - expectedSHA256
+      - contentBase64
+      properties:
+        relativePath:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        expectedSHA256:
+          type: string
+          nullable: true
+          pattern: ^[a-f0-9]{64}$
+          description: SHA-256 of the exact previously reviewed bytes; null requires absence.
+        contentBase64:
+          type: string
+          nullable: true
+          maxLength: 13981016
+          description: Base64 of exact replacement bytes; null removes the reviewed file. Total decoded
+            bytes across the request are bounded to 10 MiB.
+    LocalSkillRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - action
+      - rootId
+      - skillName
+      properties:
+        action:
+          type: string
+          enum:
+          - upsert
+          - delete
+          - restore
+        rootId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        skillName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        files:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/LocalSkillFile'
+          x-go-type-skip-optional-pointer: true
+        restoreOperationId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+      description: Review local authoring beneath one captured root. Upsert contains exact file changes;
+        delete snapshots the entire directory; restore references an engine-owned retained backup from
+        an earlier operation. Native UAP ownership is rechecked under the engine mutation lock at application.
+        A local authoring plan never changes uap.toml, uap.lock, or installation ownership.
+    LocalSkillBackup:
+      type: object
+      additionalProperties: false
+      required:
+      - operationId
+      - rootId
+      - skillName
+      - path
+      properties:
+        operationId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        rootId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        skillName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        path:
+          type: string
+          maxLength: 4096
+        recordedAt:
+          type: string
+          format: date-time
+          description: Time the original operation outcome was durably observed. For older records,
+            the retained operation's known updatedAt is used; omitted when no timestamp is available.
+        originalAction:
+          type: string
+          enum:
+          - upsert
+          - delete
+          - restore
+          x-enum-varnames:
+          - LocalSkillBackupOriginalActionUpsert
+          - LocalSkillBackupOriginalActionDelete
+          - LocalSkillBackupOriginalActionRestore
+          x-go-type-skip-optional-pointer: true
+          description: Original local action whose previous files this backup preserves. Omitted for
+            older records that did not retain the action; callers must not infer it from list order.
+      description: Engine-owned reversible copy of the previous local Skill. Restore uses operationId
+        and a fresh review; path is display-only and is never accepted as authority.
+    LocalSkillIdentity:
+      type: object
+      additionalProperties: false
+      required:
+      - rootId
+      - skillName
+      properties:
+        rootId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        skillName:
+          type: string
+          minLength: 1
+          maxLength: 255
+    UpdateCheckRequest:
+      type: object
+      additionalProperties: false
+      description: Select unique declared aliases or all; both and empty selection are invalid.
+      properties:
+        aliases:
+          type: array
+          maxItems: 2000
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+        all:
+          type: boolean
+          x-go-type-skip-optional-pointer: true
+    UpdateIdentity:
+      type: object
+      additionalProperties: false
+      required: [version, revision, treeDigest, manifestDigest]
+      properties:
+        version:
+          type: string
+        revision:
+          type: string
+        treeDigest:
+          type: string
+        manifestDigest:
+          type: string
+        distributionId:
+          type: string
+          x-go-type-skip-optional-pointer: true
+        releaseSequence:
+          type: string
+          description: Decimal signed release sequence; a string preserves the exact integer identity.
+          x-go-type-skip-optional-pointer: true
+    UpdateSelector:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties:
+        kind:
+          type: string
+        value:
+          type: string
+    UpdateOwner:
+      type: object
+      additionalProperties: false
+      required: [alias, selector]
+      properties:
+        alias:
+          type: string
+        selector:
+          $ref: '#/components/schemas/UpdateSelector'
+    UpdateCheckEntry:
+      type: object
+      additionalProperties: false
+      required: [alias, declared, selected, source, status, reason, requiredBy]
+      properties:
+        alias:
+          type: string
+        declared:
+          type: boolean
+        selected:
+          type: boolean
+        source:
+          type: string
+        requested:
+          $ref: '#/components/schemas/UpdateSelector'
+        status:
+          type: string
+          enum: [current, available, pinned, blocked, check_unavailable]
+        reason:
+          type: string
+        installed:
+          $ref: '#/components/schemas/UpdateIdentity'
+        available:
+          $ref: '#/components/schemas/UpdateIdentity'
+        requiredBy:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpdateOwner'
+    UpdateCheck:
+      type: object
+      additionalProperties: false
+      required: [contextId, complete, changed, entries, diagnostics]
+      description: Complete describes the whole selected graph. A current root may have changed
+        shared dependencies listed separately. Unavailable facts never mean current or approved.
+      properties:
+        contextId:
+          type: string
+        complete:
+          type: boolean
+        changed:
+          type: boolean
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpdateCheckEntry'
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/Diagnostic'

@@ -17,7 +17,7 @@ const SkippedClientsHeading = "Not available for automatic install"
 
 var (
 	ErrPromptCanceled    = errors.New("prompt canceled")
-	ErrPromptUnavailable = errors.New("prompt unavailable; use --target and explicit flags")
+	ErrPromptUnavailable = errors.New("an interactive terminal is required for this prompt; run the command in a terminal or pass the explicit flags it documents (for example --target <agent>)")
 	ErrPromptInputClosed = errors.New("prompt input closed before a complete answer")
 )
 

@@ -22,7 +22,7 @@ await writeFile(resolve(target, 'tsconfig.json'), JSON.stringify({
 for (const path of [
   'components/layout/LanguageSwitcher.vue', 'composables/useLocation.ts',
   'stores/locale.ts', 'utils/localizedRoutes.ts', 'data/routes.ts',
-  'plugins/vuetify.ts', 'locales/en.json',
+  'plugins/vuetify.ts', 'i18n/locales/en.json',
 ]) {
   await mkdir(dirname(resolve(target, path)), { recursive: true });
   await cp(resolve(landing, path), resolve(target, path));

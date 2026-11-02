@@ -74,11 +74,11 @@ func geminiPlannedOwnership(stagingRoot, configRoot string, envelope domain.Pack
 	if component.Support == domain.SupportUnsupported {
 		return nil, nil
 	}
-	if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
-		return nil, fmt.Errorf("invalid Gemini component name %q: %w", component.Name, err)
-	}
 	switch component.Kind {
 	case domain.ComponentSkill:
+		if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
+			return nil, fmt.Errorf("invalid Gemini skill name %q: %w", component.Name, err)
+		}
 		object, err := geminiSkillOwnership(stagingRoot, configRoot, envelope, component)
 		if err != nil {
 			return nil, err

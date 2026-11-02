@@ -69,11 +69,8 @@ func codexEnvironment(root string, ambient []string) ([]string, error) {
 		if !ok || key == "" || strings.ContainsRune(entry, 0) || seen[canonical] {
 			return nil, fmt.Errorf("malformed or duplicate Codex environment entry")
 		}
-		for i, ch := range key {
-			valid := ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch == '_' || i > 0 && ch >= '0' && ch <= '9'
-			if !valid {
-				return nil, fmt.Errorf("malformed Codex environment name")
-			}
+		if !validCodexEnvironmentName(key) {
+			return nil, fmt.Errorf("malformed Codex environment name")
 		}
 		seen[canonical] = true
 		if keep[canonical] {
@@ -82,6 +79,22 @@ func codexEnvironment(root string, ambient []string) ([]string, error) {
 	}
 	sort.Strings(result)
 	return result, nil
+}
+
+// These Windows installation-location variables are valid ambient metadata,
+// but intentionally remain outside the child environment allowlist.
+func validCodexEnvironmentName(key string) bool {
+	switch strings.ToUpper(key) {
+	case "PROGRAMFILES(X86)", "COMMONPROGRAMFILES(X86)":
+		return true
+	}
+	for i, ch := range key {
+		valid := ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch == '_' || i > 0 && ch >= '0' && ch <= '9'
+		if !valid {
+			return false
+		}
+	}
+	return key != ""
 }
 
 func runCodex(ctx context.Context, env clients.Env, root, executable string, args ...string) (legacyports.CommandResult, error) {

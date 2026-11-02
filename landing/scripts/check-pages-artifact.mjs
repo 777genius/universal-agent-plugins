@@ -314,7 +314,7 @@ export async function checkPagesArtifact({
     const meta = tags(html, 'meta');
     assert.equal(
       meta.find((tag) => tag.property === 'og:locale')?.content,
-      localeMetadata[route.locale].iso.replace('-', '_'),
+      localeMetadata[route.locale].language.replace('-', '_'),
     );
     assert.deepEqual(
       meta
@@ -340,7 +340,8 @@ export async function checkPagesArtifact({
     checkPageSchemaUrls(graphs, route, siteUrl, base);
     if (route.indexable) expectedLocations.push(seo.canonical);
     if (['plugin', 'download'].includes(route.family)) {
-      assert(raw.length < 450000, `HTML payload budget: ${relative} (${raw.length})`);
+      // The resolved release's own evidence rides in the route-scoped payload.
+      assert(raw.length < 455000, `HTML payload budget: ${relative} (${raw.length})`);
       assert(!html.includes('registryIndex'), `Full registry payload: ${relative}`);
     }
     await checkHtmlReferences({

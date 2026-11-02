@@ -2,26 +2,56 @@ package conformance
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"gopkg.in/yaml.v3"
 	"regexp"
 	"strings"
-	"unicode"
 	"unicode/utf8"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+)
+
+// MaxSkillNameBytes retains its historical exported name; the normative Skill
+// name limit counts Unicode characters. Generated ASCII names also use it.
+const (
+	MaxSkillNameBytes        = 64
+	MaxSkillDescriptionRunes = 1024
 )
 
 var skillNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$`)
+
+// PortableSkillNameForm is the ASCII subset used for generated command names.
+// Normative Skill admission uses the Unicode-aware shared ParseSkill grammar.
+func PortableSkillNameForm(name string) bool {
+	return skillNamePattern.MatchString(name) && !strings.Contains(name, "--")
+}
 
 var skillFields = map[string]struct{}{
 	"name": {}, "description": {}, "license": {}, "compatibility": {}, "metadata": {}, "allowed-tools": {},
 }
 
 func ParseInstallerSkill(directoryName string, body []byte) (domain.Skill, error) {
-	return parseSkill(directoryName, body, skillFrontmatter, false)
+	return ParseSkill(context.Background(), directoryName, body)
 }
+
+// ParseSkill shares the bounded normative grammar with authoring. Unknown fields
+// are opaque and Raw retains the complete original document bytes.
+func ParseSkill(ctx context.Context, directoryName string, body []byte) (domain.Skill, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.Skill{}, err
+	}
+	if len(body) > DefaultLimits().SkillBytes {
+		return domain.Skill{}, &parseFailure{Code: "document_bytes_limit"}
+	}
+	if !utf8.Valid(body) {
+		return domain.Skill{}, &parseFailure{Code: "document_utf8_invalid"}
+	}
+	return parseSkill(directoryName, body, func(b []byte) (map[string]any, error) { return skillFrontmatter(ctx, b) }, true)
+}
+
 func parseSkill(directoryName string, body []byte, front func([]byte) (map[string]any, error), author bool) (domain.Skill, error) {
-	if (!author && (len(directoryName) > 64 || !skillNamePattern.MatchString(directoryName) || strings.Contains(directoryName, "--"))) || (author && !normativeSkillName(directoryName)) {
+	if (!author && (len(directoryName) > MaxSkillNameBytes || !PortableSkillNameForm(directoryName))) || (author && !normativeSkillName(directoryName)) {
 		return domain.Skill{}, skillError("skill_name_invalid", "directory name %q is not a portable Agent Skill name", directoryName)
 	}
 	frontmatter, err := front(body)
@@ -44,8 +74,8 @@ func parseSkill(directoryName string, body []byte, front func([]byte) (map[strin
 	if err != nil {
 		return domain.Skill{}, err
 	}
-	if count := utf8.RuneCountInString(description); count < 1 || count > 1024 {
-		return domain.Skill{}, skillError("skill_description_length", "description length must be between 1 and 1024 characters")
+	if count := utf8.RuneCountInString(description); count < 1 || count > MaxSkillDescriptionRunes {
+		return domain.Skill{}, skillError("skill_description_length", "description length must be between 1 and %d characters", MaxSkillDescriptionRunes)
 	}
 	license, err := optionalString(frontmatter, "license")
 	if err != nil {
@@ -88,35 +118,29 @@ func parseSkill(directoryName string, body []byte, front func([]byte) (map[strin
 }
 
 func frontmatterBytes(body []byte) ([]byte, error) {
+	header, _, err := splitFrontmatter(body)
+	return header, err
+}
+
+// splitFrontmatter returns the YAML header and everything after its closing
+// delimiter, both with CRLF folded to LF.
+func splitFrontmatter(body []byte) ([]byte, []byte, error) {
 	normalized := bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n"))
 	if !bytes.HasPrefix(normalized, []byte("---\n")) {
-		return nil, skillError("skill_frontmatter_open", "SKILL.md must begin with YAML frontmatter")
+		return nil, nil, skillError("skill_frontmatter_open", "SKILL.md must begin with YAML frontmatter")
 	}
 	remainder := normalized[len("---\n"):]
 	end := bytes.Index(remainder, []byte("\n---\n"))
 	if end < 0 {
 		if bytes.HasSuffix(remainder, []byte("\n---")) {
-			end = len(remainder) - len("\n---")
-		} else {
-			return nil, skillError("skill_frontmatter_close", "SKILL.md frontmatter is not terminated")
+			return remainder[:len(remainder)-len("\n---")], nil, nil
 		}
+		return nil, nil, skillError("skill_frontmatter_close", "SKILL.md frontmatter is not terminated")
 	}
-	return remainder[:end], nil
+	return remainder[:end], remainder[end+len("\n---\n"):], nil
 }
-func skillFrontmatter(body []byte) (map[string]any, error) {
-	data, err := frontmatterBytes(body)
-	if err != nil {
-		return nil, err
-	}
-	var frontmatter map[string]any
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	if err := decoder.Decode(&frontmatter); err != nil {
-		return nil, skillError("skill_yaml_invalid", "parse skill frontmatter: %v", err)
-	}
-	if frontmatter == nil {
-		return nil, skillError("skill_frontmatter_type", "skill frontmatter must be an object")
-	}
-	return frontmatter, nil
+func skillFrontmatter(ctx context.Context, body []byte) (map[string]any, error) {
+	return boundedFrontmatter(ctx, body, DefaultLimits())
 }
 
 func requiredString(values map[string]any, key string) (string, error) {
@@ -150,14 +174,19 @@ func skillError(code, format string, args ...any) error {
 	return &skillFailure{code, fmt.Sprintf(format, args...)}
 }
 func normativeSkillName(name string) bool {
-	n := utf8.RuneCountInString(name)
-	if n < 1 || n > 64 || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") || strings.Contains(name, "--") {
-		return false
+	return domain.ValidSkillName(name)
+}
+
+// SkillErrorCode distinguishes normative invalidity from incomplete host-safety
+// evidence without exposing raw parser errors in discovery responses.
+func SkillErrorCode(err error) (code string, unavailable bool) {
+	var safety *parseFailure
+	if errors.As(err, &safety) {
+		return safety.Code, true
 	}
-	for _, r := range name {
-		if r != '-' && !unicode.IsLower(r) && !unicode.IsNumber(r) {
-			return false
-		}
+	var invalid *skillFailure
+	if errors.As(err, &invalid) {
+		return invalid.Code, false
 	}
-	return true
+	return "skill_metadata_unavailable", true
 }

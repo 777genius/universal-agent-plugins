@@ -1,4 +1,4 @@
-Disposable real Nuxt 3 / i18n 9 candidate fixture; all three codes load the existing
+Disposable real Nuxt 3 / i18n 10 candidate fixture; all three codes load the existing
 English reference dictionary. Nothing here participates in production routes or
 publication. `prepare.mjs` copies the current switcher, adapter, preference store
 and helpers byte-for-byte into a fresh temporary app, substitutes only the locale
@@ -38,10 +38,9 @@ query arrays/hash, cookie base, keyboard/current choice/Escape/focus, and pendin
 controls. A global fixture route guard aborts before the locale middleware.
 Production static artifact refresh/payload checks remain in `tests/browser`.
 
-The rejection test also observes i18n 9's own `Failed locale loading:` console
-error and a new factory request on explicit retry. Installed i18n 9.5.6 catches
-factory errors and supplies an empty dictionary; its production cache only stores
-non-function dictionaries, so the async candidate factories remain retryable.
+The failure/retry scenario must validate the *installed i18n 10 runtime* rather
+than assuming i18n 9's cache or console-error behavior. The adapter may not
+commit a failed locale or silently display empty messages.
 Tab from the final menu item exits to the next control, Abort next navigation;
 Escape returns focus to the activator. All five scenarios remain required at
 both bases. Hosted build/browser results are required before calling this

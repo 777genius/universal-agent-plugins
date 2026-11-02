@@ -1,0 +1,631 @@
+{
+  "/ar/": [
+    {
+      "text": "استخدام الإضافات",
+      "items": [
+        {
+          "text": "نظرة عامة",
+          "link": "/ar/use/"
+        },
+        {
+          "text": "التثبيت",
+          "link": "/ar/use/install"
+        },
+        {
+          "text": "الإدارة",
+          "link": "/ar/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "بناء الإضافات",
+      "items": [
+        {
+          "text": "نظرة عامة",
+          "link": "/ar/build/"
+        },
+        {
+          "text": "Skill واحدة",
+          "link": "/ar/build/skill"
+        },
+        {
+          "text": "MCP بعيد",
+          "link": "/ar/build/mcp-remote"
+        },
+        {
+          "text": "MCP محلي",
+          "link": "/ar/build/mcp-stdio"
+        },
+        {
+          "text": "إضافة هجينة",
+          "link": "/ar/build/hybrid"
+        },
+        {
+          "text": "عدة Skills",
+          "link": "/ar/build/skills"
+        },
+        {
+          "text": "البنية",
+          "link": "/ar/build/layout"
+        },
+        {
+          "text": "الفحوصات",
+          "link": "/ar/build/checks"
+        },
+        {
+          "text": "التسليم",
+          "link": "/ar/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · مرجع 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/ar/use/": [
+    {
+      "text": "استخدام الإضافات",
+      "items": [
+        {
+          "text": "نظرة عامة",
+          "link": "/ar/use/"
+        },
+        {
+          "text": "التثبيت",
+          "link": "/ar/use/install"
+        },
+        {
+          "text": "الإدارة",
+          "link": "/ar/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "بناء الإضافات",
+      "items": [
+        {
+          "text": "نظرة عامة",
+          "link": "/ar/build/"
+        },
+        {
+          "text": "Skill واحدة",
+          "link": "/ar/build/skill"
+        },
+        {
+          "text": "MCP بعيد",
+          "link": "/ar/build/mcp-remote"
+        },
+        {
+          "text": "MCP محلي",
+          "link": "/ar/build/mcp-stdio"
+        },
+        {
+          "text": "إضافة هجينة",
+          "link": "/ar/build/hybrid"
+        },
+        {
+          "text": "عدة Skills",
+          "link": "/ar/build/skills"
+        },
+        {
+          "text": "البنية",
+          "link": "/ar/build/layout"
+        },
+        {
+          "text": "الفحوصات",
+          "link": "/ar/build/checks"
+        },
+        {
+          "text": "التسليم",
+          "link": "/ar/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · مرجع 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/ar/build/": [
+    {
+      "text": "استخدام الإضافات",
+      "items": [
+        {
+          "text": "نظرة عامة",
+          "link": "/ar/use/"
+        },
+        {
+          "text": "التثبيت",
+          "link": "/ar/use/install"
+        },
+        {
+          "text": "الإدارة",
+          "link": "/ar/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "بناء الإضافات",
+      "items": [
+        {
+          "text": "نظرة عامة",
+          "link": "/ar/build/"
+        },
+        {
+          "text": "Skill واحدة",
+          "link": "/ar/build/skill"
+        },
+        {
+          "text": "MCP بعيد",
+          "link": "/ar/build/mcp-remote"
+        },
+        {
+          "text": "MCP محلي",
+          "link": "/ar/build/mcp-stdio"
+        },
+        {
+          "text": "إضافة هجينة",
+          "link": "/ar/build/hybrid"
+        },
+        {
+          "text": "عدة Skills",
+          "link": "/ar/build/skills"
+        },
+        {
+          "text": "البنية",
+          "link": "/ar/build/layout"
+        },
+        {
+          "text": "الفحوصات",
+          "link": "/ar/build/checks"
+        },
+        {
+          "text": "التسليم",
+          "link": "/ar/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · مرجع 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/ar/api/cli/prepared-authoring-v2": [
+    {
+      "text": "استخدام الإضافات",
+      "items": [
+        {
+          "text": "نظرة عامة",
+          "link": "/ar/use/"
+        },
+        {
+          "text": "التثبيت",
+          "link": "/ar/use/install"
+        },
+        {
+          "text": "الإدارة",
+          "link": "/ar/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "بناء الإضافات",
+      "items": [
+        {
+          "text": "نظرة عامة",
+          "link": "/ar/build/"
+        },
+        {
+          "text": "Skill واحدة",
+          "link": "/ar/build/skill"
+        },
+        {
+          "text": "MCP بعيد",
+          "link": "/ar/build/mcp-remote"
+        },
+        {
+          "text": "MCP محلي",
+          "link": "/ar/build/mcp-stdio"
+        },
+        {
+          "text": "إضافة هجينة",
+          "link": "/ar/build/hybrid"
+        },
+        {
+          "text": "عدة Skills",
+          "link": "/ar/build/skills"
+        },
+        {
+          "text": "البنية",
+          "link": "/ar/build/layout"
+        },
+        {
+          "text": "الفحوصات",
+          "link": "/ar/build/checks"
+        },
+        {
+          "text": "التسليم",
+          "link": "/ar/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · مرجع 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/ar/guide/quickstart": [
+    {
+      "text": "البداية",
+      "items": [
+        {
+          "text": "استخدام الإضافات",
+          "link": "/ar/use/"
+        },
+        {
+          "text": "بناء الإضافات",
+          "link": "/ar/build/"
+        },
+        {
+          "text": "البدء السريع",
+          "link": "/ar/guide/quickstart"
+        }
+      ]
+    }
+  ],
+  "/ar/reference/client-compatibility": [
+    {
+      "text": "استخدام الإضافات",
+      "items": [
+        {
+          "text": "نظرة عامة",
+          "link": "/ar/use/"
+        },
+        {
+          "text": "التثبيت",
+          "link": "/ar/use/install"
+        },
+        {
+          "text": "الإدارة",
+          "link": "/ar/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "بناء الإضافات",
+      "items": [
+        {
+          "text": "نظرة عامة",
+          "link": "/ar/build/"
+        },
+        {
+          "text": "Skill واحدة",
+          "link": "/ar/build/skill"
+        },
+        {
+          "text": "MCP بعيد",
+          "link": "/ar/build/mcp-remote"
+        },
+        {
+          "text": "MCP محلي",
+          "link": "/ar/build/mcp-stdio"
+        },
+        {
+          "text": "إضافة هجينة",
+          "link": "/ar/build/hybrid"
+        },
+        {
+          "text": "عدة Skills",
+          "link": "/ar/build/skills"
+        },
+        {
+          "text": "البنية",
+          "link": "/ar/build/layout"
+        },
+        {
+          "text": "الفحوصات",
+          "link": "/ar/build/checks"
+        },
+        {
+          "text": "التسليم",
+          "link": "/ar/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · مرجع 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (بالإنجليزية)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ]
+}

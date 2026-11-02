@@ -1,0 +1,631 @@
+{
+  "/hi/": [
+    {
+      "text": "प्लगइन इस्तेमाल करें",
+      "items": [
+        {
+          "text": "अवलोकन",
+          "link": "/hi/use/"
+        },
+        {
+          "text": "इंस्टॉल करें",
+          "link": "/hi/use/install"
+        },
+        {
+          "text": "प्रबंधित करें",
+          "link": "/hi/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "प्लगइन बनाएँ",
+      "items": [
+        {
+          "text": "अवलोकन",
+          "link": "/hi/build/"
+        },
+        {
+          "text": "एक Skill",
+          "link": "/hi/build/skill"
+        },
+        {
+          "text": "रिमोट MCP",
+          "link": "/hi/build/mcp-remote"
+        },
+        {
+          "text": "स्थानीय MCP",
+          "link": "/hi/build/mcp-stdio"
+        },
+        {
+          "text": "हाइब्रिड प्लगइन",
+          "link": "/hi/build/hybrid"
+        },
+        {
+          "text": "कई Skills",
+          "link": "/hi/build/skills"
+        },
+        {
+          "text": "संरचना",
+          "link": "/hi/build/layout"
+        },
+        {
+          "text": "जाँच",
+          "link": "/hi/build/checks"
+        },
+        {
+          "text": "हस्तांतरण",
+          "link": "/hi/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · 0.1.65 संदर्भ",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/hi/use/": [
+    {
+      "text": "प्लगइन इस्तेमाल करें",
+      "items": [
+        {
+          "text": "अवलोकन",
+          "link": "/hi/use/"
+        },
+        {
+          "text": "इंस्टॉल करें",
+          "link": "/hi/use/install"
+        },
+        {
+          "text": "प्रबंधित करें",
+          "link": "/hi/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "प्लगइन बनाएँ",
+      "items": [
+        {
+          "text": "अवलोकन",
+          "link": "/hi/build/"
+        },
+        {
+          "text": "एक Skill",
+          "link": "/hi/build/skill"
+        },
+        {
+          "text": "रिमोट MCP",
+          "link": "/hi/build/mcp-remote"
+        },
+        {
+          "text": "स्थानीय MCP",
+          "link": "/hi/build/mcp-stdio"
+        },
+        {
+          "text": "हाइब्रिड प्लगइन",
+          "link": "/hi/build/hybrid"
+        },
+        {
+          "text": "कई Skills",
+          "link": "/hi/build/skills"
+        },
+        {
+          "text": "संरचना",
+          "link": "/hi/build/layout"
+        },
+        {
+          "text": "जाँच",
+          "link": "/hi/build/checks"
+        },
+        {
+          "text": "हस्तांतरण",
+          "link": "/hi/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · 0.1.65 संदर्भ",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/hi/build/": [
+    {
+      "text": "प्लगइन इस्तेमाल करें",
+      "items": [
+        {
+          "text": "अवलोकन",
+          "link": "/hi/use/"
+        },
+        {
+          "text": "इंस्टॉल करें",
+          "link": "/hi/use/install"
+        },
+        {
+          "text": "प्रबंधित करें",
+          "link": "/hi/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "प्लगइन बनाएँ",
+      "items": [
+        {
+          "text": "अवलोकन",
+          "link": "/hi/build/"
+        },
+        {
+          "text": "एक Skill",
+          "link": "/hi/build/skill"
+        },
+        {
+          "text": "रिमोट MCP",
+          "link": "/hi/build/mcp-remote"
+        },
+        {
+          "text": "स्थानीय MCP",
+          "link": "/hi/build/mcp-stdio"
+        },
+        {
+          "text": "हाइब्रिड प्लगइन",
+          "link": "/hi/build/hybrid"
+        },
+        {
+          "text": "कई Skills",
+          "link": "/hi/build/skills"
+        },
+        {
+          "text": "संरचना",
+          "link": "/hi/build/layout"
+        },
+        {
+          "text": "जाँच",
+          "link": "/hi/build/checks"
+        },
+        {
+          "text": "हस्तांतरण",
+          "link": "/hi/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · 0.1.65 संदर्भ",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/hi/api/cli/prepared-authoring-v2": [
+    {
+      "text": "प्लगइन इस्तेमाल करें",
+      "items": [
+        {
+          "text": "अवलोकन",
+          "link": "/hi/use/"
+        },
+        {
+          "text": "इंस्टॉल करें",
+          "link": "/hi/use/install"
+        },
+        {
+          "text": "प्रबंधित करें",
+          "link": "/hi/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "प्लगइन बनाएँ",
+      "items": [
+        {
+          "text": "अवलोकन",
+          "link": "/hi/build/"
+        },
+        {
+          "text": "एक Skill",
+          "link": "/hi/build/skill"
+        },
+        {
+          "text": "रिमोट MCP",
+          "link": "/hi/build/mcp-remote"
+        },
+        {
+          "text": "स्थानीय MCP",
+          "link": "/hi/build/mcp-stdio"
+        },
+        {
+          "text": "हाइब्रिड प्लगइन",
+          "link": "/hi/build/hybrid"
+        },
+        {
+          "text": "कई Skills",
+          "link": "/hi/build/skills"
+        },
+        {
+          "text": "संरचना",
+          "link": "/hi/build/layout"
+        },
+        {
+          "text": "जाँच",
+          "link": "/hi/build/checks"
+        },
+        {
+          "text": "हस्तांतरण",
+          "link": "/hi/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · 0.1.65 संदर्भ",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/hi/guide/quickstart": [
+    {
+      "text": "शुरुआत",
+      "items": [
+        {
+          "text": "प्लगइन इस्तेमाल करें",
+          "link": "/hi/use/"
+        },
+        {
+          "text": "प्लगइन बनाएँ",
+          "link": "/hi/build/"
+        },
+        {
+          "text": "त्वरित शुरुआत",
+          "link": "/hi/guide/quickstart"
+        }
+      ]
+    }
+  ],
+  "/hi/reference/client-compatibility": [
+    {
+      "text": "प्लगइन इस्तेमाल करें",
+      "items": [
+        {
+          "text": "अवलोकन",
+          "link": "/hi/use/"
+        },
+        {
+          "text": "इंस्टॉल करें",
+          "link": "/hi/use/install"
+        },
+        {
+          "text": "प्रबंधित करें",
+          "link": "/hi/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "प्लगइन बनाएँ",
+      "items": [
+        {
+          "text": "अवलोकन",
+          "link": "/hi/build/"
+        },
+        {
+          "text": "एक Skill",
+          "link": "/hi/build/skill"
+        },
+        {
+          "text": "रिमोट MCP",
+          "link": "/hi/build/mcp-remote"
+        },
+        {
+          "text": "स्थानीय MCP",
+          "link": "/hi/build/mcp-stdio"
+        },
+        {
+          "text": "हाइब्रिड प्लगइन",
+          "link": "/hi/build/hybrid"
+        },
+        {
+          "text": "कई Skills",
+          "link": "/hi/build/skills"
+        },
+        {
+          "text": "संरचना",
+          "link": "/hi/build/layout"
+        },
+        {
+          "text": "जाँच",
+          "link": "/hi/build/checks"
+        },
+        {
+          "text": "हस्तांतरण",
+          "link": "/hi/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · 0.1.65 संदर्भ",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (अंग्रेज़ी में)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ]
+}

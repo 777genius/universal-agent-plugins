@@ -34,7 +34,7 @@ var integrationsDoctorCmd = &cobra.Command{
 func runIntegrationsSync(cmd *cobra.Command, args []string) error {
 	startLine := ""
 	if !integrationDryRun {
-		startLine = "Syncing desired integrations from .plugin-kit-ai.lock..."
+		startLine = "Syncing desired integrations from .uap-integrations.lock..."
 	}
 	return runIntegrationResultAction(cmd, startLine, integrationFailureContext{
 		Action: "sync",
@@ -45,7 +45,7 @@ func runIntegrationsSync(cmd *cobra.Command, args []string) error {
 
 var integrationsSyncCmd = &cobra.Command{
 	Use:           "sync",
-	Short:         "Reconcile workspace desired integrations from .plugin-kit-ai.lock",
+	Short:         "Reconcile workspace desired integrations from .uap-integrations.lock",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE:          runIntegrationsSync,

@@ -20,6 +20,9 @@ var (
 )
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if in.TargetContext.Scope == domain.ScopeProject {
+		return refineProjectPlan(in, plan)
+	}
 	eligible := shared.OnlyNativeComponents(plan.Components)
 	needsCLI := shared.HasSupportedMCP(plan.Components)
 	hasConfigRoot := strings.TrimSpace(in.Client.ConfigRoot) != ""
@@ -39,6 +42,24 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 // mutating it, which needs a native registry root and a selection Kiro delivers
 // whole.
 func (*Adapter) RefinePreparation(plan *domain.DeliveryPlan) error {
+	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject || plan.TargetContext.ProjectRoot != "" {
+		if plan.ClientID != domain.ClientKiro {
+			return fmt.Errorf("kiro project preparation client identity mismatch")
+		}
+		if _, err := kiroProjectPlanRoot(domain.DetectedClient{ClientID: domain.ClientKiro, ConfigRoot: plan.TargetContext.UserConfigRoot}, *plan); err != nil {
+			return err
+		}
+		if plan.Status == domain.PlanUnsupported {
+			return nil
+		}
+		if !shared.OnlyNativeComponents(plan.Components) {
+			return fmt.Errorf("kiro project preparation requires supported native components")
+		}
+		plan.Status, plan.Activation, plan.Verification = domain.PlanReady, domain.ActivationPrepared, domain.VerificationPackageValid
+		plan.UserActions = []string{KiroProjectAction}
+		return nil
+	}
+
 	if strings.TrimSpace(plan.NativeRegistryRoot) == "" || !shared.OnlyNativeComponents(plan.Components) {
 		return fmt.Errorf("a Kiro preparation requires a native config root and supported skills or MCP servers")
 	}

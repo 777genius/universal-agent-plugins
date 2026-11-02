@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
@@ -23,9 +25,15 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 		Short: "Safely update a tracked Agent Plugin across selected or installed clients",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			operationApp := app
+			operationApp.Lifecycle.PrepareHostsForPreview = !opts.dryRun
 			if all {
 				if len(args) > 0 {
 					return fmt.Errorf("choose either one installation or --all")
@@ -33,10 +41,13 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 				if strings.TrimSpace(opts.target) != "" {
 					return fmt.Errorf("--target cannot be combined with --all; every installation keeps its recorded targets")
 				}
-				return runUpdateAll(cmd.Context(), cmd, app, opts)
+				return runUpdateAll(cmd.Context(), cmd, operationApp, opts)
 			}
 			if len(args) != 1 {
 				return fmt.Errorf("provide one installation or use --all")
+			}
+			if handled, err := runSavedLifecycle(cmd, operationApp, opts, args[0], "update"); handled || err != nil {
+				return err
 			}
 			if strings.TrimSpace(opts.target) == "" {
 				targets, err := defaultInstalledBindingTargets(cmd.Context(), app, args[0], opts.scope, false)
@@ -50,10 +61,10 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return runUpdateMany(cmd.Context(), cmd, app, opts, args[0], targets)
+			return runUpdateMany(cmd.Context(), cmd, operationApp, opts, args[0], targets)
 		},
 	}
-	command.Flags().BoolVar(&all, "all", false, "update every eligible tracked installation after one complete preflight")
+	command.Flags().BoolVar(&all, "all", false, "update saved dependencies and eligible tracked installations after one complete preflight")
 	return command
 }
 
@@ -62,7 +73,16 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 		Use: "repair <name-or-installation-id>", Short: "Explicitly restore a missing or modified managed package",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
+				return err
+			}
+			operationApp := app
+			operationApp.Lifecycle.PrepareHostsForPreview = !opts.dryRun
+			if handled, err := runSavedLifecycle(cmd, operationApp, opts, args[0], "repair"); handled || err != nil {
 				return err
 			}
 			if strings.TrimSpace(opts.target) == "" {
@@ -79,7 +99,10 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 				return err
 			}
 			_ = stdin
-			return runRepairMany(cmd.Context(), cmd, app, opts, args[0], targets)
+			if handled, err := repairOwnedDependencies(cmd, operationApp, opts, args[0], targets); handled || err != nil {
+				return err
+			}
+			return runRepairMany(cmd.Context(), cmd, operationApp, opts, args[0], targets)
 		},
 	}
 }
@@ -113,7 +136,12 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return err
 	}
 	writeProgress(app, opts.format, "Resolving and validating the exact installed Agent Plugin revision...")
-	loaded, err := app.loadPackage(ctx, source)
+	var loaded loadedPackage
+	if installation.Source.SourceKind != "" {
+		loaded, err = app.loadRecordedDirect(ctx, installation, binding)
+	} else {
+		loaded, err = app.loadPackage(ctx, source)
+	}
 	if err != nil {
 		return err
 	}
@@ -131,9 +159,13 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return err
 	}
 	service := lifecycleService(app, detectedMap)
+	authority, err := environmentAuthorityForBinding(state, installation.InstallationID, selected.ClientID, "repair")
+	if err != nil {
+		return err
+	}
 	input := usecase.AddInput{Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope), DryRun: opts.dryRun,
 		InstallationID: installation.InstallationID, Interactive: app.Terminal, Hints: loaded.hints,
-		BackendExecutable: backendExecutable(selected, detectedMap)}
+		BackendExecutable: backendExecutable(selected, detectedMap, app.scope()), EnvironmentAuthority: authority}
 	planned, err := service.Repair(ctx, input)
 	if err != nil {
 		if planned.Plan.Status == domain.PlanUnsupported {
@@ -164,6 +196,7 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
 		return err
 	}
+	retainPlannedClient(&input, planned.Plan)
 	input.Confirmed = true
 	result, repairErr := service.Repair(ctx, input)
 	if renderErr := renderRepairResult(cmd.OutOrStdout(), opts.format, installation, result, false); renderErr != nil && repairErr == nil {
@@ -272,11 +305,16 @@ func runUpdate(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return err
 	}
 	service := lifecycleService(app, detectedMap)
+	authority, err := environmentAuthorityForBinding(state, installation.InstallationID, selected.ClientID, "update")
+	if err != nil {
+		return err
+	}
 	input := usecase.AddInput{
 		Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Interactive: app.Terminal, Hints: loaded.hints,
-		BackendExecutable:                backendExecutable(selected, detectedMap),
+		BackendExecutable:                backendExecutable(selected, detectedMap, app.scope()),
 		PersistAuthoritativeObservations: true,
+		EnvironmentAuthority:             authority,
 	}
 	planned, err := service.Update(ctx, input)
 	if err != nil {
@@ -314,6 +352,7 @@ func runUpdate(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return nil
 	}
 	writeProgress(app, opts.format, "Applying transactional package update...")
+	retainPlannedClient(&input, planned.Plan)
 	input.Confirmed = true
 	result, updateErr := service.Update(ctx, input)
 	if renderErr := renderUpdateResult(cmd.OutOrStdout(), opts.format, loaded.envelope, result, false); renderErr != nil && updateErr == nil {
@@ -328,7 +367,14 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 		Short: "Safely remove selected targets while retaining plugin data by default",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
+				return err
+			}
+			if handled, err := runSavedLifecycle(cmd, app, opts, args[0], "remove"); handled || err != nil {
 				return err
 			}
 			// JSON calls must reject missing selectors before
@@ -489,11 +535,16 @@ func runRemove(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return err
 	}
 	service := lifecycleService(app, detectedMap)
+	authority, err := environmentAuthorityForBinding(state, installation.InstallationID, selected.ClientID, "remove")
+	if err != nil {
+		return err
+	}
 	input := usecase.RemoveInput{
 		Selector: installation.InstallationID, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Interactive: app.Terminal,
-		ExternalUninstalled: opts.externalUninstalled,
-		BackendExecutable:   backendExecutable(selected, detectedMap),
+		ExternalUninstalled:  opts.externalUninstalled,
+		BackendExecutable:    backendExecutable(selected, detectedMap, app.scope()),
+		EnvironmentAuthority: authority,
 	}
 	planned, err := service.Remove(ctx, input)
 	if err != nil {
@@ -623,11 +674,48 @@ func lifecycleService(app App, detected map[domain.ClientID]domain.DetectedClien
 	if app.Targets != nil {
 		service.Targets = app.Targets
 	}
-	service.Detected = detected
+	service.Detected = maps.Clone(detected)
 	return service
 }
 
+func environmentAuthorityForBinding(state domain.StateFileV2, installationID string, clientID domain.ClientID, action string) (*domain.EnvironmentAuthority, error) {
+	var binding domain.ClientBinding
+	found := false
+	for _, installation := range state.Installations {
+		if installation.InstallationID != installationID {
+			continue
+		}
+		for _, candidate := range installation.Clients {
+			if candidate.ClientID == string(clientID) {
+				binding, found = candidate, true
+				break
+			}
+		}
+	}
+	if !found {
+		return nil, nil
+	}
+	for _, receipt := range state.EnvironmentReceipts {
+		if receipt.InstallationID == installationID && receipt.ClientBindingID == binding.ClientBindingID &&
+			receipt.ClientID == string(clientID) {
+			if action != "repair" {
+				return nil, fmt.Errorf("%w: use deps sync for owned bindings", transaction.ErrEnvironmentAuthority)
+			}
+			return &domain.EnvironmentAuthority{EnvironmentID: receipt.EnvironmentID, Alias: receipt.Alias,
+				ClientID: receipt.ClientID, ReceiptID: receipt.ReceiptID, InstallationID: receipt.InstallationID,
+				ClientBindingID: receipt.ClientBindingID, SourceKey: receipt.SourceKey, ExpectedAction: action}, nil
+		}
+	}
+	return nil, nil
+}
+
 func updateSource(installation domain.Installation) string {
+	if installation.Source.SourceKind == "archive" && filepath.IsAbs(installation.Source.SourceURL) {
+		return localArchiveUpdateSource(installation.Source)
+	}
+	if installation.Source.SourceKind != "" && installation.Source.RequestedSource == "" {
+		return directSourceRequested(installation.Source)
+	}
 	if installation.Source.Repository == "" && filepath.IsAbs(installation.Source.CanonicalSource) {
 		return installation.Source.CanonicalSource
 	}
@@ -668,6 +756,14 @@ func repairSource(installation domain.Installation, binding domain.ClientBinding
 	}
 	if revision == "" {
 		return "", fmt.Errorf("the selected client binding has no exact resolved revision; refusing repair from a moving source")
+	}
+	if installation.Source.SourceKind != "" {
+		source := installation.Source
+		source.ResolvedRevision = revision
+		if source.SourceKind == "archive" {
+			source.ArchiveSHA256 = strings.TrimPrefix(revision, "sha256:")
+		}
+		return directSourceRequested(source), nil
 	}
 	if repository := strings.TrimSpace(installation.Source.Repository); repository != "" {
 		value := "github:" + repository + "@" + revision
@@ -854,6 +950,9 @@ func renderRemoveResult(writer io.Writer, format string, installation domain.Ins
 	if result.Mutated {
 		_, _ = fmt.Fprintln(writer, "Removed the selected managed package.")
 	}
+	if removalNeedsManualStep(result.Deactivation) {
+		_, _ = fmt.Fprintln(writer, removalIncompleteNotice)
+	}
 	for _, action := range result.Deactivation.UserActions {
 		_, _ = fmt.Fprintf(writer, "Next: %s\n", action)
 	}
@@ -861,6 +960,14 @@ func renderRemoveResult(writer io.Writer, format string, installation domain.Ins
 		_, _ = fmt.Fprintf(writer, "Next: %s\n", action)
 	}
 	return nil
+}
+
+// removalIncompleteNotice keeps partial removals explicit: without it a run
+// that stopped for a manual client step reads like a finished removal.
+const removalIncompleteNotice = "Removal is not complete: a manual client step is still required."
+
+func removalNeedsManualStep(deactivation domain.DeactivationOutcome) bool {
+	return !deactivation.ArtifactRemovalAllowed || len(deactivation.UserActions) > 0
 }
 
 type removeResultData struct {

@@ -10,14 +10,22 @@ func (session *removeGroupSession) removeGroupNative() error {
 	externalCompleted := 0
 	for plannedIndex := range session.planned {
 		item := &session.planned[plannedIndex]
-		nativeAttempt := nativeLifecycleClient(item.input.Client.ClientID)
+		nativeAttempt := nativeLifecycleClient(item.input.Client.ClientID, item.client.SelectedDelivery, item.input.Scope)
+		var attempt *nativeRemovalAttempt
 		if nativeAttempt {
-			if err := session.service.beginNativeAttempt(session.installation.InstallationID, item.clientKey); err != nil {
+			var err error
+			attempt, err = session.service.beginNativeRemovalAttempt(session.installation.InstallationID, item.clientKey, item.client, session.state)
+			if err != nil {
 				return err
 			}
 		}
-		outcome, err := session.service.Activator.Deactivate(session.ctx, domain.DeactivationRequest{
-			Client: item.input.Client, DeclaredName: session.installation.DeclaredName,
+		outcome, err := session.service.deactivateWithFrozenObservation(session.ctx, session.installation.InstallationID, item.clientKey, domain.DeactivationRequest{
+			TargetContext:         session.service.targetContext(item.input.Client, item.input.Scope),
+			NativeRegistryRoot:    nativeRegistryForBinding(item.client, item.input.Client),
+			LocalEntryObservation: item.client.LocalEntryObservation.Clone(),
+			RemoveOwnedEntry:      item.client.SelectedDelivery.OwnsProfileEntry(item.client.NativeObjects),
+			SelectedDelivery:      item.client.SelectedDelivery,
+			Client:                item.input.Client, DeclaredName: session.installation.DeclaredName,
 			CurrentActivation: item.client.Activation, Interactive: item.input.Interactive, ExternalUninstalled: item.input.ExternalUninstalled,
 			Confirmed: true, PhysicalArtifactID: item.client.PhysicalArtifact, BackendExecutable: item.input.BackendExecutable,
 			ManagedArtifactPath: item.client.TargetLocator,
@@ -28,6 +36,7 @@ func (session *removeGroupSession) removeGroupNative() error {
 		}
 		if err != nil {
 			session.markNativeDeactivationFailed(item, externalCompleted)
+			err = session.service.acknowledgeUnchangedRemoval(attempt, outcome, err)
 			return fmt.Errorf("external deactivation failed; managed materialization was retained for repair: %w", err)
 		}
 		if nativeAttempt {

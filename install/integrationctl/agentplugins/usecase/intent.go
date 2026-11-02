@@ -19,14 +19,55 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 	if err := validatePersonalMapping(input, installation); err != nil {
 		return domain.DeliveryPlan{}, err
 	}
-	return service.Planner.Plan(ctx, domain.PlanRequest{
-		Envelope:           input.Envelope,
-		Client:             input.Client,
-		Scope:              input.Scope,
-		PhysicalArtifactID: physicalID,
-		InstallIntent:      input.InstallIntent,
-		Detected:           service.Detected,
+	binding, err := frozenPlanningBinding(*input, installation)
+	if err != nil {
+		return domain.DeliveryPlan{}, err
+	}
+	var observation *domain.LocalEntryObservation
+	var objects []domain.NativeObjectOwnership
+	if binding != nil {
+		observation = binding.LocalEntryObservation.Clone()
+		objects = append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...)
+	}
+	if service.ClientPreparation != nil {
+		for _, frozen := range service.PhysicalProfiles {
+			if frozen.ClientID == input.Client.ClientID {
+				input.Client.ProfileAuthority = domain.CloneProfileAuthority(frozen.ProfileAuthority)
+				input.Client.ProfileNamespace = frozen.ProfileNamespace
+			}
+		}
+		host, err := service.ClientPreparation.PrepareClient(ctx, input.Envelope, input.Client, objects, input.BackendExecutable, input.DryRun && !input.OnlinePreview)
+		if err != nil {
+			return domain.DeliveryPlan{}, err
+		}
+		input.Client.OpenCodeHost = host
+	}
+	plan, err := service.Planner.Plan(ctx, domain.PlanRequest{
+		ProjectRoot:           service.ProjectRoot,
+		LocalEntryObservation: observation.Clone(),
+		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), objects...),
+		Envelope:              input.Envelope,
+		Client:                input.Client,
+		Scope:                 input.Scope,
+		PhysicalArtifactID:    physicalID,
+		InstallIntent:         input.InstallIntent,
+		Detected:              service.Detected,
 	})
+	if err != nil {
+		return plan, err
+	}
+	// Historical planners need not expose native predecessors; selected planners do.
+	if !plan.SelectedDelivery.IsZero() {
+		if err := validatePlannedObservation(plan, observation, objects); err != nil {
+			return plan, err
+		}
+	}
+	plan.LocalEntryObservation = observation.Clone()
+	plan.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), objects...)
+	if err := validateSelectedPlan(&plan, input.Envelope, installation, input.refreshSelectedDelivery); err != nil {
+		return plan, err
+	}
+	return plan, nil
 }
 
 func resolvePersistedIntent(input *AddInput, installation *domain.Installation) error {
@@ -58,7 +99,7 @@ func resolvePersistedIntent(input *AddInput, installation *domain.Installation) 
 }
 
 func validatePersonalMapping(input *AddInput, installation *domain.Installation) error {
-	traits := domain.ClientTraitsFor(input.Client.ClientID)
+	traits := (domain.SelectedDelivery{}).EffectiveTraitsForScope(input.Client.ClientID, input.Scope)
 	if traits.RequiresPersonalMappingForPrepare && input.InstallIntent == domain.InstallIntentPrepare && input.Envelope.LocalChatGPTMapping == nil {
 		return fmt.Errorf("%s preparation requires a personal Context7 registration receipt", clientDisplayName(input.Client.ClientID))
 	}

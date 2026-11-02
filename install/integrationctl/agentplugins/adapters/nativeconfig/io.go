@@ -40,11 +40,11 @@ func (osFiles) WriteAtomic(path string, body []byte, mode os.FileMode) error {
 }
 
 func (files conditionalOSFiles) CompareAndSwap(path string, expected []byte, expectedExists bool, body []byte, mode os.FileMode) error {
-	current, _, exists, err := files.ReadNoFollow(path)
+	current, currentMode, exists, err := files.ReadNoFollow(path)
 	if err != nil {
 		return fmt.Errorf("re-read native config at replacement boundary: %w", err)
 	}
-	if exists != expectedExists || !bytes.Equal(current, expected) {
+	if exists != expectedExists || !bytes.Equal(current, expected) || expectedExists && currentMode.Perm() != mode.Perm() {
 		return ErrConcurrentChange
 	}
 	return files.WriteAtomic(path, body, mode)

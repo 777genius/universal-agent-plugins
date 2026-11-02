@@ -11,6 +11,8 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         }
       ],
@@ -19,16 +21,25 @@
       "Diagnostics": null,
       "InstallIntent": "",
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
       "NativeRegistryExecutable": "\u003croot\u003e/bin/chatgpt",
       "NativeRegistryRoot": "\u003croot\u003e/clients/chatgpt",
+      "OpenCodeHost": null,
       "PackageMode": "compatibility_projection",
       "PersonalChatGPTPreparation": false,
       "PhysicalArtifactID": "demo-0123456789ab",
       "Policy": "allowed",
+      "PreviousNativeObjects": null,
       "Scope": "user",
+      "SelectedDelivery": {},
       "Status": "manual_activation_required",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/chatgpt"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/chatgpt",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -52,6 +63,8 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         }
       ],
@@ -60,16 +73,25 @@
       "Diagnostics": null,
       "InstallIntent": "",
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
       "NativeRegistryExecutable": "\u003croot\u003e/bin/claude",
       "NativeRegistryRoot": "\u003croot\u003e/clients/claude",
+      "OpenCodeHost": null,
       "PackageMode": "compatibility_projection",
       "PersonalChatGPTPreparation": false,
       "PhysicalArtifactID": "demo-0123456789ab",
       "Policy": "allowed",
+      "PreviousNativeObjects": null,
       "Scope": "user",
+      "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/clients/claude",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/claude"
+      },
       "TargetRoot": "\u003croot\u003e/clients/claude/skills",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -93,6 +115,8 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         }
       ],
@@ -101,16 +125,25 @@
       "Diagnostics": null,
       "InstallIntent": "",
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
-      "NativeRegistryExecutable": "\u003croot\u003e/bin/cline",
+      "NativeRegistryExecutable": "",
       "NativeRegistryRoot": "\u003croot\u003e/clients/cline",
+      "OpenCodeHost": null,
       "PackageMode": "native",
       "PersonalChatGPTPreparation": false,
       "PhysicalArtifactID": "demo-0123456789ab",
       "Policy": "allowed",
+      "PreviousNativeObjects": null,
       "Scope": "user",
+      "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/cline"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/cline",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -134,6 +167,8 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         }
       ],
@@ -142,16 +177,25 @@
       "Diagnostics": null,
       "InstallIntent": "",
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
       "NativeRegistryExecutable": "\u003croot\u003e/bin/codex",
       "NativeRegistryRoot": "\u003croot\u003e/clients/codex",
+      "OpenCodeHost": null,
       "PackageMode": "compatibility_projection",
       "PersonalChatGPTPreparation": false,
       "PhysicalArtifactID": "demo-0123456789ab",
       "Policy": "allowed",
+      "PreviousNativeObjects": null,
       "Scope": "user",
+      "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/codex"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/codex",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -175,6 +219,8 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         }
       ],
@@ -183,16 +229,25 @@
       "Diagnostics": null,
       "InstallIntent": "",
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
       "NativeRegistryExecutable": "\u003croot\u003e/bin/copilot",
       "NativeRegistryRoot": "\u003croot\u003e/clients/copilot",
+      "OpenCodeHost": null,
       "PackageMode": "native",
       "PersonalChatGPTPreparation": false,
       "PhysicalArtifactID": "demo-0123456789ab",
       "Policy": "allowed",
+      "PreviousNativeObjects": null,
       "Scope": "user",
+      "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/copilot"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/copilot",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -216,6 +271,8 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         }
       ],
@@ -224,16 +281,25 @@
       "Diagnostics": null,
       "InstallIntent": "",
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
       "NativeRegistryExecutable": "\u003croot\u003e/bin/cursor",
       "NativeRegistryRoot": "\u003croot\u003e/clients/cursor",
+      "OpenCodeHost": null,
       "PackageMode": "native",
       "PersonalChatGPTPreparation": false,
       "PhysicalArtifactID": "demo-0123456789ab",
       "Policy": "allowed",
+      "PreviousNativeObjects": null,
       "Scope": "user",
+      "SelectedDelivery": {},
       "Status": "manual_activation_required",
       "TargetAnchor": "\u003croot\u003e/clients/cursor",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/cursor"
+      },
       "TargetRoot": "\u003croot\u003e/clients/cursor/plugins/local",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -258,6 +324,8 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         }
       ],
@@ -266,20 +334,133 @@
       "Diagnostics": null,
       "InstallIntent": "",
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
       "NativeRegistryExecutable": "\u003croot\u003e/bin/gemini",
       "NativeRegistryRoot": "\u003croot\u003e/clients/gemini",
+      "OpenCodeHost": null,
       "PackageMode": "native",
       "PersonalChatGPTPreparation": false,
       "PhysicalArtifactID": "demo-0123456789ab",
       "Policy": "allowed",
+      "PreviousNativeObjects": null,
       "Scope": "user",
+      "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/gemini"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/gemini",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
         "agentplugins will install and verify Gemini CLI skills and MCP servers automatically; reload them in a running session or restart Gemini CLI"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "grok": {
+    "Error": "",
+    "Plan": {
+      "Activation": "prepared",
+      "ActivePath": "\u003croot\u003e/clients/grok/plugins/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "grok",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Source": "",
+          "SourceName": "",
+          "Support": "native"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/grok",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/grok",
+      "OpenCodeHost": null,
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "PreviousNativeObjects": null,
+      "Scope": "user",
+      "SelectedDelivery": {},
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/clients/grok",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/grok"
+      },
+      "TargetRoot": "\u003croot\u003e/clients/grok/plugins",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "agentplugins will register and verify the plugin through Grok Build CLI; reload Grok Build to use it"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "kimi": {
+    "Error": "",
+    "Plan": {
+      "Activation": "prepared",
+      "ActivePath": "\u003croot\u003e/clients/kimi/plugins/managed/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "kimi",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Source": "",
+          "SourceName": "",
+          "Support": "native"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/kimi",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/kimi",
+      "OpenCodeHost": null,
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "PreviousNativeObjects": null,
+      "Scope": "user",
+      "SelectedDelivery": {},
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/clients/kimi",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/kimi"
+      },
+      "TargetRoot": "\u003croot\u003e/clients/kimi/plugins/managed",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "Run /reload or /new in Kimi Code to load the installed plugin; runtime MCP connections and authentication have not been verified."
       ],
       "Verification": "package_validated",
       "Warnings": [
@@ -299,6 +480,8 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         }
       ],
@@ -307,16 +490,25 @@
       "Diagnostics": null,
       "InstallIntent": "",
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
       "NativeRegistryExecutable": "\u003croot\u003e/bin/kiro",
       "NativeRegistryRoot": "\u003croot\u003e/clients/kiro",
+      "OpenCodeHost": null,
       "PackageMode": "native",
       "PersonalChatGPTPreparation": false,
       "PhysicalArtifactID": "demo-0123456789ab",
       "Policy": "allowed",
+      "PreviousNativeObjects": null,
       "Scope": "user",
+      "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/kiro"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/kiro",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -340,6 +532,8 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         }
       ],
@@ -348,20 +542,131 @@
       "Diagnostics": null,
       "InstallIntent": "",
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
       "NativeRegistryExecutable": "\u003croot\u003e/bin/opencode",
       "NativeRegistryRoot": "\u003croot\u003e/clients/opencode",
+      "OpenCodeHost": {},
       "PackageMode": "prepared_package",
       "PersonalChatGPTPreparation": false,
       "PhysicalArtifactID": "demo-0123456789ab",
       "Policy": "allowed",
+      "PreviousNativeObjects": null,
       "Scope": "user",
+      "SelectedDelivery": {},
       "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/opencode"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/opencode",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
         "agentplugins will install the package's skills and MCP servers; restart OpenCode when complete"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
+  "pi": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/clients/pi/extensions/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "pi",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
+          "Support": "unsupported"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/pi",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/pi",
+      "OpenCodeHost": null,
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "PreviousNativeObjects": null,
+      "Scope": "user",
+      "SelectedDelivery": {},
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/clients/pi",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/pi"
+      },
+      "TargetRoot": "\u003croot\u003e/clients/pi/extensions",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "no_supported_components"
+      ]
+    }
+  },
+  "qoder": {
+    "Error": "",
+    "Plan": {
+      "Activation": "prepared",
+      "ActivePath": "\u003croot\u003e/managed/clients/qoder/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "qoder",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Source": "",
+          "SourceName": "",
+          "Support": "native"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/qoder",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/qoder",
+      "OpenCodeHost": null,
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "PreviousNativeObjects": null,
+      "Scope": "user",
+      "SelectedDelivery": {},
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/qoder"
+      },
+      "TargetRoot": "\u003croot\u003e/managed/clients/qoder",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "agentplugins will register and verify the plugin through Qoder CLI; run /plugins reload or restart Qoder to use it"
       ],
       "Verification": "package_validated",
       "Warnings": [
@@ -381,6 +686,8 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         }
       ],
@@ -389,16 +696,25 @@
       "Diagnostics": null,
       "InstallIntent": "",
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
       "NativeRegistryExecutable": "",
       "NativeRegistryRoot": "",
+      "OpenCodeHost": null,
       "PackageMode": "prepared_package",
       "PersonalChatGPTPreparation": false,
       "PhysicalArtifactID": "demo-0123456789ab",
       "Policy": "allowed",
+      "PreviousNativeObjects": null,
       "Scope": "user",
+      "SelectedDelivery": {},
       "Status": "manual_activation_required",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/vscode"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/vscode",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
@@ -422,6 +738,8 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         }
       ],
@@ -430,16 +748,25 @@
       "Diagnostics": null,
       "InstallIntent": "",
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
       "NativeRegistryExecutable": "\u003croot\u003e/bin/windsurf",
       "NativeRegistryRoot": "\u003croot\u003e/clients/windsurf",
+      "OpenCodeHost": null,
       "PackageMode": "prepared_package",
       "PersonalChatGPTPreparation": false,
       "PhysicalArtifactID": "demo-0123456789ab",
       "Policy": "allowed",
+      "PreviousNativeObjects": null,
       "Scope": "user",
+      "SelectedDelivery": {},
       "Status": "manual_activation_required",
       "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/windsurf"
+      },
       "TargetRoot": "\u003croot\u003e/managed/clients/windsurf",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",

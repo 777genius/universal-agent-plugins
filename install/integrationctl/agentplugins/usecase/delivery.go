@@ -36,13 +36,13 @@ func openAIOAuthApplies(clientID domain.ClientID, envelope domain.PackageEnvelop
 // plan so activation and user-facing results still describe what the caller
 // selected.
 func bindStagedDeliveryToPhysicalOwner(delivery domain.StagedDelivery, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.StagedDelivery, error) {
-	if !sharesPhysicalBackend(plan.ClientID) {
+	if !sharesPhysicalBackend(plan.ClientID, plan.SelectedDelivery, plan.Scope) {
 		return delivery, nil
 	}
 	owner := plan.ClientID
 	if managed != nil {
 		owner = domain.ClientID(managed.ClientID)
-		if !sameNativeBackend(owner, plan.ClientID) || managed.PhysicalArtifact != plan.PhysicalArtifactID {
+		if !sameNativeBackend(owner, plan.ClientID, plan.Scope) || managed.PhysicalArtifact != plan.PhysicalArtifactID {
 			return delivery, fmt.Errorf("shared physical binding identity does not match the staged delivery")
 		}
 	}
@@ -67,6 +67,11 @@ func bindStagedDeliveryToPhysicalOwner(delivery domain.StagedDelivery, plan doma
 }
 
 func initialLifecycle(plan domain.DeliveryPlan) (domain.ActivationState, domain.VerificationState) {
+	// The plan describes the intended external result. A package transaction
+	// cannot establish CLI registration before the activator verifies it.
+	if plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, plan.Scope).LifecycleKind == domain.LifecycleCLIRegistry && plan.Activation == domain.ActivationActive {
+		return domain.ActivationPrepared, domain.VerificationPackageValid
+	}
 	return plan.Activation, plan.Verification
 }
 
@@ -98,6 +103,16 @@ func newOperationID() (string, error) {
 }
 
 func packageNeedsPluginData(envelope domain.PackageEnvelope, plan domain.DeliveryPlan) bool {
+	if domain.ClientTraitsFor(plan.ClientID).RequiresPluginData {
+		return true
+	}
+	// The native Cursor Stop selector also belongs to the owned data receipt.
+	if _, ok := plan.SelectedDelivery.CursorFacts(); ok {
+		return true
+	}
+	if facts, ok := plan.SelectedDelivery.LocalFacts(); ok && facts.NativeStop {
+		return true
+	}
 	for _, name := range domain.SelectedMCPNames(plan) {
 		server := envelope.MCP.Servers[name]
 		if server.Type == "stdio" {
@@ -113,7 +128,7 @@ func (service Service) preflightActivation(input AddInput, plan domain.DeliveryP
 		return nil
 	}
 	return preflighter.PreflightActivation(domain.ActivationRequest{
-		Client: input.Client, Plan: plan, BackendExecutable: input.BackendExecutable,
-		VerifyOnly: input.DryRun,
+		Client: input.Client, Plan: cloneLocalObservationPlan(plan), BackendExecutable: input.BackendExecutable,
+		VerifyOnly: input.DryRun, ActivationComplete: input.ActivationComplete,
 	})
 }

@@ -119,7 +119,7 @@ func TestOrdinaryDirectoryOriginPreservesProductionTrustAndBootstrap(t *testing.
 		t.Fatalf("ordinary origin changed production configuration: origin=%q keys=%d require_bootstrap=%v", client.Origin, len(client.Trust.Keys), client.RequireEmbeddedBootstrap)
 	}
 	bundle, err := client.Embedded.Verify(client.Trust)
-	if err != nil || bundle.Snapshot.Sequence != 38 || bundle.Digest != "sha256:fb1817f377adc3008bf1d20493599f688f96d08511bd33fcb5c0409867547c28" {
+	if err != nil || bundle.Snapshot.Sequence != 43 || bundle.Digest != "sha256:7ffb6078ac08e7ed00575dbf9a871b0dba53c755591d8983dd9399bfdc4edaf6" {
 		t.Fatalf("ordinary origin changed production bootstrap identity: sequence=%d digest=%q err=%v", bundle.Snapshot.Sequence, bundle.Digest, err)
 	}
 }

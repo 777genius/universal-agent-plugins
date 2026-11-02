@@ -17,6 +17,7 @@ const plugin = computed(() =>
       item.trust_state === 'conformant_unreviewed' && item.install_source === requestedSource.value,
   ),
 );
+const discoveryStale = useDiscoveryIsStale(() => plugin.value ?? {});
 const discoverySettled = computed(() =>
   ['current', 'cached', 'stale', 'unavailable'].includes(discovery.value.state),
 );
@@ -132,7 +133,19 @@ usePageSeo(
             </div>
           </dl>
 
-          <SecurityAssessmentPanel v-if="plugin.security" :plugin="plugin" />
+          <SecurityAssessmentPanel v-if="plugin.security && !discoveryStale" :plugin="plugin" />
+          <SkillSpectorAssessment
+            :applicable="plugin.components.includes('skills')"
+            :subject="{
+              kind: 'plugin',
+              repository: plugin.source.repository,
+              path: plugin.source.path,
+              revision: plugin.source.revision,
+            }"
+            :name="plugin.display_name"
+            scope="plugin"
+            expanded
+          />
         </article>
 
         <InstallPanel v-model:targets="targets" v-model:auto-detect="autoDetect" :plugin="plugin" />

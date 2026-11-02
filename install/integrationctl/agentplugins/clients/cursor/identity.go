@@ -11,9 +11,21 @@ var _ clients.RegistryInspector = (*Adapter)(nil)
 
 func (*Adapter) UsesNativeRegistryExecutable() bool { return false }
 
-func (*Adapter) InspectNativeRegistry(ctx context.Context, _ clients.Env, _ domain.DetectedClient, _ domain.DeliveryPlan, _ *domain.ClientBinding) (clients.RegistryFinding, error) {
+func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
+	}
+	if plan.Scope == domain.ScopeProject {
+		root, err := cursorPlanRoot(client, plan)
+		if err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		if managed != nil {
+			selected := *managed
+			selected.NativeObjects = cursorNativeObjects(managed.NativeObjects)
+			managed = &selected
+		}
+		return cursorComponents(root).Inspect(plan.Components, managed, env.NativeConfig)
 	}
 	// This manual preparation contract has no managed executable registration.
 	// Clear leaves the existing prepared-directory collision walk in charge;

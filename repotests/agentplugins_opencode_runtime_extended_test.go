@@ -38,7 +38,7 @@ func TestAgentpluginsOpenCodeNativeRuntimeExtended(t *testing.T) {
 	client := openCodeNativeBinary(t, "AGENTPLUGINS_OPENCODE_BIN")
 	installer := openCodeNativeBinary(t, "AGENTPLUGINS_INSTALLER_BIN")
 	scanner := openCodePrepareNative(t, f, client)
-	if got := openCodeVersionString(t, f, client); got != "1.18.29" {
+	if got := openCodeVersionString(t, f, client); got != "1.18.34" {
 		t.Fatal(got)
 	}
 	identity, err := nativeSourceIdentity(os.Getenv("AGENTPLUGINS_INSTALLER_COMMIT"), os.Getenv("AGENTPLUGINS_INSTALLER_TREE"), os.Getenv("AGENTPLUGINS_INSTALLER_PATCH_SHA256"))

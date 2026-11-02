@@ -15,12 +15,16 @@ type Adapter struct{}
 func New() *Adapter { return &Adapter{} }
 
 var (
-	_ clients.Adapter            = (*Adapter)(nil)
-	_ clients.HostDetector       = (*Adapter)(nil)
-	_ clients.Lifecycle          = (*Adapter)(nil)
-	_ clients.AutomaticActivator = (*Adapter)(nil)
-	_ clients.ReadOnlyVerifier   = (*Adapter)(nil)
+	_ clients.Adapter                     = (*Adapter)(nil)
+	_ clients.OpenCodeHostProfileConsumer = (*Adapter)(nil)
+	_ clients.HostDetector                = (*Adapter)(nil)
+	_ clients.Lifecycle                   = (*Adapter)(nil)
+	_ clients.AutomaticActivator          = (*Adapter)(nil)
+	_ clients.ReadOnlyVerifier            = (*Adapter)(nil)
 )
+
+// UsesOpenCodeHostProfile opts native mutations into explicit runtime authority.
+func (*Adapter) UsesOpenCodeHostProfile() bool { return true }
 
 // ID reports the client this adapter serves.
 func (*Adapter) ID() domain.ClientID { return domain.ClientOpenCode }
@@ -31,6 +35,7 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	configRoot := host.XDGConfigRoot("opencode")
 	surfaces := []domain.ClientSurface{
 		host.BinarySurface("opencode_cli", "opencode"),
+		host.BinarySurface("opencode2_cli", "opencode2"),
 		host.DirectorySurface("opencode_config", configRoot),
 	}
 	switch host.GOOS() {

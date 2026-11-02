@@ -39,6 +39,13 @@ func newSwitchCommand(app App, opts *options) *cobra.Command {
 		Short: "Move a complete Agent Plugin installation to a reviewed source",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
+			if err := rejectProjectCommand(app, "switch"); err != nil {
+				return err
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}

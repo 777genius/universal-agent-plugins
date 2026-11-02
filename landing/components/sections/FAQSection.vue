@@ -36,7 +36,11 @@ const faqIconById: Record<string, string> = {
   whichPathFirst: mdiCodeTags,
 };
 
-const { locale } = useI18n();
+const {
+  quickstartUrl, buildGuideUrl, useGuideUrl,
+  quickstartEnglishFallback, buildGuideEnglishFallback, useGuideEnglishFallback,
+  docsLabel,
+} = useDocsLinks();
 
 const faqLabelById = computed<Record<string, string>>(() => ({
   whatIsIt: t('faq.labels.whatIsIt'),
@@ -47,27 +51,23 @@ const faqLabelById = computed<Record<string, string>>(() => ({
   whichPathFirst: t('faq.labels.whichPathFirst'),
 }));
 
-const faqQuickLinks = computed(() => {
-  const docsBase = `https://777genius.github.io/universal-agent-plugins/docs/${locale.value}`;
-
-  return [
-    {
-      title: t('faq.quickLinks.quickstartTitle'),
-      body: t('faq.quickLinks.quickstartBody'),
-      href: `${docsBase}/guide/quickstart.html`,
-    },
-    {
-      title: t('faq.quickLinks.buildTitle'),
-      body: t('faq.quickLinks.buildBody'),
-      href: `${docsBase}/build/`,
-    },
-    {
-      title: t('faq.quickLinks.useTitle'),
-      body: t('faq.quickLinks.useBody'),
-      href: `${docsBase}/use/`,
-    },
-  ];
-});
+const faqQuickLinks = computed(() => [
+  {
+    title: docsLabel(t('faq.quickLinks.quickstartTitle'), quickstartEnglishFallback.value),
+    body: t('faq.quickLinks.quickstartBody'),
+    href: quickstartUrl.value,
+  },
+  {
+    title: docsLabel(t('faq.quickLinks.buildTitle'), buildGuideEnglishFallback.value),
+    body: t('faq.quickLinks.buildBody'),
+    href: buildGuideUrl.value,
+  },
+  {
+    title: docsLabel(t('faq.quickLinks.useTitle'), useGuideEnglishFallback.value),
+    body: t('faq.quickLinks.useBody'),
+    href: useGuideUrl.value,
+  },
+]);
 </script>
 
 <template>

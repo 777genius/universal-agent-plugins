@@ -17,6 +17,9 @@ var (
 // PreflightActivation rejects a prepare request that has not presented a
 // validated personal mapping. Other intents have nothing extra to check.
 func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequest) error {
+	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject || request.Plan.TargetContext.ProjectRoot != "" {
+		return fmt.Errorf("chatgpt does not support project scope")
+	}
 	if request.Plan.InstallIntent != domain.InstallIntentPrepare {
 		return nil
 	}
@@ -56,5 +59,8 @@ func (*Adapter) Activate(_ context.Context, env clients.Env, request domain.Acti
 
 // Deactivate requires the operator to uninstall in ChatGPT Plugins first.
 func (*Adapter) Deactivate(_ context.Context, _ clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if request.TargetContext.Scope == domain.ScopeProject || request.TargetContext.ProjectRoot != "" {
+		return domain.DeactivationOutcome{}, fmt.Errorf("chatgpt does not support project scope")
+	}
 	return shared.RequireExternalUninstall(shared.StartedDeactivation(), request.ExternalUninstalled, "uninstall the plugin in ChatGPT Plugins, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"), nil
 }

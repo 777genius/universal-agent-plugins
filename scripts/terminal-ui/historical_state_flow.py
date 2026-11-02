@@ -149,11 +149,14 @@ def release_flow(current, go, tag, version, expected_schema, root):
     parse_json(applied.stdout, "migrate-apply")
     migrated = json.loads(state_path.read_text(encoding="utf-8"))
     check(
-        migrated.get("schema_version") == 4,
-        f"{tag}: migration did not write schema 4")
+        migrated.get("schema_version") == 5,
+        f"{tag}: migration did not write schema 5")
     check(
         len(migrated.get("installations", [])) == 1,
         f"{tag}: migration lost installation")
+    check(
+        not migrated.get("environment_receipts"),
+        f"{tag}: migration invented dependency environment ownership")
     backups = list(state_path.parent.glob(
         f"{state_path.name}.schema{expected_schema}.backup-agentplugins-*"))
     check(
@@ -167,7 +170,7 @@ def release_flow(current, go, tag, version, expected_schema, root):
     parse_json(removed.stdout, "current-remove")
     final = json.loads(state_path.read_text(encoding="utf-8"))
     check(
-        final.get("schema_version") == 4 and
+        final.get("schema_version") == 5 and
         not final.get("installations"),
         f"{tag}: migrated state did not complete remove lifecycle")
 

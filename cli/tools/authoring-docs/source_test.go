@@ -66,6 +66,14 @@ func committedFixture(t *testing.T) string {
 // layout migration. It is a test input, not a new public documentation pin.
 const sourceFixtureSHA = "0506dd888029ad69d07dd5263669fb53766dbdf9"
 
+// The domain pins advanced after sourceFixtureSHA. Use their already-pinned
+// historical bytes, independently checked below, rather than current S1 source.
+const sourceFixtureDomainSHA = "c77c9975eb41d81bcca178b2974ecc6cd1eb1d22"
+
+// The registry pin includes the later audited Grok/Kimi integration. Its exact
+// historical blob must still match the unchanged production fingerprint.
+const sourceFixtureRegistrySHA = "66710680c22cc0cf7cc926e1438bb9d647eff1a2"
+
 func newSourceFixture(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs("../../..")
@@ -87,10 +95,17 @@ func newSourceFixture(t *testing.T) string {
 		if want, ok := pinned[path]; ok && (e != nil || fmt.Sprintf("%x", sha256.Sum256(b)) != want) {
 			// Current factory implementations may evolve; the rejection tests
 			// must begin with the unchanged audited source contract.
-			cmd := exec.CommandContext(t.Context(), "git", "-C", root, "show", sourceFixtureSHA+":"+path)
+			sha := sourceFixtureSHA
+			if strings.HasPrefix(path, "install/integrationctl/agentplugins/domain/") {
+				sha = sourceFixtureDomainSHA
+			}
+			if path == "install/integrationctl/agentplugins/domain/clients.go" {
+				sha = sourceFixtureRegistrySHA
+			}
+			cmd := exec.CommandContext(t.Context(), "git", "-C", root, "show", sha+":"+path)
 			b, e = cmd.Output()
 			if e != nil {
-				t.Fatalf("audited fixture input %s unavailable; fetch %s: %v", path, sourceFixtureSHA, e)
+				t.Fatalf("audited fixture input %s unavailable; fetch %s: %v", path, sha, e)
 			}
 			if fmt.Sprintf("%x", sha256.Sum256(b)) != want {
 				t.Fatalf("audited fixture fingerprint differs: %s", path)
@@ -120,13 +135,13 @@ func TestCommittedSourceAndDocsOnlyCommit(t *testing.T) {
 	dir := newSourceFixture(t)
 	first := checkoutSHA(t, dir)
 	a := filepath.Join(t.TempDir(), "a")
-	if err := export(dir, first, a); err != nil {
+	if err := exportTrees(dir, first, a, auditedAncestorFixtureTrees); err != nil {
 		t.Fatal(err)
 	}
 	writeFixture(t, dir, "docs/later.md", []byte("docs only\n"))
 	second := commitFixture(t, dir)
 	b := filepath.Join(t.TempDir(), "b")
-	if err := export(dir, second, b); err != nil {
+	if err := exportTrees(dir, second, b, auditedAncestorFixtureTrees); err != nil {
 		t.Fatal(err)
 	}
 	for _, base := range []struct{ path, sha string }{{a, first}, {b, second}} {
@@ -234,7 +249,7 @@ func TestLoadedProjectionMismatch(t *testing.T) {
 	for _, fact := range []string{"help", "flag", "markdown"} {
 		t.Run(fact, func(t *testing.T) {
 			rejectedBeforeOutput(t, dir, checkoutSHA(t, dir), "loaded documentation projection mismatch", func() ([]*cobra.Command, error) {
-				roots, err := trees()
+				roots, err := auditedAncestorFixtureTrees()
 				if err != nil {
 					return nil, err
 				}

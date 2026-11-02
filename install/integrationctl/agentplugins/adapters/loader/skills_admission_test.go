@@ -3,6 +3,7 @@ package loader
 import (
 	"context"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -32,6 +33,39 @@ func TestSkillAdmissionKeepsHealthyComponents(t *testing.T) {
 				}
 			}
 			t.Fatal("missing skill-boundary diagnostic for bad")
+		})
+	}
+}
+
+func TestPortableMCPReservedAliasKeepsHealthyComponents(t *testing.T) {
+	for _, env := range []string{`{"plugin_root":"foreign"}`, `{"Plugin_Data":"foreign"}`} {
+		t.Run(env, func(t *testing.T) {
+			root := t.TempDir()
+			writeMinimalPlugin(t, root, "mixed")
+			writeLoaderFile(t, filepath.Join(root, "skills", "healthy", "SKILL.md"),
+				"---\nname: healthy\ndescription: Portable Skill\n---\nInstructions.\n")
+			writeLoaderFile(t, filepath.Join(root, "mcp.json"), `{"$schema":"`+domain.MCPSchemaV1+
+				`","mcpServers":{"selected":{"type":"stdio","command":"node","env":`+env+
+				`},"healthy":{"type":"streamable-http","url":"https://example.test/mcp"}}}`)
+			pkg, err := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := pkg.Skills["healthy"]; !ok {
+				t.Fatal("valid Skill was lost")
+			}
+			if _, ok := pkg.MCP.Servers["healthy"]; !ok {
+				t.Fatal("valid remote MCP server was lost")
+			}
+			_, selected := pkg.MCP.Servers["selected"]
+			if selected == (runtime.GOOS == "windows") {
+				t.Fatalf("server admission inconsistent with host semantics: selected=%v", selected)
+			}
+			if runtime.GOOS == "windows" {
+				if pkg.MCP.InvalidServer["selected"].Code != "mcp_server_invalid" {
+					t.Fatalf("missing isolated invalid server: %+v", pkg.MCP.InvalidServer)
+				}
+			}
 		})
 	}
 }

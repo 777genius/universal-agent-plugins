@@ -29,7 +29,7 @@
 .docs-hero h1 {
   margin: 0;
   font-size: clamp(2.4rem, 5vw, 3.5rem);
-  line-height: 1;
+  line-height: 1.12;
 }
 
 .docs-lead {
@@ -102,8 +102,8 @@ a.docs-card * {
 }
 
 .language-gateway {
-  width: min(100%, 860px);
-  max-width: 860px;
+  width: min(100%, 1080px);
+  max-width: 1080px;
   margin: 3rem auto;
   padding: 0 1rem;
   box-sizing: border-box;
@@ -197,7 +197,7 @@ a.docs-card * {
 }
 
 .locale-switcher--navbar .locale-switcher__button {
-  margin-left: 14px;
+  margin-inline-start: 14px;
   height: 36px;
   padding: 0 10px;
   border: 1px solid color-mix(in srgb, var(--vp-c-divider) 86%, transparent);
@@ -235,21 +235,17 @@ a.docs-card * {
 
 .locale-switcher__menu {
   position: absolute;
-  top: calc(var(--vp-nav-height) / 2 + 20px);
-  right: 0;
+  top: 100%;
+  padding-top: calc((var(--vp-nav-height) - 36px) / 2);
+  inset-inline-end: 0;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(6px);
-  transition:
-    opacity 0.2s ease,
-    visibility 0.2s ease,
-    transform 0.2s ease;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 
 .locale-switcher.is-open .locale-switcher__menu {
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
 }
 
 .locale-switcher__panel {
@@ -308,7 +304,8 @@ a.docs-card * {
 }
 
 .locale-switcher__screen {
-  padding: 6px 0 0 24px;
+  padding-block: 6px 0;
+  padding-inline: 24px 0;
 }
 
 .locale-switcher__screen-link {
@@ -460,4 +457,129 @@ a.docs-card * {
   color: var(--vp-c-warning-1);
   background: var(--vp-c-warning-soft);
   font-weight: 600;
+}
+
+/* Reading rhythm and touch targets stay consistent across every writing system. */
+:root {
+  --vp-font-family-base: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", "Noto Sans Devanagari", "Noto Sans Arabic", sans-serif;
+}
+.vp-doc { overflow-wrap: break-word; }
+.vp-doc p, .vp-doc li { line-height: 1.8; }
+.vp-doc h1 { line-height: 1.25; text-wrap: balance; }
+.vp-doc h2, .vp-doc h3 { line-height: 1.4; }
+.vp-doc table { max-width: 100%; }
+.vp-doc th, .vp-doc td { min-width: 7rem; vertical-align: top; }
+.vp-doc a:focus-visible, .docs-card:focus-visible, .language-gateway__card:focus-visible,
+.locale-switcher__button:focus-visible, .locale-switcher a:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 4px;
+}
+.language-gateway__intro h1 {
+  margin: 0.5rem 0 1rem;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+.language-gateway__intro > p:not(.language-gateway__eyebrow) {
+  font-size: 1.05rem;
+  line-height: 1.75;
+  color: var(--vp-c-text-2);
+}
+.language-gateway__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.language-gateway__card {
+  align-content: start;
+  gap: 0.65rem;
+  padding: 1.35rem;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+.language-gateway__card:hover {
+  border-color: var(--vp-c-brand-1);
+  background-color: var(--vp-c-brand-soft);
+  transform: translateY(-2px);
+}
+.language-gateway__code {
+  font-size: 0.7rem;
+  line-height: 1.4;
+  letter-spacing: 0.12em;
+  color: var(--vp-c-text-3);
+}
+.language-gateway__card strong { font-size: 1.15rem; line-height: 1.5; font-weight: 650; }
+.language-gateway__card small { font-size: 0.85rem; line-height: 1.7; color: var(--vp-c-text-2); }
+.locale-switcher__panel { max-height: min(640px, calc(100dvh - 100px)); overflow-y: auto; }
+.locale-switcher__link { min-height: 42px; font-size: 14px; }
+.locale-switcher__screen-link { min-height: 42px; }
+.doc-meta-card__source { overflow-wrap: anywhere; max-width: 100%; }
+
+/* Technical syntax retains its reading order inside right-to-left prose. */
+html[dir="rtl"] .vp-doc { font-family: "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif; }
+html[dir="rtl"] .vp-doc p, html[dir="rtl"] .vp-doc li { line-height: 1.95; }
+html[dir="rtl"] .vp-doc h1, html[dir="rtl"] .vp-doc h2, html[dir="rtl"] .vp-doc h3,
+html[dir="rtl"] .docs-kicker { letter-spacing: normal; }
+html[dir="rtl"] :is(pre, code, kbd, .mermaid, .mermaid-diagram, .doc-meta-card__source) {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
+html[dir="rtl"] .VPNavBarSearchButton .keys { direction: ltr; unicode-bidi: isolate; }
+html[dir="rtl"] .vp-doc :not(pre) > code { display: inline-block; max-width: 100%; vertical-align: baseline; }
+html[dir="rtl"] .vp-doc :is(th, td) { text-align: start; }
+html[dir="rtl"] .vp-doc :is(ul, ol) { padding-right: 1.25rem; padding-left: 0; }
+html[dir="rtl"] .vp-doc blockquote { border-left: 0; border-right: 2px solid var(--vp-c-divider); padding-left: 0; padding-right: 16px; }
+html[dir="rtl"] .vp-doc .header-anchor { float: right; margin-left: 0; margin-right: -0.87em; }
+html[dir="rtl"] .VPSidebar { left: auto; right: 0; transform: translateX(100%); }
+html[dir="rtl"] .VPSidebar.open { transform: translateX(0); }
+html[dir="rtl"] .VPSidebarItem .items { border-left: 0; border-right: 1px solid var(--vp-c-divider); padding-left: 0; padding-right: 16px; }
+html[dir="rtl"] .VPSidebarItem .indicator { left: auto; right: -17px; }
+html[dir="rtl"] .VPSidebarItem .caret { margin-right: 0; margin-left: -7px; }
+html[dir="rtl"] .VPSidebarItem.collapsed .caret-icon { transform: rotate(180deg); }
+html[dir="rtl"] .VPNavBarTitle .logo { margin-right: 0; margin-left: 8px; }
+html[dir="rtl"] .VPLocalNav .menu-icon { margin-right: 0; margin-left: 8px; }
+html[dir="rtl"] .VPDocAsideOutline .content { border-left: 0; border-right: 1px solid var(--vp-c-divider); padding-left: 0; padding-right: 16px; }
+html[dir="rtl"] .VPDocAsideOutline .outline-marker { left: auto; right: -1px; }
+html[dir="rtl"] .VPDoc .aside { padding-left: 0; padding-right: 32px; }
+html[dir="rtl"] .VPDocFooter .pager-link { text-align: right; }
+html[dir="rtl"] .VPDocFooter .pager-link.next { text-align: left; }
+html[dir="rtl"] .VPDocOutlineItem.nested { padding-left: 0; padding-right: 16px; }
+html[dir="rtl"] .VPSkipLink { left: auto; right: 8px; }
+html[dir="rtl"] .VPNavBarSearch { padding-left: 0; padding-right: 24px; }
+@media (min-width: 960px) {
+  html[dir="rtl"] .VPSidebar { transform: translateX(0); }
+  html[dir="rtl"] .VPLocalNav.has-sidebar { padding-left: 0; padding-right: var(--vp-sidebar-width); }
+  html[dir="rtl"] .VPNavBar.has-sidebar > .divider { padding-left: 0; padding-right: var(--vp-sidebar-width); }
+  html[dir="rtl"] .VPContent.has-sidebar { padding-left: 0; padding-right: var(--vp-sidebar-width); }
+  html[dir="rtl"] .VPNavBar.has-sidebar > .wrapper > .container > .title { left: auto; right: 0; }
+  html[dir="rtl"] .VPNavBar.has-sidebar .content { padding-left: 32px; padding-right: var(--vp-sidebar-width); }
+  html[dir="rtl"] .VPNavBar .content-body { margin-right: 0; padding-right: 0; margin-left: -100vw; padding-left: 100vw; }
+}
+@media (min-width: 1440px) {
+  html[dir="rtl"] .VPNavBar.has-sidebar > .divider { padding-right: calc((100% - var(--vp-layout-max-width)) / 2 + var(--vp-sidebar-width)); }
+  html[dir="rtl"] .VPSidebar { padding-left: 32px; padding-right: max(32px, calc((100% - (var(--vp-layout-max-width) - 64px)) / 2)); }
+  html[dir="rtl"] .VPContent.has-sidebar { padding-left: calc((100% - var(--vp-layout-max-width)) / 2); padding-right: calc((100% - var(--vp-layout-max-width)) / 2 + var(--vp-sidebar-width)); }
+  html[dir="rtl"] .VPNavBar.has-sidebar > .wrapper > .container > .title { padding-left: 32px; padding-right: max(32px, calc((100% - (var(--vp-layout-max-width) - 64px)) / 2)); }
+  html[dir="rtl"] .VPNavBar.has-sidebar .content { padding-left: calc((100% - var(--vp-layout-max-width)) / 2 + 32px); padding-right: calc((100% - var(--vp-layout-max-width)) / 2 + var(--vp-sidebar-width)); }
+}
+@media (min-width: 768px) and (max-width: 1279px) {
+  .VPNavBarSearch .DocSearch-Button-Placeholder, .VPNavBarSearch .DocSearch-Button-Keys,
+  .VPNavBarSearch .VPNavBarSearchButton .text, .VPNavBarSearch .VPNavBarSearchButton .keys { display: none; }
+  .VPNavBarMenuLink { padding-inline: 8px; }
+  .locale-switcher--navbar .locale-switcher__button { margin-inline-start: 6px; }
+}
+@media (max-width: 767px) {
+  .language-gateway__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vp-doc h1 { font-size: 1.9rem; }
+}
+@media (max-width: 480px) {
+  .language-gateway__grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-card, .language-gateway__card, .locale-switcher__menu { transition: none; }
+}
+
+@media (min-width: 768px) and (max-width: 1439px) {
+  /* Long translated journey labels need the compact menu below 1440px.
+     Wrapper specificity overrides VitePress scoped desktop selectors. */
+  .VPNav .VPNavBar .VPNavBarMenu { display: none; }
+  .VPNav .VPNavBar .VPNavBarHamburger { display: flex; }
+  .Layout .VPNav .VPNavScreen { display: block; }
 }

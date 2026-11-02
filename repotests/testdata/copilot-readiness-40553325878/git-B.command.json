@@ -1,0 +1,1 @@
+{"argv":["/usr/bin/git","-c","core.hooksPath=/dev/null","init","--quiet"],"cleanup":"ordinary full-descendant supervision; forced cleanup is a failure","context_error":false,"cwd":"/home/runner/work/_temp/project-runtime-copilot/tmp/TestAgentpluginsCopilotNativeProjectRuntimeAttempt1397621521/001/project-B","elapsed_ms":23,"error":false,"exit":0}

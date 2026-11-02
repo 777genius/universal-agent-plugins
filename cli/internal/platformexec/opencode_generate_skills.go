@@ -2,7 +2,6 @@ package platformexec
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -22,7 +21,7 @@ func renderPortableSkills(root string, paths []string, outputRoot string) ([]plu
 }
 
 func portableSkillArtifact(root, rel, outputRoot string) (pluginmodel.Artifact, error) {
-	body, err := os.ReadFile(filepath.Join(root, rel))
+	body, err := readBundleFile(root, rel, filepath.ToSlash(rel))
 	if err != nil {
 		return pluginmodel.Artifact{}, err
 	}

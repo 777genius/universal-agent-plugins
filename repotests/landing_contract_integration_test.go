@@ -42,17 +42,23 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	if strings.Contains(docsLinks, "from '~/data/docsAvailability'") {
 		mustContain(t, docsLinks, "resolveDocsLink(id, locale.value, configured)")
 		for _, id := range []string{"home", "quickstart", "supportBoundary", "customLogicGuide"} {
-			mustContain(t, docsLinks, "link('"+id+"'")
+			invocation := regexp.MustCompile(`\blink\(\s*'` + regexp.QuoteMeta(id) + `'\s*,`)
+			if !invocation.MatchString(docsLinks) {
+				t.Fatalf("docs composable must resolve the %q page through link", id)
+			}
 		}
+		mustContain(t, docsLinks, "String(config.public.quickstartUrl || '') || ownedPageUrl('quickstart')")
 		docs := readRepoFile(t, landingRoot, "data", "docsAvailability.ts")
 		for _, contract := range []string{
 			"home: ''", "quickstart: 'guide/quickstart.html'",
 			"supportBoundary: 'build/'",
-			"customLogicGuide: 'guide/build-custom-plugin-logic.html'",
+			"customLogicGuide: 'build/checks.html'",
 			"https://777genius.github.io/universal-agent-plugins/docs/",
-			"const docsLanguages = ['en', 'ru', 'es', 'fr', 'zh'] as const",
+			"https://777genius.github.io/docs/",
+			"https://universal-agent-plugins.com/docs/",
+			"const docsLanguages = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'] as const",
 			"(docsLanguages as readonly string[]).includes(locale) ? locale : 'en'",
-			"englishFallback: locale === 'uk'",
+			"englishFallback: locale !== language",
 			"configuredUrl || defaultUrl", "source === owned",
 			"source.startsWith(owned)", "/^[?#]/.test(suffix)",
 			"return { url: source, language: null, englishFallback: false }",
@@ -63,7 +69,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	} else {
 		// Foundation checkpoint: the original docs resolver is still wired.
 		mustContain(t, docsLinks, "import type { LocaleCode } from '~/data/i18n'")
-		mustContain(t, docsLinks, `const docsLocalePattern = /\/(en|ru|es|fr|zh)(?=\/|$)/;`)
+		mustContain(t, docsLinks, `const docsLocalePattern = /\/(en|ru|uk|zh|es|hi|ar|pt|fr)(?=\/|$)/;`)
 		mustContain(t, docsLinks, "new Set<LocaleCode>(['en', 'ru', 'es', 'fr', 'zh'])")
 		for _, path := range []string{"", "guide/quickstart.html", "reference/support-boundary.html", "guide/build-custom-plugin-logic.html"} {
 			mustContain(t, docsLinks, "https://777genius.github.io/universal-agent-plugins/docs/en/"+path+"'")
@@ -137,7 +143,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustNotContain(t, ruContent, `"testimonials"`)
 	mustContain(t, ruContent, `"title": "Проверяемый установочный скрипт"`)
 	mustContain(t, ruContent, `"title": "npx · Node.js 22+"`)
-	mustContain(t, ruContent, `"invocation": "npx universal-agent-plugins"`)
+	mustContain(t, ruContent, `"invocation": "npx -y universal-agent-plugins"`)
 	mustContain(t, ruContent, `"note": "Без постоянной установки: npx скачивает проверенный CLI и запускает команду плагина за один шаг."`)
 	mustNotContain(t, ruContent, `Public-beta обёртка`)
 	mustNotContain(t, ruContent, `"pricing"`)
@@ -161,7 +167,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		}
 	}
 
-	enLocaleBody, err := os.ReadFile(filepath.Join(landingRoot, "locales", "en.json"))
+	enLocaleBody, err := os.ReadFile(filepath.Join(landingRoot, "i18n", "locales", "en.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +188,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustNotContain(t, enLocale, `"hookplex":`)
 	mustNotContain(t, enLocale, `"generate": "generate"`)
 
-	ruLocaleBody, err := os.ReadFile(filepath.Join(landingRoot, "locales", "ru.json"))
+	ruLocaleBody, err := os.ReadFile(filepath.Join(landingRoot, "i18n", "locales", "ru.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +210,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustNotContain(t, ruLocale, `"generate": "generate"`)
 
 	for _, localeFile := range []string{"es.json", "fr.json", "zh.json"} {
-		if _, err := os.Stat(filepath.Join(landingRoot, "locales", localeFile)); err != nil {
+		if _, err := os.Stat(filepath.Join(landingRoot, "i18n", "locales", localeFile)); err != nil {
 			t.Fatalf("expected locale file %s: %v", localeFile, err)
 		}
 		if _, err := os.Stat(filepath.Join(landingRoot, "content", localeFile)); err != nil {
@@ -300,7 +306,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		mustContain(t, pluginsPage, `usePageSeo('Agent Plugins 1.0 Directory | Find Plugins'`)
 	}
 	mustContain(t, pluginsPage, `'@type': 'ItemList'`)
-	mustContain(t, pluginsPage, `<PluginCatalog`)
+	mustContain(t, pluginsPage, `<UnifiedCatalog`)
 	mustContain(t, pluginsPage, `:plugins="registry.plugins"`)
 
 	pluginDetailPageBody, err := os.ReadFile(filepath.Join(landingRoot, "pages", "plugins", "[slug].vue"))
@@ -325,7 +331,8 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustContain(t, agentPage, `projection: { kind: 'client', value: client.id }`)
 	mustContain(t, agentPage, `'@type': 'ItemList'`)
 	mustContain(t, agentPage, `'@type': 'BreadcrumbList'`)
-	mustContain(t, agentPage, `npx universal-agent-plugins add context7 --target`)
+	mustContain(t, agentPage, `const needsLocalExample = client.id === 'grok' || client.id === 'kimi'`)
+	mustContain(t, agentPage, `npx -y universal-agent-plugins add ${needsLocalExample ? './my-plugin' : 'context7'} --target`)
 
 	enContentBody, err := os.ReadFile(filepath.Join(landingRoot, "content", "en.json"))
 	if err != nil {
@@ -383,7 +390,7 @@ func scanRemovedBranding(root string) ([]string, error) {
 		filepath.Join(root, "components"),
 		filepath.Join(root, "content"),
 		filepath.Join(root, "composables"),
-		filepath.Join(root, "locales"),
+		filepath.Join(root, "i18n", "locales"),
 		filepath.Join(root, "types"),
 	}
 	if _, err := exec.LookPath("rg"); err == nil {
@@ -499,7 +506,7 @@ func assertLandingLocaleModel(t *testing.T, root, source string) {
 	}
 	for code := range required {
 		var dictionary map[string]interface{}
-		if err := json.Unmarshal([]byte(readRepoFile(t, root, "locales", code+".json")), &dictionary); err != nil {
+		if err := json.Unmarshal([]byte(readRepoFile(t, root, "i18n", "locales", code+".json")), &dictionary); err != nil {
 			t.Fatalf("%s dictionary: %v", code, err)
 		}
 		if len(dictionary) == 0 {

@@ -1,6 +1,13 @@
 # Changelog
 
-All notable changes to this repository are documented here. **CLI releases** (`plugin-kit-ai` binary built from `cli`) are versioned together with the monorepo for now; SDK history remains in [sdk/CHANGELOG.md](sdk/CHANGELOG.md).
+This log preserves repository changes across the earlier `plugin-kit-ai`
+product and the current `agentplugins` installer. The accumulated Unreleased
+section contains historical entries that have since shipped; its wording is not
+the current availability contract. Use the versioned
+[Agentplugins release notes](https://github.com/777genius/universal-agent-plugins/releases)
+and [current documentation](https://universal-agent-plugins.com/docs/en/) for
+published commands. Runtime SDK history remains in [sdk/CHANGELOG.md](sdk/CHANGELOG.md);
+TypeScript Management SDK releases are in [sdks/typescript/CHANGELOG.md](sdks/typescript/CHANGELOG.md).
 
 ## [Unreleased]
 
@@ -8,6 +15,36 @@ Changes after `v1.2.4` land here.
 
 ### Added
 
+- Unreleased source commands `agentplugins deps export` and `deps import`
+  transfer the exact validated `uap.toml` / `uap.lock` pair through the current
+  folder (or an optional directory), with a preview and confirmation for every
+  copy. `deps import --install` restores through the strict locked installer;
+  installation failures after saving retain the imported desired state.
+
+- Dependency environments now accept stable exact/caret registry versions and
+  transitive `plugin.json` dependencies, choosing one compatible minimum version
+  per source in the existing `uap.lock`. Compatible pins replay unchanged;
+  shared packages remain while required. Offline `deps tree` shows the graph,
+  and `deps update <alias>` refreshes registry ranges without changing intent.
+  Locked replay verifies pinned declarations and rejects incomplete graphs
+  before installation or repair. This remains an unreleased source workflow.
+
+- Locked install/sync fetches each missing immutable pin once per command,
+  stages verified bytes through preflight and publishes the store after
+  confirmation. Exact copied-lock restore permits superseded, non-revoked
+  registry releases without changing versions or claiming installed history;
+  publication identity, revocation, suspension and compatibility checks remain
+  enforced. Ordinary fresh registry selection still requires an active release.
+
+- `agentplugins install` is the everyday environment converge verb, matching
+  how package managers are used: a first run installs everything declared in
+  `uap.toml` and `uap.lock`, a repeat run is a successful nothing-to-do, and
+  missing or drifted environment-owned projections are repaired from their
+  recorded lock pin before converging to the locked state. It accepts
+  `--locked`, `--yes` and `--external-uninstalled` with the same fail-closed
+  meaning as `deps sync`. `install <name-or-source>` keeps the historical
+  `add` alias contract, so the bare `install` command replaces the old alias;
+  `agentplugins add` remains the canonical single-package verb.
 - The `agentplugins` lifecycle commands now accept ordered, comma-separated
   targets such as `--target codex,cursor`, with versioned batch JSON output and
   explicit partial-failure reporting that preserves successful client changes.
@@ -15,6 +52,84 @@ Changes after `v1.2.4` land here.
   receipt reconciliation, exact native discovery, the observed client version,
   and path-free command evidence without changing its additive schema-version 1
   envelope or mutating installation state.
+- Portable commands for Agent Plugins packages. A Markdown file in
+  `io.github.777genius.agentplugins/commands/` becomes the skill
+  `<slug>-<name>` in every client that takes skills. A command marked
+  `disable-model-invocation: true` is explicit-only: it reaches a client only
+  when that client is confirmed to keep it out of automatic invocation, and is
+  otherwise withheld with the `explicit_invocation_not_enforceable` warning. No
+  client is confirmed yet, so explicit-only commands are withheld everywhere in
+  this release. GitHub Copilot CLI and Visual Studio Code receive no commands
+  at all while Visual Studio Code is frozen: they share one installed package,
+  so each command is withheld from both with the
+  `command_not_supported_by_client` warning. See [docs/UAP_COMMANDS.md](docs/UAP_COMMANDS.md) and
+  [ADR 0008](docs/adr/0008-portable-commands.md).
+- `agentplugins validate` counts `commands` and `invalid_commands`, plans of
+  `add`, `update` and `info` mark rendered skills with `source` and
+  `source_name`, and command problems are diagnostics with `boundary: command`.
+
+### Changed
+
+The following `agentplugins` changes are breaking. They ship in the next minor
+0.x release without a compatibility layer; each item says how to move.
+
+- **`io.github.777genius.agentplugins/commands/` is now read.** Every entry in
+  it except dotfiles must be a valid command; an invalid one is reported and
+  not delivered. Move unrelated files elsewhere, and add the CI check from
+  [docs/UAP_COMMANDS.md](docs/UAP_COMMANDS.md#checking-commands-in-ci), since
+  `agentplugins validate` still exits with success on invalid commands.
+- **Update refreshes command skills first.** For a package with commands,
+  `update` of an unchanged revision now re-renders the command skills with the
+  current rules before the ordinary update when the installed command skills
+  differ from the current rendering, and changes nothing otherwise; other
+  host projection changes are left alone, as for a package without commands. Its preview, single or grouped, is never unchanged:
+  `update --all` and the batch update plan such a package instead of skipping
+  it as current, and an embedded installer's preview reports
+  `RequiresConfirmation` rather than `NoChange`. Hosts that skip unchanged
+  previews need no change. After upgrading the installer, run
+  `agentplugins update <name>` for packages with commands; `update --all`
+  still skips Directory installations reported current by Discovery. Saved
+  dependency environments pick up new rules at their next pin change.
+- **Outdated command projections are refused.** Operations that keep the
+  installed tree return `usecase.ErrProjectionRefreshRequired` (the same
+  value as the new `domain.ErrProjectionRefreshRequired`) when the command
+  skills of an intact package would render differently today: repair, both
+  single-target and the group repair behind `agentplugins repair`, and, on
+  clients that track native objects, a repeated add, a resumed activation and
+  an unchanged group target. The embedded installer wraps it in
+  `ErrUpdateRequired` with the `update_required` reason. Check for either with
+  `errors.Is` and run `OpUpdate` instead. A saved dependency gets
+  `usecase.ErrProjectionPinChangeRequired` instead, reported by the embedded
+  installer with the `pin_change_required` reason and no next action, because
+  it applies new command rules only at its next pin change.
+- **Go API.** `installer.ComponentDecision` gains `Source` and `SourceName`, so
+  unkeyed literals must name their fields. `clients.OpenCodeNativeRequirements`
+  takes the client definition, because commands alone can deliver skills.
+  `domain.SecurityEvaluationInput` gains `Commands` and `PluginName`; hosts
+  that call the evaluator directly pass them so the scan covers the rendered
+  commands. An adapter that sets `ClientTraits.EnforcesExplicitSkillInvocation`
+  must implement `clients.ExplicitSkillDecorator`, and an adapter whose
+  projection moves the package's `skills/` elsewhere must implement
+  `clients.SkillsLocator`, so installed command skills can be read back.
+- **Security review.** A package with commands is always scanned locally, or
+  served from a cache entry for the same rendered commands; a signed Directory
+  verdict is not accepted for it.
+- **Authoring reports.** Invalid commands fail Readiness as `installer_policy`
+  findings without changing Conformance or HostSafety. Compatibility reports a
+  withheld explicit-only command as the warning `target_command_withheld`, and
+  as an error only when the client gets nothing else.
+- **Workspace lock renamed to `.uap-integrations.lock`.** The workspace desired
+  state file written by `plugin-kit-ai integrations sync` is now
+  `<repo>/.uap-integrations.lock`, so its name no longer collides with the
+  legacy `plugin-kit-ai` branding or with the dependency environment lock
+  `uap.lock`. `plugin-kit-ai integrations` commands read and write only the new
+  name: a repository whose lock still carries the legacy
+  `.plugin-kit-ai.lock` name fails with rename guidance instead of silently
+  adopting or rewriting it, so migrate with `mv .plugin-kit-ai.lock
+  .uap-integrations.lock`. The legacy name remains an accepted package-tree
+  exclusion everywhere digests are computed, so existing workspaces see no
+  digest drift. Authoring reports list the tree exclusion as
+  `root non-directory .uap-integrations.lock`.
 
 ### Fixed
 

@@ -82,6 +82,10 @@
           }
         }
       }
-    ]
+    ],
+    "environment": {
+      "reason": "local_source_not_portable",
+      "saved": false
+    }
   }
 }

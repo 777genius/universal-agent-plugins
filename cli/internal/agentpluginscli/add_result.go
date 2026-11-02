@@ -102,7 +102,7 @@ func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 		_, err := fmt.Fprintln(writer, message+"\nNext: "+nextLocalLifecycleAction(result))
 		return err
 	}
-	if result.NoChange {
+	if result.NoChange && fullyInstalled(result.Activation) {
 		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed and lifecycle verification is complete. No changes made."))
 		return nil
 	}

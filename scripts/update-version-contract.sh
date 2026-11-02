@@ -6,15 +6,14 @@ cd "$ROOT"
 
 source "$ROOT/scripts/version-contract.env"
 
-if [[ -z "${GO_SDK_VERSION:-}" || -z "${RUNTIME_PACKAGE_VERSION:-}" ]]; then
-  echo "version contract is incomplete; expected GO_SDK_VERSION and RUNTIME_PACKAGE_VERSION" >&2
+if [[ -z "${GO_SDK_VERSION:-}" || -z "${RUNTIME_PACKAGE_VERSION:-}" || -z "${GO_SDK_GUIDE_VERSION:-}" ]]; then
+  echo "version contract is incomplete; expected GO_SDK_VERSION, RUNTIME_PACKAGE_VERSION and GO_SDK_GUIDE_VERSION" >&2
   exit 1
 fi
 
 files=(
   README.md
   cli/README.md
-  sdk/README.md
   docs/CHOOSING_HELPER_DELIVERY_MODE.md
   examples/starters/README.md
   examples/starters/codex-go-starter/README.md
@@ -55,5 +54,12 @@ perl_expr=(
 )
 
 perl "${perl_expr[@]}" "${files[@]}"
+
+# This guide describes newer published APIs; legacy scaffold synchronization must
+# not downgrade its module references to the preserved starter/runtime version.
+perl -0pi \
+  -e "s{github\\.com/777genius/plugin-kit-ai/sdk\\@v\\d+\\.\\d+\\.\\d+}{github.com/777genius/plugin-kit-ai/sdk\\@${GO_SDK_GUIDE_VERSION}}g;" \
+  -e "s{published \\[v\\d+\\.\\d+\\.\\d+ module\\]}{published [${GO_SDK_GUIDE_VERSION} module]}g;" \
+  sdk/README.md
 
 echo "updated pinned version references from scripts/version-contract.env"

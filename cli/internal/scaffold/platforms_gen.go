@@ -92,6 +92,28 @@ var generatedPlatforms = map[string]PlatformDefinition{
 			{Path: "plugin/skills/{{.ProjectName}}/SKILL.md", Template: "SKILL.md.tmpl", Extra: true},
 		},
 	},
+	"grok": {
+		Name: "grok",
+		Files: []TemplateFile{
+			{Path: "plugin/plugin.yaml", Template: "plugin.yaml.tmpl", Extra: false},
+			{Path: "plugin/README.md", Template: "grok.README.md.tmpl", Extra: false},
+			{Path: "plugin/mcp/servers.yaml", Template: "mcp.servers.yaml.tmpl", Extra: true},
+			{Path: "plugin/skills/{{.ProjectName}}/SKILL.md", Template: "SKILL.md.tmpl", Extra: true},
+			{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl", Extra: false},
+			{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl", Extra: false},
+		},
+	},
+	"kimi": {
+		Name: "kimi",
+		Files: []TemplateFile{
+			{Path: "plugin/plugin.yaml", Template: "plugin.yaml.tmpl", Extra: false},
+			{Path: "plugin/README.md", Template: "kimi.README.md.tmpl", Extra: false},
+			{Path: "plugin/mcp/servers.yaml", Template: "mcp.servers.yaml.tmpl", Extra: true},
+			{Path: "plugin/skills/{{.ProjectName}}/SKILL.md", Template: "SKILL.md.tmpl", Extra: true},
+			{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl", Extra: false},
+			{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl", Extra: false},
+		},
+	},
 	"opencode": {
 		Name: "opencode",
 		Files: []TemplateFile{
@@ -111,6 +133,20 @@ var generatedPlatforms = map[string]PlatformDefinition{
 			{Path: "plugin/targets/opencode/tools/{{.ProjectName}}.ts", Template: "opencode.tool.ts.tmpl", Extra: true},
 			{Path: "plugin/targets/opencode/plugins/example.js", Template: "opencode.plugin.js.tmpl", Extra: true},
 			{Path: "plugin/targets/opencode/package.json", Template: "opencode.package.json.tmpl", Extra: true},
+		},
+	},
+	"qoder": {
+		Name: "qoder",
+		Files: []TemplateFile{
+			{Path: "plugin/plugin.yaml", Template: "plugin.yaml.tmpl", Extra: false},
+			{Path: "plugin/README.md", Template: "qoder.README.md.tmpl", Extra: false},
+			{Path: "plugin/mcp/servers.yaml", Template: "mcp.servers.yaml.tmpl", Extra: true},
+			{Path: "plugin/skills/{{.ProjectName}}/SKILL.md", Template: "SKILL.md.tmpl", Extra: true},
+			{Path: "plugin/targets/qoder/hooks/hooks.json", Template: "targets.qoder.hooks.json.tmpl", Extra: true},
+			{Path: "plugin/targets/qoder/commands/{{.ProjectName}}.md", Template: "targets.qoder.command.md.tmpl", Extra: true},
+			{Path: "plugin/targets/qoder/bin/{{.ProjectName}}-hook", Template: "targets.qoder.hook.sh.tmpl", Extra: true},
+			{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl", Extra: false},
+			{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl", Extra: false},
 		},
 	},
 }

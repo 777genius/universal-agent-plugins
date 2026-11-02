@@ -15,6 +15,15 @@
   "Objects": [
     {
       "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
       "Kind": "managed_package_directory",
       "LogicalName": "demo",
       "ManagedDigest": "${ARTIFACT}",

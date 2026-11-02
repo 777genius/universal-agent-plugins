@@ -12,50 +12,114 @@ translationRequired: true
 
 # Use plugins / Build plugins
 
-Install available plugins or prepare a portable Agent Plugins 1.0 package.
+Install a package for the agents you use, or create a portable Agent Plugins 1.0
+package with instructions and tool configuration.
 
 ## Use plugins {#use-plugins}
 
 <a id="optional-first-proof"></a>
 
-Available now: install plugins with Universal Agent Plugins. With Node.js 22+, run:
+With Node.js 22 or newer:
 
 ```bash
 npx universal-agent-plugins add context7
 ```
 
-For native installation on macOS, Linux or Windows, follow the installer guide. The CLI asks which compatible agents to use; individual plugins may need their own runtimes.
+The CLI asks which compatible agents to use and reports any remaining activation
+steps. To inspect and preview first:
 
-[Installer guide](https://github.com/777genius/universal-agent-plugins#quick-start)
+```bash
+npx universal-agent-plugins info context7
+npx universal-agent-plugins add context7 --target codex,cursor --dry-run
+```
 
-Agent Plugins authoring is available in `universal-agent-plugins`; GitHub release: `agentplugins-v*`.
+The [native installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)
+also provides macOS, Linux and Windows executables. The native manager needs no
+Node.js, although individual plugins may require their own runtimes. Check
+`npx universal-agent-plugins version` when using npm: a package-manager channel
+can still provide an older CLI. The automatic selection below requires 0.1.94;
+use the native installer for the verified release. The explicit project commands
+in this guide also work with 0.1.93.
 
-Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+retains explicit project scope and the automatic `install` selection introduced
+in 0.1.94. It also adds a [local management API](../use/manage#local-management-api)
+and [native Pi extensions](../reference/client-compatibility#pi-native-extensions).
+To preview adding a package to a project:
 
-[Client compatibility (English)](https://github.com/777genius/universal-agent-plugins#supported-clients)
+For a compatible reviewed catalog entry, copy its exact commit-pinned Git source and supported target. Directory v1 aliases such as `context7` remain user-scoped. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA`, and `PACKAGE_PATH`; omit `//PACKAGE_PATH` for a repository-root package.
 
-[Tested client versions and platform limitations](/en/reference/client-compatibility)
+Template: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. The command below uses a real historical GitLab commit, not a currently reviewed catalog revision. For a new installation, copy the current reviewed source from the catalog.
+
+```bash
+npx universal-agent-plugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex --scope project \
+  --project-root /path/to/project --dry-run
+```
+
+Choose an existing project directory. Add and maintenance commands default to
+user scope, so select project scope explicitly. In 0.1.94, `install` without a
+source argument selects the project only if the exact current folder contains
+a regular `uap.toml`; explicit scope wins and parents are not searched. Review
+the plan before omitting `--dry-run`. Native discovery, trust, authentication
+and successful MCP calls remain separate from writing the package's files.
+
+[Complete installation journey](../use/install) ·
+[Client compatibility and test boundaries](../reference/client-compatibility)
+
+### Restore a saved dependency set
+
+Check what your selected user environment records:
+
+```bash
+npx universal-agent-plugins deps status
+```
+
+For a saved `uap.toml`/`uap.lock` pair, export from an exchange folder:
+
+```bash
+npx universal-agent-plugins deps export
+```
+
+Copy the folder to another machine, install its target clients, and run there:
+
+```bash
+npx universal-agent-plugins deps import
+npx universal-agent-plugins install --locked --scope user
+```
+
+Only the validated agreement and lock are transferred. Profiles, settings,
+credentials, receipts and plugin data stay separate. Installation still needs
+the exact sources or verified cached packages. For a project, commit the pair
+and restore with explicit `install --locked --scope project`.
+See [maintenance and restoration](../use/manage) for recovery and transfer details.
 
 ## Build plugins {#build-plugins}
 
 <a id="recommended-default"></a>
 <a id="if-you-only-read-one-thing"></a>
 
-Build a portable Agent Plugins 1.0 package around plugin.json, with optional skills/ and mcp.json. Client support depends on the package and its components.
-
-**Agent Plugins authoring is available**
-
-Static authoring is available through `agentplugins author` in `universal-agent-plugins`; GitHub release: `agentplugins-v*`. npm, Homebrew, native archives and public-channel E2E are verified. The release does not run package code, start development servers, bootstrap dependencies, export bundles, or publish packages.
+A standard package starts with root `plugin.json`, and can include
+`skills/<name>/SKILL.md`, `mcp.json`, or both. You can write these files manually
+and validate the package with the released installer:
 
 ```bash
-npm install --global universal-agent-plugins
-agentplugins author init ./my-plugin --template skill --name my-plugin \
-  --description 'Instructions for a repeatable agent task'
-agentplugins author validate ./my-plugin
-agentplugins author inspect ./my-plugin
-agentplugins author test ./my-plugin
+npx universal-agent-plugins validate ./my-plugin
+npx universal-agent-plugins add ./my-plugin --target codex --dry-run
 ```
 
-[Open the complete Build guide](/en/build/)
+These examples assume `./my-plugin` already contains a complete package.
+The [Build guide](../build/) walks through a small manual Skill package and the
+source-build scaffolding tools.
 
-[Read the Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
+**Authoring availability:** the current npm and native installer release does
+not include `agentplugins author`. Current source implements scaffolding,
+static checks, explicit MCP runtime tests, development cycles, dependency
+bootstrap and JSON maintenance. Use the [source-build setup](../build/#build-from-source)
+for those commands. Older authoring release evidence remains tied to its own
+version; it is not a promise about the current installer download.
+
+Static validation does not establish runtime, OAuth or activation. MCP transport
+support also varies by client; for example, Codex does not support declared MCP
+SSE. Keep the package's requirements and remaining checks visible in its README.
+
+[Agent Plugins 1.0 specification](https://agent-plugins.org/specification)

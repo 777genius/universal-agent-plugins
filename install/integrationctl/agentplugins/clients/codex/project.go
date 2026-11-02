@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	_ clients.Projector       = (*Adapter)(nil)
-	_ clients.SelectionReader = (*Adapter)(nil)
+	_ clients.Projector             = (*Adapter)(nil)
+	_ clients.SelectionReader       = (*Adapter)(nil)
+	_ clients.ActiveNativeProjector = (*Adapter)(nil)
 )
 
 // ManagedMCPSelection reports Codex's OpenAI-shaped `.mcp.json`.
@@ -22,6 +23,9 @@ func (*Adapter) ManagedMCPSelection() clients.SelectionLayout {
 
 // Project renders the OpenAI compatibility layout and the managed marketplace.
 func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	if in.Plan.Scope == domain.ScopeProject {
+		return projectCodexComponents(in)
+	}
 	if in.Plan.PackageMode != domain.PackageProjection {
 		return nil, nil
 	}
@@ -32,6 +36,16 @@ func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain
 		return nil, err
 	}
 	return nil, nil
+}
+
+func (*Adapter) ProjectActiveNative(_ context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) ([]domain.NativeObjectOwnership, error) {
+	if plan.Scope != domain.ScopeProject {
+		return nil, nil
+	}
+	if err := validateCodexProjectStdio(root, plan, dataPath); err != nil {
+		return nil, err
+	}
+	return codexProjectObjects(root, envelope, plan)
 }
 
 func projectOpenAI(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, hints domain.CompatibilityHints, dataPath string) error {

@@ -98,7 +98,7 @@ func (loader Loader) Load(ctx context.Context, input domain.LoadInput) (domain.P
 
 	executableFiles := append([]string(nil), input.ExecutableFiles...)
 	sort.Strings(executableFiles)
-	return domain.PackageEnvelope{
+	return withCommands(ctx, domain.PackageEnvelope{
 		LoaderKind:      domain.LoaderKindAgentPlugins,
 		FormatID:        formatID,
 		SchemaURI:       manifest.SchemaURI,
@@ -114,7 +114,7 @@ func (loader Loader) Load(ctx context.Context, input domain.LoadInput) (domain.P
 		ManifestDigest:  manifestDigest,
 		ExecutableFiles: executableFiles,
 		SnapshotRoot:    root,
-	}, nil
+	}, root)
 }
 
 func rejectDiscoverableHooks(root string) error {

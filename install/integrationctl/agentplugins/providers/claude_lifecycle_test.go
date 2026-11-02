@@ -134,7 +134,7 @@ func TestClaudeActivateAndRemoveBoundBlockingRunnerToSharedTimeout(t *testing.T)
 			go func() { done <- operation(context.Background(), runner) }()
 			deadline := <-runner.observed
 			remaining := time.Until(deadline)
-			if remaining < 14*time.Second || remaining > claude.ClaudeProbeTimeout {
+			if remaining < 45*time.Second || remaining > 60*time.Second {
 				t.Fatalf("shared Claude deadline remaining=%s, want approximately %s", remaining, claude.ClaudeProbeTimeout)
 			}
 			close(release)

@@ -34,6 +34,7 @@ type repairMultiResult struct {
 }
 
 type repairRevisionRequest struct {
+	binding  *domain.ClientBinding
 	sequence uint64
 	revision string
 	source   string
@@ -111,7 +112,7 @@ func (session *repairManySession) collectRevisionRequests() error {
 }
 
 func (session *repairManySession) recordTargetRevision(target domain.ClientID) error {
-	binding, err := selectedRepairBinding(session.installation, target, domain.ScopeUser)
+	binding, err := selectedRepairBinding(session.installation, target, session.app.scope())
 	if err != nil {
 		return fmt.Errorf("preflight target %s: %w; no target was changed", target, err)
 	}
@@ -125,10 +126,10 @@ func (session *repairManySession) recordTargetRevision(target domain.ClientID) e
 	}
 	session.targetRevision[target] = key
 	if existing := session.requests[key]; existing != nil {
-		existing.targets = expandAffectedSurfaceTargets(append(existing.targets, bindingSurfaceTargets(binding)...))
+		existing.targets = expandAffectedSurfaceTargets(append(existing.targets, bindingSurfaceTargets(binding)...), session.app.scope())
 		return nil
 	}
-	request.targets = expandAffectedSurfaceTargets(bindingSurfaceTargets(binding))
+	request.targets = expandAffectedSurfaceTargets(bindingSurfaceTargets(binding), session.app.scope())
 	session.requests[key] = &request
 	return nil
 }
@@ -146,6 +147,10 @@ func (session *repairManySession) revisionKey(binding domain.ClientBinding) (str
 			return "", request, err
 		}
 		request.source = source
+		if session.installation.Source.SourceKind != "" {
+			cloned := binding
+			request.binding = &cloned
+		}
 		key = "direct:" + source
 	}
 	key += ":" + binding.PackageRevision.ResolvedRevision + ":" + binding.PackageRevision.TreeDigest + ":" + binding.PackageRevision.ManifestDigest
@@ -156,8 +161,8 @@ func (session *repairManySession) revisionKey(binding domain.ClientBinding) (str
 }
 
 func (session *repairManySession) preflight() error {
-	_, detected, err := preflightSelectedTargets(
-		session.ctx, session.app, session.targets, nil,
+	_, detected, err := preflightProjectLifecycleTargets(
+		session.ctx, session.app, session.opts, session.targets, nil,
 		!session.opts.dryRun && session.installation.OriginMode == domain.OriginModeDirectory,
 		lifecycleInstallIntents(session.installation, session.opts.scope, nil),
 	)
@@ -192,6 +197,9 @@ func (session *repairManySession) resolveRevision(key string) (loadedPackage, er
 	return resolveRepairSource(session.ctx, repairSourceResolutionTimeout, func(resolutionCtx context.Context) (loadedPackage, error) {
 		if session.installation.OriginMode == domain.OriginModeDirectory {
 			return session.app.loadInstalledPackage(resolutionCtx, session.installation, request.targets, domain.DirectoryRepair, request.sequence, request.revision, session.detected)
+		}
+		if request.binding != nil {
+			return session.app.loadRecordedDirect(resolutionCtx, session.installation, *request.binding)
 		}
 		return session.app.loadPackageFor(resolutionCtx, request.source, packageResolutionRequest{
 			Targets: request.targets, Operation: domain.DirectoryRepair, Clients: session.detected,
@@ -245,14 +253,33 @@ func (session *repairManySession) targetInput(target domain.ClientID) (usecase.A
 	if err := prepareLoadedPackageForClient(&clientPackage, target); err != nil {
 		return usecase.AddInput{}, fmt.Errorf("preflight target %s: %w; no target was changed", target, err)
 	}
+	state, err := session.app.StateStore.Load()
+	if err != nil {
+		return usecase.AddInput{}, err
+	}
+	authority, err := environmentAuthorityForBinding(state, session.installation.InstallationID, target, "repair")
+	if err != nil {
+		return usecase.AddInput{}, err
+	}
+	if authority != nil {
+		binding := session.recordedBindings[target]
+		if binding.PackageRevision == nil || clientPackage.envelope.TreeDigest != binding.PackageRevision.TreeDigest || clientPackage.envelope.Source.ResolvedRevision != binding.PackageRevision.ResolvedRevision {
+			return usecase.AddInput{}, fmt.Errorf("repair must restore the exact recorded dependency pin")
+		}
+		clientPackage.envelope.Source.SourceBindingHint = "uap-dependency-git"
+		if loaded.origin == domain.OriginModeDirectory {
+			clientPackage.envelope.Source.SourceBindingHint = "uap-dependency-registry"
+		}
+	}
 	client := session.detected[target]
 	return usecase.AddInput{
-		Envelope: clientPackage.envelope, Client: client, Scope: domain.ScopeUser,
+		Envelope: clientPackage.envelope, Client: client, Scope: session.app.scope(),
 		Interactive: false, Hints: clientPackage.hints,
 		InstallationID:    session.installation.InstallationID,
-		BackendExecutable: backendExecutable(client, session.detected),
+		BackendExecutable: backendExecutable(client, session.detected, session.app.scope()),
 		OriginMode:        loaded.origin, DirectoryResolution: cloneDirectoryOrigin(loaded.directory),
 		DistributionSuspended: loaded.distributionSuspended, ReleaseRevoked: loaded.releaseRevoked,
+		EnvironmentAuthority: authority,
 	}, nil
 }
 
@@ -272,7 +299,8 @@ func (session *repairManySession) planAndApply() error {
 }
 
 func (session *repairManySession) plan(operationID string) error {
-	planned, err := session.service.RepairGroup(session.ctx, usecase.GroupInput{Targets: session.inputs, OperationGroupID: operationID, DryRun: true, Repair: true})
+	planned, err := session.service.RepairGroup(session.ctx, usecase.GroupInput{Targets: session.inputs, OperationGroupID: operationID, DryRun: true, OnlinePreview: !session.opts.dryRun, Repair: true})
+	retainPreparedClients(session.inputs, planned.PreparedClients)
 	for index, targetResult := range planned.Targets {
 		output := newRepairResultData(session.installation, targetResult, true)
 		output.OperationID = operationID

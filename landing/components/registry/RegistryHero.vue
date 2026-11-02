@@ -27,7 +27,11 @@ if (import.meta.client) {
   watch(
     () => discovery.value.state,
     (state) => {
-      if (state !== 'current' && state !== 'cached') return;
+      if (
+        !['current', 'cached', 'stale'].includes(state) ||
+        (state === 'stale' && !discovery.value.count)
+      )
+        return;
 
       const target = groupCatalogPlugins(catalogVisiblePlugins(props.registry.plugins)).length;
       if (
@@ -73,8 +77,48 @@ const demoPlugin = computed(() => {
   return plugin;
 });
 
+// Context7 has a CLI-guided personal app setup path without a publisher binding.
+// Keep this separate from verified Directory compatibility and generic discovery.
+function context7Preparation(peers: ClientID[] = []) {
+  const plugin = demoPlugin.value;
+  if (
+    plugin.name !== 'context7' ||
+    plugin.install_source !== 'context7' ||
+    plugin.client_support.resolution !== 'directory'
+  )
+    return false;
+  const upstream = plugin.distributions.find(
+    (item) => item.id === 'upstash/context7' && item.kind === 'upstream',
+  );
+  if (!upstream) return false;
+  const candidate = { ...plugin, distributions: [upstream], default_distribution: upstream.id, declared_default_distribution: upstream.id };
+  const promoted = upstream.compatible_clients
+    .map((client) => expectedDistribution(candidate, [client]))
+    .filter(
+      (release) =>
+        release?.source.repository === 'upstash/context7' &&
+        release.source.path === 'plugins/agent-plugins/context7',
+    )
+    .sort((a, b) => (b!.release_sequence ?? 0) - (a!.release_sequence ?? 0))[0];
+  if (!promoted) return false;
+  if (!peers.length) return true;
+  candidate.distributions = [
+    {
+      ...upstream,
+      releases: upstream.releases.filter(
+        (release) => release.release_sequence === promoted.release_sequence,
+      ),
+    },
+  ];
+  return Boolean(expectedDistribution(candidate, peers));
+}
+const guidedChatgptSetup = computed(() => context7Preparation());
 const compatibleClients = computed(() =>
-  clients.filter((client) => demoPlugin.value.client_support.clients.includes(client.id)),
+  clients.filter(
+    (client) =>
+      demoPlugin.value.client_support.clients.includes(client.id) ||
+      (client.id === 'chatgpt' && guidedChatgptSetup.value),
+  ),
 );
 const preferences = useInstallPreferencesStore();
 const availableTargets = computed(() => compatibleClients.value.map((client) => client.id));
@@ -110,7 +154,7 @@ const targetOptions = computed(() =>
     value: client.id,
     label: client.id === 'copilot' ? 'Copilot' : client.name,
     icon: asset(`client-icons/${client.icon}`),
-    disabled: !demoPlugin.value.client_support.clients.includes(client.id),
+    disabled: !availableTargets.value.includes(client.id),
     description: (() => {
       if (!published.value) return t('shell.hero.unavailable');
       if (expired.value) return t('shell.hero.refreshing');
@@ -118,7 +162,9 @@ const targetOptions = computed(() =>
         (item) => item.client === client.id,
       );
       if (client.id === 'chatgpt')
-        return target?.app_binding ? t('shell.hero.chatgptSetup') : t('shell.hero.notAvailable');
+        return target?.app_binding || guidedChatgptSetup.value
+          ? t('shell.hero.chatgptSetup')
+          : t('shell.hero.notAvailableForPlugin');
       return target
         ? t(`shell.hero.delivery.${target.delivery}`)
         : t('shell.hero.notAvailableForPlugin');
@@ -178,8 +224,13 @@ const fallbackReason = computed(() => {
     t('shell.hero.sourceReason', { reason: resolution.value.fallback_reason ?? '' })
   );
 });
+defineExpose({ fallbackReason });
 const command = computed(() => {
-  if (!current.value || (!autoDetect.value && !resolution.value.distribution)) return '';
+  const guidedSelection =
+    selectedTargets.value.includes('chatgpt') &&
+    context7Preparation(selectedTargets.value.filter((client) => client !== 'chatgpt'));
+  if (!current.value || (!autoDetect.value && !resolution.value.distribution && !guidedSelection))
+    return '';
   return pluginCommands(
     demoPlugin.value,
     autoDetect.value ? undefined : selectedClients.value.map((client) => client.id),
@@ -233,58 +284,57 @@ function updateTargets(values: string[]) {
       </div>
 
       <div class="hero__demo">
-        <HeroAgentField />
-        <div class="hero__window">
-          <div class="hero__window-body">
-            <div class="hero-quick-start__header">
-              <h2>{{ t('shell.hero.install', { name: demoPlugin.display_name }) }}</h2>
-              <a href="https://agent-plugins.org/specification" target="_blank" rel="noreferrer"
-                >Agent Plugins 1.0</a
-              >
-            </div>
-            <ol class="hero-quick-start__steps">
-              <li class="hero-quick-start__step">
-                <span class="hero-quick-start__number">1</span>
-                <span class="hero-quick-start__label"
-                  ><strong>{{ t('shell.hero.choose') }}</strong
-                  ><small>{{ t('shell.hero.chooseHint') }}</small></span
+        <HeroDemoVideo />
+        <div class="hero__install">
+          <HeroAgentField />
+          <div class="hero__window">
+            <div class="hero__window-body">
+              <div class="hero-quick-start__header">
+                <h2>{{ t('shell.hero.install', { name: demoPlugin.display_name }) }}</h2>
+                <a href="https://agent-plugins.org/specification" target="_blank" rel="noreferrer"
+                  >Agent Plugins 1.0</a
                 >
-                <AppMultiSelect
-                  :model-value="selectedTargets"
-                  :auto-selected="autoDetect"
-                  :auto-option="autoOption"
-                  :label="t('shell.accessibility.chooseTargets')"
-                  :options="targetOptions"
-                  @update:auto-selected="autoDetect = $event"
-                  @update:model-value="updateTargets"
-                />
-              </li>
-              <li class="hero-quick-start__step">
-                <span class="hero-quick-start__number hero-quick-start__number--run">2</span>
-                <span class="hero-quick-start__label"
-                  ><strong>{{ t('shell.hero.run') }}</strong
-                  ><small>{{ t('shell.hero.terminal') }}</small></span
-                >
-                <div class="hero-quick-start__command">
-                  <CommandSnippet v-if="command" :command="command" kind="add" inline />
-                  <p v-else class="install-panel__notice" role="status">
-                    {{ t('shell.hero.refreshNotice') }}
-                  </p>
-                  <a
-                    class="hero-quick-start__more-install"
-                    href="https://github.com/777genius/universal-agent-plugins#quick-start"
-                    target="_blank"
-                    rel="noreferrer"
-                    >{{ t('shell.hero.otherMethods') }} <span aria-hidden="true">↗</span></a
-                  >
-                </div>
-              </li>
-            </ol>
-            <div class="hero-quick-start__footer">
-              <p><span aria-hidden="true">✓</span> {{ t('shell.hero.planNotice') }}</p>
-              <p v-if="!autoDetect && resolution.fallback_reason">
-                {{ fallbackReason }}
-              </p>
+              </div>
+              <ol class="hero-quick-start__steps">
+                <li class="hero-quick-start__step">
+                  <div class="hero-quick-start__caption">
+                    <span class="hero-quick-start__number">1</span>
+                    <span class="hero-quick-start__label"
+                      ><strong>{{ t('shell.hero.choose') }}</strong></span
+                    >
+                  </div>
+                  <AppMultiSelect
+                    :model-value="selectedTargets"
+                    :auto-selected="autoDetect"
+                    :auto-option="autoOption"
+                    :label="t('shell.accessibility.chooseTargets')"
+                    :options="targetOptions"
+                    @update:auto-selected="autoDetect = $event"
+                    @update:model-value="updateTargets"
+                  />
+                </li>
+                <li class="hero-quick-start__step">
+                  <div class="hero-quick-start__caption">
+                    <span class="hero-quick-start__number hero-quick-start__number--run">2</span>
+                    <span class="hero-quick-start__label"
+                      ><strong>{{ t('shell.hero.run') }}</strong></span
+                    >
+                  </div>
+                  <div class="hero-quick-start__command">
+                    <CommandSnippet v-if="command" :command="command" kind="add" inline />
+                    <p v-else class="install-panel__notice" role="status">
+                      {{ t('shell.hero.refreshNotice') }}
+                    </p>
+                    <a
+                      class="hero-quick-start__more-install"
+                      href="https://github.com/777genius/universal-agent-plugins#quick-start"
+                      target="_blank"
+                      rel="noreferrer"
+                      >{{ t('shell.hero.otherMethods') }} <span aria-hidden="true">↗</span></a
+                    >
+                  </div>
+                </li>
+              </ol>
             </div>
           </div>
         </div>

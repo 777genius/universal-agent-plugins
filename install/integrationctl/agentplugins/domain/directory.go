@@ -291,6 +291,10 @@ type DirectoryResolveRequest struct {
 	RequiredComponents []string
 	Operation          DirectoryOperation
 	Recorded           *RecordedDirectoryRelease
+	// DesiredReleaseSequence selects one exact release as new-install intent.
+	// It is deliberately distinct from Recorded, which is proof of installed
+	// state and may receive exact-operation exceptions.
+	DesiredReleaseSequence uint64
 }
 
 type DirectoryDiagnostic struct {
@@ -335,6 +339,9 @@ func ResolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveReques
 	if request.Scope == "" {
 		request.Scope = ScopeUser
 	}
+	if request.DesiredReleaseSequence != 0 && request.Recorded != nil {
+		return DirectorySelection{}, fmt.Errorf("desired Directory release and recorded installed release are mutually exclusive")
+	}
 	if request.Operation == "" {
 		request.Operation = DirectoryInstall
 	}
@@ -360,6 +367,17 @@ func ResolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveReques
 			return DirectorySelection{}, fmt.Errorf("recorded product %q does not match %q", request.Recorded.ProductID, product.ID)
 		}
 		qualified = request.Recorded.DistributionID
+	}
+	// Release sequences are distribution-local. Resolve an exact short selector
+	// before eligibility checks, so an ineligible publisher cannot be substituted.
+	if request.DesiredReleaseSequence != 0 && qualified == "" {
+		distributions := orderedDistributions(snapshot, product)
+		if len(distributions) > 1 {
+			return DirectorySelection{}, fmt.Errorf("%w: exact release for %q requires a qualified distribution ID", ErrDirectoryAmbiguous, selector)
+		}
+		if len(distributions) == 1 {
+			qualified = distributions[0].ID
+		}
 	}
 	if qualified != "" {
 		distribution := distributionByID(snapshot, product, qualified)
@@ -499,6 +517,9 @@ func chooseDirectoryRelease(snapshot DirectorySnapshot, product DirectoryProduct
 	reasons := []eligibilityReason{}
 	for i := range releases {
 		release := &releases[i]
+		if request.DesiredReleaseSequence != 0 && release.Sequence != request.DesiredReleaseSequence {
+			continue
+		}
 		policy, ok := policies[release.Sequence]
 		if !ok {
 			continue
@@ -517,6 +538,10 @@ func chooseDirectoryRelease(snapshot DirectorySnapshot, product DirectoryProduct
 		if request.Operation == DirectoryUpdate && request.Recorded != nil && release.Sequence <= request.Recorded.ReleaseSequence {
 			continue
 		}
+		if request.Purpose == DirectoryResolveLockedRestore && distribution.Status != DistributionActive {
+			reasons = append(reasons, eligibilityReason{"distribution_not_active", fmt.Sprintf("distribution is %s for locked restore", distribution.Status)})
+			continue
+		}
 		if distribution.Status == DistributionSuspended && request.Operation != DirectoryRemove && request.Operation != DirectoryRepair && request.Operation != DirectoryRematerialize && request.Operation != DirectoryReproduce &&
 			!(exactRecorded && (request.Operation == DirectoryInstall || request.Operation == DirectoryNewTarget)) {
 			reasons = append(reasons, eligibilityReason{"distribution_suspended", "distribution is suspended for this operation"})
@@ -525,11 +550,12 @@ func chooseDirectoryRelease(snapshot DirectorySnapshot, product DirectoryProduct
 		if request.Operation == DirectoryRemove && exactRecorded {
 			return release, nil
 		}
-		if isRevoked(snapshot, distribution.ID, release.Sequence) || policy.Status == ReleaseRevoked {
+		if isRevoked(snapshot, distribution.ID, release.Sequence) || policy.Status == ReleaseRevoked ||
+			(request.Purpose == DirectoryResolveLockedRestore && isRevoked(snapshot, distribution.ID, 0)) {
 			reasons = append(reasons, eligibilityReason{"release_revoked", fmt.Sprintf("release %d is revoked", release.Sequence)})
 			continue
 		}
-		if policy.Status == ReleaseSuperseded && !exactRecorded {
+		if policy.Status == ReleaseSuperseded && !exactRecorded && request.Purpose != DirectoryResolveLockedRestore {
 			reasons = append(reasons, eligibilityReason{"release_superseded", fmt.Sprintf("release %d is historical only", release.Sequence)})
 			continue
 		}

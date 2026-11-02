@@ -60,6 +60,9 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 			return nil, fmt.Errorf("batched native config requests must share paths and codec")
 		}
 	}
+	if err := kernel.requireDocumentParser(requests[0].Codec); err != nil {
+		return nil, err
+	}
 	acquireLocks := kernel.acquireLocks
 	if acquireLocks == nil {
 		acquireLocks = kernel.acquireCandidateLocks
@@ -92,19 +95,30 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 	if err != nil {
 		return nil, err
 	}
-	doc, err := newDocument(file.jsonc)
+	var doc *document
 	if file.exists {
-		doc, err = parseDocument(file.body, file.jsonc)
+		doc, err = kernel.parseDocument(file.body, file.jsonc, requests[0].Codec)
+	} else {
+		doc, err = kernel.newDocument(file.jsonc, requests[0].Codec)
 	}
 	if err != nil {
 		return nil, err
 	}
-	key := codecCollectionKey(requests[0].Codec)
 	create := false
 	for _, req := range requests {
 		create = create || req.Action == ActionAdd
 	}
-	entries, err := collection(doc, key, create)
+	if requests[0].Codec == CodecOpenCodeV2 {
+		for _, req := range requests {
+			if req.Action != ActionRemove {
+				if err := requireOpenCodeV2Root(doc); err != nil {
+					return nil, err
+				}
+				break
+			}
+		}
+	}
+	entries, err := codecCollection(doc, requests[0].Codec, create)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +166,7 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 			removeEntry(entries, req.Name)
 		}
 	}
-	if requests[0].Codec == CodecOpenCode {
+	if requests[0].Codec == CodecOpenCode || requests[0].Codec == CodecOpenCodeV2 {
 		proposed := make([]string, 0, len(requests))
 		for _, req := range requests {
 			if req.Action == ActionAdd || req.Action == ActionUpdate {
@@ -160,9 +174,22 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 			}
 		}
 		if len(proposed) > 0 {
-			active, namesErr := openCodeActiveMCPNames(entries)
+			active, namesErr := openCodeActiveMCPNamesForCodec(entries, requests[0].Codec)
 			if namesErr != nil {
 				return nil, namesErr
+			}
+			if requests[0].Codec == CodecOpenCodeV2 {
+				activeSet := make(map[string]bool, len(active))
+				for _, name := range active {
+					activeSet[name] = true
+				}
+				activeProposed := proposed[:0]
+				for _, name := range proposed {
+					if activeSet[name] {
+						activeProposed = append(activeProposed, name)
+					}
+				}
+				proposed = activeProposed
 			}
 			proposedSet := make(map[string]bool, len(proposed))
 			for _, name := range proposed {
@@ -225,16 +252,18 @@ func (kernel Kernel) Inspect(paths Paths, codec Codec, name string, owned *Recei
 	if err := validateRequest(probe); err != nil {
 		return false, false, err
 	}
+	if err := kernel.requireDocumentParser(codec); err != nil {
+		return false, false, err
+	}
 	file, err := kernel.resolve(paths)
 	if err != nil || !file.exists {
 		return false, false, err
 	}
-	doc, err := parseDocument(file.body, file.jsonc)
+	doc, err := kernel.parseDocument(file.body, file.jsonc, codec)
 	if err != nil {
 		return false, false, err
 	}
-	key := codecCollectionKey(codec)
-	entries, err := collection(doc, key, false)
+	entries, err := codecCollection(doc, codec, false)
 	if err != nil || entries == nil {
 		return false, false, err
 	}
@@ -286,6 +315,11 @@ func (kernel Kernel) writeVerified(file resolvedFile, _ Codec, next []byte) (res
 		return err
 	}
 	if err := kernel.compareAndSwap(file.path, file.body, file.exists, next, mode); err != nil {
+		if errors.Is(err, ErrConcurrentChange) {
+			// A rejected CAS never authorized our write, even if the competing
+			// writer chose next. Do not treat equal foreign output as rollback authority.
+			return fmt.Errorf("write native config: %w", err)
+		}
 		return kernel.rollbackIfStillOurs(file, next, restore, fmt.Errorf("write native config: %w", err))
 	}
 	if err := kernel.verifyAlternateAbsent(file); err != nil {
@@ -306,11 +340,11 @@ func (kernel Kernel) compareAndSwap(path string, expected []byte, expectedExists
 	if files, ok := kernel.files.(conditionalFileIO); ok {
 		return files.CompareAndSwap(path, expected, expectedExists, next, mode)
 	}
-	current, _, exists, err := kernel.files.ReadNoFollow(path)
+	current, currentMode, exists, err := kernel.files.ReadNoFollow(path)
 	if err != nil {
 		return fmt.Errorf("re-read native config at replacement boundary: %w", err)
 	}
-	if exists != expectedExists || !bytes.Equal(current, expected) {
+	if exists != expectedExists || !bytes.Equal(current, expected) || expectedExists && currentMode.Perm() != mode.Perm() {
 		return ErrConcurrentChange
 	}
 	return kernel.files.WriteAtomic(path, next, mode)

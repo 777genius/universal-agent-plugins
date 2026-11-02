@@ -105,14 +105,14 @@ test('read/write method failures and a choice before readiness remain usable', (
   g.start()();
   assert.equal(g.store.current, 'light');
 });
-test('plugin waits for installed Nuxt readiness, installs once, and cleans up on unmount', () => {
+for (const hydrating of [true, false]) test(`plugin restores the theme without idle work when ${hydrating ? 'hydration completes' : 'already hydrated'}`, () => {
   const f = fixture('light');
   const hooks = new Map<string, () => void>();
   const idle: (() => void)[] = [];
   let unmount = () => {};
   let localeCalls = 0;
   const app = {
-    isHydrating: true,
+    isHydrating: hydrating,
     hooks: { hookOnce: (name: string, callback: () => void) => hooks.set(name, callback) },
     vueApp: {
       onUnmount: (fn: () => void) => {
@@ -139,14 +139,16 @@ test('plugin waits for installed Nuxt readiness, installs once, and cleans up on
     'plugin',
   );
   plugin.setup(app);
-  // Root mount can finish while the async layout still holds deferHydration.
-  assert.equal(f.store.current, 'dark');
-  assert.deepEqual(f.changes, []);
-  assert.equal(localeCalls, 0);
-  app.isHydrating = false;
-  hooks.get('app:suspense:resolve')!();
-  assert.equal(f.store.current, 'dark');
-  idle.shift()!();
+  if (hydrating) {
+    // Root mount can finish while the async layout still holds deferHydration.
+    assert.equal(f.store.current, 'dark');
+    assert.deepEqual(f.changes, []);
+    assert.equal(localeCalls, 0);
+    app.isHydrating = false;
+    hooks.get('app:suspense:resolve')!();
+  }
+  // Essential saved preferences cannot wait for a busy page to become idle.
+  assert.deepEqual(idle, []);
   assert.equal(f.store.current, 'light');
   assert.deepEqual(f.changes, ['light']);
   assert.equal(localeCalls, 1);
@@ -189,6 +191,12 @@ test('plugin initializes locale with denied storage and cancels deferred work af
       'plugin',
     );
     plugin.setup({
+      isHydrating: true,
+      hooks: {
+        hookOnce: (_: string, fn: () => void) => {
+          ready = fn;
+        },
+      },
       vueApp: {
         onUnmount: (fn: () => void) => {
           unmount = fn;

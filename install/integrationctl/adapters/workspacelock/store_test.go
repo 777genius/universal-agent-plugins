@@ -2,7 +2,9 @@ package workspacelock
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	fsadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/fs"
@@ -11,7 +13,7 @@ import (
 
 func TestStoreSaveAndLoad(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), ".plugin-kit-ai.lock")
+	path := filepath.Join(t.TempDir(), ".uap-integrations.lock")
 	store := Store{FS: fsadapter.OS{}, File: path}
 	want := domain.WorkspaceLock{
 		APIVersion: "v1",
@@ -46,5 +48,23 @@ func TestStoreSaveAndLoad(t *testing.T) {
 	}
 	if got.Integrations[0].Policy.Scope != "project" || !got.Integrations[0].Policy.AutoUpdate {
 		t.Fatalf("policy = %+v", got.Integrations[0].Policy)
+	}
+}
+
+func TestStoreLoadRefusesLegacyNameInsteadOfSilentAdoption(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	store := Store{FS: fsadapter.OS{}, File: filepath.Join(dir, domain.WorkspaceLockFileName)}
+	legacy := filepath.Join(dir, domain.LegacyWorkspaceLockFileName)
+	if err := os.WriteFile(legacy, []byte("api_version: v1\nintegrations: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Load(context.Background()); err == nil {
+		t.Fatal("load succeeded with only the legacy lock name present")
+	} else if !strings.Contains(err.Error(), domain.LegacyWorkspaceLockFileName) || !strings.Contains(err.Error(), domain.WorkspaceLockFileName) {
+		t.Fatalf("load error = %q, want rename guidance", err)
+	}
+	if _, err := os.Stat(legacy); err != nil {
+		t.Fatalf("legacy lock was modified: %v", err)
 	}
 }

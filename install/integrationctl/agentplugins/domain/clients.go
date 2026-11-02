@@ -23,12 +23,17 @@ const (
 	ClientOpenCode ClientID = "opencode"
 	ClientCline    ClientID = "cline"
 	ClientWindsurf ClientID = "windsurf"
+	ClientGrok     ClientID = "grok"
+	ClientKimi     ClientID = "kimi"
+	ClientQoder    ClientID = "qoder"
+	ClientPi       ClientID = "pi"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
 
 	ScopeUser    InstallScope = "user"
 	ScopeProject InstallScope = "project"
+	ScopeLocal   InstallScope = "local"
 
 	PackageNative     PackageMode = "native"
 	PackageProjection PackageMode = "compatibility_projection"
@@ -60,6 +65,7 @@ const (
 // mutation remains in client-specific adapters and is intentionally not part
 // of this registry.
 type ClientDefinition struct {
+	ProjectPolicy         ProjectPolicy `json:"-"`
 	ID                    ClientID
 	DisplayName           string
 	BackendFamily         string
@@ -75,19 +81,26 @@ type ClientDefinition struct {
 	// none, which is the normal case.
 	DirectoryPreparationPurpose DirectoryResolvePurpose
 	Capabilities                ClientCapabilities
+	// CommandSupport is whether the installer delivers portable commands to
+	// this client as skills. Empty follows Capabilities.SkillSupport;
+	// SupportUnsupported withholds every command. Backend siblings install one
+	// shared package, so they must agree. Like Traits, it is installer policy
+	// and not part of the public JSON capabilities contract.
+	CommandSupport SupportLevel
 	// Traits are installer policy for this client. They are not part of the
 	// public JSON capabilities contract and must not be serialized onto it.
 	Traits ClientTraits
 }
 
 var clientDefinitions = []ClientDefinition{
-	clientDefinition(ClientCodex, "OpenAI Codex", "codex", "managed", "projected", true, PackageProjection, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:            LifecycleCLIRegistry,
-		HonorsOpenAIMCPAuthHints: true,
-		SupportsPreparedRecovery: true,
-		BindsNativeProfileRoot:   true,
-	}),
+	withProjectScope(clientDefinition(ClientCodex, "OpenAI Codex", "codex", "managed", "projected", true, PackageProjection, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		QualifiedLocalInstallerFacade: true,
+		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:                 LifecycleCLIRegistry,
+		HonorsOpenAIMCPAuthHints:      true,
+		SupportsPreparedRecovery:      true,
+		BindsNativeProfileRoot:        true,
+	}), LifecycleNativeConfig),
 	withoutHostPresence(withDirectoryPreparation(
 		clientDefinition(ClientChatGPT, "ChatGPT", "chatgpt", "manual_activation", "projected", false, PackageProjection, SupportProjected, SupportUnsupported, SupportUnsupported, SupportProjected, SupportUnsupported, ClientTraits{
 			InstallIntents:                    []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
@@ -95,51 +108,83 @@ var clientDefinitions = []ClientDefinition{
 			RequiresPersonalMappingForPrepare: true,
 		}),
 		DirectoryResolveContext7ChatGPTPreparation)),
-	clientDefinition(ClientCursor, "Cursor", "cursor", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
+	withProjectScope(clientDefinition(ClientCursor, "Cursor", "cursor", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
-	}),
-	clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecycleCLIRegistry,
-	}),
-	clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecycleCLIRegistry,
-	}),
-	clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
+	}), LifecycleNativeConfig),
+	withProjectScope(withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
+		InstallIntents:             []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:              LifecycleCLIRegistry,
+		RecordsUserProfileOnCreate: true,
+	})), LifecycleNativeConfig),
+	withProjectScope(withoutCommands(clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
+		SavedDependenciesDeferred: true,
+		InstallIntents:            []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:             LifecycleCLIRegistry,
+	})), LifecycleNativeConfig),
+	withProjectScope(clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:      []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
 		LifecycleKind:       LifecycleCLIRegistry,
 		TracksNativeEffects: true,
-	}),
-	withActivation(clientDefinition(ClientClaude, "Claude Code", "claude", "managed", "projected", false, PackageProjection, SupportProjected, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:            LifecycleCLIRegistry,
-		UsesManagedStdioLauncher: true,
-	}), ActivationAutomatic),
-	clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
+	}), LifecycleNativeConfig),
+	withProjectScope(withActivation(clientDefinition(ClientClaude, "Claude Code", "claude", "managed", "projected", false, PackageProjection, SupportProjected, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, ClientTraits{
+		QualifiedLocalInstallerFacade: true,
+		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:                 LifecycleCLIRegistry,
+		UsesManagedStdioLauncher:      true,
+	}), ActivationAutomatic), LifecycleCLIRegistry),
+	withProjectScope(clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:         []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:          LifecycleNativeConfig,
 		BindsNativeProfileRoot: true,
-	}),
-	withActivation(clientDefinition(ClientOpenCode, "OpenCode", "opencode", "managed", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+	}), LifecycleNativeConfig),
+	withProjectScope(withActivation(clientDefinition(ClientOpenCode, "OpenCode", "opencode", "managed", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:                   []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:                    LifecycleNativeConfig,
 		ReportsMCPToolNamespaceCollision: true,
-	}), ActivationAutomatic),
-	withActivation(clientDefinition(ClientCline, "Cline", "cline", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
+	}), ActivationAutomatic), LifecycleNativeConfig),
+	withProjectScope(withActivation(clientDefinition(ClientCline, "Cline", "cline", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleNativeConfig,
-	}), ActivationAutomatic),
-	clientDefinition(ClientWindsurf, "Windsurf / Devin", "windsurf", "prepared", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
+	}), ActivationAutomatic), LifecycleNativeConfig),
+	withProjectScope(clientDefinition(ClientWindsurf, "Windsurf / Devin", "windsurf", "prepared", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
 		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:            LifecycleNativeConfig,
 		UsesManagedStdioLauncher: true,
-	}),
+	}), LifecycleNativeConfig),
+	withProjectScope(clientDefinition(ClientGrok, "Grok Build", "grok", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:  LifecycleCLIRegistry,
+	}), LifecyclePrepared),
+	withProjectScope(clientDefinition(ClientKimi, "Kimi Code", "kimi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:  LifecycleNativeConfig,
+	}), LifecycleNativeConfig),
+	withProjectScope(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:            LifecycleCLIRegistry,
+		BindsNativeProfileRoot:   true,
+		DiscoversNativeHooks:     true,
+		HonorsOpenAIMCPAuthHints: true,
+	}), LifecyclePrepared),
+	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
+		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,
+	})), ActivationAutomatic), LifecyclePrepared), SupportNative, SupportNative),
 }
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {
 	definition.Capabilities.ActivationMode = activation
+	return definition
+}
+
+// withoutCommands withholds portable commands from a client that otherwise
+// takes skills. The github-copilot family carries it while Visual Studio Code
+// is frozen by the owner decision of 2026-10-16: VS Code installs through the
+// package it shares with Copilot CLI, so neither may get commands. Removing it
+// from both entries delivers commands to the family again.
+func withoutCommands(definition ClientDefinition) ClientDefinition {
+	definition.CommandSupport = SupportUnsupported
 	return definition
 }
 
@@ -212,6 +257,10 @@ var clientAliases = map[string]ClientID{
 	"gemini-cli":     ClientGemini,
 	"open-code":      ClientOpenCode,
 	"devin":          ClientWindsurf,
+	"grok-build":     ClientGrok,
+	"kimi-code":      ClientKimi,
+	"qoder-cli":      ClientQoder,
+	"qoder-desktop":  ClientQoder,
 }
 
 // ParseClientID folds case and whitespace, maps known aliases onto canonical
@@ -268,12 +317,21 @@ type ClientSurface struct {
 	Evidence string `json:"evidence,omitempty"`
 }
 
+// OpenCodeHostAuthority is a read-only, immutable prepared-host port. It does
+// no probing. The client contract owns the closed parent profile snapshot.
+type OpenCodeHostAuthority interface {
+	ValidateNative(skills bool, transports []string) error
+}
+
 type DetectedClient struct {
-	ClientID    ClientID        `json:"client_id"`
-	DisplayName string          `json:"display_name"`
-	Status      DetectionStatus `json:"status"`
-	Version     string          `json:"version,omitempty"`
-	Surfaces    []ClientSurface `json:"surfaces,omitempty"`
+	ProfileAuthority *ProfileAuthority     `json:"-"`
+	ProfileNamespace string                `json:"-"`
+	OpenCodeHost     OpenCodeHostAuthority `json:"-"`
+	ClientID         ClientID              `json:"client_id"`
+	DisplayName      string                `json:"display_name"`
+	Status           DetectionStatus       `json:"status"`
+	Version          string                `json:"version,omitempty"`
+	Surfaces         []ClientSurface       `json:"surfaces,omitempty"`
 	// ExecutablePath and ConfigRoot are operational locators. They must never be
 	// emitted by the public JSON renderer because they can reveal the user home.
 	ExecutablePath string `json:"-"`
@@ -299,10 +357,23 @@ type ComponentDecision struct {
 	Name    string        `json:"name"`
 	Support SupportLevel  `json:"support"`
 	Reason  string        `json:"reason,omitempty"`
+	// Source and SourceName are set only for a component the installer
+	// renders, such as ComponentSourceCommand and the command's name.
+	Source     string `json:"source,omitempty"`
+	SourceName string `json:"source_name,omitempty"`
 }
 
 type DeliveryPlan struct {
-	PersonalChatGPTPreparation bool `json:"-"`
+	requiresNativeProjectionRefresh bool
+
+	TargetContext              TargetContext           `json:"-"`
+	profileAuthority           *ProfileAuthority       `json:"-"`
+	profileNamespace           string                  `json:"-"`
+	PreviousNativeObjects      []NativeObjectOwnership `json:"-"`
+	LocalEntryObservation      *LocalEntryObservation  `json:"-"`
+	SelectedDelivery           SelectedDelivery        `json:"-"`
+	OpenCodeHost               OpenCodeHostAuthority   `json:"-"`
+	PersonalChatGPTPreparation bool                    `json:"-"`
 
 	InstallIntent      InstallIntent       `json:"install_intent,omitempty"`
 	ClientID           ClientID            `json:"client_id"`
@@ -344,9 +415,13 @@ type DeliveryPlan struct {
 // configured client roots. Persisted state must be checked against this value
 // before any destructive operation.
 type DeliveryTarget struct {
-	TargetAnchor string `json:"-"`
-	TargetRoot   string `json:"-"`
-	ActivePath   string `json:"-"`
+	TargetContext      TargetContext     `json:"-"`
+	NativeRegistryRoot string            `json:"-"`
+	profileAuthority   *ProfileAuthority `json:"-"`
+	profileNamespace   string            `json:"-"`
+	TargetAnchor       string            `json:"-"`
+	TargetRoot         string            `json:"-"`
+	ActivePath         string            `json:"-"`
 }
 
 type OpenAIMCPAuthHint struct {
@@ -372,13 +447,18 @@ type StagedDelivery struct {
 }
 
 type ActivationRequest struct {
-	Client            DetectedClient `json:"client"`
-	Plan              DeliveryPlan   `json:"plan"`
-	Delivery          StagedDelivery `json:"delivery"`
-	DeclaredName      string         `json:"declared_name"`
-	Replacing         bool           `json:"replacing"`
-	Interactive       bool           `json:"interactive"`
-	BackendExecutable string         `json:"-"`
+	// PackageUnchanged means activation reuses the committed, verified managed
+	// package without a new package transaction. External CLI effects may still
+	// be required; VerifyOnly describes those effects independently.
+	PackageUnchanged  bool                  `json:"-"`
+	NativeAttempt     NativeAttemptIdentity `json:"-"`
+	Client            DetectedClient        `json:"client"`
+	Plan              DeliveryPlan          `json:"plan"`
+	Delivery          StagedDelivery        `json:"delivery"`
+	DeclaredName      string                `json:"declared_name"`
+	Replacing         bool                  `json:"replacing"`
+	Interactive       bool                  `json:"interactive"`
+	BackendExecutable string                `json:"-"`
 	// PreviousNativeObjects binds replacement preflight to the exact native
 	// objects recorded by the currently installed package revision.
 	PreviousNativeObjects []NativeObjectOwnership `json:"-"`
@@ -390,14 +470,15 @@ type ActivationRequest struct {
 }
 
 type ActivationOutcome struct {
-	Activation             ActivationState     `json:"activation"`
-	Authentication         AuthenticationState `json:"authentication"`
-	Policy                 PolicyState         `json:"policy"`
-	Verification           VerificationState   `json:"verification"`
-	UserActions            []string            `json:"user_actions,omitempty"`
-	LocalActions           []string            `json:"-"`
-	ActivationAttested     bool                `json:"activation_attested,omitempty"`
-	AuthenticationAttested bool                `json:"authentication_attested,omitempty"`
+	LocalEntryObservation  *LocalEntryObservation `json:"-"`
+	Activation             ActivationState        `json:"activation"`
+	Authentication         AuthenticationState    `json:"authentication"`
+	Policy                 PolicyState            `json:"policy"`
+	Verification           VerificationState      `json:"verification"`
+	UserActions            []string               `json:"user_actions,omitempty"`
+	LocalActions           []string               `json:"-"`
+	ActivationAttested     bool                   `json:"activation_attested,omitempty"`
+	AuthenticationAttested bool                   `json:"authentication_attested,omitempty"`
 	// AuthoritativeObservation marks recognized negative verifier evidence.
 	// It is transient control-plane metadata and is never persisted as state.
 	AuthoritativeObservation bool `json:"-"`
@@ -407,22 +488,52 @@ type ActivationOutcome struct {
 }
 
 type DeactivationRequest struct {
-	Client              DetectedClient          `json:"client"`
-	DeclaredName        string                  `json:"declared_name"`
-	CurrentActivation   ActivationState         `json:"current_activation"`
-	Interactive         bool                    `json:"interactive"`
-	ExternalUninstalled bool                    `json:"external_uninstalled"`
-	Confirmed           bool                    `json:"confirmed"`
-	PhysicalArtifactID  string                  `json:"physical_artifact_id"`
-	BackendExecutable   string                  `json:"-"`
-	ManagedArtifactPath string                  `json:"-"`
-	NativeObjects       []NativeObjectOwnership `json:"-"`
+	TargetContext         TargetContext           `json:"-"`
+	NativeRegistryRoot    string                  `json:"-"`
+	LocalEntryObservation *LocalEntryObservation  `json:"-"`
+	RemoveOwnedEntry      bool                    `json:"-"`
+	SelectedDelivery      SelectedDelivery        `json:"-"`
+	Client                DetectedClient          `json:"client"`
+	DeclaredName          string                  `json:"declared_name"`
+	CurrentActivation     ActivationState         `json:"current_activation"`
+	Interactive           bool                    `json:"interactive"`
+	ExternalUninstalled   bool                    `json:"external_uninstalled"`
+	Confirmed             bool                    `json:"confirmed"`
+	PhysicalArtifactID    string                  `json:"physical_artifact_id"`
+	BackendExecutable     string                  `json:"-"`
+	ManagedArtifactPath   string                  `json:"-"`
+	NativeObjects         []NativeObjectOwnership `json:"-"`
 }
 
 type DeactivationOutcome struct {
-	Activation              ActivationState `json:"activation"`
-	ArtifactRemovalAllowed  bool            `json:"artifact_removal_allowed"`
-	ExternalRemovalComplete bool            `json:"external_removal_complete"`
-	UserActions             []string        `json:"user_actions,omitempty"`
-	LocalActions            []string        `json:"-"`
+	// NativeEffect is transient evidence of a native transaction's actual
+	// effects. An ordinary error never establishes that removal was unchanged.
+	NativeEffect            NativeEffectState `json:"-"`
+	Activation              ActivationState   `json:"activation"`
+	ArtifactRemovalAllowed  bool              `json:"artifact_removal_allowed"`
+	ExternalRemovalComplete bool              `json:"external_removal_complete"`
+	UserActions             []string          `json:"user_actions,omitempty"`
+	LocalActions            []string          `json:"-"`
 }
+
+func supportsLocalDelivery(id ClientID) bool { return id == ClientVSCode }
+
+func (p DeliveryPlan) WithProfileAuthority(token *ProfileAuthority, namespace string) DeliveryPlan {
+	p.profileAuthority = CloneProfileAuthority(token)
+	p.profileNamespace = namespace
+	return p
+}
+func (p DeliveryPlan) ProfileAuthority() *ProfileAuthority {
+	return CloneProfileAuthority(p.profileAuthority)
+}
+func (p DeliveryPlan) ProfileNamespace() string { return p.profileNamespace }
+
+func (p DeliveryTarget) WithProfileAuthority(token *ProfileAuthority, namespace string) DeliveryTarget {
+	p.profileAuthority = CloneProfileAuthority(token)
+	p.profileNamespace = namespace
+	return p
+}
+func (p DeliveryTarget) ProfileAuthority() *ProfileAuthority {
+	return CloneProfileAuthority(p.profileAuthority)
+}
+func (p DeliveryTarget) ProfileNamespace() string { return p.profileNamespace }

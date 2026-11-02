@@ -133,7 +133,7 @@ func newCursorSmokeWorkspace(t *testing.T, pluginKitAIBin string, opts cursorSmo
 	if err := os.MkdirAll(filepath.Join(dir, "plugin"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "plugin", "plugin.yaml"), []byte("api_version: v1\nname: \"cursor-cli-smoke\"\nversion: \"0.1.0\"\ndescription: \"Cursor CLI live smoke workspace\"\ntargets:\n  - \"cursor\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "plugin", "plugin.yaml"), []byte("api_version: v1\nname: \"cursor-cli-smoke\"\nversion: \"0.1.0\"\ndescription: \"Cursor CLI live smoke workspace\"\ntargets:\n  - \"cursor\"\n  - \"cursor-workspace\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if strings.TrimSpace(opts.AgentsBody) != "" {
@@ -143,7 +143,7 @@ func newCursorSmokeWorkspace(t *testing.T, pluginKitAIBin string, opts cursorSmo
 		}
 	}
 	if strings.TrimSpace(opts.RuleBody) != "" {
-		path := filepath.Join(dir, "plugin", "targets", "cursor", "rules", "project.mdc")
+		path := filepath.Join(dir, "plugin", "targets", "cursor-workspace", "rules", "project.mdc")
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -163,6 +163,7 @@ func newCursorSmokeWorkspace(t *testing.T, pluginKitAIBin string, opts cursorSmo
 	root := RepoRoot(t)
 	runCmd(t, root, exec.Command(pluginKitAIBin, "generate", dir))
 	runCmd(t, root, exec.Command(pluginKitAIBin, "validate", dir, "--platform", "cursor", "--strict"))
+	runCmd(t, root, exec.CommandContext(context.Background(), pluginKitAIBin, "validate", dir, "--platform", "cursor-workspace", "--strict"))
 	return dir
 }
 

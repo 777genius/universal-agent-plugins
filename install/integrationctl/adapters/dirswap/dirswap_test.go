@@ -457,3 +457,33 @@ func verifyFixture(t *testing.T, path string) func(context.Context, string) erro
 	}
 	return func(_ context.Context, candidate string) error { return matchesProof(candidate, identity, digest) }
 }
+
+func TestEnvironmentOwnerIsDurableBeforeFirstRename(t *testing.T) {
+	manager, input := fixture(t)
+	input.EnvironmentID = "user-default"
+	manager.Fault = func(phase string) error {
+		if phase == PhaseBackupPending {
+			return errors.New("crash at durable intent")
+		}
+		return nil
+	}
+	if _, err := manager.Apply(context.Background(), input); err == nil {
+		t.Fatal("missing injected crash")
+	}
+	body, err := os.ReadFile(manager.journalPath(input.OperationID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receipt Receipt
+	if err := json.Unmarshal(body, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if receipt.EnvironmentID != input.EnvironmentID || receipt.SchemaVersion != 6 {
+		t.Fatalf("missing fail-closed owner: %+v", receipt)
+	}
+	assertBody(t, input.ActivePath, "old")
+	manager.Fault = nil
+	if err := manager.Recover(context.Background(), input.OperationID, false); err != nil {
+		t.Fatal(err)
+	}
+}

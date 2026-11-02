@@ -8,6 +8,9 @@ import (
 )
 
 func (e *Engine) confirmPreparedPlan(ctx context.Context, prepared *PreparedOperation) error {
+	if err := e.confirmDeliveries(ctx, prepared); err != nil {
+		return err
+	}
 	plan := prepared.plan
 	if len(plan.Targets) > 1 {
 		return e.confirmGroupPlan(ctx, prepared)
@@ -49,7 +52,7 @@ func (e *Engine) confirmInstallTarget(ctx context.Context, prepared *PreparedOpe
 			return err
 		}
 		if prepared.artifact != "" {
-			target, err := e.planner().ResolveTarget(ctx, prepared.client, domain.ScopeUser, prepared.artifact)
+			target, err := e.planner().ResolveTarget(ctx, prepared.client, e.scope(), prepared.artifact)
 			if err != nil {
 				return fmt.Errorf("%w: %w", ErrPlanChanged, err)
 			}

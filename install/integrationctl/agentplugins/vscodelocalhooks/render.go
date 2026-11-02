@@ -67,7 +67,10 @@ func Render(target Target, specs []Spec) ([]byte, error) {
 			return nil, err
 		}
 		field := "linux"
-		if target.Shell == WindowsPowerShell51 {
+		switch target.Shell {
+		case MacOSSH:
+			field = "osx"
+		case WindowsPowerShell51:
 			field = "windows"
 		}
 		hooks[spec.Event] = []map[string]any{{"type": "command", field: command, "timeout": TimeoutSeconds}}
@@ -101,7 +104,7 @@ func validateExecutable(shell Shell, executable string) error {
 	if err := validateLiteral(executable); err != nil {
 		return err
 	}
-	if shell == LinuxSH {
+	if shell == LinuxSH || shell == MacOSSH {
 		if !path.IsAbs(executable) || executable == "/" || strings.HasSuffix(executable, "/") {
 			return fmt.Errorf("%w: require an absolute executable path", ErrInvalid)
 		}

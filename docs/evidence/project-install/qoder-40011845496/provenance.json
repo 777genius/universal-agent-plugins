@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "repository": "777genius/universal-agent-plugins",
+  "run_id": 40011845496,
+  "job_id": 120613942005,
+  "artifact_id": 12532010944,
+  "artifact_zip_sha256": "918333b4690c1076d1714a19e036c7e66d62625d58881ae216449590c980ac54",
+  "source_commit": "1dfe89a5eb79386333d50b82e1705c26659e79fc",
+  "success": false,
+  "project_qualified": false,
+  "recovery_redownload_verified": true,
+  "files": {
+    "plugins-empty-list.stderr.log": "eeeb556610ef3a555aa2f6566f36fa8654d8ea6ef8221a60b9d5a40d7c227e78",
+    "plugins-empty-list.stdout.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "plugins-help.stderr.log": "eeeb556610ef3a555aa2f6566f36fa8654d8ea6ef8221a60b9d5a40d7c227e78",
+    "plugins-help.stdout.log": "2604593dc2f18c63c963feb585665ee40ebfc18a3b592515102bb493b7856b29",
+    "plugins-install-help.stderr.log": "eeeb556610ef3a555aa2f6566f36fa8654d8ea6ef8221a60b9d5a40d7c227e78",
+    "plugins-install-help.stdout.log": "b2a99711c310da0df75a1918b42fe82870bcfc198221213e46bd48e79c0ec96e",
+    "plugins-list-help.stderr.log": "eeeb556610ef3a555aa2f6566f36fa8654d8ea6ef8221a60b9d5a40d7c227e78",
+    "plugins-list-help.stdout.log": "9d29ee8027c2862585f860bea7e53bc5253654137ee88fd6ce8df49ef31e167b",
+    "plugins-uninstall-help.stderr.log": "eeeb556610ef3a555aa2f6566f36fa8654d8ea6ef8221a60b9d5a40d7c227e78",
+    "plugins-uninstall-help.stdout.log": "8d43b1ec885561af42110e20bf202ad858b0ad7787c533ac1d13105acfcc3ca9",
+    "qoder-precode-research.json": "641fb54a8558958c4e09391226b7741dbe87e8a2567701b17e74494570cba560",
+    "version.stderr.log": "eeeb556610ef3a555aa2f6566f36fa8654d8ea6ef8221a60b9d5a40d7c227e78",
+    "version.stdout.log": "c4686cb8ea686d3220f88295494aaebff51a91ac90d64a6b5eb48b27d6ce6fde"
+  }
+}

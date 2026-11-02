@@ -2,9 +2,9 @@ package domain
 
 import "fmt"
 
-// DirectoryResolvePurpose distinguishes normal target eligibility from the
-// bounded acquisition of source for local preparation. The zero value retains
-// normal resolution; callers must explicitly opt in after validating intent.
+// DirectoryResolvePurpose distinguishes normal eligibility from bounded source
+// preparation and exact lock restoration. The zero value retains normal
+// resolution; callers must explicitly opt in after validating intent.
 type DirectoryResolvePurpose string
 
 // DirectoryResolveContext7ChatGPTPreparation permits only source acquisition
@@ -13,13 +13,23 @@ type DirectoryResolvePurpose string
 const DirectoryResolveContext7ChatGPTPreparation DirectoryResolvePurpose = "context7_chatgpt_preparation"
 
 func validateDirectoryResolvePurpose(request DirectoryResolveRequest) error {
-	if request.Purpose == "" {
+	switch request.Purpose {
+	case "":
 		return nil
+	case DirectoryResolveLockedRestore:
+		if request.Scope != ScopeUser || request.DesiredReleaseSequence == 0 || request.Recorded != nil || len(request.Targets) == 0 ||
+			(request.Operation != "" && request.Operation != DirectoryInstall) {
+			return fmt.Errorf("%w: locked restore requires an exact user-scope new install without recorded state", ErrDirectoryIneligible)
+		}
+		return nil
+	case DirectoryResolveContext7ChatGPTPreparation:
+		if request.Scope != ScopeUser || len(request.Targets) != 1 || !declaresDirectoryPreparation(request.Targets[0], request.Purpose) {
+			return fmt.Errorf("%w: invalid Context7 ChatGPT user-scope preparation purpose", ErrDirectoryIneligible)
+		}
+		return nil
+	default:
+		return fmt.Errorf("%w: unknown Directory resolve purpose %q", ErrDirectoryIneligible, request.Purpose)
 	}
-	if request.Scope != ScopeUser || len(request.Targets) != 1 || !declaresDirectoryPreparation(request.Targets[0], request.Purpose) {
-		return fmt.Errorf("%w: invalid Context7 ChatGPT user-scope preparation purpose", ErrDirectoryIneligible)
-	}
-	return nil
 }
 
 // declaresDirectoryPreparation reports whether this client is the one the

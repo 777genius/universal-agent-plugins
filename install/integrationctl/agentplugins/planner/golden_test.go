@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/internal/goldentest"
 )
@@ -144,11 +145,15 @@ func goldenEnvelopes() []envelopeFixture {
 // goldenClient uses fixed synthetic locators: the planner only inspects them
 // lexically, so no directory has to exist and the result is reproducible.
 func goldenClient(id domain.ClientID, root string) domain.DetectedClient {
-	return domain.DetectedClient{
+	client := domain.DetectedClient{
 		ClientID: id, DisplayName: string(id), Status: domain.DetectionDetected,
 		ConfigRoot:     filepath.Join(root, "clients", string(id)),
 		ExecutablePath: filepath.Join(root, "bin", string(id)),
 	}
+	if id == domain.ClientOpenCode {
+		client.OpenCodeHost = contracttest.OpenCodeV1Host{}
+	}
+	return client
 }
 
 func goldenRoot(t *testing.T) string {

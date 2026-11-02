@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
+	icdomain "github.com/777genius/plugin-kit-ai/install/integrationctl/domain"
 )
 
 // Capture is the explicit second stage, called only after the caller accepts the
@@ -357,7 +358,7 @@ func (l *Lease) walk(ctx context.Context, dir string, depth int) error {
 			continue
 		}
 		defer p.file.Close() // bounded entry count; close on panic before loop cleanup
-		if rel == ".plugin-kit-ai.lock" && !p.info.IsDir() {
+		if icdomain.IsWorkspaceLockFile(rel) && !p.info.IsDir() {
 			if ce := p.file.Close(); ce != nil {
 				return fail("close_failed")
 			}

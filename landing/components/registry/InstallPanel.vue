@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { useInstallPreferencesStore } from '~/stores/installPreferences';
+import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
 import type { RegistryDiagnostic, ClientID, RegistryPlugin } from '~/types/registry';
 import { pluginCommands } from '~/utils/commands';
-import { expectedDistribution, resolveDistribution } from '~/utils/registry';
+import { projectCatalogCommands } from '~/utils/projectCatalogSource';
+import { isFullyRetired } from '~/utils/filter';
+import { vendorInstallSource } from '~/utils/registry';
 const { t } = useI18n();
 
 const props = defineProps<{ plugin: RegistryPlugin }>();
@@ -10,25 +12,41 @@ const targets = defineModel<ClientID[]>('targets', { required: true });
 const autoDetect = defineModel<boolean>('autoDetect', { required: true });
 const { asset, sourceUrl } = useSite();
 const { current, expired, published } = useDirectoryStatus();
-const autoOption = computed(() => ({
-  label: t('registryUi.install.allInstalledAgentsRecommended'),
-  summary: t('registryUi.install.allInstalledAgents'),
-  description: t('registryUi.install.detectedWhenYouRunTheCommand'),
-}));
-const availableClients = computed(() =>
-  clients.filter((client) => props.plugin.client_support.clients.includes(client.id)),
+const isDiscovered = computed(() => props.plugin.trust_state === 'conformant_unreviewed');
+const canUseSource = computed(() => isDiscovered.value || current.value);
+const selection = usePluginInstallSelection(() => props.plugin, { targets, autoDetect });
+const {
+  scope,
+  targetDistributions,
+  projectAvailable,
+  updateTargets,
+  updateAutoDetect,
+  updateScope,
+} = selection;
+const autoOption = computed(() =>
+  scope.value === 'project'
+    ? undefined
+    : {
+        label: t('registryUi.install.allInstalledAgentsRecommended'),
+        summary: t('registryUi.install.allInstalledAgents'),
+        description: t('registryUi.install.detectedWhenYouRunTheCommand'),
+      },
 );
 const targetOptions = computed(() =>
   clients.map((client) => ({
     value: client.id,
     label: client.name,
     icon: asset(`client-icons/${client.icon}`),
-    disabled: !props.plugin.client_support.clients.includes(client.id),
+    disabled: !targetDistributions.value.get(client.id) && !targets.value.includes(client.id),
     description: (() => {
+      if (isDiscovered.value)
+        return props.plugin.discovery?.availability === 'available'
+          ? t('registryUi.card.checkedAgainBeforeInstallation')
+          : t('registryUi.card.unavailableAtItsIndexedSource');
       if (!published.value)
         return t('registryUi.install.unavailableReviewDataIsNotInstallationAuthority');
       if (expired.value) return t('registryUi.install.unavailableSignedDirectorySnapshotExpired');
-      const source = expectedDistribution(props.plugin, [client.id]);
+      const source = targetDistributions.value.get(client.id);
       const target = source?.targets.find((item) => item.client === client.id);
       if (client.id === 'chatgpt')
         return target?.app_binding
@@ -39,52 +57,16 @@ const targetOptions = computed(() =>
     })(),
   })),
 );
-const preferences = useInstallPreferencesStore();
-watch(
-  () => props.plugin.install_source,
-  (identity, previous) => {
-    if (preferences.package.identity)
-      preferences.reconcilePackage(
-        identity,
-        availableClients.value.map((client) => client.id),
-      );
-    const saved = preferences.readPackage(
-      identity,
-      availableClients.value.map((client) => client.id),
-    );
-    if (saved.targetIds.length) targets.value = saved.targetIds as ClientID[];
-    else if (previous && previous !== identity) {
-      const initial =
-        availableClients.value.find((client) => client.id === 'cursor') ??
-        availableClients.value[0];
-      targets.value = initial ? [initial.id] : [];
-    }
-    autoDetect.value = saved.autoDetect;
-  },
-  { immediate: true, flush: 'sync' },
-);
-const choicePending = ref(false);
-watch([targets, autoDetect], () => {
-  if (!choicePending.value) return;
-  choicePending.value = false;
-  saveChoice();
-}, { flush: 'post' });
-function saveChoice() {
-  preferences.selectPackage(
-    props.plugin.install_source,
-    {
-      targetIds: targets.value,
-      autoDetect: autoDetect.value,
-      expanded: true,
-    },
-    availableClients.value.map((client) => client.id),
-  );
-}
 const commands = computed(() =>
+  (scope.value !== 'project' || !autoDetect.value) &&
   props.plugin.installable &&
-  current.value &&
+  props.plugin.discovery?.availability !== 'unavailable' &&
+  canUseSource.value &&
   (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
-    ? pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
+    ? (scope.value === 'project'
+        ? projectCatalogCommands(props.plugin, targets.value)
+        : pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
+      )
     : undefined,
 );
 function diagnosticText(
@@ -101,8 +83,10 @@ function diagnosticText(
   if (diagnostic.params?.status) params.status = t(`registryUi.status.${diagnostic.params.status}`);
   return t(`registryUi.reason.${diagnostic.code}`, params);
 }
-const resolution = computed(() => resolveDistribution(props.plugin, targets.value));
-const expectedSource = computed(() => (current.value ? resolution.value.distribution : undefined));
+const resolution = selection.resolution;
+const expectedSource = computed(() =>
+  canUseSource.value ? resolution.value.distribution : undefined,
+);
 const expectedSourceLabel = computed(() =>
   expectedSource.value ? t(`registryUi.distribution.${expectedSource.value.kind}`) : '',
 );
@@ -117,42 +101,22 @@ const chatgptSelected = computed(
     selectedTargets.value.some((target) => target.client === 'chatgpt' && target.app_binding),
 );
 const unavailableDiscoveryReason = computed(() => {
-  if (props.plugin.installable) return '';
   if (props.plugin.discovery?.availability === 'unavailable')
     return t('registryUi.install.thisPackageIsNoLongerAvailableFromItsSource');
+  if (isFullyRetired(props.plugin))
+    return t(
+      'registryUi.install.thisProductIsRetiredNewInstallsAreUnavailableAndExistingInstallsCanOnlyBeRemoved',
+    );
+  if (props.plugin.installable) return '';
   if (!props.plugin.components.length)
     return t(
       'registryUi.install.weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet',
     );
   return t('registryUi.install.thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet');
 });
-
-function updateTargets(values: string[]) {
-  const allowed = new Set(availableClients.value.map((client) => client.id));
-  const next = values.filter((value): value is (typeof clients)[number]['id'] =>
-    allowed.has(value as (typeof clients)[number]['id']),
-  );
-  if (next.length) {
-    choicePending.value = true;
-    targets.value = next;
-  }
-}
-
-function updateAutoDetect(value: boolean) {
-  choicePending.value = true;
-  autoDetect.value = value;
-}
-
-watch(availableClients, (next) => {
-  const allowed = new Set(next.map((client) => client.id));
-  const retained = targets.value.filter((target) => allowed.has(target));
-  if (retained.length !== targets.value.length) {
-    targets.value = retained.length ? retained : next[0] ? [next[0].id] : [];
-    autoDetect.value = true;
-    if (preferences.package.identity)
-      preferences.reconcilePackage(props.plugin.install_source, [...allowed]);
-  }
-});
+const vendorInstall = computed(() =>
+  unavailableDiscoveryReason.value ? vendorInstallSource(props.plugin) : undefined,
+);
 </script>
 
 <template>
@@ -162,9 +126,11 @@ watch(availableClients, (next) => {
         <p class="eyebrow">{{ t('registryUi.install.installer') }}</p>
         <h2 id="install-title">
           {{
-            unavailableDiscoveryReason
-              ? t('registryUi.install.notReadyToInstall')
-              : t('registryUi.install.useWithYourAgent')
+            vendorInstall
+              ? t('registryUi.install.vendorInstallerHeading')
+              : unavailableDiscoveryReason
+                ? t('registryUi.install.notReadyToInstall')
+                : t('registryUi.install.useWithYourAgent')
           }}
         </h2>
       </div>
@@ -177,7 +143,21 @@ watch(availableClients, (next) => {
         >{{ t('registryUi.install.runWithNpx') }}</a
       >
     </div>
-    <div v-if="unavailableDiscoveryReason" class="install-panel__empty" role="status">
+    <div v-if="vendorInstall" class="install-panel__empty" role="status">
+      <span class="install-panel__empty-icon" aria-hidden="true">i</span>
+      <div>
+        <p>{{ t('registryUi.install.vendorInstallerBody') }}</p>
+        <CommandSnippet
+          :label="t('registryUi.install.vendorCommandLabel')"
+          kind="add"
+          :command="vendorInstall.command"
+        />
+        <a :href="vendorInstall.url" target="_blank" rel="noreferrer"
+          >{{ t('registryUi.install.vendorInstallerCta') }} ↗</a
+        >
+      </div>
+    </div>
+    <div v-else-if="unavailableDiscoveryReason" class="install-panel__empty" role="status">
       <span class="install-panel__empty-icon" aria-hidden="true">i</span>
       <div>
         <h3>{{ t('registryUi.install.thisPluginIsNotInstallableYet') }}</h3>
@@ -187,7 +167,12 @@ watch(availableClients, (next) => {
         }}</a>
       </div>
     </div>
-    <div v-else-if="commands" class="command-stack">
+    <div v-else-if="canUseSource" class="command-stack">
+      <InstallScopeSelect
+        :model-value="scope"
+        :project-available="projectAvailable"
+        @update:model-value="updateScope"
+      />
       <div class="install-command-row">
         <div class="target-select">
           <span>{{ t('registryUi.install.agents') }}</span
@@ -201,25 +186,49 @@ watch(availableClients, (next) => {
             @update:model-value="updateTargets"
           />
         </div>
-        <CommandSnippet :label="t('registryUi.install.add')" kind="add" :command="commands.add" />
+        <CommandSnippet
+          v-if="commands"
+          :label="t('registryUi.install.add')"
+          kind="add"
+          :command="commands.add"
+        />
       </div>
+      <InstallOutcome
+        v-if="commands && !autoDetect && expectedSource"
+        :distribution="expectedSource"
+        :targets="targets"
+      />
+      <p v-if="commands?.saveMode" class="install-panel__notice">
+        {{
+          t(
+            `registryUi.install.dependencySaving.${scope === 'project' && commands.saveMode === 'saved' ? 'projectSaved' : commands.saveMode}`,
+          )
+        }}
+      </p>
       <CommandSnippet
+        v-if="commands"
         :label="t('registryUi.install.update')"
         kind="update"
         :command="commands.update"
       />
       <CommandSnippet
+        v-if="commands"
         :label="t('registryUi.install.repair')"
         kind="repair"
         :command="commands.repair"
       />
       <CommandSnippet
+        v-if="commands"
         :label="t('registryUi.install.remove')"
         kind="remove"
         :command="commands.remove"
       />
     </div>
-    <p v-if="!unavailableDiscoveryReason && expired" class="install-panel__notice" role="status">
+    <p
+      v-if="!isDiscovered && !unavailableDiscoveryReason && expired"
+      class="install-panel__notice"
+      role="status"
+    >
       <strong>{{ t('registryUi.install.commandsUnavailableStaleDirectory') }}</strong>
       {{
         t(
@@ -228,7 +237,7 @@ watch(availableClients, (next) => {
       }}
     </p>
     <p
-      v-else-if="!unavailableDiscoveryReason && !published"
+      v-else-if="!isDiscovered && !unavailableDiscoveryReason && !published"
       class="install-panel__notice"
       role="status"
     >
@@ -245,7 +254,11 @@ watch(availableClients, (next) => {
       role="status"
     >
       <strong>{{ t('registryUi.install.commandsUnavailable') }}</strong>
-      {{ diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason) }}
+      {{
+        scope === 'project'
+          ? t('registryUi.install.scope.selectionUnavailable')
+          : diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason)
+      }}
     </p>
     <p v-if="autoDetect && commands" class="install-panel__notice">
       <strong>{{ t('registryUi.install.automaticDetection') }}</strong>
@@ -260,7 +273,9 @@ watch(availableClients, (next) => {
       {{ t('registryUi.install.chatgptFinish', { name: plugin.display_name }) }}
     </p>
     <p
-      v-if="!unavailableDiscoveryReason && !autoDetect && resolution.fallback_reason && current"
+      v-if="
+        !unavailableDiscoveryReason && !autoDetect && resolution.fallback_reason && canUseSource
+      "
       class="install-panel__notice"
     >
       <strong>{{
@@ -271,7 +286,7 @@ watch(availableClients, (next) => {
       {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
     </p>
     <p
-      v-else-if="!unavailableDiscoveryReason && !autoDetect && !hasCompleteSource && current"
+      v-else-if="!unavailableDiscoveryReason && !autoDetect && !hasCompleteSource && canUseSource"
       class="install-panel__notice"
     >
       <strong>{{ t('registryUi.install.noSingleSourceServesThisTargetSet') }}</strong>

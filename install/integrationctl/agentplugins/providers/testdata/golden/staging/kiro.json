@@ -11,6 +11,15 @@
   "Objects": [
     {
       "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
       "Kind": "managed_package_directory",
       "LogicalName": "demo",
       "ManagedDigest": "${ARTIFACT}",
@@ -22,6 +31,15 @@
     },
     {
       "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
       "Kind": "kiro_global_mcp_server",
       "LogicalName": "notion",
       "ManagedDigest": "sha256:989600c7dea2bd8538f88879c05c1914f1dca94d433154cfb2d087650ec4de78",
@@ -33,6 +51,15 @@
     },
     {
       "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
       "Kind": "kiro_global_skill_directory",
       "LogicalName": "good",
       "ManagedDigest": "sha256:0ff5f701bc7b96b22b654f61883ffa11bc7582422b293c495159b78d4607ba07",

@@ -353,3 +353,72 @@ func TestImportedPortableMCPYAMLCanonicalizesAPIVersionV1(t *testing.T) {
 		t.Fatalf("gemini import did not normalize protocol:\n%s", rendered)
 	}
 }
+
+func TestUnwrapNativeMCPServersAcceptsEnvelopeAndBareMaps(t *testing.T) {
+	t.Parallel()
+	envelope := map[string]any{
+		"mcpServers": map[string]any{
+			"docs": map[string]any{"command": "node", "args": []any{"server.mjs"}},
+		},
+	}
+	servers, err := UnwrapNativeMCPServers(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(servers) != 1 || servers["docs"] == nil {
+		t.Fatalf("envelope servers = %#v", servers)
+	}
+	bare := map[string]any{"docs": map[string]any{"url": "https://example.com/mcp"}}
+	servers, err = UnwrapNativeMCPServers(bare)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(servers) != 1 || servers["docs"] == nil {
+		t.Fatalf("bare servers = %#v", servers)
+	}
+	if _, err := UnwrapNativeMCPServers(map[string]any{"mcpServers": "nope"}); err == nil {
+		t.Fatal("expected envelope type error")
+	}
+}
+
+func TestParsePortableMCPRejectsUnknownTransport(t *testing.T) {
+	t.Parallel()
+	_, err := ParsePortableMCP("mcp/servers.yaml", []byte(`api_version: v1
+
+servers:
+  weird:
+    type: websocket
+    remote:
+      url: "https://example.com/mcp"
+`))
+	if err == nil || !strings.Contains(err.Error(), "type must be stdio or remote") {
+		t.Fatalf("unknown transports must be rejected at parse time, err = %v", err)
+	}
+}
+
+func TestRenderPortableMCPForTargetProjectsRemoteHTTP(t *testing.T) {
+	t.Parallel()
+	parsed, err := ParsePortableMCP("mcp/servers.yaml", []byte(`api_version: v1
+
+servers:
+  docs:
+    type: remote
+    remote:
+      protocol: streamable_http
+      url: "https://example.com/mcp"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	projected, err := renderPortableMCPForTarget(&PortableMCP{File: parsed.File}, "grok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	docs, ok := projected["docs"].(map[string]any)
+	if !ok {
+		t.Fatalf("projection = %#v", projected)
+	}
+	if docs["type"] != "http" || docs["url"] != "https://example.com/mcp" {
+		t.Fatalf("remote projection = %#v", docs)
+	}
+}

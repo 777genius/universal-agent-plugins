@@ -1,0 +1,82 @@
+{
+  "registryUi": {
+    "skills": {
+      "catalogType": "Tipo de catálogo",
+      "plugins": "Extensões",
+      "skills": "Habilidades",
+      "heading": "Explore as Agent Skills",
+      "intro": "Encontre uma habilidade, escolha seus agentes e copie o comando de instalação.",
+      "search": "Buscar Skills",
+      "searchPlaceholder": "Busque por nome ou repositório",
+      "clearSearch": "Limpar busca",
+      "sortLabel": "Ordenar Skills",
+      "loaded": "Exibindo {count} Skills",
+      "searchResults": "Exibindo {count} resultados",
+      "stale": "Resultados salvos em {date}. Dados recentes estão temporariamente indisponíveis.",
+      "minSearch": "Digite pelo menos 2 caracteres",
+      "minSearchHelp": "Use um nome ou repositório, ou limpe a busca para explorar.",
+      "loading": "Carregando Skills…",
+      "unavailable": "Skills temporariamente indisponíveis",
+      "unavailableHelp": "Tente carregar o catálogo novamente em instantes.",
+      "retry": "Tentar novamente",
+      "noMatches": "Nenhuma Skill encontrada",
+      "noMatchesHelp": "Tente uma busca mais ampla ou limpe a busca para explorar.",
+      "moreUnavailable": "Não foi possível carregar mais Skills. Seus resultados atuais continuam disponíveis.",
+      "showMore": "Mostrar mais Skills",
+      "externalSource": "Fonte externa",
+      "githubSource": "Código no GitHub",
+      "unsupportedSource": "Não há uma origem de instalação verificada para esta listagem.",
+      "chooseAgents": "Escolher agentes",
+      "chooseInTerminal": "Escolher agentes no terminal",
+      "chooseInTerminalHelp": "O comando permite escolher agentes antes da instalação.",
+      "checkedBeforeInstall": "A CLI verifica a fonte e a Skill antes da instalação.",
+      "views": {
+        "popular": "Populares · todo o período",
+        "trending": "Tendências · 24 horas",
+        "hot": "Em alta · última hora"
+      },
+      "metric": {
+        "all-time": "{count} instalações · todo o período",
+        "24h": "{count} instalações · últimas 24 horas",
+        "1h": "{count} instalações · última hora"
+      },
+      "pageHeading": "Encontre Agent Skills",
+      "unsupportedName": "A instalação direta não está disponível para esta listagem. Consulte a origem no GitHub.",
+      "collectionShown": "Exibindo {count} de {total} nesta coleção",
+      "headingPrefix": "Encontre",
+      "manualSkillSelection": "Selecione a Skill exata no instalador; o nome do catálogo não foi verificado.",
+      "publisherSource": "Fonte do editor",
+      "invalidPublisherName": "É necessário o nome exato da Skill. Confira a fonte do editor.",
+      "detail": {
+        "breadcrumb": "Navegação da Skill",
+        "skill": "Habilidade do agente",
+        "notFound": "Skill não encontrada",
+        "notFoundHelp": "Esta ficha não está disponível. Volte ao catálogo de Skills.",
+        "backToSkills": "Voltar às Skills",
+        "installation": "Instalação",
+        "command": "Comando",
+        "prompt": "Instrução",
+        "promptText": "Instale esta Skill com Universal Agent Plugins. Revise a fonte e as alterações antes de executar:\n{command}",
+        "exactNameUnavailable": "Não foi possível validar o nome exato para instalação. Consulte a fonte do editor.",
+        "security": "Verificações de segurança",
+        "installs": "Instalações",
+        "source": "Fonte",
+        "metricsNotice": "As contagens são fornecidas pelo catálogo externo e não foram verificadas independentemente.",
+        "loadingDocument": "Carregando instruções da fonte…",
+        "sourceDocumentNotice": "Instruções do editor · conteúdo não verificado. Revise antes de usar.",
+        "documentUnavailable": "Não foi possível carregar SKILL.md do editor. Você pode consultar a fonte diretamente.",
+        "viewPublisher": "Ver fonte do editor",
+        "revision": "Revisão da fonte",
+        "rawDocument": "Ver o SKILL.md completo"
+      }
+    },
+    "directoryPage": {
+      "pluginDirectory": "Diretório de plugins",
+      "findAgentPlugins10": "Encontre Agent Plugins 1.0.",
+      "useThemEverywhere": "Use-os em qualquer lugar.",
+      "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "Pesquise pacotes revisados e plugins da comunidade descobertos em repositórios públicos do GitHub.",
+      "explorePlugins": "Explorar plugins",
+      "filterByCapabilitySourceAuthenticationOrSupportedAgent": "Filtre por recurso, origem, autenticação ou agente compatível."
+    }
+  }
+}

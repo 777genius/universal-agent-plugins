@@ -17,15 +17,20 @@ export default defineNuxtPlugin({
     nuxtApp.vueApp.onUnmount(cleanup);
     if (import.meta.hot) import.meta.hot.dispose(cleanup);
 
-    // app:mounted can precede async NuxtLayout hydration. onNuxtReady waits
-    // for app:suspense:resolve, so existing SSR nodes observe the theme change.
-    onNuxtReady(() => {
+    // app:mounted can precede async NuxtLayout hydration. Apply preferences
+    // when it completes; waiting for browser idle can leave the saved theme unapplied.
+    const initialize = () => {
       if (stopped) return;
       try {
         dispose = createBrowserThemeAdapter(themeStore, nuxtApp.$vuetifyTheme as ThemeInstance, window);
       } finally {
         initLocale();
       }
-    });
+    };
+    if (nuxtApp.isHydrating) {
+      nuxtApp.hooks.hookOnce('app:suspense:resolve', initialize);
+    } else {
+      initialize();
+    }
   },
 });

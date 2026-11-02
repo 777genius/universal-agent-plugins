@@ -1,13 +1,26 @@
 name: Docs Canary
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/docs-canary.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/docs-canary.yml'
   schedule:
     - cron: "0 4 * * 1"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   canary:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    env:
+      GOTOOLCHAIN: local
+      GOMAXPROCS: "2"
     defaults:
       run:
         working-directory: website
@@ -15,6 +28,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v5
         with:
@@ -28,17 +42,56 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.13"
+          go-version: "1.26.10"
           cache: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
       - name: Install pinned docs toolchain
         run: pnpm install --frozen-lockfile
+
+      - name: Install pinned docs generators
+        working-directory: .
+        run: |
+          python -m venv "${RUNNER_TEMP}/docs-tools-root/python-venv"
+          "${RUNNER_TEMP}/docs-tools-root/python-venv/bin/pip" install --require-hashes -r "${GITHUB_WORKSPACE}/website/tools/pydoc-markdown-requirements.txt"
+          mkdir -p "${RUNNER_TEMP}/docs-tools-root/bin"
+          GOBIN="${RUNNER_TEMP}/docs-tools-root/bin" go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@v1.1.0
+
+      - name: Prepare immutable authoring source
+        working-directory: .
+        run: |
+          source_sha=$(node --input-type=module -e 'import { acceptedAuthoringSHA } from "./website/tools/lib/source-contract.mjs"; process.stdout.write(acceptedAuthoringSHA)')
+          git clone --no-local --no-checkout . "${RUNNER_TEMP}/docs-authoring-source"
+          git -C "${RUNNER_TEMP}/docs-authoring-source" checkout --quiet --detach "$source_sha"
+          chmod -R a-w "${RUNNER_TEMP}/docs-authoring-source"
+          echo "DOCS_AUTHORING_CHECKOUT=${RUNNER_TEMP}/docs-authoring-source" >> "$GITHUB_ENV"
+
+      - name: Warm Go module cache for offline docs consumer integration
+        working-directory: .
+        env:
+          GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
+          GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
+        run: |
+          cd "$DOCS_AUTHORING_CHECKOUT"
+          GOWORK="$DOCS_AUTHORING_CHECKOUT/go.work" go build -p 2 -o "$RUNNER_TEMP/docs-authoring-preflight" ./cli/plugin-kit-ai/tools/authoring-docs
 
       - name: Install Chromium for docs smoke
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run pinned alpha canary
         env:
+          GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
+          GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
+          DOCS_TOOLS_ROOT: ${{ runner.temp }}/docs-tools-root
+          DOCS_GOMARKDOC: ${{ runner.temp }}/docs-tools-root/bin/gomarkdoc
+          TMPDIR: ${{ runner.temp }}
+          GOWORK: ${{ github.workspace }}/go.work
+          GOPROXY: "off"
+          GOSUMDB: "off"
+          GOENV: "off"
           DOCS_BASE_PATH: /plugin-kit-ai/docs/
           DOCS_HOSTNAME: https://777genius.github.io
         run: pnpm run docs:check && pnpm run docs:smoke-ui

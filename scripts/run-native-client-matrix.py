@@ -34,41 +34,120 @@ PINS = {
         "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz", "sha256:33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c", "rg"),
         "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-x86_64-unknown-linux-musl.tar.gz", "sha256:f479424eca092484dc40d87ae28c44f4cc40234a60045d6131e493800d814a30", "codex-x86_64-unknown-linux-musl"),
         "claude": ("npm", "@anthropic-ai/claude-code-linux-x64", "2.1.263", "claude-code-linux-x64-2.1.263.tgz", "sha512-0IrvpLd/0FP0acQw59T4Cvx/r4nwAXKBrW0WyhIXymzYWurPCLztB+Icu9MkeewAUI+p3PTXsSfmilv/n6XlAQ==", "claude"),
-        "opencode": ("npm", "opencode-linux-x64", "1.18.29", "opencode-linux-x64-1.18.29.tgz", "sha512-X8/wS/8mzL7Ko0zYYF6RzKax39KkxXDRoimhmzXuo0gPrZX4DQjqBNpPAByBwUjFapk73ZGSVsjDGvoNapBa1Q==", "opencode"),
+        "opencode": ("npm", "opencode-linux-x64", "1.18.34", "opencode-linux-x64-1.18.34.tgz", "sha512-RTAMjCve4euxP2QKLuvRmdoW5J5DQK1DiZqt+7slfixyjAEi79QC2Df2oYKogibaAI4IEU8uzenoJeEl3k+UEw==", "opencode"),
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz", "sha256:2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da", "lintai"),
     },
     "linux-arm64": {
         "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz", "sha256:a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d", "rg"),
         "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-aarch64-unknown-linux-musl.tar.gz", "sha256:5cda6182bd94c3a30f2eb63a495489ebf7f691fddb14d70f48c6c1a5071b6cde", "codex-aarch64-unknown-linux-musl"),
         "claude": ("npm", "@anthropic-ai/claude-code-linux-arm64", "2.1.263", "claude-code-linux-arm64-2.1.263.tgz", "sha512-RlJtLbl8xqFMf2zUdOKD4o5FkNhcgGjlS3Un8PNfSbv1fLQg3SqBQgEJhNEtSeKlEsOs26RnCG/jVk4yah8Udw==", "claude"),
-        "opencode": ("npm", "opencode-linux-arm64", "1.18.29", "opencode-linux-arm64-1.18.29.tgz", "sha512-Lr7XXik5wPJZBV5RW+aR6Uogf1n5GogpB565m+D/jiO/vRXr9LhvCpixgAr1tiwuH1ZfMsqOOlbFQz5jgH3Tqg==", "opencode"),
+        "opencode": ("npm", "opencode-linux-arm64", "1.18.34", "opencode-linux-arm64-1.18.34.tgz", "sha512-ZSjqcH0MEbAzLEmkRC9Aop1PbWZxe2NuKONAE/x8MRQdjKdOepX7M50UpjbsNoiLMkP584Z98Mg4a42fJhouvA==", "opencode"),
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-aarch64-unknown-linux-gnu.tar.gz", "sha256:132a37610575bd251ecaf0be4c6090dad144dd1397c99aad989a3944c63c3d4a", "lintai"),
     },
     "darwin-arm64": {
         "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-aarch64-apple-darwin.tar.gz", "sha256:3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4", "rg"),
         "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-aarch64-apple-darwin.tar.gz", "sha256:8cf911ea676523bfb2121ec561848d2aba564890ad536db4d8a3353f2b9850b1", "codex-aarch64-apple-darwin"),
         "claude": ("npm", "@anthropic-ai/claude-code-darwin-arm64", "2.1.263", "claude-code-darwin-arm64-2.1.263.tgz", "sha512-yLv8MtgulGMGCWTwDUSmlEL0+94sxKP3vJm0SAXZX+0qVQ09PrjVSRC0ibtVeW7xymyhvP1JaUimOyp+t2wO5g==", "claude"),
-        "opencode": ("npm", "opencode-darwin-arm64", "1.18.29", "opencode-darwin-arm64-1.18.29.tgz", "sha512-EU0qma5GPJXcDp5rENvedSfqJjqxatQW/Qzjs71pR2YdbrSh7YmBwtvnIb2/KIvfQr0DErX4ST14sbBQI2mQdg==", "opencode"),
+        "opencode": ("npm", "opencode-darwin-arm64", "1.18.34", "opencode-darwin-arm64-1.18.34.tgz", "sha512-ioBEvc3nUA64waDIVsphh92LgJgyTbq+uRd0OurdqqT9WEI9rp4J7NrA24NfL6epCa1Xr06TnRx5+th9W3T/sA==", "opencode"),
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-aarch64-apple-darwin.tar.gz", "sha256:be8b263e2323074080d928ea7c2129458299a6d03f7a9f178dfc1aa8e6bc17ff", "lintai"),
     },
     "windows-amd64": {
         "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-x86_64-pc-windows-msvc.zip", "sha256:71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5", "rg.exe"),
         "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-x86_64-pc-windows-msvc.exe.zip", "sha256:c016b0e6968b78586919c720d2685a03712f6d5f11bcd9d6f92c91eb8c41ba16", "codex-x86_64-pc-windows-msvc.exe"),
         "claude": ("npm", "@anthropic-ai/claude-code-win32-x64", "2.1.263", "claude-code-win32-x64-2.1.263.tgz", "sha512-P1LnudAWj2ptyE0IZzCZKAe7nU7LxqlkcLdBfp8FsHlH5dp75Og4JJ6TClvfjanHn3shYW4CYN6oI1vSqZlkHw==", "claude.exe"),
-        "opencode": ("npm", "opencode-windows-x64", "1.18.29", "opencode-windows-x64-1.18.29.tgz", "sha512-xtWiZNMiwFtBl7q9yMG+XK/BTYGfgFoHLDx4ruWVYCoxjV0NYwjJi6rB9B3xIVbTclzu81YLKNFcT3kNBEG9Yw==", "opencode.exe"),
+        "opencode": ("npm", "opencode-windows-x64", "1.18.34", "opencode-windows-x64-1.18.34.tgz", "sha512-Nbw1JUHcMd+6Zab97tvhiR/wzMBrtFbHMog3w+HssBqt0068BLdpPadLmo72+vPtBu+ZxXIZzqNB9R3qtca7qg==", "opencode.exe"),
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-x86_64-pc-windows-msvc.zip", "sha256:2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911", "lintai.exe"),
     },
 }
+# Current-source V2 qualification uses official GitHub release assets. Retain
+# the independently pinned V1 PINS above as a separate regression lane.
+OPENCODE_V2_PINS = {
+    "linux-amd64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-linux-x64.tar.gz", "sha256:09f44302c10fd036912f59c81fd1aef5df45dd06f649197f9dfc9bbe2a79614e", "opencode"),
+    "linux-arm64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-linux-arm64.tar.gz", "sha256:5a528f42caf576c6cdece6a191eb273d3db54effa5518e0402684d8f8026aeb6", "opencode"),
+    "darwin-arm64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-darwin-arm64.zip", "sha256:25ba9908979fa7d764792c82589b4b5768ab1511154e0317d98aa77d216ce767", "opencode"),
+    "windows-amd64": ("github", "anomalyco/opencode", "v2.2.5", "opencode-windows-x64.zip", "sha256:2f3bfd6b3527c60c2a882557b20ddc9ba6bdff4b5a8fe61c853da8fcfb3076e8", "opencode.exe"),
+}
+
+
+def selected_pin(args, name):
+    if name == "opencode" and getattr(args, "opencode_generation", "v1") == "v2":
+        return OPENCODE_V2_PINS[args.target]
+    return PINS[args.target][name]
+
+
+# Exact, anchored selections: every selected test is required and every
+# required test is selected (scripts/test_native_client_matrix.py checks both
+# against the Go sources).
 PATTERNS = {
-    "codex": r"^TestAgentpluginsCodexNativeLifecycle$",
-    "claude": r"^TestAgentpluginsClaudeNative(Lifecycle|RuntimeLifecycle)$",
-    "opencode": r"^TestAgentpluginsOpenCodeNative",
+    "codex": r"^TestAgentpluginsCodexNative(Lifecycle|CommandsLifecycle)$",
+    "claude": r"^TestAgentpluginsClaudeNative(Lifecycle|RuntimeLifecycle|CommandsLifecycle)$",
+    "opencode": r"^TestAgentpluginsOpenCodeNative(Lifecycle|ToolCollision|RuntimeExtended|CommandsLifecycle)$",
 }
 REQUIRED_TESTS = {
-    "codex": {"TestAgentpluginsCodexNativeLifecycle"},
-    "claude": {"TestAgentpluginsClaudeNativeLifecycle", "TestAgentpluginsClaudeNativeRuntimeLifecycle"},
-    "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended"},
+    "codex": {"TestAgentpluginsCodexNativeLifecycle", "TestAgentpluginsCodexNativeCommandsLifecycle"},
+    "claude": {"TestAgentpluginsClaudeNativeLifecycle", "TestAgentpluginsClaudeNativeRuntimeLifecycle", "TestAgentpluginsClaudeNativeCommandsLifecycle"},
+    "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended", "TestAgentpluginsOpenCodeNativeCommandsLifecycle"},
 }
+PROJECT_TESTS = {
+    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP"},
+    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery"},
+    "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
+}
+
+# V2 retains the reviewed A/B lifecycle, then independently proves a real
+# stdio MCP initialize + tools/list path without using vendor credentials.
+# V1 stays on its exact historical selectors and client pin.
+OPENCODE_V2_PROJECT_TESTS = PROJECT_TESTS["opencode"] | {"TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake"}
+
+
+def select_native_tests(client, project_components=False, released=False, opencode_generation="v1"):
+    """Keep current-source project proof separate from released user evidence."""
+    if opencode_generation == "v2":
+        if client != "opencode" or not project_components or released:
+            raise ValueError("V2 qualification requires current-source OpenCode project scope")
+        required = OPENCODE_V2_PROJECT_TESTS
+        return "^(?:" + "|".join(re.escape(name) for name in sorted(required)) + ")$", required
+    if opencode_generation != "v1":
+        raise ValueError("unknown OpenCode generation")
+    if not project_components:
+        return PATTERNS[client], REQUIRED_TESTS[client]
+    if released or client not in PROJECT_TESTS:
+        raise ValueError("project proof requires a qualified current-source client, not a released/draft installer")
+    required = REQUIRED_TESTS[client] | PROJECT_TESTS[client]
+    return "^(?:" + "|".join(re.escape(name) for name in sorted(required)) + ")$", required
+
+
+def collect_opencode_project_artifact(fixture, output):
+    """Only the new admitted envelope, in a finite child; never copy its raw tree."""
+    destination = output / (fixture.name + ".zip")
+    error = None
+    try:
+        result = subprocess.run([sys.executable, str(Path(__file__).with_name("native_client_project_artifacts.py")),
+                                 str(fixture), str(destination)], stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, timeout=5, check=False)
+        if result.returncode:
+            error = "project envelope child refused (exit " + str(result.returncode) + ")"
+    except (OSError, subprocess.TimeoutExpired) as failure:
+        error = type(failure).__name__ + ": project envelope child failed or exceeded five seconds"
+    try:
+        info = destination.lstat()
+        valid = not destination.is_symlink() and destination.is_file() and info.st_nlink == 1 and info.st_size <= 32 << 20
+    except OSError:
+        valid = False
+    if error or not valid:
+        error = error or "project envelope archive admission refused"
+        # Write outside upload and atomically replace the final leaf, including
+        # a refused symlink; never open its target. No recursive failure cleanup.
+        pending_root = Path(tempfile.mkdtemp(prefix="opencode-fallback-", dir=fixture.parent))
+        pending = pending_root / "failure.zip"
+        with zipfile.ZipFile(pending, "x", compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr("opencode-project-evidence.json", json.dumps({"success": False,
+                "native_discovery_qualified": False, "native_mcp_initialization_qualified": False,
+                "native_model_use_qualified": False, "artifact_admission_error": error, "artifact_python_runtime": {"version": sys.version[:512], "implementation": sys.implementation.name[:64], "executable": sys.executable[:1024]}}))
+        if destination.exists() and destination.is_dir() and not destination.is_symlink():
+            os.replace(destination, pending_root / "refused-directory")
+        os.replace(pending, destination)
+    return error
 
 
 def require_verified_pin(pin):
@@ -234,7 +313,7 @@ def prepared_release(source, args):
         tool_dir.mkdir()
         tools = {}
         for name in (args.client, 'lintai', 'rg'):
-            pin = PINS[args.target][name]
+            pin = selected_pin(args, name)
             path, evidence = provision(pin, tool_dir, name)
             tools[name] = dict(path=path.relative_to(root).as_posix(),
                                pin=list(pin), evidence=evidence)
@@ -274,7 +353,7 @@ def load_prepared(args):
     tools = record.get('tools', {})
     draft.require(set(tools) == {args.client, 'lintai', 'rg'}, 'missing prepared tools')
     for name, tool in tools.items():
-        pin = PINS[args.target][name]
+        pin = selected_pin(args, name)
         require_verified_pin(pin[4])
         draft.require(tool['pin'] == list(pin), 'prepared tool pin mismatch')
         draft.require(tool['path'] in record['files'] and
@@ -287,7 +366,7 @@ def prepared_tools(args, directory):
     """Keep standalone acquisition, but consume only frozen bytes when supplied."""
     names = (args.client, 'lintai', 'rg')
     if args.prepared_input is None:
-        return {name: provision(PINS[args.target][name], directory, name) for name in names}
+        return {name: provision(selected_pin(args, name), directory, name) for name in names}
     record = load_prepared(args)
     root = args.prepared_input.resolve()
     result = {}
@@ -318,14 +397,23 @@ def main():
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--prepared-input", type=Path)
     parser.add_argument("--target-scope", choices=('historical-nine', 'linux-amd64'), default='historical-nine')
+    parser.add_argument("--project-components", action="store_true", help="also require current-source project lifecycle evidence with explicit discovery limits; never released/draft proof")
+    parser.add_argument("--opencode-generation", choices=("v1", "v2"), default="v1", help="select pinned OpenCode native generation; V2 requires current-source project proof")
     args = parser.parse_args()
     draft.validate(args)
+    if args.opencode_generation == "v2" and (args.client != "opencode" or not args.project_components or args.release_tag or args.release_state != "public" or args.prepared_input or args.prepare_only):
+        parser.error("V2 requires non-prepared current-source OpenCode --project-components")
     if args.release_state == "draft" and args.producer_source is None:
         parser.error("draft mode requires --producer-source")
     if args.release_state == "public" and args.producer_source is not None:
         parser.error("public mode must not receive --producer-source")
     if bool(args.release_tag) != bool(args.release_commit):
         parser.error("--release-tag and --release-commit must be supplied together")
+    try:
+        pattern, required_tests = select_native_tests(args.client, args.project_components,
+            bool(args.release_tag) or args.release_state == "draft" or bool(args.prepared_input) or args.prepare_only, args.opencode_generation)
+    except ValueError as error:
+        parser.error(str(error))
     require_hosted(args.target)
     source = Path(__file__).resolve().parents[1]
     if args.prepare_only:
@@ -339,7 +427,7 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     scratch = Path(tempfile.mkdtemp(prefix="uap-native-hosted-", dir=os.environ["RUNNER_TEMP"])).resolve()
-    identity = {"schema_version": 1, "client": args.client, "target": args.target, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "isolation": "disposable GitHub-hosted machine; explicit subprocess environments and fresh profiles; no OS/process isolation from runner or later steps", "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof", "status": "failed", "scratch": str(scratch)}
+    identity = {"schema_version": 1, "python_runtime": {"version": sys.version[:512], "implementation": sys.implementation.name[:64], "executable": sys.executable[:1024]}, "client": args.client, "target": args.target, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "isolation": "disposable GitHub-hosted machine; explicit subprocess environments and fresh profiles; no OS/process isolation from runner or later steps", "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof", "status": "failed", "scratch": str(scratch)}
     try:
         for key, rev in [("commit", "HEAD"), ("tree", "HEAD^{tree}")]:
             identity[key] = subprocess.check_output(["git", "rev-parse", rev], cwd=source, encoding="utf-8", errors="strict").strip()
@@ -349,13 +437,15 @@ def main():
         if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=source):
             raise RuntimeError("native proof must build a clean exact checkout")
         for key in (args.client, "lintai", "rg"):
-            require_verified_pin(PINS[args.target][key][4])
+            require_verified_pin(selected_pin(args, key)[4])
         binary_dir = scratch / "bin"
         binary_dir.mkdir()
         tools = prepared_tools(args, binary_dir)
         client, client_evidence = tools[args.client]
         scanner, scanner_evidence = tools["lintai"]
         identity["client_asset"] = client_evidence
+        if args.client == "opencode":
+            identity["opencode_generation"] = args.opencode_generation
         identity["scanner_asset"] = scanner_evidence
         _, identity["ripgrep_asset"] = tools["rg"]
         suffix = ".exe" if os.name == "nt" else ""
@@ -427,11 +517,15 @@ def main():
                 raise RuntimeError(f"released installer version mismatch: {measured!r}")
         prefix = "AGENTPLUGINS_" + args.client.upper()
         env[prefix + "_NATIVE_E2E"] = "1"
+        if args.project_components:
+            env[prefix + "_PROJECT_NATIVE_E2E"] = "1"
         env[prefix + "_BIN"] = str(client)
         env[prefix + "_SHA256"] = client_evidence["binary_sha256"]
-        env[prefix + "_VERSION"] = {"codex": "0.153.4", "claude": "2.1.263 (Claude Code)", "opencode": "1.18.29"}[args.client]
-        command = [str(tests), "-test.v", "-test.timeout=15m", "-test.run=" + PATTERNS[args.client]]
+        env[prefix + "_VERSION"] = "2.2.5" if args.client == "opencode" and args.opencode_generation == "v2" else {"codex": "0.153.4", "claude": "2.1.263 (Claude Code)", "opencode": "1.18.34"}[args.client]
+        command = [str(tests), "-test.v", "-test.timeout=15m", "-test.run=" + pattern]
         identity["test_command"] = command
+        identity["required_tests"] = sorted(required_tests)
+        identity["project_components"] = args.project_components
         with (output / "native-tests.log").open("w", encoding="utf-8") as transcript:
             result = subprocess.run(command, cwd=project, env=env, stdout=transcript, stderr=subprocess.STDOUT, timeout=930)
         identity["exit_code"] = result.returncode
@@ -441,17 +535,27 @@ def main():
         skipped = re.findall(r"^\s*--- SKIP: ([^\s]+)", log, re.M)
         identity["passed_tests"] = sorted(passed)
         identity["skipped_tests"] = skipped
-        if result.returncode or skipped or not REQUIRED_TESTS[args.client].issubset(passed):
+        if result.returncode or skipped or not required_tests.issubset(passed):
             raise RuntimeError("native suite failed, skipped, or omitted a required test; inspect transcript")
         identity["status"] = "passed"
     finally:
         identity["finished_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         # Keep structured evidence and transcripts, never copy client caches,
         # profile databases, source payload binaries, or ephemeral client auth.
+        native_passed = identity["status"] == "passed"
+        project_artifact_errors = []
         evidence_dir = scratch / "evidence"
         allowed = {".json", ".jsonl", ".log"}
         if evidence_dir.exists():
             for fixture in evidence_dir.iterdir():
+                if fixture.name.startswith("uap-opencode-project-work-"):
+                    continue
+                if fixture.name.startswith("uap-opencode-project-admitted-"):
+                    if args.client == "opencode" and args.project_components:
+                        error = collect_opencode_project_artifact(fixture, output)
+                        if error:
+                            project_artifact_errors.append(error)
+                    continue
                 if not fixture.is_dir():
                     continue
                 for path in fixture.iterdir():
@@ -459,8 +563,13 @@ def main():
                         destination = output / fixture.name / path.name
                         destination.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copyfile(path, destination)
+        if project_artifact_errors:
+            identity["status"] = "failed"
+            identity["project_artifact_admission_errors"] = project_artifact_errors
         identity["artifact_sha256"] = {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in output.rglob("*") if p.is_file()}
         (output / "runner-evidence.json").write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
+        if native_passed and project_artifact_errors:
+            raise RuntimeError("new OpenCode project artifact admission failed; bounded failure evidence retained")
 
 
 if __name__ == "__main__":

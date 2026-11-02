@@ -4,8 +4,9 @@ import path from "node:path";
 import { sourceRoot } from "../config/site.mjs";
 import { listMarkdownFiles } from "../lib/fs.mjs";
 import { readFrontmatter } from "../lib/site-model.mjs";
+import { isRetiredArchive } from "../lib/public-routes.mjs";
 
-const locales = ["en", "ru", "es", "fr", "zh"];
+import { docsLocales as locales, historicalLocales } from "../config/locales.mjs";
 const english = new Map();
 const errors = [];
 for (const locale of locales) {
@@ -24,9 +25,12 @@ for (const locale of locales) {
     if (!english.has(relative)) errors.push(`${locale}/${relative}: missing English counterpart`);
     if (meta.canonicalId !== english.get(relative)?.canonicalId) errors.push(`${locale}/${relative}: canonical mismatch`);
     for (const error of dispositionErrors(`${locale}/${relative}`, body, meta)) errors.push(`${locale}/${relative}: ${error}`);
+    if (!isRetiredArchive(`${locale}/${relative}`) && meta.localeDisposition !== "current-translation") {
+      errors.push(`${locale}/${relative}: published source page needs a current translation`);
+    }
   }
   if (locale !== "en") for (const relative of english.keys()) {
-    if (!seen.has(relative)) errors.push(`${locale}/${relative}: missing counterpart`);
+    if ((!isRetiredArchive(`${locale}/${relative}`) || historicalLocales.includes(locale)) && !seen.has(relative)) errors.push(`${locale}/${relative}: missing counterpart`);
   }
 }
 for (const relative of Object.keys(inventory.pages)) {
@@ -35,4 +39,4 @@ for (const relative of Object.keys(inventory.pages)) {
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exitCode = 1;
-} else console.log(`Locale content parity: ${english.size} routes × ${locales.length} locales passed.`);
+} else console.log(`Locale content parity: ${locales.length} public locales and preserved historical counterparts passed.`);

@@ -50,6 +50,7 @@ func (session *removeGroupSession) buildDirectoryRemovals() ([]transaction.Direc
 			Verify: func(verifyContext context.Context, path string) error {
 				return stager.Verify(verifyContext, path, expected)
 			},
+			EnvironmentAuthority: item.input.EnvironmentAuthority,
 		})
 	}
 	keys := make([]string, 0, len(session.planned))
@@ -67,6 +68,9 @@ func (session *removeGroupSession) buildDirectoryRemovals() ([]transaction.Direc
 		return nil, err
 	}
 	session.desired = desired
+	for _, target := range session.input.Targets {
+		transaction.DropEnvironmentReceipt(&session.desired, target.EnvironmentAuthority)
+	}
 	session.createdData = createdData
 	pluginData := session.service.PluginData
 	for index, dataReceipt := range purgeReceipts {
@@ -74,11 +78,12 @@ func (session *removeGroupSession) buildDirectoryRemovals() ([]transaction.Direc
 		operationID := fmt.Sprintf("%s-data-%03d", session.groupID, index+1)
 		removals = append(removals, transaction.DirectoryRemoval{
 			OperationID: operationID, OperationGroupID: session.groupID,
-			ClientBindingID: receipt.DataReceiptID, Sequence: 1, OwnedBase: filepath.Dir(receipt.Locator),
+			InstallationID: session.installation.InstallationID, DataReceiptID: receipt.DataReceiptID, ClientBindingID: receipt.DataReceiptID, Sequence: 1, OwnedBase: filepath.Dir(receipt.Locator),
 			ActivePath: receipt.Locator, BeforeDigest: receipt.OwnershipDigest, Standalone: true,
 			Verify: func(verifyContext context.Context, path string) error {
 				return pluginData.ValidateDataAt(verifyContext, receipt, path)
 			},
+			EnvironmentAuthority: dataRemovalAuthority(session.input.Targets),
 		})
 	}
 	return removals, nil
@@ -136,4 +141,11 @@ func (session *removeGroupSession) markPersistFailure(err error) {
 	} else {
 		session.result.Phase = session.result.ManagedPhase
 	}
+}
+
+func dataRemovalAuthority(targets []RemoveInput) *domain.EnvironmentAuthority {
+	if len(targets) == 0 {
+		return nil
+	}
+	return targets[0].EnvironmentAuthority
 }

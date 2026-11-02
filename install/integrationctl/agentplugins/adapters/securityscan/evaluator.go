@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -25,7 +26,11 @@ func (evaluator Evaluator) Evaluate(ctx context.Context, input domain.SecurityEv
 		requirement = DefaultRequirement()
 	}
 	subject := domain.SecuritySubject{TreeDigest: input.TreeDigest, ManifestDigest: input.ManifestDigest}
-	if input.Trusted != nil {
+	view, err := newCommandView(input.PluginName, input.Commands)
+	if err != nil {
+		return domain.SecurityAssessment{}, err
+	}
+	if input.Trusted != nil && view == nil {
 		trusted := *input.Trusted
 		if err := trusted.Validate(requirement, subject); err == nil {
 			trusted.Evidence = domain.SecurityEvidenceSignedIndex
@@ -33,6 +38,9 @@ func (evaluator Evaluator) Evaluate(ctx context.Context, input domain.SecurityEv
 		}
 	}
 	key := CacheKey(subject, requirement)
+	if view != nil {
+		key = view.cacheKey(key)
+	}
 	if evaluator.Cache != nil {
 		if cached, ok := evaluator.Cache.Load(key); ok && cached.Validate(requirement, subject) == nil {
 			cached.Evidence = domain.SecurityEvidenceCache
@@ -42,7 +50,7 @@ func (evaluator Evaluator) Evaluate(ctx context.Context, input domain.SecurityEv
 	if evaluator.Scanner == nil {
 		return domain.SecurityAssessment{}, errors.New("security scanner is unavailable")
 	}
-	body, err := evaluator.Scanner.Scan(ctx, input.SnapshotRoot)
+	body, err := evaluator.scan(ctx, input.SnapshotRoot, view)
 	if err != nil {
 		return domain.SecurityAssessment{}, err
 	}
@@ -63,6 +71,18 @@ func (evaluator Evaluator) Evaluate(ctx context.Context, input domain.SecurityEv
 		}
 	}
 	return assessment, nil
+}
+
+func (evaluator Evaluator) scan(ctx context.Context, snapshotRoot string, view *commandView) ([]byte, error) {
+	if view == nil {
+		return evaluator.Scanner.Scan(ctx, snapshotRoot)
+	}
+	scratch, root, err := view.materialize(snapshotRoot)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(scratch) }()
+	return evaluator.Scanner.Scan(ctx, root)
 }
 
 func assessmentFromReport(subject domain.SecuritySubject, requirement domain.SecurityRequirement, report rawReport, rawReportBody []byte) (domain.SecurityAssessment, error) {

@@ -21,11 +21,17 @@ var (
 
 // AutomaticallyActivates reports that Activate will drive the Codex CLI.
 func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.ActivationRequest) bool {
+	if request.Plan.Scope == domain.ScopeProject {
+		return request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(request.Plan.Components)
+	}
 	return shared.HasClientCLI(env, request.BackendExecutable)
 }
 
 // VerifierAvailable reports that an exact Codex listing can be observed.
-func (*Adapter) VerifierAvailable(_ domain.DetectedClient, _ domain.DeliveryPlan, backendExecutable string) bool {
+func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
+	if plan.Scope == domain.ScopeProject {
+		return shared.OnlyNativeComponents(plan.Components)
+	}
 	return shared.HasListingCLI(backendExecutable)
 }
 
@@ -34,6 +40,9 @@ func (*Adapter) VerifierAvailable(_ domain.DetectedClient, _ domain.DeliveryPlan
 func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
+	}
+	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject {
+		return activateCodexProject(ctx, env, request)
 	}
 	profileRoot := request.Client.ConfigRoot
 	if profileRoot == "" {
@@ -139,4 +148,10 @@ func manualCodexVerification(outcome domain.ActivationOutcome, request domain.Ac
 	outcome.UserActions = []string{"confirm the managed plugin is installed and enabled in Codex"}
 	outcome.LocalActions = []string{fmt.Sprintf("the `%s plugin list --json` output contract was not recognized; inspect %s manually", request.BackendExecutable, request.DeclaredName)}
 	return outcome
+}
+
+// SupportsIndependentActivation limits effect-only execution to the adapter's
+// user CLI flow. Project and selected native-config delivery keep serial custody.
+func (*Adapter) SupportsIndependentActivation(request domain.ActivationRequest) bool {
+	return request.Plan.Scope == domain.ScopeUser && request.Plan.SelectedDelivery.IsZero()
 }

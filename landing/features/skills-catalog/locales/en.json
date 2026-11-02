@@ -1,0 +1,82 @@
+{
+  "registryUi": {
+    "skills": {
+      "catalogType": "Catalog type",
+      "plugins": "Plugins",
+      "skills": "Skills",
+      "heading": "Explore Agent Skills",
+      "intro": "Find a skill, choose your agents, and copy the install command.",
+      "search": "Search Skills",
+      "searchPlaceholder": "Search skills by name or repository",
+      "clearSearch": "Clear search",
+      "sortLabel": "Sort Skills",
+      "loaded": "Showing {count} Skills",
+      "searchResults": "Showing {count} search results",
+      "stale": "Showing saved results from {date}. Fresh results are temporarily unavailable.",
+      "minSearch": "Enter at least 2 characters",
+      "minSearchHelp": "Use a skill name or repository, or clear your search to browse.",
+      "loading": "Loading Skills…",
+      "unavailable": "Skills are temporarily unavailable",
+      "unavailableHelp": "Try again in a moment to load the catalog.",
+      "retry": "Try again",
+      "noMatches": "No matching Skills",
+      "noMatchesHelp": "Try a broader search or clear your search to browse.",
+      "moreUnavailable": "More Skills could not be loaded. Your current results are still available.",
+      "showMore": "Show more Skills",
+      "externalSource": "External source",
+      "githubSource": "GitHub source",
+      "unsupportedSource": "No verified install source is available for this listing.",
+      "chooseAgents": "Choose agents",
+      "chooseInTerminal": "Choose agents in terminal",
+      "chooseInTerminalHelp": "The command lets you choose agents before installation.",
+      "checkedBeforeInstall": "The CLI checks the source and Skill before installation.",
+      "views": {
+        "popular": "Popular · all time",
+        "trending": "Trending · 24 hours",
+        "hot": "Hot · last hour"
+      },
+      "metric": {
+        "all-time": "{count} installs · all time",
+        "24h": "{count} installs · last 24 hours",
+        "1h": "{count} installs · last hour"
+      },
+      "pageHeading": "Find Agent Skills",
+      "unsupportedName": "Direct install is not available for this listing. Review the GitHub source.",
+      "collectionShown": "Showing {count} of {total} in this collection",
+      "headingPrefix": "Find your",
+      "manualSkillSelection": "Select the exact Skill in the installer; this catalog name is not verified.",
+      "publisherSource": "Publisher source",
+      "invalidPublisherName": "An exact Skill name is needed. Check the publisher's source.",
+      "detail": {
+        "breadcrumb": "Skill navigation",
+        "skill": "Agent Skill",
+        "notFound": "Skill not found",
+        "notFoundHelp": "This listing is not available from the catalog. Return to Skills and search again.",
+        "backToSkills": "Back to Skills",
+        "installation": "Installation",
+        "command": "Command",
+        "prompt": "Prompt",
+        "promptText": "Install this Skill with Universal Agent Plugins. Review the source and the planned changes before running the following command:\n{command}",
+        "exactNameUnavailable": "The exact install selector could not be validated. Check the publisher's source.",
+        "security": "Security checks",
+        "installs": "Installs",
+        "source": "Source",
+        "metricsNotice": "Install counts are reported by the external directory, not independently verified.",
+        "loadingDocument": "Loading source instructions…",
+        "sourceDocumentNotice": "Published source instructions · unverified content. Review before using.",
+        "documentUnavailable": "The publisher's SKILL.md could not be loaded. You can inspect its source directly.",
+        "viewPublisher": "View publisher source",
+        "revision": "Source revision",
+        "rawDocument": "View complete SKILL.md source"
+      }
+    },
+    "directoryPage": {
+      "pluginDirectory": "Plugin directory",
+      "findAgentPlugins10": "Find Agent Plugins 1.0.",
+      "useThemEverywhere": "Use them everywhere.",
+      "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "Search reviewed packages and community plugins discovered from public GitHub repositories.",
+      "explorePlugins": "Explore plugins",
+      "filterByCapabilitySourceAuthenticationOrSupportedAgent": "Filter by capability, source, authentication, or supported agent."
+    }
+  }
+}

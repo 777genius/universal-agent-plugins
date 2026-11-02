@@ -1,0 +1,54 @@
+{
+  "agentplugins-build.json": {
+    "bytes": 6193,
+    "sha256": "d217f05dda21e30d40f69a816eda2101b3ebff6966fb94f6add98f3ae4a14fc6"
+  },
+  "dependencies.txt": {
+    "bytes": 22540,
+    "sha256": "34a879b9de3da81133a0284048ee0449cf0b3574ed978e4542a45cb7ff4b799d"
+  },
+  "go-env.json": {
+    "bytes": 164,
+    "sha256": "a6ee8aaad98ac1d26093df24d37bb2606d7e96131a7792eead0905059faf1b78"
+  },
+  "go-test.json": {
+    "bytes": 1295649,
+    "sha256": "91f2da2314e636b9640c3b56fe7eaff84e07dc69efc5788cbdd9f7de103c8c0b"
+  },
+  "go-test.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "head.txt": {
+    "bytes": 41,
+    "sha256": "afdf566ecae42ade538799692923421cc16ff95e1d09fb317f7bdb97acf20285"
+  },
+  "node-version.txt": {
+    "bytes": 9,
+    "sha256": "33e26f35db6e57ce0c486ddc815fe966867e4f649e418eaf323f75f4720eb8e9"
+  },
+  "packages.txt": {
+    "bytes": 1091,
+    "sha256": "55c4fa388eabf217b6ad4c3ef321efa0aabb33135ea38ecca127fe4a975dfa6c"
+  },
+  "packageview-exit.txt": {
+    "bytes": 2,
+    "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  "plugin-kit-ai-build.json": {
+    "bytes": 3277,
+    "sha256": "9db49cd66a056be1d2472d2a409403ee063c7625c3d96118f7cb19210d61b934"
+  },
+  "summary.json": {
+    "bytes": 16609,
+    "sha256": "9a3d00df8c41e16f20bebb74b070f4f2a66de92c65b808fc594b0beaec4cae4f"
+  },
+  "test-discovery.json": {
+    "bytes": 68510,
+    "sha256": "7f4638e11d86f1272b5e4d2810e2ba5dd6f194472e8059655c024f28d71e64f5"
+  },
+  "test-exit.txt": {
+    "bytes": 2,
+    "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  }
+}

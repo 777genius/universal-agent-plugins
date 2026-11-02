@@ -13,10 +13,16 @@ function readSidebar(fileName: string) {
 }
 
 export const esLocaleConfig = {
+  title: "Agent Plugins · Documentación",
+  description: "Guías para instalar, gestionar y crear Agent Plugins.",
   label: "Español",
   lang: "es-ES",
   link: "/es/",
   themeConfig: {
+    langMenuLabel: "Cambiar idioma",
+    lightModeSwitchTitle: "Cambiar al tema claro",
+    darkModeSwitchTitle: "Cambiar al tema oscuro",
+    skipToContentLabel: "Saltar al contenido",
     outlineTitle: "En esta página",
     lastUpdatedText: "Actualizado",
     returnToTopLabel: "Volver arriba",
@@ -28,12 +34,12 @@ export const esLocaleConfig = {
     },
     footer: {
       message: "Documentación pública para autores de plugins e integradores.",
-      copyright: "Licencia MIT"
+      copyright: "Licencia Apache 2.0"
     },
     nav: [
       ...journeyNav("es"),
       { text: "Inicio rápido", link: "/es/guide/quickstart" },
-      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
+      { text: "API 0.1.65 · EN", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.es.json"),
     editLink: {

@@ -32,9 +32,9 @@ func (session *groupSession) upsertGroupTargetState(target plannedGroupTarget) {
 		client.AffectedSurfaces = append(client.AffectedSurfaces, target.managed.AffectedSurfaces...)
 		client.AffectedSurfaces = append(client.AffectedSurfaces, target.managed.ClientID)
 	}
-	if sharesPhysicalBackend(target.input.Client.ClientID) {
+	if sharesPhysicalBackend(target.input.Client.ClientID, target.plan.SelectedDelivery, target.input.Scope) {
 		client.AffectedSurfaces = append(client.AffectedSurfaces, string(target.input.Client.ClientID))
-		for _, sibling := range domain.BackendSiblings(target.input.Client.ClientID) {
+		for _, sibling := range domain.BackendSiblingsForScope(target.input.Client.ClientID, target.input.Scope) {
 			client.AffectedSurfaces = append(client.AffectedSurfaces, string(sibling))
 		}
 	}
@@ -82,12 +82,7 @@ func (session *groupSession) restoreGroupOrigin() {
 	if session.input.Switch {
 		installation := session.desired.Installations[session.installationIndex]
 		first := session.first
-		installation.Source = domain.SourceBinding{
-			SourceBindingID: session.sourceID, RequestedSource: first.Envelope.Source.RequestedSource,
-			CanonicalSource: first.Envelope.Source.CanonicalSource, Repository: first.Envelope.Source.Repository,
-			PackageSubpath: first.Envelope.Source.PackageSubpath, ResolvedRevision: first.Envelope.Source.ResolvedRevision,
-			TreeDigest: first.Envelope.TreeDigest,
-		}
+		installation.Source = sourceBindingFromEnvelope(first.Envelope, session.sourceID)
 		installation.OriginMode = normalizedOriginMode(first.OriginMode)
 		installation.Directory = cloneDirectoryOrigin(first.DirectoryResolution)
 		session.desired.Installations[session.installationIndex] = installation
@@ -104,6 +99,14 @@ func (session *groupSession) restoreGroupOrigin() {
 }
 
 func (session *groupSession) applyGroupKernel() error {
+	// Keep the prepared host authority pinned through the final kernel boundary.
+	for _, target := range session.planned {
+		if session.service.ClientPreparation != nil {
+			if err := session.service.ClientPreparation.RevalidateClient(session.ctx, target.input.Client, target.plan); err != nil {
+				return fmt.Errorf("prepared host changed before group commit: %w", err)
+			}
+		}
+	}
 	mutations := session.buildGroupMutations()
 	kernel := session.service.Kernel
 	kernel.StateStore = session.service.StateStore
@@ -111,7 +114,9 @@ func (session *groupSession) applyGroupKernel() error {
 	if len(mutations) == 0 {
 		session.clearCreatedPluginData()
 		for _, target := range session.planned {
-			session.reportGroupProgress(target, GroupProgressConfigured)
+			if err := session.reportGroupProgress(target, GroupProgressConfigured); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -132,7 +137,9 @@ func (session *groupSession) applyGroupKernel() error {
 	}
 	session.clearCreatedPluginData()
 	for _, target := range session.planned {
-		session.reportGroupProgress(target, GroupProgressConfigured)
+		if err := session.reportGroupProgress(target, GroupProgressConfigured); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -158,17 +165,19 @@ func (session *groupSession) buildGroupMutations() []transaction.DirectoryMutati
 		if session.input.Repair && target.managed != nil {
 			authentication = preservedGroupAuthentication(authentication, target.managed.Authentication)
 		}
+		activation, verification := initialLifecycle(target.plan)
 		mutations = append(mutations, transaction.DirectoryMutation{
 			OperationID: operationID, InstallationID: session.installationID, ClientBindingID: target.clientBindingID,
 			Sequence: nextSequence(client), OwnedBase: delivery.OwnedBase, ActivePath: delivery.ActivePath, StagingPath: delivery.StagingPath,
-			BeforeDigest: before, AfterDigest: delivery.ArtifactDigest, NativeObjects: delivery.NativeObjects, Activation: target.plan.Activation,
-			Authentication: authentication, Policy: domain.PolicyAllowed, Verification: target.plan.Verification, RequireAbsent: target.requireAbsent,
+			BeforeDigest: before, AfterDigest: delivery.ArtifactDigest, NativeObjects: delivery.NativeObjects, Activation: activation,
+			Authentication: authentication, Policy: domain.PolicyAllowed, Verification: verification, RequireAbsent: target.requireAbsent,
 			VerifyBefore: func(verifyContext context.Context, path string) error {
 				return stager.Verify(verifyContext, path, before)
 			},
 			Verify: func(verifyContext context.Context, activePath string) error {
 				return stager.Verify(verifyContext, activePath, delivery.ArtifactDigest)
 			},
+			EnvironmentAuthority: target.input.EnvironmentAuthority,
 		})
 	}
 	return mutations

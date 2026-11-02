@@ -11,6 +11,7 @@
       "LocalActions": [
         "open ChatGPT Plugins and install demo from the prepared marketplace at \u003croot\u003e/managed/clients/chatgpt/demo-0123456789ab, then confirm it is enabled in a new chat"
       ],
+      "LocalEntryObservation": null,
       "NativeEffect": "",
       "NativeObjects": null,
       "Policy": "allowed",
@@ -37,6 +38,7 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "NativeEffect": "",
       "NativeObjects": null,
       "Policy": "allowed",
@@ -54,6 +56,7 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "NativeEffect": "committed",
       "NativeObjects": null,
       "Policy": "allowed",
@@ -97,6 +100,7 @@
       "LocalActions": [
         "the `\u003croot\u003e/bin/codex plugin list --json` output contract was not recognized; inspect demo manually"
       ],
+      "LocalEntryObservation": null,
       "NativeEffect": "",
       "NativeObjects": null,
       "Policy": "allowed",
@@ -135,6 +139,7 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "NativeEffect": "",
       "NativeObjects": null,
       "Policy": "allowed",
@@ -154,6 +159,7 @@
       "LocalActions": [
         "reload Cursor with Developer: Reload Window, then verify demo from \u003croot\u003e/cursor/config/plugins/local/demo-0123456789ab is visible; native discovery remains unverified"
       ],
+      "LocalEntryObservation": null,
       "NativeEffect": "",
       "NativeObjects": null,
       "Policy": "allowed",
@@ -173,11 +179,57 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "NativeEffect": "committed",
       "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "in a running Gemini CLI session use `/mcp reload` and `/skills reload`, or restart Gemini CLI"
+      ],
+      "Verification": "installation_verified"
+    }
+  },
+  "grok": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/grok",
+        "plugin",
+        "list",
+        "--json"
+      ]
+    ],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
+      "Policy": "allowed",
+      "UserActions": null,
+      "Verification": "installation_verified"
+    }
+  },
+  "kimi": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "committed",
+      "NativeObjects": null,
+      "Policy": "allowed",
+      "UserActions": [
+        "Run /reload or /new in Kimi Code to load the installed plugin; runtime MCP connections and authentication have not been verified."
       ],
       "Verification": "installation_verified"
     }
@@ -201,6 +253,7 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "NativeEffect": "committed",
       "NativeObjects": null,
       "Policy": "allowed",
@@ -218,12 +271,81 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "NativeEffect": "committed",
       "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "restart OpenCode to load the installed plugin"
       ],
+      "Verification": "installation_verified"
+    }
+  },
+  "pi": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "unchanged",
+      "NativeObjects": [
+        {
+          "BeforeDigest": "",
+          "CursorReceipt": {
+            "EntryDigest": "",
+            "Event": "",
+            "Executable": "",
+            "RemainderDigest": "",
+            "Selector": "",
+            "Shell": "",
+            "Version": 0
+          },
+          "Kind": "managed_package_directory",
+          "LogicalName": "demo",
+          "ManagedDigest": "${ARTIFACT}",
+          "ObjectID": "package:pi:demo-0123456789ab",
+          "Path": "\u003croot\u003e/pi/config/extensions/demo-0123456789ab",
+          "ProtectionClass": "managed",
+          "SourceRelative": "",
+          "UserModified": false
+        }
+      ],
+      "Policy": "allowed",
+      "UserActions": [
+        "Reload resources or restart Pi to load the installed extension."
+      ],
+      "Verification": "installation_verified"
+    }
+  },
+  "qoder": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/qoder",
+        "--config-dir",
+        "\u003croot\u003e/qoder/config",
+        "plugins",
+        "list",
+        "--json"
+      ]
+    ],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
+      "Policy": "allowed",
+      "UserActions": null,
       "Verification": "installation_verified"
     }
   },
@@ -256,6 +378,7 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "LocalEntryObservation": null,
       "NativeEffect": "",
       "NativeObjects": null,
       "Policy": "allowed",
@@ -275,6 +398,7 @@
       "LocalActions": [
         "Windsurf: import MCP servers from \u003croot\u003e/managed/clients/windsurf/demo-0123456789ab/mcp.json; Devin cloud-synced configuration is never changed automatically"
       ],
+      "LocalEntryObservation": null,
       "NativeEffect": "unchanged",
       "NativeObjects": null,
       "Policy": "allowed",

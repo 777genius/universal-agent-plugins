@@ -14,7 +14,12 @@ import { canonicalPath } from '~/utils/seo';
 const { t, n } = useI18n();
 
 const props = withDefaults(
-  defineProps<{ plugins: RegistryPlugin[]; heading?: string; intro?: string }>(),
+  defineProps<{
+    plugins: RegistryPlugin[];
+    heading?: string;
+    intro?: string;
+    hideHeading?: boolean;
+  }>(),
   {
     heading: undefined,
     intro: undefined,
@@ -32,8 +37,18 @@ const owner = ref('all');
 const route = useRoute();
 const router = useRouter();
 const filterRefs = [query, category, component, source, trust, client, authentication, owner];
+let pendingFilterValues: string[] | undefined;
+let syncingFilters = false;
+let disposed = false;
+onScopeDispose(() => {
+  disposed = true;
+});
 function restoreFilters() {
-  restoreCatalogQuery(route.query).forEach((value, index) => {
+  const values = restoreCatalogQuery(route.query);
+  // A completed own write may describe input that the user already changed.
+  // Other navigation still restores its filters, including back and locale changes.
+  if (JSON.stringify(values) === JSON.stringify(pendingFilterValues)) return;
+  values.forEach((value, index) => {
     filterRefs[index]!.value = value;
   });
 }
@@ -72,7 +87,10 @@ function stableOptions(next: FilterOption[], previous: FilterOption[]) {
 const stableCategoryOptions = computed(() => {
   const next = [
     { value: 'all', label: t('registryUi.catalog.allCategories') },
-    ...filters.value.categories.map((item) => ({ value: item, label: item })),
+    ...filters.value.categories.map((item) => ({
+      value: item,
+      label: item === 'marketing' ? t('registryUi.catalog.marketingCategory') : item,
+    })),
   ];
   previousCategoryOptions = stableOptions(next, previousCategoryOptions);
   return previousCategoryOptions;
@@ -200,22 +218,44 @@ function clearFilters() {
   mobileFiltersOpen.value = false;
 }
 
+async function syncCatalogQuery() {
+  if (syncingFilters) return;
+  syncingFilters = true;
+  try {
+    while (!disposed) {
+      const values = filterRefs.map((filter) => filter.value);
+      if (JSON.stringify(values) === JSON.stringify(restoreCatalogQuery(route.query))) break;
+      pendingFilterValues = values;
+      const failure = await router.replace({
+        path: canonicalPath(route.path),
+        query: catalogQuery(values, route.query) as LocationQueryRaw,
+        hash: '',
+      });
+      if (failure) {
+        pendingFilterValues = undefined;
+        restoreFilters();
+        break;
+      }
+    }
+  } finally {
+    pendingFilterValues = undefined;
+    syncingFilters = false;
+  }
+}
+
 watch([query, category, component, source, trust, client, authentication, owner], () => {
   catalogUi.reconcile(family.value, fingerprint.value);
-  const values = filterRefs.map((filter) => filter.value);
-  if (JSON.stringify(values) !== JSON.stringify(restoreCatalogQuery(route.query))) {
-    void router.replace({
-      path: canonicalPath(route.path),
-      query: catalogQuery(values, route.query) as LocationQueryRaw,
-      hash: route.hash,
-    });
-  }
+  void syncCatalogQuery();
 });
 </script>
 
 <template>
-  <section class="catalog" aria-labelledby="catalog-title" :data-discovery-state="discovery.state">
-    <div class="section-heading">
+  <section
+    class="catalog"
+    :aria-labelledby="hideHeading ? 'unified-catalog-title' : 'catalog-title'"
+    :data-discovery-state="discovery.state"
+  >
+    <div v-if="!hideHeading" class="section-heading">
       <p class="eyebrow">{{ t('registryUi.catalog.pluginDirectory') }}</p>
       <div class="catalog-heading-row">
         <h2 id="catalog-title">{{ heading ?? t('registryUi.catalog.explorePlugins') }}</h2>
@@ -232,28 +272,12 @@ watch([query, category, component, source, trust, client, authentication, owner]
       <p>{{ intro ?? t('registryUi.catalog.searchByCapabilityComponentOrSource') }}</p>
     </div>
     <div class="catalog-controls" role="search" :aria-label="t('registryUi.catalog.filterPlugins')">
-      <label class="search-field">
-        <span class="sr-only">{{ t('registryUi.catalog.searchPlugins') }}</span>
-        <svg class="search-field__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none">
-          <circle cx="11" cy="11" r="6.5" />
-          <path d="m16 16 4 4" />
-        </svg>
-        <input
-          v-model="query"
-          type="search"
-          :aria-label="t('registryUi.catalog.searchPlugins')"
-          :placeholder="t('registryUi.catalog.searchByNameAuthorOrCapability')"
-        />
-        <button
-          v-if="query"
-          class="search-field__clear"
-          type="button"
-          :aria-label="t('registryUi.catalog.clearPluginSearch')"
-          @click="query = ''"
-        >
-          <span aria-hidden="true">×</span>
-        </button>
-      </label>
+      <CatalogSearchField
+        v-model="query"
+        :label="t('registryUi.catalog.searchPlugins')"
+        :placeholder="t('registryUi.catalog.searchByNameAuthorOrCapability')"
+        :clear-label="t('registryUi.catalog.clearPluginSearch')"
+      />
       <button
         class="catalog-filter-toggle"
         type="button"
@@ -323,7 +347,7 @@ watch([query, category, component, source, trust, client, authentication, owner]
         />
       </div>
     </div>
-    <div class="catalog-active-filters" :aria-label="t('registryUi.catalog.activeFilters')">
+    <div v-if="activeChips.length" class="catalog-active-filters" :aria-label="t('registryUi.catalog.activeFilters')">
       <button
         v-for="chip in activeChips"
         :key="chip.index"
@@ -337,7 +361,6 @@ watch([query, category, component, source, trust, client, authentication, owner]
       <button
         type="button"
         class="catalog-filter-reset"
-        :disabled="!activeChips.length"
         @click="clearFilters"
       >
         {{ t('registryUi.catalog.resetFilters') }}
@@ -347,15 +370,12 @@ watch([query, category, component, source, trust, client, authentication, owner]
       <div>
         <div class="catalog-count" aria-live="polite">{{ catalogSummary }}</div>
         <p
-          v-if="['loading', 'stale', 'unavailable'].includes(discovery.state)"
+          v-if="['loading', 'unavailable'].includes(discovery.state)"
           class="discovery-status"
           :class="`discovery-status--${discovery.state}`"
         >
           <template v-if="discovery.state === 'loading'">{{
             t('registryUi.catalog.findingMoreCommunityPluginsOnGithub')
-          }}</template>
-          <template v-else-if="discovery.state === 'stale'">{{
-            t('registryUi.catalog.communityResultsAreRefreshingReviewedListingsRemainAvailable')
           }}</template>
           <template v-else-if="discovery.state === 'unavailable'">{{
             t(

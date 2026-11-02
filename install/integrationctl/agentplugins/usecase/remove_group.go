@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 type RemoveGroupInput struct {
@@ -38,7 +39,41 @@ func (service Service) RemoveGroup(ctx context.Context, input RemoveGroupInput) 
 	if err := session.validateRemoveGroupInput(); err != nil {
 		return RemoveGroupResult{}, err
 	}
-	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return RemoveGroupResult{}, err
+	}
+	_, installation, err := findInstallation(state, input.Selector)
+	if err != nil {
+		return RemoveGroupResult{}, err
+	}
+	for _, target := range input.Targets {
+		bindingID := ""
+		for _, binding := range installation.Clients {
+			if binding.ClientID == string(target.Client.ClientID) {
+				bindingID = binding.ClientBindingID
+				break
+			}
+		}
+		if err := transaction.AuthorizeEnvironmentMutation(state, target.EnvironmentAuthority, "remove",
+			installation.InstallationID, bindingID, installation.Source.SourceBindingID, false); err != nil {
+			return RemoveGroupResult{}, err
+		}
+	}
+	selected := make([]domain.DetectedClient, len(input.Targets))
+	for i, t := range input.Targets {
+		selected[i] = t.Client
+	}
+	service, frozen, err := service.freezeProfiles(ctx, installation.InstallationID, selected, false)
+	if err != nil {
+		return RemoveGroupResult{}, err
+	}
+	session.service = service
+	session.input.Targets = append([]RemoveInput(nil), input.Targets...)
+	for i := range session.input.Targets {
+		session.input.Targets[i].Client = frozen[i]
+	}
+	release, err := service.beginEnvironmentMutation(ctx, input.DryRun, input.Confirmed, input.Targets[0].EnvironmentAuthority)
 	if err != nil {
 		return RemoveGroupResult{}, err
 	}

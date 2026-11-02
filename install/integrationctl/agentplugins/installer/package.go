@@ -3,6 +3,7 @@ package installer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -12,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 // snapshotLocalPackage uses packagedigest executable overrides so Windows
@@ -62,6 +64,9 @@ func snapshotLocalPackage(ctx context.Context, tempRoot, packageRoot string) (do
 }
 
 func snapshotRequestPackage(ctx context.Context, tempRoot string, req Request) (domain.PackageSnapshot, error) {
+	if req.AcquiredSnapshot != nil {
+		return snapshotAcquiredRequest(ctx, tempRoot, req)
+	}
 	if req.ExecutableFiles == nil {
 		return snapshotLocalPackage(ctx, tempRoot, req.PackageRoot)
 	}
@@ -76,6 +81,50 @@ func snapshotRequestPackage(ctx context.Context, tempRoot string, req Request) (
 	}
 	source := domain.SourceIdentity{RequestedSource: req.PackageRoot, CanonicalSource: req.PackageRoot, SourceBindingHint: "direct-local"}
 	return (packagedigest.Builder{TempRoot: tempRoot}).SnapshotWithExecutables(ctx, req.PackageRoot, source, req.ExecutableFiles)
+}
+
+func snapshotAcquiredRequest(ctx context.Context, tempRoot string, req Request) (domain.PackageSnapshot, error) {
+	if err := validateAcquiredRequest(req); err != nil {
+		return domain.PackageSnapshot{}, err
+	}
+	acquired := req.AcquiredSnapshot
+	files := append([]string{}, acquired.ExecutableFiles...)
+	if err := validateAcquiredExecutables(req.PackageRoot, files); err != nil {
+		return domain.PackageSnapshot{}, err
+	}
+	snapshot, err := (packagedigest.Builder{TempRoot: tempRoot}).SnapshotWithExecutables(ctx, req.PackageRoot, acquired.Source, files)
+	if err != nil {
+		return domain.PackageSnapshot{}, err
+	}
+	if snapshot.TreeDigest != acquired.TreeDigest || snapshot.DigestAlgorithm != acquired.DigestAlgorithm ||
+		!equalStrings(snapshot.ExecutableFiles, acquired.ExecutableFiles) || snapshot.Source != acquired.Source {
+		_ = packagedigest.Remove(snapshot)
+		return domain.PackageSnapshot{}, fmt.Errorf("%w: acquired snapshot identity changed while resealing bytes", ErrInvalidRequest)
+	}
+	snapshot.OriginMode = acquired.OriginMode
+	snapshot.Directory = cloneAcquiredDirectory(acquired.Directory)
+	snapshot.ExecutableFiles = append([]string{}, acquired.ExecutableFiles...)
+	return snapshot, nil
+}
+
+func cloneAcquiredDirectory(origin *domain.DirectoryOrigin) *domain.DirectoryOrigin {
+	if origin == nil {
+		return nil
+	}
+	cloned := *origin
+	return &cloned
+}
+
+func equalStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func declaredPackageExecutables(root string) ([]string, error) {
@@ -127,10 +176,10 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 	if !e.SupportsClient(req.ClientID) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: client %q is not registered for this installer", ErrUnsupported, req.ClientID)
 	}
-	if req.ClientConfigRoot == "" || !validRoot(req.ClientConfigRoot) {
+	if (req.ClientConfigRoot == "" && e.scope() != domain.ScopeProject) || (req.ClientConfigRoot != "" && !validRoot(req.ClientConfigRoot)) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientConfigRoot must be an explicit absolute clean path", ErrInvalidRequest)
 	}
-	if req.Operation == OpInstall && (req.ClientExecutable == "" || !validRoot(req.ClientExecutable)) {
+	if (req.ClientExecutable != "" && !validRoot(req.ClientExecutable)) || (req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id, e.scope()) && req.ClientExecutable == "") {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientExecutable must be an explicit absolute clean path", ErrInvalidRequest)
 	}
 	root := req.ClientConfigRoot
@@ -141,7 +190,7 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 			return domain.DetectedClient{}, fmt.Errorf("%w: invalid client profile: %w", ErrInvalidRequest, err)
 		}
 	}
-	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, ExecutablePath: req.ClientExecutable}, nil
+	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, ExecutablePath: req.ClientExecutable, Version: req.ClientVersion}, nil
 }
 
 func missingRequired(envelope domain.PackageEnvelope, required []string) []string {
@@ -289,6 +338,9 @@ func (e *Engine) reuseMatchingSourceIdentity(installationID string, snapshot *do
 	if installation.Source.CanonicalSource != "" {
 		snapshot.Source.CanonicalSource = installation.Source.CanonicalSource
 	}
+	snapshot.Source.SourceKind = installation.Source.SourceKind
+	snapshot.Source.SourceURL = installation.Source.SourceURL
+	snapshot.Source.ArchiveSHA256 = installation.Source.ArchiveSHA256
 	if installation.Source.RequestedSource != "" {
 		snapshot.Source.RequestedSource = installation.Source.RequestedSource
 	}
@@ -308,7 +360,8 @@ func wrapLifecycleError(err error) error {
 		return nil
 	}
 	msg := err.Error()
-	if strings.Contains(msg, "run update separately") ||
+	if errors.Is(err, usecase.ErrProjectionRefreshRequired) ||
+		strings.Contains(msg, "run update separately") ||
 		strings.Contains(msg, "at a different revision; use update") ||
 		strings.Contains(msg, "differs from the installed revision; use update") ||
 		strings.Contains(msg, "use switch to change source") {
@@ -320,4 +373,62 @@ func wrapLifecycleError(err error) error {
 		return fmt.Errorf("%w: %w", ErrNotInstalled, err)
 	}
 	return err
+}
+
+func validateAcquiredRequest(req Request) error {
+	acquired := req.AcquiredSnapshot
+	key, err := validateAcquiredSource(acquired, req.EnvironmentAuthority != nil)
+	if err != nil {
+		return err
+	}
+	if req.EnvironmentAuthority != nil {
+		if acquired.OriginMode == domain.OriginModeDirectory {
+			if acquired.Directory == nil {
+				return fmt.Errorf("%w: directory source is missing publication identity", ErrInvalidRequest)
+			}
+			key = "directory:" + strings.ToLower(acquired.Directory.DistributionID)
+		}
+		if req.EnvironmentAuthority.SourceKey != key {
+			return fmt.Errorf("%w: environment source key differs from acquisition", ErrInvalidRequest)
+		}
+	}
+	if acquired.OriginMode != domain.OriginModeDirect && acquired.OriginMode != domain.OriginModeDirectory {
+		return ErrInvalidRequest
+	}
+	if len(req.Targets) != 0 {
+		return fmt.Errorf("%w: acquired snapshots support single-target requests only", ErrInvalidRequest)
+	}
+	if acquired.TreeDigest == "" || acquired.DigestAlgorithm != domain.TreeDigestAlgorithm {
+		return fmt.Errorf("%w: acquired snapshot digest identity is incomplete", ErrInvalidRequest)
+	}
+	if req.ExecutableFiles != nil && !equalStrings(req.ExecutableFiles, acquired.ExecutableFiles) {
+		return fmt.Errorf("%w: request executable inventory differs from acquired snapshot", ErrInvalidRequest)
+	}
+	return nil
+}
+func validateAcquiredExecutables(root string, files []string) error {
+	for _, relative := range files {
+		if relative == "." || relative == ".." || path.IsAbs(relative) || path.Clean(relative) != relative || strings.HasPrefix(relative, "../") || strings.Contains(relative, `\`) || filepath.VolumeName(relative) != "" {
+			return fmt.Errorf("%w: acquired snapshot executable path is invalid", ErrInvalidRequest)
+		}
+		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(relative)))
+		if err != nil || !info.Mode().IsRegular() {
+			return fmt.Errorf("%w: acquired snapshot executable is not a regular package file", ErrInvalidRequest)
+		}
+	}
+	return nil
+}
+
+// Native configuration adapters need only an explicit profile. CLI registries
+// and host-profile probes also require the caller's executable authority.
+func requiresExecutable(registry *clients.Registry, id domain.ClientID, scopes ...domain.InstallScope) bool {
+	scope := domain.ScopeUser
+	if len(scopes) > 0 && scopes[0] != "" {
+		scope = scopes[0]
+	}
+	if (domain.SelectedDelivery{}).EffectiveTraitsForScope(id, scope).LifecycleKind == domain.LifecycleCLIRegistry {
+		return true
+	}
+	consumer, ok := clients.As[clients.OpenCodeHostProfileConsumer](registry, id)
+	return ok && consumer.UsesOpenCodeHostProfile()
 }

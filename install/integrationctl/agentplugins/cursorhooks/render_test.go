@@ -20,14 +20,17 @@ import (
 // Unicode/quotes. This executes /bin/sh against a real fresh TEST recorder; it
 // proves the target shell contract, not a new native Cursor stop/platform claim.
 func TestLiteralArgvThroughJSONAndTargetShell(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("qualified Linux shell only; Windows native CI remains pending")
+	shell := ch.LinuxUserShell32212
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		shell = ch.DarwinUserShell20260918
+	} else if runtime.GOOS != "linux" {
+		t.Skip("qualified Linux/Darwin arm64 shells only")
 	}
 	recorder, home := freshRecorder(t)
 	args := []string{"", "arg with spaces", "apostrophe's", "double\"quote", "back\\slash",
 		"ü-中文-😀", "é", "é", "semi;literal", "percent%bang!", "&|<>#(){}*?[]~", "-dash",
 		"; touch TEST-injected", strings.Repeat("long", 900)}
-	command, err := ch.RenderArgv(ch.LinuxUserShell32212, append([]string{recorder}, args...))
+	command, err := ch.RenderArgv(shell, append([]string{recorder}, args...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,6 +50,7 @@ func TestLiteralArgvThroughJSONAndTargetShell(t *testing.T) {
 	}
 	// The planner's fixed entry also executes with the exact public argv.
 	req := request(nil, ch.Install, nil)
+	req.Shell = shell
 	req.Specs[0] = ch.HookSpec{Executable: recorder, Selector: filepath.Join(home, "control TEST", "binding's ü.json")}
 	i := mustPlan(t, req)
 	var entry struct {
@@ -72,6 +76,12 @@ func freshRecorder(t *testing.T) (string, string) {
 		root = t.TempDir()
 	} else if !filepath.IsAbs(root) || !strings.Contains(filepath.ToSlash(root), "/.research/tmp/") {
 		t.Fatal("set CURSORHOOKS_TEST_ROOT to own absolute .research/tmp TEST directory")
+	}
+	// Darwin's default temp root traverses /var -> /private/var. Record the
+	// physical TEST root so getcwd compares the same directory identity.
+	root, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
 	}
 	dir, err := os.MkdirTemp(root, "TEST-argv-")
 	if err != nil {

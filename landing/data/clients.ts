@@ -48,7 +48,7 @@ export const clientLandingPages: ClientLandingPage[] = [
     intro:
       'Install Agent Plugins 1.0 into Cursor projects without translating each plugin by hand. The CLI plans the native package before changing files.',
     delivery:
-      'The CLI writes the supported Cursor plugin, skill, and MCP projections for the selected project.',
+      'The CLI prepares supported Cursor plugin, skill and MCP components for the selected scope. The add command defaults to user scope; select project scope explicitly for add.',
     activation: 'Reload Cursor when requested, then verify that the plugin is discovered.',
     vendorDocsUrl: 'https://docs.cursor.com/context/mcp',
   },
@@ -162,6 +162,65 @@ export const clientLandingPages: ClientLandingPage[] = [
     delivery:
       'The CLI validates and prepares the compatible Windsurf package without claiming automatic activation.',
     activation: 'Follow the exact manual activation path printed after preparation.',
+  },
+  {
+    id: 'grok',
+    slug: 'grok-build',
+    name: 'Grok Build',
+    icon: 'grok.svg',
+    note: 'Native skills and MCP plugin; CLI verification',
+    status: 'Supported',
+    intro:
+      'Install portable Agent Plugins 1.0 skills and MCP servers for Grok Build from the same CLI used for other clients.',
+    delivery:
+      "The CLI writes a native .grok-plugin manifest in Grok's user plugin directory and manages registration with the Grok CLI when available.",
+    activation:
+      'Reload Grok Build after installation. If the Grok CLI is unavailable, install it and rerun the update command for native verification.',
+    vendorDocsUrl: 'https://docs.x.ai/build/features/skills-plugins-marketplaces',
+  },
+  {
+    id: 'kimi',
+    slug: 'kimi-code',
+    name: 'Kimi Code',
+    icon: 'kimi.svg',
+    note: 'Managed user plugin with skills and MCP',
+    status: 'Supported',
+    intro:
+      'Install portable Agent Plugins 1.0 skills and MCP servers into Kimi Code through a managed user plugin.',
+    delivery:
+      'The CLI writes a native .kimi-plugin manifest and registers the managed package while preserving unrelated Kimi plugins.',
+    activation:
+      'Run /reload or /new in Kimi Code. Runtime MCP connections and provider authentication still need confirmation in Kimi.',
+    vendorDocsUrl: 'https://www.kimi.com/code/docs/en/kimi-code-cli/customization/plugins',
+  },
+  {
+    id: 'qoder',
+    slug: 'qoder',
+    name: 'Qoder',
+    icon: 'qoder.svg',
+    note: 'Native skills and MCP plugin; CLI verification',
+    status: 'Supported',
+    intro:
+      'Install portable Agent Plugins 1.0 skills and MCP servers for Qoder from the same CLI used for other clients.',
+    delivery:
+      'The CLI writes a native .qoder-plugin manifest and registers the managed package through the Qoder CLI when available.',
+    activation:
+      'Reload Qoder plugins or restart Qoder after installation. Runtime MCP connections and provider authentication still need confirmation in Qoder.',
+  },
+  {
+    id: 'pi',
+    slug: 'pi',
+    name: 'Pi',
+    icon: 'pi.svg',
+    note: 'Managed native Pi extensions only',
+    status: 'Supported',
+    intro:
+      'Install Agent Plugins 1.0 packages that declare a native Pi extension. Portable skills and MCP projection are outside this adapter’s current scope.',
+    delivery:
+      'The CLI installs the declared Pi extension in your Pi agent directory and tracks the managed package for update, repair, and removal.',
+    activation: 'Reload resources or restart Pi after installation to load the managed extension.',
+    vendorDocsUrl:
+      'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md',
   },
 ];
 

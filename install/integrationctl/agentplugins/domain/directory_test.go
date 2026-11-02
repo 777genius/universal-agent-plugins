@@ -508,3 +508,47 @@ func TestResolveDirectoryMultiTargetOrderIsDeterministic(t *testing.T) {
 		t.Fatalf("target order changed selection: %+v != %+v", first, second)
 	}
 }
+
+func TestResolveDirectoryDesiredSequenceUsesExactNewInstallEligibility(t *testing.T) {
+	s := testDirectory()
+	exact := request("owner/tool", ClientCodex)
+	exact.DesiredReleaseSequence = 2
+	got, err := ResolveDirectory(s, exact)
+	if err != nil || got.DistributionID != "owner/tool" || got.ReleaseSequence != 2 || got.Fallback {
+		t.Fatalf("exact desired release selected fallback: %+v %v", got, err)
+	}
+	missing := request("owner/tool", ClientCodex)
+	missing.DesiredReleaseSequence = 99
+	if got, err := ResolveDirectory(s, missing); err == nil || got.ReleaseSequence != 0 {
+		t.Fatalf("missing desired release fell back: %+v %v", got, err)
+	}
+	invalid := exact
+	invalid.Recorded = &RecordedDirectoryRelease{ProductID: "tool", DistributionID: "owner/tool", ReleaseSequence: 2}
+	if _, err := ResolveDirectory(s, invalid); err == nil {
+		t.Fatal("desired and recorded release identities were combined")
+	}
+}
+
+// An exact sequence is meaningful only within one distribution. Target
+// eligibility must not silently move that pin to another publisher.
+func TestResolveDirectoryExactShortNameDoesNotFallback(t *testing.T) {
+	s := testDirectory()
+	s.Distributions[1].Releases[0].Sequence = 2
+	s.Distributions[1].ReleasePolicies[0].ReleaseSequence = 2
+	exact := request("tool", ClientCursor)
+	exact.DesiredReleaseSequence = 2
+	if got, err := ResolveDirectory(s, exact); !errors.Is(err, ErrDirectoryAmbiguous) {
+		t.Fatalf("ambiguous exact pin selected another publisher: %+v %v", got, err)
+	}
+	exact.Selector = "owner/tool"
+	if _, err := ResolveDirectory(s, exact); !errors.Is(err, ErrDirectoryIneligible) {
+		t.Fatalf("qualified ineligible pin fell back: %v", err)
+	}
+	s.Products[0].Distributions = []string{"community/tool-bridge"}
+	s.Products[0].DefaultDistribution = "community/tool-bridge"
+	exact.Selector = "tool"
+	got, err := ResolveDirectory(s, exact)
+	if err != nil || got.DistributionID != "community/tool-bridge" || got.ReleaseSequence != 2 || got.Fallback {
+		t.Fatalf("unambiguous exact pin: %+v %v", got, err)
+	}
+}

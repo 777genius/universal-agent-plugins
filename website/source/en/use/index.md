@@ -1,6 +1,6 @@
 ---
 title: "Use plugins"
-description: "Choose installation or authoring, then follow the appropriate journey."
+description: "Install packages for your agents and keep project dependencies separate."
 canonicalId: "page:use:index"
 section: "use"
 locale: "en"
@@ -10,67 +10,77 @@ translationRequired: true
 
 # Use plugins
 
+Universal Agent Plugins installs standard packages for the AI agents you select.
+A package can contain Skills, MCP server configuration, or both. You can install
+for your account or keep a project's dependencies separate.
 
-Choose by the result you need:
+## Get the CLI
 
-| Your job | Start here | Tool boundary |
-| --- | --- | --- |
-| Use an existing plugin in an agent | [Find and install](./install) | `agentplugins` manages installation and activation instructions. |
-| Write instructions or connect tools in a new package | [Build plugins](/en/build/) | `agentplugins author` is the supported authoring surface. |
-
-You do not need to create a project to use someone else's plugin. The installer
-accepts standard packages from the registry, local directories, or exact GitHub
-commits. Compatibility depends on both the package and the selected agent.
-
-## The installer journey
-
-1. [Find and inspect a package](./install) before selecting agents.
-2. Review its source, tools, permissions, and any sign-in requirements.
-3. Preview an explicit target selection with the installer's dry run.
-4. Install only after reviewing the plan, then follow the printed activation steps.
-5. [Check and maintain installed state](./manage) when updating or repairing.
-
-A successful installation can still require a client restart, a fresh session,
-manual activation, or OAuth. Read the result for your selected client instead of
-assuming that every agent activates the same way.
-
-## Existing installer entrypoints
-
-The current installer documentation uses the native `agentplugins` executable
-or the npm package `universal-agent-plugins`. The npm wrapper requires Node.js 22
-or newer. These two examples express the same discovery job; choose one:
-
-```bash
-agentplugins search docs
-```
+With Node.js 22 or newer, run the npm wrapper directly:
 
 ```bash
 npx universal-agent-plugins search docs
 ```
 
-For installer acquisition, use the repository's
-[native installation guide](https://github.com/777genius/universal-agent-plugins/blob/ec0883bf0bfb7f4044321bba9dfd4fd8d6467721/docs/NATIVE_INSTALL.md).
-The examples here assume the chosen installer is already available. For the
-released static authoring entrypoints, follow the [Build guide](/en/build/).
+For repeated use, install it globally:
 
-## Similar command names, different jobs
+```bash
+npm install -g universal-agent-plugins
+agentplugins version
+```
 
-| Command | Question it answers |
+Homebrew is another option:
+
+```bash
+brew install 777genius/agentplugins/agentplugins
+```
+
+The [native installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)
+provides macOS, Linux and Windows instructions. Native installation needs no
+Node.js for the manager, although individual plugins may need their own runtime.
+Examples in this journey use `agentplugins`; `npx universal-agent-plugins`
+can run the same installer commands.
+
+## Follow the installation journey
+
+1. [Find and inspect a package](./install). Check its source and prerequisites.
+2. Preview your intended targets and scope with `--dry-run`.
+3. Apply the reviewed installation and follow its activation instructions.
+4. [Maintain the installed state](./manage) with list, update, repair and removal.
+5. Restore a shared dependency set from `uap.toml` and `uap.lock` when needed.
+
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+is the current native installer. It adds a local management API and user-scope
+native Pi extensions. See [local management](./manage#local-management-api)
+and [Pi compatibility](../reference/client-compatibility#pi-native-extensions).
+Package-manager channels can lag; check `agentplugins version` before relying
+on release-specific behavior. Use the native installer for the verified release.
+Explicit project scope works since 0.1.93.
+Most commands default to user scope. Since 0.1.94, `install` without a source
+argument or explicit scope selects a project only when a regular `uap.toml`
+exists in the exact current folder; it does not search parents. Select
+`--scope project` on project maintenance commands. Project support and client
+activation differ by target.
+
+## Read the result at the right level
+
+Installation can still leave a client reload, trust prompt, manual activation or
+OAuth step. A Prepared result means more client work remains. Read each target's
+result rather than treating the whole operation as proof of runtime success.
+See [client compatibility](../reference/client-compatibility) for the evidence
+behind versioned native observations.
+
+## If you are writing a package
+
+Start with [Build plugins](../build/). The shared handoff is a directory with
+root `plugin.json` and its components. It does not require the installer user to
+run source-build authoring tools.
+
+| Command | Purpose |
 | --- | --- |
-| `agentplugins validate ./my-plugin` | Can the installer read this local standard package? |
-| `agentplugins doctor` | What needs attention in installer-managed state? |
-| `agentplugins author validate ./my-plugin` | Does this authored package conform, and is its static readiness complete? |
-| `agentplugins author doctor ./my-plugin` | What project and toolchain evidence can be inspected without execution? |
+| `agentplugins validate ./my-plugin` | Read and validate a local package for installation. |
+| `agentplugins doctor` | Diagnose installer-managed state. |
+| `agentplugins author validate ./my-plugin` | Check authoring conformance and readiness in an authoring-enabled source build. |
+| `agentplugins author doctor ./my-plugin` | Inspect project and toolchain evidence in that source build. |
 
-Installer doctor does not author a package. Authoring doctor does not repair an
-installation. Keep reports from these jobs separate when asking for help.
-
-## What travels between the journeys
-
-The handoff is a directory with root `plugin.json` and the package's components.
-It is not a promise that a server has been tested.
-Authors can prepare [a local planner handoff](/en/build/handoff); installers then
-make their own target, security, and activation decisions.
-
-Portable components are Skills and MCP configuration. Client-specific hooks or
-extensions are separate compatibility concerns, not a third portable component.
+The current npm and native installer release does not include `agentplugins author`.

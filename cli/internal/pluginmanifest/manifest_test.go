@@ -1745,6 +1745,40 @@ func TestImport_CurrentNativeCodexImportsCustomSkillsAndMCPRefs(t *testing.T) {
 	}
 }
 
+func TestImport_CurrentNativeQoderImportsWrappedMCPEnvelope(t *testing.T) {
+	root := t.TempDir()
+	mustWritePluginFile(t, root, filepath.Join(".qoder-plugin", "plugin.json"), `{"name":"demo","version":"0.1.0","description":"demo","skills":"./skills/","mcpServers":"./.mcp.json"}`)
+	mustWritePluginFile(t, root, ".mcp.json", `{"mcpServers":{"docs":{"command":"node","args":["${QODER_PLUGIN_ROOT}/bin/docs.mjs"]}}}`)
+	mustWritePluginFile(t, root, filepath.Join("skills", "demo", "SKILL.md"), "---\nname: demo\ndescription: demo\n---\nRun the demo.\n")
+
+	imported, _, err := Import(root, "qoder", false, false)
+	if err != nil {
+		t.Fatalf("Import error = %v", err)
+	}
+	if imported.Name != "demo" {
+		t.Fatalf("manifest name = %q", imported.Name)
+	}
+	mcpBody, err := os.ReadFile(filepath.Join(root, pluginmodel.SourceDirName, "mcp", "servers.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"docs:", "command: node", "docs.mjs"} {
+		if !strings.Contains(string(mcpBody), want) {
+			t.Fatalf("imported servers.yaml missing %q:\n%s", want, string(mcpBody))
+		}
+	}
+	if strings.Contains(string(mcpBody), "mcpServers:") {
+		t.Fatalf("imported servers.yaml kept the native envelope:\n%s", string(mcpBody))
+	}
+	skillBody, err := os.ReadFile(filepath.Join(root, pluginmodel.SourceDirName, "skills", "demo", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(skillBody), "Run the demo.") {
+		t.Fatalf("imported skill = %q", string(skillBody))
+	}
+}
+
 func TestImport_ClaudeHooksJSONParsingHandlesNonFirstCommand(t *testing.T) {
 	root := t.TempDir()
 	mustWritePluginFile(t, root, filepath.Join(".claude-plugin", "plugin.json"), `{"name":"demo","version":"0.1.0","description":"demo"}`)

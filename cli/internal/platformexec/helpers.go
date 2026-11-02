@@ -3,7 +3,9 @@ package platformexec
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,6 +47,9 @@ func jsonDocumentsEqual(left, right any) bool {
 }
 
 func decodeJSONObject(body []byte, label string) (map[string]any, error) {
+	if err := rejectDuplicateJSONKeys(body, label); err != nil {
+		return nil, err
+	}
 	var doc map[string]any
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return nil, fmt.Errorf("%s is invalid JSON: %w", label, err)
@@ -53,6 +58,95 @@ func decodeJSONObject(body []byte, label string) (map[string]any, error) {
 		doc = map[string]any{}
 	}
 	return doc, nil
+}
+
+// rejectDuplicateJSONKeys rejects repeated object keys: json.Unmarshal silently
+// keeps the last one while client parsers may keep the first, so a duplicate is
+// a parser differential waiting to happen.
+func rejectDuplicateJSONKeys(body []byte, label string) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	var stack jsonKeyStack
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("%s is invalid JSON: %w", label, err)
+		}
+		if err := stack.observe(token); err != nil {
+			return fmt.Errorf("%s is invalid JSON: %w", label, err)
+		}
+	}
+}
+
+type jsonKeyFrame struct {
+	isObject  bool
+	expectKey bool
+	seen      map[string]bool
+}
+
+// jsonKeyStack walks decoded tokens frame by frame so each step stays small.
+type jsonKeyStack []*jsonKeyFrame
+
+func (s *jsonKeyStack) observe(token json.Token) error {
+	switch typed := token.(type) {
+	case json.Delim:
+		return s.observeDelim(typed)
+	case string:
+		return s.observeString(typed)
+	default:
+		s.markValue()
+		return nil
+	}
+}
+
+func (s *jsonKeyStack) observeDelim(delim json.Delim) error {
+	switch delim {
+	case '{':
+		s.push(&jsonKeyFrame{isObject: true, expectKey: true, seen: map[string]bool{}})
+	case '[':
+		s.push(&jsonKeyFrame{})
+	case '}', ']':
+		if len(*s) == 0 {
+			return errors.New("unbalanced delimiters")
+		}
+		*s = (*s)[:len(*s)-1]
+	}
+	return nil
+}
+
+func (s *jsonKeyStack) push(frame *jsonKeyFrame) {
+	if n := len(*s); n > 0 {
+		(*s)[n-1].expectKey = true
+	}
+	*s = append(*s, frame)
+}
+
+func (s *jsonKeyStack) observeString(value string) error {
+	if len(*s) == 0 {
+		return nil
+	}
+	top := (*s)[len(*s)-1]
+	if !top.isObject {
+		return nil
+	}
+	if !top.expectKey {
+		top.expectKey = true
+		return nil
+	}
+	if top.seen[value] {
+		return fmt.Errorf("duplicate object key %q", value)
+	}
+	top.seen[value] = true
+	top.expectKey = false
+	return nil
+}
+
+func (s *jsonKeyStack) markValue() {
+	if n := len(*s); n > 0 && (*s)[n-1].isObject {
+		(*s)[n-1].expectKey = true
+	}
 }
 
 func jsonStringArray(values []any) []string {

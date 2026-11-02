@@ -1,0 +1,23 @@
+{
+  "name": "workspace-observer",
+  "publisher": "uap-research",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.143.0"
+  },
+  "main": "./extension.cjs",
+  "activationEvents": [
+    "*"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "enabledApiProposals": [
+    "mcpServerDefinitions",
+    "chatPromptFiles"
+  ]
+}
+

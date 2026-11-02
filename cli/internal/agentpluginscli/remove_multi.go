@@ -118,15 +118,24 @@ func (session *removeManySession) buildInputs() error {
 		if err := selectedDetectionError(target, session.detected); err != nil {
 			return err
 		}
+		state, err := session.app.StateStore.Load()
+		if err != nil {
+			return err
+		}
+		authority, err := environmentAuthorityForBinding(state, session.installation.InstallationID, target, "remove")
+		if err != nil {
+			return err
+		}
 		client, ok := session.detected[target]
 		if !ok {
 			client = domain.DetectedClient{ClientID: target, DisplayName: string(target), Status: domain.DetectionNotDetected}
 			session.detected[target] = client
 		}
 		inputs = append(inputs, usecase.RemoveInput{
-			Selector: session.installationSelector, Client: client, Scope: domain.ScopeUser,
+			Selector: session.installationSelector, Client: client, Scope: session.app.scope(),
 			DryRun: true, Interactive: false, ExternalUninstalled: session.opts.externalUninstalled,
-			BackendExecutable: backendExecutable(client, session.detected),
+			BackendExecutable:    backendExecutable(client, session.detected, session.app.scope()),
+			EnvironmentAuthority: authority,
 		})
 		selected = append(selected, client)
 	}
@@ -249,7 +258,16 @@ func (session *removeManySession) recordRetainedData() {
 			Scope: receipt.Scope, State: receipt.State,
 		})
 	}
-	session.result.RetainedDataAction = fmt.Sprintf("run `agentplugins remove %s --purge-data` to delete retained plugin data", session.installation.InstallationID)
+	session.result.RetainedDataAction = fmt.Sprintf("run `%s` to delete retained plugin data", retainedDataPurgeCommand(session.app, session.installation.InstallationID))
+}
+
+func multiRemovalNeedsManualStep(result removeMultiResult) bool {
+	for _, target := range result.Targets {
+		if removalNeedsManualStep(target.Output.Result.Deactivation) || target.Status == "blocked" || target.Status == "not_applied" {
+			return true
+		}
+	}
+	return false
 }
 
 func renderRemoveMultiResult(cmd *cobra.Command, opts *options, result removeMultiResult) error {
@@ -271,6 +289,11 @@ func renderRemoveMultiResult(cmd *cobra.Command, opts *options, result removeMul
 			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", target.Output.NextAction); err != nil {
 				return err
 			}
+		}
+	}
+	if !result.DryRun && multiRemovalNeedsManualStep(result) {
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "  "+removalIncompleteNotice); err != nil {
+			return err
 		}
 	}
 	if result.PluginDataPreserved {

@@ -1404,7 +1404,7 @@ Recommended shape:
 
 Recommended location:
 
-- `<repo>/.plugin-kit-ai.lock`
+- `<repo>/.uap-integrations.lock` (renamed from `.plugin-kit-ai.lock`; the legacy name is still excluded from package digests but never read or written silently)
 
 Purpose:
 
@@ -2260,7 +2260,7 @@ Reason:
 
 ### Phase 5: workspace sync
 
-- introduce `.plugin-kit-ai.lock`
+- introduce `.uap-integrations.lock`
 - support team sync and CI verification
 
 ### Phase 6: bootstrap integration
@@ -2337,7 +2337,7 @@ Mitigation:
 
 1. Create the new lifecycle module skeleton under `install/integrationctl`.
 2. Define domain types and the `TargetAdapterPort`.
-3. Define `state.json` and `.plugin-kit-ai.lock` schemas.
+3. Define `state.json` and `.uap-integrations.lock` schemas.
 4. Implement dry-run planning before any mutating command.
 5. Define the evidence registry before adapter implementation starts.
 6. Implement Claude and Gemini adapters first.

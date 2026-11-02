@@ -6,11 +6,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestOpenCodeNamespaceCLIGroupRefusesBeforeMutation(t *testing.T) {
 	openCode := fixtureClient(t, domain.ClientOpenCode)
+	// This direct usecase fixture bypasses Engine.Prepare and supplies explicit
+	// qualified authority; the namespace guard still inspects the actual config.
+	openCode.OpenCodeHost = contracttest.OpenCodeV1Host{}
 	cursor := fixtureClient(t, domain.ClientCursor)
 	fixture := newCLIFixture(t, []domain.DetectedClient{cursor, openCode})
 	if err := os.MkdirAll(openCode.ConfigRoot, 0o700); err != nil {
@@ -41,6 +45,9 @@ func TestOpenCodeNamespaceCLIGroupRefusesBeforeMutation(t *testing.T) {
 
 func TestOpenCodeNamespaceCLIDryRunShowsInformationalEvidence(t *testing.T) {
 	openCode := fixtureClient(t, domain.ClientOpenCode)
+	// This direct usecase fixture bypasses Engine.Prepare and supplies explicit
+	// qualified authority; the namespace guard still inspects the actual config.
+	openCode.OpenCodeHost = contracttest.OpenCodeV1Host{}
 	fixture := newCLIFixture(t, []domain.DetectedClient{openCode})
 	plugin := writeCLIPlugin(t)
 	writeCLIMCP(t, plugin)

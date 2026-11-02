@@ -116,7 +116,7 @@ func (runner *lifecycleRunner) Run(_ context.Context, command legacyports.Comman
 
 func lifecycleActivationRequest(t *testing.T, id domain.ClientID) domain.ActivationRequest {
 	t.Helper()
-	root := t.TempDir()
+	root := canonicalTempRoot(t)
 	base := filepath.Join(root, "owned")
 	active := filepath.Join(base, "demo")
 	if err := os.MkdirAll(active, 0o755); err != nil {

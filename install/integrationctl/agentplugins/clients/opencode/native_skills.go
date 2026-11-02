@@ -1,21 +1,22 @@
 package opencode
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
-
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 type openCodeBackup struct{ backup, target string }
 type openCodeRenameFunc func(string, string) error
 type openCodeSkillTxn struct {
+	durable   bool
 	root      string
 	backups   map[string]openCodeBackup
 	installed map[string]domain.NativeObjectOwnership
@@ -32,7 +33,7 @@ func renameOpenCodeDirectoryNoReplace(oldPath, newPath string, rename openCodeRe
 	return rename(oldPath, newPath)
 }
 
-func installOpenCodeSkillsWithOps(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, rename openCodeRenameFunc, removeAll func(string) error) (*openCodeSkillTxn, error) {
+func installOpenCodeSkillsWithLayout(layout openCodeNativeLayout, activePath string, previous, desired []domain.NativeObjectOwnership, rename openCodeRenameFunc, removeAll func(string) error) (*openCodeSkillTxn, error) {
 	if rename == nil {
 		return nil, fmt.Errorf("OpenCode rename operation is unavailable")
 	}
@@ -43,7 +44,7 @@ func installOpenCodeSkillsWithOps(configRoot, activePath string, previous, desir
 	if !containsOpenCodeSkill(previous) && !containsOpenCodeSkill(desired) {
 		return txn, nil
 	}
-	if err := txn.createRoot(configRoot); err != nil {
+	if err := txn.createLayoutRoot(layout); err != nil {
 		return nil, err
 	}
 	if err := txn.stageAndSwap(activePath, previous, desired); err != nil {
@@ -53,21 +54,45 @@ func installOpenCodeSkillsWithOps(configRoot, activePath string, previous, desir
 }
 
 func (txn *openCodeSkillTxn) createRoot(configRoot string) error {
-	skillsRoot := filepath.Join(configRoot, "skills")
+	return txn.createLayoutRoot(userOpenCodeLayout(configRoot))
+}
+
+func (txn *openCodeSkillTxn) createLayoutRoot(layout openCodeNativeLayout) error {
+	configRoot, skillsRoot := layout.Root, layout.Skills
+	if err := pathpolicy.RequireContainedChild(configRoot, skillsRoot); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(skillsRoot, 0o700); err != nil {
 		return err
 	}
-	root, err := os.MkdirTemp(skillsRoot, ".agentplugins-native-")
+	root, err := createPrivateTransitionRoot(skillsRoot)
 	if err != nil {
 		return err
 	}
 	txn.root = root
+	if txn.durable {
+		if layout.Scope == domain.ScopeProject {
+			if err := atomicfile.SyncDirectory(configRoot); err != nil {
+				return err
+			}
+		}
+		if err := atomicfile.SyncDirectory(filepath.Dir(skillsRoot)); err != nil {
+			return err
+		}
+		return atomicfile.SyncDirectory(skillsRoot)
+	}
 	return nil
 }
 
 func (txn *openCodeSkillTxn) fail(err error) (*openCodeSkillTxn, error) {
 	if rollbackErr := txn.rollback(); rollbackErr != nil {
 		return nil, fmt.Errorf("%w; OpenCode skill rollback failed: %w; recovery retained at %q", err, rollbackErr, txn.root)
+	}
+	// A content conflict is raised while backing up previous Skills, before
+	// installStaged. Successful rollback has restored every earlier backup.
+	// Preserve unknown-effect handling for all later or failed rollbacks.
+	if errors.Is(err, domain.ErrManagedSkillChanged) && len(txn.installed) == 0 {
+		return nil, &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
 	return nil, err
 }
@@ -119,11 +144,19 @@ func (txn *openCodeSkillTxn) backupPrevious(previousByID map[string]domain.Nativ
 		}
 		digest, err := shared.DigestSkillDirectory(object.Path)
 		if err != nil || digest != object.ManagedDigest {
-			return fmt.Errorf("managed OpenCode skill %q changed outside agentplugins", object.LogicalName)
+			return fmt.Errorf("managed OpenCode skill %q changed outside agentplugins: %w", object.LogicalName, domain.ErrManagedSkillChanged)
 		}
 		backup := filepath.Join(txn.root, "old-"+object.LogicalName)
-		if err := os.Rename(object.Path, backup); err != nil {
+		if err := renameOpenCodeDirectoryNoReplace(object.Path, backup, txn.rename); err != nil {
 			return err
+		}
+		if txn.durable {
+			if err := atomicfile.SyncDirectory(filepath.Dir(object.Path)); err != nil {
+				return err
+			}
+			if err := atomicfile.SyncDirectory(txn.root); err != nil {
+				return err
+			}
 		}
 		txn.backups[id] = openCodeBackup{backup: backup, target: object.Path}
 	}
@@ -139,6 +172,14 @@ func (txn *openCodeSkillTxn) installStaged(staged map[string]string, desiredByID
 			return err
 		}
 		txn.installed[id] = object
+		if txn.durable {
+			if err := atomicfile.SyncDirectory(filepath.Dir(object.Path)); err != nil {
+				return err
+			}
+			if err := atomicfile.SyncDirectory(txn.root); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

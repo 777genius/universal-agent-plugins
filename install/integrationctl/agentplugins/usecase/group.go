@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 type GroupInput struct {
@@ -15,6 +16,7 @@ type GroupInput struct {
 	CompatibilityChecks []AddInput
 	OperationGroupID    string
 	Progress            func(GroupProgressEvent)
+	OnlinePreview       bool
 	DryRun              bool
 	Confirmed           bool
 	Switch              bool
@@ -27,6 +29,7 @@ const (
 	GroupProgressPreparing   GroupProgressPhase = "preparing"
 	GroupProgressConfiguring GroupProgressPhase = "configuring"
 	GroupProgressConfigured  GroupProgressPhase = "configured"
+	GroupProgressActivating  GroupProgressPhase = "activating"
 	GroupProgressActivated   GroupProgressPhase = "activated"
 )
 
@@ -39,6 +42,8 @@ type GroupProgressEvent struct {
 }
 
 type GroupResult struct {
+	// PreparedClients carries immutable host snapshots to this operation's apply.
+	PreparedClients  []domain.DetectedClient   `json:"-"`
 	InstallationID   string                    `json:"installation_id"`
 	OperationGroupID string                    `json:"operation_group_id,omitempty"`
 	Targets          []AddResult               `json:"targets"`
@@ -86,16 +91,17 @@ func (service Service) AddGroup(ctx context.Context, input GroupInput) (GroupRes
 	return service.applyGroup(ctx, input, false)
 }
 
-func (service Service) UpdateGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
-	return service.applyGroup(ctx, input, true)
-}
-
 func (service Service) SwitchGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
 	input.Switch = true
 	return service.applyGroup(ctx, input, true)
 }
 
 func (service Service) RepairGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
+	result, err := service.repairGroup(ctx, input)
+	return result, forSavedDependency(err, groupEnvironmentAuthority(input))
+}
+
+func (service Service) repairGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
 	if service.StateStore == nil {
 		return GroupResult{}, fmt.Errorf("state store is required")
 	}
@@ -114,7 +120,7 @@ func (service Service) RepairGroup(ctx context.Context, input GroupInput) (Group
 		installation := state.Installations[index]
 		matched := false
 		for _, client := range installation.Clients {
-			if !sameNativeBackend(domain.ClientID(client.ClientID), target.Client.ClientID) || client.Scope != string(target.Scope) {
+			if !sameNativeBackend(domain.ClientID(client.ClientID), target.Client.ClientID, target.Scope) || client.Scope != string(target.Scope) {
 				continue
 			}
 			if !repairPackageRevisionMatches(client.PackageRevision, target.Envelope, installation.OriginMode == domain.OriginModeDirectory) {
@@ -153,25 +159,34 @@ type plannedGroupTarget struct {
 	requireAbsent bool
 }
 
-func (session *groupSession) reportGroupProgress(target plannedGroupTarget, phase GroupProgressPhase) {
+func (session *groupSession) reportGroupProgress(target plannedGroupTarget, phase GroupProgressPhase) error {
 	if session.input.Progress == nil {
-		return
+		return nil
 	}
 	for _, index := range target.resultIndexes {
+		if session.service.profileCheck != nil {
+			if err := session.service.checkProfiles(session.ctx); err != nil {
+				return err
+			}
+		}
 		result := session.result.Targets[index]
 		session.input.Progress(GroupProgressEvent{ClientID: result.Plan.ClientID, Phase: phase, Result: result})
+		if session.service.profileCheck != nil {
+			if err := session.service.checkProfiles(session.ctx); err != nil {
+				return err
+			}
+		}
 	}
+	return nil
 }
 
 func (service Service) applyGroup(ctx context.Context, input GroupInput, replace bool) (GroupResult, error) {
 	session := &groupSession{service: service, ctx: ctx, input: input, replace: replace}
-	if err := session.validateGroupInput(); err != nil {
+	if err := session.prepareGroupInputs(); err != nil {
 		return GroupResult{}, err
 	}
-	if err := session.ensureGroupID(); err != nil {
-		return GroupResult{}, err
-	}
-	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
+	service = session.service
+	release, err := service.beginEnvironmentMutation(ctx, input.DryRun, input.Confirmed, session.first.EnvironmentAuthority)
 	if err != nil {
 		return GroupResult{}, err
 	}
@@ -187,8 +202,14 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	if err := session.preflightCompatibleBindings(); err != nil {
 		return session.result, err
 	}
+	if err := session.preflightUnchangedProjections(); err != nil {
+		return session.result, err
+	}
 	if session.input.DryRun || !session.input.Confirmed {
 		return session.result, nil
+	}
+	if err := session.revalidateHosts(); err != nil {
+		return session.result, err
 	}
 	if err := session.stageGroupDeliveries(); err != nil {
 		// Staging can prepare a locked runtime after the read-only preflight.
@@ -198,12 +219,26 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		return session.result, err
 	}
 	defer session.cleanupStaged()
+	if err := session.revalidateHosts(); err != nil {
+		return session.result, err
+	}
+	for _, target := range session.planned {
+		if err := session.reportGroupProgress(target, GroupProgressConfiguring); err != nil {
+			return session.result, err
+		}
+	}
+	// Callers can change any target from a progress callback. Reobserve every
+	// identity after the final callback, before building or committing state.
 	if err := session.reobserveGroupIdentity(); err != nil {
 		return session.result, err
 	}
 	session.buildDesiredGroupState()
 	for _, target := range session.planned {
-		session.reportGroupProgress(target, GroupProgressConfiguring)
+		if target.input.EnvironmentAuthority != nil {
+			_ = transaction.UpsertEnvironmentReceipt(&session.desired, target.input.EnvironmentAuthority,
+				session.installationID, target.clientBindingID, firstEnvironmentSourceKey(target.input.EnvironmentAuthority, session.sourceID),
+				target.input.Envelope.TreeDigest, target.plan.ProfileAuthority(), "committed")
+		}
 	}
 	if err := session.applyGroupKernel(); err != nil {
 		return session.result, err
@@ -211,11 +246,34 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	return session.activateGroupTargets()
 }
 
-func groupTargetFailureFromActivation(err error, outcome domain.ActivationOutcome) *GroupTargetFailure {
+func (session *groupSession) prepareGroupInputs() error {
+	if err := session.validateGroupInput(); err != nil {
+		return err
+	}
+	targets, err := session.service.prepareHostInputs(session.ctx, session.input.Targets, session.input.DryRun)
+	if err != nil {
+		return err
+	}
+	session.input.Targets = targets
+	checks, err := session.service.prepareHostInputs(session.ctx, session.input.CompatibilityChecks, session.input.DryRun)
+	if err != nil {
+		return err
+	}
+	session.input.CompatibilityChecks = checks
+	if err := session.ensureGroupID(); err != nil {
+		return err
+	}
+	if err := session.resolveGroupInstallation(); err != nil {
+		return err
+	}
+	return session.freezeGroupProfiles()
+}
+
+func groupTargetFailureFromActivation(ctx context.Context, err error, outcome domain.ActivationOutcome) *GroupTargetFailure {
 	stage := "activation"
 	switch {
-	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		stage = "canceled"
+	case ctx.Err() != nil, errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		stage, _ = groupActivationStopReason(ctx, err)
 	case outcome.Authentication == domain.AuthenticationFailed &&
 		outcome.Activation != domain.ActivationFailed &&
 		outcome.Verification != domain.VerificationFailed:
@@ -332,10 +390,15 @@ func groupPackageUnchanged(binding domain.ClientBinding, input AddInput) bool {
 // indeterminate object remains blocking, and an existing managed object still
 // has to match its recorded ownership digest.
 func (service Service) observeGroupNativeIdentity(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding, repair bool) error {
+	if repair && service.ClientPreparation != nil {
+		if err := service.ClientPreparation.RevalidateClient(ctx, client, plan); err != nil {
+			return err
+		}
+	}
 	if !repair || service.NativeObserver == nil {
 		return service.observeNativeIdentity(ctx, client, plan, managed)
 	}
-	observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, client, plan, managed)
+	observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, client, cloneLocalObservationPlan(plan), cloneLocalObservationBinding(managed))
 	if err != nil {
 		return fmt.Errorf("observe native identity for %s: %w", client.ClientID, err)
 	}
@@ -397,7 +460,7 @@ func validateGroupNativeIdentityObservation(observation domain.NativeIdentityObs
 // that failure mode, so they keep going through the ordinary, immediate
 // CLI-inclusive check.
 func (service Service) observeGroupRecoveryEligibility(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) bool {
-	if !domain.ClientTraitsFor(client.ClientID).SupportsPreparedRecovery || managed == nil || managedDigest(*managed) == "" || service.NativeObserver == nil {
+	if !plan.SelectedDelivery.EffectiveTraitsForScope(client.ClientID, plan.Scope).SupportsPreparedRecovery || managed == nil || managedDigest(*managed) == "" || service.NativeObserver == nil {
 		return false
 	}
 	observation, err := service.preparedIdentityObservation(ctx, client, plan, managed)
@@ -451,7 +514,7 @@ func (service Service) groupRecoveryPostApplyVerify(planned []plannedGroupTarget
 		for _, target := range recovering {
 			// Eligibility already required a non-nil NativeObserver; recovering
 			// can only be true when that held at preflight time.
-			observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, target.input.Client, target.plan, target.managed)
+			observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, target.input.Client, cloneLocalObservationPlan(target.plan), cloneLocalObservationBinding(target.managed))
 			if err != nil {
 				return fmt.Errorf("verify restored native identity for %s: %w", target.input.Client.ClientID, err)
 			}
@@ -494,6 +557,24 @@ func validateGroupRecoveryVerification(observation domain.NativeIdentityObservat
 	expected := managedDigest(*managed)
 	if expected == "" || observation.Digest == "" || expected != observation.Digest {
 		return fmt.Errorf("restored digest does not match the recorded receipt")
+	}
+	return nil
+}
+
+func (session *groupSession) freezeGroupProfiles() error {
+	selected := make([]domain.DetectedClient, len(session.input.Targets))
+	for i, t := range session.input.Targets {
+		selected[i] = t.Client
+	}
+	service, frozen, err := session.service.freezeProfiles(session.ctx, session.installationID, selected, true)
+	if err != nil {
+		return err
+	}
+	session.service = service
+	session.input.Targets = append([]AddInput(nil), session.input.Targets...)
+	for i := range session.input.Targets {
+		session.input.Targets[i].Client = frozen[i]
+		session.input.Targets[i].InstallationID = session.installationID
 	}
 	return nil
 }

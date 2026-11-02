@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,12 +25,12 @@ type deactivationRecord struct {
 	Commands [][]string
 }
 
-// TestActivateGoldenAcrossClients freezes the lifecycle of all eleven clients,
+// TestActivateGoldenAcrossClients freezes the lifecycle of all clients,
 // including which commands each one runs, before the switch in activator.go is
 // replaced by a registry lookup. The runner here answers every command with an
 // empty result, which is the silent-client path: Claude and Kiro end in their
-// unknown-evidence error, the other nine in their normal outcome.
-// TestActivateGoldenWhenClientsRespond covers the happy path for all eleven.
+// unknown-evidence error, the others in their normal outcome.
+// TestActivateGoldenWhenClientsRespond covers the happy path for every client.
 func TestActivateGoldenAcrossClients(t *testing.T) {
 	t.Parallel()
 	for _, verifyOnly := range []bool{false, true} {
@@ -40,13 +41,16 @@ func TestActivateGoldenAcrossClients(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			root := t.TempDir()
+			root := tempRoot(t)
 			records := make(map[string]activationRecord, len(domain.ClientDefinitions()))
 			for _, definition := range domain.ClientDefinitions() {
 				runner := &recordingRunner{}
 				request := goldenActivationRequest(t, definition.ID, root)
 				request.VerifyOnly = verifyOnly
 				outcome, err := testActivator(Activator{Runner: runner}).Activate(context.Background(), request)
+				if domain.ClientTraitsFor(definition.ID).VerifiesNativeDirectory {
+					outcome = piGoldenActivationOutcome(outcome)
+				}
 				records[string(definition.ID)] = activationRecord{
 					Outcome: outcome, Error: errorText(err), Commands: commandArgv(runner.commands),
 				}
@@ -59,7 +63,7 @@ func TestActivateGoldenAcrossClients(t *testing.T) {
 // TestActivateGoldenWhenClientsRespond is the happy path: every client's CLI
 // answers as it does when the plugin really is installed. Part 7 moves this
 // dispatch into per-client adapters, so both the responding and the silent side
-// have to stay identical for all eleven.
+// have to stay identical for all clients.
 func TestActivateGoldenWhenClientsRespond(t *testing.T) {
 	t.Parallel()
 	for _, verifyOnly := range []bool{false, true} {
@@ -69,13 +73,16 @@ func TestActivateGoldenWhenClientsRespond(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			root := t.TempDir()
+			root := tempRoot(t)
 			records := make(map[string]activationRecord, len(domain.ClientDefinitions()))
 			for _, definition := range domain.ClientDefinitions() {
 				request := goldenActivationRequest(t, definition.ID, root)
 				request.VerifyOnly = verifyOnly
 				runner := goldenRespondingRunner(definition.ID, request)
 				outcome, err := testActivator(Activator{Runner: runner}).Activate(context.Background(), request)
+				if domain.ClientTraitsFor(definition.ID).VerifiesNativeDirectory {
+					outcome = piGoldenActivationOutcome(outcome)
+				}
 				records[string(definition.ID)] = activationRecord{
 					Outcome: outcome, Error: errorText(err), Commands: commandArgv(runner.commands),
 				}
@@ -96,7 +103,7 @@ func TestDeactivateGoldenAcrossClients(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			root := t.TempDir()
+			root := tempRoot(t)
 			records := make(map[string]deactivationRecord, len(domain.ClientDefinitions()))
 			for _, definition := range domain.ClientDefinitions() {
 				runner := &recordingRunner{}
@@ -117,7 +124,7 @@ func TestDeactivateGoldenAcrossClients(t *testing.T) {
 // reaches its removal instead of stopping at the missing-ownership guard.
 // Not parallel: the Cline settings location is read from the environment.
 func TestDeactivateGoldenWhenOwnershipIsRecorded(t *testing.T) {
-	root := t.TempDir()
+	root := tempRoot(t)
 	t.Setenv("CLINE_MCP_SETTINGS_PATH", filepath.Join(root, "cline", "cline_mcp_settings.json"))
 	records := make(map[string]deactivationRecord, len(domain.ClientDefinitions()))
 	for _, definition := range domain.ClientDefinitions() {
@@ -152,6 +159,16 @@ func goldenRespondingRunner(id domain.ClientID, request domain.ActivationRequest
 		// record; a plain reader hits EOF first and Kiro reads that as the
 		// agent exiting before verification finished.
 		return &recordingRunner{duplexOutput: connectedACP("remote"), duplexLive: true}
+	case domain.ClientGrok:
+		listing := fmt.Sprintf(`[{"name":%q,"status":"installed","source":%q,"version":%q}]`, request.DeclaredName, request.Delivery.ActivePath, "1.0.0")
+		return &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
+			return legacyports.CommandResult{Stdout: []byte(listing)}
+		}}
+	case domain.ClientQoder:
+		listing := fmt.Sprintf(`[{"id":%q,"version":%q}]`, request.DeclaredName+"@local", "1.0.0")
+		return &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
+			return legacyports.CommandResult{Stdout: []byte(listing)}
+		}}
 	default:
 		return &recordingRunner{}
 	}
@@ -176,6 +193,9 @@ func goldenNativeObjects(t *testing.T, id domain.ClientID, root string) []domain
 // this client, so the activator sees the same invariants it sees in production.
 func goldenActivationRequest(t *testing.T, id domain.ClientID, root string) domain.ActivationRequest {
 	t.Helper()
+	if domain.ClientTraitsFor(id).VerifiesNativeDirectory {
+		return piGoldenActivationRequest(t, root)
+	}
 	configRoot := filepath.Join(root, string(id), "config")
 	anchor, targetRoot := goldenTargetRoot(id, root, configRoot)
 	activePath := filepath.Join(targetRoot, "demo-0123456789ab")
@@ -184,6 +204,9 @@ func goldenActivationRequest(t *testing.T, id domain.ClientID, root string) doma
 	}
 	if err := os.MkdirAll(configRoot, 0o755); err != nil {
 		t.Fatal(err)
+	}
+	if id == domain.ClientKimi {
+		writeTestFile(t, filepath.Join(activePath, ".kimi-plugin", "plugin.json"), `{"name":"demo","skills":"./skills/"}`)
 	}
 	components := []domain.ComponentDecision{
 		{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative},
@@ -213,7 +236,7 @@ func goldenActivationRequest(t *testing.T, id domain.ClientID, root string) doma
 func goldenDeactivationRequest(t *testing.T, id domain.ClientID, root string) domain.DeactivationRequest {
 	t.Helper()
 	request := goldenActivationRequest(t, id, root)
-	return domain.DeactivationRequest{
+	requestRemoval := domain.DeactivationRequest{
 		Client:              request.Client,
 		DeclaredName:        request.DeclaredName,
 		CurrentActivation:   domain.ActivationActive,
@@ -221,6 +244,10 @@ func goldenDeactivationRequest(t *testing.T, id domain.ClientID, root string) do
 		BackendExecutable:   request.BackendExecutable,
 		ManagedArtifactPath: request.Delivery.ActivePath,
 	}
+	if domain.ClientTraitsFor(id).VerifiesNativeDirectory {
+		requestRemoval.NativeRegistryRoot = request.Plan.NativeRegistryRoot
+	}
+	return requestRemoval
 }
 
 // goldenTargetRoot mirrors planner.targetRoot: Claude and Cursor deliver into
@@ -231,6 +258,10 @@ func goldenTargetRoot(id domain.ClientID, root, configRoot string) (string, stri
 		return configRoot, filepath.Join(configRoot, "skills")
 	case domain.ClientCursor:
 		return configRoot, filepath.Join(configRoot, "plugins", "local")
+	case domain.ClientGrok:
+		return configRoot, filepath.Join(configRoot, "plugins")
+	case domain.ClientKimi:
+		return configRoot, filepath.Join(configRoot, "plugins", "managed")
 	default:
 		managed := filepath.Join(root, "managed")
 		return managed, filepath.Join(managed, "clients", string(id))

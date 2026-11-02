@@ -7,25 +7,35 @@ import { computed, ref, watch, toValue } from 'vue';
 import { clients, clientLandingBySlug, clientLandingById } from '../data/clients.ts';
 import { localizedPath } from '../utils/localizedRoutes.ts';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '../utils/seo.ts';
+import { catalogVisiblePlugins, isFullyRetired } from '../utils/filter.ts';
+import { resolveDistribution, vendorInstallSource } from '../utils/registry.ts';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'));
-async function page(filename: string, parameters = { slug: 'gitlab', client: 'codex' }) {
+const discoverySource = stripTypeScriptTypes(readFileSync(new URL('../composables/useDiscoveryStatus.ts', import.meta.url), 'utf8')).replace(/^export /gm, '');
+async function page(
+  filename: string,
+  parameters = { slug: 'gitlab', client: 'codex' },
+  registry: unknown = fixture,
+) {
   const locale = ref('en');
+  const discoveryStatus = ref({ state: 'current' });
   let seo: any;
   const route = { params: parameters, query: { source: fixture.plugins[0].install_source } };
   const source = readFileSync(new URL(`../pages/${filename}`, import.meta.url), 'utf8')
     .match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1]
     .replace(/^import[\s\S]*?from '[^']+';\n/gm, '');
-  await runInNewContext(`(async () => { ${stripTypeScriptTypes(source)} })()`, {
-    computed, ref, watch, clients, clientLandingBySlug, clientLandingById, localizedPath, productRootUrl, seoDescription, spdxLicenseUrl,
+  await runInNewContext(`(async () => { ${discoverySource}\n${stripTypeScriptTypes(source)} })()`, {
+    computed, ref, watch, clients, clientLandingBySlug, clientLandingById, localizedPath, productRootUrl, seoDescription, spdxLicenseUrl, catalogVisiblePlugins,
+    resolveDistribution, vendorInstallSource, isFullyRetired,
+    useDirectoryStatus: () => ({ current: ref(true), expired: ref(false), published: ref(true) }),
     // Synthetic key markers test reactivity without creating translations.
     useI18n: () => ({ locale, t: (key: string) => `${locale.value}:${key}`, n: (value: number) => String(value) }),
     useLocalePath: () => (path: string) => localizedPath(path, locale.value as 'en' | 'uk'),
     useRoute: () => route,
     useRuntimeConfig: () => ({ app: { baseURL: '/universal-agent-plugins/' }, public: { siteUrl: 'https://example.test/universal-agent-plugins/' } }),
     useSite: () => ({ asset: (path: string) => path, pluginIcon: () => '', sourceUrl: () => 'https://github.com/original/source' }),
-    useDiscoveryStatus: () => ref({ state: 'current' }),
-    useRegistryPage: async () => structuredClone(fixture),
+    useState: () => discoveryStatus,
+    useRegistryPage: async () => structuredClone(registry),
     usePageSeo: (title: unknown, description: unknown, options: unknown) => { seo = { title, description, options }; },
     createError: (options: object) => Object.assign(new Error(), options),
   });
@@ -63,5 +73,43 @@ test('community keeps noindex, no canonical and no WebPage identity; unknown rev
   locale.value = 'uk'; assert.ok(toValue(seo.title).startsWith('uk:'));
   for (const filename of ['plugins/[slug].vue', 'agents/[client].vue']) {
     await assert.rejects(page(filename, { slug: 'missing', client: 'missing' }), { statusCode: 404 });
+  }
+});
+
+test('retired products never reach catalog ItemList structured data', async () => {
+  const retired = structuredClone(fixture.plugins[0]);
+  retired.name = 'retired-demo';
+  retired.display_name = 'Retired Demo';
+  retired.default_distribution = '777genius/retired-demo';
+  retired.declared_default_distribution = '777genius/retired-demo';
+  retired.distributions = retired.distributions.map((distribution: any) => ({
+    ...distribution,
+    id: '777genius/retired-demo',
+    releases: distribution.releases.map((release: any) => ({ ...release, release_status: 'revoked' })),
+    release_status: 'revoked',
+  }));
+  const registry = { ...fixture, plugins: [...fixture.plugins, retired] };
+  for (const filename of ['plugins/index.vue', 'agents/[client].vue']) {
+    const { seo } = await page(filename, { slug: 'gitlab', client: 'codex' }, registry);
+    const structured = toValue(seo.options.structuredData) as any[];
+    const names = structured[0].itemListElement.map((entry: any) => entry.name);
+    assert.ok(names.includes('GitLab'), `${filename} keeps live products`);
+    assert.ok(!names.includes('Retired Demo'), `${filename} drops retired products`);
+    assert.equal(structured[0].numberOfItems, names.length);
+  }
+});
+
+test('temporarily unlisted products never reach catalog surfaces', async () => {
+  const hidden = structuredClone(fixture.plugins[0]);
+  hidden.name = 'agent-notifications';
+  hidden.display_name = 'Agent Notifications';
+  const registry = { ...fixture, plugins: [...fixture.plugins, hidden] };
+  for (const filename of ['plugins/index.vue', 'agents/[client].vue']) {
+    const { seo } = await page(filename, { slug: 'gitlab', client: 'codex' }, registry);
+    const structured = toValue(seo.options.structuredData) as any[];
+    const names = structured[0].itemListElement.map((entry: any) => entry.name);
+    assert.ok(names.includes('GitLab'), `${filename} keeps listed products`);
+    assert.ok(!names.includes('Agent Notifications'), `${filename} drops held-back products`);
+    assert.equal(structured[0].numberOfItems, names.length);
   }
 });

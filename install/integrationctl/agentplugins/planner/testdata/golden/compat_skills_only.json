@@ -22,6 +22,7 @@
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       }
     ],
@@ -50,7 +51,8 @@
       },
       "PackageMode": "compatibility_projection",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "projected"
     },
@@ -60,6 +62,7 @@
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       }
     ],
@@ -85,7 +88,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -95,6 +99,7 @@
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -120,7 +125,8 @@
       },
       "PackageMode": "compatibility_projection",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "projected"
     },
@@ -130,6 +136,7 @@
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       }
     ],
@@ -156,7 +163,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -166,6 +174,7 @@
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -192,7 +201,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -202,6 +212,7 @@
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -228,7 +239,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -238,6 +250,83 @@
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
+        "Support": "native"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "grok",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user",
+        "project"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "grok",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": null,
+        "Source": "",
+        "Support": "native"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "kimi",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user",
+        "project"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "kimi",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -264,7 +353,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -274,6 +364,7 @@
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -300,7 +391,8 @@
       },
       "PackageMode": "prepared_package",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "prepared"
     },
@@ -310,6 +402,7 @@
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       }
     ],
@@ -318,6 +411,83 @@
       "catalog_publication_not_checked",
       "client_version_not_checked",
       "installation_not_checked",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "automatic",
+      "AppSupport": "unsupported",
+      "ClientID": "pi",
+      "ExtensionSupport": "native",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "unsupported",
+        "streamable-http": "unsupported"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user",
+        "project"
+      ],
+      "SkillSupport": "unsupported"
+    },
+    "ClientID": "pi",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client"
+        ],
+        "Source": "",
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "installation_not_checked",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "qoder",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user",
+        "project"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "qoder",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": null,
+        "Source": "",
+        "Support": "native"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "installation_not_checked",
+      "manual_activation_required",
       "runtime_not_checked",
       "static_adapter_support_only"
     ]
@@ -335,7 +505,8 @@
       },
       "PackageMode": "prepared_package",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "prepared"
     },
@@ -345,6 +516,7 @@
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       }
     ],
@@ -371,7 +543,8 @@
       },
       "PackageMode": "prepared_package",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "prepared"
     },
@@ -381,6 +554,7 @@
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       }
     ],

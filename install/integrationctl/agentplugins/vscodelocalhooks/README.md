@@ -24,7 +24,7 @@ err = vscodelocalhooks.VerifyOwned(body, target, specs)
 
 `RenderArgv` exposes the same command rendering independently. `Render` returns
 a fresh complete strict JSON file. Linux entries have only `type:"command"`,
-`linux` and `timeout:5`; Windows preparation substitutes `windows`. Platform-only
+`linux` and `timeout:5`; macOS substitutes `osx`, Windows preparation `windows`. Platform-only
 commands avoid falling back to another OS's shell syntax. Event names are exact
 PascalCase. There is no numeric version, Claude matcher group, CLI camelCase,
 default command, explicit cwd or env. Selecting one event never adds the other;
@@ -55,7 +55,7 @@ root expansion has been admitted by this slice. Other dollar expressions,
 backticks and shell operators remain literal Unix argv, as proved with a real
 `/bin/sh` recorder.
 
-The source contract is pinned to VS Code **1.140.0**, commit
+The source contract is pinned to VS Code **1.140.0** / bundled Copilot **0.68.0**, commit
 [`07f806f999227108933c2e30515b26eecc1fda74`](https://github.com/microsoft/vscode/tree/07f806f999227108933c2e30515b26eecc1fda74).
 The Linux official archive supplied to the earlier native spike has SHA-256
 `d32031e9e213d59532af3cf32fcb8b357a1cdd10417967b4f5b5ba30436dc0dc`.
@@ -79,11 +79,14 @@ observed `Stop`, discovered `com.github.copilot/hooks/hooks.json`, and recorded
 adversarial argv plus default cwd in a fresh TEST HOME. Its archived receipt,
 source attestations and limits are referenced in `.research/implementation-evidence.md`.
 This implementation reuses that evidence; it launches no native application.
-Its process test invokes the actual `/bin/sh -c` boundary with a copied inert
-test executable, fresh TEST HOME/USERPROFILE, hostile executable/path/literal
+Its Linux/macOS process test invokes the actual `/bin/sh -c` boundary with a
+copied inert test executable, fresh TEST HOME/USERPROFILE, hostile executable/path/literal
 values and an injection sentinel. It emits no synthetic Stop input and claims
-no new native lifecycle result. Native execution of these newly rendered
-platform fields and a complete installed candidate remain later gates.
+no new native lifecycle result. The supplied coordinator Mac receipt proves a
+genuine native Stop ran the exact 8955bd6 POSIX command after changing only `linux` to `osx`; it does not prove
+execution through the new public `MacOSSH` API. The coordinator will rerun that
+API after source review. Complete installed candidate qualification remains a
+later gate.
 
 Windows is **prepared only**. The trusted snapshot must give an ordinary
 drive-absolute `SystemRoot` and its exact `System32\cmd.exe` `ComSpec` (case
@@ -93,10 +96,44 @@ insensitive). The pinned native executor then calls
 `POWERSHELL_UPDATECHECK=Off`, and no intermediate cmd shell. This is Windows
 PowerShell 5.1, not pwsh 7. Commands use `&` and single-quoted literals.
 Missing/non-system ComSpec, fallback shells, scripts/UNC/device/relative paths,
-empty arguments, double quotes, trailing backslashes and controls are refused.
+empty arguments, double quotes, trailing backslashes and controls are refused;
+smart single quotes (U+2018/U+2019/U+201A/U+201B) are refused in both paths and arguments.
 Windows executable paths must end in `.exe`. Native Windows CI must qualify
 actual argv representation before activation; Linux string tests and a Windows
-cross-build are solely preparation/compilation evidence. macOS is unqualified.
+cross-build are solely preparation/compilation evidence.
+
+`MacOSSH` is an explicit trusted target with the identical POSIX renderer,
+bounds and placeholder refusals as `LinuxSH`. Both require empty `ComSpec` and
+`SystemRoot`; unsupported targets refuse without fallback. Only native `osx`
+is emitted. The shared process contract runs on actual Darwin `/bin/sh` in the
+focused workflow; Linux execution does not qualify Darwin. Supplied signed Mac
+VS Code receipts are attributed coordinator evidence, with both failed first
+attempts retained; artifact hashes and exact field projection were inspected.
+They establish native command transport, not this new API's native execution,
+installed Notifications delivery, a desktop banner or timeout/tree cleanup.
+
+`TestTESTWindowsPowerShell51Process` runs only on Windows, through public
+`Render`/`VerifyOwned` and the exact system PowerShell executable/vendor argv.
+It probes that executable's actual `$PSVersionTable` independently, requiring
+5.1/Desktop and the exact system process path. The unchanged rendered command
+then launches a copied inert native `.exe` receiver with hostile path/Unicode,
+space, apostrophe, dollar, backtick, percent and ampersand literals. The receiver
+writes actual argv/cwd/TEST HOME/USERPROFILE in an exclusive UTF-8 file, so
+PowerShell's legacy stdout transcoding cannot conceal argument corruption.
+Raw stdout/stderr bytes, exit code, version, encoding code pages, rendered JSON
+and receiver SHA-256 are logged. It uses fresh TEST profiles, injection sentinels,
+a bounded process deadline and cleanup; refused forms produce no artifact or
+receiver effects. The version probe is a separate invocation of the same exact
+system executable; no test instrumentation modifies the rendered command.
+
+`.github/workflows/vscode-local-native.yml` runs these contracts on actual
+`windows-latest` and `macos-latest`, with exact-head logs and an explicit
+`U2_REQUIRE_NATIVE` OS gate. Missing PS5.1 fails. A missing/skipped required
+process test also fails the workflow. There is no GUI/model/auth dependency.
+A Windows CI pass qualifies only the exact PS5.1 argv transport; genuine Windows
+Local Stop, installed delivery and desktop visibility remain unproved. Until
+that CI result exists Windows remains prepared. Local Linux passes, compilation
+and supplied Mac command receipts must never be substituted for native CI.
 
 Five seconds is a native timer value, not a hard tree cleanup guarantee. The
 vendor executor signals its spawned shell/process with SIGTERM, escalates that

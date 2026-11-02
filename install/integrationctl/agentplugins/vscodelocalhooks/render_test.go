@@ -70,7 +70,7 @@ func TestWindowsPreparedContract(t *testing.T) {
 
 func TestRefuseUnsupportedInputs(t *testing.T) {
 	for _, target := range []hooks.Target{
-		{}, {Shell: "pwsh7"}, {Shell: "macos-/bin/sh"},
+		{}, {Shell: "pwsh7"}, {Shell: "unsupported-/bin/sh"},
 		{Shell: hooks.LinuxSH, ComSpec: "cmd.exe"},
 		{Shell: hooks.WindowsPowerShell51},
 		{Shell: hooks.WindowsPowerShell51, SystemRoot: `C:\Windows`, ComSpec: "cmd.exe"},
@@ -189,6 +189,37 @@ func TestSpecRefusal(t *testing.T) {
 	for _, specs := range [][]hooks.Spec{nil, {stop(), stop()}, {stop(), stop(), stop()}} {
 		if _, err := hooks.Render(linux(), specs); !errors.Is(err, hooks.ErrInvalid) {
 			t.Fatal("empty/duplicate/excess events accepted", err)
+		}
+	}
+}
+
+// Red: a PowerShell delimiter reaches any public boundary or leaks its value.
+// POSIX accepts the same Unicode literally; this is a Windows-only refusal.
+func TestRefuseWindowsSmartSingleQuotes(t *testing.T) {
+	for _, quote := range []rune{'\u2018', '\u2019', '\u201a', '\u201b'} {
+		value := "TEST-private-safe" + string(quote) + "; New-Item -Path C:\\TEST\\SMART-INJECTION-MUST-NOT-EXIST; #"
+		for _, spec := range []hooks.Spec{
+			{Event: hooks.Stop, Executable: `C:\TEST\runtime.exe`, Args: []string{value}, TimeoutSeconds: 5},
+			{Event: hooks.Stop, Executable: `C:\TEST\reader` + string(quote) + "s.exe", TimeoutSeconds: 5},
+		} {
+			command, argvErr := hooks.RenderArgv(windows(), spec.Executable, spec.Args)
+			body, renderErr := hooks.Render(windows(), []hooks.Spec{spec})
+			verifyErr := hooks.VerifyOwned([]byte(authored), windows(), []hooks.Spec{spec})
+			for _, err := range []error{argvErr, renderErr, verifyErr} {
+				if !errors.Is(err, hooks.ErrUnsupported) {
+					t.Errorf("U+%04X accepted or wrong classification: %v", quote, err)
+				} else if strings.Contains(err.Error(), "TEST-private") || strings.Contains(err.Error(), "reader") || strings.ContainsRune(err.Error(), quote) {
+					t.Error("refusal leaked supplied literal")
+				}
+			}
+			if command != "" || len(body) != 0 {
+				t.Error("refused literal produced executable output")
+			}
+		}
+		for _, target := range []hooks.Target{linux(), {Shell: hooks.MacOSSH}} {
+			if _, err := hooks.RenderArgv(target, "/TEST/reader"+string(quote)+"s", []string{value}); err != nil {
+				t.Fatal("Windows refusal altered POSIX literals", err)
+			}
 		}
 	}
 }

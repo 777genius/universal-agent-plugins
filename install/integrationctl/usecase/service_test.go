@@ -410,7 +410,7 @@ func TestSyncNonDryRunInstallsFromWorkspaceLockRelativeSource(t *testing.T) {
 	sourceRoot := filepath.Join(workspace, "plugins", "cursor-demo")
 	writeFile(t, filepath.Join(sourceRoot, "plugin", "plugin.yaml"), "api_version: v1\nname: cursor-demo\nversion: 0.1.0\ndescription: test\ntargets:\n  - cursor\n")
 	writeFile(t, filepath.Join(sourceRoot, "plugin", "mcp", "servers.yaml"), "api_version: v1\nservers:\n  release-checks:\n    type: stdio\n    stdio:\n      command: node\n      args:\n        - ${package.root}/bin/release-checks.mjs\n")
-	writeFile(t, filepath.Join(workspace, ".plugin-kit-ai.lock"), "api_version: v1\nintegrations:\n  - source: ./plugins/cursor-demo\n    targets:\n      - cursor\n    policy:\n      scope: project\n      auto_update: true\n      adopt_new_targets: manual\n")
+	writeFile(t, filepath.Join(workspace, ".uap-integrations.lock"), "api_version: v1\nintegrations:\n  - source: ./plugins/cursor-demo\n    targets:\n      - cursor\n    policy:\n      scope: project\n      auto_update: true\n      adopt_new_targets: manual\n")
 	evidencePath := filepath.Join(root, "evidence.json")
 	writeFile(t, evidencePath, `{"schema_version":1,"entries":[{"key":"target.cursor.native_surface","claim":"x","evidence_class":"confirmed_vendor_fact","urls":["https://example.com"]}]}`)
 	fs := fsadapter.OS{}
@@ -418,7 +418,7 @@ func TestSyncNonDryRunInstallsFromWorkspaceLockRelativeSource(t *testing.T) {
 		SourceResolver: source.Resolver{},
 		ManifestLoader: manifest.Loader{},
 		StateStore:     jsonstate.Store{FS: fs, Path: filepath.Join(root, "state.json")},
-		WorkspaceLock: stubWorkspaceLockStore{path: filepath.Join(workspace, ".plugin-kit-ai.lock"), load: func() (domain.WorkspaceLock, error) {
+		WorkspaceLock: stubWorkspaceLockStore{path: filepath.Join(workspace, ".uap-integrations.lock"), load: func() (domain.WorkspaceLock, error) {
 			return domain.WorkspaceLock{APIVersion: "v1", Integrations: []domain.WorkspaceLockIntegration{{Source: "./plugins/cursor-demo", Targets: []string{"cursor"}, Policy: domain.InstallPolicy{Scope: "project", AutoUpdate: true, AdoptNewTargets: "manual"}}}}, nil
 		}},
 		LockManager: locks.FileLock{BaseDir: filepath.Join(root, "locks")},

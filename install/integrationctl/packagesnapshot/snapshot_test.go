@@ -15,6 +15,7 @@ func TestBuildCreatesSealedSnapshotAndPreservesExecutableIntent(t *testing.T) {
 	mustWrite(t, filepath.Join(source, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"demo"}`), 0o644)
 	mustWrite(t, filepath.Join(source, "bin", "run"), []byte("#!/bin/sh\n"), 0o755)
 	mustWrite(t, filepath.Join(source, ".git", "ignored"), []byte("ignored"), 0o644)
+	mustWrite(t, filepath.Join(source, "nested", ".uap-integrations.lock"), []byte("ignored"), 0o644)
 	mustWrite(t, filepath.Join(source, "nested", ".plugin-kit-ai.lock"), []byte("ignored"), 0o644)
 
 	snapshot, err := (Builder{}).Build(context.Background(), source)
@@ -32,8 +33,10 @@ func TestBuildCreatesSealedSnapshotAndPreservesExecutableIntent(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(snapshot.Root, ".git")); !os.IsNotExist(err) {
 		t.Fatalf(".git copied into snapshot: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(snapshot.Root, "nested", ".plugin-kit-ai.lock")); !os.IsNotExist(err) {
-		t.Fatalf("workspace lock copied into snapshot: %v", err)
+	for _, name := range []string{".uap-integrations.lock", ".plugin-kit-ai.lock"} {
+		if _, err := os.Stat(filepath.Join(snapshot.Root, "nested", name)); !os.IsNotExist(err) {
+			t.Fatalf("workspace lock %s copied into snapshot: %v", name, err)
+		}
 	}
 	executable, err := os.Stat(filepath.Join(snapshot.Root, "bin", "run"))
 	if err != nil {

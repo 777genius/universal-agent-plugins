@@ -1,0 +1,16 @@
+{
+  "package": "@anthropic-ai/claude-code-linux-x64",
+  "version": "2.1.263",
+  "source_url": "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-2.1.263.tgz",
+  "archive_sha256": "8b6207348ad56fdcde085a0ad1f7cff0dfe06ce2c6c1bf97f69f1a1a7b6d0945",
+  "binary_sha256": "26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba",
+  "integrity_verification": "downloaded archive SHA512 equals official npm metadata integrity",
+  "production_source_inspected": "0cf52a6067b03bc36d3bb1f45ac2c6356f95ae52",
+  "project_trust_granted": false,
+  "model_requests": false,
+  "mcp_initialization": "not_evaluated",
+  "uap_prepared_lifecycle": "not_evaluated_by_this_spike",
+  "trusted_precedence": "not_evaluated",
+  "ordinary_directory_fixture_not_git_worktree": true,
+  "disclosure": "Records contain only explicitly constructed disposable fixture environment and paths; stdout/stderr strings retained exactly. No ambient credentials were supplied. Native process network calls were not claimed to be blocked. Archive/binary removed after verification to relieve scratch exhaustion."
+}

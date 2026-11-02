@@ -1,0 +1,158 @@
+{
+  "evidence_kind": "vscode-untrusted-workspace-metadata-research",
+  "source_commit": "f48d685133105e3ec7922acf811ee30a95830ef8",
+  "version": "1.143.1",
+  "publisher_commit": "e646868227c3e3a9e3f24277c8c7220be42c0be7",
+  "collection_complete": true,
+  "native_project_qualified": false,
+  "native_mcp_initialization_qualified": false,
+  "native_runtime_qualified": false,
+  "checkout": {
+    "probe": "source-checkout",
+    "argv": [
+      "/usr/bin/git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+    "error": null,
+    "exit": 0,
+    "elapsed_seconds": 0.003,
+    "stdout_file": "source-checkout.stdout.log",
+    "stderr_file": "source-checkout.stderr.log",
+    "stdout_bytes": 41,
+    "stderr_bytes": 0,
+    "stdout_sha256": "2b6adf439ffe5900a952eae6fd446826ab16c07bbf1f534cb5bbb9451f1671d8",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "archive": {
+    "url": "https://vscode.download.prss.microsoft.com/dbazure/download/stable/e646868227c3e3a9e3f24277c8c7220be42c0be7/code-stable-x64-1792691793.tar.gz",
+    "bytes": 350844741,
+    "sha256": "48f658052e54e020a1c1be7b37ac0f9ae39f07e8ccda805c63f053cfda72b2be"
+  },
+  "materialization": {
+    "members": 4262,
+    "expanded_bytes": 1034475520,
+    "regular_bytes": 1031068984,
+    "omitted_symlinks": 0,
+    "omitted_symlink_metadata_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "publisher_files": {
+    "code": {
+      "sha256": "cf8508cc7ddde30cfccc70caeda877a9a99119953c4476dcb30a3eb1a2c415e9",
+      "bytes": 223685880,
+      "identity": [
+        2049,
+        9096913
+      ]
+    },
+    "resources/app/out/cli.js": {
+      "sha256": "bd393ad6f0d28ba0aa7cd79cc685617f5187096f092009e315a4f098349f7976",
+      "bytes": 275169,
+      "identity": [
+        2049,
+        9099737
+      ]
+    },
+    "resources/app/product.json": {
+      "sha256": "a141a1de8ed44415c0c527b1882362e6abc25e674be052d67c09da71a27fbd7e",
+      "bytes": 68251,
+      "identity": [
+        2049,
+        9096932
+      ]
+    }
+  },
+  "helper": {
+    "version_probe": {
+      "probe": "go-version",
+      "argv": [
+        "/opt/hostedtoolcache/go/1.26.10/x64/bin/go",
+        "version"
+      ],
+      "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.006,
+      "stdout_file": "go-version.stdout.log",
+      "stderr_file": "go-version.stderr.log",
+      "stdout_bytes": 33,
+      "stderr_bytes": 0,
+      "stdout_sha256": "4e0b213cba780f63b02f3ab9001ee61e4101d254e0af1a8205574c19dad0f93b",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "build": {
+      "probe": "helper-build",
+      "argv": [
+        "/opt/hostedtoolcache/go/1.26.10/x64/bin/go",
+        "build",
+        "-trimpath",
+        "-p=1",
+        "-ldflags",
+        "-X main.buildCommit=f48d685133105e3ec7922acf811ee30a95830ef8",
+        "-o",
+        "/tmp/vscode-workspace-input-fytis4qj/controller",
+        "./install/integrationctl/research/vscodeworkspace"
+      ],
+      "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 12.521,
+      "stdout_file": "helper-build.stdout.log",
+      "stderr_file": "helper-build.stderr.log",
+      "stdout_bytes": 0,
+      "stderr_bytes": 41,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "b683257fca25cabaa9ba8f1ca2a8006ae11a5853fa2424b28a8f8f38d274d569"
+    },
+    "bytes": 4996105,
+    "sha256": "30b2cba5e6c2a533416d5f311581ad477b682b3c977b6f41db09084c42748ac8"
+  },
+  "controller": {
+    "argv": [
+      "/usr/bin/sudo",
+      "-n",
+      "--preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED,EXPECTED_COMMIT",
+      "/tmp/vscode-workspace-input-fytis4qj/controller",
+      "--input-root",
+      "/tmp/vscode-workspace-input-fytis4qj"
+    ],
+    "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+    "error": null,
+    "controller_reaped": true,
+    "exit": 0,
+    "stdout_file": "controller.stdout.log",
+    "stdout_bytes": 77,
+    "stdout_sha256": "9aaefc2134a5aaccd766fdbb75f8690691999e93460cad68a1bb20cf5011a9ad",
+    "stderr_file": "controller.stderr.log",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "frontend_cleanup": {
+    "complete": true,
+    "probe": {
+      "probe": "cleanup",
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-c",
+        "\nimport os,stat,sys\npath,device,inode,owner=sys.argv[1:]\ndevice,inode,owner=int(device),int(inode),int(owner)\nparent,name=os.path.split(path)\nif parent!=\"/tmp\" or not name.startswith(\"vscode-workspace-input-\") or not name or owner<=0 or os.getuid()!=owner or os.geteuid()!=owner:\n    raise SystemExit(\"frontend cleanup authority refused\")\ndef same(a,b):\n    return (a.st_dev,a.st_ino,a.st_uid,stat.S_IFMT(a.st_mode))==(b.st_dev,b.st_ino,b.st_uid,stat.S_IFMT(b.st_mode))\ndef owned_directory(info):\n    if not stat.S_ISDIR(info.st_mode) or info.st_uid!=owner or info.st_dev!=device:\n        raise RuntimeError(\"frontend cleanup directory authority differs\")\nparent_fd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)\nroot=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent_fd)\nidentity=os.fstat(root)\nif (identity.st_dev,identity.st_ino,identity.st_uid)!=(device,inode,owner) or not same(identity,os.stat(name,dir_fd=parent_fd,follow_symlinks=False)):\n    raise SystemExit(\"frontend cleanup root changed\")\ndef clear(fd,expected):\n    current=os.fstat(fd)\n    owned_directory(current)\n    if not same(current,expected):raise RuntimeError(\"frontend cleanup opened directory changed\")\n    os.fchmod(fd,(current.st_mode&0o777)|0o700)\n    for entry in os.listdir(fd):\n        item=os.stat(entry,dir_fd=fd,follow_symlinks=False)\n        if item.st_uid!=owner or item.st_dev!=device:raise RuntimeError(\"frontend cleanup leaf authority differs\")\n        if stat.S_ISDIR(item.st_mode):\n            child=os.open(entry,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)\n            try:\n                opened=os.fstat(child)\n                if not same(item,opened) or not same(opened,os.stat(entry,dir_fd=fd,follow_symlinks=False)):\n                    raise RuntimeError(\"frontend cleanup directory replaced\")\n                clear(child,opened)\n                if not same(opened,os.stat(entry,dir_fd=fd,follow_symlinks=False)):\n                    raise RuntimeError(\"frontend cleanup directory replaced before removal\")\n            finally:os.close(child)\n            os.rmdir(entry,dir_fd=fd)\n        else:\n            if not (stat.S_ISREG(item.st_mode) or stat.S_ISLNK(item.st_mode)):\n                raise RuntimeError(\"frontend cleanup unsupported leaf\")\n            if not same(item,os.stat(entry,dir_fd=fd,follow_symlinks=False)):\n                raise RuntimeError(\"frontend cleanup leaf replaced\")\n            os.unlink(entry,dir_fd=fd)\nclear(root,identity)\nif not same(identity,os.stat(name,dir_fd=parent_fd,follow_symlinks=False)):\n    raise SystemExit(\"frontend cleanup root replaced before removal\")\nos.close(root)\nos.rmdir(name,dir_fd=parent_fd)\nos.close(parent_fd)\n",
+        "/tmp/vscode-workspace-input-fytis4qj",
+        "2049",
+        "9096901",
+        "1001"
+      ],
+      "cwd": "/",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.718,
+      "stdout_file": "cleanup.stdout.log",
+      "stderr_file": "cleanup.stderr.log",
+      "stdout_bytes": 0,
+      "stderr_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "elapsed_seconds": 104.287642312
+}

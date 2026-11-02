@@ -41,13 +41,37 @@ type Diagnostic struct {
 	Message  string          `json:"message"`
 }
 
+// SkillSourceFacts records the exact raw source behind a normalized artifact.
+// It is provenance, not a mutable update selector or installation identity.
+type SkillSourceFacts struct {
+	Name          string `json:"name"`
+	RequestedPath string `json:"requested_path"`
+	ResolvedPath  string `json:"resolved_path"`
+	RawTreeDigest string `json:"raw_tree_digest"`
+	Normalizer    string `json:"normalizer"`
+}
+
+func CloneSkillSourceFacts(f *SkillSourceFacts) *SkillSourceFacts {
+	if f == nil {
+		return nil
+	}
+	cloned := *f
+	return &cloned
+}
+
 type SourceIdentity struct {
-	RequestedSource   string `json:"requested_source,omitempty"`
-	CanonicalSource   string `json:"canonical_source,omitempty"`
-	Repository        string `json:"repository,omitempty"`
-	PackageSubpath    string `json:"package_subpath,omitempty"`
-	ResolvedRevision  string `json:"resolved_revision,omitempty"`
-	SourceBindingHint string `json:"source_binding_hint,omitempty"`
+	SourceKind        string               `json:"source_kind,omitempty"`
+	SourceURL         string               `json:"source_url,omitempty"`
+	ArchiveSHA256     string               `json:"archive_sha256,omitempty"`
+	Skill             *SkillSourceFacts    `json:"skill,omitempty"`
+	WebSkill          *WebSkillSourceFacts `json:"web_skill,omitempty"`
+	StableSourceKey   string               `json:"stable_source_key,omitempty"`
+	RequestedSource   string               `json:"requested_source,omitempty"`
+	CanonicalSource   string               `json:"canonical_source,omitempty"`
+	Repository        string               `json:"repository,omitempty"`
+	PackageSubpath    string               `json:"package_subpath,omitempty"`
+	ResolvedRevision  string               `json:"resolved_revision,omitempty"`
+	SourceBindingHint string               `json:"source_binding_hint,omitempty"`
 }
 
 type Author struct {
@@ -186,6 +210,15 @@ type PackageEnvelope struct {
 	ManifestDigest  string             `json:"manifest_digest"`
 	ExecutableFiles []string           `json:"executable_files,omitempty"`
 	SnapshotRoot    string             `json:"-"`
+
+	// Commands are the valid authored commands; InvalidCommands names the
+	// rejected entries by file stem. Each rejection has a BoundaryCommand
+	// diagnostic.
+	Commands        map[string]Command `json:"commands,omitempty"`
+	InvalidCommands []string           `json:"invalid_commands,omitempty"`
+	// SkillsDirEntries are the physical names directly under skills/, valid or
+	// not, so a projected command skill can be checked against all of them.
+	SkillsDirEntries []string `json:"-"`
 }
 
 type LoadInput struct {

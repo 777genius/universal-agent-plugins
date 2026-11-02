@@ -10,6 +10,9 @@ translationRequired: true
 
 # Build a standalone Skill
 
+**Source-build authoring:** commands on this page require the
+[authoring-enabled source build](./#build-from-source). The current installer
+release does not include `agentplugins author`.
 
 Use this path when the agent needs a repeatable method, checklist, or writing
 instruction and does not need an MCP tool connection. The package contains one

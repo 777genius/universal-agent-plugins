@@ -9,6 +9,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 type repairSession struct {
@@ -82,6 +83,10 @@ func (session *repairSession) loadRepairTarget() error {
 	if err := session.bindRepairClient(physicalID); err != nil {
 		return err
 	}
+	if err := transaction.AuthorizeEnvironmentMutation(session.state, session.input.EnvironmentAuthority, "repair",
+		session.installation.InstallationID, session.clientKey, domain.ComputeSourceBindingID(session.input.Envelope.Source), false); err != nil {
+		return err
+	}
 	if err := session.service.checkMCPNamespace(session.ctx, session.input.Client, &session.plan, &session.client); err != nil {
 		return err
 	}
@@ -92,10 +97,10 @@ func (session *repairSession) loadRepairTarget() error {
 func (session *repairSession) bindRepairClient(physicalID string) error {
 	session.clientKey = domain.ComputeClientBindingID(session.installation.InstallationID, string(session.input.Client.ClientID), string(session.input.Scope), session.plan.ActivePath)
 	client, ok := session.installation.Clients[session.clientKey]
-	if !ok && sharesPhysicalBackend(session.input.Client.ClientID) {
+	if !ok && sharesPhysicalBackend(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
 		for key, binding := range session.installation.Clients {
 			if binding.Scope != string(session.input.Scope) || binding.Materialization == domain.MaterializationAbsent ||
-				binding.PhysicalArtifact != session.plan.PhysicalArtifactID || !sameNativeBackend(domain.ClientID(binding.ClientID), session.input.Client.ClientID) {
+				binding.PhysicalArtifact != session.plan.PhysicalArtifactID || !sameNativeBackend(domain.ClientID(binding.ClientID), session.input.Client.ClientID, session.input.Scope) {
 				continue
 			}
 			session.clientKey, client, ok = key, binding, true
@@ -108,11 +113,11 @@ func (session *repairSession) bindRepairClient(physicalID string) error {
 	if !ok || (client.Materialization != domain.MaterializationMaterialized && client.Materialization != domain.MaterializationDegraded) {
 		return fmt.Errorf("plugin is not materialized for %s", session.input.Client.ClientID)
 	}
-	if client.ClientBindingID != session.clientKey || !sameNativeBackend(domain.ClientID(client.ClientID), session.input.Client.ClientID) ||
+	if client.ClientBindingID != session.clientKey || !sameNativeBackend(domain.ClientID(client.ClientID), session.input.Client.ClientID, session.input.Scope) ||
 		client.Scope != string(session.input.Scope) || client.PhysicalArtifact != physicalID {
 		return fmt.Errorf("managed repair target identity does not match the selected binding")
 	}
-	if err := validateNativeBinding(client, session.input.Client); err != nil {
+	if err := session.service.validateNativeBinding(session.ctx, client, session.input.Client); err != nil {
 		return err
 	}
 	session.client = client
@@ -153,7 +158,7 @@ func (session *repairSession) verifyRepairPreconditions() error {
 		return fmt.Errorf("managed package digest is missing; refusing repair")
 	}
 	session.verifyErr = session.service.Stager.Verify(session.ctx, target.ActivePath, session.expectedDigest)
-	return nil
+	return session.verifyProjectRepairOwnership()
 }
 
 func (session *repairSession) persistRepair(client domain.ClientBinding) error {
@@ -161,7 +166,7 @@ func (session *repairSession) persistRepair(client domain.ClientBinding) error {
 	session.installation.Clients[session.clientKey] = client
 	session.installation.UpdatedAt = client.UpdatedAt
 	session.state.Installations[session.index] = session.installation
-	return session.service.StateStore.Save(session.state)
+	return session.service.persistLifecycleState(session.state)
 }
 
 func repairMismatchKind(err error) (*ports.VerificationError, bool) {

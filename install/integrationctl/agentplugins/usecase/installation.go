@@ -1,11 +1,14 @@
 package usecase
 
 import (
+	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 func upsertPreparedInstallation(
@@ -26,7 +29,8 @@ func upsertPreparedInstallation(
 		mapping := *input.Envelope.LocalChatGPTMapping
 		installation.LocalChatGPTMapping = &mapping
 	}
-	installation.Clients[clientBindingID] = stagedClientBinding(installation.Clients[clientBindingID], input, plan, clientBindingID, timestamp)
+	previous, bindingExists := installation.Clients[clientBindingID]
+	installation.Clients[clientBindingID] = stagedClientBinding(previous, bindingExists, input, plan, clientBindingID, timestamp)
 	if existing {
 		state.Installations[installationIndex] = installation
 		return state, installationIndex
@@ -39,15 +43,7 @@ func newPreparedInstallation(input AddInput, installationID, sourceBindingID, ti
 	return domain.Installation{
 		InstallationID: installationID,
 		DeclaredName:   input.Envelope.Manifest.Name,
-		Source: domain.SourceBinding{
-			SourceBindingID:  sourceBindingID,
-			RequestedSource:  input.Envelope.Source.RequestedSource,
-			CanonicalSource:  input.Envelope.Source.CanonicalSource,
-			Repository:       input.Envelope.Source.Repository,
-			PackageSubpath:   input.Envelope.Source.PackageSubpath,
-			ResolvedRevision: input.Envelope.Source.ResolvedRevision,
-			TreeDigest:       input.Envelope.TreeDigest,
-		},
+		Source:         sourceBindingFromEnvelope(input.Envelope, sourceBindingID),
 		Package: domain.PackageBinding{
 			LoaderKind: input.Envelope.LoaderKind, FormatID: input.Envelope.FormatID,
 			SchemaURI: input.Envelope.SchemaURI, DeclaredName: input.Envelope.Manifest.Name,
@@ -66,10 +62,9 @@ func overlayExistingInstallation(installation domain.Installation, input AddInpu
 	installation.DeclaredName = input.Envelope.Manifest.Name
 	installation.Source.ResolvedRevision = input.Envelope.Source.ResolvedRevision
 	installation.Source.TreeDigest = input.Envelope.TreeDigest
-	if installation.OriginMode == domain.OriginModeDirectory {
-		installation.Source = domain.SourceBinding{SourceBindingID: sourceBindingID, RequestedSource: input.Envelope.Source.RequestedSource,
-			CanonicalSource: input.Envelope.Source.CanonicalSource, Repository: input.Envelope.Source.Repository, PackageSubpath: input.Envelope.Source.PackageSubpath,
-			ResolvedRevision: input.Envelope.Source.ResolvedRevision, TreeDigest: input.Envelope.TreeDigest}
+	installation.Source.ArchiveSHA256 = input.Envelope.Source.ArchiveSHA256
+	if installation.OriginMode == domain.OriginModeDirectory || input.EnvironmentAuthority != nil {
+		installation.Source = sourceBindingFromEnvelope(input.Envelope, sourceBindingID)
 	}
 	installation.Package = domain.PackageBinding{
 		LoaderKind: input.Envelope.LoaderKind, FormatID: input.Envelope.FormatID,
@@ -87,18 +82,37 @@ func overlayExistingInstallation(installation domain.Installation, input AddInpu
 	return installation
 }
 
-func stagedClientBinding(previous domain.ClientBinding, input AddInput, plan domain.DeliveryPlan, clientBindingID, timestamp string) domain.ClientBinding {
+func stagedClientBinding(previous domain.ClientBinding, bindingExists bool, input AddInput, plan domain.DeliveryPlan, clientBindingID, timestamp string) domain.ClientBinding {
 	bindingClientID := string(input.Client.ClientID)
 	if previous.ClientID != "" {
 		bindingClientID = previous.ClientID
 	}
 	profileRoot := previous.NativeProfileRoot
-	if profileRoot == "" && domain.ClientTraitsFor(input.Client.ClientID).BindsNativeProfileRoot {
+	// Creation-only profile recording never adopts an existing or coalesced
+	// binding into a newly requested user profile.
+	traits := plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope)
+	if !bindingExists && input.Scope == domain.ScopeUser && traits.RecordsUserProfileOnCreate {
 		profileRoot = input.Client.ConfigRoot
 	}
+	if token := plan.ProfileAuthority(); token != nil {
+		profileRoot = token.Facts().CanonicalRoot
+	}
+	if profileRoot == "" && traits.BindsNativeProfileRoot {
+		profileRoot = input.Client.ConfigRoot
+		if input.Scope == domain.ScopeProject {
+			profileRoot = plan.NativeRegistryRoot
+		}
+		if facts, ok := plan.SelectedDelivery.LocalFacts(); ok {
+			profileRoot = facts.ProfileRoot
+		}
+	}
 	return domain.ClientBinding{
-		InstallIntent:   input.InstallIntent,
-		ClientBindingID: clientBindingID, ClientID: bindingClientID, Scope: string(input.Scope),
+		ProfileAuthority: plan.ProfileAuthority(), ProfileNamespace: plan.ProfileNamespace(),
+		SelectedDelivery:      plan.SelectedDelivery,
+		LocalEntryObservation: previous.LocalEntryObservation.Clone(),
+		PendingNativeIntent:   previous.PendingNativeIntent.Clone(),
+		InstallIntent:         input.InstallIntent,
+		ClientBindingID:       clientBindingID, ClientID: bindingClientID, Scope: string(input.Scope),
 		TargetLocator: plan.ActivePath, PhysicalArtifact: plan.PhysicalArtifactID,
 		Materialization: domain.MaterializationStaged, Activation: domain.ActivationPrepared,
 		Authentication: plan.Authentication, Policy: domain.PolicyAllowed,
@@ -108,18 +122,20 @@ func stagedClientBinding(previous domain.ClientBinding, input AddInput, plan dom
 		NativeObjects:           append([]domain.NativeObjectOwnership(nil), previous.NativeObjects...),
 		NativeProfileRoot:       profileRoot,
 		NativeActivationAttempt: previous.NativeActivationAttempt,
-		AffectedSurfaces:        preparedAffectedSurfaces(previous, input.Client.ClientID),
+		AffectedSurfaces:        preparedAffectedSurfaces(previous, input.Client.ClientID, plan.SelectedDelivery, input.Scope),
 	}
 }
 
-func preparedAffectedSurfaces(previous domain.ClientBinding, requested domain.ClientID) []string {
+func preparedAffectedSurfaces(previous domain.ClientBinding, requested domain.ClientID, selected domain.SelectedDelivery, scopes ...domain.InstallScope) []string {
 	values := append([]string(nil), previous.AffectedSurfaces...)
 	if previous.ClientID != "" {
 		values = append(values, previous.ClientID)
 	}
 	values = append(values, string(requested))
-	for _, sibling := range domain.BackendSiblings(requested) {
-		values = append(values, string(sibling))
+	if selected.SharesBackendForScope(requested, selectedScope(scopes)) {
+		for _, sibling := range domain.BackendSiblingsForScope(requested, selectedScope(scopes)) {
+			values = append(values, string(sibling))
+		}
 	}
 	return uniqueSortedSurfaces(values)
 }
@@ -174,14 +190,14 @@ func materializedClient(installation domain.Installation, clientBindingID string
 	return ok && client.Materialization != domain.MaterializationAbsent
 }
 
-func rejectNativeNameCollision(state domain.StateFileV2, installationID, declaredName string, clientID domain.ClientID) error {
+func rejectNativeNameCollision(state domain.StateFileV2, installationID, declaredName string, clientID domain.ClientID, scopes ...domain.InstallScope) error {
 	for _, installation := range state.Installations {
 		if installation.InstallationID == installationID || installation.DeclaredName != declaredName {
 			continue
 		}
 		for _, client := range installation.Clients {
 			boundClientID := domain.ClientID(client.ClientID)
-			if sameNativeBackend(boundClientID, clientID) && client.Materialization != domain.MaterializationAbsent {
+			if sameNativeBackend(boundClientID, clientID, selectedScope(scopes)) && client.Materialization != domain.MaterializationAbsent {
 				return fmt.Errorf("native client name collision for %q on %s; remove or rebind the existing source first", declaredName, clientID)
 			}
 		}
@@ -189,6 +205,201 @@ func rejectNativeNameCollision(state domain.StateFileV2, installationID, declare
 	return nil
 }
 
-func sameNativeBackend(first, second domain.ClientID) bool {
-	return domain.SameClientBackend(first, second)
+func sameNativeBackend(first, second domain.ClientID, scopes ...domain.InstallScope) bool {
+	return domain.SameClientBackendForScope(first, second, selectedScope(scopes))
+}
+
+func (service Service) authorityPort() ports.PhysicalProfileAuthority {
+	if service.PhysicalAuthority != nil {
+		return service.PhysicalAuthority
+	}
+	port, _ := service.Planner.(ports.PhysicalProfileAuthority)
+	return port
+}
+func (service Service) checkProfiles(ctx context.Context) error {
+	if service.CheckNamespace != nil {
+		if err := service.CheckNamespace(); err != nil {
+			return err
+		}
+	} else if service.ProjectRoot != "" {
+		return fmt.Errorf("project namespace guard is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if service.profileCheck != nil {
+		return service.profileCheck()
+	}
+	for _, c := range service.PhysicalProfiles {
+		if err := service.checkProfile(ctx, c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (service Service) checkProfile(ctx context.Context, c domain.DetectedClient) error {
+	token := domain.ProfileAuthority{}
+	if c.ProfileAuthority != nil {
+		token = *c.ProfileAuthority
+		if token.IsZero() {
+			return fmt.Errorf("opted profile token is missing")
+		}
+		if c.ProfileNamespace == "" || c.ProfileNamespace != service.Kernel.Namespace {
+			return fmt.Errorf("physical profile namespace differs")
+		}
+	}
+	port := service.authorityPort()
+	if port == nil {
+		if !token.IsZero() {
+			return fmt.Errorf("physical profile verifier is required")
+		}
+		return nil
+	}
+	return port.RevalidateProfileAuthority(ctx, c.ClientID, token)
+}
+func (service Service) freezeProfiles(ctx context.Context, installationID string, selected []domain.DetectedClient, capture bool) (Service, []domain.DetectedClient, error) {
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return service, nil, err
+	}
+	frozen := append([]domain.DetectedClient(nil), selected...)
+	opted := false
+	shared, err := service.sharedProfiles(ctx, state, installationID)
+	if err != nil {
+		return service, nil, err
+	}
+	for _, c := range shared {
+		opted = opted || c.ProfileAuthority != nil
+	}
+	for i, c := range frozen {
+		current, err := service.freezeProfile(ctx, state, installationID, c, capture)
+		if err != nil {
+			return service, nil, err
+		}
+		frozen[i] = current
+		opted = opted || current.ProfileAuthority != nil
+	}
+	if !opted {
+		return service, frozen, nil
+	}
+	return service.guardFrozenProfiles(ctx, frozen, shared), frozen, nil
+}
+
+func (service Service) dataProfileOwners(dataID string) []domain.PhysicalProfileOwner {
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return nil
+	}
+	var owners []domain.PhysicalProfileOwner
+	for _, i := range state.Installations {
+		for key, b := range i.Clients {
+			if b.DataReceiptID == dataID && b.ProfileAuthority != nil {
+				owners = append(owners, domain.PhysicalProfileOwner{Namespace: b.ProfileNamespace, InstallationID: i.InstallationID, ClientID: b.ClientID, ClientBindingID: key, Authority: domain.CloneProfileAuthority(b.ProfileAuthority)})
+			}
+		}
+	}
+	return owners
+}
+
+func (service Service) sharedProfiles(ctx context.Context, state domain.StateFileV2, installationID string) ([]domain.DetectedClient, error) {
+	var shared []domain.DetectedClient
+	for _, installation := range state.Installations {
+		if installation.InstallationID != installationID {
+			continue
+		}
+		for key, b := range installation.Clients {
+			if b.PhysicalArtifact != domain.ComputePhysicalArtifactID(installation.DeclaredName, installationID) {
+				continue
+			}
+			if key != b.ClientBindingID {
+				return nil, fmt.Errorf("shared data binding key differs")
+			}
+			c := domain.DetectedClient{ClientID: domain.ClientID(b.ClientID), ConfigRoot: b.NativeProfileRoot, ProfileAuthority: domain.CloneProfileAuthority(b.ProfileAuthority), ProfileNamespace: b.ProfileNamespace}
+			if service.ProjectRoot != "" {
+				c.ConfigRoot = service.Detected[c.ClientID].ConfigRoot
+			}
+			if err := service.checkProfile(ctx, c); err != nil {
+				return nil, err
+			}
+			shared = append(shared, c)
+		}
+	}
+	return shared, nil
+}
+func recordedProfile(state domain.StateFileV2, installationID string, c domain.DetectedClient, scopes ...domain.InstallScope) (*domain.ClientBinding, error) {
+	var recorded *domain.ClientBinding
+	for _, installation := range state.Installations {
+		if installation.InstallationID != installationID {
+			continue
+		}
+		for key, b := range installation.Clients {
+			if b.ClientID != string(c.ClientID) || b.Scope != string(selectedScope(scopes)) {
+				continue
+			}
+			if key != b.ClientBindingID || recorded != nil {
+				return nil, fmt.Errorf("physical owner binding is ambiguous or malformed")
+			}
+			bindingCopy := b
+			recorded = &bindingCopy
+		}
+	}
+	return recorded, nil
+}
+func (service Service) freezeProfile(ctx context.Context, state domain.StateFileV2, installationID string, c domain.DetectedClient, capture bool) (domain.DetectedClient, error) {
+	recorded, err := recordedProfile(state, installationID, c, service.scope())
+	if err != nil {
+		return c, err
+	}
+	if recorded != nil {
+		if c.ProfileAuthority != nil && !domain.SameProfileAuthority(c.ProfileAuthority, recorded.ProfileAuthority) {
+			return c, fmt.Errorf("caller profile differs from recorded owner")
+		}
+		c.ProfileAuthority = domain.CloneProfileAuthority(recorded.ProfileAuthority)
+		c.ProfileNamespace = recorded.ProfileNamespace
+	} else if c.ProfileAuthority == nil && capture && service.authorityPort() != nil {
+		token, err := service.authorityPort().CaptureProfileAuthority(ctx, c)
+		if err != nil {
+			return c, err
+		}
+		if !token.IsZero() {
+			c.ProfileAuthority = &token
+			c.ProfileNamespace = service.Kernel.Namespace
+		}
+	}
+	if c.ProfileAuthority != nil {
+		root := c.ProfileAuthority.Facts().CanonicalRoot
+		expected := c.ConfigRoot
+		if service.ProjectRoot != "" {
+			target, err := service.Targets.ResolveTarget(ctx, c, domain.ScopeProject, "project-context")
+			if err != nil {
+				return c, err
+			}
+			expected = target.NativeRegistryRoot
+		}
+		spelling, err := filepath.EvalSymlinks(expected)
+		if err != nil || spelling != root {
+			return c, fmt.Errorf("selected profile differs from recorded canonical root")
+		}
+		if service.ProjectRoot == "" {
+			c.ConfigRoot = root
+		}
+	}
+	if err := service.checkProfile(ctx, c); err != nil {
+		return c, err
+	}
+	c.ProfileAuthority = domain.CloneProfileAuthority(c.ProfileAuthority)
+	return c, nil
+}
+
+// A moved Skill retains the environment's explicit stable source authority;
+// ordinary direct packages keep their historical repository/path rule.
+func managedDirectSource(installation domain.Installation, input AddInput) bool {
+	if input.EnvironmentAuthority == nil || normalizedOriginMode(input.OriginMode) != domain.OriginModeDirect || installation.Source.Repository != input.Envelope.Source.Repository {
+		return false
+	}
+	if installation.Source.StableSourceKey != "" {
+		hint := input.Envelope.Source.SourceBindingHint
+		return (hint == "uap-dependency-skill" || hint == "uap-dependency-web-skill") && installation.Source.StableSourceKey == input.Envelope.Source.StableSourceKey && input.EnvironmentAuthority.SourceKey == installation.Source.StableSourceKey
+	}
+	return installation.Source.PackageSubpath == input.Envelope.Source.PackageSubpath
 }

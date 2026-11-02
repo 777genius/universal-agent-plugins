@@ -19,7 +19,7 @@ These committed root docs are guidance files with a managed block, not plain gen
 - `GEMINI.md`
 - `GENERATED.md`
 - `README.md`
-- `commands/deploy.toml`
+- `commands/release/deploy.toml`
 - `contexts/RELEASE.md`
 - `gemini-extension.json`
 - `hooks/hooks.json`

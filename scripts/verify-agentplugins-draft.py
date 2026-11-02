@@ -7,6 +7,7 @@ existing release-assets.js verifier. No release mutation or installer execution.
 import argparse
 import datetime
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -125,12 +126,23 @@ def verify(args):
                              "size": asset["size"], "sha256": digest})
         after = snapshot(args.repository, args.tag, args.commit, args.release_id)
         require(before == after, "release metadata changed during verification")
-    result = {"schema_version": 1, "release_state": "verified-draft",
+    npm_artifact = None
+    if getattr(args, "npm_tarball_file", None):
+        helper_path = Path(__file__).with_name("reuse-agentplugins-npm-artifact.py")
+        spec = importlib.util.spec_from_file_location("npm_artifact", helper_path)
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        npm_artifact = helper.capture_npm_artifact(
+            args.repository, args.tag, args.commit, args.run_id, args.run_attempt,
+            args.npm_tarball_file)
+    result = {"schema_version": 2 if npm_artifact else 1, "release_state": "verified-draft",
               "verified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "repository": args.repository, "release": after,
               "asset_set_digest": args.asset_set_digest, "subjects": subjects,
               "signer_workflow": signer, "producer_commit": args.commit,
               "producer_run_id": args.run_id, "producer_run_attempt": args.run_attempt}
+    if npm_artifact:
+        result["npm_artifact"] = npm_artifact
     # Exclusive creation: failure never leaves a success receipt from this invocation.
     with receipt.open("x", encoding="utf-8") as output:
         output.write(json.dumps(result, indent=2) + "\n")
@@ -143,6 +155,7 @@ def main():
         parser.add_argument(f"--{name}", required=True)
     for name in ("release-id", "run-id", "run-attempt"):
         parser.add_argument(f"--{name}", required=True, type=int)
+    parser.add_argument("--npm-tarball-file", help="Bind the exact six-platform tested npm artifact")
     parser.add_argument("--policy-source", help="trusted verifier checkout; source remains producer data")
     verify(parser.parse_args())
 

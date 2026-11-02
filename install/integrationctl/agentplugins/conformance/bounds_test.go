@@ -234,7 +234,7 @@ func TestTypedDecodeAndSecondRegistryFailureAreEngineFailures(t *testing.T) {
 func TestDuplicateFindingSpanIdentity(t *testing.T) {
 	d := decoder(t)
 	i := minimal()
-	i.Plugin = NewDocument("plugin.json", Present, []byte(`{"$schema":"`+domain.PluginSchemaV1+`","name":"good","opaque":{"a":1,"a":2,"b":1,"b":2}}`))
+	i.Plugin = NewDocument("plugin.json", Present, []byte(`{"$schema":"`+domain.PluginSchemaV1+`","name":"good","author":{"name":"first","name":"second","email":"x","email":"y"}}`))
 	f, e := d.Decode(context.Background(), i)
 	if e != nil {
 		t.Fatal(e)

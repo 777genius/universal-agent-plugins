@@ -1,3 +1,5 @@
+import { docsLocaleEntries, localePathField } from "../../tools/config/locales.mjs";
+import { searchLocales } from "./search";
 import { requirePublicationBoundary } from "../../tools/lib/journeys.mjs";
 import { isRetiredArchive } from "../../tools/lib/public-routes.mjs";
 
@@ -9,11 +11,7 @@ const websiteRoot = path.resolve(__dirname, "..", "..");
 const generatedRoot = path.join(websiteRoot, "generated", "registries");
 type RegistryEntity = {
   canonicalId?: string;
-  pathEn?: string;
-  pathRu?: string;
-  pathEs?: string;
-  pathFr?: string;
-  pathZh?: string;
+  [key: string]: unknown;
 };
 
 function readJson<T>(fileName: string, fallback: T): T {
@@ -35,13 +33,6 @@ const entityByCanonicalId = new Map(
     .filter((entity) => typeof entity.canonicalId === "string" && entity.canonicalId.length > 0)
     .map((entity) => [entity.canonicalId as string, entity])
 );
-const localeHrefLang = {
-  en: "en-US",
-  ru: "ru-RU",
-  es: "es-ES",
-  fr: "fr-FR",
-  zh: "zh-CN"
-} as const;
 
 function escapeForRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -53,7 +44,7 @@ function toDocsAbsoluteUrl(value: string): string {
 
 function toDocsPageUrl(relativePath: string): string {
   const normalized = relativePath.replace(/\\/g, "/");
-  if (normalized === "gateway/index.md") {
+  if (normalized === "index.md" || normalized === "gateway/index.md") {
     return docsBaseUrl;
   }
 
@@ -88,7 +79,7 @@ export const sharedConfig = defineConfig({
   },
   transformHead({ pageData, title, description }) {
     const relativePath = pageData.relativePath.replace(/\\/g, "/");
-    const isGateway = relativePath.startsWith("gateway/");
+    const isGateway = relativePath === "index.md" || relativePath.startsWith("gateway/");
     const isNotFound = pageData.isNotFound || relativePath === "gateway/404.md";
     const pageTitle = title || pageData.title || "Agent Plugins Docs";
     const pageDescription =
@@ -125,15 +116,9 @@ export const sharedConfig = defineConfig({
     const entity = canonicalId ? entityByCanonicalId.get(canonicalId) : null;
 
     if (!isGateway && !isNotFound && entity) {
-      const localePaths = [
-        ["en", entity.pathEn],
-        ["ru", entity.pathRu],
-        ["es", entity.pathEs],
-        ["fr", entity.pathFr],
-        ["zh", entity.pathZh]
-      ] as const;
 
-      for (const [code, localePath] of localePaths) {
+      for (const { code, lang } of docsLocaleEntries) {
+        const localePath = entity[localePathField(code)];
         if (typeof localePath !== "string" || !localePath) {
           continue;
         }
@@ -142,14 +127,14 @@ export const sharedConfig = defineConfig({
           "link",
           {
             rel: "alternate",
-            hreflang: localeHrefLang[code],
+            hreflang: lang,
             href: toDocsAbsoluteUrl(localePath)
           }
         ]);
       }
 
       const defaultPath =
-        entity.pathEn || entity.pathRu || entity.pathEs || entity.pathFr || entity.pathZh;
+        entity.pathEn || docsLocaleEntries.map(({ code }) => entity[localePathField(code)]).find(Boolean);
       if (typeof defaultPath === "string" && defaultPath) {
         head.push([
           "link",
@@ -208,19 +193,16 @@ export const sharedConfig = defineConfig({
   },
   locales: {
     root: { label: "Language Gateway", lang: "en-US", link: "/" },
-    en: { label: "English", lang: "en-US" },
-    ru: { label: "Русский", lang: "ru-RU" },
-    es: { label: "Español", lang: "es-ES" },
-    fr: { label: "Français", lang: "fr-FR" },
-    zh: { label: "简体中文", lang: "zh-CN" }
+    ...Object.fromEntries(docsLocaleEntries.map(({ code, label, lang, dir }) => [code, { label, lang, dir, link: `/${code}/` }]))
   },
   // Static aliases are emitted by postbuild; VitePress rewrites move pages.
   rewrites: {},
   themeConfig: {
     logo: "/icon.svg",
-    siteTitle: "Agent Plugins Docs",
+    siteTitle: "Agent Plugins",
     search: {
-      provider: "local"
+      provider: "local",
+      options: { locales: searchLocales }
     },
     socialLinks: [{ icon: "github", link: "https://github.com/777genius/universal-agent-plugins" }]
   }

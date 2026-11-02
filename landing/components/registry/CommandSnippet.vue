@@ -26,7 +26,7 @@ const visibleCommand = computed(() => {
   if (!props.compact) return props.command;
   if (props.command.includes(' --target '))
     return props.command.replace(' --target ', '\n--target ');
-  return props.command.replace(/^(npx universal-agent-plugins\s+\S+)\s+/, '$1\n');
+  return props.command.replace(/^(npx -y universal-agent-plugins\s+\S+)\s+/, '$1\n');
 });
 let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -35,20 +35,29 @@ onBeforeUnmount(() => {
 });
 
 async function copyCommand() {
+  copied.value = false;
+  if (timer) clearTimeout(timer);
+  let success = false;
   try {
     await navigator.clipboard.writeText(props.command);
+    success = true;
   } catch {
     const field = document.createElement('textarea');
     field.value = props.command;
     field.style.position = 'fixed';
     field.style.opacity = '0';
-    document.body.appendChild(field);
-    field.select();
-    document.execCommand('copy');
-    field.remove();
+    try {
+      document.body.appendChild(field);
+      field.select();
+      success = document.execCommand('copy');
+    } catch {
+      return;
+    } finally {
+      field.remove();
+    }
   }
+  if (!success) return;
   copied.value = true;
-  if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
     copied.value = false;
   }, 1600);
@@ -98,7 +107,7 @@ async function copyCommand() {
         {{ copied ? t('registryUi.command.copied') : t('registryUi.command.copy') }}
       </button>
     </div>
-    <pre><code>{{ visibleCommand }}</code></pre>
+    <pre><code><slot>{{ visibleCommand }}</slot></code></pre>
     <span class="sr-only" role="status" aria-live="polite">{{
       copied ? t('registryUi.command.announcement') : ''
     }}</span>

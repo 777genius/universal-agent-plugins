@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
@@ -39,30 +40,44 @@ type SourceAcquirer interface {
 }
 
 type App struct {
+	ManagementFactory func(management.Startup) (App, error)
+	// ForScope composes an isolated runtime after command flags select its context.
+	ForScope           func(domain.InstallScope, string) (App, error) `json:"-"`
+	Scope              domain.InstallScope                            `json:"-"`
+	ProjectRoot        string                                         `json:"-"`
 	chatGPTPreparation bool
 	chatGPTAppID       string
 	Prompter           prompt.Prompter
 	PromptFactory      func(io.Reader, io.Writer, io.Writer, bool, bool) (prompt.Prompter, io.Writer, error)
 	reviewOutput       io.Writer
 
-	Version     string
-	UserHome    string
-	ManagedRoot string
-	StateStore  transaction.StateStore
-	Detector    ports.ClientDetector
+	dependencySnapshots *dependencySnapshotCache
+
+	Version              string
+	UserHome             string
+	ManagedRoot          string
+	DependenciesRoot     string
+	EnvironmentStoreRoot string
+	EnvironmentLockPath  string
+	StateStore           transaction.StateStore
+	Detector             ports.ClientDetector
 	// ClientRegistry is the set of client adapters this binary knows about. The
 	// composition root decides it; CLI commands receive the already-built planner
 	// and never reconstruct one.
-	ClientRegistry      *clients.Registry
-	Planner             ports.DeliveryPlanner
-	Targets             ports.DeliveryTargetResolver
-	DirectoryClient     DirectoryClient
-	DiscoveryClient     DiscoveryClient
-	SourceAcquirer      SourceAcquirer
-	PackageLoader       ports.PackageLoader
-	NativePackageLoader ports.PackageLoader
-	SecurityIndex       SecurityIndex
-	SecurityEvaluator   ports.PackageSecurityEvaluator
+	ClientRegistry             *clients.Registry
+	Planner                    ports.DeliveryPlanner
+	Targets                    ports.DeliveryTargetResolver
+	DirectoryClient            DirectoryClient
+	DirectoryClientForDryRun   func(string) (DirectoryClient, error)
+	CommitDirectoryPreview     func(DirectoryClient) error
+	DiscoveryClient            DiscoveryClient
+	SourceAcquirer             SourceAcquirer
+	PackageLoader              ports.PackageLoader
+	NativePackageLoader        ports.PackageLoader
+	SecurityIndex              SecurityIndex
+	SecurityEvaluator          ports.PackageSecurityEvaluator
+	SecurityEvaluatorForDryRun func(string) ports.PackageSecurityEvaluator
+	SourceAcquirerForDryRun    func(string) SourceAcquirer
 	// Installer is the public facade used by the qualified explicit local
 	// package path. Other CLI acquisition and lifecycle paths remain on the
 	// existing service until their contracts are qualified separately.
@@ -78,18 +93,25 @@ type App struct {
 }
 
 type options struct {
-	chatGPTAppID        string
-	installIntents      map[domain.ClientID]domain.InstallIntent
-	color               terminaltheme.Policy
-	target              string
-	scope               string
-	dryRun              bool
-	format              string
-	plain               bool
-	externalUninstalled bool
-	purgeData           bool
-	acceptSecurityRisk  bool
-	securityDetails     bool
+	installSelection     *installSelection
+	dependencyComponents map[string][]domain.ComponentDecision
+	environmentOutput    map[string]any
+	noSave               bool
+	alias                string
+	environmentReason    string
+	chatGPTAppID         string
+	installIntents       map[domain.ClientID]domain.InstallIntent
+	color                terminaltheme.Policy
+	target               string
+	projectRoot          string
+	scope                string
+	dryRun               bool
+	format               string
+	plain                bool
+	externalUninstalled  bool
+	purgeData            bool
+	acceptSecurityRisk   bool
+	securityDetails      bool
 }
 
 func (app App) input() io.Reader {

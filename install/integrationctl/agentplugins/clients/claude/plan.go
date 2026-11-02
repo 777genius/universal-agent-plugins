@@ -32,6 +32,11 @@ func (*Adapter) TargetRoot(client domain.DetectedClient, mode domain.PackageMode
 // CheckPlanPrecondition refuses to plan without the CLI: the exact @skills-dir
 // identity of a delivered package can only be confirmed through it.
 func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if in.TargetContext.Scope == domain.ScopeProject {
+		if _, err := claudeProjectRoot(in.Client, in.TargetContext, plan.NativeRegistryRoot); err != nil {
+			return err
+		}
+	}
 	if strings.TrimSpace(in.Client.ExecutablePath) != "" {
 		return nil
 	}
@@ -42,7 +47,12 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
 	return nil
 }
 
-func (*Adapter) RefinePlan(_ context.Context, _ clients.PlanInput, plan *domain.DeliveryPlan) error {
+func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if in.TargetContext.Scope == domain.ScopeProject {
+		if _, err := claudePlanProjectRoot(in.Client, *plan); err != nil {
+			return err
+		}
+	}
 	plan.UserActions = shared.AppendUnique(plan.UserActions, "start a new Claude Code session or run /reload-plugins")
 	return nil
 }

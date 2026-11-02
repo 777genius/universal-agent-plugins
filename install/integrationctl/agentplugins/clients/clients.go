@@ -35,11 +35,12 @@ type Adapter interface {
 // by the dispatcher rather than owned by the adapter, so a client package never
 // reaches for a process, a clock or the filesystem policy on its own.
 type Env struct {
-	Runner       ports.CommandRunner
-	NativeConfig nativeconfig.Kernel
-	Paths        ports.PathPolicy
-	Launcher     StdioLauncherDeliverer
-	Now          func() time.Time
+	OpenCodeTransitions ports.OpenCodeTransitionRecorder
+	Runner              ports.CommandRunner
+	NativeConfig        nativeconfig.Kernel
+	Paths               ports.PathPolicy
+	Launcher            StdioLauncherDeliverer
+	Now                 func() time.Time
 }
 
 // StdioLauncherDeliverer copies the managed stdio launcher into a staged tree.

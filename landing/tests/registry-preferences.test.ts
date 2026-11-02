@@ -1,3 +1,4 @@
+import { authenticationIndicator } from '../utils/authentication.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -9,30 +10,45 @@ import { computed, effectScope, nextTick, reactive, ref, watch } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
+import { usePluginInstallSelection } from '../composables/usePluginInstallSelection.ts';
 import { useCatalogUiStore } from '../stores/catalogUi.ts';
 import { clients } from '../data/clients.ts';
 import * as registryDomain from '../utils/registry.ts';
 import * as filters from '../utils/filter.ts';
 import { pluginCommands } from '../utils/commands.ts';
+import { projectCatalogCommands } from '../utils/projectCatalogSource.ts';
+import { discoveryPlugin } from '../utils/discovery.ts';
+import { signedDiscoveryFixture } from './fixtures/signed-discovery.ts';
+import { createMemoryHistory, createRouter, type RouteLocationRaw } from 'vue-router';
 
 const fixture = JSON.parse(
   readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
 ).plugins[0];
 const messages = JSON.parse(
-  readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('../i18n/locales/en.json', import.meta.url), 'utf8'),
 );
 const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], string, false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
+const discoveryStatus = ref({ state: 'current', count: 0 });
+const discoveryHelpers = runInNewContext(
+  stripTypeScriptTypes(readFileSync(new URL('../composables/useDiscoveryStatus.ts', import.meta.url), 'utf8')).replace(/^export /gm, '') + '\n({ useDiscoveryIsStale });',
+  { computed, useState: () => discoveryStatus },
+);
 const common = {
   computed,
   ref,
   watch,
   clients,
   ...registryDomain,
+  authenticationIndicator,
   ...filters,
   pluginCommands,
+  projectCatalogCommands,
+  onScopeDispose: Vue.onScopeDispose,
+  ...discoveryHelpers,
   useI18n: () => i18n,
   useLocalePath: () => (path: string) => path,
   useInstallPreferencesStore,
+  usePluginInstallSelection,
   useCatalogUiStore,
   useSite: () => ({
     asset: (path: string) => path,
@@ -64,9 +80,58 @@ function card(props = packageProps()) {
   return setup(
     'RegistryPluginCard',
     { defineProps: () => props, withDefaults: (value: unknown) => value },
-    'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authLabel, toggleInstall',
+    'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall, deliverySummary, updateScope',
   );
 }
+
+test('explicit card delivery summary follows the winning scoped release rather than default aggregate', () => {
+  setActivePinia(createPinia());
+  const plugin = structuredClone(fixture);
+  const fallback = structuredClone(plugin.distributions[0]);
+  fallback.id = 'project-fallback';
+  fallback.kind = 'community';
+  fallback.releases[0].targets = [{ client: 'codex', scopes: ['project'], delivery: 'prepared', authentication: 'required' }];
+  fallback.releases[0].blocking_clients = [];
+  fallback.releases[0].meets_minimum_capabilities = true;
+  fallback.releases = [fallback.releases[0]];
+  plugin.distributions.push(fallback);
+  const instance = card(packageProps(plugin));
+  assert.equal(instance.state.deliverySummary.value, '', 'terminal detection cannot claim agent status');
+  instance.state.updateTargets(['codex']);
+  instance.state.updateAutoDetect(false);
+  instance.state.updateScope('project');
+  assert.equal(instance.state.deliverySummary.value, 'Agents: 0 automatic setup · 1 need follow-up');
+  assert.match(instance.state.command.value, /--target codex --scope project$/);
+  instance.state.updateScope('user');
+  instance.state.updateAutoDetect(true);
+  assert.equal(instance.state.deliverySummary.value, '', 'switching back to terminal hides agent status');
+  instance.stop();
+});
+
+test('expired community card and detail produce pinned commands with compatible targets while unavailable packages stay blocked', () => {
+  setActivePinia(createPinia());
+  const data = signedDiscoveryFixture({ generated: '2000-01-01T00:00:00Z', expires: '2000-01-02T00:00:00Z' });
+  const plugin = discoveryPlugin(data.snapshot.records[0]!, data.snapshot);
+  const expected = `npx -y universal-agent-plugins add github:test/plugin-00000@${'a'.repeat(40)}`;
+  const instance = card(packageProps(plugin));
+  assert.equal(instance.state.command.value, expected);
+  instance.state.updateTargets(['codex']);
+  instance.state.updateAutoDetect(false);
+  assert.equal(instance.state.command.value, `${expected} --target codex`);
+  instance.stop();
+  const panel = setup('InstallPanel', {
+    defineProps: () => ({ plugin }),
+    defineModel: (name: string) => name === 'targets' ? ref(['codex']) : ref(false),
+    useDirectoryStatus: () => ({ current: ref(false), published: ref(false), expired: ref(true) }),
+  }, 'commands, unavailableDiscoveryReason');
+  assert.equal(panel.state.commands.value.add, `${expected} --target codex`);
+  assert.equal(panel.state.unavailableDiscoveryReason.value, '');
+  panel.stop();
+  const unavailable = discoveryPlugin({ ...data.snapshot.records[0]!, availability: 'unavailable' }, data.snapshot);
+  const blocked = card(packageProps(unavailable));
+  assert.equal(blocked.state.command.value, '');
+  blocked.stop();
+});
 
 test('catalog SSR defaults do not populate install preferences; valid manual selection survives locale remount', async () => {
   setActivePinia(createPinia());
@@ -103,6 +168,12 @@ test('invalid target preferences are discarded and a new package does not inheri
     packageProps({
       ...fixture,
       client_support: { ...fixture.client_support, clients: ['cursor'] },
+      distributions: fixture.distributions.map((distribution: any) => ({
+        ...distribution,
+        releases: distribution.releases.map((release: any) => ({
+          ...release, targets: release.targets.filter((target: any) => target.client === 'cursor'),
+        })),
+      })),
     }),
   );
   assert.deepEqual(Array.from(changed.state.targets.value), ['cursor']);
@@ -182,8 +253,8 @@ test('catalog Show more survives language remount and filter changes replace its
   const store = useCatalogUiStore();
   const route = reactive({
     path: '/plugins/',
-    query: {} as Record<string, string>,
-    hash: '#plugins',
+    query: { ref: 'launch' } as Record<string, string>,
+    hash: '#plugin-dependencies',
   });
   const navigations: any[] = [];
   const mount = () =>
@@ -197,6 +268,7 @@ test('catalog Show more survives language remount and filter changes replace its
           replace: (target: any) => {
             navigations.push(target);
             route.query = target.query;
+            route.hash = target.hash;
           },
         }),
         useDiscoveryStatus: () => ref({ state: 'idle' }),
@@ -217,20 +289,95 @@ test('catalog Show more survives language remount and filter changes replace its
   await nextTick();
   assert.equal(remount.state.displayLimit.value, 48);
   assert.equal(route.query.q, 'gitlab');
-  assert.equal(navigations[0].hash, '#plugins');
+  assert.equal(route.query.ref, 'launch');
+  assert.equal(navigations.length, 1);
+  assert.equal(navigations[0].path, '/uk/plugins/');
+  assert.equal(navigations[0].hash, '');
+  assert.equal(route.hash, '');
   remount.stop();
   const again = mount();
   assert.equal(again.state.query.value, 'gitlab');
   assert.equal(again.state.displayLimit.value, 48);
   again.state.showMore();
   again.stop();
-  route.query = { q: 'different' };
+  route.query = { q: 'different', ref: 'launch' };
+  route.hash = '#plugins';
   const changedInitial = mount();
   assert.equal(changedInitial.state.displayLimit.value, 48);
   changedInitial.state.query.value = 'gitlab';
   await nextTick();
   assert.equal(changedInitial.state.displayLimit.value, 48);
+  assert.equal(navigations.length, 2);
+  assert.equal(navigations[1].hash, '');
+  assert.equal(route.hash, '');
+  assert.equal(route.query.q, 'gitlab');
+  assert.equal(route.query.ref, 'launch');
   changedInitial.stop();
+});
+
+test('clearing search during URL navigation persists the latest input and external navigation still restores filters', async () => {
+  setActivePinia(createPinia());
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: {} }] });
+  await router.push('/');
+  const route = reactive({
+    get path() { return router.currentRoute.value.path; },
+    get query() { return router.currentRoute.value.query; },
+    get hash() { return router.currentRoute.value.hash; },
+  });
+  function barrier() {
+    let release!: () => void;
+    let enter!: () => void;
+    const wait = new Promise<void>(resolve => { release = resolve; });
+    const entered = new Promise<void>(resolve => { enter = resolve; });
+    return { release, enter, wait, entered };
+  }
+  let gate = barrier();
+  router.beforeEach(async to => {
+    if (to.query.q !== 'gitlab') return;
+    const blocked = gate;
+    blocked.enter();
+    await blocked.wait;
+  });
+  const writes: Promise<unknown>[] = [];
+  const instance = setup('PluginCatalog', {
+    defineProps: () => ({ plugins: [fixture] }),
+    withDefaults: (value: unknown) => value,
+    useRoute: () => route,
+    useRouter: () => ({ replace: (target: RouteLocationRaw) => {
+      const write = router.replace(target);
+      writes.push(write);
+      return write;
+    } }),
+    useDiscoveryStatus: () => ref({ state: 'idle' }),
+    canonicalPath: (path: string) => path,
+  }, 'query, client');
+  try {
+    instance.state.query.value = 'gitlab';
+    await gate.entered;
+    instance.state.query.value = '';
+    await nextTick();
+    gate.release();
+    await writes[0];
+    await nextTick();
+    await writes.at(-1);
+    await nextTick();
+    assert.equal(instance.state.query.value, '');
+    assert.equal(router.currentRoute.value.query.q, undefined);
+
+    gate = barrier();
+    instance.state.query.value = 'gitlab';
+    await gate.entered;
+    await router.replace({ query: { q: 'external', client: 'cursor' } });
+    gate.release();
+    await writes.at(-1);
+    await nextTick();
+    assert.equal(instance.state.query.value, 'external');
+    assert.equal(instance.state.client.value, 'cursor');
+    assert.equal(router.currentRoute.value.query.q, 'external');
+  } finally {
+    gate.release();
+    instance.stop();
+  }
 });
 
 
@@ -251,10 +398,15 @@ test('distribution captions use stable kind and authentication visibility ignore
   instance.state.updateTargets(['codex']);
   instance.state.updateAutoDetect(false);
   const visible = instance.state.showAuthentication.value;
-  i18n.mergeLocaleMessage('en', { registryUi: { authentication: Object.fromEntries(
+  i18n.mergeLocaleMessage('en', { registryUi: { authenticationIndicator: Object.fromEntries(
     ['not_required', 'required', 'unknown', 'varies', 'oauth', 'client_managed'].map(key => [key, 'SYNTHETIC CAPTION']),
   ) } });
-  assert.equal(instance.state.authLabel.value, 'SYNTHETIC CAPTION');
+  // Node's vue-i18n composer does not invalidate computed consumers on a
+  // message merge. A normal target change refreshes this same card instance.
+  instance.state.updateTargets(['cursor']);
+  assert.equal(instance.state.authentication.value.label, 'SYNTHETIC CAPTION');
+  instance.state.updateTargets(['codex']);
+  assert.equal(instance.state.authentication.value.label, 'SYNTHETIC CAPTION');
   assert.equal(instance.state.showAuthentication.value, visible);
   i18n.setLocaleMessage('en', messages);
   instance.stop();

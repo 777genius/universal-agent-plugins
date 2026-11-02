@@ -13,13 +13,20 @@ for (const locale of ['ru', 'uk'] as const) {
     await projections(page, registryFixture());
     await navigate(page, '/plugins/i18n-state-00/');
     const panel = page.locator('.install-panel');
-    await targets(page, panel, ['Codex', 'Cursor']);
-    await exactCommands(page, panel, 'i18n-state-00', 'codex,cursor');
+    const selectedNames = ['Codex', 'Cursor', 'Claude', 'Gemini', 'OpenCode'];
+    await targets(page, panel, selectedNames);
+    await exactCommands(page, panel, 'i18n-state-00', 'codex,cursor,claude,gemini,opencode');
+    await expect(panel.locator('.install-panel__notice').filter({ hasText: 'uap.toml' })).toHaveText(
+      wording('en')('registryUi.install.dependencySaving.saved'),
+    );
     await navigate(page, '/plugins/i18n-state-00/', locale);
     await expect(panel.getByRole('heading', { name: wording(locale)('registryUi.install.useWithYourAgent'), exact: true })).toBeVisible();
-    await exactCommands(page, panel, 'i18n-state-00', 'codex,cursor');
+    await exactCommands(page, panel, 'i18n-state-00', 'codex,cursor,claude,gemini,opencode');
+    await expect(panel.locator('.install-panel__notice').filter({ hasText: 'uap.toml' })).toHaveText(
+      wording(locale)('registryUi.install.dependencySaving.saved'),
+    );
     await panel.locator('.app-multiselect__trigger').click();
-    for (const name of ['Codex', 'Cursor']) await expect(page.getByRole('checkbox', { name: new RegExp(`^${name}\\s`) })).toBeChecked();
+    for (const name of selectedNames) await expect(page.getByRole('checkbox', { name: new RegExp(`^${name}\\s`) })).toBeChecked();
     await page.keyboard.press('Escape');
     await automatic(page, panel, locale);
     await exactCommands(page, panel, 'i18n-state-00');
@@ -74,9 +81,9 @@ for (const locale of locales) {
     await expect(card.locator('.command-snippet code')).toContainText('--target codex');
     await expect(card.locator('.plugin-card__auth')).toHaveCount(0);
     await targets(page, card, ['Cursor']);
-    await expect(card.locator('.plugin-card__auth')).toHaveText(t('registryUi.authentication.varies'));
+    await expect(card.locator('.plugin-card__auth')).toHaveText(t('registryUi.authenticationIndicator.varies'));
     await targets(page, card, ['Codex']);
-    await expect(card.locator('.plugin-card__auth')).toHaveText(t('registryUi.authentication.required'));
+    await expect(card.locator('.plugin-card__auth')).toHaveText(t('registryUi.authenticationIndicator.required'));
     await expect(card.locator('.command-snippet code')).toContainText('--target cursor');
     await card.locator('.app-multiselect__trigger').click();
     const auto = page.locator('.app-multiselect__auto');
@@ -85,7 +92,7 @@ for (const locale of locales) {
     await page.keyboard.press('Escape');
     await expect(card.locator('.plugin-card__auth')).toHaveCount(0);
     await card.locator('.command-snippet').getByRole('button').click();
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('npx universal-agent-plugins add i18n-state-00');
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('npx -y universal-agent-plugins add i18n-state-00');
     expect(errors).toEqual([]);
   });
 }
@@ -147,7 +154,7 @@ test('manual download channel beats delayed detection and locale remount', async
     await expect(npm).toHaveAttribute('aria-pressed', 'true');
     const commands = await page.locator('.download-section__steps code').allTextContents();
     expect(commands.length).toBeGreaterThan(0);
-    expect(commands.join('\n')).toContain('npx universal-agent-plugins add');
+    expect(commands.join('\n')).toContain('npx -y universal-agent-plugins add');
     gate.release();
     await expect(page.locator('.download-section__platform-note')).toContainText(wording('en')('download.platforms.linux'));
     await expect(npm).toHaveAttribute('aria-pressed', 'true');
@@ -214,7 +221,8 @@ for (const outcome of ['success', 'error', 'security'] as const) {
           await expect(page.locator('.download-section__install-tab[aria-pressed="true"]')).toContainText('npx');
           await navigate(page, '/plugins/', 'en', '?q=gitlab&client=cursor');
         }
-        await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', outcome === 'error' ? 'unavailable' : 'current', { timeout: 15_000 });
+        // Remounts may reuse the reverified fresh snapshot at the same sequence.
+        await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', outcome === 'error' ? 'unavailable' : /^(current|cached)$/, { timeout: 15_000 });
         await expect(page.getByRole('searchbox', { name: t('registryUi.catalog.searchPlugins') })).toHaveValue('gitlab');
         await expect(page.locator('.catalog-active-filters')).toContainText(`${t('registryUi.catalog.agent')}: Cursor`);
         await expect(page.locator('.plugin-card[data-install-source="gitlab"]').getByRole('heading', { name: 'GitLab', exact: true })).toBeVisible();

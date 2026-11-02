@@ -150,6 +150,18 @@ they use a disposable committed source-contract fixture. Mutation tests always
 use private fixture Git metadata and never mutate the source checkout. Existing Windows/macOS holds remain unchanged; no
 restricted Windows reproduction was attempted or rerouted.
 
+The project-installation source introduces two inherited installer help facts:
+`--project-root` and the project-aware `--scope` wording. The production exporter
+continues to reject this current construction against the historical input pins
+and unchanged projection golden before creating output. Historical success tests
+use a clearly named test-only audited-ancestor fixture loader. It admits exactly
+those two known live ancestor differences, models the audited ancestor facts,
+and requires the entire resulting projection to match the unchanged golden;
+additional visible drift still fails. This models historical facts for formatter,
+source-integrity and filesystem tests. It is not proof of a rebuilt historical
+binary and is never used by production `trees` or `export`. Current-source export
+qualification still requires a separate review of its actual construction inputs.
+
 ROOT mechanical integration and independent medium review remain downstream.
 D2b must preserve v1 source and routes, use a separately accepted integrated
 source identity, and consume these prepared records only after D1 integration.

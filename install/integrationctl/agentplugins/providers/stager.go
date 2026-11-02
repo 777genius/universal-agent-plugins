@@ -8,14 +8,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/commandext"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
+	icdomain "github.com/777genius/plugin-kit-ai/install/integrationctl/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 )
 
@@ -88,17 +91,15 @@ func (stager Stager) Verify(ctx context.Context, root, expectedDigest string) er
 		}
 		return &ports.VerificationError{Kind: kind, Err: err}
 	}
-	artifact, err := stager.SnapshotBuilder.Build(ctx, root)
+	// Installed verification reads fresh bytes and does not depend on temporary
+	// snapshot creation, sealing, or cleanup.
+	digest, err := stager.SnapshotBuilder.Digest(ctx, root)
 	if err != nil {
 		kind := ports.VerificationIndeterminate
 		if errors.Is(err, os.ErrNotExist) {
 			kind = ports.VerificationAbsent
 		}
 		return &ports.VerificationError{Kind: kind, Err: err}
-	}
-	digest := artifact.Digest
-	if closeErr := artifact.Close(); closeErr != nil {
-		return &ports.VerificationError{Kind: ports.VerificationIndeterminate, Err: closeErr}
 	}
 	if digest != expectedDigest {
 		return &ports.VerificationError{Kind: ports.VerificationDigestMismatch, ActualDigest: digest, Err: fmt.Errorf("artifact digest mismatch")}
@@ -120,7 +121,7 @@ func rejectExcludedOwnershipMarkers(root string) error {
 		if filepath.Clean(path) == filepath.Clean(root) {
 			return nil
 		}
-		if entry.Name() == ".git" || entry.Name() == ".plugin-kit-ai.lock" {
+		if entry.Name() == ".git" || icdomain.IsWorkspaceLockFile(entry.Name()) {
 			return &excludedOwnershipMarkerError{name: entry.Name()}
 		}
 		return nil
@@ -162,6 +163,10 @@ func (stager Stager) stage(
 	hints domain.CompatibilityHints,
 	pluginDataPath string,
 ) (delivery domain.StagedDelivery, err error) {
+	commands, err := stager.renderCommandSkills(ctx, envelope, plan)
+	if err != nil {
+		return domain.StagedDelivery{}, err
+	}
 	layout, err := stager.preflightStage(ctx, envelope, plan, operationID)
 	if err != nil {
 		return domain.StagedDelivery{}, err
@@ -176,6 +181,14 @@ func (stager Stager) stage(
 		}
 	}()
 	if err = stager.materializeStaging(stagingPath, envelope, plan); err != nil {
+		return domain.StagedDelivery{}, err
+	}
+	// Command skills join the tree after sanitize and before the projector,
+	// which then treats them like the package's own skills.
+	if err = writeCommandSkills(stager.Paths, stagingPath, commands); err != nil {
+		return domain.StagedDelivery{}, err
+	}
+	if envelope, err = commandext.WithCommandSkills(envelope, plan); err != nil {
 		return domain.StagedDelivery{}, err
 	}
 	projected, err := stager.project(ctx, stagingPath, envelope, plan, hints, pluginDataPath)
@@ -287,7 +300,7 @@ func (stager Stager) project(
 ) ([]domain.NativeObjectOwnership, error) {
 	projector, ok := clients.As[clients.Projector](stager.Registry, plan.ClientID)
 	if !ok {
-		if domain.RequiresNativeProjector(plan.ClientID) {
+		if domain.RequiresNativeProjectorForScope(plan.ClientID, plan.Scope) {
 			return nil, fmt.Errorf("client %q requires a native projector", plan.ClientID)
 		}
 		return nil, nil
@@ -308,21 +321,8 @@ func validateReservedStdioEnvironment(envelope domain.PackageEnvelope, plan doma
 		if server.Type != "stdio" {
 			continue
 		}
-		switch env := server.Decoded["env"].(type) {
-		case map[string]any:
-			if _, ok := env["PLUGIN_ROOT"]; ok {
-				return fmt.Errorf("stdio MCP server %s defines reserved PLUGIN_ROOT", name)
-			}
-			if _, ok := env["PLUGIN_DATA"]; ok {
-				return fmt.Errorf("stdio MCP server %s defines reserved PLUGIN_DATA", name)
-			}
-		case map[string]string:
-			if _, ok := env["PLUGIN_ROOT"]; ok {
-				return fmt.Errorf("stdio MCP server %s defines reserved PLUGIN_ROOT", name)
-			}
-			if _, ok := env["PLUGIN_DATA"]; ok {
-				return fmt.Errorf("stdio MCP server %s defines reserved PLUGIN_DATA", name)
-			}
+		if reserved := domain.ReservedStdioEnvKey(server.Decoded["env"], runtime.GOOS == "windows"); reserved != "" {
+			return fmt.Errorf("stdio MCP server %s defines reserved %s", name, reserved)
 		}
 	}
 	return nil

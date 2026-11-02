@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,16 +25,29 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ do
 }
 
 func InspectOpenCodeRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding, kernel nativeconfig.Kernel) (clients.RegistryFinding, error) {
-	root := strings.TrimSpace(plan.NativeRegistryRoot)
-	if root == "" {
+	if managed == nil && !hasPlannedOpenCodeNative(plan) {
+		return clients.RegistryClear, nil
+	}
+	if strings.TrimSpace(plan.NativeRegistryRoot) == "" {
 		return clients.RegistryIndeterminate, nil
+	}
+	layout, err := openCodePlanLayout(plan)
+	if err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	if err := validateOpenCodeManagedContext(layout, managed); err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	codec, err := observedOpenCodeCodec(plan, managed)
+	if err != nil {
+		return clients.RegistryIndeterminate, err
 	}
 	finding := clients.RegistryClear
 	for _, component := range plan.Components {
 		if component.Support == domain.SupportUnsupported {
 			continue
 		}
-		exists, owned, err := inspectOpenCodeComponent(root, managed, component, kernel)
+		exists, owned, err := inspectOpenCodeComponent(layout, managed, component, kernel, codec)
 		if err != nil {
 			return clients.RegistryIndeterminate, err
 		}
@@ -47,22 +61,53 @@ func InspectOpenCodeRegistry(plan domain.DeliveryPlan, managed *domain.ClientBin
 	return finding, nil
 }
 
-func inspectOpenCodeComponent(root string, managed *domain.ClientBinding, component domain.ComponentDecision, kernel nativeconfig.Kernel) (bool, bool, error) {
+// A managed observation uses stored receipts even if the host disappeared
+// or changed dialect. Without stored MCP receipts, selected desired MCP uses
+// prepared authority; observing skills alone does not require a codec.
+func observedOpenCodeCodec(plan domain.DeliveryPlan, managed *domain.ClientBinding) (nativeconfig.Codec, error) {
+	if managed == nil {
+		return DesiredOpenCodeCodec(plan.OpenCodeHost)
+	}
+	var stored nativeconfig.Codec
+	for _, object := range OpenCodeObjects(managed.NativeObjects) {
+		candidate, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind)
+		if err != nil {
+			return "", err
+		}
+		if !mcp {
+			continue
+		}
+		if stored != "" && stored != candidate {
+			return "", nativeconfig.ErrNativeMigrationRequired
+		}
+		stored = candidate
+	}
+	if stored != "" {
+		return stored, nil
+	}
+	if len(domain.SelectedMCPNames(plan)) > 0 {
+		return DesiredOpenCodeCodec(plan.OpenCodeHost)
+	}
+	return nativeconfig.CodecOpenCode, nil
+}
+
+func inspectOpenCodeComponent(layout openCodeNativeLayout, managed *domain.ClientBinding, component domain.ComponentDecision, kernel nativeconfig.Kernel, codec nativeconfig.Codec) (bool, bool, error) {
 	switch component.Kind {
 	case domain.ComponentSkill:
-		return inspectOpenCodeSkillComponent(root, managed, component.Name)
+		return inspectOpenCodeSkillComponent(layout, managed, component.Name)
 	case domain.ComponentMCPServer:
-		return inspectOpenCodeMCPComponent(root, managed, component.Name, kernel)
+		return inspectOpenCodeMCPComponent(layout, managed, component.Name, kernel, codec)
 	default:
 		return false, false, nil
 	}
 }
 
-func inspectOpenCodeSkillComponent(root string, managed *domain.ClientBinding, name string) (bool, bool, error) {
+func inspectOpenCodeSkillComponent(layout openCodeNativeLayout, managed *domain.ClientBinding, name string) (bool, bool, error) {
 	if err := pathpolicy.ValidateLeafID(name); err != nil {
 		return false, false, err
 	}
-	path := filepath.Join(root, "skills", name)
+	root := layout.Root
+	path := filepath.Join(layout.Skills, name)
 	if err := pathpolicy.RequireContainedChild(root, path); err != nil {
 		return false, false, err
 	}
@@ -74,7 +119,8 @@ func inspectOpenCodeSkillComponent(root string, managed *domain.ClientBinding, n
 	return err == nil, owned, nil
 }
 
-func inspectOpenCodeMCPComponent(root string, managed *domain.ClientBinding, name string, kernel nativeconfig.Kernel) (bool, bool, error) {
+func inspectOpenCodeMCPComponent(layout openCodeNativeLayout, managed *domain.ClientBinding, name string, kernel nativeconfig.Kernel, codec nativeconfig.Codec) (bool, bool, error) {
+	root := layout.Root
 	paths := nativeconfig.Paths{JSON: filepath.Join(root, "opencode.json"), JSONC: filepath.Join(root, "opencode.jsonc")}
 	if err := pathpolicy.RequireContainedChild(root, paths.JSON); err != nil {
 		return false, false, err
@@ -85,13 +131,24 @@ func inspectOpenCodeMCPComponent(root string, managed *domain.ClientBinding, nam
 	var receipt *nativeconfig.Receipt
 	if managed != nil {
 		for _, object := range OpenCodeObjects(managed.NativeObjects) {
-			if object.Kind == OpenCodeMCPObjectKind && object.LogicalName == name {
-				owned := receiptFromOpenCodeObject(object)
+			stored, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind)
+			if err != nil {
+				return false, false, err
+			}
+			if mcp && object.LogicalName == name {
+				if err := validateOpenCodeObject(layout, OpenCodeProjection{}, object); err != nil {
+					return false, false, err
+				}
+				codec = stored
+				owned, err := receiptFromOpenCodeObject(object)
+				if err != nil {
+					return false, false, err
+				}
 				receipt = &owned
 			}
 		}
 	}
-	return kernel.Inspect(paths, nativeconfig.CodecOpenCode, name, receipt)
+	return kernel.Inspect(paths, codec, name, receipt)
 }
 
 func managedOpenCodeObjectExists(objects []domain.NativeObjectOwnership, kind, name string) bool {
@@ -101,4 +158,19 @@ func managedOpenCodeObjectExists(objects []domain.NativeObjectOwnership, kind, n
 		}
 	}
 	return false
+}
+
+func validateOpenCodeManagedContext(layout openCodeNativeLayout, managed *domain.ClientBinding) error {
+	if managed == nil || layout.Scope != domain.ScopeProject {
+		return nil
+	}
+	if managed.Scope != string(domain.ScopeProject) || managed.NativeProfileRoot != layout.Root {
+		return fmt.Errorf("opencode ownership differs from the selected project")
+	}
+	for _, object := range OpenCodeObjects(managed.NativeObjects) {
+		if err := validateOpenCodeObject(layout, OpenCodeProjection{}, object); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -1,10 +1,12 @@
 package clients
 
 import (
+	"context"
 	"io/fs"
 	"os"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 // HostDetector is the read-only surface probe of one client. It returns what it
@@ -75,8 +77,31 @@ type VersionProbeEnvironment interface {
 	VersionProbeEnvironment(configRoot string) ([]string, error)
 }
 
+// ProjectVersionRequirement identifies an adapter's selected hosts that need
+// an observed version before project mutation. It is a pure eligibility check;
+// the caller retains selection, execution and version-admission authority.
+type ProjectVersionRequirement interface {
+	RequiresProjectVersion(client domain.DetectedClient) bool
+}
+
+// HostVersionProbeEnvironment binds a version child to original host facts
+// when the selected ConfigRoot represents a different native authority. The
+// detector still owns whether to probe, argv, cwd, timeout and output bounds.
+type HostVersionProbeEnvironment interface {
+	VersionProbeEnvironmentForHost(host Host, client domain.DetectedClient) ([]string, error)
+}
+
 // ProfileBindingValidator checks persisted profile authority before lifecycle
 // work, including removal paths that do not inspect a native registry.
 type ProfileBindingValidator interface {
 	ValidateBindingProfile(root string, binding domain.ClientBinding) error
+}
+
+// PhysicalProfileAuthority is the single optional port, shared with the planner.
+type PhysicalProfileAuthority = ports.PhysicalProfileAuthority
+
+// ProjectPhysicalAuthority captures the existing authority token for the real
+// project registry, without replacing the detected user's ConfigRoot.
+type ProjectPhysicalAuthority interface {
+	CaptureProjectAuthority(context.Context, domain.DetectedClient, domain.TargetContext, string) (domain.ProfileAuthority, error)
 }

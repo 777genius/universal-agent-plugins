@@ -36,6 +36,7 @@ func nativeBinary(t *testing.T, key string) string {
 }
 
 type nativeRPC struct {
+	ctx      context.Context
 	cmd      *exec.Cmd
 	in       io.WriteCloser
 	messages chan []byte
@@ -77,7 +78,7 @@ func startNativeRPC(t *testing.T, f *nativeFixture, client, label string) *nativ
 		log.Close()
 		t.Fatal(err)
 	}
-	r := &nativeRPC{cmd: cmd, in: in, cancel: cancel, log: log, messages: make(chan []byte, 128)}
+	r := &nativeRPC{ctx: ctx, cmd: cmd, in: in, cancel: cancel, log: log, messages: make(chan []byte, 128)}
 	go func() {
 		defer close(r.messages)
 		scan := bufio.NewScanner(io.LimitReader(out, 16<<20))
@@ -104,6 +105,14 @@ func (r *nativeRPC) close() {
 	}
 }
 func (r *nativeRPC) request(method string, params any) (json.RawMessage, error) {
+	return r.requestContext(r.ctx, method, params)
+}
+func (r *nativeRPC) requestContext(parent context.Context, method string, params any) (json.RawMessage, error) {
+	ctx, cancel := context.WithTimeout(parent, 35*time.Second)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	r.next++
 	id := r.next
 	request := map[string]any{"id": id, "method": method, "params": params}
@@ -113,8 +122,6 @@ func (r *nativeRPC) request(method string, params any) (json.RawMessage, error) 
 	if err := json.NewEncoder(r.in).Encode(request); err != nil {
 		return nil, err
 	}
-	timer := time.NewTimer(35 * time.Second)
-	defer timer.Stop()
 	for {
 		select {
 		case b, ok := <-r.messages:
@@ -138,8 +145,8 @@ func (r *nativeRPC) request(method string, params any) (json.RawMessage, error) 
 				}
 				return row.Result, nil
 			}
-		case <-timer.C:
-			return nil, fmt.Errorf("timeout: %s", method)
+		case <-ctx.Done():
+			return nil, fmt.Errorf("%s: %w", method, ctx.Err())
 		}
 	}
 }
@@ -678,6 +685,7 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	// Codex has no supported CLI verb for UAP to silently uninstall a plugin
 	// on the user's behalf (see usecase/remove.go and remove_group.go); every
 	// real remove against Codex must be an acknowledged external uninstall.
+	removeInventoryBefore := nativeFileInventory(t, f.CodexHome, filepath.Join(f.Root, "installer-state"))
 	nativeInstaller(t, f, installer, client, "remove", "remove", "native-proof", "--external-uninstalled")
 	// UAP's own directory removal must be immediate and independent of
 	// whatever a later fresh app-server session reports; this isolates that
@@ -700,7 +708,42 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 		t.Fatal("remove lost native data marker")
 	}
 	nativeAssertAbsent(t, f, client, fmt.Sprint(evidence["native_plugin_id"]), "removed")
-	stages["remove"] = nativeStage{Status: "passed", Reason: "New CLI/app-server inventory excludes plugin; native data retained"}
+	// Exact removal accounting: every deleted path must be plugin-owned (the
+	// UAP managed artifact or the client's own plugin cache/registry entry),
+	// and no plugin-named file may survive in the Codex home. The full
+	// inventory diff is recorded as evidence of exactly what was removed.
+	removedPaths, addedPaths, changedPaths := nativeInventoryDiff(removeInventoryBefore, nativeFileInventory(t, f.CodexHome, filepath.Join(f.Root, "installer-state")))
+	// The Codex CLI's own volatile arg0 scratch (<CodexHome>/tmp: shims and
+	// lock files) is created and cleaned up by the client across any codex
+	// invocation, so deletions there say nothing about plugin removal. They
+	// are recorded separately instead of being miscounted as foreign damage.
+	clientScratchPrefix := filepath.Join(f.CodexHome, "tmp") + string(os.PathSeparator)
+	pluginRemoved := []string{}
+	clientScratchRemoved := []string{}
+	for _, path := range removedPaths {
+		if strings.HasPrefix(path, clientScratchPrefix) {
+			clientScratchRemoved = append(clientScratchRemoved, path)
+			continue
+		}
+		pluginRemoved = append(pluginRemoved, path)
+	}
+	for _, path := range pluginRemoved {
+		if !strings.Contains(path, "native-proof") && !strings.Contains(path, "agentplugins-") && !strings.HasPrefix(path, active) {
+			t.Fatalf("remove deleted a file outside the plugin's owned scope: %s (pluginRemoved=%v)", path, pluginRemoved)
+		}
+	}
+	survivors := []string{}
+	for path := range nativeFileInventory(t, f.CodexHome) {
+		if strings.Contains(path, "native-proof") {
+			survivors = append(survivors, path)
+		}
+	}
+	sort.Strings(survivors)
+	if len(survivors) != 0 {
+		t.Fatalf("plugin-named files survived removal in the Codex home: %v", survivors)
+	}
+	nativeJSON(t, filepath.Join(f.Root, "remove-inventory-diff.json"), map[string]any{"removed": pluginRemoved, "client_scratch_removed": clientScratchRemoved, "added": addedPaths, "changed": changedPaths})
+	stages["remove"] = nativeStage{Status: "passed", Reason: fmt.Sprintf("New CLI/app-server inventory excludes plugin; native data retained; exact inventory diff recorded (removed=%d all plugin-owned, client-scratch=%d, added=%d, changed=%d)", len(pluginRemoved), len(clientScratchRemoved), len(addedPaths), len(changedPaths)), Artifacts: []string{"remove-inventory-diff.json"}}
 	nativeAttempt(stages, "foreign_preservation", "removed-rpc.jsonl")
 	for path, body := range foreign {
 		got, err := os.ReadFile(path)
@@ -798,6 +841,7 @@ func nativeCheckHTTP(t *testing.T, f *nativeFixture, stages map[string]nativeSta
 	}
 	seen, redirect, leaked, redirectSource := false, false, false, false
 	negotiated := ""
+	stages["http_request_contract"] = nativeStage{Status: "failed", Reason: "No declared-source POST RPC request observed"}
 	stages["generated_protocol_header_priority"] = nativeStage{Status: "not_evaluated", Reason: "No post-negotiation request with a generated protocol header observed"}
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
 		if len(line) == 0 {
@@ -837,9 +881,11 @@ func nativeCheckHTTP(t *testing.T, f *nativeFixture, stages map[string]nativeSta
 				leaked = true
 			}
 		}
-		if !seen && strings.HasPrefix(e.URI, "/mcp?") {
+		// Streamable HTTP clients may probe with GET before their first RPC.
+		// Only the first declared-source POST can establish the request contract.
+		if !seen && e.Origin == "declared-source" && e.Method == "POST" && strings.HasPrefix(e.URI, "/mcp?") {
 			seen = true
-			if e.Method != "POST" || e.Probe != f.Nonce || e.Literal != "${UNKNOWN}" || e.URI != "/mcp?literal=%24%7BUNKNOWN%7D" {
+			if e.Method != "POST" || e.RPCMethod == "" || e.Probe != f.Nonce || e.Literal != "${UNKNOWN}" || e.URI != "/mcp?literal=%24%7BUNKNOWN%7D" {
 				stages["http_request_contract"] = nativeStage{Status: "failed", Reason: string(line)}
 			} else {
 				stages["http_request_contract"] = nativeStage{Status: "passed"}

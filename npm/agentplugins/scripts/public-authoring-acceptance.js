@@ -608,7 +608,7 @@ const PROFILES = freeze([
   ['agent-skills/2026-09-06', '69ef37e9424c0a7ea9dd2293b559e43ec8176379', 'b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220'],
   [PLUGIN_SCHEMA, '1.0.0', '0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883'],
   [MCP_SCHEMA, '1.0.0', '6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb'],
-  ['author-document-bounds/v1', '1', '93ebbf02aa70a38b18fdc720ace9e45c8f911b91d94a5c85a26b96c2d69efa46']
+  ['author-document-bounds/v1', '1', '2bffd36f3e4ef0bdc1b25c3153b847542011a01af2f0b35ec31f2bc747952789']
 ].map(([id, revision, digest]) => ({ id, revision, digest: 'sha256:' + digest })));
 const SURFACE = freeze(['capabilities', 'compat', 'doctor', 'init', 'inspect', 'skills.init', 'skills.validate', 'test', 'validate', 'version'].map(x => 'author.' + x));
 function clientFacts() {
@@ -696,7 +696,7 @@ function authorResult(v, want, j) {
     agree(d.identity.scope_algorithm, 'agentplugins-captured-input-sha256-v1', 'scope algorithm');
     agree(d.identity.tree_algorithm, 'agentplugins-tree-sha256-v1', 'tree algorithm');
     agree(d.identity.read_profile, `packageview-local-${cell(j.cell).target.split('-')[0]}-v1`, 'recorded host read profile');
-    agree(d.identity.tree_exclusions, ['root .git', 'root non-directory .plugin-kit-ai.lock'], 'exact tree exclusions');
+    agree(d.identity.tree_exclusions, ['root .git', 'root non-directory .uap-integrations.lock'], 'exact tree exclusions');
     for (const k of ['scope_digest', 'tree_digest', 'manifest_digest']) digestID(d.identity[k]);
     agree(d.profiles, PROFILES, 'embedded profiles');
     agree(d.schema_ids, (want.lane === 'skill' ? [PLUGIN_SCHEMA] : [MCP_SCHEMA, PLUGIN_SCHEMA]).sort(), 'exact schema inventory');

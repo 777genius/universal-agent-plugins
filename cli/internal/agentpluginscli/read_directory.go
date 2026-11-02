@@ -113,7 +113,7 @@ func inspectDirectoryProduct(ctx context.Context, app App, state domain.StateFil
 		return publicProductInspection{}, fmt.Errorf("load signed Directory: %w", err)
 	}
 	selection, err := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{Selector: selector, Targets: targets,
-		Scope: domain.ScopeUser, InstallerVersion: app.Version, SchemaVersion: "1.0.0", Operation: domain.DirectoryInstall})
+		Scope: app.scope(), InstallerVersion: app.Version, SchemaVersion: "1.0.0", Operation: domain.DirectoryInstall})
 	if err != nil {
 		return publicProductInspection{}, err
 	}
@@ -179,9 +179,9 @@ func inspectInstalledProduct(ctx context.Context, app App, state domain.StateFil
 			view.CurrentReleaseSequence, view.CurrentEvidence = current.ReleaseSequence, current.Evidence
 		}
 	}
-	targets := installationTargets(installation, string(domain.ScopeUser))
+	targets := installationTargets(installation, string(app.scope()))
 	selection, err := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{Selector: origin.DistributionID,
-		Targets: targets, Scope: domain.ScopeUser, InstallerVersion: app.Version, SchemaVersion: "1.0.0", Operation: domain.DirectoryInstall})
+		Targets: targets, Scope: app.scope(), InstallerVersion: app.Version, SchemaVersion: "1.0.0", Operation: domain.DirectoryInstall})
 	if err == nil {
 		view.CurrentDistribution, view.CurrentRevision = selection.DistributionID, selection.Source.Revision
 		view.CurrentRepository, view.CurrentPackagePath = selection.Source.Repository, selection.Source.Path

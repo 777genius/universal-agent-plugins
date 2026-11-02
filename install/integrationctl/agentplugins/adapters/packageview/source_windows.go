@@ -196,13 +196,13 @@ func winDup(f *os.File) (*os.File, error) {
 	return os.NewFile(uintptr(h), "source-pin"), nil
 }
 
-// winUnchanged excludes only the write/change epoch of a proven traversal-only
-// directory (outside-source ancestry or trusted scratch, including its leaf).
-// Identity, creation, size, attributes and links stay pinned. Captured source
+// winUnchanged excludes directory index size and write/change epochs of a proven
+// traversal-only directory (outside-source ancestry or trusted scratch, including its leaf).
+// Identity, creation, attributes and links stay pinned. Captured source
 // root/descendant observations always require the complete snapshot.
 func winUnchanged(a, b winSnapshot, traversalOnly bool) bool {
 	if traversalOnly && a.Attributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0 && a.Attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT == 0 {
-		a.Write, a.Change = b.Write, b.Change
+		a.Size, a.Write, a.Change = b.Size, b.Write, b.Change
 	}
 	return a == b
 }

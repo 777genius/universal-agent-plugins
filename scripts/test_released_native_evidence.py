@@ -68,7 +68,7 @@ class EvidenceTests(unittest.TestCase):
             data = dict(installer_base_commit='a'*40,installer_tree='d'*40,installer_patch_sha256=[], installer_sha256='d'*64,client_sha256='1'*64,
                 scanner={'binary_sha256':'1'*64,'archive_sha256':record['scanner_asset']['archive_integrity'][7:], 'platform':target,'source_tag':record['scanner_asset']['version']},
                 stages=stages,transcript_sha256={'command.log':proof.digest(transcript)},**extra)
-            data['client_version_measured' if kind in ('claude-lifecycle','opencode-lifecycle') else 'client_version'] = {'codex':'0.153.4','claude':'2.1.263 (Claude Code)','opencode':'1.18.29'}[client]
+            data['client_version_measured' if kind in ('claude-lifecycle','opencode-lifecycle') else 'client_version'] = {'codex':'0.153.4','claude':'2.1.263 (Claude Code)','opencode':'1.18.34'}[client]
             if kind == 'claude-runtime': data['stages'] = {k:'passed' for k in proof.STAGES[kind]}
             (directory/name).write_text(json.dumps(data))
         for path in folder.rglob('*'):

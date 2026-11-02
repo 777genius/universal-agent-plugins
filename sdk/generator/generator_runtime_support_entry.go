@@ -54,8 +54,16 @@ func supportBucketFuncName(platform string) string {
 		return "claudeSupportEntries"
 	case "gemini":
 		return "geminiSupportEntries"
+	case "cursor":
+		return "cursorSupportEntries"
+	case "vscode-local":
+		return "vscodeLocalSupportEntries"
 	case "codex":
 		return "codexSupportEntries"
+	case "qoder":
+		return "qoderSupportEntries"
+	case "pi":
+		return "piSupportEntries"
 	default:
 		panic(fmt.Sprintf("unsupported support bucket %q", platform))
 	}

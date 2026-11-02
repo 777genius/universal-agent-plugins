@@ -19,24 +19,47 @@ type Kind string
 
 const (
 	TurnIdleVerified Kind = "turn_idle_verified"
-	QuestionAsked     Kind = "question_asked"
-	PermissionAsked   Kind = "permission_asked"
-	TerminalError     Kind = "terminal_error"
-	Unknown           Kind = "unknown"
+	QuestionAsked    Kind = "question_asked"
+	PermissionAsked  Kind = "permission_asked"
+	TerminalError    Kind = "terminal_error"
+	Unknown          Kind = "unknown"
 )
 
-type ObservedEvent struct {
-	Version    int    `json:"version"`
-	Kind       Kind   `json:"kind"`
-	SessionID  string `json:"sessionID,omitempty"`
-	TurnID     string `json:"turnID,omitempty"`
-	MessageID  string `json:"messageID,omitempty"`
-	RequestID  string `json:"requestID,omitempty"`
-	NativeType string `json:"nativeType,omitempty"`
-	RootSession *bool  `json:"rootSession,omitempty"`
+// Provenance is additive private candidate evidence. NativeTime is epoch
+// milliseconds; a V1 lower bound is not a request birth timestamp. Consumers
+// still need qualified clock mapping, runtime eligibility and durable admission.
+type Provenance struct {
+	Generation      string `json:"generation"`
+	ObservationID   string `json:"observationID"`
+	NativeEventID   string `json:"nativeEventID,omitempty"`
+	NativeMessageID string `json:"nativeMessageID,omitempty"`
+	NativeTime      int64  `json:"nativeTime"`
+	TimeBasis       string `json:"timeBasis"`
 }
 
-func validID(s string) bool { return len(s) > 0 && len(s) <= 256 }
+type ObservedEvent struct {
+	Version     int         `json:"version"`
+	Kind        Kind        `json:"kind"`
+	SessionID   string      `json:"sessionID,omitempty"`
+	TurnID      string      `json:"turnID,omitempty"`
+	MessageID   string      `json:"messageID,omitempty"`
+	RequestID   string      `json:"requestID,omitempty"`
+	NativeType  string      `json:"nativeType,omitempty"`
+	RootSession *bool       `json:"rootSession,omitempty"`
+	Provenance  *Provenance `json:"provenance,omitempty"`
+}
+
+func validID(s string) bool {
+	if len(s) == 0 || len(s) > 256 {
+		return false
+	}
+	for i := range s {
+		if s[i] < 32 {
+			return false
+		}
+	}
+	return true
+}
 
 // Decode accepts additive fields and unfamiliar event kinds within wire v1.
 // Consumers must ignore Unknown; a changed required shape needs a new version.
@@ -62,6 +85,31 @@ func Decode(data []byte) (ObservedEvent, error) {
 	for _, v := range []string{e.SessionID, e.TurnID, e.MessageID, e.RequestID} {
 		if len(v) > 256 {
 			return e, errors.New("opencode: oversized ID")
+		}
+	}
+	if p := e.Provenance; p != nil {
+		if p.NativeTime <= 0 || p.NativeTime > 9007199254740991 || len(p.ObservationID) == 0 || len(p.ObservationID) > 2048 ||
+			(p.NativeEventID != "" && !validID(p.NativeEventID)) ||
+			(p.NativeMessageID != "" && !validID(p.NativeMessageID)) {
+			return e, errors.New("opencode: invalid provenance")
+		}
+		if p.Generation == "v2" {
+			if p.TimeBasis != "envelope_created" || !validID(p.NativeEventID) {
+				return e, errors.New("opencode: invalid v2 provenance")
+			}
+		} else if p.Generation == "v1" {
+			if e.Kind == TerminalError && !validID(p.NativeMessageID) {
+				return e, errors.New("opencode: missing native terminal message")
+			}
+			if p.TimeBasis != "assistant_created_lower_bound" && p.TimeBasis != "assistant_completed" {
+				return e, errors.New("opencode: invalid v1 provenance")
+			}
+			if (e.Kind == TurnIdleVerified && p.TimeBasis != "assistant_completed") ||
+				((e.Kind == QuestionAsked || e.Kind == PermissionAsked || e.Kind == TerminalError) && p.TimeBasis != "assistant_created_lower_bound") {
+				return e, errors.New("opencode: native time basis contradicts fact")
+			}
+		} else {
+			return e, errors.New("opencode: invalid native generation")
 		}
 	}
 	switch e.Kind {

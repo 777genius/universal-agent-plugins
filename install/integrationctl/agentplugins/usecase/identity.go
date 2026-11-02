@@ -25,7 +25,7 @@ func (service Service) verifyManagedTarget(
 		return fmt.Errorf("managed package digest is missing; refusing %s and retaining state for reviewed recovery", operation)
 	}
 	targetClient := client
-	if sameNativeBackend(domain.ClientID(binding.ClientID), client.ClientID) {
+	if sameNativeBackend(domain.ClientID(binding.ClientID), client.ClientID, scope) {
 		// Validate the persisted path against the physical binding's canonical
 		// owner, even when the caller addressed the shared backend through its
 		// other logical surface.
@@ -86,15 +86,20 @@ func validateNativeIdentityObservation(observation domain.NativeIdentityObservat
 }
 
 func (service Service) nativeIdentityObservation(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {
+	if service.ClientPreparation != nil {
+		if err := service.ClientPreparation.RevalidateClient(ctx, client, plan); err != nil {
+			return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate}, err
+		}
+	}
 	if service.NativeObserver != nil {
-		return service.NativeObserver.ObserveNativeIdentity(ctx, client, plan, managed)
+		return service.NativeObserver.ObserveNativeIdentity(ctx, client, cloneLocalObservationPlan(plan), cloneLocalObservationBinding(managed))
 	}
 	return service.filesystemIdentityObservation(ctx, plan, managed)
 }
 
 func (service Service) preparedIdentityObservation(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {
 	if observer, ok := service.NativeObserver.(PreparedIdentityObserver); ok {
-		return observer.ObservePreparedIdentity(ctx, client, plan, managed)
+		return observer.ObservePreparedIdentity(ctx, client, cloneLocalObservationPlan(plan), cloneLocalObservationBinding(managed))
 	}
 	return service.filesystemIdentityObservation(ctx, plan, managed)
 }

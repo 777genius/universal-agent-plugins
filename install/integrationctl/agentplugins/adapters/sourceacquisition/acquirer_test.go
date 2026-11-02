@@ -47,6 +47,37 @@ func TestAcquireGitHubExactSHASparselySnapshotsOnlyPluginRoot(t *testing.T) {
 	}
 }
 
+type selectorRunner struct{ ambiguous bool }
+
+func (runner selectorRunner) Run(_ context.Context, command Command) ([]byte, error) {
+	switch {
+	case len(command.Args) > 0 && command.Args[0] == "ls-remote":
+		if runner.ambiguous {
+			return []byte("1111111111111111111111111111111111111111\trefs/heads/release\n2222222222222222222222222222222222222222\trefs/tags/release\n"), nil
+		}
+		return []byte("3333333333333333333333333333333333333333\trefs/tags/v1\n"), nil
+	case len(command.Args) > 2 && command.Args[2] == "rev-parse":
+		return []byte("4444444444444444444444444444444444444444\n"), nil
+	default:
+		return nil, nil
+	}
+}
+
+func TestResolveGitHubSelectorRejectsShortRefAmbiguityAndResolvesAnnotatedCommit(t *testing.T) {
+	ambiguous := Acquirer{TempRoot: t.TempDir(), Runner: selectorRunner{ambiguous: true}, URLForRepo: func(string) string { return "https://example.invalid/repo.git" }}
+	if _, err := ambiguous.ResolveGitHubSelector(context.Background(), "acme/tools", "release"); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("ambiguous short ref = %v", err)
+	}
+	exact := Acquirer{TempRoot: t.TempDir(), Runner: selectorRunner{}, URLForRepo: func(string) string { return "https://example.invalid/repo.git" }}
+	got, err := exact.ResolveGitHubSelector(context.Background(), "acme/tools", "refs/tags/v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ResolvedRef != "refs/tags/v1" || got.Commit != strings.Repeat("4", 40) {
+		t.Fatalf("annotated tag resolution = %+v", got)
+	}
+}
+
 func TestDiscoverGitHubPackagesPrefersRepositoryRootManifest(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is unavailable")
@@ -466,4 +497,30 @@ func runGit(t *testing.T, args ...string) string {
 		t.Fatalf("git %v: %v: %s", args, err, output)
 	}
 	return string(output)
+}
+
+func TestExactRefKindPreservesDefaultAndSHAShapedNames(t *testing.T) {
+	repo := newRepository(t)
+	writeRepo(t, repo, "plugin.json", "{}", 0600)
+	old := commit(t, repo)
+	runGit(t, "-C", repo, "branch", "default", old)
+	shaName := strings.Repeat("f", 40)
+	runGit(t, "-C", repo, "branch", shaName, old)
+	writeRepo(t, repo, "next", "different HEAD", 0600)
+	head := commit(t, repo)
+	a := Acquirer{TempRoot: t.TempDir(), Runner: localGitTestRunner{}, URLForRepo: func(string) string { return repo }}
+	for _, ref := range []string{"default", shaName} {
+		got, err := a.ResolveGitHubRef(context.Background(), "acme/demo", ref)
+		if err != nil || got.Commit != old || got.ResolvedRef != "refs/heads/"+ref {
+			t.Fatalf("ref %s: %+v %v", ref, got, err)
+		}
+	}
+	got, err := a.ResolveGitHubSelector(context.Background(), "acme/demo", "default")
+	if err != nil || got.Commit != head {
+		t.Fatalf("omitted selector default: %+v %v", got, err)
+	}
+	runGit(t, "-C", repo, "tag", "default", head)
+	if _, err := a.ResolveGitHubRef(context.Background(), "acme/demo", "default"); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("default branch/tag ambiguity: %v", err)
+	}
 }

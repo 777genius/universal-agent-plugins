@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { computed, ref } from 'vue';
 import { isKnownLocale } from '../data/i18n.ts';
+import { catalogVisiblePlugins } from '../utils/filter.ts';
 import { localizedPath } from '../utils/localizedRoutes.ts';
 import {
   productRootUrl,
@@ -45,11 +46,29 @@ for (const base of ['/', '/universal-agent-plugins/']) {
             keywords: [],
             author: { name: 'Fixture', url: 'https://author.test/' },
             client_support: { clients: ['codex'], delivery: { codex: 'managed' } },
+            distributions: [
+              {
+                id: 'fixture/context7',
+                kind: 'community',
+                releases: [{ release_status: 'active' }],
+              },
+            ],
           };
           await runInNewContext(`(async () => {${stripTypeScriptTypes(source)}\n})()`, {
             computed,
             ref,
             isKnownLocale,
+            catalogVisiblePlugins,
+            // URL-only fixture: the reviewed detail page's auto-imported policy
+            // adapters are inert; its schema URL construction stays under test.
+            resolveDistribution: (_plugin: unknown, targets: readonly string[]) => ({
+              distribution: { targets: targets.map((client) => ({ client, delivery: 'managed' })) },
+            }),
+            vendorInstallSource: () => undefined,
+            isFullyRetired: () => false,
+            useDirectoryStatus: () => ({
+              current: ref(true), expired: ref(false), published: ref(true),
+            }),
             localizedPath,
             productRootUrl,
             productSoftwareSchema,

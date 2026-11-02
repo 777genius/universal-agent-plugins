@@ -43,7 +43,11 @@ func importedPortableMCPArtifacts(root string) ([]Artifact, error) {
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return nil, fmt.Errorf("parse portable MCP .mcp.json: %w", err)
 	}
-	normalized, err := pluginmodel.ImportedPortableMCPYAML("", doc)
+	servers, err := pluginmodel.UnwrapNativeMCPServers(doc)
+	if err != nil {
+		return nil, fmt.Errorf("parse portable MCP .mcp.json: %w", err)
+	}
+	normalized, err := pluginmodel.ImportedPortableMCPYAML("", servers)
 	if err != nil {
 		return nil, err
 	}

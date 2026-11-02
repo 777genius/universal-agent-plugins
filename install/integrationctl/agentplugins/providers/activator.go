@@ -15,8 +15,9 @@ import (
 )
 
 type Activator struct {
-	Runner       ports.CommandRunner
-	NativeConfig *nativeconfig.Kernel
+	OpenCodeTransitions ports.OpenCodeTransitionRecorder
+	Runner              ports.CommandRunner
+	NativeConfig        *nativeconfig.Kernel
 	// Registry supplies the client adapters that own lifecycle. It is injected
 	// by the composition root and never defaulted to "every client".
 	Registry *clients.Registry
@@ -29,15 +30,19 @@ func (activator Activator) requireRegistry() error {
 	return nil
 }
 
-func requireNativeConfigKernel(id domain.ClientID, kernel nativeconfig.Kernel) error {
-	if domain.ClientTraitsFor(id).LifecycleKind != domain.LifecycleNativeConfig {
+func requireNativeConfigKernel(id domain.ClientID, kernel nativeconfig.Kernel, scopes ...domain.InstallScope) error {
+	scope := domain.ScopeUser
+	if len(scopes) > 0 && scopes[0] != "" {
+		scope = scopes[0]
+	}
+	if (domain.SelectedDelivery{}).EffectiveTraitsForScope(id, scope).LifecycleKind != domain.LifecycleNativeConfig {
 		return nil
 	}
 	return kernel.RequireFileIO()
 }
 
 func (activator Activator) env() clients.Env {
-	return clients.Env{Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel()}
+	return clients.Env{OpenCodeTransitions: activator.OpenCodeTransitions, Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel()}
 }
 
 func (activator Activator) nativeConfigKernel() nativeconfig.Kernel {
@@ -89,7 +94,7 @@ func (activator Activator) Deactivate(ctx context.Context, request domain.Deacti
 	if err := activator.requireRegistry(); err != nil {
 		return domain.DeactivationOutcome{}, err
 	}
-	if err := requireNativeConfigKernel(request.Client.ClientID, activator.nativeConfigKernel()); err != nil {
+	if err := requireNativeConfigKernel(request.Client.ClientID, activator.nativeConfigKernel(), request.TargetContext.Scope); err != nil {
 		return domain.DeactivationOutcome{}, err
 	}
 	if lifecycle, ok := clients.As[clients.Lifecycle](activator.Registry, request.Client.ClientID); ok {
@@ -105,7 +110,7 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 	if err := activator.requireRegistry(); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	if err := requireNativeConfigKernel(request.Client.ClientID, activator.nativeConfigKernel()); err != nil {
+	if err := requireNativeConfigKernel(request.Client.ClientID, activator.nativeConfigKernel(), request.Plan.Scope); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
@@ -150,4 +155,10 @@ func (activator Activator) dispatchActivate(ctx context.Context, request domain.
 		return lifecycle.Activate(ctx, activator.env(), request)
 	}
 	return domain.ActivationOutcome{}, fmt.Errorf("unsupported activation client %q", request.Client.ClientID)
+}
+
+// SupportsIndependentActivation delegates effect isolation to adapter metadata.
+func (activator Activator) SupportsIndependentActivation(request domain.ActivationRequest) bool {
+	independent, ok := clients.As[clients.IndependentActivator](activator.Registry, request.Client.ClientID)
+	return ok && independent.SupportsIndependentActivation(request)
 }

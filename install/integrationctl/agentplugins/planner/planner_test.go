@@ -14,7 +14,7 @@ func TestPlannerNegotiatesPartialSupportWithoutRejectingSupportedComponents(t *t
 	t.Parallel()
 	planner := testPlanner(Planner{ManagedRoot: t.TempDir()})
 	envelope := testEnvelope()
-	client := detectedClient(domain.ClientCodex, filepath.Join(t.TempDir(), ".codex"))
+	client := detectedClient(domain.ClientCodex, filepath.Join(tempRoot(t), ".codex"))
 	plan, err := planner.Plan(context.Background(), envelope, client, domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +46,7 @@ func TestCodexPlanMatchesAvailableCLIActivation(t *testing.T) {
 		{"desktop_only", "", domain.PlanManualActivationRequired, domain.ActivationManual, "finish installation in Codex Plugins, then start a new session"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			client := detectedClient(domain.ClientCodex, filepath.Join(t.TempDir(), ".codex"))
+			client := detectedClient(domain.ClientCodex, filepath.Join(tempRoot(t), ".codex"))
 			client.ExecutablePath = tc.executable
 			plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), testEnvelope(), client, domain.ScopeUser, "demo-0123456789ab")
 			if err != nil {
@@ -166,7 +166,7 @@ func TestPlannerCarriesNonFatalLoaderDiagnosticsToPlan(t *testing.T) {
 
 func TestPlannerUsesNativeCursorTargetAndDoesNotExposeItInJSON(t *testing.T) {
 	t.Parallel()
-	config := filepath.Join(t.TempDir(), ".cursor")
+	config := filepath.Join(tempRoot(t), ".cursor")
 	planner := testPlanner(Planner{ManagedRoot: t.TempDir()})
 	plan, err := planner.Plan(context.Background(), testEnvelope(), detectedClient(domain.ClientCursor, config), domain.ScopeUser, "demo-0123456789ab")
 	if err != nil {
@@ -257,13 +257,25 @@ func TestPlannerFailsClosedForUndetectedClientAndUnsupportedScope(t *testing.T) 
 	if plan.Status != domain.PlanUnsupported || !contains(plan.Warnings, "client_not_detected") {
 		t.Fatalf("undetected plan = %+v", plan)
 	}
-	client = detectedClient(domain.ClientCursor, filepath.Join(t.TempDir(), ".cursor"))
-	plan, err = planner.Plan(context.Background(), testEnvelope(), client, domain.ScopeProject, "demo-0123456789ab")
+	// ChatGPT is actually unsupported for filesystem project installation.
+	projectRoot, rootErr := filepath.EvalSymlinks(t.TempDir())
+	if rootErr != nil {
+		t.Fatal(rootErr)
+	}
+	unsupportedPlanner := testPlanner(Planner{ProjectRoot: projectRoot, ManagedRoot: filepath.Join(projectRoot, ".uap", "managed")})
+	client = detectedClient(domain.ClientChatGPT, filepath.Join(t.TempDir(), ".chatgpt"))
+	plan, err = unsupportedPlanner.Plan(context.Background(), testEnvelope(), client, domain.ScopeProject, "demo-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if plan.Status != domain.PlanUnsupported || !contains(plan.Warnings, "scope_not_supported") {
 		t.Fatalf("project plan = %+v", plan)
+	}
+	// Cursor is qualified, but cannot borrow a missing selected project root.
+	client = detectedClient(domain.ClientCursor, filepath.Join(t.TempDir(), ".cursor"))
+	invalid, err := planner.Plan(context.Background(), testEnvelope(), client, domain.ScopeProject, "demo-0123456789ab")
+	if err == nil || invalid.ActivePath != "" {
+		t.Fatalf("qualified project with missing root resolved an artifact: %+v %v", invalid, err)
 	}
 }
 
@@ -481,6 +493,18 @@ func testEnvelope() domain.PackageEnvelope {
 
 func detectedClient(id domain.ClientID, config string) domain.DetectedClient {
 	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: config}
+}
+
+// tempRoot returns a symlink-free temp directory: native root checks demand
+// canonical paths, which t.TempDir() does not guarantee on macOS (/var vs
+// /private/var).
+func tempRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
 }
 
 func supportOf(plan domain.DeliveryPlan, kind domain.ComponentKind, name string) domain.SupportLevel {

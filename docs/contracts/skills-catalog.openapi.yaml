@@ -1,0 +1,188 @@
+openapi: 3.0.3
+info:
+  title: Public skills catalog
+  version: 1.0.0
+  description: >-
+    Anonymous, read-only catalog with a replaceable provider contract. Current
+    provider is skills.sh. Listings are unverified hints, not installation,
+    repository-folder, commit, declared-name, trust or security evidence.
+    Browse is zero-based, fixed at up to 200 upstream results per page. Search
+    returns at most 100 matches without usable pagination or complete totals.
+    Fresh TTL is 30 minutes for browse and 10 minutes for search. During upstream
+    failures, schema-valid cached results may be served for at most seven days
+    from fetchedAt, including after restart. A valid empty response is a success.
+servers:
+  - url: https://api.universal-agent-plugins.com
+paths:
+  /healthz:
+    get:
+      operationId: health
+      responses:
+        '200':
+          description: Process is serving; independent of upstream availability.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: {type: string, enum: [ok]}
+  /v1/skills:
+    get:
+      operationId: listSkills
+      description: >-
+        Only listed query parameters are accepted, once each. CORS permits exact
+        configured origins without credentials. No caller authentication, cookies,
+        or upstream response headers are forwarded. Search always uses the
+        canonical popular view and page zero. Global bounded upstream concurrency
+        and rate limits apply; cache misses can return 503 with Retry-After.
+      parameters:
+        - in: query
+          name: view
+          schema: {$ref: '#/components/schemas/CatalogView'}
+        - in: query
+          name: page
+          description: Zero-based browse page. Search requires zero.
+          schema: {type: integer, minimum: 0, maximum: 10000, default: 0}
+        - in: query
+          name: q
+          description: Search text, trimmed; at least two Unicode characters, at most 200 UTF-8 bytes, no control characters.
+          schema: {type: string, minLength: 2, maxLength: 200}
+        - in: query
+          name: limit
+          description: Search only. Browse always uses the provider's fixed page size.
+          schema: {type: integer, minimum: 1, maximum: 100, default: 100}
+      responses:
+        '200':
+          description: Schema-valid fresh or stale listing. Inspect cache.status and fetchedAt.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SkillsPage'}
+              examples:
+                browse:
+                  value:
+                    items:
+                      - id: skills-sh:vercel-labs/skills:find-skills
+                        providerId: skills-sh
+                        providerUrl: https://www.skills.sh/vercel-labs/skills/find-skills
+                        title: find-skills
+                        skillNameHint: find-skills
+                        source:
+                          kind: github
+                          repository: vercel-labs/skills
+                          url: https://github.com/vercel-labs/skills
+                        metrics: {installs: 1234, window: all-time}
+                        availability: unverified
+                    total: 1
+                    hasMore: false
+                    page: 0
+                    view: popular
+                    cache: {status: fresh, fetchedAt: '2026-10-24T00:00:00Z'}
+                search:
+                  value:
+                    items: []
+                    hasMore: false
+                    page: 0
+                    query: find skills
+                    view: popular
+                    cache: {status: fresh, fetchedAt: '2026-10-24T00:00:00Z'}
+                    warnings: [search_results_limited]
+        '400':
+          description: Invalid, duplicate or unknown query parameter.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CatalogError'}
+        '403':
+          description: Browser origin or preflight is not allowed.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CatalogError'}
+        '503':
+          description: Provider unavailable and no cache entry within seven days.
+          headers:
+            Retry-After:
+              description: Minimum seconds before another request is useful.
+              schema: {type: integer, minimum: 1}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CatalogError'}
+              example:
+                error: {code: provider_unavailable, message: Skills provider is temporarily unavailable}
+                retryAfter: 30
+components:
+  schemas:
+    CatalogView:
+      type: string
+      enum: [popular, trending, hot]
+      default: popular
+    SkillSource:
+      type: object
+      required: [kind, url]
+      properties:
+        kind: {type: string, enum: [github, external]}
+        repository:
+          type: string
+          description: Present only for a validated two-segment GitHub owner/repository locator. No folder or revision is inferred.
+        url: {type: string, format: uri}
+    SkillMetrics:
+      type: object
+      required: [installs, window]
+      properties:
+        installs: {type: integer, format: int64, minimum: 0}
+        window:
+          type: string
+          enum: [all-time, 24h, 1h]
+          description: Provider ranking window; not an independently verified measurement.
+    SkillListing:
+      type: object
+      required: [id, providerId, providerUrl, title, skillNameHint, source, metrics, availability]
+      properties:
+        id: {type: string, description: Opaque provider-namespaced identifier.}
+        providerId: {type: string}
+        providerUrl: {type: string, format: uri}
+        title: {type: string}
+        skillNameHint:
+          type: string
+          description: Exact raw upstream name, including Unicode and case, as an unverified CLI selection hint. Never a declared or validated installer name; the listing slug identifies only the provider detail page.
+        source: {$ref: '#/components/schemas/SkillSource'}
+        metrics: {$ref: '#/components/schemas/SkillMetrics'}
+        availability: {type: string, enum: [unverified, unsupported-source]}
+    CatalogCache:
+      type: object
+      required: [status, fetchedAt]
+      properties:
+        status: {type: string, enum: [fresh, stale]}
+        fetchedAt: {type: string, format: date-time, description: Timestamp of the last schema-valid upstream success, never the failed refresh.}
+    SkillsPage:
+      type: object
+      required: [items, hasMore, page, view, cache]
+      properties:
+        items:
+          type: array
+          maxItems: 200
+          items: {$ref: '#/components/schemas/SkillListing'}
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Browse provider total only. Omitted for bounded search results.
+        hasMore: {type: boolean}
+        page: {type: integer, minimum: 0}
+        query: {type: string}
+        view: {$ref: '#/components/schemas/CatalogView'}
+        cache: {$ref: '#/components/schemas/CatalogCache'}
+        warnings:
+          type: array
+          items: {type: string}
+          description: Includes search_results_limited, provider_unavailable for stale results, or cache_persistence_unavailable.
+    CatalogError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: {type: string}
+            message: {type: string}
+        retryAfter: {type: integer, minimum: 1, description: Seconds before retry, when available.}

@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { hydrated } from './i18n-state.helpers';
 import { publishedLocales, localeMetadata, type KnownLocale } from '../../data/i18n';
@@ -29,6 +30,48 @@ for (const locale of publishedLocales) {
       await page.goto(url);
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await expect(page.locator('h1')).toBeVisible();
+      if (family === '/') {
+        const messages = JSON.parse(
+          readFileSync(new URL(`../../i18n/locales/${locale}.json`, import.meta.url), 'utf8'),
+        ).shell;
+        const copy = messages.restore as Record<string, string>;
+        const restore = page.locator('#restore-environment');
+        await expect(restore.getByRole('heading', { level: 2 })).toHaveText(copy.title!);
+        await expect(restore.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(1);
+        await expect(restore.locator('.registry-restore__package strong')).toHaveText([
+          'v1.0.0',
+          'v1.0.0',
+        ]);
+        await expect(restore.locator('.registry-restore__locked-version')).toHaveText('v1.0.0');
+        const snippets = restore.locator('.command-snippet pre code');
+        await expect(snippets).toHaveCount(2);
+        await expect(snippets.first()).toContainText('agentplugins add');
+        await expect(snippets.first()).toContainText('github:brunoborges/javaevolved');
+        await expect(snippets.last()).toHaveText('agentplugins install --locked');
+        const docsLocale = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
+        const guideLabel =
+          docsLocale === locale
+            ? copy.guide!
+            : messages.docs.englishLabel.replace('{label}', copy.guide!);
+        await expect(restore.getByRole('link', { name: guideLabel })).toHaveAttribute(
+          'href',
+          new RegExp(`/docs/${docsLocale}/use/manage\\.html#restore-project-dependencies$`),
+        );
+        if (locale === 'en' || locale === 'ar') {
+          await page.setViewportSize({ width: locale === 'ar' ? 390 : 1440, height: 1000 });
+          await restore.scrollIntoViewIfNeeded();
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+          ).toBe(true);
+          await expect(restore).toHaveCSS('direction', locale === 'ar' ? 'rtl' : 'ltr');
+          await expect(restore.locator('pre').first()).toHaveCSS('direction', 'ltr');
+          const screenshots = process.env.UAP_LANDING_SCREENSHOT_DIR;
+          if (screenshots) {
+            mkdirSync(screenshots, { recursive: true });
+            await restore.screenshot({ path: resolve(screenshots, `restore-${locale}.png`) });
+          }
+        }
+      }
       await page.reload();
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       expect(errors).toEqual([]);
@@ -73,9 +116,12 @@ for (const target of ['ru', 'uk'] as const)
       });
       await expect(choice).toBeVisible();
       if (width < 768) {
-        await expect(page.getByRole('dialog').getByRole('menuitemradio', {
-          name: localeMetadata[target].name, exact: true,
-        })).toBeVisible();
+        await expect(
+          page.getByRole('dialog').getByRole('menuitemradio', {
+            name: localeMetadata[target].name,
+            exact: true,
+          }),
+        ).toBeVisible();
       }
       await choice.focus();
       await page.keyboard.press('Escape');
@@ -95,7 +141,7 @@ for (const target of ['ru', 'uk'] as const)
       await outsideInput.click();
       await expect(choice).not.toBeVisible();
       await expect(outsideInput).toBeFocused();
-      await outsideInput.evaluate(input => input.remove());
+      await outsideInput.evaluate((input) => input.remove());
       await switcher.press('Enter');
       await choice.focus();
       await choice.press('Enter');
@@ -107,7 +153,9 @@ for (const target of ['ru', 'uk'] as const)
       await expect(switcher).toBeFocused();
       await expect(page.locator('html')).toHaveAttribute('lang', target);
       expect(await page.evaluate(() => history.length)).toBe(initialHistoryLength + 1);
-      expect((await page.context().cookies()).find(cookie => cookie.name === 'uap_locale')?.value).toBe(target);
+      expect(
+        (await page.context().cookies()).find((cookie) => cookie.name === 'uap_locale')?.value,
+      ).toBe(target);
       const url = new URL(page.url());
       expect(url.searchParams.get('q')).toBe('context7');
       expect(url.searchParams.getAll('tag')).toEqual(['one', 'two']);
@@ -117,7 +165,9 @@ for (const target of ['ru', 'uk'] as const)
       await expect(page).toHaveURL(initialUrl);
       await expect(page.locator('html')).toHaveAttribute('lang', 'en');
       await expect(page.locator('h1')).toBeVisible();
-      expect((await page.context().cookies()).find(cookie => cookie.name === 'uap_locale')?.value).toBe(target);
+      expect(
+        (await page.context().cookies()).find((cookie) => cookie.name === 'uap_locale')?.value,
+      ).toBe(target);
       await page.goForward();
       await expect(page).toHaveURL(targetUrl);
       await expect(page.locator('html')).toHaveAttribute('lang', target);
@@ -130,10 +180,10 @@ for (const locale of publishedLocales) {
     baseURL,
   }) => {
     const messages = JSON.parse(
-      readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'),
+      readFileSync(new URL(`../../i18n/locales/${locale}.json`, import.meta.url), 'utf8'),
     );
     const reference = JSON.parse(
-      readFileSync(new URL('../../locales/en.json', import.meta.url), 'utf8'),
+      readFileSync(new URL('../../i18n/locales/en.json', import.meta.url), 'utf8'),
     );
     if (locale !== 'en')
       expect(messages.publicAuthoring.title).not.toBe(reference.publicAuthoring.title);
@@ -145,7 +195,7 @@ for (const locale of publishedLocales) {
         messages.publicAuthoring.title,
       );
       await expect(page.locator('#use-plugins code')).toHaveText(
-        'npx universal-agent-plugins add context7',
+        'npx -y universal-agent-plugins add context7',
       );
       await expect(page.locator('#historical-v1')).toHaveCount(0);
     } finally {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { isKnownLocale } from '~/data/i18n';
 import { localizedPath } from '~/utils/localizedRoutes';
-import { clientLandingById } from '~/data/clients';
+import { clientLandingById, clients } from '~/data/clients';
 
 const { t, locale } = useI18n();
 const clientPath = (slug: string) =>
@@ -10,7 +10,11 @@ const { asset } = useSite();
 </script>
 
 <template>
-  <ul class="client-strip" :aria-label="t('shell.accessibility.supportedAgents')">
+  <ul
+    class="client-strip"
+    :aria-label="t('shell.accessibility.supportedAgents')"
+    :style="{ '--client-strip-columns': clients.length }"
+  >
     <li v-for="client in clients" :key="client.id">
       <NuxtLink :to="clientPath(clientLandingById.get(client.id)!.slug)">
         <span class="client-strip__icon"

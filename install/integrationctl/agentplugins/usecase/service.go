@@ -17,7 +17,20 @@ import (
 )
 
 type Service struct {
-	StateStore transaction.StateStore
+	CheckNamespace       func() error `json:"-"`
+	ProjectRoot          string       `json:"-"`
+	environmentAuthority *domain.EnvironmentAuthority
+	ClientPreparation    ClientPreparation
+	// OpenCodeHosts retains the explicit legacy preparation seam for callers
+	// without ClientPreparation; production composition uses ClientPreparation.
+	OpenCodeHosts ports.OpenCodeHostPreparer
+	// PrepareHostsForPreview authorizes online host preparation for a mutation's
+	// plan-first pass. Offline callers leave this false, including CLI --dry-run.
+	PrepareHostsForPreview bool
+	PhysicalAuthority      ports.PhysicalProfileAuthority
+	PhysicalProfiles       []domain.DetectedClient
+	profileCheck           func() error
+	StateStore             transaction.StateStore
 	// Paths is required. There is deliberately no default: a silently supplied
 	// one would let a caller that forgot to wire it keep running with whatever
 	// containment rules that default happened to carry.
@@ -37,6 +50,13 @@ type Service struct {
 	NamespacePreflight MCPNamespacePreflight
 	PluginData         PluginDataManager
 	Now                func() time.Time
+}
+
+// ClientPreparation freezes explicit host authority before a desired native
+// plan. Process-inert planning must never launch a host executable.
+type ClientPreparation interface {
+	PrepareClient(context.Context, domain.PackageEnvelope, domain.DetectedClient, []domain.NativeObjectOwnership, string, bool) (domain.OpenCodeHostAuthority, error)
+	RevalidateClient(context.Context, domain.DetectedClient, domain.DeliveryPlan) error
 }
 
 type NativeIdentityState = domain.NativeIdentityState
@@ -78,10 +98,18 @@ type PluginDataManager interface {
 }
 
 type AddInput struct {
-	InstallIntent      domain.InstallIntent
-	Envelope           domain.PackageEnvelope
-	Client             domain.DetectedClient
-	Scope              domain.InstallScope
+	refreshSelectedDelivery bool
+	// refreshChangedProjectionOnly limits a refresh to a changed projected
+	// digest. Update sets it: the update itself finishes any outstanding
+	// activation, and a settled prepared state is not one.
+	refreshChangedProjectionOnly bool
+	InstallIntent                domain.InstallIntent
+	Envelope                     domain.PackageEnvelope
+	Client                       domain.DetectedClient
+	Scope                        domain.InstallScope
+	// OnlinePreview permits host probing during a read-only normal-operation preview.
+	// It grants no mutation or confirmation permission.
+	OnlinePreview      bool
 	DryRun             bool
 	Confirmed          bool
 	Interactive        bool
@@ -91,6 +119,9 @@ type AddInput struct {
 	BackendExecutable  string
 	ActivationComplete bool
 	AuthComplete       bool
+	// EnvironmentAuthority is mandatory for managed update/remove/repair and is
+	// copied into the durable receipt before the first managed effect.
+	EnvironmentAuthority *domain.EnvironmentAuthority
 	// OriginMode and DirectoryResolution are supplied by the resolver. Omitting
 	// OriginMode is treated as an explicit direct source for compatibility with
 	// exact/local callers; Directory authority is never inferred from a name.
@@ -120,16 +151,26 @@ func (service Service) Add(ctx context.Context, input AddInput) (AddResult, erro
 	return service.apply(ctx, input, false)
 }
 
-func (service Service) Update(ctx context.Context, input AddInput) (AddResult, error) {
-	return service.apply(ctx, input, true)
-}
-
 func (service Service) apply(ctx context.Context, input AddInput, replace bool) (AddResult, error) {
 	session := &applySession{service: service, ctx: ctx, input: input, replace: replace}
 	if err := session.validateApplyInput(); err != nil {
 		return AddResult{}, err
 	}
-	release, err := service.beginMutation(ctx, session.input.DryRun, session.input.Confirmed)
+	prepared, err := session.service.prepareHostInputs(ctx, []AddInput{session.input}, session.input.DryRun)
+	if err != nil {
+		return AddResult{}, err
+	}
+	session.input = prepared[0]
+	if err := session.resolveInstallation(); err != nil {
+		return AddResult{}, err
+	}
+	service, frozen, err := session.service.freezeProfiles(ctx, session.installationID, []domain.DetectedClient{session.input.Client}, true)
+	if err != nil {
+		return AddResult{}, err
+	}
+	session.service, session.input.Client = service, frozen[0]
+	session.input.InstallationID = session.installationID
+	release, err := service.beginEnvironmentMutation(ctx, session.input.DryRun, session.input.Confirmed, session.input.EnvironmentAuthority)
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -151,6 +192,9 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	if session.input.DryRun {
 		return session.dryRunPath()
 	}
+	if err := session.service.revalidateHost(ctx, session.input.Client); err != nil {
+		return session.result, err
+	}
 	done, result, err := session.noChangeOrResume()
 	if done {
 		return result, err
@@ -170,6 +214,18 @@ func (service Service) stagePackage(ctx context.Context, envelope domain.Package
 }
 
 func (service Service) beginMutation(ctx context.Context, dryRun, confirmed bool) (ports.UnlockFunc, error) {
+	if err := service.checkProfiles(ctx); err != nil {
+		return nil, err
+	}
+	if err := service.guardEnvironmentRecovery(); err != nil {
+		return nil, err
+	}
+	kernel := service.Kernel
+	kernel.StateStore = service.StateStore
+	kernel.PhysicalAuthority = service.authorityPort()
+	if err := kernel.PrevalidateRecovery(ctx); err != nil {
+		return nil, err
+	}
 	if dryRun || !confirmed {
 		return nil, nil
 	}
@@ -186,13 +242,45 @@ func (service Service) beginMutation(ctx context.Context, dryRun, confirmed bool
 			return nil, err
 		}
 	}
-	kernel := service.Kernel
+	if err := service.validateRecordedDeliveries(); err != nil {
+		_ = release()
+		return nil, err
+	}
+	if err := service.checkProfiles(ctx); err != nil {
+		_ = release()
+		return nil, err
+	}
+	kernel = service.Kernel
 	kernel.StateStore = service.StateStore
+	kernel.PhysicalAuthority = service.authorityPort()
+	if err := service.guardEnvironmentRecovery(); err != nil {
+		_ = release()
+		return nil, err
+	}
 	if err := kernel.Recover(ctx); err != nil {
 		_ = release()
 		return nil, fmt.Errorf("recover interrupted mutation: %w", err)
 	}
 	return release, nil
+}
+
+func firstEnvironmentSourceKey(authority *domain.EnvironmentAuthority, fallback string) string {
+	if authority != nil && authority.SourceKey != "" {
+		return authority.SourceKey
+	}
+	return fallback
+}
+
+func (service Service) beginEnvironmentMutation(ctx context.Context, dryRun, confirmed bool, authority *domain.EnvironmentAuthority) (ports.UnlockFunc, error) {
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return nil, err
+	}
+	if err := transaction.ValidateEnvironmentRecoveryScope(state, authority); err != nil {
+		return nil, err
+	}
+	service.environmentAuthority = authority
+	return service.beginMutation(ctx, dryRun, confirmed)
 }
 
 func (service Service) now() time.Time {
@@ -301,7 +389,9 @@ func immutableDirectGit(source domain.SourceBinding) bool {
 
 func packageRevisionFromEnvelope(envelope domain.PackageEnvelope) *domain.ClientPackageRevision {
 	return &domain.ClientPackageRevision{
-		Version: envelope.Manifest.Version, ResolvedRevision: envelope.Source.ResolvedRevision,
+		Skill:    domain.CloneSkillSourceFacts(envelope.Source.Skill),
+		WebSkill: domain.CloneWebSkillSourceFacts(envelope.Source.WebSkill),
+		Version:  envelope.Manifest.Version, ResolvedRevision: envelope.Source.ResolvedRevision,
 		TreeDigest: envelope.TreeDigest, ManifestDigest: envelope.ManifestDigest,
 		CatalogEvidence: cloneCatalogEvidence(envelope.CatalogEvidence),
 	}
@@ -318,6 +408,7 @@ func packageRevisionForInput(input AddInput) *domain.ClientPackageRevision {
 
 func packageRevisionMatches(revision *domain.ClientPackageRevision, envelope domain.PackageEnvelope) bool {
 	return revision != nil && revision.TreeDigest == envelope.TreeDigest && revision.ManifestDigest == envelope.ManifestDigest &&
+		reflect.DeepEqual(revision.WebSkill, envelope.Source.WebSkill) &&
 		reflect.DeepEqual(revision.CatalogEvidence, envelope.CatalogEvidence)
 }
 
@@ -421,4 +512,46 @@ func versionCompare(left, right string) (int, bool) {
 		return 0, false
 	}
 	return semver.Compare(left, right), true
+}
+
+func (service Service) guardEnvironmentRecovery() error {
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return err
+	}
+	// Managed environments recover explicitly; ordinary imperative recovery
+	// may continue only when the complete pending scope is unmanaged.
+	if err := transaction.ValidateEnvironmentRecoveryScope(state, nil); err != nil {
+		return err
+	}
+	// An unmanaged in-memory planner may have no journal backend configured.
+	// State ownership was checked above; managed operations still require a backend.
+	if service.Kernel.Directory.JournalDir == "" && service.environmentAuthority == nil && len(state.EnvironmentReceipts) == 0 {
+		return nil
+	}
+	journals, err := service.Kernel.Directory.ListOpen()
+	if err != nil {
+		return err
+	}
+	for _, j := range journals {
+		if j.EnvironmentID != "" {
+			return fmt.Errorf("recovery_required: run deps recover")
+		}
+		for _, r := range state.EnvironmentReceipts {
+			if r.ClientBindingID == j.ClientBindingID {
+				return fmt.Errorf("recovery_required: run deps recover")
+			}
+		}
+		if service.environmentAuthority != nil {
+			return fmt.Errorf("recovery_required: pending journal requires explicit recovery")
+		}
+	}
+	if service.environmentAuthority != nil {
+		for _, r := range state.TransactionReceipts {
+			if r.Phase != "" && r.Phase != "committed" {
+				return fmt.Errorf("recovery_required: run deps recover")
+			}
+		}
+	}
+	return nil
 }

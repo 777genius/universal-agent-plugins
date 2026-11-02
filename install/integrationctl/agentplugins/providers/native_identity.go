@@ -37,7 +37,10 @@ type NativeIdentityObserver struct {
 	Registry *clients.Registry
 }
 
-const defaultNativeDiscoveryTimeout = 15 * time.Second
+// Native CLIs can take tens of seconds on first launch (including runtime
+// initialization). Keep discovery finite without rejecting a healthy cold start;
+// context.WithTimeout still preserves an earlier caller deadline.
+const defaultNativeDiscoveryTimeout = 60 * time.Second
 
 // The finding vocabulary belongs to the client contract: these names stay here
 // as aliases so in-package tests keep reading the same tokens.
@@ -72,7 +75,7 @@ func (observer NativeIdentityObserver) ObserveNativeIdentity(ctx context.Context
 	return observer.observeIdentity(ctx, client, plan, managed, true)
 }
 
-// ObservePreparedIdentity inspects only filesystem-backed package identities.
+// ObservePreparedIdentity inspects filesystem-backed package and project component identities.
 // It deliberately excludes native CLI discovery so dry-run cannot launch the
 // detected client executable.
 func (observer NativeIdentityObserver) ObservePreparedIdentity(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {
@@ -90,10 +93,15 @@ func (observer NativeIdentityObserver) observeIdentity(ctx context.Context, clie
 	if err := observer.requireRegistry(); err != nil {
 		return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate}, err
 	}
-	if err := requireNativeConfigKernel(client.ClientID, observer.nativeConfigKernel()); err != nil {
+	if err := requireNativeConfigKernel(client.ClientID, observer.nativeConfigKernel(), plan.Scope); err != nil {
 		return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate}, err
 	}
 	prepared, preparedErr := observer.inspectPreparedRegistry(client.ClientID, plan, name, managed != nil)
+	if !includeNativeRegistry {
+		local, localErr := observer.inspectPreparedProjectFiles(ctx, client, plan, managed)
+		prepared = combinePreparedFindings(prepared, local)
+		preparedErr = errors.Join(preparedErr, localErr)
+	}
 	if preparedErr != nil {
 		prepared = registryIndeterminate
 	}
@@ -118,6 +126,9 @@ func (observer NativeIdentityObserver) discoverNativeFinding(ctx context.Context
 		timeout := observer.DiscoveryTimeout
 		if timeout <= 0 {
 			timeout = defaultNativeDiscoveryTimeout
+			if policy, ok := clients.As[clients.NativeDiscoveryPolicy](observer.Registry, client.ClientID); ok {
+				timeout = policy.NativeDiscoveryTimeout()
+			}
 		}
 		nativeCtx, cancelNative = context.WithTimeout(ctx, timeout)
 	}

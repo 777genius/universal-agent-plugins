@@ -2,7 +2,7 @@ module github.com/777genius/plugin-kit-ai/cli
 
 go 1.25.8
 
-toolchain go1.25.13
+toolchain go1.26.10
 
 replace github.com/777genius/plugin-kit-ai/sdk => ../sdk
 
@@ -46,6 +46,7 @@ require (
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
+	github.com/creachadair/tomledit v0.0.29 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

@@ -53,8 +53,11 @@ func BuildClineNativeObjects(stagingRoot string, envelope domain.PackageEnvelope
 		if component.Support == domain.SupportUnsupported {
 			continue
 		}
-		if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
-			return nil, fmt.Errorf("invalid Cline component name %q: %w", component.Name, err)
+		// The Skill is a directory, whereas MCP servers are JSON selectors.
+		if component.Kind == domain.ComponentSkill {
+			if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
+				return nil, fmt.Errorf("invalid Cline skill name %q: %w", component.Name, err)
+			}
 		}
 		object, err := clineComponentOwnership(stagingRoot, root, envelope, component)
 		if err != nil {

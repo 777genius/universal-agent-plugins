@@ -15,16 +15,24 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
 	}
+	root, err := geminiInspectionRoot(client, plan)
+	if err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	plan.NativeRegistryRoot = root
+	return InspectGeminiRegistry(plan, managed, env.NativeConfig)
+}
+
+func geminiInspectionRoot(client domain.DetectedClient, plan domain.DeliveryPlan) (string, error) {
+	if plan.Scope == domain.ScopeProject {
+		return geminiPlanRoot(client, plan)
+	}
 	root := client.ConfigRoot
 	if root == "" {
 		root = plan.NativeRegistryRoot
 	}
 	if root == "" {
-		return clients.RegistryIndeterminate, nil
+		return "", nil
 	}
-	if err := validateProfile(root, plan.NativeRegistryRoot); err != nil {
-		return clients.RegistryIndeterminate, err
-	}
-	plan.NativeRegistryRoot = root
-	return InspectGeminiRegistry(plan, managed, env.NativeConfig)
+	return root, validateProfile(root, plan.NativeRegistryRoot)
 }

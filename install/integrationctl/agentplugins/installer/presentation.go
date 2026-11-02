@@ -8,14 +8,14 @@ import (
 
 func deliveryPlan(plan domain.DeliveryPlan) DeliveryPlan {
 	out := DeliveryPlan{
-		ActivePath: plan.ActivePath,
-		Status:     string(plan.Status), PackageMode: string(plan.PackageMode), InstallIntent: string(plan.InstallIntent),
+		ActivePath: plan.ActivePath, SelectedDelivery: plan.SelectedDelivery,
+		Status: string(plan.Status), PackageMode: string(plan.PackageMode), InstallIntent: string(plan.InstallIntent),
 		PhysicalArtifactID: plan.PhysicalArtifactID, Activation: string(plan.Activation),
 		Authentication: string(plan.Authentication), Policy: string(plan.Policy), Verification: string(plan.Verification),
 		UserActions: slices.Clone(plan.UserActions), LocalActions: slices.Clone(plan.LocalActions), Warnings: slices.Clone(plan.Warnings),
 	}
 	for _, component := range plan.Components {
-		out.Components = append(out.Components, ComponentDecision{Kind: string(component.Kind), Name: component.Name, Support: string(component.Support), Reason: component.Reason})
+		out.Components = append(out.Components, ComponentDecision{Kind: string(component.Kind), Name: component.Name, Support: string(component.Support), Reason: component.Reason, Source: component.Source, SourceName: component.SourceName})
 	}
 	for _, diagnostic := range plan.Diagnostics {
 		out.Diagnostics = append(out.Diagnostics, PlanDiagnostic{Severity: string(diagnostic.Severity), Boundary: string(diagnostic.Boundary), Code: diagnostic.Code, Path: diagnostic.Path, Item: diagnostic.Item, Message: diagnostic.Message})

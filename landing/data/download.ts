@@ -14,8 +14,8 @@ export const downloadTechnical = {
     {
       id: 'npm',
       href: 'https://www.npmjs.com/package/universal-agent-plugins',
-      command: 'npx universal-agent-plugins version',
-      invocation: 'npx universal-agent-plugins',
+      command: 'npx -y universal-agent-plugins version',
+      invocation: 'npx -y universal-agent-plugins',
     },
     {
       id: 'script',
@@ -35,7 +35,7 @@ export const downloadTechnical = {
   quickstartSteps: [
     {
       id: 'install-cli',
-      command: 'npx universal-agent-plugins version',
+      command: 'npx -y universal-agent-plugins version',
     },
     {
       id: 'try-plugin',

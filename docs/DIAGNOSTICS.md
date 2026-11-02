@@ -1,5 +1,11 @@
 # Diagnostics Contract
 
+This contract describes the preserved `plugin-kit-ai` workflow. Current
+`agentplugins` diagnostics are defined by the installer and authoring contracts
+and the [public Use/Build guides](https://universal-agent-plugins.com/docs/en/).
+Historical diagnostic codes below are not a promise that the latest installer
+exposes the retired commands.
+
 This document records the current user-facing diagnostics contract for shipped `plugin-kit-ai` surfaces.
 
 ## Goal

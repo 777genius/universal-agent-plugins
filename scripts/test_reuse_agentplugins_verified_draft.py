@@ -5,7 +5,9 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -56,7 +58,6 @@ class ReuseTests(unittest.TestCase):
             "Capture staged release identity", "Share frozen draft assets with the read-only proof workflow")]
         self.jobs.append({"name": "promote-release", "run_id": 42,
                           "status": "completed", "conclusion": "skipped", "steps": []})
-        self.current_main = self.args.commit
         self.set_zip()
 
     def set_zip(self):
@@ -89,12 +90,7 @@ class ReuseTests(unittest.TestCase):
             self.assertEqual(command[2], f"repos/{reuse.REPOSITORY}/actions/artifacts/70/zip")
             return self.body
         if command[:3] == ["git", "-C", self.args.source]:
-            if command[3] == "fetch":
-                return b""
             if command[3] == "rev-parse":
-                return (self.current_main if command[4] == "refs/remotes/origin/main"
-                        else self.args.commit).encode() + b"\n"
-            if command[3] == "rev-list":
                 return (self.args.commit + "\n").encode()
             if command[3] == "status":
                 return b""
@@ -103,6 +99,7 @@ class ReuseTests(unittest.TestCase):
     def verify(self):
         with patch.object(reuse, "api", side_effect=self.api), \
              patch.object(reuse, "output", side_effect=self.output), \
+             patch.object(reuse, "require_current_source"), \
              patch.object(reuse.draft, "verify", return_value=self.receipt) as live:
             result = reuse.verify(self.args)
         self.assertEqual(result, self.receipt)
@@ -111,12 +108,39 @@ class ReuseTests(unittest.TestCase):
     def reject(self):
         with patch.object(reuse, "api", side_effect=self.api), \
              patch.object(reuse, "output", side_effect=self.output), \
+             patch.object(reuse, "require_current_source"), \
              patch.object(reuse.draft, "verify", return_value=self.receipt):
             with self.assertRaises((ValueError, KeyError, TypeError, zipfile.BadZipFile)):
                 reuse.verify(self.args)
 
     def test_exact_qualified_draft_reused(self):
         self.verify()
+
+    def test_qualification_at_exact_tag_reused(self):
+        self.run["head_branch"] = self.args.tag
+        self.verify()
+        self.run["head_branch"] = "agentplugins-v1.2.4"
+        self.reject()
+
+    def test_schema_two_requires_both_parallel_qualification_jobs(self):
+        self.receipt["schema_version"] = 2
+        self.set_zip()
+        qualification_jobs = [{"name": name, "run_id": 42, "status": "completed",
+                               "conclusion": "success", "steps": [{"conclusion": "success"}]}
+                              for name in ("qualify-go", "qualify-npm")]
+        self.jobs.extend(qualification_jobs)
+        self.verify()
+        for job in qualification_jobs:
+            with self.subTest(job=job["name"]):
+                self.jobs.remove(job)
+                self.reject()
+                self.jobs.append(job)
+                job["conclusion"] = "failure"
+                self.reject()
+                job["conclusion"] = "success"
+                job["steps"][0]["conclusion"] = "skipped"
+                self.reject()
+                job["steps"][0]["conclusion"] = "success"
 
     def test_run_and_workflow_mismatch(self):
         for key, bad in (("head_sha", "b" * 40), ("head_branch", "feature"),
@@ -168,13 +192,116 @@ class ReuseTests(unittest.TestCase):
         changed["release"]["assets"][0]["id"] = 999
         with patch.object(reuse, "api", side_effect=self.api), \
              patch.object(reuse, "output", side_effect=self.output), \
+             patch.object(reuse, "require_current_source"), \
              patch.object(reuse.draft, "verify", return_value=changed):
             with self.assertRaisesRegex(ValueError, "draft changed since qualification"):
                 reuse.verify(self.args)
 
-    def test_current_main_moved(self):
-        self.current_main = "d" * 40
-        self.reject()
+
+class SourceIdentityTests(unittest.TestCase):
+    """Use disposable repositories to check the actual Git ancestry/ref boundary."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="TEST-release-source-")
+        self.addCleanup(self.temp.cleanup)
+        self.remote = Path(self.temp.name) / "origin.git"
+        self.source = Path(self.temp.name) / "source"
+        self.env = {**os.environ, "GIT_AUTHOR_NAME": "iliya",
+                    "GIT_AUTHOR_EMAIL": "iliyazelenkog@gmail.com",
+                    "GIT_COMMITTER_NAME": "iliya",
+                    "GIT_COMMITTER_EMAIL": "iliyazelenkog@gmail.com"}
+        self.git("init", "--bare", "--initial-branch=main", str(self.remote), cwd=self.remote.parent)
+        self.git("clone", str(self.remote), str(self.source), cwd=self.remote.parent)
+        self.commit("frozen candidate")
+        self.candidate = self.git("rev-parse", "HEAD").strip()
+        self.tag = "agentplugins-v1.2.3"
+        self.git("tag", self.tag)
+        self.git("push", "origin", "main", self.tag)
+        self.args = argparse.Namespace(repository=reuse.REPOSITORY, tag=self.tag,
+                                       commit=self.candidate, run_id=42, run_attempt=2,
+                                       source=str(self.source))
+        self.receipt = {"release": {"id": 123}, "asset_set_digest": "c" * 64,
+                        "subjects": []}
+
+    def git(self, *args, cwd=None):
+        return subprocess.check_output(["git", "-C", str(cwd or self.source), *args],
+                                       env=self.env, stderr=subprocess.PIPE).decode()
+
+    def commit(self, message):
+        for role in ("AUTHOR", "COMMITTER"):
+            self.assertTrue(self.git("var", f"GIT_{role}_IDENT").startswith(
+                "iliya <iliyazelenkog@gmail.com> "))
+        self.git("commit", "--allow-empty", "-m", message)
+
+    def advance_main(self):
+        self.commit("main descendant")
+        self.git("push", "origin", "main")
+        self.git("checkout", "--detach", self.candidate)
+
+    def verify(self, live_effect=None):
+        with patch.object(reuse, "authenticate", return_value=self.receipt), \
+             patch.object(reuse.draft, "verify", side_effect=live_effect,
+                          return_value=self.receipt) as live:
+            result = reuse.verify(self.args)
+        self.assertEqual(result, self.receipt)
+        live.assert_called_once()
+
+    def test_frozen_candidate_survives_descendant_main(self):
+        self.verify()
+        self.advance_main()
+        self.verify()
+
+    def test_tag_movement_rejected_before_and_during_verification(self):
+        self.advance_main()
+
+        def move_tag(_args):
+            self.git("tag", "--force", self.tag, "main")
+            self.git("push", "--force", "origin", self.tag)
+            return self.receipt
+
+        with self.assertRaisesRegex(ValueError, "tag moved since qualification"):
+            self.verify(move_tag)
+        with self.assertRaisesRegex(ValueError, "tag moved since qualification"):
+            self.verify()
+
+    def test_candidate_removed_from_main_rejected(self):
+        self.git("checkout", "--orphan", "unrelated")
+        self.commit("unrelated main")
+        self.git("push", "--force", "origin", "HEAD:main")
+        self.git("checkout", "--detach", self.candidate)
+        with self.assertRaisesRegex(ValueError, "not an ancestor of current main"):
+            self.verify()
+
+    def test_missing_tag_or_candidate_rejected(self):
+        self.git("push", "origin", "--delete", self.tag)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify()
+        self.git("push", "origin", self.tag)
+        self.args.commit = "f" * 40
+        with self.assertRaisesRegex(ValueError, "checkout differs from frozen commit"):
+            self.verify()
+
+    def test_wrong_checkout_and_dirty_checkout_rejected(self):
+        self.advance_main()
+        self.git("checkout", "main")
+        with self.assertRaisesRegex(ValueError, "checkout differs from frozen commit"):
+            self.verify()
+        self.git("checkout", "--detach", self.candidate)
+        (self.source / "untracked.txt").write_text("dirty checkout")
+        with self.assertRaisesRegex(ValueError, "checkout differs from frozen commit"):
+            self.verify()
+
+    def test_ancestry_command_error_fails_closed(self):
+        run = subprocess.run
+
+        def fail_ancestry(command, **kwargs):
+            if "merge-base" in command:
+                return subprocess.CompletedProcess(command, 128)
+            return run(command, **kwargs)
+
+        with patch.object(reuse.subprocess, "run", side_effect=fail_ancestry):
+            with self.assertRaisesRegex(ValueError, "could not verify frozen commit ancestry"):
+                reuse.require_current_source(self.source, self.tag, self.candidate)
 
 
 if __name__ == "__main__":

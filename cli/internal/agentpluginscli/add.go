@@ -6,24 +6,30 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
-	"github.com/spf13/cobra"
 )
 
 func newAddCommand(app App, opts *options) *cobra.Command {
 	var activationComplete, authComplete bool
 	command := &cobra.Command{
-		Use:     "add <name-or-source>",
-		Aliases: []string{"install"},
-		Short:   "Plan and install one Agent Plugins 1.0 package for one or more clients",
-		Args:    addCommandArgs(opts),
+		Use:   "add <name-or-source>",
+		Short: "Plan and install one Agent Plugins 1.0 package for one or more clients",
+		Args:  addCommandArgs(opts),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			return executeAddCommand(cmd, app, opts, args[0], activationComplete, authComplete)
 		},
 	}
+	command.Flags().BoolVar(&opts.noSave, "no-save", false, "install without saving portable dependency intent")
+	command.Flags().StringVar(&opts.alias, "alias", "", "saved dependency alias")
 	command.Flags().StringVar(&opts.chatGPTAppID, "chatgpt-app-id", "", "personal Context7 registration ID copied from ChatGPT Developer Mode")
 	command.Flags().BoolVar(&activationComplete, "activation-complete", false, "attest that manual client activation is complete")
 	command.Flags().BoolVar(&authComplete, "auth-complete", false, "attest that required authentication is complete or none is required after review")
@@ -44,6 +50,14 @@ func addCommandArgs(opts *options) cobra.PositionalArgs {
 
 func executeAddCommand(cmd *cobra.Command, app App, opts *options, source string, activationComplete, authComplete bool) error {
 	if err := validateCommonOptions(opts); err != nil {
+		return err
+	}
+	if opts.chatGPTAppID != "" {
+		if err := domain.ValidateChatGPTAppID(opts.chatGPTAppID); err != nil {
+			return err
+		}
+	}
+	if handled, err := routeSavedAdd(cmd, app, opts, source, activationComplete, authComplete); handled {
 		return err
 	}
 	opts.installIntents = make(map[domain.ClientID]domain.InstallIntent)
@@ -98,7 +112,7 @@ func executePromptedAdd(cmd *cobra.Command, app App, opts *options, source strin
 	if err != nil {
 		return fmt.Errorf("detect selected AI clients: %w", err)
 	}
-	_, detected, err := preflightSelectedTargets(cmd.Context(), app, selection, detectedClients, false)
+	_, detected, err := preflightProjectLifecycleTargets(cmd.Context(), app, opts, selection, detectedClients, false)
 	if err != nil {
 		return err
 	}
@@ -143,6 +157,10 @@ func runAddWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *o
 }
 
 func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
+	if err := rejectImperativePackageRequirements(loaded); err != nil {
+		return err
+	}
+
 	targets, err := parseTargetOption(opts.target)
 	if err != nil {
 		return err
@@ -169,7 +187,7 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 		InstallIntent: opts.installIntents[selected.ClientID],
 		Envelope:      loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Confirmed: false, Interactive: app.Terminal,
-		Hints: loaded.hints, BackendExecutable: backendExecutable(selected, detectedMap),
+		Hints: loaded.hints, BackendExecutable: backendExecutable(selected, detectedMap, app.scope()),
 		ActivationComplete: activationComplete, AuthComplete: authComplete,
 		PersistAuthoritativeObservations: true,
 		OriginMode:                       loaded.origin, DirectoryResolution: cloneDirectoryOrigin(loaded.directory),
@@ -191,6 +209,7 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 }
 
 func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *options, service usecase.Service, input usecase.AddInput, loaded loadedPackage, planned usecase.AddResult, activationComplete, authComplete, needsInstallConfirmation bool) error {
+	retainPlannedClient(&input, planned.Plan)
 	if opts.format == "human" {
 		if err := renderHumanPlan(cmd.OutOrStdout(), loaded.envelope, planned); err != nil {
 			return err
@@ -371,6 +390,7 @@ func attestAuthenticationComplete(ctx context.Context, cmd *cobra.Command, servi
 
 func resumeAddPhase(ctx context.Context, cmd *cobra.Command, service usecase.Service, input usecase.AddInput, envelope domain.PackageEnvelope, current usecase.AddResult, activationComplete, authComplete bool) (usecase.AddResult, error) {
 	resume := input
+	retainPlannedClient(&resume, current.Plan)
 	resume.Confirmed = true
 	resume.InstallationID = current.InstallationID
 	resume.ActivationComplete = activationComplete

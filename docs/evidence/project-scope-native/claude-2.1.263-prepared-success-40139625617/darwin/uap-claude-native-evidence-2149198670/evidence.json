@@ -1,0 +1,70 @@
+{
+  "client_binary_sha256": "ef5d2909c8af49f31ab6d5487e90316777bc2fac170adfe8160716caa8aaf4f9",
+  "client_version_measured": "2.1.263 (Claude Code)",
+  "finished_utc": "2026-10-24T22:44:05.385116Z",
+  "installer_base_commit": "428bdf5d49e63b78bc4783df6b766c87c8e678ca",
+  "installer_binary_sha256": "f706f052e81912db4330675cd614f2b25c2b2db2ae6aff0775733f671cc0a612",
+  "installer_patch_sha256": "",
+  "installer_tree": "94f69fd2a2e60040c0718dfec6ea4a778be78a6a",
+  "stages": {
+    "foreign_content_inside_managed_directory_blocked": {
+      "status": "passed",
+      "reason": "exact ownership-verification refusal (\"artifact digest mismatch\") when foreign content is planted inside the plugin's own managed directory; the foreign file survived the blocked attempt and was removed only by the test before the real remove below"
+    },
+    "install": {
+      "status": "passed"
+    },
+    "mcp_transport_discovery": {
+      "status": "passed",
+      "reason": "claude mcp list classified remote-http as (HTTP) and remote-sse as (SSE) and attempted a real (loopback-refused) connection to each, distinct from plugin details' shallow key enumeration; no live tool call or successful connection claimed"
+    },
+    "owned_repair": {
+      "status": "passed",
+      "reason": "managed directory re-staged from the still-present, exact-revision-matching local source after deletion; restored content bytes, .mcp.json, and Claude plugin details verified; receipt records the physically absent before-state"
+    },
+    "remove": {
+      "status": "passed",
+      "reason": "managed directory removed; sibling foreign plugin's sentinel content and its sole remaining claude plugin list entry both confirmed; exact inventory diff recorded (removed=8 all plugin-owned, added=0 installer-state only, changed=2)"
+    },
+    "repeat_remove": {
+      "status": "passed",
+      "reason": "exact expected refusal message"
+    },
+    "same_version_refresh": {
+      "status": "passed"
+    },
+    "skill_discovery": {
+      "status": "passed",
+      "reason": "exact plugin-attributed skill enumerated by the real CLI with exact body bytes verified on disk; no model use claimed"
+    },
+    "stdio_discovery": {
+      "status": "passed",
+      "reason": "local stdio enumerated by native CLI; no successful tool call claimed"
+    },
+    "unchanged": {
+      "status": "passed",
+      "reason": "mutated:false plus byte-identical managed-directory tree digest and state-file digest before/after a byte-identical re-apply"
+    },
+    "version_update": {
+      "status": "passed"
+    }
+  },
+  "transcript_sha256": {
+    "01-claude-version.log": "b223e2a39cb8534c8a0923ee0ec5050b0ed073905f830f89ef5b84a754e98185",
+    "02-add-v1.log": "7b8be042a11b1b11d1ef71cd1280120ba206076cd6c0098d3ae57ca6467c1d1d",
+    "03-list-after-install.log": "e05a4bd907e99c330aaa797daeea395af983773dfcdff46ab521830eaa6ff232",
+    "04-details-after-install.log": "f6d3b225f3f8d90d64fafe36b5ebe8c1ed46bf6867fa68f9897c08bbcda50b64",
+    "05-mcp-list-after-install.log": "32fe2e78e244a328f5cf83f8a6c8e72e9e2db3bd5e18e774b7381fca1bf3ae9a",
+    "06-update-v2.log": "67a15913bde0f4e8c6ad220f77820fc2fc197a25f44709cc669dca7d7ef7b870",
+    "07-list-after-version-update.log": "00e0bfb35c45c0e78a5d790bafc172fe707a7e14c38cbe59826d48906417dfa6",
+    "08-update-same-version.log": "c462167e4c64a1c2b74e7d68723241786b3738c9f141a0f5efd8cdd22db73cfd",
+    "09-update-unchanged.log": "f6865e9acd1507ea421527c2b2e9fe0d224cce0fe95dc03c53bdbe6d904c7420",
+    "10-repair-absent.log": "f2451e8eb2ae4d68ab7f2a25fce150ffc421b08aa01d813316925e3aedfac704",
+    "11-list-after-repair.log": "00e0bfb35c45c0e78a5d790bafc172fe707a7e14c38cbe59826d48906417dfa6",
+    "12-details-after-repair.log": "61091ab19d98cc042ceb8919e12a7bd1efcef34cc8166fb2ca79296909c16831",
+    "13-remove-blocked-by-foreign-content.log": "e36c3fb960fade53bafca2570d4a57e660dc125d2563280d63ab2666a77bb450",
+    "14-remove.log": "ca0cf263cacd02d9b12ff11c283b48ed9560bfdfdb013375619639dc409fb103",
+    "15-list-after-remove.log": "d31b52f9ea36ed5c5e6b6b5ac9a95f465059a7d197a1e3995d3b1e98baecb305",
+    "16-repeat-remove.log": "9f7e8a6d254b5cfd57ccbb292dd645cb88a62042fc82f7c940dacec0abbcff53"
+  }
+}

@@ -140,6 +140,9 @@ func mustDefaultRegistry() *Registry {
 		cursorWorkspaceAdapter{},
 		geminiAdapter{},
 		opencodeAdapter{},
+		qoderAdapter{},
+		newGrokPluginAdapter(),
+		newKimiPluginAdapter(),
 	} {
 		if err := registry.Register(adapter); err != nil {
 			panic(err)

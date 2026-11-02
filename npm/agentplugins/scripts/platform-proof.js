@@ -208,7 +208,15 @@ function main() {
   const cache = path.join(root, "binary-cache");
   const synthetic = path.join(root, "synthetic-plugin");
   const temporary = path.join(root, "tmp");
-  for (const directory of [project, cursor, synthetic, temporary]) mkdir(directory);
+  const fixtureBin = path.join(root, "fixture-bin");
+  for (const directory of [project, cursor, synthetic, temporary, fixtureBin]) mkdir(directory);
+  // A leftover config directory cannot select Cursor. This stub establishes
+  // only synthetic editor presence, never native plugin execution evidence.
+  const cursorStub = process.platform === "win32" ? "cursor.cmd" : "cursor";
+  const cursorStubBody = process.platform === "win32"
+    ? '@echo off\r\nif "%~1"=="--version" (echo 0.0.0-platform-proof & exit /b 0)\r\nexit /b 1\r\n'
+    : '#!/bin/sh\nif [ "$1" = "--version" ]; then printf "%s\\n" "0.0.0-platform-proof"; else exit 1; fi\n';
+  fs.writeFileSync(path.join(fixtureBin, cursorStub), cursorStubBody, { mode: 0o755 });
   fs.writeFileSync(path.join(cursor, "platform-proof-marker"), "synthetic isolated client root\n");
   fs.writeFileSync(path.join(synthetic, "plugin.json"), JSON.stringify({
     $schema: "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
@@ -224,6 +232,7 @@ function main() {
 
   const env = { ...process.env };
   Object.assign(env, {
+    PATH: fixtureBin + path.delimiter + (process.env.PATH || ""),
     HOME: home,
     USERPROFILE: home,
     APPDATA: path.join(root, "appdata"),

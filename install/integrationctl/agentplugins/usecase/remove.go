@@ -11,16 +11,18 @@ import (
 )
 
 type RemoveInput struct {
-	Selector            string
-	Client              domain.DetectedClient
-	Scope               domain.InstallScope
-	DryRun              bool
-	Confirmed           bool
-	Interactive         bool
-	ExternalUninstalled bool
-	OperationID         string
-	BackendExecutable   string
-	PurgeData           bool
+	SelectedDelivery     domain.SelectedDelivery
+	Selector             string
+	Client               domain.DetectedClient
+	Scope                domain.InstallScope
+	DryRun               bool
+	Confirmed            bool
+	Interactive          bool
+	ExternalUninstalled  bool
+	OperationID          string
+	BackendExecutable    string
+	PurgeData            bool
+	EnvironmentAuthority *domain.EnvironmentAuthority
 }
 
 type RemoveResult struct {
@@ -39,7 +41,20 @@ func (service Service) Remove(ctx context.Context, input RemoveInput) (RemoveRes
 	if service.StateStore == nil || service.Paths == nil || service.Targets == nil || service.Stager == nil || service.Activator == nil {
 		return RemoveResult{}, fmt.Errorf("agentplugins service dependencies are incomplete")
 	}
-	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return RemoveResult{}, err
+	}
+	_, installation, err := findInstallation(state, input.Selector)
+	if err != nil {
+		return RemoveResult{}, err
+	}
+	service, frozen, err := service.freezeProfiles(ctx, installation.InstallationID, []domain.DetectedClient{input.Client}, false)
+	if err != nil {
+		return RemoveResult{}, err
+	}
+	input.Client = frozen[0]
+	release, err := service.beginEnvironmentMutation(ctx, input.DryRun, input.Confirmed, input.EnvironmentAuthority)
 	if err != nil {
 		return RemoveResult{}, err
 	}

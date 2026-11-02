@@ -2,18 +2,154 @@ package providers
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/cursorhooks"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+// Regression: an already committed selected Cursor package cannot reach the
+// read-only update path because its registered adapter lacks active projection.
+// Package bytes must never turn an attempt's Stop receipt into acknowledged
+// ownership (including when its foreign remainder differs from the old one).
+func TestStagerSelectedCursorActiveProjection(t *testing.T) {
+	envelope := stagingEnvelope(t)
+	plan := stagingPlan(t, domain.ClientCursor, domain.PackageNative)
+	registry, err := clients.NewRegistry(cursor.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stager := testStager(Stager{Registry: registry})
+	snapshot, err := stager.SnapshotBuilder.Build(t.Context(), envelope.SnapshotRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope.TreeDigest = snapshot.Digest
+	if err := snapshot.Close(); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(plan.NativeRegistryRoot, "hooks.json"), `{"version":1,"hooks":{"stop":[{"command":"TEST-foreign"}]}}`)
+	planned, err := cursorhooks.Plan(cursorhooks.Request{Operation: cursorhooks.Install,
+		Shell: cursorhooks.LinuxUserShell32212, ExecutableVerified: true,
+		Specs: []cursorhooks.HookSpec{{Executable: filepath.Join(plan.NativeRegistryRoot, "TEST-helper"), Selector: filepath.Join(plan.NativeRegistryRoot, "TEST-selector")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := planned.Receipt
+	plan.SelectedDelivery, err = domain.NewCursorDelivery(domain.CursorDeliveryFacts{
+		ProfileRoot: plan.NativeRegistryRoot, HooksPath: filepath.Join(plan.NativeRegistryRoot, "hooks.json"),
+		ProfileIdentity: "TEST-contract-only", QualificationID: "TEST-not-native-qualified",
+		CursorVersion: "2026.09.28-64d2043", TargetOS: "linux", TargetArch: "amd64",
+		Executable: r.Spec.Executable, Selector: r.Spec.Selector, Shell: string(r.Shell), ObjectID: "TEST-stop",
+		EntryDigest: r.EntryDigest, CanonicalDigest: envelope.TreeDigest, OriginalRawDigest: fmt.Sprintf("sha256:%x", sha256.Sum256(nil)),
+		PlannedReceipt: domain.CursorHookReceipt{Version: r.Version, Event: r.Event, Executable: r.Spec.Executable, Selector: r.Spec.Selector, Shell: string(r.Shell), EntryDigest: r.EntryDigest, RemainderDigest: r.RemainderDigest},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := stager.Stage(t.Context(), envelope, plan, "TEST-active-cursor", domain.CompatibilityHints{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(delivery.NativeObjects) != 1 || delivery.NativeObjects[0].Kind != "managed_package_directory" {
+		t.Fatalf("package projection inferred profile ownership: %+v", delivery.NativeObjects)
+	}
+	if err := os.Rename(delivery.StagingPath, plan.ActivePath); err != nil {
+		t.Fatal(err)
+	}
+	plan.SelectedDelivery, err = plan.SelectedDelivery.WithProjectionDigest(delivery.ArtifactDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforePlan := plan
+	beforeEnvelope, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := cursorProjectionBytes(t, plan.TargetAnchor, plan.NativeRegistryRoot, envelope.SnapshotRoot)
+	objects, err := stager.ProjectActiveNative(t.Context(), envelope, plan, delivery.ArtifactDigest, "")
+	if err != nil {
+		t.Fatalf("verified selected active projection: %v", err)
+	}
+	if len(objects) != 0 {
+		t.Fatalf("attempt receipt became package ownership: %+v", objects)
+	}
+	for _, name := range []string{"canonical", "profile", "scope", "client"} {
+		t.Run(name, func(t *testing.T) {
+			p, e := plan, envelope
+			switch name {
+			case "canonical":
+				e.TreeDigest = "sha256:" + strings.Repeat("a", 64)
+			case "profile":
+				p.NativeRegistryRoot += "-other"
+			case "scope":
+				p.Scope = domain.ScopeProject
+			case "client":
+				p.ClientID = domain.ClientGemini
+			}
+			if got, err := stager.ProjectActiveNative(t.Context(), e, p, delivery.ArtifactDigest, ""); err == nil || len(got) != 0 {
+				t.Fatalf("mismatched %s accepted: %+v %v", name, got, err)
+			}
+		})
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := stager.ProjectActiveNative(ctx, envelope, plan, delivery.ArtifactDigest, ""); err == nil {
+		t.Fatal("canceled projection accepted")
+	}
+	afterEnvelope, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, cursorProjectionBytes(t, plan.TargetAnchor, plan.NativeRegistryRoot, envelope.SnapshotRoot)) || !reflect.DeepEqual(beforePlan, plan) || string(beforeEnvelope) != string(afterEnvelope) {
+		t.Fatal("active projection changed package/profile bytes or frozen inputs")
+	}
+	writeTestFile(t, filepath.Join(plan.ActivePath, "mcp.json"), "TEST-drift")
+	drifted := cursorProjectionBytes(t, plan.TargetAnchor, plan.NativeRegistryRoot, envelope.SnapshotRoot)
+	if got, err := stager.ProjectActiveNative(t.Context(), envelope, plan, delivery.ArtifactDigest, ""); err == nil || !strings.Contains(err.Error(), "verify active package") || len(got) != 0 {
+		t.Fatalf("drift not refused before projection: %+v %v", got, err)
+	}
+	if !reflect.DeepEqual(drifted, cursorProjectionBytes(t, plan.TargetAnchor, plan.NativeRegistryRoot, envelope.SnapshotRoot)) {
+		t.Fatal("drift refusal rewrote bytes")
+	}
+}
+
+func cursorProjectionBytes(t *testing.T, roots ...string) map[string]string {
+	t.Helper()
+	result := map[string]string{}
+	for _, root := range roots {
+		if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			var body []byte
+			if !entry.IsDir() {
+				body, err = os.ReadFile(path)
+			}
+			result[path] = fmt.Sprintf("%s:%x", info.Mode(), sha256.Sum256(body))
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return result
+}
 
 func TestStagerBuildsOpenAIProjectionWithoutMutatingPortableSnapshot(t *testing.T) {
 	t.Parallel()
@@ -482,6 +618,28 @@ func TestStagerKeepsNativePackageAndSanitizesFailureBoundaries(t *testing.T) {
 	}
 }
 
+func TestStagerCarriesNativeHooksAndCommandsForQoder(t *testing.T) {
+	t.Parallel()
+	envelope := stagingEnvelope(t)
+	hooksBody := `{"description":"demo hooks","hooks":{"Stop":[{"async":true,"hooks":[{"type":"command","command":"${QODER_PLUGIN_ROOT}/bin/run","args":["stop"],"name":"demo-stop","timeout":2}]}]}}` + "\n"
+	writeTestFile(t, filepath.Join(envelope.SnapshotRoot, "hooks", "hooks.json"), hooksBody)
+	writeTestFile(t, filepath.Join(envelope.SnapshotRoot, "commands", "ship.md"), "---\ndescription: Ship the demo\n---\nShip it.\n")
+	plan := stagingPlan(t, domain.ClientQoder, domain.PackageNative)
+	delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "operation-qoder-hooks", domain.CompatibilityHints{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body, err := os.ReadFile(filepath.Join(delivery.StagingPath, "hooks", "hooks.json")); err != nil || string(body) != hooksBody {
+		t.Fatalf("staged hooks = %q, %v", body, err)
+	}
+	if _, err := os.Stat(filepath.Join(delivery.StagingPath, "commands", "ship.md")); err != nil {
+		t.Fatalf("staged commands missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(envelope.SnapshotRoot, "hooks", "hooks.json")); err != nil {
+		t.Fatalf("source hooks were mutated: %v", err)
+	}
+}
+
 func TestStagerInvalidSkillNamedSkillsDoesNotRemoveSkillsRoot(t *testing.T) {
 	t.Parallel()
 	envelope := stagingEnvelope(t)
@@ -549,7 +707,7 @@ func TestStagerVerifiesAndSafelyDiscardsOnlyItsStagingDirectory(t *testing.T) {
 
 func TestStagerVerifyRejectsMarkersExcludedFromPortableSnapshotDigest(t *testing.T) {
 	t.Parallel()
-	for _, marker := range []string{filepath.Join(".git", "config"), filepath.Join("nested", ".plugin-kit-ai.lock")} {
+	for _, marker := range []string{filepath.Join(".git", "config"), filepath.Join("nested", ".uap-integrations.lock"), filepath.Join("nested", ".plugin-kit-ai.lock")} {
 		marker := marker
 		t.Run(marker, func(t *testing.T) {
 			envelope := stagingEnvelope(t)
@@ -626,7 +784,7 @@ func stagingEnvelope(t *testing.T) domain.PackageEnvelope {
 
 func stagingPlan(t *testing.T, client domain.ClientID, mode domain.PackageMode) domain.DeliveryPlan {
 	t.Helper()
-	anchor := filepath.Join(t.TempDir(), "managed")
+	anchor := filepath.Join(tempRoot(t), "managed")
 	target := filepath.Join(anchor, "clients", string(client))
 	if client == domain.ClientClaude {
 		target = filepath.Join(anchor, "skills")
@@ -649,7 +807,7 @@ func stagingPlan(t *testing.T, client domain.ClientID, mode domain.PackageMode) 
 			{Kind: domain.ComponentExtension, Name: "cursor", Support: domain.SupportUnsupported},
 		},
 	}
-	plan.NativeRegistryRoot = filepath.Join(t.TempDir(), "config")
+	plan.NativeRegistryRoot = filepath.Join(tempRoot(t), "config")
 	return plan
 }
 

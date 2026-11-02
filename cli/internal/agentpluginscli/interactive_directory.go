@@ -109,7 +109,7 @@ func (session *directoryTargetSession) subsetResolves(candidate []domain.Detecte
 
 func (session *directoryTargetSession) baseRequest(targets []domain.ClientID) domain.DirectoryResolveRequest {
 	return domain.DirectoryResolveRequest{
-		Selector: session.resolveSelector, Targets: targets, Scope: domain.ScopeUser,
+		Selector: session.resolveSelector, Targets: targets, Scope: session.app.scope(),
 		InstallerVersion: session.app.Version, ClientVersions: session.environment.ClientVersions,
 		OS: runtime.GOOS, Architecture: runtime.GOARCH, DependencyIdentity: session.environment.DependencyIdentity,
 		SchemaVersion: "1.0.0", Operation: session.operation, Recorded: session.recorded,

@@ -13,7 +13,7 @@ import (
 )
 
 func sanitizePackage(paths ports.PathPolicy, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
-	if err := removeUnsupportedPortableHooks(paths, root); err != nil {
+	if err := removeUnsupportedPortableHooks(paths, root, plan); err != nil {
 		return err
 	}
 	if err := removeInvalidAndUnsupportedSkills(paths, root, envelope, plan); err != nil {
@@ -28,7 +28,13 @@ func sanitizePackage(paths ports.PathPolicy, root string, envelope domain.Packag
 	return writeSanitizedExtensions(root, envelope, plan)
 }
 
-func removeUnsupportedPortableHooks(paths ports.PathPolicy, root string) error {
+func removeUnsupportedPortableHooks(paths ports.PathPolicy, root string, plan domain.DeliveryPlan) error {
+	// A client that convention-discovers package-root hooks/ and commands/
+	// receives them as target-native surfaces; the portable-hooks strip below
+	// is only for clients with no consumer for that directory.
+	if plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, plan.Scope).DiscoversNativeHooks {
+		return nil
+	}
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return fmt.Errorf("inspect staged package root: %w", err)

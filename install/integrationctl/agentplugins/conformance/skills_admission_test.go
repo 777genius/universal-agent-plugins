@@ -61,3 +61,24 @@ func TestSharedSkillAdmission(t *testing.T) {
 		})
 	}
 }
+
+// Prevent reintroducing the old narrower installer dialect. The UTF-8 limit is
+// characters, extension fields stay opaque, and original bytes stay untouched.
+func TestInstallerAndAuthorShareNormativeUnicodeAndOpaqueGrammar(t *testing.T) {
+	for _, name := range []string{"навык", "école", "a" + strings.Repeat("é", 63)} {
+		body := append([]byte{0xef, 0xbb, 0xbf}, []byte("---\r\nname: "+name+"\r\ndescription: Works\r\nfuture: {opaque: [1, true]}\r\n---\r\nbody\r\n")...)
+		skill, err := ParseInstallerSkill(name, body)
+		if err != nil || string(skill.Raw) != string(body) {
+			t.Fatal(name, err)
+		}
+		facts, err := (Decoder{}).DecodeSkill(context.Background(), SkillInput{name, NewDocument("skills/"+name+"/SKILL.md", Present, body)})
+		if err != nil || facts.Coverage.Skills != Pass {
+			t.Fatal(name, facts, err)
+		}
+	}
+	_, err := ParseInstallerSkill("good", []byte("---\nname: good\nname: other\ndescription: Works\n---\n"))
+	code, unavailable := SkillErrorCode(err)
+	if !unavailable || code != "yaml_duplicate_key" {
+		t.Fatalf("duplicate YAML evidence = %s %v %v", code, unavailable, err)
+	}
+}

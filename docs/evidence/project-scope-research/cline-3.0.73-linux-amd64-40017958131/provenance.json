@@ -1,0 +1,229 @@
+{
+  "evidence_kind": "historical-hosted-research-provenance",
+  "recorded_utc": "2026-10-24",
+  "repository": "777genius/universal-agent-plugins",
+  "source_commit": "bb8c89bf62542096a0af3aff26f21a16fee4d595",
+  "run_id": 40017958131,
+  "job_id": 120634802143,
+  "artifact_id": 12532307825,
+  "artifact_name": "cline-3.0.73-precode-config-linux-amd64",
+  "artifact_archive_bytes": 9915,
+  "artifact_archive_sha256": "cec4b3dd3bf2aa7a8572c7d517f06c3529837d5e01445326d00d4a2d4f27c68c",
+  "run_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/40017958131",
+  "job_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/40017958131/job/120634802143",
+  "archive_committed": false,
+  "verifications": {
+    "raw_text_members": 29,
+    "stream_records_size_and_sha256_verified": 28,
+    "fixture_inventories_equal": true,
+    "native_created_empty": true,
+    "original_summary_preserved": true
+  },
+  "comparison_checkpoint": "4cba9df5cab26f12fafa4c0e68a119953485e652",
+  "source_closure_comparison": [
+    {
+      "path": "scripts/research-cline-native.py",
+      "measured_source_blob": "43b4dfb73fc89cbd84dc392c52e80ae6bb201bd2",
+      "comparison_checkpoint_blob": "43b4dfb73fc89cbd84dc392c52e80ae6bb201bd2",
+      "byte_identical": true
+    },
+    {
+      "path": "scripts/native_client_research.py",
+      "measured_source_blob": "7ae48fa7d2b3dc7dcbbea85ccb6181944d4f9f31",
+      "comparison_checkpoint_blob": "624fcd6d098cbcac5e3ad176e3718b85ca661fcc",
+      "byte_identical": false
+    },
+    {
+      "path": "scripts/research-grok-native.py",
+      "measured_source_blob": "66f64189ae91f7a5795aa5501508db767f8b9fa5",
+      "comparison_checkpoint_blob": "66f64189ae91f7a5795aa5501508db767f8b9fa5",
+      "byte_identical": true
+    },
+    {
+      "path": "scripts/run-native-client-matrix.py",
+      "measured_source_blob": "6947dc0d105a311d7f19ba851e50c3ac28c9a654",
+      "comparison_checkpoint_blob": "9d23a2ececdd5346b3f497f80d7aa216c2cc6648",
+      "byte_identical": false
+    },
+    {
+      "path": "scripts/native_client_draft.py",
+      "measured_source_blob": "521e1420d65e0ee2b29ecebfb66ffbe17c13cc50",
+      "comparison_checkpoint_blob": "521e1420d65e0ee2b29ecebfb66ffbe17c13cc50",
+      "byte_identical": true
+    },
+    {
+      "path": ".github/workflows/cline-native-research.yml",
+      "measured_source_blob": "ec7d58458f1ffc91862cc5b7a953278cf85ca4a2",
+      "comparison_checkpoint_blob": "ec7d58458f1ffc91862cc5b7a953278cf85ca4a2",
+      "byte_identical": true
+    }
+  ],
+  "interpretation_reviews": [
+    {
+      "reviewer": "skillshare_scope",
+      "decision": "GO for concrete post-observation plan only",
+      "native_executed_by_review": false
+    },
+    {
+      "reviewer": "root",
+      "decision": "GO for concrete post-observation plan only",
+      "native_executed_by_review": false
+    }
+  ],
+  "qualification_boundary": {
+    "current_head_native_gate": false,
+    "uap_project_installation": false,
+    "ordinary_project_mcp_startup": false,
+    "mcp_initialize_or_tool": false,
+    "skill_execution": false,
+    "ide_or_trust_or_model": false,
+    "runtime_network_isolation": false
+  },
+  "files": [
+    {
+      "name": "cline-precode-research.json",
+      "bytes": 27900,
+      "sha256": "3cc5c427a4abe2f1bfe45a36c414e487d70da3d7109dd1dd6541b33488fe3176"
+    },
+    {
+      "name": "config-help.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "config-help.stdout.log",
+      "bytes": 186,
+      "sha256": "f251998cd21fa6e94730770601b6081e279a79312f98102d3445a5ef983358cf"
+    },
+    {
+      "name": "cross-a-from-b.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "cross-a-from-b.stdout.log",
+      "bytes": 156,
+      "sha256": "1e24e90f88c97a59125df9dbd80bb881d82c2107ac1eacfbe95bbd3bc2aa42a6"
+    },
+    {
+      "name": "default-a-again.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "default-a-again.stdout.log",
+      "bytes": 171,
+      "sha256": "8736a40624cd044c742fbe14108eebc9d8e4e163940f826154b124d967dd5e8c"
+    },
+    {
+      "name": "default-a.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "default-a.stdout.log",
+      "bytes": 171,
+      "sha256": "8736a40624cd044c742fbe14108eebc9d8e4e163940f826154b124d967dd5e8c"
+    },
+    {
+      "name": "default-b.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "default-b.stdout.log",
+      "bytes": 171,
+      "sha256": "8736a40624cd044c742fbe14108eebc9d8e4e163940f826154b124d967dd5e8c"
+    },
+    {
+      "name": "git-init-project-a.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "git-init-project-a.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "git-init-project-b.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "git-init-project-b.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "help.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "help.stdout.log",
+      "bytes": 3993,
+      "sha256": "04d834c4ae0cc8ea0bf304351a54a4d534acfb52f92c40fa6e28bd290ddef651"
+    },
+    {
+      "name": "mcp-help.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "mcp-help.stdout.log",
+      "bytes": 332,
+      "sha256": "104e1a4b531a169d65d77511a9d8b9b1140dd5e33534274c12cd1c7fa7838563"
+    },
+    {
+      "name": "override-a.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "override-a.stdout.log",
+      "bytes": 156,
+      "sha256": "1e24e90f88c97a59125df9dbd80bb881d82c2107ac1eacfbe95bbd3bc2aa42a6"
+    },
+    {
+      "name": "override-b.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "override-b.stdout.log",
+      "bytes": 145,
+      "sha256": "36e7b91aa4dd2c2013048df70e6dc0139ce0cd3bd8ff89a39d2c96808ac307d1"
+    },
+    {
+      "name": "skills-a.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "skills-a.stdout.log",
+      "bytes": 665,
+      "sha256": "0125c771a967130ba90d2ac84afb91a860bc7795a5325b14601f2f9122058a7a"
+    },
+    {
+      "name": "skills-b.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "skills-b.stdout.log",
+      "bytes": 665,
+      "sha256": "15fa742c1862f6e2be4a25783eda83013d476374c0b50e3519718fd4cb8f5cb5"
+    },
+    {
+      "name": "version.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "version.stdout.log",
+      "bytes": 7,
+      "sha256": "942a33503b6a87e2f85be82d79fc3ced6c59ebd1b901ba309db8d04da494ffc7"
+    }
+  ]
+}

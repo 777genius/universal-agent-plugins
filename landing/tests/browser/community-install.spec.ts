@@ -22,7 +22,7 @@ test('community installer is centered, full-width, and readable at desktop/table
     expect(Math.abs(grid.width - box.width)).toBeLessThanOrEqual(1);
     expect(Math.abs(box.x + box.width / 2 - width / 2)).toBeLessThanOrEqual(1);
     const label = panel.locator('.app-multiselect__value > span:last-child');
-    await expect(label).toHaveText('All installed agents');
+    await expect(label).toHaveText('Choose agents in terminal');
     expect(await label.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,

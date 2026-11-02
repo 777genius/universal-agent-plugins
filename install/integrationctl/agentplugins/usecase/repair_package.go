@@ -15,6 +15,9 @@ func (session *repairSession) repairPackage() (AddResult, error) {
 	if !ok {
 		return session.result, fmt.Errorf("managed package integrity could not be determined; refusing repair: %w", session.verifyErr)
 	}
+	if verification.Kind == ports.VerificationDigestMismatch && domain.ClientTraitsFor(session.input.Client.ClientID).ProtectsModifiedPackage {
+		return session.result, fmt.Errorf("managed native extension was edited; preserve the changes before repair: %w", session.verifyErr)
+	}
 	beforeDigest, err := repairBeforeDigest(verification)
 	if err != nil {
 		return session.result, err
@@ -63,11 +66,14 @@ func (session *repairSession) stageRepairDelivery(allowProjectionChange bool) (d
 	if err != nil {
 		return domain.StagedDelivery{}, err
 	}
-	delivery, err := session.service.stagePackage(session.ctx, session.input.Envelope, session.plan, operationID, session.input.Hints, dataPath)
+	delivery, err := session.service.stagePackage(session.ctx, session.input.Envelope, cloneLocalObservationPlan(session.plan), operationID, session.input.Hints, dataPath)
 	if err != nil {
 		return domain.StagedDelivery{}, err
 	}
 	delivery, err = bindStagedDeliveryToPhysicalOwner(delivery, session.plan, &session.client)
+	if err == nil {
+		delivery.NativeObjects, err = retainRecordedLocalSelector(session.plan.SelectedDelivery, session.client, delivery.NativeObjects)
+	}
 	if err != nil {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return domain.StagedDelivery{}, err
@@ -86,6 +92,11 @@ func (session *repairSession) stageRepairDelivery(allowProjectionChange bool) (d
 			return domain.StagedDelivery{}, fmt.Errorf("prepare locked MCP runtime before repair activation: %w", err)
 		}
 	}
+	if err := sealStagedSelection(&session.plan, delivery); err != nil {
+		_ = session.service.Stager.Discard(context.Background(), delivery)
+		return domain.StagedDelivery{}, err
+	}
+	session.result.Plan = session.plan
 	session.input.OperationID = operationID
 	return delivery, nil
 }
@@ -118,12 +129,25 @@ func (session *repairSession) commitRepairPackage(delivery domain.StagedDelivery
 }
 
 func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelivery, beforeDigest string, verifiedState domain.ActivationOutcome) (AddResult, error) {
+	if err := session.service.revalidateHost(session.ctx, session.input.Client); err != nil {
+		return session.result, err
+	}
+
+	if session.service.ClientPreparation != nil {
+		if err := session.service.ClientPreparation.RevalidateClient(session.ctx, session.input.Client, session.plan); err != nil {
+			return session.result, fmt.Errorf("prepared host changed before repair commit: %w", err)
+		}
+	}
+	if err := session.verifyProjectRepairOwnership(); err != nil {
+		return session.result, err
+	}
 	// The user or client can change the native object while staging runs. Repair
 	// may replace the exact absent/digest-mismatched object reviewed above, but
 	// never a different object that appeared after preflight.
 	kernel := session.service.Kernel
 	kernel.StateStore = session.service.StateStore
 	desiredClient := session.client
+	desiredClient.SelectedDelivery = session.plan.SelectedDelivery
 	desiredClient.Materialization = domain.MaterializationMaterialized
 	desiredClient.Activation = verifiedState.Activation
 	desiredClient.Authentication = verifiedState.Authentication
@@ -134,6 +158,9 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 	session.installation.Clients[session.clientKey] = desiredClient
 	session.installation.UpdatedAt = desiredClient.UpdatedAt
 	session.state.Installations[session.index] = session.installation
+	_ = transaction.UpsertEnvironmentReceipt(&session.state, session.input.EnvironmentAuthority, session.installation.InstallationID,
+		session.clientKey, firstEnvironmentSourceKey(session.input.EnvironmentAuthority, domain.ComputeSourceBindingID(session.input.Envelope.Source)), session.input.Envelope.TreeDigest,
+		session.plan.ProfileAuthority(), "committed")
 	receipt, err := kernel.ApplyDirectory(session.ctx, transaction.DirectoryMutation{
 		OperationID: session.input.OperationID, InstallationID: session.installation.InstallationID, ClientBindingID: session.clientKey,
 		Sequence: nextSequence(session.client), OwnedBase: delivery.OwnedBase, ActivePath: session.target.ActivePath,
@@ -147,6 +174,7 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 		Verify: func(verifyContext context.Context, activePath string) error {
 			return session.service.Stager.Verify(verifyContext, activePath, delivery.ArtifactDigest)
 		},
+		EnvironmentAuthority: session.input.EnvironmentAuthority,
 	})
 	session.result.Receipt = receipt
 	if err != nil {
@@ -158,10 +186,13 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 }
 
 func (session *repairSession) reactivateRepaired(delivery domain.StagedDelivery, verifiedState domain.ActivationOutcome) (AddResult, error) {
-	if nativeLifecycleClient(session.input.Client.ClientID) {
+	if preparedProjectFileCandidate(session.input, session.plan) {
+		return session.verifyRepairedProjectFiles(delivery)
+	}
+	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
 		return session.reapplyRepairedNative(delivery)
 	}
-	if domain.ClientTraitsFor(session.input.Client.ClientID).UsesManagedStdioLauncher {
+	if session.plan.SelectedDelivery.EffectiveTraitsForScope(session.input.Client.ClientID, session.input.Scope).UsesManagedStdioLauncher {
 		return session.verifyRepairedLauncher(delivery)
 	}
 	_ = verifiedState
@@ -169,6 +200,7 @@ func (session *repairSession) reactivateRepaired(delivery domain.StagedDelivery,
 }
 
 func (session *repairSession) reapplyRepairedNative(delivery domain.StagedDelivery) (AddResult, error) {
+	previousObservation := session.plan.LocalEntryObservation.Clone()
 	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installation.InstallationID, session.clientKey, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.plan,
 		Delivery: domain.StagedDelivery{
@@ -182,7 +214,7 @@ func (session *repairSession) reapplyRepairedNative(delivery domain.StagedDelive
 	})
 	outcome = preserveManagedAuthentication(outcome, session.client.Authentication)
 	session.result.Activation = outcome
-	if _, updateErr := session.service.updateActivationResult(session.installation.InstallationID, session.clientKey, outcome, activationErr, session.client.NativeObjects); updateErr != nil {
+	if _, updateErr := session.service.updateActivationResultWithObservation(session.installation.InstallationID, session.clientKey, outcome, activationErr, session.client.NativeObjects, previousObservation); updateErr != nil {
 		if activationErr != nil {
 			return session.result, fmt.Errorf("reapply repaired native state: %w; persist verification state: %w", activationErr, updateErr)
 		}

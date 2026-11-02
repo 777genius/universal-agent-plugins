@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { expectedDistribution } from '../../utils/registry';
+import { projections, navigate } from './i18n-state.helpers';
+import type { RegistryIndex, RegistryPlugin } from '../../types/registry';
 import { expect, test } from '@playwright/test';
 import { clients } from '../../data/clients';
 
@@ -8,7 +12,7 @@ test('CSS background works without JavaScript and keeps unique logos on the circ
   const page = await context.newPage();
   try {
     await page.goto('./');
-    const field = page.locator('.hero__demo .hero-agent-field');
+    const field = page.locator('.hero-agent-field');
     await expect(field).toHaveAttribute('aria-hidden', 'true');
     await expect(field.locator('[data-client-id]')).toHaveCount(uniqueLogos.length);
     await expect(field.locator('img[src$="/openai.svg"]')).toHaveCount(1);
@@ -52,7 +56,7 @@ test('CSS background works without JavaScript and keeps unique logos on the circ
 test('CSS background depth animates on the right and pauses offscreen or hidden', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('./');
-  const field = page.locator('.hero__demo .hero-agent-field');
+  const field = page.locator('.hero-agent-field');
   const orbit = field.locator('.hero-agent-field__orbit');
   await expect(field).toHaveClass(/hero-agent-field--active/);
   // Observe real playback in one browser task. The failure trace stalled in a
@@ -65,7 +69,7 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   });
   const first = await orbit.evaluate((node) => getComputedStyle(node).transform);
   await page.waitForFunction((initial) => {
-    const node = document.querySelector('.hero__demo .hero-agent-field__orbit');
+    const node = document.querySelector('.hero-agent-field__orbit');
     return node && getComputedStyle(node).animationPlayState === 'running'
       && getComputedStyle(node).transform !== initial;
   }, first, { timeout: 5_000 });
@@ -77,7 +81,7 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   expect(bounds.x).toBeGreaterThan(copy.x + copy.width);
   expect(bounds.y).toBeCloseTo(installation.y, 1);
   expect(bounds.height).toBeCloseTo(installation.height, 1);
-  expect(await field.evaluate((node) => getComputedStyle(node).position)).toBe('absolute');
+  expect(await field.evaluate((node) => getComputedStyle(node).position)).toBe('fixed');
   const sceneAnimations = await field.evaluate((node) => node.getAnimations({ subtree: true })
     .map((animation) => (animation as CSSAnimation).animationName));
   expect(sceneAnimations).toContain('agent-orbit-breathe');
@@ -96,10 +100,10 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   // Real out-of-plane rotation changes depth on both axes, not just a flat spin.
   expect(Math.abs(tiltMatrices[0]![0]! - tiltMatrices[1]![0]!)).toBeGreaterThan(0.5);
   expect(Math.abs(tiltMatrices[0]![1]! - tiltMatrices[1]![1]!)).toBeGreaterThan(0.5);
-  await page.getByRole('contentinfo').scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
   await expect(field).not.toHaveClass(/hero-agent-field--active/);
   expect(await orbit.evaluate((node) => getComputedStyle(node).animationPlayState)).toBe('paused');
-  await field.scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   await expect(field).toHaveClass(/hero-agent-field--active/);
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { value: true, configurable: true });
@@ -112,7 +116,7 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   });
   await expect(field).toHaveClass(/hero-agent-field--active/);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
+  await expect.poll(() => field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
 });
 
 test('logos travel clockwise along a stationary ring and stay upright', async ({ page }) => {
@@ -167,52 +171,68 @@ test('larger breathing background never changes layout or blocks the foreground'
   await expect(field).toHaveCSS('perspective', '1125px');
   for (const width of [1440, 1280, 1024, 800, 390, 280]) {
     await page.setViewportSize({ width, height: 1000 });
-    await field.scrollIntoViewIfNeeded();
-    const windowBefore = (await page.locator('.hero__window').boundingBox())!;
-    const heroBefore = (await page.locator('.hero').boundingBox())!;
-    const planeWidth = await field.locator('.hero-agent-field__plane')
-      .evaluate((node) => Number.parseFloat(getComputedStyle(node).width));
-    const fieldWidth = (await field.boundingBox())!.width;
-    expect(await field.locator('.hero-agent-field__plane')
-      .evaluate((node) => Number.parseFloat(getComputedStyle(node).left))).toBeCloseTo(fieldWidth * 0.62 - 100, 1);
-    expect(planeWidth).toBeCloseTo(Math.min(width <= 720 ? 492 : 720, fieldWidth * 1.5), 1);
-    expect(await field.locator('.hero-agent-field__node').first()
-      .evaluate((node) => Number.parseFloat(getComputedStyle(node).width))).toBe(width <= 720 ? 30 : 38);
-    expect(await field.locator('.hero-agent-field__hub')
-      .evaluate((node) => Number.parseFloat(getComputedStyle(node).width))).toBe(width <= 720 ? 96 : 116);
-    expect(await field.locator('.hero-agent-field__hub img')
-      .evaluate((node) => Number.parseFloat(getComputedStyle(node).width))).toBe(width <= 720 ? 64 : 76);
-    await field.evaluate((node: HTMLElement) => { node.style.display = 'none'; });
-    expect(await page.locator('.hero__window').boundingBox()).toEqual(windowBefore);
-    expect(await page.locator('.hero').boundingBox()).toEqual(heroBefore);
-    await field.evaluate((node: HTMLElement) => { node.style.removeProperty('display'); });
-    for (const time of [0, 5000, 10000, 36000, 54000]) {
-      await field.evaluate((node, elapsed) => {
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    // Read one viewport atomically, retaining every geometry check while avoiding
+    // repeated protocol/snapshot work between these read-only measurements.
+    const geometry = await field.evaluate((node: HTMLElement) => {
+      const box = (selector: string) => {
+        const { x, y, width, height } = document.querySelector(selector)!.getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      const plane = getComputedStyle(node.querySelector('.hero-agent-field__plane')!);
+      const result = {
+        windowBefore: box('.hero__window'), heroBefore: box('.hero'),
+        fieldWidth: node.getBoundingClientRect().width,
+        planeWidth: Number.parseFloat(plane.width), planeLeft: Number.parseFloat(plane.left),
+        nodeWidth: Number.parseFloat(getComputedStyle(node.querySelector('.hero-agent-field__node')!).width),
+        hubWidth: Number.parseFloat(getComputedStyle(node.querySelector('.hero-agent-field__hub')!).width),
+        hubImageWidth: Number.parseFloat(getComputedStyle(node.querySelector('.hero-agent-field__hub img')!).width),
+      };
+      node.style.display = 'none';
+      const hidden = { window: box('.hero__window'), hero: box('.hero') };
+      node.style.removeProperty('display');
+      return { ...result, hidden };
+    });
+    const { windowBefore, heroBefore } = geometry;
+    expect(geometry.planeLeft).toBeCloseTo(geometry.fieldWidth * 0.62 - 100, 1);
+    expect(geometry.planeWidth).toBeCloseTo(Math.min(width <= 720 ? 492 : 720, geometry.fieldWidth * 1.5), 1);
+    expect(geometry.nodeWidth).toBe(width <= 720 ? 30 : 38);
+    expect(geometry.hubWidth).toBe(width <= 720 ? 96 : 116);
+    expect(geometry.hubImageWidth).toBe(width <= 720 ? 64 : 76);
+    expect(geometry.hidden.window).toEqual(windowBefore);
+    expect(geometry.hidden.hero).toEqual(heroBefore);
+    const samples = await field.evaluate(async (node, times) => {
+      const result = [];
+      for (const elapsed of times) {
         for (const animation of node.getAnimations({ subtree: true })) {
-          animation.pause();
-          animation.currentTime = elapsed;
+          animation.pause(); animation.currentTime = elapsed;
         }
-      }, time);
-      await page.evaluate(() => new Promise(requestAnimationFrame));
-      const installation = (await page.locator('.hero__window').boundingBox())!;
-      expect(installation).toEqual(windowBefore);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const { x, y, width, height } = document.querySelector('.hero__window')!.getBoundingClientRect();
+        result.push({ installation: { x, y, width, height }, fits: document.documentElement.scrollWidth <= innerWidth });
+      }
+      return result;
+    }, [0, 5000, 10000, 36000, 54000]);
+    for (const sample of samples) {
+      expect(sample.installation).toEqual(windowBefore);
+      expect(sample.fits).toBe(true);
     }
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await field.scrollIntoViewIfNeeded();
-  const sizes: number[] = [];
-  for (const progress of [0, 0.5, 1]) {
-    await field.evaluate((node, fraction) => {
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  const sizes = await field.evaluate(async (node, fractions) => {
+    const result = [];
+    for (const fraction of fractions) {
       for (const animation of node.getAnimations({ subtree: true })) {
         animation.pause();
         animation.currentTime = (animation as CSSAnimation).animationName === 'agent-orbit-breathe'
           ? Number(animation.effect!.getTiming().duration) * fraction : 0;
       }
-    }, progress);
-    await page.evaluate(() => new Promise(requestAnimationFrame));
-    sizes.push((await field.locator('.hero-agent-field__track').boundingBox())!.width);
-  }
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      result.push(node.querySelector('.hero-agent-field__track')!.getBoundingClientRect().width);
+    }
+    return result;
+  }, [0, 0.5, 1]);
   expect(sizes[1]!).toBeGreaterThan(sizes[0]! * 1.05);
   expect(sizes[1]!).toBeLessThan(sizes[0]! * 1.25);
   expect(sizes[2]!).toBeCloseTo(sizes[0]!, 1);
@@ -254,26 +274,56 @@ test('logo thickness follows the viewing angle without extra animation loops', a
     expect(first.x * opposite.x + first.y * opposite.y).toBeLessThan(-1);
   }
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
+  await expect.poll(() => field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
   await expect(field.locator('.hero-agent-field__face')).toHaveCount(uniqueLogos.length);
 });
 
-test('installation works with WebGL forbidden and the orbit has no canvas or optional renderer', async ({ page }) => {
+test('installation works with WebGL forbidden and the orbit has no canvas or optional renderer', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...args: unknown[]) {
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      type: string,
+      ...args: unknown[]
+    ) {
       if (/webgl/i.test(type)) throw new Error('This CSS-only page must not create WebGL');
       return original.apply(this, [type, ...args] as Parameters<typeof original>);
     } as typeof original;
   });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  const response = await page.request.get('./api/registry/plugin/context7');
+  expect(response.ok()).toBe(true);
+  const context7 = (await response.json()).plugins[0] as RegistryPlugin;
+  const upstream = context7.distributions.find(
+    (distribution) => distribution.id === 'upstash/context7' && distribution.kind === 'upstream',
+  );
+  const guidedSetupEligible = Boolean(
+    upstream &&
+    upstream.compatible_clients.some((client) => {
+      const candidate = {
+        ...context7,
+        distributions: [upstream],
+        default_distribution: upstream.id,
+        declared_default_distribution: upstream.id,
+      };
+      const release = expectedDistribution(candidate, [client]);
+      return (
+        release?.source.repository === 'upstash/context7' &&
+        release.source.path === 'plugins/agent-plugins/context7'
+      );
+    }),
+  );
   await page.goto('./');
   const field = page.locator('.hero-agent-field');
   await expect(field).toHaveClass(/hero-agent-field--active/);
   await expect(field.locator('canvas')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Choose target agents: All installed agents', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Choose target agents: Choose agents in terminal', exact: true })
+    .click();
   await page.getByRole('checkbox', { name: /^Cursor / }).click();
   await page.keyboard.press('Escape');
   await expect(page.locator('.hero__demo .command-snippet')).toContainText('--target cursor');
@@ -283,7 +333,128 @@ test('installation works with WebGL forbidden and the orbit has no canvas or opt
   // Only decorative logos are deduplicated, never the actual install targets.
   await page.getByRole('button', { name: /Choose target agents:/ }).click();
   await expect(page.getByRole('checkbox', { name: /^Codex / })).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: /^ChatGPT / })).toBeVisible();
+  const cursor = page.getByRole('checkbox', { name: /^Cursor / });
+  await cursor.click();
+  await expect(cursor).not.toBeChecked();
+  await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.hero__demo .command-snippet')).not.toContainText('--target');
+  const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT / });
+  if (guidedSetupEligible) {
+    await expect(chatgpt).toBeEnabled();
+    await expect(chatgpt).toContainText('Finish setup in ChatGPT');
+    await chatgpt.click();
+    await expect(chatgpt).toBeChecked();
+    await expect(page.locator('.hero__demo .command-snippet')).toContainText(
+      'add context7 --target chatgpt',
+    );
+  } else {
+    await expect(chatgpt).toBeDisabled();
+    await expect(chatgpt).toContainText('Not available for this plugin');
+    await expect(page.locator('.hero__demo .command-snippet')).not.toContainText(
+      '--target chatgpt',
+    );
+  }
   await page.keyboard.press('Escape');
   expect(errors).toEqual([]);
+});
+
+test('guided ChatGPT preparation remains available for an eligible deterministic upstream fixture', async ({
+  page,
+}) => {
+  const index = JSON.parse(
+    readFileSync(new URL('../fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
+  ) as RegistryIndex;
+  index.expires_at = '2099-10-06T04:35:40Z';
+  const plugin = index.plugins[0];
+  plugin.name = 'context7';
+  plugin.install_source = 'context7';
+  const upstream = plugin.distributions[0];
+  upstream.id = 'upstash/context7';
+  upstream.kind = 'upstream';
+  upstream.compatible_clients = ['codex'];
+  const release = upstream.releases[0];
+  release.release_status = 'active';
+  release.meets_minimum_capabilities = true;
+  release.blocking_clients = [];
+  release.materialized_clients = ['codex'];
+  release.source = {
+    ...release.source,
+    repository: 'upstash/context7',
+    path: 'plugins/agent-plugins/context7',
+  };
+  plugin.distributions = [upstream];
+  plugin.default_distribution = upstream.id;
+  plugin.declared_default_distribution = upstream.id;
+  await projections(page, index);
+  await navigate(page, '/');
+  await page
+    .getByRole('button', { name: 'Choose target agents: Choose agents in terminal', exact: true })
+    .click();
+  const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT / });
+  await expect(chatgpt).toBeEnabled();
+  await expect(chatgpt).toContainText('Finish setup in ChatGPT');
+  await chatgpt.click();
+  await expect(chatgpt).toBeChecked();
+  await expect(page.locator('.hero__demo .command-snippet')).toContainText(
+    'add context7 --target chatgpt',
+  );
+});
+
+test('orbit follows scrolling with a small upward and leftward drift, then returns', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('./');
+  const field = page.locator('.hero-agent-field');
+  await expect(field).toHaveCSS('position', 'fixed');
+  const start = (await field.boundingBox())!;
+  const installation = (await page.locator('.hero__window').boundingBox())!;
+  for (const distance of [400, 1000, 400, 0]) {
+    await page.mouse.wheel(0, distance - await page.evaluate(() => window.scrollY));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(distance);
+    await expect.poll(async () => (await field.boundingBox())!.y - start.y).toBeCloseTo(-distance * 0.12, 0);
+    expect((await field.boundingBox())!.x - start.x).toBeCloseTo(-distance * 0.025, 0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  expect(await page.locator('.hero__window').boundingBox()).toEqual(installation);
+  // Resize while scrolled: the anchor must still be measured in document coordinates.
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(600);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const anchor = page.locator('.hero-agent-field-anchor');
+  await expect.poll(async () => {
+    const origin = (await anchor.boundingBox())!;
+    const moved = (await field.boundingBox())!;
+    return Math.round(moved.y - origin.y);
+  }).toBe(528);
+  await expect.poll(async () => (await field.boundingBox())!.width).toBe((await anchor.boundingBox())!.width);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(field).toHaveCSS('translate', 'none');
+  await expect.poll(() => field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
+});
+
+
+test('orbit progressively defocuses near the catalog and sharpens again at the hero', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('./');
+  const field = page.locator('.hero-agent-field--fixed');
+  await expect(field).toHaveCSS('filter', 'blur(0px)');
+  const catalogTop = await page.locator('#plugins').evaluate((node) => node.getBoundingClientRect().top + scrollY);
+  const blur = () => field.evaluate((node) => Number.parseFloat(getComputedStyle(node).filter.slice(5)));
+  // Heading at 70% of the screen: visibly softening, without an abrupt switch.
+  await page.mouse.wheel(0, catalogTop - 700);
+  await expect.poll(blur).toBeGreaterThan(2);
+  expect(await blur()).toBeLessThan(10);
+  await page.mouse.wheel(0, 400);
+  await expect(field).toHaveCSS('filter', 'blur(12px)');
+  const deeperScroll = await page.evaluate(() => scrollY) + 500;
+  await page.mouse.wheel(0, 500);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(deeperScroll);
+  await expect(field).toHaveCSS('filter', 'blur(12px)');
+  await page.mouse.wheel(0, -await page.evaluate(() => scrollY));
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+  await expect(field).toHaveCSS('filter', 'blur(0px)');
+  // Mobile layout has a different catalog offset; resizing must refresh it.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#plugins').scrollIntoViewIfNeeded();
+  await expect(field).toHaveCSS('filter', 'blur(12px)');
 });

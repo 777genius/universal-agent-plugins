@@ -25,7 +25,7 @@ func TestOpenCodeNamespacePreflightOnlyExcludesExactlyOwnedPriorServer(t *testin
 		t.Fatal(err)
 	}
 	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: root}
-	plan := domain.DeliveryPlan{Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportPrepared}}}
+	plan := domain.DeliveryPlan{OpenCodeHost: openCodeV1FixtureProfile{}, Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportPrepared}}}
 	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{
 		Kind: opencode.OpenCodeMCPObjectKind, LogicalName: "docs_extra", Path: receipt.Path, ManagedDigest: receipt.Digest,
 	}}}

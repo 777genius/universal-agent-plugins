@@ -7,8 +7,11 @@ import (
 )
 
 func geminiPackageMetaEqual(left, right geminiPackageMeta) bool {
-	return strings.TrimSpace(left.ContextFileName) == strings.TrimSpace(right.ContextFileName) &&
-		slices.Equal(normalizeGeminiExcludeTools(left.ExcludeTools), normalizeGeminiExcludeTools(right.ExcludeTools)) &&
+	// context_file_name is not compared here: generate renders the manifest's
+	// contextFileName from the authored context selection (with the GEMINI.md
+	// fallback), and validateGeminiContextFileNameProjection already enforces
+	// that projection against the selection.
+	return slices.Equal(normalizeGeminiExcludeTools(left.ExcludeTools), normalizeGeminiExcludeTools(right.ExcludeTools)) &&
 		strings.TrimSpace(left.MigratedTo) == strings.TrimSpace(right.MigratedTo) &&
 		strings.TrimSpace(left.PlanDirectory) == strings.TrimSpace(right.PlanDirectory)
 }

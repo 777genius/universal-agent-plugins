@@ -88,6 +88,12 @@ func ValidateBindingProfile(root string, binding domain.ClientBinding) error {
 	if err := validateProfile(root, ""); err != nil {
 		return err
 	}
+	if binding.Scope == string(domain.ScopeProject) {
+		if binding.NativeProfileRoot != root {
+			return fmt.Errorf("recorded Codex project root differs from selected root")
+		}
+		return validateCodexProjectObjects(root, binding.NativeObjects)
+	}
 	if binding.NativeProfileRoot != "" {
 		if err := validateProfile(binding.NativeProfileRoot, root); err != nil {
 			return fmt.Errorf("recorded Codex profile mismatch: %w", err)

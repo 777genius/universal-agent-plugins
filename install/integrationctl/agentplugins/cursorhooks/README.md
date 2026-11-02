@@ -100,13 +100,13 @@ unproven absence separately.
 
 ## Shell evidence and host obligations
 
-`RenderArgv` supports only `LinuxUserShell32212`: the explicitly selected local
-Linux user-hook single-quote grammar, with apostrophes encoded by adjacent
+`RenderArgv` supports `LinuxUserShell32212` and `DarwinUserShell20260918`: the
+explicitly selected user-hook single-quote grammars, with apostrophes encoded by adjacent
 single/double quoted segments. It emits a literal command without `exec`, shell
 option changes or failure/output guards. Tokens are at most 4,096 bytes, argv
 at most 32 tokens/16,384 bytes. Empty ordinary args are supported; NUL, CR/LF,
 invalid UTF-8, dollar and backtick tokens are unsupported. Executable and
-selector paths must be canonical absolute Linux paths, not `/` or `//` aliases.
+selector paths must be canonical absolute POSIX paths, not `/` or `//` aliases.
 
 The supplied Cursor IDE 3.22.12 Linux spike observed `workspaceOpen`, config
 discovery, ordinary adversarial argv and cwd `TEST HOME/.cursor`. It did not
@@ -120,13 +120,38 @@ forms therefore remain refused even though the narrow native spike recorded
 one dollar literal. Do not broaden placeholders or literal forms by assuming
 quoting disables native preprocessing.
 
+A separate Darwin arm64 Cursor CLI `2026.09.18-9a7762b` TEST run on
+2026-10-10 captured a genuine `stop` after a loopback provider request, exact
+conversation/generation correlation, and unchanged space/apostrophe argv.
+The CLI returned its neutral Stop response and exited normally. Its `index.js`
+SHA-256 was `19af19274b07dcb8ad9bd86915320b7b49a62de763af10c6857ab45257c8a14b`.
+The run used fresh TEST HOME/workspace, a synthetic token, file credential store
+and `CI=1`. This qualifies this narrow native shell grammar, not an installed
+notifications route, cloud-provider access or other architectures/versions.
+Dollar/backtick and other existing lexical refusals remain unchanged.
+
 The regression recorder executes the JSON-decoded command under actual
 `/bin/sh` in fresh TEST scratch with a minimal environment. Its broader token
 matrix is target-shell proof only. It does not establish the exact native
 backend shell identity or broaden the supplied native qualification. The caller
 must qualify the selected backend before activation. `WindowsUnqualified` and
-all other contracts explicitly return `ErrUnsupported`; Linux roundtrips and
-cross-builds cannot qualify Windows. Real Windows native CI remains required.
+other unknown contracts return `ErrUnsupported`; Linux roundtrips and
+cross-builds cannot qualify Windows.
+
+A separate Windows amd64 CLI `2026.10.01-e373342` native Actions run
+[38220319890](https://github.com/777genius/agent-notifications/actions/runs/38220319890)
+on 2026-10-12 captured genuine Stop with exact conversation/generation and
+space/apostrophe argv, Stop acknowledgement, exec close and natural exit 0.
+The owned Job Object had no remaining processes; no forced cleanup occurred.
+The unmodified official archive SHA-256 is
+`31896ce9a43f63c8ae7ff3c4bee868213d6d02d60fb49908bef6dc91d582f6ee`;
+its `index.js` SHA-256 is
+`0e7e28c34e050c6b83fe574e1fefa8d95d7c80bea6c4a4d3ae2726e5191243ef`.
+This qualifies only the fixed five-argument Stop PowerShell grammar for a
+verified local `.exe` and selector. Generic PowerShell argv, CMD, WSL, other
+versions/architectures, installed Notifications delivery and visible toast
+are not established by that shell run. Filesystem authority, consent and
+installed consumer verification remain separate host responsibilities.
 
 The host must verify a fixed regular owned executable, execute permissions,
 bounded confined selector and no-follow canonical parents before setting
@@ -159,5 +184,5 @@ Run from the agentplugins module with the explicitly provided toolchain and
 offline isolated Go caches: `go test -p 2 -count=1 -timeout 90s ./cursorhooks`.
 Set `CURSORHOOKS_TEST_ROOT` to an existing absolute own `.research/tmp/` TEST
 directory, and `TMPDIR`, `GOTMPDIR`, `HOME` and `USERPROFILE` to fresh TEST paths.
-The shell recorder fails if the TEST scratch boundary is missing. Non-Linux
-runs skip only the Linux recorder and retain explicit Windows refusal checks.
+The shell recorder fails if the TEST scratch boundary is missing. Unqualified platforms
+skip only the shell recorder and retain explicit Windows refusal checks.

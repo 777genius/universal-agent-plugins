@@ -13,7 +13,7 @@ import (
 func TestCodexTransportSelectionPreservesSiblings(t *testing.T) {
 	for _, onlySSE := range []bool{false, true} {
 		t.Run(map[bool]string{false: "mixed", true: "sse-only"}[onlySSE], func(t *testing.T) {
-			root := t.TempDir()
+			root := tempRoot(t)
 			e := testEnvelope()
 			e.MCP.Servers = map[string]domain.MCPServer{"events": {Type: "sse"}}
 			if onlySSE {

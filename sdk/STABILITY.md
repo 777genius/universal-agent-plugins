@@ -14,6 +14,23 @@ The generated support matrix and `plugin-kit-ai.Supported()` describe runtime-ev
 ## Public-Beta
 Current SDK beta surface added after the first promotion:
 
+- VS Code Local `CommonEvent`, `StopEvent`, `SubagentStopEvent`, empty
+  `StopResponse`/`SubagentStopResponse`, registrar `OnStop`/`OnSubagentStop`
+  and `App.VSCodeLocal`. Fixed invocations `VSCodeLocalStop` and
+  `VSCodeLocalSubagentStop` use runtime identity `vscode-local`. This optional
+  typed observer does not qualify installer `vscode`, Agent Notifications
+  `copilot-vscode`, native availability or executable release. Stop is about
+  to stop, not a completion/success/idle/root-session signal. See the
+  [generated Local guide](../docs/generated/vscode_local.md).
+
+- Cursor `StopEvent`, `StopStatus` and its constants, `ModelParam`, empty
+  `StopResponse`, registrar `OnStop`/`OnStopContext`, `App.Cursor`,
+  `App.RunCursorObserver`, `CursorObserverIO` and `NewCursorObserverPipeIO`.
+  Invocation `CursorStop` is reserved, beta and stop-only. The
+  [generated guide](../docs/generated/cursor_stop.md) states IO ownership and
+  cancellation limits. Native client/Windows pipe qualification is pending;
+  neither all-Cursor stability nor installed integration is claimed.
+
 - Gemini `NotificationEvent`, `NotificationType`,
   `NotificationTypeToolPermission`, `NotificationResponse`, and
   `(*gemini.Registrar).OnNotification` (invocation `GeminiNotification`). This

@@ -137,12 +137,13 @@ targets:
   - "gemini"
   - "opencode"
   - "cursor"
+  - "cursor-workspace"
 `)
 	mustWriteRepoFile(t, workDir, filepath.Join("plugin", "launcher.yaml"), "runtime: shell\nentrypoint: ./scripts/main.sh\n")
 	mustWriteRepoExecutable(t, workDir, filepath.Join("scripts", "main.sh"), "#!/usr/bin/env bash\nexit 0\n")
 	mustWriteRepoFile(t, workDir, filepath.Join("plugin", "targets", "gemini", "contexts", "GEMINI.md"), "# Gemini\n")
 	mustWriteRepoFile(t, workDir, filepath.Join("plugin", "targets", "opencode", "package.yaml"), "plugins:\n  - \"@acme/portable-mcp-live\"\n")
-	mustWriteRepoFile(t, workDir, filepath.Join("plugin", "targets", "cursor", "rules", "project.mdc"), `---
+	mustWriteRepoFile(t, workDir, filepath.Join("plugin", "targets", "cursor-workspace", "rules", "project.mdc"), `---
 description: "Portable MCP live smoke"
 alwaysApply: true
 ---
@@ -162,12 +163,13 @@ servers:
       - gemini
       - opencode
       - cursor
+      - cursor-workspace
 `, filepath.ToSlash(mcpBin)))
 
 	root := RepoRoot(t)
 	runCmd(t, root, exec.Command(pluginKitAIBin, "generate", workDir))
 	runCmd(t, root, exec.Command(pluginKitAIBin, "generate", workDir, "--check"))
-	for _, platform := range []string{"claude", "codex-package", "gemini", "opencode", "cursor"} {
+	for _, platform := range []string{"claude", "codex-package", "gemini", "opencode", "cursor", "cursor-workspace"} {
 		runCmd(t, root, exec.Command(pluginKitAIBin, "validate", workDir, "--platform", platform, "--strict"))
 	}
 	assertPortableMCPLiveRenderedArtifacts(t, workDir, mcpBin)
@@ -288,6 +290,14 @@ func assertPortableMCPLiveRenderedArtifacts(t *testing.T, workDir, mcpBin string
 	}
 	if got := strings.TrimSpace(fmt.Sprint(cursorServer["command"])); got != filepath.ToSlash(mcpBin) {
 		t.Fatalf("cursor release-checks command = %q want %q\n%s", got, filepath.ToSlash(mcpBin), cursorBody)
+	}
+
+	cursorRulesBody, err := os.ReadFile(filepath.Join(workDir, ".cursor", "rules", "project.mdc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(cursorRulesBody), "release_checks") {
+		t.Fatalf(".cursor/rules/project.mdc missing authored rule projection:\n%s", cursorRulesBody)
 	}
 }
 

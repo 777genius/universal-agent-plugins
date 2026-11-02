@@ -17,9 +17,15 @@ const (
 	// command/args/env/cwd and remote uses url/headers with no transport tag.
 	// Clients with different native transport keys require their own codec.
 	CodecMCPServers Codec = "mcpServers"
+	CodecCopilot    Codec = "copilot-mcpServers"
+	CodecVSCode     Codec = "vscode-project-servers"
+	CodecKimi       Codec = "kimi-project-mcpServers"
 	CodecGemini     Codec = "gemini-mcpServers"
+	CodecCodex      Codec = "codex-mcp-servers"
 	CodecOpenCode   Codec = "opencode-mcp"
+	CodecOpenCodeV2 Codec = "opencode-v2-mcp"
 	CodecWindsurf   Codec = "windsurf-mcpServers"
+	CodecDevin      Codec = "devin-mcpServers"
 	CodecCline      Codec = "cline-mcpServers"
 )
 
@@ -37,6 +43,9 @@ var (
 	ErrNotOwned         = errors.New("native MCP entry is not exactly owned")
 	ErrMalformed        = errors.New("native config is malformed")
 	ErrConcurrentChange = errors.New("native config changed during patch")
+	// ErrNativeMigrationRequired rejects unqualified mixed-generation roots.
+	// A managed-leaf writer cannot convert unrelated V1 configuration to V2.
+	ErrNativeMigrationRequired = errors.New("native_migration_required")
 )
 
 // CommittedCleanupError reports that the requested native config bytes and
@@ -73,9 +82,35 @@ type Server struct {
 	CWD                 string            `json:"cwd,omitempty"`
 	URL                 string            `json:"url,omitempty"`
 	Headers             map[string]string `json:"headers,omitempty"`
-	// RemoteTransport distinguishes Gemini's streamable HTTP and legacy SSE
-	// native keys. It is ignored by codecs whose native shape uses one URL key.
+	// RemoteTransport selects codec-specific native keys where supported.
+	// OpenCode V2 accepts empty (native default) or streamable-http; V1 keeps
+	// rejecting an explicit transport. Unsupported transports are never dropped.
 	RemoteTransport string `json:"remote_transport,omitempty"`
+	// OpenCodeV2 carries only the pinned V2 disabled/timeout contract. Other
+	// codecs reject it rather than silently discard dialect-specific intent.
+	OpenCodeV2 *OpenCodeV2Options `json:"opencode_v2,omitempty"`
+	// CodexAuth contains only nonsecret references from compatibility hints.
+	CodexAuth *CodexAuthOptions `json:"codex_auth,omitempty"`
+}
+
+type CodexAuthOptions struct {
+	BearerTokenEnvVar string `json:"bearer_token_env_var,omitempty"`
+	OAuthResource     string `json:"oauth_resource,omitempty"`
+}
+
+// OpenCodeV2Options is a closed subset of the pinned native MCP entry schema.
+// Nil options render disabled:false and omit timeout.
+type OpenCodeV2Options struct {
+	Disabled bool               `json:"disabled"`
+	Timeout  *OpenCodeV2Timeout `json:"timeout,omitempty"`
+}
+
+// OpenCodeV2Timeout uses milliseconds. Zero omits a field; configured values
+// must be positive, as in @opencode/schema 2.0.21 Mcp.TimeoutConfig.
+type OpenCodeV2Timeout struct {
+	Startup   int `json:"startup,omitempty"`
+	Catalog   int `json:"catalog,omitempty"`
+	Execution int `json:"execution,omitempty"`
 }
 
 // Paths names the mutually exclusive client config variants. If neither
@@ -144,6 +179,7 @@ type lockAcquirer func(Paths, Codec) (func() error, error)
 type Kernel struct {
 	files        FileIO
 	acquireLocks lockAcquirer
+	codexParser  CodexDocumentParser
 }
 
 func New() Kernel { return Kernel{files: conditionalOSFiles{}} }
@@ -155,6 +191,12 @@ func NewWithLockAcquirer(acquireLocks func(Paths, Codec) (func() error, error)) 
 }
 
 func validateRequest(req Request) error {
+	if req.Codec == CodecCodex && req.Paths.JSONC != "" {
+		return fmt.Errorf("codex requires one TOML config path")
+	}
+	if req.Codec == CodecVSCode && req.Paths.JSONC != "" {
+		return fmt.Errorf("VS Code requires one mcp.json config path with native JSONC syntax")
+	}
 	if err := validateExactPath(req.Paths.JSON, "JSON native config path"); err != nil {
 		return err
 	}
@@ -185,11 +227,17 @@ func validateRequest(req Request) error {
 }
 
 func supportedCodec(codec Codec) bool {
-	return codec == CodecMCPServers || codec == CodecGemini || codec == CodecOpenCode || codec == CodecWindsurf || codec == CodecCline
+	return codec == CodecMCPServers || codec == CodecCopilot || codec == CodecVSCode || codec == CodecKimi || codec == CodecGemini || codec == CodecCodex || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecDevin || codec == CodecCline
 }
 
 func codecCollectionKey(codec Codec) string {
-	if codec == CodecOpenCode {
+	if codec == CodecVSCode {
+		return "servers"
+	}
+	if codec == CodecCodex {
+		return "mcp_servers"
+	}
+	if codec == CodecOpenCode || codec == CodecOpenCodeV2 {
 		return "mcp"
 	}
 	return "mcpServers"

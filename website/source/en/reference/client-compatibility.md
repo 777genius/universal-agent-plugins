@@ -10,9 +10,85 @@ translationRequired: false
 
 # UAP client compatibility evidence
 
-## Draft installer 0.1.55
+## Current release and scope
 
-**0.1.55 is an unpublished draft.** These results qualify the recorded draft snapshots; they are not a release announcement or upgrade instruction. The released 0.1.53 evidence below remains valid and separate.
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95),
+the native release published on 29 October 2026, adds an owned local management
+API, read-only client/profile discovery and a user-scope native Pi extension
+provider. See [local management](../use/manage#local-management-api).
+Package-manager channels may lag; check `agentplugins version`.
+
+Since CLI 0.1.94, an `install` without a source argument automatically selects
+project scope when the exact current folder contains a regular `uap.toml`.
+Explicit scope wins; parent folders are not searched. Existing locks
+are checked strictly even without `--locked`. Explicit project delivery was
+introduced in 0.1.93. This installer release evidence does not qualify every native agent
+runtime or the standard authoring executable. The current npm/native installer
+excludes `agentplugins author`; see the [Build guide](../build/) for source tools.
+
+Read compatibility as several separate questions:
+
+| Check | Meaning |
+| --- | --- |
+| Package conformance | The package's standard files satisfy the loader/schema contract. |
+| Component delivery | The adapter prepared or installed the components it owns. |
+| Native discovery | A particular client observed the intended component. |
+| MCP runtime | A recorded process or connection initialized and performed the tested calls. |
+| Authentication and model use | Only established when the evidence explicitly exercises them. |
+
+Project delivery commonly remains **Prepared** while trust, reload, explicit
+configuration or session work remains. ChatGPT project installation is explicitly
+unsupported. VS Code project scope prepares files for a single local folder;
+its pinned metadata observation is not MCP startup or model-execution evidence.
+See [project support by client](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
+and the [project evidence index](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
+
+The records below preserve exact historical releases, client versions, platform
+identities and observed limitations. They do not automatically apply to 0.1.95,
+a later client version, another scope or an untested package. UAP is independent
+community tooling; these are bounded maintainer observations, not vendor
+certification or a claim of universal production readiness.
+
+## Pi native extensions {#pi-native-extensions}
+
+CLI 0.1.95 accepts `--target pi` for packages declaring a
+[native Pi extension](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md).
+The published 0.1.95 CLI supports **user-scope** native Pi extensions. A
+[later main-source change (#631)](https://github.com/777genius/universal-agent-plugins/pull/631)
+also adds **project-scoped extension installation** under the selected
+`.pi/extensions/<artifact>`; this newer capability must not be attributed to
+0.1.95 until a later release includes it. Use an explicit project selection
+(`--scope project --project-root /path/to/workspace`) with a Pi extension
+package, then review Pi's project trust prompt and reload or restart. UAP never
+grants project trust automatically or reports a prepared extension as loaded.
+
+The [project E2E matrix](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
+records real Pi v1.4.0 Linux, macOS and Windows project A/B loading, update
+and removal qualification, separate from the
+[historical user-scope Linux evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md).
+
+A later source-only [Pi Skills/MCP integration (#640)](https://github.com/777genius/universal-agent-plugins/pull/640)
+also manages exact owned project Skills in `.pi/skills` and individual stdio or
+Streamable HTTP server entries in `.pi/mcp.json`; user-profile and other-project
+configuration stays separate. Its pinned real Pi project E2E observes trusted
+Skill discovery and native stdio MCP `initialize`/`tools/list`. A subsequent
+[source-only native Pi `tools/call` E2E (#656)](https://github.com/777genius/universal-agent-plugins/pull/656)
+also proved exactly one real Pi-driven tool execution and its result on Linux,
+macOS and Windows using a local scripted model. **Neither this nor the earlier
+handshake establishes vendor-model authorization or automatic project trust.**
+UAP retains the Prepared state until a separate native observation establishes
+activation. Neither this nor #631 is included in release 0.1.95.
+
+OpenCode has separate [V1/V2 native project lifecycle evidence (#626)](https://github.com/777genius/universal-agent-plugins/pull/626)
+and source-bound [V2 MCP handshake qualification (#638)](https://github.com/777genius/universal-agent-plugins/pull/638).
+The latter confirms real V2 client `initialize` and `tools/list` with a
+controlled stdio server; `tools/call` and real-model use remain unqualified.
+These tests do not establish desktop notifications, audio, terminal focus or
+third-party model authorization.
+
+## Historical draft installer 0.1.55
+
+**At the recorded September 2026 checkpoint, 0.1.55 was an unpublished draft.** These results qualify those draft snapshots; they are not current release status or an upgrade instruction. The released 0.1.53 evidence below remains valid and separate.
 
 Across two independently qualified scopes, **12 native-client lanes passed all 24 top-level required tests without skips**. Each used the original producer npm tarball, offline npm installation with scripts disabled, cold bootstrap from the frozen native binary, and a warm launch without the proof source. Genuine pinned clients then ran in fresh disposable profiles.
 
@@ -260,3 +336,19 @@ has its own installer, package, and transcript digests. It proves no browser
 tool call, model, OAuth, or runtime claim for the current candidate. New results
 must identify their own source SHA and client/OS versions before replacing any
 pending cell.
+
+## Project scope evidence
+
+Explicit project delivery is released in CLI 0.1.93. The historical release and
+native observations above retain their original scope. Project installation has
+a separate per-client contract: installed ownership, native discovery and MCP/model operation are
+reported separately. ChatGPT project scope refuses explicitly; other targets
+have their own component, preparation or harness restrictions.
+
+VS Code project preparation uses `.github/skills` and `.vscode/mcp.json`.
+The [pinned VS Code 1.143.1 observation](https://github.com/777genius/universal-agent-plugins/actions/runs/40188310034) verified metadata in
+separate A/B folders, a fresh A launch and removal, with workspace trust ungranted.
+This is metadata evidence; the adapter reports Prepared and installed-file
+verification, without claiming MCP startup, tool calls or model execution.
+
+[Project installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Current project support and limitations](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

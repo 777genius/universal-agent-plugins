@@ -10,15 +10,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
-func lifecycleConverged(client domain.ClientBinding) bool {
-	if client.InstallIntent == domain.InstallIntentPrepare {
-		return client.Materialization == domain.MaterializationMaterialized && client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationPackageValid
-	}
-	authComplete := client.Authentication == domain.AuthenticationNotRequired || client.Authentication == domain.AuthenticationComplete
-	return client.Materialization == domain.MaterializationMaterialized &&
-		client.Activation == domain.ActivationActive &&
-		client.Verification == domain.VerificationInstalled && authComplete
-}
+func lifecycleConverged(client domain.ClientBinding) bool { return client.LifecycleConverged() }
 
 // resume retries only the external client lifecycle against an existing,
 // digest-verified managed package. It deliberately creates no directory
@@ -31,6 +23,7 @@ func (service Service) resume(
 	installationID, clientBindingID string,
 	client domain.ClientBinding,
 ) (AddResult, error) {
+	previousObservation := client.LocalEntryObservation.Clone()
 	if input.DryRun {
 		return result, nil
 	}
@@ -42,34 +35,36 @@ func (service Service) resume(
 		result.RequiresConfirmation = true
 		return result, nil
 	}
-	state, err := service.StateStore.Load()
+	delivery, complete, settled, err := service.resumeNativeDelivery(ctx, input, result.Plan, installationID, client)
 	if err != nil {
 		return result, err
 	}
-	var installation domain.Installation
-	for _, item := range state.Installations {
-		if item.InstallationID == installationID {
-			installation = item
-			break
+	if client.NativeActivationAttempt != "" || client.PendingNativeIntent != nil {
+		return result, fmt.Errorf("native activation attempt %s is unresolved; inspect the owned client state before retry", unresolvedNativeAttemptID(client))
+	}
+	if complete && !result.Plan.SelectedDelivery.IsZero() {
+		result.Plan, err = service.readOnlyObservationPlan(client, result.Plan)
+		if err != nil {
+			return result, err
 		}
 	}
-	delivery, complete, err := service.activeNativeDelivery(ctx, input, result.Plan, installation, client)
-	if err != nil {
-		return result, err
-	}
-	if client.NativeActivationAttempt != "" {
-		return result, fmt.Errorf("native activation attempt %s is unresolved; inspect the owned client state before retry", client.NativeActivationAttempt)
-	}
-	outcome, activationErr := service.activateWithNativeAttempt(ctx, installationID, clientBindingID, domain.ActivationRequest{
-		Client: input.Client, Plan: result.Plan, Delivery: delivery,
+	request := domain.ActivationRequest{
+		Client: input.Client, Plan: result.Plan, Delivery: delivery, PackageUnchanged: true,
 		DeclaredName: input.Envelope.Manifest.Name, Replacing: true,
 		Interactive: input.Interactive, BackendExecutable: input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...),
 		VerifyOnly:            complete, ActivationComplete: input.ActivationComplete,
-	})
+	}
+	var outcome domain.ActivationOutcome
+	var activationErr error
+	if complete && !result.Plan.SelectedDelivery.IsZero() {
+		outcome, activationErr = service.activateReadOnlyWithObservation(ctx, client, request)
+	} else {
+		outcome, activationErr = service.activateWithNativeAttempt(ctx, installationID, clientBindingID, request)
+	}
 	outcome = service.resumeActivationOutcome(input, result.Plan, client, outcome, activationErr)
 	result.Activation = outcome
-	changed, updateErr := service.updateActivationResult(installationID, clientBindingID, outcome, activationErr, client.NativeObjects)
+	changed, updateErr := service.updateActivationResultWithObservation(installationID, clientBindingID, outcome, activationErr, client.NativeObjects, previousObservation)
 	result.Mutated = changed
 	if updateErr != nil {
 		if activationErr != nil {
@@ -80,8 +75,35 @@ func (service Service) resume(
 	if activationErr != nil {
 		return result, activationErr
 	}
-	result.NoChange = complete && !changed && service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome)
+	// A settled manual registration is a stable no-change outcome: this request
+	// cannot finish it, and a later one the adapter can act on will.
+	result.NoChange = !changed && (complete && (service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome) || settled) || service.verifiedPreparedObservationUnchanged(input, result.Plan, client, delivery, outcome, complete))
 	return result, nil
+}
+
+func unresolvedNativeAttemptID(client domain.ClientBinding) string {
+	if client.NativeActivationAttempt != "" {
+		return client.NativeActivationAttempt
+	}
+	if client.PendingNativeIntent != nil {
+		return client.PendingNativeIntent.AttemptID
+	}
+	return ""
+}
+
+func (service Service) resumeNativeDelivery(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installationID string, client domain.ClientBinding) (domain.StagedDelivery, bool, bool, error) {
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return domain.StagedDelivery{}, false, false, err
+	}
+	var installation domain.Installation
+	for _, item := range state.Installations {
+		if item.InstallationID == installationID {
+			installation = item
+			break
+		}
+	}
+	return service.activeNativeDelivery(ctx, input, plan, installation, client)
 }
 
 func (service Service) resumeActivationOutcome(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, outcome domain.ActivationOutcome, activationErr error) domain.ActivationOutcome {
@@ -119,6 +141,48 @@ func (service Service) verifiedRegistrationUnchanged(input AddInput, plan domain
 		!input.AuthComplete && !outcome.AuthenticationAttested && len(outcome.UserActions) == 0
 }
 
+// verifiedPreparedObservationUnchanged classifies a repeated project-only,
+// read-only observation, not lifecycle convergence. The verified existing
+// delivery is reused; every subsequent request still reobserves the client.
+func (service Service) verifiedPreparedObservationUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome, nativeComplete bool) bool {
+	if plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope).LifecycleKind == domain.LifecycleNativeConfig {
+		return nativeComplete && service.verifiedPreparedNativeConfigUnchanged(input, plan, client, delivery, outcome)
+	}
+	return input.Scope == domain.ScopeProject && !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery, input.Scope) &&
+		service.clientVerifierAvailable(input, plan) && client.Materialization == domain.MaterializationMaterialized &&
+		client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationInstalled &&
+		outcome.Activation == client.Activation && outcome.Verification == client.Verification &&
+		outcome.Authentication == client.Authentication && outcome.Policy == client.Policy &&
+		!input.ActivationComplete && !input.AuthComplete && !outcome.ActivationAttested && !outcome.AuthenticationAttested &&
+		(outcome.NativeEffect == "" || outcome.NativeEffect == domain.NativeEffectUnchanged) && len(outcome.NativeObjects) == 0 &&
+		preparedDeliveryUnchanged(client, delivery)
+}
+
+// A complete native projection can retain Prepared while exact file verification
+// succeeds. This classifies only that operation; it does not converge lifecycle.
+func (service Service) verifiedPreparedNativeConfigUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome) bool {
+	return input.Scope == domain.ScopeProject && plan.Scope == domain.ScopeProject && client.Scope == string(domain.ScopeProject) &&
+		plan.ClientID == input.Client.ClientID && client.ClientID == string(input.Client.ClientID) && delivery.ClientID == input.Client.ClientID &&
+		plan.ActivePath != "" && plan.ActivePath == client.TargetLocator &&
+		plan.SelectedDelivery.IsZero() && client.SelectedDelivery.IsZero() && service.clientVerifierAvailable(input, plan) &&
+		len(client.NativeObjects) > 0 && reflect.DeepEqual(outcome.NativeObjects, client.NativeObjects) &&
+		preparedDeliveryUnchanged(client, delivery) && preparedNativeConfigLifecycleUnchanged(input, client, outcome)
+}
+
+func preparedNativeConfigLifecycleUnchanged(input AddInput, client domain.ClientBinding, outcome domain.ActivationOutcome) bool {
+	return outcome.Policy == domain.PolicyAllowed &&
+		client.Materialization == domain.MaterializationMaterialized && client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationInstalled &&
+		outcome.Activation == client.Activation && outcome.Verification == client.Verification && outcome.Authentication == client.Authentication && outcome.Policy == client.Policy &&
+		client.NativeActivationAttempt == "" && client.PendingNativeIntent == nil && !input.ActivationComplete && !input.AuthComplete &&
+		!outcome.ActivationAttested && !outcome.AuthenticationAttested && !outcome.AuthoritativeObservation && outcome.LocalEntryObservation == nil &&
+		outcome.NativeEffect == domain.NativeEffectUnchanged
+}
+
+func preparedDeliveryUnchanged(client domain.ClientBinding, delivery domain.StagedDelivery) bool {
+	return delivery.ActivePath == client.TargetLocator && delivery.ArtifactDigest != "" &&
+		delivery.ArtifactDigest == managedDigest(client) && reflect.DeepEqual(delivery.NativeObjects, client.NativeObjects)
+}
+
 // clientVerifierAvailable asks the activator whether an exact client-side
 // verifier can observe this plan. An activator without the capability reports
 // no verifier, so prior evidence is re-derived rather than retained.
@@ -148,6 +212,7 @@ func (service Service) persistAuthoritativeObservation(ctx context.Context, inpu
 	if input.Confirmed {
 		return service.updateLifecycle(installationID, clientBindingID, outcome)
 	}
+	outcome.LocalEntryObservation = nil
 	release, err := service.beginMutation(ctx, false, true)
 	if err != nil {
 		return false, err
@@ -174,15 +239,34 @@ func (service Service) updateLifecycle(installationID, clientBindingID string, o
 }
 
 func (service Service) updateActivationResult(installationID, clientBindingID string, outcome domain.ActivationOutcome, activationErr error, previousNativeObjects []domain.NativeObjectOwnership) (bool, error) {
+	if err := service.refuseImplicitLocalObservation(installationID, clientBindingID); err != nil {
+		return false, err
+	}
+	return service.applyActivationResult(installationID, clientBindingID, outcome, activationErr, previousNativeObjects, nil)
+}
+
+func (service Service) applyActivationResult(installationID, clientBindingID string, outcome domain.ActivationOutcome, activationErr error, previousNativeObjects []domain.NativeObjectOwnership, predecessor *activationObservationPredecessor) (bool, error) {
+	// A discoverable native record owns this exact state decision. Generic
+	// failure/lifecycle timestamps cannot change its bound old/target snapshot.
+	if fence, ok := service.Kernel.NativeRecovery.(ports.NativeTransitionActivationFence); ok {
+		held, err := fence.HoldsActivation(installationID, clientBindingID)
+		if err != nil {
+			return false, err
+		}
+		if held {
+			return outcome.NativeEffect == domain.NativeEffectCommitted, nil
+		}
+	}
+
 	switch outcome.NativeEffect {
 	case domain.NativeEffectCommitted:
 		confirmed := append([]domain.NativeObjectOwnership(nil), outcome.NativeObjects...)
-		return service.updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID, outcome, &confirmed, true, true)
+		return service.updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID, outcome, &confirmed, true, true, predecessor)
 	case domain.NativeEffectUnchanged:
 		prior := append([]domain.NativeObjectOwnership(nil), previousNativeObjects...)
-		return service.updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID, outcome, &prior, true, true)
+		return service.updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID, outcome, &prior, true, true, predecessor)
 	case domain.NativeEffectUncertain:
-		return service.updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID, outcome, nil, false, false)
+		return service.updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID, outcome, nil, false, false, predecessor)
 	}
 	// Legacy non-native activators have no native effect contract.
 	if activationErr == nil {
@@ -193,10 +277,10 @@ func (service Service) updateActivationResult(installationID, clientBindingID st
 }
 
 func (service Service) updateLifecycleAndNativeObjects(installationID, clientBindingID string, outcome domain.ActivationOutcome, nativeObjects *[]domain.NativeObjectOwnership, preserveCommittedPackage bool) (bool, error) {
-	return service.updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID, outcome, nativeObjects, preserveCommittedPackage, false)
+	return service.updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID, outcome, nativeObjects, preserveCommittedPackage, false, nil)
 }
 
-func (service Service) updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID string, outcome domain.ActivationOutcome, nativeObjects *[]domain.NativeObjectOwnership, preserveCommittedPackage, clearAttempt bool) (bool, error) {
+func (service Service) updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID string, outcome domain.ActivationOutcome, nativeObjects *[]domain.NativeObjectOwnership, preserveCommittedPackage, clearAttempt bool, predecessor *activationObservationPredecessor) (bool, error) {
 	state, err := service.StateStore.Load()
 	if err != nil {
 		return false, err
@@ -208,6 +292,9 @@ func (service Service) updateLifecycleAndNativeObjectsWithAttempt(installationID
 		client, ok := installation.Clients[clientBindingID]
 		if !ok {
 			return false, fmt.Errorf("client binding disappeared during activation")
+		}
+		if err := validateActivationPredecessor(client, predecessor, outcome); err != nil {
+			return false, err
 		}
 		nativeObjects, err = reconcilePreservedNativeObjects(client, nativeObjects, preserveCommittedPackage)
 		if err != nil {
@@ -223,6 +310,7 @@ func (service Service) updateLifecycleAndNativeObjectsWithAttempt(installationID
 		}
 		if clearAttempt {
 			client.NativeActivationAttempt = ""
+			client.PendingNativeIntent = nil
 		}
 		installation.Clients[clientBindingID] = client
 		installation.UpdatedAt = client.UpdatedAt
@@ -254,6 +342,10 @@ func reconcilePreservedNativeObjects(client domain.ClientBinding, nativeObjects 
 			reconciled = append(reconciled, object)
 		}
 	}
+	reconciled, err := retainRecordedLocalSelector(client.SelectedDelivery, client, reconciled)
+	if err != nil {
+		return nil, err
+	}
 	return &reconciled, nil
 }
 
@@ -261,7 +353,7 @@ func lifecycleOutcomeUnchanged(client domain.ClientBinding, outcome domain.Activ
 	lifecycleUnchanged := client.Activation == outcome.Activation && client.Authentication == outcome.Authentication &&
 		client.Policy == outcome.Policy && client.Verification == outcome.Verification
 	nativeObjectsUnchanged := nativeObjects == nil || reflect.DeepEqual(client.NativeObjects, *nativeObjects)
-	return lifecycleUnchanged && nativeObjectsUnchanged
+	return lifecycleUnchanged && nativeObjectsUnchanged && (outcome.LocalEntryObservation == nil || client.LocalEntryObservation.Equal(outcome.LocalEntryObservation))
 }
 
 func applyLifecycleOutcome(client *domain.ClientBinding, outcome domain.ActivationOutcome, nativeObjects *[]domain.NativeObjectOwnership, now time.Time) {
@@ -272,19 +364,26 @@ func applyLifecycleOutcome(client *domain.ClientBinding, outcome domain.Activati
 	if nativeObjects != nil {
 		client.NativeObjects = append([]domain.NativeObjectOwnership(nil), (*nativeObjects)...)
 	}
+	if outcome.LocalEntryObservation != nil {
+		client.LocalEntryObservation = outcome.LocalEntryObservation.Clone()
+	}
 	client.UpdatedAt = now.Format(time.RFC3339Nano)
 }
 
 func lifecycleOutcome(client domain.ClientBinding) domain.ActivationOutcome {
-	return domain.ActivationOutcome{Activation: client.Activation, Authentication: client.Authentication, Policy: client.Policy, Verification: client.Verification}
+	return domain.ActivationOutcome{LocalEntryObservation: client.LocalEntryObservation.Clone(), Activation: client.Activation, Authentication: client.Authentication, Policy: client.Policy, Verification: client.Verification}
 }
 
 func (service Service) verifyClientReadOnly(ctx context.Context, input AddInput, result AddResult, client domain.ClientBinding) (domain.ActivationOutcome, error) {
-	if !domain.ShouldReadOnlyVerify(input.Client.ClientID, input.BackendExecutable, input.InstallIntent) {
+	if preparedProjectFileCandidate(input, result.Plan) {
+		delivery := domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client), NativeObjects: client.NativeObjects}
+		return service.observePreparedProjectFiles(ctx, input, result.Plan, result.InstallationID, client, delivery)
+	}
+	if result.Plan.SelectedDelivery.IsZero() && !domain.ShouldReadOnlyVerifyForScope(input.Client.ClientID, input.Scope, input.BackendExecutable, input.InstallIntent) {
 		return domain.ActivationOutcome{}, nil
 	}
 	delivery := domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client), NativeObjects: client.NativeObjects}
-	outcome, err := service.Activator.Activate(ctx, domain.ActivationRequest{Client: input.Client, Plan: result.Plan, Delivery: delivery, DeclaredName: input.Envelope.Manifest.Name, Replacing: true, BackendExecutable: input.BackendExecutable, PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...), VerifyOnly: true})
+	outcome, err := service.activateReadOnlyWithObservation(ctx, client, domain.ActivationRequest{Client: input.Client, Plan: result.Plan, Delivery: delivery, DeclaredName: input.Envelope.Manifest.Name, Replacing: true, BackendExecutable: input.BackendExecutable, PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...), VerifyOnly: true})
 	outcome = preserveManagedAuthentication(outcome, client.Authentication)
 	return outcome, err
 }

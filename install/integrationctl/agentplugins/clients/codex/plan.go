@@ -14,10 +14,17 @@ var (
 )
 
 func (*Adapter) CheckPlanPrecondition(input clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if plan.Scope == domain.ScopeProject || input.TargetContext.Scope == domain.ScopeProject {
+		_, err := codexProjectPlanRoot(input.Client, *plan)
+		return err
+	}
 	return validateProfile(input.Client.ConfigRoot, plan.NativeRegistryRoot)
 }
 
-func (*Adapter) RefinePlan(_ context.Context, _ clients.PlanInput, plan *domain.DeliveryPlan) error {
+func (*Adapter) RefinePlan(_ context.Context, input clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if plan.Scope == domain.ScopeProject {
+		return refineCodexProjectPlan(input, plan)
+	}
 	if plan.Status != domain.PlanUnsupported && shared.HasListingCLI(plan.NativeRegistryExecutable) {
 		plan.Status = domain.PlanReady
 		plan.Activation = domain.ActivationActive

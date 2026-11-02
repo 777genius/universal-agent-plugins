@@ -2,6 +2,7 @@ package installer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -27,25 +28,32 @@ func (e *Engine) applyGroup(ctx context.Context, prepared *PreparedOperation) (R
 	if prepared.plan.NoChange && !pending {
 		result.Outcome = OutcomeUnchanged
 		result.NoChange = true
-		for _, target := range prepared.plan.Targets {
-			result.Targets = append(result.Targets, ClientResult{
-				ClientID: target.ClientID, BindingID: target.BindingID, TreeDigest: target.TreeDigest,
-			})
+		state, err := e.store.Load()
+		if err != nil {
+			return result, err
+		}
+		if installation, ok := findInstall(state, prepared.plan.InstallationID); ok {
+			e.attachLiveGroupResult(&result, prepared, installation)
 		}
 		return result, nil
 	}
 	got, err := e.mutateGroup(ctx, prepared)
 	if err != nil && got == nil {
-		return Result{Operation: prepared.req.Operation, Outcome: OutcomeIncomplete, Reason: err.Error()}, err
+		outcome, reason := OutcomeIncomplete, err.Error()
+		if errors.Is(err, ErrPlanChanged) {
+			outcome, reason = OutcomeConflict, "plan_changed"
+		}
+		return Result{Operation: prepared.req.Operation, Outcome: outcome, Reason: reason}, err
 	}
 	return e.finishGroup(prepared, result, pending, *got, err)
 }
 
 func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending bool, got usecase.GroupResult, err error) (Result, error) {
+	result.Mutated = result.Mutated || got.Mutated
 	err = wrapLifecycleError(err)
 	result.InstallationID = firstNonEmpty(got.InstallationID, prepared.plan.InstallationID)
 	state, loadErr := e.store.Load()
-	if loadErr != nil && err == nil && !got.Mutated && !prepared.plan.NoChange {
+	if prepared.req.Scope != domain.ScopeProject && loadErr != nil && err == nil && !got.Mutated && !prepared.plan.NoChange {
 		result.Outcome = OutcomeIncomplete
 		result.Reason = "committed state is unknown"
 		return result, loadErr
@@ -55,21 +63,27 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 			e.attachLiveGroupResult(&result, prepared, installation)
 		}
 	}
+	attachGroupAttemptResult(&result, got)
 	if err != nil {
-		result.Outcome = OutcomeIncomplete
-		result.Reason = err.Error()
-		if strings.Contains(err.Error(), "run update separately") {
-			result.Outcome = OutcomeConflict
-			result.Reason = "update_required"
+		return failedGroupResult(result, err)
+	}
+	if prepared.req.Scope == domain.ScopeProject {
+		if loadErr != nil {
+			result.Outcome, result.Reason = OutcomeIncomplete, "committed project state is unknown"
+			return result, loadErr
 		}
-		return result, err
+		if completeErr := completedProjectGroup(prepared, got, state); completeErr != nil {
+			result.Outcome, result.Reason = OutcomeIncomplete, completeErr.Error()
+			return result, completeErr
+		}
+		pending = false
 	}
 	if pending && e.anyGroupHostHandoffPending(prepared) {
 		result.Outcome = OutcomeIncomplete
 		result.Reason = "committed binding is not activated"
 		return result, fmt.Errorf("%s", result.Reason)
 	}
-	if !pending && (prepared.plan.NoChange || (!got.Mutated && groupPreviewUnchanged(got))) {
+	if !result.Mutated && !pending && (prepared.plan.NoChange || (!got.Mutated && groupPreviewUnchanged(got))) {
 		result.Outcome = OutcomeUnchanged
 		result.NoChange = true
 		return result, nil
@@ -82,18 +96,76 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 	return result, nil
 }
 
+func failedGroupResult(result Result, err error) (Result, error) {
+	result.Outcome = OutcomeIncomplete
+	result.Reason = err.Error()
+	if errors.Is(err, ErrPlanChanged) {
+		result.Outcome = OutcomeConflict
+		result.Reason = "plan_changed"
+	}
+	if strings.Contains(err.Error(), "run update separately") || errors.Is(err, usecase.ErrProjectionRefreshRequired) {
+		result.Outcome = OutcomeConflict
+		result.Reason = "update_required"
+	}
+	if errors.Is(err, usecase.ErrProjectionPinChangeRequired) {
+		result.Outcome = OutcomeConflict
+		result.Reason = "pin_change_required"
+	}
+	return result, err
+}
+
+func attachGroupAttemptResult(result *Result, got usecase.GroupResult) {
+	for _, target := range got.Targets {
+		if target.Plan.Scope == domain.ScopeProject {
+			result.ManualActions = append(result.ManualActions, target.Activation.UserActions...)
+		}
+		if target.Plan.ClientID == "" || target.GroupPhase == "" {
+			continue
+		}
+		index := -1
+		for i := range result.Targets {
+			if result.Targets[i].ClientID == string(target.Plan.ClientID) {
+				index = i
+				break
+			}
+		}
+		if index < 0 {
+			// A failed state reload must not erase observed attempt facts. Saved
+			// lifecycle dimensions remain unknown until a successful inspection.
+			result.Targets = append(result.Targets, ClientResult{ClientID: string(target.Plan.ClientID)})
+			index = len(result.Targets) - 1
+		}
+		item := &result.Targets[index]
+		attachClientAttemptResult(item, target)
+		if result.Client.ClientID == "" || result.Client.ClientID == item.ClientID {
+			result.Client = *item
+		}
+	}
+}
+
+func attachClientAttemptResult(item *ClientResult, target usecase.AddResult) {
+	item.GroupPhase = string(target.GroupPhase)
+	item.Failure = nil
+	if target.Failure != nil {
+		item.Failure = &ClientFailure{Stage: target.Failure.Stage, Message: target.Failure.Message}
+	}
+}
+
 func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (*usecase.GroupResult, error) {
-	if _, err := e.helper(); err != nil {
+	if _, err := e.preparedHelper(prepared); err != nil {
+		return nil, err
+	}
+	if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
 		return nil, err
 	}
 	if err := e.ensureDirs(); err != nil {
 		return nil, err
 	}
-	helper, err := e.helper()
+	helper, err := e.preparedHelper(prepared)
 	if err != nil {
 		return nil, err
 	}
-	svc := e.lifecycle(helper, prepared.facts, prepared.detected)
+	svc := confirmationLifecycle(prepared, e.lifecycle(helper, prepared.facts, prepared.detected), false)
 	envelopes := prepared.envelopes
 	if len(envelopes) == 0 {
 		envelopes = make([]domain.PackageEnvelope, len(prepared.req.Targets))
@@ -101,15 +173,26 @@ func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (
 			envelopes[i] = prepared.envelope
 		}
 	}
-	inputs, _, err := e.groupAddInputs(prepared.req, envelopes, false, true)
+	req := prepared.req
+	req.InstallationID = firstNonEmpty(req.InstallationID, prepared.plan.InstallationID)
+	inputs, _, err := e.groupAddInputs(req, envelopes, false, true)
 	if err != nil {
 		return nil, err
 	}
+	for i := range inputs {
+		inputs[i].Client = physicalClient(prepared.req, inputs[i].Client)
+	}
 	e.report(ProgressStage)
+	// Recheck every target after host observers, before the group can lock or
+	// discover the first native identity. Keep each actual replan guarded too.
+	if err := e.confirmDeliveries(ctx, prepared); err != nil {
+		return nil, err
+	}
 	group := usecase.GroupInput{
 		Targets: inputs, CompatibilityChecks: inputs,
 		OperationGroupID: firstNonEmpty(prepared.req.OperationID, "group"),
 		Confirmed:        true, Repair: prepared.req.Operation == OpRepair,
+		Progress: e.reportGroupActivation,
 	}
 	var got usecase.GroupResult
 	switch prepared.req.Operation {
@@ -121,4 +204,18 @@ func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (
 		got, err = svc.AddGroup(ctx, group)
 	}
 	return &got, err
+}
+
+func (e *Engine) reportGroupActivation(event usecase.GroupProgressEvent) {
+	if (event.Phase != usecase.GroupProgressActivated && event.Phase != usecase.GroupProgressActivating) || e.cfg.Progress == nil {
+		return
+	}
+	item := ClientResult{ClientID: string(event.ClientID), GroupPhase: string(event.Result.GroupPhase), Activation: string(event.Result.Activation.Activation)}
+	if event.Phase == usecase.GroupProgressActivating {
+		item.GroupPhase = "external_started"
+	}
+	if event.Result.Failure != nil {
+		item.Failure = &ClientFailure{Stage: event.Result.Failure.Stage}
+	}
+	e.cfg.Progress(ProgressEvent{Phase: ProgressActivate, Client: &item})
 }

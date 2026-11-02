@@ -112,7 +112,7 @@ func TestContractClarity_GeminiRuntimeDocsStayAligned(t *testing.T) {
 	mustContain(t, string(sdkReadme), "`gemini.BeforeToolSelectionForceAny(...)`")
 	mustContain(t, string(sdkReadme), "`gemini.AfterToolTailCallValue(...)`")
 	mustContain(t, string(sdkReadme), "promoted 9-hook runtime surface is now also `public-stable`")
-	mustContain(t, string(sdkReadme), "[../../docs/GEMINI_RUNTIME_AUDIT.md](../../docs/GEMINI_RUNTIME_AUDIT.md)")
+	mustContain(t, string(sdkReadme), "[../docs/GEMINI_RUNTIME_AUDIT.md](../docs/GEMINI_RUNTIME_AUDIT.md)")
 	mustContain(t, string(sdkReadme), "Gemini's current production-ready 9-hook runtime boundary is audited")
 
 	mustContain(t, string(sdkStability), "`(*plugin-kit-ai.App).Gemini`")

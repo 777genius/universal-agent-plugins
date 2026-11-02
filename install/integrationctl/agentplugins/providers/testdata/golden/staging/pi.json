@@ -1,0 +1,36 @@
+{
+  "Digests": {
+    ".agentplugins-pi.json": "c7d453e7283db32684fdd3a6f0664071cd110511b99c67271011fafa58fdef96",
+    "bin/": "dir",
+    "bin/run": "a8076d3d28d21e02012b20eaf7dbf75409a6277134439025f282e368e3305abf",
+    "index.ts": "75469f5610f77ded2597e3a5e7a206c17c4fd0861b4ae857a615fed8ecd39456",
+    "native/": "dir",
+    "native/index.ts": "166bb7bb49e9e1721f586470ba2aeeaf80f7d9d43fe9025515af97ae70610179",
+    "plugin.json": "020cd4772c3dc55648dd96a02d0fcc81617aa9eb0b4c7ffd205eb730f0240317",
+    "skills/": "dir",
+    "skills/good/": "dir",
+    "skills/good/SKILL.md": "3c58ae530ad65c3d3a468eb051e1c761687903c4f722529196d369d3d74a40ce"
+  },
+  "Objects": [
+    {
+      "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
+      "Kind": "managed_package_directory",
+      "LogicalName": "demo",
+      "ManagedDigest": "${ARTIFACT}",
+      "ObjectID": "package:pi:demo-0123456789ab",
+      "Path": "${ACTIVE}",
+      "ProtectionClass": "managed",
+      "SourceRelative": "",
+      "UserModified": false
+    }
+  ]
+}

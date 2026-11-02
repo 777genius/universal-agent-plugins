@@ -27,6 +27,9 @@ func (*Adapter) UsesNativeRegistryExecutable() bool { return true }
 // by its CLI; scanning every sibling directory during a dry-run would turn an
 // unrelated fixture or installation into a false indeterminate result.
 func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, owned bool) (clients.RegistryFinding, error) {
+	if plan.Scope == domain.ScopeProject {
+		return inspectPreparedCodexProject(plan, owned)
+	}
 	if strings.TrimSpace(plan.ActivePath) == "" {
 		return clients.RegistryClear, nil
 	}
@@ -81,6 +84,12 @@ func inspectPreparedSiblings(plan domain.DeliveryPlan, name string, fallback cli
 func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
+	}
+	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject {
+		if _, err := codexProjectPlanRoot(client, plan); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		return inspectCodexProject(plan, managed, env.NativeConfig)
 	}
 	profileRoot := client.ConfigRoot
 	if profileRoot == "" {

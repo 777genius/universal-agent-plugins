@@ -101,7 +101,19 @@ func (s *source) pin(rel string, nofollow bool) (*pinned, error) {
 	if nofollow {
 		flags |= unix.O_NOFOLLOW
 	}
-	fd, e := unix.Openat2(int(s.anchor.Fd()), rel, &unix.OpenHow{Flags: flags, Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_MAGICLINKS | unix.RESOLVE_NO_XDEV})
+	anchor := int(s.anchor.Fd())
+	how := &unix.OpenHow{Flags: flags, Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_MAGICLINKS | unix.RESOLVE_NO_XDEV}
+	var fd int
+	var e error
+	// openat2 permits retrying EAGAIN when concurrent renames leave BENEATH
+	// containment uncertain. Keep the same anchor, path and guards; exhaustion
+	// returns the original error through the existing fail-closed path.
+	for range 8 {
+		fd, e = unix.Openat2(anchor, rel, how)
+		if !errors.Is(e, syscall.EAGAIN) {
+			break
+		}
+	}
 	if e != nil {
 		return nil, e
 	}

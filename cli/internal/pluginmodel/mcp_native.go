@@ -28,6 +28,24 @@ func ImportedPortableMCPYAML(sourceTarget string, servers map[string]any) ([]byt
 	return MarshalPortableMCPFile(file)
 }
 
+// UnwrapNativeMCPServers extracts the server alias map from a native MCP document.
+// The wrapped {"mcpServers": {...}} sidecar envelope (qoder/cursor/claude packaged
+// form) and a bare alias map (portable form) are both accepted.
+func UnwrapNativeMCPServers(doc map[string]any) (map[string]any, error) {
+	value, ok := doc["mcpServers"]
+	if !ok {
+		return doc, nil
+	}
+	servers, ok := value.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("native MCP config field %q must be a JSON object", "mcpServers")
+	}
+	if servers == nil {
+		return map[string]any{}, nil
+	}
+	return servers, nil
+}
+
 func PortableMCPFileFromNative(sourceTarget string, servers map[string]any) (PortableMCPFile, error) {
 	target := NormalizeTarget(sourceTarget)
 	file := PortableMCPFile{

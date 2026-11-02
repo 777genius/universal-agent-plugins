@@ -1,0 +1,65 @@
+name: VS Code Pinned Publisher Research
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/vscode-native-research.yml'
+      - 'scripts/research-vscode-native.py'
+      - 'scripts/test_vscode_native_research.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/test_native_client_research.py'
+      - 'scripts/research-grok-native.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'scripts/native_client_draft.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vscode-native-research-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  research:
+    name: VS Code 1.143.1 help and version only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify inert archive and collector safety contracts
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_vscode_native_research.py'
+          python3 -m unittest discover -s scripts -p 'test_native_client_research.py'
+      - name: Capture exact publisher help and version in isolated disposable processes
+        env:
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 scripts/research-vscode-native.py --output '${{ runner.temp }}/vscode-native-research'
+      - name: Admit the exact bounded upload envelope
+        id: upload_admission
+        if: ${{ always() }}
+        env:
+          RESEARCH_OUTPUT: ${{ runner.temp }}/vscode-native-research/upload/research.zip
+        run: |
+          python3 - <<'PYTHON'
+          import os, stat
+          from pathlib import Path
+          path = Path(os.environ["RESEARCH_OUTPUT"])
+          info = path.lstat()
+          if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 32 * 1024 * 1024:
+              raise SystemExit("refusing unbounded or nonregular upload envelope")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("valid=true\n")
+          PYTHON
+      - name: Upload bounded research including failed stages
+        if: ${{ always() && steps.upload_admission.outputs.valid == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: vscode-1.143.1-precode-publisher-linux-amd64
+          path: ${{ runner.temp }}/vscode-native-research/upload/research.zip
+          if-no-files-found: error
+          retention-days: 14

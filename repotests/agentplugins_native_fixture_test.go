@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -399,6 +400,50 @@ func TestAgentpluginsNativeFixtureHTTP(t *testing.T) {
 	}
 }
 
+func TestAgentpluginsNativeFixtureHTTPRequestEvidence(t *testing.T) {
+	valid := map[string]string{"origin": "declared-source", "method": "POST", "uri": "/mcp?literal=%24%7BUNKNOWN%7D", "rpc_method": "initialize", "probe_header": "nonce", "literal_header": "${UNKNOWN}"}
+	variant := func(key, value string) map[string]string {
+		event := map[string]string{}
+		for k, v := range valid {
+			event[k] = v
+		}
+		event[key] = value
+		return event
+	}
+	get := variant("method", "GET")
+	get["rpc_method"] = ""
+	for _, tc := range []struct {
+		name   string
+		events []map[string]string
+		want   string
+	}{
+		{"GET before POST", []map[string]string{get, valid}, "passed"},
+		{"GET only", []map[string]string{get}, "failed"},
+		{"wrong origin only", []map[string]string{variant("origin", "redirect-destination")}, "failed"},
+		{"wrong origin before POST", []map[string]string{variant("origin", "redirect-destination"), valid}, "passed"},
+		{"bad nonce stays failed", []map[string]string{variant("probe_header", "wrong"), valid}, "failed"},
+		{"bad literal stays failed", []map[string]string{variant("literal_header", "expanded"), valid}, "failed"},
+		{"bad URI stays failed", []map[string]string{variant("uri", "/mcp?literal=expanded"), valid}, "failed"},
+		{"missing RPC stays failed", []map[string]string{variant("rpc_method", ""), valid}, "failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &nativeFixture{Root: t.TempDir(), Nonce: "nonce"}
+			var body bytes.Buffer
+			for _, event := range tc.events {
+				if err := json.NewEncoder(&body).Encode(event); err != nil {
+					t.Fatal(err)
+				}
+			}
+			nativeWrite(t, filepath.Join(f.Root, "http-events.jsonl"), body.Bytes(), 0600)
+			stages := map[string]nativeStage{}
+			nativeCheckHTTP(t, f, stages)
+			if got := stages["http_request_contract"].Status; got != tc.want {
+				t.Fatalf("HTTP request evidence=%s, want %s: %+v", got, tc.want, stages)
+			}
+		})
+	}
+}
+
 func TestAgentpluginsNativeFixtureEvidenceOutcomes(t *testing.T) {
 	for _, tc := range []struct{ name, requestHeader, negotiated, want string }{
 		{"missing", "", "2025-06-18", "not_evaluated"},
@@ -658,6 +703,84 @@ func nativeTreeDigest(t *testing.T, root string) string {
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
+
+// nativeFileInventory records every regular file under the given roots keyed
+// by absolute path with its content SHA-256, so remove stages can assert the
+// exact set of deleted paths instead of spot-checking sentinels. Failures are
+// fatal: a partial inventory would silently weaken the exact-removal claim.
+func nativeFileInventory(t *testing.T, roots ...string) map[string]string {
+	t.Helper()
+	inventory := map[string]string{}
+	for _, root := range roots {
+		err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			digest := sha256.Sum256(body)
+			inventory[path] = hex.EncodeToString(digest[:])
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("inventory %s: %v", root, err)
+		}
+	}
+	return inventory
+}
+
+func nativeInventoryDiff(before, after map[string]string) (removed, added, changed []string) {
+	for path, digest := range before {
+		switch got, ok := after[path]; {
+		case !ok:
+			removed = append(removed, path)
+		case got != digest:
+			changed = append(changed, path)
+		}
+	}
+	for path := range after {
+		if _, ok := before[path]; !ok {
+			added = append(added, path)
+		}
+	}
+	sort.Strings(removed)
+	sort.Strings(added)
+	sort.Strings(changed)
+	return removed, added, changed
+}
+
+func TestAgentpluginsNativeInventoryDiff(t *testing.T) {
+	root := t.TempDir()
+	kept := filepath.Join(root, "kept.txt")
+	deleted := filepath.Join(root, "deleted.txt")
+	changed := filepath.Join(root, "changed.txt")
+	nativeWrite(t, kept, []byte("kept"), 0600)
+	nativeWrite(t, deleted, []byte("deleted"), 0600)
+	nativeWrite(t, changed, []byte("before"), 0600)
+	before := nativeFileInventory(t, root)
+	nativeWrite(t, changed, []byte("after"), 0600)
+	added := filepath.Join(root, "added.txt")
+	nativeWrite(t, added, []byte("added"), 0600)
+	if err := os.Remove(deleted); err != nil {
+		t.Fatal(err)
+	}
+	removedPaths, addedPaths, changedPaths := nativeInventoryDiff(before, nativeFileInventory(t, root))
+	if len(removedPaths) != 1 || removedPaths[0] != deleted {
+		t.Fatalf("wrong removed set: %v", removedPaths)
+	}
+	if len(addedPaths) != 1 || addedPaths[0] != added {
+		t.Fatalf("wrong added set: %v", addedPaths)
+	}
+	if len(changedPaths) != 1 || changedPaths[0] != changed {
+		t.Fatalf("wrong changed set: %v", changedPaths)
+	}
+}
+
 func TestAgentpluginsNativeFixtureLifecycleResults(t *testing.T) {
 	good := []byte(`{"schema_version":1,"command":"add","result":"success","data":{"result":{"mutated":false}}}`)
 	if err := nativeUnchangedResult(good); err != nil {

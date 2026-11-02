@@ -40,7 +40,7 @@ func newService() (usecase.Service, error) {
 		SourceResolver:       source.Resolver{Runner: process.OS{}},
 		ManifestLoader:       manifest.Loader{},
 		StateStore:           jsonstate.Store{FS: fs, Path: filepath.Join(home, ".plugin-kit-ai", "state.json")},
-		WorkspaceLock:        workspacelock.Store{FS: fs, File: filepath.Join(repoRoot, ".plugin-kit-ai.lock")},
+		WorkspaceLock:        workspacelock.Store{FS: fs, File: filepath.Join(repoRoot, domain.WorkspaceLockFileName)},
 		LockManager:          locks.FileLock{BaseDir: filepath.Join(home, ".plugin-kit-ai", "locks")},
 		Journal:              journal.FileJournal{FS: fs, BaseDir: filepath.Join(home, ".plugin-kit-ai", "operations")},
 		Evidence:             evidence.Registry{FS: fs, Path: filepath.Join(repoRoot, "docs", "generated", "integrationctl_evidence_registry.json")},

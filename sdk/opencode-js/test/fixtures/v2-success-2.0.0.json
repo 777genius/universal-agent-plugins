@@ -1,0 +1,77 @@
+{
+  "nativeVersion": "2.0.0",
+  "sourceRef": "63f7ceecbed2d7d9a627518d935dd963b9d4ac9f",
+  "provenance": "Sanitized first success from lifecycle-synchronized trace; identifiers normalized, no content or paths. Contract fixture, not artifact qualification.",
+  "events": [
+    {
+      "type": "session.created",
+      "data": {
+        "sessionID": "session"
+      }
+    },
+    {
+      "type": "session.inbox.enqueued",
+      "data": {
+        "sessionID": "session",
+        "inboxID": "user",
+        "item": {
+          "type": "user",
+          "delivery": "steer"
+        }
+      }
+    },
+    {
+      "type": "session.execution.started",
+      "data": {
+        "sessionID": "session"
+      }
+    },
+    {
+      "type": "session.inbox.delivered",
+      "data": {
+        "sessionID": "session",
+        "inboxID": "user"
+      }
+    },
+    {
+      "type": "session.step.started",
+      "data": {
+        "sessionID": "session",
+        "assistantMessageID": "assistant"
+      }
+    },
+    {
+      "type": "session.step.ended",
+      "data": {
+        "sessionID": "session",
+        "assistantMessageID": "assistant",
+        "finish": "stop"
+      }
+    },
+    {
+      "type": "session.execution.succeeded",
+      "data": {
+        "sessionID": "session"
+      }
+    }
+  ],
+  "context": [
+    {
+      "id": "user",
+      "type": "user",
+      "time": {
+        "created": 1790859893279
+      }
+    },
+    {
+      "id": "assistant",
+      "type": "assistant",
+      "finish": "stop",
+      "time": {
+        "created": 1790859893328,
+        "streamed": 1790859893333,
+        "completed": 1790859893339
+      }
+    }
+  ]
+}

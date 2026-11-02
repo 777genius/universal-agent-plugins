@@ -4,8 +4,8 @@
     "kind": "page",
     "surface": "build",
     "localeStrategy": "canonical-en",
-    "title": "Check a package without running it",
-    "summary": "Interpret conformance, static readiness, compatibility, and toolchain evidence separately.",
+    "title": "Check a package and its evidence",
+    "summary": "Separate static checks, explicit source-build MCP execution and client activation evidence.",
     "stability": "public-stable",
     "maturity": "stable",
     "publicVisibility": "public",
@@ -13,14 +13,77 @@
     "released": true,
     "sourceKind": "hand-authored",
     "sourceRef": "build/checks.md",
+    "anchorsByLocale": {
+      "en": [],
+      "ru": [
+        "evaluate-mcp-runtime-explicitly"
+      ],
+      "uk": [
+        "check-a-package-and-its-evidence",
+        "run-the-offline-authoring-loop",
+        "read-the-evidence-layers",
+        "select-clients-explicitly",
+        "evaluate-mcp-runtime-explicitly",
+        "iterate-with-the-source-development-loop",
+        "capture-a-reviewable-report",
+        "maintain-json-deliberately",
+        "choose-the-right-command-boundary"
+      ],
+      "zh": [
+        "evaluate-mcp-runtime-explicitly"
+      ],
+      "es": [
+        "evaluate-mcp-runtime-explicitly"
+      ],
+      "hi": [
+        "check-a-package-and-its-evidence",
+        "run-the-offline-authoring-loop",
+        "read-the-evidence-layers",
+        "select-clients-explicitly",
+        "evaluate-mcp-runtime-explicitly",
+        "iterate-with-the-source-development-loop",
+        "capture-a-reviewable-report",
+        "maintain-json-deliberately",
+        "choose-the-right-command-boundary"
+      ],
+      "ar": [
+        "check-a-package-and-its-evidence",
+        "run-the-offline-authoring-loop",
+        "read-the-evidence-layers",
+        "select-clients-explicitly",
+        "evaluate-mcp-runtime-explicitly",
+        "iterate-with-the-source-development-loop",
+        "capture-a-reviewable-report",
+        "maintain-json-deliberately",
+        "choose-the-right-command-boundary"
+      ],
+      "pt": [
+        "check-a-package-and-its-evidence",
+        "run-the-offline-authoring-loop",
+        "read-the-evidence-layers",
+        "select-clients-explicitly",
+        "evaluate-mcp-runtime-explicitly",
+        "iterate-with-the-source-development-loop",
+        "capture-a-reviewable-report",
+        "maintain-json-deliberately",
+        "choose-the-right-command-boundary"
+      ],
+      "fr": [
+        "evaluate-mcp-runtime-explicitly"
+      ]
+    },
     "pathEn": "/en/build/checks",
     "pathRu": "/ru/build/checks",
-    "pathEs": "/es/build/checks",
-    "pathFr": "/fr/build/checks",
+    "pathUk": "/uk/build/checks",
     "pathZh": "/zh/build/checks",
+    "pathEs": "/es/build/checks",
+    "pathHi": "/hi/build/checks",
+    "pathAr": "/ar/build/checks",
+    "pathPt": "/pt/build/checks",
+    "pathFr": "/fr/build/checks",
     "relatedIds": [],
     "searchTerms": [
-      "Check a package without running it"
+      "Check a package and its evidence"
     ]
   },
   {
@@ -37,11 +100,54 @@
     "released": true,
     "sourceKind": "hand-authored",
     "sourceRef": "build/handoff.md",
+    "anchorsByLocale": {
+      "en": [],
+      "ru": [],
+      "uk": [
+        "hand-a-package-to-the-installer-planner",
+        "prepare-the-package-and-evidence",
+        "finish-source-authoring-checks-when-available",
+        "ask-the-released-installer-to-plan",
+        "share-a-reproducible-source",
+        "explain-what-remains"
+      ],
+      "zh": [],
+      "es": [],
+      "hi": [
+        "hand-a-package-to-the-installer-planner",
+        "prepare-the-package-and-evidence",
+        "finish-source-authoring-checks-when-available",
+        "ask-the-released-installer-to-plan",
+        "share-a-reproducible-source",
+        "explain-what-remains"
+      ],
+      "ar": [
+        "hand-a-package-to-the-installer-planner",
+        "prepare-the-package-and-evidence",
+        "finish-source-authoring-checks-when-available",
+        "ask-the-released-installer-to-plan",
+        "share-a-reproducible-source",
+        "explain-what-remains"
+      ],
+      "pt": [
+        "hand-a-package-to-the-installer-planner",
+        "prepare-the-package-and-evidence",
+        "finish-source-authoring-checks-when-available",
+        "ask-the-released-installer-to-plan",
+        "share-a-reproducible-source",
+        "explain-what-remains"
+      ],
+      "fr": []
+    },
     "pathEn": "/en/build/handoff",
     "pathRu": "/ru/build/handoff",
-    "pathEs": "/es/build/handoff",
-    "pathFr": "/fr/build/handoff",
+    "pathUk": "/uk/build/handoff",
     "pathZh": "/zh/build/handoff",
+    "pathEs": "/es/build/handoff",
+    "pathHi": "/hi/build/handoff",
+    "pathAr": "/ar/build/handoff",
+    "pathPt": "/pt/build/handoff",
+    "pathFr": "/fr/build/handoff",
     "relatedIds": [],
     "searchTerms": [
       "Hand a package to the installer planner"
@@ -61,11 +167,50 @@
     "released": true,
     "sourceKind": "hand-authored",
     "sourceRef": "build/hybrid.md",
+    "anchorsByLocale": {
+      "en": [],
+      "ru": [],
+      "uk": [
+        "build-a-hybrid-package",
+        "choose-the-mcp-side-explicitly",
+        "or-choose-a-local-process",
+        "connect-instructions-to-tools",
+        "check-both-components"
+      ],
+      "zh": [],
+      "es": [],
+      "hi": [
+        "build-a-hybrid-package",
+        "choose-the-mcp-side-explicitly",
+        "or-choose-a-local-process",
+        "connect-instructions-to-tools",
+        "check-both-components"
+      ],
+      "ar": [
+        "build-a-hybrid-package",
+        "choose-the-mcp-side-explicitly",
+        "or-choose-a-local-process",
+        "connect-instructions-to-tools",
+        "check-both-components"
+      ],
+      "pt": [
+        "build-a-hybrid-package",
+        "choose-the-mcp-side-explicitly",
+        "or-choose-a-local-process",
+        "connect-instructions-to-tools",
+        "check-both-components"
+      ],
+      "fr": []
+    },
     "pathEn": "/en/build/hybrid",
     "pathRu": "/ru/build/hybrid",
-    "pathEs": "/es/build/hybrid",
-    "pathFr": "/fr/build/hybrid",
+    "pathUk": "/uk/build/hybrid",
     "pathZh": "/zh/build/hybrid",
+    "pathEs": "/es/build/hybrid",
+    "pathHi": "/hi/build/hybrid",
+    "pathAr": "/ar/build/hybrid",
+    "pathPt": "/pt/build/hybrid",
+    "pathFr": "/fr/build/hybrid",
     "relatedIds": [],
     "searchTerms": [
       "Build a hybrid package"
@@ -85,11 +230,64 @@
     "released": true,
     "sourceKind": "hand-authored",
     "sourceRef": "build/index.md",
+    "anchorsByLocale": {
+      "en": [
+        "build-from-source"
+      ],
+      "ru": [
+        "build-from-source"
+      ],
+      "uk": [
+        "build-plugins",
+        "availability",
+        "make-a-small-package-by-hand",
+        "build-from-source",
+        "choose-a-package-to-scaffold",
+        "follow-the-authoring-loop"
+      ],
+      "zh": [
+        "build-from-source"
+      ],
+      "es": [
+        "build-from-source"
+      ],
+      "hi": [
+        "build-plugins",
+        "availability",
+        "make-a-small-package-by-hand",
+        "build-from-source",
+        "choose-a-package-to-scaffold",
+        "follow-the-authoring-loop"
+      ],
+      "ar": [
+        "build-plugins",
+        "availability",
+        "make-a-small-package-by-hand",
+        "build-from-source",
+        "choose-a-package-to-scaffold",
+        "follow-the-authoring-loop"
+      ],
+      "pt": [
+        "build-plugins",
+        "availability",
+        "make-a-small-package-by-hand",
+        "build-from-source",
+        "choose-a-package-to-scaffold",
+        "follow-the-authoring-loop"
+      ],
+      "fr": [
+        "build-from-source"
+      ]
+    },
     "pathEn": "/en/build/",
     "pathRu": "/ru/build/",
-    "pathEs": "/es/build/",
-    "pathFr": "/fr/build/",
+    "pathUk": "/uk/build/",
     "pathZh": "/zh/build/",
+    "pathEs": "/es/build/",
+    "pathHi": "/hi/build/",
+    "pathAr": "/ar/build/",
+    "pathPt": "/pt/build/",
+    "pathFr": "/fr/build/",
     "relatedIds": [],
     "searchTerms": [
       "Build plugins"
@@ -109,11 +307,50 @@
     "released": true,
     "sourceKind": "hand-authored",
     "sourceRef": "build/layout.md",
+    "anchorsByLocale": {
+      "en": [],
+      "ru": [],
+      "uk": [
+        "understand-the-package-root",
+        "minimal-and-combined-layouts",
+        "give-each-file-a-clear-responsibility",
+        "identity-and-optional-metadata",
+        "select-the-root-consistently"
+      ],
+      "zh": [],
+      "es": [],
+      "hi": [
+        "understand-the-package-root",
+        "minimal-and-combined-layouts",
+        "give-each-file-a-clear-responsibility",
+        "identity-and-optional-metadata",
+        "select-the-root-consistently"
+      ],
+      "ar": [
+        "understand-the-package-root",
+        "minimal-and-combined-layouts",
+        "give-each-file-a-clear-responsibility",
+        "identity-and-optional-metadata",
+        "select-the-root-consistently"
+      ],
+      "pt": [
+        "understand-the-package-root",
+        "minimal-and-combined-layouts",
+        "give-each-file-a-clear-responsibility",
+        "identity-and-optional-metadata",
+        "select-the-root-consistently"
+      ],
+      "fr": []
+    },
     "pathEn": "/en/build/layout",
     "pathRu": "/ru/build/layout",
-    "pathEs": "/es/build/layout",
-    "pathFr": "/fr/build/layout",
+    "pathUk": "/uk/build/layout",
     "pathZh": "/zh/build/layout",
+    "pathEs": "/es/build/layout",
+    "pathHi": "/hi/build/layout",
+    "pathAr": "/ar/build/layout",
+    "pathPt": "/pt/build/layout",
+    "pathFr": "/fr/build/layout",
     "relatedIds": [],
     "searchTerms": [
       "Understand the package root"
@@ -133,11 +370,50 @@
     "released": true,
     "sourceKind": "hand-authored",
     "sourceRef": "build/mcp-remote.md",
+    "anchorsByLocale": {
+      "en": [],
+      "ru": [],
+      "uk": [
+        "build-a-remote-mcp-package",
+        "supply-the-endpoint-explicitly",
+        "understand-the-files",
+        "check-configuration-and-target-support",
+        "keep-the-remaining-work-visible"
+      ],
+      "zh": [],
+      "es": [],
+      "hi": [
+        "build-a-remote-mcp-package",
+        "supply-the-endpoint-explicitly",
+        "understand-the-files",
+        "check-configuration-and-target-support",
+        "keep-the-remaining-work-visible"
+      ],
+      "ar": [
+        "build-a-remote-mcp-package",
+        "supply-the-endpoint-explicitly",
+        "understand-the-files",
+        "check-configuration-and-target-support",
+        "keep-the-remaining-work-visible"
+      ],
+      "pt": [
+        "build-a-remote-mcp-package",
+        "supply-the-endpoint-explicitly",
+        "understand-the-files",
+        "check-configuration-and-target-support",
+        "keep-the-remaining-work-visible"
+      ],
+      "fr": []
+    },
     "pathEn": "/en/build/mcp-remote",
     "pathRu": "/ru/build/mcp-remote",
-    "pathEs": "/es/build/mcp-remote",
-    "pathFr": "/fr/build/mcp-remote",
+    "pathUk": "/uk/build/mcp-remote",
     "pathZh": "/zh/build/mcp-remote",
+    "pathEs": "/es/build/mcp-remote",
+    "pathHi": "/hi/build/mcp-remote",
+    "pathAr": "/ar/build/mcp-remote",
+    "pathPt": "/pt/build/mcp-remote",
+    "pathFr": "/fr/build/mcp-remote",
     "relatedIds": [],
     "searchTerms": [
       "Build a remote MCP package"
@@ -157,11 +433,58 @@
     "released": true,
     "sourceKind": "hand-authored",
     "sourceRef": "build/mcp-stdio.md",
+    "anchorsByLocale": {
+      "en": [],
+      "ru": [],
+      "uk": [
+        "build-a-stdio-mcp-package",
+        "create-the-scaffold",
+        "review-the-files",
+        "gather-static-evidence",
+        "bootstrap-the-recognized-template",
+        "run-one-explicit-mcp-check",
+        "prepare-the-handoff"
+      ],
+      "zh": [],
+      "es": [],
+      "hi": [
+        "build-a-stdio-mcp-package",
+        "create-the-scaffold",
+        "review-the-files",
+        "gather-static-evidence",
+        "bootstrap-the-recognized-template",
+        "run-one-explicit-mcp-check",
+        "prepare-the-handoff"
+      ],
+      "ar": [
+        "build-a-stdio-mcp-package",
+        "create-the-scaffold",
+        "review-the-files",
+        "gather-static-evidence",
+        "bootstrap-the-recognized-template",
+        "run-one-explicit-mcp-check",
+        "prepare-the-handoff"
+      ],
+      "pt": [
+        "build-a-stdio-mcp-package",
+        "create-the-scaffold",
+        "review-the-files",
+        "gather-static-evidence",
+        "bootstrap-the-recognized-template",
+        "run-one-explicit-mcp-check",
+        "prepare-the-handoff"
+      ],
+      "fr": []
+    },
     "pathEn": "/en/build/mcp-stdio",
     "pathRu": "/ru/build/mcp-stdio",
-    "pathEs": "/es/build/mcp-stdio",
-    "pathFr": "/fr/build/mcp-stdio",
+    "pathUk": "/uk/build/mcp-stdio",
     "pathZh": "/zh/build/mcp-stdio",
+    "pathEs": "/es/build/mcp-stdio",
+    "pathHi": "/hi/build/mcp-stdio",
+    "pathAr": "/ar/build/mcp-stdio",
+    "pathPt": "/pt/build/mcp-stdio",
+    "pathFr": "/fr/build/mcp-stdio",
     "relatedIds": [],
     "searchTerms": [
       "Build a stdio MCP package"
@@ -181,11 +504,46 @@
     "released": true,
     "sourceKind": "hand-authored",
     "sourceRef": "build/skill.md",
+    "anchorsByLocale": {
+      "en": [],
+      "ru": [],
+      "uk": [
+        "build-a-standalone-skill",
+        "choose-an-explicit-destination",
+        "review-the-created-files",
+        "check-the-exact-package-root"
+      ],
+      "zh": [],
+      "es": [],
+      "hi": [
+        "build-a-standalone-skill",
+        "choose-an-explicit-destination",
+        "review-the-created-files",
+        "check-the-exact-package-root"
+      ],
+      "ar": [
+        "build-a-standalone-skill",
+        "choose-an-explicit-destination",
+        "review-the-created-files",
+        "check-the-exact-package-root"
+      ],
+      "pt": [
+        "build-a-standalone-skill",
+        "choose-an-explicit-destination",
+        "review-the-created-files",
+        "check-the-exact-package-root"
+      ],
+      "fr": []
+    },
     "pathEn": "/en/build/skill",
     "pathRu": "/ru/build/skill",
-    "pathEs": "/es/build/skill",
-    "pathFr": "/fr/build/skill",
+    "pathUk": "/uk/build/skill",
     "pathZh": "/zh/build/skill",
+    "pathEs": "/es/build/skill",
+    "pathHi": "/hi/build/skill",
+    "pathAr": "/ar/build/skill",
+    "pathPt": "/pt/build/skill",
+    "pathFr": "/fr/build/skill",
     "relatedIds": [],
     "searchTerms": [
       "Build a standalone Skill"
@@ -197,7 +555,7 @@
     "surface": "build",
     "localeStrategy": "canonical-en",
     "title": "Add extra Skills",
-    "summary": "Extend an existing standard package with another immediate Skill.",
+    "summary": "Add another Skill in a direct child directory of skills/ to an existing standard package.",
     "stability": "public-stable",
     "maturity": "stable",
     "publicVisibility": "public",
@@ -205,11 +563,58 @@
     "released": true,
     "sourceKind": "hand-authored",
     "sourceRef": "build/skills.md",
+    "anchorsByLocale": {
+      "en": [
+        "validate-the-package-and-immediate-skills"
+      ],
+      "ru": [
+        "проверьте-пакет-и-непосредственные-skills"
+      ],
+      "uk": [
+        "add-extra-skills",
+        "name-the-new-skill-and-package",
+        "review-the-additional-component",
+        "validate-the-package-and-immediate-skills",
+        "handle-a-failure-without-overwriting-work"
+      ],
+      "zh": [],
+      "es": [
+        "valida-el-paquete-y-los-skills-inmediatos"
+      ],
+      "hi": [
+        "add-extra-skills",
+        "name-the-new-skill-and-package",
+        "review-the-additional-component",
+        "validate-the-package-and-immediate-skills",
+        "handle-a-failure-without-overwriting-work"
+      ],
+      "ar": [
+        "add-extra-skills",
+        "name-the-new-skill-and-package",
+        "review-the-additional-component",
+        "validate-the-package-and-immediate-skills",
+        "handle-a-failure-without-overwriting-work"
+      ],
+      "pt": [
+        "add-extra-skills",
+        "name-the-new-skill-and-package",
+        "review-the-additional-component",
+        "validate-the-package-and-immediate-skills",
+        "handle-a-failure-without-overwriting-work"
+      ],
+      "fr": [
+        "validez-le-paquet-et-les-skills-immediats"
+      ]
+    },
     "pathEn": "/en/build/skills",
     "pathRu": "/ru/build/skills",
-    "pathEs": "/es/build/skills",
-    "pathFr": "/fr/build/skills",
+    "pathUk": "/uk/build/skills",
     "pathZh": "/zh/build/skills",
+    "pathEs": "/es/build/skills",
+    "pathHi": "/hi/build/skills",
+    "pathAr": "/ar/build/skills",
+    "pathPt": "/pt/build/skills",
+    "pathFr": "/fr/build/skills",
     "relatedIds": [],
     "searchTerms": [
       "Add extra Skills"
@@ -227,11 +632,92 @@
     "publicVisibility": "public",
     "sourceKind": "hand-authored",
     "sourceRef": "guide/quickstart.md",
+    "anchorsByLocale": {
+      "en": [
+        "quickstart",
+        "use-plugins",
+        "optional-first-proof",
+        "build-plugins",
+        "recommended-default",
+        "if-you-only-read-one-thing"
+      ],
+      "ru": [
+        "быстрыи-старт",
+        "use-plugins",
+        "опциональная-быстрая-проверка",
+        "build-plugins",
+        "рекомендуемыи-путь",
+        "если-прочитать-только-одно"
+      ],
+      "uk": [
+        "quickstart",
+        "use-plugins-build-plugins",
+        "use-plugins",
+        "optional-first-proof",
+        "restore-a-saved-dependency-set",
+        "build-plugins",
+        "recommended-default",
+        "if-you-only-read-one-thing"
+      ],
+      "zh": [
+        "quickstart",
+        "快速入门",
+        "use-plugins",
+        "optional-first-proof",
+        "build-plugins",
+        "recommended-default",
+        "if-you-only-read-one-thing"
+      ],
+      "es": [
+        "inicio-rapido",
+        "use-plugins",
+        "build-plugins"
+      ],
+      "hi": [
+        "quickstart",
+        "use-plugins--build-plugins",
+        "use-plugins",
+        "optional-first-proof",
+        "restore-a-saved-dependency-set",
+        "build-plugins",
+        "recommended-default",
+        "if-you-only-read-one-thing"
+      ],
+      "ar": [
+        "quickstart",
+        "use-plugins--build-plugins",
+        "use-plugins",
+        "optional-first-proof",
+        "restore-a-saved-dependency-set",
+        "build-plugins",
+        "recommended-default",
+        "if-you-only-read-one-thing"
+      ],
+      "pt": [
+        "quickstart",
+        "use-plugins-build-plugins",
+        "use-plugins",
+        "optional-first-proof",
+        "restore-a-saved-dependency-set",
+        "build-plugins",
+        "recommended-default",
+        "if-you-only-read-one-thing"
+      ],
+      "fr": [
+        "demarrage-rapide",
+        "use-plugins",
+        "build-plugins"
+      ]
+    },
     "pathEn": "/en/guide/quickstart",
     "pathRu": "/ru/guide/quickstart",
-    "pathEs": "/es/guide/quickstart",
-    "pathFr": "/fr/guide/quickstart",
+    "pathUk": "/uk/guide/quickstart",
     "pathZh": "/zh/guide/quickstart",
+    "pathEs": "/es/guide/quickstart",
+    "pathHi": "/hi/guide/quickstart",
+    "pathAr": "/ar/guide/quickstart",
+    "pathPt": "/pt/guide/quickstart",
+    "pathFr": "/fr/guide/quickstart",
     "relatedIds": [],
     "searchTerms": [
       "Quickstart"
@@ -249,11 +735,46 @@
     "publicVisibility": "public",
     "sourceKind": "hand-authored",
     "sourceRef": "index.md",
+    "anchorsByLocale": {
+      "en": [],
+      "ru": [],
+      "uk": [
+        "choose-your-journey",
+        "install-your-first-plugin",
+        "what-is-available",
+        "understand-the-result"
+      ],
+      "zh": [],
+      "es": [],
+      "hi": [
+        "choose-your-journey",
+        "install-your-first-plugin",
+        "what-is-available",
+        "understand-the-result"
+      ],
+      "ar": [
+        "choose-your-journey",
+        "install-your-first-plugin",
+        "what-is-available",
+        "understand-the-result"
+      ],
+      "pt": [
+        "choose-your-journey",
+        "install-your-first-plugin",
+        "what-is-available",
+        "understand-the-result"
+      ],
+      "fr": []
+    },
     "pathEn": "/en/",
     "pathRu": "/ru/",
-    "pathEs": "/es/",
-    "pathFr": "/fr/",
+    "pathUk": "/uk/",
     "pathZh": "/zh/",
+    "pathEs": "/es/",
+    "pathHi": "/hi/",
+    "pathAr": "/ar/",
+    "pathPt": "/pt/",
+    "pathFr": "/fr/",
     "relatedIds": [],
     "searchTerms": [
       "Agent Plugins Documentation"
@@ -271,11 +792,92 @@
     "publicVisibility": "public",
     "sourceKind": "hand-authored",
     "sourceRef": "reference/client-compatibility.md",
+    "anchorsByLocale": {
+      "en": [
+        "pi-native-extensions"
+      ],
+      "ru": [
+        "pi-native-extensions"
+      ],
+      "uk": [
+        "uap-client-compatibility-evidence",
+        "current-release-and-scope",
+        "pi-native-extensions",
+        "historical-draft-installer-0155",
+        "released-installer-0153",
+        "supplemental-linux-amd64-proof-for-0153",
+        "historical-source-built-observations",
+        "historical-source-and-release-boundary",
+        "historical-linux-arm64-native-cli-matrix",
+        "historical-limitations-and-narrower-proofs",
+        "historical-macos-arm64-and-windows-amd64-source-checkpoint",
+        "other-platforms-and-clients",
+        "project-scope-evidence"
+      ],
+      "zh": [
+        "pi-native-extensions"
+      ],
+      "es": [
+        "pi-native-extensions"
+      ],
+      "hi": [
+        "uap-client-compatibility-evidence",
+        "current-release-and-scope",
+        "pi-native-extensions",
+        "historical-draft-installer-0155",
+        "released-installer-0153",
+        "supplemental-linux-amd64-proof-for-0153",
+        "historical-source-built-observations",
+        "historical-source-and-release-boundary",
+        "historical-linux-arm64-native-cli-matrix",
+        "historical-limitations-and-narrower-proofs",
+        "historical-macos-arm64-and-windows-amd64-source-checkpoint",
+        "other-platforms-and-clients",
+        "project-scope-evidence"
+      ],
+      "ar": [
+        "uap-client-compatibility-evidence",
+        "current-release-and-scope",
+        "pi-native-extensions",
+        "historical-draft-installer-0155",
+        "released-installer-0153",
+        "supplemental-linux-amd64-proof-for-0153",
+        "historical-source-built-observations",
+        "historical-source-and-release-boundary",
+        "historical-linux-arm64-native-cli-matrix",
+        "historical-limitations-and-narrower-proofs",
+        "historical-macos-arm64-and-windows-amd64-source-checkpoint",
+        "other-platforms-and-clients",
+        "project-scope-evidence"
+      ],
+      "pt": [
+        "uap-client-compatibility-evidence",
+        "current-release-and-scope",
+        "pi-native-extensions",
+        "historical-draft-installer-0155",
+        "released-installer-0153",
+        "supplemental-linux-amd64-proof-for-0153",
+        "historical-source-built-observations",
+        "historical-source-and-release-boundary",
+        "historical-linux-arm64-native-cli-matrix",
+        "historical-limitations-and-narrower-proofs",
+        "historical-macos-arm64-and-windows-amd64-source-checkpoint",
+        "other-platforms-and-clients",
+        "project-scope-evidence"
+      ],
+      "fr": [
+        "pi-native-extensions"
+      ]
+    },
     "pathEn": "/en/reference/client-compatibility",
     "pathRu": "/ru/reference/client-compatibility",
-    "pathEs": "/es/reference/client-compatibility",
-    "pathFr": "/fr/reference/client-compatibility",
+    "pathUk": "/uk/reference/client-compatibility",
     "pathZh": "/zh/reference/client-compatibility",
+    "pathEs": "/es/reference/client-compatibility",
+    "pathHi": "/hi/reference/client-compatibility",
+    "pathAr": "/ar/reference/client-compatibility",
+    "pathPt": "/pt/reference/client-compatibility",
+    "pathFr": "/fr/reference/client-compatibility",
     "relatedIds": [],
     "searchTerms": [
       "UAP client compatibility evidence"
@@ -287,7 +889,7 @@
     "surface": "use",
     "localeStrategy": "canonical-en",
     "title": "Use plugins",
-    "summary": "Choose installation or authoring, then follow the appropriate journey.",
+    "summary": "Install packages for your agents and keep project dependencies separate.",
     "stability": "public-stable",
     "maturity": "stable",
     "publicVisibility": "public",
@@ -295,11 +897,50 @@
     "released": true,
     "sourceKind": "hand-authored",
     "sourceRef": "use/index.md",
+    "anchorsByLocale": {
+      "en": [],
+      "ru": [],
+      "uk": [
+        "use-plugins",
+        "get-the-cli",
+        "follow-the-installation-journey",
+        "read-the-result-at-the-right-level",
+        "if-you-are-writing-a-package"
+      ],
+      "zh": [],
+      "es": [],
+      "hi": [
+        "use-plugins",
+        "get-the-cli",
+        "follow-the-installation-journey",
+        "read-the-result-at-the-right-level",
+        "if-you-are-writing-a-package"
+      ],
+      "ar": [
+        "use-plugins",
+        "get-the-cli",
+        "follow-the-installation-journey",
+        "read-the-result-at-the-right-level",
+        "if-you-are-writing-a-package"
+      ],
+      "pt": [
+        "use-plugins",
+        "get-the-cli",
+        "follow-the-installation-journey",
+        "read-the-result-at-the-right-level",
+        "if-you-are-writing-a-package"
+      ],
+      "fr": []
+    },
     "pathEn": "/en/use/",
     "pathRu": "/ru/use/",
-    "pathEs": "/es/use/",
-    "pathFr": "/fr/use/",
+    "pathUk": "/uk/use/",
     "pathZh": "/zh/use/",
+    "pathEs": "/es/use/",
+    "pathHi": "/hi/use/",
+    "pathAr": "/ar/use/",
+    "pathPt": "/pt/use/",
+    "pathFr": "/fr/use/",
     "relatedIds": [],
     "searchTerms": [
       "Use plugins"
@@ -319,11 +960,72 @@
     "released": true,
     "sourceKind": "hand-authored",
     "sourceRef": "use/install.md",
+    "anchorsByLocale": {
+      "en": [],
+      "ru": [],
+      "uk": [
+        "find-and-install-a-plugin",
+        "discover-the-package",
+        "preview-one-explicit-selection",
+        "install-after-reviewing-the-plan",
+        "finish-activation",
+        "use-a-local-package",
+        "select-an-exact-github-source",
+        "install-agent-skills",
+        "install-for-one-project"
+      ],
+      "zh": [
+        "install-agent-skills"
+      ],
+      "es": [
+        "install-agent-skills"
+      ],
+      "hi": [
+        "find-and-install-a-plugin",
+        "discover-the-package",
+        "preview-one-explicit-selection",
+        "install-after-reviewing-the-plan",
+        "finish-activation",
+        "use-a-local-package",
+        "select-an-exact-github-source",
+        "install-agent-skills",
+        "install-for-one-project"
+      ],
+      "ar": [
+        "find-and-install-a-plugin",
+        "discover-the-package",
+        "preview-one-explicit-selection",
+        "install-after-reviewing-the-plan",
+        "finish-activation",
+        "use-a-local-package",
+        "select-an-exact-github-source",
+        "install-agent-skills",
+        "install-for-one-project"
+      ],
+      "pt": [
+        "find-and-install-a-plugin",
+        "discover-the-package",
+        "preview-one-explicit-selection",
+        "install-after-reviewing-the-plan",
+        "finish-activation",
+        "use-a-local-package",
+        "select-an-exact-github-source",
+        "install-agent-skills",
+        "install-for-one-project"
+      ],
+      "fr": [
+        "install-agent-skills"
+      ]
+    },
     "pathEn": "/en/use/install",
     "pathRu": "/ru/use/install",
-    "pathEs": "/es/use/install",
-    "pathFr": "/fr/use/install",
+    "pathUk": "/uk/use/install",
     "pathZh": "/zh/use/install",
+    "pathEs": "/es/use/install",
+    "pathHi": "/hi/use/install",
+    "pathAr": "/ar/use/install",
+    "pathPt": "/pt/use/install",
+    "pathFr": "/fr/use/install",
     "relatedIds": [],
     "searchTerms": [
       "Find and install a plugin"
@@ -343,11 +1045,94 @@
     "released": true,
     "sourceKind": "hand-authored",
     "sourceRef": "use/manage.md",
+    "anchorsByLocale": {
+      "en": [
+        "local-management-api",
+        "restore-project-dependencies"
+      ],
+      "ru": [
+        "local-management-api",
+        "restore-project-dependencies"
+      ],
+      "uk": [
+        "maintain-installed-plugins",
+        "inspect-the-situation-first",
+        "local-management-api",
+        "update-deliberately",
+        "repair-recorded-state",
+        "remove-the-selected-installation",
+        "use-a-saved-dependency-environment",
+        "restore-on-another-machine",
+        "restore-project-dependencies",
+        "restore-and-maintain-a-project",
+        "default-install-selection-in-cli-0194",
+        "report-a-problem-clearly"
+      ],
+      "zh": [
+        "local-management-api",
+        "restore-on-another-machine",
+        "restore-project-dependencies"
+      ],
+      "es": [
+        "local-management-api",
+        "restore-project-dependencies"
+      ],
+      "hi": [
+        "maintain-installed-plugins",
+        "inspect-the-situation-first",
+        "local-management-api",
+        "update-deliberately",
+        "repair-recorded-state",
+        "remove-the-selected-installation",
+        "use-a-saved-dependency-environment",
+        "restore-on-another-machine",
+        "restore-project-dependencies",
+        "restore-and-maintain-a-project",
+        "default-install-selection-in-cli-0194",
+        "report-a-problem-clearly"
+      ],
+      "ar": [
+        "maintain-installed-plugins",
+        "inspect-the-situation-first",
+        "local-management-api",
+        "update-deliberately",
+        "repair-recorded-state",
+        "remove-the-selected-installation",
+        "use-a-saved-dependency-environment",
+        "restore-on-another-machine",
+        "restore-project-dependencies",
+        "restore-and-maintain-a-project",
+        "default-install-selection-in-cli-0194",
+        "report-a-problem-clearly"
+      ],
+      "pt": [
+        "maintain-installed-plugins",
+        "inspect-the-situation-first",
+        "local-management-api",
+        "update-deliberately",
+        "repair-recorded-state",
+        "remove-the-selected-installation",
+        "use-a-saved-dependency-environment",
+        "restore-on-another-machine",
+        "restore-project-dependencies",
+        "restore-and-maintain-a-project",
+        "default-install-selection-in-cli-0194",
+        "report-a-problem-clearly"
+      ],
+      "fr": [
+        "local-management-api",
+        "restore-project-dependencies"
+      ]
+    },
     "pathEn": "/en/use/manage",
     "pathRu": "/ru/use/manage",
-    "pathEs": "/es/use/manage",
-    "pathFr": "/fr/use/manage",
+    "pathUk": "/uk/use/manage",
     "pathZh": "/zh/use/manage",
+    "pathEs": "/es/use/manage",
+    "pathHi": "/hi/use/manage",
+    "pathAr": "/ar/use/manage",
+    "pathPt": "/pt/use/manage",
+    "pathFr": "/fr/use/manage",
     "relatedIds": [],
     "searchTerms": [
       "Maintain installed plugins"
@@ -705,7 +1490,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -1059,7 +1848,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -1427,7 +2220,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -1795,7 +2592,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -2149,7 +2950,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -2576,7 +3381,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -2944,7 +3753,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -3298,7 +4111,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -3652,7 +4469,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -4019,7 +4840,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -4380,7 +5205,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -4748,7 +5577,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -5116,7 +5949,11 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   },
   {
     "namespace": "prepared-authoring-v2",
@@ -5470,6 +6307,10 @@
           "usage": "target client(s), comma-separated: codex, chatgpt, cursor, copilot, vscode, kiro, claude, gemini, opencode, cline, windsurf"
         }
       ]
-    }
+    },
+    "pathUk": "",
+    "pathHi": "",
+    "pathAr": "",
+    "pathPt": ""
   }
 ]

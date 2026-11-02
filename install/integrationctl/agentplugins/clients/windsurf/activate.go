@@ -14,6 +14,9 @@ import (
 // AutomaticallyActivates reports that Activate will write owned Windsurf MCP
 // entries for this exact request.
 func (*Adapter) AutomaticallyActivates(_ clients.Env, request domain.ActivationRequest) bool {
+	if request.Plan.Scope == domain.ScopeProject {
+		return request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(request.Plan.Components)
+	}
 	return request.Plan.InstallIntent == domain.InstallIntentAutomatic &&
 		strings.TrimSpace(request.Client.ConfigRoot) != "" &&
 		len(WindsurfObjects(request.Delivery.NativeObjects)) > 0
@@ -22,12 +25,18 @@ func (*Adapter) AutomaticallyActivates(_ clients.Env, request domain.ActivationR
 // VerifierAvailable reports that an exact native configuration listing can be
 // observed. It does not need a client executable.
 func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, _ string) bool {
+	if plan.Scope == domain.ScopeProject {
+		return len(plan.Components) > 0
+	}
 	return len(plan.Components) > 0
 }
 
 // Activate installs or verifies owned Windsurf MCP entries, or leaves a
 // channel-selection follow-up when automatic installation is unavailable.
-func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject {
+		return adapter.activateDevinProject(ctx, env, request)
+	}
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
@@ -72,13 +81,17 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 
 // Deactivate removes owned Windsurf MCP entries, or asks the operator to
 // finish a leftover channel first.
-func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
-	outcome := shared.StartedDeactivation()
-	if len(WindsurfObjects(request.NativeObjects)) == 0 {
-		return shared.RequireExternalUninstall(outcome, request.ExternalUninstalled, "remove the prepared package manually, then rerun remove with `--external-uninstalled`"), nil
+func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if request.TargetContext.Scope == domain.ScopeProject {
+		return deactivateDevinProject(ctx, env, request)
 	}
-	if strings.TrimSpace(request.Client.ConfigRoot) == "" {
-		return shared.RequireExternalUninstall(outcome, request.ExternalUninstalled, "select exactly one installed Windsurf channel, then rerun remove"), nil
+	outcome := shared.StartedDeactivation()
+	if adapter.RequiresExternalUninstalled(env, request) {
+		action := "remove the prepared package manually, then rerun remove with `--external-uninstalled`"
+		if len(WindsurfObjects(request.NativeObjects)) > 0 {
+			action = "select exactly one installed Windsurf channel, then rerun remove"
+		}
+		return shared.RequireExternalUninstall(outcome, request.ExternalUninstalled, action), nil
 	}
 	if !request.Confirmed {
 		outcome.UserActions = append(outcome.UserActions, "agentplugins will remove only its owned Windsurf MCP entries")

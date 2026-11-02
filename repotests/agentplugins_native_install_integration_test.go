@@ -55,11 +55,16 @@ printf '\n'
 	t.Cleanup(server.Close)
 
 	root := t.TempDir()
-	binDir := filepath.Join(root, "bin")
+	binDir := filepath.Join(root, "bin with spaces")
+	tempDir := filepath.Join(root, "tmp with spaces")
+	if err := os.MkdirAll(tempDir, 0700); err != nil {
+		t.Fatal(err)
+	}
 	outputFile := filepath.Join(root, "installer.outputs")
 	output := runNativeInstaller(t, server.URL, map[string]string{
 		"AGENTPLUGINS_BIN_DIR":     binDir,
 		"AGENTPLUGINS_OUTPUT_FILE": outputFile,
+		"TMPDIR":                   tempDir,
 	}, "add", "context7", "--dry-run")
 
 	installedPath := filepath.Join(binDir, "agentplugins")

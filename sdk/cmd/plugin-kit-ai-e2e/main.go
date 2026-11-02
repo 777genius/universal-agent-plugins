@@ -10,6 +10,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/sdk/claude"
 	"github.com/777genius/plugin-kit-ai/sdk/codex"
 	"github.com/777genius/plugin-kit-ai/sdk/gemini"
+	"github.com/777genius/plugin-kit-ai/sdk/qoder"
 )
 
 // PLUGIN_KIT_AI_E2E_TRACE, when set to a file path, appends one JSON line per hook invocation (for CLI e2e).
@@ -139,6 +140,36 @@ func main() {
 			"raw_json": string(e.RawJSON()),
 		})
 		return codex.Continue()
+	})
+	app.Qoder().OnSessionStart(func(e *qoder.SessionStartEvent) *qoder.SessionStartResponse {
+		trace(map[string]any{
+			"hook":     "SessionStart",
+			"platform": "qoder",
+			"outcome":  "continue",
+			"source":   e.Source,
+		})
+		return nil
+	})
+	app.Qoder().OnUserPromptSubmit(func(e *qoder.UserPromptSubmitEvent) *qoder.UserPromptSubmitResponse {
+		if strings.Contains(strings.ToLower(e.Prompt), "secret") {
+			trace(map[string]any{"hook": "UserPromptSubmit", "platform": "qoder", "outcome": "block"})
+			return qoder.UserPromptSubmitBlock("no secrets")
+		}
+		trace(map[string]any{"hook": "UserPromptSubmit", "platform": "qoder", "outcome": "allow"})
+		return qoder.UserPromptSubmitAllow()
+	})
+	app.Qoder().OnPostToolUse(func(e *qoder.PostToolUseEvent) *qoder.PostToolUseResponse {
+		trace(map[string]any{
+			"hook":     "PostToolUse",
+			"platform": "qoder",
+			"outcome":  "continue",
+			"tool":     e.ToolName,
+		})
+		return nil
+	})
+	app.Qoder().OnStop(func(e *qoder.StopEvent) *qoder.StopResponse {
+		trace(map[string]any{"hook": "Stop", "platform": "qoder", "outcome": "allow"})
+		return qoder.StopAllow()
 	})
 	app.Gemini().OnSessionStart(func(e *gemini.SessionStartEvent) *gemini.SessionStartResponse {
 		if message, ok := geminiOverrideMessage("SESSION_START"); ok {

@@ -5,6 +5,9 @@
     "DetectionError": null,
     "DisplayName": "ChatGPT",
     "ExecutablePath": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -21,6 +24,9 @@
     "DetectionError": null,
     "DisplayName": "Claude Code",
     "ExecutablePath": "\u003chome\u003e/bin/claude",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -42,6 +48,9 @@
     "DetectionError": null,
     "DisplayName": "Cline",
     "ExecutablePath": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -63,6 +72,11 @@
         "Detected": true,
         "Evidence": "configuration_directory",
         "ID": "cline_cursor_config"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "cline_cli"
       }
     ],
     "Version": ""
@@ -73,6 +87,9 @@
     "DetectionError": null,
     "DisplayName": "OpenAI Codex",
     "ExecutablePath": "\u003chome\u003e/bin/codex",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -94,6 +111,9 @@
     "DetectionError": null,
     "DisplayName": "GitHub Copilot CLI",
     "ExecutablePath": "\u003chome\u003e/bin/copilot",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -115,6 +135,9 @@
     "DetectionError": null,
     "DisplayName": "Cursor",
     "ExecutablePath": "\u003chome\u003e/bin/cursor",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -146,6 +169,9 @@
     "DetectionError": null,
     "DisplayName": "Gemini CLI",
     "ExecutablePath": "\u003chome\u003e/bin/gemini",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -162,11 +188,62 @@
     "Version": ""
   },
   {
+    "ClientID": "grok",
+    "ConfigRoot": "\u003chome\u003e/.grok",
+    "DetectionError": null,
+    "DisplayName": "Grok Build",
+    "ExecutablePath": "\u003chome\u003e/bin/grok",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "grok_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "grok_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "kimi",
+    "ConfigRoot": "\u003chome\u003e/.kimi-code",
+    "DetectionError": null,
+    "DisplayName": "Kimi Code",
+    "ExecutablePath": "\u003chome\u003e/bin/kimi",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "kimi_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "kimi_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
     "ClientID": "kiro",
     "ConfigRoot": "\u003chome\u003e/.kiro",
     "DetectionError": null,
     "DisplayName": "Kiro",
     "ExecutablePath": "\u003chome\u003e/bin/kiro-cli",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -198,12 +275,20 @@
     "DetectionError": null,
     "DisplayName": "OpenCode",
     "ExecutablePath": "\u003chome\u003e/bin/opencode",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
         "Detected": true,
         "Evidence": "executable_on_path",
         "ID": "opencode_cli"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "opencode2_cli"
       },
       {
         "Detected": true,
@@ -219,11 +304,62 @@
     "Version": ""
   },
   {
+    "ClientID": "pi",
+    "ConfigRoot": "\u003chome\u003e/.pi/agent",
+    "DetectionError": null,
+    "DisplayName": "Pi",
+    "ExecutablePath": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
+    "Status": "not_detected",
+    "Surfaces": [
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "pi_cli"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "pi_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "qoder",
+    "ConfigRoot": "\u003chome\u003e/.qoder",
+    "DetectionError": null,
+    "DisplayName": "Qoder",
+    "ExecutablePath": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
+    "Status": "not_detected",
+    "Surfaces": [
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "qoder_cli"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "qoder_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
     "ClientID": "vscode",
     "ConfigRoot": "\u003chome\u003e/AppData/Roaming/Code/User",
     "DetectionError": null,
     "DisplayName": "Visual Studio Code",
     "ExecutablePath": "\u003chome\u003e/bin/code",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -250,6 +386,9 @@
     "DetectionError": null,
     "DisplayName": "Windsurf / Devin",
     "ExecutablePath": "\u003chome\u003e/bin/windsurf",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {

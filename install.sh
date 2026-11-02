@@ -184,7 +184,7 @@ ACTUAL_SUM="$(file_sha256 "$BINARY_PATH")"
 [ "$ACTUAL_SUM" = "$EXPECTED_SUM" ] || fail "checksum mismatch for $ASSET_NAME"
 chmod 0755 "$BINARY_PATH" 2>/dev/null || true
 
-OBSERVED_VERSION="$($BINARY_PATH version 2>&1)" \
+OBSERVED_VERSION="$("$BINARY_PATH" version 2>&1)" \
   || fail "downloaded binary failed its version check"
 [ "$OBSERVED_VERSION" = "agentplugins $VERSION" ] \
   || fail "downloaded binary reported unexpected version: $OBSERVED_VERSION"

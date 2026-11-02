@@ -28,14 +28,22 @@ func ActivateGeminiNativeWithKernel(ctx context.Context, request domain.Activati
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return applyGeminiNativeMutationWithKernel(request.Client.ConfigRoot, request.Delivery.ActivePath, request.PreviousNativeObjects, request.Delivery.NativeObjects, kernel)
+	root, err := geminiPlanRoot(request.Client, request.Plan)
+	if err != nil {
+		return err
+	}
+	return applyGeminiNativeMutationWithKernel(root, request.Delivery.ActivePath, request.PreviousNativeObjects, request.Delivery.NativeObjects, kernel)
 }
 
 func DeactivateGeminiNativeWithKernel(ctx context.Context, request domain.DeactivationRequest, kernel nativeconfig.Kernel) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return applyGeminiNativeMutationWithKernel(request.Client.ConfigRoot, "", request.NativeObjects, nil, kernel)
+	root, err := geminiNativeRoot(request.Client, request.TargetContext, request.NativeRegistryRoot)
+	if err != nil {
+		return err
+	}
+	return applyGeminiNativeMutationWithKernel(root, "", request.NativeObjects, nil, kernel)
 }
 
 func VerifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool, kernel nativeconfig.Kernel) error {
@@ -261,13 +269,19 @@ func validateGeminiObjectPaths(root string, objects []domain.NativeObjectOwnersh
 }
 
 func validateGeminiObject(root string, object domain.NativeObjectOwnership) error {
-	if err := pathpolicy.ValidateLeafID(object.LogicalName); err != nil {
-		return err
-	}
 	expected := filepath.Join(root, "settings.json")
-	if object.Kind == GeminiSkillObjectKind {
+	switch object.Kind {
+	case GeminiSkillObjectKind:
+		if err := pathpolicy.ValidateLeafID(object.LogicalName); err != nil {
+			return err
+		}
 		expected = filepath.Join(root, "skills", object.LogicalName)
-	} else if object.Kind != GeminiMCPObjectKind {
+	case GeminiMCPObjectKind:
+		// MCP selectors are JSON member keys, never filesystem path segments.
+		if object.LogicalName == "" {
+			return fmt.Errorf("invalid Gemini MCP server name %q", object.LogicalName)
+		}
+	default:
 		return fmt.Errorf("unsupported Gemini native object kind %q", object.Kind)
 	}
 	// Do not normalize ownership into authority: a symlink followed by .. can

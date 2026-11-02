@@ -4,6 +4,7 @@ import path from "node:path";
 import { generatedRegistryPaths, generatedRoot, repoRoot, runtimeRoot, sourceRoot, websiteRoot } from "../config/site.mjs";
 import { listMarkdownFiles } from "../lib/fs.mjs";
 import { readFrontmatter } from "../lib/site-model.mjs";
+import { generatedLocaleErrors, requiredEntityLocales } from "./model-locales.mjs";
 
 const entities = JSON.parse(await fs.readFile(generatedRegistryPaths.entities, "utf8"));
 const errors = [];
@@ -29,9 +30,10 @@ async function checkRegistryEntities(allEntities) {
     }
     ids.add(entity.canonicalId);
 
+    const requiredLocales = requiredEntityLocales(entity);
     for (const locale of docsLocales) {
       const localePath = entity[localePathField(locale)];
-      if (!localePath && entity.localeStrategy === "canonical-en" && entity.pathEn && locale !== "en") continue;
+      if (!localePath && !requiredLocales.includes(locale)) continue;
       if (!localePath) {
         errors.push(`Missing ${locale.toUpperCase()} path for entity: ${entity.canonicalId}`);
         continue;
@@ -102,40 +104,21 @@ async function checkRegistryEntities(allEntities) {
 }
 
 async function checkGeneratedMarkdownParity() {
-  const generatedFiles = (await Promise.all(docsLocales.map((locale) => listMarkdownFiles(path.join(generatedRoot, locale))))).flat();
-  const localeCoverage = new Map();
+  const generatedFiles = await listMarkdownFiles(generatedRoot);
+  const pages = [];
 
   for (const filePath of generatedFiles) {
     const meta = await readFrontmatter(filePath);
-    if (!meta.canonicalId) {
-      errors.push(`Generated file is missing canonicalId frontmatter: ${filePath}`);
-      continue;
-    }
-    if (!meta.locale) {
-      errors.push(`Generated file is missing locale frontmatter: ${filePath}`);
-      continue;
-    }
-
     const relative = path.relative(generatedRoot, filePath).replace(/\\/g, "/");
+    pages.push({ canonicalId: meta.canonicalId, locale: meta.locale, relativePath: relative });
     if (relative.includes("npm/plugin-kit-ai/") || relative.includes("python/plugin-kit-ai/")) {
       errors.push(`Wrapper package leaked into generated tree: ${relative}`);
     }
     if ((await fs.readFile(filePath, "utf8")).includes("/Users/")) {
       errors.push(`Machine-specific absolute path leaked into generated markdown: ${filePath}`);
     }
-
-    const bucket = localeCoverage.get(meta.canonicalId) || new Set();
-    bucket.add(meta.locale);
-    localeCoverage.set(meta.canonicalId, bucket);
   }
-
-  for (const [canonicalId, locales] of localeCoverage.entries()) {
-    const entity = entities.find((entry) => entry.canonicalId === canonicalId);
-    const required = entity?.localeStrategy === "canonical-en" ? ["en"] : docsLocales;
-    if (required.some((locale) => !locales.has(locale))) {
-      errors.push(`Generated locale parity failure for ${canonicalId}: have [${[...locales].sort().join(", ")}]`);
-    }
-  }
+  errors.push(...generatedLocaleErrors(pages, entities));
 }
 
 function markdownPathFor(locale, localePath) {

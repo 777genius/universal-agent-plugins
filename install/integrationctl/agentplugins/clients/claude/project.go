@@ -15,6 +15,7 @@ var (
 	_ clients.Projector       = (*Adapter)(nil)
 	_ clients.StagingLayout   = (*Adapter)(nil)
 	_ clients.SelectionReader = (*Adapter)(nil)
+	_ clients.SkillsLocator   = (*Adapter)(nil)
 )
 
 // StagingBase keeps the transaction staging directory beside Claude Code's
@@ -31,6 +32,10 @@ func (*Adapter) StagingBase(plan domain.DeliveryPlan) string {
 // ValidateTargetLayout requires the planned target root to be the exact
 // configured skills directory under the Claude config root.
 func (*Adapter) ValidateTargetLayout(plan domain.DeliveryPlan) error {
+	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject {
+		_, err := claudePlanProjectRoot(domain.DetectedClient{ConfigRoot: plan.TargetContext.UserConfigRoot}, plan)
+		return err
+	}
 	if filepath.Clean(plan.TargetRoot) != filepath.Join(filepath.Clean(plan.TargetAnchor), "skills") {
 		return fmt.Errorf("the Claude Code delivery target root must be the exact configured skills directory")
 	}
@@ -42,6 +47,15 @@ func (*Adapter) ValidateTargetLayout(plan domain.DeliveryPlan) error {
 // mcpServers.
 func (*Adapter) ManagedMCPSelection() clients.SelectionLayout {
 	return clients.SelectionLayout{File: ".mcp.json"}
+}
+
+// InstalledSkillsDirectory follows Project: a projected package keeps its
+// skills inside the isolated runtime directory, a native one where they are.
+func (*Adapter) InstalledSkillsDirectory(plan domain.DeliveryPlan) string {
+	if plan.PackageMode != domain.PackageProjection {
+		return "skills"
+	}
+	return ClaudeRuntimeDirectory + "/skills"
 }
 
 // Project renders the portable envelope into Claude Code's skills-directory

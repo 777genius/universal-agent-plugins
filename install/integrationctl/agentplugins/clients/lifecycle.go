@@ -22,6 +22,13 @@ type ActivationPreflighter interface {
 	PreflightActivation(env Env, req domain.ActivationRequest) error
 }
 
+// RemovalAttestationPolicy reports whether an owned binding requires an explicit
+// host confirmation that its native plugin was removed or never activated. The
+// answer is read-only policy, independent of Confirmed or ExternalUninstalled.
+type RemovalAttestationPolicy interface {
+	RequiresExternalUninstalled(env Env, req domain.DeactivationRequest) bool
+}
+
 // AutomaticActivator reports whether Activate will drive a managed client CLI
 // for this exact request. Runtime preflight reads the same predicate so the two
 // cannot drift.
@@ -33,4 +40,10 @@ type AutomaticActivator interface {
 // which is what lets a read-only reconciliation trust its own observation.
 type ReadOnlyVerifier interface {
 	VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool
+}
+
+// IndependentActivator attests that an adapter's activation effects do not
+// write shared installation state or invoke host handoff callbacks.
+type IndependentActivator interface {
+	SupportsIndependentActivation(domain.ActivationRequest) bool
 }

@@ -379,6 +379,10 @@ func TestPluginKitAIIntegrationsLifecycleAcrossAgents(t *testing.T) {
 	assertFileSnapshot(t, "OpenCode example.js after remove dry-run", opencodeExamplePath, beforeRemoveOpenCodeExample)
 	assertFileSnapshot(t, "OpenCode package.json after remove dry-run", opencodePackagePath, beforeRemoveOpenCodePackage)
 
+	// Exact removal accounting across agents (Codex/Cursor/OpenCode): every
+	// deleted path in the workspace must be plugin-owned, proven by a full
+	// file-inventory diff around the real (non-dry-run) remove.
+	removeInventoryBefore := nativeFileInventory(t, workspaceRoot)
 	removeOutput := runIntegrationsLifecycleCommand(t, pluginKitAIBin, workspaceRoot, homeRoot,
 		"integrations", "remove", "lifecycle-demo", "--dry-run=false")
 	for _, want := range []string{
@@ -424,6 +428,17 @@ func TestPluginKitAIIntegrationsLifecycleAcrossAgents(t *testing.T) {
 		t.Fatalf("Codex plugin root should be removed after remove: %v", err)
 	}
 	assertStringSet(t, "Codex marketplace entries after remove", codexMarketplacePluginNames(t, codexCatalogPath), []string{"alpha"})
+
+	removedPaths, addedPaths, changedPaths := nativeInventoryDiff(removeInventoryBefore, nativeFileInventory(t, workspaceRoot))
+	for _, path := range removedPaths {
+		owned := strings.HasPrefix(path, codexPluginRoot+string(os.PathSeparator)) ||
+			path == opencodeExamplePath || path == opencodeStalePath || path == opencodePackagePath ||
+			strings.Contains(path, "lifecycle-demo")
+		if !owned {
+			t.Fatalf("remove deleted a file outside the plugin's owned scope: %s (removed=%v)", path, removedPaths)
+		}
+	}
+	t.Logf("exact removal inventory across agents: removed=%d all plugin-owned, added=%d, changed=%d", len(removedPaths), len(addedPaths), len(changedPaths))
 }
 
 func seedIntegrationLifecycleWorkspace(t *testing.T, workspaceRoot string) {
