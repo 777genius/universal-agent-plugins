@@ -36,17 +36,17 @@ type cachedDocument struct {
 }
 
 type documentHandler struct {
-	git          SourceResolver
-	website      WebsiteDocumentReader
-	origins      map[string]bool
-	mu           sync.Mutex
-	active       int
-	clients      map[string]bool
-	nextAllowed  map[string]time.Time
-	failures     map[string]time.Time
-	tokens       float64
-	tokenAt      time.Time
-	cache        map[string]cachedDocument
+	git	SourceResolver
+	website	WebsiteDocumentReader
+	origins	map[string]bool
+	mu	sync.Mutex
+	active	int
+	clients	map[string]bool
+	nextAllowed	map[string]time.Time
+	failures	map[string]time.Time
+	tokens	float64
+	tokenAt	time.Time
+	cache	map[string]cachedDocument
 }
 
 // NewDocumentHandler exposes only bounded, text-only public previews.
@@ -125,7 +125,11 @@ func (h *documentHandler) serveDocument(w http.ResponseWriter, r *http.Request, 
 	defer cancel()
 	result, err := h.load(ctx, source, name)
 	if err != nil || ctx.Err() != nil {
-		h.rememberDocument(key, documentResponse{}, true)
+		// A disconnected browser does not mean the publisher failed. Do not
+		// negatively cache its aborted request for other visitors.
+		if r.Context().Err() == nil {
+			h.rememberDocument(key, documentResponse{}, true)
+		}
 		documentUnavailable(w)
 		return
 	}
@@ -231,7 +235,7 @@ func parseDocumentQuery(raw string) (id, source, name string, valid bool) {
 		return "", "", "", false
 	}
 	id, name = values.Get("id"), values.Get("name")
-	if len(id) > 1024 || len(name) == 0 || len(name) > 512 || !safeText(name, 512) ||
+	if len(id) > 1024 || name == "" || len(name) > 512 || !safeText(name, 512) ||
 		!strings.HasPrefix(id, "skills-sh:") {
 		return "", "", "", false
 	}
@@ -257,7 +261,7 @@ func (h *documentHandler) load(ctx context.Context, source, name string) (docume
 	result := documentResponse{Status: "unavailable", Source: source}
 	if repository(source) {
 		if h.git == nil {
-			return result, fmt.Errorf("Git preview unavailable")
+			return result, fmt.Errorf("git preview unavailable")
 		}
 		preview, err := h.git.Resolve(ctx, skillsresolve.Request{Repository: source, SkillNameHint: &name})
 		if err != nil {
@@ -283,7 +287,7 @@ func (h *documentHandler) load(ctx context.Context, source, name string) (docume
 	if err != nil {
 		return result, err
 	}
-	if len(markdown) == 0 || len(markdown) > 64<<10 {
+	if markdown == "" || len(markdown) > 64<<10 {
 		return result, fmt.Errorf("invalid document length")
 	}
 	sum := sha256.Sum256([]byte(markdown))
