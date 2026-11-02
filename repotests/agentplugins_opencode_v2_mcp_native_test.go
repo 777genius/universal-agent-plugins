@@ -363,13 +363,26 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 		t.Fatal("native MCP call event record missing or unbounded")
 	}
 	called := 0
-	for _, method := range strings.Fields(string(afterCall)) {
+	calls := strings.Fields(string(afterCall))
+	if len(calls) < len(methods) || len(calls) > 32 {
+		t.Fatal("post-run native MCP event inventory exceeded lifecycle bound")
+	}
+	postCounts := map[string]int{}
+	for _, method := range calls {
+		postCounts[method]++
+		if postCounts[method] > 8 {
+			t.Fatal("post-run native MCP method repeated outside lifecycle bound")
+		}
 		if method == "tools/call" {
 			called++
 		}
 	}
 	if called != 1 {
 		t.Fatalf("native OpenCode V2 project tools/call count=%d, want 1", called)
+	}
+	postRunConfig, err := os.ReadFile(configuration)
+	if err != nil || sha256.Sum256(postRunConfig) != baseline {
+		t.Fatal("native model-driven MCP call changed the original project config")
 	}
 	before := append([]byte(nil), afterCall...)
 	stopService()
