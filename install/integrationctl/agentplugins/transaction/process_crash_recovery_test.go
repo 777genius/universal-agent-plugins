@@ -134,6 +134,18 @@ func TestDirectoryProcessCrashAfterActivationRecovers(t *testing.T) {
 		t.Fatalf("clean retry did not commit after recovery: %+v %v", receipt, err)
 	}
 	assertTransactionBody(t, mutation.ActivePath, "new")
+	committed, err := store.Load()
+	if err != nil || len(committed.Installations) != 1 {
+		t.Fatalf("clean retry did not persist a valid installation: %v", err)
+	}
+	owned := onlyClient(committed.Installations[0])
+	if len(owned.Receipts) != 1 || owned.Receipts[0].Phase != ReceiptPhaseCommitted ||
+		owned.Receipts[0].OperationID != mutation.OperationID {
+		t.Fatalf("clean retry returned success without a durable committed receipt: %+v", owned.Receipts)
+	}
+	if open, err := restarted.Directory.ListOpen(); err != nil || len(open) != 0 {
+		t.Fatalf("clean retry left an uncommitted journal: %+v %v", open, err)
+	}
 	if got, err := os.ReadFile(foreign); err != nil || string(got) != "unmanaged contents\n" {
 		t.Fatalf("clean retry damaged unmanaged data: %q %v", got, err)
 	}
