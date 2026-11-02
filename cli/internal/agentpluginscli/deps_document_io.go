@@ -29,6 +29,19 @@ func dependencyDocumentLimit(path string) (int64, error) {
 	}
 }
 
+// validateDependencyCandidateFiles admits both replacements together before
+// any manifest-first publication; a later oversized lock cannot leave a
+// partially updated agreement from this operation.
+func validateDependencyCandidateFiles(manifest, lock []byte) error {
+	if int64(len(manifest)) > maxDependencyManifestBytes {
+		return fmt.Errorf("uap.toml exceeds %d bytes", maxDependencyManifestBytes)
+	}
+	if int64(len(lock)) > maxDependencyLockBytes {
+		return fmt.Errorf("uap.lock exceeds %d bytes", maxDependencyLockBytes)
+	}
+	return nil
+}
+
 func readDependencyDocument(path string, limit int64) ([]byte, error) {
 	before, err := os.Lstat(path)
 	if err != nil {

@@ -150,6 +150,9 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	if equalDependencyLock(snapshot.Lock, locked) || (snapshot.Lock.LockVersion == 0 && len(requirements.Dependencies) == 0) {
 		body = snapshot.LockBytes
 	}
+	if err := validateDependencyCandidateFiles(manifest, body); err != nil {
+		return request, err
+	}
 	request = dependencySyncRequest{targets: targets, requirements: requirements, lock: locked, intent: snapshot.intent(manifest, body), prepared: actions, detected: detected, consent: consent, aliases: aliases, attestation: attest}
 	return request, nil
 }

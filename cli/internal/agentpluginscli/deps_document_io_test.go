@@ -105,6 +105,69 @@ func TestDependencyIntentFilesRejectOversizedWriteWithoutMutation(t *testing.T) 
 	}
 }
 
+func TestDependencyCandidateSizePreflightProtectsManifestAndLock(t *testing.T) {
+	root := t.TempDir()
+	manifest := filepath.Join(root, "uap.toml")
+	lock := filepath.Join(root, "uap.lock")
+	const sentinel = "existing agreement; preserve bytes"
+	for _, path := range []string{manifest, lock} {
+		if err := os.WriteFile(path, []byte(sentinel), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		name string
+		manifest, lock []byte
+		want string
+	}{
+		{"normal", []byte("schema_version = 1"), []byte("{}"), ""},
+		{"manifest-too-large", bytes.Repeat([]byte("a"), int(maxDependencyManifestBytes)+1), []byte("{}"), "uap.toml"},
+		{"lock-too-large", []byte("schema_version = 1"), bytes.Repeat([]byte("a"), int(maxDependencyLockBytes)+1), "uap.lock"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateDependencyCandidateFiles(tc.manifest, tc.lock)
+			if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+				t.Fatalf("candidate admission wrong: %v", err)
+			}
+			for _, path := range []string{manifest, lock} {
+				body, readErr := os.ReadFile(path)
+				if readErr != nil || string(body) != sentinel {
+					t.Fatalf("candidate admission mutated %s: %v", path, readErr)
+				}
+			}
+		})
+	}
+}
+
+func TestDependencyManagementRecoveryReaderIsBounded(t *testing.T) {
+	for _, name := range []string{"uap.toml", "uap.lock"} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), name)
+			limit, err := dependencyDocumentLimit(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := file.Truncate(limit + 1); err != nil {
+				t.Fatal(err)
+			}
+			if err := file.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := managementReadOptional(path); err == nil || !strings.Contains(err.Error(), "exceeds") {
+				t.Fatalf("management recovery admitted oversized agreement: %v", err)
+			}
+		})
+	}
+	missing := filepath.Join(t.TempDir(), "uap.lock")
+	if body, err := managementReadOptional(missing); err != nil || body != nil {
+		t.Fatalf("missing optional recovery agreement changed: %v, %q", err, body)
+	}
+}
+
 func TestDependencyAgreementReaderRejectsSymlinkAndKeepsTarget(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "foreign.toml")
