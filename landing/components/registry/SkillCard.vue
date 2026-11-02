@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SkillListing } from '~/types/skillsCatalog';
 import { skillClients } from '~/data/skillClients';
-import { skillDetailRoute, skillInstallCommand, skillManualSourceCommand, skillNeedsManualSelection, skillPublisherUrl, skillRepositoryUrl } from '~/utils/skillsCatalog';
+import { skillDetailRoute, skillInstallCommand, skillNeedsManualSelection, skillPublisherUrl, skillRepositoryUrl } from '~/utils/skillsCatalog';
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 
 const props = defineProps<{ skill: SkillListing }>();
@@ -23,14 +23,6 @@ const needsManualSelection = computed(() => skillNeedsManualSelection(props.skil
 const command = computed(() =>
   skillInstallCommand(props.skill, chooseInTerminal.value ? undefined : targets.value),
 );
-const manualExpanded = ref(false);
-const manualSource = ref('');
-const manualName = ref('');
-const manualCommand = computed(() => skillManualSourceCommand(manualSource.value, manualName.value));
-const manualPanelId = `skill-source-${useId()}`;
-const manualURLId = `${manualPanelId}-url`;
-const manualNameId = `${manualPanelId}-name`;
-const manualHelpId = `${manualPanelId}-help`;
 const panelId = `skill-install-${useId()}`;
 const options = computed(() =>
   skillClients.map((client) => ({
@@ -122,67 +114,18 @@ function updateTerminal(value: boolean) {
       >
         {{ t('registryUi.card.install') }}
       </button>
-      <template v-else>
-        <p class="plugin-card__unavailable">
-          {{
-            t(
-              repositoryUrl
-                ? 'registryUi.skills.unsupportedName'
-                : publisherUrl
-                  ? 'registryUi.skills.invalidPublisherName'
-                  : 'registryUi.skills.unsupportedSource',
-            )
-          }}
-        </p>
-        <button
-          type="button"
-          class="plugin-card__vendor-install"
-          :aria-expanded="manualExpanded"
-          :aria-controls="manualPanelId"
-          @click="manualExpanded = !manualExpanded"
-        >
-          {{ t('registryUi.skills.manualSourceAction') }}
-        </button>
-        <div
-          v-if="manualExpanded"
-          :id="manualPanelId"
-          class="plugin-card__install-panel skill-card__manual-panel"
-        >
-          <p :id="manualHelpId" class="plugin-card__unavailable">
-            {{ t('registryUi.skills.manualSourceHelp') }}
-          </p>
-          <label :for="manualURLId">{{ t('registryUi.skills.manualSourceURL') }}</label>
-          <input
-            :id="manualURLId"
-            v-model.trim="manualSource"
-            type="url"
-            autocomplete="off"
-            spellcheck="false"
-            :aria-describedby="manualHelpId"
-            placeholder="https://github.com/owner/repo"
-          />
-          <label :for="manualNameId">{{ t('registryUi.skills.manualExactName') }}</label>
-          <input
-            :id="manualNameId"
-            v-model.trim="manualName"
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            :aria-describedby="manualHelpId"
-            placeholder="my-skill"
-          />
-          <CommandSnippet
-            v-if="manualCommand"
-            :command="manualCommand"
-            :label="t('registryUi.card.add')"
-            kind="add"
-            compact
-          />
-          <p v-else-if="manualSource || manualName" class="plugin-card__unavailable" role="status">
-            {{ t('registryUi.skills.manualSourceInvalid') }}
-          </p>
-        </div>
-      </template>
+      <SkillManualSource
+        v-else
+        :reason="
+          t(
+            repositoryUrl
+              ? 'registryUi.skills.unsupportedName'
+              : publisherUrl
+                ? 'registryUi.skills.invalidPublisherName'
+                : 'registryUi.skills.unsupportedSource',
+          )
+        "
+      />
       <Transition name="plugin-install">
         <div v-if="expanded && command" :id="panelId" class="plugin-card__install-panel">
           <div class="plugin-card__install">
