@@ -17,6 +17,7 @@
 - `TestManifestRejectsWindowsReservedAndAmbiguousGitPath` rejects unsafe intent at the pure domain boundary.
 - `TestSavedSourceAdmissionRefusalDoesNotPublish` uses the real CLI and verifies refusal with no download, lock publication, immutable-store writes, or installer state writes; registered as a required four-OS package-manager case.
 - `pmAgreementLockOnlyPreservesInstalled` uses real CLI, native Gemini integration, sealed ZIP acquisition, dependency lock and state receipts: a lock-only change of desired root must **not uninstall or rewrite** already-installed package/native Skill/settings/receipts. The repeated lock is byte/metadata idempotent; registered in the required E2E catalog.
+- `pmAgreementSourceRebindingRequiresExplicitTransfer` uses two distinct archive URLs with **identical package bytes**. A change in publisher URL behind a saved alias must not silently rebind its existing native ownership, even if content digests match; whether refused during resolution or installation, deployed state is unchanged. Registered in four-platform E2E.
 
 No change to existing VS Code adapters or the Agent Plugins 1.0/Agent Skills 1.0 formats; no change to accepted ADRs or TOML contract.
 
@@ -26,7 +27,7 @@ No change to existing VS Code adapters or the Agent Plugins 1.0/Agent Skills 1.0
 |---|---|---|
 | #2296: lock-only removes managed files | `deps lock` publishes portable agreement; `install/deps sync` owns mutations | **Yes:** lock-only preserves installed; must pass actual E2E |
 | #2368: Git auth environment overrides Git hardening | `sourceacquisition` isolates inherited `GIT_*` variables and explicitly sets Git options; existing Git transport tests | Existing contract, requalification required |
-| #1935: changed origin + version silently reused old dependency | `SourceKey`, requested selector, validated lock identities and exact replay | Existing domain and E2E contracts, requalification required |
+| #1935: changed origin + version silently reused old dependency | `SourceKey`, requested selector, validated lock identities and exact replay | **Yes:** identical bytes at changed archive origin must not silently adopt existing owner |
 | #1716: deployed Skill ignored by drift detection | Native Skill ownership and receipt/projection digest in installer | Existing adversarial native Skill/drift cases, requalification required |
 | #450: repeated install changes lock timestamp | Deterministic `uap.lock` and no-op publication | **Yes:** actual installed-state + lock stability |
 | #794: global writes project lock | Scope/manifest roots are explicit and separate; project-context tests | Existing scope cases, requalification required |
