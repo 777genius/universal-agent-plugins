@@ -240,6 +240,24 @@ export function skillIdentityFromId(id: string): SkillListing['source'] | undefi
   return publisher ? { kind: 'external', url: publisher } : undefined;
 }
 
+/** Mirror the Skills document API's accepted public source IDs.
+ * CLI source recovery is deliberately broader: installable remote URLs cannot
+ * be treated as document-preview routes until the API supports those IDs.
+ */
+export function skillDetailIdAvailable(id: string): boolean {
+  const identity = catalogSourceIdentity(id);
+  if (!identity) return false;
+  const source = identity.raw;
+  const parts = source.split('/');
+  if (parts.length === 2 &&
+      /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(parts[0]!) &&
+      /^[A-Za-z0-9_.-]{1,100}$/.test(parts[1]!) &&
+      parts[1] !== '.' && parts[1] !== '..' && !parts[1]!.endsWith('.git'))
+    return true;
+  return source.length <= 253 &&
+    /^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$/.test(source);
+}
+
 /** Do not reuse a catalog entry when the direct-link Skill selector changes. */
 export function skillMatchesSelection(skill: SkillListing, id: string, name: string): boolean {
   return skill.id === id && skill.skillNameHint === name;
