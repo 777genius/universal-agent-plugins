@@ -65,6 +65,10 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      - name: Install genuine Codex CLI for native target detection
+        run: |
+          npm install --global @openai/codex@latest
+          codex --version
       - name: Build actual public CLI
         run: go build -trimpath -o "${RUNNER_TEMP}/uap-skills-cli" ./cli/cmd/agentplugins
       - name: Verify scoped HTTPS publisher install-lock-restore lifecycle
@@ -98,6 +102,10 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      - name: Install genuine Codex CLI for public npm target detection
+        run: |
+          npm install --global @openai/codex@latest
+          codex --version
       - name: Verify actual npx latest installs in disposable Codex projects
         timeout-minutes: 9
         env:

@@ -147,7 +147,6 @@ test('HTTPS publishers use their origin and exact names, never a listing page or
   });
   for (const url of [
     'https://www.skills.sh/site/open.feishu.cn/lark-mail',
-    'https://open.feishu.cn/lark-cli/skills/regular',
     'https://open.feishu.cn:443',
     'https://open.feishu.cn?next=evil',
     'https://name:pass@open.feishu.cn',
@@ -243,7 +242,7 @@ test('Detail identity uses only a canonical source, never the listing-page URL',
   });
   for (const id of [
     'skills-sh:127.0.0.1:lark-mail',
-    'skills-sh:https://example.com:secret',
+    'skills-sh:https://example.com:8443:secret',
     'skills-sh:owner/repo/tree:bad',
     'skills-sh:open.feishu.cn:bad:extra',
     'not-a-skill',

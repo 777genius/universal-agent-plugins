@@ -63,7 +63,10 @@ function legacySource(skill: SkillListing): LegacySource | undefined {
   const github = githubSource(identity.raw);
   // A plain owner/repository should already have kind=github upstream. A
   // contradictory unsupported-source DTO must not gain install authority.
-  if (github && !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(identity.raw))
+  // An explicit .git remote is not the same ambiguous legacy owner/repo
+  // fallback: normalize this unambiguous upstream remote into HTTPS.
+  if (github && (!/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(identity.raw) ||
+      identity.raw.endsWith('.git')))
     return { kind: 'github', url: github };
   const publisher = publisherBase(identity.raw);
   return publisher ? { kind: 'publisher', url: publisher } : undefined;

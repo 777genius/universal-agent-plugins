@@ -89,14 +89,17 @@ try {
     const data = join(sourceDir, 'data');
     const cache = join(sourceDir, 'cache');
     for (const path of [project, home, config, data, cache]) mkdirSync(path, { recursive: true });
+    // A genuine installed Codex CLI must discover its own isolated profile.
+    // Never reuse the runner's real user configuration or credentials.
+    mkdirSync(join(home, '.codex'), { recursive: true });
     const command = skillInstallCommand(listing(fixture)) ?? '';
     const expectedCommand = 'npx universal-agent-plugins@latest skills add ' + fixture.source +
       ' --skill ' + fixture.skill;
     if (command !== expectedCommand) {
       failures.push('Catalog command/source mismatch for ' + fixture.id);
     }
-    const env = { ...process.env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: config,
-      XDG_DATA_HOME: data, XDG_CACHE_HOME: cache, GIT_CONFIG_NOSYSTEM: '1',
+    const env = { ...process.env, HOME: home, USERPROFILE: home, CODEX_HOME: join(home, '.codex'),
+      XDG_CONFIG_HOME: config, XDG_DATA_HOME: data, XDG_CACHE_HOME: cache, GIT_CONFIG_NOSYSTEM: '1',
       GIT_CONFIG_GLOBAL: join(config, 'gitconfig'), GIT_TERMINAL_PROMPT: '0',
       GCM_INTERACTIVE: 'never', CI: 'true', DO_NOT_TRACK: '1' };
     const args = ['skills', 'add', fixture.source, '--skill', fixture.skill, '--target', 'codex',
