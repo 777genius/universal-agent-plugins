@@ -40,7 +40,7 @@ func (documentGitStub) Resolve(_ context.Context, r skillsresolve.Request) (skil
 
 func documentRequest(id, name, origin string) *http.Request {
 	q := url.Values{"id": {id}, "name": {name}}
-	r := httptest.NewRequest(http.MethodGet, "/v1/skills/document?"+q.Encode(), nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/skills/document?"+q.Encode(), http.NoBody)
 	if origin != "" {
 		r.Header.Set("Origin", origin)
 	}
@@ -88,7 +88,7 @@ func TestPublicDocumentPreviewSourceAuthorityCachingAndCORS(t *testing.T) {
 }
 
 func TestDocumentPreviewGitAndNameRefusal(t *testing.T) {
-	handler, err := NewDocumentHandler(documentGitStub{}, nil, nil)
+	handler, err := NewDocumentHandler(documentGitStub{}, nil, http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestPublisherIPRefusesLocalReservedAndMappedAddresses(t *testing.T) {
 }
 
 func TestDocumentPreviewPerClientAdmissionAndFailureCooldown(t *testing.T) {
-	handler, err := NewDocumentHandler(documentGitStub{}, &documentWebsiteStub{}, nil)
+	handler, err := NewDocumentHandler(documentGitStub{}, &documentWebsiteStub{}, http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,16 +161,58 @@ func TestDocumentPreviewPerClientAdmissionAndFailureCooldown(t *testing.T) {
 }
 
 func TestDocumentClientIdentityCannotBeSpoofedByForwardedHeader(t *testing.T) {
-	proxied := httptest.NewRequest(http.MethodGet, "/v1/skills/document", nil)
+	proxied := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/skills/document", http.NoBody)
 	proxied.RemoteAddr = "127.0.0.1:23012"
 	proxied.Header.Set("X-UAP-Preview-Client", "198.51.100.25")
 	if got := documentClientKey(proxied); got != "198.51.100.25" {
 		t.Fatalf("proxy-provided client identity ignored: %s", got)
 	}
-	direct := httptest.NewRequest(http.MethodGet, "/v1/skills/document", nil)
+	direct := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/skills/document", http.NoBody)
 	direct.RemoteAddr = "198.51.100.35:23012"
 	direct.Header.Set("X-UAP-Preview-Client", "198.51.100.25")
 	if got := documentClientKey(direct); got != "198.51.100.35" {
 		t.Fatalf("untrusted peer spoofed client identity: %s", got)
+	}
+}
+
+type abortOnceDocumentReader struct {
+	cancel context.CancelFunc
+	calls  atomic.Int32
+}
+
+func (stub *abortOnceDocumentReader) PreviewHTTPSkill(ctx context.Context, _, _ string) (string, error) {
+	if stub.calls.Add(1) == 1 {
+		stub.cancel()
+		return "", ctx.Err()
+	}
+	return "---\nname: lark-mail\ndescription: Mail\n---\n# Mail", nil
+}
+
+func TestCancelledDocumentRequestDoesNotPoisonOtherClients(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	reader := &abortOnceDocumentReader{cancel: cancel}
+	handler, err := NewDocumentHandler(nil, reader, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "skills-sh:open.feishu.cn:lark-mail"
+	first := httptest.NewRequestWithContext(ctx, http.MethodGet,
+		"/v1/skills/document?id=skills-sh%3Aopen.feishu.cn%3Alark-mail&name=lark-mail", http.NoBody)
+	first.RemoteAddr = "198.51.100.111:12345"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, first)
+	if w.Code != 503 {
+		t.Fatalf("canceled request status: %d", w.Code)
+	}
+	if _, found, _ := handler.(*documentHandler).lookupDocument(id + "\x00lark-mail"); found {
+		t.Fatal("canceled caller created a shared negative-cache entry")
+	}
+	second := documentRequest(id, "lark-mail", "")
+	second.RemoteAddr = "198.51.100.112:12345"
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, second)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "# Mail") || reader.calls.Load() != 2 {
+		t.Fatalf("other visitor should fetch the source: %d %s", w.Code, w.Body.String())
 	}
 }
