@@ -75,15 +75,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -count=1 -timeout=5m -json ./adapters/sourceacquisition -run '^(TestNativeSSHGitWithIsolatedKeysAndHostVerification|TestNativeSSHGitTwoHostCredentialIsolation)
-      - name: Verify saved CLI SSH URL and SCP lifecycle
-        working-directory: cli
-        shell: bash
-        run: |
-          set -euo pipefail
-          go test -count=1 -timeout=3m -json ./internal/agentpluginscli -run '^TestDirectSourceSavedLifecycleRealSSH$' | tee cli-ssh.json
-          jq -s -e 'any(.[]; .Action == "pass" and .Test == "TestDirectSourceSavedLifecycleRealSSH/ssh-url") and any(.[]; .Action == "pass" and .Test == "TestDirectSourceSavedLifecycleRealSSH/scp") and all(.[]; .Action != "skip")' cli-ssh.json
- | tee native-ssh.json
+          go test -count=1 -timeout=5m -json ./adapters/sourceacquisition -run '^(TestNativeSSHGitWithIsolatedKeysAndHostVerification|TestNativeSSHGitTwoHostCredentialIsolation)$' | tee native-ssh.json
           jq -s -e '. as $events | all(["TestNativeSSHGitWithIsolatedKeysAndHostVerification", "TestNativeSSHGitTwoHostCredentialIsolation"][]; . as $name | any($events[]; .Action == "run" and .Test == $name) and any($events[]; .Action == "pass" and .Test == $name)) and all($events[]; .Action != "skip" and .Action != "fail")' native-ssh.json
       - name: Verify saved CLI SSH URL and SCP lifecycle
         working-directory: cli
