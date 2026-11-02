@@ -37,6 +37,7 @@ func TestOpenCodeV2MCPStdioResponder(t *testing.T) {
 		var request struct {
 			ID     json.RawMessage `json:"id"`
 			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
 		}
 		if json.Unmarshal(reader.Bytes(), &request) != nil || request.Method == "" {
 			os.Exit(2)
@@ -66,8 +67,15 @@ func TestOpenCodeV2MCPStdioResponder(t *testing.T) {
 		case "ping":
 			result = map[string]any{}
 		case "tools/call":
-			// This endpoint exists for later model-driven qualification. The
-			// current test must not misreport an unobserved tools/call as PASS.
+			// Only the exact tool emitted by this server may qualify native
+			// model-driven dispatch, never an arbitrary tools/call method.
+			var call struct {
+				Name      string         `json:"name"`
+				Arguments map[string]any `json:"arguments"`
+			}
+			if json.Unmarshal(request.Params, &call) != nil || call.Name != "uap_ping" || len(call.Arguments) != 0 {
+				os.Exit(2)
+			}
 			result = map[string]any{"content": []any{map[string]string{"type": "text", "text": "uap-pong"}}}
 		default:
 			os.Exit(2)
