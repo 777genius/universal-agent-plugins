@@ -54,16 +54,14 @@ for (const width of [1440, 390]) {
       'npx -y universal-agent-plugins add i18n-state-00',
     );
     await card.getByRole('button', { name: 'This project', exact: true }).click();
-    // The default Cursor choice remains visible, although this package supports
-    // project delivery only for Codex. No command may quietly use user scope.
-    await expect(card.locator('.command-snippet')).toHaveCount(0);
-    await expect(card.locator('.app-multiselect__trigger')).toContainText('Cursor');
-    await expect(card.getByRole('status')).toContainText('combination of agents');
+    const autoAdd = 'npx -y universal-agent-plugins add i18n-state-00 --scope project';
+    await expect(card.locator('.app-multiselect__trigger')).toContainText('All installed agents');
+    await expect(card.locator('.command-snippet code')).toHaveText(autoAdd);
+    await card.locator('.app-multiselect__trigger').click();
+    await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Escape');
+    // An explicit checkbox switches to manual mode; no implicit Cursor selection.
     await targets(page, card, ['Codex']);
-    await expect(card.locator('.command-snippet')).toHaveCount(0);
-    // Exercise the actual picker, including removal of an invalid selected
-    // option; direct composable calls cannot establish this recovery path.
-    await targets(page, card, ['Cursor']);
     const expectedAdd =
       'npx -y universal-agent-plugins add i18n-state-00 --target codex --scope project';
     await expect(card.locator('.command-snippet code')).toHaveText(expectedAdd);
@@ -94,8 +92,12 @@ for (const width of [1440, 390]) {
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
     }
     await panel.locator('.app-multiselect__trigger').click();
-    await expect(page.locator('.app-multiselect__auto')).toHaveCount(0);
+    await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'false');
+    await page.locator('.app-multiselect__auto').click();
+    await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
     await page.keyboard.press('Escape');
+    await expect(panel.locator('.app-multiselect__trigger')).toContainText('All installed agents');
+    await expect(panel.locator('.command-snippet--add code')).toHaveText(autoAdd);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
@@ -104,7 +106,8 @@ for (const width of [1440, 390]) {
       animations: 'disabled',
     });
     await page.goBack();
-    await expect(card.locator('.command-snippet code')).toHaveText(expectedAdd);
+    await expect(card.locator('.app-multiselect__trigger')).toContainText('All installed agents');
+    await expect(card.locator('.command-snippet code')).toHaveText(autoAdd);
     await card.scrollIntoViewIfNeeded();
     // Back navigation remounts the existing catalog scroll-reveal observer.
     // Wait for its real visible state before accepting visual evidence.
@@ -120,7 +123,7 @@ for (const width of [1440, 390]) {
         exact: true,
       }),
     ).toHaveAttribute('aria-pressed', 'true');
-    await expect(card.locator('.command-snippet code')).toHaveText(expectedAdd);
+    await expect(card.locator('.command-snippet code')).toHaveText(autoAdd);
     expect(errors).toEqual([]);
   });
 
@@ -172,10 +175,11 @@ test('reviewed user-only v1 catalog generates exact pinned project Git commands'
   await project.click();
   const source = index.plugins[0]!.distributions[0]!.releases[0]!.source;
   const exact = `github:${source.repository}@${source.revision}//${source.path}`;
+  await expect(card.locator('.app-multiselect__trigger')).toContainText('All installed agents');
   await expect(card.locator('.command-snippet code')).toHaveText(
-    `npx -y universal-agent-plugins add ${exact} --target cursor --scope project`,
+    `npx -y universal-agent-plugins add ${exact} --scope project`,
   );
-  await targets(page, card, ['Codex', 'Cursor']);
+  await targets(page, card, ['Codex']);
   const expected = `npx -y universal-agent-plugins add ${exact} --target codex --scope project`;
   await expect(card.locator('.command-snippet code')).toHaveText(expected);
   await card.locator('.command-snippet button').click();
@@ -220,6 +224,8 @@ test('Marketing Kit does not advertise unsupported signed project scope or force
   plugin.display_name = 'Marketing Kit';
   plugin.trust_state = 'reviewed';
   plugin.client_support.clients = ['cursor', 'codex', 'claude', 'gemini'];
+  plugin.distributions = plugin.distributions.slice(0, 1);
+  plugin.distributions[0]!.releases[0]!.source.revision = null;
   plugin.distributions[0]!.releases[0]!.targets.push(
     { client: 'claude', scopes: ['user'], delivery: 'managed', authentication: 'required' },
     { client: 'gemini', scopes: ['user'], delivery: 'managed', authentication: 'required' },
@@ -244,6 +250,38 @@ test('Marketing Kit does not advertise unsupported signed project scope or force
   const panel = page.locator('.install-panel');
   await expect(panel.getByRole('button', { name: 'This project', exact: true })).toBeDisabled();
   await expect(panel.locator('.marketing-kit-project')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('Marketing Kit project becomes automatic when the signed release authorizes project', async ({ page }) => {
+  const errors = await offline(page);
+  const index = scopedFixture();
+  const plugin = index.plugins[0]!;
+  plugin.name = 'marketing-kit';
+  plugin.install_source = 'marketing-kit';
+  plugin.display_name = 'Marketing Kit';
+  plugin.trust_state = 'reviewed';
+  plugin.distributions = plugin.distributions.slice(0, 1);
+  const release = plugin.distributions[0]!.releases[0]!;
+  release.source.revision = null;
+  // Simulated future signed policy: a single qualified client is sufficient,
+  // and the other clients must remain excluded until authorized.
+  for (const target of release.targets) {
+    target.scopes = target.client === 'codex' ? ['user', 'project'] : ['user'];
+  }
+  await projections(page, index);
+  await navigate(page, '/', 'en', '?q=marketing-kit');
+  const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
+  await card.locator('.plugin-card__install-toggle').click();
+  await card.getByRole('button', { name: 'This project', exact: true }).click();
+  await expect(card.locator('.app-multiselect__trigger')).toContainText('All installed agents');
+  await expect(card.locator('.command-snippet--add code')).toHaveText(
+    'npx -y universal-agent-plugins add marketing-kit --scope project',
+  );
+  await targets(page, card, ['Codex']);
+  await expect(card.locator('.command-snippet--add code')).toHaveText(
+    'npx -y universal-agent-plugins add marketing-kit --target codex --scope project',
+  );
   expect(errors).toEqual([]);
 });
 
