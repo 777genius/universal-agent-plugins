@@ -40,6 +40,9 @@ function scopedFixture() {
   return index;
 }
 
+const cardAutoSummary = wording('en')('registryUi.card.allInstalledAgents');
+const detailAutoSummary = wording('en')('registryUi.install.allInstalledAgents');
+
 for (const width of [1440, 390]) {
   test(`manual user Cursor never leaks into default project selection at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -51,7 +54,7 @@ for (const width of [1440, 390]) {
     await targets(page, card, ['Cursor']);
     await expect(card.locator('.app-multiselect__trigger')).toContainText('Cursor');
     await card.getByRole('button', { name: 'This project', exact: true }).click();
-    await expect(card.locator('.app-multiselect__trigger')).toContainText('All installed agents');
+    await expect(card.locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
     await expect(card.locator('.command-snippet--add code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00 --scope project',
     );
@@ -72,7 +75,7 @@ for (const width of [1440, 390]) {
     );
     await card.getByRole('button', { name: 'This project', exact: true }).click();
     const autoAdd = 'npx -y universal-agent-plugins add i18n-state-00 --scope project';
-    await expect(card.locator('.app-multiselect__trigger')).toContainText('All installed agents');
+    await expect(card.locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
     await expect(card.locator('.command-snippet code')).toHaveText(autoAdd);
     await card.locator('.app-multiselect__trigger').click();
     await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
@@ -115,7 +118,7 @@ for (const width of [1440, 390]) {
     await page.locator('.app-multiselect__auto').click();
     await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
     await page.keyboard.press('Escape');
-    await expect(panel.locator('.app-multiselect__trigger')).toContainText('All installed agents');
+    await expect(panel.locator('.app-multiselect__trigger')).toContainText(detailAutoSummary);
     await expect(panel.locator('.command-snippet--add code')).toHaveText(autoAdd);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
@@ -125,7 +128,7 @@ for (const width of [1440, 390]) {
       animations: 'disabled',
     });
     await page.goBack();
-    await expect(card.locator('.app-multiselect__trigger')).toContainText('All installed agents');
+    await expect(card.locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
     await expect(card.locator('.command-snippet code')).toHaveText(autoAdd);
     await card.scrollIntoViewIfNeeded();
     // Back navigation remounts the existing catalog scroll-reveal observer.
@@ -194,7 +197,7 @@ test('reviewed user-only v1 catalog generates exact pinned project Git commands'
   await project.click();
   const source = index.plugins[0]!.distributions[0]!.releases[0]!.source;
   const exact = `github:${source.repository}@${source.revision}//${source.path}`;
-  await expect(card.locator('.app-multiselect__trigger')).toContainText('All installed agents');
+  await expect(card.locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
   await expect(card.locator('.command-snippet code')).toHaveText(
     `npx -y universal-agent-plugins add ${exact} --scope project`,
   );
@@ -295,7 +298,7 @@ test('Marketing Kit project becomes automatic only with a new signed project rel
   const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
   await card.locator('.plugin-card__install-toggle').click();
   await card.getByRole('button', { name: 'This project', exact: true }).click();
-  await expect(card.locator('.app-multiselect__trigger')).toContainText('All installed agents');
+  await expect(card.locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
   await expect(card.locator('.command-snippet--add code')).toHaveText(
     'npx -y universal-agent-plugins add marketing-kit --scope project',
   );
