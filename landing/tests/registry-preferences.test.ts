@@ -16,6 +16,7 @@ import { clients } from '../data/clients.ts';
 import * as registryDomain from '../utils/registry.ts';
 import * as filters from '../utils/filter.ts';
 import { pluginCommands } from '../utils/commands.ts';
+import { isReviewedMarketingKit } from '../data/marketingKitDemo.ts';
 import { projectCatalogCommands } from '../utils/projectCatalogSource.ts';
 import { discoveryPlugin } from '../utils/discovery.ts';
 import { signedDiscoveryFixture } from './fixtures/signed-discovery.ts';
@@ -42,6 +43,7 @@ const common = {
   authenticationIndicator,
   ...filters,
   pluginCommands,
+  isReviewedMarketingKit,
   projectCatalogCommands,
   onScopeDispose: Vue.onScopeDispose,
   ...discoveryHelpers,
@@ -80,7 +82,7 @@ function card(props = packageProps()) {
   return setup(
     'RegistryPluginCard',
     { defineProps: () => props, withDefaults: (value: unknown) => value },
-    'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall, deliverySummary, updateScope',
+    'targets, autoDetect, scope, projectAvailable, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall, deliverySummary, updateScope',
   );
 }
 
@@ -409,5 +411,34 @@ test('distribution captions use stable kind and authentication visibility ignore
   assert.equal(instance.state.authentication.value.label, 'SYNTHETIC CAPTION');
   assert.equal(instance.state.showAuthentication.value, visible);
   i18n.setLocaleMessage('en', messages);
+  instance.stop();
+});
+
+test('saved unsupported Marketing Kit project intent never emits Cursor command and recovers to auto detection', () => {
+  setActivePinia(createPinia());
+  const item = structuredClone(fixture);
+  item.name = 'marketing-kit';
+  item.install_source = 'marketing-kit';
+  item.trust_state = 'reviewed';
+  item.installable = true;
+  for (const distribution of item.distributions) {
+    for (const release of distribution.releases) {
+      for (const target of release.targets) target.scopes = ['user'];
+    }
+  }
+  const preferences = useInstallPreferencesStore();
+  preferences.selectPackage(
+    item.install_source,
+    { targetIds: ['cursor'], autoDetect: false, expanded: true, scope: 'project' },
+    clients.map((client) => client.id),
+  );
+  const instance = card(packageProps(item));
+  assert.equal(instance.state.scope.value, 'project');
+  assert.equal(instance.state.projectAvailable.value, false);
+  assert.equal(instance.state.command.value, '', 'invalid saved project must never yield user-scope command');
+  instance.state.updateScope('user');
+  assert.equal(instance.state.scope.value, 'user');
+  assert.equal(instance.state.autoDetect.value, true, 'no silent Cursor choice after recovering');
+  assert.equal(instance.state.command.value, 'npx -y universal-agent-plugins add marketing-kit');
   instance.stop();
 });

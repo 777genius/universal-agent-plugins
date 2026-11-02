@@ -376,13 +376,15 @@
     "restore": {
       "title": "Same plugin versions. Across your team.",
       "guide": "Guide",
-      "from": "In your project",
-      "to": "Your teammate",
-      "transfer": "Commit {manifest} and {lockfile} with your project so teammates can restore the same versions.",
-      "requirements": "Restoration requires the recorded sources to remain available and clients supported by dependency management.",
+      "from": "My computer",
+      "to": "Teammate's computer",
+      "transfer": "Export {manifest} and {lockfile}, share both with a teammate, then import them to restore the same versions.",
+      "requirements": "Marketing Kit's published release supports user environments; project scope is not yet qualified. Restoring requires the pinned sources and compatible agents.",
       "excludes": "Sign-ins, secrets, settings and plugin data are not transferred.",
-      "subtitle": "Install for a project. Commit the lockfile. Let teammates restore the same versions.",
-      "commit": "Commit uap.toml + uap.lock"
+      "subtitle": "Declare Marketing Kit 0.1.0 in your user uap.toml before installing. Export the resulting lockfile and restore the same versions for a teammate.",
+      "commit": "Export exact versions",
+      "manifestPreview": "Preview user environment uap.toml",
+      "closePreview": "Close file preview"
     },
     "docs": {
       "navLabel": "Docs",
@@ -555,6 +557,7 @@
       "copyLabel": "Copy command",
       "copied": "Copied",
       "copy": "Copy",
+      "copyFailed": "Copy failed",
       "announcement": "Command copied to clipboard"
     },
     "directory": {
@@ -748,7 +751,7 @@
       },
       "scope": {
         "label": "Install for",
-        "user": "This user",
+        "user": "This computer",
         "project": "This project",
         "projectHint": "Run these commands from your project folder. Your agent may ask you to trust or activate the project.",
         "projectUnavailable": "Project installation is not available for this package.",

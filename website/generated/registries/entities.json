@@ -1052,6 +1052,7 @@
       ],
       "ru": [
         "local-management-api",
+        "restore-on-another-machine",
         "restore-project-dependencies"
       ],
       "uk": [
@@ -1075,6 +1076,7 @@
       ],
       "es": [
         "local-management-api",
+        "restore-on-another-machine",
         "restore-project-dependencies"
       ],
       "hi": [
@@ -1121,6 +1123,7 @@
       ],
       "fr": [
         "local-management-api",
+        "restore-on-another-machine",
         "restore-project-dependencies"
       ]
     },

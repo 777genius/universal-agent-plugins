@@ -1,3 +1,4 @@
+import { isReviewedMarketingKit, marketingKitTargetIDs } from '../data/marketingKitDemo.ts';
 import { computed, ref, watch, type Ref } from 'vue';
 import { clients } from '../data/clients.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
@@ -29,9 +30,14 @@ export function usePluginInstallSelection(
       ),
   );
   const projectAvailable = computed(() =>
-    availableClients.value.some((client) =>
-      Boolean(projectCatalogSelection(plugin(), [client.id]).resolution.distribution),
-    ),
+    isReviewedMarketingKit(plugin())
+      // This package and its transitives have signed user-only policies.
+      // Never present the direct-source project bridge as qualified Directory
+      // dependency resolution for the three-agent manifest.
+      ? Boolean(resolveDistribution(plugin(), [...marketingKitTargetIDs], 'project').distribution)
+      : availableClients.value.some((client) =>
+          Boolean(projectCatalogSelection(plugin(), [client.id]).resolution.distribution),
+        ),
   );
   const resolution = computed(() => select(targets.value));
   let choicePending = false;
@@ -68,6 +74,8 @@ export function usePluginInstallSelection(
         : initial
           ? [initial.id]
           : [];
+      // Preserve explicit scope intent; a now-unsupported project never
+      // silently falls back to modifying the user's computer.
       scope.value = saved.scope;
       autoDetect.value = saved.autoDetect;
       installExpanded.value = saved.expanded;
@@ -115,9 +123,18 @@ export function usePluginInstallSelection(
   }
   function updateScope(value: InstallScope) {
     if (value === 'project' && !projectAvailable.value) return;
+    const previousScope = scope.value;
     choicePending = true;
     scope.value = value;
     if (value === 'project') autoDetect.value = false;
+    // Previously saved project intent may have pinned a single target (Cursor).
+    // When the user explicitly switches a user-only Marketing Kit back to
+    // This computer, return to CLI-side installed-agent detection.
+    if (
+      previousScope === 'project' &&
+      value === 'user' &&
+      isReviewedMarketingKit(plugin())
+    ) autoDetect.value = true;
     saveUnboundChoice();
   }
   function toggleInstall() {

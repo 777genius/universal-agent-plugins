@@ -90,7 +90,7 @@ Para un entorno nuevo, ejecuta `agentplugins deps init`, edita el manifiesto del
 
 Desde CLI 0.1.93, las instalaciones remotas elegibles guardan las dependencias por defecto. `--no-save`, los orígenes locales, los selectores literales `discovery:` y la preparación de ChatGPT quedan fuera de ese guardado portable. Si una selección combina ChatGPT con otros destinos, sepárala o usa `--no-save`. No des por hecho que una instalación imperativa anterior forme parte del acuerdo: consulta `deps status` y los archivos reales antes de transferirlos.
 
-## Restaura en otra máquina
+## Restaura en otra máquina {#restore-on-another-machine}
 
 Transfiere un entorno de usuario guardado mediante una carpeta de intercambio. Desde esa carpeta en la máquina de origen:
 

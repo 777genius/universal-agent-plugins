@@ -222,13 +222,15 @@
     "restore": {
       "title": "As mesmas versões. Para toda a equipe.",
       "guide": "Guia",
-      "from": "No seu projeto",
-      "to": "Seu colega",
-      "transfer": "Inclua {manifest} e {lockfile} no Git com o projeto para que a equipe restaure as mesmas versões.",
-      "requirements": "A restauração exige que as fontes registradas continuem disponíveis e que os clientes sejam compatíveis com o gerenciamento de dependências.",
+      "from": "Meu computador",
+      "to": "Computador do colega",
+      "transfer": "Exporte {manifest} e {lockfile}, compartilhe os dois arquivos e importe-os para restaurar as mesmas versões.",
+      "requirements": "O Marketing Kit publicado oferece suporte ao ambiente do usuário; o escopo de projeto ainda não está qualificado. As fontes e os agentes compatíveis devem permanecer disponíveis.",
       "excludes": "Logins, segredos, configurações e dados dos plugins não são transferidos.",
-      "subtitle": "Instale no projeto. Inclua o arquivo de lock no Git. Sua equipe poderá restaurar as mesmas versões.",
-      "commit": "Inclua uap.toml + uap.lock no Git"
+      "subtitle": "Declare Marketing Kit 0.1.0 no uap.toml do usuário antes de instalar. Exporte o arquivo de bloqueio para que um colega restaure as mesmas versões.",
+      "commit": "Exportar versões exatas",
+      "manifestPreview": "Prévia do uap.toml do usuário",
+      "closePreview": "Fechar prévia"
     },
     "docs": {
       "navLabel": "Documentação",
@@ -538,6 +540,7 @@
       "copyLabel": "Copiar comando",
       "copied": "Copiado",
       "copy": "Copiar",
+      "copyFailed": "Falha ao copiar",
       "announcement": "Comando copiado para a área de transferência"
     },
     "directory": {
@@ -731,7 +734,7 @@
       },
       "scope": {
         "label": "Instalar para",
-        "user": "Este usuário",
+        "user": "Este computador",
         "project": "Este projeto",
         "projectHint": "Execute estes comandos na pasta do projeto. Seu agente pode pedir que você confie no projeto ou o ative.",
         "projectUnavailable": "A instalação em um projeto não está disponível para este pacote.",
