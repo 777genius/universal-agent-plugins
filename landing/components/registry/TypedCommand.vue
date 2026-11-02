@@ -16,7 +16,7 @@ const started = ref(false);
 const complete = ref(false);
 const reducedMotion = ref(false);
 const visibleCommand = computed(() =>
-  reducedMotion.value ? command.value : command.value.slice(0, characters.value),
+  !started.value || reducedMotion.value ? command.value : command.value.slice(0, characters.value),
 );
 const host = ref<HTMLElement | null>(null);
 let observer: IntersectionObserver | undefined;
