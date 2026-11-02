@@ -49,7 +49,7 @@ func decodeDependencyLockBytes(body []byte, requirements environment.Requirement
 	// encoding/json permits repeated object keys even with DisallowUnknownFields.
 	// A lock is an authority document: reject ambiguous nested and escaped keys
 	// before any pin or installer state can be interpreted.
-	if err := conformance.RejectDuplicateJSONKeys(body); err != nil {
+	if err := conformance.RejectDuplicateJSONKeysFolded(body); err != nil {
 		return environment.Lock{}, fmt.Errorf("decode uap.lock: %w", err)
 	}
 	var err error
