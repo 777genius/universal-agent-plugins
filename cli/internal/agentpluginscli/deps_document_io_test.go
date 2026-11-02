@@ -29,7 +29,7 @@ func TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized(t *testing
 	root := t.TempDir()
 	requirements := environment.Requirements{SchemaVersion: environment.ManifestSchemaVersion}
 	for _, tc := range []struct {
-		name string
+		name  string
 		limit int64
 	}{
 		{"uap.toml", maxDependencyManifestBytes},

@@ -51,9 +51,9 @@ func TestSavedSourceAdmissionRefusalDoesNotPublish(t *testing.T) {
 	}
 }
 
- // The real deps lock command must reject an oversized pre-existing agreement
- // *before* source acquisition, receipt publication or lock replacement.
- // Both manifest and lock entry points are checked on every qualification OS.
+// The real deps lock command must reject an oversized pre-existing agreement
+// *before* source acquisition, receipt publication or lock replacement.
+// Both manifest and lock entry points are checked on every qualification OS.
 func TestDependencyAgreementOversizedCLIRefusesWithoutSideEffects(t *testing.T) {
 	for _, which := range []string{"uap.toml", "uap.lock"} {
 		t.Run(which, func(t *testing.T) {
