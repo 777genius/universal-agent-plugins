@@ -71,7 +71,8 @@ function legacySource(skill: SkillListing): LegacySource | undefined {
 
 /** Parse the source and selector boundaries without assuming a colon-free URL. */
 function catalogSourceIdentity(id: string): { raw: string; slug: string } | undefined {
-  if (!id.startsWith('skills-sh:') || id.length > 1024) return undefined;
+  if (typeof id !== 'string' || !id.startsWith('skills-sh:') || id.length > 1024)
+    return undefined;
   const separator = id.lastIndexOf(':');
   if (separator <= 'skills-sh:'.length || separator >= id.length - 1) return undefined;
   const raw = id.slice('skills-sh:'.length, separator);
@@ -243,6 +244,9 @@ export function skillInstallCommand(
   skill: SkillListing,
   targets?: readonly string[],
 ): string | undefined {
+  if (!skill || typeof skill !== 'object' || !skill.source ||
+      typeof skill.id !== 'string' || typeof skill.source.kind !== 'string')
+    return undefined;
   const source = skillRepositoryUrl(skill) ?? skillPublisherUrl(skill);
   const compatible = legacySource(skill);
   if (!source || (skill.availability === 'unsupported-source' && !legacyPublisherUrl(skill) &&

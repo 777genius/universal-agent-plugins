@@ -515,3 +515,11 @@ test('empty unsupported pages stop at a bounded hop limit until the next user ac
   assert.equal(catalog.requests.length, 6);
   catalog.stop();
 });
+
+
+test('malformed DTOs disable their own Install action without crashing the catalog', () => {
+  assert.equal(skillIdentityFromId(undefined as unknown as string), undefined);
+  assert.equal(skillInstallCommand({ ...skill, id: undefined as unknown as string }), undefined);
+  assert.equal(skillInstallCommand({ ...skill, source: null as unknown as SkillListing['source'] }), undefined);
+  assert.equal(skillInstallCommand(null as unknown as SkillListing), undefined);
+});
