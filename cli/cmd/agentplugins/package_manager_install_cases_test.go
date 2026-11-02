@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -164,6 +165,41 @@ func pmInstallForeignSkillCollision(t *testing.T) {
 	pmInstallEqual(t, "foreign skill collision", native, securityFixtureTree(t, f.native(f.a, "gemini")))
 	f.noActive(t, f.a)
 	projectJourneyAbsent(t, filepath.Join(f.a, "uap.toml"), filepath.Join(f.a, "uap.lock"))
+}
+
+// One foreign Skill on Gemini must not turn a two-target add into a false
+// success with only Cursor configured. After removing the obstruction a fresh
+// retry must materialize the same pinned package for both targets.
+func pmInstallCrossTargetForeignSkillCollision(t *testing.T) {
+	o := newPMInstallOrigin(t)
+	f := newPMInstallJourney(t, o)
+	collision := filepath.Join(f.native(f.a, "gemini"), "skills", "docs", "SKILL.md")
+	projectJourneyWrite(t, collision, "user-owned Gemini Skill must not be adopted\n")
+	before := f.activeSnapshot(t, f.a)
+	requests := o.count()
+
+	out, err := f.execute(t, f.a, "", false, "add", o.url(), "--alias", "rich", "--target", "cursor,gemini", "--format", "json")
+	if err == nil || !strings.Contains(err.Error(), "native identity is unmanaged") {
+		t.Fatalf("cross-target foreign Skill did not refuse as a group: %v\n%s", err, out)
+	}
+	if o.count() <= requests || f.security.calls == 0 {
+		t.Fatal("cross-target collision never reached real acquisition and assessment")
+	}
+	pmInstallEqual(t, "cross-target refusal preserved both native roots and portable agreement", before, f.activeSnapshot(t, f.a))
+	f.noActive(t, f.a)
+	projectJourneyAbsent(t, filepath.Join(f.a, "uap.toml"), filepath.Join(f.a, "uap.lock"))
+	projectJourneyAbsent(t, filepath.Join(f.native(f.a, "cursor"), "skills", "docs", "SKILL.md"))
+
+	if err := os.RemoveAll(filepath.Dir(collision)); err != nil {
+		t.Fatal(err)
+	}
+	f.run(t, f.a, "add", o.url(), "--alias", "rich", "--target", "cursor,gemini")
+	f.assertPin(t, f.a, "cursor", "gemini")
+	f.assertInstalled(t, f.a, "cursor", "v1", false)
+	f.assertInstalled(t, f.a, "gemini", "v1", false)
+	if receipts := f.state(t, f.a).EnvironmentReceipts; len(receipts) != 2 {
+		t.Fatalf("clean two-target retry did not produce both ownership receipts: %+v", receipts)
+	}
 }
 
 func pmInstallForeignDisabledMCPCollision(t *testing.T) {
