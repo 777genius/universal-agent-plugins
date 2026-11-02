@@ -31,9 +31,10 @@ export function usePluginInstallSelection(
   );
   const projectAvailable = computed(() =>
     isReviewedMarketingKit(plugin())
-      ? marketingKitTargetIDs.every((client) =>
-          Boolean(projectCatalogSelection(plugin(), [client]).resolution.distribution),
-        )
+      // This package and its transitives have signed user-only policies.
+      // Never present the direct-source project bridge as qualified Directory
+      // dependency resolution for the three-agent manifest.
+      ? Boolean(resolveDistribution(plugin(), [...marketingKitTargetIDs], 'project').distribution)
       : availableClients.value.some((client) =>
           Boolean(projectCatalogSelection(plugin(), [client.id]).resolution.distribution),
         ),
