@@ -12,7 +12,7 @@ markdown.disable('image');
 markdown.validateLink = (href) => {
   try {
     const url = new URL(href);
-    const hostname = url.hostname.toLowerCase();
+    const hostname = url.hostname.toLowerCase().replace(/\.+$/, '');
     return (
       (url.protocol === 'https:' || url.protocol === 'http:') &&
       !url.username &&
