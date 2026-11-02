@@ -32,6 +32,7 @@ func packageManagerAdversarialCases() map[string]func(*testing.T) {
 		"stale-lock-metadata":       pmAdversarialLockMetadata,
 		"symlink-lock-refusal":      pmAdversarialSymlinkMutationLock,
 		"foreign-skill-refusal":     pmAdversarialForeignSkillCollision,
+		"cold-shared-skill-owners":  pmAdversarialColdSharedSkillOwners,
 		"native-config-obstruction": pmAdversarialNativeConfigObstruction,
 	}
 }
