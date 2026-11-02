@@ -48,7 +48,7 @@ func snapshotEnvironmentContext(ctx context.Context, app App, verifyPrevious ...
 		return s, installer.ErrRecoveryRequired
 	}
 	s.ManifestPath, s.LockPath = app.dependencyPaths()
-	s.ManifestBytes, err = os.ReadFile(s.ManifestPath)
+	s.ManifestBytes, err = readDependencyDocument(s.ManifestPath, maxDependencyManifestBytes)
 	if os.IsNotExist(err) {
 		s.ManifestBytes = nil
 		s.Requirements = environment.Requirements{SchemaVersion: 1, Dependencies: map[string]environment.Requirement{}, Targets: map[string][]string{}}
@@ -60,7 +60,7 @@ func snapshotEnvironmentContext(ctx context.Context, app App, verifyPrevious ...
 			return s, err
 		}
 	}
-	s.LockBytes, err = os.ReadFile(s.LockPath)
+	s.LockBytes, err = readDependencyDocument(s.LockPath, maxDependencyLockBytes)
 	if os.IsNotExist(err) {
 		s.LockBytes = nil
 		if len(s.Requirements.Dependencies) > 0 {

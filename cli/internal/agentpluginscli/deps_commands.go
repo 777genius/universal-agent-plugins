@@ -64,11 +64,11 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 		return dependencyLockResult{}, err
 	}
 	manifestPath, lockPath := app.dependencyPaths()
-	manifestBefore, manifestReadErr := os.ReadFile(manifestPath)
+	manifestBefore, manifestReadErr := readDependencyDocument(manifestPath, maxDependencyManifestBytes)
 	if manifestReadErr != nil {
 		return dependencyLockResult{}, manifestReadErr
 	}
-	lockBefore, lockReadErr := os.ReadFile(lockPath)
+	lockBefore, lockReadErr := readDependencyDocument(lockPath, maxDependencyLockBytes)
 	if os.IsNotExist(lockReadErr) {
 		lockBefore = nil
 	} else if lockReadErr != nil {

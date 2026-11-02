@@ -295,7 +295,7 @@ func prepareDependencySyncCandidate(cmd *cobra.Command, app App, opts *options, 
 
 func prepareDependencySyncCandidateContext(ctx context.Context, app App, opts *options, lockedOnly bool) (dependencySyncRequest, error) {
 	manifestPath, lockPath := app.dependencyPaths()
-	manifestBytes, err := os.ReadFile(manifestPath)
+	manifestBytes, err := readDependencyDocument(manifestPath, maxDependencyManifestBytes)
 	if err != nil {
 		return dependencySyncRequest{}, err
 	}
@@ -306,7 +306,7 @@ func prepareDependencySyncCandidateContext(ctx context.Context, app App, opts *o
 	if err := validateDependencyTargets(app, requirements); err != nil {
 		return dependencySyncRequest{}, err
 	}
-	lockBytes, err := os.ReadFile(lockPath)
+	lockBytes, err := readDependencyDocument(lockPath, maxDependencyLockBytes)
 	if err != nil && !os.IsNotExist(err) {
 		return dependencySyncRequest{}, err
 	}
