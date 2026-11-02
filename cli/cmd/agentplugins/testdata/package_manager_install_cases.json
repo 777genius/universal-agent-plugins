@@ -3,6 +3,7 @@
   "selected-target-ownership",
   "component-set-replacement",
   "foreign-skill-collision",
+  "cross-target-foreign-skill-collision",
   "foreign-disabled-mcp-collision",
   "malformed-native-config",
   "drift-recorded-pin-repair",
