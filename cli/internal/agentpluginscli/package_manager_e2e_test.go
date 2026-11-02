@@ -75,5 +75,6 @@ func packageManagerAgreementCases() map[string]func(*testing.T) {
 		"direct-source-promotion":        TestDirectSavedAddPromotesRetainedIntentWithoutAcquisition,
 		"direct-source-selector-refusal": TestDirectSavedPromotionRejectsSelectorOrAliasChanges,
 		"occupied-declaration-key":       TestDirectSavedPromotionRejectsOccupiedDeclarationKey,
+		"lock-json-duplicate-refusal":    pmAgreementDuplicateJSONKeysFailClosed,
 	}
 }
