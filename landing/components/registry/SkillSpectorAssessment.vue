@@ -7,6 +7,7 @@ import type {
 } from '~/types/skillSpector';
 import {
   skillSpectorAssessment,
+  isLegacySkillSpectorReport,
   hasIncompleteSkillSpectorFindings,
   groupSkillSpectorReasons,
   skillSpectorFindingLocation,
@@ -58,12 +59,10 @@ const { report, status: loadedStatus, recoverable, retry: retryReport } = useSki
 );
 const reportStatus = computed(() => (props.applicable === false ? 'ready' : loadedStatus.value));
 const assessment = computed(() => skillSpectorAssessment(report.value, props.subject));
-const legacy = computed(() =>
-  Boolean(
-    report.value &&
-    (report.value.schema_version !== 3 ||
-      report.value.records.some((record) => record.legacy_format)),
-  ),
+const legacy = computed(() => isLegacySkillSpectorReport(report.value));
+const hasLegacyEvidence = computed(
+  () => report.value?.schema_version === 3 &&
+    report.value.records.some((record) => record.legacy_format),
 );
 const displayStatus = computed(() => {
   if (props.applicable === false) return 'unsupported';
@@ -346,6 +345,7 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
         </p>
         <p>{{ t('registryUi.skillSpector.engine') }}</p>
         <p v-if="legacy">{{ t('registryUi.skillSpector.legacyCoverage') }}</p>
+        <p v-else-if="hasLegacyEvidence">{{ t('registryUi.skillSpector.legacyEvidence') }}</p>
         <p v-if="assessment.outOfDate">{{ t('registryUi.skillSpector.older') }}</p>
         <p v-if="scope === 'skill' && assessment.records.length">
           {{ t('registryUi.skillSpector.unverified') }}
