@@ -7,6 +7,7 @@ const fallbackFullscreen = ref(false);
 const demoContainer = ref<HTMLElement | null>(null);
 const playerFrame = ref<HTMLIFrameElement | null>(null);
 const closeButton = ref<HTMLButtonElement | null>(null);
+const launchButton = ref<HTMLButtonElement | null>(null);
 let enteredFullscreen = false;
 let previousBodyOverflow = '';
 
@@ -47,10 +48,13 @@ function onPlayerMessage(event: MessageEvent) {
 }
 
 function stopDemo() {
+  const wasPlaying = playing.value;
   playing.value = false;
   fallbackFullscreen.value = false;
   if (document.fullscreenElement === demoContainer.value)
     void document.exitFullscreen().catch(() => {});
+  // Return keyboard focus to the poster control after Vue remounts it.
+  if (wasPlaying) void nextTick(() => launchButton.value?.focus({ preventScroll: true }));
 }
 
 function onFullscreenChange() {
@@ -147,6 +151,7 @@ onBeforeUnmount(() => {
       <img :src="thumbnailUrl" :alt="t('shell.hero.demoVideoTitle')" loading="lazy" />
       <button
         type="button"
+        ref="launchButton"
         class="hero-demo-video__launch"
         :aria-label="t('shell.hero.watchDemo')"
         @click="playDemo"
