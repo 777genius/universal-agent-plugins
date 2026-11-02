@@ -74,7 +74,7 @@ func (m *claudeProjectScriptedModel) respond(w http.ResponseWriter, r *http.Requ
 	// GET route. It neither fabricates an MCP call nor counts as a model turn.
 	if r.Method == http.MethodGet && r.URL.Path == "/v1/models" {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"data":[` + claudeProjectModelInfo + `],"first_id":"claude-sonnet-4-5","last_id":"claude-sonnet-4-5","has_more":false}`)
+		_, _ = io.WriteString(w, `{"data":[`+claudeProjectModelInfo+`],"first_id":"claude-sonnet-4-5","last_id":"claude-sonnet-4-5","has_more":false}`)
 		return
 	}
 	if r.Method == http.MethodGet && r.URL.Path == "/v1/models/claude-sonnet-4-5" {
