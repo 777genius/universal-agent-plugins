@@ -309,6 +309,32 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	}
 	stages["project_B_no_leak"] = nativeStage{Status: "passed", Reason: "fresh trusted B model session did not discover, invoke or reconnect A MCP"}
 
+	// Actual Claude sessions may update Claude's own profile metadata. Verify
+	// that both projects remain trusted, then pin the exact post-native bytes
+	// immediately before UAP remove. The installer must preserve this new
+	// baseline (and every other unchanged foreign file) without modification.
+	profilePath := filepath.Join(f.base.ConfigDir, ".claude.json")
+	profile, err := readClaudeTrustedProfile(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var currentProfile struct {
+		Projects map[string]struct {
+			Trusted bool `json:"hasTrustDialogAccepted"`
+		} `json:"projects"`
+	}
+	if err := json.Unmarshal(profile, &currentProfile); err != nil {
+		t.Fatal(err)
+	}
+	for _, project := range []string{f.project, f.otherProject} {
+		entry, ok := currentProfile.Projects[filepath.ToSlash(project)]
+		if !ok || !entry.Trusted {
+			t.Fatal("native Claude session changed trusted project authority")
+		}
+	}
+	f.foreign[profilePath] = nativeSHA(t, profilePath)
+	evidence["native_profile_baseline_refreshed_before_remove"] = true
+
 	c.succeed(t, "trusted-foreign-mcp-remove", "remove", commandsPluginName)
 	f.requireForeign(t)
 	claudeProjectRunScripted(t, f, f.project, true)
