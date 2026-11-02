@@ -44,3 +44,20 @@ Score UAP vs Microsoft APM separately and transparently, distinguishing directly
 - Draft from first commit; push incremental, scoped commits into this branch.
 - Protect current open UAP PR work (#530, #657, #666, #498) and frozen VS Code scope.
 - Source of truth: final branch HEAD SHA and CI logs/artifacts, not old success summaries.
+
+## CI runner routing and latest SHA qualification
+
+On 2026-11-02 the complete four-OS Package Manager E2E on head
+`2a9225a357027519eaea298f25b5820e56b9467b` passed with
+`suite=full`, `full_qualification=true`, source unchanged and 215 actual
+run+pass catalog events per platform, including all three new required
+regressions. Evidence is in workflow run 41502246452.
+
+The other Linux-based Required/Core fast/CodeQL/source/govuln jobs remained
+**queued** while explicitly hosted Windows/macOS and pinned Ubuntu jobs
+completed. Those workflows explicitly prefer `vars.CI_LINUX_RUNNER` when
+defined, but have an existing pull-request label fallback to GitHub hosted
+Ubuntu via `ci:github-hosted`. Apply that existing label and re-run the
+complete PR checks on the **new** HEAD. This is a runner-routing workaround,
+not suppression/waiver of any CI gate. Only merge after fresh CodeQL, Required,
+Core, Source transports and other applicable jobs are proven on the new HEAD.
