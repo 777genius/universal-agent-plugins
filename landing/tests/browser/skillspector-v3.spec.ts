@@ -149,7 +149,7 @@ async function setup(
     // results. It must not put the entire plugin into legacy display mode.
     const old = shard.records[0];
     old.freshness = 'historical';
-    old.legacy_format = true;
+    old.legacy_format = 2;
     old.profile = { id: 'static-only-v2', digest: `sha256:${'a'.repeat(64)}` };
     const oldStatus = old.status as 'complete' | 'partial' | 'error';
     manifest.coverage = {
