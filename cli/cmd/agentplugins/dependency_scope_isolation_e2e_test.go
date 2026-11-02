@@ -11,7 +11,7 @@ import (
 
 // No mocked resolver or target adapter: run the real public CLI composition in
 // a disposable user environment and two independent project roots.
-func TestDependencyLockNeverCrossesUserProjectScopeE2E(t *testing.T) {
+func TestProjectDependencyLockNeverCrossesUserProjectScopeE2E(t *testing.T) {
 	app, user, a, b := projectCompositionFixture(t)
 	run := func(args ...string) error {
 		t.Helper()
