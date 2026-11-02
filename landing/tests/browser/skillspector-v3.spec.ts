@@ -856,12 +856,19 @@ for (const locale of ['en', 'ru'] as const) {
   }
 }
 
-test('unsupported standalone listings are hidden, not misrepresented as clean scans', async ({
+test('unsupported standalone sources retain their explanation and do not imply an empty completed check', async ({
   page,
 }) => {
-  const { errors } = await setup(page, 'unsupportedSource');
-  await expect(page.locator('.skills-catalog .skill-card')).toHaveCount(0);
-  await expect(page.locator('.skills-catalog .skillspector')).toHaveCount(0);
+  const { assessment, errors } = await setup(page, 'unsupportedSource');
+  await expect(assessment).toHaveClass(/skillspector--unsupported/);
+  await expect(assessment.locator(':scope > summary')).toContainText('Not checked');
+  await expect(assessment.locator('.skillspector__summary-coverage')).toHaveCount(0);
+  await assessment.locator(':scope > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(assessment).toContainText(
+    'This source type is not supported by static SkillSpector checks. Its files have not been checked.',
+  );
+  await expect(assessment.locator('.skillspector--noSkills')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
