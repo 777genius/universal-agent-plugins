@@ -60,6 +60,7 @@ func TestPackageManagerE2E(t *testing.T) {
 func packageManagerAgreementCases() map[string]func(*testing.T) {
 	return map[string]func(*testing.T){
 		"manifest-rejections":            TestDependencyManifestRejectsUnknownConflictingAndMissingIntent,
+		"saved-source-admission-refusal": TestSavedSourceAdmissionRefusalDoesNotPublish,
 		"manifest-locations":             TestDependencyManifestErrorLocations,
 		"version-intent-preservation":    TestVersionSelectionManifestForms,
 		"transfer-replacement-noop":      TestDependencyTransferReplacementAndNoop,
@@ -70,6 +71,8 @@ func packageManagerAgreementCases() map[string]func(*testing.T) {
 		"lock-store-publication-recheck": TestDependencyLockRechecksAfterStorePublication,
 		"lock-cold-store-hydration":      TestDependencyLockUnchangedHydratesMissingStore,
 		"lock-read-only-no-publication":  TestDependencyLockReadOnlyResolutionDoesNotPublish,
+		"lock-only-preserves-installed":  pmAgreementLockOnlyPreservesInstalled,
+		"source-origin-rebind-refusal":   pmAgreementSourceRebindingRequiresExplicitTransfer,
 		"lock-empty-existing-refusal":    TestDependencyLockRejectsEmptyExistingLock,
 		"absent-empty-distinct":          TestDependencyLockInputCheckDistinguishesAbsentAndEmpty,
 		"direct-source-promotion":        TestDirectSavedAddPromotesRetainedIntentWithoutAcquisition,

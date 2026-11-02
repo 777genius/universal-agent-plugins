@@ -127,9 +127,9 @@ func TestNewURLGitRequiresSharedPortablePathGrammar(t *testing.T) {
 			t.Fatalf("new URL Git accepted nonportable package path %q", packagePath)
 		}
 	}
-	// Existing repository intent uses the historical path admission contract.
-	old := Requirement{Alias: "demo", Git: &GitSource{Repository: "acme/repo", Path: "CON", Selector: Selector{Kind: SelectorDefault}}}
-	if err := old.Validate(); err != nil {
-		t.Fatalf("historical repository path contract changed: %v", err)
+	// Saved repository intent must enforce the same portable path grammar.
+	saved := Requirement{Alias: "demo", Git: &GitSource{Repository: "acme/repo", Path: "CON", Selector: Selector{Kind: SelectorDefault}}}
+	if err := saved.Validate(); err == nil {
+		t.Fatal("saved repository accepted nonportable package path")
 	}
 }

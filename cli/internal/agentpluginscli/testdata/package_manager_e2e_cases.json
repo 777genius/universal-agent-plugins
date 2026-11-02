@@ -57,6 +57,7 @@
   ],
   "agreement": [
     "manifest-rejections",
+    "saved-source-admission-refusal",
     "manifest-locations",
     "version-intent-preservation",
     "transfer-replacement-noop",
@@ -67,6 +68,8 @@
     "lock-store-publication-recheck",
     "lock-cold-store-hydration",
     "lock-read-only-no-publication",
+    "lock-only-preserves-installed",
+    "source-origin-rebind-refusal",
     "lock-empty-existing-refusal",
     "absent-empty-distinct",
     "direct-source-promotion",
