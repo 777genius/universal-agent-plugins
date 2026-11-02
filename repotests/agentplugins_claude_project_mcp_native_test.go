@@ -19,6 +19,10 @@ import (
 const claudeProjectTool = "mcp__uap_project_fixture__uap_ping"
 const claudeProjectToolCallID = "uap_claude_project_call_1"
 
+// Only one inert model exists in this fixture. Match Anthropic's Models API
+// required metadata shape rather than returning an incomplete model object.
+const claudeProjectModelInfo = `{"type":"model","id":"claude-sonnet-4-5","display_name":"UAP local scripted model","created_at":"2026-01-01T00:00:00Z","capabilities":null,"max_input_tokens":200000,"max_tokens":8192}`
+
 // Only the local scripted model is simulated: the actual pinned Claude Code
 // process must discover and call the real project stdio MCP child itself.
 type claudeProjectScriptedModel struct {
@@ -64,12 +68,12 @@ func (m *claudeProjectScriptedModel) respond(w http.ResponseWriter, r *http.Requ
 	// GET route. It neither fabricates an MCP call nor counts as a model turn.
 	if r.Method == http.MethodGet && r.URL.Path == "/v1/models" {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"data":[{"type":"model","id":"claude-sonnet-4-5","display_name":"UAP local scripted model"}],"first_id":"claude-sonnet-4-5","last_id":"claude-sonnet-4-5","has_more":false}`)
+		_, _ = io.WriteString(w, `{"data":[`+claudeProjectModelInfo+`],"first_id":"claude-sonnet-4-5","last_id":"claude-sonnet-4-5","has_more":false}`)
 		return
 	}
 	if r.Method == http.MethodGet && r.URL.Path == "/v1/models/claude-sonnet-4-5" {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"type":"model","id":"claude-sonnet-4-5","display_name":"UAP local scripted model"}`)
+		_, _ = io.WriteString(w, claudeProjectModelInfo)
 		return
 	}
 	if r.Method == http.MethodPost && r.URL.Path == "/v1/messages/count_tokens" {
