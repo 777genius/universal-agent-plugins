@@ -9,8 +9,8 @@ Microsoft APM historical issue #794 wrote a global operation into the current pr
 Use the **actual public Go CLI composition** with three disposable environments: user, project A, project B. No mock resolver and no network.
 1. `deps init` and `deps lock` in all three contexts; assert the manifest and locked environment pairs have distinct, exact roots.
 2. Modify only project A's valid target declaration; rerun `deps lock --scope project --project-root A`; project B and user lock bytes and file metadata remain identical.
-3. Run user-scope `deps lock` while process cwd happens to be project A; explicit `--scope user` must still target user files, not infer a project from cwd.
-4. Refuse a nonexisting or symlink-selected project path before touching any environment.
+3. Refuse contradictory `--scope user --project-root A` before any mutation. Explicit `--scope user` must always use user paths, never select a project by an unrelated project-root argument.
+4. Refuse a nonexisting project path before touching any environment. Legitimate symlink aliases are canonicalized to their selected existing directory by the current project-root contract and must not be treated as independent project identities.
 5. Repeat no-op lock and ensure no gratuitous rewrites; source provenance and native user/project state must not be conflated.
 
 ## Architecture and reviews
