@@ -206,9 +206,9 @@ export async function checkHtmlReferences({
 export async function checkPagesArtifact({
   root = path.join(repo, '.pages-dist'),
   mirror = process.env.UAP_VERIFIED_MIRROR,
-  base = process.env.NUXT_APP_BASE_URL || '/universal-agent-plugins/',
+  base = process.env.NUXT_APP_BASE_URL || '/',
   siteUrl = process.env.NUXT_PUBLIC_SITE_URL ||
-    'https://777genius.github.io/universal-agent-plugins',
+    'https://universal-agent-plugins.com',
   docsDist = path.join(repo, 'website/dist'),
   // Explicit fixture injection only; CLI always uses the production published set.
   locales = publishedLocales,
