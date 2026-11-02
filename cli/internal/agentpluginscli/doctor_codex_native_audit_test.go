@@ -303,3 +303,44 @@ func TestCodexDoctorNativePathRecognizer(t *testing.T) {
 		}
 	}
 }
+
+// Invalid foreign and duplicate MCP ownership must never create a second,
+// fabricated missing-member finding for a server UAP does not own.
+func TestCodexDoctorDoesNotInspectForeignOrInvalidMCPReceipts(t *testing.T) {
+	t.Parallel()
+	for _, variant := range []string{"foreign", "bad_path", "duplicate"} {
+		t.Run(variant, func(t *testing.T) {
+			installation, root := codexDoctorFixture(t)
+			binding := installation.Clients["codex"]
+			mcp := filepath.Join(root, ".codex", "config.toml")
+			object := domain.NativeObjectOwnership{
+				ObjectID: "mcp:not-recorded", Kind: "codex_project_mcp_server",
+				LogicalName: "not-recorded", Path: mcp, ProtectionClass: "managed_entry",
+			}
+			want := ""
+			switch variant {
+			case "foreign":
+				object.ProtectionClass = "foreign"
+				want = "codex_project_ownership_unverified"
+			case "bad_path":
+				object.Path = filepath.Join(t.TempDir(), "config.toml")
+				want = "codex_project_path_mismatch"
+			case "duplicate":
+				// The first copy is not manager-owned. The second must be
+				// rejected as duplicate without creating an MCP member check.
+				object.ProtectionClass = "foreign"
+				binding.NativeObjects = append(binding.NativeObjects, object)
+				want = "codex_project_duplicate_receipt"
+			}
+			binding.NativeObjects = append(binding.NativeObjects, object)
+			installation.Clients["codex"] = binding
+			findings := doctorSingleProject(t, installation)
+			if !doctorCode(findings, want) {
+				t.Fatalf("invalid MCP ownership was accepted: %+v", findings)
+			}
+			if doctorCode(findings, "codex_project_mcp_member_missing") {
+				t.Fatalf("foreign or duplicate MCP server was audited as owned: %+v", findings)
+			}
+		})
+	}
+}

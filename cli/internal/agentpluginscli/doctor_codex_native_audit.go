@@ -136,7 +136,6 @@ func (d *codexDoctorInspection) inspectObject(object domain.NativeObjectOwnershi
 			return
 		}
 		expected = filepath.Join(d.rootPath, ".codex", "config.toml")
-		d.mcpNames = append(d.mcpNames, object.LogicalName)
 	default:
 		return // Foreign objects and unrelated client surfaces are not ours.
 	}
@@ -167,6 +166,9 @@ func (d *codexDoctorInspection) inspectObject(object domain.NativeObjectOwnershi
 		d.add(doctorNativeStatusSeverity(issue), "codex_project_"+issue,
 			"the recorded native component is missing, inaccessible, linked or has the wrong filesystem type")
 		return
+	}
+	if !directory {
+		d.mcpNames = append(d.mcpNames, object.LogicalName)
 	}
 	if directory {
 		if issue := doctorNativePathStatus(d.root, filepath.Join(relative, "SKILL.md"), false); issue != "" {
