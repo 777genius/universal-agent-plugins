@@ -24,7 +24,12 @@ func TestPortableSegmentsRejectSuperscriptDeviceAliases(t *testing.T) {
 			}
 		}
 	}
-	for _, good := range []string{"COM10", "LPT10", "COM⁴", "report¹.txt", "中文", "skills-é", "valid.md"} {
+	for _, bad := range []string{"COM¹ .txt", "com² .tar.gz", "LPT³  .md", "CON .txt", "COM1 .txt", "NUL .txt"} {
+		if err := ValidatePortablePathSegment(bad); err == nil {
+			t.Errorf("accepted Win32 whitespace-padded device name %q", bad)
+		}
+	}
+	for _, good := range []string{"COM10", "LPT10", "COM⁴", "report¹.txt", "中文", "skills-é", "valid.md", "report mid .txt"} {
 		if err := ValidatePortablePathSegment(good); err != nil {
 			t.Fatalf("non-device portable name %q was rejected: %v", good, err)
 		}

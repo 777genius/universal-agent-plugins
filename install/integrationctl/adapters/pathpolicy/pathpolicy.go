@@ -44,7 +44,7 @@ func ValidatePortablePathSegment(value string) error {
 			return fmt.Errorf("path segment contains a control character")
 		}
 	}
-	base := strings.ToUpper(strings.SplitN(value, ".", 2)[0])
+	base := strings.ToUpper(strings.TrimRight(strings.SplitN(value, ".", 2)[0], " ."))
 	if _, reserved := windowsReservedLeafIDs[base]; reserved {
 		return fmt.Errorf("Windows reserved path segment")
 	}

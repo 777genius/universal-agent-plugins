@@ -15,6 +15,7 @@ func TestArchiveRefusesUnicodeDeviceAliasesAcrossFormats(t *testing.T) {
 	for _, name := range []string{
 		"COM¹", "com².txt", "LPT³.tar.gz",
 		"publisher/COM¹/skill.md", "publisher/nested/lpt²/readme.md",
+		"COM¹ .txt", "com² .tar.gz", "LPT³  .md", "CON .txt", "COM1 .txt",
 	} {
 		t.Run(name, func(t *testing.T) {
 			// Keep an otherwise valid Agent Plugins package in the archive. A
@@ -45,7 +46,11 @@ func TestArchiveRetainsValidUnicodeOutsideDeviceNamespace(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			entries := append(archivePackageEntries(""), archiveFixtureEntry{
 				name: "docs/report¹.txt", body: "portable unicode content",
+				// Interior spaces are portable unless the Win32 stem is reserved.
+				// A broad spaces ban would regress healthy package names.
+				
 			})
+			entries = append(entries, archiveFixtureEntry{name: "docs/report mid .txt", body: "valid interior space"})
 			payload := tc.pack(t, entries)
 			snapshot, err := (Acquirer{TempRoot: t.TempDir()}).AcquireArchive(
 				t.Context(), sourcespec.Archive{URL: archiveLocalFile(t, payload)}, "", "")
@@ -57,6 +62,10 @@ func TestArchiveRetainsValidUnicodeOutsideDeviceNamespace(t *testing.T) {
 					t.Errorf("remove acquired snapshot: %v", err)
 				}
 			})
+			spaced, spaceErr := os.ReadFile(filepath.Join(snapshot.Root, "docs", "report mid .txt"))
+			if spaceErr != nil || string(spaced) != "valid interior space" {
+				t.Fatalf("valid interior-space name failed: body=%q err=%v", spaced, spaceErr)
+			}
 			body, err := os.ReadFile(filepath.Join(snapshot.Root, "docs", "report¹.txt"))
 			if err != nil || string(body) != "portable unicode content" {
 				t.Fatalf("valid Unicode archive content=%q, err=%v", body, err)
