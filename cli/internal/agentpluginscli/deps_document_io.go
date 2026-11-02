@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"fmt"
 	"io"
 	"os"
@@ -38,7 +39,7 @@ func readDependencyDocument(path string, limit int64) ([]byte, error) {
 	if before.Size() > limit {
 		return nil, fmt.Errorf("%s exceeds %d bytes", filepath.Base(path), limit)
 	}
-	file, err := os.Open(path)
+	file, err := atomicfile.OpenReadFile(path)
 	if err != nil {
 		return nil, err
 	}
