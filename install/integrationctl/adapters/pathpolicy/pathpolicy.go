@@ -55,7 +55,11 @@ func ValidatePortablePathSegment(value string) error {
 // filesystem path component. Product-specific schemas may impose stricter
 // semantic rules in addition to this portable path-safety invariant.
 func ValidateLeafID(value string) error {
-	value = strings.TrimSpace(value)
+	// A validator must not silently canonicalize a different path identity.
+	// A caller using the original string would otherwise bypass the ASCII leaf rule.
+	if value != strings.TrimSpace(value) {
+		return fmt.Errorf("identifier must not have leading or trailing whitespace")
+	}
 	if value == "" {
 		return fmt.Errorf("identifier is required")
 	}
