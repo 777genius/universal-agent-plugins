@@ -71,6 +71,7 @@
     "absent-empty-distinct",
     "direct-source-promotion",
     "direct-source-selector-refusal",
-    "occupied-declaration-key"
+    "occupied-declaration-key",
+    "lock-json-duplicate-refusal"
   ]
 }
