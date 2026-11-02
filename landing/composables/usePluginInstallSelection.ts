@@ -63,13 +63,16 @@ export function usePluginInstallSelection(
       const initial =
         availableClients.value.find((client) => client.id === 'cursor') ??
         availableClients.value[0];
-      targets.value = saved.targetIds.length
-        ? (saved.targetIds as ClientID[])
-        : initial
-          ? [initial.id]
-          : [];
+      targets.value = saved.scope === 'project' && plugin().name === 'marketing-kit'
+        ? ['claude', 'codex', 'gemini']
+        : saved.targetIds.length
+          ? (saved.targetIds as ClientID[])
+          : initial
+            ? [initial.id]
+            : [];
       scope.value = saved.scope;
-      autoDetect.value = saved.autoDetect;
+      autoDetect.value = saved.scope === 'project' && plugin().name === 'marketing-kit'
+        ? false : saved.autoDetect;
       installExpanded.value = saved.expanded;
     },
     { immediate: true, flush: 'sync' },
@@ -117,7 +120,18 @@ export function usePluginInstallSelection(
     if (value === 'project' && !projectAvailable.value) return;
     choicePending = true;
     scope.value = value;
-    if (value === 'project') autoDetect.value = false;
+    if (plugin().name === 'marketing-kit') {
+      // The project variant is a declarative manifest for three named clients,
+      // never the saved one-client picker (often Cursor) or implicit discovery.
+      if (value === 'project') {
+        targets.value = ['claude', 'codex', 'gemini'];
+        autoDetect.value = false;
+      } else {
+        autoDetect.value = true; // Real auto-detection happens in the CLI, not the browser.
+      }
+    } else if (value === 'project') {
+      autoDetect.value = false;
+    }
     saveUnboundChoice();
   }
   function toggleInstall() {
