@@ -151,8 +151,8 @@ func projectNativeClientActions(clientID string) []string {
 		return []string{"Open the selected project in Cursor and review workspace trust, project Skills and MCP settings",
 			"Verify tool visibility and MCP server status inside Cursor; file preparation alone is not activation"}
 	case "pi":
-		return []string{"Start Pi in the project and explicitly review project trust before loading its extensions and Skills",
-			"Check native extension loading and project MCP tool use in a fresh Pi session"}
+		return []string{"Start Pi in the selected project and review its native extension loading and applicable trust policy",
+			"Verify extension discovery in a fresh Pi session; UAP's Pi target does not project portable Skills or MCP servers"}
 	case "kimi":
 		return []string{"Start Kimi Code from the selected project Git root and inspect selected Skill directories",
 			"Check effective project .kimi-code/mcp.json loading and trust in a fresh session"}

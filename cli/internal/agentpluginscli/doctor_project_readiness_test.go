@@ -143,6 +143,10 @@ func TestProjectNativeGuidanceForTwelveAgents(t *testing.T) {
 			}
 		})
 	}
+	pi := strings.Join(projectReadinessActions("pi", "prepared_native_unverified"), " ")
+	if !strings.Contains(pi, "does not project portable Skills or MCP servers") {
+		t.Fatalf("Pi guidance claimed unsupported portable component installation: %q", pi)
+	}
 	for status, want := range map[string]string{
 		"source_rebind_required": "source identity",
 		"failed": "explicit review",
