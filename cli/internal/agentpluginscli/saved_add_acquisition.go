@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/spf13/cobra"
 )
 
 func acquireSavedAdd(ctx context.Context, app App, opts *options, source string, targets []domain.ClientID, matches []string, requirement environment.Requirement, requirements environment.Requirements) (environment.Requirement, environment.LockedPackage, error) {

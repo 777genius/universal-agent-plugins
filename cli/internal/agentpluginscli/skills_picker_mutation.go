@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/skillsource"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"

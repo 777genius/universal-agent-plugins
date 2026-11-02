@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path"
 	"path/filepath"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 )
 

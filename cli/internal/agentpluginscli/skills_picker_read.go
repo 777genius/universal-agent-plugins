@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"context"
 	"errors"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )

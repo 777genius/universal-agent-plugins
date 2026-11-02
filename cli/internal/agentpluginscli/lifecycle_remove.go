@@ -6,9 +6,10 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
+	"github.com/spf13/cobra"
 )
 
 func newRemoveCommand(app App, opts *options) *cobra.Command {
