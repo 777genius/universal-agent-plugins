@@ -167,17 +167,17 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 		"model": "uap-fixture/uap-scripted",
 		"providers": map[string]any{
 			"uap-fixture": map[string]any{
-				"name": "Local deterministic CI fixture",
+				"name":    "Local deterministic CI fixture",
 				"package": "@opencode/ai/providers/openai-compatible",
 				"settings": map[string]any{
 					"baseURL": model.baseURL(),
-					"apiKey": "local-fixture-not-a-vendor-secret",
+					"apiKey":  "local-fixture-not-a-vendor-secret",
 				},
 				"models": map[string]any{
 					"uap-scripted": map[string]any{
-						"name": "UAP scripted test response",
+						"name":         "UAP scripted test response",
 						"capabilities": map[string]any{"tools": true, "input": []string{"text"}, "output": []string{"text"}},
-						"limit": map[string]int{"context": 32768, "output": 8192},
+						"limit":        map[string]int{"context": 32768, "output": 8192},
 					},
 				},
 			},
