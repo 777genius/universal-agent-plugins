@@ -57,6 +57,7 @@
   ],
   "agreement": [
     "manifest-rejections",
+    "saved-source-admission-refusal",
     "manifest-locations",
     "version-intent-preservation",
     "transfer-replacement-noop",
