@@ -833,9 +833,13 @@ describe('SkillSpector v3 exact producer contract', () => {
     );
     assert.equal(annotations.length, 2);
     for (const finding of annotations) finding.exception.profile_digest = currentDigest;
+    // The other twelve fixture records still have old policy digests.
+    // Verify only the republished annotated record; do not rewrite unrelated evidence.
+    newestShard.records = [annotatedRecord];
+    const annotatedDescriptor = { ...descriptor, record_count: 1 };
     assert.equal(
-      decodeSkillSpectorShardV3(newestShard, newestManifest, descriptor).length,
-      descriptor.record_count,
+      decodeSkillSpectorShardV3(newestShard, newestManifest, annotatedDescriptor).length,
+      1,
     );
 
     // An exact profile match alone does not authorize tampered exception metadata.
@@ -844,7 +848,7 @@ describe('SkillSpector v3 exact producer contract', () => {
       .find((finding: { review_status: string }) => finding.review_status === 'false_positive');
     assert.ok(forgedFinding);
     forgedFinding.exception!.source_content_digest = `sha256:${'0'.repeat(64)}`;
-    assert.throws(() => decodeSkillSpectorShardV3(forged, newestManifest, descriptor), /invalid/);
+    assert.throws(() => decodeSkillSpectorShardV3(forged, newestManifest, annotatedDescriptor), /invalid/);
   });
   it('preserves and verifies the two content-bound registry false-positive annotations', () => {
     const decoded = decodeSkillSpectorShardV3(shard, manifest, descriptor);
