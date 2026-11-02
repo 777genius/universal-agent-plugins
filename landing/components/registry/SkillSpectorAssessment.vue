@@ -99,7 +99,7 @@ const label = computed(() => {
     assessment.value.inventoryKnown &&
     (assessment.value.selected ?? 0) > 1
   ) {
-    if (previous && !scanned && !outcomes.failed)
+    if (previous && !scanned && !outcomes.failed && !waiting)
       return t('registryUi.skillSpector.historyProgress', {
         total: n(assessment.value.selected ?? 0),
         previous: n(previous),
