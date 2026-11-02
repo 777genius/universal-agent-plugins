@@ -215,3 +215,40 @@ func pmAdversarialColdSharedSkillOwners(t *testing.T) {
 	pmArchiveAssertEqual(t, "committed Skill and unrelated settings", native, freshRestoreFiles(t, coldShared, settings))
 	pmArchiveAssertEqual(t, "cold portable agreement", portable, freshRestoreFiles(t, mp, lp))
 }
+
+// Lock resolution is an agreement-only operation, not an implicit uninstall.
+// APM #2296 is an adversarial reminder: even dropping the last declared root
+// must not delete its already-deployed package, native Skill or foreign config.
+// The actual CLI and installer are used with a disposable HTTPS ZIP origin.
+func pmAgreementLockOnlyPreservesInstalled(t *testing.T) {
+	origin := newPMArchiveOrigin(t, pmArchiveGraph{"a": nil, "b": nil})
+	fixture := newPMArchiveEnvironment(t, origin, false)
+	fixture.manifest(t, origin, []string{"a"}, map[string][]string{"gemini": {"a"}})
+	fixture.run(t, "install", "--yes", "--format", "json")
+	fixture.assertInstalled(t, pmArchiveTargets{"a": {"gemini"}})
+	before := fixture.activeFiles(t)
+	_, lockPath := fixture.app.dependencyPaths()
+	previousLock := dependencyRead(t, lockPath)
+
+	// Deliberately change the portable agreement without applying it.
+	fixture.manifest(t, origin, []string{"b"}, map[string][]string{"gemini": {"b"}})
+	fixture.run(t, "deps", "lock", "--format", "json")
+	next := fixture.lock(t)
+	if _, present := next.Package("a"); present {
+		t.Fatal("new lock retained removed root a")
+	}
+	if _, present := next.Package("b"); !present {
+		t.Fatal("new lock omitted replacement root b")
+	}
+	if dependencyRead(t, lockPath) == previousLock {
+		t.Fatal("lock-only command did not publish new dependency intent")
+	}
+	pmArchiveAssertEqual(t, "lock-only preserved deployed bytes, native Skill, foreign settings and receipts", before, fixture.activeFiles(t))
+
+	// Repeating the exact agreement is idempotent for both lock bytes and
+	// the materialized environment; a no-op must not rewrite timestamps.
+	stableLock := freshRestoreFiles(t, lockPath)
+	fixture.run(t, "deps", "lock", "--format", "json")
+	pmArchiveAssertEqual(t, "unchanged lock bytes and metadata", stableLock, freshRestoreFiles(t, lockPath))
+	pmArchiveAssertEqual(t, "unchanged native and managed files", before, fixture.activeFiles(t))
+}
