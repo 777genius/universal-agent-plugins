@@ -270,7 +270,7 @@ async function copyDiagnostics() {
       >{{ t('registryUi.skillSpector.title') }} ·
       {{ t('registryUi.skillSpector.noSkills') }}</strong
     >
-    <p>{{ t('registryUi.skillSpector.noSkillsDetails') }}</p>
+    <p v-if="expanded">{{ t('registryUi.skillSpector.noSkillsDetails') }}</p>
   </section>
   <p
     v-else-if="expanded && reportStatus === 'loading'"
