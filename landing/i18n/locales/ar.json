@@ -754,11 +754,6 @@
           "mcp": "أدوات MCP",
           "extensions": "إضافات"
         }
-      },
-      "marketingKitProject": {
-        "intro": "احفظ ملف uap.toml في مشروعك أولاً ثم ثبّت إصدار الحزمة المحدد.",
-        "agents": "لـ Claude Code وCodex وGemini CLI إذا كانت مثبتة.",
-        "help": "شغّل الأمر من مجلد المشروع. قد يلزم تفعيل الوكلاء وتسجيل الدخول للخدمات بشكل منفصل."
       }
     },
     "authentication": {
