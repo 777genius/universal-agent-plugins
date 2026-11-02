@@ -244,7 +244,7 @@ test('Detail identity uses only a canonical source, never the listing-page URL',
   for (const id of [
     'skills-sh:127.0.0.1:lark-mail',
     'skills-sh:https://example.com:secret',
-    'skills-sh:owner/repo/tree/main:bad',
+    'skills-sh:owner/repo/tree:bad',
     'skills-sh:open.feishu.cn:bad:extra',
     'not-a-skill',
     'skills-sh:bad\nsource:other',
