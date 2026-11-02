@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { hydrated } from './i18n-state.helpers';
 
 const addCommand = 'npx -y universal-agent-plugins install --scope user';
-const restoreCommand = 'agentplugins deps import --install';
+const restoreCommand = 'npx -y universal-agent-plugins deps import --install';
 const manifest = `schema_version = 1
 
 [dependencies]
@@ -47,12 +47,12 @@ for (const theme of ['dark', 'light'] as const) {
       const typed = section.locator('.typed-command');
       await expect(typed).toHaveCount(3);
       await expect(section.locator('.registry-restore__export')).toHaveAttribute(
-        'data-command', 'agentplugins deps export',
+        'data-command', 'npx -y universal-agent-plugins deps export',
       );
       await expect(typed.first()).toHaveAttribute('data-complete', 'true');
       await expect(typed.last()).toHaveAttribute('data-complete', 'true');
       await expect(typed.locator('.typed-command__visible')).toHaveText([
-        addCommand, 'agentplugins deps export', restoreCommand,
+        addCommand, 'npx -y universal-agent-plugins deps export', restoreCommand,
       ]);
       // A visually wrapped command must still be one executable CLI command.
       for (const element of await typed.all()) {
@@ -169,6 +169,6 @@ test('typing is sequential and always copies complete commands', async ({ page, 
   await expect(section.locator('.typed-command').first()).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });
   await expect(section.locator('.typed-command').last()).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });
   await expect(section.locator('.typed-command__visible')).toHaveText([
-    addCommand, 'agentplugins deps export', restoreCommand,
+    addCommand, 'npx -y universal-agent-plugins deps export', restoreCommand,
   ]);
 });

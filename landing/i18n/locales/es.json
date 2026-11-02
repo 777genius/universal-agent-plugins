@@ -365,7 +365,7 @@
       "requirements": "Marketing Kit solo admite el entorno del usuario; aún no está validado para proyectos. Las fuentes y los agentes compatibles deben seguir disponibles.",
       "excludes": "No se transfieren sesiones, secretos, ajustes ni datos de plugins.",
       "subtitle": "Fija Marketing Kit 0.1.0 en este ordenador. Exporta el entorno para restaurar las mismas versiones en otro equipo.",
-      "commit": "Exportar: agentplugins deps export",
+      "commit": "Exportar versiones exactas",
       "manifestPreview": "Vista previa de uap.toml",
       "closePreview": "Cerrar vista previa"
     },

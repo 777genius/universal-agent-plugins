@@ -108,7 +108,7 @@ async function copyCommand(which: 1 | 2) {
           </div>
           <code class="registry-restore__locked-version" dir="ltr">v{{ marketingKitVersion }}</code>
           <div class="registry-restore__export" dir="ltr" :data-command="marketingKitExportCommand">
-            <TypedCommand :lines="['agentplugins deps export']" :delay="1700" />
+            <TypedCommand :lines="['npx -y', 'universal-agent-plugins', 'deps export']" :delay="1700" />
           </div>
           <svg class="registry-restore__arrow" viewBox="0 0 160 36" fill="none" aria-hidden="true">
             <path d="M4 26C36 26 46 12 84 12h52" stroke-dasharray="3.5 7" />
@@ -155,7 +155,7 @@ async function copyCommand(which: 1 | 2) {
             </p>
             <div class="registry-restore__terminal" dir="ltr" :data-command="marketingKitRestoreCommand">
               <span class="registry-restore__prompt" aria-hidden="true">$</span>
-              <TypedCommand :lines="['agentplugins deps import', '--install']" :delay="330" />
+              <TypedCommand :lines="['npx -y', 'universal-agent-plugins', 'deps import --install']" :delay="330" />
             </div>
           </div>
         </div>

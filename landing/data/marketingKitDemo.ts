@@ -21,9 +21,9 @@ gemini = ["777genius/marketing-kit"]`;
 /** The published marketing-kit 0.1.0 Directory policy is user-only. */
 export const marketingKitInstallCommand = 'npx -y universal-agent-plugins install --scope user';
 /** Export the saved user environment's portable manifest and lockfile. */
-export const marketingKitExportCommand = 'agentplugins deps export';
+export const marketingKitExportCommand = 'npx -y universal-agent-plugins deps export';
 /** Import a portable user environment and install its recorded exact pins. */
-export const marketingKitRestoreCommand = 'agentplugins deps import --install';
+export const marketingKitRestoreCommand = 'npx -y universal-agent-plugins deps import --install';
 
 /** Names denote declared compatible targets, never detection of local installs. */
 export const marketingKitTargetIDs = ['claude', 'codex', 'gemini'] as const;

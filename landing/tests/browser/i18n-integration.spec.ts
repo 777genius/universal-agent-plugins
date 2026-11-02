@@ -48,7 +48,7 @@ for (const locale of publishedLocales) {
           'data-command', 'npx -y universal-agent-plugins install --scope user',
         );
         await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute(
-          'data-command', 'agentplugins deps import --install',
+          'data-command', 'npx -y universal-agent-plugins deps import --install',
         );
         const docsLocale = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
         const guideLabel =
