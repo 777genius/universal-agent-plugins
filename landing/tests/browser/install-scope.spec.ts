@@ -258,3 +258,32 @@ test('Marketing Kit project mode uses three-agent TOML and does not force Cursor
   );
   expect(errors).toEqual([]);
 });
+
+for (const locale of ['en', 'ar'] as const) {
+  test(`segmented install scope indicator tracks selected button in ${locale}`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 850 });
+    const errors = await offline(page);
+    await projections(page, scopedFixture());
+    await navigate(page, '/', locale, '?q=i18n-state-00');
+    const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
+    await card.locator('.plugin-card__install-toggle').click();
+    const options = card.locator('.install-scope__choices');
+    const thumb = options.locator('.install-scope__thumb');
+    for (const kind of ['user', 'project', 'user'] as const) {
+      const selected = options.getByRole('button', {
+        name: wording(locale)(`registryUi.install.scope.${kind}`),
+        exact: true,
+      });
+      await selected.click();
+      await expect(selected).toHaveAttribute('aria-pressed', 'true');
+      await expect.poll(async () => {
+        const button = await selected.boundingBox();
+        const indicator = await thumb.boundingBox();
+        if (!button || !indicator) return 999;
+        return Math.abs(button.x + button.width / 2 - indicator.x - indicator.width / 2);
+      }).toBeLessThan(4);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}
