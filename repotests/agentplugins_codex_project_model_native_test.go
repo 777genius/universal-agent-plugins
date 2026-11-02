@@ -116,6 +116,7 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	resultSeen, searchFound, wrongResult, wrongSearch := false, false, false, false
+	var wrongResultDetail string
 	for _, raw := range input.Input {
 		var item struct {
 			Type   string                  `json:"type"`
@@ -133,6 +134,12 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 				resultSeen = true
 			} else {
 				wrongResult = true
+				// Only in the disposable, credential-free failure fixture: retain
+				// a bounded error hint to distinguish policy refusals from routing bugs.
+				wrongResultDetail = string(item.Output)
+				if len(wrongResultDetail) > 400 {
+					wrongResultDetail = wrongResultDetail[:400] + "...(truncated)"
+				}
 			}
 		case "tool_search_output":
 			if item.CallID == codexForeignProjectSearchID && codexProjectModelHasForeign(item.Tools) {
@@ -158,7 +165,7 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 		stage.searchHits++
 	}
 	if wrongResult {
-		stage.invalid = append(stage.invalid, "wrong function_call_output")
+		stage.invalid = append(stage.invalid, "wrong function_call_output: "+wrongResultDetail)
 	}
 	if wrongSearch {
 		stage.invalid = append(stage.invalid, "wrong tool_search_output")
