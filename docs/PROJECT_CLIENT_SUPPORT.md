@@ -33,7 +33,7 @@ selection, reload, trust or session work can remain.
 | Kimi Code | `.kimi-code/skills` and `.kimi-code/mcp.json` | Prepared; new delivery requires observed `kimi` 2.3.1 and the selected skill directory's nearest Git root. The user plugin registry stays separate. |
 | ChatGPT | No supported native project filesystem installation | Explicit refusal before source acquisition, including `--no-save`; the existing user/manual path is preserved. See [ChatGPT scope](CHATGPT_PROJECT_SCOPE.md). |
 | VS Code | `.github/skills` and exact `servers` members in `.vscode/mcp.json`, including native JSONC syntax | Prepared with installed-file verification for one local folder. Open that folder and review workspace/server trust; observed metadata does not prove MCP startup or model execution. See [VS Code preparation](PROJECT_INSTALLATION.md#vs-code-project-preparation) and [pinned metadata evidence](evidence/project-scope-research/vscode-1.143.1-untrusted-workspace-linux-amd64-40188310034/README.md). |
-| Pi | `.pi/extensions/<artifact>`, managed `.pi/skills/<skill>`, exact owned `mcpServers` members in `.pi/mcp.json` | Project-scoped Extensions, Skills and stdio/Streamable HTTP MCP preparation. UAP preserves user/project B and foreign entries; **Prepared** until Pi separately grants trust. Never changes trust or assumes live tool execution. [Extensions #631](https://github.com/777genius/universal-agent-plugins/pull/631), [Skills/MCP #640](https://github.com/777genius/universal-agent-plugins/pull/640). |
+| Pi | `.pi/extensions/<artifact>`, managed `.pi/skills/<skill>`, exact owned `mcpServers` members in `.pi/mcp.json` | Project-scoped Extensions, Skills and stdio/Streamable HTTP MCP preparation, preserving user/project B and foreign entries; **Prepared** until Pi separately grants trust. Native `tools/call` is now qualified only with a local scripted model, not vendor authentication. [Extensions #631](https://github.com/777genius/universal-agent-plugins/pull/631), [Skills/MCP #640](https://github.com/777genius/universal-agent-plugins/pull/640), [real Pi call #656](https://github.com/777genius/universal-agent-plugins/pull/656). |
 
 ## Native project evidence matrix
 
@@ -60,7 +60,7 @@ the actual client executable, not a live vendor model or general-purpose access.
 | Windsurf / Devin | Yes | Qualified supported project skills lifecycle, restart and removal | Not qualified | [#528](https://github.com/777genius/universal-agent-plugins/pull/528); separate strict cache-frame follow-up [#611](https://github.com/777genius/universal-agent-plugins/pull/611) |
 | Kiro | Prepared | Authenticated native lifecycle **not qualified** | Not qualified | [Draft #529](https://github.com/777genius/universal-agent-plugins/pull/529); dedicated test authentication needed |
 | VS Code | Prepared | Trusted native project lifecycle **not qualified** | Not qualified | [Deferred Draft #530](https://github.com/777genius/universal-agent-plugins/pull/530) |
-| Pi | Native extensions, per-project Skills and exact owned `.pi/mcp.json` entries | Genuine Pi v1.4.0 A/B trust, fresh extension loading, Skill discovery, scoped add/update/repair/remove and foreign preservation on Linux/macOS/Windows; **Prepared** until trust | Real Pi `mcp list` observed stdio `initialize` and `tools/list`; no native `tools/call` execution or model/provider authentication claimed | [Extensions #631](https://github.com/777genius/universal-agent-plugins/pull/631), [Skills/MCP #640](https://github.com/777genius/universal-agent-plugins/pull/640), [ownership kernel #639](https://github.com/777genius/universal-agent-plugins/pull/639) |
+| Pi | Native extensions, per-project Skills and exact owned `.pi/mcp.json` entries | Genuine Pi v1.4.0 A/B trust, fresh extension loading, Skill discovery, scoped add/update/repair/remove and foreign preservation on Linux/macOS/Windows; **Prepared** until trust | Real Pi stdio `initialize`/`tools/list` and exactly one client-driven `tools/call` observed through a local scripted model on all three OS; vendor-model login/provider authorization not qualified | [Extensions #631](https://github.com/777genius/universal-agent-plugins/pull/631), [Skills/MCP #640](https://github.com/777genius/universal-agent-plugins/pull/640), [ownership kernel #639](https://github.com/777genius/universal-agent-plugins/pull/639), [real native call #656](https://github.com/777genius/universal-agent-plugins/pull/656) |
 | ChatGPT | **No** native project filesystem adapter | Not supported | Not applicable | [ChatGPT scope](CHATGPT_PROJECT_SCOPE.md); user/manual app flow is separate |
 
 All project-native lanes in this table leave **vendor authentication and real
@@ -70,12 +70,7 @@ proof of a third-party remote service. A *Prepared* delivery is not automaticall
 *Active*. Project UI/reload/trust, configuration precedence and per-client
 restrictions remain as listed above.
 
-The remaining **native tools/call** E2E boundaries are tracked separately for
-[Pi (#623)](https://github.com/777genius/universal-agent-plugins/issues/623)
-and [OpenCode / Claude / Codex (#624)](https://github.com/777genius/universal-agent-plugins/issues/624).
-Neither a configured MCP entry nor a successful `tools/list` proves model-driven
-tool execution. Do not label these calls qualified without observing them through
-the selected real client under a controlled caller.
+Pi project MCP `tools/call` is qualified in current source by [merged #656](https://github.com/777genius/universal-agent-plugins/pull/656), closing [#623](https://github.com/777genius/universal-agent-plugins/issues/623). Remaining native project gaps are tracked under [OpenCode / Claude / Codex #624](https://github.com/777genius/universal-agent-plugins/issues/624). A configured MCP entry or successful `tools/list` alone never establishes tool execution; the Pi proof observes an actual call from the pinned client, but not vendor-model authentication.
 
 For releases, explicit project scope first shipped in CLI 0.1.93 and automatic
 project selection for argumentless `install` in 0.1.94. The #520 integration
