@@ -29,6 +29,7 @@ const {
   installExpanded,
   targetDistributions,
   projectAvailable,
+  projectAutomatic,
   updateTargets,
   updateAutoDetect,
   updateScope,
@@ -75,7 +76,7 @@ const canChooseInstall = computed(
 const canInstall = computed(
   () =>
     !marketingProjectBlocked.value &&
-    (scope.value !== 'project' || !autoDetect.value) &&
+    (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
     (isDiscovered.value
       ? props.plugin.installable &&
         props.plugin.discovery?.availability !== 'unavailable' &&
@@ -86,7 +87,7 @@ const canInstall = computed(
 const command = computed(() =>
   canInstall.value
     ? (scope.value === 'project'
-        ? projectCatalogCommands(props.plugin, targets.value)
+        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : targets.value)
         : pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
       ).add
     : '',
@@ -94,15 +95,11 @@ const command = computed(() =>
 const vendorInstall = computed(() => vendorInstallSource(props.plugin));
 const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
 const iconURL = computed(() => pluginIcon(props.plugin));
-const autoOption = computed(() =>
-  scope.value === 'project'
-    ? undefined
-    : {
-        label: t('registryUi.card.allInstalledAgentsRecommended'),
-        summary: t('registryUi.card.allInstalledAgents'),
-        description: t('registryUi.card.detectedWhenYouRunTheCommand'),
-      },
-);
+const autoOption = computed(() => ({
+  label: t('registryUi.card.allInstalledAgentsRecommended'),
+  summary: t('registryUi.card.allInstalledAgents'),
+  description: t('registryUi.card.detectedWhenYouRunTheCommand'),
+}));
 const targetOptions = computed(() =>
   clients.map((client) => ({
     value: client.id,

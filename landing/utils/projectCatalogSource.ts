@@ -1,5 +1,5 @@
 import { installCommands, pluginCommands, shellToken } from './commands.ts';
-import { resolveDistribution } from './registry.ts';
+import { reachableTargetPolicies, resolveDistribution } from './registry.ts';
 import type { ClientID, DistributionResolution, RegistryPlugin } from '../types/registry.ts';
 
 // The project-native matrix in docs/PROJECT_CLIENT_SUPPORT.md qualifies
@@ -70,17 +70,35 @@ export function projectCatalogSelection(
   return { resolution: signed };
 }
 
+/**
+ * A targetless project command is an interactive CLI request, not a browser-side
+ * guess at which agents are installed. Prefer a signed project release, then a
+ * valid pinned Git source; the CLI detects compatible installed agents and
+ * asks the user to confirm before applying any project changes.
+ */
+export function projectCatalogAutomaticSelection(plugin: RegistryPlugin) {
+  const candidates = [...new Set(reachableTargetPolicies(plugin.distributions).map((t) => t.client))];
+  let pinned: ReturnType<typeof projectCatalogSelection> | undefined;
+  for (const client of candidates) {
+    const choice = projectCatalogSelection(plugin, [client]);
+    if (!choice.resolution.distribution) continue;
+    if (!choice.directSource) return choice;
+    pinned ??= choice;
+  }
+  return pinned;
+}
+
 export function projectCatalogCommands(
   plugin: RegistryPlugin,
-  targets: readonly ClientID[],
+  targets?: readonly ClientID[],
 ) {
-  const selected = projectCatalogSelection(plugin, targets);
-  if (!selected.resolution.distribution) throw new Error('No eligible project installation source');
+  const selected = targets === undefined
+    ? projectCatalogAutomaticSelection(plugin)
+    : projectCatalogSelection(plugin, targets);
+  if (!selected?.resolution.distribution) throw new Error('No eligible project installation source');
   if (selected.directSource) {
-    // The signed v1 release authenticates immutable bytes, but its target policy
-    // is *user-only*. Use an explicit direct Git route, not a fictitious
-    // project-enabled Directory alias. Installation remains Prepared until the
-    // real client verifies trust/activation.
+    // Signed user-only policy never authorizes project Directory resolution.
+    // This exact Git source remains Prepared until native client trust/activation.
     return installCommands(shellToken(selected.directSource), plugin.name, targets,
       undefined, 'project');
   }

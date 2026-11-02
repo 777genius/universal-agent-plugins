@@ -20,19 +20,16 @@ const {
   scope,
   targetDistributions,
   projectAvailable,
+  projectAutomatic,
   updateTargets,
   updateAutoDetect,
   updateScope,
 } = selection;
-const autoOption = computed(() =>
-  scope.value === 'project'
-    ? undefined
-    : {
-        label: t('registryUi.install.allInstalledAgentsRecommended'),
-        summary: t('registryUi.install.allInstalledAgents'),
-        description: t('registryUi.install.detectedWhenYouRunTheCommand'),
-      },
-);
+const autoOption = computed(() => ({
+  label: t('registryUi.install.allInstalledAgentsRecommended'),
+  summary: t('registryUi.install.allInstalledAgents'),
+  description: t('registryUi.install.detectedWhenYouRunTheCommand'),
+}));
 const marketingProjectBlocked = computed(() => isReviewedMarketingKit(props.plugin) && scope.value === 'project' && !projectAvailable.value);
 const targetOptions = computed(() =>
   clients.map((client) => ({
@@ -61,13 +58,13 @@ const targetOptions = computed(() =>
 );
 const commands = computed(() =>
   !marketingProjectBlocked.value &&
-  (scope.value !== 'project' || !autoDetect.value) &&
+  (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
   props.plugin.installable &&
   props.plugin.discovery?.availability !== 'unavailable' &&
   canUseSource.value &&
   (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
     ? (scope.value === 'project'
-        ? projectCatalogCommands(props.plugin, targets.value)
+        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : targets.value)
         : pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
       )
     : undefined,
