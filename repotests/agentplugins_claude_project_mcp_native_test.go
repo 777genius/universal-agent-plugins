@@ -158,7 +158,10 @@ func claudeProjectRunScripted(t *testing.T, f *claudeProjectNativeFixture, proje
 		"ANTHROPIC_BASE_URL="+model.server.URL,
 		"ANTHROPIC_AUTH_TOKEN=uap-disposable-fixture-token",
 		"CLAUDE_CODE_DISABLE_1M_CONTEXT=1",
-		"ENABLE_TOOL_SEARCH=false")
+		"ENABLE_TOOL_SEARCH=false",
+		// One-shot scripted model requests must see the real stdio tool catalog;
+		// extend only Claude\'s documented first-connection window on slow hosts.
+		"MCP_CONNECT_TIMEOUT_MS=20000")
 	ctx, cancel := context.WithTimeout(context.Background(), 85*time.Second)
 	defer cancel()
 	capture := captureProjectNative(ctx, f.client, project, env, []string{
