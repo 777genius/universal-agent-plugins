@@ -41,7 +41,9 @@ for (const theme of ['dark', 'light'] as const) {
       );
       if (locale === 'en') {
         await expect(section.locator('.registry-restore__subtitle')).toContainText('Marketing Kit 0.1.0');
-        await expect(section.locator('.registry-restore__handoff-note')).toContainText('imports them before installing');
+        await expect(section.locator('.registry-restore__handoff-note')).toHaveText(
+          "Commit and share both files. Import previews and replaces your teammate's user manifest and lock after confirmation.",
+        );
       }
       await expect(section.locator('.registry-restore__export')).toHaveCount(0);
       await expect(section.locator('.registry-restore__boundary')).toHaveCount(0);
@@ -137,6 +139,9 @@ test('manifest morph opens by focus and tap, closes with Escape, and preserves v
   await expect(file).toHaveAttribute('aria-expanded', 'true');
   const preview = handoff.getByRole('region');
   await expect(preview).toContainText(manifest);
+  await expect(preview.locator('.marketing-manifest__heading strong')).toHaveText(
+    'Preview uap.toml example',
+  );
   await handoff.screenshot({
     path: testInfo.outputPath('marketing-kit-manifest-expanded.png'),
     animations: 'disabled',

@@ -362,9 +362,9 @@
       "from": "Mon ordinateur",
       "to": "Ordinateur du collègue",
       "transfer": "Partagez {manifest} et {lockfile}. Votre collègue importe les deux fichiers dans son environnement utilisateur avant l’installation.",
-      "handoff": "Versionnez et partagez les deux fichiers ; votre collègue les importe avant l’installation.",
-      "subtitle": "Installez Marketing Kit 0.1.0, puis partagez les versions épinglées avec un collègue.",
-      "manifestPreview": "Aperçu de uap.toml",
+      "handoff": "Versionnez et partagez les deux fichiers. L'import prévisualise et confirme le remplacement du manifeste et du verrou utilisateur du collègue.",
+      "subtitle": "Exemple avec Marketing Kit v0.1.0 : installez-le, puis partagez les versions verrouillées.",
+      "manifestPreview": "Aperçu d’un exemple de uap.toml",
       "closePreview": "Fermer l’aperçu"
     },
     "docs": {
