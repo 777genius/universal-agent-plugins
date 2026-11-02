@@ -17,6 +17,7 @@ func TestPackageManagerInstallE2E(t *testing.T) {
 		"selected-target-ownership":      pmInstallSelectedTargetOwnership,
 		"component-set-replacement":      pmInstallComponentReplacement,
 		"foreign-skill-collision":        pmInstallForeignSkillCollision,
+		"cross-target-foreign-skill-collision": pmInstallCrossTargetForeignSkillCollision,
 		"foreign-disabled-mcp-collision": pmInstallForeignDisabledMCPCollision,
 		"malformed-native-config":        pmInstallMalformedNativeConfig,
 		"drift-recorded-pin-repair":      pmInstallDriftRecordedPinRepair,
