@@ -67,6 +67,14 @@ const { t } = useI18n();
 .install-scope__choices[data-selected='project'] .install-scope__thumb {
   transform: translateX(100%);
 }
+/* Logical visual position must match the grid's reversed order in Arabic. */
+.install-scope:dir(rtl) .install-scope__thumb {
+  left: auto;
+  right: 3px;
+}
+.install-scope:dir(rtl) .install-scope__choices[data-selected='project'] .install-scope__thumb {
+  transform: translateX(-100%);
+}
 .install-scope button {
   display: grid;
   place-items: center;
