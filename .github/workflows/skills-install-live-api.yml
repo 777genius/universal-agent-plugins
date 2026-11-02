@@ -85,3 +85,31 @@ jobs:
           path: ${{ runner.temp }}/skills-native-live-report/
           if-no-files-found: warn
           retention-days: 7
+
+  published-npm-install:
+    name: Published npm Skills install
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:live-skills')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Verify actual npx latest installs in disposable Codex projects
+        timeout-minutes: 9
+        env:
+          UAP_E2E_LIVE_SKILLS: '1'
+          UAP_E2E_PUBLISHED_CLI: '1'
+          UAP_SKILLS_INSTALL_REPORT_DIR: ${{ runner.temp }}/skills-published-live-report
+        run: node --experimental-strip-types landing/scripts/skills-install-native-live-e2e.ts
+      - name: Retain public npm install evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: skills-install-public-npm
+          path: ${{ runner.temp }}/skills-published-live-report/
+          if-no-files-found: warn
+          retention-days: 7

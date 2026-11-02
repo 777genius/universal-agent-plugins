@@ -9,8 +9,9 @@ import { skillInstallCommand } from '../utils/skillsCatalog.ts';
 // Actual public HTTPS/GitHub acquisition through the built production CLI.
 // Every installation uses a disposable project and home, not runner profiles.
 assert.equal(process.env.UAP_E2E_LIVE_SKILLS, '1');
+const published = process.env.UAP_E2E_PUBLISHED_CLI === '1';
 const binary = resolve(process.env.UAP_E2E_SKILLS_BIN || '');
-assert.ok(existsSync(binary), 'Build the actual CLI before this test');
+if (!published) assert.ok(existsSync(binary), 'Build the actual CLI before this test');
 const reportRoot = process.env.UAP_SKILLS_INSTALL_REPORT_DIR || join(tmpdir(), 'uap-native-skills-report');
 mkdirSync(reportRoot, { recursive: true });
 
@@ -44,7 +45,8 @@ type Evidence = { id: string; source: string; skill: string; command: string; ex
   installed: boolean; lock_written: boolean; native_skill_present: boolean; resources: number;
   stdout_tail: string; stderr_tail: string; error: string | null };
 const report = {
-  checked_at: new Date().toISOString(), production_cli: binary, profile: 'isolated temporary project',
+  checked_at: new Date().toISOString(), production_cli: published ? 'npx universal-agent-plugins@latest' : binary,
+  profile: 'isolated temporary project',
   live_network: true, results: [] as Evidence[],
 };
 const runRoot = mkdtempSync(join(tmpdir(), 'uap-live-skills-'));
@@ -72,8 +74,14 @@ function countSkills(root: string): number {
   }
   return count;
 }
+const selected = published
+  ? fixtures.filter(fixture => [
+      'https://github.com/anthropics/skills/tree/main/skills/frontend-design',
+      'https://uizze.com',
+    ].includes(fixture.source))
+  : fixtures;
 try {
-  for (const [i, fixture] of fixtures.entries()) {
+  for (const [i, fixture] of selected.entries()) {
     const sourceDir = join(runRoot, String(i));
     const project = join(sourceDir, 'project');
     const home = join(sourceDir, 'home');
@@ -93,8 +101,9 @@ try {
       GCM_INTERACTIVE: 'never', CI: 'true', DO_NOT_TRACK: '1' };
     const args = ['skills', 'add', fixture.source, '--skill', fixture.skill, '--target', 'codex',
       '--scope', 'project', '--project-root', project, '--no-ui', '--yes', '--format', 'json'];
-    const output = spawnSync(binary, args, { env, cwd: project, encoding: 'utf8',
-      timeout: 120_000, maxBuffer: 1024 * 1024 * 2 });
+    const output = spawnSync(published ? 'npx' : binary,
+      published ? ['-y', 'universal-agent-plugins@latest', ...args] : args,
+      { env, cwd: project, encoding: 'utf8', timeout: 120_000, maxBuffer: 1024 * 1024 * 2 });
     const lockWritten = existsSync(join(project, 'uap.lock')) && existsSync(join(project, 'uap.toml'));
     const nativeSkillsRoot = join(project, '.agents', 'skills');
     // A cached publisher copy under .uap is not native installation evidence.
@@ -121,6 +130,7 @@ try {
   // another source a false green.
   assert.deepEqual(failures, [], 'Native source acquisition failures; inspect saved evidence');
 } finally {
-  writeFileSync(join(reportRoot, 'native-install.json'), JSON.stringify(report, null, 2) + '\n');
+  writeFileSync(join(reportRoot, published ? 'npm-install.json' : 'native-install.json'),
+    JSON.stringify(report, null, 2) + '\n');
   rmSync(runRoot, { recursive: true, force: true });
 }
