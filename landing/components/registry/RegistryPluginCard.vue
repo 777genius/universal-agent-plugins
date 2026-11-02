@@ -1,3 +1,4 @@
+import { isReviewedMarketingKit } from '~/data/marketingKitDemo';
 <!--
   Card composition adapted from plugin-kit-ai landing/components/plugins/PluginCard.vue (MIT).
   Content model and implementation are new for Universal Agent Plugins.
@@ -88,7 +89,7 @@ const command = computed(() =>
       ).add
     : '',
 );
-const marketingKitProject = computed(() => props.plugin.name === 'marketing-kit' && scope.value === 'project');
+const marketingKitProject = computed(() => isReviewedMarketingKit(props.plugin) && scope.value === 'project');
 const vendorInstall = computed(() => vendorInstallSource(props.plugin));
 const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
 const iconURL = computed(() => pluginIcon(props.plugin));
