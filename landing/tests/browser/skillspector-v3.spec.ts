@@ -1169,6 +1169,9 @@ for (const width of [1280, 390]) {
     await expect(dialog.locator('.skillspector__details > section + section').first())
       .toHaveCSS('border-top-width', '0px');
     const button = dialog.getByRole('button', { name: 'Copy diagnostics for AI' });
+    const status = dialog.getByRole('status');
+    await expect(status).toBeAttached();
+    await expect(status).toHaveText('');
     await expect(button).toBeEnabled();
     await button.click();
     const diagnostic = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
@@ -1188,7 +1191,9 @@ for (const width of [1280, 390]) {
       Boolean(record.attempt_history?.length))).toBe(true);
     expect(diagnostic.guidance).toContain('not proof of safety');
     await expect(dialog.getByRole('button', { name: 'Copied' })).toBeVisible();
-    await expect(dialog.getByRole('status')).toContainText('Diagnostics copied');
+    await expect(dialog.locator('.skillspector__copy')).toBeFocused();
+    await expect(dialog.locator('.skillspector__copy')).toHaveAttribute('aria-busy', 'false');
+    await expect(status).toContainText('Diagnostics copied');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await dialog.getByRole('button', { name: 'Close' }).click();
     await expect(assessment.locator(':scope > summary')).toBeFocused();

@@ -313,15 +313,20 @@ async function copyDiagnostics() {
               {{ t('registryUi.skillSpector.title') }} · {{ label }}
             </p>
             <p>{{ t('registryUi.skillSpector.statusExplanation') }}</p>
-            <p v-if="copyState !== 'idle'" class="skillspector__copy-feedback" role="status" aria-live="polite">
-              {{ t(`registryUi.skillSpector.${copyState === 'copied' ? 'copyDiagnosticsSuccess' : 'copyDiagnosticsError'}`) }}
-            </p>
+            <p
+              class="skillspector__copy-feedback"
+              :class="{ 'skillspector__copy-feedback--empty': copyState === 'idle' }"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >{{ copyState === 'idle' ? '' : t(`registryUi.skillSpector.${copyState === 'copied' ? 'copyDiagnosticsSuccess' : 'copyDiagnosticsError'}`) }}</p>
           </div>
           <div class="skillspector__dialog-actions">
             <button
               type="button"
               class="skillspector__copy"
-              :disabled="copying || reportStatus === 'loading'"
+              :disabled="reportStatus === 'loading'"
+              :aria-busy="copying"
               :title="t('registryUi.skillSpector.copyDiagnosticsHelp')"
               @click="copyDiagnostics"
             >
@@ -887,6 +892,9 @@ async function copyDiagnostics() {
 .skillspector__copy-feedback {
   color: var(--text) !important;
   font-weight: 700;
+}
+.skillspector__dialog-header .skillspector__copy-feedback--empty {
+  margin: 0;
 }
 .skillspector__dialog-header h2 {
   margin: 0;

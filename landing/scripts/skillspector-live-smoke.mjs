@@ -556,6 +556,8 @@ try {
         'data-discovery-state',
         /current|cached/,
       );
+      await expect(page.locator('.plugin-card[data-install-source="cloudflare"]')).toBeVisible();
+      assert.ok(await page.locator('.plugin-card').count(), 'Expected rendered plugin cards');
       const missingPluginStatuses = await page.locator('.plugin-card').evaluateAll((cards) =>
         cards
           .filter((card) => !card.querySelector('.skillspector'))
@@ -718,6 +720,8 @@ try {
       const skill = page.locator(
         `.skill-card[data-skill-id=${JSON.stringify(standalone.listing.id)}]`,
       );
+      await expect(skill).toBeVisible();
+      assert.ok(await page.locator('.skill-card').count(), 'Expected rendered Skill cards');
       const missingSkillStatuses = await page.locator('.skill-card').evaluateAll((cards) =>
         cards
           .filter((card) => !card.querySelector('.skillspector'))
