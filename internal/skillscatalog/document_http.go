@@ -177,7 +177,7 @@ func (h *documentHandler) admitDocument(client string) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	now := time.Now()
-	h.tokens = min(4, h.tokens + now.Sub(h.tokenAt).Seconds()/5)
+	h.tokens = min(4, h.tokens+now.Sub(h.tokenAt).Seconds()/5)
 	h.tokenAt = now
 	if h.active >= maxActiveDocumentPreviews || h.clients[client] ||
 		now.Before(h.nextAllowed[client]) || h.tokens < 1 {
