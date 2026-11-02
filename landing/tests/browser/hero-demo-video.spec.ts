@@ -122,7 +122,13 @@ test('denied fullscreen still launches a viewport-filling autoplay player on one
   })).toBe(true);
   await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body')
     .getAttribute('data-subscribed')).toBe('ended');
-  await expect(page.getByRole('button', { name: 'Close demo' })).toBeVisible();
+  const close = demo.getByRole('button', { name: 'Close demo' });
+  await expect(close).toBeVisible();
+  // A sticky header must not intercept clicks in the top-right fallback controls.
+  await expect.poll(() => close.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) === element;
+  })).toBe(true);
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden');
   await page.keyboard.press('Escape');
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeVisible();
