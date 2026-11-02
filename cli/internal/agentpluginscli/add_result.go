@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"fmt"
 	"io"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"

@@ -3,8 +3,9 @@ package agentpluginscli
 import (
 	"fmt"
 	"strings"
-	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/spf13/cobra"
 )
 
 func newAddCommand(app App, opts *options) *cobra.Command {

@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/spf13/cobra"
 )
 
 type outdatedReleaseIdentity struct {

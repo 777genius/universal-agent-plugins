@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 )
 
