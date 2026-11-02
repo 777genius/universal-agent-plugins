@@ -359,13 +359,15 @@
     "restore": {
       "title": "Las mismas versiones. Para todo el equipo.",
       "guide": "Guía",
-      "from": "En tu proyecto",
-      "to": "Tu compañero",
+      "from": "Mi ordenador",
+      "to": "Ordenador de mi compañero",
       "transfer": "Guarda {manifest} y {lockfile} en Git con tu proyecto para que el equipo restaure las mismas versiones.",
       "requirements": "La restauración requiere que las fuentes registradas sigan disponibles y que los clientes sean compatibles con la gestión de dependencias.",
       "excludes": "No se transfieren sesiones, secretos, ajustes ni datos de plugins.",
       "subtitle": "Instala en el proyecto. Guarda el archivo de bloqueo en Git. Tu equipo restaurará las mismas versiones.",
-      "commit": "Guarda uap.toml + uap.lock en Git"
+      "commit": "Guarda uap.toml + uap.lock en Git",
+      "manifestPreview": "Vista previa de uap.toml",
+      "closePreview": "Cerrar vista previa"
     },
     "docs": {
       "navLabel": "Documentación",
@@ -730,7 +732,7 @@
       },
       "scope": {
         "label": "Instalar para",
-        "user": "Este usuario",
+        "user": "Este ordenador",
         "project": "Este proyecto",
         "projectHint": "Ejecuta estos comandos desde la carpeta del proyecto. Tu agente puede pedirte que confíes en el proyecto o lo actives.",
         "projectUnavailable": "La instalación en un proyecto no está disponible para este paquete.",
@@ -752,6 +754,11 @@
           "mcp": "Herramientas MCP",
           "extensions": "Extensiones"
         }
+      },
+      "marketingKitProject": {
+        "intro": "Guarda primero este uap.toml en el proyecto e instala la versión exacta.",
+        "agents": "Para Claude Code, Codex y Gemini CLI, si están instalados.",
+        "help": "Ejecuta desde la carpeta del proyecto. Puede que debas activar los agentes o iniciar sesión."
       }
     },
     "authentication": {
