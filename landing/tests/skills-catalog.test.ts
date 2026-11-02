@@ -528,6 +528,26 @@ test('empty unsupported pages stop at a bounded hop limit until the next user ac
 });
 
 
+test('Skill search continues across bounded unsupported pages before reporting no matches', async () => {
+  const catalog = catalogHarness();
+  catalog.query.value = 'frontend';
+  await nextTick();
+  catalog.debounce();
+  for (let page = 0; page < 5; page++) {
+    assert.equal(catalog.requests[page + 1]!.url.searchParams.get('page'), String(page));
+    assert.equal(catalog.requests[page + 1]!.url.searchParams.get('q'), 'frontend');
+    await catalog.respond(page + 1, 200, page, 200, 200, true);
+  }
+  assert.equal(catalog.requests.length, 6);
+  assert.equal(catalog.state.displayed.value.length, 0);
+  assert.equal(catalog.state.hasMore.value, true);
+  catalog.state.showMore();
+  assert.equal(catalog.requests[6]!.url.searchParams.get('page'), '5');
+  await catalog.respond(6, 1, 5, 200, 0, false);
+  assert.equal(catalog.state.displayed.value.length, 1);
+  catalog.stop();
+});
+
 test('legacy GitHub picker does not interpolate unsafe catalog-supplied Skill names', () => {
   const legacy = {
     ...skill,
