@@ -63,6 +63,9 @@ for (const width of [1440, 390, 320]) {
     const frame = demo.locator('iframe');
     await expect(frame).toBeVisible();
     await expect(frame).toHaveAttribute('allowfullscreen', '');
+    await expect.poll(() => demo.evaluate((element) =>
+      document.fullscreenElement === element || element.classList.contains('hero-demo-video--fallback'),
+    )).toBe(true);
     await expect(frame).toHaveAttribute(
       'src',
       /^https:\/\/player\.mux\.com\/[a-zA-Z0-9]+\?autoplay=any&preload=auto$/,
