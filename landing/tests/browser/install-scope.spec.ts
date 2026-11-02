@@ -235,10 +235,15 @@ test('Marketing Kit project mode uses three-agent TOML and does not force Cursor
   for (const client of ['claude', 'codex', 'gemini']) {
     await expect(kit.locator('pre code')).toContainText(`${client} = ["777genius/marketing-kit"]`);
   }
-  await expect(kit.locator('.command-snippet--add code')).toHaveText(
+  await expect(kit.locator('.command-snippet--add code')).toContainText(
+    'npx -y universal-agent-plugins',
+  );
+  await expect(kit.locator('.command-snippet--add code')).toContainText('install --scope project');
+  await expect(kit.locator('.command-snippet--add code')).not.toContainText('--target');
+  await kit.locator('.command-snippet--add button').click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
     'npx -y universal-agent-plugins install --scope project',
   );
-  await expect(kit.locator('.command-snippet--add code')).not.toContainText('--target');
   await expect(kit).not.toContainText('Cursor:');
   await card.getByRole('button', { name: 'This computer', exact: true }).click();
   await expect(card.getByRole('button', { name: 'This computer', exact: true })).toHaveAttribute('aria-pressed', 'true');
