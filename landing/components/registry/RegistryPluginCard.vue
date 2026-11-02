@@ -88,6 +88,7 @@ const command = computed(() =>
       ).add
     : '',
 );
+const marketingKitProject = computed(() => props.plugin.name === 'marketing-kit' && scope.value === 'project');
 const vendorInstall = computed(() => vendorInstallSource(props.plugin));
 const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
 const iconURL = computed(() => pluginIcon(props.plugin));
@@ -347,7 +348,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
           :id="installPanelId"
           class="plugin-card__install-panel"
         >
-          <p v-if="!autoDetect && selectedDistribution" class="plugin-card__author">
+          <p v-if="!marketingKitProject && !autoDetect && selectedDistribution" class="plugin-card__author">
             {{ t('registryUi.card.publisher', { publisher: selectedDistribution.publisher }) }} ·
             <a
               :href="isDiscovered ? provenanceURL : githubSourceUrl(plugin, selectedDistribution)"
@@ -360,23 +361,25 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
             >
           </p>
           <p
-            v-if="!autoDetect && resolution.fallback_reason && current"
+            v-if="!marketingKitProject && !autoDetect && resolution.fallback_reason && current"
             class="plugin-card__author"
           >
             {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
           </p>
-          <p v-if="showAuthentication" class="plugin-card__auth">{{ authentication.label }}</p>
+          <p v-if="showAuthentication && !marketingKitProject" class="plugin-card__auth">{{ authentication.label }}</p>
           <InstallScopeSelect
             :model-value="scope"
             :project-available="projectAvailable"
             @update:model-value="updateScope"
           />
           <InstallOutcome
-            v-if="!autoDetect && selectedDistribution"
+            v-if="!marketingKitProject && !autoDetect && selectedDistribution"
             :distribution="selectedDistribution"
             :targets="targets"
           />
           <div class="plugin-card__install">
+            <MarketingKitProjectInstall v-if="marketingKitProject" />
+            <template v-else>
             <AppMultiSelect
               v-if="targets.length"
               :model-value="targets"
@@ -397,6 +400,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
             <p v-else class="plugin-card__unavailable" role="status">
               {{ t('registryUi.install.scope.selectionUnavailable') }}
             </p>
+            </template>
           </div>
         </div>
       </Transition>
