@@ -81,7 +81,8 @@ function playDemo() {
     fallbackFullscreen.value = true;
   } else {
     try {
-      void container.requestFullscreen().catch(() => {
+      const request = container.requestFullscreen();
+      if (request) void request.catch(() => {
         if (playing.value) fallbackFullscreen.value = true;
       });
     } catch {
