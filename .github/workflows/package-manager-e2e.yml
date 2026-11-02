@@ -96,7 +96,7 @@ jobs:
         run: python -B -m unittest discover -s scripts -p test_package_manager_ci_policy.py
       - name: Execute the full portable catalog
         run: python -B scripts/package-manager-e2e.py --output "${{ runner.temp }}/package-manager-e2e"
-      - name: Verify Windows Unicode device names are portable on every OS
+      - name: Verify Unicode Win32 device aliases across ZIP, TAR and source paths
         shell: bash
         run: |
           set -euo pipefail
@@ -105,8 +105,7 @@ jobs:
             ./install/integrationctl/agentplugins/adapters/packagedigest \
             ./install/integrationctl/agentplugins/adapters/sourceacquisition \
             ./install/integrationctl/agentplugins/sourcespec \
-            -run '^(TestPortableSegmentsRejectSuperscriptDeviceAliases|TestArchiveRefusesUnicodeDeviceAliasesAcrossFormats|TestArchiveRetainsValidUnicodeOutsideDeviceNamespace|TestSnapshotPathValidationRejectsSuperscriptDevices|TestGitAndArchiveSubpathRejectWindowsUnicodeDeviceNames)
-        working-directory: install/integrationctl/agentplugins
+            -run '^(TestPortableSegmentsRejectSuperscriptDeviceAliases|TestArchiveRefusesUnicodeDeviceAliasesAcrossFormats|TestArchiveRetainsValidUnicodeOutsideDeviceNamespace|TestSnapshotPathValidationRejectsSuperscriptDevices|TestGitAndArchiveSubpathRejectWindowsUnicodeDeviceNames)        working-directory: install/integrationctl/agentplugins
         shell: bash
         run: |
           set -euo pipefail
@@ -181,13 +180,16 @@ jobs:
               "TestSnapshotPathValidationRejectsSuperscriptDevices",
               "TestGitAndArchiveSubpathRejectWindowsUnicodeDeviceNames",
           }
-          for test in sorted(tests):
-              matches = [e["Action"] for e in events if e.get("Test") == test]
-              if "run" not in matches or "pass" not in matches or "fail" in matches or "skip" in matches:
-                  raise SystemExit(f"missing real run/pass for {test}: {matches}")
-          if any(e.get("Action") in ("fail", "skip") for e in events):
-              raise SystemExit("Unicode path qualification failed or skipped")
-          print("Confirmed five cross-platform Unicode path tests ran and passed, including actual ZIP/TAR acquisition")
+          for name in sorted(tests):
+              seen = [e["Action"] for e in events if e.get("Test") == name]
+              if "run" not in seen or "pass" not in seen or "fail" in seen or "skip" in seen:
+                  raise SystemExit(f"exact run/pass missing for {name}: {seen}")
+          packages = {e["Package"] for e in events if e.get("Test") in tests}
+          if len(packages) != 4 or any(not any(e.get("Package") == pkg and
+                  e.get("Action") == "pass" and not e.get("Test")
+                  for e in events) for pkg in packages):
+              raise SystemExit(f"expected four successful Go packages, got {packages}")
+          print("Confirmed five exact Unicode tests and four packages ran and passed; no skips")
           '
       - name: Verify actual process crash and durable transaction recovery
         working-directory: install/integrationctl/agentplugins
