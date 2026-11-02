@@ -1,0 +1,256 @@
+package pluginkitairepo_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+const claudeProjectTool = "mcp__uap_project_fixture__uap_ping"
+const claudeProjectToolCallID = "uap_claude_project_call_1"
+
+// Only the local scripted model is simulated: the actual pinned Claude Code
+// process must discover and call the real project stdio MCP child itself.
+type claudeProjectScriptedModel struct {
+	server *httptest.Server
+	mu sync.Mutex
+	requests, advertised, calls, results, invalid int
+}
+
+func newClaudeProjectScriptedModel(t *testing.T) *claudeProjectScriptedModel {
+	t.Helper()
+	m := &claudeProjectScriptedModel{}
+	m.server = httptest.NewServer(http.HandlerFunc(m.respond))
+	t.Cleanup(m.server.Close)
+	return m
+}
+
+func (m *claudeProjectScriptedModel) stats() (requests, advertised, calls, results, invalid int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.requests, m.advertised, m.calls, m.results, m.invalid
+}
+
+func (m *claudeProjectScriptedModel) respond(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost && r.URL.Path == "/v1/messages/count_tokens" {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"input_tokens":100}`)
+		return
+	}
+	if r.Method != http.MethodPost || r.URL.Path != "/v1/messages" {
+		m.mu.Lock()
+		m.invalid++
+		m.mu.Unlock()
+		http.Error(w, "unsupported scripted gateway route", http.StatusNotFound)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, (1<<20)+1))
+	if err != nil || len(body) > 1<<20 {
+		m.mu.Lock()
+		m.invalid++
+		m.mu.Unlock()
+		http.Error(w, "unbounded scripted gateway request", http.StatusRequestEntityTooLarge)
+		return
+	}
+	var input struct {
+		Tools []struct { Name string `json:"name"` } `json:"tools"`
+		Messages []struct { Content json.RawMessage `json:"content"` } `json:"messages"`
+	}
+	if json.Unmarshal(body, &input) != nil || len(input.Tools) > 128 || len(input.Messages) > 128 {
+		m.mu.Lock()
+		m.invalid++
+		m.mu.Unlock()
+		http.Error(w, "invalid scripted gateway request", http.StatusBadRequest)
+		return
+	}
+	found, resultSeen := false, false
+	for _, tool := range input.Tools {
+		if tool.Name == claudeProjectTool {
+			found = true
+		}
+	}
+	for _, message := range input.Messages {
+		var blocks []struct {
+			Type string `json:"type"`
+			ID string `json:"tool_use_id"`
+			Content json.RawMessage `json:"content"`
+			IsError bool `json:"is_error"`
+		}
+		if json.Unmarshal(message.Content, &blocks) != nil {
+			continue
+		}
+		for _, block := range blocks {
+			if block.Type == "tool_result" && block.ID == claudeProjectToolCallID &&
+				!block.IsError && bytes.Contains(block.Content, []byte("uap-pong")) {
+				resultSeen = true
+			}
+		}
+	}
+	m.mu.Lock()
+	m.requests++
+	if found { m.advertised++ }
+	call := found && !resultSeen && m.calls == 0
+	if call { m.calls++ }
+	if resultSeen { m.results++ }
+	overflow := m.requests > 8
+	if overflow { m.invalid++ }
+	m.mu.Unlock()
+	if overflow {
+		http.Error(w, "scripted request budget exceeded", http.StatusTooManyRequests)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	emit := func(event string, value any) {
+		data, _ := json.Marshal(value)
+		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data)
+	}
+	emit("message_start", map[string]any{"type":"message_start", "message":map[string]any{
+		"id":"msg_uap_claude_project", "type":"message", "role":"assistant", "model":"claude-sonnet-4-5",
+		"content":[]any{}, "stop_reason":nil, "stop_sequence":nil,
+		"usage":map[string]int{"input_tokens":100,"output_tokens":0},
+	}})
+	block := map[string]any{"type":"text", "text":""}
+	delta := map[string]any{"type":"text_delta", "text":"Local project MCP E2E complete."}
+	stop := "end_turn"
+	if call {
+		block = map[string]any{"type":"tool_use", "id":claudeProjectToolCallID, "name":claudeProjectTool, "input":map[string]any{}}
+		delta = map[string]any{"type":"input_json_delta", "partial_json":"{}"}
+		stop = "tool_use"
+	}
+	emit("content_block_start", map[string]any{"type":"content_block_start", "index":0, "content_block":block})
+	emit("content_block_delta", map[string]any{"type":"content_block_delta", "index":0, "delta":delta})
+	emit("content_block_stop", map[string]any{"type":"content_block_stop", "index":0})
+	emit("message_delta", map[string]any{"type":"message_delta", "delta":map[string]any{"stop_reason":stop,"stop_sequence":nil}, "usage":map[string]int{"output_tokens":10}})
+	emit("message_stop", map[string]any{"type":"message_stop"})
+	if flusher, ok := w.(http.Flusher); ok { flusher.Flush() }
+}
+
+func claudeProjectRunScripted(t *testing.T, f *claudeProjectNativeFixture, project string, wantCall bool) {
+	t.Helper()
+	model := newClaudeProjectScriptedModel(t)
+	env := append(f.base.env(filepath.Dir(f.client)),
+		"ANTHROPIC_BASE_URL="+model.server.URL,
+		"ANTHROPIC_AUTH_TOKEN=uap-disposable-fixture-token",
+		"CLAUDE_CODE_DISABLE_1M_CONTEXT=1",
+		"ENABLE_TOOL_SEARCH=false")
+	ctx, cancel := context.WithTimeout(context.Background(), 85*time.Second)
+	defer cancel()
+	capture := captureProjectNative(ctx, f.client, project, env, []string{
+		"-p", "Call the exact uap_ping project MCP tool once if it is available.",
+		"--output-format", "stream-json", "--verbose", "--max-turns", "4",
+		"--permission-mode", "bypassPermissions", "--model", "claude-sonnet-4-5",
+	}, 1<<20, 80*time.Second)
+	if capture.Exit != 0 || capture.Error != "" || capture.Deadline || capture.StdoutLimit || capture.StderrLimit {
+		t.Fatalf("native Claude project model session failed: exit=%d kind=%s deadline=%t stdout_limit=%t stderr_limit=%t",
+			capture.Exit, capture.ErrorKind, capture.Deadline, capture.StdoutLimit, capture.StderrLimit)
+	}
+	requests, advertised, calls, results, invalid := model.stats()
+	if requests == 0 || requests > 8 || invalid != 0 {
+		t.Fatalf("unqualified scripted Claude session: requests=%d invalid=%d", requests, invalid)
+	}
+	if wantCall && (advertised == 0 || calls != 1 || results == 0) {
+		t.Fatalf("native Claude failed to dispatch/return exact project MCP tool: advertised=%d calls=%d results=%d", advertised, calls, results)
+	}
+	if !wantCall && (advertised != 0 || calls != 0 || results != 0) {
+		t.Fatalf("foreign project MCP tool leaked into control project: advertised=%d calls=%d results=%d", advertised, calls, results)
+	}
+}
+
+func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
+	if os.Getenv("AGENTPLUGINS_CLAUDE_PROJECT_NATIVE_E2E") != "1" {
+		t.Skip("requires pinned hosted Claude project native selection")
+	}
+	nativeRequireDisposable(t)
+	f := newClaudeProjectNativeFixture(t)
+	stages := map[string]nativeStage{
+		"install_and_foreign_mcp": {Status:"not_evaluated", Reason:"not reached"},
+		"actual_native_tool_call": {Status:"not_evaluated", Reason:"not reached"},
+		"project_B_no_leak": {Status:"not_evaluated", Reason:"not reached"},
+		"remove_foreign_retention": {Status:"not_evaluated", Reason:"not reached"},
+	}
+	evidence := claudeProjectNativeIdentity(t, f)
+	evidence["project_contract"] = "trusted_project_foreign_mcp_call_v1"
+	evidence["native_surface"] = "pinned real Claude native project MCP tool call with local model, foreign config retained; not UAP-managed MCP or vendor auth"
+	defer f.writeEvidence(t, evidence, stages)
+	trust, err := json.Marshal(map[string]any{"projects":map[string]any{
+		filepath.ToSlash(f.project):map[string]any{"hasTrustDialogAccepted":true},
+		filepath.ToSlash(f.otherProject):map[string]any{"hasTrustDialogAccepted":true},
+	}})
+	if err != nil { t.Fatal(err) }
+	nativeWrite(t, filepath.Join(f.base.ConfigDir, ".claude.json"), trust, 0600)
+	f.keep(t, filepath.Join(f.base.ConfigDir, "settings.json"),
+		`{"enableAllProjectMcpServers":true,"enabledPlugins":{"foreign-project-fixture@skills-dir":false}}`)
+	claudeTrustedInitializeProfile(t, f, trust)
+	executable, err := os.Executable()
+	if err != nil { t.Fatal(err) }
+	events := filepath.Join(f.base.Root, "claude-project-mcp-methods.log")
+	// Reuse the independently audited exact-name stdio responder. Despite its
+	// historical OpenCode test name, the child is a real generic MCP server;
+	// it is launched by Claude Code, never called directly by this test.
+	nativeJSON(t, filepath.Join(f.project, ".mcp.json"), map[string]any{
+		"mcpServers":map[string]any{"uap_project_fixture":map[string]any{
+			"type":"stdio",
+			"command":executable,
+			"args":[]string{"-test.run=^TestOpenCodeV2MCPStdioResponder$"},
+			"env":map[string]string{
+				"UAP_OPENCODE_V2_MCP_HELPER":"1",
+				"UAP_OPENCODE_V2_MCP_EVENTS":events,
+			},
+		}},
+	})
+	projectMCP := filepath.Join(f.project, ".mcp.json")
+	f.foreign[projectMCP] = nativeSHA(t, projectMCP)
+	copyTree(t, commandsFixtureSource(t), f.base.PackageRoot)
+	c := commandsNativeClient{target:"claude", pkg:f.base.PackageRoot, run:f.run}
+	added := c.succeed(t, "trusted-foreign-mcp-add", "add", c.pkg)
+	outcome, err := commandsTargetOutcome(claudePreparedEnvelope(added))
+	if err != nil { t.Fatal(err) }
+	plan, _ := outcome["plan"].(map[string]any)
+	if plan["client_id"] != "claude" || plan["scope"] != "project" {
+		t.Fatal("UAP project skills installation did not retain project scope")
+	}
+	f.requireForeign(t)
+	stages["install_and_foreign_mcp"] = nativeStage{Status:"passed", Reason:"UAP project skill install preserved exact foreign project MCP and disposable user/A/B configuration"}
+
+	claudeProjectRunScripted(t, f, f.project, true)
+	methods, err := os.ReadFile(events)
+	if err != nil || len(methods) > 2048 { t.Fatal("native Claude stdio MCP methods absent/unbounded", err) }
+	counts := map[string]int{}
+	for _, method := range strings.Fields(string(methods)) { counts[method]++ }
+	if counts["initialize"] == 0 || counts["tools/list"] == 0 || counts["tools/call"] != 1 || len(strings.Fields(string(methods))) > 24 {
+		t.Fatalf("Claude project native MCP handshake/call did not match: initialize=%d list=%d call=%d", counts["initialize"], counts["tools/list"], counts["tools/call"])
+	}
+	stages["actual_native_tool_call"] = nativeStage{Status:"passed", Reason:"real pinned Claude project session invoked stdio tools/call exactly once and returned uap-pong to local scripted model"}
+
+	claudeProjectRunScripted(t, f, f.otherProject, false)
+	afterB, err := os.ReadFile(events)
+	if err != nil || !bytes.Equal(afterB, methods) { t.Fatal("trusted project B started project A MCP subprocess") }
+	stages["project_B_no_leak"] = nativeStage{Status:"passed", Reason:"fresh trusted B model session did not discover, invoke or reconnect A MCP"}
+
+	c.succeed(t, "trusted-foreign-mcp-remove", "remove", commandsPluginName)
+	f.requireForeign(t)
+	claudeProjectRunScripted(t, f, f.project, true)
+	afterRemoval, err := os.ReadFile(events)
+	if err != nil || len(afterRemoval) > 3072 { t.Fatal("post-remove MCP event record absent/unbounded", err) }
+	afterCalls := 0
+	for _, method := range strings.Fields(string(afterRemoval)) {
+		if method == "tools/call" { afterCalls++ }
+	}
+	if afterCalls != 2 {
+		t.Fatalf("removing UAP project skills broke foreign project MCP: total native calls=%d", afterCalls)
+	}
+	stages["remove_foreign_retention"] = nativeStage{Status:"passed", Reason:"UAP removal preserved byte-exact foreign project MCP; independent fresh Claude session still called it"}
+	t.Log("Claude genuine trusted project MCP native tools/call qualified using foreign project config and local model; UAP-managed project MCP and vendor auth unqualified")
+}
