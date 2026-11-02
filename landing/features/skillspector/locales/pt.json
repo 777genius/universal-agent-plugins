@@ -104,8 +104,8 @@
       "awaitingList": "Skills sem verificação atual",
       "awaitingExplanation": "Esses Skills ainda não têm resultado de verificação atual. A segurança é desconhecida.",
       "waitingWithLimitsProgress": "Verificados {checked}/{total} · {waiting} aguardando · {limited} incompletos",
-      "referenceDirectoryPartial": "A pasta vinculada existe nos arquivos analisados da Skill, mas seu conteúdo e comportamento não foram totalmente verificados.",
-      "referenceDirectoryStatus": "Pasta encontrada; verificação incompleta"
+      "referenceDirectoryStatus": "Referência a diretório; inspeção incompleta",
+      "referenceUninspectedArtifact": "Alguns arquivos ou diretórios referenciados não foram totalmente inspecionados. Consulte os caminhos originais e os limites da análise."
     }
   }
 }

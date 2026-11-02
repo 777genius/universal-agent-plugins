@@ -104,8 +104,8 @@
       "awaitingList": "Skills sin comprobación actual",
       "awaitingExplanation": "Estos Skills aún no tienen un resultado actual. Se desconoce su seguridad.",
       "waitingWithLimitsProgress": "Comprobados {checked}/{total} · {waiting} pendientes · {limited} incompletos",
-      "referenceDirectoryPartial": "La carpeta enlazada existe en los archivos analizados, pero no se verificaron por completo su contenido ni su comportamiento.",
-      "referenceDirectoryStatus": "Carpeta encontrada; revisión incompleta"
+      "referenceDirectoryStatus": "Referencia a directorio; inspección incompleta",
+      "referenceUninspectedArtifact": "Algunos archivos o directorios referenciados no se inspeccionaron por completo. Consulta las rutas originales y los límites del análisis."
     }
   }
 }

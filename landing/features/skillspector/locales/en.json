@@ -104,8 +104,8 @@
       "awaitingList": "Skills awaiting a current check",
       "awaitingExplanation": "These listed Skills do not have a current result yet. Their safety is not known.",
       "waitingWithLimitsProgress": "{checked}/{total} checked · {waiting} awaiting · {limited} not fully checked",
-      "referenceDirectoryPartial": "A linked folder is present in the scanned Skill, but its complete contents and behavior were not verified.",
-      "referenceDirectoryStatus": "Folder found; not fully inspected"
+      "referenceDirectoryStatus": "Directory reference; inspection incomplete",
+      "referenceUninspectedArtifact": "Some referenced files or directories were not fully inspected. See their original paths and coverage limits."
     }
   }
 }

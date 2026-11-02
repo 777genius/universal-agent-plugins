@@ -104,8 +104,8 @@
       "awaitingList": "尚无当前检查结果的技能",
       "awaitingExplanation": "这些技能尚无当前检查结果，安全状态未知。",
       "waitingWithLimitsProgress": "已检查 {checked}/{total} · {waiting} 项待检查 · {limited} 项未完全检查",
-      "referenceDirectoryPartial": "已在扫描的技能文件中找到链接的文件夹，但尚未完整验证其内容和行为。",
-      "referenceDirectoryStatus": "已找到文件夹；尚未完整检查"
+      "referenceDirectoryStatus": "目录引用；检查尚未完成",
+      "referenceUninspectedArtifact": "部分引用的文件或目录尚未完整检查。请查看原始路径和覆盖范围限制。"
     }
   }
 }

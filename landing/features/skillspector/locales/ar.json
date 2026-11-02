@@ -104,8 +104,8 @@
       "awaitingList": "مهارات بانتظار فحص حالي",
       "awaitingExplanation": "لا تتوفر نتائج فحص حالية لهذه المهارات حتى الآن. سلامتها غير معروفة.",
       "waitingWithLimitsProgress": "تم فحص {checked}/{total} · {waiting} بانتظار الفحص · {limited} غير مكتملة",
-      "referenceDirectoryPartial": "المجلد المرتبط موجود ضمن ملفات المهارة المفحوصة، لكن لم يُتحقق بالكامل من محتوياته أو سلوكه.",
-      "referenceDirectoryStatus": "المجلد موجود؛ الفحص غير مكتمل"
+      "referenceDirectoryStatus": "مرجع إلى مجلد؛ الفحص غير مكتمل",
+      "referenceUninspectedArtifact": "لم تُفحص بعض الملفات أو المجلدات المشار إليها فحصًا كاملًا. راجع المسارات الأصلية وحدود التحليل."
     }
   }
 }
