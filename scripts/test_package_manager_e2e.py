@@ -39,12 +39,23 @@ class EvidenceAcceptanceTests(unittest.TestCase):
             return RUNNER.validate_go_events(path, required, "fixture/package", exit_code)
 
     def events(self):
-        return [{"Action": "pass", "Package": "fixture/package", "Test": "TestCatalog/leaf"},
+        return [{"Action": "run", "Package": "fixture/package", "Test": "TestCatalog"},
+                {"Action": "run", "Package": "fixture/package", "Test": "TestCatalog/leaf"},
+                {"Action": "pass", "Package": "fixture/package", "Test": "TestCatalog/leaf"},
                 {"Action": "pass", "Package": "fixture/package", "Test": "TestCatalog"},
                 {"Action": "pass", "Package": "fixture/package"}]
 
     def test_complete_execution(self):
-        self.assertEqual(self.check(self.events()), ["TestCatalog", "TestCatalog/leaf"])
+        self.assertEqual(self.check(self.events()), {
+            "started_tests": ["TestCatalog", "TestCatalog/leaf"],
+            "passed_tests": ["TestCatalog", "TestCatalog/leaf"],
+        })
+
+    def test_pass_without_run_is_not_proof(self):
+        for name in ("TestCatalog", "TestCatalog/leaf"):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "missing_run="):
+                self.check([event for event in self.events()
+                            if not (event["Action"] == "run" and event.get("Test") == name)])
 
     def test_zero_matched_tests_is_not_success(self):
         with self.assertRaisesRegex(ValueError, "missing="):
@@ -52,7 +63,7 @@ class EvidenceAcceptanceTests(unittest.TestCase):
 
     def test_parent_pass_does_not_replace_missing_leaf(self):
         with self.assertRaisesRegex(ValueError, "TestCatalog/leaf"):
-            self.check(self.events()[1:])
+            self.check([event for event in self.events() if event.get("Test") != "TestCatalog/leaf"])
 
     def test_required_skip_and_failed_descendant_are_refused(self):
         for action in ["skip", "fail"]:
@@ -66,8 +77,9 @@ class EvidenceAcceptanceTests(unittest.TestCase):
             self.check(self.events(), exit_code=1)
 
     def test_other_package_cannot_supply_missing_proof(self):
-        events = self.events()
-        events[0]["Package"] = "another/package"
+        events = [dict(event, Package="another/package")
+                  if event.get("Test") == "TestCatalog/leaf" else event
+                  for event in self.events()]
         with self.assertRaises(ValueError):
             self.check(events)
 
