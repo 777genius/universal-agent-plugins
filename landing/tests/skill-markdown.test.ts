@@ -31,6 +31,8 @@ test('untrusted Markdown cannot inject HTML, scripts, image tracking, or unsafe 
     '![Tracker](https://attacker.test/pixel.png)',
     '[Bad](javascript:alert(1))',
     '[Competitor](https://www.skills.sh/site/example)',
+    '[Trailing dot](https://www.skills.sh./site/example)',
+    '[Mixed-case dot](https://SkIlLs.Sh./site/example)',
     '[Relative](../secrets/SKILL.md)',
     '[Good](https://github.com/larksuite/cli)',
   ].join('\n\n');
@@ -39,4 +41,6 @@ test('untrusted Markdown cannot inject HTML, scripts, image tracking, or unsafe 
   assert.match(html, /&lt;script&gt;/);
   assert.match(html, /href="https:\/\/github\.com\/larksuite\/cli"/);
   assert.doesNotMatch(html, /<a[^>]*>Competitor<\/a>/);
+  assert.doesNotMatch(html, /<a[^>]*>Trailing dot<\/a>/);
+  assert.doesNotMatch(html, /<a[^>]*>Mixed-case dot<\/a>/);
 });
