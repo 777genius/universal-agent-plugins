@@ -66,7 +66,14 @@ for (const locale of publishedLocales) {
             await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
           ).toBe(true);
           await expect(restore).toHaveCSS('direction', locale === 'ar' ? 'rtl' : 'ltr');
-          await expect(restore.locator('pre').first()).toHaveCSS('direction', 'ltr');
+          // The manifest preview intentionally auto-folds; explicitly open it
+          // before checking its code direction, rather than racing the intro.
+          const manifestButton = restore.getByRole('button', { name: /uap\.toml/i });
+          await manifestButton.click();
+          await expect(restore.locator('.marketing-manifest__popover pre')).toHaveCSS(
+            'direction', 'ltr',
+          );
+          await manifestButton.press('Escape');
           const screenshots = process.env.UAP_LANDING_SCREENSHOT_DIR;
           if (screenshots) {
             mkdirSync(screenshots, { recursive: true });
