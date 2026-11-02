@@ -19,6 +19,7 @@ func pmAgreementDuplicateJSONKeysFailClosed(t *testing.T) {
 		{"root-different-value", "\"manifest_digest\":", "\"manifest_digest\": \"invalid\", ", ""},
 		{"root-casefold-alias", "\"lock_version\":", "\"LOCK_VERSION\": 2, ", ""},
 		{"package-casefold-source-key", "\"source_key\":", "\"SOURCE_KEY\": \"foreign-owner\", ", ""},
+		{"package-unicode-fold-key", "\"source_key\":", "\"ſource_key\": \"foreign-owner\", ", ""},
 		{"nested-casefold-checksum", "\"sha256\":", "\"SHA256\": \"invalid\", ", ""},
 		{"package-source-key", "\"source_key\":", "\"source_key\": \"foreign-owner\", ", ""},
 		{"package-tree-digest", "\"tree_digest\":", "\"tree_digest\": \"sha256:untrusted\", ", ""},
