@@ -71,8 +71,11 @@ A later source-only [Pi Skills/MCP integration (#640)](https://github.com/777gen
 also manages exact owned project Skills in `.pi/skills` and individual stdio or
 Streamable HTTP server entries in `.pi/mcp.json`; user-profile and other-project
 configuration stays separate. Its pinned real Pi project E2E observes trusted
-Skill discovery and native stdio MCP `initialize`/`tools/list`. **This does not prove
-`tools/call`, provider authorization, or that Pi granted project trust itself.**
+Skill discovery and native stdio MCP `initialize`/`tools/list`. A subsequent
+[source-only native Pi `tools/call` E2E (#656)](https://github.com/777genius/universal-agent-plugins/pull/656)
+also proved exactly one real Pi-driven tool execution and its result on Linux,
+macOS and Windows using a local scripted model. **Neither this nor the earlier
+handshake establishes vendor-model authorization or automatic project trust.**
 UAP retains the Prepared state until a separate native observation establishes
 activation. Neither this nor #631 is included in release 0.1.95.
 
