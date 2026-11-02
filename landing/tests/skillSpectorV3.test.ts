@@ -814,6 +814,38 @@ describe('SkillSpector v3 exact producer contract', () => {
     current.records[0].freshness = 'current';
     assert.throws(() => decodeSkillSpectorShardV3(current, index, part), /invalid/);
   });
+  it('recognizes the exact republished Cloudflare annotation under its new pinned profile', () => {
+    // The production registry retained the identical two annotated E4 matches
+    // after the extended v3 policy digest changed. Other evidence stays pinned.
+    const currentDigest = 'sha256:255c72648dd6a6e6b93ea75f5ad51553826692c60dd8222c7fb55613cf5766ba';
+    const newestManifest = structuredClone(manifest);
+    newestManifest.profiles = newestManifest.profiles.map((entry) =>
+      entry.id === 'static-extended-v3' ? { ...entry, digest: currentDigest } : entry,
+    );
+    const newestShard = structuredClone(shard);
+    const annotatedRecord = newestShard.records.find((record: SkillSpectorRecord) =>
+      record.findings.some((finding) => finding.review_status === 'false_positive'),
+    );
+    assert.ok(annotatedRecord);
+    annotatedRecord.profile.digest = currentDigest;
+    const annotations = annotatedRecord.findings.filter(
+      (finding: { review_status: string }) => finding.review_status === 'false_positive',
+    );
+    assert.equal(annotations.length, 2);
+    for (const finding of annotations) finding.exception.profile_digest = currentDigest;
+    assert.equal(
+      decodeSkillSpectorShardV3(newestShard, newestManifest, descriptor).length,
+      descriptor.record_count,
+    );
+
+    // An exact profile match alone does not authorize tampered exception metadata.
+    const forged = structuredClone(newestShard);
+    const forgedFinding = forged.records.flatMap((record: SkillSpectorRecord) => record.findings)
+      .find((finding: { review_status: string }) => finding.review_status === 'false_positive');
+    assert.ok(forgedFinding);
+    forgedFinding.exception!.source_content_digest = `sha256:${'0'.repeat(64)}`;
+    assert.throws(() => decodeSkillSpectorShardV3(forged, newestManifest, descriptor), /invalid/);
+  });
   it('preserves and verifies the two content-bound registry false-positive annotations', () => {
     const decoded = decodeSkillSpectorShardV3(shard, manifest, descriptor);
     const annotations = decoded
