@@ -245,9 +245,32 @@ describe('SkillSpector v3 exact producer contract', () => {
     const falselyAnalyzed = structuredClone(record);
     falselyAnalyzed.coverage.references[0].disposition = 'analyzed';
     assert.throws(() => decodeReference(falselyAnalyzed));
-    const falselyComplete = structuredClone(record);
-    falselyComplete.status = 'complete';
-    assert.throws(() => decodeReference(falselyComplete));
+    // Start with a *valid complete* producer record; otherwise rejection could
+    // come from the Cloudflare fixture's unrelated incomplete ledger evidence.
+    const completeFixture = JSON.parse(
+      readFileSync(
+        new URL('./fixtures/skillspector-v3-complete-context.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    const complete = structuredClone(
+      Object.values(completeFixture.records)[0] as SkillSpectorRecord,
+    );
+    const index = { ...manifest, generated_at: completeFixture.generated_at };
+    const part = { ...descriptor, repository: complete.source.repository, record_count: 1 };
+    const decodeComplete = (entry: SkillSpectorRecord) =>
+      decodeSkillSpectorShardV3(
+        { ...shard, repository: part.repository, records: [entry] },
+        index,
+        part,
+      );
+    assert.equal(decodeComplete(complete)[0]!.status, 'complete');
+    Object.assign(complete.coverage!.references![0], {
+      status: 'uninspected',
+      target_path: 'docs',
+      disposition: 'partial',
+    });
+    assert.throws(() => decodeComplete(complete));
     const noTarget = structuredClone(record);
     noTarget.coverage.references[0].target_path = null;
     assert.throws(() => decodeReference(noTarget));
