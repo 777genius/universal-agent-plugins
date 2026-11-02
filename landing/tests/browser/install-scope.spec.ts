@@ -225,7 +225,7 @@ test('Marketing Kit does not advertise unsupported signed project scope or force
   plugin.trust_state = 'reviewed';
   plugin.client_support.clients = ['cursor', 'codex', 'claude', 'gemini'];
   plugin.distributions = plugin.distributions.slice(0, 1);
-  plugin.distributions[0]!.releases[0]!.source.revision = null;
+  plugin.distributions[0]!.releases[0]!.source.revision = 'c5bcedd4ecf12585a8a50401852e57a44891ebec';
   plugin.distributions[0]!.releases[0]!.targets.push(
     { client: 'claude', scopes: ['user'], delivery: 'managed', authentication: 'required' },
     { client: 'gemini', scopes: ['user'], delivery: 'managed', authentication: 'required' },
@@ -253,7 +253,7 @@ test('Marketing Kit does not advertise unsupported signed project scope or force
   expect(errors).toEqual([]);
 });
 
-test('Marketing Kit project becomes automatic when the signed release authorizes project', async ({ page }) => {
+test('Marketing Kit project becomes automatic only with a new signed project release', async ({ page }) => {
   const errors = await offline(page);
   const index = scopedFixture();
   const plugin = index.plugins[0]!;
@@ -264,8 +264,9 @@ test('Marketing Kit project becomes automatic when the signed release authorizes
   plugin.distributions = plugin.distributions.slice(0, 1);
   const release = plugin.distributions[0]!.releases[0]!;
   release.source.revision = null;
-  // Simulated future signed policy: a single qualified client is sufficient,
-  // and the other clients must remain excluded until authorized.
+  // Synthetic future signed policy: tests UI selection only, NOT closure
+  // qualification. Production must first verify every dependency in project
+  // scope before publishing a project-enabled Marketing Kit release.
   for (const target of release.targets) {
     target.scopes = target.client === 'codex' ? ['user', 'project'] : ['user'];
   }

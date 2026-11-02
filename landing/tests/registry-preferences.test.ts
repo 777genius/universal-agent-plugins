@@ -424,9 +424,9 @@ test('saved unsupported Marketing Kit project intent never emits Cursor command 
   for (const distribution of item.distributions) {
     for (const release of distribution.releases) {
       for (const target of release.targets) target.scopes = ['user'];
-      // The actual published Marketing Kit source has no immutable Git revision.
-      // A direct-source project bridge must never be fabricated.
-      release.source.revision = null;
+      // The signed snapshot binds this immutable Marketing Kit source, but
+      // its mandatory Registry dependencies remain user-only.
+      release.source.revision = 'c5bcedd4ecf12585a8a50401852e57a44891ebec';
     }
   }
   const preferences = useInstallPreferencesStore();

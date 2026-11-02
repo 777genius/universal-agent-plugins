@@ -1,3 +1,4 @@
+import { isReviewedMarketingKit } from '../data/marketingKitDemo.ts';
 import { installCommands, pluginCommands, shellToken } from './commands.ts';
 import { reachableTargetPolicies, resolveDistribution } from './registry.ts';
 import type { ClientID, DistributionResolution, RegistryPlugin } from '../types/registry.ts';
@@ -48,6 +49,12 @@ export function projectCatalogSelection(
   // An explicitly qualified signed project policy always takes precedence.
   const signed = resolveDistribution(plugin, targets, 'project');
   if (signed.distribution) return { resolution: signed };
+  // The published Marketing Kit release has mandatory Registry dependencies
+  // (Notion, HubSpot, Playwright) whose signed policies are user-only. An
+  // immutable Git source for the parent does NOT waive child scope checks.
+  // Do not render a copyable project command until that dependency closure
+  // is qualified and the signed policy supports the selected project targets.
+  if (isReviewedMarketingKit(plugin)) return { resolution: signed };
   const pinned = pinnedSource(plugin, targets);
   if (pinned) {
     // A user-target policy can establish a reviewed source, NOT native project
