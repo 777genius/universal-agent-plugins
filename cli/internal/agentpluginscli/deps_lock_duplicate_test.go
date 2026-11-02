@@ -43,4 +43,15 @@ func TestDependencyLockDuplicateKeysRejectedByStrictAndCompatibleReaders(t *test
 			}
 		})
 	}
+	// A lock must preserve byte-for-byte source identity: encoding/json would
+	// otherwise turn an invalid UTF-8 byte into a replacement character.
+	invalidUTF8 := []byte(strings.Replace(string(body), "\"manifest_digest\":\"", "\"manifest_digest\":\""+string([]byte{0xff}), 1))
+	if string(invalidUTF8) == string(body) {
+		t.Fatal("fixture did not inject invalid UTF-8")
+	}
+	for _, compatible := range []bool{false, true} {
+		if _, err := decodeDependencyLockBytes(invalidUTF8, requirements, compatible); err == nil || !strings.Contains(err.Error(), "UTF-8") {
+			t.Fatalf("compatible=%t accepted non-portable UTF-8 lock: %v", compatible, err)
+		}
+	}
 }
