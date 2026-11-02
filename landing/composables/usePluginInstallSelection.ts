@@ -123,9 +123,18 @@ export function usePluginInstallSelection(
   }
   function updateScope(value: InstallScope) {
     if (value === 'project' && !projectAvailable.value) return;
+    const previousScope = scope.value;
     choicePending = true;
     scope.value = value;
     if (value === 'project') autoDetect.value = false;
+    // Previously saved project intent may have pinned a single target (Cursor).
+    // When the user explicitly switches a user-only Marketing Kit back to
+    // This computer, return to CLI-side installed-agent detection.
+    if (
+      previousScope === 'project' &&
+      value === 'user' &&
+      isReviewedMarketingKit(plugin())
+    ) autoDetect.value = true;
     saveUnboundChoice();
   }
   function toggleInstall() {
