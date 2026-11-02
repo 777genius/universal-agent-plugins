@@ -6,8 +6,10 @@ const props = withDefaults(defineProps<{ autoCollapse?: boolean }>(), { autoColl
 const { t } = useI18n();
 const root = ref<HTMLElement | null>(null);
 const trigger = ref<HTMLButtonElement | null>(null);
-const open = ref(props.autoCollapse);
+const open = ref(false);
 let timer: ReturnType<typeof setTimeout> | undefined;
+let observer: IntersectionObserver | undefined;
+let introStarted = false;
 
 function show() {
   if (timer) clearTimeout(timer);
@@ -30,17 +32,36 @@ function outside(event: PointerEvent) {
 function onFocusOut(event: FocusEvent) {
   if (!root.value?.contains(event.relatedTarget as Node | null)) collapse();
 }
-onMounted(() => {
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    open.value = !props.autoCollapse;
-  } else if (props.autoCollapse) {
-    timer = setTimeout(() => { open.value = false; }, 3200);
-  } else {
+function beginIntro() {
+  if (introStarted) return;
+  introStarted = true;
+  observer?.disconnect();
+  if (!props.autoCollapse) {
     open.value = true;
+    return;
+  }
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (root.value?.matches(':hover') || root.value?.contains(document.activeElement)) return;
+  open.value = true;
+  timer = setTimeout(() => {
+    if (!root.value?.matches(':hover') && !root.value?.contains(document.activeElement)) {
+      open.value = false;
+    }
+  }, 3200);
+}
+onMounted(() => {
+  if ('IntersectionObserver' in window) {
+    observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) beginIntro();
+    }, { threshold: 0.15, rootMargin: '0px 0px 40px 0px' });
+    if (root.value) observer.observe(root.value);
+  } else {
+    beginIntro();
   }
   document.addEventListener('pointerdown', outside);
 });
 onBeforeUnmount(() => {
+  observer?.disconnect();
   if (timer) clearTimeout(timer);
   document.removeEventListener('pointerdown', outside);
 });
