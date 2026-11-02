@@ -96,6 +96,7 @@
       "scanComplete": "Перевірку завершено",
       "selectionScanned": "Вибрані скіли перевірено",
       "retryLoad": "Спробувати завантажити знову",
+      "progressWithFailures": "{checked}/{total} перевірено · {failed} помилок · {waiting} очікують · {limited} частково",
       "coverageProgress": "Перевірено {checked}/{total} · {limited} не повністю",
       "waitingProgress": "Перевірено {checked}/{total} · {waiting} очікують перевірки",
       "statusExplanation": "Деякі файли або перевірки не вдалося підтвердити. Це не означає, що виявлено підтверджену вразливість.",
