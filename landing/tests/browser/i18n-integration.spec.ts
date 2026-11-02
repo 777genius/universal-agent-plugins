@@ -45,10 +45,10 @@ for (const locale of publishedLocales) {
         await expect(restore.locator('.registry-restore__locked-version')).toHaveText('v0.1.0');
         await expect(restore.locator('.registry-restore__terminal')).toHaveCount(2);
         await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute(
-          'data-command', 'npx -y universal-agent-plugins install --scope project',
+          'data-command', 'npx -y universal-agent-plugins install --scope user',
         );
         await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute(
-          'data-command', 'agentplugins install --locked --scope project',
+          'data-command', 'agentplugins deps import --install',
         );
         const docsLocale = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
         const guideLabel =
