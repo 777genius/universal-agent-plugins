@@ -11,7 +11,17 @@ test('staged Skills interface renders every live catalog install command truthfu
   let livePage: SkillsCatalogPage | undefined;
   await page.route('https://api.universal-agent-plugins.com/v1/skills**', async (route) => {
     const url = new URL(route.request().url());
-    const response = await route.fetch({ timeout: 20000, maxRetries: 1 });
+    // The staged localhost page is not an allowed production CORS origin.
+    // Ask the real API as the production origin, then expose the unchanged
+    // status/body to localhost. The separate API acceptance checks true CORS.
+    const response = await route.fetch({
+      timeout: 20000,
+      maxRetries: 1,
+      headers: {
+        ...route.request().headers(),
+        origin: 'https://universal-agent-plugins.com',
+      },
+    });
     if (
       url.pathname === '/v1/skills' &&
       url.searchParams.get('view') === 'popular' &&
