@@ -20,6 +20,7 @@ import (
 func packageManagerEvolutionCases() map[string]func(*testing.T) {
 	return map[string]func(*testing.T){
 		"graph-edge-replacement":     pmEvolutionReplaceEdges,
+		"old-cache-new-lock":         pmEvolutionOldCacheNewLock,
 		"graph-update-failure-retry": pmEvolutionFailedUpdate,
 		"cascade-remove-drift":       pmEvolutionRemoveDrift,
 		"prune-drift-after-lock":     pmEvolutionPruneDrift,
