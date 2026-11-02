@@ -23,18 +23,18 @@ import (
 
 func packageManagerAdversarialCases() map[string]func(*testing.T) {
 	return map[string]func(*testing.T){
-		"foreign-native-settings":   pmAdversarialForeignSettings,
-		"managed-native-drift":      pmAdversarialNativeDrift,
-		"hostile-archives":          pmAdversarialArchives,
-		"cache-metadata-corruption": pmAdversarialCacheMetadata,
-		"malformed-state":           pmAdversarialMalformedState,
-		"component-name-collision":  pmAdversarialComponentCollision,
-		"stale-lock-metadata":       pmAdversarialLockMetadata,
-		"symlink-lock-refusal":      pmAdversarialSymlinkMutationLock,
-		"foreign-skill-refusal":     pmAdversarialForeignSkillCollision,
-		"cold-shared-skill-owners":  pmAdversarialColdSharedSkillOwners,
+		"foreign-native-settings":    pmAdversarialForeignSettings,
+		"managed-native-drift":       pmAdversarialNativeDrift,
+		"hostile-archives":           pmAdversarialArchives,
+		"cache-metadata-corruption":  pmAdversarialCacheMetadata,
+		"malformed-state":            pmAdversarialMalformedState,
+		"component-name-collision":   pmAdversarialComponentCollision,
+		"stale-lock-metadata":        pmAdversarialLockMetadata,
+		"symlink-lock-refusal":       pmAdversarialSymlinkMutationLock,
+		"foreign-skill-refusal":      pmAdversarialForeignSkillCollision,
+		"cold-shared-skill-owners":   pmAdversarialColdSharedSkillOwners,
 		"cross-target-foreign-skill": pmAdversarialCrossTargetForeignSkill,
-		"native-config-obstruction": pmAdversarialNativeConfigObstruction,
+		"native-config-obstruction":  pmAdversarialNativeConfigObstruction,
 	}
 }
 
