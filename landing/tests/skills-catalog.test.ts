@@ -193,6 +193,7 @@ test('legacy Skills API website records recover only canonical publisher install
     { ...legacy, id: 'skills-sh:https://evil.example:lark-mail' },
     { ...legacy, id: 'skills-sh:127.0.0.1:lark-mail' },
     { ...legacy, id: 'skills-sh:owner/repo/tree/main:lark-mail' },
+    { ...legacy, skillNameHint: 'other-valid-name' },
   ]) {
     assert.equal(skillPublisherUrl(modified), undefined, modified.id);
     assert.equal(skillInstallCommand(modified), undefined, modified.id);
@@ -451,6 +452,10 @@ test('legacy source variants produce CLI commands without using directory pages 
       raw,
     );
   }
+  const mismatchedGithub = unknown('https://github.com/owner/repo/tree/main/skills/frontend-design');
+  mismatchedGithub.skillNameHint = 'other-valid-name';
+  assert.equal(skillRepositoryUrl(mismatchedGithub), undefined);
+  assert.equal(skillInstallCommand(mismatchedGithub), undefined);
   const scoped = unknown('https://publisher.com/scoped/skills', 'review');
   assert.equal(skillPublisherUrl(scoped), 'https://publisher.com/scoped/skills');
   assert.equal(

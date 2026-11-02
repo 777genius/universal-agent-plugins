@@ -59,7 +59,9 @@ function legacySource(skill: SkillListing): LegacySource | undefined {
       !skill.id.startsWith('skills-sh:') || skill.id.length > 1024)
     return undefined;
   const identity = catalogSourceIdentity(skill.id);
-  if (!identity) return undefined;
+  // An old unsupported-source DTO is not authoritative when its selector
+  // disagrees with the upstream ID. Never install a different Skill by name.
+  if (!identity || identity.slug !== skill.skillNameHint) return undefined;
   const github = githubSource(identity.raw);
   // A plain owner/repository should already have kind=github upstream. A
   // contradictory unsupported-source DTO must not gain install authority.
@@ -175,7 +177,7 @@ function legacyPublisherUrl(skill: SkillListing): string | undefined {
 
   const parts = /^skills-sh:([^:]+):([^:]+)$/.exec(skill.id);
   const source = skillIdentityFromId(skill.id);
-  if (!parts || source?.kind !== 'external') return undefined;
+  if (!parts || parts[2] !== skill.skillNameHint || source?.kind !== 'external') return undefined;
 
   // Chromium accepts some malformed IDNA hosts rejected by Node (xn--a).
   // Until the original publisher is verified, reject all punycode legacy IDs
