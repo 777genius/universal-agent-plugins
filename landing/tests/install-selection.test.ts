@@ -64,6 +64,25 @@ test('project defaults to CLI detection and preserves manual project targets', (
   state.stop();
 });
 
+test('switching user manual Cursor to project re-enables terminal detection', () => {
+  setActivePinia(createPinia());
+  const state = mount(data());
+  state.updateAutoDetect(false);
+  state.updateTargets(['cursor']);
+  assert.equal(state.autoDetect.value, false);
+  state.updateScope('project');
+  assert.equal(state.autoDetect.value, true);
+  assert.equal(state.projectAvailable.value, true);
+  assert.equal(state.scope.value, 'project');
+  // Selecting a project target explicitly still turns detection off.
+  state.updateAutoDetect(false);
+  state.updateTargets(['codex']);
+  assert.equal(state.autoDetect.value, false);
+  state.updateScope('project');
+  assert.equal(state.autoDetect.value, false, 'reselecting the same project must not erase manual intent');
+  state.stop();
+});
+
 test('project invalidation and remount preserve requested scope and invalid agents until explicit recovery', async () => {
   setActivePinia(createPinia());
   const plugin = data();

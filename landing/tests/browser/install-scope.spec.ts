@@ -41,6 +41,23 @@ function scopedFixture() {
 }
 
 for (const width of [1440, 390]) {
+  test(`manual user Cursor never leaks into default project selection at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors = await offline(page);
+    await projections(page, scopedFixture());
+    await navigate(page, '/', 'en', '?q=i18n-state-00');
+    const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
+    await card.locator('.plugin-card__install-toggle').click();
+    await targets(page, card, ['Cursor']);
+    await expect(card.locator('.app-multiselect__trigger')).toContainText('Cursor');
+    await card.getByRole('button', { name: 'This project', exact: true }).click();
+    await expect(card.locator('.app-multiselect__trigger')).toContainText('All installed agents');
+    await expect(card.locator('.command-snippet--add code')).toHaveText(
+      'npx -y universal-agent-plugins add i18n-state-00 --scope project',
+    );
+    expect(errors).toEqual([]);
+  });
+
   test(`scope selection, real picker recovery, copied lifecycle commands and navigation at ${width}px`, async ({
     page,
   }, testInfo) => {

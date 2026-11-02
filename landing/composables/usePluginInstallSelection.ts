@@ -119,6 +119,10 @@ export function usePluginInstallSelection(
     const previousScope = scope.value;
     choicePending = true;
     scope.value = value;
+    // Entering project starts with CLI-side detection, even if the user
+    // manually selected Cursor in their *user* environment. An explicit
+    // project choice remains persistent across detail/navigation remounts.
+    if (previousScope !== 'project' && value === 'project') autoDetect.value = true;
     // Previously saved project intent may have pinned a single target (Cursor).
     // When the user explicitly switches a user-only Marketing Kit back to
     // This computer, return to CLI-side installed-agent detection.
