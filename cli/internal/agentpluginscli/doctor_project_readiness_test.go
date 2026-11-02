@@ -186,7 +186,7 @@ func TestProjectScopeFlagMakesProjectRootExplicit(t *testing.T) {
 	t.Parallel()
 	project := domain.ClientBinding{Scope: string(domain.ScopeProject)}
 	user := domain.ClientBinding{Scope: string(domain.ScopeUser)}
-	if got := doctorScopeFlag(project); got != " --scope project --project-root <PROJECT_ROOT>" {
+	if got := doctorScopeFlag(project); got != " --scope project --project-root \"<PROJECT_ROOT>\"" {
 		t.Fatalf("project recovery may accidentally select another scope: %q", got)
 	}
 	if got := doctorScopeFlag(user); got != "" {
@@ -207,5 +207,26 @@ func TestProjectReadinessOnlyDependsOnRecordedState(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "should-not-appear") || strings.Contains(string(raw), "secret/user") || strings.Contains(string(raw), "localhost:") {
 		t.Fatalf("status report disclosed native profile or provider data: %s", raw)
+	}
+}
+
+func TestDoctorHealthySentinelNeverContradictsNativeDrift(t *testing.T) {
+	t.Parallel()
+	healthy := doctorFinding{Status: "healthy", Code: "no_degradation_detected"}
+	drift := doctorFinding{Status: "degraded", Code: "codex_project_mcp_member_missing"}
+	unknown := doctorFinding{Status: "unknown", Code: "project_native_unverified"}
+	if got := dropDoctorHealthySentinel([]doctorFinding{healthy}); len(got) != 1 || got[0] != healthy {
+		t.Fatalf("healthy-only report was changed: %+v", got)
+	}
+	for _, scenario := range [][]doctorFinding{{healthy, drift}, {drift, healthy}, {healthy, unknown, drift}} {
+		got := dropDoctorHealthySentinel(append([]doctorFinding(nil), scenario...))
+		if len(got) != len(scenario)-1 {
+			t.Fatalf("stale healthy sentinel survived: %+v", got)
+		}
+		for _, entry := range got {
+			if entry.Code == "no_degradation_detected" {
+				t.Fatalf("doctor gave contradictory healthy and degraded findings: %+v", got)
+			}
+		}
 	}
 }

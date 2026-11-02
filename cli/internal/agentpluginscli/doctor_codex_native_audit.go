@@ -71,7 +71,7 @@ type codexDoctorInspection struct {
 
 func (d *codexDoctorInspection) add(status, code, explanation string) {
 	d.findings = append(d.findings, scopedFinding(status, code, d.installation, d.binding.ClientID,
-		explanation, "Inspect the original project-native object receipts and use an explicit, reviewed repair with --scope project --project-root <PROJECT_ROOT>; do not adopt foreign files"))
+		explanation, "Inspect the original project-native object receipts and use an explicit, reviewed repair with --scope project --project-root \"<PROJECT_ROOT>\"; do not adopt foreign files"))
 }
 
 func doctorCodexBindingFindings(installation domain.Installation, binding domain.ClientBinding) []doctorFinding {
@@ -100,6 +100,12 @@ func doctorCodexBindingFindings(installation domain.Installation, binding domain
 		return d.findings
 	}
 	defer func() { _ = d.root.Close() }()
+	opened, err := d.root.Stat(".")
+	if err != nil || !os.SameFile(info, opened) {
+		d.add("unknown", "codex_project_root_changed",
+			"the recorded project root changed during the read-only inspection")
+		return d.findings
+	}
 	if len(binding.NativeObjects) > doctorNativeObjectMax {
 		d.add("unknown", "codex_project_inventory_too_large",
 			"project-native object inventory exceeds the safe observational bound")

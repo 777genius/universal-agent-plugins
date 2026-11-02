@@ -246,15 +246,8 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	if err != nil {
 		return fmt.Errorf("inspect signed Directory: %w", err)
 	}
-	if len(safety) > 0 {
-		filtered := report.Findings[:0]
-		for _, finding := range report.Findings {
-			if finding.Code != "no_degradation_detected" {
-				filtered = append(filtered, finding)
-			}
-		}
-		report.Findings = append(filtered, safety...)
-	}
+	report.Findings = append(report.Findings, safety...)
+	report.Findings = dropDoctorHealthySentinel(report.Findings)
 	sortDoctorFindings(report.Findings)
 	if opts.format == "json" {
 		return writeJSONOutput(cmd.OutOrStdout(), "doctor", report)
@@ -291,6 +284,21 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return renderInstallation(cmd.OutOrStdout(), *report.Installation)
 	}
 	return nil
+}
+
+// A generic "healthy" sentinel is valid only when no more-specific observer
+// found any issue, including native project drift or Directory safety findings.
+func dropDoctorHealthySentinel(findings []doctorFinding) []doctorFinding {
+	if len(findings) <= 1 {
+		return findings
+	}
+	kept := findings[:0]
+	for _, finding := range findings {
+		if finding.Code != "no_degradation_detected" {
+			kept = append(kept, finding)
+		}
+	}
+	return kept
 }
 
 func normalizedToolVersion(version string) string {
@@ -512,7 +520,7 @@ func repairAction(installation domain.Installation, binding domain.ClientBinding
 
 func doctorScopeFlag(binding domain.ClientBinding) string {
 	if binding.Scope == string(domain.ScopeProject) {
-		return " --scope project --project-root <PROJECT_ROOT>"
+		return " --scope project --project-root \"<PROJECT_ROOT>\""
 	}
 	return ""
 }
