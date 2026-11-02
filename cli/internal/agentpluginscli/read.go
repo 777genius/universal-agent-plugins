@@ -215,15 +215,15 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		})
 	}
 	report := struct {
-		ReadOnly           bool                   `json:"read_only"`
-		ToolVersion        string                 `json:"tool_version"`
-		SupportedClients   []supportedClient      `json:"supported_clients"`
-		Clients            []publicDetectedClient `json:"clients"`
-		InstallationCount  int                    `json:"installation_count"`
-		OpenOperationCount int                    `json:"open_operation_count"`
-		Installation       *publicInstallation    `json:"installation,omitempty"`
+		ReadOnly           bool                     `json:"read_only"`
+		ToolVersion        string                   `json:"tool_version"`
+		SupportedClients   []supportedClient        `json:"supported_clients"`
+		Clients            []publicDetectedClient   `json:"clients"`
+		InstallationCount  int                      `json:"installation_count"`
+		OpenOperationCount int                      `json:"open_operation_count"`
+		Installation       *publicInstallation      `json:"installation,omitempty"`
 		ProjectReadiness   []projectReadinessRecord `json:"project_readiness"`
-		Findings           []doctorFinding        `json:"findings"`
+		Findings           []doctorFinding          `json:"findings"`
 	}{ReadOnly: true, ToolVersion: normalizedToolVersion(app.Version), SupportedClients: doctorSupportedClients(), Clients: publicClients,
 		InstallationCount: len(publicInstallations(state, false)), OpenOperationCount: len(open)}
 	selected := (*domain.Installation)(nil)
