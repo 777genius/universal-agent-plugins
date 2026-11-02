@@ -58,7 +58,7 @@ const targetOptions = computed(() =>
     })(),
   })),
 );
-const marketingKitProject = computed(() => isReviewedMarketingKit(props.plugin) && scope.value === 'project');
+const marketingKitProject = computed(() => isReviewedMarketingKit(props.plugin) && projectAvailable.value && scope.value === 'project');
 const commands = computed(() =>
   !marketingKitProject.value &&
   (scope.value !== 'project' || !autoDetect.value) &&
