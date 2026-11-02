@@ -69,6 +69,12 @@ func TestOpenCodeV2MCPStdioResponder(t *testing.T) {
 			}}
 		case "ping":
 			result = map[string]any{}
+		case "resources/list":
+			result = map[string]any{"resources": []any{}}
+		case "resources/templates/list":
+			result = map[string]any{"resourceTemplates": []any{}}
+		case "prompts/list":
+			result = map[string]any{"prompts": []any{}}
 		case "tools/call":
 			// Only a valid invocation of the exact advertised tool qualifies.
 			if !validOpenCodeV2MCPCall(request.Params) {
