@@ -55,6 +55,7 @@ Our [installer automation principle](docs/INSTALLER_AUTOMATION_PRINCIPLE.md) is 
 [Browse plugins](https://universal-agent-plugins.com/plugins/)
 
 <a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
+
 <details>
 <summary>More interface screenshots</summary>
 
@@ -90,8 +91,9 @@ discovery (`manage discover`) and native Pi extensions. See the
 npm and Homebrew versions may lag; check `agentplugins version` (or
 `npx universal-agent-plugins version`) before relying on release-specific
 behavior. Use the native installer for the verified release. Changes in
-`main` are **not** automatically available in an older published CLI. Automatic project
-selection requires 0.1.94; explicit project-scope commands work since 0.1.93.
+`main` are **not** automatically available in an older published CLI.
+Automatic project selection requires 0.1.94; explicit project-scope commands
+work since 0.1.93.
 
 <details>
 <summary>Other installation options</summary>
