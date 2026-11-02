@@ -71,6 +71,7 @@ func packageManagerAgreementCases() map[string]func(*testing.T) {
 		"lock-store-publication-recheck": TestDependencyLockRechecksAfterStorePublication,
 		"lock-cold-store-hydration":      TestDependencyLockUnchangedHydratesMissingStore,
 		"lock-read-only-no-publication":  TestDependencyLockReadOnlyResolutionDoesNotPublish,
+		"lock-only-preserves-installed":   pmAgreementLockOnlyPreservesInstalled,
 		"lock-empty-existing-refusal":    TestDependencyLockRejectsEmptyExistingLock,
 		"absent-empty-distinct":          TestDependencyLockInputCheckDistinguishesAbsentAndEmpty,
 		"direct-source-promotion":        TestDirectSavedAddPromotesRetainedIntentWithoutAcquisition,
