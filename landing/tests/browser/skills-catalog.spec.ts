@@ -61,6 +61,10 @@ test('Skills search reveals install choices, copies the exact command and surviv
   await expect.poll(() => requests.some((query) => query.includes('q=frontend'))).toBe(true);
   await expect(page).toHaveURL(/tab=skills.*q=frontend/);
   await expect(catalog.locator('.catalog-count')).toHaveText('Showing 2 search results');
+  await expect(catalog.locator('.skill-card .skillspector')).toHaveCount(2);
+  await expect(catalog.locator('.skill-card').last().locator('.skillspector')).toHaveClass(
+    /skillspector--unsupported/,
+  );
   // Provider ranking metadata must never create a competitor outbound link.
   await expect(catalog.locator('a[href*="skills.sh"]')).toHaveCount(0);
   const card = catalog.locator('.skill-card').first();
