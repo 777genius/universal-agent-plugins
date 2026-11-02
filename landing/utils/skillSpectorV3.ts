@@ -475,7 +475,9 @@ export function decodeSkillSpectorShardV3(
     profile(r.profile);
     if (
       r.legacy_format !== undefined &&
-      (r.freshness !== 'historical' || !['static-only-v1', 'static-only-v2'].includes(r.profile.id))
+      (![1, 2].includes(r.legacy_format) ||
+        r.freshness !== 'historical' ||
+        !['static-only-v1', 'static-only-v2'].includes(r.profile.id))
     )
       fail();
     if (
