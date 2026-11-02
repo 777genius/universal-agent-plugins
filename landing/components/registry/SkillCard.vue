@@ -75,7 +75,7 @@ function updateTerminal(value: boolean) {
         </h3>
         <p class="plugin-card__source-label">
           <a v-if="repositoryUrl" :href="repositoryUrl" target="_blank" rel="noreferrer">{{
-            skill.source.repository
+            skill.source.repository ?? repositoryUrl.replace('https://github.com/', '')
           }}</a>
           <a v-else-if="publisherUrl" :href="publisherUrl" target="_blank" rel="noreferrer noopener">{{ publisherUrl.replace('https://', '') }}</a>
           <span v-else>{{ t('registryUi.skills.externalSource') }}</span>

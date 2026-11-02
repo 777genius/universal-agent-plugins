@@ -1,4 +1,5 @@
 import type { SkillsCatalogPage, SkillsView, SkillListing } from '~/types/skillsCatalog';
+import { skillInstallCommand } from '~/utils/skillsCatalog';
 
 /** A request belongs to exactly one search/view; late responses cannot replace it. */
 export function useSkillsCatalog(query: Ref<string>, view: Ref<SkillsView>) {
@@ -21,51 +22,56 @@ export function useSkillsCatalog(query: Ref<string>, view: Ref<SkillsView>) {
   const remaining = computed(() => Math.max(0, items.value.length - displayLimit.value));
   const hasMore = computed(() => remaining.value > 0 || Boolean(metadata.value?.hasMore));
 
+  // Never drop an installable Skill merely because an upstream page contains
+  // unresolvable listings. Requests are bounded to avoid exhausting the provider.
+  const maxPagesPerLoad = 5;
   async function load(append = false) {
     if (searchTooShort.value) return;
     controller?.abort();
     controller = new AbortController();
+    const signal = controller.signal;
     const request = ++generation;
     if (append) loadingMore.value = true;
     else loading.value = true;
     failed.value = false;
-    const params = new URLSearchParams({
-      view: view.value,
-      page: String(append ? (metadata.value?.page ?? 0) + 1 : 0),
-    });
+
+    const nextLimit = append ? displayed.value.length + 48 : 48;
+    const collected = append ? [...items.value] : [] as SkillListing[];
+    const seen = new Set(collected.map(item => item.id));
     const search = query.value.trim();
-    if (search) {
-      params.set('q', search);
-      params.set('view', 'popular');
-    }
+    let latest: SkillsCatalogPage | undefined;
+    let pageNumber = append ? (metadata.value?.page ?? 0) + 1 : 0;
     try {
-      const endpoint = String(config.public.skillsCatalogEndpoint);
-      const response = await fetch(`${endpoint}${endpoint.includes('?') ? '&' : '?'}${params}`, {
-        signal: controller.signal,
-        headers: { Accept: 'application/json' },
-      });
-      if (!response.ok) throw new Error('Catalog unavailable');
-      const page = (await response.json()) as SkillsCatalogPage;
-      if (
-        !Array.isArray(page.items) ||
-        typeof page.hasMore !== 'boolean' ||
-        !Number.isInteger(page.page) ||
-        !page.cache
-      )
-        throw new Error('Invalid catalog');
-      if (request !== generation) return;
-      if (append) {
-        const nextLimit = displayed.value.length + 48;
-        const seen = new Set(items.value.map((item) => item.id));
-        items.value = [...items.value, ...page.items.filter((item) => !seen.has(item.id))];
-        displayLimit.value = nextLimit;
-      } else {
-        items.value = page.items;
-        displayLimit.value = 48;
+      for (let count = 0; count < maxPagesPerLoad; count++) {
+        const params = new URLSearchParams({ view: search ? 'popular' : view.value, page: String(pageNumber) });
+        if (search) params.set('q', search);
+        const endpoint = String(config.public.skillsCatalogEndpoint);
+        const response = await fetch(`${endpoint}${endpoint.includes('?') ? '&' : '?'}${params}`, {
+          signal,
+          headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) throw new Error('Catalog unavailable');
+        const page = (await response.json()) as SkillsCatalogPage;
+        if (!Array.isArray(page.items) || typeof page.hasMore !== 'boolean' ||
+            page.page !== pageNumber || !page.cache)
+          throw new Error('Invalid catalog');
+        if (request !== generation) return;
+        for (const item of page.items) {
+          if (!seen.has(item.id) && skillInstallCommand(item)) {
+            seen.add(item.id);
+            collected.push(item);
+          }
+        }
+        latest = page;
+        if (!page.hasMore || !page.items.length || collected.length >= nextLimit || search) break;
+        pageNumber++;
       }
-      metadata.value = page;
+      if (request !== generation) return;
+      items.value = collected;
+      displayLimit.value = nextLimit;
+      metadata.value = latest;
     } catch {
-      if (request === generation && !controller.signal.aborted) failed.value = true;
+      if (request === generation && !signal.aborted) failed.value = true;
     } finally {
       if (request === generation) {
         loading.value = false;

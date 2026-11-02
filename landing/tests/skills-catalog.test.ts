@@ -323,6 +323,7 @@ function catalogHarness() {
     onMounted: (callback: () => void) => {
       mounted = callback;
     },
+    skillInstallCommand,
     useRuntimeConfig: () => ({
       public: { skillsCatalogEndpoint: 'https://example.com/v1/skills' },
     }),
