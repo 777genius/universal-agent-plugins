@@ -20,7 +20,9 @@ export function useSkillsCatalog(query: Ref<string>, view: Ref<SkillsView>) {
   });
   const displayed = computed(() => items.value.slice(0, displayLimit.value));
   const remaining = computed(() => Math.max(0, items.value.length - displayLimit.value));
-  const hasMore = computed(() => remaining.value > 0 || Boolean(metadata.value?.hasMore));
+  const hasMore = computed(() =>
+    remaining.value > 0 || (!query.value.trim() && Boolean(metadata.value?.hasMore)),
+  );
 
   // Never drop an installable Skill merely because an upstream page contains
   // unresolvable listings. Requests are bounded to avoid exhausting the provider.
@@ -64,7 +66,9 @@ export function useSkillsCatalog(query: Ref<string>, view: Ref<SkillsView>) {
           }
         }
         latest = page;
-        if (!page.hasMore || !page.items.length || collected.length >= nextLimit) break;
+        // Search has no pagination in the public API, even if a future upstream
+        // payload mistakenly exposes hasMore=true.
+        if (!page.hasMore || !page.items.length || collected.length >= nextLimit || search) break;
         pageNumber++;
       }
       if (request !== generation) return;
@@ -121,6 +125,6 @@ export function useSkillsCatalog(query: Ref<string>, view: Ref<SkillsView>) {
     hasMore,
     searchTooShort,
     showMore,
-    retry: () => load(Boolean(items.value.length)),
+    retry: () => load(!query.value.trim() && Boolean(items.value.length)),
   };
 }
