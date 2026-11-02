@@ -42,12 +42,13 @@ const fixtures = [
 ] as const;
 type Evidence = { id: string; source: string; skill: string; command: string; exit_code: number | null;
   installed: boolean; lock_written: boolean; native_skill_present: boolean; resources: number;
-  stderr_tail: string; error: string | null };
+  stdout_tail: string; stderr_tail: string; error: string | null };
 const report = {
   checked_at: new Date().toISOString(), production_cli: binary, profile: 'isolated temporary project',
   live_network: true, results: [] as Evidence[],
 };
 const runRoot = mkdtempSync(join(tmpdir(), 'uap-live-skills-'));
+const failures: string[] = [];
 function listing(fixture: typeof fixtures[number]): SkillListing {
   // Model the API's actual website DTOs rather than inventing unsupported
   // source metadata: one current origin form and two legacy listing-page forms.
@@ -80,9 +81,12 @@ try {
     const data = join(sourceDir, 'data');
     const cache = join(sourceDir, 'cache');
     for (const path of [project, home, config, data, cache]) mkdirSync(path, { recursive: true });
-    const command = skillInstallCommand(listing(fixture));
-    assert.equal(command, 'npx universal-agent-plugins@latest skills add ' + fixture.source +
-      ' --skill ' + fixture.skill, 'The UI must select exactly the tested source');
+    const command = skillInstallCommand(listing(fixture)) ?? '';
+    const expectedCommand = 'npx universal-agent-plugins@latest skills add ' + fixture.source +
+      ' --skill ' + fixture.skill;
+    if (command !== expectedCommand) {
+      failures.push('Catalog command/source mismatch for ' + fixture.id);
+    }
     const env = { ...process.env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: config,
       XDG_DATA_HOME: data, XDG_CACHE_HOME: cache, GIT_CONFIG_NOSYSTEM: '1',
       GIT_CONFIG_GLOBAL: join(config, 'gitconfig'), GIT_TERMINAL_PROMPT: '0',
@@ -101,16 +105,21 @@ try {
       exit_code: output.status,
       installed: output.status === 0 && lockWritten && nativeSkillPresent && resources > 0,
       lock_written: lockWritten, native_skill_present: nativeSkillPresent, resources,
+      stdout_tail: (output.stdout || '').slice(-1600),
       stderr_tail: (output.stderr || '').slice(-1600),
       error: output.error?.message || null,
     };
     report.results.push(evidence);
     console.log(JSON.stringify(evidence));
-    assert.ok(evidence.installed,
-      'Native public Skill install failed for ' + fixture.id + '; inspect evidence');
-    assert.ok(readFileSync(join(project, 'uap.lock'), 'utf8').includes(fixture.skill),
-      'Lock must preserve the selected Skill');
+    if (!evidence.installed) failures.push('Native public Skill install failed for ' + fixture.id);
+    if (lockWritten && !readFileSync(join(project, 'uap.lock'), 'utf8').includes(fixture.skill)) {
+      failures.push('Lock does not preserve selected Skill for ' + fixture.id);
+    }
   }
+  // Preserve all seven independent live source results, even when the first
+  // publisher is broken. The suite still fails closed; no fixture can give
+  // another source a false green.
+  assert.deepEqual(failures, [], 'Native source acquisition failures; inspect saved evidence');
 } finally {
   writeFileSync(join(reportRoot, 'native-install.json'), JSON.stringify(report, null, 2) + '\n');
   rmSync(runRoot, { recursive: true, force: true });
