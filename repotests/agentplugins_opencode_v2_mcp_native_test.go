@@ -62,7 +62,10 @@ func TestOpenCodeV2MCPStdioResponder(t *testing.T) {
 		case "tools/list":
 			result = map[string]any{"tools": []any{
 				map[string]any{"name": "uap_ping", "description": "Inert project MCP check",
-					"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
+					"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}},
+					// This inert tool reads no user data or state. Codex's native model
+					// policy may otherwise deny unannotated MCP calls with approvals=never.
+					"annotations": map[string]any{"readOnlyHint": true, "destructiveHint": false, "openWorldHint": false}},
 			}}
 		case "ping":
 			result = map[string]any{}
