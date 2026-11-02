@@ -148,6 +148,17 @@ test('HTTPS publishers use their origin and exact names, never a listing page or
   };
   assert.equal(skillInstallCommand(supported, ['codex']),
     'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar --target codex');
+  // An explicit current API source may use a non-/skills scope: only ambiguous
+  // legacy unsupported-source IDs must satisfy the narrower recovery rule.
+  const explicitScoped: SkillListing = {
+    ...supported,
+    id: 'skills-sh:https://publisher.com/team/custom:ui-radar',
+    providerUrl: 'https://www.skills.sh/',
+    source: { kind: 'external', url: 'https://publisher.com/team/custom' },
+    availability: 'unverified',
+  };
+  assert.equal(skillInstallCommand(explicitScoped),
+    'npx universal-agent-plugins@latest skills add https://publisher.com/team/custom --skill ui-radar');
   assert.deepEqual(skillDetailRoute(website), {
     path: '/skills/',
     query: { id: website.id, q: 'lark-mail' },
