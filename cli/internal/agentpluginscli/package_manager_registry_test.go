@@ -17,15 +17,15 @@ import (
 
 func packageManagerRegistryCases() map[string]func(*testing.T) {
 	return map[string]func(*testing.T){
-		"compatible-ranges":           packageManagerCompatibleRanges,
-		"incompatible-ranges":         packageManagerIncompatibleRanges,
-		"forced-backtracking":         packageManagerForcedBacktracking,
-		"candidate-integrity-failure": packageManagerCandidateIntegrityFailure,
-		"candidate-ineligibility":     TestDependencySelectionSkipsHostAndLoadedMCPIneligibility,
-		"partial-commit-locked-retry": TestDependencyEnvironmentCLIEndToEnd,
-		"mixed-source-target-union":   TestDependencyTOMLMixedSourceLifecycleAndRestore,
-		"portable-cold-restore":       TestDependencyFreshRestoreFromPortableFiles,
-		"skill-typo-retains-installed":  TestSkillsMisspelledSelectionRetainsInstalledSkill,
+		"compatible-ranges":            packageManagerCompatibleRanges,
+		"incompatible-ranges":          packageManagerIncompatibleRanges,
+		"forced-backtracking":          packageManagerForcedBacktracking,
+		"candidate-integrity-failure":  packageManagerCandidateIntegrityFailure,
+		"candidate-ineligibility":      TestDependencySelectionSkipsHostAndLoadedMCPIneligibility,
+		"partial-commit-locked-retry":  TestDependencyEnvironmentCLIEndToEnd,
+		"mixed-source-target-union":    TestDependencyTOMLMixedSourceLifecycleAndRestore,
+		"portable-cold-restore":        TestDependencyFreshRestoreFromPortableFiles,
+		"skill-typo-retains-installed": TestSkillsMisspelledSelectionRetainsInstalledSkill,
 	}
 }
 
