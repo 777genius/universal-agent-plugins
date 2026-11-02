@@ -61,7 +61,7 @@ export function serializeSkillSpectorDiagnostics(input: SkillSpectorDiagnosticIn
               catalog_coverage: report.catalog_coverage ?? null,
             }
           : report.schema_version === 2
-            ? { global_coverage: report.coverage }
+            ? { global_coverage: 'coverage' in report ? report.coverage : null }
             : {}),
       }
     : null;

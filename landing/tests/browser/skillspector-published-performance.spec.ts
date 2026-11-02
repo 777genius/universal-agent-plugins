@@ -137,7 +137,9 @@ test('published large reports keep closed cards unmounted after real data and ap
       elements.map((element) => element.getAttribute('data-install-source')).sort(),
     );
   expect(visibleStatuses).toEqual([...cardSources].sort());
-  const expectedNoSkills = cardSources.filter((source) => !hasSkillsBySource.get(source)).sort();
+  const expectedNoSkills = cardSources
+    .filter((source): source is string => source !== null && !hasSkillsBySource.get(source))
+    .sort();
   const noSkills = await page.locator('.plugin-card:has(.skillspector--noSkills)')
     .evaluateAll((elements) =>
       elements.map((element) => element.getAttribute('data-install-source')).sort(),
