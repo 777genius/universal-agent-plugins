@@ -150,7 +150,7 @@ const limitationExplanations = computed(() => {
   const codes = new Set(reasons.value.map((reason) => reason.code));
   return [
     ['reference_missing', 'referenceMissing'],
-    ['referenced_uninspected', 'referenceDirectoryPartial'],
+    ['referenced_uninspected', 'referenceUninspectedArtifact'],
     ['static_parse_limit', 'staticParseLimit'],
     ['analyzer_incomplete', 'analyzerIncomplete'],
     ['acquisition_transfer_limit', 'acquisitionTransferLimit'],
