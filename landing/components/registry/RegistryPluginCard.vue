@@ -371,6 +371,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
           <InstallScopeSelect
             :model-value="scope"
             :project-available="projectAvailable"
+            :always-show="isReviewedMarketingKit(plugin)"
             @update:model-value="updateScope"
           />
           <InstallOutcome
