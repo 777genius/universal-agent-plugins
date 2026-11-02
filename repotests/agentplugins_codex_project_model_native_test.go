@@ -16,7 +16,8 @@ import (
 	"time"
 )
 
-const codexForeignProjectTool = "mcp__foreign_fixture__uap_ping"
+const codexForeignProjectNamespace = "mcp__foreign_fixture"
+const codexForeignProjectTool = "uap_ping"
 const codexForeignProjectCallID = "call_uap_codex_project_foreign"
 
 // Only the model is scripted. A real pinned Codex app-server must discover the
@@ -75,7 +76,11 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 	}
 	var input struct {
 		Tools []struct {
-			Name string `json:"name"`
+			Name  string `json:"name"`
+			Type  string `json:"type"`
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
 		} `json:"tools"`
 		Input []json.RawMessage `json:"input"`
 	}
@@ -85,8 +90,12 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 	}
 	advertised := false
 	for _, tool := range input.Tools {
-		if tool.Name == codexForeignProjectTool {
-			advertised = true
+		if tool.Name == codexForeignProjectNamespace && tool.Type == "namespace" {
+			for _, member := range tool.Tools {
+				if member.Name == codexForeignProjectTool {
+					advertised = true
+				}
+			}
 		}
 	}
 	resultSeen, wrongResult := false, false
@@ -153,7 +162,7 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 	if sendCall {
 		emit("response.output_item.done", map[string]any{"type": "response.output_item.done", "item": map[string]string{
 			"type": "function_call", "call_id": codexForeignProjectCallID,
-			"name": codexForeignProjectTool, "arguments": "{}",
+			"namespace": codexForeignProjectNamespace, "name": codexForeignProjectTool, "arguments": "{}",
 		}})
 	} else {
 		emit("response.output_item.done", map[string]any{"type": "response.output_item.done", "item": map[string]any{
