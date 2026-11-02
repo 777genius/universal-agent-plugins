@@ -213,9 +213,17 @@ test('legacy API website publisher offers safe Install while malformed sources r
             providerUrl: 'https://www.skills.sh/',
             availability: 'unsupported-source',
           },
+          {
+            ...skill(2),
+            id: 'skills-sh:xn--a.example:lark-mail',
+            title: 'Malformed publisher',
+            source: { kind: 'external', url: 'https://www.skills.sh/site/xn--a.example/lark-mail' },
+            providerUrl: 'https://www.skills.sh/site/xn--a.example/lark-mail',
+            availability: 'unsupported-source',
+          },
         ],
         page: 0,
-        total: 2,
+        total: 3,
         hasMore: false,
         view: 'popular',
         cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' },
@@ -225,7 +233,7 @@ test('legacy API website publisher offers safe Install while malformed sources r
 
   await page.goto('plugins/?tab=skills');
   const cards = page.locator('.skills-catalog .skill-card');
-  await expect(cards).toHaveCount(2);
+  await expect(cards).toHaveCount(3);
   const recovered = cards.first();
   await expect(recovered.getByRole('link', { name: 'Publisher source' })).toHaveAttribute(
     'href', 'https://open.feishu.cn',
@@ -235,7 +243,10 @@ test('legacy API website publisher offers safe Install while malformed sources r
     'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
   );
   await expect(recovered.locator('.command-snippet code')).not.toContainText('skills.sh');
-  const unavailable = cards.last();
+  const unavailable = cards.nth(1);
+  const malformed = cards.last();
+  await expect(malformed.getByRole('button', { name: /Install/ })).toHaveCount(0);
+  await expect(malformed.locator('h3')).toHaveText('Malformed publisher');
   await expect(unavailable.getByRole('button', { name: /Install/ })).toHaveCount(0);
   await expect(unavailable).toContainText('No verified install source');
   await expect(unavailable.getByRole('link', { name: 'Unrecoverable source' })).toHaveCount(0);
