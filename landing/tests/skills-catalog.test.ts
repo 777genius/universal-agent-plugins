@@ -439,6 +439,8 @@ test('legacy source variants produce CLI commands without using directory pages 
     ['git@github.com:owner/repo.git', 'https://github.com/owner/repo'],
     ['github.com/owner/repo', 'https://github.com/owner/repo'],
     ['owner/repo.git', 'https://github.com/owner/repo'],
+    ['https://raw.githubusercontent.com/owner/repo/main/skills/frontend-design/SKILL.md',
+      'https://raw.githubusercontent.com/owner/repo/main/skills/frontend-design/SKILL.md'],
   ] as const;
   for (const [raw, source] of supported) {
     const listing = unknown(raw);
@@ -468,6 +470,9 @@ test('legacy source variants produce CLI commands without using directory pages 
     'https://evil.com/owner/repo', 'https://www.skills.sh/site/owner/repo',
     'https://localhost', 'https://127.0.0.1', 'https://xn--a.example',
     'https://publisher.internal', 'owner/repo/tree/main/$hack',
+    'https://raw.githubusercontent.com/owner/repo/main/secret.sh',
+    'https://raw.githubusercontent.com/owner/repo/main/../SKILL.md',
+    'https://raw.githubusercontent.com/owner/repo/main/SKILL.md?ref=main',
   ]) {
     assert.equal(skillInstallCommand(unknown(raw)), undefined, raw);
   }

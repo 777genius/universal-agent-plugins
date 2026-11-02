@@ -19,7 +19,7 @@ const chooseInTerminal = ref(saved.autoDetect);
 const targets = ref(saved.targetIds.length ? saved.targetIds : ['codex']);
 const repositoryUrl = computed(() => skillRepositoryUrl(props.skill));
 const repositoryName = computed(() => props.skill.source.repository ??
-  /^https:\/\/github\.com\/([^/]+\/[^/]+)/.exec(repositoryUrl.value ?? '')?.[1]);
+  /^https:\/\/(?:github\.com|raw\.githubusercontent\.com)\/([^/]+\/[^/]+)/.exec(repositoryUrl.value ?? '')?.[1]);
 const publisherUrl = computed(() => skillPublisherUrl(props.skill));
 const needsManualSelection = computed(() => skillNeedsManualSelection(props.skill));
 const command = computed(() =>

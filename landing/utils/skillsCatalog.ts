@@ -84,6 +84,17 @@ function catalogSourceIdentity(id: string): { raw: string; slug: string } | unde
 /** Accept GitHub's explicit repository and single-segment-ref file/tree forms. */
 function githubSource(raw: string): string | undefined {
   if (raw.length < 3 || raw.length > 512) return undefined;
+  // The CLI supports an exact raw GitHub SKILL.md URL as a source.
+  if (raw.startsWith('https://raw.githubusercontent.com/')) {
+    const segments = raw.slice('https://raw.githubusercontent.com/'.length).split('/');
+    if (segments.length < 4 || segments.at(-1) !== 'SKILL.md' ||
+        !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(segments[0]!) ||
+        !/^[A-Za-z0-9_.-]{1,100}$/.test(segments[1]!) ||
+        segments[1] === '.' || segments[1] === '..' ||
+        segments.slice(2).some(part => part === '.' || part === '..' ||
+          !/^[A-Za-z0-9_.-]{1,128}$/.test(part))) return undefined;
+    return raw;
+  }
   let path = raw;
   if (path.startsWith('git+https://github.com/')) {
     path = path.slice('git+https://github.com/'.length);

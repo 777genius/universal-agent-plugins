@@ -53,7 +53,7 @@ jobs:
     name: Native real GitHub and HTTPS install
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:live-skills')
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -68,7 +68,7 @@ jobs:
       - name: Build actual public CLI
         run: go build -trimpath -o "${RUNNER_TEMP}/uap-skills-cli" ./cli/cmd/agentplugins
       - name: Install genuine nested GitHub and HTTPS publisher Skills in isolated projects
-        timeout-minutes: 10
+        timeout-minutes: 13
         env:
           UAP_E2E_LIVE_SKILLS: '1'
           UAP_E2E_SKILLS_BIN: ${{ runner.temp }}/uap-skills-cli

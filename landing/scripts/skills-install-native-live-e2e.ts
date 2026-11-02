@@ -23,6 +23,10 @@ const fixtures = [
     skill: 'frontend-design',
     id: 'skills-sh:https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md:frontend-design',
     providerUrl: 'https://www.skills.sh/' },
+  { source: 'https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/SKILL.md',
+    skill: 'frontend-design',
+    id: 'skills-sh:https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/SKILL.md:frontend-design',
+    providerUrl: 'https://www.skills.sh/' },
   { source: 'https://uizze.com', skill: 'ui-radar',
     id: 'skills-sh:https://uizze.com:ui-radar',
     providerUrl: 'https://www.skills.sh/' },
@@ -75,7 +79,7 @@ try {
     const args = ['skills', 'add', fixture.source, '--skill', fixture.skill, '--target', 'codex',
       '--scope', 'project', '--project-root', project, '--no-ui', '--yes', '--format', 'json'];
     const output = spawnSync(binary, args, { env, cwd: project, encoding: 'utf8',
-      timeout: 180_000, maxBuffer: 1024 * 1024 * 2 });
+      timeout: 120_000, maxBuffer: 1024 * 1024 * 2 });
     const lockWritten = existsSync(join(project, 'uap.lock')) && existsSync(join(project, 'uap.toml'));
     const resources = countSkills(project);
     const evidence: Evidence = {
