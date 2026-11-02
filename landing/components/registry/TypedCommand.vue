@@ -13,10 +13,11 @@ const props = withDefaults(defineProps<{
 const command = computed(() => props.lines.join(' '));
 const characters = ref(0);
 const started = ref(false);
+const clientReady = ref(false);
 const complete = ref(false);
 const reducedMotion = ref(false);
 const visibleCommand = computed(() =>
-  !started.value || reducedMotion.value ? command.value : command.value.slice(0, characters.value),
+  !clientReady.value || reducedMotion.value ? command.value : command.value.slice(0, characters.value),
 );
 const host = ref<HTMLElement | null>(null);
 let observer: IntersectionObserver | undefined;
@@ -48,6 +49,7 @@ function begin() {
 }
 onMounted(() => {
   reducedMotion.value = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  clientReady.value = true;
   if (reducedMotion.value || !('IntersectionObserver' in window)) {
     finish();
     return;
