@@ -48,6 +48,7 @@ async function setup(
   mode:
     | 'mixed'
     | 'historicalMixed'
+    | 'foreignLegacy'
     | 'stale'
     | 'unavailable'
     | 'invalid'
@@ -159,6 +160,43 @@ async function setup(
       stale: manifest.coverage.stale + 1,
     };
     manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
+  }
+  if (mode === 'foreignLegacy') {
+    // Another plugin in this same repository has an old report. It must not
+    // claim that the viewed plugin has any imported legacy Skill evidence.
+    const old = structuredClone(shard.records[0]);
+    old.id = `${old.id}-foreign`;
+    old.plugin_path = 'plugins/foreign';
+    old.source.path = 'plugins/foreign/skills/agents-sdk';
+    old.freshness = 'historical';
+    old.legacy_format = 2;
+    old.profile = { id: 'static-only-v2', digest: `sha256:${'a'.repeat(64)}` };
+    shard.records.push(old);
+    manifest.coverage = {
+      ...manifest.coverage,
+      selected: manifest.coverage.selected + 1,
+      reported: manifest.coverage.reported + 1,
+      pending: 1,
+      stale: 1,
+    };
+    manifest.plugin_coverage.push({
+      ...manifest.plugin_coverage[0]!,
+      plugin_path: old.plugin_path,
+      selected: 1,
+      reported: 1,
+      pending: 1,
+      stale: 1,
+      complete: 0,
+      partial: 0,
+      error: 0,
+    });
+    manifest.plugin_states.push({
+      ...manifest.plugin_states[0]!,
+      id: 'foreign-legacy',
+      plugin_path: old.plugin_path,
+      skills_total: 1,
+      selected_ids: [old.id],
+    });
   }
   const standalone = mode === 'completeResolved' || mode === 'unsupportedSource';
   const complete = mode === 'completeExternal' || standalone;
@@ -515,6 +553,17 @@ for (const width of [1280, 390]) {
     expect(errors).toEqual([]);
   });
 }
+
+test('a different plugin’s legacy Skill never marks the viewed plugin as legacy', async ({ page }) => {
+  const { assessment, errors } = await setup(page, 'foreignLegacy');
+  await expect(assessment).toHaveClass(/skillspector--incomplete/);
+  await expect(assessment.locator(':scope > summary')).toContainText('13/13 checked');
+  await assessment.locator(':scope > summary').click();
+  await expect(assessment.locator('.skillspector__advice')).not.toContainText(
+    'Some Skill results were imported from older scan formats',
+  );
+  expect(errors).toEqual([]);
+});
 
 test('n8n known inventory distinguishes six incomplete checks from nine missing current results', async ({ page }) => {
   const { assessment, errors } = await setup(page, 'n8nPending');

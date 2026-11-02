@@ -62,7 +62,7 @@ const assessment = computed(() => skillSpectorAssessment(report.value, props.sub
 const legacy = computed(() => isLegacySkillSpectorReport(report.value));
 const hasLegacyEvidence = computed(
   () => report.value?.schema_version === 3 &&
-    report.value.records.some((record) => record.legacy_format),
+    assessment.value.records.some((record) => record.legacy_format),
 );
 const displayStatus = computed(() => {
   if (props.applicable === false) return 'unsupported';
