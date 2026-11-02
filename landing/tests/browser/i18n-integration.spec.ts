@@ -32,17 +32,23 @@ for (const locale of publishedLocales) {
       await expect(page.locator('h1')).toBeVisible();
       if (family === '/') {
         const messages = JSON.parse(
-          readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'),
+          readFileSync(new URL(`../../i18n/locales/${locale}.json`, import.meta.url), 'utf8'),
         ).shell;
         const copy = messages.restore as Record<string, string>;
         const restore = page.locator('#restore-environment');
         await expect(restore.getByRole('heading', { level: 2 })).toHaveText(copy.title!);
         await expect(restore.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(1);
-        await expect(restore.locator('.command-snippet pre code')).toHaveText([
-          'agentplugins add <git-url> --scope project',
-          'agentplugins install',
+        await expect(restore.locator('.registry-restore__package strong')).toHaveText([
+          'v1.0.0',
+          'v1.0.0',
         ]);
-        const docsLocale = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
+        await expect(restore.locator('.registry-restore__locked-version')).toHaveText('v1.0.0');
+        const snippets = restore.locator('.command-snippet pre code');
+        await expect(snippets).toHaveCount(2);
+        await expect(snippets.first()).toContainText('agentplugins add');
+        await expect(snippets.first()).toContainText('github:brunoborges/javaevolved');
+        await expect(snippets.last()).toHaveText('agentplugins install --locked');
+        const docsLocale = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
         const guideLabel =
           docsLocale === locale
             ? copy.guide!
@@ -174,10 +180,10 @@ for (const locale of publishedLocales) {
     baseURL,
   }) => {
     const messages = JSON.parse(
-      readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'),
+      readFileSync(new URL(`../../i18n/locales/${locale}.json`, import.meta.url), 'utf8'),
     );
     const reference = JSON.parse(
-      readFileSync(new URL('../../locales/en.json', import.meta.url), 'utf8'),
+      readFileSync(new URL('../../i18n/locales/en.json', import.meta.url), 'utf8'),
     );
     if (locale !== 'en')
       expect(messages.publicAuthoring.title).not.toBe(reference.publicAuthoring.title);

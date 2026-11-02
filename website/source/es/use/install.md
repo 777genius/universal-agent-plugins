@@ -105,14 +105,18 @@ Los hallazgos automáticos de seguridad pueden bloquear la instalación. `--secu
 
 El ámbito de proyecto explícito está disponible desde [CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93). Elige un directorio existente e indica el ámbito en cada comando:
 
+Para una entrada revisada y compatible del catálogo, copia su origen Git fijado a un SHA completo y el cliente adecuado. Los alias de Directory v1, como `context7`, solo sirven en el ámbito de usuario. Sustituye `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` y `PACKAGE_PATH`; si el paquete está en la raíz del repositorio, omite `//PACKAGE_PATH`.
+
+Plantilla: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. El comando siguiente usa un commit histórico real de GitLab; no demuestra que esa revisión siga aprobada en el catálogo. Para una instalación nueva, copia la fuente revisada actual del catálogo.
+
 ```bash
-agentplugins add context7 --target cursor --scope project \
+agentplugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex --scope project \
   --project-root /path/to/project --dry-run
 agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project
 ```
 
-El primer comando muestra una vista previa; omite `--dry-run` para aplicarla. El segundo abre un selector con ese ámbito y puede aplicar tu selección. Sin `--project-root`, el ámbito de proyecto explícito usa el directorio desde el que ejecutas el comando. No busca en carpetas superiores. Los comandos `add` y `skills add` usan por defecto el ámbito de usuario. La selección automática de proyecto de `install` sin argumentos, publicada en 0.1.94, se explica en [mantenimiento](./manage).
+El primer comando muestra una vista previa; omite `--dry-run` para aplicarla. El segundo abre un selector con ese ámbito y puede aplicar tu selección. Sin `--project-root`, el ámbito de proyecto explícito usa el directorio desde el que ejecutas el comando. No busca en carpetas superiores. Los comandos `add` y `skills add` usan por defecto el ámbito de usuario. La selección automática de proyecto de `install` sin argumento de origen, publicada en 0.1.94, se explica en [mantenimiento](./manage).
 
 El destino debe admitir los componentes de proyecto solicitados. La instalación de proyecto para ChatGPT no está admitida y se rechaza explícitamente. VS Code prepara `.github/skills` y las entradas `servers` que pertenecen a la instalación en `.vscode/mcp.json`, para una sola carpeta local. Su resultado sigue siendo Prepared: revisa la confianza del espacio de trabajo y de los servidores, y examina los ajustes del cliente. Esa observación de metadatos no demuestra el arranque de MCP, las llamadas a herramientas ni la ejecución de modelos.
 

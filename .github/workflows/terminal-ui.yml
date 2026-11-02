@@ -1,6 +1,14 @@
 name: Terminal UI
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Documentation and web-only changes cannot affect the terminal matrix.
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
   workflow_dispatch:
 # Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:
@@ -11,6 +19,7 @@ permissions:
   contents: read
 jobs:
   terminal:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -25,7 +34,7 @@ jobs:
           - os: windows-2025
             target: windows-amd64
             archive: lintai-v0.1.3-x86_64-pc-windows-msvc.zip
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.os == 'ubuntu-24.04' && matrix.os || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
     env:
       GOWORK: 'off'
       GOTOOLCHAIN: local

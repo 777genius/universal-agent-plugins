@@ -235,7 +235,9 @@ func directSavedLifecycleCase(t *testing.T, format string) {
 
 func directSavedLifecycleEndpoint(t *testing.T, fixture cliFixture, transport *directTransportFixture, format, endpoint string) {
 	t.Helper()
+	expected := directExpectedPackage(t, transport.work)
 	dependencyRun(t, fixture, "add", endpoint, "--target", "gemini", "--format", "json")
+	directAssertInstalledPackage(t, fixture, expected)
 	first := directLockedPin(t, fixture)
 	state, err := fixture.store.Load()
 	if err != nil {
@@ -244,7 +246,9 @@ func directSavedLifecycleEndpoint(t *testing.T, fixture cliFixture, transport *d
 	installationID, sourceID := state.Installations[0].InstallationID, state.Installations[0].Source.SourceBindingID
 	directAssertSourceFacts(t, first, state.Installations[0], endpoint)
 	directAdvanceTransport(t, transport, format)
+	expected["revision.txt"] = "second immutable package"
 	dependencyRun(t, fixture, "update", first.Alias, "--target", "gemini", "--format", "json")
+	directAssertInstalledPackage(t, fixture, expected)
 	second := directLockedPin(t, fixture)
 	if second.TreeDigest == first.TreeDigest || second.SourceKey != first.SourceKey {
 		t.Fatal("moving source did not update within its stable ownership")
@@ -257,7 +261,8 @@ func directSavedLifecycleEndpoint(t *testing.T, fixture cliFixture, transport *d
 		t.Fatal("update changed binding identity")
 	}
 	dependencyRun(t, fixture, "repair", installationID, "--target", "gemini", "--format", "json")
-	directColdRestore(t, fixture, transport, second)
+	directAssertInstalledPackage(t, fixture, expected)
+	directColdRestore(t, fixture, transport, second, expected)
 }
 
 func directAdvanceTransport(t *testing.T, transport *directTransportFixture, format string) {
@@ -285,7 +290,7 @@ func directAssertSourceFacts(t *testing.T, pin environment.LockedPackage, instal
 	}
 }
 
-func directColdRestore(t *testing.T, original cliFixture, transport *directTransportFixture, pin environment.LockedPackage) {
+func directColdRestore(t *testing.T, original cliFixture, transport *directTransportFixture, pin environment.LockedPackage, expected map[string]string) {
 	t.Helper()
 	fresh := directCLIEnvironment(t, transport)
 	oldManifest, oldLock := original.app.dependencyPaths()
@@ -293,6 +298,7 @@ func directColdRestore(t *testing.T, original cliFixture, transport *directTrans
 	dependencyWrite(t, newManifest, dependencyRead(t, oldManifest))
 	dependencyWrite(t, newLock, dependencyRead(t, oldLock))
 	dependencyRun(t, fresh, "deps", "sync", "--locked", "--yes", "--format", "json")
+	directAssertInstalledPackage(t, fresh, expected)
 	state, err := fresh.store.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -301,6 +307,7 @@ func directColdRestore(t *testing.T, original cliFixture, transport *directTrans
 		t.Fatalf("cold restore changed pinned identity: %+v", state.Installations)
 	}
 	dependencyRun(t, fresh, "deps", "sync", "--locked", "--yes", "--format", "json")
+	directAssertInstalledPackage(t, fresh, expected)
 	view, err := fresh.app.Installer.Inspect(context.Background())
 	if err != nil {
 		t.Fatal(err)

@@ -91,3 +91,51 @@ func TestSkillsOperationOutcomeNeverExposesProviderReasons(t *testing.T) {
 		t.Fatalf("stable reason guidance lost: %s", body)
 	}
 }
+
+// Regression against the destructive "misspelled skills filter removes the
+// previously installed Skills" pattern. This exercises UAP's supported exact
+// raw-Skill selector (not an unsupported APM-style package skill filter).
+func TestSkillsMisspelledSelectionRetainsInstalledSkill(t *testing.T) {
+	journey, _, raw := skillsFullFlowFixture(t)
+	journey.run(t, "skills", "add", "acme/skills", "--path", "engineering/review",
+		"--target", "codex", "--no-ui", "--yes", "--format", "json")
+	state := journey.state(t)
+	if len(state.EnvironmentReceipts) != 1 {
+		t.Fatalf("missing originally installed Skill receipt: %+v", state.EnvironmentReceipts)
+	}
+	binding := savedJourneyBinding(t, state, "codex")
+	nativePath := filepath.Join(binding.TargetLocator, "skills", "review", "SKILL.md")
+	if got := dependencyRead(t, nativePath); got != string(raw) {
+		t.Fatalf("original pinned Skill was never installed: %q", got)
+	}
+	beforeEnvironment := savedJourneyTree(t, journey.cli.app.DependenciesRoot)
+	beforeProjection := savedJourneyTree(t, binding.TargetLocator)
+	beforeCalls := journey.runner.calls
+	mp, lp := journey.cli.app.dependencyPaths()
+	manifest, lock := dependencyRead(t, mp), dependencyRead(t, lp)
+
+	// Preserve the misspelling as a negative-control input without allowing
+	// the source spelling linter to rewrite the intentionally invalid name.
+	unknownSkill := "rev" + "eiw"
+	out, _, err := journey.cli.execute(false, "skills", "add", "acme/skills",
+		"--skill", unknownSkill, "--target", "codex", "--no-ui", "--yes", "--format", "json")
+	if err == nil || !strings.Contains(out, "SKILL_NOT_FOUND") ||
+		!strings.Contains(out, "Names are exact") {
+		t.Fatalf("unknown Skill did not fail with specific selection refusal: %v %s", err, out)
+	}
+	if !reflect.DeepEqual(state, journey.state(t)) ||
+		!reflect.DeepEqual(beforeEnvironment, savedJourneyTree(t, journey.cli.app.DependenciesRoot)) ||
+		!reflect.DeepEqual(beforeProjection, savedJourneyTree(t, binding.TargetLocator)) ||
+		dependencyRead(t, mp) != manifest || dependencyRead(t, lp) != lock ||
+		journey.runner.calls != beforeCalls {
+		t.Fatal("misspelled Skill selection changed durable pins, native files or ownership")
+	}
+
+	journey.run(t, "deps", "sync", "--locked", "--yes", "--format", "json")
+	if got := dependencyRead(t, nativePath); got != string(raw) {
+		t.Fatalf("locked repeat after refusal lost original Skill: %q", got)
+	}
+	if !reflect.DeepEqual(beforeProjection, savedJourneyTree(t, binding.TargetLocator)) {
+		t.Fatal("locked retry rewrote the previously installed Skill")
+	}
+}

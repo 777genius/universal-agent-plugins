@@ -17,7 +17,7 @@ users' task. A Skill supplies instructions; MCP supplies a connection to tools.
 ## Availability
 
 The current native installer release,
-[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94),
+[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95),
 can validate and install standard packages. Package-manager channels can lag;
 check `agentplugins version` for the installed version. It does **not** include
 `agentplugins author`. The authoring commands in this Build journey describe
@@ -80,8 +80,8 @@ See [package layout](./layout) for the responsibility of each file.
 
 ## Build from source {#build-from-source}
 
-The following developer setup builds the current public authoring contract from
-source. It requires Git and the Go toolchain declared by the repository
+The following commands build the current CLI from source with authoring enabled.
+They require Git and the Go toolchain declared by the repository
 (currently Go 1.26.10). Record the checked-out commit when sharing results.
 
 ```bash

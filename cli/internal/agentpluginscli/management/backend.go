@@ -14,6 +14,7 @@ type Backend interface {
 	CatalogDetail(context.Context, string) (CatalogEntry, error)
 	SkillsCatalog(context.Context, SourceRequest) (SkillCatalog, error)
 	Inspect(context.Context) (Environment, error)
+	CheckUpdates(context.Context, UpdateCheckRequest) (UpdateCheck, error)
 	Prepare(context.Context, ChangeRequest, string) (Prepared, error)
 }
 

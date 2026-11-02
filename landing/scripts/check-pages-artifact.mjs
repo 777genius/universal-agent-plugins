@@ -314,7 +314,7 @@ export async function checkPagesArtifact({
     const meta = tags(html, 'meta');
     assert.equal(
       meta.find((tag) => tag.property === 'og:locale')?.content,
-      localeMetadata[route.locale].iso.replace('-', '_'),
+      localeMetadata[route.locale].language.replace('-', '_'),
     );
     assert.deepEqual(
       meta

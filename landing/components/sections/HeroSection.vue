@@ -140,11 +140,9 @@ const releaseDate = computed(() => {
 .hero-section__logo {
   width: 56px;
   height: 56px;
-  border-radius: 14px;
   flex-shrink: 0;
   display: block;
-  box-shadow: 0 10px 30px rgba(0, 240, 255, 0.2);
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .hero-section__subtitle {

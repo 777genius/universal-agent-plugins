@@ -104,12 +104,22 @@ func TestRootCompatibilityInstallerAndAuthorPolicies(t *testing.T) {
 	for _, field := range []string{"future", "extensions"} {
 		body := []byte(`{"$schema":"` + domain.PluginSchemaV1 + `","name":"good","` + field + `":{"example.fixture":{"x":1,"x":2}}}`)
 		_, diagnostics, _, err := installer.Plugin(body)
-		if field == "extensions" {
-			if err == nil || !strings.Contains(err.Error(), `duplicate field "x"`) {
-				t.Fatalf("known field duplicate: %v", err)
+		if err != nil {
+			t.Fatalf("opaque nested duplicate rejected: %v", err)
+		}
+		if field == "future" {
+			if len(diagnostics) != 1 || diagnostics[0].Code != "plugin_unknown_field" || diagnostics[0].Item != "future" {
+				t.Fatalf("unknown top-level field diagnostics: %+v", diagnostics)
 			}
-		} else if err != nil || len(diagnostics) != 1 || diagnostics[0].Code != "plugin_unknown_field" || diagnostics[0].Item != "future" {
-			t.Fatalf("opaque duplicate disposition: %v %+v", err, diagnostics)
+		} else if len(diagnostics) != 0 {
+			t.Fatalf("unknown extension content incorrectly reported: %+v", diagnostics)
+		}
+		facts, err := d.DecodePlugin(context.Background(), NewDocument("plugin.json", Present, body))
+		if err != nil || facts.Package == nil {
+			t.Fatalf("authoring lost opaque package: %+v %v", facts, err)
+		}
+		if field == "extensions" && facts.Coverage.Plugin != Pass {
+			t.Fatalf("opaque extension duplicates degraded authoring: %+v", facts)
 		}
 	}
 	for _, tc := range []struct{ code, value string }{

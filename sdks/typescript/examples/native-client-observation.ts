@@ -1,16 +1,17 @@
 // Native discovery only: no model, authentication, thread, or simulated client.
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
-import { realpath } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 
-export type NativeClient = 'opencode' | 'claude' | 'codex';
+export type NativeClient = 'opencode' | 'claude' | 'codex' | 'cline' | 'gemini' | 'copilot' | 'grok' | 'qoder';
 export interface NativeObservation {
   skills: Map<string, string>;
   pluginId?: string;
 }
-interface Options {
+export interface Options {
+  managedArtifact?: string;
   client: NativeClient;
   executable: string;
   root: string;
@@ -19,17 +20,19 @@ interface Options {
   env: NodeJS.ProcessEnv;
   expectedPluginId?: string;
 }
+import { inspectPackageNative } from './package-client-observation.ts';
+
 const pluginName = 'uap-commands-fixture';
 const fixtureNames = ['fixture-guide', `${pluginName}-echo`, `${pluginName}-wizard`];
 const limit = 4 * 1024 * 1024;
 
-async function command(options: Options, args: string[]): Promise<string> {
+export async function command(options: Options, args: string[]): Promise<string> {
   const { stdout } = await promisify(execFile)(options.executable, args, {
     cwd: options.project, env: options.env, timeout: 30_000, maxBuffer: limit,
   });
   return stdout;
 }
-async function contained(root: string, path: string): Promise<string> {
+export async function contained(root: string, path: string): Promise<string> {
   assert.ok(isAbsolute(path), `Native path is not absolute: ${path}`);
   const [base, actual] = await Promise.all([realpath(root), realpath(path)]);
   const child = relative(base, actual);
@@ -124,6 +127,37 @@ async function codexSkills(options: Options): Promise<unknown> {
 
 export async function inspectNative(options: Options): Promise<NativeObservation> {
   const skills = new Map<string, string>();
+  if (['copilot', 'grok', 'qoder'].includes(options.client)) return inspectPackageNative(options);
+  if (options.client === 'cline') {
+    const rows: unknown = JSON.parse(await command(options, ['--auto-approve', 'false', '--cwd', options.project, 'config', 'skills', '--json']));
+    assert.ok(Array.isArray(rows));
+    for (const row of rows as Record<string, unknown>[]) {
+      assert.equal(typeof row.path, 'string'); assert.equal(typeof row.name, 'string');
+      const expected = join(options.nativeRoot, 'skills', row.name as string, 'SKILL.md');
+      if (row.path !== expected) continue;
+      assert.equal(skills.has(row.name as string), false, 'Duplicate Cline Skill');
+      await contained(options.root, expected);
+      const markdown = await readFile(expected, 'utf8');
+      const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(markdown);
+      const body = frontmatter ? markdown.slice(frontmatter[0].length).trim() : markdown.trim();
+      assert.equal(row.instructions, body, 'Cline instructions differ from actual Skill Markdown');
+      assert.ok(row.frontmatter && typeof row.frontmatter === 'object' && !Array.isArray(row.frontmatter));
+      for (const key of ['name', 'description']) {
+        const value = frontmatter?.[1]?.match(new RegExp(`^${key}: *(.+)$`, 'm'))?.[1]?.replace(/^['"]|['"]$/g, '');
+        if (value !== undefined) { assert.equal((row.frontmatter as Record<string, unknown>)[key], value); assert.equal(row[key], value); }
+      }
+      skills.set(row.name as string, expected);
+    }
+    return { skills };
+  }
+  if (options.client === 'gemini') {
+    const rows = parseAgentSkills(await command(options, ['skills', 'list']));
+    for (const [name, path] of rows) {
+      assert.equal(path, join(options.nativeRoot, 'skills', name, 'SKILL.md'));
+      await contained(options.root, path); skills.set(name, path);
+    }
+    return { skills };
+  }
   if (options.client === 'opencode') {
     const listing: unknown = JSON.parse(await command(options, ['debug', 'skill']));
     assert.ok(Array.isArray(listing));
@@ -201,4 +235,19 @@ export async function actualuninstallCodex(options: Options & { expectedPluginId
   assert.equal(removed.pluginId, options.expectedPluginId, 'Native remove returned another plugin identity');
   const after = await inspectNative(options);
   assert.equal(after.skills.size, 0, 'Fresh native Codex discovery still exposes removed plugin');
+}
+
+// Parse the entire pinned native grammar; never accept a truncated final row.
+export function parseAgentSkills(text: string): Map<string, string> {
+  const rows = new Map<string, string>();
+  if (/^No (?:agent )?skills (?:found|discovered)\.?\s*$/i.test(text.trim())) return rows;
+  assert.ok(text.startsWith('Discovered Agent Skills:'), `Unexpected native Skill listing: ${text}`);
+  let rest = text.slice('Discovered Agent Skills:'.length).trim();
+  while (rest) {
+    const match = /^([^\s]+) \[Enabled\]\r?\n[ \t]+Description: ([^\r\n]*)\r?\n[ \t]+Location:[ \t]+([^\r\n]+)(?:\r?\n|$)/.exec(rest);
+    assert.ok(match, `Unparsed or truncated native Skill listing: ${rest}`);
+    assert.equal(rows.has(match[1]!), false, 'Duplicate native Skill');
+    rows.set(match[1]!, match[3]!.trim()); rest = rest.slice(match[0].length).trim();
+  }
+  return rows;
 }

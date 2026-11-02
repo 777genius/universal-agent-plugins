@@ -56,7 +56,7 @@ func (b *ManagementBackend) finishManagementPreparation(ctx context.Context, pre
 	p.operationIDs = managementOperationIDs(operationID, actions)
 	p.review = management.Plan{Action: input.Action, ContextId: b.ContextID(), Confirmable: true, Actions: []management.PlanAction{}, Warnings: []management.Diagnostic{}, Conflicts: []management.Diagnostic{}}
 	for _, action := range actions {
-		entry := management.PlanAction{Action: string(action.Action), Alias: action.Alias, TargetId: b.targetID(action.ClientID), Description: action.Reason, DestinationPath: paths[action.Alias+"\x00"+action.ClientID]}
+		entry := management.PlanAction{FromVersion: action.FromVersion, Action: string(action.Action), Alias: action.Alias, TargetId: b.targetID(action.ClientID), Description: action.Reason, DestinationPath: paths[action.Alias+"\x00"+action.ClientID]}
 		if action.Package != nil {
 			entry.ToVersion = action.Package.Version
 		}

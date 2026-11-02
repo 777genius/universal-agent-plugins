@@ -165,10 +165,14 @@ of the unchanged seal. Failure artifacts retain logs and sealed inputs; the
 artifact digest index preserves relationships. Downloaded archives are audit
 material, not a fresh verification of relocated live trees.
 
-The always-running aggregate requires **native and packed success**. Its focused
-structural controls reject missing/conditional jobs, dependencies, matrix lanes
-and explicit tags. All four native lanes and all five source-harness lanes
-remain mandatory. Existing Windows concurrent-init failure remains a blocker;
+The always-running aggregate requires **native and packed success**. The only
+exception is a pull request that the shared `pr-changes.yml` classifier reports
+as documentation and web content only (`authoring=false`): both lanes are then
+skipped and the aggregate requires exactly that. An unavailable classification
+and every dispatch run both lanes. Its focused structural controls reject
+missing jobs, any other job condition, dependencies, matrix lanes and explicit
+tags. All four native lanes and all five source-harness lanes remain mandatory
+whenever the lanes run. Existing Windows concurrent-init failure remains a blocker;
 no retry or restricted diagnostic substitutes for that gate. PR167/169 and the
 writable macOS owner gate remain upstream requirements. Required-check settings
 are external: source controls do not prove GitHub enforcement. ROOT must run the

@@ -6,6 +6,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"net/netip"
 	"net/url"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -231,17 +232,22 @@ func ParseStdio(config map[string]any, commandPolicy func(string) (string, error
 			}
 		}
 	}
-	if env, ok := config["env"].(map[string]any); ok {
-		if _, reserved := env["PLUGIN_ROOT"]; reserved {
-			return nil, semanticError("stdio_env_reserved", "stdio server must not define reserved environment variable PLUGIN_ROOT")
-		}
-		if _, reserved := env["PLUGIN_DATA"]; reserved {
-			return nil, semanticError("stdio_env_reserved", "stdio server must not define reserved environment variable PLUGIN_DATA")
-		}
+	// The portable config's reserved keys are invalid at the server
+	// boundary, not merely an installation-time readiness failure.
+	// Windows environment names are case-insensitive (§9.1).
+	if reserved := domain.ReservedStdioEnvKey(config["env"], runtime.GOOS == "windows"); reserved != "" {
+		return nil, semanticError("stdio_env_reserved", "stdio server must not define reserved environment variable %s", reserved)
+	}
+	switch env := config["env"].(type) {
+	case map[string]any:
 		for _, value := range env {
 			if text, ok := value.(string); ok {
 				values = append(values, text)
 			}
+		}
+	case map[string]string:
+		for _, value := range env {
+			values = append(values, value)
 		}
 	}
 	if cwd, ok := config["cwd"].(string); ok {

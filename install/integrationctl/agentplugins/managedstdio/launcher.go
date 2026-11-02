@@ -29,7 +29,7 @@ func Dispatch(args []string, stderr io.Writer) (bool, int) {
 		return false, 0
 	}
 	if err := run(args[1:]); err != nil {
-		fmt.Fprintln(stderr, "managed stdio:", err)
+		_, _ = fmt.Fprintln(stderr, "managed stdio:", err)
 		return true, 126
 	}
 	return true, 0
@@ -39,19 +39,21 @@ func run(args []string) error {
 	if !Supported() {
 		return fmt.Errorf("managed stdio is unsupported on this platform")
 	}
-	if len(args) < 6 || args[4] != "--" {
+	if len(args) < 6 {
 		return fmt.Errorf("invalid protocol v1 arguments")
+	}
+	child, err := DecodeCommandArguments(args[4], args[5:])
+	if err != nil {
+		return err
 	}
 	plugin, data, cwd := args[0], args[1], args[2]
 	if !filepath.IsAbs(plugin) || !filepath.IsAbs(data) || !filepath.IsAbs(cwd) {
 		return fmt.Errorf("protocol roots and cwd must be absolute")
 	}
 	root := plugin
-	switch pathcontract.Anchor(args[3]) {
-	case pathcontract.Plugin:
-	case pathcontract.Data:
+	if anchor := pathcontract.Anchor(args[3]); anchor == pathcontract.Data {
 		root = data
-	default:
+	} else if anchor != pathcontract.Plugin {
 		return fmt.Errorf("invalid cwd anchor")
 	}
 	// Strip without Clean/Rel: symlink/.. traversal must reach the resolver intact.
@@ -65,13 +67,13 @@ func run(args []string) error {
 	}
 	resolved := pathcontract.Resolve(root, relative)
 	if resolved.State != pathcontract.Resolved {
-		return fmt.Errorf("cwd unavailable: %v", resolved.Err)
+		return fmt.Errorf("cwd unavailable: %w", resolved.Err)
 	}
 	info, err := os.Stat(resolved.Path)
 	if err != nil || !info.IsDir() {
 		return fmt.Errorf("cwd is not a directory")
 	}
-	command := args[5]
+	command := child[0]
 	if strings.HasPrefix(command, "./") {
 		relative, err := pathcontract.ParseCommand(command)
 		if err != nil {
@@ -79,7 +81,7 @@ func run(args []string) error {
 		}
 		result := pathcontract.Resolve(plugin, relative)
 		if result.State != pathcontract.Resolved {
-			return fmt.Errorf("bundled command unavailable: %v", result.Err)
+			return fmt.Errorf("bundled command unavailable: %w", result.Err)
 		}
 		command = result.Path
 	} else {
@@ -95,5 +97,5 @@ func run(args []string) error {
 			return fmt.Errorf("runtime PATH resolved to a relative executable")
 		}
 	}
-	return replaceProcess(command, append([]string{command}, args[6:]...), resolved.Path)
+	return replaceProcess(command, append([]string{command}, child[1:]...), resolved.Path)
 }

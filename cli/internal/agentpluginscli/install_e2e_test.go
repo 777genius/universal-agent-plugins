@@ -277,10 +277,10 @@ func TestInstallDependencyGraphLifecycle(t *testing.T) {
 		distribution.ReleasePolicies = append(distribution.ReleasePolicies, domain.DirectoryReleasePolicy{ReleaseSequence: sequence, Status: domain.ReleaseActive, MinimumInstallerVersion: "0.1.0", CurrentEvidence: []string{evidence.ID}, Targets: []domain.DirectoryTarget{{Client: domain.ClientCodex, Scopes: []domain.InstallScope{domain.ScopeUser}, Delivery: "managed", Authentication: domain.AuthenticationRequirementNotRequired}}})
 		return release
 	}
-	firstA := addRelease("a", "1.3.0", "^1.2", 1)
+	addRelease("a", "1.2.0", "^1.2", 1)
+	firstA := addRelease("a", "1.3.0", "^1.2", 2)
 	firstB := addRelease("b", "1.0.0", "^1.2", 1)
 	firstC := addRelease("c", "1.2.0", "", 1)
-	nextC := addRelease("c", "1.3.0", "", 2)
 	mp, lp := f.app.dependencyPaths()
 	manifest := "schema_version = 1\n[dependencies]\na = \"^1.2\"\nb = \"1.0.0\"\n[targets]\ncodex = [\"a\", \"b\"]\n"
 	dependencyWrite(t, mp, manifest)
@@ -435,7 +435,7 @@ func TestInstallDependencyGraphLifecycle(t *testing.T) {
 			t.Fatal("deps tree wrote files or acquired source/catalog")
 		}
 	}
-	// 1. Resolve the diamond once, using the minimum admissible shared version.
+	// 1. Fresh resolution chooses the highest compatible A, with one shared C.
 	run("deps", "lock", "--format", "json")
 	locked := readLock()
 	initial := pins(locked)
@@ -462,7 +462,10 @@ func TestInstallDependencyGraphLifecycle(t *testing.T) {
 			t.Fatalf("transitive removal installed bindings: %+v %v", view, err)
 		}
 	}
-	// 2. Install the complete recorded graph and prove both tree views are read-only.
+	// 2. Publish a newer C after locking. Replay keeps the recorded graph.
+	nextC := addRelease("c", "1.3.0", "", 2)
+	directory.bundle.Snapshot.Sequence = 2
+	directory.bundle.Digest = "sha256:" + strings.Repeat("b", 64)
 	run("install", "--locked", "--yes", "--format", "json")
 	installed := checkBindings(locked)
 	checkTree(locked, []string{"a", "b"})
@@ -485,7 +488,8 @@ func TestInstallDependencyGraphLifecycle(t *testing.T) {
 	if source.downloads != downloads || source.lookups != lookups || !reflect.DeepEqual(before, snapshot(paths...)) {
 		t.Fatal("repeat install acquired source or changed bytes/mtime")
 	}
-	// 4. Repair from the store, then add a newer release with a lower semver.
+	// 4. Repair from the store. A later lower version cannot downgrade A;
+	// an eligible higher version then advances A and the shared C closure.
 	drift := filepath.Join(installed["c"].TargetPath, "user-edit.txt")
 	dependencyWrite(t, drift, "drift")
 	run("install", "--locked", "--yes", "--format", "json")
@@ -496,9 +500,17 @@ func TestInstallDependencyGraphLifecycle(t *testing.T) {
 	if _, err := os.Stat(drift); !os.IsNotExist(err) {
 		t.Fatalf("drift survived repair: %v", err)
 	}
-	nextA := addRelease("a", "1.2.0", "^1.3", 2)
-	directory.bundle.Snapshot.Sequence = 2
-	directory.bundle.Digest = "sha256:" + strings.Repeat("b", 64)
+	addRelease("a", "1.2.0", "^1.3", 3)
+	directory.bundle.Snapshot.Sequence = 3
+	directory.bundle.Digest = "sha256:" + strings.Repeat("c", 64)
+	beforeLower := snapshot(mp, lp, f.store.Path, f.app.EnvironmentStoreRoot, f.app.ManagedRoot)
+	run("deps", "update", "a", "--format", "json")
+	if !reflect.DeepEqual(locked, readLock()) || !reflect.DeepEqual(beforeLower, snapshot(mp, lp, f.store.Path, f.app.EnvironmentStoreRoot, f.app.ManagedRoot)) {
+		t.Fatal("later lower version changed the pinned graph or installed files")
+	}
+	nextA := addRelease("a", "1.4.0", "^1.3", 4)
+	directory.bundle.Snapshot.Sequence = 4
+	directory.bundle.Digest = "sha256:" + strings.Repeat("d", 64)
 	beforeUpdate := snapshot(append([]string{mp, f.store.Path}, paths[3:]...)...)
 	previousLock := dependencyRead(t, lp)
 	run("deps", "update", "a", "--format", "json")

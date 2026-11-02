@@ -8,7 +8,9 @@ baseline; newer source-only behavior is labelled separately. The historical
 A Skill can be installed from a public GitHub repository, a folder URL, or a
 `SKILL.md` URL. The installer keeps its original document, scripts and resources,
 then uses the existing package installer and ownership/recovery rules.
-Installation does not execute the Skill's scripts.
+Installation does not execute the Skill's scripts or prepare arbitrary runtime
+libraries. See [shared MCP ownership and locked Skill runtime preparation](SHARED_MCP_AND_SKILL_RUNTIME.md)
+for explicit prerequisites and what the installed lock does (and does not) cover.
 
 Compatible HTTPS publishers can also expose complete Skills through a
 `.well-known` discovery index. Publisher installation requires the exact

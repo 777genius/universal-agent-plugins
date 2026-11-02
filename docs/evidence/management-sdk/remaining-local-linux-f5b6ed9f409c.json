@@ -1,0 +1,759 @@
+{
+  "evidence_kind": "management-sdk-local-user-lifecycles",
+  "tested_source_commit": "f5b6ed9f409c5c1b1748b7625db5076cba944a80",
+  "source_dirty": false,
+  "platform": "linux",
+  "architecture": "x64",
+  "engine_sha256": "4aef4ef3a4777d617957ba27b10e3f33b51d0da7513fdedb54c4afa50e75ae29",
+  "scope": "Existing Management SDK user scope; native acceptance and SDK-only configuration are distinct qualifications.",
+  "runs": [
+    {
+      "client": "cline",
+      "native_version": "3.0.73",
+      "qualification": "sdk-native-lifecycle",
+      "elapsed_seconds": 17.085,
+      "native_sha256": "1ff8841d17d4d83763134c193d414e4f7fcf2ef56af759e5ebbe96727fc2c8f7",
+      "receipt_sha256": "4c6e2e8ea58487a173850fe878567a82960caafb9c9bfaf647c22e6123ec7660",
+      "source_sha256": "ccfe2d7b7826affb3b7aeb91eb98946e5a4f2f41c4b7f404f63f643012d3adcd",
+      "status": "passed",
+      "stage": "complete",
+      "checks": [
+        "real cline native discovery loads exact pinned Skill bytes and portable command; explicit-only command remains withheld",
+        "targeted immutable-source update preserves the lock",
+        "edited native projection is refused as partial, keeps pending history and preserves its exact bytes",
+        "after manual preservation, a fresh review restores exact native fixture bytes and settles only proved recovery",
+        "lost accepted response plus owned-process SIGKILL preserves retry identity; fresh recovery verifies exact real native consumer bytes without duplicate dependency",
+        "accepted successful operation survives engine restart without replay",
+        "managed removal clears desired environment and real native Skill discovery",
+        "local create/edit/delete and restart-visible exact backup restoration use the same real Go lifecycle"
+      ],
+      "operations": [
+        {
+          "action": "install",
+          "operationId": "41d34f646971ff47cc6273d7274384da332fc5140bfb0642568fcabcb1e97497",
+          "state": "succeeded"
+        },
+        {
+          "action": "update",
+          "operationId": "0469c1101e5b9198840aeab2fd4852552289e825419234fb0491ebde4fe315c8",
+          "state": "succeeded"
+        },
+        {
+          "action": "repair",
+          "operationId": "c734539de921e0b44d29fdd9bcc27664d3d358f7a02da84a0c6fef62c236257c",
+          "state": "succeeded"
+        },
+        {
+          "action": "repair",
+          "operationId": "812950e9f99dfc9d7357d3f02a5b459bd69f63e2bb3f9de889d43ad4ab9b4750",
+          "state": "partial"
+        },
+        {
+          "action": "recover",
+          "operationId": "2cc07e2cfd7e9a0c2ab36fea57f5729faf7e6bd8fdb573f574703a89a7242bb3",
+          "state": "succeeded"
+        },
+        {
+          "action": "recover",
+          "operationId": "5963288b2850c1040eccbbedf143930007ec7694ec7221cf015f856ec42aafed",
+          "state": "succeeded"
+        },
+        {
+          "action": "remove",
+          "operationId": "07e0ea56d4698a0de28c9eaeb341869e586d4c1abfce403819df739b5fdb196d",
+          "state": "succeeded"
+        },
+        {
+          "action": "local_upsert",
+          "operationId": "40ceea83358f9ce215b90f76320bfe13f41bd70a0aa9e4807494d05d35e37dc1",
+          "state": "succeeded"
+        },
+        {
+          "action": "local_upsert",
+          "operationId": "0dc9abf1f61eefc3afbd80d4b578b32e8f40829e2d8d81ef6e1627a8354f162a",
+          "state": "succeeded"
+        },
+        {
+          "action": "local_delete",
+          "operationId": "6a9f86356f626b9ac40ad778077f11d7dc4aa15a5179abcda1b423b5e4c947ec",
+          "state": "succeeded"
+        },
+        {
+          "action": "local_restore",
+          "operationId": "fbda83ae39006860d1f2e82c4f322f3a0316fad4c1302bb387f274caaec7f980",
+          "state": "succeeded"
+        }
+      ],
+      "native_observations": [
+        {
+          "stage": "install succeeded",
+          "skills": [
+            {
+              "name": "fixture-guide",
+              "path": "/tmp/uap-real-sdk-20mgao/home/.cline/skills/fixture-guide/SKILL.md",
+              "sha256": "07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0"
+            },
+            {
+              "name": "uap-commands-fixture-echo",
+              "path": "/tmp/uap-real-sdk-20mgao/home/.cline/skills/uap-commands-fixture-echo/SKILL.md",
+              "sha256": "455693f889350641f0c82c99cba45e9a3adc5b153879c91d517b32f35925f5be"
+            }
+          ]
+        },
+        {
+          "stage": "recover succeeded",
+          "skills": [
+            {
+              "name": "fixture-guide",
+              "path": "/tmp/uap-real-sdk-20mgao/home/.cline/skills/fixture-guide/SKILL.md",
+              "sha256": "07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0"
+            },
+            {
+              "name": "uap-commands-fixture-echo",
+              "path": "/tmp/uap-real-sdk-20mgao/home/.cline/skills/uap-commands-fixture-echo/SKILL.md",
+              "sha256": "455693f889350641f0c82c99cba45e9a3adc5b153879c91d517b32f35925f5be"
+            }
+          ]
+        },
+        {
+          "stage": "recover succeeded",
+          "skills": [
+            {
+              "name": "fixture-guide",
+              "path": "/tmp/uap-real-sdk-20mgao/home/.cline/skills/fixture-guide/SKILL.md",
+              "sha256": "07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0"
+            },
+            {
+              "name": "uap-commands-fixture-echo",
+              "path": "/tmp/uap-real-sdk-20mgao/home/.cline/skills/uap-commands-fixture-echo/SKILL.md",
+              "sha256": "455693f889350641f0c82c99cba45e9a3adc5b153879c91d517b32f35925f5be"
+            }
+          ]
+        },
+        {
+          "stage": "remove succeeded",
+          "skills": []
+        }
+      ],
+      "lost_response": {
+        "planId": "37052d3a81413bb82b7229c40e6b32cc9679c5e852f54ff086778f5a4ed36669",
+        "requestId": "4d55b34a-5465-4fcd-bb14-10f6699f3fbe",
+        "observedState": "interrupted",
+        "operationId": "9ba98c42754eef91f5b28e08af02d5e52c27580ba38aa6b70424d331cecfe46a"
+      },
+      "edited_refusal": null,
+      "fixture": {
+        "fixture": "agentplugins_commands_fixture",
+        "archive_sha256": "2dfd6f6422cee4f6ad56b633431fdd0e1706723146ba9046ee5847f8f5590239",
+        "fixture_files": {
+          "io.github.777genius.agentplugins/commands/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "io.github.777genius.agentplugins/commands/echo.md": "43ac4d8a01dccc348eefd739a0a671a9a8474dd97a2f0f6b85e2b7f8327724f8",
+          "io.github.777genius.agentplugins/commands/wizard.md": "397427a03f8500f40882b6689b2b4d239c2dbacaeb6444636bbe7f0463b69bb1",
+          "plugin.json": "bab4987eb53807dc5d89b290e285d55db7cceccd69c0b32c25bf9506db04f7e2",
+          "skills/fixture-guide/SKILL.md": "07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0"
+        },
+        "https_requests": 1
+      },
+      "process": {
+        "exit": 0,
+        "error": null,
+        "stdout_bytes": 5387,
+        "stderr_bytes": 0,
+        "stdout_sha256": "4c6e2e8ea58487a173850fe878567a82960caafb9c9bfaf647c22e6123ec7660",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "client": "gemini",
+      "native_version": "0.65.0",
+      "qualification": "sdk-native-lifecycle",
+      "elapsed_seconds": 19.529,
+      "native_sha256": "2af4920d5c85a3c193b0f4ea7b8fb58bf2ee3eeeb653bc1760f63fbfac4481f9",
+      "receipt_sha256": "444142aab7980b2306807972cc3bb44bedc102b1b74b8a8a90170fe50b2c1a64",
+      "source_sha256": "9d645ff5d2193ca04a240e5f6aa58f62313c39ff2266d43050ee9e1386533ef1",
+      "status": "passed",
+      "stage": "complete",
+      "checks": [
+        "real gemini native discovery loads exact pinned Skill bytes and portable command; explicit-only command remains withheld",
+        "targeted immutable-source update preserves the lock",
+        "edited native projection is refused as partial, keeps pending history and preserves its exact bytes",
+        "after manual preservation, a fresh review restores exact native fixture bytes and settles only proved recovery",
+        "lost accepted response plus owned-process SIGKILL preserves retry identity; fresh recovery verifies exact real native consumer bytes without duplicate dependency",
+        "accepted successful operation survives engine restart without replay",
+        "managed removal clears desired environment and real native Skill discovery",
+        "local create/edit/delete and restart-visible exact backup restoration use the same real Go lifecycle"
+      ],
+      "operations": [
+        {
+          "action": "install",
+          "operationId": "35cd0799d76be8652205e31b88b5a85a8a0cabd7b2c4b55c13cfd0d478f76dee",
+          "state": "succeeded"
+        },
+        {
+          "action": "update",
+          "operationId": "d8de27ad0fdeaf9ca93db90658979da06aff47657451f2bc6c375f97718fd52e",
+          "state": "succeeded"
+        },
+        {
+          "action": "repair",
+          "operationId": "85c26ae4bdc597900e6132009279abcef93109344ad170e3c1939ea299cbf601",
+          "state": "succeeded"
+        },
+        {
+          "action": "repair",
+          "operationId": "d8716f64f6363bb1cc631f4078fa747d58b9051814d1e4e1eeef3f482d5c4816",
+          "state": "partial"
+        },
+        {
+          "action": "recover",
+          "operationId": "b1c8589b1f728c6aa4ca9f1905e63d69812f2ffa8fb2cd5a5bc4f79420504332",
+          "state": "succeeded"
+        },
+        {
+          "action": "recover",
+          "operationId": "9c7512d949af316792879e473fb195b9b3c3d1d972a401f9e2c96fd74fdc8486",
+          "state": "succeeded"
+        },
+        {
+          "action": "remove",
+          "operationId": "fb78d448f0f73aaacf08c7aeb42ceb22d91ff10cc4e54db95657f8b32bc8fba4",
+          "state": "succeeded"
+        },
+        {
+          "action": "local_upsert",
+          "operationId": "f387cfd0a549d0efebfa189a96a2b54bcba8507094c4cd1104c7e00d2bc93ef4",
+          "state": "succeeded"
+        },
+        {
+          "action": "local_upsert",
+          "operationId": "257e9d4bb6b5941dd76b832f1076b2366db67b643bd76fcdd86de172508274fe",
+          "state": "succeeded"
+        },
+        {
+          "action": "local_delete",
+          "operationId": "bf3793b53c92f6ef508a32b8394ead17a14a5b6266e362d15d6c2c8f4df4fba2",
+          "state": "succeeded"
+        },
+        {
+          "action": "local_restore",
+          "operationId": "7c8385c5083bdd2d0ab670bae763e6f3046475aea40854f1c359f1278ef7ea8a",
+          "state": "succeeded"
+        }
+      ],
+      "native_observations": [
+        {
+          "stage": "install succeeded",
+          "skills": [
+            {
+              "name": "fixture-guide",
+              "path": "/tmp/uap-real-sdk-wFR61E/home/.gemini/skills/fixture-guide/SKILL.md",
+              "sha256": "07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0"
+            },
+            {
+              "name": "uap-commands-fixture-echo",
+              "path": "/tmp/uap-real-sdk-wFR61E/home/.gemini/skills/uap-commands-fixture-echo/SKILL.md",
+              "sha256": "455693f889350641f0c82c99cba45e9a3adc5b153879c91d517b32f35925f5be"
+            }
+          ]
+        },
+        {
+          "stage": "recover succeeded",
+          "skills": [
+            {
+              "name": "fixture-guide",
+              "path": "/tmp/uap-real-sdk-wFR61E/home/.gemini/skills/fixture-guide/SKILL.md",
+              "sha256": "07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0"
+            },
+            {
+              "name": "uap-commands-fixture-echo",
+              "path": "/tmp/uap-real-sdk-wFR61E/home/.gemini/skills/uap-commands-fixture-echo/SKILL.md",
+              "sha256": "455693f889350641f0c82c99cba45e9a3adc5b153879c91d517b32f35925f5be"
+            }
+          ]
+        },
+        {
+          "stage": "recover succeeded",
+          "skills": [
+            {
+              "name": "fixture-guide",
+              "path": "/tmp/uap-real-sdk-wFR61E/home/.gemini/skills/fixture-guide/SKILL.md",
+              "sha256": "07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0"
+            },
+            {
+              "name": "uap-commands-fixture-echo",
+              "path": "/tmp/uap-real-sdk-wFR61E/home/.gemini/skills/uap-commands-fixture-echo/SKILL.md",
+              "sha256": "455693f889350641f0c82c99cba45e9a3adc5b153879c91d517b32f35925f5be"
+            }
+          ]
+        },
+        {
+          "stage": "remove succeeded",
+          "skills": []
+        }
+      ],
+      "lost_response": {
+        "planId": "ad28ddd1ed6020325c726473c4f6c2e280dbf5fe1035f1c003459b4d2e571690",
+        "requestId": "7a46e3e5-580b-4387-8af0-8cee304993c4",
+        "observedState": "interrupted",
+        "operationId": "f70ac600f599ba94dce3d1a76fe5c961d4c33de50de186fa9b92827d7fc04579"
+      },
+      "edited_refusal": null,
+      "fixture": {
+        "fixture": "agentplugins_commands_fixture",
+        "archive_sha256": "2dfd6f6422cee4f6ad56b633431fdd0e1706723146ba9046ee5847f8f5590239",
+        "fixture_files": {
+          "io.github.777genius.agentplugins/commands/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "io.github.777genius.agentplugins/commands/echo.md": "43ac4d8a01dccc348eefd739a0a671a9a8474dd97a2f0f6b85e2b7f8327724f8",
+          "io.github.777genius.agentplugins/commands/wizard.md": "397427a03f8500f40882b6689b2b4d239c2dbacaeb6444636bbe7f0463b69bb1",
+          "plugin.json": "bab4987eb53807dc5d89b290e285d55db7cceccd69c0b32c25bf9506db04f7e2",
+          "skills/fixture-guide/SKILL.md": "07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0"
+        },
+        "https_requests": 1
+      },
+      "process": {
+        "exit": 0,
+        "error": null,
+        "stdout_bytes": 5395,
+        "stderr_bytes": 0,
+        "stdout_sha256": "444142aab7980b2306807972cc3bb44bedc102b1b74b8a8a90170fe50b2c1a64",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "native_bundle": {
+        "path": "/tmp/uap-restored-clients/gemini/gemini.js",
+        "sha256": "41847af2158ced805c4a3e098a05b9a2c26fb1a49b12583009b2eaf6a4059a59",
+        "archive_sha256": "bb5e7e879608bd9b3fe261930d3886fa56aacbf471da1655f2978eb35b705a73",
+        "file_count": 451,
+        "tree_sha256": "c45f6975ec42bf5e245ae1df94e80e31b893a1e1312af3c1fe2f6a14833e1005"
+      },
+      "native_node": {
+        "path": "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "sha256": "61ab14cd750fc24d5db53490ec5fc40f756e4b6e136b78cf7004265471d9bd1d",
+        "version": "v24.22.1"
+      }
+    },
+    {
+      "client": "pi",
+      "native_version": "1.4.0",
+      "qualification": "sdk-native-lifecycle",
+      "elapsed_seconds": 7.737,
+      "native_sha256": "0d7611d0b86d38ec8f65dda8e8bee9c5e907c7bae381e9cfff9161b21e8087d0",
+      "receipt_sha256": "12354cb538cf61d15deca0a63d3a39873d58c435e0d0b3534e00bce7392797f2",
+      "source_sha256": "63b3a2dddf98fab9cad0acb6b899108692d5021e6e95bec920029bf99395ac29",
+      "status": "passed",
+      "stage": "complete",
+      "checks": [
+        "immutable-source update retains exact lock and native extension bytes",
+        "explicit repair reconstructs the missing package and real Pi loads its exact factory",
+        "Pi repair refuses modified package and preserves exact edited bytes",
+        "restart observes original accepted request identity without duplicate installation",
+        "fresh real Pi process no longer loads removed extension or exposes its command"
+      ],
+      "operations": [
+        {
+          "action": "install",
+          "operationId": "5da1073ce5f4d0de5707504d47c2b833c868d2839131b330fc179c14658dd9d0",
+          "state": "succeeded"
+        },
+        {
+          "action": "update",
+          "operationId": "868920ce6b970cb7632ffa4f66e91f87875c1b93f05acf8de6376ab025b307af",
+          "state": "succeeded"
+        },
+        {
+          "action": "repair",
+          "operationId": "c3ebb8b83957ab75956d8585c7619cc10dca8fafb8f924b7f416dd71c2dbb3f3",
+          "state": "succeeded"
+        },
+        {
+          "action": "repair",
+          "operationId": "c4532065b6ebfc9fff1e2030aad92c977c53bb9c7ed46db383331d601eb426da",
+          "state": "succeeded"
+        },
+        {
+          "action": "remove",
+          "operationId": "610e3a382e0bed50503566a7dad47c3f04c6d04a53e9896894b9800e0a1af82d",
+          "state": "succeeded"
+        }
+      ],
+      "native_observations": [
+        {
+          "stage": "install succeeded",
+          "present": true,
+          "records": [
+            {
+              "module": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c/com.universal-agent-plugins.pi/index.ts",
+              "type": "top-level"
+            },
+            {
+              "module": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c/com.universal-agent-plugins.pi/index.ts",
+              "type": "factory",
+              "descriptor": {
+                "schema_version": 1,
+                "bootstrap_version": 1,
+                "active_path": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c",
+                "package_root": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c",
+                "data_root": "/tmp/uap-pi-sdk-ukKawK/state/plugin-data/uap-pi-sdk-fixture-b7475f38178c",
+                "canonical_tree_digest": "sha256:cd9b0a9327b2bf92b14bae58605c6fda357868187d17d1e787d29640cbfae352"
+              }
+            },
+            {
+              "module": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c/com.universal-agent-plugins.pi/index.ts",
+              "type": "command"
+            }
+          ],
+          "response": [
+            {
+              "id": "sdk-witness",
+              "type": "response",
+              "command": "prompt",
+              "success": true,
+              "data": {
+                "disposition": "handled"
+              }
+            }
+          ]
+        },
+        {
+          "stage": "update succeeded",
+          "present": true,
+          "records": [
+            {
+              "module": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c/com.universal-agent-plugins.pi/index.ts",
+              "type": "top-level"
+            },
+            {
+              "module": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c/com.universal-agent-plugins.pi/index.ts",
+              "type": "factory",
+              "descriptor": {
+                "schema_version": 1,
+                "bootstrap_version": 1,
+                "active_path": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c",
+                "package_root": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c",
+                "data_root": "/tmp/uap-pi-sdk-ukKawK/state/plugin-data/uap-pi-sdk-fixture-b7475f38178c",
+                "canonical_tree_digest": "sha256:cd9b0a9327b2bf92b14bae58605c6fda357868187d17d1e787d29640cbfae352"
+              }
+            },
+            {
+              "module": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c/com.universal-agent-plugins.pi/index.ts",
+              "type": "command"
+            }
+          ],
+          "response": [
+            {
+              "id": "sdk-witness",
+              "type": "response",
+              "command": "prompt",
+              "success": true,
+              "data": {
+                "disposition": "handled"
+              }
+            }
+          ]
+        },
+        {
+          "stage": "repair succeeded",
+          "present": true,
+          "records": [
+            {
+              "module": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c/com.universal-agent-plugins.pi/index.ts",
+              "type": "top-level"
+            },
+            {
+              "module": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c/com.universal-agent-plugins.pi/index.ts",
+              "type": "factory",
+              "descriptor": {
+                "schema_version": 1,
+                "bootstrap_version": 1,
+                "active_path": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c",
+                "package_root": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c",
+                "data_root": "/tmp/uap-pi-sdk-ukKawK/state/plugin-data/uap-pi-sdk-fixture-b7475f38178c",
+                "canonical_tree_digest": "sha256:cd9b0a9327b2bf92b14bae58605c6fda357868187d17d1e787d29640cbfae352"
+              }
+            },
+            {
+              "module": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c/com.universal-agent-plugins.pi/index.ts",
+              "type": "command"
+            }
+          ],
+          "response": [
+            {
+              "id": "sdk-witness",
+              "type": "response",
+              "command": "prompt",
+              "success": true,
+              "data": {
+                "disposition": "handled"
+              }
+            }
+          ]
+        },
+        {
+          "stage": "repair succeeded",
+          "present": true,
+          "records": [
+            {
+              "module": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c/com.universal-agent-plugins.pi/index.ts",
+              "type": "top-level"
+            },
+            {
+              "module": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c/com.universal-agent-plugins.pi/index.ts",
+              "type": "factory",
+              "descriptor": {
+                "schema_version": 1,
+                "bootstrap_version": 1,
+                "active_path": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c",
+                "package_root": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c",
+                "data_root": "/tmp/uap-pi-sdk-ukKawK/state/plugin-data/uap-pi-sdk-fixture-b7475f38178c",
+                "canonical_tree_digest": "sha256:cd9b0a9327b2bf92b14bae58605c6fda357868187d17d1e787d29640cbfae352"
+              }
+            },
+            {
+              "module": "/tmp/uap-pi-sdk-ukKawK/home/.pi/agent/extensions/uap-pi-sdk-fixture-b7475f38178c/com.universal-agent-plugins.pi/index.ts",
+              "type": "command"
+            }
+          ],
+          "response": [
+            {
+              "id": "sdk-witness",
+              "type": "response",
+              "command": "prompt",
+              "success": true,
+              "data": {
+                "disposition": "handled"
+              }
+            }
+          ]
+        },
+        {
+          "stage": "remove succeeded",
+          "present": false,
+          "records": [],
+          "response": [
+            {
+              "id": "sdk-witness",
+              "type": "response",
+              "command": "get_commands",
+              "success": true,
+              "data": {
+                "commands": [
+                  {
+                    "name": "llama",
+                    "description": "Manage llama.cpp router models",
+                    "source": "extension",
+                    "sourceInfo": {
+                      "path": "builtin:llama.cpp",
+                      "source": "builtin",
+                      "scope": "temporary",
+                      "origin": "top-level"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "lost_response": null,
+      "edited_refusal": {
+        "phase": "prepare",
+        "code": "OPERATION_REFUSED",
+        "status": 422
+      },
+      "fixture": {
+        "fixture": "agentplugins_pi_sdk_fixture",
+        "archive_sha256": "74a7ab41f037d8ee5410feb2e59a9622b3652bebe462935f57f5ee0a6cced7ff",
+        "fixture_files": {
+          "com.universal-agent-plugins.pi/index.ts": "2b8fea81176e3665323fa3958e08ee4de2cbf00dd73910e9ed1129a656355f07",
+          "plugin.json": "36c9da3fb59d6ed51596fea066c516d4a9c4ae13b037c47b73cfd8403a79ad4a"
+        },
+        "https_requests": 1
+      },
+      "process": {
+        "exit": 0,
+        "error": null,
+        "stdout_bytes": 8608,
+        "stderr_bytes": 0,
+        "stdout_sha256": "12354cb538cf61d15deca0a63d3a39873d58c435e0d0b3534e00bce7392797f2",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "native_loaded": true
+    },
+    {
+      "client": "kimi",
+      "native_version": "2.3.1",
+      "qualification": "sdk-lifecycle-only",
+      "elapsed_seconds": 4.265,
+      "native_sha256": "781ec1c24e5e79a01aaaa31ad859e8818ae11ffe792e93645cdc0c068a264ba0",
+      "receipt_sha256": "9837eebdb9dfe0028522d7ed1bb892f9cefaabb03680b9030001088fb03fb300",
+      "source_sha256": "17e0130d5b648c664c995b2aa233c20aa46288574888a235d0efba833543694c",
+      "status": "passed",
+      "stage": "complete",
+      "checks": [
+        "idempotent apply; owned profile; pinned lock; intact repair; restart history; removal"
+      ],
+      "operations": [
+        {
+          "action": "install",
+          "operationId": "855769a2a090e8a5185931014c1795c8e793a337d50cef4d4a8f03c49bc5f835",
+          "state": "succeeded"
+        },
+        {
+          "action": "update",
+          "operationId": "d20d2a207a6bb3e18937ec2821037e7d0308b041aa02e0eb79c893ef73657e84",
+          "state": "succeeded"
+        },
+        {
+          "action": "repair",
+          "operationId": "1ebc4b4e7a682ac244090238cbe0f7fbe530de2a3f8c8601e7eb4a96d1278ac4",
+          "state": "succeeded"
+        },
+        {
+          "action": "remove",
+          "operationId": "e3e91adb077c519ce56b2d67ea6ba1b8626a9dcdad24abebaed8b910a9c669f8",
+          "state": "succeeded"
+        }
+      ],
+      "native_observations": [],
+      "lost_response": null,
+      "edited_refusal": null,
+      "fixture": {
+        "fixture": "agentplugins_commands_fixture",
+        "archive_sha256": "2dfd6f6422cee4f6ad56b633431fdd0e1706723146ba9046ee5847f8f5590239",
+        "fixture_files": {
+          "io.github.777genius.agentplugins/commands/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "io.github.777genius.agentplugins/commands/echo.md": "43ac4d8a01dccc348eefd739a0a671a9a8474dd97a2f0f6b85e2b7f8327724f8",
+          "io.github.777genius.agentplugins/commands/wizard.md": "397427a03f8500f40882b6689b2b4d239c2dbacaeb6444636bbe7f0463b69bb1",
+          "plugin.json": "bab4987eb53807dc5d89b290e285d55db7cceccd69c0b32c25bf9506db04f7e2",
+          "skills/fixture-guide/SKILL.md": "07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0"
+        },
+        "https_requests": 1
+      },
+      "process": {
+        "exit": 0,
+        "error": null,
+        "stdout_bytes": 1445,
+        "stderr_bytes": 0,
+        "stdout_sha256": "9837eebdb9dfe0028522d7ed1bb892f9cefaabb03680b9030001088fb03fb300",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "native_loaded": false
+    },
+    {
+      "client": "kiro",
+      "native_version": "kiro-cli 2.33.1",
+      "qualification": "sdk-lifecycle-only",
+      "elapsed_seconds": 3.152,
+      "native_sha256": "801e11f74e31d26f883f5f56cde96c006124c94ee8e063c58f45ad183f34f147",
+      "receipt_sha256": "fb7475ea9cd250192b6564da0dd8a9b831a7fed2d2801fc56c14b55c4edc8621",
+      "source_sha256": "a409879c4a0cb50c55c1bebcf4a44bb5960ecebb2a42b06139b1539b87dd61b7",
+      "status": "passed",
+      "stage": "complete",
+      "checks": [
+        "idempotent apply; owned profile; pinned lock; intact repair; restart history; removal"
+      ],
+      "operations": [
+        {
+          "action": "install",
+          "operationId": "ee7021dc5835b76730208d5a2c8c570b8ee078de052985a5f69fa85e2e568f2f",
+          "state": "succeeded"
+        },
+        {
+          "action": "update",
+          "operationId": "bface9d56936246933401880abb52e3d4cb396d82f54e6722cf75b3c25a3ebff",
+          "state": "succeeded"
+        },
+        {
+          "action": "repair",
+          "operationId": "882980c13d37a21c4f616260f13c040e2460c6f918c6616c9668518f0d4f6f47",
+          "state": "succeeded"
+        },
+        {
+          "action": "remove",
+          "operationId": "3a8de7bd53cc79cd575e38a8562578e2d51a07280c71a08f73f0892f24826443",
+          "state": "succeeded"
+        }
+      ],
+      "native_observations": [],
+      "lost_response": null,
+      "edited_refusal": null,
+      "fixture": {
+        "fixture": "agentplugins_commands_fixture",
+        "archive_sha256": "2dfd6f6422cee4f6ad56b633431fdd0e1706723146ba9046ee5847f8f5590239",
+        "fixture_files": {
+          "io.github.777genius.agentplugins/commands/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "io.github.777genius.agentplugins/commands/echo.md": "43ac4d8a01dccc348eefd739a0a671a9a8474dd97a2f0f6b85e2b7f8327724f8",
+          "io.github.777genius.agentplugins/commands/wizard.md": "397427a03f8500f40882b6689b2b4d239c2dbacaeb6444636bbe7f0463b69bb1",
+          "plugin.json": "bab4987eb53807dc5d89b290e285d55db7cceccd69c0b32c25bf9506db04f7e2",
+          "skills/fixture-guide/SKILL.md": "07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0"
+        },
+        "https_requests": 1
+      },
+      "process": {
+        "exit": 0,
+        "error": null,
+        "stdout_bytes": 1455,
+        "stderr_bytes": 0,
+        "stdout_sha256": "fb7475ea9cd250192b6564da0dd8a9b831a7fed2d2801fc56c14b55c4edc8621",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "native_loaded": false
+    },
+    {
+      "client": "windsurf",
+      "native_version": null,
+      "qualification": "sdk-lifecycle-only",
+      "elapsed_seconds": 3.021,
+      "native_sha256": null,
+      "receipt_sha256": "fd3a49f66f9c5bcdcd73485edefbc729c9a6eaf2eab2c1b1ecf085599e99c5d6",
+      "source_sha256": "6b9d54069dd653a8c5ff17182d51525d5dafffc85448c24d5a9ec741bb8259af",
+      "status": "passed",
+      "stage": "complete",
+      "checks": [
+        "idempotent apply; owned profile; pinned lock; intact repair; restart history; removal"
+      ],
+      "operations": [
+        {
+          "action": "install",
+          "operationId": "5a302881f277655f8fee6843aaa37d4a7a0f39241539d0e37f5cfee9bb6c964a",
+          "state": "succeeded"
+        },
+        {
+          "action": "update",
+          "operationId": "7e930c2421835b3ca25d5b7d97b2d9330be4dd3545f137484a3b0022eac7c9e8",
+          "state": "succeeded"
+        },
+        {
+          "action": "repair",
+          "operationId": "2b86e2b3814f6a15af6e24b640a4283029502175a1b6ee7f16e5e38228314227",
+          "state": "succeeded"
+        },
+        {
+          "action": "remove",
+          "operationId": "1fc79501c360b5a363e3692f08c8cb26974b1901ff576e5f003c28ae385858fd",
+          "state": "succeeded"
+        }
+      ],
+      "native_observations": [],
+      "lost_response": null,
+      "edited_refusal": null,
+      "fixture": {
+        "fixture": "agentplugins_sdk_mcp_fixture",
+        "archive_sha256": "d27b067e380ac309fd93bc94b791298544d9d382d46b7822f4f6d604a35b32a9",
+        "fixture_files": {
+          "mcp.json": "e4e244b6a92f45d270884920f93c878c74a04937fc02dda0c1bca35a9398bc5f",
+          "plugin.json": "788ea707e5a6c0a183b9e797f94f3a173f5a08b121b95d18cec9b95c50e7b5c0"
+        },
+        "https_requests": 1
+      },
+      "process": {
+        "exit": 0,
+        "error": null,
+        "stdout_bytes": 1388,
+        "stderr_bytes": 0,
+        "stdout_sha256": "fd3a49f66f9c5bcdcd73485edefbc729c9a6eaf2eab2c1b1ecf085599e99c5d6",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "native_loaded": false
+    }
+  ]
+}

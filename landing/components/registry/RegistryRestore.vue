@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import monitorImage from '~/assets/images/restore-monitor.png';
 
+// Real Agent Plugins 1.0 package. The Git SHA pins the source, while the
+// version below comes from that revision's plugin.json; they are not interchangeable.
+const pluginName = 'modern-java-development';
+const pluginVersion = '1.0.0';
+const pluginSource =
+  'github:brunoborges/javaevolved@4bfa3c268a4abb026b16c136330e389fb9cce091//agent-plugins/modern-java-development';
+const addCommand = `agentplugins add ${pluginSource} --target codex --scope project`;
+const restoreCommand = 'agentplugins install --locked';
+
 const { t } = useI18n();
 const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
 </script>
@@ -39,11 +48,20 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
               <span class="registry-restore__step" aria-hidden="true">01</span>
               {{ t('shell.restore.from') }}
             </p>
+            <p class="registry-restore__package" dir="ltr">
+              <span>{{ pluginName }}</span>
+              <strong>v{{ pluginVersion }}</strong>
+            </p>
             <div class="registry-restore__screen-body">
-              <CommandSnippet command="agentplugins add <git-url> --scope project" inline>
-                agentplugins <span class="registry-restore__accent">add</span> &lt;git-url&gt;
+              <CommandSnippet :command="addCommand" inline>
+                agentplugins <span class="registry-restore__accent">add</span>{{ ' ' }}
+                <span class="registry-restore__source" :title="pluginSource"
+                  >github:brunoborges/javaevolved…</span
+                >
+                <span class="registry-restore__source-compact">github:brunoborges/…</span>{{ ' ' }}
                 <span class="registry-restore__argument"
-                  ><span class="registry-restore__accent">--scope</span> project</span
+                  ><span class="registry-restore__accent">--target</span> codex{{ ' ' }}
+                  <span class="registry-restore__accent">--scope</span> project</span
                 >
               </CommandSnippet>
               <p class="registry-restore__commit" dir="auto">{{ t('shell.restore.commit') }}</p>
@@ -68,6 +86,7 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
               <code dir="ltr">uap.lock</code>
             </span>
           </div>
+          <code class="registry-restore__locked-version" dir="ltr">v{{ pluginVersion }}</code>
           <svg class="registry-restore__arrow" viewBox="0 0 160 36" fill="none" aria-hidden="true">
             <path d="M4 26C36 26 46 12 84 12h52" stroke-dasharray="3.5 7" />
             <path d="M138 5 157 12 138 19 141.5 12Z" fill="currentColor" stroke="none" />
@@ -94,9 +113,14 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
               <span class="registry-restore__step" aria-hidden="true">02</span>
               {{ t('shell.restore.to') }}
             </p>
+            <p class="registry-restore__package" dir="ltr">
+              <span>{{ pluginName }}</span>
+              <strong>v{{ pluginVersion }}</strong>
+            </p>
             <div class="registry-restore__screen-body">
-              <CommandSnippet command="agentplugins install" inline>
-                agentplugins <span class="registry-restore__accent">install</span>
+              <CommandSnippet :command="restoreCommand" inline>
+                agentplugins <span class="registry-restore__accent">install</span>{{ ' ' }}
+                <span class="registry-restore__accent">--locked</span>
               </CommandSnippet>
             </div>
           </div>
@@ -211,8 +235,26 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
     line-height: 1;
   }
 
+  &__package {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 1.5cqw;
+    margin: 2cqw 0 0;
+    color: #e0e6ff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(10px, 2.7cqw, 16px);
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+
+    strong {
+      color: #00f0ff;
+      font-weight: 650;
+    }
+  }
+
   &__screen-body {
-    margin-block-start: 5.5cqw;
+    margin-block-start: 3.2cqw;
 
     :deep(.command-snippet.command-snippet--inline) {
       position: relative;
@@ -254,9 +296,9 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
       overflow: visible;
       overflow-wrap: normal;
       font-family: 'JetBrains Mono', monospace;
-      font-size: clamp(12px, 3.3cqw, 24px);
+      font-size: clamp(10px, 2.8cqw, 18px);
       letter-spacing: -0.045em;
-      line-height: 1.65;
+      line-height: 1.4;
     }
 
     :deep(code) {
@@ -268,12 +310,22 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
   &__accent {
     color: #00f0ff;
   }
+  &__source {
+    display: block;
+    font-size: 0.84em;
+    overflow-wrap: anywhere;
+  }
+
+  &__source-compact {
+    display: none;
+  }
+
   &__argument {
-    display: inline-block;
+    display: block;
   }
 
   &__commit {
-    margin: 4cqw 0 0;
+    margin: 2cqw 0 0;
     color: #9198a8;
     font-family: 'JetBrains Mono', monospace;
     font-size: clamp(10px, 2.3cqw, 16px);
@@ -315,6 +367,12 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
     }
   }
 
+  &__locked-version {
+    color: var(--primary-bright);
+    font-size: clamp(12px, 1vw, 15px);
+    font-weight: 700;
+  }
+
   &__arrow {
     width: 100%;
     height: 36px;
@@ -348,7 +406,7 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
     }
     &__machine {
       width: 100%;
-      max-width: 680px;
+      max-width: 500px;
       margin-inline: auto;
     }
     &__handoff {
@@ -388,10 +446,61 @@ const { restoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks
       inset: 20% 10% 27%;
     }
     &__screen-body {
-      margin-block-start: 6cqw;
+      margin-block-start: 2cqw;
+    }
+    &__source {
+      display: none;
+    }
+    &__source-compact {
+      display: inline;
+    }
+    &__argument {
+      display: inline-block;
     }
     &__commit {
       margin-block-start: 2cqw;
+    }
+  }
+}
+
+@media (max-width: 340px) {
+  .registry-restore {
+    // Keep the installed source and copy control legible on narrow phones.
+    // The commit instruction is repeated in the handoff immediately below.
+    &__stage-label {
+      gap: 2cqw;
+      font-size: 10px;
+    }
+    &__step {
+      font-size: 5cqw;
+    }
+    &__package,
+    &__screen-body {
+      margin-block-start: 1cqw;
+    }
+    &__commit {
+      display: none;
+    }
+    // Move Copy beside the stage, clear of the version badge.
+    &__screen-body :deep(.command-snippet__header) {
+      bottom: calc(100% + 17px);
+    }
+    &__screen-body :deep(.command-snippet button) {
+      padding: 1px 2px;
+      font-size: 8px;
+      line-height: 1.1;
+    }
+  }
+}
+
+@media (max-width: 300px) {
+  .registry-restore {
+    &__package {
+      font-size: 9px;
+    }
+    &__screen-body :deep(pre) {
+      font-size: 9px;
+      line-height: 1.25;
     }
   }
 }

@@ -33,14 +33,22 @@ export async function copyTree(sourceDir, targetDir) {
   }
 }
 
-export async function listMarkdownFiles(rootDir) {
+export async function listMarkdownFiles(rootDir, { allowMissing = false } = {}) {
   const out = [];
-  await walk(rootDir, out);
+  await walk(rootDir, out, allowMissing);
   return out.sort();
 }
 
-async function walk(currentDir, out) {
-  const entries = await fs.readdir(currentDir, { withFileTypes: true });
+async function walk(currentDir, out, allowMissing = false) {
+  let entries;
+  try {
+    entries = await fs.readdir(currentDir, { withFileTypes: true });
+  } catch (error) {
+    // A locale may have no translated generated API. Required authored source
+    // and extractor outputs retain the strict default; nested read errors fail.
+    if (allowMissing && error.code === "ENOENT") return;
+    throw error;
+  }
   for (const entry of entries) {
     const currentPath = path.join(currentDir, entry.name);
     if (entry.isDirectory()) {

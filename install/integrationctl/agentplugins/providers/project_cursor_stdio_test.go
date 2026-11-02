@@ -2,6 +2,7 @@ package providers_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
@@ -37,7 +38,8 @@ func TestProjectCursorStdioUsesBoundManagedLauncherWithoutExecution(t *testing.T
 	server := document.Servers["docs"]
 	active := fixture.request.Plan.ActivePath
 	data := filepath.Join(fixture.request.Plan.TargetContext.ProjectRoot, ".uap", "data", fixture.request.Plan.PhysicalArtifactID)
-	wantArgs := []string{managedstdio.Mode, active, data, active, "plugin", "--", "node", active + "/server.js", data}
+	wantArgs := []string{managedstdio.Mode, active, data, active, "plugin", "--argv-base64-v1", "bm9kZQ==",
+		base64.StdEncoding.EncodeToString([]byte(active + "/server.js")), base64.StdEncoding.EncodeToString([]byte(data))}
 	if server.Command != filepath.Join(active, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName) || !reflect.DeepEqual(server.Args, wantArgs) || server.CWD != "" || server.Env["PLUGIN_ROOT"] != active || server.Env["PLUGIN_DATA"] != data {
 		t.Fatalf("native launcher binding = %+v; want args %q", server, wantArgs)
 	}

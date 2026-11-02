@@ -29,7 +29,8 @@ func upsertPreparedInstallation(
 		mapping := *input.Envelope.LocalChatGPTMapping
 		installation.LocalChatGPTMapping = &mapping
 	}
-	installation.Clients[clientBindingID] = stagedClientBinding(installation.Clients[clientBindingID], input, plan, clientBindingID, timestamp)
+	previous, bindingExists := installation.Clients[clientBindingID]
+	installation.Clients[clientBindingID] = stagedClientBinding(previous, bindingExists, input, plan, clientBindingID, timestamp)
 	if existing {
 		state.Installations[installationIndex] = installation
 		return state, installationIndex
@@ -81,16 +82,22 @@ func overlayExistingInstallation(installation domain.Installation, input AddInpu
 	return installation
 }
 
-func stagedClientBinding(previous domain.ClientBinding, input AddInput, plan domain.DeliveryPlan, clientBindingID, timestamp string) domain.ClientBinding {
+func stagedClientBinding(previous domain.ClientBinding, bindingExists bool, input AddInput, plan domain.DeliveryPlan, clientBindingID, timestamp string) domain.ClientBinding {
 	bindingClientID := string(input.Client.ClientID)
 	if previous.ClientID != "" {
 		bindingClientID = previous.ClientID
 	}
 	profileRoot := previous.NativeProfileRoot
+	// Creation-only profile recording never adopts an existing or coalesced
+	// binding into a newly requested user profile.
+	traits := plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope)
+	if !bindingExists && input.Scope == domain.ScopeUser && traits.RecordsUserProfileOnCreate {
+		profileRoot = input.Client.ConfigRoot
+	}
 	if token := plan.ProfileAuthority(); token != nil {
 		profileRoot = token.Facts().CanonicalRoot
 	}
-	if profileRoot == "" && plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope).BindsNativeProfileRoot {
+	if profileRoot == "" && traits.BindsNativeProfileRoot {
 		profileRoot = input.Client.ConfigRoot
 		if input.Scope == domain.ScopeProject {
 			profileRoot = plan.NativeRegistryRoot

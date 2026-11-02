@@ -10,12 +10,10 @@ export default defineNuxtConfig({
   build: { transpile: ['vuetify'] },
   vite: { plugins: [vuetify({ autoImport: true })] },
   i18n: {
-    restructureDir: false,
     strategy: 'prefix_except_default',
     trailingSlash: true,
     defaultLocale: 'en',
     detectBrowserLanguage: false,
-    lazy: true,
     langDir: 'locales',
     locales: [
       { code: 'en', language: 'en-US', file: 'en.json' },

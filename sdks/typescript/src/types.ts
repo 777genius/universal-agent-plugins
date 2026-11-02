@@ -34,3 +34,8 @@ export type LocalSkillFile = Schema['LocalSkillFile'];
 export type LocalSkillRequest = Schema['LocalSkillRequest'];
 export type LocalSkillBackup = Schema['LocalSkillBackup'];
 export type LocalSkillIdentity = Schema['LocalSkillIdentity'];
+
+export type UpdateCheckRequest = Schema['UpdateCheckRequest'];
+export type UpdateCheck = Schema['UpdateCheck'];
+export type UpdateCheckEntry = Schema['UpdateCheckEntry'];
+export type UpdateIdentity = Schema['UpdateIdentity'];

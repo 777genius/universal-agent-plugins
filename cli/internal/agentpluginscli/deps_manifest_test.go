@@ -189,7 +189,7 @@ func TestDependencyLockedShortNameDoesNotRecheckInstallEligibility(t *testing.T)
 	previousClient := fixture.cli.app.DirectoryClient
 	fixture.cli.app.DirectoryClient = nil
 	requirements.Dependencies["docs"].Registry.Distribution = distribution.ProductID
-	resolved, _, next, err := resolveDependencyLock(context.Background(), fixture.cli.app, &options{dryRun: true}, requirements, path, "")
+	resolved, _, next, err := resolveDependencyLock(context.Background(), fixture.cli.app, &options{dryRun: true}, requirements, []byte(dependencyRead(t, path)), "")
 	if err != nil || resolved.Dependencies["docs"].Registry.Distribution != "owner/rollout" || next.Packages[0].TreeDigest != lock.Packages[0].TreeDigest {
 		t.Fatalf("resolve lock-first identity: %+v %v", next, err)
 	}

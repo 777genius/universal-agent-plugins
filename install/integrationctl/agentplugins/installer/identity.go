@@ -31,6 +31,7 @@ type IdentityReservation struct {
 
 // ReserveIdentity returns installation and binding IDs without creating
 // TempRoot, capturing a snapshot, or mutating client config.
+// Resolving a prospective binding returns an error if its target is invalid.
 func (e *Engine) ReserveIdentity(req IdentityRequest) (IdentityReservation, error) {
 	if req.ClientID != "" && !e.SupportsClient(req.ClientID) {
 		return IdentityReservation{}, fmt.Errorf("%w: client %q is not registered for this installer", ErrUnsupported, req.ClientID)
@@ -62,22 +63,25 @@ func (e *Engine) ReserveIdentity(req IdentityRequest) (IdentityReservation, erro
 			return out, nil
 		}
 	}
-	e.reserveNewBinding(&out, req)
+	if err := e.reserveNewBinding(&out, req); err != nil {
+		return IdentityReservation{}, err
+	}
 	return out, nil
 }
 
-func (e *Engine) reserveNewBinding(out *IdentityReservation, req IdentityRequest) {
+func (e *Engine) reserveNewBinding(out *IdentityReservation, req IdentityRequest) error {
 	if req.DeclaredName == "" || out.InstallationID == "" || req.ClientID == "" {
-		return
+		return nil
 	}
 	physicalID := domain.ComputePhysicalArtifactID(req.DeclaredName, out.InstallationID)
 	client := domain.DetectedClient{ClientID: domain.ClientID(req.ClientID), Status: domain.DetectionDetected, ConfigRoot: req.ClientConfigRoot}
 	target, err := e.planner().ResolveTarget(context.Background(), client, e.scope(), physicalID)
 	if err != nil {
-		return
+		return err
 	}
 	out.TargetPath = target.ActivePath
 	out.BindingID = domain.ComputeClientBindingID(out.InstallationID, req.ClientID, out.Scope, target.ActivePath)
+	return nil
 }
 
 func reserveInstallationID(out *IdentityReservation, state domain.StateFileV2, allocate bool) error {

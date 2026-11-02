@@ -20,10 +20,13 @@ test('production locales are explicit and published', () => {
 });
 test('HTML manifest expansion, exclusions, collisions and base boundaries', () => {
   const routes = productRoutes(['gitlab'], ['codex', 'github-copilot-cli']);
-  assert.equal(expandLocalizedRoutes(routes).length, 72);
+  assert.equal(expandLocalizedRoutes(routes).length, routes.length * publishedLocales.length);
   const expanded = expandLocalizedRoutes(routes, candidateLocales);
-  assert.equal(expanded.length, 72);
-  assert.equal(expanded.filter(r => r.indexable).length, 54);
+  assert.equal(expanded.length, routes.length * candidateLocales.length);
+  assert.equal(
+    expanded.filter((r) => r.indexable).length,
+    routes.filter((r) => r.indexable).length * candidateLocales.length,
+  );
   assert.ok(expanded.some(r => r.path === '/uk/plugins/gitlab/'));
   for (const path of ['/agents/', '/api/registry/catalog/', '/plugins/unknown/', '/de/', '/create-plugin/', '/plugins/community/?source=x']) {
     assert.equal(isIndexablePath(path, routes), false, path);

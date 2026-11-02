@@ -1,0 +1,6 @@
+schema_version = 1
+
+[dependencies.child]
+git = "https://github.com/777genius/universal-agent-plugins.git"
+path = "tests/fixtures/uap_apm/risk_graph/child"
+commit = "23b565afdec292963c82d0030eb087dfd4d24989"

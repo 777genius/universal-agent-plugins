@@ -35,8 +35,13 @@ for (const block of descriptor.customBlocks) {
     new URL('../components/registry/UnifiedCatalog.vue', import.meta.url),
   );
   const locale = String(block.attrs.locale);
-  const request = `${fileURLToPath(path)}?vue&type=custom&index=0&src=true&blockType=i18n&locale=${locale}&lang.json`;
-  const result = await compiler.transform.call(
+  const request = `${fileURLToPath(path)}?vue&type=i18n&index=0&src=true&locale=${locale}&lang.json`;
+  // Unplugin 3 exposes Vite hooks as objects with a `handler`, rather than
+  // callable hooks. Exercise the actual compiler instead of replacing it.
+  const hook = compiler.transform;
+  const transform = typeof hook === 'function' ? hook : hook?.handler;
+  assert.equal(typeof transform, 'function', 'i18n SFC transform hook is installed');
+  const result = await transform.call(
     {
       error: (error: unknown) => {
         throw error;
@@ -46,6 +51,7 @@ for (const block of descriptor.customBlocks) {
     readFileSync(path, 'utf8'),
     request,
   );
+  assert.ok(result && typeof result === 'object' && 'code' in result, `${locale}: custom i18n block was not compiled`);
   const component: ComponentOptions = {};
   const attach = runInNewContext(result.code.replace('export default', '(') + ')');
   attach(component);
@@ -57,7 +63,7 @@ test('Skills resources compile outside global locale includes and render in runt
   for (const locale of publishedLocales) {
     const full = loadI18nMessages(locale);
     const base = JSON.parse(
-      readFileSync(new URL(`../locales/${locale}.json`, import.meta.url), 'utf8'),
+      readFileSync(new URL(`../i18n/locales/${locale}.json`, import.meta.url), 'utf8'),
     );
     assert.equal(
       base.registryUi.skills,

@@ -46,7 +46,7 @@ Un paquet stdio contient aussi le code du serveur et les manifestes de dépendan
 | --- | --- |
 | `plugin.json` | Identité et métadonnées standard du paquet. |
 | `mcp.json` | Configuration des serveurs MCP lorsque le paquet fournit des outils. |
-| `skills/<name>/SKILL.md` | Identité, description et instructions d’un Skill immédiat. |
+| `skills/<name>/SKILL.md` | Identité, description et instructions d’un Skill placé directement dans `skills/`. |
 | `README.md` | Usage prévu, prérequis, validation et limites restantes. |
 | `package.json`, `package-lock.json`, `src/server.mjs` | Entrées de la structure Node stdio pour le travail d’exécution distinct. |
 | `LICENSE` | Licence choisie explicitement, si indiquée pendant `init`. |

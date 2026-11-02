@@ -1,11 +1,93 @@
 # UAP Management API, language clients, and Agent Teams integration
 
-Status: implementation plan v11 — scoped E2E completion and current-main reconciliation.
+Status: implementation plan v12 — remaining user-scope SDK client qualification.
 Owner authorization: 2026-10-24. Implement end to end, open draft PRs early, publish
 every commit immediately, review plan revisions and implementation independently,
 verify actual Electron interaction, merge only after required gates and resolved
 review findings. This is not authorization to bypass repository protections or
 publish a new public release.
+
+## Continuation checkpoint — v12 (2026-10-29)
+
+The owner requested local Linux verification of the remaining admitted user-scope
+Management SDK clients and merge of the resulting E2E work. PR #500 and the
+Claude/Codex continuation [PR #558](https://github.com/777genius/universal-agent-plugins/pull/558)
+are merged. The latter qualified Claude 2.1.263 and Codex 0.153.4 through the actual
+SDK and Go engine on source `d52f2248fbb4817e46927d914fee343ca1ccf4a3`
+([native run 40754108543](https://github.com/777genius/universal-agent-plugins/actions/runs/40754108543)).
+Those receipts remain tied to their original source.
+
+This continuation adds local pinned HTTPS fixture journeys for Cline and Gemini
+native Skills, Pi native extension auto-discovery, and the existing Kimi/Kiro/
+Windsurf SDK configuration lifecycles. Five real regressions are repaired:
+legacy user native-config attempts remain inspectable; read-only Cline preparation
+refusals report unchanged native state; owned Windsurf MCP entries prove the captured
+Management profile; Copilot's actual built-in plugin section no longer makes its
+user plugin inventory unrecognizable; new Copilot user bindings retain their
+captured native profile and native commands use that profile explicitly so
+subsequent SDK operations can prove that same context.
+The inventory correction is confined to Copilot's adapter and retains the native
+runner's tree containment and error evidence. Profile recording applies only to
+a missing Copilot user binding; existing legacy or shared sibling bindings never
+acquire new proof. The Copilot-only native runner binds `COPILOT_HOME` for
+inspection, activation, verification and removal, preserving its process-tree
+capability and complete command/error evidence. Management's foreign/missing-profile
+refusal remains unchanged. The strengthened real native journey deliberately
+conflicts ambient and selected profiles and requires the ambient tree to stay
+unchanged; matching HOME and selected roots alone do not qualify this boundary.
+Selected/project recovery authority and later mutation failure semantics remain
+unchanged.
+
+After reconciliation with main `60967b8b6ca79245a61caf28895aa09c2c9d74a2`,
+all six local journeys passed on clean published source
+`f5b6ed9f409c5c1b1748b7625db5076cba944a80`, using an engine rebuilt from that
+commit. The [committed receipt](../evidence/management-sdk/remaining-local-linux-f5b6ed9f409c.json)
+records executable/fixture identities, actual native observations, operation states,
+process termination and the full Gemini bundle identity. It qualifies those exact
+bytes; later documentation or CI wiring commits are not relabeled as that run.
+
+Cline 3.0.73 and Gemini 0.65.0 each passed eleven lifecycle operations, including
+an expected edited-projection `partial` result followed by successful recovery.
+Pi 1.4.0 passed five operations and fresh extension discovery/command observations;
+it qualifies the admitted extension lifecycle, not Skills or MCP. Kimi 2.3.1,
+Kiro 2.33.1 and Windsurf each passed four SDK configuration lifecycle operations.
+Kimi/Kiro require native authentication and Windsurf requires an editor refresh;
+their receipts explicitly record `nativeLoaded: false`. Cursor's existing user
+editor route remains manual. The pinned Agent archive/version can now be acquired,
+but Agent presence does not establish the separate editor capability or native
+loading; see the [Cursor detection boundary](../../install/integrationctl/agentplugins/clients/cursor/README.md).
+
+Copilot 1.0.103, Grok 1.0.67 and Qoder 1.1.78 need Go-managed native processes.
+This local container lacks the required `/proc/<pid>/task/<tid>/children` interface;
+no production process guard is relaxed. A focused three-client Linux workflow
+qualifies only these SDK journeys and binds receipts to the checkout and executable
+hashes. It uses a disposable hosted Ubuntu 24.04 runner after the shared AMD64
+pool had no active runners and left the native jobs unassigned; repository-wide
+runner variables and other workflows are unchanged.
+[PR #566](https://github.com/777genius/universal-agent-plugins/pull/566)
+records the current three-client results and required repository checks. On clean
+source `259fddb621c654c333ccc9b7dad78457aeca6d60`, Grok and Qoder each passed all
+eleven SDK lifecycle operations and fresh native observations in
+[run 40937772324](https://github.com/777genius/universal-agent-plugins/actions/runs/40937772324);
+the [verified receipt](../evidence/management-sdk/grok-qoder-linux-259fddb621c6.json)
+retains that exact source and its artifact boundaries. Copilot's first actual SDK
+run exposed the missing captured profile and an incorrect test expectation:
+Copilot's existing portable command support is unsupported. Its corrected journey
+must verify exact fixture Skill bytes and absence of both fixture commands through
+the full lifecycle; other clients retain exact portable command byte checks.
+Independent review reported no remaining P1/P2 finding; execution gates remain
+authoritative and the fresh Copilot result is recorded in the PR.
+The later Copilot correction has its own actual local
+[1.0.103 inventory evidence](../evidence/management-sdk/copilot-1.0.103-linux-listing.json)
+and adapter regressions; that diagnostic is not relabeled as a full SDK journey.
+Local SDK protocol/owned-process tests passed 46/46 without skips, and the packed
+npm consumer passed type checking and runtime imports. CodeRabbit identified a
+Copilot observer counting a fixture-named path continuation as a second plugin;
+an actual local native run reproduced the failure, and counting only plugin
+bullet rows corrected it while retaining malformed/truncated-row refusal.
+No App/runtime architecture,
+S25/S26 project support, VS Code
+changes or public SDK release is included.
 
 ## Continuation checkpoint — v11 (2026-10-28)
 

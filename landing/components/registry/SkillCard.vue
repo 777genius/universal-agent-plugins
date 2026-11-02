@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import type { SkillListing } from '~/types/skillsCatalog';
 import { skillClients } from '~/data/skillClients';
-import { skillInstallCommand, skillRepositoryUrl } from '~/utils/skillsCatalog';
+import { skillDetailRoute, skillInstallCommand, skillNeedsManualSelection, skillPublisherUrl, skillRepositoryUrl } from '~/utils/skillsCatalog';
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 
 const props = defineProps<{ skill: SkillListing }>();
+const localePath = useLocalePath();
+const selectedSkill = useState<SkillListing | null>('skills-catalog:selected-skill', () => null);
+function rememberSkill() { selectedSkill.value = props.skill; }
 const { t, n } = useI18n({ useScope: 'parent' });
 const { asset } = useSite();
 const preferences = useInstallPreferencesStore();
@@ -15,6 +18,8 @@ const expanded = ref(saved.expanded);
 const chooseInTerminal = ref(saved.autoDetect);
 const targets = ref(saved.targetIds.length ? saved.targetIds : ['codex']);
 const repositoryUrl = computed(() => skillRepositoryUrl(props.skill));
+const publisherUrl = computed(() => skillPublisherUrl(props.skill));
+const needsManualSelection = computed(() => skillNeedsManualSelection(props.skill));
 const command = computed(() =>
   skillInstallCommand(props.skill, chooseInTerminal.value ? undefined : targets.value),
 );
@@ -60,11 +65,19 @@ function updateTerminal(value: boolean) {
   <CatalogCard :expanded="expanded" class="skill-card" :data-skill-id="skill.id">
     <div class="plugin-card__identity">
       <div class="plugin-card__identity-copy">
-        <h3 :title="skill.title">{{ skill.title }}</h3>
+        <h3 :title="skill.title">
+          <NuxtLink
+            v-if="skill.availability !== 'unsupported-source'"
+            :to="localePath(skillDetailRoute(skill))"
+            @click="rememberSkill"
+          >{{ skill.title }}</NuxtLink>
+          <span v-else>{{ skill.title }}</span>
+        </h3>
         <p class="plugin-card__source-label">
           <a v-if="repositoryUrl" :href="repositoryUrl" target="_blank" rel="noreferrer">{{
             skill.source.repository
           }}</a>
+          <a v-else-if="publisherUrl" :href="publisherUrl" target="_blank" rel="noreferrer noopener">{{ publisherUrl.replace('https://', '') }}</a>
           <span v-else>{{ t('registryUi.skills.externalSource') }}</span>
         </p>
       </div>
@@ -84,9 +97,9 @@ function updateTerminal(value: boolean) {
         t(`registryUi.skills.metric.${skill.metrics.window}`, { count: n(skill.metrics.installs) })
       }}
     </p>
-    <div v-if="repositoryUrl" class="skill-card__links">
-      <a :href="repositoryUrl" target="_blank" rel="noreferrer"
-        >{{ t('registryUi.skills.githubSource') }}<span aria-hidden="true"> ↗</span></a
+    <div v-if="repositoryUrl || publisherUrl" class="skill-card__links">
+      <a :href="repositoryUrl || publisherUrl" target="_blank" rel="noreferrer noopener"
+        >{{ t(repositoryUrl ? 'registryUi.skills.githubSource' : 'registryUi.skills.publisherSource') }}<span aria-hidden="true"> ↗</span></a
       >
     </div>
     <div class="plugin-card__bottom">
@@ -106,7 +119,9 @@ function updateTerminal(value: boolean) {
           t(
             repositoryUrl
               ? 'registryUi.skills.unsupportedName'
-              : 'registryUi.skills.unsupportedSource',
+              : publisherUrl
+                ? 'registryUi.skills.invalidPublisherName'
+                : 'registryUi.skills.unsupportedSource',
           )
         }}
       </p>
@@ -130,6 +145,7 @@ function updateTerminal(value: boolean) {
               compact
             />
           </div>
+          <p v-if="needsManualSelection" class="plugin-card__unavailable">{{ t('registryUi.skills.manualSkillSelection') }}</p>
           <p class="plugin-card__unavailable">{{ t('registryUi.skills.checkedBeforeInstall') }}</p>
         </div>
       </Transition>

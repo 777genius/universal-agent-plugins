@@ -12,7 +12,7 @@ describe('docsLinks locale fallback', () => {
   });
 
   it('recognizes current Use and Build translations in every maintained docs locale', () => {
-    for (const locale of ['en', 'ru', 'es', 'fr', 'zh'] as const) {
+    for (const locale of ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'] as const) {
       for (const page of ['use', 'use/install', 'use/manage', 'build', 'build/checks']) {
         assert.equal(resolveDocsLocale(locale, page), locale);
         assert.equal(hasRealDocsContent(locale, page), true);

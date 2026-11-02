@@ -1,10 +1,17 @@
 # Changelog
 
-All notable changes to this module are documented here.
+This file collects Go SDK source changes and historical migration notes. It is
+not a complete version-by-version release ledger: some entries below have
+already shipped. Do not interpret this collection as a pending v1.0.0 release.
 
-The format is inspired by Keep a Changelog; versions follow SemVer. This unreleased entry is the pending `v1.0.0` release candidate.
+For the published module version, installation and current compatibility
+boundary, start with the [SDK README](README.md) and [stability policy](STABILITY.md).
+Use the exact `sdk/vX.Y.Z` tag when checking which changes a module contains;
+installer and TypeScript Management SDK releases have separate versions.
 
-## [Unreleased]
+<a id="unreleased"></a>
+
+## Source changes and historical migration notes
 
 ### Added
 
@@ -62,17 +69,21 @@ The format is inspired by Keep a Changelog; versions follow SemVer. This unrelea
 
 ### Migration
 
+These are historical pre-v1 migration fragments. In Go code, use the import alias
+`pluginkitai` for `github.com/777genius/plugin-kit-ai/sdk`, as shown in the
+[complete examples](README.md#claude-example).
+
 - Replace:
 
 ```go
-app := plugin-kit-ai.New()
+app := pluginkitai.New()
 app.OnStop(...)
 ```
 
 with:
 
 ```go
-app := plugin-kit-ai.New(plugin-kit-ai.Config{Name: "my-plugin"})
+app := pluginkitai.New(pluginkitai.Config{Name: "my-plugin"})
 app.Claude().OnStop(...)
 ```
 

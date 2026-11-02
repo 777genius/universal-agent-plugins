@@ -11,6 +11,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -57,13 +58,13 @@ func (b *ManagementBackend) prepareRecovery(ctx context.Context, input managemen
 
 func managementRecoveryFiles(app App) (dependencySyncRequest, error) {
 	manifest, lock := app.dependencyPaths()
-	files := dependencySyncRequest{manifestPath: manifest, lockPath: lock}
+	files := dependencySyncRequest{intent: environmentapp.Intent{ManifestPath: manifest, LockPath: lock}}
 	var err error
-	files.manifestBytes, err = managementReadOptional(manifest)
+	files.intent.ManifestBytes, err = managementReadOptional(manifest)
 	if err != nil {
 		return files, err
 	}
-	files.lockBytes, err = managementReadOptional(lock)
+	files.intent.LockBytes, err = managementReadOptional(lock)
 	return files, err
 }
 func managementReadOptional(path string) ([]byte, error) {

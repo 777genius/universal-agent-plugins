@@ -1,0 +1,261 @@
+{
+  "evidence_kind": "copilot-native-inventory-compatibility",
+  "qualification": "native-cli-diagnostic-only",
+  "platform": "linux-amd64",
+  "version": "1.0.103",
+  "source_baseline": "a68ba7a6ebca5316f147f16ddc9796f65b9750cf",
+  "provision": {
+    "client": "copilot",
+    "path": "/tmp/uap-copilot-list-probe-bin/copilot",
+    "source": "https://github.com/github/copilot-cli/releases/tag/v1.0.103",
+    "version": "v1.0.103",
+    "archive": "copilot-linux-x64.tar.gz",
+    "archive_integrity": "sha256:9aeb4430e9ac9523546db07b227c7aba179a4710a55f9ac29ad143b0f9e1b325",
+    "binary_sha256": "f19b3554a6b62605db3a26d5255ebe2a3ee39fcd6a357edb18301ea5037f6f0d"
+  },
+  "engine_invoked": false,
+  "model_invoked": false,
+  "profile": "owned temporary HOME/XDG and project; no inherited credentials",
+  "purpose": "Record the actual built-in section preceding live plugins or following the empty inventory, for a Copilot-only adapter regression. This does not qualify a complete SDK lifecycle.",
+  "runs": [
+    {
+      "probe": "version",
+      "argv": [
+        "/tmp/uap-copilot-list-probe-bin/copilot",
+        "--version"
+      ],
+      "cwd": "/tmp/uap-copilot-list-probe/project",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.97,
+      "stdout_file": "version.stdout.log",
+      "stderr_file": "version.stderr.log",
+      "stdout_bytes": 71,
+      "stderr_bytes": 0,
+      "stdout_sha256": "0381297224b3ae763df6f5434597b39b5ea5d26a42cab604ad8d346d69487237",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "GitHub Copilot CLI 1.0.103.\nRun 'copilot update' to check for updates.\n",
+      "stderr": ""
+    },
+    {
+      "probe": "empty-plugin-list",
+      "argv": [
+        "/tmp/uap-copilot-list-probe-bin/copilot",
+        "plugin",
+        "list"
+      ],
+      "cwd": "/tmp/uap-copilot-list-probe/project",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.791,
+      "stdout_file": "empty-plugin-list.stdout.log",
+      "stderr_file": "empty-plugin-list.stderr.log",
+      "stdout_bytes": 138,
+      "stderr_bytes": 0,
+      "stdout_sha256": "f09cb232e9a7f7bd379daed96099ea1fdf8f6644dcc390ce43c7854874d7e879",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\nBuilt-in plugins:\n  • browser-use (v0.0.4) [disabled]\n",
+      "stderr": ""
+    },
+    {
+      "probe": "marketplace-add",
+      "argv": [
+        "/tmp/uap-copilot-list-probe-bin/copilot",
+        "plugin",
+        "marketplace",
+        "add",
+        "/tmp/uap-copilot-list-probe/managed-artifact"
+      ],
+      "cwd": "/tmp/uap-copilot-list-probe/project",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.906,
+      "stdout_file": "marketplace-add.stdout.log",
+      "stderr_file": "marketplace-add.stderr.log",
+      "stdout_bytes": 60,
+      "stderr_bytes": 0,
+      "stdout_sha256": "367907a3ece0d4714415cfc46653d519818bc617154ea6e1f8a4e41d15a24d93",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "Marketplace \"agentplugins-012345abcdef\" added successfully.\n",
+      "stderr": ""
+    },
+    {
+      "probe": "plugin-install",
+      "argv": [
+        "/tmp/uap-copilot-list-probe-bin/copilot",
+        "plugin",
+        "install",
+        "uap-commands-fixture@agentplugins-012345abcdef"
+      ],
+      "cwd": "/tmp/uap-copilot-list-probe/project",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.518,
+      "stdout_file": "plugin-install.stdout.log",
+      "stderr_file": "plugin-install.stderr.log",
+      "stdout_bytes": 265,
+      "stderr_bytes": 0,
+      "stdout_sha256": "a606ffc20933353158317f6a60bc9857acfb6c06130238ad0e0b08dedf876169",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "Plugin \"uap-commands-fixture\" installed successfully. Installed 1 skill.\nEnabled \"uap-commands-fixture@agentplugins-012345abcdef\". It is loaded live from /tmp/uap-copilot-list-probe/managed-artifact, so edits take effect on the next session — nothing was copied.\n",
+      "stderr": ""
+    },
+    {
+      "probe": "installed-plugin-list",
+      "argv": [
+        "/tmp/uap-copilot-list-probe-bin/copilot",
+        "plugin",
+        "list"
+      ],
+      "cwd": "/tmp/uap-copilot-list-probe/project",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.453,
+      "stdout_file": "installed-plugin-list.stdout.log",
+      "stderr_file": "installed-plugin-list.stderr.log",
+      "stdout_bytes": 256,
+      "stderr_bytes": 0,
+      "stdout_sha256": "fb7ef8374be0f74cfa7bf6cb7985e76365ddc1ca9903bb5ec737fa9fef43d3ae",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "Built-in plugins:\n  • browser-use (v0.0.4) [disabled]\nLive Plugins (loaded from a local marketplace directory, never copied):\n  • uap-commands-fixture@agentplugins-012345abcdef (v1.0.0) (enabled)\n      from /tmp/uap-copilot-list-probe/managed-artifact\n",
+      "stderr": ""
+    },
+    {
+      "probe": "plugin-uninstall",
+      "argv": [
+        "/tmp/uap-copilot-list-probe-bin/copilot",
+        "plugin",
+        "uninstall",
+        "uap-commands-fixture@agentplugins-012345abcdef"
+      ],
+      "cwd": "/tmp/uap-copilot-list-probe/project",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.411,
+      "stdout_file": "plugin-uninstall.stdout.log",
+      "stderr_file": "plugin-uninstall.stderr.log",
+      "stdout_bytes": 159,
+      "stderr_bytes": 0,
+      "stdout_sha256": "93877c2fba3ea1d4aacb75ba8d6649212a226540b250d92e4009d09c238aff58",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "Plugin \"uap-commands-fixture@agentplugins-012345abcdef\" disabled. It is still on disk at /tmp/uap-copilot-list-probe/managed-artifact — nothing was removed.\n",
+      "stderr": ""
+    },
+    {
+      "probe": "marketplace-remove",
+      "argv": [
+        "/tmp/uap-copilot-list-probe-bin/copilot",
+        "plugin",
+        "marketplace",
+        "remove",
+        "agentplugins-012345abcdef"
+      ],
+      "cwd": "/tmp/uap-copilot-list-probe/project",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.437,
+      "stdout_file": "marketplace-remove.stdout.log",
+      "stderr_file": "marketplace-remove.stderr.log",
+      "stdout_bytes": 62,
+      "stderr_bytes": 0,
+      "stdout_sha256": "a6b155307b5c32fb277ae23c4f33fac6a6d340b70899f892ac3b5fb052ecbd62",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "Marketplace \"agentplugins-012345abcdef\" removed successfully.\n",
+      "stderr": ""
+    },
+    {
+      "probe": "removed-plugin-list",
+      "argv": [
+        "/tmp/uap-copilot-list-probe-bin/copilot",
+        "plugin",
+        "list"
+      ],
+      "cwd": "/tmp/uap-copilot-list-probe/project",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.419,
+      "stdout_file": "removed-plugin-list.stdout.log",
+      "stderr_file": "removed-plugin-list.stderr.log",
+      "stdout_bytes": 138,
+      "stderr_bytes": 0,
+      "stdout_sha256": "f09cb232e9a7f7bd379daed96099ea1fdf8f6644dcc390ce43c7854874d7e879",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\nBuilt-in plugins:\n  • browser-use (v0.0.4) [disabled]\n",
+      "stderr": ""
+    }
+  ],
+  "observer_regression": {
+    "review_comment": "https://github.com/777genius/universal-agent-plugins/pull/566#discussion_r4416641617",
+    "fixture_named_path": "/tmp/uap-copilot-list-probe/uap-commands-fixture-012345abcdef",
+    "qualification": "actual-native-observer-diagnostic-only",
+    "engine_invoked": false,
+    "runs": [
+      {
+        "probe": "named-path-observer-before",
+        "argv": [
+          "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+          "--experimental-strip-types",
+          "/tmp/uap-copilot-list-probe/check-observation.mts"
+        ],
+        "cwd": "/tmp/uap-copilot-list-probe/project",
+        "error": null,
+        "exit": 1,
+        "elapsed_seconds": 0.552,
+        "stdout_file": "named-path-observer-before.stdout.log",
+        "stderr_file": "named-path-observer-before.stderr.log",
+        "stdout_bytes": 0,
+        "stderr_bytes": 597,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "7a10e585f1da647b8ff268b62a69788c15a3e60f172e9b2593de3fe9126fd4fc",
+        "stdout": "",
+        "stderr": "node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Malformed, disabled or truncated Copilot fixture row\n\n1 !== 2\n\n    at inspectPackageNative (file:///tmp/uap-sdk-remaining-work/sdks/typescript/examples/package-client-observation.ts:24:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///tmp/uap-copilot-list-probe/check-observation.mts:3:16 {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: 1,\n  expected: 2,\n  operator: 'strictEqual',\n  diff: 'simple'\n}\n\nNode.js v24.22.1\n",
+        "observer_source_dirty": false
+      },
+      {
+        "probe": "named-path-observer-after",
+        "argv": [
+          "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+          "--experimental-strip-types",
+          "/tmp/uap-copilot-list-probe/check-observation.mts"
+        ],
+        "cwd": "/tmp/uap-copilot-list-probe/project",
+        "error": null,
+        "exit": 0,
+        "elapsed_seconds": 1.045,
+        "stdout_file": "named-path-observer-after.stdout.log",
+        "stderr_file": "named-path-observer-after.stderr.log",
+        "stdout_bytes": 185,
+        "stderr_bytes": 0,
+        "stdout_sha256": "76396d2756b7ae20f9a9fc79dac6d3a80f642c814b629316fba8ec522508847d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\"pluginId\":\"uap-commands-fixture@agentplugins-012345abcdef\",\"skills\":[[\"fixture-guide\",\"/tmp/uap-copilot-list-probe/uap-commands-fixture-012345abcdef/skills/fixture-guide/SKILL.md\"]]}\n",
+        "stderr": "",
+        "observer_source_dirty": true
+      },
+      {
+        "probe": "named-path-observer-removed",
+        "argv": [
+          "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+          "--experimental-strip-types",
+          "/tmp/uap-copilot-list-probe/check-observation.mts",
+          "--remove"
+        ],
+        "cwd": "/tmp/uap-copilot-list-probe/project",
+        "error": null,
+        "exit": 0,
+        "elapsed_seconds": 3.711,
+        "stdout_file": "named-path-observer-removed.stdout.log",
+        "stderr_file": "named-path-observer-removed.stderr.log",
+        "stdout_bytes": 74,
+        "stderr_bytes": 0,
+        "stdout_sha256": "ec12c5f25bdeaa37e50060de96e09da29d0ee1bc8fb17f9946b24e05f3875eb3",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "{\"pluginId\":\"uap-commands-fixture@agentplugins-012345abcdef\",\"skills\":[]}\n",
+        "stderr": "",
+        "observer_source_dirty": true
+      }
+    ],
+    "observer_source_base": "a7a6a9914b4705201e8e9d63abb11b60ee9c9da1",
+    "corrected_source_change": "Count only fixture plugin bullet rows before comparing complete parsed native entries; remaining assertions unchanged."
+  }
+}

@@ -64,7 +64,7 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 			return runUpdateMany(cmd.Context(), cmd, operationApp, opts, args[0], targets)
 		},
 	}
-	command.Flags().BoolVar(&all, "all", false, "update every eligible tracked installation after one complete preflight")
+	command.Flags().BoolVar(&all, "all", false, "update saved dependencies and eligible tracked installations after one complete preflight")
 	return command
 }
 

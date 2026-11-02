@@ -99,7 +99,7 @@ func (candidate *skillsBatchCandidate) prepare(ctx context.Context, app, preview
 		return nil, err
 	}
 	snapshot := candidate.snapshot
-	request := dependencySyncRequest{targets: candidate.targets, requirements: candidate.requirements, lock: locked, manifestPath: snapshot.ManifestPath, lockPath: snapshot.LockPath, manifestBytes: snapshot.ManifestBytes, lockBytes: snapshot.LockBytes, candidateManifest: manifest, candidateLock: append(body, '\n'), aliases: aliases, prepared: bindings, detected: detected}
+	request := dependencySyncRequest{targets: candidate.targets, requirements: candidate.requirements, lock: locked, intent: snapshot.intent(manifest, append(body, '\n')), aliases: aliases, prepared: bindings, detected: detected}
 	plan := &PreparedSkillsBatch{app: app, preview: preview, cleanup: cleanup, request: request, warnings: warnings}
 	for _, binding := range bindings {
 		plan.actions = append(plan.actions, SkillsAction{Alias: binding.Alias, ClientID: binding.ClientID, Action: string(binding.Action), TargetPath: paths[binding.Alias+"\x00"+binding.ClientID], CandidateID: candidate.candidateIDs[binding.Alias]})

@@ -1,8 +1,30 @@
 {
-  "name": "@uap/management-sdk",
-  "version": "0.0.0-development",
-  "description": "Typed client and optional Node host for the UAP Go management engine",
+  "name": "universal-agent-plugins-management-sdk",
+  "version": "0.1.1",
+  "description": "Typed client and optional Node host for the Universal Agent Plugins (UAP) Go management engine",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/777genius/universal-agent-plugins.git",
+    "directory": "sdks/typescript"
+  },
+  "homepage": "https://github.com/777genius/universal-agent-plugins/tree/main/sdks/typescript#readme",
+  "bugs": {
+    "url": "https://github.com/777genius/universal-agent-plugins/issues"
+  },
+  "keywords": [
+    "universal-agent-plugins",
+    "agent-plugins",
+    "ai-agents",
+    "plugin-manager",
+    "management-api",
+    "sdk",
+    "typescript",
+    "openapi",
+    "claude-code",
+    "codex",
+    "opencode"
+  ],
   "type": "module",
   "engines": {
     "node": ">=22.18"
@@ -22,6 +44,10 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-schema.ts",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",

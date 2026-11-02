@@ -2,63 +2,61 @@ package agentpluginscli
 
 import (
 	"context"
+	"os"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 )
 
-type dependencyApplicationResult struct {
-	Results   []installer.Result
-	Published bool
+type dependencyApplicationResult = environmentapp.Result
+
+// applyPreparedDependencies maps CLI, picker and management preparation to the
+// transport-independent application service. The caller owns acceptance.
+func applyPreparedDependencies(ctx context.Context, app App, request *dependencySyncRequest, adapter *dependencyInstaller, check func(context.Context) error) (dependencyApplicationResult, error) {
+	// The service invokes this same guard before publication and before every
+	// binding Prepare/Apply. Retain custom guards such as the Skills context check
+	// while avoiding a second invocation inside the concrete installer adapter.
+	guard := adapter.beforeApply
+	adapter.beforeApply = nil
+	defer func() { adapter.beforeApply = guard }()
+	return (environmentapp.Service{
+		Readiness: dependencyMutationReadiness{app: app},
+		Lock:      dependencyEnvironmentLock{path: app.EnvironmentLockPath},
+		Packages:  dependencyPackageMaterializer{app: app},
+		Files:     dependencyIntentFiles{},
+		Mutator:   adapter,
+	}).Apply(ctx, environmentapp.Change{
+		Intent: &request.intent,
+		Plan: environment.PreparedSync{EnvironmentID: app.environmentID(),
+			ManifestDigest: request.lock.ManifestDigest, Bindings: request.prepared},
+		Lock: request.lock, Aliases: request.aliases, RepairOnly: request.repairOnly,
+		Recheck: check, CheckInputs: guard,
+	})
 }
 
-// applyPreparedDependencies is shared by CLI, picker and management. The caller
-// already owns explicit acceptance; the existing environment lock and installer
-// receipts remain the only authority for durable dependency/native effects.
-func applyPreparedDependencies(ctx context.Context, app App, request *dependencySyncRequest, adapter *dependencyInstaller, check func(context.Context) error) (out dependencyApplicationResult, err error) {
-	if adapter.beforeApply == nil {
-		adapter.beforeApply = func() error { return request.checkInputs() }
-	}
-	if err = requireDependencyMutationReady(app); err != nil {
-		return out, err
-	}
-	unlock, err := (processlock.Lock{Path: app.EnvironmentLockPath}).Acquire(ctx)
-	if err != nil {
-		return out, err
-	}
-	defer func() { _ = unlock() }()
-	if err = ctx.Err(); err != nil {
-		return out, err
-	}
-	if err = requireDependencyMutationReady(app); err != nil {
-		return out, err
-	}
-	if err = check(ctx); err != nil {
-		return out, err
-	}
-	if !request.repairOnly {
-		if err = ensureDependencyStore(ctx, app, request.selectedLock()); err != nil {
-			return out, err
-		}
-	}
-	if err = ctx.Err(); err != nil {
-		return out, err
-	}
-	if err = adapter.beforeApply(); err != nil {
-		return out, err
-	}
-	// A failed second publication is still a durable intent change. Preserve that
-	// fact even when no binding reached the installer yet.
-	manifest, lock := append([]byte(nil), request.manifestBytes...), append([]byte(nil), request.lockBytes...)
-	defer func() {
-		out.Published = !sameEnvironmentFile(request.manifestPath, manifest) || !sameEnvironmentFile(request.lockPath, lock)
-	}()
-	if err = request.publish(); err != nil {
-		return out, err
-	}
-	out.Results, err = (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(ctx, environment.PreparedSync{
-		EnvironmentID: app.environmentID(), ManifestDigest: request.lock.ManifestDigest, Bindings: request.prepared,
-	}, true)
-	return out, err
+type dependencyMutationReadiness struct{ app App }
+
+func (gate dependencyMutationReadiness) RequireMutationReady() error {
+	return requireDependencyMutationReady(gate.app)
+}
+
+type dependencyPackageMaterializer struct{ app App }
+
+func (materializer dependencyPackageMaterializer) Ensure(ctx context.Context, lock environment.Lock) error {
+	return ensureDependencyStore(ctx, materializer.app, lock)
+}
+
+type dependencyEnvironmentLock struct{ path string }
+
+func (lock dependencyEnvironmentLock) Acquire(ctx context.Context) (func() error, error) {
+	unlock, err := (processlock.Lock{Path: lock.path}).Acquire(ctx)
+	return unlock, err
+}
+
+type dependencyIntentFiles struct{}
+
+func (dependencyIntentFiles) Read(path string) ([]byte, error) { return os.ReadFile(path) }
+func (dependencyIntentFiles) Write(path string, body []byte) error {
+	return publishEnvironmentFile(path, body)
 }

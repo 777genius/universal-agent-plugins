@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"sort"
@@ -47,6 +48,7 @@ type dependencyStatus struct {
 	ManifestDigest   string                     `json:"manifest_digest,omitempty"`
 	LockDigest       string                     `json:"lock_digest,omitempty"`
 	PendingRecovery  bool                       `json:"pending_recovery"`
+	ValidLock        bool                       `json:"-"`
 	Facts            []dependencyStatusFact     `json:"facts"`
 }
 
@@ -84,6 +86,7 @@ func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 		var lockErr error
 		lock, lockErr = readDependencyLock(lockPath, requirements)
 		validLock = lockErr == nil
+		status.ValidLock = validLock
 		if lockErr != nil {
 			status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"not_synced"}})
 		} else {
@@ -287,7 +290,36 @@ func renderDependencyStatus(cmd *cobra.Command, opts *options, status dependency
 			}
 		}
 	}
-	return nil
+	return renderDependencyStatusGuidance(cmd.OutOrStdout(), status)
+}
+
+func renderDependencyStatusGuidance(writer io.Writer, status dependencyStatus) error {
+	missing := false
+	for _, fact := range status.Facts {
+		for _, code := range fact.Facts {
+			missing = missing || code == "manifest_missing"
+		}
+	}
+	var explanation string
+	switch {
+	case status.PendingRecovery:
+		explanation = "Recovery is pending. Inspect it before any other changes: agentplugins deps recover --dry-run"
+	case missing:
+		explanation = "No saved uap.toml was found. This does not mean other plugins are absent. To save a Registry/Git source for a supported saved-dependency target, start with agentplugins add <source> --target <agent>"
+	case !status.ValidLock:
+		explanation = "No valid uap.lock was found. Inspect uap.toml and uap.lock before making changes; locked installation is not available yet."
+	default:
+		explanation = "Inspect exact saved versions and dependency relationships: agentplugins deps tree"
+	}
+	if _, err := fmt.Fprintln(writer, "\n"+explanation); err != nil {
+		return err
+	}
+	if status.Scope == string(domain.ScopeProject) {
+		_, err := fmt.Fprintln(writer, "For this project, use --scope project and the same --project-root directory with the suggested command.")
+		return err
+	}
+	_, err := fmt.Fprintln(writer, "For this user environment, use --scope user with the suggested command.")
+	return err
 }
 
 func inspectDependencyFacts(ctx context.Context, app App, state installer.Inspection, lock environment.Lock, validLock bool) []dependencyStatusFact {

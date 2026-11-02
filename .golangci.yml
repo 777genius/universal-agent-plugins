@@ -177,50 +177,37 @@ linters:
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect
               desc: detection calls clients.HostDetector, so a client never imports the detector
         clients-no-concrete-clients:
-          # The contract, its shared helpers and every client package are peers:
-          # none of them may reach for another client or for the assembled
-          # registry. Without this, the first shared helper a client package
-          # needs would invert the dependency and close an import cycle.
-          # clients/all is the one place that names them all, so it is excluded.
-          # These packages arrive in Parts 3-5; the rule is declared now so the
-          # parts that create them cannot get this wrong.
-          files:
-            - "**/install/integrationctl/agentplugins/clients/**"
-            - "!**/install/integrationctl/agentplugins/clients/all/**"
-          deny:
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all
-              desc: the default registry is assembled in the composition root, never inside a helper
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude
-              desc: shared helpers are used by client packages and never use one
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex
-              desc: shared helpers are used by client packages and never use one
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/chatgpt
-              desc: shared helpers are used by client packages and never use one
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/copilot
-              desc: shared helpers are used by client packages and never use one
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor
-              desc: shared helpers are used by client packages and never use one
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/vscode
-              desc: shared helpers are used by client packages and never use one
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro
-              desc: shared helpers are used by client packages and never use one
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode
-              desc: shared helpers are used by client packages and never use one
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline
-              desc: shared helpers are used by client packages and never use one
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf
-              desc: shared helpers are used by client packages and never use one
-        clients-no-gemini-peer:
-          # Keep the Gemini peer ban everywhere the rule above applies. Only
-          # Gemini's own public consumer tests may import their own adapter;
-          # they retain every other peer and assembled-registry ban above.
+          # Deny the implementation namespace rather than a client list: every
+          # future adapter is private immediately, including nested packages.
+          # Lax mode permits only the more-specific shared/helper exceptions.
+          # Exact '$' matches avoid exempting a new adapter named sharedfuture.
           files:
             - "**/install/integrationctl/agentplugins/clients/**"
             - "!**/install/integrationctl/agentplugins/clients/all/**"
             - "!**/install/integrationctl/agentplugins/clients/gemini/*_test.go"
+          list-mode: lax
+          allow:
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared$"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared/"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest$"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest/"
           deny:
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini
-              desc: shared helpers and peer adapters never import Gemini
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/
+              desc: client contracts, helpers and adapters never import a concrete client or assembled registry
+        gemini-consumer-tests-no-peers:
+          # Preserve the existing external Gemini tests' own-package import,
+          # while keeping every peer and assembled registry forbidden there.
+          files: ["**/install/integrationctl/agentplugins/clients/gemini/*_test.go"]
+          list-mode: lax
+          allow:
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini$"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared$"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared/"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest$"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest/"
+          deny:
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/
+              desc: consumer tests may import their own adapter, never peers or the assembled registry
         libraries-take-an-injected-registry:
           # Libraries are handed a registry; they never assemble the default
           # one. Importing clients/all here would link every adapter into any
@@ -233,46 +220,30 @@ linters:
             - "**/install/integrationctl/agentplugins/providers/**"
             - "**/install/integrationctl/agentplugins/planner/**"
             - "**/install/integrationctl/agentplugins/adapters/clientdetect/**"
+            - "**/install/integrationctl/agentplugins/installer/**"
             - "**/cli/internal/**"
             - "!$test"
           deny:
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all
               desc: the registry is injected by the composition root, never resolved by the dispatcher
         generic-no-concrete:
-          # Generic packages dispatch through clients.Registry. They may import
-          # the contract and shared helpers, never a concrete adapter. Tests
-          # are exempt: they name adapters to build the injected registry.
-          # clients/all is denied by libraries-take-an-injected-registry, which
-          # covers this file set plus CLI internals; repeating it here hid that
-          # one rule is the composition-root gate.
+          # Generic dispatchers see contracts and shared helpers. A broad
+          # namespace deny also covers clients that do not exist yet.
+          # Tests assemble explicit registries and remain exempt.
           files:
             - "**/install/integrationctl/agentplugins/providers/**"
             - "**/install/integrationctl/agentplugins/planner/**"
             - "**/install/integrationctl/agentplugins/adapters/clientdetect/**"
             - "!$test"
+          list-mode: lax
+          allow:
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared$"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared/"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest$"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest/"
           deny:
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude
-              desc: generic code reaches Claude through the registry, not the adapter package
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex
-              desc: generic code reaches Codex through the registry, not the adapter package
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/chatgpt
-              desc: generic code reaches ChatGPT through the registry, not the adapter package
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/copilot
-              desc: generic code reaches Copilot through the registry, not the adapter package
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor
-              desc: generic code reaches Cursor through the registry, not the adapter package
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/vscode
-              desc: generic code reaches VS Code through the registry, not the adapter package
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro
-              desc: generic code reaches Kiro through the registry, not the adapter package
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini
-              desc: generic code reaches Gemini through the registry, not the adapter package
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode
-              desc: generic code reaches OpenCode through the registry, not the adapter package
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline
-              desc: generic code reaches Cline through the registry, not the adapter package
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf
-              desc: generic code reaches Windsurf through the registry, not the adapter package
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/
+              desc: generic code reaches client implementations through an injected registry
         cli-no-core-internals:
           # CLI commands are a composition consumer. They may use the planner
           # public facade, never providers or the path-policy adapter. Tests

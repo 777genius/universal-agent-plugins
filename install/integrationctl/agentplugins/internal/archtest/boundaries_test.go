@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"go/parser"
 	"go/token"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -25,30 +27,17 @@ type boundary struct {
 	// imports. Otherwise deny lists forbidden import prefixes.
 	allow []string
 	deny  []string
+	// clientImports applies the namespace policy shared by generic dispatchers
+	// and client peers, without enumerating supported client identities.
+	clientImports bool
 }
 
-func TestLayerBoundaries(t *testing.T) {
-	t.Parallel()
-	root := testRepoRoot(t)
+func layerBoundaries() []boundary {
 	// A library is handed a registry and never assembles the default one:
 	// importing clients/all would link every adapter into any binary that
 	// merely detects, plans or reads a project. Only a main may name the set.
 	injectedRegistry := []string{modulePath + "/install/integrationctl/agentplugins/clients/all"}
-	concreteClients := []string{
-		modulePath + "/install/integrationctl/agentplugins/clients/claude",
-		modulePath + "/install/integrationctl/agentplugins/clients/codex",
-		modulePath + "/install/integrationctl/agentplugins/clients/chatgpt",
-		modulePath + "/install/integrationctl/agentplugins/clients/copilot",
-		modulePath + "/install/integrationctl/agentplugins/clients/cursor",
-		modulePath + "/install/integrationctl/agentplugins/clients/vscode",
-		modulePath + "/install/integrationctl/agentplugins/clients/kiro",
-		modulePath + "/install/integrationctl/agentplugins/clients/gemini",
-		modulePath + "/install/integrationctl/agentplugins/clients/opencode",
-		modulePath + "/install/integrationctl/agentplugins/clients/cline",
-		modulePath + "/install/integrationctl/agentplugins/clients/windsurf",
-	}
-	genericNoConcrete := append(append([]string{}, injectedRegistry...), concreteClients...)
-	boundaries := []boundary{
+	return []boundary{
 		{pkg: agentplugins + "/domain", allow: nil},
 		{pkg: agentplugins + "/ports", tests: true, allow: []string{
 			modulePath + "/install/integrationctl/agentplugins/domain",
@@ -80,9 +69,11 @@ func TestLayerBoundaries(t *testing.T) {
 			modulePath + "/install/integrationctl/agentplugins/usecase",
 			modulePath + "/install/integrationctl/agentplugins/adapters/clientdetect",
 		}},
-		{pkg: agentplugins + "/providers", deny: genericNoConcrete},
-		{pkg: agentplugins + "/planner", deny: genericNoConcrete},
-		{pkg: agentplugins + "/adapters/clientdetect", deny: genericNoConcrete},
+		{pkg: agentplugins + "/clients", tests: true, clientImports: true},
+		{pkg: agentplugins + "/providers", clientImports: true},
+		{pkg: agentplugins + "/planner", clientImports: true},
+		{pkg: agentplugins + "/adapters/clientdetect", clientImports: true},
+		{pkg: agentplugins + "/installer", deny: injectedRegistry},
 		// The CLI libraries are consumers of the same contract. The authoring
 		// readiness package reached for the default registry here and pulled
 		// every adapter into the authoring binary, which is the cost this rule
@@ -93,43 +84,95 @@ func TestLayerBoundaries(t *testing.T) {
 			modulePath + "/install/integrationctl/adapters/pathpolicy",
 		}},
 	}
-	for _, rule := range boundaries {
-		t.Run(rule.pkg, func(t *testing.T) {
+}
+
+func TestLayerBoundaries(t *testing.T) {
+	t.Parallel()
+	root := testRepoRoot(t)
+	for _, rule := range layerBoundaries() {
+		name := rule.pkg
+		if rule.clientImports {
+			name += "/client-imports"
+		}
+		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			for _, file := range goFiles(t, filepath.Join(root, filepath.FromSlash(rule.pkg)), rule.tests) {
-				for _, imported := range fileImports(t, file) {
-					checkImport(t, rule, strings.TrimPrefix(file, root+string(filepath.Separator)), imported)
-				}
+			for _, violation := range boundaryViolations(t, root, rule) {
+				t.Error(violation)
 			}
 		})
 	}
 }
 
-func checkImport(t *testing.T, rule boundary, file, imported string) {
+func boundaryViolations(t *testing.T, root string, rule boundary) []string {
 	t.Helper()
+	var violations []string
+	for _, file := range goFiles(t, filepath.Join(root, filepath.FromSlash(rule.pkg)), rule.tests) {
+		rel, err := filepath.Rel(root, file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, imported := range fileImports(t, file) {
+			if importForbidden(rule, filepath.ToSlash(rel), imported) {
+				violations = append(violations, fmt.Sprintf("%s imports %s, which the layer forbids", filepath.ToSlash(rel), imported))
+			}
+		}
+	}
+	return violations
+}
+
+func importForbidden(rule boundary, file, imported string) bool {
 	if standardLibrary(imported) {
-		return
+		return false
+	}
+	if rule.clientImports {
+		return clientImportForbidden(file, imported)
 	}
 	if len(rule.deny) > 0 {
 		for _, denied := range rule.deny {
 			if imported == denied || strings.HasPrefix(imported, denied+"/") {
-				t.Errorf("%s imports %s, which the layer forbids", file, imported)
+				return true
 			}
 		}
-		return
+		return false
 	}
 	for _, allowed := range rule.allow {
 		if imported == allowed || strings.HasPrefix(imported, allowed+"/") {
-			return
+			return false
 		}
 	}
-	t.Errorf("%s imports %s, which the layer does not allow", file, imported)
+	return true
+}
+
+// clientImportForbidden classifies the namespace rather than the domain registry:
+// a new or not-yet-registered adapter must not escape the boundary. Only shared
+// code and contract-test helpers are structural subpackages. Unknown names,
+// nested implementations and clients/all are otherwise private to composition.
+func clientImportForbidden(file, imported string) bool {
+	const clientRoot = modulePath + "/" + agentplugins + "/clients/"
+	rel, clientPackage := strings.CutPrefix(imported, clientRoot)
+	if !clientPackage {
+		return false
+	}
+	leaf, _, _ := strings.Cut(rel, "/")
+	if leaf == "shared" || leaf == "contracttest" {
+		return false
+	}
+	const clientDir = agentplugins + "/clients/"
+	if strings.HasPrefix(file, clientDir+"all/") {
+		return false
+	}
+	// Preserve the existing external Gemini consumer tests' own-adapter
+	// exception. A peer or nested concrete import remains forbidden there.
+	if path.Dir(file) == clientDir+"gemini" && strings.HasSuffix(file, "_test.go") && imported == clientRoot+"gemini" {
+		return false
+	}
+	return true
 }
 
 // standardLibrary uses the same rule the go tool does: only standard library
 // paths have no dot in their first segment.
-func standardLibrary(path string) bool {
-	first, _, _ := strings.Cut(path, "/")
+func standardLibrary(importPath string) bool {
+	first, _, _ := strings.Cut(importPath, "/")
 	return !strings.Contains(first, ".")
 }
 
@@ -164,13 +207,13 @@ func goFiles(t *testing.T, dir string, includeTests bool) []string {
 	return files
 }
 
-func fileImports(t *testing.T, path string) []string {
+func fileImports(t *testing.T, filename string) []string {
 	t.Helper()
-	contents, err := os.ReadFile(path)
+	contents, err := os.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
-	file, err := parser.ParseFile(token.NewFileSet(), path, contents, parser.ImportsOnly|parser.SkipObjectResolution)
+	file, err := parser.ParseFile(token.NewFileSet(), filename, contents, parser.ImportsOnly|parser.SkipObjectResolution)
 	if err != nil {
 		t.Fatal(err)
 	}

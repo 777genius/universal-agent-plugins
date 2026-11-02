@@ -1,6 +1,6 @@
 ---
 title: "Ajouter des Skills"
-description: "Complétez un paquet standard existant avec un autre Skill immédiat."
+description: "Complétez un paquet standard existant avec un autre Skill placé directement dans skills/."
 canonicalId: "page:build:skills"
 section: "build"
 locale: "fr"
@@ -42,13 +42,13 @@ Modifiez `skills/release-notes/SKILL.md` pour expliquer son déclenchement, sa m
 
 Scripts, références et ressources peuvent soutenir les instructions, mais leur présence ne prouve ni leur exécution ni l’autorisation de les lancer. `allowed-tools` n’est pas une autorisation indépendante. Examinez les éléments annexes avec le même soin que les instructions.
 
-## Validez le paquet et les Skills immédiats
+## Validez le paquet et les Skills placés directement dans `skills/` {#validez-le-paquet-et-les-skills-immediats}
 
 ```bash
 agentplugins author skills validate ./review-helper
 ```
 
-La commande indique la préparation globale du paquet et examine les Skills immédiats séparément. Une erreur ailleurs dans le paquet peut donc affecter le résultat global même si le nouveau Skill ne présente aucun problème.
+La commande indique la préparation globale du paquet et examine les Skills placés directement dans `skills/` séparément. Une erreur ailleurs dans le paquet peut donc affecter le résultat global même si le nouveau Skill ne présente aucun problème.
 
 Sans chemin, seule la racine du dossier courant est utilisée, sans recherche dans les parents. Des racines explicites clarifient scripts et diagnostics. Exécuter depuis `skills/release-notes/` ne remplace pas la sélection de la racine du paquet.
 

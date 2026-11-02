@@ -210,3 +210,57 @@ func TestProjectComponentsMCPOnlyDoesNotCreateSkillTransaction(t *testing.T) {
 		t.Fatalf("MCP-only request created skill transaction/root: %v", err)
 	}
 }
+
+func TestProjectComponentsMCPJsonNameWithSpacesLifecycle(t *testing.T) {
+	mutation := componentFixture(t)
+	name := " deployment notes "
+	server := nativeconfig.Server{Type: "remote", URL: "https://managed.test/v1"}
+	first, err := mutation.Layout.MCPObject(name, server, mutation.Layout.ConfigPaths.JSON)
+	if err != nil {
+		t.Fatalf("JSON member selector was treated as a filesystem leaf: %v", err)
+	}
+	mutation.Desired = []domain.NativeObjectOwnership{first}
+	mutation.Servers = map[string]nativeconfig.Server{name: server}
+	for _, url := range []string{"https://managed.test/v1", "https://managed.test/v2"} {
+		if url != server.URL {
+			mutation.Previous = append([]domain.NativeObjectOwnership(nil), mutation.Desired...)
+			server.URL = url
+			next, err := mutation.Layout.MCPObject(name, server, mutation.Layout.ConfigPaths.JSON)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutation.Desired = []domain.NativeObjectOwnership{next}
+			mutation.Servers[name] = server
+		}
+		if err := mutation.Apply(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if err := mutation.Layout.Verify(mutation.Desired, false, mutation.Kernel); err != nil {
+			t.Fatal(err)
+		}
+		body, err := os.ReadFile(mutation.Layout.ConfigPaths.JSON)
+		if err != nil || !strings.Contains(string(body), url) || !strings.Contains(string(body), `"foreign"`) {
+			t.Fatalf("native JSON member was lost: %q, %v", body, err)
+		}
+	}
+	mutation.Previous = append([]domain.NativeObjectOwnership(nil), mutation.Desired...)
+	mutation.Desired, mutation.Servers = nil, nil
+	if err := mutation.Apply(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(mutation.Layout.ConfigPaths.JSON)
+	if err != nil || strings.Contains(string(body), `" deployment notes "`) || !strings.Contains(string(body), `"foreign"`) {
+		t.Fatalf("owned JSON selector removal changed foreign data: %q, %v", body, err)
+	}
+}
+
+func TestProjectComponentsSkillNamesStayFilesystemSafe(t *testing.T) {
+	mutation := componentFixture(t)
+	skill := mutation.Desired[0]
+	skill.LogicalName = "unsafe skill"
+	skill.ObjectID = mutation.Layout.SkillKind + ":" + skill.LogicalName
+	skill.Path = filepath.Join(mutation.Layout.SkillsRoot, skill.LogicalName)
+	if err := mutation.Layout.ValidateObjects([]domain.NativeObjectOwnership{skill}); err == nil {
+		t.Fatal("skill directory accepted a space-bearing filesystem leaf")
+	}
+}

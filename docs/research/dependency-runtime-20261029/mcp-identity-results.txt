@@ -1,0 +1,12 @@
+test_exact_owned_binding_is_only_a_candidate (__main__.Boundaries.test_exact_owned_binding_is_only_a_candidate) ... ok
+test_foreign_identical_entries_are_not_adopted (__main__.Boundaries.test_foreign_identical_entries_are_not_adopted) ... ok
+test_same_content_does_not_make_registry_and_git_one_source (__main__.Boundaries.test_same_content_does_not_make_registry_and_git_one_source) ... ok
+test_same_stdio_program_has_separate_client_bindings (__main__.Boundaries.test_same_stdio_program_has_separate_client_bindings) ... ok
+test_same_url_does_not_establish_shared_authority (__main__.Boundaries.test_same_url_does_not_establish_shared_authority) ... ok
+test_shared_package_survives_one_consumer_removal (__main__.Boundaries.test_shared_package_survives_one_consumer_removal) ... ok
+test_unreachable_cycle_does_not_keep_itself_installed (__main__.Boundaries.test_unreachable_cycle_does_not_keep_itself_installed) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.001s
+
+OK

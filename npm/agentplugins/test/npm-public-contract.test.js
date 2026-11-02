@@ -10,10 +10,12 @@ const test = require("node:test");
 const STAGED_SOURCE_CHECKOUT = process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1";
 
 const {
+  MANAGEMENT_SDK_METADATA,
   validateAuditSignatures,
   validateDownloadedTarball,
   validatePackJSON,
   validateProductPackJSON,
+  validatePairedSource,
   validatePublicMetadata,
   validateSLSAAttestation
 } = require("../scripts/npm-public-contract");
@@ -463,4 +465,110 @@ test("C1 packPackage rejects unknown products before invoking npm", t => {
   const run = t.mock.method(cp, "execFileSync", () => { throw new Error("unexpected tool"); });
   assert.throws(() => packing.packPackage("toString", {}, "", {}, {}), /unknown fixed npm product/);
   assert.equal(run.mock.callCount(), 0);
+});
+
+// The Management SDK reuses this contract with its own package, workflow and tag.
+function managementSDKFixture() {
+  const value = fixture();
+  const name = "universal-agent-plugins-management-sdk";
+  const tag = `management-sdk-v${value.version}`;
+  const workflow = ".github/workflows/management-sdk-release.yml";
+  const metadata = structuredClone(value.metadata);
+  Object.assign(metadata, {
+    name,
+    homepage: "https://github.com/777genius/universal-agent-plugins/tree/main/sdks/typescript#readme",
+    repository: { type: "git", url: "git+https://github.com/777genius/universal-agent-plugins.git", directory: "sdks/typescript" },
+    engines: { node: ">=22.18" },
+    scripts: { build: "tsc -p tsconfig.json", test: "node --test" }
+  });
+  delete metadata.bin;
+  metadata.dist.tarball = `https://registry.npmjs.org/${name}/-/${name}-${value.version}.tgz`;
+  metadata.dist.attestations.url = `https://registry.npmjs.org/-/npm/v1/attestations/${name}@${value.version}`;
+  const statement = structuredClone(value.statement);
+  statement.subject[0].name = `pkg:npm/${name}@${value.version}`;
+  statement.predicate.buildDefinition.externalParameters.workflow = {
+    ref: `refs/tags/${tag}`, repository: "https://github.com/777genius/universal-agent-plugins", path: workflow
+  };
+  statement.predicate.buildDefinition.resolvedDependencies[0].uri =
+    `git+https://github.com/777genius/universal-agent-plugins@refs/tags/${tag}`;
+  const attestations = structuredClone(value.attestations);
+  attestations.attestations[1].bundle.dsseEnvelope.payload = Buffer.from(JSON.stringify(statement)).toString("base64");
+  const pack = [{ ...value.pack[0], name, filename: `${name}-${value.version}.tgz` }];
+  const audit = {
+    invalid: [],
+    missing: [],
+    verified: [{ name: "openapi-fetch", version: "0.17.0" }, {
+      name,
+      version: value.version,
+      location: `node_modules/${name}`,
+      registry: "https://registry.npmjs.org/",
+      attestations: metadata.dist.attestations,
+      attestationBundles: attestations.attestations
+    }]
+  };
+  return { ...value, attestations, audit, metadata, name, pack, statement, tag };
+}
+
+test("management SDK product binds its own package, workflow, tag and dependencies", (t) => {
+  const value = managementSDKFixture();
+  const product = "management-sdk";
+  assert.equal(validatePublicMetadata([value.metadata], value.version, value.integrity, value.shasum, product), value.metadata);
+  assert.deepEqual(validateSLSAAttestation(value.attestations, value.version, value.integrity, value.tag, value.uapCommit, product), value.statement);
+  assert.equal(validateAuditSignatures(value.audit, value.attestations, value.version, product), value.audit.verified[1]);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "npm-public-contract-sdk-"));
+  t.after(() => cp.execFileSync("rm", ["-r", "--", root]));
+  fs.writeFileSync(path.join(root, value.pack[0].filename), value.body);
+  for (const form of [value.pack, { [value.name]: value.pack[0] }]) {
+    assert.equal(validateDownloadedTarball(form, root, value.version, value.integrity, value.shasum, product).name, value.name);
+  }
+  // The CLI identity and defaults never accept SDK records.
+  assert.throws(() => validatePublicMetadata(value.metadata, value.version, value.integrity, value.shasum));
+  assert.throws(() => validateSLSAAttestation(value.attestations, value.version, value.integrity, value.tag, value.uapCommit));
+  assert.throws(() => validateSLSAAttestation(fixture().attestations, value.version, value.integrity, `agentplugins-v${value.version}`, value.uapCommit, product));
+  assert.throws(() => validateAuditSignatures(value.audit, value.attestations, value.version));
+  const extra = structuredClone(fixture());
+  const cliAudit = { invalid: [], missing: [], verified: [{ name: "openapi-fetch" }, { name: "universal-agent-plugins" }] };
+  assert.throws(() => validateAuditSignatures(cliAudit, extra.attestations, extra.version), /exactly one package/);
+});
+
+test("management SDK product fails closed for every reviewed identity field", () => {
+  const value = managementSDKFixture();
+  const product = "management-sdk";
+  for (const mutate of [
+    (x) => { x.repository.directory = "npm/agentplugins"; },
+    (x) => { x.homepage = "https://example.invalid/"; },
+    (x) => { x.engines.node = ">=22"; },
+    (x) => { x.bin = { sdk: "bin/sdk.js" }; },
+    (x) => { x.scripts.postinstall = "node install.js"; },
+    (x) => { x.scripts.prepare = "node prepare.js"; },
+    (x) => { x._npmUser.trustedPublisher.id = "other"; }
+  ]) {
+    const invalid = structuredClone(value.metadata);
+    mutate(invalid);
+    assert.throws(() => validatePublicMetadata(invalid, value.version, value.integrity, value.shasum, product));
+  }
+  for (const mutate of [
+    (x) => mutatePayload(x, (statement) => { statement.predicate.buildDefinition.externalParameters.workflow.path = ".github/workflows/agentplugins-npm-publish.yml"; }),
+    (x) => mutatePayload(x, (statement) => { statement.predicate.buildDefinition.resolvedDependencies[0].digest.gitCommit = "b".repeat(40); })
+  ]) {
+    const invalid = structuredClone(value.attestations);
+    mutate(invalid);
+    assert.throws(() => validateSLSAAttestation(invalid, value.version, value.integrity, value.tag, value.uapCommit, product));
+  }
+  const missing = structuredClone(value.audit);
+  missing.missing.push({ name: "openapi-fetch" });
+  assert.throws(() => validateAuditSignatures(missing, value.attestations, value.version, product));
+  assert.throws(() => validatePairedSource({}, {}, "a".repeat(40), "d".repeat(64), product), /unknown paired product/);
+});
+
+test("management SDK registry contract matches the SDK manifest", { skip: STAGED_SOURCE_CHECKOUT && "requires the complete repository source tree" }, () => {
+  const manifest = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../../sdks/typescript/package.json"), "utf8"));
+  assert.deepEqual(
+    { repository: manifest.repository, homepage: manifest.homepage, engines: manifest.engines },
+    structuredClone(MANAGEMENT_SDK_METADATA)
+  );
+  assert.equal(manifest.bin, undefined);
+  for (const hook of ["preinstall", "install", "postinstall", "prepare", "preprepare", "postprepare"]) {
+    assert.equal(manifest.scripts?.[hook], undefined, hook);
+  }
 });

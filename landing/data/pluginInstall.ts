@@ -1,9 +1,5 @@
-import {
-  SAVED_DEPENDENCIES_CLI_RELEASED,
-  dependencySaveMode,
-  dependencyAddFlag,
-  isPinnedGitSource,
-} from '../utils/savedDependencies';
+import { SAVED_DEPENDENCIES_CLI_RELEASED } from '../utils/savedDependencies';
+import { installCommands } from '../utils/commands.ts';
 import { contentByLocale } from '~/data/content';
 import type {
   PluginInstallCommandSet,
@@ -115,20 +111,14 @@ const buildInstallCommand = (
   includeTargets = true,
   savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
 ): string => {
-  const args = ['universal-agent-plugins', 'add', cliSource];
-
-  if (includeTargets && targetIds.length > 0) {
-    args.push('--target', targetIds.join(','));
-  }
-
-  if (scope === 'project') {
-    args.push('--scope', 'project');
-  }
-
-  return (
-    args.join(' ') +
-    dependencyAddFlag(dependencySaveMode(cliSource, targetIds), savedDependenciesReleased)
-  );
+  return installCommands(
+    cliSource,
+    cliSource,
+    includeTargets && targetIds.length ? targetIds : undefined,
+    savedDependenciesReleased,
+    scope ?? 'user',
+    'universal-agent-plugins',
+  ).add;
 };
 
 const buildManageCommands = (
@@ -136,16 +126,18 @@ const buildManageCommands = (
   cliSource: string,
   targetIds: PluginInstallTargetId[],
   savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
-): PluginManageCommands => ({
-  update:
-    savedDependenciesReleased &&
-    isPinnedGitSource(cliSource) &&
-    dependencySaveMode(cliSource, targetIds) === 'saved'
-      ? buildInstallCommand(cliSource, targetIds, undefined, true, savedDependenciesReleased)
-      : `universal-agent-plugins update ${integrationName}`,
-  repair: `universal-agent-plugins repair ${integrationName}`,
-  remove: `universal-agent-plugins remove ${integrationName}`,
-});
+  scope: PluginInstallScope = 'user',
+): PluginManageCommands => {
+  const { update, repair, remove } = installCommands(
+    cliSource,
+    integrationName,
+    targetIds.length ? targetIds : undefined,
+    savedDependenciesReleased,
+    scope,
+    'universal-agent-plugins',
+  );
+  return { update, repair, remove };
+};
 
 const buildCommandSet = (
   cliSource: string,
@@ -165,9 +157,22 @@ const buildCommandSet = (
     cliSource,
     [lane.targetId],
     savedDependenciesReleased,
+    lane.scope,
   ).update,
-  repair: `universal-agent-plugins repair ${integrationName} --target ${lane.targetId}`,
-  remove: `universal-agent-plugins remove ${integrationName}`,
+  repair: buildManageCommands(
+    integrationName,
+    cliSource,
+    [lane.targetId],
+    savedDependenciesReleased,
+    lane.scope,
+  ).repair,
+  remove: buildManageCommands(
+    integrationName,
+    cliSource,
+    [lane.targetId],
+    savedDependenciesReleased,
+    lane.scope,
+  ).remove,
 });
 
 const resolveSupportedTargets = (
@@ -225,36 +230,35 @@ export const getResolvedPluginInstallSpec = (
   };
 };
 
+const resolveSelection = (
+  spec: PluginResolvedInstallSpec,
+  selectedTargetIds: PluginInstallTargetId[],
+): { targetIds: PluginInstallTargetId[]; scope: PluginInstallScope } => {
+  const allTargetIds = spec.recommendedTargetOrder.filter((targetId) =>
+    spec.supportedTargets.some((lane) => lane.targetId === targetId),
+  );
+  const targetIds = [...new Set(selectedTargetIds.length > 0 ? selectedTargetIds : allTargetIds)];
+  const selectedLanes = targetIds.map((targetId) =>
+    spec.supportedTargets.find((lane) => lane.targetId === targetId),
+  );
+  if (!selectedLanes.length || selectedLanes.some((lane) => !lane))
+    throw new Error('Unsupported install target selection');
+  const uniqueScopes = [...new Set(selectedLanes.map((lane) => lane!.scope))];
+  if (uniqueScopes.length !== 1)
+    throw new Error('Selected agents must use the same installation scope');
+  return { targetIds, scope: uniqueScopes[0]! };
+};
+
 export const buildInstallCommandForSelection = (
   spec: PluginResolvedInstallSpec,
   selectedTargetIds: PluginInstallTargetId[],
   savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
 ): string => {
-  const allTargetIds = spec.recommendedTargetOrder.filter((targetId) =>
-    spec.supportedTargets.some((lane) => lane.targetId === targetId),
-  );
-  const normalizedTargetIds = selectedTargetIds.length > 0 ? selectedTargetIds : allTargetIds;
-  const selectedLanes = normalizedTargetIds
-    .map((targetId) => spec.supportedTargets.find((lane) => lane.targetId === targetId))
-    .filter((lane): lane is NonNullable<typeof lane> => Boolean(lane));
+  const { targetIds, scope } = resolveSelection(spec, selectedTargetIds);
   // Keep generated commands explicit even when the user leaves every target
   // selected. An omitted --target invokes interactive detection and can differ
   // from the targets shown in the UI.
-  const includeTargets = true;
-  const uniqueScopes = [...new Set(selectedLanes.map((lane) => lane.scope))];
-  const scope = !includeTargets
-    ? undefined
-    : uniqueScopes.length === 1 && uniqueScopes[0] === 'project'
-      ? 'project'
-      : undefined;
-
-  return buildInstallCommand(
-    spec.cliSource,
-    normalizedTargetIds,
-    scope,
-    includeTargets,
-    savedDependenciesReleased,
-  );
+  return buildInstallCommand(spec.cliSource, targetIds, scope, true, savedDependenciesReleased);
 };
 
 export const buildManageCommandsForSelection = (
@@ -262,24 +266,12 @@ export const buildManageCommandsForSelection = (
   selectedTargetIds: PluginInstallTargetId[],
   savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
 ): PluginManageCommands => {
-  const targetIds =
-    selectedTargetIds.length > 0
-      ? selectedTargetIds
-      : spec.recommendedTargetOrder.filter((targetId) =>
-          spec.supportedTargets.some((lane) => lane.targetId === targetId),
-        );
-  const targetFlag = targetIds.length ? ` --target ${targetIds.join(',')}` : '';
-  const saved =
-    savedDependenciesReleased && dependencySaveMode(spec.cliSource, targetIds) === 'saved';
-  const commands = savedDependenciesReleased
-    ? buildManageCommands(spec.integrationName, spec.cliSource, targetIds, true)
-    : spec.manageCommands;
-  // Owned Directory updates advance the alias as a whole. Git pins advance only
-  // through add of the current exact source, retaining the selected target set.
-  const update = saved ? commands.update : `${commands.update}${targetFlag}`;
-  return {
-    update,
-    repair: `${commands.repair}${targetFlag}`,
-    remove: `${commands.remove}${targetFlag}`,
-  };
+  const { targetIds, scope } = resolveSelection(spec, selectedTargetIds);
+  return buildManageCommands(
+    spec.integrationName,
+    spec.cliSource,
+    targetIds,
+    savedDependenciesReleased,
+    scope,
+  );
 };

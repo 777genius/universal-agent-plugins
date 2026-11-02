@@ -58,6 +58,55 @@ func (s *dependencyTestSource) ResolveGit(ctx context.Context, source sourcespec
 	return s.Acquirer.ResolveGit(ctx, source, selector, exact)
 }
 
+type dependencyStatusTestFacts map[string]bool
+
+func readDependencyStatusTestFacts(t *testing.T, body string) dependencyStatusTestFacts {
+	t.Helper()
+	var status dependencyStatus
+	if err := json.Unmarshal([]byte(body), &status); err != nil {
+		t.Fatalf("decode dependency status facts: %v\n%s", err, body)
+	}
+	facts := dependencyStatusTestFacts{}
+	for _, binding := range status.Facts {
+		for _, fact := range binding.Facts {
+			facts[fact] = true
+		}
+	}
+	return facts
+}
+
+func (facts dependencyStatusTestFacts) hasMismatch() bool {
+	for fact := range facts {
+		if strings.Contains(fact, "mismatch") {
+			return true
+		}
+	}
+	return false
+}
+
+func TestDependencyStatusTestFactsIgnoreMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		want       []string
+		mismatch   bool
+	}{
+		{"metadata is not a status fact", `{"manifest_path":"/tmp/partial/store_mismatch/uap.toml","lock_path":"/tmp/not_synced/uap.lock","facts":[{"alias":"projection_mismatch","owner":"partial","next_actions":[{"kind":"not_synced","reason":"store_mismatch"}],"facts":["auth_unverified"]}]}`, []string{"auth_unverified"}, false},
+		{"exact facts remain visible", `{"facts":[{"facts":["partial","not_synced","store_mismatch"]},{"facts":["projection_mismatch","auth_unverified"]}]}`, []string{"partial", "not_synced", "store_mismatch", "projection_mismatch", "auth_unverified"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			facts := readDependencyStatusTestFacts(t, tc.body)
+			if len(facts) != len(tc.want) || facts.hasMismatch() != tc.mismatch {
+				t.Fatalf("status metadata contaminated facts: got %v want %v", facts, tc.want)
+			}
+			for _, fact := range tc.want {
+				if !facts[fact] {
+					t.Fatalf("status fact %q missing from %v", fact, facts)
+				}
+			}
+		})
+	}
+}
+
 // Real Git acquisition, standard loader, digest store, public SDK transaction,
 // Codex projection and CLI commands run against exclusively disposable roots.
 func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
@@ -126,7 +175,9 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if err != nil || failedView.Recovery.Required || len(failedView.EnvironmentReceipts) != 1 {
 		t.Fatalf("expected committed recoverable lifecycle failure without pending transaction: %+v %v", failedView, err)
 	}
-	if status := run(f, "deps", "status", "--format", "json"); !strings.Contains(status, "partial") {
+	status := run(f, "deps", "status", "--format", "json")
+	facts := readDependencyStatusTestFacts(t, status)
+	if !facts["partial"] {
 		t.Fatal("failed lifecycle hidden: " + status)
 	}
 	failedProjection := failedView.Installations[0].Bindings[0].ProjectionDigest
@@ -135,7 +186,9 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if err != nil || resumedView.Installations[0].Bindings[0].Activation != string(domain.ActivationActive) || resumedView.Installations[0].Bindings[0].Verification != "installation_verified" || resumedView.Installations[0].Bindings[0].ProjectionDigest != failedProjection {
 		t.Fatalf("same-pin retry did not resume lifecycle: %+v %v", resumedView, err)
 	}
-	if status := run(f, "deps", "status", "--format", "json"); !strings.Contains(status, "auth_unverified") || strings.Contains(status, "partial") {
+	status = run(f, "deps", "status", "--format", "json")
+	facts = readDependencyStatusTestFacts(t, status)
+	if !facts["auth_unverified"] || facts["partial"] {
 		t.Fatal("unchecked authentication must remain visible: " + status)
 	}
 	beforeDownloads, beforeLookups := source.downloads, source.lookups
@@ -156,8 +209,9 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if source.lookups != beforeLookups || source.downloads != beforeDownloads {
 		t.Fatal("locked mismatch acquired source")
 	}
-	status := run(f, "deps", "status", "--format", "json")
-	if strings.Contains(status, "mismatch") || strings.Contains(status, "not_synced") {
+	status = run(f, "deps", "status", "--format", "json")
+	facts = readDependencyStatusTestFacts(t, status)
+	if facts.hasMismatch() || facts["not_synced"] {
 		t.Fatal(status)
 	}
 	state, e := f.store.Load()
@@ -186,7 +240,8 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	status = run(f, "deps", "status", "--format", "json")
-	if !strings.Contains(status, "store_mismatch") || strings.Contains(status, "projection_mismatch") {
+	facts = readDependencyStatusTestFacts(t, status)
+	if !facts["store_mismatch"] || facts["projection_mismatch"] {
 		t.Fatal("store/projection facts conflated: " + status)
 	}
 	savedLock, err := os.ReadFile(lp)
@@ -212,8 +267,9 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		}
 		lookups, downloads := source.lookups, source.downloads
 		report := run(f, "deps", "status", "--format", "json")
+		facts := readDependencyStatusTestFacts(t, report)
 		for _, fact := range []string{"not_synced", "store_mismatch", "projection_mismatch"} {
-			if !strings.Contains(report, fact) {
+			if !facts[fact] {
 				t.Fatalf("%s hid %s: %s", agreement, fact, report)
 			}
 		}
@@ -288,7 +344,8 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		t.Fatal("exact repair performed ref lookup")
 	}
 	status = run(f, "deps", "status", "--format", "json")
-	if strings.Contains(status, "mismatch") || strings.Contains(status, "not_synced") {
+	facts = readDependencyStatusTestFacts(t, status)
+	if facts.hasMismatch() || facts["not_synced"] {
 		t.Fatal(status)
 	}
 	if _, _, e := f.execute(false, "add", githubIdentity("acme/demo", pinned.Source.Git.Commit, ""), "--target", "codex", "--no-save", "--format", "json"); e == nil {
@@ -367,7 +424,8 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	f2.app.SecurityEvaluator = dependencyTestScanner{}
 	run(f2, "deps", "sync", "--locked", "--yes", "--format", "json")
 	status = run(f2, "deps", "status", "--format", "json")
-	if strings.Contains(status, "mismatch") || strings.Contains(status, "not_synced") {
+	facts = readDependencyStatusTestFacts(t, status)
+	if facts.hasMismatch() || facts["not_synced"] {
 		t.Fatal(status)
 	}
 	if e := os.WriteFile(mp, []byte("schema_version = 1\n[targets]\n"), 0600); e != nil {
@@ -410,7 +468,7 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	run(f, "deps", "update", "demo", "--format", "json")
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
 	status = run(f, "deps", "status", "--format", "json")
-	if strings.Contains(status, "not_synced") {
+	if readDependencyStatusTestFacts(t, status)["not_synced"] {
 		t.Fatal(status)
 	}
 	// Add another target without moving the source pin, then interrupt a real
@@ -493,7 +551,8 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	}
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
 	status = run(f, "deps", "status", "--format", "json")
-	if strings.Contains(status, "mismatch") || strings.Contains(status, "not_synced") {
+	facts = readDependencyStatusTestFacts(t, status)
+	if facts.hasMismatch() || facts["not_synced"] {
 		t.Fatal(status)
 	}
 

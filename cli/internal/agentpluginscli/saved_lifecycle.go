@@ -288,22 +288,7 @@ func (selection savedLifecycleSelection) update(cmd *cobra.Command, app App, opt
 	if strings.TrimSpace(opts.target) != "" && !slices.Equal(selection.targets, desired) {
 		return requirements, snapshot.Lock, fmt.Errorf("update %s must select every target of the alias", selection.alias)
 	}
-	requirement, exists := requirements.Dependencies[key]
-	if !exists {
-		return requirements, snapshot.Lock, fmt.Errorf("dependency %q is absent from uap.toml; run agentplugins deps sync", selection.alias)
-	}
-	if requirement.Registry != nil && requirement.Registry.Selector.Kind == environment.SelectorVersion {
-		return requirements, snapshot.Lock, nil
-	}
-	if requirement.Registry != nil && requirement.Registry.Selector.Kind != environment.SelectorRange {
-		return updateSavedRegistry(cmd, app, opts, snapshot, selection.alias, selection.installation)
-	}
-	updateAlias := key
-	if (requirement.Git != nil && requirement.Git.Selector.Kind == environment.SelectorCommit) || (requirement.Archive != nil && requirement.Archive.SHA256 != "") {
-		updateAlias = ""
-	}
-	locked, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: dependencyResolver{requirements: requirements, app: app, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, snapshot.Lock, updateAlias)
-	return requirements, locked, err
+	return prepareSavedUpdates(cmd.Context(), app, snapshot, []string{key}, nil)
 }
 
 func (selection savedLifecycleSelection) renderNextAction(cmd *cobra.Command, app App, opts *options, requirements environment.Requirements, locked environment.Lock, operation string) error {

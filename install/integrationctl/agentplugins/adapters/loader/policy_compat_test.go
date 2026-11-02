@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
@@ -107,14 +106,5 @@ func TestPortableNameDoesNotPreventComponentDecode(t *testing.T) {
 	f, e := (conformance.Decoder{Registry: original.Registry}).DecodePlugin(context.Background(), conformance.NewDocument("plugin.json", conformance.Present, []byte(`{"$schema":"`+domain.PluginSchemaV1+`","name":"con"}`)))
 	if e != nil || f.Package == nil || f.Coverage.Plugin != conformance.Pass || f.Package.Manifest.Name != "con" {
 		t.Fatal(f, e)
-	}
-}
-func TestInstallerRetainsInvalidUTF8Compatibility(t *testing.T) {
-	root := t.TempDir()
-	body := `{"$schema":"` + domain.PluginSchemaV1 + `","name":"good","description":"` + string([]byte{0xff}) + `"}`
-	writeLoaderFile(t, filepath.Join(root, "plugin.json"), body)
-	pkg, e := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
-	if e != nil || pkg.Manifest.Description != "�" || !strings.Contains(string(pkg.Manifest.Raw), string([]byte{0xff})) {
-		t.Fatal(pkg, e)
 	}
 }

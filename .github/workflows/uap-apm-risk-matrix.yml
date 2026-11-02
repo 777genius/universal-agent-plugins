@@ -1,0 +1,164 @@
+name: UAP APM six-risk E2E (evidence only)
+
+on:
+  pull_request:
+    paths:
+      - "scripts/comparisons/uap_apm_skills_e2e.py"
+      - "scripts/comparisons/uap_apm_risk_e2e.py"
+      - "scripts/comparisons/apm-cli-0.35.0-requirements.lock"
+      - "scripts/comparisons/test_uap_apm_risk_e2e.py"
+      - "tests/fixtures/uap_apm/**"
+      - ".github/workflows/uap-apm-risk-matrix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uap-apm-risk-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: risk-${{ matrix.group }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [cold-profile, graph-removal, failure-secrets]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.10"
+          cache: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v4.4.2
+        with:
+          node-version: "22"
+          cache: ""
+      - name: Build exact released UAP source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/uap-release" agentplugins-v0.1.95
+          test "$(git -C "$RUNNER_TEMP/uap-release" rev-parse HEAD)" = ec85ee7d759944b9799e451c96bfc1859f9d5533
+          mkdir -p "$RUNNER_TEMP/uap-bin"
+          (cd "$RUNNER_TEMP/uap-release/cli" && go build -trimpath -o "$RUNNER_TEMP/uap-bin/agentplugins" ./cmd/agentplugins)
+          "$RUNNER_TEMP/uap-bin/agentplugins" version
+      - name: Install released APM at verified distribution digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/apm-venv"
+          mkdir -p "$RUNNER_TEMP/apm-dist"
+          "$RUNNER_TEMP/apm-venv/bin/python" -m pip download --no-deps --dest "$RUNNER_TEMP/apm-dist" "apm-cli==0.35.0"
+          wheel="$(find "$RUNNER_TEMP/apm-dist" -maxdepth 1 -type f -name 'apm_cli-0.35.0-*.whl' -print -quit)"
+          test -n "$wheel"
+          test "$(sha256sum "$wheel" | cut -d ' ' -f1)" = 535f9478fdfeb7acf586af96cbf1428ef128f76fdf89a9c084df04b88bebc1af
+          # Every resolved wheel uses a pinned version and exact archived
+          # SHA-256 from the previously measured Linux/Python 3.13 release lane.
+          # Missing or changed upstream bytes fail closed before importing APM.
+          "$RUNNER_TEMP/apm-venv/bin/python" -m pip install --disable-pip-version-check \
+            --only-binary=:all: --require-hashes --find-links "$RUNNER_TEMP/apm-dist" \
+            --report "$RUNNER_TEMP/apm-pip-report.json" \
+            -r scripts/comparisons/apm-cli-0.35.0-requirements.lock
+          "$RUNNER_TEMP/apm-venv/bin/apm" --version
+      - name: Provision genuine pinned Codex target without login
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/codex-archive"
+          mkdir -p "$archive"
+          filename="$(npm pack --ignore-scripts --silent --pack-destination "$archive" '@openai/codex@0.164.0')"
+          package="$archive/$filename"
+          test -f "$package"
+          digest="sha512-$(openssl dgst -sha512 -binary "$package" | openssl base64 -A)"
+          test "$digest" = 'sha512-TWj7UGyPRe3Pj/A3ddNAxs1te3a/W/xAd+J0LHrrFTmsSfahGMOLF/vn88D3QCIgAT3B1rm1y/Z3NYE0rx6cZQ=='
+          npm install --prefix "$RUNNER_TEMP/codex-runtime" --no-save --ignore-scripts --no-audit --no-fund --no-package-lock "$package"
+          native_root="$RUNNER_TEMP/codex-runtime/node_modules/@openai/codex-linux-x64"
+          test -d "$native_root"
+          mapfile -d '' -t natives < <(find "$native_root" -type f -name codex -print0)
+          test "${#natives[@]}" -eq 1
+          test "$(sha256sum "${natives[0]}" | cut -d ' ' -f1)" = b93f6811d3f653f0fb83be4050d857fb9abbb111dfa2ce160563327daff7f306
+          mkdir -p "$RUNNER_TEMP/codex-probe/.codex"
+          observed="$(HOME="$RUNNER_TEMP/codex-probe" CODEX_HOME="$RUNNER_TEMP/codex-probe/.codex" "${natives[0]}" --version)"
+          test "$observed" = "codex-cli 0.164.0"
+          # Only the verified native executable is exposed to the actual
+          # comparison subprocess. Never add npm package .bin trees to a
+          # job-wide PATH before subsequent provenance verification.
+          mkdir -p "$RUNNER_TEMP/verified-client-bin"
+          ln -s "${natives[0]}" "$RUNNER_TEMP/verified-client-bin/codex"
+      - name: Provision genuine pinned Claude Code for profile lane
+        if: matrix.group == 'cold-profile'
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/claude-archive"
+          mkdir -p "$archive"
+          filename="$(npm pack --ignore-scripts --silent --pack-destination "$archive" '@anthropic-ai/claude-code-linux-x64@2.1.263')"
+          package="$archive/$filename"
+          test -f "$package"
+          digest="sha512-$(openssl dgst -sha512 -binary "$package" | openssl base64 -A)"
+          test "$digest" = 'sha512-0IrvpLd/0FP0acQw59T4Cvx/r4nwAXKBrW0WyhIXymzYWurPCLztB+Icu9MkeewAUI+p3PTXsSfmilv/n6XlAQ=='
+          npm install --prefix "$RUNNER_TEMP/claude-runtime" --no-save --ignore-scripts --no-audit --no-fund --no-package-lock "$package"
+          native_root="$RUNNER_TEMP/claude-runtime/node_modules/@anthropic-ai/claude-code-linux-x64"
+          test -d "$native_root"
+          mapfile -d '' -t natives < <(find "$native_root" -type f -name claude -print0)
+          test "${#natives[@]}" -eq 1
+          test "$(sha256sum "${natives[0]}" | cut -d ' ' -f1)" = 26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba
+          mkdir -p "$RUNNER_TEMP/claude-probe"
+          observed="$(HOME="$RUNNER_TEMP/claude-probe" CLAUDE_CONFIG_DIR="$RUNNER_TEMP/claude-probe" "${natives[0]}" --version)"
+          [[ "$observed" =~ (^|[^0-9])2[.]1[.]263([^0-9]|$) ]]
+          [[ "$observed" != *$'\n'* && "$observed" != *$'\r'* ]]
+          printf '%s\n' "$observed" > "$RUNNER_TEMP/claude-probe/verified-version.txt"
+          printf '%s\n' "$(sha256sum "${natives[0]}" | cut -d ' ' -f1)" > "$RUNNER_TEMP/claude-probe/verified-native-sha256.txt"
+          # No npm-installed directories enter the job-wide PATH.
+          ln -s "${natives[0]}" "$RUNNER_TEMP/verified-client-bin/claude"
+      - name: Validate fail-closed observer classifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/apm-venv/bin/python" -m py_compile scripts/comparisons/uap_apm_risk_e2e.py
+          "$RUNNER_TEMP/apm-venv/bin/python" -m unittest discover -s scripts/comparisons -p 'test_uap_apm_risk_e2e.py' -v
+      - name: Execute isolated scenarios and retain every product status
+        shell: bash
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          umask 077
+          output="$RUNNER_TEMP/uap-apm-risk-${{ matrix.group }}"
+          mkdir -p "$output"
+          cp "$RUNNER_TEMP/apm-pip-report.json" "$output/apm-pip-report.json"
+          args=()
+          if [[ "${{ matrix.group }}" == "cold-profile" ]]; then
+            args+=(--claude-verified
+                   --claude-version "$(cat "$RUNNER_TEMP/claude-probe/verified-version.txt")"
+                   --claude-native-sha256 "$(cat "$RUNNER_TEMP/claude-probe/verified-native-sha256.txt")")
+          fi
+          # The directory contains only verified codex/claude symlinks.
+          # Use it for this subprocess alone, after all hash/probe checks.
+          PATH="$RUNNER_TEMP/verified-client-bin:$PATH" \
+            "$RUNNER_TEMP/apm-venv/bin/python" scripts/comparisons/uap_apm_risk_e2e.py \
+            --uap "$RUNNER_TEMP/uap-bin/agentplugins" \
+            --apm "$RUNNER_TEMP/apm-venv/bin/apm" \
+            --fixture-commit 58e11fc3799361d5e05ef2468c62f846fff8d723 \
+            --uap-source-sha ec85ee7d759944b9799e451c96bfc1859f9d5533 \
+            --group "${{ matrix.group }}" --output "$output" "${args[@]}"
+          cat "$output/report.md" >> "$GITHUB_STEP_SUMMARY"
+          # Green here means *receipts captured*. Individual cases may FAIL.
+      - name: Retain bounded independent receipts even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: uap-apm-risk-${{ matrix.group }}
+          path: ${{ runner.temp }}/uap-apm-risk-${{ matrix.group }}/
+          retention-days: 14
+          if-no-files-found: warn

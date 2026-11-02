@@ -1,8 +1,8 @@
 import availability from '../data/docsLocaleAvailability.generated.json' with { type: 'json' };
 
-export type DocsLocale = 'en' | 'ru' | 'es' | 'fr' | 'zh';
+export type DocsLocale = 'en' | 'ru' | 'uk' | 'zh' | 'es' | 'hi' | 'ar' | 'pt' | 'fr';
 
-const docsLocalePattern = /\/(en|ru|es|fr|zh)(?=\/|$)/;
+const docsLocalePattern = /\/(en|ru|uk|zh|es|hi|ar|pt|fr)(?=\/|$)/;
 const realPaths = availability.realPaths as Record<string, string[]>;
 
 /** `docPath` is the locale-relative page path with no extension, e.g. "guide/quickstart"; "" means the locale root. */

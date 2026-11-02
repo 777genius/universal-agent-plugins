@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -61,7 +62,7 @@ func projectNativeCLIArguments(client, executable, view, prompt string) ([]strin
 	case "grok":
 		// Source-guided candidate: unlike --tools "" (which parses as None), the
 		// strict permission parser maps --deny "" to Deny/Any/no pattern.
-		return []string{executable, "--single", prompt, "--output-format", "streaming-json", "--permission-mode", "default", "--deny", "", "--no-subagents", "--disable-web-search", "--max-turns", "1"}, nil
+		return []string{executable, "--single", prompt, "--output-format", "streaming-json", "--permission-mode", "default", "--deny", "", "--no-subagents", "--disable-web-search", "--max-turns", "1", "--model", grokProjectProviderModel}, nil
 	case "kiro":
 		return []string{executable, "chat", "--v2", "--no-interactive", prompt}, nil
 	case "windsurf":
@@ -93,12 +94,21 @@ type projectNativeCLIAttempt struct {
 	used                                                                         map[string]bool
 	evidence                                                                     map[string]any
 	binding                                                                      domain.ClientBinding
+	qoderMetadata                                                                *qoderOriginalMetadata
+	qoderTelemetry                                                               *qoderEmptyTelemetry
+	grok                                                                         *grokProjectProvider
 	kiroAuth                                                                     kiroAttemptAuth
 }
 
 func (f *projectNativeCLIAttempt) keep(t *testing.T, name string, body []byte) {
 	t.Helper()
 	body = f.kiroAuth.redact(body)
+	if f.grok != nil {
+		body = f.grok.redact(body)
+		if grokProjectPrivateCredential(body) {
+			t.Fatal("unredacted Grok fixture credential refused")
+		}
+	}
 	total := len(body)
 	for _, b := range f.files {
 		total += len(b)
@@ -110,10 +120,24 @@ func (f *projectNativeCLIAttempt) keep(t *testing.T, name string, body []byte) {
 }
 func (f *projectNativeCLIAttempt) check(t *testing.T) {
 	t.Helper()
-	for _, inventory := range []map[string]string{f.immutable, f.protected} {
+	if f.spec.client == "qoder" && f.qoderMetadata != nil {
+		if err := f.qoderMetadata.check(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if f.spec.client == "qoder" && f.qoderTelemetry != nil {
+		if err := f.qoderTelemetry.check(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for index, inventory := range []map[string]string{f.immutable, f.protected} {
 		for path, want := range inventory {
 			got, err := projectNativeRuntimeDigest(path)
 			if err != nil || got != want {
+				f.captureWindsurfConfigChange(path, want, got, err)
+				if index == 1 && err == nil {
+					f.observeGrokConfigMutation(path, want, got)
+				}
 				t.Fatalf("native CLI immutable/protected identity changed: %s (%v)", path, err)
 			}
 		}
@@ -131,6 +155,12 @@ func (f *projectNativeCLIAttempt) env() []string {
 	env := append(f.base.env(f.bin), "NO_COLOR=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_TERMINAL_PROMPT=0")
 	if f.spec.client == "grok" {
 		env = append(env, "GROK_DISABLE_AUTOUPDATER=1")
+		if f.grok != nil {
+			env = append(env, "UAP_GROK_TEST_PROVIDER_KEY="+f.grok.key, "GROK_SAMPLER_SHARED_CLIENT=0")
+			if f.grok.title != nil {
+				env = append(env, "UAP_GROK_TITLE_PROVIDER_KEY="+f.grok.title.transport.key)
+			}
+		}
 	}
 	return env
 }
@@ -155,6 +185,16 @@ func (f *projectNativeCLIAttempt) selectedCommand(label, cwd string, argv []stri
 		if err != nil {
 			return err
 		}
+	case "native-catalog":
+		if f.spec.client != "qoder" || !filepath.IsAbs(f.view) || filepath.Clean(f.view) != f.view || filepath.Base(f.view) != ".agentplugins-qoder-native" {
+			return fmt.Errorf("only the exact receipt-selected Qoder catalog is registered")
+		}
+		expected = []string{f.client, "plugins", "list", "--json", "--plugin-dir", f.view}
+	case "native-inspect":
+		if f.spec.client != "grok" {
+			return fmt.Errorf("only Grok has the measured installed inspection")
+		}
+		expected = []string{f.client, "inspect", "--json"}
 	default:
 		return fmt.Errorf("unregistered native CLI command label")
 	}
@@ -166,6 +206,12 @@ func (f *projectNativeCLIAttempt) selectedCommand(label, cwd string, argv []stri
 func (f *projectNativeCLIAttempt) command(t *testing.T, label, cwd string, argv []string, timeout time.Duration) ports.CommandResult {
 	t.Helper()
 	allowed := map[string]bool{"git-a": true, "git-b": true, "version": true, "add-a": true, "native-attempt": true}
+	if f.spec.client == "qoder" {
+		allowed["native-catalog"] = true
+	}
+	if f.spec.client == "grok" {
+		allowed["native-inspect"] = true
+	}
 	if !allowed[label] || f.used[label] {
 		t.Fatal("unregistered/repeated CLI attempt command")
 	}
@@ -332,6 +378,16 @@ func newProjectNativeCLIAttempt(t *testing.T, spec projectNativeCLISpec) *projec
 		projectNativeRuntimeWrite(t, path, body, 0600)
 		f.protected[path] = nativeSHA(t, path)
 		f.evidence["fixture_authored_updater_config"] = path
+	}
+	if spec.client == "qoder" {
+		f.qoderMetadata, err = qoderAuthorOriginalMetadata(filepath.Join(f.base.Home, ".qoder"), f.protected)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.qoderTelemetry, err = qoderAuthorEmptyTelemetry(f.ctx, filepath.Join(f.base.Home, ".qoder"))
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	return f
 }
@@ -649,17 +705,35 @@ func projectNativeCLIClosedView(root, name string, skill []byte) error {
 func (f *projectNativeCLIAttempt) finish(t *testing.T) {
 	t.Helper()
 	defer f.cancel()
+	if f.grok != nil {
+		f.grok.finish(t, f)
+	}
 	if time.Since(f.started) > 180*time.Second {
 		t.Error("original CLI attempt total deadline exceeded")
 	}
 	f.evidence["test_failed"], f.evidence["elapsed_ms"] = t.Failed(), time.Since(f.started).Milliseconds()
-	if f.base != nil {
+	if f.spec.client == "grok" && f.evidence["capture_mode"] == "grok-complete-skills-cycle" {
+		complete := !t.Failed() && f.ctx.Err() == nil && f.evidence["cycle_observed_complete"] == true
+		f.evidence["runtime_attempt_complete"] = complete
+		f.evidence["qualification"] = map[string]bool{"project-lifecycle": complete, "native-restart-removal": complete, "mcp-initialize": false, "mcp-tools-list": false, "mcp-tools-call": false}
+	}
+	if f.base != nil && f.evidence["capture_mode"] != qoderCycleMode && f.evidence["capture_mode"] != windCycleMode {
 		if body, err := projectNativeRuntimeRead(f.base.Events, 1<<20); err == nil {
 			f.keep(t, "probe-events.jsonl", body)
 		}
 	}
+	qoderCycleFinalizeEvidence(f.evidence)
+	windCycleFinalizeEvidence(f.evidence)
 	raw, _ := json.MarshalIndent(f.evidence, "", "  ")
 	f.keep(t, "runtime-attempt.json", append(raw, '\n'))
+	if f.grok != nil || f.spec.client == "grok" && f.evidence["capture_mode"] == "grok-complete-skills-cycle" {
+		for _, body := range f.files {
+			if grokProjectPrivateCredential(body) {
+				t.Error("unredacted Grok fixture credential refused")
+				return
+			}
+		}
+	}
 	file, err := os.OpenFile(filepath.Join(f.output, "research.zip"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		t.Error(err)
@@ -689,6 +763,98 @@ func (f *projectNativeCLIAttempt) finish(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// This one read-only catalog must preserve the complete original Qoder user
+// profile, including new empty directories and changes to nonexecutable modes.
+// It does not freeze or inspect any other client's mutable profile/cache.
+func projectNativeCLIQoderProfile(root string) (map[string]string, error) {
+	if err := projectNativeRuntimeParents(filepath.Join(root, "leaf")); err != nil {
+		return nil, err
+	}
+	result := map[string]string{}
+	count, total := 0, int64(0)
+	var logLink *qoderLogLinkSnapshot
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		count++
+		rel, err := filepath.Rel(root, path)
+		if err != nil || count > 4096 || len(strings.Split(rel, string(filepath.Separator))) > 32 {
+			return fmt.Errorf("Qoder profile inventory entry/depth bound")
+		}
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		identity, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || identity.Uid != uint32(os.Getuid()) {
+			return fmt.Errorf("Qoder profile original owner differs")
+		}
+		if info.IsDir() {
+			if err := projectNativeRuntimeParents(filepath.Join(path, "leaf")); err != nil {
+				return err
+			}
+			result[rel] = fmt.Sprintf("directory:%o", info.Mode())
+			return nil
+		}
+		if rel == filepath.Join("logs", "latest") && info.Mode()&os.ModeSymlink != 0 {
+			snapshot, err := qoderReadOriginalLogLink(root, info)
+			if err != nil {
+				return err
+			}
+			total += info.Size()
+			if total > 256<<20 {
+				return fmt.Errorf("Qoder profile inventory byte bound")
+			}
+			result[rel], logLink = snapshot.Record, &snapshot
+			return nil
+		}
+		if !info.Mode().IsRegular() || identity.Nlink != 1 || info.Size() < 0 {
+			return projectNativeCLIQoderProfileRefusal(rel, info, identity.Nlink)
+		}
+		total += info.Size()
+		if total > 256<<20 {
+			return fmt.Errorf("Qoder profile inventory byte bound")
+		}
+		body, err := projectNativeRuntimeRead(path, 64<<20)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(body)
+		result[rel] = fmt.Sprintf("file:%o:%d:%s", info.Mode(), len(body), hex.EncodeToString(sum[:]))
+		return nil
+	})
+	if err == nil && logLink != nil {
+		err = qoderVerifyOriginalLogClosure(root, *logLink, result)
+	}
+	return result, err
+}
+
+// Report only metadata already held by the refusing Lstat, never link targets
+// or entry contents. Quote a bounded relative name to keep controls inert.
+func projectNativeCLIQoderProfileRefusal(rel string, info os.FileInfo, links uint64) error {
+	if len(rel) > 256 {
+		rel = rel[:256] + "...[truncated]"
+	}
+	return fmt.Errorf("Qoder profile ordinary single-link file required: entry=%q mode=%s nlink=%d size=%d", rel, info.Mode().String(), links, info.Size())
+}
+
+func projectNativeCLIQoderCatalogJSON(body []byte) (string, error) {
+	value, err := projectNativeRuntimeJSON(body)
+	if err != nil {
+		return "", err
+	}
+	switch value.(type) {
+	case map[string]any:
+		return "object", nil
+	case []any:
+		return "array", nil
+	default:
+		return "", fmt.Errorf("Qoder catalog must be opaque whole JSON object or array")
+	}
+}
+
 func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 	t.Helper()
 	spec, err := projectNativeCLISpecification(client)
@@ -700,7 +866,44 @@ func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 	}
 	f := newProjectNativeCLIAttempt(t, spec)
 	defer f.finish(t)
+	if client == "grok" {
+		// finish owns cleanup before any listener or native child can start.
+		f.configureGrokTitleProvider(t)
+	}
 	f.setup(t)
+	switch client {
+	case "qoder":
+		profile := filepath.Join(f.base.Home, ".qoder")
+		before, err := projectNativeCLIQoderProfile(profile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if record, ok := before[filepath.Join("logs", "latest")]; ok {
+			f.evidence["qoder_original_log_link"] = map[string]any{"no_follow": true, "contained_ordinary_target": true, "record": record}
+		}
+		f.evidence["attempt_stage"] = "native-installed-catalog"
+		catalogArgv := []string{f.client, "plugins", "list", "--json", "--plugin-dir", f.view}
+		result := f.command(t, "native-catalog", f.base.Project, catalogArgv, 30*time.Second)
+		after, err := projectNativeCLIQoderProfile(profile)
+		if err != nil || !reflect.DeepEqual(after, before) {
+			if err == nil {
+				f.evidence["qoder_original_profile_change"] = qoderOriginalProfileDelta(before, after)
+				f.evidence["qoder_log_run_observation"] = qoderObserveLogRun(f.ctx, profile, f.base.Project, catalogArgv, before, after)
+			}
+			t.Fatal("Qoder catalog changed the complete original user profile/cache")
+		}
+		if len(result.Stderr) != 0 {
+			t.Fatal("Qoder catalog emitted native diagnostics; raw capture remains failed/unqualified")
+		}
+		kind, err := projectNativeCLIQoderCatalogJSON(result.Stdout)
+		if err != nil {
+			t.Fatal("Qoder catalog has unmeasured non-JSON grammar; raw capture remains failed/unqualified")
+		}
+		sum := sha256.Sum256(result.Stdout)
+		f.evidence["native_catalog"] = map[string]any{"schema_qualified": false, "json_kind": kind, "sha256": hex.EncodeToString(sum[:]), "original_profile_preserved": true, "selection_interpretation": "opaque native catalog; no scope or runtime qualification"}
+	case "grok":
+		f.inspectGrokSelected(t)
+	}
 	prompt := "Describe only the installed " + f.name + " skill marker. Do not run any tool or change any file."
 	argv, err := projectNativeCLIArguments(client, f.client, f.view, prompt)
 	if err != nil {

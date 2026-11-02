@@ -166,7 +166,7 @@ func (solver *graphSolver) checkTargets(ctx context.Context, node graphNode, pkg
 	if solver.graph == nil {
 		return ErrDependencyFactsUnavailable
 	}
-	if old, ok := solver.pins[pkg.SourceKey]; ok && sameEligibilityPin(old, pkg) && slices.Equal(unionTargets(old.Targets, node.targets), old.Targets) {
+	if old, ok := solver.pins[pkg.SourceKey]; ok && !solver.update[pkg.SourceKey] && sameEligibilityPin(old, pkg) && slices.Equal(unionTargets(old.Targets, node.targets), old.Targets) {
 		return nil
 	}
 	eligible, err := solver.graph.Eligible(ctx, pkg, node.targets)

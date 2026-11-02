@@ -373,6 +373,7 @@ try {
     for (const { locale, width } of [
       { locale: 'en', width: 1280 },
       { locale: 'en', width: 390 },
+      { locale: 'ru', width: 1280 },
       { locale: 'ru', width: 390 },
     ]) {
       const t = wording(locale);
@@ -555,12 +556,37 @@ try {
       // Keep assertions at Playwright's ordinary 5-second budget.
       await expect(panel).toHaveClass(new RegExp(`skillspector--${assessment.status}(?:\\s|$)`));
       const summary = panel.locator(':scope > summary');
-      await expect(summary).toContainText(
-        t('fullyChecked', {
-          checked: new Intl.NumberFormat(locale).format(assessment.fullyChecked),
-          total: new Intl.NumberFormat(locale).format(assessment.selected),
-        }),
-      );
+      // Keep the actual fully-checked count in the evidence, while the card
+      // reports the number scanned with explicit limited coverage.
+      const outcomes = assessment.outcomes;
+      const scanned = (outcomes?.complete ?? 0) + (outcomes?.limited ?? 0);
+      const scannedLabel = t('fullyChecked', {
+        checked: new Intl.NumberFormat(locale).format(scanned),
+        total: new Intl.NumberFormat(locale).format(assessment.selected),
+      });
+      await expect(summary).toContainText(t('title'));
+      const showProgress =
+        report.schema_version === 3 &&
+        !report.records.some((record) => record.legacy_format) &&
+        assessment.status === 'incomplete' &&
+        assessment.inventoryKnown &&
+        (outcomes?.limited ?? 0) > 0 &&
+        (outcomes?.failed ?? 0) === 0 &&
+        (assessment.selected ?? 0) > 1;
+      const expectedSummary = showProgress
+        ? t('coverageProgress', {
+            checked: new Intl.NumberFormat(locale).format(scanned),
+            total: new Intl.NumberFormat(locale).format(assessment.selected),
+            limited: new Intl.NumberFormat(locale).format(outcomes.limited),
+          })
+        : assessment.status === 'incomplete' &&
+            (outcomes?.limited ?? 0) > 0 &&
+            (outcomes?.failed ?? 0) === 0 &&
+            (outcomes?.unscanned ?? 0) === 0
+          ? t('outcomelimited')
+          : t(assessment.status === 'noStaticFindings' ? 'scanComplete' : assessment.status);
+      await expect(summary).toContainText(expectedSummary);
+      await expect(summary).not.toContainText(scannedLabel);
       await expect(panel.locator('.skillspector__details')).toHaveCount(0);
       await summary.focus();
       await page.keyboard.press('Enter');
@@ -577,6 +603,14 @@ try {
         ],
       );
       await expect(panel.locator('.skillspector__advice')).toContainText(t('installAdvice'));
+      await expect(panel.locator('.skillspector__advice')).toContainText(scannedLabel);
+      const outcomeRows = Object.entries(assessment.outcomes).filter(([, count]) => count > 0);
+      await expect(panel.locator('.skillspector__outcomes dt')).toHaveText(
+        outcomeRows.map(([outcome]) => t(outcome === 'complete' ? 'scanComplete' : `outcome${outcome}`)),
+      );
+      await expect(panel.locator('.skillspector__outcomes dd')).toHaveText(
+        outcomeRows.map(([, count]) => new Intl.NumberFormat(locale).format(count)),
+      );
       await expect(panel.locator('.skillspector__signals')).toContainText(t('signalExplanation'));
       const technicalRecords = await panel
         .locator('.skillspector__technical > div > details > pre')
@@ -621,11 +655,11 @@ try {
       await expect(panel.locator('.skillspector__coverage')).toContainText(
         'node_modules/wrangler/config-schema.json',
       );
-      await summary.focus();
-      await page.keyboard.press('Space');
+      await panel.locator('.skillspector__dialog-close').click();
+      await expect(summary).toBeFocused();
       await expect(panel).not.toHaveAttribute('open');
       await expect(panel.locator('.skillspector__details')).toHaveCount(0);
-      await page.keyboard.press('Enter');
+      await summary.press('Enter');
       await expect(panel.locator('.skillspector__details')).toBeVisible();
       assert.deepEqual(
         await panel.locator('.skillspector__technical > div > details > pre').allTextContents(),
@@ -637,7 +671,8 @@ try {
         true,
         'No horizontal page overflow',
       );
-      await panel.screenshot({ path: resolve(output, `plugin-${locale}-${width}.png`) });
+      await panel.locator('.skillspector__dialog').screenshot({ path: resolve(output, `plugin-${locale}-${width}.png`) });
+      await panel.locator('.skillspector__dialog-close').click();
       const standaloneAssessment = skillSpectorAssessment(standalone.report, {
         kind: 'skill',
         repository: standalone.listing.source.repository,
@@ -670,7 +705,9 @@ try {
         ).map((value) => JSON.parse(value)),
         standaloneAssessment.records,
       );
-      await skill.screenshot({ path: resolve(output, `standalone-${locale}-${width}.png`) });
+      await skillPanel.locator('.skillspector__dialog').screenshot({
+        path: resolve(output, `standalone-${locale}-${width}.png`),
+      });
       const failures = (await Promise.all(responseChecks)).filter(Boolean);
       assert.deepEqual(
         failures.map((error) => error.message),
@@ -710,6 +747,7 @@ try {
         plugin_status: assessment.status,
         selected: assessment.selected,
         fully_checked: assessment.fullyChecked,
+        outcomes: assessment.outcomes,
         rendered_records: technicalRecords.length,
         classified_groups: classified.length,
         references: main.coverage.references.length,

@@ -96,3 +96,8 @@ These source/attributed startup observations prove no genuine Stop, native MCP
 request, restart discovery, Windows native I/O, or release availability.
 S4 needs the supplied official artifact to be available for an isolated TEST
 native discovery run. Independent code review precedes public delivery.
+
+Project MCP stdio entries use the private launcher's explicit encoded argv form
+to preserve bundled commands and opaque arguments through Cursor normalization.
+The same strict decoder validates installed entries and execution; selected
+package/data/cwd authority and legacy raw entries retain their existing checks.

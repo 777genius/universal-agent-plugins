@@ -68,7 +68,7 @@ describe('SkillSpector historical display reports', () => {
     );
     for (const locale of publishedLocales) {
       const base = JSON.parse(
-        readFileSync(new URL(`../locales/${locale}.json`, import.meta.url), 'utf8'),
+        readFileSync(new URL(`../i18n/locales/${locale}.json`, import.meta.url), 'utf8'),
       );
       assert.equal(base.registryUi.skillSpector, undefined);
       const resource = JSON.parse(

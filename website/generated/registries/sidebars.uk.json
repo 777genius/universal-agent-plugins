@@ -1,0 +1,631 @@
+{
+  "/uk/": [
+    {
+      "text": "Використовувати плагіни",
+      "items": [
+        {
+          "text": "Огляд",
+          "link": "/uk/use/"
+        },
+        {
+          "text": "Встановлення",
+          "link": "/uk/use/install"
+        },
+        {
+          "text": "Керування",
+          "link": "/uk/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Створювати плагіни",
+      "items": [
+        {
+          "text": "Огляд",
+          "link": "/uk/build/"
+        },
+        {
+          "text": "Один Skill",
+          "link": "/uk/build/skill"
+        },
+        {
+          "text": "Віддалений MCP",
+          "link": "/uk/build/mcp-remote"
+        },
+        {
+          "text": "Локальний MCP",
+          "link": "/uk/build/mcp-stdio"
+        },
+        {
+          "text": "Гібридний плагін",
+          "link": "/uk/build/hybrid"
+        },
+        {
+          "text": "Кілька Skills",
+          "link": "/uk/build/skills"
+        },
+        {
+          "text": "Структура",
+          "link": "/uk/build/layout"
+        },
+        {
+          "text": "Перевірки",
+          "link": "/uk/build/checks"
+        },
+        {
+          "text": "Передавання",
+          "link": "/uk/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · довідник 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/uk/use/": [
+    {
+      "text": "Використовувати плагіни",
+      "items": [
+        {
+          "text": "Огляд",
+          "link": "/uk/use/"
+        },
+        {
+          "text": "Встановлення",
+          "link": "/uk/use/install"
+        },
+        {
+          "text": "Керування",
+          "link": "/uk/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Створювати плагіни",
+      "items": [
+        {
+          "text": "Огляд",
+          "link": "/uk/build/"
+        },
+        {
+          "text": "Один Skill",
+          "link": "/uk/build/skill"
+        },
+        {
+          "text": "Віддалений MCP",
+          "link": "/uk/build/mcp-remote"
+        },
+        {
+          "text": "Локальний MCP",
+          "link": "/uk/build/mcp-stdio"
+        },
+        {
+          "text": "Гібридний плагін",
+          "link": "/uk/build/hybrid"
+        },
+        {
+          "text": "Кілька Skills",
+          "link": "/uk/build/skills"
+        },
+        {
+          "text": "Структура",
+          "link": "/uk/build/layout"
+        },
+        {
+          "text": "Перевірки",
+          "link": "/uk/build/checks"
+        },
+        {
+          "text": "Передавання",
+          "link": "/uk/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · довідник 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/uk/build/": [
+    {
+      "text": "Використовувати плагіни",
+      "items": [
+        {
+          "text": "Огляд",
+          "link": "/uk/use/"
+        },
+        {
+          "text": "Встановлення",
+          "link": "/uk/use/install"
+        },
+        {
+          "text": "Керування",
+          "link": "/uk/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Створювати плагіни",
+      "items": [
+        {
+          "text": "Огляд",
+          "link": "/uk/build/"
+        },
+        {
+          "text": "Один Skill",
+          "link": "/uk/build/skill"
+        },
+        {
+          "text": "Віддалений MCP",
+          "link": "/uk/build/mcp-remote"
+        },
+        {
+          "text": "Локальний MCP",
+          "link": "/uk/build/mcp-stdio"
+        },
+        {
+          "text": "Гібридний плагін",
+          "link": "/uk/build/hybrid"
+        },
+        {
+          "text": "Кілька Skills",
+          "link": "/uk/build/skills"
+        },
+        {
+          "text": "Структура",
+          "link": "/uk/build/layout"
+        },
+        {
+          "text": "Перевірки",
+          "link": "/uk/build/checks"
+        },
+        {
+          "text": "Передавання",
+          "link": "/uk/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · довідник 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/uk/api/cli/prepared-authoring-v2": [
+    {
+      "text": "Використовувати плагіни",
+      "items": [
+        {
+          "text": "Огляд",
+          "link": "/uk/use/"
+        },
+        {
+          "text": "Встановлення",
+          "link": "/uk/use/install"
+        },
+        {
+          "text": "Керування",
+          "link": "/uk/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Створювати плагіни",
+      "items": [
+        {
+          "text": "Огляд",
+          "link": "/uk/build/"
+        },
+        {
+          "text": "Один Skill",
+          "link": "/uk/build/skill"
+        },
+        {
+          "text": "Віддалений MCP",
+          "link": "/uk/build/mcp-remote"
+        },
+        {
+          "text": "Локальний MCP",
+          "link": "/uk/build/mcp-stdio"
+        },
+        {
+          "text": "Гібридний плагін",
+          "link": "/uk/build/hybrid"
+        },
+        {
+          "text": "Кілька Skills",
+          "link": "/uk/build/skills"
+        },
+        {
+          "text": "Структура",
+          "link": "/uk/build/layout"
+        },
+        {
+          "text": "Перевірки",
+          "link": "/uk/build/checks"
+        },
+        {
+          "text": "Передавання",
+          "link": "/uk/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · довідник 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/uk/guide/quickstart": [
+    {
+      "text": "Початок",
+      "items": [
+        {
+          "text": "Використовувати плагіни",
+          "link": "/uk/use/"
+        },
+        {
+          "text": "Створювати плагіни",
+          "link": "/uk/build/"
+        },
+        {
+          "text": "Швидкий початок",
+          "link": "/uk/guide/quickstart"
+        }
+      ]
+    }
+  ],
+  "/uk/reference/client-compatibility": [
+    {
+      "text": "Використовувати плагіни",
+      "items": [
+        {
+          "text": "Огляд",
+          "link": "/uk/use/"
+        },
+        {
+          "text": "Встановлення",
+          "link": "/uk/use/install"
+        },
+        {
+          "text": "Керування",
+          "link": "/uk/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "Створювати плагіни",
+      "items": [
+        {
+          "text": "Огляд",
+          "link": "/uk/build/"
+        },
+        {
+          "text": "Один Skill",
+          "link": "/uk/build/skill"
+        },
+        {
+          "text": "Віддалений MCP",
+          "link": "/uk/build/mcp-remote"
+        },
+        {
+          "text": "Локальний MCP",
+          "link": "/uk/build/mcp-stdio"
+        },
+        {
+          "text": "Гібридний плагін",
+          "link": "/uk/build/hybrid"
+        },
+        {
+          "text": "Кілька Skills",
+          "link": "/uk/build/skills"
+        },
+        {
+          "text": "Структура",
+          "link": "/uk/build/layout"
+        },
+        {
+          "text": "Перевірки",
+          "link": "/uk/build/checks"
+        },
+        {
+          "text": "Передавання",
+          "link": "/uk/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · довідник 0.1.65",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (Англійською)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ]
+}

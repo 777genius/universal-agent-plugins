@@ -31,18 +31,14 @@ export function downloadChannelTitle(locale: PublishedLocale, channel: string) {
 }
 
 export async function hydrated(page: Page) {
+  // Theme/locale initialization runs on app:suspense:resolve, alongside Nuxt's
+  // hydration completion. A later browser idle turn is not an app lifecycle gate.
   await page.waitForFunction(() => {
     const root = document.querySelector('#__nuxt') as HTMLElement & {
       __vue_app__?: { config: { globalProperties: { $nuxt?: { isHydrating: boolean } } } };
     };
     return root?.__vue_app__?.config.globalProperties.$nuxt?.isHydrating === false;
   });
-  // Nuxt onNuxtReady callbacks (including theme/locale setup) run in a native
-  // idle turn after this flag flips. Hydration alone is not app readiness.
-  // Preserve the actual scheduler and all existing test/assertion timeouts.
-  await page.evaluate(() => new Promise<void>((resolve) => {
-    requestIdleCallback(() => queueMicrotask(resolve));
-  }));
 }
 
 export async function navigate(page: Page, family: string, locale: PublishedLocale = 'en', suffix = '') {
@@ -200,7 +196,9 @@ export async function delayedMirror(page: Page, kind: 'discovery' | 'security', 
       const headers = route.request().headers();
       delete headers['if-none-match'];
       delete headers['if-modified-since'];
-      const response = await route.fetch({ headers }); // local static artifact only
+      // The Pages fixture server can reset a connection under concurrent E2E load.
+      // Retry only network resets, never a bad status or signature.
+      const response = await route.fetch({ headers, maxRetries: 2 }); // local static artifact only
       expect(response.status(), `${kind} mirror must exist in final artifact`).toBe(200);
       await route.fulfill({ response });
     }

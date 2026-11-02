@@ -1,3 +1,4 @@
+import { docsLocales } from "../config/locales.mjs";
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -17,7 +18,7 @@ const { createMarkdownRenderer } = await import(pathToFileURL(
 const md = await createMarkdownRenderer(fileURLToPath(new URL('website/', root)));
 
 test('current journeys stay searchable while retired product pages are archived', () => {
-  for (const locale of ['en', 'ru', 'es', 'fr', 'zh']) {
+  for (const locale of docsLocales) {
     for (const page of ['index.md', 'use/index.md', 'use/install.md', 'build/index.md', 'build/skill.md', 'guide/quickstart.md'])
       assert.equal(isRetiredArchive(`${locale}/${page}`), false, `${locale}/${page}`);
   }
@@ -39,7 +40,7 @@ test('published source never claims it is on a non-deploying branch', () => {
 });
 
 test('user dependency management never lets install infer a project from the working directory', async () => {
-  for (const locale of ['en', 'ru', 'es', 'fr', 'zh']) {
+  for (const locale of docsLocales) {
     const source = read(`website/source/${locale}/use/manage.md`);
     const boundary = '<a id="restore-project-dependencies"></a>';
     assert.ok(source.includes(boundary), `${locale}: project section boundary`);
@@ -76,7 +77,7 @@ test('current Build journey uses Agent Plugins as its single documented command 
 });
 
 test('current locale journeys and top navigation do not expose the retired product', () => {
-  for (const locale of ['en', 'ru', 'es', 'fr', 'zh']) {
+  for (const locale of docsLocales) {
     for (const section of ['use', 'build']) {
       const directory = fileURLToPath(new URL(`website/source/${locale}/${section}/`, root));
       for (const relative of readdirSync(directory)) {
@@ -94,8 +95,8 @@ test('current locale journeys and top navigation do not expose the retired produ
 });
 
 const ids = (html) => [...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
-const quickstartIds = { en: 'quickstart', ru: 'быстрыи-старт', es: 'inicio-rapido', fr: 'demarrage-rapide', zh: '快速入门' };
-for (const locale of ['en', 'ru', 'es', 'fr', 'zh']) {
+const quickstartIds = { en: 'quickstart', ru: 'быстрыи-старт', es: 'inicio-rapido', fr: 'demarrage-rapide', zh: '快速入门', uk: 'quickstart', hi: 'quickstart', ar: 'quickstart', pt: 'quickstart' };
+for (const locale of docsLocales) {
   test(`${locale}: current quickstart fragments resolve exactly once`, async () => {
     const source = read(`website/source/${locale}/guide/quickstart.md`);
     const html = await md.renderAsync(source);

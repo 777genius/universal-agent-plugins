@@ -96,8 +96,11 @@ func TestDependencyTransferReplacementAndNoop(t *testing.T) {
 					if string(result["outcome"]) != `"completed"` || string(result["changed"]) != "true" {
 						t.Fatalf("replacement not reported: %s", out)
 					}
-					if scenario == "invalid destination" && !strings.Contains(strings.ToLower(out), "invalid") {
-						t.Fatalf("invalid destination diagnostic was discarded: %s", out)
+					if scenario == "invalid destination" {
+						var diagnostic string
+						if err := json.Unmarshal(result["destination_diagnostic"], &diagnostic); err != nil || !strings.Contains(diagnostic, "uap.toml:1:") || !strings.Contains(diagnostic, "toml:") {
+							t.Fatalf("invalid destination TOML diagnostic was discarded: %s", out)
+						}
 					}
 					if dependencyRead(t, filepath.Join(destination, "uap.toml")) != manifest || dependencyRead(t, filepath.Join(destination, "uap.lock")) != lock {
 						t.Fatal("confirmed replacement did not copy exact bytes")
@@ -340,7 +343,7 @@ func TestDependencyTransferPublicationRollback(t *testing.T) {
 			partial := scenario == "rollback failed" || scenario == "external edit" || scenario == "external read-only toggle"
 			if partial {
 				result := transferJSON(t, out)
-				if string(result["outcome"]) != `"partial"` || !strings.Contains(err.Error(), "rollback") || !strings.Contains(err.Error(), fixture.app.DependenciesRoot) {
+				if string(result["outcome"]) != `"partial"` || !strings.Contains(err.Error(), "rollback incomplete") || !strings.Contains(err.Error(), fixture.app.DependenciesRoot) {
 					t.Fatalf("partial rollback lacks truthful retry state: %v %s", err, out)
 				}
 				want := manifest
