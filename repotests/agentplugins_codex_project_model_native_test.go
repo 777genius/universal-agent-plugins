@@ -2,6 +2,7 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -152,7 +153,7 @@ func (m *codexProjectModel) respond(w http.ResponseWriter, r *http.Request) {
 		}})
 	}
 	emit("response.completed", map[string]any{"type": "response.completed", "response": map[string]any{
-		"id": "resp_uap_codex_project",
+		"id":    "resp_uap_codex_project",
 		"usage": map[string]int{"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
 	}})
 	if flush, ok := w.(http.Flusher); ok {
@@ -184,9 +185,69 @@ func (m *codexProjectModel) verify(t *testing.T, stage *codexProjectModelStage) 
 	}
 }
 
-func codexProjectModelSession(t *testing.T, f *codexProjectNativeFixture, model *codexProjectModel, project, label string, wantCall bool) {
+// Native MCP startup is asynchronous; qualify only connected servers with an
+// exact declared tool before a model turn, never an inferred configuration.
+func codexProjectAwaitModelMCP(t *testing.T, r *nativeRPC, threadID string, wantForeign, wantManaged bool) {
 	t.Helper()
-	stage := model.begin(wantCall)
+	ctx, cancel := context.WithTimeout(r.ctx, 30*time.Second)
+	defer cancel()
+	expected := map[string]string{}
+	if wantForeign {
+		expected["foreign_fixture"] = "uap_ping"
+		if wantManaged {
+			expected["default"] = "inspect_runtime"
+			expected["explicit"] = "inspect_runtime"
+		}
+	}
+	for {
+		raw, err := r.requestContext(ctx, "mcpServerStatus/list", map[string]any{"threadId": threadID, "limit": 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var inventory codexProjectMCPInventory
+		if err := json.Unmarshal(raw, &inventory); err != nil || inventory.NextCursor != nil {
+			t.Fatalf("incomplete native Codex MCP inventory: %s (%v)", raw, err)
+		}
+		if len(expected) == 0 {
+			if len(inventory.Data) != 0 {
+				t.Fatalf("control project discovered foreign MCP: %+v", inventory)
+			}
+			return
+		}
+		ready := len(inventory.Data) == len(expected)
+		seen := map[string]bool{}
+		for _, server := range inventory.Data {
+			tool, valid := expected[server.Name]
+			if !valid || server.PluginID != "" || seen[server.Name] {
+				t.Fatalf("unexpected/duplicate project MCP server: %+v", server)
+			}
+			seen[server.Name] = true
+			switch server.RuntimeStatus {
+			case "starting":
+				ready = false
+			case "connected":
+				if len(server.Tools) != 1 || server.Tools[tool] == nil {
+					t.Fatalf("connected MCP lacks exact native tool: %+v", server)
+				}
+			default:
+				t.Fatalf("native project MCP did not connect: %+v", server)
+			}
+		}
+		if ready {
+			return
+		}
+		timer := time.NewTimer(60 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			t.Fatalf("native MCP did not reach connected state: %v", ctx.Err())
+		case <-timer.C:
+		}
+	}
+}
+
+func codexProjectModelSession(t *testing.T, f *codexProjectNativeFixture, model *codexProjectModel, project, label string, wantCall, wantManaged bool) {
+	t.Helper()
 	selected := *f.base
 	selected.Project = project
 	r := startNativeRPC(t, &selected, f.client, label)
@@ -206,6 +267,8 @@ func codexProjectModelSession(t *testing.T, f *codexProjectNativeFixture, model 
 	}), &thread); err != nil || thread.Thread.ID == "" {
 		t.Fatalf("native Codex project thread startup: %v", err)
 	}
+	codexProjectAwaitModelMCP(t, r, thread.Thread.ID, wantCall, wantManaged)
+	stage := model.begin(wantCall)
 	r.must(t, "turn/start", map[string]any{"threadId": thread.Thread.ID,
 		"input": []any{map[string]any{"type": "text", "text": "Call uap_ping from foreign_fixture once if available, then finish.", "text_elements": []any{}}},
 	})
@@ -246,7 +309,7 @@ func TestAgentpluginsCodexNativeProjectModelForeignMCP(t *testing.T) {
 		t.Fatal("disposable host must have no system Codex config")
 	}
 	f := &codexProjectNativeFixture{base: newNativeFixture(t, true),
-		client: nativeBinary(t, "AGENTPLUGINS_CODEX_BIN"),
+		client:    nativeBinary(t, "AGENTPLUGINS_CODEX_BIN"),
 		installer: nativeBinary(t, "AGENTPLUGINS_INSTALLER_BIN"),
 		unchanged: map[string]string{},
 	}
@@ -277,10 +340,10 @@ func TestAgentpluginsCodexNativeProjectModelForeignMCP(t *testing.T) {
 
 	stages := map[string]nativeStage{
 		"install_preserved_foreign": {Status: "not_evaluated", Reason: "not reached"},
-		"model_native_tool_before": {Status: "not_evaluated", Reason: "not reached"},
-		"project_B_no_leak": {Status: "not_evaluated", Reason: "not reached"},
-		"remove_foreign_retention": {Status: "not_evaluated", Reason: "not reached"},
-		"model_native_tool_after": {Status: "not_evaluated", Reason: "not reached"},
+		"model_native_tool_before":  {Status: "not_evaluated", Reason: "not reached"},
+		"project_B_no_leak":         {Status: "not_evaluated", Reason: "not reached"},
+		"remove_foreign_retention":  {Status: "not_evaluated", Reason: "not reached"},
+		"model_native_tool_after":   {Status: "not_evaluated", Reason: "not reached"},
 	}
 	evidence := f.evidence(t, stages)
 	evidence["project_contract"] = "codex_trusted_foreign_project_model_mcp_v1"
@@ -300,13 +363,13 @@ func TestAgentpluginsCodexNativeProjectModelForeignMCP(t *testing.T) {
 	}
 	stages["install_preserved_foreign"] = nativeStage{Status: "passed", Reason: "project add retained foreign project MCP alongside UAP-managed MCP, with user/B isolation"}
 
-	codexProjectModelSession(t, f, model, f.base.Project, "codex-model-before-remove-A", true)
+	codexProjectModelSession(t, f, model, f.base.Project, "codex-model-before-remove-A", true, true)
 	beforeCalls, beforeB := codexProjectMCPEventCount(t, events)
 	if beforeCalls != 1 {
 		t.Fatalf("real Codex before-remove MCP tools/call count=%d", beforeCalls)
 	}
 	stages["model_native_tool_before"] = nativeStage{Status: "passed", Reason: "native model turn chose exact foreign MCP tool; real child called and uap-pong returned to local Responses provider"}
-	codexProjectModelSession(t, f, model, f.otherProject, "codex-model-control-B", false)
+	codexProjectModelSession(t, f, model, f.otherProject, "codex-model-control-B", false, false)
 	afterB, err := os.ReadFile(events)
 	if err != nil || !bytes.Equal(afterB, beforeB) {
 		t.Fatal("control project B connected or executed project A foreign MCP")
@@ -319,7 +382,7 @@ func TestAgentpluginsCodexNativeProjectModelForeignMCP(t *testing.T) {
 	f.requireForeign(t)
 	stages["remove_foreign_retention"] = nativeStage{Status: "passed", Reason: "remove restored byte-identical foreign MCP config without modifying user or project B"}
 
-	codexProjectModelSession(t, f, model, f.base.Project, "codex-model-after-remove-A", true)
+	codexProjectModelSession(t, f, model, f.base.Project, "codex-model-after-remove-A", true, false)
 	afterCalls, _ := codexProjectMCPEventCount(t, events)
 	if afterCalls != 2 {
 		t.Fatalf("foreign MCP stopped working after UAP removal: tools/call=%d", afterCalls)
