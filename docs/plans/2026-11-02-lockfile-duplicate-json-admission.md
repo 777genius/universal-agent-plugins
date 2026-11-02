@@ -6,11 +6,12 @@ The current `cli/internal/agentpluginscli/deps_resolver.go` decodes `uap.lock` u
 
 ## Minimal architectural change
 
-Before any lock is materialized or reconciled, invoke the existing `conformance.RejectDuplicateJSONKeys` once in the **single CLI decode chokepoint**. This validator is already used by the source index and standard loader; do not add a duplicate JSON parser or change the `uap.lock` schema. Keep Go `DisallowUnknownFields`, exact trailing-value rejection, manifest/lock identity and immutable-tree verification intact.
+Before any lock is materialized or reconciled, reject invalid UTF-8 bytes (to avoid Go's silent U+FFFD substitution) and invoke the existing `conformance.RejectDuplicateJSONKeys` once in the **single CLI decode chokepoint**. This validator is already used by the source index and standard loader; do not add a duplicate JSON parser or change the `uap.lock` schema. Keep Go `DisallowUnknownFields`, exact trailing-value rejection, manifest/lock identity and immutable-tree verification intact.
 
 ## Tests and E2E
 
 - Feed the real portable `uap.lock` writer, then tamper root and nested packages/sources/selectors with repeated identical keys as well as differently valued ones. Reject even when values match.
+- Test raw invalid UTF-8 bytes in a security-relevant lock string while otherwise preserving the JSON syntax; reject before any parser normalization.
 - Test escaped-equivalent key syntax such as `"loc\\u006b_version"` versus `"lock_version"`: JSON string normalization must happen before duplicate detection.
 - Run exact public CLI `install --locked` or `deps status` with a tampered lock, assert fail closed with unchanged lock, managed native files/receipts and no source acquisition. Exercise valid clean locks as positive control.
 - Require targeted real run/pass in the existing Package Manager E2E catalogue on Linux, Windows and two macOS runners, without skip or adopting a new state format.
