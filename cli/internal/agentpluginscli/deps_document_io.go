@@ -1,11 +1,12 @@
 package agentpluginscli
 
 import (
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 )
 
 const (
@@ -16,7 +17,7 @@ const (
 )
 
 // readDependencyDocument reads a stable regular file with a hard byte ceiling.
-// Never follow an agreement symlink or drain a FIFO supplied by another actor.
+// Reject leaf symlinks and nonregular files without draining attacker-owned FIFOs.
 func dependencyDocumentLimit(path string) (int64, error) {
 	switch filepath.Base(path) {
 	case "uap.toml":
