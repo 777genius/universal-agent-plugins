@@ -109,6 +109,32 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.throws(() => decodeSkillSpectorShardV3(forged, manifest, descriptor), /invalid/);
   });
 
+  it('retains historical v3 profile digests but rejects them as current evidence', () => {
+    // Real rolling publications keep older v3 digests alongside current policy profiles.
+    const rolling = structuredClone(manifest);
+    rolling.profiles = [
+      { id: 'static-standard-v3', digest: 'sha256:33e3822d74ce72625cc5b479f4473b515f693890a3818366206a4dbc2b8f509c' },
+      { id: 'static-extended-v3', digest: 'sha256:255c72648dd6a6e6b93ea75f5ad51553826692c60dd8222c7fb55613cf5766ba' },
+    ];
+    const old = structuredClone(shard.records[0]);
+    const oneShard = { ...shard, records: [old] };
+    const oneDescriptor = { ...descriptor, record_count: 1 };
+    old.freshness = 'historical';
+    for (const earlierProfile of manifest.profiles) {
+      old.profile = structuredClone(earlierProfile);
+      const [accepted] = decodeSkillSpectorShardV3(oneShard, rolling, oneDescriptor);
+      assert.equal(accepted?.freshness, 'historical');
+      assert.deepEqual(accepted?.profile, earlierProfile);
+      old.freshness = 'current';
+      assert.throws(() => decodeSkillSpectorShardV3(oneShard, rolling, oneDescriptor), /invalid/);
+      old.freshness = 'historical';
+    }
+    old.profile = { id: 'unknown-v3', digest: manifest.profiles[0]!.digest };
+    assert.throws(() => decodeSkillSpectorShardV3(oneShard, rolling, oneDescriptor), /invalid/);
+    old.profile = { id: 'static-standard-v3', digest: 'sha256:invalid' };
+    assert.throws(() => decodeSkillSpectorShardV3(oneShard, rolling, oneDescriptor), /invalid/);
+  });
+
   it('bounds v3 global and plugin coverage at 20,000 roots while preserving arithmetic', () => {
     const bounded = structuredClone(manifest);
     const addedRoots = 20_000 - bounded.coverage.selected;

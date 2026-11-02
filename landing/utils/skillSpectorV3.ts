@@ -488,9 +488,16 @@ export function decodeSkillSpectorShardV3(
         r.scanner.revision !== manifest.scanner.revision)
     )
       fail();
+    // Historical v3 results retain the policy digest of their original run.
+    // Only current records must match a profile in this publication's manifest.
     if (
       !manifest.profiles.some((p) => p.id === r.profile.id && p.digest === r.profile.digest) &&
-      !(r.freshness === 'historical' && ['static-only-v1', 'static-only-v2'].includes(r.profile.id))
+      !(
+        r.freshness === 'historical' &&
+        ['static-only-v1', 'static-only-v2', 'static-standard-v3', 'static-extended-v3'].includes(
+          r.profile.id,
+        )
+      )
     )
       fail();
     if (!['complete', 'partial', 'not_started'].includes(c.status)) fail();
