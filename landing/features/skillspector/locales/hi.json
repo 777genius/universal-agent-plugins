@@ -96,6 +96,7 @@
       "scanComplete": "जाँच पूरी हुई",
       "selectionScanned": "चुने गए स्किल जाँचे गए",
       "retryLoad": "फिर से लोड करें",
+      "progressWithFailures": "{checked}/{total} स्कैन हुए · {failed} विफल · {waiting} लंबित · {limited} आंशिक",
       "coverageProgress": "{checked}/{total} की जाँच हुई · {limited} अधूरे",
       "waitingProgress": "{checked}/{total} की जाँच हुई · {waiting} प्रतीक्षारत",
       "statusExplanation": "कुछ फ़ाइलों या जाँचों का सत्यापन नहीं हो सका। इसका अर्थ यह नहीं कि सुरक्षा समस्या की पुष्टि हुई है।",
