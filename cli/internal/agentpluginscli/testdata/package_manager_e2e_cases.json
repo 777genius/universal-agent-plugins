@@ -50,6 +50,7 @@
     "stale-lock-metadata",
     "symlink-lock-refusal",
     "foreign-skill-refusal",
+    "cold-shared-skill-owners",
     "native-config-obstruction"
   ],
   "agreement": [
