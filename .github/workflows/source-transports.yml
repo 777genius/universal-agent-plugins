@@ -53,14 +53,13 @@ jobs:
           for executable in sshd ssh ssh-keygen git jq; do
             command -v "$executable"
           done
-      - name: Verify Git hardening with the real Git binary
+      - name: Verify native Git hardening against inherited config
         working-directory: install/integrationctl/agentplugins
         shell: bash
         run: |
           set -euo pipefail
           go test -count=1 -timeout=3m -json ./adapters/sourceacquisition \
-            -run '^TestNativeGit(OptionsRetainMandatoryHardening|HardeningWinsOverInheritedGitSettings)
-        working-directory: install/integrationctl/agentplugins
+            -run '^TestNativeGit(OptionsRetainMandatoryHardening|HardeningWinsOverInheritedGitSettings)        working-directory: install/integrationctl/agentplugins
         shell: bash
         run: |
           set -euo pipefail
@@ -73,15 +72,21 @@ jobs:
           set -euo pipefail
           go test -count=1 -timeout=3m -json ./internal/agentpluginscli -run '^TestDirectSourceSavedLifecycleRealSSH$' | tee cli-ssh.json
           jq -s -e 'any(.[]; .Action == "pass" and .Test == "TestDirectSourceSavedLifecycleRealSSH/ssh-url") and any(.[]; .Action == "pass" and .Test == "TestDirectSourceSavedLifecycleRealSSH/scp") and all(.[]; .Action != "skip")' cli-ssh.json
- \
-            | tee native-git-hardening.json
-          jq -s -e '
-            (any(.[]; .Action == "run" and .Test == "TestNativeGitOptionsRetainMandatoryHardening"))
-            and (any(.[]; .Action == "pass" and .Test == "TestNativeGitOptionsRetainMandatoryHardening"))
-            and (any(.[]; .Action == "run" and .Test == "TestNativeGitHardeningWinsOverInheritedGitSettings"))
-            and (any(.[]; .Action == "pass" and .Test == "TestNativeGitHardeningWinsOverInheritedGitSettings"))
-            and (all(.[]; .Action != "skip" and .Action != "fail"))
-          ' native-git-hardening.json
+ | python -c '
+          import json, sys
+          events = [json.loads(line) for line in sys.stdin if line.strip()]
+          names = {
+              "TestNativeGitOptionsRetainMandatoryHardening",
+              "TestNativeGitHardeningWinsOverInheritedGitSettings",
+          }
+          for name in sorted(names):
+              actions = [e.get("Action") for e in events if e.get("Test") == name]
+              if "run" not in actions or "pass" not in actions or "fail" in actions or "skip" in actions:
+                  raise SystemExit(f"native Git test was not run/passed: {name}: {actions}")
+          if not any(e.get("Action") == "pass" and not e.get("Test") for e in events):
+              raise SystemExit("Git sourceacquisition package did not pass")
+          print("Confirmed both native Git hardening tests ran and passed, with no skips")
+          '
       - name: Verify native Git SSH and host authentication
         working-directory: install/integrationctl/agentplugins
         shell: bash
