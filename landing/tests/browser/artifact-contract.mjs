@@ -156,6 +156,9 @@ test('final artifact gate rejects missing, altered, draft and mis-scoped output 
           else await fs.rm(file, { force: true });
         }
       };
+      await mutation('llms.txt', null, /Missing final artifact/);
+      await mutation('.well-known/ai-catalog.json', null, /Missing final artifact/);
+      await mutation('.well-known/ard.json', null, /Missing final artifact/);
       await mutation('download/index.html', null, /Missing final artifact/);
       await mutation('download/_payload.json', null, /Missing final artifact/);
       await mutation(
