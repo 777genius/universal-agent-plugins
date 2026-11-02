@@ -219,6 +219,11 @@ test('Marketing Kit project mode uses three-agent TOML and does not force Cursor
   plugin.install_source = 'marketing-kit';
   plugin.display_name = 'Marketing Kit';
   plugin.trust_state = 'reviewed';
+  plugin.client_support.clients = ['cursor', 'codex', 'claude', 'gemini'];
+  plugin.distributions[0]!.releases[0]!.targets.push(
+    { client: 'claude', scopes: ['user'], delivery: 'managed', authentication: 'required' },
+    { client: 'gemini', scopes: ['user'], delivery: 'managed', authentication: 'required' },
+  );
   await projections(page, index);
   await navigate(page, '/', 'en', '?q=marketing-kit');
   const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
