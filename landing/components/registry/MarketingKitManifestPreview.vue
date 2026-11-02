@@ -5,6 +5,7 @@ import { marketingKitProjectManifest } from '~/data/marketingKitDemo';
 const props = withDefaults(defineProps<{ autoCollapse?: boolean }>(), { autoCollapse: true });
 const { t } = useI18n();
 const root = ref<HTMLElement | null>(null);
+const trigger = ref<HTMLButtonElement | null>(null);
 const open = ref(props.autoCollapse);
 let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -19,6 +20,10 @@ function collapse() {
 // Hover may already have opened the file before the click fires. Click always
 // opens it; Escape, outside click, mouse leave and the close button dismiss.
 function toggle() { show(); }
+function closeAndFocus() {
+  collapse();
+  trigger.value?.focus();
+}
 function outside(event: PointerEvent) {
   if (root.value && !root.value.contains(event.target as Node)) collapse();
 }
@@ -52,6 +57,7 @@ onBeforeUnmount(() => {
     @keydown.esc.stop.prevent="collapse"
   >
     <button
+      ref="trigger"
       type="button"
       class="marketing-manifest__file"
       :aria-expanded="open"
@@ -76,7 +82,7 @@ onBeforeUnmount(() => {
       >
         <div class="marketing-manifest__heading">
           <strong>uap.toml</strong>
-          <button type="button" :aria-label="t('shell.restore.closePreview')" @click="collapse">×</button>
+          <button type="button" :aria-label="t('shell.restore.closePreview')" @click="closeAndFocus">×</button>
         </div>
         <pre dir="ltr"><code>{{ marketingKitProjectManifest }}</code></pre>
       </div>
