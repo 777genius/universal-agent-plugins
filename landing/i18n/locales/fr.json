@@ -359,13 +359,15 @@
     "restore": {
       "title": "Les mêmes versions. Pour toute l’équipe.",
       "guide": "Guide",
-      "from": "Dans votre projet",
-      "to": "Votre collègue",
+      "from": "Mon ordinateur",
+      "to": "Ordinateur du collègue",
       "transfer": "Ajoutez {manifest} et {lockfile} à Git avec votre projet pour que votre équipe retrouve les mêmes versions.",
       "requirements": "La restauration nécessite des sources enregistrées toujours disponibles et des clients compatibles avec la gestion des dépendances.",
       "excludes": "Les connexions aux comptes, secrets, réglages et données des plugins ne sont pas transférés.",
       "subtitle": "Installez dans le projet. Ajoutez le fichier de verrouillage à Git. Votre équipe retrouvera les mêmes versions.",
-      "commit": "Ajoutez uap.toml + uap.lock à Git"
+      "commit": "Ajoutez uap.toml + uap.lock à Git",
+      "manifestPreview": "Aperçu du fichier uap.toml",
+      "closePreview": "Fermer l’aperçu"
     },
     "docs": {
       "navLabel": "Documentation",
@@ -730,7 +732,7 @@
       },
       "scope": {
         "label": "Installer pour",
-        "user": "Cet utilisateur",
+        "user": "Cet ordinateur",
         "project": "Ce projet",
         "projectHint": "Exécutez ces commandes depuis le dossier du projet. Votre agent peut vous demander de faire confiance au projet ou de l’activer.",
         "projectUnavailable": "L’installation dans un projet n’est pas disponible pour ce paquet.",
@@ -752,6 +754,11 @@
           "mcp": "Outils MCP",
           "extensions": "Modules complémentaires"
         }
+      },
+      "marketingKitProject": {
+        "intro": "Enregistrez d’abord ce uap.toml dans le projet, puis installez la version exacte.",
+        "agents": "Pour Claude Code, Codex et Gemini CLI, s’ils sont installés.",
+        "help": "Exécutez depuis le projet. L’activation des agents et la connexion aux services restent distinctes."
       }
     },
     "authentication": {
