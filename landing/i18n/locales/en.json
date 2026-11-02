@@ -378,12 +378,10 @@
       "guide": "Guide",
       "from": "My computer",
       "to": "Teammate's computer",
-      "transfer": "Export {manifest} and {lockfile}, share both with a teammate, then import them to restore the same versions.",
-      "requirements": "Marketing Kit's published release supports user environments; project scope is not yet qualified. Restoring requires the pinned sources and compatible agents.",
-      "excludes": "Sign-ins, secrets, settings and plugin data are not transferred.",
-      "subtitle": "Declare Marketing Kit 0.1.0 in your user uap.toml before installing. Export the resulting lockfile and restore the same versions for a teammate.",
-      "commit": "Export exact versions",
-      "manifestPreview": "Preview user environment uap.toml",
+      "transfer": "Share {manifest} and {lockfile}. Your teammate imports both files into their user environment before installing.",
+      "handoff": "Commit both files and share them with a teammate.",
+      "subtitle": "Install Marketing Kit 0.1.0, then share your pinned setup with a teammate.",
+      "manifestPreview": "Preview uap.toml",
       "closePreview": "Close file preview"
     },
     "docs": {
