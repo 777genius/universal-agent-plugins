@@ -140,6 +140,10 @@ function publisherBase(raw: string): string | undefined {
     const url = new URL(candidate);
     const host = url.hostname;
     const scope = url.pathname === '/' ? '' : url.pathname;
+    // A generic /owner/repo path on an arbitrary HTTPS host may be a Git
+    // remote, not a publisher index. Only recognize explicit Skill-scoped
+    // publisher URLs; the native CLI still validates the real discovery index.
+    if (scope && !scope.split('/').includes('skills')) return undefined;
     if (url.protocol !== 'https:' || url.host !== host ||
         url.username || url.password || url.search || url.hash ||
         candidate !== `https://${host}${scope}` ||
