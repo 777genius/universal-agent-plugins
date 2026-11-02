@@ -77,7 +77,7 @@ async function copyCommand(which: 1 | 2) {
                 <span class="registry-restore__step" aria-hidden="true">01</span>
                 {{ t('shell.restore.from') }}
               </p>
-              <button type="button" class="registry-restore__copy" :aria-label="t('registryUi.command.copyLabel')"
+              <button type="button" class="registry-restore__copy" :aria-label="t('registryUi.command.copyLabel') + ': ' + t('shell.restore.from')"
                 @click="copyCommand(1)"
               >{{ copied === 1 ? t('registryUi.command.copied') : t('registryUi.command.copy') }}</button>
             </div>
@@ -146,7 +146,7 @@ async function copyCommand(which: 1 | 2) {
                 <span class="registry-restore__step" aria-hidden="true">02</span>
                 {{ t('shell.restore.to') }}
               </p>
-              <button type="button" class="registry-restore__copy" :aria-label="t('registryUi.command.copyLabel')"
+              <button type="button" class="registry-restore__copy" :aria-label="t('registryUi.command.copyLabel') + ': ' + t('shell.restore.to')"
                 @click="copyCommand(2)"
               >{{ copied === 2 ? t('registryUi.command.copied') : t('registryUi.command.copy') }}</button>
             </div>
@@ -161,6 +161,9 @@ async function copyCommand(which: 1 | 2) {
         </div>
       </div>
 
+      <span class="sr-only registry-restore__copy-status" role="status" aria-live="polite">
+        {{ copied === null ? '' : t('registryUi.command.copied') + ': ' + t(copied === 1 ? 'shell.restore.from' : 'shell.restore.to') }}
+      </span>
       <p class="registry-restore__boundary">
         {{ t('shell.restore.requirements') }} {{ t('shell.restore.excludes') }}
       </p>
@@ -276,9 +279,12 @@ async function copyCommand(which: 1 | 2) {
     line-height: 1;
   }
   &__copy {
+    display: inline-grid;
+    place-items: center;
     flex: none;
-    padding: 3px 2px;
-    min-width: 0;
+    padding: 3px 4px;
+    min-width: 24px;
+    min-height: 24px;
     border: 0;
     border-radius: 4px;
     background: transparent;

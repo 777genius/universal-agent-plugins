@@ -59,7 +59,17 @@ for (const theme of ['dark', 'light'] as const) {
       for (const element of await typed.all()) {
         await expect(element.locator('.typed-command__visible > .typed-command__line')).toHaveCount(0);
       }
-      await expect(section.locator('.registry-restore__copy')).toHaveCount(2);
+      const copyButtons = section.locator('.registry-restore__copy');
+      await expect(copyButtons).toHaveCount(2);
+      if (locale === 'en') {
+        await expect(copyButtons.first()).toHaveAccessibleName(/Copy command: My computer/);
+        await expect(copyButtons.last()).toHaveAccessibleName(/Copy command: Teammate.s computer/);
+      }
+      // Both tiny-monitor controls remain usable by touch, even at 280px.
+      expect(await copyButtons.evaluateAll((buttons) => buttons.every((button) => {
+        const { width: hitWidth, height: hitHeight } = button.getBoundingClientRect();
+        return hitWidth >= 24 && hitHeight >= 24;
+      }))).toBe(true);
       if (width <= 340) {
         const overlaps = await section.locator('.registry-restore__screen').evaluateAll((screens) =>
           screens.flatMap((screen, index) => {
@@ -170,6 +180,8 @@ test('typing is sequential and always copies complete commands', async ({ page, 
     await buttons.nth(i).focus();
     await buttons.nth(i).press('Enter');
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expected[i]);
+    // The persistent live region announces copy success, with step-specific button names.
+    await expect(section.locator('.registry-restore__copy-status')).toContainText('Copied:');
   }
   await expect(section.locator('.typed-command').first()).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });
   await expect(section.locator('.typed-command').last()).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });

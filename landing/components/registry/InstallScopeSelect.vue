@@ -65,7 +65,7 @@ const { t } = useI18n();
   pointer-events: none;
 }
 .install-scope__choices[data-selected='project'] .install-scope__thumb {
-  transform: translateX(100%);
+  transform: translateX(calc(100% + 2px));
 }
 /* Logical visual position must match the grid's reversed order in Arabic. */
 .install-scope:dir(rtl) .install-scope__thumb {
@@ -73,7 +73,7 @@ const { t } = useI18n();
   right: 3px;
 }
 .install-scope:dir(rtl) .install-scope__choices[data-selected='project'] .install-scope__thumb {
-  transform: translateX(-100%);
+  transform: translateX(calc(-100% - 2px));
 }
 .install-scope button {
   display: grid;

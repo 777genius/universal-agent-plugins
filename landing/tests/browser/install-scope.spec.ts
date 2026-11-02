@@ -269,7 +269,7 @@ for (const locale of ['en', 'ar'] as const) {
         const indicator = await thumb.boundingBox();
         if (!button || !indicator) return 999;
         return Math.abs(button.x + button.width / 2 - indicator.x - indicator.width / 2);
-      }).toBeLessThan(4);
+      }).toBeLessThan(1.5);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
