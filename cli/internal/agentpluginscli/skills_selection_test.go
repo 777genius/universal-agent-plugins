@@ -92,9 +92,9 @@ func TestSkillsOperationOutcomeNeverExposesProviderReasons(t *testing.T) {
 	}
 }
 
-/// Regression against the destructive "misspelled skills filter removes the
-/// previously installed Skills" pattern. This exercises UAP's supported exact
-/// raw-Skill selector (not an unsupported APM-style package skill filter).
+// Regression against the destructive "misspelled skills filter removes the
+// previously installed Skills" pattern. This exercises UAP's supported exact
+// raw-Skill selector (not an unsupported APM-style package skill filter).
 func TestSkillsMisspelledSelectionRetainsInstalledSkill(t *testing.T) {
 	journey, _, raw := skillsFullFlowFixture(t)
 	journey.run(t, "skills", "add", "acme/skills", "--path", "engineering/review",
