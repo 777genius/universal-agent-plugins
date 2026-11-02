@@ -57,16 +57,24 @@ function legacySource(skill: SkillListing): LegacySource | undefined {
       skill.source.url !== skill.providerUrl ||
       !skill.id.startsWith('skills-sh:') || skill.id.length > 1024)
     return undefined;
-  const separator = skill.id.lastIndexOf(':');
-  if (separator <= 'skills-sh:'.length || separator >= skill.id.length - 1) return undefined;
-  const raw = skill.id.slice('skills-sh:'.length, separator);
-  const slug = skill.id.slice(separator + 1);
-  if (raw.length > 512 || slug.length > 256 || /[\x00-\x20\x7f]/.test(raw) ||
-      /[\x00-\x1f\x7f]/.test(slug)) return undefined;
-  const github = githubSource(raw);
+  const identity = catalogSourceIdentity(skill.id);
+  if (!identity) return undefined;
+  const github = githubSource(identity.raw);
   if (github) return { kind: 'github', url: github };
-  const publisher = publisherOrigin(raw);
+  const publisher = publisherOrigin(identity.raw);
   return publisher ? { kind: 'publisher', url: publisher } : undefined;
+}
+
+/** Parse the source and selector boundaries without assuming a colon-free URL. */
+function catalogSourceIdentity(id: string): { raw: string; slug: string } | undefined {
+  if (!id.startsWith('skills-sh:') || id.length > 1024) return undefined;
+  const separator = id.lastIndexOf(':');
+  if (separator <= 'skills-sh:'.length || separator >= id.length - 1) return undefined;
+  const raw = id.slice('skills-sh:'.length, separator);
+  const slug = id.slice(separator + 1);
+  if (raw.length > 512 || slug.length > 256 ||
+      /[\x00-\x20\x7f]/.test(raw) || /[\x00-\x1f\x7f]/.test(slug)) return undefined;
+  return { raw, slug };
 }
 
 /** Accept GitHub's explicit repository and single-segment-ref file/tree forms. */
@@ -186,21 +194,21 @@ export function skillPublisherUrl(skill: SkillListing): string | undefined {
   }
 }
 
-/** Derive a source solely from a bounded, canonical catalog identity. */
+/** Derive a source solely from a bounded, explicit catalog identity. */
 export function skillIdentityFromId(id: string): SkillListing['source'] | undefined {
-  const match = /^skills-sh:([^:]+):([^:]+)$/.exec(id);
-  if (!match || id.length > 1024) return undefined;
-  const source = match[1]!;
-  if (/^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(source)) {
-    return { kind: 'github', repository: source, url: `https://github.com/${source}` };
+  const parsed = catalogSourceIdentity(id);
+  if (!parsed) return undefined;
+  const repository = githubSource(parsed.raw);
+  if (repository) {
+    const parts = new URL(repository).pathname.split('/').filter(Boolean);
+    return { kind: 'github', repository: `${parts[0]}/${parts[1]}`, url: repository };
   }
-  if (
-    source.length <= 253 &&
-    /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/i.test(source)
-  ) {
-    return { kind: 'external', url: `https://${source.toLowerCase()}` };
-  }
-  return undefined;
+  const publisher = publisherOrigin(
+    /^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$/.test(parsed.raw)
+      ? `https://${parsed.raw.toLowerCase()}`
+      : parsed.raw,
+  );
+  return publisher ? { kind: 'external', url: publisher } : undefined;
 }
 
 /** Do not reuse a catalog entry when the direct-link Skill selector changes. */
