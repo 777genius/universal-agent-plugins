@@ -166,7 +166,7 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 		"mcp": map[string]any{
 			"servers": map[string]any{
 				"uap_project_fixture": map[string]any{
-					"type": "local",
+					"type":    "local",
 					"command": []string{executable, "-test.run=^TestOpenCodeV2MCPStdioResponder$"},
 					"environment": map[string]string{
 						"UAP_OPENCODE_V2_MCP_HELPER": "1",
