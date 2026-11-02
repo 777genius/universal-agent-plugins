@@ -151,7 +151,7 @@ async function copyCommand(which: 1 | 2) {
             </p>
             <div class="registry-restore__terminal" dir="ltr" :data-command="marketingKitRestoreCommand">
               <span class="registry-restore__prompt" aria-hidden="true">$</span>
-              <TypedCommand :lines="['agentplugins install', '--locked']" :delay="330" />
+              <TypedCommand :lines="['agentplugins install', '--locked --scope project']" :delay="330" />
             </div>
           </div>
         </div>
