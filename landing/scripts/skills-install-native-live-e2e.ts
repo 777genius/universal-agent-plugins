@@ -35,7 +35,8 @@ const fixtures = [
     providerUrl: 'https://www.skills.sh/' },
 ] as const;
 type Evidence = { id: string; source: string; skill: string; command: string; exit_code: number | null;
-  installed: boolean; lock_written: boolean; resources: number; stderr_tail: string; error: string | null };
+  installed: boolean; lock_written: boolean; native_skill_present: boolean; resources: number;
+  stderr_tail: string; error: string | null };
 const report = {
   checked_at: new Date().toISOString(), production_cli: binary, profile: 'isolated temporary project',
   live_network: true, results: [] as Evidence[],
@@ -81,11 +82,16 @@ try {
     const output = spawnSync(binary, args, { env, cwd: project, encoding: 'utf8',
       timeout: 120_000, maxBuffer: 1024 * 1024 * 2 });
     const lockWritten = existsSync(join(project, 'uap.lock')) && existsSync(join(project, 'uap.toml'));
-    const resources = countSkills(project);
+    const nativeSkillsRoot = join(project, '.agents', 'skills');
+    // A cached publisher copy under .uap is not native installation evidence.
+    const nativeSkillPresent = existsSync(join(nativeSkillsRoot, fixture.skill, 'SKILL.md'));
+    const resources = countSkills(nativeSkillsRoot);
     const evidence: Evidence = {
       id: fixture.id, source: fixture.source, skill: fixture.skill, command,
-      exit_code: output.status, installed: output.status === 0 && lockWritten && resources > 0,
-      lock_written: lockWritten, resources, stderr_tail: (output.stderr || '').slice(-1600),
+      exit_code: output.status,
+      installed: output.status === 0 && lockWritten && nativeSkillPresent && resources > 0,
+      lock_written: lockWritten, native_skill_present: nativeSkillPresent, resources,
+      stderr_tail: (output.stderr || '').slice(-1600),
       error: output.error?.message || null,
     };
     report.results.push(evidence);
