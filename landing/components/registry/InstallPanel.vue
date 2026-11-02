@@ -177,7 +177,7 @@ const vendorInstall = computed(() =>
             :always-show="isReviewedMarketingKit(plugin)"
         @update:model-value="updateScope"
       />
-      <div class="install-command-row">
+      <div v-if="!marketingProjectBlocked" class="install-command-row">
         <div class="target-select">
           <span>{{ t('registryUi.install.agents') }}</span
           ><AppMultiSelect
