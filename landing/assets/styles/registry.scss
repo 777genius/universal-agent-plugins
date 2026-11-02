@@ -330,8 +330,8 @@ img {
 }
 
 .demo-showcase {
+  // Do not trap the fixed fullscreen fallback beneath the sticky header.
   position: relative;
-  z-index: 2;
   width: min(calc(100% - 32px), 1600px);
   margin: 0 auto;
   padding: clamp(16px, 2.4vw, 36px) 0 clamp(40px, 5vw, 84px);
