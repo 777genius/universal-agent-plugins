@@ -147,7 +147,7 @@ func (m *openCodeV2ModelFixture) respond(w http.ResponseWriter, r *http.Request)
 		"id": "chatcmpl-uap-local-fixture", "object": "chat.completion",
 		"created": 1, "model": openCodeV2ModelID,
 		"choices": []any{map[string]any{"index": 0, "message": message, "finish_reason": finish}},
-		"usage": map[string]int{"prompt_tokens": 8, "completion_tokens": 4, "total_tokens": 12},
+		"usage":   map[string]int{"prompt_tokens": 8, "completion_tokens": 4, "total_tokens": 12},
 	})
 	_, _ = w.Write(output)
 }
