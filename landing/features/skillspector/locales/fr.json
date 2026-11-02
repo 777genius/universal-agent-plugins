@@ -103,7 +103,9 @@
       "closeReport": "Fermer",
       "awaitingList": "Skills sans vérification actuelle",
       "awaitingExplanation": "Ces Skills n'ont pas encore de résultat actuel. Leur sécurité est inconnue.",
-      "waitingWithLimitsProgress": "Vérifiés {checked}/{total} · {waiting} en attente · {limited} incomplets"
+      "waitingWithLimitsProgress": "Vérifiés {checked}/{total} · {waiting} en attente · {limited} incomplets",
+      "referenceDirectoryPartial": "Le dossier lié existe parmi les fichiers analysés, mais son contenu et son comportement n'ont pas été entièrement vérifiés.",
+      "referenceDirectoryStatus": "Dossier trouvé ; analyse incomplète"
     }
   }
 }

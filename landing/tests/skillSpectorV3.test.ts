@@ -224,6 +224,35 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.equal(missing.target_path, null);
     assert.equal(main.status, 'partial');
   });
+  it('preserves acquired directory links as partial, and rejects forged analyzed/complete evidence', () => {
+    const record = referenceRecord();
+    const link = record.coverage.references[0];
+    Object.assign(link, {
+      status: 'uninspected',
+      target_path: 'docs',
+      disposition: 'partial',
+      evidence: '[guides](./docs/)',
+    });
+    record.coverage.reasons.push({
+      code: 'referenced_uninspected',
+      message: 'Directory exists, but its contents were not fully inspected.',
+    });
+    const decoded = decodeReference(record);
+    assert.equal(decoded.coverage!.references![0]!.status, 'uninspected');
+    assert.equal(decoded.coverage!.references![0]!.target_path, 'docs');
+    assert.equal(decoded.status, 'partial');
+
+    const falselyAnalyzed = structuredClone(record);
+    falselyAnalyzed.coverage.references[0].disposition = 'analyzed';
+    assert.throws(() => decodeReference(falselyAnalyzed));
+    const falselyComplete = structuredClone(record);
+    falselyComplete.status = 'complete';
+    assert.throws(() => decodeReference(falselyComplete));
+    const noTarget = structuredClone(record);
+    noTarget.coverage.references[0].target_path = null;
+    assert.throws(() => decodeReference(noTarget));
+  });
+
   it('rejects malformed, falsely complete and silently omitted reference context', () => {
     const changes = [
       (r: any) => {

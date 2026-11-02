@@ -103,7 +103,9 @@
       "closeReport": "Cerrar",
       "awaitingList": "Skills sin comprobación actual",
       "awaitingExplanation": "Estos Skills aún no tienen un resultado actual. Se desconoce su seguridad.",
-      "waitingWithLimitsProgress": "Comprobados {checked}/{total} · {waiting} pendientes · {limited} incompletos"
+      "waitingWithLimitsProgress": "Comprobados {checked}/{total} · {waiting} pendientes · {limited} incompletos",
+      "referenceDirectoryPartial": "La carpeta enlazada existe en los archivos analizados, pero no se verificaron por completo su contenido ni su comportamiento.",
+      "referenceDirectoryStatus": "Carpeta encontrada; revisión incompleta"
     }
   }
 }
