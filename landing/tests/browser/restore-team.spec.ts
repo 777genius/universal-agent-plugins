@@ -125,6 +125,22 @@ test('manifest morph opens by focus and tap, closes with Escape, and preserves v
   await expect(file).toHaveAttribute('aria-expanded', 'false');
 });
 
+test('manifest unfolds on first view, folds into icon and reopens on hover', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('./');
+  await hydrated(page);
+  await page.mouse.move(0, 0);
+  const handoff = page.locator('#restore-environment .registry-restore__handoff');
+  const file = handoff.getByRole('button', { name: /uap.toml/i });
+  await handoff.scrollIntoViewIfNeeded();
+  await expect(file).toHaveAttribute('aria-expanded', 'true', { timeout: 6_000 });
+  await expect(file).toHaveAttribute('aria-expanded', 'false', { timeout: 7_000 });
+  await file.hover();
+  await expect(file).toHaveAttribute('aria-expanded', 'true');
+  await page.mouse.move(0, 0);
+  await expect(file).toHaveAttribute('aria-expanded', 'false');
+});
+
 test('typing is sequential and always copies complete commands', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
