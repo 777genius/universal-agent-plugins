@@ -304,7 +304,7 @@ func SafePublisherClient() *http.Client {
 	dialer := &net.Dialer{Timeout: 6 * time.Second}
 	transport := &http.Transport{
 		Proxy: nil, MaxIdleConns: 4, MaxIdleConnsPerHost: 2,
-		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS12},
 		ResponseHeaderTimeout: 8 * time.Second,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			host, port, err := net.SplitHostPort(address)
