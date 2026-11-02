@@ -149,7 +149,7 @@ for (const width of [1440, 390]) {
     await expect(panel.locator('.app-multiselect__trigger')).toContainText('Codex');
     await expect(panel.locator('.command-snippet')).toHaveCount(0);
     await expect(panel.getByRole('status').first()).toContainText('combination of agents');
-    await panel.getByRole('button', { name: 'This user', exact: true }).click();
+    await panel.getByRole('button', { name: 'This computer', exact: true }).click();
     await expect(panel.locator('.command-snippet--add code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00 --target codex',
     );
@@ -186,7 +186,7 @@ test('reviewed user-only v1 catalog generates exact pinned project Git commands'
   await expect(panel.locator('.command-snippet--update code')).toHaveText(expected);
   await expect(panel.locator('.command-snippet--remove code'))
     .toHaveText('npx -y universal-agent-plugins remove i18n-state-00 --scope project');
-  await panel.getByRole('button', { name: 'This user', exact: true }).click();
+  await panel.getByRole('button', { name: 'This computer', exact: true }).click();
   await expect(panel.locator('.command-snippet--add code'))
     .toHaveText('npx -y universal-agent-plugins add i18n-state-00 --target codex');
   expect(errors).toEqual([]);
@@ -210,3 +210,68 @@ test('unqualified project scope is hidden while auto agent delivery stays non-nu
   await expect(page.locator('.plugin-detail .install-scope')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test('Marketing Kit does not advertise unsupported signed project scope or force Cursor', async ({ page }) => {
+  const errors = await offline(page);
+  const index = scopedFixture();
+  const plugin = index.plugins[0]!;
+  plugin.name = 'marketing-kit';
+  plugin.install_source = 'marketing-kit';
+  plugin.display_name = 'Marketing Kit';
+  plugin.trust_state = 'reviewed';
+  plugin.client_support.clients = ['cursor', 'codex', 'claude', 'gemini'];
+  plugin.distributions[0]!.releases[0]!.targets.push(
+    { client: 'claude', scopes: ['user'], delivery: 'managed', authentication: 'required' },
+    { client: 'gemini', scopes: ['user'], delivery: 'managed', authentication: 'required' },
+  );
+  await projections(page, index);
+  await navigate(page, '/', 'en', '?q=marketing-kit');
+  const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
+  await card.locator('.plugin-card__install-toggle').click();
+
+  const computer = card.getByRole('button', { name: 'This computer', exact: true });
+  const project = card.getByRole('button', { name: 'This project', exact: true });
+  await expect(computer).toHaveAttribute('aria-pressed', 'true');
+  await expect(project).toBeDisabled();
+  await expect(card.locator('.marketing-kit-project')).toHaveCount(0);
+  await expect(card).toContainText('Project installation is not available for this package.');
+  await expect(card.locator('.command-snippet--add code')).toHaveText(
+    'npx -y universal-agent-plugins add marketing-kit',
+  );
+  await expect(card.locator('.command-snippet--add code')).not.toContainText('--target cursor');
+  await expect(card).not.toContainText('Cursor: Files are prepared.');
+  await card.locator('.plugin-card__title-link').click();
+  const panel = page.locator('.install-panel');
+  await expect(panel.getByRole('button', { name: 'This project', exact: true })).toBeDisabled();
+  await expect(panel.locator('.marketing-kit-project')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+for (const locale of ['en', 'ar'] as const) {
+  test(`segmented install scope indicator tracks selected button in ${locale}`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 850 });
+    const errors = await offline(page);
+    await projections(page, scopedFixture());
+    await navigate(page, '/', locale, '?q=i18n-state-00');
+    const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
+    await card.locator('.plugin-card__install-toggle').click();
+    const options = card.locator('.install-scope__choices');
+    const thumb = options.locator('.install-scope__thumb');
+    for (const kind of ['user', 'project', 'user'] as const) {
+      const selected = options.getByRole('button', {
+        name: wording(locale)(`registryUi.install.scope.${kind}`),
+        exact: true,
+      });
+      await selected.click();
+      await expect(selected).toHaveAttribute('aria-pressed', 'true');
+      await expect.poll(async () => {
+        const button = await selected.boundingBox();
+        const indicator = await thumb.boundingBox();
+        if (!button || !indicator) return 999;
+        return Math.abs(button.x + button.width / 2 - indicator.x - indicator.width / 2);
+      }).toBeLessThan(1.5);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}

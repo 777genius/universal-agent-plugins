@@ -359,13 +359,15 @@
     "restore": {
       "title": "Las mismas versiones. Para todo el equipo.",
       "guide": "Guía",
-      "from": "En tu proyecto",
-      "to": "Tu compañero",
-      "transfer": "Guarda {manifest} y {lockfile} en Git con tu proyecto para que el equipo restaure las mismas versiones.",
-      "requirements": "La restauración requiere que las fuentes registradas sigan disponibles y que los clientes sean compatibles con la gestión de dependencias.",
+      "from": "Mi ordenador",
+      "to": "Ordenador de mi compañero",
+      "transfer": "Exporta {manifest} y {lockfile}, comparte ambos archivos e impórtalos en el equipo de tu compañero para restaurar las mismas versiones.",
+      "requirements": "Marketing Kit solo admite el entorno del usuario; aún no está validado para proyectos. Las fuentes y los agentes compatibles deben seguir disponibles.",
       "excludes": "No se transfieren sesiones, secretos, ajustes ni datos de plugins.",
-      "subtitle": "Instala en el proyecto. Guarda el archivo de bloqueo en Git. Tu equipo restaurará las mismas versiones.",
-      "commit": "Guarda uap.toml + uap.lock en Git"
+      "subtitle": "Declara Marketing Kit 0.1.0 en el uap.toml de usuario antes de instalarlo. Exporta el archivo de bloqueo para que un compañero restaure las mismas versiones.",
+      "commit": "Exportar versiones exactas",
+      "manifestPreview": "Vista previa del uap.toml del usuario",
+      "closePreview": "Cerrar vista previa"
     },
     "docs": {
       "navLabel": "Documentación",
@@ -538,6 +540,7 @@
       "copyLabel": "Copiar comando",
       "copied": "Copiado",
       "copy": "Copiar",
+      "copyFailed": "No se pudo copiar",
       "announcement": "Comando copiado al portapapeles"
     },
     "directory": {
@@ -731,7 +734,7 @@
       },
       "scope": {
         "label": "Instalar para",
-        "user": "Este usuario",
+        "user": "Este ordenador",
         "project": "Este proyecto",
         "projectHint": "Ejecuta estos comandos desde la carpeta del proyecto. Tu agente puede pedirte que confíes en el proyecto o lo actives.",
         "projectUnavailable": "La instalación en un proyecto no está disponible para este paquete.",
