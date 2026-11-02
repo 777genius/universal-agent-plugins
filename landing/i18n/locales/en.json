@@ -376,13 +376,15 @@
     "restore": {
       "title": "Same plugin versions. Across your team.",
       "guide": "Guide",
-      "from": "In your project",
-      "to": "Your teammate",
+      "from": "My computer",
+      "to": "Teammate's computer",
       "transfer": "Commit {manifest} and {lockfile} with your project so teammates can restore the same versions.",
       "requirements": "Restoration requires the recorded sources to remain available and clients supported by dependency management.",
       "excludes": "Sign-ins, secrets, settings and plugin data are not transferred.",
       "subtitle": "Install for a project. Commit the lockfile. Let teammates restore the same versions.",
-      "commit": "Commit uap.toml + uap.lock"
+      "commit": "Commit uap.toml + uap.lock",
+      "manifestPreview": "Preview project uap.toml",
+      "closePreview": "Close file preview"
     },
     "docs": {
       "navLabel": "Docs",
@@ -747,7 +749,7 @@
       },
       "scope": {
         "label": "Install for",
-        "user": "This user",
+        "user": "This computer",
         "project": "This project",
         "projectHint": "Run these commands from your project folder. Your agent may ask you to trust or activate the project.",
         "projectUnavailable": "Project installation is not available for this package.",
@@ -769,6 +771,11 @@
           "mcp": "MCP tools",
           "extensions": "Extensions"
         }
+      },
+      "marketingKitProject": {
+        "intro": "Save this uap.toml in your project first. Then install the exact package version.",
+        "agents": "Targets: Claude Code, Codex and Gemini CLI, where installed.",
+        "help": "Run from the project folder. Client activation and provider sign-in may still be required."
       }
     },
     "authentication": {
