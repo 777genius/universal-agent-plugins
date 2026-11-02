@@ -79,12 +79,21 @@ handshake establishes vendor-model authorization or automatic project trust.**
 UAP retains the Prepared state until a separate native observation establishes
 activation. Neither this nor #631 is included in release 0.1.95.
 
-OpenCode has separate [V1/V2 native project lifecycle evidence (#626)](https://github.com/777genius/universal-agent-plugins/pull/626)
-and source-bound [V2 MCP handshake qualification (#638)](https://github.com/777genius/universal-agent-plugins/pull/638).
-The latter confirms real V2 client `initialize` and `tools/list` with a
-controlled stdio server; `tools/call` and real-model use remain unqualified.
-These tests do not establish desktop notifications, audio, terminal focus or
-third-party model authorization.
+OpenCode has separate [V1/V2 native project lifecycle evidence (#626)](https://github.com/777genius/universal-agent-plugins/pull/626),
+[V2 MCP handshake qualification (#638)](https://github.com/777genius/universal-agent-plugins/pull/638)
+and [real V2 model-driven `tools/call` E2E (#655)](https://github.com/777genius/universal-agent-plugins/pull/655).
+The pinned V2.2.5 client performed project stdio `initialize`, `tools/list`
+and one exact `uap_ping`/`uap-pong` call on Linux, macOS and Windows with a
+local scripted model. Original V1 regressions remain separately qualified.
+
+[Claude Code project MCP E2E (#664)](https://github.com/777genius/universal-agent-plugins/pull/664)
+separately observes the real pinned Claude 2.1.263 client invoke a
+**pre-existing foreign** project `.mcp.json` tool and receive its result on
+macOS and Windows, without leaking the tool to another trusted project or
+modifying the foreign MCP entry during UAP project-Skill add/remove. This is
+not UAP-managed Claude project MCP. No such source-only test proves automatic
+trust, vendor-model authentication, a released CLI upgrade, desktop
+notifications, audio or terminal focus.
 
 ## Historical draft installer 0.1.55
 
