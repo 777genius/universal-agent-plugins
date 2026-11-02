@@ -458,7 +458,15 @@ test('legacy source variants produce CLI commands without using directory pages 
     skillInstallCommand(scoped),
     'npx universal-agent-plugins@latest skills add https://publisher.com/scoped/skills --skill review',
   );
-    const publisher = unknown('https://open.feishu.cn', 'lark-mail');
+    const bareScoped = unknown('open.feishu.cn/lark-cli/skills/regular', 'lark-mail');
+  assert.equal(skillPublisherUrl(bareScoped), 'https://open.feishu.cn/lark-cli/skills/regular');
+  assert.equal(
+    skillInstallCommand(bareScoped),
+    'npx universal-agent-plugins@latest skills add https://open.feishu.cn/lark-cli/skills/regular --skill lark-mail',
+  );
+  const canonicalBareHost = unknown('Open.Feishu.Cn/lark-cli/skills/regular', 'lark-mail');
+  assert.equal(skillPublisherUrl(canonicalBareHost), 'https://open.feishu.cn/lark-cli/skills/regular');
+  const publisher = unknown('https://open.feishu.cn', 'lark-mail');
   assert.equal(skillPublisherUrl(publisher), 'https://open.feishu.cn');
   assert.equal(
     skillInstallCommand(publisher),
@@ -476,6 +484,9 @@ test('legacy source variants produce CLI commands without using directory pages 
     'https://evil.com/owner/repo', 'https://www.skills.sh/site/owner/repo',
     'https://localhost', 'https://127.0.0.1', 'https://xn--a.example',
     'https://publisher.internal', 'owner/repo/tree/main/$hack',
+    'open.feishu.cn/lark-cli/../secret',
+    'open.feishu.cn/lark-cli//regular',
+    'open.feishu.cn/lark-cli/regular?token=secret',
     'https://publisher.com/scoped/../private',
     'https://publisher.com/scoped//bad',
     'https://publisher.com/scoped/?token=1',

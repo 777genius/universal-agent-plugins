@@ -128,12 +128,16 @@ function githubSource(raw: string): string | undefined {
 /** Canonical HTTPS well-known publisher base, including explicit scoped bases. */
 function publisherBase(raw: string): string | undefined {
   try {
-    const url = new URL(raw);
+    // The directory's source is sometimes "host/scope" without a scheme.
+    // Upgrade only an exact public-domain locator; never rewrite arbitrary URLs.
+    const bare = /^([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,})(\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*)?$/.exec(raw);
+    const candidate = bare ? `https://${bare[1]!.toLowerCase()}${bare[2] ?? ''}` : raw;
+    const url = new URL(candidate);
     const host = url.hostname;
     const scope = url.pathname === '/' ? '' : url.pathname;
     if (url.protocol !== 'https:' || url.host !== host ||
         url.username || url.password || url.search || url.hash ||
-        raw !== `https://${host}${scope}` ||
+        candidate !== `https://${host}${scope}` ||
         !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(host) ||
         /(?:^|\.)xn--/.test(host) ||
         /\.(?:local|localhost|internal|test|example|invalid)$/.test(host) ||
@@ -142,7 +146,7 @@ function publisherBase(raw: string): string | undefined {
         (scope !== '' && (!/^\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*$/.test(scope) ||
           scope.split('/').some(part => part === '.' || part === '..'))))
       return undefined;
-    return raw;
+    return candidate;
   } catch {
     return undefined;
   }

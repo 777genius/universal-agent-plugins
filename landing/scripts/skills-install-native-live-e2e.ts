@@ -36,6 +36,9 @@ const fixtures = [
   { source: 'https://open.feishu.cn', skill: 'lark-mail',
     id: 'skills-sh:open.feishu.cn:lark-mail',
     providerUrl: 'https://www.skills.sh/site/open.feishu.cn/lark-mail' },
+  { source: 'https://open.feishu.cn/lark-cli/skills/regular', skill: 'lark-mail',
+    id: 'skills-sh:open.feishu.cn/lark-cli/skills/regular:lark-mail',
+    providerUrl: 'https://www.skills.sh/' },
 ] as const;
 type Evidence = { id: string; source: string; skill: string; command: string; exit_code: number | null;
   installed: boolean; lock_written: boolean; native_skill_present: boolean; resources: number;
