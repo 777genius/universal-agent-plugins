@@ -64,7 +64,7 @@ export function useSkillsCatalog(query: Ref<string>, view: Ref<SkillsView>) {
           }
         }
         latest = page;
-        if (!page.hasMore || !page.items.length || collected.length >= nextLimit || search) break;
+        if (!page.hasMore || !page.items.length || collected.length >= nextLimit) break;
         pageNumber++;
       }
       if (request !== generation) return;
