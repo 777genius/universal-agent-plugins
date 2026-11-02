@@ -37,6 +37,7 @@ func TestOpenCodeV2MCPStdioResponder(t *testing.T) {
 		var request struct {
 			ID     json.RawMessage `json:"id"`
 			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
 		}
 		if json.Unmarshal(reader.Bytes(), &request) != nil || request.Method == "" {
 			os.Exit(2)
@@ -66,8 +67,10 @@ func TestOpenCodeV2MCPStdioResponder(t *testing.T) {
 		case "ping":
 			result = map[string]any{}
 		case "tools/call":
-			// This endpoint exists for later model-driven qualification. The
-			// current test must not misreport an unobserved tools/call as PASS.
+			// Only a valid invocation of the exact advertised tool qualifies.
+			if !validOpenCodeV2MCPCall(request.Params) {
+				os.Exit(2)
+			}
 			result = map[string]any{"content": []any{map[string]string{"type": "text", "text": "uap-pong"}}}
 		default:
 			os.Exit(2)
@@ -87,6 +90,49 @@ func TestOpenCodeV2MCPStdioResponder(t *testing.T) {
 		os.Exit(2)
 	}
 	os.Exit(0)
+}
+
+// MCP permits omitting arguments, but an explicitly present member must
+// contain an object. An explicit null must never count as a successful call.
+func validOpenCodeV2MCPCall(params json.RawMessage) bool {
+	var call struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	}
+	if json.Unmarshal(params, &call) != nil || call.Name != "uap_ping" {
+		return false
+	}
+	if len(call.Arguments) == 0 {
+		return true
+	}
+	var args map[string]json.RawMessage
+	return json.Unmarshal(call.Arguments, &args) == nil && args != nil && len(args) == 0
+}
+
+func TestOpenCodeV2MCPCallParameters(t *testing.T) {
+	cases := []struct {
+		name   string
+		params string
+		valid  bool
+	}{
+		{"omitted arguments", `{"name":"uap_ping"}`, true},
+		{"empty object", `{"name":"uap_ping","arguments":{}}`, true},
+		{"explicit null", `{"name":"uap_ping","arguments":null}`, false},
+		{"array", `{"name":"uap_ping","arguments":[]}`, false},
+		{"string", `{"name":"uap_ping","arguments":"{}"}`, false},
+		{"nonempty object", `{"name":"uap_ping","arguments":{"unexpected":1}}`, false},
+		{"wrong tool", `{"name":"other","arguments":{}}`, false},
+		{"missing tool", `{"arguments":{}}`, false},
+		{"invalid params", `null`, false},
+		{"malformed JSON", `{"name":`, false},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			if got := validOpenCodeV2MCPCall(json.RawMessage(test.params)); got != test.valid {
+				t.Fatalf("MCP call validation = %t, want %t", got, test.valid)
+			}
+		})
+	}
 }
 
 func appendOpenCodeV2MCPEvent(path, method string) error {
@@ -162,7 +208,27 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 		}
 	}
 	events := filepath.Join(root, "observed-mcp-methods.log")
+	model := newOpenCodeV2ModelFixture(t)
 	config := map[string]any{
+		"model": "uap-fixture/uap-scripted",
+		"providers": map[string]any{
+			"uap-fixture": map[string]any{
+				"name":    "Local deterministic CI fixture",
+				"package": "@opencode/ai/providers/openai-compatible",
+				"settings": map[string]any{
+					"baseURL": model.baseURL(),
+					"apiKey":  "local-fixture-not-a-vendor-secret",
+				},
+				"models": map[string]any{
+					"uap-scripted": map[string]any{
+						"name":         "UAP scripted test response",
+						"capabilities": map[string]any{"tools": true, "input": []string{"text"}, "output": []string{"text"}},
+						"limit":        map[string]int{"context": 32768, "output": 8192},
+					},
+				},
+			},
+		},
+		"permissions": []any{map[string]string{"action": "*", "resource": "*", "effect": "allow"}},
 		"mcp": map[string]any{
 			"servers": map[string]any{
 				"uap_project_fixture": map[string]any{
@@ -174,6 +240,7 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 					},
 					"disabled": false,
 					"protocol": "legacy",
+					"codemode": false,
 				},
 			},
 		},
@@ -326,7 +393,44 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 	if err != nil || sha256.Sum256(currentProjectConfig) != baseline {
 		t.Fatal("native MCP command changed the original project config")
 	}
-	before := append([]byte(nil), methodsRaw...)
+	// The real OpenCode agent, not this test, must receive the MCP tool
+	// definition from its connected server and issue the actual tools/call.
+	// A bounded local model emits one scripted native tool call after observing
+	// that exact definition; there is no vendor auth, API key or mock client.
+	_ = runService(projectA, "run", "--format", "json", "--model",
+		"uap-fixture/uap-scripted", "Call uap_project_fixture_uap_ping exactly once.")
+	toolSeen, modelCalls, resultSeen, invalid := model.stats()
+	if toolSeen == 0 || modelCalls != 1 || resultSeen == 0 || invalid != 0 {
+		t.Fatalf("native model/session MCP dispatch not qualified: tool=%t calls=%d result=%t invalid=%d",
+			toolSeen > 0, modelCalls, resultSeen > 0, invalid)
+	}
+	afterCall, err := os.ReadFile(events)
+	if err != nil || len(afterCall) > 3072 {
+		t.Fatal("native MCP call event record missing or unbounded")
+	}
+	called := 0
+	calls := strings.Fields(string(afterCall))
+	if len(calls) < len(methods) || len(calls) > 32 {
+		t.Fatal("post-run native MCP event inventory exceeded lifecycle bound")
+	}
+	postCounts := map[string]int{}
+	for _, method := range calls {
+		postCounts[method]++
+		if postCounts[method] > 8 {
+			t.Fatal("post-run native MCP method repeated outside lifecycle bound")
+		}
+		if method == "tools/call" {
+			called++
+		}
+	}
+	if called != 1 {
+		t.Fatalf("native OpenCode V2 project tools/call count=%d, want 1", called)
+	}
+	postRunConfig, err := os.ReadFile(configuration)
+	if err != nil || sha256.Sum256(postRunConfig) != baseline {
+		t.Fatal("native model-driven MCP call changed the original project config")
+	}
+	before := append([]byte(nil), afterCall...)
 	stopService()
 	for _, project := range []string{projectB, projectA} {
 		if project == projectA {
@@ -347,5 +451,5 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 	if err == nil || !os.IsNotExist(err) || len(current) != 0 {
 		t.Fatal("MCP project E2E wrote to original user config")
 	}
-	t.Log("real pinned V2 project MCP initialize/tools-list confirmed; tools/call and vendor models unqualified")
+	t.Log("real pinned V2 project MCP initialize/tools-list/tools-call confirmed with local scripted model; vendor authentication and real models unqualified")
 }
