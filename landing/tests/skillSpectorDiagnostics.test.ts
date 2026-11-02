@@ -86,6 +86,45 @@ describe('SkillSpector AI diagnostic export', () => {
     assert.ok(exported.guidance.includes('not a completed current scan'));
   });
 
+  it('preserves case-sensitive Skill identities while matching repository aliases safely', () => {
+    const selected: SkillSpectorSubject = {
+      kind: 'skill',
+      repository: 'Example/TOOLS',
+      name: 'CaseSensitive',
+    };
+    const state = (id: string) => ({
+      id,
+      repository: 'example/tools',
+      state: 'resolved',
+      current: true,
+      selected_ids: [],
+      candidates: [],
+    });
+    const report = {
+      ...structuredClone(manifest),
+      records: [],
+      repository_aliases: [],
+      source_states: [
+        state('example/tools/CaseSensitive'),
+        state('example/tools/casesensitive'),
+        state('example/tools/Other'),
+      ],
+    } as SkillSpectorDisplayReport;
+    const diagnostic = JSON.parse(serializeSkillSpectorDiagnostics({
+      name: selected.name,
+      scope: 'skill',
+      subject: selected,
+      report,
+      reportStatus: 'ready',
+      displayStatus: 'notChecked',
+      assessment: skillSpectorAssessment(report, selected),
+    }));
+    assert.deepEqual(diagnostic.source_states.map((item: { id: string }) => item.id), [
+      'example/tools/CaseSensitive',
+    ]);
+    assert.deepEqual(diagnostic.records, []);
+  });
+
   it('identifies unsupported external Skills without querying an unrelated repository', () => {
     const exported = JSON.parse(serializeSkillSpectorDiagnostics({
       name: 'Unverified external skill',

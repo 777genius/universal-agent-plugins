@@ -1079,9 +1079,10 @@ async function copyDiagnostics() {
     max-height: calc(100dvh - 12px);
   }
   .skillspector__dialog-frame { max-height: calc(100dvh - 12px); }
-  .skillspector__dialog-header { padding: 14px; gap: 10px; }
+  .skillspector__dialog-header { padding: 14px; gap: 10px; flex-direction: column; }
   .skillspector__dialog-actions { width: 100%; flex-wrap: nowrap; }
-  .skillspector__copy { flex: 1 1 auto; min-width: 0; }
+  .skillspector__copy { flex: 1 1 auto; min-width: 0; text-align: center; white-space: normal; line-height: 1.35; }
+  .skillspector__copy svg { flex: 0 0 16px; }
   .skillspector__dialog-close { min-height: 44px; }
   .skillspector__details { padding: 14px; gap: 12px; }
   .skillspector__details > section { padding: 14px; }

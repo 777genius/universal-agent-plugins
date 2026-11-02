@@ -35,14 +35,20 @@ export function serializeSkillSpectorDiagnostics(input: SkillSpectorDiagnosticIn
     const candidate = String(item.repository ?? '').toLowerCase();
     return Boolean(canonical && (candidate === canonical || candidate === repository));
   };
+  // GitHub owner/repository locators are case-insensitive. Skill names are not:
+  // do not merge e.g. /ReadMe and /readme into the same diagnostic export.
+  const matchesSkillState = (item: Record<string, unknown>, name: string) => {
+    if (!matchesRepository(item) || typeof item.id !== 'string') return false;
+    const suffix = `/${name}`;
+    if (!item.id.endsWith(suffix)) return false;
+    const source = item.id.slice(0, -suffix.length).toLowerCase();
+    return source === canonical || source === repository;
+  };
   const relevantStates = report?.schema_version === 3 && subject
     ? subject.kind === 'plugin'
       ? report.plugin_states.filter((item) =>
           matchesRepository(item) && item.plugin_path === subject.path)
-      : report.source_states.filter((item) =>
-          matchesRepository(item) &&
-          (item.id === `${canonical}/${subject.name}` ||
-            item.id === `${repository}/${subject.name}`))
+      : report.source_states.filter((item) => matchesSkillState(item, subject.name))
     : [];
   const publication = report
     ? {
