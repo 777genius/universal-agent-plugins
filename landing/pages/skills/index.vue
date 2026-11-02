@@ -97,7 +97,7 @@ const terminalOption = computed(() => ({
   description: t('registryUi.skills.chooseInTerminalHelp'),
 }));
 function updateTargets(values: string[]) {
-  const supported = new Set(skillClients.map((client) => client.id));
+  const supported = new Set<string>(skillClients.map((client) => client.id));
   const next = values.filter((value) => supported.has(value));
   if (next.length) targets.value = next;
 }
