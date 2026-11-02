@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 )
 
 type duplicateMode uint8
@@ -116,7 +117,7 @@ func (s *jsonScanner) value(token json.Token, keys []string, depth int) error {
 			}
 			identity := key
 			if s.mode == duplicateAllFold {
-				identity = strings.ToLower(key)
+				identity = foldJSONStructKey(key)
 			}
 			if seen[identity] {
 				if s.mode == duplicateAll || s.mode == duplicateAllFold || (s.mode == duplicateRoot && depth == 1) {
@@ -176,6 +177,21 @@ func (s *jsonScanner) value(token json.Token, keys []string, depth int) error {
 		return fmt.Errorf("unexpected JSON delimiter %q", delim)
 	}
 	return nil
+}
+
+// foldJSONStructKey mirrors encoding/json v1's Unicode SimpleFold matching
+// for struct fields. ToLower alone misses aliases such as ſource_key and
+// locK_version that still resolve to source_key and lock_version in Go.
+func foldJSONStructKey(key string) string {
+	return strings.Map(func(r rune) rune {
+		for {
+			next := unicode.SimpleFold(r)
+			if next <= r {
+				return next
+			}
+			r = next
+		}
+	}, key)
 }
 
 // observedPluginDuplicate narrows reporting only, never JSON syntax or work
