@@ -67,6 +67,24 @@ jobs:
           node-version: '24'
       - name: Build actual public CLI
         run: go build -trimpath -o "${RUNNER_TEMP}/uap-skills-cli" ./cli/cmd/agentplugins
+      - name: Verify scoped HTTPS publisher install-lock-restore lifecycle
+        timeout-minutes: 4
+        run: go test ./cli/internal/agentpluginscli -run '^TestWebsiteSkillsSavedLifecycleAndColdRefusal
+        timeout-minutes: 13
+        env:
+          UAP_E2E_LIVE_SKILLS: '1'
+          UAP_E2E_SKILLS_BIN: ${{ runner.temp }}/uap-skills-cli
+          UAP_SKILLS_INSTALL_REPORT_DIR: ${{ runner.temp }}/skills-native-live-report
+        run: node --experimental-strip-types landing/scripts/skills-install-native-live-e2e.ts
+      - name: Retain native source-install evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: skills-install-native-live
+          path: ${{ runner.temp }}/skills-native-live-report/
+          if-no-files-found: warn
+          retention-days: 7
+ -count=1
       - name: Install genuine nested GitHub and HTTPS publisher Skills in isolated projects
         timeout-minutes: 13
         env:
