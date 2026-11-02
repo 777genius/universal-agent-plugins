@@ -648,7 +648,7 @@ try {
         pluginDiagnostics.records.some((record) => record.coverage?.ledger_exceptions?.length),
         'Original coverage diagnostics must survive clipboard export',
       );
-      await expect(pluginCopy).toHaveText(t('copiedDiagnostics'));
+      await expect(panel.locator('button.skillspector__copy')).toHaveText(t('copiedDiagnostics'));
       const recordIndex = assessment.records.indexOf(main);
       const mainPanel = panel.locator('.skillspector__record').nth(recordIndex);
       await mainPanel.locator(':scope > summary').click();
@@ -751,7 +751,7 @@ try {
       assert.equal(skillDiagnostics.listing.scope, 'skill');
       assert.equal(skillDiagnostics.listing.source.repository, standalone.listing.source.repository);
       assert.deepEqual(skillDiagnostics.records, standaloneAssessment.records);
-      await expect(standaloneCopy).toHaveText(t('copiedDiagnostics'));
+      await expect(skillPanel.locator('button.skillspector__copy')).toHaveText(t('copiedDiagnostics'));
       await skillPanel.locator('.skillspector__dialog').screenshot({
         path: resolve(output, `standalone-${locale}-${width}.png`),
       });
