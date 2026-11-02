@@ -68,6 +68,7 @@
     "lock-store-publication-recheck",
     "lock-cold-store-hydration",
     "lock-read-only-no-publication",
+    "lock-only-preserves-installed",
     "lock-empty-existing-refusal",
     "absent-empty-distinct",
     "direct-source-promotion",
