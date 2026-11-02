@@ -259,6 +259,28 @@ test('legacy API website publisher offers safe Install while malformed sources r
   );
 });
 
+test('malformed publisher deep link degrades without crashing document rendering', async ({ page }) => {
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/document')) {
+      return route.fulfill({
+        json: { status: 'selection_required', source: 'xn--a.example' },
+      });
+    }
+    return route.fulfill({
+      json: {
+        items: [], page: 0, total: 0, hasMore: false, view: 'popular',
+        cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' },
+      },
+    });
+  });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('skills/?id=skills-sh%3Axn--a.example%3Alark-mail&q=lark-mail');
+  await expect(page.getByRole('heading', { level: 1, name: 'Skill not found' })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('unverified GitHub Skill names open the installer picker without guessing a selector', async ({
   page,
 }) => {
