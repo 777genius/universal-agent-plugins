@@ -67,7 +67,7 @@ function updateTerminal(value: boolean) {
       <div class="plugin-card__identity-copy">
         <h3 :title="skill.title">
           <NuxtLink
-            v-if="skill.availability !== 'unsupported-source'"
+            v-if="skill.availability !== 'unsupported-source' || publisherUrl"
             :to="localePath(skillDetailRoute(skill))"
             @click="rememberSkill"
           >{{ skill.title }}</NuxtLink>
