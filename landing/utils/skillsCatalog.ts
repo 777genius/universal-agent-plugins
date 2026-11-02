@@ -71,6 +71,11 @@ function legacySource(skill: SkillListing): LegacySource | undefined {
       identity.raw.endsWith('.git')))
     return { kind: 'github', url: github };
   const publisher = publisherBase(identity.raw);
+  // The unsupported legacy DTO has only a string ID, not verified publisher
+  // metadata. Arbitrary /owner/repo paths are ambiguous Git remotes; recover
+  // scoped publisher URLs here only when the path explicitly names /skills.
+  if (publisher && new URL(publisher).pathname !== '/' &&
+      !new URL(publisher).pathname.split('/').includes('skills')) return undefined;
   return publisher ? { kind: 'publisher', url: publisher } : undefined;
 }
 
@@ -140,10 +145,6 @@ function publisherBase(raw: string): string | undefined {
     const url = new URL(candidate);
     const host = url.hostname;
     const scope = url.pathname === '/' ? '' : url.pathname;
-    // A generic /owner/repo path on an arbitrary HTTPS host may be a Git
-    // remote, not a publisher index. Only recognize explicit Skill-scoped
-    // publisher URLs; the native CLI still validates the real discovery index.
-    if (scope && !scope.split('/').includes('skills')) return undefined;
     if (url.protocol !== 'https:' || url.host !== host ||
         url.username || url.password || url.search || url.hash ||
         candidate !== `https://${host}${scope}` ||
