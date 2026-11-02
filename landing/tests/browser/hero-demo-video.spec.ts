@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test';
 import { hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
 
 const fakePlayer = `<!doctype html><html><body><script>
+  document.body.dataset.autoplay = new URLSearchParams(location.search).get('autoplay') || '';
   window.addEventListener('message', (event) => {
     const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
     if (data?.context === 'player.js' && data?.method === 'addEventListener' && data?.value === 'ended') {
@@ -31,9 +32,15 @@ for (const width of [1440, 390, 320]) {
     await expect(button).toBeVisible();
     await expect(demo.locator('iframe')).toHaveCount(0);
     expect(requests).toHaveLength(0);
-    const installBefore = (await page.locator('.hero__window').boundingBox())!;
+    const installBefore = await page.locator('.hero__window').evaluate(
+      (element) => element.getBoundingClientRect().top + window.scrollY,
+    );
     const before = (await demo.boundingBox())!;
-    expect(before.width).toBeLessThanOrEqual(480);
+    const supported = (await page.locator('.client-section').boundingBox())!;
+    expect(before.y).toBeGreaterThanOrEqual(supported.y + supported.height - 1);
+    expect(before.width).toBeGreaterThanOrEqual(Math.min(width - 32, 1600) - 4);
+    await expect(page.locator('.hero__demo .hero-demo-video')).toHaveCount(0);
+    await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
     const overlay = await button.evaluate((element) => {
       const video = element.closest('.hero-demo-video')!.getBoundingClientRect();
       const label = element.querySelector('span')!.getBoundingClientRect();
@@ -47,8 +54,8 @@ for (const width of [1440, 390, 320]) {
         posterBlur: getComputedStyle(element.parentElement!.querySelector('img')!).filter,
       };
     });
-    expect(overlay.fontSize).toBeCloseTo((before.width - 2) * 0.09375, 0);
-    expect(overlay.playSize).toBeCloseTo((before.width - 2) * 0.225, 0);
+    expect(overlay.fontSize).toBeCloseTo(Math.max(18, Math.min(56, (before.width - 2) * 0.04)), 0);
+    expect(overlay.playSize).toBeCloseTo(Math.max(76, Math.min(156, (before.width - 2) * 0.11)), 0);
     expect(overlay.posterBlur).toContain('blur(2px)');
     expect(overlay.contained).toBe(true);
     await button.focus();
@@ -56,7 +63,13 @@ for (const width of [1440, 390, 320]) {
     const frame = demo.locator('iframe');
     await expect(frame).toBeVisible();
     await expect(frame).toHaveAttribute('allowfullscreen', '');
-    await expect(frame).toHaveAttribute('src', /^https:\/\/player\.mux\.com\/[a-zA-Z0-9]+\?autoplay=true$/);
+    await expect(frame).toHaveAttribute(
+      'src',
+      /^https:\/\/player\.mux\.com\/[a-zA-Z0-9]+\?autoplay=any&preload=auto$/,
+    );
+    await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body')
+      .getAttribute('data-autoplay')).toBe('any');
+    await expect(demo.locator('.hero-demo-video__launch')).toHaveCount(0);
     await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body').getAttribute('data-subscribed')).toBe('ended');
     expect(requests).toHaveLength(1);
     // Cross-origin frames cannot be trusted without both origin and source.
@@ -74,13 +87,15 @@ for (const width of [1440, 390, 320]) {
     );
     await expect(button).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBe(null);
-    const installAfter = (await page.locator('.hero__window').boundingBox())!;
-    expect(Math.abs(installAfter.y - installBefore.y)).toBeLessThan(1);
+    const installAfter = await page.locator('.hero__window').evaluate(
+      (element) => element.getBoundingClientRect().top + window.scrollY,
+    );
+    expect(Math.abs(installAfter - installBefore)).toBeLessThan(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
 
-test('fullscreen denial still plays the iframe and accepts genuine completion', async ({ page }) => {
+test('denied fullscreen still launches a viewport-filling autoplay player on one click', async ({ page }) => {
   await setSignedMirrorTestTime(page);
   await page.route('https://player.mux.com/**', (route) =>
     route.fulfill({ contentType: 'text/html', body: fakePlayer }),
@@ -88,16 +103,49 @@ test('fullscreen denial still plays the iframe and accepts genuine completion', 
   await page.addInitScript(() => {
     HTMLElement.prototype.requestFullscreen = () => Promise.reject(new Error('denied'));
   });
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('./');
   await hydrated(page);
-  await page.getByRole('button', { name: 'Watch demo' }).click();
-  const frame = page.locator('.hero-demo-video iframe');
+  const demo = page.locator('.hero-demo-video');
+  await demo.getByRole('button', { name: 'Watch demo' }).click();
+  const frame = demo.locator('iframe');
   await expect(frame).toBeVisible();
-  await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body').getAttribute('data-subscribed')).toBe('ended');
-  await page.frameLocator('.hero-demo-video iframe').locator('body').evaluate(() => window.parent.postMessage(JSON.stringify({
-    context: 'player.js', version: '0.0.11', event: 'ended',
-  }), '*'));
-  await expect(page.getByRole('button', { name: 'Watch demo' })).toBeVisible();
+  await expect(frame).toHaveAttribute('src', /\?autoplay=any&preload=auto$/);
+  await expect(demo).toHaveClass(/hero-demo-video--fallback/);
+  await expect(demo).toHaveCSS('position', 'fixed');
+  await expect.poll(() => demo.evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    return rect.width >= innerWidth - 1 && rect.height >= innerHeight - 1;
+  })).toBe(true);
+  await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body')
+    .getAttribute('data-subscribed')).toBe('ended');
+  await expect(page.getByRole('button', { name: 'Close demo' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden');
+  await page.keyboard.press('Escape');
+  await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
+  await demo.getByRole('button', { name: 'Watch demo' }).click();
+  await expect(demo).toHaveClass(/hero-demo-video--fallback/);
+  await demo.getByRole('button', { name: 'Close demo' }).click();
+  await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeVisible();
+});
+
+test('missing Fullscreen API uses an accessible fullscreen overlay', async ({ page }) => {
+  await setSignedMirrorTestTime(page);
+  await page.route('https://player.mux.com/**', (route) =>
+    route.fulfill({ contentType: 'text/html', body: fakePlayer }),
+  );
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { value: undefined, configurable: true });
+  });
+  await page.goto('./');
+  await hydrated(page);
+  const demo = page.locator('.hero-demo-video');
+  await demo.getByRole('button', { name: 'Watch demo' }).click();
+  await expect(demo).toHaveClass(/hero-demo-video--fallback/);
+  await expect(demo.locator('iframe')).toBeVisible();
+  await demo.getByRole('button', { name: 'Close demo' }).click();
+  await expect(demo.locator('iframe')).toHaveCount(0);
 });
 
 test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ page }) => {
