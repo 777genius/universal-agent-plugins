@@ -36,16 +36,16 @@ func TestOpenCodeProjectDoctorProductionReadinessE2E(t *testing.T) {
 
 	var result struct {
 		Data struct {
-			ReadOnly bool `json:"read_only"`
+			ReadOnly         bool `json:"read_only"`
 			ProjectReadiness []struct {
-				InstallationID string `json:"installation_id"`
-				ClientID string `json:"client_id"`
-				Status string `json:"status"`
-				NativeEvidence string `json:"native_evidence"`
-				NextActions []string `json:"next_actions"`
+				InstallationID string   `json:"installation_id"`
+				ClientID       string   `json:"client_id"`
+				Status         string   `json:"status"`
+				NativeEvidence string   `json:"native_evidence"`
+				NextActions    []string `json:"next_actions"`
 			} `json:"project_readiness"`
 			Findings []struct {
-				Code string `json:"code"`
+				Code   string `json:"code"`
 				Status string `json:"status"`
 			} `json:"findings"`
 		} `json:"data"`
