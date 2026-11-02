@@ -21,7 +21,8 @@
     "candidate-ineligibility",
     "partial-commit-locked-retry",
     "mixed-source-target-union",
-    "portable-cold-restore"
+    "portable-cold-restore",
+    "skill-typo-retains-installed"
   ],
   "transport": [
     "zip",
