@@ -291,7 +291,7 @@ test('Website publisher Skills install with UAP and open their own detail page',
   await expect(page.locator('.skills-detail__document .skill-markdown h1')).toHaveText('Mail');
   await expect(page.locator('.skills-detail__document .skill-markdown strong')).toHaveText('Important instructions');
   await expect(page.locator('.skills-detail__document .skill-markdown table')).toBeVisible();
-  await expect(page.locator('.skills-detail__document .skill-markdown pre')).toBeVisible();
+  await expect(page.locator('.skills-detail__document .skill-markdown__rendered pre')).toBeVisible();
   const raw = page.locator('.skill-markdown__raw');
   await raw.locator('summary').click();
   await expect(raw.locator('pre')).toContainText('description: Mail');

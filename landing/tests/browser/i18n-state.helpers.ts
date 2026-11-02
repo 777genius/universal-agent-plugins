@@ -196,7 +196,7 @@ export async function delayedMirror(page: Page, kind: 'discovery' | 'security', 
       const headers = route.request().headers();
       delete headers['if-none-match'];
       delete headers['if-modified-since'];
-      const response = await route.fetch({ headers }); // local static artifact only
+      // The Pages fixture server can reset a connection under concurrent E2E load.\n      // Retry only network resets, never a bad status or signature.\n      const response = await route.fetch({ headers, maxRetries: 2 }); // local static artifact only
       expect(response.status(), `${kind} mirror must exist in final artifact`).toBe(200);
       await route.fulfill({ response });
     }
