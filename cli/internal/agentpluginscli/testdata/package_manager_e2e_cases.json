@@ -33,6 +33,7 @@
   ],
   "evolution": [
     "graph-edge-replacement",
+    "old-cache-new-lock",
     "graph-update-failure-retry",
     "cascade-remove-drift",
     "prune-drift-after-lock",
