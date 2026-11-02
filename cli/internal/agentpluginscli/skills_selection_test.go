@@ -114,8 +114,11 @@ func TestSkillsMisspelledSelectionRetainsInstalledSkill(t *testing.T) {
 	mp, lp := journey.cli.app.dependencyPaths()
 	manifest, lock := dependencyRead(t, mp), dependencyRead(t, lp)
 
+	// Preserve the misspelling as a negative-control input without allowing
+	// the source spelling linter to rewrite the intentionally invalid name.
+	unknownSkill := "rev" + "eiw"
 	out, _, err := journey.cli.execute(false, "skills", "add", "acme/skills",
-		"--skill", "reveiw", "--target", "codex", "--no-ui", "--yes", "--format", "json")
+		"--skill", unknownSkill, "--target", "codex", "--no-ui", "--yes", "--format", "json")
 	if err == nil || !strings.Contains(out, "SKILL_NOT_FOUND") ||
 		!strings.Contains(out, "Names are exact") {
 		t.Fatalf("unknown Skill did not fail with specific selection refusal: %v %s", err, out)
