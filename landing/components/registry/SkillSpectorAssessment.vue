@@ -92,7 +92,7 @@ const label = computed(() => {
   const previous = outcomes?.historical ?? 0;
   if (
     !legacy.value &&
-    ['incomplete', 'unavailable'].includes(key) &&
+    ['incomplete', 'unavailable', 'stale'].includes(key) &&
     outcomes &&
     props.scope === 'plugin' &&
     assessment.value.inventoryKnown &&
