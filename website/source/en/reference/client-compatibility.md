@@ -71,7 +71,7 @@ A later source-only [Pi Skills/MCP integration (#640)](https://github.com/777gen
 also manages exact owned project Skills in `.pi/skills` and individual stdio or
 Streamable HTTP server entries in `.pi/mcp.json`; user-profile and other-project
 configuration stays separate. Its pinned real Pi project E2E observes trusted
-Skill discovery and native MCP `initialize`/`tools/list`. **This does not prove
+Skill discovery and native stdio MCP `initialize`/`tools/list`. **This does not prove
 `tools/call`, provider authorization, or that Pi granted project trust itself.**
 UAP retains the Prepared state until a separate native observation establishes
 activation. Neither this nor #631 is included in release 0.1.95.
