@@ -362,7 +362,7 @@
       "from": "我的电脑",
       "to": "队友的电脑",
       "transfer": "将 {manifest} 和 {lockfile} 交给队友。安装前，队友需把这两个文件导入用户环境。",
-      "handoff": "提交这两个文件，并与队友共享。",
+      "handoff": "提交并共享这两个文件；队友需在安装前导入它们。",
       "subtitle": "安装 Marketing Kit 0.1.0，然后与队友共享锁定的版本。",
       "manifestPreview": "预览 uap.toml",
       "closePreview": "关闭文件预览"

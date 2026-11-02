@@ -41,7 +41,7 @@ for (const theme of ['dark', 'light'] as const) {
       );
       if (locale === 'en') {
         await expect(section.locator('.registry-restore__subtitle')).toContainText('Marketing Kit 0.1.0');
-        await expect(section.locator('.registry-restore__handoff-note')).toContainText('Commit both files');
+        await expect(section.locator('.registry-restore__handoff-note')).toContainText('imports them before installing');
       }
       await expect(section.locator('.registry-restore__export')).toHaveCount(0);
       await expect(section.locator('.registry-restore__boundary')).toHaveCount(0);

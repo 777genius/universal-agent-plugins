@@ -362,7 +362,7 @@
       "from": "Mi ordenador",
       "to": "Ordenador de mi compañero",
       "transfer": "Comparte {manifest} y {lockfile}. Tu compañero importa ambos archivos en su entorno de usuario antes de instalar.",
-      "handoff": "Haz commit de ambos archivos y compártelos con tu compañero.",
+      "handoff": "Haz commit de ambos archivos y compártelos; tu compañero los importa antes de instalar.",
       "subtitle": "Instala Marketing Kit 0.1.0 y comparte las versiones fijadas con un compañero.",
       "manifestPreview": "Vista previa de uap.toml",
       "closePreview": "Cerrar vista previa"

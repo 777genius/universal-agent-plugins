@@ -379,7 +379,7 @@
       "from": "My computer",
       "to": "Teammate's computer",
       "transfer": "Share {manifest} and {lockfile}. Your teammate imports both files into their user environment before installing.",
-      "handoff": "Commit both files and share them with a teammate.",
+      "handoff": "Commit and share both files; your teammate imports them before installing.",
       "subtitle": "Install Marketing Kit 0.1.0, then share your pinned setup with a teammate.",
       "manifestPreview": "Preview uap.toml",
       "closePreview": "Close file preview"
