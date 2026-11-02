@@ -86,7 +86,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
       await inspectSwitcher(referenceRoute, () => referenceRoute, () => "en", true, false, "agentplugins author");
       evidence.push({ variant, nineCounterparts: true, gatewayHomes: true, versionedEnglishFallback: true });
       async function inspectSwitcher(label, destination, language, fallback, home = false, identityOverride = "") {
-        const homeIdentities = Object.fromEntries(locales.map(code => [code, "Agent Plugins"]));
+        const homeIdentities = Object.fromEntries(locales.map(code => [code, code === "en" ? "Universal Agent Plugins" : "Agent Plugins"]));
         const useIdentities = { uk: "Використання плагінів", hi: "प्लगइन इस्तेमाल करें", ar: "استخدام الإضافات", pt: "Usar plugins", en: "Use plugins", ru: "Использовать плагины", es: "Usar plugins", fr: "Utiliser des plugins", zh: "使用插件" };
         for (const [index, code] of locales.entries()) {
           // Every activation starts at its own origin, including same-route
