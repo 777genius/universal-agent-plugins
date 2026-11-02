@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -225,11 +224,10 @@ func (selector Selector) Validate() error {
 	return nil
 }
 
+// Use the same Git reference grammar as direct source installation. A saved
+// uap.toml must not admit ref expressions rejected by the source boundary.
 func validateRefSelector(value string) error {
-	if value == "" || strings.TrimSpace(value) != value || strings.ContainsAny(value, " \t\r\n~^:?*[\\") || strings.HasPrefix(value, "-") || path.Clean(value) != value {
-		return errors.New("ref selector is not a safe exact Git ref")
-	}
-	return nil
+	return sourcespec.ValidateRef(value)
 }
 func validateReleaseSelector(value string) error {
 	if value == "" || strings.TrimSpace(value) != value {
@@ -242,19 +240,11 @@ func validateReleaseSelector(value string) error {
 	return nil
 }
 
+// Saved declarations and direct acquisition must share one portable path
+// policy, including Windows reserved names, Unicode and length limits.
 func validateSubpath(value string) error {
-	if value == "" {
-		return nil
-	}
-	if strings.Contains(value, `\`) || strings.HasPrefix(value, "/") || path.Clean(value) != value || strings.HasPrefix(value, "../") {
-		return errors.New("package path must be a normalized repository-relative directory")
-	}
-	for _, segment := range strings.Split(value, "/") {
-		if segment == "." || segment == ".." || segment == "" {
-			return errors.New("package path contains an unsafe segment")
-		}
-	}
-	return nil
+	_, err := sourcespec.NormalizeSubpath(value)
+	return err
 }
 
 // Declaration keys are logical intent, never filesystem names or receipt aliases.
