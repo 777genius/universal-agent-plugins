@@ -29,6 +29,28 @@ export function groupSkillSpectorReasons<T extends { code: string; message: stri
   return [...groups.values()];
 }
 
+/**
+ * Match an immutable Skill source state by repository (case-insensitive GitHub
+ * locator) and exact Skill name (case-sensitive filesystem identity).
+ * This same predicate is used by status display and AI diagnostic export.
+ */
+export function skillSpectorSourceStateMatches(
+  item: Record<string, unknown>,
+  repository: string,
+  canonical: string,
+  name: string,
+): boolean {
+  const direct = repository.toLowerCase();
+  const resolved = canonical.toLowerCase();
+  const source = String(item.repository ?? '').toLowerCase();
+  if (source !== direct && source !== resolved) return false;
+  if (typeof item.id !== 'string') return false;
+  const suffix = `/${name}`;
+  if (!item.id.endsWith(suffix)) return false;
+  const idRepository = item.id.slice(0, -suffix.length).toLowerCase();
+  return idRepository === direct || idRepository === resolved;
+}
+
 const revisionPattern = /^[0-9a-f]{40}$/;
 const digestPattern = /^sha256:[0-9a-f]{64}$/;
 const repositoryPattern = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -254,18 +276,20 @@ export function skillSpectorAssessment(
   const findingCount = records.reduce((sum, record) => sum + record.finding_count, 0);
   if (report?.schema_version === 3) {
     const states = subject?.kind === 'plugin' ? report.plugin_states : report.source_states;
-    const state = states.find(
-      (item) =>
-        (String(item.repository).toLowerCase() === canonical ||
-          (subject?.kind === 'skill' &&
-            String(item.repository).toLowerCase() === subject.repository.toLowerCase())) &&
-        (subject?.kind === 'plugin'
-          ? item.plugin_path === subject.path &&
-            (item.revision === null || item.revision === subject.revision)
-          : item.id === `${canonical}/${subject?.name}` ||
-            String(item.id).toLowerCase() ===
-              `${subject?.repository.toLowerCase()}/${subject?.name}`),
-    );
+    const state = subject
+      ? states.find((item) =>
+          subject.kind === 'plugin'
+            ? String(item.repository).toLowerCase() === canonical &&
+              item.plugin_path === subject.path &&
+              (item.revision === null || item.revision === subject.revision)
+            : skillSpectorSourceStateMatches(
+                item,
+                subject.repository,
+                canonical ?? subject.repository,
+                subject.name,
+              ),
+        )
+      : undefined;
     const currentRecords = records.filter(
       (record) =>
         record.freshness === 'current' &&

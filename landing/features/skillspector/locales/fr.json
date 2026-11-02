@@ -108,7 +108,12 @@
       "awaitingExplanation": "Ces Skills n'ont pas encore de résultat actuel. Leur sécurité est inconnue.",
       "waitingWithLimitsProgress": "Vérifiés {checked}/{total} · {waiting} en attente · {limited} incomplets",
       "referenceDirectoryStatus": "Référence à un dossier ; inspection incomplète",
-      "referenceUninspectedArtifact": "Certains fichiers ou répertoires référencés n'ont pas été entièrement inspectés. Consultez les chemins d'origine et les limites de l'analyse."
+      "referenceUninspectedArtifact": "Certains fichiers ou répertoires référencés n'ont pas été entièrement inspectés. Consultez les chemins d'origine et les limites de l'analyse.",
+      "copyDiagnostics": "Copier le diagnostic pour une IA",
+      "copiedDiagnostics": "Copié",
+      "copyDiagnosticsHelp": "Copie le statut du scan et toutes les preuves diagnostiques publiées de cette fiche au format JSON. Aucune donnée n'est envoyée.",
+      "copyDiagnosticsSuccess": "Diagnostic copié. Collez-le dans un assistant IA pour analyser les preuves.",
+      "copyDiagnosticsError": "Impossible de copier. Autorisez l'accès au presse-papiers puis réessayez."
     }
   }
 }

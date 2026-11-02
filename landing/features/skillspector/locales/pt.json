@@ -108,7 +108,12 @@
       "awaitingExplanation": "Esses Skills ainda não têm resultado de verificação atual. A segurança é desconhecida.",
       "waitingWithLimitsProgress": "Verificados {checked}/{total} · {waiting} aguardando · {limited} incompletos",
       "referenceDirectoryStatus": "Referência a diretório; inspeção incompleta",
-      "referenceUninspectedArtifact": "Alguns arquivos ou diretórios referenciados não foram totalmente inspecionados. Consulte os caminhos originais e os limites da análise."
+      "referenceUninspectedArtifact": "Alguns arquivos ou diretórios referenciados não foram totalmente inspecionados. Consulte os caminhos originais e os limites da análise.",
+      "copyDiagnostics": "Copiar diagnóstico para IA",
+      "copiedDiagnostics": "Copiado",
+      "copyDiagnosticsHelp": "Copia o estado da verificação e todas as evidências de diagnóstico publicadas desta entrada como JSON. Nenhum dado é enviado.",
+      "copyDiagnosticsSuccess": "Diagnóstico copiado. Cole-o no assistente de IA para analisar as evidências.",
+      "copyDiagnosticsError": "Não foi possível copiar. Permita acesso à área de transferência e tente novamente."
     }
   }
 }

@@ -797,7 +797,7 @@ for (const width of [1280, 390]) {
 
 for (const locale of ['en', 'ru'] as const) {
   for (const width of [1280, 390]) {
-    test(`known MCP-only metadata omits card checks and explains detail scope without report requests (${locale}, ${width})`, async ({
+    test(`known MCP-only metadata shows an explicit no-Skills state on card and detail without report requests (${locale}, ${width})`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height: 900 });
@@ -818,8 +818,12 @@ for (const locale of ['en', 'ru'] as const) {
       await navigate(page, '/plugins/', locale, '?q=i18n-state-00');
       const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
       await expect(card).toBeVisible();
-      await expect(card.locator('.skillspector')).toHaveCount(0);
-      await expect(card).not.toContainText('SkillSpector');
+      const cardState = card.locator('.skillspector--noSkills');
+      await expect(cardState).toBeVisible();
+      await expect(cardState).toContainText(
+        locale === 'en' ? 'Skill scan · No Skills to check' : 'Проверка скиллов · Нет скиллов для проверки',
+      );
+      await expect(card.locator('details.skillspector')).toHaveCount(0);
       const title = card.getByRole('link', { name: plugin.display_name, exact: true });
       await title.focus();
       await expect(title).toBeFocused();
@@ -1146,5 +1150,87 @@ test('opening a card while its report loads preserves the native disclosure and 
   await expect(assessment.locator('.skillspector__coverage')).toContainText(
     /reference_missing|static_parse_limit/,
   );
+  expect(errors).toEqual([]);
+});
+
+for (const width of [1280, 390]) {
+  test(`SkillSpector copies full published diagnostics to AI clipboard on ${width}px`, async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.setViewportSize({ width, height: 900 });
+    const { assessment, errors } = await setup(page, 'references');
+    await assessment.locator(':scope > summary').click();
+    const dialog = assessment.locator('.skillspector__dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('.skillspector__headline-status')).toContainText('Skill scan');
+    await expect(dialog.locator('hr')).toHaveCount(0);
+    await expect(dialog.locator('.skillspector__details > section + section').first())
+      .toHaveCSS('border-top-width', '0px');
+    const button = dialog.getByRole('button', { name: 'Copy diagnostics for AI' });
+    const status = dialog.getByRole('status');
+    await expect(status).toBeAttached();
+    await expect(status).toHaveText('');
+    await expect(button).toBeEnabled();
+    await button.click();
+    const diagnostic = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
+    expect(diagnostic.format).toBe('uap.skillspector.diagnostics.v1');
+    expect(diagnostic.listing.scope).toBe('plugin');
+    expect(diagnostic.listing.report_load_status).toBe('ready');
+    expect(diagnostic.listing.displayed_status).toBe('incomplete');
+    expect(diagnostic.publication.schema_version).toBe(3);
+    expect(diagnostic.assessment).not.toHaveProperty('records');
+    expect(diagnostic.assessment.outcomes).toEqual({
+      complete: 3, limited: 10, failed: 0, historical: 0, unscanned: 0,
+    });
+    expect(diagnostic.records.length).toBe(13);
+    expect(diagnostic.records.some((record: { coverage?: { ledger_exceptions?: unknown[] } }) =>
+      Boolean(record.coverage?.ledger_exceptions?.length))).toBe(true);
+    expect(diagnostic.records.some((record: { attempt_history?: unknown[] }) =>
+      Boolean(record.attempt_history?.length))).toBe(true);
+    expect(diagnostic.guidance).toContain('not proof of safety');
+    await expect(dialog.getByRole('button', { name: 'Copied' })).toBeVisible();
+    await expect(dialog.locator('.skillspector__copy')).toBeFocused();
+    await expect(dialog.locator('.skillspector__copy')).toHaveAttribute('aria-busy', 'false');
+    await expect(status).toContainText('Diagnostics copied');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await expect(assessment.locator(':scope > summary')).toBeFocused();
+    expect(errors).toEqual([]);
+  });
+}
+
+test('clipboard denial is announced, never falsely marked copied', async ({ page }) => {
+  const { assessment, errors } = await setup(page, 'references');
+  await assessment.locator(':scope > summary').click();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async () => { throw new Error('denied'); } },
+    });
+  });
+  const dialog = assessment.locator('.skillspector__dialog');
+  const button = dialog.getByRole('button', { name: 'Copy diagnostics for AI' });
+  await button.click();
+  await expect(button).toHaveText('Copy diagnostics for AI');
+  await expect(dialog.getByRole('status')).toContainText("Couldn't copy");
+  expect(errors).toEqual([]);
+});
+
+test('unselected scan exports an explicit unknown status, never fabricated results', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const { assessment, errors } = await setup(page, 'unselected');
+  await expect(assessment.locator(':scope > summary')).toContainText('Not checked');
+  await assessment.locator(':scope > summary').click();
+  await assessment.getByRole('button', { name: 'Copy diagnostics for AI' }).click();
+  const diagnostic = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
+  expect(diagnostic.listing.report_load_status).toBe('ready');
+  expect(diagnostic.listing.displayed_status).toBe('notChecked');
+  expect(diagnostic.records).toEqual([]);
+  expect(diagnostic.guidance).toContain('not a completed current scan');
   expect(errors).toEqual([]);
 });

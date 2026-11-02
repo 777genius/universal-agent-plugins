@@ -108,7 +108,12 @@
       "awaitingExplanation": "这些技能尚无当前检查结果，安全状态未知。",
       "waitingWithLimitsProgress": "已检查 {checked}/{total} · {waiting} 项待检查 · {limited} 项未完全检查",
       "referenceDirectoryStatus": "目录引用；检查尚未完成",
-      "referenceUninspectedArtifact": "部分引用的文件或目录尚未完整检查。请查看原始路径和覆盖范围限制。"
+      "referenceUninspectedArtifact": "部分引用的文件或目录尚未完整检查。请查看原始路径和覆盖范围限制。",
+      "copyDiagnostics": "复制诊断信息供 AI 分析",
+      "copiedDiagnostics": "已复制",
+      "copyDiagnosticsHelp": "将此条目的检查状态和所有已发布诊断证据复制为 JSON，不会发送任何数据。",
+      "copyDiagnosticsSuccess": "诊断信息已复制。可粘贴到 AI 助手中分析证据。",
+      "copyDiagnosticsError": "无法复制。请允许访问剪贴板后重试。"
     }
   }
 }

@@ -261,7 +261,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
         :details-to="securityDetailURL"
       />
       <SkillSpectorAssessment
-        v-if="plugin.components.includes('skills')"
+        :applicable="plugin.components.includes('skills')"
         :subject="{
           kind: 'plugin',
           repository: plugin.source.repository,

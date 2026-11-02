@@ -53,6 +53,7 @@ const sourceFiles = [
   'utils/skillSpectorCatalog.ts',
   'utils/skillSpectorV3.ts',
   'utils/skillSpector.ts',
+  'utils/skillSpectorDiagnostics.ts',
   'types/skillSpector.ts',
   'features/skillspector/exceptions.json',
   'components/registry/SkillSpectorAssessment.vue',
@@ -381,6 +382,9 @@ try {
         viewport: { width, height: 1000 },
         hasTouch: width < 600,
       });
+      await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
+        origin: site.origin,
+      });
       const page = await context.newPage();
       const responseChecks = [];
       const seen = new Map();
@@ -552,6 +556,14 @@ try {
         'data-discovery-state',
         /current|cached/,
       );
+      await expect(page.locator('.plugin-card[data-install-source="cloudflare"]')).toBeVisible();
+      assert.ok(await page.locator('.plugin-card').count(), 'Expected rendered plugin cards');
+      const missingPluginStatuses = await page.locator('.plugin-card').evaluateAll((cards) =>
+        cards
+          .filter((card) => !card.querySelector('.skillspector'))
+          .map((card) => card.getAttribute('data-install-source')),
+      );
+      assert.deepEqual(missingPluginStatuses, [], 'Every published plugin card must expose a Skill scan state');
       const panel = page.locator('.plugin-card[data-install-source="cloudflare"] .skillspector');
       // Keep assertions at Playwright's ordinary 5-second budget.
       await expect(panel).toHaveClass(new RegExp(`skillspector--${assessment.status}(?:\\s|$)`));
@@ -620,6 +632,23 @@ try {
         assessment.records,
         'Rendered technical evidence must be lossless',
       );
+      await expect(panel.locator('.skillspector__dialog hr')).toHaveCount(0);
+      const pluginCopy = panel.getByRole('button', { name: t('copyDiagnostics') });
+      await pluginCopy.click();
+      const pluginDiagnostics = JSON.parse(
+        await page.evaluate(() => navigator.clipboard.readText()),
+      );
+      assert.equal(pluginDiagnostics.format, 'uap.skillspector.diagnostics.v1');
+      assert.equal(pluginDiagnostics.listing.source.repository, plugin.source.repository);
+      assert.equal(pluginDiagnostics.listing.displayed_status, assessment.status);
+      assert.deepEqual(pluginDiagnostics.records, assessment.records);
+      assert.deepEqual(pluginDiagnostics.assessment.outcomes, assessment.outcomes);
+      assert.equal(Object.hasOwn(pluginDiagnostics.assessment, 'records'), false);
+      assert.ok(
+        pluginDiagnostics.records.some((record) => record.coverage?.ledger_exceptions?.length),
+        'Original coverage diagnostics must survive clipboard export',
+      );
+      await expect(pluginCopy).toHaveText(t('copiedDiagnostics'));
       const recordIndex = assessment.records.indexOf(main);
       const mainPanel = panel.locator('.skillspector__record').nth(recordIndex);
       await mainPanel.locator(':scope > summary').click();
@@ -691,6 +720,14 @@ try {
       const skill = page.locator(
         `.skill-card[data-skill-id=${JSON.stringify(standalone.listing.id)}]`,
       );
+      await expect(skill).toBeVisible();
+      assert.ok(await page.locator('.skill-card').count(), 'Expected rendered Skill cards');
+      const missingSkillStatuses = await page.locator('.skill-card').evaluateAll((cards) =>
+        cards
+          .filter((card) => !card.querySelector('.skillspector'))
+          .map((card) => card.getAttribute('data-skill-id')),
+      );
+      assert.deepEqual(missingSkillStatuses, [], 'Every published Skill card must expose a scan state');
       const skillPanel = skill.locator('.skillspector');
       await expect(skillPanel).toHaveClass(
         new RegExp(`skillspector--${standaloneAssessment.status}(?:\\s|$)`),
@@ -705,6 +742,16 @@ try {
         ).map((value) => JSON.parse(value)),
         standaloneAssessment.records,
       );
+      const standaloneCopy = skillPanel.getByRole('button', { name: t('copyDiagnostics') });
+      await standaloneCopy.click();
+      const skillDiagnostics = JSON.parse(
+        await page.evaluate(() => navigator.clipboard.readText()),
+      );
+      assert.equal(skillDiagnostics.format, 'uap.skillspector.diagnostics.v1');
+      assert.equal(skillDiagnostics.listing.scope, 'skill');
+      assert.equal(skillDiagnostics.listing.source.repository, standalone.listing.source.repository);
+      assert.deepEqual(skillDiagnostics.records, standaloneAssessment.records);
+      await expect(standaloneCopy).toHaveText(t('copiedDiagnostics'));
       await skillPanel.locator('.skillspector__dialog').screenshot({
         path: resolve(output, `standalone-${locale}-${width}.png`),
       });
@@ -745,6 +792,7 @@ try {
         locale,
         width,
         plugin_status: assessment.status,
+        diagnostic_export: { plugin: true, standalone: true, all_cards_visible: true },
         selected: assessment.selected,
         fully_checked: assessment.fullyChecked,
         outcomes: assessment.outcomes,

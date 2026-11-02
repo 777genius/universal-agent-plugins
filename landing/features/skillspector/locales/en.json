@@ -108,7 +108,12 @@
       "awaitingExplanation": "These listed Skills do not have a current result yet. Their safety is not known.",
       "waitingWithLimitsProgress": "{checked}/{total} checked · {waiting} awaiting · {limited} not fully checked",
       "referenceDirectoryStatus": "Directory reference; inspection incomplete",
-      "referenceUninspectedArtifact": "Some referenced files or directories were not fully inspected. See their original paths and coverage limits."
+      "referenceUninspectedArtifact": "Some referenced files or directories were not fully inspected. See their original paths and coverage limits.",
+      "copyDiagnostics": "Copy diagnostics for AI",
+      "copiedDiagnostics": "Copied",
+      "copyDiagnosticsHelp": "Copies the scan status and all published diagnostic evidence for this listing as JSON. Nothing is sent.",
+      "copyDiagnosticsSuccess": "Diagnostics copied. Paste them into an AI assistant to review the evidence.",
+      "copyDiagnosticsError": "Couldn't copy. Allow clipboard access and try again."
     }
   }
 }

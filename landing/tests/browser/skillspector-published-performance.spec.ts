@@ -132,6 +132,19 @@ test('published large reports keep closed cards unmounted after real data and ap
       elements.map((element) => element.getAttribute('data-install-source')).sort(),
     );
   expect(assessedSources).toEqual(expectedSources);
+  const visibleStatuses = await page.locator('.plugin-card:has(.skillspector)')
+    .evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('data-install-source')).sort(),
+    );
+  expect(visibleStatuses).toEqual([...cardSources].sort());
+  const expectedNoSkills = cardSources
+    .filter((source): source is string => source !== null && !hasSkillsBySource.get(source))
+    .sort();
+  const noSkills = await page.locator('.plugin-card:has(.skillspector--noSkills)')
+    .evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('data-install-source')).sort(),
+    );
+  expect(noSkills).toEqual(expectedNoSkills);
   await expect(page.locator('details.skillspector')).toHaveCount(expectedSources.length);
   await expect(page.locator('.skillspector__details')).toHaveCount(0);
   await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 checked · 10 not fully checked|Coverage has limits)/);

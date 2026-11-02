@@ -388,7 +388,9 @@ test('real Directory metadata limits SkillSpector to listings with Skill files',
   await navigate(page, '/plugins/', 'en', `?q=${mcpOnly.name}`);
   const mcpCard = page.locator(`.plugin-card[data-install-source="${mcpOnly.install_source}"]`);
   await expect(mcpCard).toBeVisible();
-  await expect(mcpCard.locator('.skillspector')).toHaveCount(0);
+  await expect(mcpCard.locator('.skillspector--noSkills')).toBeVisible();
+  await expect(mcpCard.locator('.skillspector--noSkills')).toContainText('No Skills to check');
+  await expect(mcpCard.locator('details.skillspector')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

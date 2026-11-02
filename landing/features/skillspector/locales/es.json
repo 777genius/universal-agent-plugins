@@ -108,7 +108,12 @@
       "awaitingExplanation": "Estos Skills aún no tienen un resultado actual. Se desconoce su seguridad.",
       "waitingWithLimitsProgress": "Comprobados {checked}/{total} · {waiting} pendientes · {limited} incompletos",
       "referenceDirectoryStatus": "Referencia a directorio; inspección incompleta",
-      "referenceUninspectedArtifact": "Algunos archivos o directorios referenciados no se inspeccionaron por completo. Consulta las rutas originales y los límites del análisis."
+      "referenceUninspectedArtifact": "Algunos archivos o directorios referenciados no se inspeccionaron por completo. Consulta las rutas originales y los límites del análisis.",
+      "copyDiagnostics": "Copiar diagnóstico para IA",
+      "copiedDiagnostics": "Copiado",
+      "copyDiagnosticsHelp": "Copia el estado y todas las pruebas diagnósticas publicadas de esta ficha como JSON. No se envía ningún dato.",
+      "copyDiagnosticsSuccess": "Diagnóstico copiado. Pégalo en tu asistente de IA para analizar las pruebas.",
+      "copyDiagnosticsError": "No se pudo copiar. Permite el acceso al portapapeles e inténtalo de nuevo."
     }
   }
 }
