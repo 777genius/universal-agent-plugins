@@ -66,9 +66,15 @@ function legacyPublisherUrl(skill: SkillListing): string | undefined {
   const source = skillIdentityFromId(skill.id);
   if (!parts || source?.kind !== 'external') return undefined;
 
-  const publisher = new URL(source.url);
-  const legacyListing = `https://www.skills.sh/site/${publisher.hostname}/${encodeURIComponent(parts[2]!.toLowerCase())}`;
-  return skill.providerUrl === legacyListing ? source.url : undefined;
+  try {
+    const publisher = new URL(source.url);
+    const legacyListing = `https://www.skills.sh/site/${publisher.hostname}/${encodeURIComponent(parts[2]!.toLowerCase())}`;
+    return skill.providerUrl === legacyListing ? source.url : undefined;
+  } catch {
+    // Malformed IDNA or lone-surrogate catalog text must disable one entry,
+    // never throw while Vue renders the entire Skills catalog.
+    return undefined;
+  }
 }
 
 /** A publisher root, never the third-party catalog's detail URL. */
