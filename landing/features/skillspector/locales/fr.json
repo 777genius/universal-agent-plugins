@@ -96,6 +96,7 @@
       "scanComplete": "Analyse terminée",
       "selectionScanned": "Skills sélectionnés analysés",
       "retryLoad": "Réessayer le chargement",
+      "progressWithFailures": "{checked}/{total} analysés · {failed} échecs · {waiting} en attente · {limited} partiels",
       "coverageProgress": "Vérifiés {checked}/{total} · {limited} incomplets",
       "waitingProgress": "Vérifiés {checked}/{total} · {waiting} en attente",
       "statusExplanation": "Certains fichiers ou contrôles n'ont pas pu être vérifiés. Cela ne signifie pas qu'un problème de sécurité a été confirmé.",
