@@ -40,6 +40,7 @@ export const useDocsLinks = () => {
     supportBoundaryUrl: computed(() => supportBoundary.value.url),
     customLogicGuideUrl: computed(() => customLogicGuide.value.url),
     restoreGuideUrl: computed(() => `${restoreGuide.value.url}#restore-project-dependencies`),
+    userRestoreGuideUrl: computed(() => `${restoreGuide.value.url}#restore-on-another-machine`),
     restoreGuideEnglishFallback: computed(() => restoreGuide.value.englishFallback),
     docsLabel,
     quickstartEnglishFallback: computed(() => quickstart.value.englishFallback),

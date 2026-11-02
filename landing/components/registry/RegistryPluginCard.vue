@@ -3,6 +3,7 @@
   Content model and implementation are new for Universal Agent Plugins.
 -->
 <script setup lang="ts">
+import { isReviewedMarketingKit } from '~/data/marketingKitDemo';
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { githubSourceUrl, reachableTargetPolicies, vendorInstallSource } from '~/utils/registry';
@@ -61,8 +62,9 @@ function diagnosticText(
   return t(`registryUi.reason.${diagnostic.code}`, params);
 }
 const resolution = selection.resolution;
+const marketingProjectBlocked = computed(() => isReviewedMarketingKit(props.plugin) && scope.value === 'project' && !projectAvailable.value);
 const selectedDistribution = computed(() =>
-  isDiscovered.value || current.value ? resolution.value.distribution : undefined,
+  !marketingProjectBlocked.value && (isDiscovered.value || current.value) ? resolution.value.distribution : undefined,
 );
 const canChooseInstall = computed(
   () =>
@@ -72,6 +74,7 @@ const canChooseInstall = computed(
 );
 const canInstall = computed(
   () =>
+    !marketingProjectBlocked.value &&
     (scope.value !== 'project' || !autoDetect.value) &&
     (isDiscovered.value
       ? props.plugin.installable &&
@@ -365,10 +368,11 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
           >
             {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
           </p>
-          <p v-if="showAuthentication" class="plugin-card__auth">{{ authentication.label }}</p>
+          <p v-if="showAuthentication && !marketingProjectBlocked" class="plugin-card__auth">{{ authentication.label }}</p>
           <InstallScopeSelect
             :model-value="scope"
             :project-available="projectAvailable"
+            :always-show="isReviewedMarketingKit(plugin)"
             @update:model-value="updateScope"
           />
           <InstallOutcome
@@ -378,7 +382,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
           />
           <div class="plugin-card__install">
             <AppMultiSelect
-              v-if="targets.length"
+              v-if="targets.length && !marketingProjectBlocked"
               :model-value="targets"
               :auto-selected="autoDetect"
               :auto-option="autoOption"

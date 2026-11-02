@@ -116,6 +116,15 @@ jobs:
         working-directory: landing
         run: pnpm exec playwright test tests/browser/hero-demo-video.spec.ts --grep 'owner-uploaded Mux film actually plays'
 
+      - name: Preserve Marketing Kit visual QA evidence
+        if: always() && steps.browser-e2e.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: marketing-kit-visual-evidence
+          path: landing/test-results/**/marketing-kit-*.png
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Preserve failed browser traces
         if: failure() && (steps.browser-e2e.outcome == 'failure' || steps.live-demo-e2e.outcome == 'failure')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0

@@ -30,7 +30,9 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 	mustContain(t, workflow, "pnpm run build:pages")
 	mustContain(t, workflow, "path: .pages-dist")
 	mustContain(t, workflow, "group: github-pages")
-	mustContain(t, workflow, "cancel-in-progress: false")
+	// Only a newer production push supersedes an in-progress Pages release;
+	// a manual run must never cancel it.
+	mustContain(t, workflow, "cancel-in-progress: ${{ github.event_name == 'push' }}")
 	mustContain(t, workflow, "PRODUCT_PAGES_ORIGIN: https://universal-agent-plugins.com/")
 	mustContain(t, workflow, "NUXT_PUBLIC_REGISTRY_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/")
 

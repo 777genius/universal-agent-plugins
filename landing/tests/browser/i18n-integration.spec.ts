@@ -39,15 +39,17 @@ for (const locale of publishedLocales) {
         await expect(restore.getByRole('heading', { level: 2 })).toHaveText(copy.title!);
         await expect(restore.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(1);
         await expect(restore.locator('.registry-restore__package strong')).toHaveText([
-          'v1.0.0',
-          'v1.0.0',
+          'v0.1.0',
+          'v0.1.0',
         ]);
-        await expect(restore.locator('.registry-restore__locked-version')).toHaveText('v1.0.0');
-        const snippets = restore.locator('.command-snippet pre code');
-        await expect(snippets).toHaveCount(2);
-        await expect(snippets.first()).toContainText('agentplugins add');
-        await expect(snippets.first()).toContainText('github:brunoborges/javaevolved');
-        await expect(snippets.last()).toHaveText('agentplugins install --locked');
+        await expect(restore.locator('.registry-restore__locked-version')).toHaveText('v0.1.0');
+        await expect(restore.locator('.registry-restore__terminal')).toHaveCount(2);
+        await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute(
+          'data-command', 'npx -y universal-agent-plugins install --scope user',
+        );
+        await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute(
+          'data-command', 'npx -y universal-agent-plugins deps import --install',
+        );
         const docsLocale = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
         const guideLabel =
           docsLocale === locale
@@ -55,7 +57,7 @@ for (const locale of publishedLocales) {
             : messages.docs.englishLabel.replace('{label}', copy.guide!);
         await expect(restore.getByRole('link', { name: guideLabel })).toHaveAttribute(
           'href',
-          new RegExp(`/docs/${docsLocale}/use/manage\\.html#restore-project-dependencies$`),
+          new RegExp(`/docs/${docsLocale}/use/manage\\.html#restore-on-another-machine$`),
         );
         if (locale === 'en' || locale === 'ar') {
           await page.setViewportSize({ width: locale === 'ar' ? 390 : 1440, height: 1000 });
@@ -64,7 +66,14 @@ for (const locale of publishedLocales) {
             await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
           ).toBe(true);
           await expect(restore).toHaveCSS('direction', locale === 'ar' ? 'rtl' : 'ltr');
-          await expect(restore.locator('pre').first()).toHaveCSS('direction', 'ltr');
+          // The manifest preview intentionally auto-folds; explicitly open it
+          // before checking its code direction, rather than racing the intro.
+          const manifestButton = restore.getByRole('button', { name: /uap\.toml/i });
+          await manifestButton.click();
+          await expect(restore.locator('.marketing-manifest__popover pre')).toHaveCSS(
+            'direction', 'ltr',
+          );
+          await manifestButton.press('Escape');
           const screenshots = process.env.UAP_LANDING_SCREENSHOT_DIR;
           if (screenshots) {
             mkdirSync(screenshots, { recursive: true });
