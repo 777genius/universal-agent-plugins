@@ -32,6 +32,7 @@ func pmAdversarialCrossTargetForeignSkill(t *testing.T) {
 	foreignBytes := "---\nname: a\ndescription: Independently maintained personal Skill\n---\nNever adopt this foreign content.\n"
 	dependencyWrite(t, foreignSkill, foreignBytes)
 	userData := pmEvolutionSeedData(t, fixture)
+	userDataBefore := freshRestoreFiles(t, userData)
 	geminiSettings := filepath.Join(fixture.clients["gemini"].ConfigRoot, "settings.json")
 	foreignBefore := freshRestoreFiles(t, foreignRoot, geminiSettings, userData)
 	codexBefore := freshRestoreFiles(t, fixture.clients["codex"].ConfigRoot)
@@ -110,6 +111,6 @@ func pmAdversarialCrossTargetForeignSkill(t *testing.T) {
 	if facts["partial"] || facts["not_synced"] || facts.hasMismatch() {
 		t.Fatalf("successful mixed-target retry still reports incomplete installation: %v", facts)
 	}
-	pmArchiveAssertEqual(t, "retry changed unrelated user data", freshRestoreFiles(t, userData),
+	pmArchiveAssertEqual(t, "retry changed unrelated user data", userDataBefore,
 		freshRestoreFiles(t, userData))
 }
