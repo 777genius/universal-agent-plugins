@@ -167,8 +167,11 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
             if not (project_b/".pi/skills/pi-managed/SKILL.md").exists():
                 raise RuntimeError("project B Skill removed with A")
             if (user/"mcp.json").read_text()!=foreign: raise RuntimeError("user Pi MCP changed")
-            if '"foreign"' not in (project_a/".pi/mcp.json").read_text():
+            remaining = json.loads((project_a/".pi/mcp.json").read_text()).get("mcpServers", {})
+            if not isinstance(remaining, dict) or "foreign" not in remaining:
                 raise RuntimeError("foreign project MCP was removed")
+            if "pi-managed" in remaining:
+                raise RuntimeError("owned Pi project MCP survived removal")
             state["stages"].append("A_update_remove_B_and_foreign_preserved")
             state["status"]="passed"
     finally:
