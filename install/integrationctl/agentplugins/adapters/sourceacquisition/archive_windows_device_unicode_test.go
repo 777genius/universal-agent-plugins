@@ -10,7 +10,9 @@ func TestArchiveRefusesUnicodeDeviceAliasesAcrossFormats(t *testing.T) {
 		"publisher/COM¹/skill.md", "publisher/nested/lpt²/readme.md",
 	} {
 		t.Run(name, func(t *testing.T) {
-			entries := []archiveFixtureEntry{{name: name, body: "inert"}}
+			// Keep an otherwise valid Agent Plugins package in the archive. A
+			// negative result must not be caused merely by a missing plugin.json.
+			entries := append(archivePackageEntries(""), archiveFixtureEntry{name: name, body: "inert"})
 			t.Run("ZIP", func(t *testing.T) {
 				archiveRejectLocal(t, archiveFixtureZIP(t, entries, ""))
 			})
