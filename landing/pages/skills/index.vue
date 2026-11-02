@@ -114,15 +114,16 @@ function onTabKeydown(event: KeyboardEvent) {
   selectTab(next, true);
 }
 
-useHead({
-  title: computed(() =>
+// Preserve the published route's locale, canonical identity and structured
+// metadata. Query-specific Skills are client-resolved and must remain noindex.
+usePageSeo(
+  () =>
     skill.value
       ? skill.value.title + ' | Universal Agent Plugins'
       : 'Agent Skills | Universal Agent Plugins',
-  ),
-  // A query-specific detail page is not prerendered with individual content.
-  meta: [{ name: 'robots', content: 'noindex,follow' }],
-});
+  () => t('registryUi.skills.intro'),
+  { translate: false, robots: 'noindex, follow' },
+);
 </script>
 
 <template>
