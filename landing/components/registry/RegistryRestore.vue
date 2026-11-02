@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import monitorImage from '~/assets/images/restore-monitor.png';
-import teammateWallpaper from '~/assets/images/restore-teammate-wallpaper.svg';
+
 import {
   marketingKitName,
   marketingKitVersion,
@@ -10,6 +10,7 @@ import {
 } from '~/data/marketingKitDemo';
 
 const { t } = useI18n();
+const { asset } = useSite();
 const { userRestoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
 const copied = ref<1 | 2 | null>(null);
 let reset: ReturnType<typeof setTimeout> | undefined;
@@ -133,7 +134,7 @@ async function copyCommand(which: 1 | 2) {
           />
           <img
             class="registry-restore__wallpaper"
-            :src="teammateWallpaper"
+            :src="asset('showcase/restore-teammate-wallpaper.svg')"
             alt=""
             width="960"
             height="580"

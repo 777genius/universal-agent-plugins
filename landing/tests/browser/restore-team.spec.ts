@@ -36,7 +36,7 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(section.locator('.registry-restore__monitor')).toHaveCount(2);
       await expect(section.locator('.registry-restore__wallpaper')).toHaveCount(1);
       await expect(section.locator('.registry-restore__wallpaper')).toHaveAttribute(
-        'src', /restore-teammate-wallpaper/,
+        'src', /\/showcase\/restore-teammate-wallpaper\.svg$/,
       );
       if (locale === 'en') await expect(section.locator('.registry-restore__subtitle')).toContainText('before installing');
       await expect(section.locator('.registry-restore__package strong')).toHaveText(['v0.1.0', 'v0.1.0']);
@@ -188,4 +188,11 @@ test('typing is sequential and always copies complete commands', async ({ page, 
   await expect(section.locator('.typed-command__visible')).toHaveText([
     addCommand, 'npx -y universal-agent-plugins deps export', restoreCommand,
   ]);
+});
+
+test('teammate wallpaper is served from the same deployment base', async ({ request }) => {
+  const response = await request.get('./showcase/restore-teammate-wallpaper.svg');
+  expect(response.ok()).toBe(true);
+  expect(response.headers()['content-type']).toMatch(/image\/svg\+xml/);
+  expect(await response.text()).toContain('Purple twilight mountains');
 });
