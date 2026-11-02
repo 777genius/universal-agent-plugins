@@ -70,6 +70,13 @@ proof of a third-party remote service. A *Prepared* delivery is not automaticall
 *Active*. Project UI/reload/trust, configuration precedence and per-client
 restrictions remain as listed above.
 
+The remaining **native tools/call** E2E boundaries are tracked separately for
+[Pi (#623)](https://github.com/777genius/universal-agent-plugins/issues/623)
+and [OpenCode / Claude / Codex (#624)](https://github.com/777genius/universal-agent-plugins/issues/624).
+Neither a configured MCP entry nor a successful `tools/list` proves model-driven
+tool execution. Do not label these calls qualified without observing them through
+the selected real client under a controlled caller.
+
 For releases, explicit project scope first shipped in CLI 0.1.93 and automatic
 project selection for argumentless `install` in 0.1.94. The #520 integration
 postdates the published 0.1.95 tag, so use its exact Git source/CI evidence
