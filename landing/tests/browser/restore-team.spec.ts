@@ -40,7 +40,9 @@ for (const theme of ['dark', 'light'] as const) {
         'src', /\/showcase\/restore-teammate-laptop\.svg$/,
       );
       if (locale === 'en') {
-        await expect(section.locator('.registry-restore__subtitle')).toContainText('Marketing Kit 0.1.0');
+        await expect(section.locator('.registry-restore__subtitle')).toHaveText(
+          'Marketing Kit v0.1.0 example — install it, then share your locked versions.',
+        );
         await expect(section.locator('.registry-restore__handoff-note')).toHaveText(
           "Commit and share both files. Import previews and replaces your teammate's user manifest and lock after confirmation.",
         );
