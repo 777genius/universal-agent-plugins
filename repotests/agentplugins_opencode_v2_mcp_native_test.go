@@ -67,13 +67,8 @@ func TestOpenCodeV2MCPStdioResponder(t *testing.T) {
 		case "ping":
 			result = map[string]any{}
 		case "tools/call":
-			// Only the exact tool emitted by this server may qualify native
-			// model-driven dispatch, never an arbitrary tools/call method.
-			var call struct {
-				Name      string         `json:"name"`
-				Arguments map[string]any `json:"arguments"`
-			}
-			if json.Unmarshal(request.Params, &call) != nil || call.Name != "uap_ping" || len(call.Arguments) != 0 {
+			// Only a valid invocation of the exact advertised tool qualifies.
+			if !validOpenCodeV2MCPCall(request.Params) {
 				os.Exit(2)
 			}
 			result = map[string]any{"content": []any{map[string]string{"type": "text", "text": "uap-pong"}}}
@@ -95,6 +90,49 @@ func TestOpenCodeV2MCPStdioResponder(t *testing.T) {
 		os.Exit(2)
 	}
 	os.Exit(0)
+}
+
+// MCP permits omitting arguments, but an explicitly present member must
+// contain an object. An explicit null must never count as a successful call.
+func validOpenCodeV2MCPCall(params json.RawMessage) bool {
+	var call struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	}
+	if json.Unmarshal(params, &call) != nil || call.Name != "uap_ping" {
+		return false
+	}
+	if len(call.Arguments) == 0 {
+		return true
+	}
+	var args map[string]json.RawMessage
+	return json.Unmarshal(call.Arguments, &args) == nil && args != nil && len(args) == 0
+}
+
+func TestOpenCodeV2MCPCallParameters(t *testing.T) {
+	cases := []struct {
+		name   string
+		params string
+		valid  bool
+	}{
+		{"omitted arguments", `{"name":"uap_ping"}`, true},
+		{"empty object", `{"name":"uap_ping","arguments":{}}`, true},
+		{"explicit null", `{"name":"uap_ping","arguments":null}`, false},
+		{"array", `{"name":"uap_ping","arguments":[]}`, false},
+		{"string", `{"name":"uap_ping","arguments":"{}"}`, false},
+		{"nonempty object", `{"name":"uap_ping","arguments":{"unexpected":1}}`, false},
+		{"wrong tool", `{"name":"other","arguments":{}}`, false},
+		{"missing tool", `{"arguments":{}}`, false},
+		{"invalid params", `null`, false},
+		{"malformed JSON", `{"name":`, false},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			if got := validOpenCodeV2MCPCall(json.RawMessage(test.params)); got != test.valid {
+				t.Fatalf("MCP call validation = %t, want %t", got, test.valid)
+			}
+		})
+	}
 }
 
 func appendOpenCodeV2MCPEvent(path, method string) error {
