@@ -55,9 +55,14 @@ Our [installer automation principle](docs/INSTALLER_AUTOMATION_PRINCIPLE.md) is 
 [Browse plugins](https://universal-agent-plugins.com/plugins/)
 
 <a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
-<img width="423" height="234" alt="image" src="https://github.com/user-attachments/assets/3f8786ea-bb3a-4869-aabe-99b245364b3d" />
-<img width="1079" height="584" alt="image" src="https://github.com/user-attachments/assets/898d66b9-3942-4725-9a26-ec2fe01ad7c0" />
-<img width="669" height="125" alt="image" src="https://github.com/user-attachments/assets/3bd5d39f-5b35-4475-8b0c-94b85e992d29" />
+<details>
+<summary>More interface screenshots</summary>
+
+<img width="423" height="234" alt="Additional Universal Agent Plugins interface screenshot 1" src="https://github.com/user-attachments/assets/3f8786ea-bb3a-4869-aabe-99b245364b3d" />
+<img width="1079" height="584" alt="Additional Universal Agent Plugins interface screenshot 2" src="https://github.com/user-attachments/assets/898d66b9-3942-4725-9a26-ec2fe01ad7c0" />
+<img width="669" height="125" alt="Additional Universal Agent Plugins interface screenshot 3" src="https://github.com/user-attachments/assets/3bd5d39f-5b35-4475-8b0c-94b85e992d29" />
+
+</details>
 
 ## Use plugins
 
@@ -84,7 +89,8 @@ discovery (`manage discover`) and native Pi extensions. See the
 [Pi compatibility](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html#pi-native-extensions).
 npm and Homebrew versions may lag; check `agentplugins version` (or
 `npx universal-agent-plugins version`) before relying on release-specific
-behavior. Use the native installer for the verified release. Automatic project
+behavior. Use the native installer for the verified release. Changes in
+`main` are **not** automatically available in an older published CLI. Automatic project
 selection requires 0.1.94; explicit project-scope commands work since 0.1.93.
 
 <details>
@@ -160,8 +166,9 @@ selected agent.
 
 - installs one plugin in one or several supported agents;
 - updates, repairs, and removes only files it manages;
-- converts the same Agent Plugins 1.0 package into each agent's native format;
-- keeps activation and OAuth prompts visible to you.
+- delivers only the package components supported by each selected client;
+- reports unsupported components, remaining activation, sign-in and reload steps
+  instead of treating preparation as verified runtime execution.
 
 ## Restore your plugin setup
 
@@ -298,9 +305,15 @@ The CLI has adapters for:
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> Grok Build | native skills/MCP plugin; Grok CLI install and verification when available |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/kimi-dark.svg"><img src="landing/public/client-icons/kimi.svg" width="24" height="24" alt="" align="middle"></picture> Kimi Code | native skills/MCP plugin and managed user registry; reload required |
 | <img src="landing/public/client-icons/qoder.svg" width="24" height="24" alt="" align="middle"> Qoder | native skills/MCP plugin; Qoder CLI install and verification when available |
-| <img src="landing/public/client-icons/pi.svg" width="24" height="24" alt="" align="middle"> Pi | native Pi extensions only; user-scope installation and reload required |
+| <img src="landing/public/client-icons/pi.svg" width="24" height="24" alt="" align="middle"> Pi | native extensions in released user scope; project Skills/MCP are separately qualified in source builds |
 
-Pi installs packages that declare a [native Pi extension](docs/PI_NATIVE_EXTENSION_CONTRACT.md). Run `npx universal-agent-plugins add ./my-plugin --target pi`, then reload resources or restart Pi. The Pi adapter supports native extensions only; portable skills and MCP projection are outside its current scope.
+In the verified 0.1.95 user-scope release, Pi installs packages declaring a
+[native Pi extension](docs/PI_NATIVE_EXTENSION_CONTRACT.md). Run
+`npx universal-agent-plugins add ./my-plugin --target pi`, then reload or
+restart Pi. Newer project-scope Pi Extensions, Skills and MCP preparation
+(and a scripted local-model tool-call test) are documented in the
+[project support evidence](docs/PROJECT_CLIENT_SUPPORT.md); do not infer
+that these source-only qualifications ship in 0.1.95 or prove vendor login.
 
 Grok Build, Kimi Code, and Qoder accept automatic user-scope installation of portable skills and MCP servers through `agentplugins add ./my-plugin --target grok,kimi,qoder`. All three adapters support stdio and Streamable HTTP MCP. The CLI verifies native registration and supports update and removal. A running client still needs a reload, and MCP authentication/connectivity is verified in that client.
 
