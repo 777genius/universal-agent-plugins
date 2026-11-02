@@ -40,7 +40,8 @@ export function skillRepositoryUrl(skill: SkillListing): string | undefined {
   if (skill.source.kind === 'github' && repository &&
       /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repository))
     return `https://github.com/${repository}`;
-  return legacySource(skill)?.kind === 'github' ? legacySource(skill)?.url : undefined;
+  const source = legacySource(skill);
+  return source?.kind === 'github' ? source.url : undefined;
 }
 
 type LegacySource = { kind: 'github' | 'publisher'; url: string };
@@ -60,7 +61,10 @@ function legacySource(skill: SkillListing): LegacySource | undefined {
   const identity = catalogSourceIdentity(skill.id);
   if (!identity) return undefined;
   const github = githubSource(identity.raw);
-  if (github) return { kind: 'github', url: github };
+  // A plain owner/repository should already have kind=github upstream. A
+  // contradictory unsupported-source DTO must not gain install authority.
+  if (github && !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(identity.raw))
+    return { kind: 'github', url: github };
   const publisher = publisherOrigin(identity.raw);
   return publisher ? { kind: 'publisher', url: publisher } : undefined;
 }
@@ -172,26 +176,9 @@ export function skillPublisherUrl(skill: SkillListing): string | undefined {
   if (legacy) return legacy;
   const compatible = legacySource(skill);
   if (compatible?.kind === 'publisher') return compatible.url;
-  if (skill.source.kind !== 'external' || skill.availability !== 'unverified') return undefined;
-  const raw = skill.source.url;
-  try {
-    const url = new URL(raw);
-    const host = url.hostname;
-    if (
-      url.protocol !== 'https:' ||
-      url.host !== host ||
-      url.username ||
-      url.password ||
-      url.pathname !== '/' ||
-      url.search ||
-      url.hash ||
-      !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(host) ||
-      raw !== `https://${host}`
-    ) return undefined;
-    return raw;
-  } catch {
-    return undefined;
-  }
+  return skill.source.kind === 'external' && skill.availability === 'unverified'
+    ? publisherOrigin(skill.source.url)
+    : undefined;
 }
 
 /** Derive a source solely from a bounded, explicit catalog identity. */
@@ -231,7 +218,7 @@ function supportedSkillName(name: string): boolean {
 export function skillNeedsManualSelection(skill: SkillListing): boolean {
   return Boolean(
     skillRepositoryUrl(skill) &&
-      (!('availability' in skill) || skill.availability !== 'unsupported-source' ||
+      (skill.availability !== 'unsupported-source' ||
         legacySource(skill)?.kind === 'github') &&
       !supportedSkillName(skill.skillNameHint),
   );
