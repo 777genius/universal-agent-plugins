@@ -10,10 +10,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 const codexForeignProjectNamespace = "mcp__foreign_fixture"
@@ -423,6 +426,42 @@ func codexProjectMCPEventCount(t *testing.T, path string) (int, []byte) {
 	return calls, body
 }
 
+// Only UAP-owned MCP entries may change. The native TOML adapter preserves
+// foreign values and comments, but deliberately does not promise that editing
+// and later removing sections reconstructs every whitespace byte of the file.
+func codexAssertForeignProjectMCP(t *testing.T, path, original string, managed bool) {
+	t.Helper()
+	current, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const foreignComment = "# foreign MCP belongs to the user, not UAP"
+	if !bytes.Contains(current, []byte(foreignComment)) {
+		t.Fatal("Codex project configuration lost foreign MCP ownership comment")
+	}
+	var before, after map[string]any
+	if err := toml.Unmarshal([]byte(original), &before); err != nil {
+		t.Fatal(err)
+	}
+	if err := toml.Unmarshal(current, &after); err != nil {
+		t.Fatal(err)
+	}
+	servers, ok := after["mcp_servers"].(map[string]any)
+	if !ok {
+		t.Fatal("Codex project configuration lost MCP servers table")
+	}
+	for _, name := range []string{"default", "explicit"} {
+		_, present := servers[name]
+		if present != managed {
+			t.Fatalf("UAP-owned Codex MCP entry %q present=%t, want=%t", name, present, managed)
+		}
+		delete(servers, name)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("Codex project configuration changed foreign TOML values")
+	}
+}
+
 func TestAgentpluginsCodexNativeProjectModelForeignMCP(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_CODEX_PROJECT_NATIVE_E2E") != "1" {
 		t.Skip("source-only pinned Codex project model tool-call test")
@@ -458,7 +497,6 @@ func TestAgentpluginsCodexNativeProjectModelForeignMCP(t *testing.T) {
 	foreign := fmt.Sprintf("# foreign MCP belongs to the user, not UAP\n[mcp_servers.foreign_fixture]\ncommand = %q\nargs = [\"-test.run=^TestOpenCodeV2MCPStdioResponder$\"]\n[mcp_servers.foreign_fixture.env]\nUAP_OPENCODE_V2_MCP_HELPER = \"1\"\nUAP_OPENCODE_V2_MCP_EVENTS = %q\n", executable, events)
 	projectConfig := filepath.Join(f.base.Project, ".codex", "config.toml")
 	nativeWrite(t, projectConfig, []byte(foreign), 0600)
-	foreignHash := nativeSHA(t, projectConfig)
 	f.base.writePackage(t, "A", "1.0.0")
 
 	stages := map[string]nativeStage{
@@ -480,10 +518,7 @@ func TestAgentpluginsCodexNativeProjectModelForeignMCP(t *testing.T) {
 	added := f.run(t, "codex-model-foreign-add", "add", f.base.Package, "--no-save")
 	codexNativeProjectPrepared(t, added)
 	codexProjectMCPBinding(t, f)
-	current, err := os.ReadFile(projectConfig)
-	if err != nil || !bytes.Contains(current, []byte("[mcp_servers.foreign_fixture]")) || !bytes.Contains(current, []byte(executable)) {
-		t.Fatal("UAP add lost original foreign project MCP")
-	}
+	codexAssertForeignProjectMCP(t, projectConfig, foreign, true)
 	stages["install_preserved_foreign"] = nativeStage{Status: "passed", Reason: "project add retained foreign project MCP alongside UAP-managed MCP, with user/B isolation"}
 
 	codexProjectModelSession(t, f, model, f.base.Project, "codex-model-before-remove-A", true, true)
@@ -499,11 +534,9 @@ func TestAgentpluginsCodexNativeProjectModelForeignMCP(t *testing.T) {
 	}
 	stages["project_B_no_leak"] = nativeStage{Status: "passed", Reason: "trusted B model turn did not discover or execute foreign project A MCP"}
 	f.run(t, "codex-model-foreign-remove", "remove", "native-proof")
-	if got := nativeSHA(t, projectConfig); got != foreignHash {
-		t.Fatal("UAP removal did not restore exact foreign project MCP TOML bytes")
-	}
+	codexAssertForeignProjectMCP(t, projectConfig, foreign, false)
 	f.requireForeign(t)
-	stages["remove_foreign_retention"] = nativeStage{Status: "passed", Reason: "remove restored byte-identical foreign MCP config without modifying user or project B"}
+	stages["remove_foreign_retention"] = nativeStage{Status: "passed", Reason: "remove preserved exact foreign TOML values and original comment while removing only owned entries; user and B unchanged"}
 
 	codexProjectModelSession(t, f, model, f.base.Project, "codex-model-after-remove-A", true, false)
 	afterCalls, _ := codexProjectMCPEventCount(t, events)
