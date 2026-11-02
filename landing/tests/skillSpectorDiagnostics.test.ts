@@ -33,6 +33,11 @@ describe('SkillSpector AI diagnostic export', () => {
       plugin_states: [
         ...structuredClone(manifest.plugin_states),
         {
+          ...structuredClone(manifest.plugin_states[0]),
+          id: 'old-revision',
+          revision: 'f'.repeat(40),
+        },
+        {
           id: 'unrelated',
           repository: subject.repository,
           plugin_path: 'plugins/unrelated',
@@ -65,6 +70,7 @@ describe('SkillSpector AI diagnostic export', () => {
     assert.ok(exported.source_states.every((state: { plugin_path: string }) =>
       state.plugin_path === subject.path));
     assert.ok(!JSON.stringify(exported).includes('plugins/unrelated'));
+    assert.ok(!JSON.stringify(exported).includes('old-revision'));
   });
 
   it('does not invent a scan, finding, source or timestamp when a report is unavailable', () => {
@@ -123,6 +129,33 @@ describe('SkillSpector AI diagnostic export', () => {
       'example/tools/CaseSensitive',
     ]);
     assert.deepEqual(diagnostic.records, []);
+    const differentlyCased: SkillSpectorSubject = {
+      kind: 'skill',
+      repository: 'Example/TOOLS',
+      name: 'casesensitive',
+    };
+    const wrongCaseReport = {
+      ...structuredClone(manifest),
+      records: [],
+      repository_aliases: [],
+      source_states: [{
+        ...state('example/tools/CaseSensitive'),
+        state: 'unsupported',
+      }],
+    } as SkillSpectorDisplayReport;
+    const correctAssessment = skillSpectorAssessment(wrongCaseReport, differentlyCased);
+    assert.equal(correctAssessment.status, 'notChecked');
+    const wrongCaseExport = JSON.parse(serializeSkillSpectorDiagnostics({
+      name: differentlyCased.name,
+      scope: 'skill',
+      subject: differentlyCased,
+      report: wrongCaseReport,
+      reportStatus: 'ready',
+      displayStatus: correctAssessment.status,
+      assessment: correctAssessment,
+    }));
+    assert.deepEqual(wrongCaseExport.source_states, []);
+    assert.equal(wrongCaseExport.listing.displayed_status, 'notChecked');
   });
 
   it('identifies unsupported external Skills without querying an unrelated repository', () => {
