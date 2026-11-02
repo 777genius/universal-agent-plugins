@@ -452,7 +452,13 @@ test('legacy source variants produce CLI commands without using directory pages 
       raw,
     );
   }
-  const publisher = unknown('https://open.feishu.cn', 'lark-mail');
+  const scoped = unknown('https://publisher.com/scoped/skills', 'review');
+  assert.equal(skillPublisherUrl(scoped), 'https://publisher.com/scoped/skills');
+  assert.equal(
+    skillInstallCommand(scoped),
+    'npx universal-agent-plugins@latest skills add https://publisher.com/scoped/skills --skill review',
+  );
+    const publisher = unknown('https://open.feishu.cn', 'lark-mail');
   assert.equal(skillPublisherUrl(publisher), 'https://open.feishu.cn');
   assert.equal(
     skillInstallCommand(publisher),
@@ -470,6 +476,9 @@ test('legacy source variants produce CLI commands without using directory pages 
     'https://evil.com/owner/repo', 'https://www.skills.sh/site/owner/repo',
     'https://localhost', 'https://127.0.0.1', 'https://xn--a.example',
     'https://publisher.internal', 'owner/repo/tree/main/$hack',
+    'https://publisher.com/scoped/../private',
+    'https://publisher.com/scoped//bad',
+    'https://publisher.com/scoped/?token=1',
     'https://raw.githubusercontent.com/owner/repo/main/secret.sh',
     'https://raw.githubusercontent.com/owner/repo/main/../SKILL.md',
     'https://raw.githubusercontent.com/owner/repo/main/SKILL.md?ref=main',

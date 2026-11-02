@@ -65,7 +65,7 @@ function legacySource(skill: SkillListing): LegacySource | undefined {
   // contradictory unsupported-source DTO must not gain install authority.
   if (github && !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(identity.raw))
     return { kind: 'github', url: github };
-  const publisher = publisherOrigin(identity.raw);
+  const publisher = publisherBase(identity.raw);
   return publisher ? { kind: 'publisher', url: publisher } : undefined;
 }
 
@@ -124,19 +124,23 @@ function githubSource(raw: string): string | undefined {
   return `${base}/${parts.slice(2).join('/')}`;
 }
 
-/** HTTPS well-known publisher origin, never a catalog page or private host. */
-function publisherOrigin(raw: string): string | undefined {
+/** Canonical HTTPS well-known publisher base, including explicit scoped bases. */
+function publisherBase(raw: string): string | undefined {
   try {
     const url = new URL(raw);
     const host = url.hostname;
+    const scope = url.pathname === '/' ? '' : url.pathname;
     if (url.protocol !== 'https:' || url.host !== host ||
-        url.username || url.password || url.pathname !== '/' ||
-        url.search || url.hash || raw !== `https://${host}` ||
+        url.username || url.password || url.search || url.hash ||
+        raw !== `https://${host}${scope}` ||
         !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(host) ||
         /(?:^|\.)xn--/.test(host) ||
         /\.(?:local|localhost|internal|test|example|invalid)$/.test(host) ||
         host === 'skills.sh' || host === 'www.skills.sh' ||
-        host === 'github.com' || host === 'www.github.com') return undefined;
+        host === 'github.com' || host === 'www.github.com' ||
+        (scope !== '' && (!/^\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*$/.test(scope) ||
+          scope.split('/').some(part => part === '.' || part === '..'))))
+      return undefined;
     return raw;
   } catch {
     return undefined;
@@ -188,7 +192,7 @@ export function skillPublisherUrl(skill: SkillListing): string | undefined {
   const compatible = legacySource(skill);
   if (compatible?.kind === 'publisher') return compatible.url;
   return skill.source.kind === 'external' && skill.availability === 'unverified'
-    ? publisherOrigin(skill.source.url)
+    ? publisherBase(skill.source.url)
     : undefined;
 }
 
@@ -201,7 +205,7 @@ export function skillIdentityFromId(id: string): SkillListing['source'] | undefi
     const parts = new URL(repository).pathname.split('/').filter(Boolean);
     return { kind: 'github', repository: `${parts[0]}/${parts[1]}`, url: repository };
   }
-  const publisher = publisherOrigin(
+  const publisher = publisherBase(
     /^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$/.test(parsed.raw)
       ? `https://${parsed.raw.toLowerCase()}`
       : parsed.raw,
