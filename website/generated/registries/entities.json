@@ -728,8 +728,8 @@
     "kind": "page",
     "surface": "home",
     "localeStrategy": "mirrored",
-    "title": "Agent Plugins Documentation",
-    "summary": "Public documentation for Agent Plugins.",
+    "title": "Universal Agent Plugins Documentation",
+    "summary": "Official Universal Agent Plugins documentation: install, update and repair Skills and MCP plugins, check client compatibility, and build portable Agent Plugins 1.0 packages.",
     "stability": "public-stable",
     "maturity": "stable",
     "publicVisibility": "public",
@@ -777,7 +777,7 @@
     "pathFr": "/fr/",
     "relatedIds": [],
     "searchTerms": [
-      "Agent Plugins Documentation"
+      "Universal Agent Plugins Documentation"
     ]
   },
   {
