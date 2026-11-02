@@ -345,7 +345,7 @@ function catalogHarness() {
     await new Promise<void>((resolve) => setImmediate(resolve));
     await nextTick();
   };
-  async function respond(index: number, count = 1, page = 0, status = 200, unavailable = 0) {
+  async function respond(index: number, count = 1, page = 0, status = 200, unavailable = 0, more = page === 0) {
     requests[index]!.resolve({
       ok: status === 200,
       json: async () => ({
@@ -358,7 +358,7 @@ function catalogHarness() {
             }
           : { ...skill, id: `${skill.id}-${page}-${i}` }),
         page,
-        hasMore: page === 0,
+        hasMore: more,
         view: 'popular',
         cache: { status: 'stale', fetchedAt: '2026-10-24T10:00:00Z' },
       }),
@@ -489,7 +489,7 @@ test('installable filtering skips unsupported records and bounds upstream pagina
 test('empty unsupported pages stop at a bounded hop limit until the next user action', async () => {
   const catalog = catalogHarness();
   for (let page = 0; page < 5; page++) {
-    await catalog.respond(page, 200, page, 200, 200);
+    await catalog.respond(page, 200, page, 200, 200, true);
   }
   assert.equal(catalog.requests.length, 5);
   assert.equal(catalog.state.displayed.value.length, 0);
