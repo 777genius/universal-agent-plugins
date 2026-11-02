@@ -8,6 +8,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 )
 
 func (s *skillsCatalogSession) reviewRefusal(err error) error {
@@ -19,6 +20,12 @@ func (s *skillsCatalogSession) reviewRefusal(err error) error {
 	case errors.Is(err, installer.ErrAssessmentRejected):
 		refusal.Code = "SECURITY_REVIEW_BLOCKED"
 		refusal.Message = "Automated security assessment blocked this selection. Remove this Skill or inspect its security findings before reviewing again."
+	case errors.Is(err, nativeconfig.ErrCollision), errors.Is(err, nativeconfig.ErrNotOwned):
+		refusal.Code = "FOREIGN_DESTINATION"
+		refusal.Message = "A selected client already has an entry at this destination that UAP does not own or can no longer verify. Inspect the existing entry, rename or remove it yourself, then prepare a new review. UAP will not overwrite it."
+	case errors.Is(err, installer.ErrManagedSkillChanged):
+		refusal.Code = "MANAGED_SKILL_CHANGED"
+		refusal.Message = "A previously installed Skill was edited outside UAP. Preserve or review those edits and prepare a new review before changing the installation."
 	case errors.Is(err, installer.ErrTargetFactsUnavailable), errors.Is(err, installer.ErrCompatibilityUnavailable):
 		refusal.Code = "TARGET_UNAVAILABLE"
 		refusal.Message = "A selected client's configuration or compatibility could not be verified. Choose another target or correct its configuration before reviewing again."

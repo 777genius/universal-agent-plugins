@@ -152,9 +152,9 @@ func readDependencyTransferFile(path string) (dependencyTransferFile, error) {
 	if !info.Mode().IsRegular() {
 		return file, fmt.Errorf("%s must be a regular non-symlink file", path)
 	}
-	limit := maxDependencyManifestBytes
-	if filepath.Base(path) == "uap.lock" {
-		limit = maxDependencyLockBytes
+	limit, err := dependencyDocumentLimit(path)
+	if err != nil {
+		return file, err
 	}
 	file.body, err = readDependencyDocument(path, limit)
 	if err != nil {

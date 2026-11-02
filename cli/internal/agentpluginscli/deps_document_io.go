@@ -16,6 +16,17 @@ const (
 
 // readDependencyDocument reads a stable regular file with a hard byte ceiling.
 // Never follow an agreement symlink or drain a FIFO supplied by another actor.
+func dependencyDocumentLimit(path string) (int64, error) {
+	switch filepath.Base(path) {
+	case "uap.toml":
+		return maxDependencyManifestBytes, nil
+	case "uap.lock":
+		return maxDependencyLockBytes, nil
+	default:
+		return 0, fmt.Errorf("unsupported dependency agreement file")
+	}
+}
+
 func readDependencyDocument(path string, limit int64) ([]byte, error) {
 	before, err := os.Lstat(path)
 	if err != nil {

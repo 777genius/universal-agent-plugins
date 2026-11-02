@@ -76,6 +76,35 @@ func TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized(t *testing
 	}
 }
 
+// Reviewed intent reads and writes must honor the same admission policy as
+// initial CLI loading, even when a file is replaced during an operation.
+func TestDependencyIntentFilesRejectOversizedWriteWithoutMutation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "uap.lock")
+	original := []byte("pinned authority; do not replace")
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := dependencyIntentFiles{}
+	if err := files.Write(path, bytes.Repeat([]byte("a"), int(maxDependencyLockBytes)+1)); err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("oversized new lock was published: %v", err)
+	}
+	after, err := os.Stat(path)
+	if err != nil || !os.SameFile(before, after) || !before.ModTime().Equal(after.ModTime()) {
+		t.Fatalf("failed write changed existing lock metadata: %v", err)
+	}
+	got, err := files.Read(path)
+	if err != nil || !bytes.Equal(got, original) {
+		t.Fatalf("failed write altered lock bytes: %v", err)
+	}
+	if _, err := files.Read(filepath.Join(t.TempDir(), "unexpected.json")); err == nil || !strings.Contains(err.Error(), "unsupported") {
+		t.Fatalf("unknown authority filename accepted: %v", err)
+	}
+}
+
 func TestDependencyAgreementReaderRejectsSymlinkAndKeepsTarget(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "foreign.toml")
