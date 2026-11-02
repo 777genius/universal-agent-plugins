@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 )
 
 type duplicateMode uint8
@@ -14,6 +15,9 @@ const (
 	duplicateRecord duplicateMode = iota
 	duplicateRoot
 	duplicateAll
+	// Reject duplicate spellings that encoding/json v1 resolves to the same
+	// struct field through case-insensitive matching. Used for portable locks.
+	duplicateAllFold
 	// Record only duplicate keys that influence the Agent Plugins core.
 	// Unknown top-level members and unimplemented extension payloads stay opaque.
 	duplicatePluginRecord
@@ -110,8 +114,12 @@ func (s *jsonScanner) value(token json.Token, keys []string, depth int) error {
 			if !ok {
 				return fmt.Errorf("JSON object key must be a string")
 			}
-			if seen[key] {
-				if s.mode == duplicateAll || (s.mode == duplicateRoot && depth == 1) {
+			identity := key
+			if s.mode == duplicateAllFold {
+				identity = strings.ToLower(key)
+			}
+			if seen[identity] {
+				if s.mode == duplicateAll || s.mode == duplicateAllFold || (s.mode == duplicateRoot && depth == 1) {
 					return fmt.Errorf("JSON object contains duplicate field %q", key)
 				}
 				if s.mode == duplicateRecord || (s.mode == duplicatePluginRecord && observedPluginDuplicate(keys)) {
@@ -121,7 +129,7 @@ func (s *jsonScanner) value(token json.Token, keys []string, depth int) error {
 					s.duplicates = append(s.duplicates, duplicate{keys: append(append([]string(nil), keys...), key)})
 				}
 			}
-			seen[key] = true
+			seen[identity] = true
 			if s.skipRootValues {
 				if err := s.ctx.Err(); err != nil {
 					return err
