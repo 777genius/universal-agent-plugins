@@ -496,7 +496,7 @@ describe('SkillSpector v3 exact producer contract', () => {
   it('does not downgrade an otherwise current v3 plugin because a legacy skill is retained', () => {
     const report = display();
     report.records[0]!.freshness = 'historical';
-    report.records[0]!.legacy_format = true;
+    report.records[0]!.legacy_format = 2;
     assert.equal(isLegacySkillSpectorReport(report), false);
     const result = skillSpectorAssessment(report, subject);
     assert.equal(result.status, 'incomplete');
