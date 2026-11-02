@@ -96,6 +96,32 @@ jobs:
         run: python -B -m unittest discover -s scripts -p test_package_manager_ci_policy.py
       - name: Execute the full portable catalog
         run: python -B scripts/package-manager-e2e.py --output "${{ runner.temp }}/package-manager-e2e"
+      - name: Verify actual process crash and durable transaction recovery
+        working-directory: install/integrationctl/agentplugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -json -count=1 -timeout=5m ./transaction -run TestDirectoryProcessCrashAfterActivationRecovers | python -c '
+          import json, sys
+          events = [json.loads(line) for line in sys.stdin if line.strip()]
+          pkg = "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
+          name = "TestDirectoryProcessCrashAfterActivationRecovers"
+          matches = lambda action: any(
+              e.get("Package") == pkg and e.get("Test") == name and e.get("Action") == action
+              for e in events
+          )
+          package_pass = any(
+              e.get("Package") == pkg and e.get("Action") == "pass" and "Test" not in e
+              for e in events
+          )
+          if not (matches("run") and matches("pass") and package_pass) or matches("fail") or matches("skip"):
+              for e in events:
+                  if e.get("Action") == "output" and e.get("Package") == pkg:
+                      sys.stderr.write(e.get("Output", ""))
+              print("Exact post-write OS crash/recovery oracle did not run and pass.", file=sys.stderr)
+              sys.exit(1)
+          print("Confirmed actual crash/recovery run+pass events, package pass, no skip: " + name)
+          '
       - name: Verify immutable Git EOL bytes across platforms
         working-directory: install/integrationctl/agentplugins
         shell: bash
