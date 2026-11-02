@@ -69,16 +69,15 @@ export function usePluginInstallSelection(
       const initial =
         availableClients.value.find((client) => client.id === 'cursor') ??
         availableClients.value[0];
-      targets.value = saved.scope === 'project' && isReviewedMarketingKit(plugin())
-        ? ['claude', 'codex', 'gemini']
-        : saved.targetIds.length
-          ? (saved.targetIds as ClientID[])
-          : initial
-            ? [initial.id]
-            : [];
+      targets.value = saved.targetIds.length
+        ? (saved.targetIds as ClientID[])
+        : initial
+          ? [initial.id]
+          : [];
+      // Preserve explicit scope intent; a now-unsupported project never
+      // silently falls back to modifying the user's computer.
       scope.value = saved.scope;
-      autoDetect.value = saved.scope === 'project' && isReviewedMarketingKit(plugin())
-        ? false : saved.autoDetect;
+      autoDetect.value = saved.autoDetect;
       installExpanded.value = saved.expanded;
     },
     { immediate: true, flush: 'sync' },
@@ -126,18 +125,7 @@ export function usePluginInstallSelection(
     if (value === 'project' && !projectAvailable.value) return;
     choicePending = true;
     scope.value = value;
-    if (isReviewedMarketingKit(plugin())) {
-      // The project variant is a declarative manifest for three named clients,
-      // never the saved one-client picker (often Cursor) or implicit discovery.
-      if (value === 'project') {
-        targets.value = ['claude', 'codex', 'gemini'];
-        autoDetect.value = false;
-      } else {
-        autoDetect.value = true; // Real auto-detection happens in the CLI, not the browser.
-      }
-    } else if (value === 'project') {
-      autoDetect.value = false;
-    }
+    if (value === 'project') autoDetect.value = false;
     saveUnboundChoice();
   }
   function toggleInstall() {
