@@ -58,7 +58,7 @@ class EvidenceAcceptanceTests(unittest.TestCase):
                             if not (event["Action"] == "run" and event.get("Test") == name)])
 
     def test_zero_matched_tests_is_not_success(self):
-        with self.assertRaisesRegex(ValueError, "missing="):
+        with self.assertRaisesRegex(ValueError, "missing_pass="):
             self.check(self.events()[-1:])
 
     def test_parent_pass_does_not_replace_missing_leaf(self):
