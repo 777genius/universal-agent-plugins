@@ -166,9 +166,18 @@ class NativeMatrixTests(unittest.TestCase):
         v1_pattern, v1_required = matrix.select_native_tests("opencode", project_components=True)
         v2_pattern, v2_required = matrix.select_native_tests(
             "opencode", project_components=True, opencode_generation="v2")
-        self.assertEqual(v2_required, {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"})
+        self.assertEqual(v2_required, {
+            "TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle",
+            "TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake",
+        })
         self.assertIn("TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle", v2_pattern)
-        self.assertEqual(v1_required, matrix.REQUIRED_TESTS["opencode"] | v2_required)
+        self.assertIn("TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake", v2_pattern)
+        self.assertEqual(v1_required, matrix.REQUIRED_TESTS["opencode"] | matrix.PROJECT_TESTS["opencode"])
+        self.assertNotIn("TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake", v1_pattern)
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual({name for name in declared if re.search(v2_pattern, name)}, v2_required)
         self.assertNotEqual(v1_pattern, v2_pattern)
         for target, pin in matrix.OPENCODE_V2_PINS.items():
             self.assertIn(target, matrix.PINS)

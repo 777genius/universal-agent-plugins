@@ -94,13 +94,18 @@ PROJECT_TESTS = {
     "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
 }
 
+# V2 retains the reviewed A/B lifecycle, then independently proves a real
+# stdio MCP initialize + tools/list path without using vendor credentials.
+# V1 stays on its exact historical selectors and client pin.
+OPENCODE_V2_PROJECT_TESTS = PROJECT_TESTS["opencode"] | {"TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake"}
+
 
 def select_native_tests(client, project_components=False, released=False, opencode_generation="v1"):
     """Keep current-source project proof separate from released user evidence."""
     if opencode_generation == "v2":
         if client != "opencode" or not project_components or released:
             raise ValueError("V2 qualification requires current-source OpenCode project scope")
-        required = PROJECT_TESTS["opencode"]
+        required = OPENCODE_V2_PROJECT_TESTS
         return "^(?:" + "|".join(re.escape(name) for name in sorted(required)) + ")$", required
     if opencode_generation != "v1":
         raise ValueError("unknown OpenCode generation")
