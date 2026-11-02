@@ -58,9 +58,7 @@ const targetOptions = computed(() =>
     })(),
   })),
 );
-const marketingKitProject = computed(() => isReviewedMarketingKit(props.plugin) && projectAvailable.value && scope.value === 'project');
 const commands = computed(() =>
-  !marketingKitProject.value &&
   (scope.value !== 'project' || !autoDetect.value) &&
   props.plugin.installable &&
   props.plugin.discovery?.availability !== 'unavailable' &&
@@ -177,8 +175,7 @@ const vendorInstall = computed(() =>
             :always-show="isReviewedMarketingKit(plugin)"
         @update:model-value="updateScope"
       />
-      <MarketingKitProjectInstall v-if="marketingKitProject" />
-      <div v-else class="install-command-row">
+      <div class="install-command-row">
         <div class="target-select">
           <span>{{ t('registryUi.install.agents') }}</span
           ><AppMultiSelect
@@ -199,7 +196,7 @@ const vendorInstall = computed(() =>
         />
       </div>
       <InstallOutcome
-        v-if="!marketingKitProject && commands && !autoDetect && expectedSource"
+        v-if="commands && !autoDetect && expectedSource"
         :distribution="expectedSource"
         :targets="targets"
       />
@@ -254,7 +251,7 @@ const vendorInstall = computed(() =>
       }}
     </p>
     <p
-      v-else-if="!marketingKitProject && !unavailableDiscoveryReason && !autoDetect && !hasCompleteSource"
+      v-else-if="!unavailableDiscoveryReason && !autoDetect && !hasCompleteSource"
       class="install-panel__notice"
       role="status"
     >
@@ -279,7 +276,7 @@ const vendorInstall = computed(() =>
     </p>
     <p
       v-if="
-        !marketingKitProject && !unavailableDiscoveryReason && !autoDetect && resolution.fallback_reason && canUseSource
+        !unavailableDiscoveryReason && !autoDetect && resolution.fallback_reason && canUseSource
       "
       class="install-panel__notice"
     >
@@ -291,7 +288,7 @@ const vendorInstall = computed(() =>
       {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
     </p>
     <p
-      v-else-if="!marketingKitProject && !unavailableDiscoveryReason && !autoDetect && !hasCompleteSource && canUseSource"
+      v-else-if="!unavailableDiscoveryReason && !autoDetect && !hasCompleteSource && canUseSource"
       class="install-panel__notice"
     >
       <strong>{{ t('registryUi.install.noSingleSourceServesThisTargetSet') }}</strong>
