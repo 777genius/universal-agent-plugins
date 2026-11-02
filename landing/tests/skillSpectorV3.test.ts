@@ -6,7 +6,7 @@ import {
   decodeSkillSpectorShardV3,
 } from '../utils/skillSpectorV3.ts';
 import { createSkillSpectorClient } from '../utils/skillSpectorCatalog.ts';
-import { skillSpectorAssessment } from '../utils/skillSpector.ts';
+import { skillSpectorAssessment, isLegacySkillSpectorReport } from '../utils/skillSpector.ts';
 import type { SkillSpectorManifestV3, SkillSpectorRecord } from '../types/skillSpector.ts';
 const root = new URL('./fixtures/skillspector-v3/', import.meta.url);
 const manifest = JSON.parse(
@@ -493,6 +493,19 @@ describe('SkillSpector v3 exact producer contract', () => {
       ).length,
     );
   });
+  it('does not downgrade an otherwise current v3 plugin because a legacy skill is retained', () => {
+    const report = display();
+    report.records[0]!.freshness = 'historical';
+    report.records[0]!.legacy_format = true;
+    assert.equal(isLegacySkillSpectorReport(report), false);
+    const result = skillSpectorAssessment(report, subject);
+    assert.equal(result.status, 'incomplete');
+    assert.equal(result.outcomes!.historical, 1);
+    assert.equal(result.outcomes!.complete + result.outcomes!.limited, 12);
+    const legacyReport = { ...report, schema_version: 2 } as unknown as typeof report;
+    assert.equal(isLegacySkillSpectorReport(legacyReport), true);
+  });
+
   it('keeps current coverage visible beside historical evidence without upgrading old findings', () => {
     const report = display();
     report.records[0]!.freshness = 'historical';
