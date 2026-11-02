@@ -160,7 +160,7 @@ func claudeProjectRunScripted(t *testing.T, f *claudeProjectNativeFixture, proje
 		"CLAUDE_CODE_DISABLE_1M_CONTEXT=1",
 		"ENABLE_TOOL_SEARCH=false",
 		// One-shot scripted model requests must see the real stdio tool catalog;
-		// extend only Claude\'s documented first-connection window on slow hosts.
+		// extend only Claude's documented first-connection window on slow hosts.
 		"MCP_CONNECT_TIMEOUT_MS=20000")
 	ctx, cancel := context.WithTimeout(context.Background(), 85*time.Second)
 	defer cancel()
