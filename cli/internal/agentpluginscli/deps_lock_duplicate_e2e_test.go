@@ -12,7 +12,7 @@ import (
 // identical values are unsafe: another JSON implementation could keep the first.
 func pmAgreementDuplicateJSONKeysFailClosed(t *testing.T) {
 	for _, tc := range []struct {
-		name, anchor, injected string
+		name, anchor, injected, expectedError string
 	}{
 		{"root-same-value", "\"lock_version\":", "\"lock_version\": 1, "},
 		{"root-escaped-equivalent", "\"lock_version\":", "\"loc\\u006b_version\": 1, "},
@@ -21,6 +21,7 @@ func pmAgreementDuplicateJSONKeysFailClosed(t *testing.T) {
 		{"package-tree-digest", "\"tree_digest\":", "\"tree_digest\": \"sha256:untrusted\", "},
 		{"nested-source-object", "\"source\":", "\"source\": null, "},
 		{"nested-archive-checksum", "\"sha256\":", "\"sha256\": \"invalid\", "},
+		{"invalid-utf8-identity", "\"manifest_digest\": \"", "\"manifest_digest\": \""+string([]byte{0xff}), "UTF-8"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			origin := newPMArchiveOrigin(t, pmArchiveGraph{"a": nil})
@@ -39,8 +40,12 @@ func pmAgreementDuplicateJSONKeysFailClosed(t *testing.T) {
 			networkBefore := origin.counts()
 			_, err := fixture.executePM(t.Context(), t, "", false,
 				"install", "--locked", "--yes", "--format", "json")
-			if err == nil || !strings.Contains(err.Error(), "duplicate") {
-				t.Fatalf("ambiguous uap.lock was accepted or rejected for wrong reason: %v", err)
+			expectedError := tc.expectedError
+			if expectedError == "" {
+				expectedError = "duplicate"
+			}
+			if err == nil || !strings.Contains(err.Error(), expectedError) {
+				t.Fatalf("unsafe uap.lock was accepted or rejected for wrong reason: %v", err)
 			}
 			if got := dependencyRead(t, lockPath); got != tampered {
 				t.Fatal("refused lock was rewritten")
