@@ -207,6 +207,11 @@ export function decodeSkillSpectorRecords(
   return value as SkillSpectorRecord[];
 }
 
+/** Legacy records retained in a v3 snapshot never downgrade its report contract. */
+export function isLegacySkillSpectorReport(report: SkillSpectorDisplayReport | undefined): boolean {
+  return Boolean(report && report.schema_version !== 3);
+}
+
 /** Plugin joins are immutable; the Skills provider supplies historical name hints only. */
 export function skillSpectorAssessment(
   report: SkillSpectorDisplayReport | undefined,
