@@ -59,8 +59,8 @@ type codexProjectModelStage struct {
 	wantCall   bool
 	requests   int
 	advertised int
-	searches    int
-	searchHits  int
+	searches   int
+	searchHits int
 	issued     int
 	results    int
 	invalid    []string
@@ -242,7 +242,7 @@ func TestCodexProjectModelDeferredMCPToolSearch(t *testing.T) {
 	send := func(body string) string {
 		t.Helper()
 		response := httptest.NewRecorder()
-		m.respond(response, httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(body)))
+		m.respond(response, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/responses", strings.NewReader(body)))
 		if response.Code != http.StatusOK {
 			t.Fatalf("fixture rejected valid Responses request: %d", response.Code)
 		}
@@ -275,7 +275,7 @@ func TestCodexProjectModelRejectsMalformedRequests(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			m := &codexProjectModel{}
 			stage := m.begin(true)
-			request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(test.body))
+			request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/responses", strings.NewReader(test.body))
 			response := httptest.NewRecorder()
 			m.respond(response, request)
 			if response.Code != test.status || len(stage.invalid) != 1 || stage.invalid[0] != test.reason {
