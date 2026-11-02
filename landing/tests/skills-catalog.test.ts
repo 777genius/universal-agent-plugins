@@ -424,7 +424,7 @@ test('Skill pagination shows only 48 new items at a partial page boundary and re
 test('legacy source variants produce CLI commands without using directory pages as origins', () => {
   const unknown = (raw: string, hint = 'frontend-design'): SkillListing => ({
     ...skill,
-    id: `skills-sh:${raw}:frontend-design`,
+    id: `skills-sh:${raw}:${hint}`,
     title: hint,
     skillNameHint: hint,
     providerUrl: 'https://www.skills.sh/',
