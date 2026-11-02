@@ -11,20 +11,17 @@ import { noindexStaticFallback } from './utils/seo';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const process: any;
 
-const siteUrl =
-  process.env.NUXT_PUBLIC_SITE_URL || 'https://777genius.github.io/universal-agent-plugins';
+const siteUrl = process.env.NUXT_PUBLIC_SITE_URL || 'https://universal-agent-plugins.com';
 const githubRepo = process.env.NUXT_PUBLIC_GITHUB_REPO || '777genius/universal-agent-plugins';
 const productName = process.env.NUXT_PUBLIC_PRODUCT_NAME || 'Universal Agent Plugins';
 const githubReleasesUrl = `https://github.com/${githubRepo}/releases`;
-const docsUrl =
-  process.env.NUXT_PUBLIC_DOCS_URL ||
-  'https://777genius.github.io/universal-agent-plugins/docs/en/';
+const docsUrl = process.env.NUXT_PUBLIC_DOCS_URL || 'https://universal-agent-plugins.com/docs/en/';
 const quickstartUrl =
   process.env.NUXT_PUBLIC_QUICKSTART_URL ||
-  'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html';
+  'https://universal-agent-plugins.com/docs/en/guide/quickstart.html';
 const docsSitemapUrl =
   process.env.NUXT_PUBLIC_DOCS_SITEMAP_URL ||
-  'https://777genius.github.io/universal-agent-plugins/docs/sitemap.xml';
+  'https://universal-agent-plugins.com/docs/sitemap.xml';
 const baseURL = process.env.NUXT_APP_BASE_URL || '/';
 const registryRepositoryUrl =
   process.env.NUXT_PUBLIC_REGISTRY_REPOSITORY_URL ||
@@ -91,6 +88,13 @@ export default defineNuxtConfig({
         { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${baseURL}favicon-32.png` },
         { rel: 'shortcut icon', href: `${baseURL}favicon.ico` },
         { rel: 'apple-touch-icon', sizes: '180x180', href: `${baseURL}apple-touch-icon.png` },
+        {
+          rel: 'ai-catalog',
+          type: 'application/ai-catalog+json',
+          href: `${baseURL}.well-known/ai-catalog.json`,
+        },
+        { rel: 'ard', type: 'application/json', href: `${baseURL}.well-known/ard.json` },
+        { rel: 'describedby', type: 'text/plain', href: `${baseURL}llms.txt` },
         { rel: 'dns-prefetch', href: 'https://api.github.com' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
@@ -148,6 +152,9 @@ export default defineNuxtConfig({
         '/api/releases/latest',
         '/sitemap.xml',
         '/robots.txt',
+        '/llms.txt',
+        '/.well-known/ai-catalog.json',
+        '/.well-known/ard.json',
       ],
     },
   },

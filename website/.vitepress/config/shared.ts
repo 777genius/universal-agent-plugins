@@ -24,8 +24,8 @@ function readJson<T>(fileName: string, fallback: T): T {
   return JSON.parse(fs.readFileSync(full, "utf8")) as T;
 }
 
-export const docsBasePath = process.env.DOCS_BASE_PATH || "/universal-agent-plugins/docs/";
-export const docsHostname = process.env.DOCS_HOSTNAME || "https://777genius.github.io";
+export const docsBasePath = process.env.DOCS_BASE_PATH || "/docs/";
+export const docsHostname = process.env.DOCS_HOSTNAME || "https://universal-agent-plugins.com";
 const docsBaseUrl = new URL(docsBasePath, docsHostname).toString();
 const socialImageUrl = new URL("og-docs.svg", docsBaseUrl).toString();
 const entities = readJson<RegistryEntity[]>("entities.json", []);
@@ -72,9 +72,12 @@ export const sharedConfig = defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   base: docsBasePath,
-  title: "Agent Plugins Docs",
-  description: "Public documentation for Agent Plugins",
+  title: "Universal Agent Plugins Docs",
+  description: "Official Universal Agent Plugins documentation: install and manage Skills and MCP plugins, check client compatibility, and build portable packages.",
   head: [
+    ["link", { rel: "describedby", type: "text/plain", href: new URL("../llms.txt", docsBaseUrl).href }],
+    ["link", { rel: "ard", type: "application/json", href: new URL("../.well-known/ard.json", docsBaseUrl).href }],
+    ["link", { rel: "ai-catalog", type: "application/ai-catalog+json", href: new URL("../.well-known/ai-catalog.json", docsBaseUrl).href }],
     ["link", { rel: "icon", href: `${docsBasePath}icon.svg`, type: "image/svg+xml" }],
     ["link", { rel: "manifest", href: `${docsBasePath}site.webmanifest` }],
     ["meta", { name: "theme-color", content: "#f7f7f8" }],
@@ -96,7 +99,7 @@ export const sharedConfig = defineConfig({
     const pageUrl = isNotFound ? null : toDocsPageUrl(relativePath);
     const head = [
       ["meta", { property: "og:type", content: "website" }],
-      ["meta", { property: "og:site_name", content: "Agent Plugins Docs" }],
+      ["meta", { property: "og:site_name", content: "Universal Agent Plugins Docs" }],
       ["meta", { property: "og:title", content: pageTitle }],
       ["meta", { property: "og:description", content: pageDescription }],
       ["meta", { property: "og:image", content: socialImageUrl }],

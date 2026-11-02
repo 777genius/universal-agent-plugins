@@ -1,6 +1,6 @@
 ---
-title: "Agent Plugins Documentation"
-description: "Public documentation for Agent Plugins."
+title: "Universal Agent Plugins Documentation"
+description: "Official Universal Agent Plugins documentation: install, update and repair Skills and MCP plugins, check client compatibility, and build portable Agent Plugins 1.0 packages."
 canonicalId: "page:home"
 section: "home"
 locale: "en"
@@ -10,7 +10,7 @@ translationRequired: true
 
 <div class="docs-hero docs-hero--feature">
   <p class="docs-kicker">PUBLIC DOCUMENTATION</p>
-  <h1>Agent Plugins</h1>
+  <h1>Universal Agent Plugins</h1>
   <p class="docs-lead">Install Skills and MCP tools for the agents you use, or build a portable package of your own.</p>
 </div>
 

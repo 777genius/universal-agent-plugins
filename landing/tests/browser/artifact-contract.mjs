@@ -11,6 +11,7 @@ import { pageRouteSeo } from '../../utils/seo.ts';
 import { clientLandingPages } from '../../data/clients.ts';
 import { parseDirectoryData } from '../../utils/registry.ts';
 import { projectRegistry } from '../../utils/registryProjection.ts';
+import { agentDiscovery } from '../../utils/agentDiscovery.ts';
 
 // A deliberately small HTML fixture exercises rejection behavior; never a deployable site.
 // Snapshot bytes are the verified build input, not a fabricated registry or plugin counter.
@@ -56,6 +57,11 @@ test('final artifact gate rejects missing, altered, draft and mis-scoped output 
       await put(path.join(root, '404.html'), '<meta name="robots" content="noindex, follow">');
       await put(path.join(root, 'robots.txt'), 'User-agent: *');
       const siteUrl = `https://example.test${base}`;
+      const discovery = agentDiscovery(siteUrl, base);
+      await put(path.join(root, 'llms.txt'), discovery.llms);
+      for (const name of ['ai-catalog', 'ard']) {
+        await put(path.join(root, `.well-known/${name}.json`), JSON.stringify(discovery.catalog));
+      }
       const entries = [];
       for (const route of expandLocalizedRoutes(routes, locales)) {
         const seo = pageRouteSeo(route.path, routes, siteUrl, base, locales);

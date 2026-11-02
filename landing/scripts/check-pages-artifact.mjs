@@ -236,6 +236,19 @@ export async function checkPagesArtifact({
   requireFile('.nojekyll');
   requireFile('404.html');
   requireFile('robots.txt');
+  requireFile('llms.txt');
+  requireFile('.well-known/ai-catalog.json');
+  requireFile('.well-known/ard.json');
+  const catalog = await json('.well-known/ai-catalog.json');
+  assert.equal(catalog.specVersion, '1.0');
+  assert(catalog.entries.length > 0, 'Agent catalog must describe real resources');
+  assert.deepEqual(await json('.well-known/ard.json'), catalog);
+  for (const entry of catalog.entries) {
+    assert(entry.identifier && entry.type && entry.url, 'Incomplete agent catalog entry');
+    assert(!('data' in entry), 'Referenced catalog entries must not also inline data');
+    assert.equal(new URL(entry.url).origin, new URL(siteUrl).origin);
+  }
+  assert((await read('llms.txt')).toString().startsWith('# Universal Agent Plugins\n'));
   requireFile('docs/index.html');
   requireFile('docs/sitemap.xml');
   // Compare every byte of both assembled inputs, including signed metadata/icons and docs aliases.
