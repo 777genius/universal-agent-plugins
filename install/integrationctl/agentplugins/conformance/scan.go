@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
+	"unicode"
 )
 
 type duplicateMode uint8
@@ -14,6 +16,9 @@ const (
 	duplicateRecord duplicateMode = iota
 	duplicateRoot
 	duplicateAll
+	// Reject duplicate spellings that encoding/json v1 resolves to the same
+	// struct field through case-insensitive matching. Used for portable locks.
+	duplicateAllFold
 	// Record only duplicate keys that influence the Agent Plugins core.
 	// Unknown top-level members and unimplemented extension payloads stay opaque.
 	duplicatePluginRecord
@@ -110,8 +115,12 @@ func (s *jsonScanner) value(token json.Token, keys []string, depth int) error {
 			if !ok {
 				return fmt.Errorf("JSON object key must be a string")
 			}
-			if seen[key] {
-				if s.mode == duplicateAll || (s.mode == duplicateRoot && depth == 1) {
+			identity := key
+			if s.mode == duplicateAllFold {
+				identity = foldJSONStructKey(key)
+			}
+			if seen[identity] {
+				if s.mode == duplicateAll || s.mode == duplicateAllFold || (s.mode == duplicateRoot && depth == 1) {
 					return fmt.Errorf("JSON object contains duplicate field %q", key)
 				}
 				if s.mode == duplicateRecord || (s.mode == duplicatePluginRecord && observedPluginDuplicate(keys)) {
@@ -121,7 +130,7 @@ func (s *jsonScanner) value(token json.Token, keys []string, depth int) error {
 					s.duplicates = append(s.duplicates, duplicate{keys: append(append([]string(nil), keys...), key)})
 				}
 			}
-			seen[key] = true
+			seen[identity] = true
 			if s.skipRootValues {
 				if err := s.ctx.Err(); err != nil {
 					return err
@@ -168,6 +177,21 @@ func (s *jsonScanner) value(token json.Token, keys []string, depth int) error {
 		return fmt.Errorf("unexpected JSON delimiter %q", delim)
 	}
 	return nil
+}
+
+// foldJSONStructKey mirrors encoding/json v1's Unicode SimpleFold matching
+// for struct fields. ToLower alone misses aliases such as ſource_key and
+// locK_version that still resolve to source_key and lock_version in Go.
+func foldJSONStructKey(key string) string {
+	return strings.Map(func(r rune) rune {
+		for {
+			next := unicode.SimpleFold(r)
+			if next <= r {
+				return next
+			}
+			r = next
+		}
+	}, key)
 }
 
 // observedPluginDuplicate narrows reporting only, never JSON syntax or work
