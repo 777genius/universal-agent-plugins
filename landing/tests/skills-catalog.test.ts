@@ -517,6 +517,22 @@ test('empty unsupported pages stop at a bounded hop limit until the next user ac
 });
 
 
+test('legacy GitHub picker does not interpolate unsafe catalog-supplied Skill names', () => {
+  const legacy = {
+    ...skill,
+    id: 'skills-sh:https://github.com/anthropics/skills:some-skill',
+    skillNameHint: 'BAD$(touch injected)',
+    providerUrl: 'https://www.skills.sh/',
+    source: { kind: 'external' as const, url: 'https://www.skills.sh/' },
+    availability: 'unsupported-source' as const,
+  };
+  assert.equal(skillNeedsManualSelection(legacy), true);
+  assert.equal(
+    skillInstallCommand(legacy),
+    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills',
+  );
+});
+
 test('malformed DTOs disable their own Install action without crashing the catalog', () => {
   assert.equal(skillIdentityFromId(undefined as unknown as string), undefined);
   assert.equal(skillInstallCommand({ ...skill, id: undefined as unknown as string }), undefined);

@@ -443,4 +443,7 @@ test('explicit legacy GitHub URL sources display a safe install command', async 
   await expect(card.getByRole('link', { name: 'GitHub source' })).toHaveAttribute(
     'href', 'https://github.com/anthropics/skills',
   );
+  // A non-canonical listing ID is installable, but the document preview API
+  // does not accept this URL-shaped ID. Keep the title non-navigable.
+  await expect(card.getByRole('link', { name: 'frontend-design', exact: true })).toHaveCount(0);
 });

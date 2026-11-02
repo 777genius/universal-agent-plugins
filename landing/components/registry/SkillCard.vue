@@ -21,6 +21,10 @@ const repositoryUrl = computed(() => skillRepositoryUrl(props.skill));
 const repositoryName = computed(() => props.skill.source.repository ??
   /^https:\/\/(?:github\.com|raw\.githubusercontent\.com)\/([^/]+\/[^/]+)/.exec(repositoryUrl.value ?? '')?.[1]);
 const publisherUrl = computed(() => skillPublisherUrl(props.skill));
+const detailAvailable = computed(() =>
+  Boolean(repositoryUrl.value || publisherUrl.value) &&
+  /^skills-sh:(?:[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+|[A-Za-z0-9.-]+\.[A-Za-z]{2,}):[^:]+$/.test(props.skill.id),
+);
 const needsManualSelection = computed(() => skillNeedsManualSelection(props.skill));
 const command = computed(() =>
   skillInstallCommand(props.skill, chooseInTerminal.value ? undefined : targets.value),
@@ -69,7 +73,7 @@ function updateTerminal(value: boolean) {
       <div class="plugin-card__identity-copy">
         <h3 :title="skill.title">
           <NuxtLink
-            v-if="repositoryUrl || publisherUrl"
+            v-if="detailAvailable"
             :to="localePath(skillDetailRoute(skill))"
             @click="rememberSkill"
           >{{ skill.title }}</NuxtLink>

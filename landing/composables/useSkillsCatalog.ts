@@ -57,6 +57,7 @@ export function useSkillsCatalog(query: Ref<string>, view: Ref<SkillsView>) {
           throw new Error('Invalid catalog');
         if (request !== generation) return;
         for (const item of page.items) {
+          if (!item || typeof item !== 'object' || typeof item.id !== 'string') continue;
           if (!seen.has(item.id) && skillInstallCommand(item)) {
             seen.add(item.id);
             collected.push(item);
