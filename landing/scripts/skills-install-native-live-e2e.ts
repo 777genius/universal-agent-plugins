@@ -19,8 +19,15 @@ const fixtures = [
     skill: 'frontend-design',
     id: 'skills-sh:anthropics/skills/tree/main/skills/frontend-design:frontend-design',
     providerUrl: 'https://www.skills.sh/' },
+  { source: 'https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md',
+    skill: 'frontend-design',
+    id: 'skills-sh:https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md:frontend-design',
+    providerUrl: 'https://www.skills.sh/' },
   { source: 'https://uizze.com', skill: 'ui-radar',
     id: 'skills-sh:https://uizze.com:ui-radar',
+    providerUrl: 'https://www.skills.sh/' },
+  { source: 'https://open.feishu.cn', skill: 'lark-mail',
+    id: 'skills-sh:https://open.feishu.cn:lark-mail',
     providerUrl: 'https://www.skills.sh/' },
 ] as const;
 type Evidence = { id: string; source: string; skill: string; command: string; exit_code: number | null;
