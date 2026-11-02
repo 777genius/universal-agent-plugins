@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { InstallScope } from '~/types/registry';
-defineProps<{ modelValue: InstallScope; projectAvailable: boolean }>();
+defineProps<{ modelValue: InstallScope; projectAvailable: boolean; alwaysShow?: boolean }>();
 const emit = defineEmits<{ 'update:modelValue': [value: InstallScope] }>();
 const { t } = useI18n();
 </script>
 
 <template>
-  <fieldset v-if="projectAvailable || modelValue === 'project'" class="install-scope">
+  <fieldset v-if="projectAvailable || modelValue === 'project' || alwaysShow" class="install-scope">
     <legend>{{ t('registryUi.install.scope.label') }}</legend>
     <div class="install-scope__choices" :data-selected="modelValue">
       <span class="install-scope__thumb" aria-hidden="true" />
