@@ -37,8 +37,8 @@ func pmEvolutionOldCacheNewLock(t *testing.T) {
 	const newSkill = "---\nname: a\ndescription: Disposable graph marker\n---\n" + newMarker
 	v2 := fmt.Sprintf("{\"$schema\":%q,\"name\":\"a\",\"version\":\"2.0.0\",\"description\":\"Disposable package-manager graph\"}", domain.PluginSchemaV1)
 	pmRewriteZIP(t, origin, "a", map[string]string{
-		"publisher/plugin.json": v2,
-		"publisher/marker.txt": newMarker,
+		"publisher/plugin.json":       v2,
+		"publisher/marker.txt":        newMarker,
 		"publisher/skills/a/SKILL.md": newSkill,
 	})
 
