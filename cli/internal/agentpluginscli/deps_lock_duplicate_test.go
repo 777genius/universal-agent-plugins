@@ -28,6 +28,8 @@ func TestDependencyLockDuplicateKeysRejectedByStrictAndCompatibleReaders(t *test
 	for _, tc := range []struct{ name, field, injected string }{
 		{"identical-root", "\"lock_version\":", "\"lock_version\":1,"},
 		{"different-root", "\"lock_version\":", "\"lock_version\":2,"},
+		{"casefold-root", "\"lock_version\":", "\"LOCK_VERSION\":2,"},
+		{"casefold-digest", "\"manifest_digest\":", "\"MANIFEST_DIGEST\":\"different\","},
 		{"escaped-equivalent-root", "\"lock_version\":", "\"loc\\u006b_version\":1,"},
 		{"duplicated-digest", "\"manifest_digest\":", "\"manifest_digest\":\"bogus\","},
 	} {
