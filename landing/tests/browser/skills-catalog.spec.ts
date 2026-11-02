@@ -188,7 +188,7 @@ test('legacy API website publisher offers safe Install while malformed sources r
           legacy,
           {
             ...skill(1),
-            id: 'skills-sh:owner/repo/tree/main:unusable',
+            id: 'skills-sh:owner/repo/not-a-github-form:unusable',
             title: 'Unrecoverable source',
             source: { kind: 'external', url: 'https://www.skills.sh/' },
             providerUrl: 'https://www.skills.sh/',
