@@ -103,7 +103,9 @@
       "closeReport": "Cerrar",
       "awaitingList": "Skills sin comprobación actual",
       "awaitingExplanation": "Estos Skills aún no tienen un resultado actual. Se desconoce su seguridad.",
-      "waitingWithLimitsProgress": "Comprobados {checked}/{total} · {waiting} pendientes · {limited} incompletos"
+      "waitingWithLimitsProgress": "Comprobados {checked}/{total} · {waiting} pendientes · {limited} incompletos",
+      "referenceDirectoryStatus": "Referencia a directorio; inspección incompleta",
+      "referenceUninspectedArtifact": "Algunos archivos o directorios referenciados no se inspeccionaron por completo. Consulta las rutas originales y los límites del análisis."
     }
   }
 }

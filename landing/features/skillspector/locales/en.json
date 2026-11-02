@@ -103,7 +103,9 @@
       "closeReport": "Close",
       "awaitingList": "Skills awaiting a current check",
       "awaitingExplanation": "These listed Skills do not have a current result yet. Their safety is not known.",
-      "waitingWithLimitsProgress": "{checked}/{total} checked · {waiting} awaiting · {limited} not fully checked"
+      "waitingWithLimitsProgress": "{checked}/{total} checked · {waiting} awaiting · {limited} not fully checked",
+      "referenceDirectoryStatus": "Directory reference; inspection incomplete",
+      "referenceUninspectedArtifact": "Some referenced files or directories were not fully inspected. See their original paths and coverage limits."
     }
   }
 }

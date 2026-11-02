@@ -103,7 +103,9 @@
       "closeReport": "Закрыть",
       "awaitingList": "Скиллы без актуальной проверки",
       "awaitingExplanation": "У этих скиллов пока нет актуального результата. Их безопасность неизвестна.",
-      "waitingWithLimitsProgress": "Проверено {checked}/{total} · {waiting} ожидают · {limited} не полностью"
+      "waitingWithLimitsProgress": "Проверено {checked}/{total} · {waiting} ожидают · {limited} не полностью",
+      "referenceDirectoryStatus": "Ссылка на каталог; проверка неполная",
+      "referenceUninspectedArtifact": "Некоторые файлы или каталоги по ссылкам проверены не полностью. Подробности — в исходных путях и ограничениях анализа."
     }
   }
 }

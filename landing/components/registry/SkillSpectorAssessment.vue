@@ -150,6 +150,7 @@ const limitationExplanations = computed(() => {
   const codes = new Set(reasons.value.map((reason) => reason.code));
   return [
     ['reference_missing', 'referenceMissing'],
+    ['referenced_uninspected', 'referenceUninspectedArtifact'],
     ['static_parse_limit', 'staticParseLimit'],
     ['analyzer_incomplete', 'analyzerIncomplete'],
     ['acquisition_transfer_limit', 'acquisitionTransferLimit'],
@@ -564,7 +565,11 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
                 <p>
                   {{ t('registryUi.skillSpector.referenceResolution') }}:
                   <code
-                    >{{ reference.status }} · {{ reference.disposition }} ·
+                    >{{
+                      reference.status === 'uninspected'
+                        ? t('registryUi.skillSpector.referenceDirectoryStatus')
+                        : reference.status
+                    }} · {{ reference.disposition }} ·
                     {{ reference.reference_kind }}</code
                   >
                 </p>

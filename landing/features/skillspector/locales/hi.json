@@ -103,7 +103,9 @@
       "closeReport": "बंद करें",
       "awaitingList": "वर्तमान जाँच की प्रतीक्षा वाले स्किल",
       "awaitingExplanation": "इन स्किल्स की अभी तक वर्तमान जाँच का परिणाम उपलब्ध नहीं है। उनकी सुरक्षा अज्ञात है।",
-      "waitingWithLimitsProgress": "{checked}/{total} की जाँच · {waiting} प्रतीक्षारत · {limited} अधूरे"
+      "waitingWithLimitsProgress": "{checked}/{total} की जाँच · {waiting} प्रतीक्षारत · {limited} अधूरे",
+      "referenceDirectoryStatus": "डायरेक्टरी संदर्भ; जाँच अधूरी",
+      "referenceUninspectedArtifact": "संदर्भित कुछ फ़ाइलों या डायरेक्टरी की पूरी जाँच नहीं हुई। मूल पथ और विश्लेषण की सीमाएँ देखें।"
     }
   }
 }

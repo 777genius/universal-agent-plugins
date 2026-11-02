@@ -103,7 +103,9 @@
       "closeReport": "Закрити",
       "awaitingList": "Скіли без актуальної перевірки",
       "awaitingExplanation": "Для цих скілів поки немає актуального результату. Їхня безпека невідома.",
-      "waitingWithLimitsProgress": "Перевірено {checked}/{total} · {waiting} очікують · {limited} не повністю"
+      "waitingWithLimitsProgress": "Перевірено {checked}/{total} · {waiting} очікують · {limited} не повністю",
+      "referenceDirectoryStatus": "Посилання на каталог; перевірка неповна",
+      "referenceUninspectedArtifact": "Деякі файли або каталоги за посиланнями перевірено не повністю. Перегляньте вихідні шляхи й обмеження аналізу."
     }
   }
 }

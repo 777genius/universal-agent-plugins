@@ -224,6 +224,58 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.equal(missing.target_path, null);
     assert.equal(main.status, 'partial');
   });
+  it('preserves acquired directory links as partial, and rejects forged analyzed/complete evidence', () => {
+    const record = referenceRecord();
+    const link = record.coverage.references[0];
+    Object.assign(link, {
+      status: 'uninspected',
+      target_path: 'docs',
+      disposition: 'partial',
+      evidence: '[guides](./docs/)',
+    });
+    record.coverage.reasons.push({
+      code: 'referenced_uninspected',
+      message: 'Directory exists, but its contents were not fully inspected.',
+    });
+    const decoded = decodeReference(record);
+    assert.equal(decoded.coverage!.references![0]!.status, 'uninspected');
+    assert.equal(decoded.coverage!.references![0]!.target_path, 'docs');
+    assert.equal(decoded.status, 'partial');
+
+    const falselyAnalyzed = structuredClone(record);
+    falselyAnalyzed.coverage.references[0].disposition = 'analyzed';
+    assert.throws(() => decodeReference(falselyAnalyzed));
+    // Start with a *valid complete* producer record; otherwise rejection could
+    // come from the Cloudflare fixture's unrelated incomplete ledger evidence.
+    const completeFixture = JSON.parse(
+      readFileSync(
+        new URL('./fixtures/skillspector-v3-complete-context.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    const complete = structuredClone(
+      Object.values(completeFixture.records)[0] as SkillSpectorRecord,
+    );
+    const index = { ...manifest, generated_at: completeFixture.generated_at };
+    const part = { ...descriptor, repository: complete.source.repository, record_count: 1 };
+    const decodeComplete = (entry: SkillSpectorRecord) =>
+      decodeSkillSpectorShardV3(
+        { ...shard, repository: part.repository, records: [entry] },
+        index,
+        part,
+      );
+    assert.equal(decodeComplete(complete)[0]!.status, 'complete');
+    Object.assign(complete.coverage!.references![0], {
+      status: 'uninspected',
+      target_path: 'docs',
+      disposition: 'partial',
+    });
+    assert.throws(() => decodeComplete(complete));
+    const noTarget = structuredClone(record);
+    noTarget.coverage.references[0].target_path = null;
+    assert.throws(() => decodeReference(noTarget));
+  });
+
   it('rejects malformed, falsely complete and silently omitted reference context', () => {
     const changes = [
       (r: any) => {

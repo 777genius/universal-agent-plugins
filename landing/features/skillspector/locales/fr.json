@@ -103,7 +103,9 @@
       "closeReport": "Fermer",
       "awaitingList": "Skills sans vérification actuelle",
       "awaitingExplanation": "Ces Skills n'ont pas encore de résultat actuel. Leur sécurité est inconnue.",
-      "waitingWithLimitsProgress": "Vérifiés {checked}/{total} · {waiting} en attente · {limited} incomplets"
+      "waitingWithLimitsProgress": "Vérifiés {checked}/{total} · {waiting} en attente · {limited} incomplets",
+      "referenceDirectoryStatus": "Référence à un dossier ; inspection incomplète",
+      "referenceUninspectedArtifact": "Certains fichiers ou répertoires référencés n'ont pas été entièrement inspectés. Consultez les chemins d'origine et les limites de l'analyse."
     }
   }
 }
