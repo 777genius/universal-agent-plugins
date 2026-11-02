@@ -211,7 +211,7 @@ test('unqualified project scope is hidden while auto agent delivery stays non-nu
   expect(errors).toEqual([]);
 });
 
-test('Marketing Kit project mode uses three-agent TOML and does not force Cursor', async ({ page }) => {
+test('Marketing Kit does not advertise unsupported signed project scope or force Cursor', async ({ page }) => {
   const errors = await offline(page);
   const index = scopedFixture();
   const plugin = index.plugins[0]!;
@@ -228,34 +228,22 @@ test('Marketing Kit project mode uses three-agent TOML and does not force Cursor
   await navigate(page, '/', 'en', '?q=marketing-kit');
   const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
   await card.locator('.plugin-card__install-toggle').click();
-  await expect(card.getByRole('button', { name: 'This computer', exact: true })).toBeVisible();
+
+  const computer = card.getByRole('button', { name: 'This computer', exact: true });
   const project = card.getByRole('button', { name: 'This project', exact: true });
-  await project.click();
-  await expect(project).toHaveAttribute('aria-pressed', 'true');
-  const kit = card.locator('.marketing-kit-project');
-  await expect(kit).toBeVisible();
-  await expect(card.locator('.app-multiselect__trigger')).toHaveCount(0);
-  await expect(card.locator('.install-outcome')).toHaveCount(0);
-  await expect(kit.locator('pre code')).toContainText('"777genius/marketing-kit" = "0.1.0"');
-  for (const client of ['claude', 'codex', 'gemini']) {
-    await expect(kit.locator('pre code')).toContainText(`${client} = ["777genius/marketing-kit"]`);
-  }
-  await expect(kit.locator('.command-snippet--add code')).toContainText(
-    'npx -y universal-agent-plugins',
-  );
-  await expect(kit.locator('.command-snippet--add code')).toContainText('install --scope project');
-  await expect(kit.locator('.command-snippet--add code')).not.toContainText('--target');
-  await kit.locator('.command-snippet--add button').click();
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
-    'npx -y universal-agent-plugins install --scope project',
-  );
-  await expect(kit).not.toContainText('Cursor:');
-  await card.getByRole('button', { name: 'This computer', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'This computer', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(computer).toHaveAttribute('aria-pressed', 'true');
+  await expect(project).toBeDisabled();
   await expect(card.locator('.marketing-kit-project')).toHaveCount(0);
+  await expect(card).toContainText('Project installation is not available for this package.');
   await expect(card.locator('.command-snippet--add code')).toHaveText(
     'npx -y universal-agent-plugins add marketing-kit',
   );
+  await expect(card.locator('.command-snippet--add code')).not.toContainText('--target cursor');
+  await expect(card).not.toContainText('Cursor: Files are prepared.');
+  await card.locator('.plugin-card__title-link').click();
+  const panel = page.locator('.install-panel');
+  await expect(panel.getByRole('button', { name: 'This project', exact: true })).toBeDisabled();
+  await expect(panel.locator('.marketing-kit-project')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
