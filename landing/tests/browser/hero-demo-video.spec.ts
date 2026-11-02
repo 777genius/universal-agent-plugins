@@ -115,6 +115,8 @@ test('denied fullscreen still launches a viewport-filling autoplay player on one
   await expect(frame).toBeVisible();
   await expect(frame).toHaveAttribute('src', /\?autoplay=any&preload=auto$/);
   await expect(demo).toHaveClass(/hero-demo-video--fallback/);
+  // The site root isolates stacking contexts; the fallback must escape to <body>.
+  await expect.poll(() => demo.evaluate((el) => el.parentElement === document.body)).toBe(true);
   await expect(demo).toHaveCSS('position', 'fixed');
   await expect.poll(() => demo.evaluate((el) => {
     const rect = el.getBoundingClientRect();
@@ -131,12 +133,14 @@ test('denied fullscreen still launches a viewport-filling autoplay player on one
   })).toBe(true);
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden');
   await page.keyboard.press('Escape');
+  await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeVisible();
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeFocused();
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
   await demo.getByRole('button', { name: 'Watch demo' }).click();
   await expect(demo).toHaveClass(/hero-demo-video--fallback/);
   await demo.getByRole('button', { name: 'Close demo' }).click();
+  await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeVisible();
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeFocused();
 });
@@ -154,8 +158,10 @@ test('missing Fullscreen API uses an accessible fullscreen overlay', async ({ pa
   const demo = page.locator('.hero-demo-video');
   await demo.getByRole('button', { name: 'Watch demo' }).click();
   await expect(demo).toHaveClass(/hero-demo-video--fallback/);
+  await expect.poll(() => demo.evaluate((el) => el.parentElement === document.body)).toBe(true);
   await expect(demo.locator('iframe')).toBeVisible();
   await demo.getByRole('button', { name: 'Close demo' }).click();
+  await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
   await expect(demo.locator('iframe')).toHaveCount(0);
 });
 

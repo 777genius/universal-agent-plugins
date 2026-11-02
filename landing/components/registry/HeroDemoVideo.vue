@@ -124,56 +124,58 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <figure
-    id="demo"
-    ref="demoContainer"
-    class="hero-demo-video"
-    :class="{ 'hero-demo-video--fallback': fallbackFullscreen }"
-    :aria-label="t('shell.hero.demoVideoTitle')"
-  >
-    <iframe
-      v-if="playing"
-      ref="playerFrame"
-      :src="playerUrl"
-      :title="t('shell.hero.demoVideoTitle')"
-      allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-      allowfullscreen
-    />
-    <button
-      v-if="playing && fallbackFullscreen"
-      ref="closeButton"
-      type="button"
-      class="hero-demo-video__close"
-      :aria-label="t('shell.hero.closeDemo')"
-      @click="stopDemo"
-    >×</button>
-    <template v-if="!playing && playbackId">
-      <img :src="thumbnailUrl" :alt="t('shell.hero.demoVideoTitle')" loading="lazy" />
+  <Teleport to="body" :disabled="!fallbackFullscreen">
+    <figure
+      id="demo"
+      ref="demoContainer"
+      class="hero-demo-video"
+      :class="{ 'hero-demo-video--fallback': fallbackFullscreen }"
+      :aria-label="t('shell.hero.demoVideoTitle')"
+    >
+      <iframe
+        v-if="playing"
+        ref="playerFrame"
+        :src="playerUrl"
+        :title="t('shell.hero.demoVideoTitle')"
+        allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+        allowfullscreen
+      />
       <button
+        v-if="playing && fallbackFullscreen"
+        ref="closeButton"
         type="button"
-        ref="launchButton"
-        class="hero-demo-video__launch"
-        :aria-label="t('shell.hero.watchDemo')"
-        @click="playDemo"
-      >
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="m9 7 8 5-8 5V7Z" fill="currentColor" stroke="none" />
-        </svg>
-        <span>{{ t('shell.hero.watchDemo') }}</span>
-      </button>
-    </template>
-    <div v-else-if="!playing" class="hero-demo-video__preview">
-      <div class="hero-demo-video__terminal" aria-hidden="true">
-        <span>● ● ●</span>
-        <code>$ npx universal-agent-plugins</code>
-        <code>✓ Codex &nbsp; ✓ Cursor &nbsp; ✓ VS Code</code>
+        class="hero-demo-video__close"
+        :aria-label="t('shell.hero.closeDemo')"
+        @click="stopDemo"
+      >×</button>
+      <template v-if="!playing && playbackId">
+        <img :src="thumbnailUrl" :alt="t('shell.hero.demoVideoTitle')" loading="lazy" />
+        <button
+          type="button"
+          ref="launchButton"
+          class="hero-demo-video__launch"
+          :aria-label="t('shell.hero.watchDemo')"
+          @click="playDemo"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="m9 7 8 5-8 5V7Z" fill="currentColor" stroke="none" />
+          </svg>
+          <span>{{ t('shell.hero.watchDemo') }}</span>
+        </button>
+      </template>
+      <div v-else-if="!playing" class="hero-demo-video__preview">
+        <div class="hero-demo-video__terminal" aria-hidden="true">
+          <span>● ● ●</span>
+          <code>$ npx universal-agent-plugins</code>
+          <code>✓ Codex &nbsp; ✓ Cursor &nbsp; ✓ VS Code</code>
+        </div>
+        <div class="hero-demo-video__caption">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m9 7 8 5-8 5V7Z" fill="currentColor" />
+          </svg>
+          <span>{{ t('shell.hero.demoVideoTitle') }}</span>
+        </div>
       </div>
-      <div class="hero-demo-video__caption">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="m9 7 8 5-8 5V7Z" fill="currentColor" />
-        </svg>
-        <span>{{ t('shell.hero.demoVideoTitle') }}</span>
-      </div>
-    </div>
-  </figure>
+    </figure>
+  </Teleport>
 </template>

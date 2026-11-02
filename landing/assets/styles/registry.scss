@@ -405,9 +405,10 @@ img {
   background: #000;
 }
 .hero-demo-video.hero-demo-video--fallback {
+  // Teleport escapes .unified-home's isolated stacking context; sit above the app header and menus.
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 11000;
 }
 .hero-demo-video__launch {
   position: absolute;
