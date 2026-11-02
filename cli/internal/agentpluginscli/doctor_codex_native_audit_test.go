@@ -118,6 +118,7 @@ func TestCodexDoctorTOMLMemberAndMalformedDocument(t *testing.T) {
 	}{
 		{"valid foreign sibling", "# foreign\n[mcp_servers.demo]\ncommand='inert'\n[mcp_servers.sibling]\nurl='https://unused.invalid'\n", ""},
 		{"missing managed member", "[mcp_servers.sibling]\nurl='https://unused.invalid'\n", "codex_project_mcp_member_missing"},
+		{"non-table managed member", "[mcp_servers]\\ndemo=false\\n", "codex_project_mcp_member_invalid"},
 		{"missing collection", "[not_mcp_servers]\nkeep='value'\n", "codex_project_mcp_missing"},
 		{"malformed", "[mcp_servers.demo\n", "codex_project_mcp_invalid"},
 		{"overlarge", strings.Repeat("#", doctorNativeFileMax+1), "codex_project_mcp_component_too_large"},

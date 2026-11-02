@@ -204,9 +204,13 @@ func (d *codexDoctorInspection) inspectMCP() {
 		return
 	}
 	for _, name := range d.mcpNames {
-		if _, found := servers[name]; !found {
+		value, found := servers[name]
+		if !found {
 			d.add("degraded", "codex_project_mcp_member_missing",
 				"a recorded project MCP server member is missing from native configuration")
+		} else if _, ok := value.(map[string]any); !ok {
+			d.add("degraded", "codex_project_mcp_member_invalid",
+				"a recorded project MCP server member is not a TOML table")
 		}
 	}
 }
