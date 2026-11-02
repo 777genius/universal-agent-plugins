@@ -33,6 +33,10 @@
     {
       "digest": "sha256:6dff52b5c0f60a670827c3fdaf08a7d8c14778a84900e4a1c961913c0d480407",
       "id": "static-extended-v3"
+    },
+    {
+      "digest": "sha256:255c72648dd6a6e6b93ea75f5ad51553826692c60dd8222c7fb55613cf5766ba",
+      "id": "static-extended-v3"
     }
   ]
 }
