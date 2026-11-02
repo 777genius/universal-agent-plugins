@@ -69,6 +69,7 @@
     "lock-cold-store-hydration",
     "lock-read-only-no-publication",
     "lock-only-preserves-installed",
+    "source-origin-rebind-refusal",
     "lock-empty-existing-refusal",
     "absent-empty-distinct",
     "direct-source-promotion",
