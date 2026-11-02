@@ -424,6 +424,9 @@ test('saved unsupported Marketing Kit project intent never emits Cursor command 
   for (const distribution of item.distributions) {
     for (const release of distribution.releases) {
       for (const target of release.targets) target.scopes = ['user'];
+      // The actual published Marketing Kit source has no immutable Git revision.
+      // A direct-source project bridge must never be fabricated.
+      release.source.revision = null;
     }
   }
   const preferences = useInstallPreferencesStore();
@@ -440,5 +443,30 @@ test('saved unsupported Marketing Kit project intent never emits Cursor command 
   assert.equal(instance.state.scope.value, 'user');
   assert.equal(instance.state.autoDetect.value, true, 'no silent Cursor choice after recovering');
   assert.equal(instance.state.command.value, 'npx -y universal-agent-plugins add marketing-kit');
+  instance.stop();
+});
+
+test('Marketing Kit project unlocks from signed project policy without hardcoded client bundle', () => {
+  setActivePinia(createPinia());
+  const item = structuredClone(fixture);
+  item.name = 'marketing-kit';
+  item.install_source = 'marketing-kit';
+  item.trust_state = 'reviewed';
+  item.installable = true;
+  for (const distribution of item.distributions) {
+    for (const release of distribution.releases) {
+      release.source.revision = null;
+      for (const target of release.targets) {
+        target.scopes = target.client === 'codex' ? ['user', 'project'] : ['user'];
+      }
+    }
+  }
+  const instance = card(packageProps(item));
+  assert.equal(instance.state.projectAvailable.value, true);
+  instance.state.updateScope('project');
+  assert.equal(instance.state.autoDetect.value, true);
+  assert.equal(instance.state.command.value,
+    'npx -y universal-agent-plugins add marketing-kit --scope project');
+  assert.doesNotMatch(instance.state.command.value, /--target cursor/);
   instance.stop();
 });
