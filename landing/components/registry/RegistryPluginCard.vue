@@ -89,7 +89,7 @@ const command = computed(() =>
       ).add
     : '',
 );
-const marketingKitProject = computed(() => isReviewedMarketingKit(props.plugin) && scope.value === 'project');
+const marketingKitProject = computed(() => isReviewedMarketingKit(props.plugin) && projectAvailable.value && scope.value === 'project');
 const vendorInstall = computed(() => vendorInstallSource(props.plugin));
 const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
 const iconURL = computed(() => pluginIcon(props.plugin));
