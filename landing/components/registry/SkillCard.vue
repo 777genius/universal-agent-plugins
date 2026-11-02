@@ -114,9 +114,8 @@ function updateTerminal(value: boolean) {
       >
         {{ t('registryUi.card.install') }}
       </button>
-      <SkillManualSource
-        v-else
-        :reason="
+      <p v-else class="plugin-card__unavailable">
+        {{
           t(
             repositoryUrl
               ? 'registryUi.skills.unsupportedName'
@@ -124,8 +123,8 @@ function updateTerminal(value: boolean) {
                 ? 'registryUi.skills.invalidPublisherName'
                 : 'registryUi.skills.unsupportedSource',
           )
-        "
-      />
+        }}
+      </p>
       <Transition name="plugin-install">
         <div v-if="expanded && command" :id="panelId" class="plugin-card__install-panel">
           <div class="plugin-card__install">

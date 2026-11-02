@@ -2230,29 +2230,6 @@ img {
 .plugin-card__install-panel .plugin-card__author {
   margin: 0;
 }
-
-.skill-card__manual-panel label {
-  color: var(--text);
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-.skill-card__manual-panel input {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 10px 12px;
-  background: var(--surface-solid);
-  color: var(--text);
-  font: inherit;
-  font-size: 0.76rem;
-}
-.skill-card__manual-panel input:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
 .plugin-install-enter-active,
 .plugin-install-leave-active {
   transition:

@@ -35,17 +35,89 @@ export function skillsCatalogQuery(
   else delete next.skillView;
   return next;
 }
-function canonicalGitHubRepositoryUrl(repository: string | undefined): string | undefined {
-  return repository &&
-    /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repository)
-    ? `https://github.com/${repository}`
-    : undefined;
+export function skillRepositoryUrl(skill: SkillListing): string | undefined {
+  const repository = skill.source.repository;
+  if (skill.source.kind === 'github' && repository &&
+      /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repository))
+    return `https://github.com/${repository}`;
+  return legacySource(skill)?.kind === 'github' ? legacySource(skill)?.url : undefined;
 }
 
-export function skillRepositoryUrl(skill: SkillListing): string | undefined {
-  return skill.source.kind === 'github'
-    ? canonicalGitHubRepositoryUrl(skill.source.repository)
-    : undefined;
+type LegacySource = { kind: 'github' | 'publisher'; url: string };
+
+/**
+ * Recover an explicit upstream source, never infer one from a skills.sh page.
+ * Legacy DTOs only retain the original "source" string in their namespaced ID.
+ * Metadata must identify the exact unsupported provider fallback shape.
+ */
+function legacySource(skill: SkillListing): LegacySource | undefined {
+  if (skill.providerId !== 'skills-sh' || skill.availability !== 'unsupported-source' ||
+      skill.source.kind !== 'external' || skill.source.repository ||
+      skill.providerUrl !== 'https://www.skills.sh/' ||
+      skill.source.url !== skill.providerUrl ||
+      !skill.id.startsWith('skills-sh:') || skill.id.length > 1024)
+    return undefined;
+  const separator = skill.id.lastIndexOf(':');
+  if (separator <= 'skills-sh:'.length || separator >= skill.id.length - 1) return undefined;
+  const raw = skill.id.slice('skills-sh:'.length, separator);
+  const slug = skill.id.slice(separator + 1);
+  if (raw.length > 512 || slug.length > 256 || /[\x00-\x20\x7f]/.test(raw) ||
+      /[\x00-\x1f\x7f]/.test(slug)) return undefined;
+  const github = githubSource(raw);
+  if (github) return { kind: 'github', url: github };
+  const publisher = publisherOrigin(raw);
+  return publisher ? { kind: 'publisher', url: publisher } : undefined;
+}
+
+/** Accept GitHub's explicit repository and single-segment-ref file/tree forms. */
+function githubSource(raw: string): string | undefined {
+  if (raw.length < 3 || raw.length > 512) return undefined;
+  let path = raw;
+  if (path.startsWith('git+https://github.com/')) {
+    path = path.slice('git+https://github.com/'.length);
+  } else if (path.startsWith('https://github.com/')) {
+    path = path.slice('https://github.com/'.length);
+  } else if (path.startsWith('github.com/')) {
+    path = path.slice('github.com/'.length);
+  } else if (path.startsWith('git@github.com:')) {
+    path = path.slice('git@github.com:'.length);
+  }
+  const parts = path.split('/');
+  if (parts.length < 2) return undefined;
+  const owner = parts[0]!;
+  const originalRepo = parts[1]!;
+  const repo = parts.length === 2 ? originalRepo.replace(/\.git$/, '') : originalRepo;
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(owner) ||
+      !/^[A-Za-z0-9_.-]{1,100}$/.test(repo) || repo === '.' || repo === '..' ||
+      repo.endsWith('.git')) return undefined;
+  const base = `https://github.com/${owner}/${repo}`;
+  if (parts.length === 2) return base;
+  if (parts.length < 4 || (parts[2] !== 'tree' && parts[2] !== 'blob')) return undefined;
+  const suffix = parts.slice(3);
+  if (suffix.some(segment => segment === '.' || segment === '..' ||
+      !/^[A-Za-z0-9_.-]{1,128}$/.test(segment))) return undefined;
+  if (parts[2] === 'blob' && (suffix.length < 2 || suffix.at(-1) !== 'SKILL.md'))
+    return undefined;
+  return `${base}/${parts.slice(2).join('/')}`;
+}
+
+/** HTTPS well-known publisher origin, never a catalog page or private host. */
+function publisherOrigin(raw: string): string | undefined {
+  try {
+    const url = new URL(raw);
+    const host = url.hostname;
+    if (url.protocol !== 'https:' || url.host !== host ||
+        url.username || url.password || url.pathname !== '/' ||
+        url.search || url.hash || raw !== `https://${host}` ||
+        !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(host) ||
+        /(?:^|\.)xn--/.test(host) ||
+        /\.(?:local|localhost|internal|test|example|invalid)$/.test(host) ||
+        host === 'skills.sh' || host === 'www.skills.sh' ||
+        host === 'github.com' || host === 'www.github.com') return undefined;
+    return raw;
+  } catch {
+    return undefined;
+  }
 }
 /**
  * Recognize the exact website-only DTO produced before the Skills API update.
@@ -86,8 +158,14 @@ function legacyPublisherUrl(skill: SkillListing): string | undefined {
   }
 }
 
-/** A canonical publisher origin, without paths, ports, credentials or query strings. */
-function canonicalPublisherOrigin(raw: string): string | undefined {
+/** A publisher root, never the third-party catalog's detail URL. */
+export function skillPublisherUrl(skill: SkillListing): string | undefined {
+  const legacy = legacyPublisherUrl(skill);
+  if (legacy) return legacy;
+  const compatible = legacySource(skill);
+  if (compatible?.kind === 'publisher') return compatible.url;
+  if (skill.source.kind !== 'external' || skill.availability !== 'unverified') return undefined;
+  const raw = skill.source.url;
   try {
     const url = new URL(raw);
     const host = url.hostname;
@@ -106,15 +184,6 @@ function canonicalPublisherOrigin(raw: string): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-/** A publisher root, never the third-party catalog's detail URL. */
-export function skillPublisherUrl(skill: SkillListing): string | undefined {
-  const legacy = legacyPublisherUrl(skill);
-  if (legacy) return legacy;
-  return skill.source.kind === 'external' && skill.availability === 'unverified'
-    ? canonicalPublisherOrigin(skill.source.url)
-    : undefined;
 }
 
 /** Derive a source solely from a bounded, canonical catalog identity. */
@@ -154,20 +223,26 @@ function supportedSkillName(name: string): boolean {
 export function skillNeedsManualSelection(skill: SkillListing): boolean {
   return Boolean(
     skillRepositoryUrl(skill) &&
-      skill.availability !== 'unsupported-source' &&
+      (!('availability' in skill) || skill.availability !== 'unsupported-source' ||
+        legacySource(skill)?.kind === 'github') &&
       !supportedSkillName(skill.skillNameHint),
   );
 }
 
-/** Share command rendering and target validation with the user-supplied source flow. */
-function buildInstallCommand(
-  source: string,
-  exactName: string | undefined,
+export function skillInstallCommand(
+  skill: SkillListing,
   targets?: readonly string[],
 ): string | undefined {
-  if (exactName !== undefined && !supportedSkillName(exactName)) return undefined;
+  const source = skillRepositoryUrl(skill) ?? skillPublisherUrl(skill);
+  const compatible = legacySource(skill);
+  if (!source || (skill.availability === 'unsupported-source' && !legacyPublisherUrl(skill) &&
+      !compatible)) return undefined;
+  // HTTPS discovery does not have a repository picker: exact name required.
+  if (!skillRepositoryUrl(skill) &&
+      (typeof skill.skillNameHint !== 'string' || !supportedSkillName(skill.skillNameHint)))
+    return undefined;
   const tokens = ['npx', 'universal-agent-plugins@latest', 'skills', 'add', source];
-  if (exactName) tokens.push('--skill', exactName);
+  if (!skillNeedsManualSelection(skill)) tokens.push('--skill', skill.skillNameHint);
   if (targets !== undefined) {
     const ids = [...new Set(targets.map((id) => id.trim()).filter(Boolean))];
     if (!ids.length || ids.some((id) => !skillTargetIds.has(id))) return undefined;
@@ -180,58 +255,4 @@ function buildInstallCommand(
   return tokens
     .map((token) => (/^[A-Za-z0-9_./:@+=-]+$/.test(token) ? token : `"${token}"`))
     .join(' ');
-}
-
-/**
- * Manual recovery is distinct from catalog provenance: a user supplies an
- * independent source and the CLI checks it. A GitHub repository opens the
- * interactive Skill picker; HTTPS publishers require a user-entered exact
- * normative Skill name. Never infer the name from the untrusted catalog title.
- */
-export function skillManualSourceCommand(
-  input: string,
-  exactName = '',
-  targets?: readonly string[],
-): string | undefined {
-  if (input.length === 0 || input.length > 256 || input !== input.trim()) return undefined;
-
-  if (input.startsWith('https://github.com/')) {
-    const repository = input.slice('https://github.com/'.length);
-    const source = repository.endsWith('.git') ? undefined : canonicalGitHubRepositoryUrl(repository);
-    return source === input ? buildInstallCommand(source, undefined, targets) : undefined;
-  }
-
-  const source = canonicalPublisherOrigin(input);
-  if (!source) return undefined;
-  const hostname = new URL(source).hostname;
-  // Directory pages, internal hosts and IDNA variations are not user-controlled
-  // Skill publisher origins. The CLI still validates a valid origin's index.
-  if (
-    hostname === 'skills.sh' || hostname === 'www.skills.sh' ||
-    hostname === 'github.com' || hostname === 'www.github.com' ||
-    /(?:^|\.)xn--/i.test(hostname) ||
-    /\.(?:local|localhost|internal|test|example|invalid)$/i.test(hostname)
-  ) return undefined;
-  return buildInstallCommand(source, exactName, targets);
-}
-
-export function skillInstallCommand(
-  skill: SkillListing,
-  targets?: readonly string[],
-): string | undefined {
-  const source = skillRepositoryUrl(skill) ?? skillPublisherUrl(skill);
-  if (!source || (skill.availability === 'unsupported-source' && !legacyPublisherUrl(skill)))
-    return undefined;
-  // GitHub can open the picker for an unverified listing selector.
-  if (skill.source.kind === 'github')
-    return buildInstallCommand(
-      source,
-      skillNeedsManualSelection(skill) ? undefined : skill.skillNameHint,
-      targets,
-    );
-  // Website publishers do not have the GitHub picker, so an exact name
-  // remains mandatory even if the public API unexpectedly omits that field.
-  if (typeof skill.skillNameHint !== 'string' || !supportedSkillName(skill.skillNameHint))
-    return undefined;
-  return buildInstallCommand(source, skill.skillNameHint, targets);
 }
