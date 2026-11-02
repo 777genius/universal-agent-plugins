@@ -142,6 +142,47 @@ func TestCodexDoctorTOMLMemberAndMalformedDocument(t *testing.T) {
 	}
 }
 
+// A bounded file still used to exhaust stack in the vulnerable TOML parser.
+func TestCodexDoctorRejectsDeepTOMLBeforeParsing(t *testing.T) {
+	t.Parallel()
+	inst, root := codexDoctorFixture(t)
+	config := filepath.Join(root, ".codex", "config.toml")
+	payload := "[mcp_servers.demo]\ncommand = " +
+		strings.Repeat("[", doctorNativeDepthMax+1) + "1" +
+		strings.Repeat("]", doctorNativeDepthMax+1) + "\n"
+	if len(payload) >= doctorNativeFileMax {
+		t.Fatal("regression input must remain below the byte cap")
+	}
+	if err := os.WriteFile(config, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := doctorSingleProject(t, inst); !doctorCode(got, "codex_project_mcp_invalid") {
+		t.Fatalf("unsafe nested TOML was not diagnosed: %+v", got)
+	}
+	after, err := os.ReadFile(config)
+	if err != nil || string(after) != payload {
+		t.Fatal("read-only doctor modified the malicious input")
+	}
+}
+
+func TestCodexDoctorDepthCheckIgnoresCommentsAndQuotedValues(t *testing.T) {
+	t.Parallel()
+	inst, root := codexDoctorFixture(t)
+	config := filepath.Join(root, ".codex", "config.toml")
+	payload := "[mcp_servers.demo]\ncommand = '" +
+		strings.Repeat("[", doctorNativeDepthMax+1) +
+		"'\n# " + strings.Repeat("{", doctorNativeDepthMax+1) + "\n"
+	if len(payload) >= doctorNativeFileMax {
+		t.Fatal("ordinary literals must remain below the byte cap")
+	}
+	if err := os.WriteFile(config, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := doctorSingleProject(t, inst); len(got) != 0 {
+		t.Fatalf("valid TOML strings/comments misclassified: %+v", got)
+	}
+}
+
 func TestCodexDoctorRecognizesMultipleOwnedServersInOneDocument(t *testing.T) {
 	t.Parallel()
 	inst, root := codexDoctorFixture(t)

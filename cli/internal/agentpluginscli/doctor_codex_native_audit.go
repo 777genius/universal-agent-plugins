@@ -15,6 +15,7 @@ import (
 
 const doctorNativeFileMax = 1 << 20
 const doctorNativeObjectMax = 512
+const doctorNativeDepthMax = 10_000
 
 // doctorCodexNativeFindings checks only selected, recorded, project-owned
 // objects. The authoritative client state is untouched; this is not a native
@@ -192,6 +193,11 @@ func (d *codexDoctorInspection) inspectMCP() {
 			"project MCP configuration cannot be inspected safely")
 		return
 	}
+	if !doctorNativeNestingBounded(contents, doctorNativeDepthMax) {
+		d.add("degraded", "codex_project_mcp_invalid",
+			"the recorded project MCP TOML configuration exceeds the safe nesting limit")
+		return
+	}
 	var document map[string]any
 	if err := toml.Unmarshal(contents, &document); err != nil {
 		d.add("degraded", "codex_project_mcp_invalid",
@@ -274,6 +280,65 @@ func doctorNativeEntryStatus(root *os.Root, path string, last, directory bool) s
 	default:
 		return ""
 	}
+}
+
+// doctorNativeNestingBounded is a non-recursive defense in depth for TOML.
+// A byte cap alone does not limit recursion; strings/comments aren't nesting.
+func doctorNativeNestingBounded(contents []byte, limit int) bool {
+	depth := 0
+	var quote byte
+	multiline, escaped, comment := false, false, false
+	for i := 0; i < len(contents); i++ {
+		b := contents[i]
+		if comment {
+			if b == '\n' || b == '\r' {
+				comment = false
+			}
+			continue
+		}
+		if quote != 0 {
+			if quote == '"' {
+				if escaped {
+					escaped = false
+					continue
+				}
+				if b == '\\' {
+					escaped = true
+					continue
+				}
+			}
+			if b == quote {
+				if !multiline {
+					quote = 0
+				} else if i+2 < len(contents) && contents[i+1] == quote && contents[i+2] == quote {
+					quote = 0
+					multiline = false
+					i += 2
+				}
+			}
+			continue
+		}
+		switch b {
+		case '#':
+			comment = true
+		case '\'', '"':
+			quote = b
+			multiline = i+2 < len(contents) && contents[i+1] == b && contents[i+2] == b
+			if multiline {
+				i += 2
+			}
+		case '[', '{':
+			depth++
+			if depth > limit {
+				return false
+			}
+		case ']', '}':
+			if depth > 0 {
+				depth--
+			}
+		}
+	}
+	return true
 }
 
 func doctorNativeRead(root *os.Root, path string) ([]byte, string) {
