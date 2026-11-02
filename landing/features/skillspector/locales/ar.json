@@ -96,6 +96,7 @@
       "scanComplete": "اكتمل الفحص",
       "selectionScanned": "فُحصت المهارات المحددة",
       "retryLoad": "إعادة تحميل التقرير",
+      "progressWithFailures": "{checked}/{total} تم فحصها · {failed} فشلت · {waiting} معلّقة · {limited} جزئية",
       "coverageProgress": "تم فحص {checked}/{total} · {limited} غير مكتملة",
       "waitingProgress": "تم فحص {checked}/{total} · {waiting} بانتظار الفحص",
       "statusExplanation": "قد توجد فجوات عندما يتعذر التحقق من بعض الملفات أو الفحوصات. هذا لا يعني تأكيد مشكلة أمنية.",
