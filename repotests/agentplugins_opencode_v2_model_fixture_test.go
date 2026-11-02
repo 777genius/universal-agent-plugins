@@ -88,7 +88,8 @@ func (m *openCodeV2ModelFixture) respond(w http.ResponseWriter, r *http.Request)
 	}
 	hasResult := false
 	for _, message := range input.Messages {
-		if message["role"] == "tool" && message["tool_call_id"] == openCodeV2CallID {
+		if message["role"] == "tool" && message["tool_call_id"] == openCodeV2CallID &&
+			strings.Contains(fmt.Sprint(message["content"]), "uap-pong") {
 			hasResult = true
 		}
 	}
