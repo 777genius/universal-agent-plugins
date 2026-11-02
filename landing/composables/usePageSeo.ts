@@ -35,7 +35,7 @@ export const usePageSeo = (
   const route = useRoute();
   const config = useRuntimeConfig();
   const siteUrl = productRootUrl(
-    String(config.public.siteUrl || 'https://universal-agent-plugins.com'),
+    String(config.public.siteUrl || 'https://777genius.github.io/universal-agent-plugins'),
     String(config.app.baseURL),
   ).replace(/\/+$/, '');
   const siteName = 'Universal Agent Plugins';

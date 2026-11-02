@@ -11,7 +11,8 @@ import { noindexStaticFallback, productRootUrl } from './utils/seo';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const process: any;
 
-const siteUrl = process.env.NUXT_PUBLIC_SITE_URL || 'https://universal-agent-plugins.com';
+const siteUrl =
+  process.env.NUXT_PUBLIC_SITE_URL || 'https://777genius.github.io/universal-agent-plugins';
 const baseURL = process.env.NUXT_APP_BASE_URL || '/';
 const siteRoot = productRootUrl(siteUrl, baseURL);
 const githubRepo = process.env.NUXT_PUBLIC_GITHUB_REPO || '777genius/universal-agent-plugins';
@@ -19,11 +20,8 @@ const productName = process.env.NUXT_PUBLIC_PRODUCT_NAME || 'Universal Agent Plu
 const githubReleasesUrl = `https://github.com/${githubRepo}/releases`;
 const docsUrl = process.env.NUXT_PUBLIC_DOCS_URL || `${siteRoot}docs/en/`;
 const quickstartUrl =
-  process.env.NUXT_PUBLIC_QUICKSTART_URL ||
-  `${siteRoot}docs/en/guide/quickstart.html`;
-const docsSitemapUrl =
-  process.env.NUXT_PUBLIC_DOCS_SITEMAP_URL ||
-  `${siteRoot}docs/sitemap.xml`;
+  process.env.NUXT_PUBLIC_QUICKSTART_URL || `${siteRoot}docs/en/guide/quickstart.html`;
+const docsSitemapUrl = process.env.NUXT_PUBLIC_DOCS_SITEMAP_URL || `${siteRoot}docs/sitemap.xml`;
 const registryRepositoryUrl =
   process.env.NUXT_PUBLIC_REGISTRY_REPOSITORY_URL ||
   'https://github.com/777genius/universal-agent-plugins-registry';

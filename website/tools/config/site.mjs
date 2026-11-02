@@ -22,8 +22,8 @@ export const publicGoPackages = [
   { id: "platformmeta", importPath: "github.com/777genius/plugin-kit-ai/sdk/platformmeta", relativePath: "sdk/platformmeta" }
 ];
 
-export const docsHostname = process.env.DOCS_HOSTNAME || "https://universal-agent-plugins.com";
-export const docsBasePath = process.env.DOCS_BASE_PATH || "/docs/";
+export const docsHostname = process.env.DOCS_HOSTNAME || "https://777genius.github.io";
+export const docsBasePath = process.env.DOCS_BASE_PATH || "/universal-agent-plugins/docs/";
 export const docsBaseUrl = new URL(docsBasePath, docsHostname).toString();
 
 export const generatedRegistryPaths = {

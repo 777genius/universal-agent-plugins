@@ -3,7 +3,7 @@ import { productRootUrl } from '../../utils/seo.ts';
 export default defineEventHandler((event) => {
   const config = useRuntimeConfig();
   const siteUrl = productRootUrl(
-    String(config.public.siteUrl || 'https://universal-agent-plugins.com'),
+    String(config.public.siteUrl || 'https://777genius.github.io/universal-agent-plugins'),
     String(config.app.baseURL),
   );
   const docsSitemapUrl = (config.public.docsSitemapUrl as string) || `${siteUrl}docs/sitemap.xml`;
