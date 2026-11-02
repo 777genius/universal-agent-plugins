@@ -53,6 +53,35 @@ jobs:
           for executable in sshd ssh ssh-keygen git jq; do
             command -v "$executable"
           done
+      - name: Verify Git hardening with the real Git binary
+        working-directory: install/integrationctl/agentplugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout=3m -json ./adapters/sourceacquisition \
+            -run '^TestNativeGit(OptionsRetainMandatoryHardening|HardeningWinsOverInheritedGitSettings)
+        working-directory: install/integrationctl/agentplugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout=3m -json ./adapters/sourceacquisition -run '^TestNativeSSHGitWithIsolatedKeysAndHostVerification$' | tee native-ssh.json
+          jq -s -e 'any(.[]; .Action == "pass" and .Test == "TestNativeSSHGitWithIsolatedKeysAndHostVerification") and all(.[]; .Action != "skip")' native-ssh.json
+      - name: Verify saved CLI SSH URL and SCP lifecycle
+        working-directory: cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout=3m -json ./internal/agentpluginscli -run '^TestDirectSourceSavedLifecycleRealSSH$' | tee cli-ssh.json
+          jq -s -e 'any(.[]; .Action == "pass" and .Test == "TestDirectSourceSavedLifecycleRealSSH/ssh-url") and any(.[]; .Action == "pass" and .Test == "TestDirectSourceSavedLifecycleRealSSH/scp") and all(.[]; .Action != "skip")' cli-ssh.json
+ \
+            | tee native-git-hardening.json
+          jq -s -e '
+            (any(.[]; .Action == "run" and .Test == "TestNativeGitOptionsRetainMandatoryHardening"))
+            and (any(.[]; .Action == "pass" and .Test == "TestNativeGitOptionsRetainMandatoryHardening"))
+            and (any(.[]; .Action == "run" and .Test == "TestNativeGitHardeningWinsOverInheritedGitSettings"))
+            and (any(.[]; .Action == "pass" and .Test == "TestNativeGitHardeningWinsOverInheritedGitSettings"))
+            and (all(.[]; .Action != "skip" and .Action != "fail"))
+          ' native-git-hardening.json
       - name: Verify native Git SSH and host authentication
         working-directory: install/integrationctl/agentplugins
         shell: bash
