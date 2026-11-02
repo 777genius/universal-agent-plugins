@@ -199,6 +199,21 @@ test('legacy Skills API website records recover only canonical publisher install
     assert.equal(skillInstallCommand(modified), undefined, modified.id);
   }
 
+  // Malformed IDNA host labels and lone-surrogate slugs cannot crash a
+  // complete Vue Skills catalog while one legacy record is inspected.
+  for (const invalid of [
+    {
+      ...legacy,
+      id: 'skills-sh:xn--a.example:lark-mail',
+      providerUrl: 'https://www.skills.sh/site/xn--a.example/lark-mail',
+      source: { kind: 'external' as const, url: 'https://www.skills.sh/site/xn--a.example/lark-mail' },
+    },
+    { ...legacy, id: 'skills-sh:open.feishu.cn:\\ud800' },
+  ]) {
+    assert.equal(skillPublisherUrl(invalid), undefined);
+    assert.equal(skillInstallCommand(invalid), undefined);
+  }
+
   // The HTTPS CLI requires exact normative names; never invent one from the
   // listing slug, display title or a guessed source folder.
   for (const name of ['Lark Mail', 'BAD$(touch injected)', 'bad--name', 'bad/name']) {
