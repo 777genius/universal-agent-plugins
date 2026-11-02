@@ -9,6 +9,7 @@ import sys
 import tempfile
 
 from pi_project_native_e2e import PINS, checked_release, require_hosted, run, write
+from pi_local_model_fixture import ScriptedPiModel
 
 def checked_rpc(pi, project, env, approved, stage):
     command = [str(pi), "--mode", "rpc", "--no-session", "--offline",
@@ -157,6 +158,35 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
             if "initialize" not in methods or "tools/list" not in methods:
                 raise RuntimeError("real Pi MCP initialize/tools-list missing")
             state["stages"].append("real_Pi_MCP_initialize_and_tools_list")
+            # A deterministic loopback model can request a real codemode
+            # invocation through the installed Pi process. Unlike pi mcp
+            # list, only the native agent session may issue tools/call.
+            fixture_model = ScriptedPiModel()
+            try:
+                write(user, "models.json", json.dumps({"providers": {"uap-fixture": {
+                    "name": "UAP local CI model",
+                    "baseUrl": fixture_model.base_url,
+                    "api": "openai-completions",
+                    "apiKey": "local-test-only",
+                    "models": [{"id": "uap-scripted", "name": "Deterministic",
+                                "reasoning": False, "input": ["text"],
+                                "contextWindow": 32768, "maxTokens": 1024}]
+                }}}, separators=(",", ":")))
+                child = [str(pi), "--print", "--offline", "--no-session",
+                         "--approve", "--tools", "+codemode",
+                         "--model", "uap-fixture/uap-scripted",
+                         "Call the available Pi project MCP echo exactly once."]
+                run(child, project_a, env=env, timeout=95, max_output=1<<20)
+                requests, seen, calls, results, invalid = fixture_model.stats()
+            finally:
+                fixture_model.close()
+            if requests == 0 or seen == 0 or calls != 1 or results == 0 or invalid != 0:
+                raise RuntimeError("real Pi model-driven MCP dispatch not qualified")
+            actual_methods = logs[0].read_text().splitlines()
+            if actual_methods.count("tools/call") != 1:
+                raise RuntimeError("Pi did not issue exactly one real native project MCP tools/call")
+            state["mcp_tools_call_qualified"] = True
+            state["stages"].append("real_Pi_MCP_tools_call_via_local_scripted_model")
             skill("second")
             op(project_a,"update")
             if not any("second" in p.read_text() for p in (project_a/".pi/skills").glob("*/SKILL.md")):
