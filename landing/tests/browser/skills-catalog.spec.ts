@@ -185,6 +185,69 @@ test('unsupported standalone source is explicit and never requests a report', as
   expect(reportRequests).toEqual([]);
 });
 
+test('legacy API website publisher offers safe Install while malformed sources remain unavailable', async ({ page }) => {
+  const legacyUrl = 'https://www.skills.sh/site/open.feishu.cn/lark-mail';
+  const legacy = {
+    ...skill(),
+    id: 'skills-sh:open.feishu.cn:lark-mail',
+    title: 'lark-mail',
+    skillNameHint: 'lark-mail',
+    providerUrl: legacyUrl,
+    source: { kind: 'external', url: legacyUrl },
+    availability: 'unsupported-source',
+  };
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', async (route) => {
+    if (new URL(route.request().url()).pathname.endsWith('/document')) {
+      await route.fulfill({ status: 503, json: { code: 'document_unavailable' } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        items: [
+          legacy,
+          {
+            ...skill(1),
+            id: 'skills-sh:owner/repo/tree/main:unusable',
+            title: 'Unrecoverable source',
+            source: { kind: 'external', url: 'https://www.skills.sh/' },
+            providerUrl: 'https://www.skills.sh/',
+            availability: 'unsupported-source',
+          },
+        ],
+        page: 0,
+        total: 2,
+        hasMore: false,
+        view: 'popular',
+        cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' },
+      },
+    });
+  });
+
+  await page.goto('plugins/?tab=skills');
+  const cards = page.locator('.skills-catalog .skill-card');
+  await expect(cards).toHaveCount(2);
+  const recovered = cards.first();
+  await expect(recovered.getByRole('link', { name: 'Publisher source' })).toHaveAttribute(
+    'href', 'https://open.feishu.cn',
+  );
+  await recovered.getByRole('button', { name: 'Install lark-mail' }).click();
+  await expect(recovered.locator('.command-snippet code')).toHaveText(
+    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
+  );
+  await expect(recovered.locator('.command-snippet code')).not.toContainText('skills.sh');
+  const unavailable = cards.last();
+  await expect(unavailable.getByRole('button', { name: /Install/ })).toHaveCount(0);
+  await expect(unavailable).toContainText('No verified install source');
+  await expect(unavailable.getByRole('link', { name: 'Unrecoverable source' })).toHaveCount(0);
+
+  await recovered.getByRole('link', { name: 'lark-mail', exact: true }).click();
+  await expect(page).toHaveURL(/\/skills\/\?id=skills-sh/);
+  await expect(page.getByRole('heading', { level: 1, name: 'lark-mail' })).toBeVisible();
+  await expect(page.locator('.skills-detail__install-body .command-snippet')).toContainText(
+    'https://open.feishu.cn --skill lark-mail',
+  );
+});
+
 test('unverified GitHub Skill names open the installer picker without guessing a selector', async ({
   page,
 }) => {
