@@ -565,7 +565,11 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
                 <p>
                   {{ t('registryUi.skillSpector.referenceResolution') }}:
                   <code
-                    >{{ reference.status === 'uninspected' ? t('registryUi.skillSpector.referenceDirectoryStatus') : reference.status }} · {{ reference.disposition }} ·
+                    >{{
+                      reference.status === 'uninspected'
+                        ? t('registryUi.skillSpector.referenceDirectoryStatus')
+                        : reference.status
+                    }} · {{ reference.disposition }} ·
                     {{ reference.reference_kind }}</code
                   >
                 </p>
