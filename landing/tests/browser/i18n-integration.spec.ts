@@ -57,7 +57,7 @@ for (const locale of publishedLocales) {
             : messages.docs.englishLabel.replace('{label}', copy.guide!);
         await expect(restore.getByRole('link', { name: guideLabel })).toHaveAttribute(
           'href',
-          new RegExp(`/docs/${docsLocale}/use/manage\\.html#restore-project-dependencies$`),
+          new RegExp(`/docs/${docsLocale}/use/manage\\.html#restore-on-another-machine$`),
         );
         if (locale === 'en' || locale === 'ar') {
           await page.setViewportSize({ width: locale === 'ar' ? 390 : 1440, height: 1000 });
