@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm';
 import { ref } from 'vue';
 import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
 import { pluginCommands } from '../utils/commands.ts';
+import { isReviewedMarketingKit } from '../data/marketingKitDemo.ts';
 
 // Exercise the actual setup expressions, with Nuxt/Vue state supplied by this
 // isolated harness. No signed production data or installer is mutated.
@@ -61,6 +62,7 @@ function panelState({ installable = true, autoDetect = true, current = true, sta
     expectedDistribution: () => undefined,
     deliveryLabel: () => '',
     pluginCommands,
+    isReviewedMarketingKit,
     isFullyRetired: () => false,
     vendorInstallSource: () => undefined,
     watch: () => {},
