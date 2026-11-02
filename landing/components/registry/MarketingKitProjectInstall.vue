@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import {
   marketingKitProjectManifest,
-  marketingKitInstallCommand,
+  marketingKitProjectInstallCommand,
 } from '~/data/marketingKitDemo';
 
 const { t } = useI18n();
@@ -35,7 +35,7 @@ async function copyManifest() {
     <CommandSnippet
       kind="add"
       :label="t('registryUi.card.install')"
-      :command="marketingKitInstallCommand"
+      :command="marketingKitProjectInstallCommand"
       compact
     >
       <TypedCommand :lines="['npx -y universal-agent-plugins', 'install --scope project']" :delay="220" />
