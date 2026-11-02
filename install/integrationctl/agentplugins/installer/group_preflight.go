@@ -3,6 +3,7 @@ package installer
 import (
 	"context"
 	"fmt"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"

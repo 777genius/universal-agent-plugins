@@ -14,8 +14,9 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"golang.org/x/mod/semver"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"golang.org/x/mod/semver"
 )
 
 func validateLockedRuntime(configBody, packageBody, lockBody []byte) (lockedRuntimeConfig, string, error) {
