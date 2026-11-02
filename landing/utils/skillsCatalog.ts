@@ -43,8 +43,49 @@ export function skillRepositoryUrl(skill: SkillListing): string | undefined {
     ? `https://github.com/${repository}`
     : undefined;
 }
+/**
+ * Recognize the exact website-only DTO produced before the Skills API update.
+ * An old API encodes a safe publisher domain in the listing ID, but marks its
+ * own skills.sh listing link as unsupported-source. It cannot be installed as
+ * a package: only the original HTTPS publisher can be passed to UAP.
+ *
+ * Require all independent legacy fields to agree. No arbitrary provider URL,
+ * guessed GitHub path or inconsistent source identity is accepted. The CLI
+ * still verifies the publisher index and exact Skill before installation.
+ */
+function legacyPublisherUrl(skill: SkillListing): string | undefined {
+  if (
+    skill.providerId !== 'skills-sh' ||
+    skill.availability !== 'unsupported-source' ||
+    skill.source.kind !== 'external' ||
+    skill.source.repository ||
+    skill.source.url !== skill.providerUrl
+  ) return undefined;
+
+  const parts = /^skills-sh:([^:]+):([^:]+)$/.exec(skill.id);
+  const source = skillIdentityFromId(skill.id);
+  if (!parts || source?.kind !== 'external') return undefined;
+
+  // Chromium accepts some malformed IDNA hosts rejected by Node (xn--a).
+  // Until the original publisher is verified, reject all punycode legacy IDs
+  // rather than exposing a browser-only Install action.
+  if (/(?:^|\.)xn--/i.test(parts[1]!)) return undefined;
+
+  try {
+    const publisher = new URL(source.url);
+    const legacyListing = `https://www.skills.sh/site/${publisher.hostname}/${encodeURIComponent(parts[2]!.toLowerCase())}`;
+    return skill.providerUrl === legacyListing ? source.url : undefined;
+  } catch {
+    // Malformed IDNA or lone-surrogate catalog text must disable one entry,
+    // never throw while Vue renders the entire Skills catalog.
+    return undefined;
+  }
+}
+
 /** A publisher root, never the third-party catalog's detail URL. */
 export function skillPublisherUrl(skill: SkillListing): string | undefined {
+  const legacy = legacyPublisherUrl(skill);
+  if (legacy) return legacy;
   if (skill.source.kind !== 'external' || skill.availability !== 'unverified') return undefined;
   const raw = skill.source.url;
   try {
@@ -114,7 +155,8 @@ export function skillInstallCommand(
   targets?: readonly string[],
 ): string | undefined {
   const source = skillRepositoryUrl(skill) ?? skillPublisherUrl(skill);
-  if (!source || skill.availability === 'unsupported-source') return undefined;
+  if (!source || (skill.availability === 'unsupported-source' && !legacyPublisherUrl(skill)))
+    return undefined;
   // A website has no Git selector/picker: it must use a safe exact Skill name.
   if (skill.source.kind === 'external' && !supportedSkillName(skill.skillNameHint)) return undefined;
   const tokens = ['npx', 'universal-agent-plugins@latest', 'skills', 'add', source];

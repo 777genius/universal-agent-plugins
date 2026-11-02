@@ -1,0 +1,42 @@
+name: Skills install live API
+
+on:
+  pull_request:
+    paths:
+      - "landing/utils/skillsCatalog.ts"
+      - "landing/scripts/skills-install-api-probe.ts"
+      - ".github/workflows/skills-install-live-api.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skills-install-live-api-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  real-api:
+    name: Real Skills API install contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Classify actual publisher sources without any HTTP interception
+        env:
+          UAP_E2E_LIVE_SKILLS: '1'
+          UAP_SKILLS_INSTALL_REPORT_DIR: ${{ runner.temp }}/skills-install-api-report
+        run: node --experimental-strip-types landing/scripts/skills-install-api-probe.ts
+      - name: Retain API proof or failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: skills-install-real-api
+          path: ${{ runner.temp }}/skills-install-api-report/
+          if-no-files-found: warn
+          retention-days: 7

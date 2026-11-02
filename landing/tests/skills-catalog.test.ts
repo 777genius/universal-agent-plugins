@@ -159,6 +159,68 @@ test('HTTPS publishers use their origin and exact names, never a listing page or
   assert.equal(skillInstallCommand({ ...website, availability: 'unsupported-source' }), undefined);
 });
 
+test('legacy Skills API website records recover only canonical publisher installs', () => {
+  // The pre-#643 API returned a skills.sh listing URL as a source, marking
+  // website publishers unsupported even when the provider ID was canonical.
+  const listingUrl = 'https://www.skills.sh/site/open.feishu.cn/lark-mail';
+  const legacy: SkillListing = {
+    ...skill,
+    id: 'skills-sh:open.feishu.cn:lark-mail',
+    title: 'lark-mail',
+    skillNameHint: 'lark-mail',
+    providerUrl: listingUrl,
+    source: { kind: 'external', url: listingUrl },
+    availability: 'unsupported-source',
+  };
+  assert.equal(skillPublisherUrl(legacy), 'https://open.feishu.cn');
+  assert.equal(
+    skillInstallCommand(legacy),
+    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
+  );
+  assert.equal(
+    skillInstallCommand(legacy, ['codex', 'claude']),
+    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail --target "codex,claude"',
+  );
+
+  // Do not broaden the recovery into trusting arbitrary directory or publisher
+  // URLs: the canonical listing ID, origin, slug and source must all agree.
+  for (const modified of [
+    { ...legacy, id: 'skills-sh:other.example:lark-mail' },
+    { ...legacy, providerId: 'unrelated-provider' },
+    { ...legacy, providerUrl: 'https://www.skills.sh/site/open.feishu.cn/other' },
+    { ...legacy, providerUrl: 'https://skills.sh/site/open.feishu.cn/lark-mail' },
+    { ...legacy, source: { kind: 'external' as const, url: 'https://evil.example' } },
+    { ...legacy, source: { kind: 'external' as const, url: 'https://open.feishu.cn' } },
+    { ...legacy, id: 'skills-sh:https://evil.example:lark-mail' },
+    { ...legacy, id: 'skills-sh:127.0.0.1:lark-mail' },
+    { ...legacy, id: 'skills-sh:owner/repo/tree/main:lark-mail' },
+  ]) {
+    assert.equal(skillPublisherUrl(modified), undefined, modified.id);
+    assert.equal(skillInstallCommand(modified), undefined, modified.id);
+  }
+
+  // Malformed IDNA host labels and lone-surrogate slugs cannot crash a
+  // complete Vue Skills catalog while one legacy record is inspected.
+  for (const invalid of [
+    {
+      ...legacy,
+      id: 'skills-sh:xn--a.example:lark-mail',
+      providerUrl: 'https://www.skills.sh/site/xn--a.example/lark-mail',
+      source: { kind: 'external' as const, url: 'https://www.skills.sh/site/xn--a.example/lark-mail' },
+    },
+    { ...legacy, id: 'skills-sh:open.feishu.cn:\ud800' },
+  ]) {
+    assert.equal(skillPublisherUrl(invalid), undefined);
+    assert.equal(skillInstallCommand(invalid), undefined);
+  }
+
+  // The HTTPS CLI requires exact normative names; never invent one from the
+  // listing slug, display title or a guessed source folder.
+  for (const name of ['Lark Mail', 'BAD$(touch injected)', 'bad--name', 'bad/name']) {
+    assert.equal(skillInstallCommand({ ...legacy, skillNameHint: name }), undefined, name);
+  }
+});
+
 test('Direct Skill selection never reuses stale details for a different name', () => {
   assert.equal(skillMatchesSelection(skill, skill.id, 'frontend-design'), true);
   assert.equal(skillMatchesSelection(skill, skill.id, 'different-name'), false);

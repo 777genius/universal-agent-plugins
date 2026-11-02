@@ -106,11 +106,22 @@ jobs:
           UAP_LANDING_SCREENSHOT_DIR: ${{ runner.temp }}/uap-skillspector-live
         run: node --experimental-strip-types scripts/skillspector-live-smoke.mjs
 
+      - name: Verify actual public Skills install actions and API
+        working-directory: landing
+        timeout-minutes: 10
+        env:
+          UAP_E2E_LIVE_SKILLS: '1'
+          UAP_LANDING_DEPLOYMENT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          UAP_SKILLS_INSTALL_REPORT_DIR: ${{ runner.temp }}/uap-skills-install-live
+        run: node --experimental-strip-types scripts/skills-install-live-smoke.ts
+
       - name: Retain evidence and screenshots
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: skillspector-production-acceptance
-          path: ${{ runner.temp }}/uap-skillspector-live/
+          path: |
+            ${{ runner.temp }}/uap-skillspector-live/
+            ${{ runner.temp }}/uap-skills-install-live/
           if-no-files-found: warn
           retention-days: 7
