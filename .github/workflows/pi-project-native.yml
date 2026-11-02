@@ -7,6 +7,7 @@ on:
       - '.github/workflows/pi-project-native.yml'
       - 'scripts/pi_project_native_e2e.py'
       - 'scripts/pi_project_components_native_e2e.py'
+      - 'scripts/pi_local_model_fixture.py'
       - 'install/integrationctl/agentplugins/clients/pi/**'
       - 'install/integrationctl/agentplugins/clients/all/registry.go'
       - 'install/integrationctl/agentplugins/domain/clients.go'
@@ -69,6 +70,8 @@ jobs:
           compile(source, 'scripts/pi_project_native_e2e.py', 'exec')
           components = Path('scripts/pi_project_components_native_e2e.py').read_text(encoding='utf8')
           compile(components, 'scripts/pi_project_components_native_e2e.py', 'exec')
+          model = Path('scripts/pi_local_model_fixture.py').read_text(encoding='utf8')
+          compile(model, 'scripts/pi_local_model_fixture.py', 'exec')
           PY
       - name: Run genuine pinned native Pi project trust and A/B lifecycle
         shell: bash
