@@ -96,6 +96,35 @@ jobs:
         run: python -B -m unittest discover -s scripts -p test_package_manager_ci_policy.py
       - name: Execute the full portable catalog
         run: python -B scripts/package-manager-e2e.py --output "${{ runner.temp }}/package-manager-e2e"
+      - name: Verify immutable Git EOL bytes across platforms
+        working-directory: install/integrationctl/agentplugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -json -count=1 -timeout=5m ./adapters/sourceacquisition -run TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL | python -c '
+          import json, sys
+          events = [json.loads(line) for line in sys.stdin if line.strip()]
+          pkg = "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
+          name = "TestImmutableGitCheckoutStableWithTextAutoAndExplicitEOL"
+          matches = lambda action, test: any(
+              e.get("Package") == pkg and e.get("Test") == test and e.get("Action") == action
+              for e in events
+          )
+          package_pass = any(
+              e.get("Package") == pkg and e.get("Action") == "pass" and "Test" not in e
+              for e in events
+          )
+          ok = matches("run", name) and matches("pass", name) and package_pass and not any(
+              matches(action, name) for action in ("fail", "skip")
+          )
+          if not ok:
+              for e in events:
+                  if e.get("Action") == "output" and e.get("Package") == pkg:
+                      sys.stderr.write(e.get("Output", ""))
+              print("Exact Git EOL oracle did not run and pass.", file=sys.stderr)
+              sys.exit(1)
+          print("Confirmed exact Go run+pass events, package pass, no skip: " + name)
+          '
       - name: Retain execution evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
