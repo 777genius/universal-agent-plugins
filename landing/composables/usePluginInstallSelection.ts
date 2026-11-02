@@ -1,3 +1,4 @@
+import { isReviewedMarketingKit } from '../data/marketingKitDemo';
 import { computed, ref, watch, type Ref } from 'vue';
 import { clients } from '../data/clients.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
@@ -63,7 +64,7 @@ export function usePluginInstallSelection(
       const initial =
         availableClients.value.find((client) => client.id === 'cursor') ??
         availableClients.value[0];
-      targets.value = saved.scope === 'project' && plugin().name === 'marketing-kit'
+      targets.value = saved.scope === 'project' && isReviewedMarketingKit(plugin())
         ? ['claude', 'codex', 'gemini']
         : saved.targetIds.length
           ? (saved.targetIds as ClientID[])
@@ -71,7 +72,7 @@ export function usePluginInstallSelection(
             ? [initial.id]
             : [];
       scope.value = saved.scope;
-      autoDetect.value = saved.scope === 'project' && plugin().name === 'marketing-kit'
+      autoDetect.value = saved.scope === 'project' && isReviewedMarketingKit(plugin())
         ? false : saved.autoDetect;
       installExpanded.value = saved.expanded;
     },
@@ -120,7 +121,7 @@ export function usePluginInstallSelection(
     if (value === 'project' && !projectAvailable.value) return;
     choicePending = true;
     scope.value = value;
-    if (plugin().name === 'marketing-kit') {
+    if (isReviewedMarketingKit(plugin())) {
       // The project variant is a declarative manifest for three named clients,
       // never the saved one-client picker (often Cursor) or implicit discovery.
       if (value === 'project') {
