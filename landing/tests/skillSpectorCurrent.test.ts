@@ -40,7 +40,19 @@ test('published evidence requires exact source, revision, path, completed execut
   const subject = publishedScanSubject(listing);
   assert.ok(subject);
   assert.equal(hasCurrentPublishedScan(currentReport(), subject), true);
+  const partlyInspected = currentReport();
+  partlyInspected.records[0]!.status = 'partial';
+  partlyInspected.records[0]!.coverage!.status = 'partial';
+  partlyInspected.records[0]!.coverage!.fully_inspected_files = 0;
+  partlyInspected.records[0]!.coverage!.partially_inspected_files = 1;
+  assert.equal(hasCurrentPublishedScan(partlyInspected, subject), true);
   const variants: Array<(report: ReturnType<typeof currentReport>) => void> = [
+    report => {
+      report.records[0]!.status = 'partial';
+      report.records[0]!.coverage!.status = 'partial';
+      report.records[0]!.coverage!.fully_inspected_files = 0;
+      report.records[0]!.coverage!.partially_inspected_files = 0;
+    },
     report => { report.records[0]!.freshness = 'historical'; },
     report => { report.records[0]!.execution!.state = 'failed'; },
     report => { report.records[0]!.source.path = 'skills/different'; },

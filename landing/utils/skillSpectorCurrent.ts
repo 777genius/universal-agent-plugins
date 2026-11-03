@@ -58,6 +58,9 @@ export function hasCurrentPublishedScan(
     record.freshness === 'current' &&
     record.execution?.state === 'completed' &&
     (record.status === 'complete' || record.status === 'partial') &&
-    record.coverage?.status === record.status,
+    record.coverage?.status === record.status &&
+    // A partial result that inspected no Skill files is not a scan.
+    ((record.coverage?.fully_inspected_files ?? 0) +
+      (record.coverage?.partially_inspected_files ?? 0)) > 0,
   );
 }
