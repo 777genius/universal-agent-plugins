@@ -15,4 +15,4 @@ The 30+30 JSON files include the target ID, CLI path and fixture names, but not 
 - **Evidence critic:** Merely pinning a version in a YAML command is not enough; retain the observed value in the same JSON as install outcomes and bind to exact source commit. Vendor installer/VS Code downloads may move even when source URLs do not.
 - **Security/compatibility critic:** Do not capture full `env`, OAuth, commands with login credentials, or native user profiles. Failed version queries must be visible, not treated as success. Avoid introducing a new external dependency or modifying production adapters.
 
-**State:** documented reproducibility gap; code and current-head qualification pending.
+**State:** version and CI/fixture provenance collection plus focused regression pushed in PR #698; current-head live artifact verification pending.

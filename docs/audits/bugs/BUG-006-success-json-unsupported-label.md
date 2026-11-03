@@ -21,4 +21,4 @@ The source was *not refused* at install time. Classifying the entire successful 
 - **Correctness critic:** A per-component unsupported capability is not equivalent to a failed package install. Report the actual top-level CLI result first and do not downgrade a success to a source refusal.
 - **Security critic:** This only corrects evidence classification. It does not change installer behavior, whitelist unsupported sources, skip security policy or turn incomplete proof into PASS.
 
-**State:** reproduced from original real JSON; minimal classifier fix + current-head verification pending.
+**State:** exit-code-gated refusal classifier and focused regression pushed in PR #698; reclassification on current-head real artifacts pending.

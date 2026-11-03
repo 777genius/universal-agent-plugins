@@ -16,4 +16,4 @@ In `scripts/live-install-audit.py`, `isolated_client_env` currently starts from 
 - **Compatibility critic:** Preserve only the OS/runtime plumbing explicitly needed by native CLIs and public network fetches; test macOS canonical paths and Windows. Do not sanitize inside the product, change CLI auth behavior or weaken the security scanner.
 - **Evidence limitation:** This is a reproducible code-path exposure, not an observed exfiltration. No claim of safe credentials can be made about pre-fix runs unless the runner environment is independently known.
 
-**State:** confirmed by source inspection; minimal fix and final-head CI qualification pending.
+**State:** explicit child environment allowlist and credential-canary regression pushed in PR #698; current-head Linux/macOS/Windows CI and independent security review pending.

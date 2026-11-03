@@ -22,4 +22,4 @@ Actual UAP install exit was 1, no native files were written, and the harness lab
 - **Critic 1 — correctness:** A broad match on `not supported` is insufficient: the actual error says `does not support complete target set`. Match the stable, exact emitted phrase instead of reinterpreting arbitrary failures.
 - **Critic 2 — security/evidence:** A classification change must never convert nonzero installs to success or mask any unexpected failures. Preserve the original stderr, nonzero CI exit and a separate `documented-or-source-unsupported` status.
 
-**Status:** reproduced in historical uploaded JSON, narrow fix and final-head regression pending. This report alone does not qualify a merge.
+**Status:** narrow source-target classifier fix and focused regression pushed in PR #698; current-head live artifacts and independent review still required. This report does not qualify a merge.

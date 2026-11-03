@@ -15,4 +15,4 @@ The historical 30-source Grok and Claude artifacts from [41727674724](https://gi
 - **Rollback/data-integrity critic:** A nonzero exit is not sufficient negative evidence; failure paths must be inspected for partial registered state, including a pending record rather than only verified installations.
 - **False-positive/security critic:** Different native file hashes from the client's first launch are not proof of UAP-owned residue. Use name+target registration and existing identity-attributed native file/Skill oracles; never mark a failed install as success.
 
-**State:** observed failed-source changes and missing rollback verification; instrumented negative-path inspection pending qualification.
+**State:** post-failure real list inspection and pending-record regression pushed in PR #698; original-source artifact deltas remain observations, not confirmed product defects. Current-head E2E pending.

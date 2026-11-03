@@ -15,4 +15,4 @@ In `scripts/live-install-audit.py`, every Skill case creates a foreign project S
 - **Data-loss critic:** A sentinel in the user's home but outside `.cursor`/`.claude`/`.config/opencode` cannot catch an adapter deleting a whole client-native folder. An in-profile neighbor is the minimum useful destructive-removal canary.
 - **Compatibility critic:** The canary must remain under a disposable HOME after environment rebinding, must not masquerade as a native plugin and cannot substitute for a real client binary. This is coverage hardening, not automatic proof of activation.
 
-**State:** missing coverage confirmed by source review; patch and current-head real evidence pending.
+**State:** native profile sentinel expanded to every local adapter and isolated no-network regression pushed in PR #698; current-head client E2E pending.
