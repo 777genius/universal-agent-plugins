@@ -668,12 +668,6 @@ linters:
       - path: ^install/integrationctl/agentplugins/domain/directory\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
-      # The next focused files contain exact pre-existing high-complexity
-      # functions moved from directory.go. Retain its measured legacy baseline;
-      # no new functions or complexity are exempted by this relocation.
-      - path: ^install/integrationctl/agentplugins/domain/directory_(eligibility|resolution)\.go$
-        linters: [funlen, gocyclo, gocognit]
-        text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/managedstdio/launcher\.go$
         linters: [gocyclo]
         text: 'cyclomatic complexity'
@@ -683,11 +677,6 @@ linters:
       - path: ^install/integrationctl/agentplugins/transaction/kernel\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
-      # Exact unchanged kernel operation bodies relocated into cohesive files.
-      # Keep the same per-rule baseline, not an unrestricted path suppression.
-      - path: ^install/integrationctl/agentplugins/transaction/kernel_directory_(write|remove|recovery)\.go$
-        linters: [funlen, gocyclo, gocognit]
-        text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/packagesnapshot/snapshot\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'is too long|too many statements|cyclomatic complexity|cognitive complexity'
