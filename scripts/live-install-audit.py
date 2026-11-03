@@ -269,6 +269,17 @@ def matching_installations(response, identity, target, kind, item):
         else:
             accepted = node.get("name") == identity
         if accepted and node.get("installation_id"):
+            # An exact-SHA Git selector must resolve to that SHA, not merely to
+            # a repository with a matching display name. Validate the native
+            # binding's recorded immutable commit, not CLI stdout prose.
+            if kind == "plugin" and isinstance(item, str) and item.startswith("github:"):
+                commit = item.rsplit("@", 1)[-1]
+                if not any(
+                    isinstance(client, dict) and client.get("client_id") == target
+                    and client.get("package_revision", {}).get("resolved_revision") == commit
+                    for client in clients
+                ):
+                    continue
             # A catalogue name is not enough to prove the selected signed
             # distribution: tie reviewed aliases to the signed directory
             # product and ensure immutable source revision/digests exist.
