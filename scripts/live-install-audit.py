@@ -52,6 +52,15 @@ def validate_fixtures(doc):
         raise ValueError("Must have exactly 30 distinct Skills")
     if set(targets) != set(NATIVE_ROOTS):
         raise ValueError("All 15 advertised adapters must be represented")
+    direct = doc["plugin_declared_names"]
+    exact_git = [v for v in names if v.startswith("github:")]
+    if set(direct) != set(exact_git + ["777genius/chrome-devtools-bridge"]):
+        raise ValueError("All external manifest identities must be supplied and no stale alias mappings")
+    for plugin in exact_git:
+        if not re.fullmatch(r"github:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[a-f0-9]{40}", plugin):
+            raise ValueError("Direct plugin source is not a pinned root package")
+        if not re.fullmatch(r"[a-z][a-z0-9-]*", direct[plugin]):
+            raise ValueError("Invalid direct package declared identity")
     for skill in skills:
         if not re.fullmatch(r"[0-9a-f]{40}", skill["ref"]):
             raise ValueError("Skill lacks a complete immutable commit")
@@ -215,8 +224,10 @@ def matching_installations(response, identity, target, kind, item):
             accepted = source == expected_source
         elif item == "777genius/chrome-devtools-bridge":
             accepted = node.get("name") == identity and isinstance(source, str)
-        elif isinstance(item, str) and item.startswith("github:sanity-io/"):
-            accepted = node.get("name") == "sanity" and "sanity-io/agent-toolkit" in source
+        elif isinstance(item, str) and item.startswith("github:"):
+            expected_repo = item.split("@", 1)[0][len("github:"):].casefold()
+            accepted = (node.get("name") == identity and isinstance(source, str)
+                        and expected_repo in source.casefold())
         else:
             accepted = node.get("name") == identity
         if accepted and node.get("installation_id"):
@@ -268,7 +279,7 @@ def uninstall_native_codex_plugin(identity, home, case_root, env, cwd):
             "native_plugin_absent": no_plugin, "native_marketplace_absent": no_market}
 
 
-def do_case(cli, target, kind, item, index, runroot):
+def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
     project = case_root / "project"
@@ -295,9 +306,7 @@ def do_case(cli, target, kind, item, index, runroot):
                DO_NOT_TRACK="1")
     before = snapshot(native_roots)
     if kind == "plugin":
-        identity = ("chrome-devtools" if item == "777genius/chrome-devtools-bridge"
-                    else "sanity" if item.startswith("github:sanity-io/agent-toolkit@")
-                    else item)
+        identity = plugin_declared_names.get(item, item)
         args = ["add", item, "--target", target, "--scope", "user", "--format", "json"]
         scope = ["--scope", "user"]
     else:
@@ -444,7 +453,8 @@ def main():
         runroot = Path(temp)
         for i, item in enumerate(selected):
             try:
-                result = do_case(cli, args.target, args.kind, item, i, runroot)
+                result = do_case(cli, args.target, args.kind, item, i, runroot,
+                                 doc["plugin_declared_names"])
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
                           "status": "harness-error", "error": repr(e)}
