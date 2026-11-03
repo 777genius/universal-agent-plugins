@@ -24,6 +24,7 @@ func packageManagerEvolutionCases() map[string]func(*testing.T) {
 		"graph-update-failure-retry": pmEvolutionFailedUpdate,
 		"cascade-remove-drift":       pmEvolutionRemoveDrift,
 		"prune-drift-after-lock":     pmEvolutionPruneDrift,
+		"git-pull-shared-owner-drift": pmEvolutionPostPullSharedOwnerAndDrift,
 		"competing-lock-writers":     pmEvolutionCompetingWriters,
 		"selective-cache-hydration":  pmEvolutionSelectiveHydration,
 	}
