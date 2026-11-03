@@ -34,7 +34,7 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 	for _, target := range directoryEligibilityTargets(request.Targets) {
 		entry := targetByClient(policy.Targets, target)
 		// Only absence of signed ChatGPT support can use the source-only lane.
-		if !(entry == nil && request.Purpose == DirectoryResolveContext7ChatGPTPreparation) {
+		if entry != nil || request.Purpose != DirectoryResolveContext7ChatGPTPreparation {
 			if entry == nil || !containsScope(entry.Scopes, request.Scope) {
 				return &eligibilityReason{"incomplete_targets", "release does not support complete target set; missing " + string(target)}
 			}
@@ -182,7 +182,7 @@ func uniqueClients(values []ClientID) []ClientID {
 	return out
 }
 func ineligibleError(id string, reasons []eligibilityReason) error {
-	parts := []string{}
+	parts := make([]string, 0, len(reasons))
 	noSafeUpdate := false
 	for _, r := range reasons {
 		parts = append(parts, r.message)
@@ -197,7 +197,7 @@ func ineligibleError(id string, reasons []eligibilityReason) error {
 	return fmt.Errorf("%w in %q: %s", ErrDirectoryIneligible, id, strings.Join(parts, "; "))
 }
 func joinDiagnosticMessages(values []DirectoryDiagnostic) string {
-	parts := []string{}
+	parts := make([]string, 0, len(values))
 	for _, v := range values {
 		parts = append(parts, v.DistributionID+": "+v.Message)
 	}
@@ -242,7 +242,7 @@ func compareSemver(left, right string) (int, error) {
 	if e != nil {
 		return 0, e
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if a.core[i] < b.core[i] {
 			return -1, nil
 		}
