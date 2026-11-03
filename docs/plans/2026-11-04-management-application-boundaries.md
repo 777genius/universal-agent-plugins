@@ -240,3 +240,11 @@ free of architectural debt.
   ownership; cover actual CLI build inputs in CI; detach retained snapshots at
   the new direct-call boundary. No new framework or domain DTO duplication.
 - Implementation reviews and final-head evidence: pending.
+- Before production changes, the actual CLI + SDK characterization passed on
+  Go 1.26.10: `node --experimental-strip-types --test test/production-engine.test.ts`
+  from `sdks/typescript` (27.63 s including source build; one pass, zero failures
+  or skips). SDK build and typecheck passed. The test also proves that replaying
+  the earlier create after deletion/restart does not recreate files, preserves
+  a different edit backup, and refuses a lost unaccepted review. A version-1
+  observation emitted by that baseline binary was retained for storage
+  compatibility testing.
