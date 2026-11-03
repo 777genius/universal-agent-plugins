@@ -83,6 +83,23 @@ execute every new composed `deps check` scenario.
 The PR description is the final exact-head CI and review ledger, allowing it to
 record completed evidence without changing already qualified source files.
 
+Two fresh final critics then independently identified the same remaining
+composition issue: the agreement transfer reader rejected nonregular `FileInfo`
+before reaching the shared reader, so an unavailable Windows placeholder could
+still be labeled `manifest_invalid` or `lock_invalid`. The minimal correction
+removes this duplicate pre-read type gate, preserving missing-file handling and
+the outer post-read identity check. A wrapper regression verifies that strict
+admission error identity survives into the command diagnostic. The platform
+reader's synthetic placeholder test remains the attribute-ordering oracle; no
+live cloud-volume test is claimed. Final source qualification follows this
+correction and its independent re-review.
+Both final critics independently approved the correction after focused tests.
+The new wrapper regression failed for both manifest and lock before the fix.
+A broader local transfer selector still encounters the documented protected Git
+runner failure at private repository initialization in `TestDependencyTransferGraphRoundTrip`;
+the unchanged real-Git path remains subject to supported-host E2E rather than a
+local runner substitution or skipped qualification.
+
 ## Evidence and overlap inventory
 
 Upstream issue descriptions are reports, not reproductions performed by this PR.

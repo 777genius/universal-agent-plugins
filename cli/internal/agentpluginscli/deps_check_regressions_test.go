@@ -9,9 +9,36 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
+
+func TestDependencyTransferFilePreservesAdmissionClassification(t *testing.T) {
+	for _, tc := range []struct{ name, stage string }{{"uap.toml", "manifest"}, {"uap.lock", "lock"}} {
+		t.Run(tc.stage, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), tc.name)
+			if err := os.Mkdir(path, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			file, err := readDependencyTransferFile(path)
+			if !errors.Is(err, atomicfile.ErrUnsafeFile) {
+				t.Fatalf("agreement wrapper replaced strict admission identity: %v", err)
+			}
+			issue := dependencyDocumentReadIssue(t.Context(), tc.stage, path, file, err)
+			if issue == nil || issue.Outcome != dependencyCheckInvalid || issue.Code != tc.stage+"_invalid" {
+				t.Fatalf("unsafe agreement classification: %+v", issue)
+			}
+			// Operational platform errors must retain a different verdict when
+			// the same shared reader cannot inspect the agreement's bytes.
+			unavailable := &os.PathError{Op: "open", Path: path, Err: os.ErrPermission}
+			issue = dependencyDocumentReadIssue(t.Context(), tc.stage, path, file, unavailable)
+			if issue == nil || issue.Outcome != dependencyCheckError || issue.Code != tc.stage+"_unreadable" {
+				t.Fatalf("operational agreement classification: %+v", issue)
+			}
+		})
+	}
+}
 
 func TestDependencyCheckMissingPackageContentAndTemporaryStorage(t *testing.T) {
 	t.Run("required_manifest_is_absent", func(t *testing.T) {

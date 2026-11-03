@@ -149,9 +149,6 @@ func readDependencyTransferFile(path string) (dependencyTransferFile, error) {
 	if err != nil {
 		return file, err
 	}
-	if !info.Mode().IsRegular() {
-		return file, fmt.Errorf("%s must be a regular non-symlink file", path)
-	}
 	limit, err := dependencyDocumentLimit(path)
 	if err != nil {
 		return file, err
