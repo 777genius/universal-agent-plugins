@@ -419,6 +419,17 @@ export function createSkillSpectorClient(
   };
   return {
     reportFor,
+    async currentSourceStateIds(): Promise<ReadonlySet<string>> {
+      const manifest = await loadManifest();
+      if (manifest.schema_version !== 3) return new Set();
+      const ids: string[] = [];
+      for (const state of manifest.source_states) {
+        if (state.current === true && state.state === 'resolved' &&
+            typeof state.id === 'string' && Array.isArray(state.selected_ids) &&
+            state.selected_ids.length === 1) ids.push(state.id);
+      }
+      return new Set(ids);
+    },
     async coverageSummary(): Promise<SkillSpectorCoverageSummary | undefined> {
       const manifest = await loadManifest();
       return manifest.schema_version === 3

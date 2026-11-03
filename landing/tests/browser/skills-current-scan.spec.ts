@@ -98,6 +98,27 @@ test('default Skills browse shows only a physically executed current source scan
   expect(errors).toEqual([]);
 });
 
+test('many unscanned popular Skills cannot crowd a current scan out of the bounded window', async ({ page }) => {
+  const { errors } = await prepare(page, 'current');
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', route => {
+    const pageNumber = Number(new URL(route.request().url()).searchParams.get('page') ?? '0');
+    const items = pageNumber < 2
+      ? Array.from({ length: 48 }, (_, i) => skill('no-scan/repo-' + (pageNumber * 48 + i), 'candidate'))
+      : [skill('affaan-m/ecc', 'recsys-pipeline-architect')];
+    return route.fulfill({ json: {
+      items, page: pageNumber, total: 97, hasMore: pageNumber < 2, view: 'popular',
+      cache: { status: 'fresh', fetchedAt: evidence.generated_at },
+    } });
+  });
+  await page.goto('plugins/?tab=skills');
+  const cards = page.locator('.skills-catalog .skill-card');
+  await expect(cards).toHaveCount(1);
+  await expect(cards.first()).toHaveAttribute(
+    'data-skill-id', 'skills-sh:affaan-m/ecc:recsys-pipeline-architect',
+  );
+  expect(errors).toEqual([]);
+});
+
 test('historical-only report does not count as a current scan and can be browsed explicitly', async ({ page }) => {
   const { errors } = await prepare(page, 'historical');
   await page.goto('plugins/?tab=skills');

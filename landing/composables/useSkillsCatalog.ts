@@ -96,6 +96,15 @@ export function useSkillsCatalog(
     }
 
     try {
+      // The v3 source-state index is a cheap candidate prefilter, never scan
+      // evidence by itself. Final authorization still verifies the SHA-256 shard.
+      const currentSourceIds = requireCurrentScan
+        ? await client?.currentSourceStateIds().catch(() => {
+            reportUnavailable = true;
+            return undefined;
+          })
+        : undefined;
+      if (request !== generation) return;
       while (collected.length < nextLimit && !signal.aborted) {
         if (requireCurrentScan && queue.length && evaluated < maxCandidatesPerLoad) {
           const batch = queue.splice(0, Math.min(8, maxCandidatesPerLoad - evaluated));
@@ -132,8 +141,10 @@ export function useSkillsCatalog(
           if (!item || typeof item !== 'object' || typeof item.id !== 'string') continue;
           if (seen.has(item.id) || !skillInstallCommand(item)) continue;
           seen.add(item.id);
-          if (requireCurrentScan) queue.push(item);
-          else collected.push(item);
+          if (requireCurrentScan) {
+            const subject = publishedScanSubject(item);
+            if (subject && currentSourceIds?.has(subject.sourceStateId)) queue.push(item);
+          } else collected.push(item);
         }
         latest = page;
       }
