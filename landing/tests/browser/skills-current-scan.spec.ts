@@ -248,7 +248,7 @@ test('filtered search retains candidates past 64 inspections, displays past 48 a
     step++
   ) {
     await page.getByRole('button', { name: 'Show more Skills' }).click();
-    await expect(page.locator('.catalog-more button')).not.toHaveText('Loading Skills…');
+    await expect(page.getByRole('button', { name: 'Loading Skills…', exact: true })).toHaveCount(0);
   }
   await expectedIds(
     page,
@@ -366,5 +366,31 @@ test('history restores independent filters and Arabic dialog fits the viewport',
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(320);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('late verified scan replies cannot repopulate an obsolete filtered search', async ({ page }) => {
+  const { errors } = await prepare(page);
+  let release!: () => void;
+  let started!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const requested = new Promise<void>(resolve => { started = resolve; });
+  await page.route('**/reports/skillspector/v3/shards/**', async route => {
+    started();
+    await gate;
+    return route.fallback();
+  });
+  await page.goto('plugins/?tab=skills&skillScan=scanned');
+  await requested;
+  await openFilters(page);
+  await page.getByRole('checkbox', { name: 'Scanned by SkillSpector', exact: true }).uncheck();
+  await closeFilters(page);
+  await expectedIds(page, allNames);
+  const reply = page.waitForResponse(response => response.url().includes('/v3/shards/'));
+  release();
+  await reply;
+  await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false');
+  await expectedIds(page, allNames);
+  expect(new URL(page.url()).searchParams.has('skillScan')).toBe(false);
   expect(errors).toEqual([]);
 });

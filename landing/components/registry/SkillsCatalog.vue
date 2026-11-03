@@ -184,7 +184,7 @@ const staleDate = computed(() => {
                 type="checkbox"
                 aria-labelledby="skills-filter-scanned-label"
                 aria-describedby="skills-filter-scanned-help"
-              />
+              >
               <span>
                 <strong id="skills-filter-scanned-label">{{ t('registryUi.skills.filters.scanned') }}</strong>
                 <span id="skills-filter-scanned-help">{{
@@ -198,7 +198,7 @@ const staleDate = computed(() => {
                 type="checkbox"
                 aria-labelledby="skills-filter-remarks-label"
                 aria-describedby="skills-filter-remarks-help"
-              />
+              >
               <span>
                 <strong id="skills-filter-remarks-label">{{ t('registryUi.skills.filters.noRemarks') }}</strong>
                 <span id="skills-filter-remarks-help">{{
