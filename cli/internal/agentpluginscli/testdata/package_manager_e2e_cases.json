@@ -39,7 +39,8 @@
     "cascade-remove-drift",
     "prune-drift-after-lock",
     "competing-lock-writers",
-    "selective-cache-hydration"
+    "selective-cache-hydration",
+    "git-pull-shared-owner-drift"
   ],
   "adversarial": [
     "foreign-native-settings",
