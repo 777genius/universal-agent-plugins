@@ -89,6 +89,27 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertTrue(Path(env["CODEX_HOME"]).is_relative_to(home))
         self.assertEqual(env["CI"], "true")
 
+    def test_version_evidence_is_short_and_never_claims_failed_probe(self):
+        audit = load_audit()
+        with patch.object(audit, "call", return_value={
+            "stdout_tail": "codex-cli 0.153.4\n" + ("A" * 500),
+            "stderr_tail": "", "exit_code": 0, "timeout": False,
+        }) as run:
+            reported = audit.version_evidence(["codex", "--version"], {"HOME": "/isolated"}, "/tmp")
+            self.assertEqual(reported["status"], "reported")
+            self.assertLessEqual(len(reported["value"]), 200)
+            self.assertEqual(run.call_args.args[1], {"HOME": "/isolated"})
+        for exit_code, stdout, timeout, status in [
+            (2, "version 1", False, "probe-failed"),
+            (0, "", False, "empty-output"),
+            (None, "", True, "timeout"),
+        ]:
+            with patch.object(audit, "call", return_value={
+                "stdout_tail": stdout, "stderr_tail": "",
+                "exit_code": exit_code, "timeout": timeout,
+            }):
+                self.assertEqual(audit.version_evidence(["client", "--version"], {}, "/tmp")["status"], status)
+
     def test_refuses_case_data_outside_disposable_root(self):
         audit = load_audit()
         with TemporaryDirectory() as temporary:

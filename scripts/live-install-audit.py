@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 from pathlib import Path
 import re
 import shutil
@@ -92,6 +93,19 @@ def call(argv, env, cwd, timeout=105):
         return {"exit_code": None, "stdout_tail": "", "stderr_tail": str(e)[-1800:], "timeout": True}
     except OSError as e:
         return {"exit_code": None, "stdout_tail": "", "stderr_tail": str(e)[-1800:], "timeout": False}
+
+
+def version_evidence(argv, env, cwd):
+    """Record a short, observable version; a successful path alone is not proof."""
+    observed = call(argv, env, cwd, 25)
+    value = (observed["stdout_tail"] or observed["stderr_tail"]).strip()
+    if observed["timeout"]:
+        return {"status": "timeout", "exit_code": observed["exit_code"]}
+    if observed["exit_code"] != 0:
+        return {"status": "probe-failed", "exit_code": observed["exit_code"]}
+    if not value:
+        return {"status": "empty-output", "exit_code": 0}
+    return {"status": "reported", "value": value[:200], "exit_code": 0}
 
 
 def snapshot(root):
@@ -586,8 +600,16 @@ def main():
     report_dir.mkdir(parents=True, exist_ok=True)
     cases = doc["plugin_aliases"] if args.kind == "plugin" else doc["skills"]
     selected = cases[:args.limit]
+    source_sha = os.environ.get("GITHUB_SHA", "")
+    workflow_run = os.environ.get("GITHUB_RUN_ID", "")
     report = {"checked_at": datetime.now(timezone.utc).isoformat(),
               "target": args.target, "kind": args.kind, "cli": args.cli,
+              "github_sha": source_sha if re.fullmatch(r"[a-f0-9]{40}", source_sha) else None,
+              "github_run_id": workflow_run if workflow_run.isdigit() else None,
+              "fixture_sha256": hashlib.sha256(FIXTURES.read_bytes()).hexdigest(),
+              "platform": sys.platform, "architecture": platform.machine(),
+              "client_binary": None, "client_version": {"status": "not-probed"},
+              "cli_version": {"status": "not-probed"},
               "fixture_count": len(cases), "cases_attempted": 0,
               "source_selection_complete": args.limit == 30,
               "full_coverage": False, "results": []}
@@ -613,6 +635,17 @@ def main():
     cli = str(Path(args.cli).resolve(strict=True))
     with tempfile.TemporaryDirectory(prefix="uap-live-30x30-") as temp:
         runroot = Path(temp)
+        probe_case = runroot / "version-probe"
+        probe_home, probe_data = probe_case / "home", probe_case / "uap-data"
+        probe_home.mkdir(parents=True)
+        probe_data.mkdir()
+        probe_env = isolated_client_env(probe_home, probe_case, probe_data)
+        report["cli_version"] = version_evidence([cli, "version"], probe_env, probe_case)
+        if eligible_binaries:
+            native = next(name for name in eligible_binaries if shutil.which(name))
+            report["client_binary"] = native
+            report["client_version"] = version_evidence([native, "--version"], probe_env, probe_case)
+        save()
         for i, item in enumerate(selected):
             try:
                 result = do_case(cli, args.target, args.kind, item, i, runroot,
