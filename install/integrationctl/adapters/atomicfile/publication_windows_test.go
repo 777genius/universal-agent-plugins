@@ -34,7 +34,7 @@ func TestWindowsAtomicPublicationHeldReaders(t *testing.T) {
 		if err := Write(path, []byte("old complete bytes"), 0600); err != nil {
 			t.Fatal(err)
 		}
-		reader, err := openReadFile(path)
+		reader, err := OpenReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -122,7 +122,7 @@ func TestWindowsAtomicPublicationUnicodeLongPath(t *testing.T) {
 	if err := Write(path, []byte("old unicode bytes"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	reader, err := openReadFile(path)
+	reader, err := OpenReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
