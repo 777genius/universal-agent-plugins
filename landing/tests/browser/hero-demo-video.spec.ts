@@ -16,6 +16,29 @@ const fakePlayer = `<!doctype html><html><body><script>
   }), '*');
 </script></body></html>`;
 
+test('demo play label and icon retain contrast in light and dark themes', async ({ page }) => {
+  await setSignedMirrorTestTime(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('./');
+  await hydrated(page);
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((name) => window.localStorage.setItem('theme', name), theme);
+    await page.reload();
+    await hydrated(page);
+    await expect(page.locator('.v-theme--' + theme).first()).toBeVisible();
+    const button = page.locator('.hero-demo-video__launch');
+    await expect(button).toBeVisible();
+    const appearance = await button.evaluate((element) => ({
+      label: getComputedStyle(element.querySelector('span')!).color,
+      icon: getComputedStyle(element.querySelector('svg')!).color,
+      overlay: getComputedStyle(element).backgroundColor,
+    }));
+    expect(appearance.label).toBe('rgb(255, 255, 255)');
+    expect(appearance.icon).toBe('rgb(255, 255, 255)');
+    expect(appearance.overlay).toBe('rgba(4, 7, 15, 0.6)');
+  }
+});
+
 for (const width of [1440, 390, 320]) {
   test(`demo at ${width}px opens fullscreen and restores the poster on authenticated Mux media end`, async ({ page }) => {
     await setSignedMirrorTestTime(page);

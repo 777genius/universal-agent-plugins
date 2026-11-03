@@ -68,7 +68,11 @@ func managementRecoveryFiles(app App) (dependencySyncRequest, error) {
 	return files, err
 }
 func managementReadOptional(path string) ([]byte, error) {
-	body, err := os.ReadFile(path)
+	limit, err := dependencyDocumentLimit(path)
+	if err != nil {
+		return nil, err
+	}
+	body, err := readDependencyDocument(path, limit)
 	if os.IsNotExist(err) {
 		return nil, nil
 	}

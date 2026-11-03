@@ -6,14 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/environmentstore"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
@@ -32,7 +33,7 @@ func readCompatibleDependencyLock(path string, requirements environment.Requirem
 	return readValidatedDependencyLock(path, requirements, true)
 }
 func readValidatedDependencyLock(path string, requirements environment.Requirements, compatible bool) (environment.Lock, error) {
-	body, err := os.ReadFile(path)
+	body, err := readDependencyDocument(path, maxDependencyLockBytes)
 	if err != nil {
 		return environment.Lock{}, err
 	}
@@ -40,6 +41,19 @@ func readValidatedDependencyLock(path string, requirements environment.Requireme
 }
 
 func decodeDependencyLockBytes(body []byte, requirements environment.Requirements, compatible bool) (environment.Lock, error) {
+	if int64(len(body)) > maxDependencyLockBytes {
+		return environment.Lock{}, fmt.Errorf("decode uap.lock: exceeds %d bytes", maxDependencyLockBytes)
+	}
+	// Portable lock identities must not be silently normalized from invalid UTF-8.
+	if !utf8.Valid(body) {
+		return environment.Lock{}, errors.New("decode uap.lock: invalid UTF-8")
+	}
+	// encoding/json permits repeated object keys even with DisallowUnknownFields.
+	// A lock is an authority document: reject ambiguous nested and escaped keys
+	// before any pin or installer state can be interpreted.
+	if err := conformance.RejectDuplicateJSONKeysFolded(body); err != nil {
+		return environment.Lock{}, fmt.Errorf("decode uap.lock: %w", err)
+	}
 	var err error
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.DisallowUnknownFields()
@@ -64,12 +78,23 @@ func decodeDependencyLockBytes(body []byte, requirements environment.Requirement
 	return lock, nil
 }
 
-func writeDependencyLock(path string, lock environment.Lock) error {
+func encodeDependencyLockBytes(lock environment.Lock) ([]byte, error) {
 	body, err := json.MarshalIndent(lock, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)+1) > maxDependencyLockBytes {
+		return nil, fmt.Errorf("encode uap.lock: exceeds %d bytes", maxDependencyLockBytes)
+	}
+	return append(body, '\n'), nil
+}
+
+func writeDependencyLock(path string, lock environment.Lock) error {
+	body, err := encodeDependencyLockBytes(lock)
 	if err != nil {
 		return err
 	}
-	return atomicfile.Write(path, append(body, '\n'), 0o600)
+	return atomicfile.Write(path, body, 0o600)
 }
 
 func (resolver dependencyResolver) Resolve(ctx context.Context, requirement environment.Requirement, targets []string, previous *environment.LockedPackage, update bool) (environment.LockedPackage, error) {

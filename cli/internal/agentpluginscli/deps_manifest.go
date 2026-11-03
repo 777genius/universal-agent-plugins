@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +20,7 @@ func (app App) dependencyPaths() (manifest, lock string) {
 }
 
 func readDependencyManifest(path string) (environment.Requirements, error) {
-	body, err := os.ReadFile(path)
+	body, err := readDependencyDocument(path, maxDependencyManifestBytes)
 	if err != nil {
 		return environment.Requirements{}, err
 	}
@@ -27,6 +28,9 @@ func readDependencyManifest(path string) (environment.Requirements, error) {
 }
 
 func readDependencyManifestBytes(path string, body []byte) (environment.Requirements, error) {
+	if int64(len(body)) > maxDependencyManifestBytes {
+		return environment.Requirements{}, fmt.Errorf("decode uap.toml: exceeds %d bytes", maxDependencyManifestBytes)
+	}
 	document, err := dependencymanifest.Decode(body, path)
 	if err != nil {
 		return environment.Requirements{}, err

@@ -516,30 +516,62 @@ func pmAdversarialSymlinkMutationLock(t *testing.T) {
 }
 
 func pmAdversarialForeignSkillCollision(t *testing.T) {
-	graph := pmArchiveGraph{"a": nil}
-	origin := newPMArchiveOrigin(t, graph)
-	fixture := newPMArchiveEnvironment(t, origin, false)
-	fixture.manifest(t, origin, []string{"a"}, map[string][]string{"gemini": {"a"}})
-	foreignRoot := filepath.Join(fixture.clients["gemini"].ConfigRoot, "skills", "a")
-	if err := os.MkdirAll(foreignRoot, 0700); err != nil {
-		t.Fatal(err)
+	// APM #3441: an existing empty Skill directory must be just as protected as
+	// one containing SKILL.md. Neither an empty nor a partial user directory
+	// grants ownership to the package manager, and refusal must be nonzero.
+	for _, fixtureKind := range []string{"existing-skill", "empty-directory", "unrelated-user-file"} {
+		t.Run(fixtureKind, func(t *testing.T) {
+			graph := pmArchiveGraph{"a": nil}
+			origin := newPMArchiveOrigin(t, graph)
+			fixture := newPMArchiveEnvironment(t, origin, false)
+			fixture.manifest(t, origin, []string{"a"}, map[string][]string{"gemini": {"a"}})
+			foreignRoot := filepath.Join(fixture.clients["gemini"].ConfigRoot, "skills", "a")
+			if err := os.MkdirAll(foreignRoot, 0700); err != nil {
+				t.Fatal(err)
+			}
+			switch fixtureKind {
+			case "existing-skill":
+				dependencyWrite(t, filepath.Join(foreignRoot, "SKILL.md"),
+					"pre-existing native skill owned by a human; never clobber\n")
+			case "unrelated-user-file":
+				dependencyWrite(t, filepath.Join(foreignRoot, "README.md"),
+					"this directory belongs to a human, not an installer\n")
+			}
+			settings := filepath.Join(fixture.clients["gemini"].ConfigRoot, "settings.json")
+			preserved := freshRestoreFiles(t, foreignRoot, settings)
+			originalDir, err := os.Lstat(foreignRoot)
+			if err != nil || !originalDir.IsDir() {
+				t.Fatalf("foreign Skill directory missing: %v", err)
+			}
+			beforeEntries, err := os.ReadDir(foreignRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = fixture.executePM(t.Context(), t, "", false, "install", "--yes", "--format", "json")
+			if err == nil || !strings.Contains(err.Error(), "already exists without agentplugins ownership") {
+				t.Fatalf("foreign %s was not refused by exact native ownership guard: %v", fixtureKind, err)
+			}
+			if origin.counts()["GET /a.zip"] == 0 {
+				t.Fatal("native collision never acquired the candidate package")
+			}
+			pmArchiveAssertEqual(t, "native Skill collision retained human files and settings",
+				preserved, freshRestoreFiles(t, foreignRoot, settings))
+			afterDir, err := os.Lstat(foreignRoot)
+			if err != nil || !os.SameFile(originalDir, afterDir) || afterDir.Mode() != originalDir.Mode() {
+				t.Fatalf("foreign Skill directory was replaced or changed: %v", err)
+			}
+			afterEntries, err := os.ReadDir(foreignRoot)
+			if err != nil || len(afterEntries) != len(beforeEntries) {
+				t.Fatalf("foreign Skill directory acquired unexpected entries: %v %v", afterEntries, err)
+			}
+			if err := os.RemoveAll(foreignRoot); err != nil {
+				t.Fatal(err)
+			}
+			fixture.run(t, "install", "--locked", "--yes", "--format", "json")
+			fixture.assertGraph(t, origin, graph, pmArchiveAll(graph, "gemini"))
+			fixture.assertInstalled(t, pmArchiveAll(graph, "gemini"))
+		})
 	}
-	foreign := filepath.Join(foreignRoot, "SKILL.md")
-	value := "pre-existing native skill owned by a human; never clobber\n"
-	dependencyWrite(t, foreign, value)
-	settings := filepath.Join(fixture.clients["gemini"].ConfigRoot, "settings.json")
-	preserved := freshRestoreFiles(t, foreign, settings)
-	_, err := fixture.executePM(t.Context(), t, "", false, "install", "--yes", "--format", "json")
-	if err == nil {
-		t.Fatal("installer overwrote a pre-existing foreign native skill")
-	}
-	pmArchiveAssertEqual(t, "native skill collision retained human files", preserved, freshRestoreFiles(t, foreign, settings))
-	if err := os.RemoveAll(foreignRoot); err != nil {
-		t.Fatal(err)
-	}
-	fixture.run(t, "install", "--yes", "--format", "json")
-	fixture.assertGraph(t, origin, graph, pmArchiveAll(graph, "gemini"))
-	fixture.assertInstalled(t, pmArchiveAll(graph, "gemini"))
 }
 
 func pmAdversarialNativeConfigObstruction(t *testing.T) {

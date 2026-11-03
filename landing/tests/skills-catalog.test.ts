@@ -13,6 +13,7 @@ import {
   skillRepositoryUrl,
   skillPublisherUrl,
   skillDetailRoute,
+  skillDetailIdAvailable,
   skillIdentityFromId,
   skillMatchesSelection,
 } from '../utils/skillsCatalog.ts';
@@ -127,6 +128,22 @@ test('Skill metadata cannot inject shell syntax or external install sources', ()
   );
 });
 
+test('Skill document URLs accept only the document API source grammar', () => {
+  for (const id of [
+    'skills-sh:anthropics/skills:frontend-design',
+    'skills-sh:uizze.com:ui-radar',
+    'skills-sh:Open.Feishu.Cn:lark-mail',
+  ]) assert.equal(skillDetailIdAvailable(id), true, id);
+  for (const id of [
+    'skills-sh:owner/repo.git:frontend-design',
+    'skills-sh:https://github.com/owner/repo:frontend-design',
+    'skills-sh:https://publisher.com/skills:review',
+    'skills-sh:owner/repo/tree/main/skills/frontend-design:frontend-design',
+    'skills-sh:open.feishu.cn/lark-cli/skills/regular:lark-mail',
+    'skills-sh:owner/repo:bad' + String.fromCharCode(10) + 'name',
+  ]) assert.equal(skillDetailIdAvailable(id), false, id);
+});
+
 test('HTTPS publishers use their origin and exact names, never a listing page or guessed selector', () => {
   const website: SkillListing = {
     ...skill,
@@ -139,15 +156,32 @@ test('HTTPS publishers use their origin and exact names, never a listing page or
   assert.equal(skillPublisherUrl(website), 'https://open.feishu.cn');
   assert.equal(
     skillInstallCommand(website, ['codex']),
-    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail --target codex',
+    undefined,
   );
+  const supported = { ...website,
+    id: 'skills-sh:uizze.com:ui-radar',
+    skillNameHint: 'ui-radar',
+    source: { kind: 'external' as const, url: 'https://uizze.com' },
+  };
+  assert.equal(skillInstallCommand(supported, ['codex']),
+    'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar --target codex');
+  // An explicit current API source may use a non-/skills scope: only ambiguous
+  // legacy unsupported-source IDs must satisfy the narrower recovery rule.
+  const explicitScoped: SkillListing = {
+    ...supported,
+    id: 'skills-sh:https://publisher.com/team/custom:ui-radar',
+    providerUrl: 'https://www.skills.sh/',
+    source: { kind: 'external', url: 'https://publisher.com/team/custom' },
+    availability: 'unverified',
+  };
+  assert.equal(skillInstallCommand(explicitScoped),
+    'npx universal-agent-plugins@latest skills add https://publisher.com/team/custom --skill ui-radar');
   assert.deepEqual(skillDetailRoute(website), {
     path: '/skills/',
     query: { id: website.id, q: 'lark-mail' },
   });
   for (const url of [
     'https://www.skills.sh/site/open.feishu.cn/lark-mail',
-    'https://open.feishu.cn/lark-cli/skills/regular',
     'https://open.feishu.cn:443',
     'https://open.feishu.cn?next=evil',
     'https://name:pass@open.feishu.cn',
@@ -173,14 +207,16 @@ test('legacy Skills API website records recover only canonical publisher install
     availability: 'unsupported-source',
   };
   assert.equal(skillPublisherUrl(legacy), 'https://open.feishu.cn');
-  assert.equal(
-    skillInstallCommand(legacy),
-    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail',
-  );
-  assert.equal(
-    skillInstallCommand(legacy, ['codex', 'claude']),
-    'npx universal-agent-plugins@latest skills add https://open.feishu.cn --skill lark-mail --target "codex,claude"',
-  );
+  assert.equal(skillInstallCommand(legacy), undefined);
+  assert.equal(skillInstallCommand(legacy, ['codex', 'claude']), undefined);
+  // The real Uizze well-known publisher supports the same legacy DTO shape.
+  const uizze = { ...legacy,
+    id: 'skills-sh:uizze.com:ui-radar', title: 'ui-radar', skillNameHint: 'ui-radar',
+    providerUrl: 'https://www.skills.sh/site/uizze.com/ui-radar',
+    source: { kind: 'external' as const, url: 'https://www.skills.sh/site/uizze.com/ui-radar' },
+  };
+  assert.equal(skillInstallCommand(uizze),
+    'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar');
 
   // Do not broaden the recovery into trusting arbitrary directory or publisher
   // URLs: the canonical listing ID, origin, slug and source must all agree.
@@ -194,6 +230,7 @@ test('legacy Skills API website records recover only canonical publisher install
     { ...legacy, id: 'skills-sh:https://evil.example:lark-mail' },
     { ...legacy, id: 'skills-sh:127.0.0.1:lark-mail' },
     { ...legacy, id: 'skills-sh:owner/repo/tree/main:lark-mail' },
+    { ...legacy, skillNameHint: 'other-valid-name' },
   ]) {
     assert.equal(skillPublisherUrl(modified), undefined, modified.id);
     assert.equal(skillInstallCommand(modified), undefined, modified.id);
@@ -243,8 +280,8 @@ test('Detail identity uses only a canonical source, never the listing-page URL',
   });
   for (const id of [
     'skills-sh:127.0.0.1:lark-mail',
-    'skills-sh:https://example.com:secret',
-    'skills-sh:owner/repo/tree/main:bad',
+    'skills-sh:https://example.com:8443:secret',
+    'skills-sh:owner/repo/tree:bad',
     'skills-sh:open.feishu.cn:bad:extra',
     'not-a-skill',
     'skills-sh:bad\nsource:other',
@@ -323,6 +360,7 @@ function catalogHarness() {
     onMounted: (callback: () => void) => {
       mounted = callback;
     },
+    skillInstallCommand,
     useRuntimeConfig: () => ({
       public: { skillsCatalogEndpoint: 'https://example.com/v1/skills' },
     }),
@@ -344,16 +382,20 @@ function catalogHarness() {
     await new Promise<void>((resolve) => setImmediate(resolve));
     await nextTick();
   };
-  async function respond(index: number, count = 1, page = 0, status = 200) {
+  async function respond(index: number, count = 1, page = 0, status = 200, unavailable = 0, more = page === 0) {
     requests[index]!.resolve({
       ok: status === 200,
       json: async () => ({
-        items: Array.from({ length: count }, (_, i) => ({
-          ...skill,
-          id: `${skill.id}-${page}-${i}`,
-        })),
+        items: Array.from({ length: count }, (_, i) => i < unavailable
+          ? {
+              ...skill, id: `skills-sh:unknown/path/subfolder:${page}-${i}`,
+              source: { kind: 'external', url: 'https://www.skills.sh/' },
+              providerUrl: 'https://www.skills.sh/',
+              availability: 'unsupported-source',
+            }
+          : { ...skill, id: `${skill.id}-${page}-${i}` }),
         page,
-        hasMore: page === 0,
+        hasMore: more,
         view: 'popular',
         cache: { status: 'stale', fetchedAt: '2026-10-24T10:00:00Z' },
       }),
@@ -413,4 +455,151 @@ test('Skill pagination shows only 48 new items at a partial page boundary and re
   assert.equal(catalog.state.displayed.value.length, 248);
   assert.equal(catalog.state.failed.value, false);
   catalog.stop();
+});
+
+
+test('legacy source variants produce CLI commands without using directory pages as origins', () => {
+  const unknown = (raw: string, hint = 'frontend-design'): SkillListing => ({
+    ...skill,
+    id: `skills-sh:${raw}:${hint}`,
+    title: hint,
+    skillNameHint: hint,
+    providerUrl: 'https://www.skills.sh/',
+    source: { kind: 'external', url: 'https://www.skills.sh/' },
+    availability: 'unsupported-source',
+  });
+  const supported = [
+    ['owner/repo/tree/main/skills/frontend-design', 'https://github.com/owner/repo/tree/main/skills/frontend-design'],
+    ['https://github.com/owner/repo/blob/main/skills/frontend-design/SKILL.md', 'https://github.com/owner/repo/blob/main/skills/frontend-design/SKILL.md'],
+    ['https://github.com/owner/repo.git', 'https://github.com/owner/repo'],
+    ['git+https://github.com/owner/repo.git', 'https://github.com/owner/repo'],
+    ['git@github.com:owner/repo.git', 'https://github.com/owner/repo'],
+    ['github.com/owner/repo', 'https://github.com/owner/repo'],
+    ['owner/repo.git', 'https://github.com/owner/repo'],
+    ['https://raw.githubusercontent.com/owner/repo/main/skills/frontend-design/SKILL.md',
+      'https://raw.githubusercontent.com/owner/repo/main/skills/frontend-design/SKILL.md'],
+  ] as const;
+  for (const [raw, source] of supported) {
+    const listing = unknown(raw);
+    assert.equal(skillRepositoryUrl(listing), source, raw);
+    assert.equal(skillIdentityFromId(listing.id)?.kind, 'github', raw);
+    assert.equal(
+      skillInstallCommand(listing),
+      `npx universal-agent-plugins@latest skills add ${source} --skill frontend-design`,
+      raw,
+    );
+  }
+  const mismatchedGithub = unknown('https://github.com/owner/repo/tree/main/skills/frontend-design');
+  mismatchedGithub.skillNameHint = 'other-valid-name';
+  assert.equal(skillRepositoryUrl(mismatchedGithub), undefined);
+  assert.equal(skillInstallCommand(mismatchedGithub), undefined);
+  const scoped = unknown('https://publisher.com/scoped/skills', 'review');
+  assert.equal(skillPublisherUrl(scoped), 'https://publisher.com/scoped/skills');
+  assert.equal(
+    skillInstallCommand(scoped),
+    'npx universal-agent-plugins@latest skills add https://publisher.com/scoped/skills --skill review',
+  );
+    const bareScoped = unknown('open.feishu.cn/lark-cli/skills/regular', 'lark-mail');
+  assert.equal(skillPublisherUrl(bareScoped), 'https://open.feishu.cn/lark-cli/skills/regular');
+  assert.equal(
+    skillInstallCommand(bareScoped),
+    undefined,
+  );
+  const canonicalBareHost = unknown('Open.Feishu.Cn/lark-cli/skills/regular', 'lark-mail');
+  assert.equal(skillPublisherUrl(canonicalBareHost), 'https://open.feishu.cn/lark-cli/skills/regular');
+  const publisher = unknown('https://open.feishu.cn', 'lark-mail');
+  assert.equal(skillPublisherUrl(publisher), 'https://open.feishu.cn');
+  assert.equal(
+    skillInstallCommand(publisher),
+    undefined,
+  );
+  assert.equal(
+    skillInstallCommand(unknown('https://github.com/owner/repo', 'UPPER')),
+    'npx universal-agent-plugins@latest skills add https://github.com/owner/repo',
+  );
+  for (const raw of [
+    'owner/repo#main', 'owner/repo/tree', 'owner/repo/tree/../secret',
+    'owner/repo/blob/main/not-skill.txt', 'https://gitlab.com/owner/repo', 'https://bitbucket.org/owner/repo', 'https://codeberg.org/owner/repo',
+    'https://github.com/owner/repo?ref=main', 'https://github.com/owner/repo/tree/main/../../x',
+    'https://github.com/owner/repo;touch-hack', 'git@evil.example:owner/repo',
+    'https://evil.com/owner/repo', 'https://www.skills.sh/site/owner/repo',
+    'https://localhost', 'https://127.0.0.1', 'https://xn--a.example',
+    'https://publisher.internal', 'owner/repo/tree/main/$hack',
+    'open.feishu.cn/lark-cli/../secret',
+    'open.feishu.cn/lark-cli//regular',
+    'open.feishu.cn/lark-cli/regular?token=secret',
+    'https://publisher.com/scoped/../private',
+    'https://publisher.com/scoped//bad',
+    'https://publisher.com/scoped/?token=1',
+    'https://raw.githubusercontent.com/owner/repo/main/secret.sh',
+    'https://raw.githubusercontent.com/owner/repo/main/../SKILL.md',
+    'https://raw.githubusercontent.com/owner/repo/main/SKILL.md?ref=main',
+  ]) {
+    assert.equal(skillInstallCommand(unknown(raw)), undefined, raw);
+  }
+});
+
+test('installable filtering skips unsupported records and bounds upstream pagination', async () => {
+  const catalog = catalogHarness();
+  const first = catalog.respond(0, 200, 0, 200, 175);
+  await first;
+  assert.equal(catalog.requests.length, 2);
+  assert.equal(catalog.requests[1]!.url.searchParams.get('page'), '1');
+  await catalog.respond(1, 200, 1, 200, 0);
+  assert.equal(catalog.state.items.value.length, 225);
+  assert.equal(catalog.state.displayed.value.length, 48);
+  assert.ok(catalog.state.displayed.value.every((item: SkillListing) => skillInstallCommand(item)));
+  catalog.stop();
+});
+
+test('empty unsupported pages stop at a bounded hop limit until the next user action', async () => {
+  const catalog = catalogHarness();
+  for (let page = 0; page < 5; page++) {
+    await catalog.respond(page, 200, page, 200, 200, true);
+  }
+  assert.equal(catalog.requests.length, 5);
+  assert.equal(catalog.state.displayed.value.length, 0);
+  assert.equal(catalog.state.hasMore.value, true);
+  catalog.state.showMore();
+  assert.equal(catalog.requests.length, 6);
+  await catalog.respond(5, 200, 5, 200, 0);
+  assert.equal(catalog.state.displayed.value.length, 48);
+  assert.equal(catalog.requests.length, 6);
+  catalog.stop();
+});
+
+
+test('Skill search honors API page-zero-only contract even if response advertises more', async () => {
+  const catalog = catalogHarness();
+  catalog.query.value = 'frontend';
+  await nextTick();
+  catalog.debounce();
+  assert.equal(catalog.requests[1]!.url.searchParams.get('page'), '0');
+  assert.equal(catalog.requests[1]!.url.searchParams.get('q'), 'frontend');
+  await catalog.respond(1, 200, 0, 200, 200, true);
+  assert.equal(catalog.requests.length, 2);
+  assert.equal(catalog.state.displayed.value.length, 0);
+  assert.equal(catalog.state.hasMore.value, false);
+  catalog.stop();
+});
+
+test('legacy GitHub DTO disagreement never interpolates unsafe Skill selectors', () => {
+  const legacy = {
+    ...skill,
+    id: 'skills-sh:https://github.com/anthropics/skills:some-skill',
+    skillNameHint: 'BAD$(touch injected)',
+    providerUrl: 'https://www.skills.sh/',
+    source: { kind: 'external' as const, url: 'https://www.skills.sh/' },
+    availability: 'unsupported-source' as const,
+  };
+  // A mismatched source-ID selector is not a valid installation candidate.
+  assert.equal(skillNeedsManualSelection(legacy), false);
+  assert.equal(skillInstallCommand(legacy), undefined);
+});
+
+test('malformed DTOs disable their own Install action without crashing the catalog', () => {
+  assert.equal(skillIdentityFromId(undefined as unknown as string), undefined);
+  assert.equal(skillInstallCommand({ ...skill, id: undefined as unknown as string }), undefined);
+  assert.equal(skillInstallCommand({ ...skill, source: null as unknown as SkillListing['source'] }), undefined);
+  assert.equal(skillInstallCommand(null as unknown as SkillListing), undefined);
 });

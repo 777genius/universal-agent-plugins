@@ -2,7 +2,8 @@ package agentpluginscli
 
 import (
 	"context"
-	"os"
+	"fmt"
+	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
@@ -56,7 +57,20 @@ func (lock dependencyEnvironmentLock) Acquire(ctx context.Context) (func() error
 
 type dependencyIntentFiles struct{}
 
-func (dependencyIntentFiles) Read(path string) ([]byte, error) { return os.ReadFile(path) }
+func (dependencyIntentFiles) Read(path string) ([]byte, error) {
+	limit, err := dependencyDocumentLimit(path)
+	if err != nil {
+		return nil, err
+	}
+	return readDependencyDocument(path, limit)
+}
 func (dependencyIntentFiles) Write(path string, body []byte) error {
+	limit, err := dependencyDocumentLimit(path)
+	if err != nil {
+		return err
+	}
+	if int64(len(body)) > limit {
+		return fmt.Errorf("%s exceeds %d bytes", filepath.Base(path), limit)
+	}
 	return publishEnvironmentFile(path, body)
 }

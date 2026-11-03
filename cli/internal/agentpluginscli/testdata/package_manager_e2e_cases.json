@@ -39,7 +39,8 @@
     "cascade-remove-drift",
     "prune-drift-after-lock",
     "competing-lock-writers",
-    "selective-cache-hydration"
+    "selective-cache-hydration",
+    "git-pull-shared-owner-drift"
   ],
   "adversarial": [
     "foreign-native-settings",
@@ -57,6 +58,8 @@
   ],
   "agreement": [
     "manifest-rejections",
+    "saved-source-admission-refusal",
+    "oversized-agreement-refusal",
     "manifest-locations",
     "version-intent-preservation",
     "transfer-replacement-noop",
@@ -67,10 +70,13 @@
     "lock-store-publication-recheck",
     "lock-cold-store-hydration",
     "lock-read-only-no-publication",
+    "lock-only-preserves-installed",
+    "source-origin-rebind-refusal",
     "lock-empty-existing-refusal",
     "absent-empty-distinct",
     "direct-source-promotion",
     "direct-source-selector-refusal",
-    "occupied-declaration-key"
+    "occupied-declaration-key",
+    "lock-json-duplicate-refusal"
   ]
 }

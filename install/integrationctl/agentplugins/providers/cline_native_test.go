@@ -162,6 +162,51 @@ func TestClineSkillRollbackRetainsBackupWhenRestoreRenameFails(t *testing.T) {
 	}
 }
 
+func TestClineLateNativeSkillDriftRefusesBeforeRename(t *testing.T) {
+	root := t.TempDir()
+	configRoot := filepath.Join(root, ".cline")
+	activeV1 := filepath.Join(root, "managed", "v1")
+	writeTestFile(t, filepath.Join(activeV1, "skills", "docs", "SKILL.md"), "v1\n")
+	previous := clineFixtureObjects(t, configRoot, activeV1, "docs", "", nativeconfig.Server{})
+	if err := cline.ApplyClineNativeMutation(configRoot, activeV1, nil, previous); err != nil {
+		t.Fatal(err)
+	}
+	activeV2 := filepath.Join(root, "managed", "v2")
+	writeTestFile(t, filepath.Join(activeV2, "skills", "docs", "SKILL.md"), "v2\n")
+	desired := clineFixtureObjects(t, configRoot, activeV2, "docs", "", nativeconfig.Server{})
+	live := filepath.Join(configRoot, "skills", "docs", "SKILL.md")
+	const edit = "user edit after first preflight\n"
+	injected := false
+	capacity := func(oldCount, newCount int) (int, error) {
+		injected = true
+		writeTestFile(t, live, edit)
+		return shared.CheckedCombinedCapacity(oldCount, newCount)
+	}
+	renamed := 0
+	rename := func(oldPath, newPath string) error {
+		renamed++
+		return os.Rename(oldPath, newPath)
+	}
+	err := cline.ApplyClineNativeMutationWithKernelRenameAndCapacity(
+		configRoot, activeV2, previous, desired, nativeconfig.New(), rename, capacity)
+	if !injected || err == nil || !strings.Contains(err.Error(), "before backup") || renamed != 0 {
+		t.Fatalf("late edit must refuse before any rename: injected=%t renames=%d err=%v", injected, renamed, err)
+	}
+	if body, err := os.ReadFile(live); err != nil || string(body) != edit {
+		t.Fatalf("Cline native user edit changed: %q %v", body, err)
+	}
+	if paths, err := filepath.Glob(filepath.Join(configRoot, "skills", ".agentplugins-native-*")); err != nil || len(paths) != 0 {
+		t.Fatalf("Cline drift refusal left transaction directories: %v %v", paths, err)
+	}
+	writeTestFile(t, live, "v1\n")
+	if err := cline.ApplyClineNativeMutation(configRoot, activeV2, previous, desired); err != nil {
+		t.Fatalf("explicit correction and retry: %v", err)
+	}
+	if body, err := os.ReadFile(live); err != nil || string(body) != "v2\n" {
+		t.Fatalf("Cline retry missed desired Skill: %q %v", body, err)
+	}
+}
+
 func TestClineSkillBackupDigestMismatchRestoresLiveDirectoryAndAborts(t *testing.T) {
 	root := t.TempDir()
 	configRoot := filepath.Join(root, ".cline")
