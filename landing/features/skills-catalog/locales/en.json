@@ -68,7 +68,17 @@
         "viewPublisher": "View publisher source",
         "revision": "Source revision",
         "rawDocument": "View complete SKILL.md source"
-      }
+      },
+      "scanFilterLabel": "Scan coverage",
+      "scanModes": {
+        "scanned": "With a current scan",
+        "all": "All installable Skills"
+      },
+      "scanNotice": "Only Skills with an executed scan of their currently published source are shown. Partial coverage is labeled; scanning does not guarantee safety or installation.",
+      "scanNone": "No Skills with a current scan were found in this bounded selection.",
+      "scanHelp": "Switch to All installable Skills to browse without scan evidence.",
+      "scanClear": "Browse all installable Skills",
+      "scanReportUnavailable": "Some scan reports could not be verified. Those Skills were excluded."
     },
     "directoryPage": {
       "pluginDirectory": "Plugin directory",

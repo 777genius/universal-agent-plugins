@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SkillsView } from '~/types/skillsCatalog';
+import type { SkillsScanView } from '~/composables/useSkillsCatalog';
 import { restoreSkillsQuery, skillsCatalogQuery } from '~/utils/skillsCatalog';
 import { canonicalPath } from '~/utils/seo';
 
@@ -11,17 +12,27 @@ const router = useRouter();
 const initial = restoreSkillsQuery(route.query);
 const query = ref(initial.query);
 const view = ref<SkillsView>(initial.view);
+const scanMode = ref<SkillsScanView>(route.query.skillScan === 'all' ? 'all' : 'scanned');
+const routeState = () => ({
+  ...restoreSkillsQuery(route.query),
+  scanMode: route.query.skillScan === 'all' ? 'all' : 'scanned',
+});
 let syncing = false;
 let disposed = false;
 let pending: string | undefined;
-const fingerprint = () => JSON.stringify({ query: query.value.trim(), view: view.value });
+const fingerprint = () => JSON.stringify({
+  query: query.value.trim(),
+  view: view.value,
+  scanMode: scanMode.value,
+});
 watch(
   () => route.query,
   () => {
-    const restored = restoreSkillsQuery(route.query);
+    const restored = routeState();
     if (JSON.stringify(restored) === pending) return;
     query.value = restored.query;
     view.value = restored.view;
+    scanMode.value = restored.scanMode as SkillsScanView;
   },
 );
 async function syncQuery() {
@@ -29,11 +40,14 @@ async function syncQuery() {
   syncing = true;
   try {
     while (!disposed) {
-      if (fingerprint() === JSON.stringify(restoreSkillsQuery(route.query))) break;
+      if (fingerprint() === JSON.stringify(routeState())) break;
       pending = fingerprint();
+      const params = skillsCatalogQuery(query.value, view.value, route.query);
+      if (scanMode.value === 'all') params.skillScan = 'all';
+      else delete params.skillScan;
       const failure = await router.replace({
         path: canonicalPath(route.path),
-        query: skillsCatalogQuery(query.value, view.value, route.query),
+        query: params,
         hash: '',
       });
       if (failure) break;
@@ -43,7 +57,7 @@ async function syncQuery() {
     syncing = false;
   }
 }
-watch([query, view], () => {
+watch([query, view, scanMode], () => {
   void syncQuery();
 });
 onScopeDispose(() => {
@@ -52,6 +66,8 @@ onScopeDispose(() => {
 const {
   displayed,
   metadata,
+  scannedOnly,
+  scanReportUnavailable,
   loading,
   loadingMore,
   failed,
@@ -59,7 +75,13 @@ const {
   searchTooShort,
   showMore,
   retry,
-} = useSkillsCatalog(query, view);
+} = useSkillsCatalog(query, view, scanMode);
+const scanOptions = computed(() =>
+  (['scanned', 'all'] as const).map((value) => ({
+    value,
+    label: t('registryUi.skills.scanModes.' + value),
+  })),
+);
 const viewOptions = computed(() =>
   (['popular', 'trending', 'hot'] as const).map((value) => ({
     value,
@@ -104,7 +126,17 @@ const staleDate = computed(() => {
         :label="t('registryUi.skills.sortLabel')"
         :options="viewOptions"
       />
+      <AppSelect
+        v-if="!query.trim()"
+        v-model="scanMode"
+        leading-icon="shield-check"
+        :label="t('registryUi.skills.scanFilterLabel')"
+        :options="scanOptions"
+      />
     </div>
+    <p v-if="scannedOnly" class="skills-catalog__scan-notice">
+      {{ t('registryUi.skills.scanNotice') }}
+    </p>
     <div class="catalog-meta">
       <div aria-live="polite">
         <p v-if="query.trim() && !searchTooShort && !loading && !failed" class="catalog-count">
@@ -112,6 +144,9 @@ const staleDate = computed(() => {
         </p>
         <p v-else-if="!loading && !searchTooShort && displayed.length" class="catalog-count">
           {{ t('registryUi.skills.loaded', { count: n(displayed.length) }) }}
+        </p>
+        <p v-if="scannedOnly && scanReportUnavailable" role="status">
+          {{ t('registryUi.skills.scanReportUnavailable') }}
         </p>
         <p
           v-if="metadata?.cache.status === 'stale'"
@@ -150,10 +185,11 @@ const staleDate = computed(() => {
         <SkillCard v-for="skill in displayed" :key="skill.id" :skill="skill" />
       </div>
       <div v-else class="empty-state">
-        <h3>{{ t('registryUi.skills.noMatches') }}</h3>
-        <p>{{ t('registryUi.skills.noMatchesHelp') }}</p>
-        <button type="button" class="button button--secondary" @click="query = ''">
-          {{ t('registryUi.skills.clearSearch') }}
+        <h3>{{ t(scannedOnly ? 'registryUi.skills.scanNone' : 'registryUi.skills.noMatches') }}</h3>
+        <p>{{ t(scannedOnly ? 'registryUi.skills.scanHelp' : 'registryUi.skills.noMatchesHelp') }}</p>
+        <button type="button" class="button button--secondary"
+          @click="scannedOnly ? scanMode = 'all' : query = ''">
+          {{ t(scannedOnly ? 'registryUi.skills.scanClear' : 'registryUi.skills.clearSearch') }}
         </button>
       </div>
       <div v-if="hasMore || failed" class="catalog-more">

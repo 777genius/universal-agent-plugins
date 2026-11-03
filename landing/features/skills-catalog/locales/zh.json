@@ -68,7 +68,17 @@
         "viewPublisher": "查看发布方源代码",
         "revision": "源代码修订版",
         "rawDocument": "查看完整 SKILL.md 原文"
-      }
+      },
+      "scanFilterLabel": "扫描覆盖情况",
+      "scanModes": {
+        "scanned": "已有当前扫描",
+        "all": "所有可安装技能"
+      },
+      "scanNotice": "仅显示已对当前发布版本实际执行扫描的技能。部分覆盖会明确标注；扫描不保证安全或安装成功。",
+      "scanNone": "在本次有限范围内未找到具有当前扫描结果的技能。",
+      "scanHelp": "切换到所有可安装技能以查看没有当前扫描证据的条目。",
+      "scanClear": "查看所有可安装技能",
+      "scanReportUnavailable": "部分扫描报告无法验证，因此已排除相应技能。"
     },
     "directoryPage": {
       "pluginDirectory": "插件目录",

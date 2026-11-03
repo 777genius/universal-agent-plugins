@@ -68,7 +68,17 @@
         "viewPublisher": "Ver fuente del editor",
         "revision": "Revisión de origen",
         "rawDocument": "Ver el archivo SKILL.md completo"
-      }
+      },
+      "scanFilterLabel": "Cobertura del análisis",
+      "scanModes": {
+        "scanned": "Con análisis actual",
+        "all": "Todas las Skills instalables"
+      },
+      "scanNotice": "Solo se muestran Skills con un análisis ejecutado de la versión publicada. La cobertura parcial se indica; el análisis no garantiza seguridad ni instalación.",
+      "scanNone": "No se encontraron Skills con análisis actual en esta selección limitada.",
+      "scanHelp": "Elige todas las Skills instalables para ver entradas sin análisis actual.",
+      "scanClear": "Ver todas las Skills instalables",
+      "scanReportUnavailable": "No se pudieron verificar algunos informes. Se excluyeron esas Skills."
     },
     "directoryPage": {
       "pluginDirectory": "Directorio de complementos",
