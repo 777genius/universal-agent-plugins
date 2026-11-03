@@ -618,7 +618,7 @@ for (const mode of ['singleLimited', 'pendingLimited'] as const) {
       await expect(assessment).toHaveClass(/skillspector--incomplete/);
       await expect(assessment.locator(':scope > summary')).toContainText(
         mode === 'singleLimited'
-          ? 'Skill scan · Coverage has limits'
+          ? 'Skill scan · Incomplete scan'
           : 'Skill scan · 1/5 checked · 4 awaiting · 1 not fully checked',
       );
       await expect(assessment.locator(':scope > summary')).not.toContainText('Incomplete check');
@@ -772,7 +772,7 @@ test('v3 distinguishes selected roots from known complete plugin inventory', asy
   // Every selected Skill has an executed partial or complete scan. The absent
   // package inventory changes the denominator's provenance, not the result.
   await expect(assessment.locator(':scope > summary')).toContainText(
-    'Skill scan · Coverage has limits',
+    'Skill scan · Incomplete scan',
   );
   await assessment.locator(':scope > summary').click();
   await expect(assessment.locator('.skillspector__advice')).toContainText(
