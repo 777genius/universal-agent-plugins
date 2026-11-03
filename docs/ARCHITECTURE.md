@@ -245,6 +245,50 @@ Current runtime carriers:
 
 `cli/internal/validate` enforces generated platform rules for scaffolded projects.
 
+### Management application and adapters
+
+Management has one application owner for retained reviews, durable acceptance,
+execution, cancellation, restart observation, retention and recovery linking.
+The ordinary dependency installer and local Skill authoring both use that owner.
+
+| Package under `cli/internal/agentpluginscli` | Responsibility | Permitted implementation dependencies |
+| --- | --- | --- |
+| `management` | Protocol models, backend/prepared contracts, `Application`, observation and mutation-lock ports, lifecycle policy | Standard library without HTTP, filesystem/process I/O or concrete adapters |
+| `managementhttp` | Loopback listener/capability, strict decoding, routes, bootstrap and response rendering | `management`, `loopbackapi` |
+| `managementstate` | Version-1 atomic observation files and existing nonblocking process lock | `management`, existing `atomicfile` and `processlock` adapters |
+| `agentpluginscli` | Installer-facing backend and `manage serve` process composition | Explicit application/state/HTTP wiring and existing installer facades |
+
+The generated Go DTOs remain in `management`, at the existing OpenAPI generator
+destination. They are shared protocol data, not executable authority. No duplicate
+domain schema or persistence migration is introduced. The existing numeric status
+in a sanitized `Refusal` remains contract metadata; only HTTP writes responses.
+
+Application calls own their admission and lifetime, including direct callers.
+The application detaches retained request/review/operation snapshots so callers
+cannot mutate authority through a returned DTO. Accepted effects derive from the
+application context, survive an individual request ending and stop on explicit
+cancel or application shutdown. HTTP owns connections and body decoding; it closes
+those before waiting for application cleanup. The application owns backend cleanup
+after construction, and the CLI cleans up a failed listener/bootstrap handoff.
+
+The mutation lock protects replay, revalidation, admission, retention and
+acceptance continuously, then transfers to execution through outcome persistence
+and recovery linking. A save error starts no effects but may leave a visible
+acceptance; retries keep their original identity. Persisted observations are
+never jobs to replay. Storage implements lookup/list/save/delete; the application
+alone decides whether uncertainty is settled and private undo can be forgotten.
+
+`management-application`, `management-http-adapter` and `management-state-adapter`
+in depguard, mirrored in `internal/archtest`, enforce these import directions.
+The source scan covers platform/build-tagged files and tests negative fixtures.
+Import checks prevent dependency regressions; they do not prove every operation
+is pure or replace lifecycle, race and production CLI/SDK tests.
+
+The broader installer-facing `ManagementBackend` still depends on the CLI `App`
+and shared dependency preparation. That adapter boundary is deliberately retained
+for a separate change; this extraction does not claim to remove all CLI coupling.
+See the [research and implementation plan](plans/2026-11-04-management-application-boundaries.md).
+
 ## Generated Sources
 
 `go run ./cmd/plugin-kit-ai-gen` is the canonical generation entrypoint.
