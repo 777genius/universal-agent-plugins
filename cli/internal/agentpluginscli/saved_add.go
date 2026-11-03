@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
-	"github.com/spf13/cobra"
 )
 
 func routeSavedAdd(cmd *cobra.Command, app App, opts *options, source string, activation, auth bool) (bool, error) {
@@ -124,5 +125,4 @@ func resolveSavedAddContext(ctx context.Context, app App, opts *options, source 
 	}
 	requirement.Alias = alias
 	return requirement, pin, nil
-
 }

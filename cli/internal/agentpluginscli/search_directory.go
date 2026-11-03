@@ -47,7 +47,8 @@ func directorySearchResult(snapshot domain.DirectorySnapshot, product domain.Dir
 
 func searchMatchScore(query string, product domain.DirectoryProduct, distribution domain.DirectoryDistribution, release domain.DirectoryRelease) (int, bool) {
 	needle := strings.ToLower(strings.TrimSpace(query))
-	identities := []string{product.ID, product.ManifestName, distribution.ID, release.ManifestName}
+	identities := make([]string, 0, 4+len(product.Aliases))
+	identities = append(identities, product.ID, product.ManifestName, distribution.ID, release.ManifestName)
 	identities = append(identities, product.Aliases...)
 	for _, identity := range identities {
 		if strings.ToLower(identity) == needle {
