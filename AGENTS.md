@@ -58,7 +58,7 @@ tag requirements remain mandatory.
 - Install buttons in the Directory and the landing catalog must match the
   source kinds the released CLI accepts. Check `agentplugins skills add --help`
   (or the release notes) before changing them.
-- Public docs are published only for `index`, `use/*`, `build/*`,
+- Public docs are published only for `index`, `use/*`, `build/*`, `sdk/*`,
   `guide/quickstart`, `reference/client-compatibility` and the authoring API.
   Other `website/source/en` pages are archived and not published.
 - Pages under `use/` and `build/` are journey pages. They need released status

@@ -81,6 +81,13 @@ async function runSmoke(browser, base) {
     ["build layout", `${base}/en/build/layout`, "Minimal and combined layouts"],
     ["build checks", `${base}/en/build/checks`, "Run the offline authoring loop"],
     ["build handoff", `${base}/en/build/handoff`, "Prepare the package and evidence"],
+    ["SDK overview", `${base}/en/sdk/`, "Choose the right SDK"],
+    ["Go Hooks SDK", `${base}/en/sdk/go-hooks`, "Minimal typed handler"],
+    ["Agent host detector", `${base}/en/sdk/host-detection`, "What the built-in detector knows"],
+    ["Go Installer SDK", `${base}/en/sdk/go-installer`, "Lifecycle: prepare"],
+    ["TypeScript Management SDK", `${base}/en/sdk/typescript-management`, "Two entry points"],
+    ["Russian SDK", `${base}/ru/sdk/`, "Какой SDK выбрать"],
+    ["Arabic SDK", `${base}/ar/sdk/`, "اختر واجهة SDK"],
     ["CLI reference", `${base}/en/api/cli/prepared-authoring-v2-agentplugins-author`, "Released Agent Plugins CLI reference"]
   ];
 
