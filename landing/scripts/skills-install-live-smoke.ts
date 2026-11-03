@@ -22,10 +22,13 @@ const report = {
   legacy_recovered: 0,
   unsupported: 0,
   scanned_default_shown: 0,
+  scanned_default_snapshot: null as string | null,
+  page_errors: [] as string[],
   failure: null as string | null,
 };
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+page.on('pageerror', error => report.page_errors.push(error.message));
 try {
   const pendingAPI = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -94,6 +97,11 @@ try {
   await expect(defaultCatalog).toHaveAttribute('aria-busy', 'false', { timeout: 90000 });
   const defaultCards = defaultCatalog.locator('.skill-card');
   report.scanned_default_shown = await defaultCards.count();
+  const scanSnapshot = defaultCatalog.locator('.skills-catalog__scan-coverage');
+  await expect(scanSnapshot).toBeVisible({ timeout: 15000 });
+  report.scanned_default_snapshot = (await scanSnapshot.innerText()).trim();
+  assert.ok(report.scanned_default_snapshot.includes('complete'),
+    'Live default catalog must explain completed vs incomplete scan coverage');
   assert.ok(report.scanned_default_shown > 0,
     'Live default Skills catalog must show at least one current physically scanned Skill');
   for (const status of ['stale', 'notChecked', 'pending', 'unavailable', 'unsupported']) {
@@ -102,6 +110,7 @@ try {
   }
   await expect(defaultCards.first().locator('.skillspector > summary'))
     .toBeVisible({ timeout: 15000 });
+  assert.deepEqual(report.page_errors, [], 'No Chromium JavaScript errors on either catalog mode');
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {
   report.failure = error instanceof Error ? error.message : String(error);
