@@ -39,13 +39,13 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 env = audit.isolated_client_env(home, case, data)
             for key in audit.PROFILE_ENV_KEYS:
                 if key in env:
-                    self.assertTrue(Path(env[key]).is_relative_to(home), (key, env[key]))
+                    self.assertTrue(Path(env[key]).resolve().is_relative_to(home.resolve()), (key, env[key]))
                 else:
                     self.assertNotIn(key, env)
             for key in ("HOME", "USERPROFILE", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
                         "XDG_CACHE_HOME", "XDG_STATE_HOME", "GIT_CONFIG_GLOBAL",
                         "AGENTPLUGINS_HOME", "TMPDIR"):
-                self.assertTrue(Path(env[key]).is_relative_to(case), (key, env[key]))
+                self.assertTrue(Path(env[key]).resolve().is_relative_to(case.resolve()), (key, env[key]))
             self.assertEqual(env["GEMINI_CLI_HOME"], str(home))
             for key in ("GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0",
                         "GIT_SSH_COMMAND", "SSH_ASKPASS"):
