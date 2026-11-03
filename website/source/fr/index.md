@@ -31,13 +31,12 @@ localeDisposition: "current-translation"
     <p>Hooks, détection de l'agent, installateur Go et gestion TypeScript.</p>
   </a>
 </div>
+
 ## Autres capacités de UAP
 
 - Installez pour plusieurs agents, ajoutez des Skills autonomes, utilisez le catalogue signé, Git/SSH et les archives. [Installer](./use/install).
 - Séparez projet et utilisateur avec `uap.toml` / `uap.lock`; mettez à jour, réparez et diagnostiquez. [Gérer](./use/manage).
 - Créez des paquets Skills/MCP portables et intégrez les SDK Go et TypeScript. [SDK](./sdk/) · [Créer](./build/).
-
-
 
 ## Installez votre premier plugin
 

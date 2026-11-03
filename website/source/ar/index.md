@@ -31,13 +31,12 @@ translationRequired: true
     <p>Hooks وكشف الوكيل ومثبّت Go وإدارة TypeScript.</p>
   </a>
 </div>
+
 ## قدرات إضافية لـ UAP
 
 - ثبّت لعدة وكلاء، وأضف Skills مستقلة، واستخدم الفهرس الموقّع أو Git/SSH أو الأرشيف. [التثبيت](./use/install).
 - افصل المشروع عن المستخدم عبر `uap.toml` / `uap.lock`؛ ثم حدّث وأصلح وشخّص الحالة. [الإدارة](./use/manage).
 - أنشئ حزم Skills/MCP قابلة للنقل، وادمج SDK بلغة Go وTypeScript. [SDK](./sdk/) · [الإنشاء](./build/).
-
-
 
 ## ثبّت إضافتك الأولى {#install-your-first-plugin}
 

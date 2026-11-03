@@ -32,13 +32,12 @@ translationRequired: true
     <p>Hooks, визначення агента, Go installer і керування з TypeScript.</p>
   </a>
 </div>
+
 ## Інші можливості UAP
 
 - Установлюйте для кількох агентів, обирайте окремі Skills, підписаний каталог, Git/SSH та архіви. [Установлення](./use/install).
 - Відокремлюйте проєкт і користувача через `uap.toml` / `uap.lock`; оновлюйте й перевіряйте стан. [Керування](./use/manage).
 - Створюйте переносні пакети Skills/MCP та інтегруйте SDK Go і TypeScript. [SDK](./sdk/) · [Створення](./build/).
-
-
 
 ## Установіть свій перший плагін {#install-your-first-plugin}
 
