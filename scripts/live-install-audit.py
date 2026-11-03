@@ -531,7 +531,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
         status = "host-containment-unavailable"
     elif "not detected" in diagnostics or "not available" in diagnostics or "target_unavailable" in diagnostics:
         status = "target-unavailable"
-    elif "unsupported" in diagnostics or "not supported" in diagnostics or source_target_incompatibility(diagnostics):
+    elif ("unsupported" in diagnostics or "not supported" in diagnostics
+          or source_target_incompatibility(diagnostics)):
         status = "documented-or-source-unsupported"
     elif "minimum installer version" in diagnostics:
         status = "test-build-version-policy"
