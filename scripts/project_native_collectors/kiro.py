@@ -110,13 +110,13 @@ def _probe(ctx, owned, label, arguments, project="a"):
         if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != len(body)
                 or stat.S_IMODE(info.st_mode) != 0o600 or path.read_bytes() != body):
             raise ValueError("Kiro changed authored fixture bytes/mode")
-    if (label in ("a-workspace-raw-list", "a-agent-raw-list") and isinstance(record, dict)
+    if (label == "a-workspace-raw-list" and isinstance(record, dict)
             and type(record.get("exit")) is int and record["exit"] == 1
             and "error" in record and record["error"] is None
             and isinstance(stdout, bytes) and stdout == b""
             and isinstance(stderr, bytes) and stderr == _LIST_AUTH_STDERR):
-        # Only these two exact, read-only authentication refusals are boundaries.
-        # None cannot become an available-agent or MCP inventory claim.
+        # This exact measured refusal identifies only this read-only command's
+        # boundary. None cannot become opaque listing or discovery evidence.
         return None
     expected_stderr = _ALL_HELP_STDERR if label == "all-help" else b""
     if (not isinstance(record, dict) or type(record.get("exit")) is not int
@@ -152,45 +152,39 @@ def collect(ctx):
             raise ValueError("unrecognized pinned Kiro help: " + label)
         help_text[label] = value
     agent_text = _probe(ctx, owned, "a-agent-raw-list", ("agent", "list"))
-    agent_observation = None if agent_text is None else {
+    agent_observation = {
         "probe": "a-agent-raw-list", "cwd_selection": "a",
         "sha256_normalized_text": hashlib.sha256(agent_text.encode()).hexdigest(),
         "interpretation": "opaque available-agent listing; no skill/MCP selection or runtime qualification",
     }
+    for scope in ("a", "b", "user"):
+        native = (home if scope == "user" else projects[scope]) / ".kiro/settings/mcp.json"
+        _parents(native)
+        native.parent.mkdir(parents=True, exist_ok=True)
+        _parents(native)
+        body = (json.dumps({"mcpServers": {NAMES[scope]: {
+            "url": "http://127.0.0.1:9/" + NAMES[scope], "disabled": True}}}, indent=2) + "\n").encode()
+        with native.open("xb") as stream:
+            stream.write(body)
+        native.chmod(0o600)
+        owned[native] = body
     captures, auth_boundary = [], None
-    if agent_text is None:
-        auth_boundary = {"probe": "a-agent-raw-list", "cwd_selection": "a",
-                         "arguments": ["agent", "list"],
-                         "kind": "authentication-required", "exit": 1,
-                         "remaining_list_commands_unobserved": 6}
-    else:
-        for scope in ("a", "b", "user"):
-            native = (home if scope == "user" else projects[scope]) / ".kiro/settings/mcp.json"
-            _parents(native)
-            native.parent.mkdir(parents=True, exist_ok=True)
-            _parents(native)
-            body = (json.dumps({"mcpServers": {NAMES[scope]: {
-                "url": "http://127.0.0.1:9/" + NAMES[scope], "disabled": True}}}, indent=2) + "\n").encode()
-            with native.open("xb") as stream:
-                stream.write(body)
-            native.chmod(0o600)
-            owned[native] = body
-        for project in ("a", "b", "user"):
-            for scope in ("workspace", "global"):
-                label = project + "-" + scope + "-raw-list"
-                text = _probe(ctx, owned, label, ("mcp", "list", scope), project)
-                if text is None:
-                    auth_boundary = {"probe": label, "cwd_selection": project,
-                                     "arguments": ["mcp", "list", scope],
-                                     "kind": "authentication-required", "exit": 1,
-                                     "remaining_list_commands_unobserved": 5}
-                    break
-                captures.append({"probe": label, "cwd_selection": project, "scope_argument": scope,
-                                 "sha256_normalized_text": hashlib.sha256(text.encode()).hexdigest(),
-                                 "fixture_name_tokens": [name for name in NAMES.values() if name in text],
-                                 "interpretation": "opaque native listing; no source schema or selection qualification"})
-            if auth_boundary is not None:
+    for project in ("a", "b", "user"):
+        for scope in ("workspace", "global"):
+            label = project + "-" + scope + "-raw-list"
+            text = _probe(ctx, owned, label, ("mcp", "list", scope), project)
+            if text is None:
+                auth_boundary = {"probe": label, "cwd_selection": project,
+                                 "arguments": ["mcp", "list", scope],
+                                 "kind": "authentication-required", "exit": 1,
+                                 "remaining_list_commands_unobserved": 5}
                 break
+            captures.append({"probe": label, "cwd_selection": project, "scope_argument": scope,
+                             "sha256_normalized_text": hashlib.sha256(text.encode()).hexdigest(),
+                             "fixture_name_tokens": [name for name in NAMES.values() if name in text],
+                             "interpretation": "opaque native listing; no source schema or selection qualification"})
+        if auth_boundary is not None:
+            break
     facts = {"client_version_measured": version,
              "advertised": {"acp_agent_engine": "--agent-engine" in help_text["acp-help"],
                             "acp_auth_method": "--auth-method" in help_text["acp-help"],
@@ -198,7 +192,7 @@ def collect(ctx):
              "raw_agent_list_observation": agent_observation,
              "raw_source_list_observations": captures,
              "read_only_authentication_boundary": auth_boundary,
-             "surface": "pinned help, read-only available-agent and MCP lists or exact authentication-required boundary; inert remote markers only when listing permitted",
+             "surface": "pinned help and read-only mcp list observations or exact authentication-required boundary; disabled inert remote markers",
              "scope_observation_qualified": False, "uap_lifecycle_qualified": False,
              "mcp_initialization_qualified": False, "mcp_tools_list_qualified": False,
              "mcp_tools_call_qualified": False, "authentication_qualified": False, "real_model_qualified": False,
