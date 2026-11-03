@@ -140,7 +140,7 @@ test('Skill document URLs accept only the document API source grammar', () => {
     'skills-sh:https://publisher.com/skills:review',
     'skills-sh:owner/repo/tree/main/skills/frontend-design:frontend-design',
     'skills-sh:open.feishu.cn/lark-cli/skills/regular:lark-mail',
-    'skills-sh:owner/repo:bad\\nname',
+    'skills-sh:owner/repo:bad' + String.fromCharCode(10) + 'name',
   ]) assert.equal(skillDetailIdAvailable(id), false, id);
 });
 
