@@ -102,6 +102,9 @@ test('explicit card delivery summary follows the winning scoped release rather t
   instance.state.updateTargets(['codex']);
   instance.state.updateAutoDetect(false);
   instance.state.updateScope('project');
+  assert.equal(instance.state.deliverySummary.value, '', 'entering project restores CLI-side detection');
+  assert.equal(instance.state.command.value, 'npx -y universal-agent-plugins add gitlab --scope project');
+  instance.state.updateAutoDetect(false);
   assert.equal(instance.state.deliverySummary.value, 'Agents: 0 automatic setup · 1 need follow-up');
   assert.match(instance.state.command.value, /--target codex --scope project$/);
   instance.state.updateScope('user');
@@ -424,6 +427,9 @@ test('saved unsupported Marketing Kit project intent never emits Cursor command 
   for (const distribution of item.distributions) {
     for (const release of distribution.releases) {
       for (const target of release.targets) target.scopes = ['user'];
+      // The signed snapshot binds this immutable Marketing Kit source, but
+      // its mandatory Registry dependencies remain user-only.
+      release.source.revision = 'c5bcedd4ecf12585a8a50401852e57a44891ebec';
     }
   }
   const preferences = useInstallPreferencesStore();
@@ -440,5 +446,30 @@ test('saved unsupported Marketing Kit project intent never emits Cursor command 
   assert.equal(instance.state.scope.value, 'user');
   assert.equal(instance.state.autoDetect.value, true, 'no silent Cursor choice after recovering');
   assert.equal(instance.state.command.value, 'npx -y universal-agent-plugins add marketing-kit');
+  instance.stop();
+});
+
+test('Marketing Kit project unlocks from signed project policy without hardcoded client bundle', () => {
+  setActivePinia(createPinia());
+  const item = structuredClone(fixture);
+  item.name = 'marketing-kit';
+  item.install_source = 'marketing-kit';
+  item.trust_state = 'reviewed';
+  item.installable = true;
+  for (const distribution of item.distributions) {
+    for (const release of distribution.releases) {
+      release.source.revision = null;
+      for (const target of release.targets) {
+        target.scopes = target.client === 'codex' ? ['user', 'project'] : ['user'];
+      }
+    }
+  }
+  const instance = card(packageProps(item));
+  assert.equal(instance.state.projectAvailable.value, true);
+  instance.state.updateScope('project');
+  assert.equal(instance.state.autoDetect.value, true);
+  assert.equal(instance.state.command.value,
+    'npx -y universal-agent-plugins add marketing-kit --scope project');
+  assert.doesNotMatch(instance.state.command.value, /--target cursor/);
   instance.stop();
 });

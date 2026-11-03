@@ -224,12 +224,10 @@
       "guide": "Guia",
       "from": "Meu computador",
       "to": "Computador do colega",
-      "transfer": "Exporte {manifest} e {lockfile}, compartilhe os dois arquivos e importe-os para restaurar as mesmas versões.",
-      "requirements": "O Marketing Kit publicado oferece suporte ao ambiente do usuário; o escopo de projeto ainda não está qualificado. As fontes e os agentes compatíveis devem permanecer disponíveis.",
-      "excludes": "Logins, segredos, configurações e dados dos plugins não são transferidos.",
-      "subtitle": "Declare Marketing Kit 0.1.0 no uap.toml do usuário antes de instalar. Exporte o arquivo de bloqueio para que um colega restaure as mesmas versões.",
-      "commit": "Exportar versões exatas",
-      "manifestPreview": "Prévia do uap.toml do usuário",
+      "transfer": "Compartilhe {manifest} e {lockfile}. Seu colega importa ambos os arquivos no ambiente de usuário antes de instalar.",
+      "handoff": "Faça commit e compartilhe os dois arquivos. A importação mostra e confirma antes de substituir o manifesto e o lock do colega.",
+      "subtitle": "Exemplo de Marketing Kit v0.1.0: instale e compartilhe as versões fixadas.",
+      "manifestPreview": "Prévia de exemplo de uap.toml",
       "closePreview": "Fechar prévia"
     },
     "docs": {
@@ -738,6 +736,7 @@
         "project": "Este projeto",
         "projectHint": "Execute estes comandos na pasta do projeto. Seu agente pode pedir que você confie no projeto ou o ative.",
         "projectUnavailable": "A instalação em um projeto não está disponível para este pacote.",
+        "marketingKitProjectUnavailable": "O Marketing Kit depende de Notion, HubSpot e Playwright, ainda não qualificados para projetos.",
         "selectionUnavailable": "Esta combinação de agentes e local não está disponível. Escolha outro agente ou local."
       },
       "outcome": {

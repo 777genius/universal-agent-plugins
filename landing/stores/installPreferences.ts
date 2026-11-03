@@ -69,7 +69,7 @@ export const useInstallPreferencesStore = defineStore('installPreferences', {
       this.package = {
         identity,
         targetIds: [...new Set(choice.targetIds)],
-        autoDetect: scope === 'user' && choice.autoDetect,
+        autoDetect: choice.autoDetect,
         expanded: choice.expanded,
         scope,
       };

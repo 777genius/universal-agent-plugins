@@ -108,7 +108,7 @@ onBeforeUnmount(() => {
         :aria-label="t('shell.restore.manifestPreview')"
       >
         <div class="marketing-manifest__heading">
-          <strong>uap.toml</strong>
+          <strong>{{ t('shell.restore.manifestPreview') }}</strong>
           <button type="button" :aria-label="t('shell.restore.closePreview')" @click="closeAndFocus">×</button>
         </div>
         <pre dir="ltr"><code>{{ marketingKitUserManifest }}</code></pre>

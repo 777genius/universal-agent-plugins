@@ -5,7 +5,6 @@ import {
   marketingKitName,
   marketingKitVersion,
   marketingKitInstallCommand,
-  marketingKitExportCommand,
   marketingKitRestoreCommand,
 } from '~/data/marketingKitDemo';
 
@@ -90,12 +89,8 @@ async function copyCommand(which: 1 | 2) {
             </p>
             <div class="registry-restore__terminal" dir="ltr" :data-command="marketingKitInstallCommand">
               <span class="registry-restore__prompt" aria-hidden="true">$</span>
-              <TypedCommand
-                :lines="['npx -y', 'universal-agent-plugins', 'install --scope user']"
-                :delay="180"
-              />
+              <TypedCommand :lines="marketingKitInstallCommand.split(' ')" :delay="180" />
             </div>
-            <p class="registry-restore__commit">{{ t('shell.restore.commit') }}</p>
           </div>
         </div>
 
@@ -111,9 +106,7 @@ async function copyCommand(which: 1 | 2) {
             </span>
           </div>
           <code class="registry-restore__locked-version" dir="ltr">v{{ marketingKitVersion }}</code>
-          <div class="registry-restore__export" dir="ltr" :data-command="marketingKitExportCommand">
-            <TypedCommand :lines="['npx -y', 'universal-agent-plugins', 'deps export']" :delay="1700" />
-          </div>
+          <p class="registry-restore__handoff-note">{{ t('shell.restore.handoff') }}</p>
           <svg class="registry-restore__arrow" viewBox="0 0 160 36" fill="none" aria-hidden="true">
             <path d="M4 26C36 26 46 12 84 12h52" stroke-dasharray="3.5 7" />
             <path d="M138 5 157 12 138 19 141.5 12Z" fill="currentColor" stroke="none" />
@@ -126,22 +119,13 @@ async function copyCommand(which: 1 | 2) {
 
         <div class="registry-restore__machine registry-restore__machine--teammate">
           <img
-            class="registry-restore__monitor"
-            :src="monitorImage"
+            class="registry-restore__laptop"
+            :src="asset('showcase/restore-teammate-laptop.svg')"
             width="1577"
-            height="997"
+            height="1083"
             alt=""
             loading="lazy"
             decoding="async"
-            aria-hidden="true"
-          />
-          <img
-            class="registry-restore__wallpaper"
-            :src="asset('showcase/restore-teammate-wallpaper.svg')"
-            alt=""
-            width="960"
-            height="580"
-            loading="lazy"
             aria-hidden="true"
           />
           <div class="registry-restore__screen">
@@ -159,7 +143,7 @@ async function copyCommand(which: 1 | 2) {
             </p>
             <div class="registry-restore__terminal" dir="ltr" :data-command="marketingKitRestoreCommand">
               <span class="registry-restore__prompt" aria-hidden="true">$</span>
-              <TypedCommand :lines="['npx -y', 'universal-agent-plugins', 'deps import --install']" :delay="330" />
+              <TypedCommand :lines="marketingKitRestoreCommand.split(' ')" :delay="330" />
             </div>
           </div>
         </div>
@@ -168,9 +152,6 @@ async function copyCommand(which: 1 | 2) {
       <span class="sr-only registry-restore__copy-status" role="status" aria-live="polite">
         {{ copied === null && copyFailed === null ? '' : t(copyFailed === null ? 'registryUi.command.copied' : 'registryUi.command.copyFailed') + ': ' + t((copyFailed ?? copied) === 1 ? 'shell.restore.from' : 'shell.restore.to') }}
       </span>
-      <p class="registry-restore__boundary">
-        {{ t('shell.restore.requirements') }} {{ t('shell.restore.excludes') }}
-      </p>
     </div>
   </section>
 </template>
@@ -237,16 +218,12 @@ async function copyCommand(which: 1 | 2) {
     pointer-events: none;
     user-select: none;
   }
-  &__machine--teammate &__monitor { filter: hue-rotate(46deg) saturate(1.18); }
-  &__wallpaper {
-    position: absolute;
-    inset: 22% 10% 28%;
-    width: 80%;
-    height: 50%;
-    object-fit: cover;
-    border-radius: 3px;
-    opacity: .36;
+  &__laptop {
+    display: block;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
+    user-select: none;
   }
   &__screen {
     position: absolute;
@@ -255,6 +232,7 @@ async function copyCommand(which: 1 | 2) {
     text-align: start;
     direction: ltr;
   }
+  &__machine--teammate &__screen { inset: 19% 14% 31%; }
   &__stepbar {
     display: flex;
     align-items: flex-start;
@@ -327,13 +305,6 @@ async function copyCommand(which: 1 | 2) {
     letter-spacing: -.025em;
   }
   &__prompt { color: #00f0ff; flex: none; }
-  &__commit {
-    margin: 2cqw 0 0;
-    color: #949cb6;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: clamp(9px, 1.9cqw, 13px);
-    line-height: 1.3;
-  }
   &__handoff {
     position: relative;
     display: grid;
@@ -365,11 +336,15 @@ async function copyCommand(which: 1 | 2) {
     }
     code { color: var(--text); }
   }
-  &__export {
-    min-width: 0;
-    max-width: 100%;
-    font: 600 clamp(9px, .85vw, 12px)/1.35 'JetBrains Mono', monospace;
-    color: var(--text);
+  &__handoff-note {
+    max-width: 230px;
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(10px, .85vw, 12px);
+    font-weight: 400;
+    line-height: 1.5;
+    text-align: center;
+    text-wrap: pretty;
   }
   &__locked-version {
     color: var(--primary-bright);
@@ -386,15 +361,6 @@ async function copyCommand(which: 1 | 2) {
     stroke-linejoin: round;
   }
   :dir(rtl) &__arrow { transform: scaleX(-1); }
-  &__boundary {
-    margin: 18px 0 0;
-    padding-block-start: 20px;
-    border-block-start: 1px solid var(--line);
-    color: var(--muted);
-    font-size: .78rem;
-    line-height: 1.6;
-    text-align: center;
-  }
 }
 @keyframes restore-arrive {
   from { opacity: 0; transform: translateY(12px); }
@@ -422,7 +388,6 @@ async function copyCommand(which: 1 | 2) {
     &__header, &__subtitle { margin-inline: 8px; }
     &__screen { inset: 19% 10% 27%; }
     &__stage-label { font-size: clamp(9px, 2.3cqw, 11px); }
-    &__commit { display: none; }
     &__terminal { margin-block-start: 1.8cqw; }
   }
 }

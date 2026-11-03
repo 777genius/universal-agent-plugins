@@ -34,6 +34,8 @@ test('reviewed portable project matrix allows explicit prepared CLI source only'
     assert.equal(selected.resolution.distribution?.targets.find((target) => target.client === client)?.delivery, 'prepared');
     assert.ok(projectCatalogCommands(plugin, [client]).add.endsWith('--target ' + client + ' --scope project'));
   }
+  assert.match(projectCatalogCommands(plugin).add,
+    /^npx -y universal-agent-plugins add github:[^ ]+ --scope project$/);
   for (const client of ['grok', 'qoder', 'windsurf'] as const) {
     assert.equal(projectCatalogSelection(plugin, [client]).resolution.distribution, undefined,
       client + ' cannot advertise project MCP without qualification');

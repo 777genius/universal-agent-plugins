@@ -361,12 +361,10 @@
       "guide": "Guide",
       "from": "Mon ordinateur",
       "to": "Ordinateur du collègue",
-      "transfer": "Exportez {manifest} et {lockfile}, partagez les deux fichiers et importez-les chez votre collègue pour restaurer les mêmes versions.",
-      "requirements": "La publication Marketing Kit ne prend en charge que l’environnement utilisateur ; le projet n’est pas encore qualifié. Les sources et agents compatibles doivent rester disponibles.",
-      "excludes": "Les connexions aux comptes, secrets, réglages et données des plugins ne sont pas transférés.",
-      "subtitle": "Déclarez Marketing Kit 0.1.0 dans votre uap.toml utilisateur avant l’installation. Exportez le fichier de verrouillage pour qu’un collègue retrouve les mêmes versions.",
-      "commit": "Exporter les versions exactes",
-      "manifestPreview": "Aperçu du fichier uap.toml utilisateur",
+      "transfer": "Partagez {manifest} et {lockfile}. Votre collègue importe les deux fichiers dans son environnement utilisateur avant l’installation.",
+      "handoff": "Versionnez et partagez les deux fichiers. L'import prévisualise et confirme le remplacement du manifeste et du verrou utilisateur du collègue.",
+      "subtitle": "Exemple avec Marketing Kit v0.1.0 : installez-le, puis partagez les versions verrouillées.",
+      "manifestPreview": "Aperçu d’un exemple de uap.toml",
       "closePreview": "Fermer l’aperçu"
     },
     "docs": {
@@ -738,6 +736,7 @@
         "project": "Ce projet",
         "projectHint": "Exécutez ces commandes depuis le dossier du projet. Votre agent peut vous demander de faire confiance au projet ou de l’activer.",
         "projectUnavailable": "L’installation dans un projet n’est pas disponible pour ce paquet.",
+        "marketingKitProjectUnavailable": "Marketing Kit dépend de Notion, HubSpot et Playwright, non encore qualifiés pour les projets.",
         "selectionUnavailable": "Cette combinaison d’agents et d’emplacement est indisponible. Choisissez un autre agent ou emplacement."
       },
       "outcome": {

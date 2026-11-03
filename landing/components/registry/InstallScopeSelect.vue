@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { InstallScope } from '~/types/registry';
-defineProps<{ modelValue: InstallScope; projectAvailable: boolean; alwaysShow?: boolean }>();
+defineProps<{ modelValue: InstallScope; projectAvailable: boolean; alwaysShow?: boolean; unavailableReason?: string }>();
 const emit = defineEmits<{ 'update:modelValue': [value: InstallScope] }>();
 const { t } = useI18n();
 </script>
@@ -23,7 +23,7 @@ const { t } = useI18n();
       </button>
     </div>
     <p v-if="modelValue === 'project'">{{ t('registryUi.install.scope.projectHint') }}</p>
-    <p v-else-if="!projectAvailable">{{ t('registryUi.install.scope.projectUnavailable') }}</p>
+    <p v-else-if="!projectAvailable">{{ unavailableReason ?? t('registryUi.install.scope.projectUnavailable') }}</p>
   </fieldset>
 </template>
 

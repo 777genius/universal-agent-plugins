@@ -429,6 +429,11 @@ img {
   line-height: 1.1;
   font-weight: 750;
 }
+.hero-demo-video__launch > span,
+.hero-demo-video__launch > svg {
+  // Explicit text/icon colors override theme-dependent child element styles.
+  color: #fff;
+}
 .hero-demo-video__launch span {
   color: #fff;
   max-width: calc(100% - 32px);

@@ -74,7 +74,11 @@ test('every project lifecycle command carries scope and owned management retains
     installCommands('gitlab', 'gitlab', ['unknown'], true, 'project').add,
     / --scope project --no-save$/,
   );
-  assert.throws(() => pluginCommands(fixture, undefined, true, 'project'), /explicit targets/);
+  assert.equal(
+    pluginCommands(fixture, undefined, true, 'project').add,
+    'npx -y universal-agent-plugins add gitlab --scope project',
+    'targetless project adds delegate compatible agent selection to the interactive CLI',
+  );
   assert.throws(() => installCommands('gitlab', 'gitlab', [], true, 'project'), /target/);
 });
 

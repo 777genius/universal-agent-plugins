@@ -361,12 +361,10 @@
       "guide": "指南",
       "from": "我的电脑",
       "to": "队友的电脑",
-      "transfer": "导出 {manifest} 和 {lockfile}，将两个文件交给队友并导入，即可恢复相同版本。",
-      "requirements": "当前发布的 Marketing Kit 仅支持用户环境，尚未验证项目范围安装。恢复时需要可用的固定来源和兼容代理。",
-      "excludes": "不会传输登录状态、机密信息、设置或插件数据。",
-      "subtitle": "安装前先在用户的 uap.toml 中声明 Marketing Kit 0.1.0，再导出锁文件，让队友恢复相同的版本。",
-      "commit": "导出精确版本",
-      "manifestPreview": "预览用户环境的 uap.toml",
+      "transfer": "将 {manifest} 和 {lockfile} 交给队友。安装前，队友需把这两个文件导入用户环境。",
+      "handoff": "提交并共享两个文件。导入前会预览并确认是否替换队友现有的用户清单与锁文件。",
+      "subtitle": "Marketing Kit v0.1.0 示例：安装后共享锁定的版本。",
+      "manifestPreview": "预览 uap.toml 示例",
       "closePreview": "关闭文件预览"
     },
     "docs": {
@@ -738,6 +736,7 @@
         "project": "此项目",
         "projectHint": "请在项目文件夹中运行这些命令。代理可能会要求您信任或激活该项目。",
         "projectUnavailable": "此软件包不支持项目安装。",
+        "marketingKitProjectUnavailable": "Marketing Kit 依赖 Notion、HubSpot 和 Playwright，目前尚未验证其项目安装。",
         "selectionUnavailable": "所选代理与安装位置的组合不可用。请选择其他代理或位置。"
       },
       "outcome": {

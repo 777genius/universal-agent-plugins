@@ -39,17 +39,19 @@ function mount(plugin: RegistryPlugin) {
   return { ...selection, stop: () => lifetime.stop() };
 }
 
-test('project requires explicit agents without replacing the user default or silently dropping targets', () => {
+test('project defaults to CLI detection and preserves manual project targets', () => {
   setActivePinia(createPinia());
   const state = mount(data());
   assert.equal(state.scope.value, 'user');
   assert.equal(state.autoDetect.value, true);
   assert.deepEqual(state.targets.value, ['cursor']);
   state.updateScope('project');
-  assert.equal(state.autoDetect.value, false);
-  assert.deepEqual(state.targets.value, ['cursor']);
+  assert.equal(state.autoDetect.value, true);
+  assert.equal(state.projectAvailable.value, true);
+  assert.ok(state.projectAutomatic.value?.resolution.distribution);
+  assert.deepEqual(state.targets.value, ['cursor'], 'legacy manual placeholder must not choose an agent');
   assert.equal(state.resolution.value.distribution, undefined);
-  state.updateAutoDetect(true);
+  state.updateAutoDetect(false);
   assert.equal(state.autoDetect.value, false);
   state.updateTargets(['codex', 'cursor']);
   assert.equal(state.resolution.value.distribution, undefined);
@@ -62,11 +64,31 @@ test('project requires explicit agents without replacing the user default or sil
   state.stop();
 });
 
+test('switching user manual Cursor to project re-enables terminal detection', () => {
+  setActivePinia(createPinia());
+  const state = mount(data());
+  state.updateAutoDetect(false);
+  state.updateTargets(['cursor']);
+  assert.equal(state.autoDetect.value, false);
+  state.updateScope('project');
+  assert.equal(state.autoDetect.value, true);
+  assert.equal(state.projectAvailable.value, true);
+  assert.equal(state.scope.value, 'project');
+  // Selecting a project target explicitly still turns detection off.
+  state.updateAutoDetect(false);
+  state.updateTargets(['codex']);
+  assert.equal(state.autoDetect.value, false);
+  state.updateScope('project');
+  assert.equal(state.autoDetect.value, false, 'reselecting the same project must not erase manual intent');
+  state.stop();
+});
+
 test('project invalidation and remount preserve requested scope and invalid agents until explicit recovery', async () => {
   setActivePinia(createPinia());
   const plugin = data();
   let state = mount(plugin);
   state.updateScope('project');
+  state.updateAutoDetect(false);
   state.updateTargets(['codex']);
   state.toggleInstall();
   plugin.distributions[0]!.releases[0]!.targets =
@@ -112,9 +134,34 @@ test('target and project availability include fallback and older releases rather
   assert.ok(state.availableClients.value.some((client) => client.id === 'codex'));
   assert.equal(state.projectAvailable.value, true);
   state.updateScope('project');
+  assert.equal(state.autoDetect.value, true);
+  state.updateAutoDetect(false);
   state.updateTargets(['codex']);
   assert.equal(state.resolution.value.distribution?.id, 'project-fallback');
   assert.deepEqual(state.resolution.value.distribution?.components, ['skills']);
+  state.stop();
+});
+
+test('project auto selection survives remount and remains separate from user scope', async () => {
+  setActivePinia(createPinia());
+  const plugin = data();
+  let state = mount(plugin);
+  state.updateScope('project');
+  state.toggleInstall();
+  await nextTick();
+  const store = useInstallPreferencesStore();
+  assert.equal(store.package.scope, 'project');
+  assert.equal(store.package.autoDetect, true);
+  state.stop();
+  state = mount(plugin);
+  assert.equal(state.scope.value, 'project');
+  assert.equal(state.autoDetect.value, true);
+  assert.equal(state.projectAvailable.value, true);
+  assert.equal(state.installExpanded.value, true);
+  state.updateAutoDetect(false);
+  state.updateTargets(['codex']);
+  await nextTick();
+  assert.equal(store.package.autoDetect, false);
   state.stop();
 });
 
