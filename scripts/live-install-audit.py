@@ -149,6 +149,11 @@ def attributable_native_changes(native_roots, changes, identity):
     return sorted(set(found))
 
 
+def source_target_incompatibility(diagnostic):
+    """A signed package with no eligible adapter target is unsupported, not broken."""
+    return "release does not support complete target set" in diagnostic.lower()
+
+
 def native_identity_residuals(native_roots, identity, observed_paths, target):
     """After remove, reject any remaining named native file/config entry.
 
@@ -526,7 +531,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
         status = "host-containment-unavailable"
     elif "not detected" in diagnostics or "not available" in diagnostics or "target_unavailable" in diagnostics:
         status = "target-unavailable"
-    elif "unsupported" in diagnostics or "not supported" in diagnostics:
+    elif "unsupported" in diagnostics or "not supported" in diagnostics or source_target_incompatibility(diagnostics):
         status = "documented-or-source-unsupported"
     elif "minimum installer version" in diagnostics:
         status = "test-build-version-policy"
