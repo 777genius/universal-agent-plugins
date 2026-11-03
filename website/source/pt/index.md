@@ -34,9 +34,9 @@ translationRequired: true
 </div>
 ## Outros recursos do UAP
 
-- Instale em vários agentes, adicione Skills avulsas, use o catálogo assinado, Git/SSH e arquivos. [Install](./use/install).
-- Separe projeto e usuário com `uap.toml` / `uap.lock`; atualize, repare e diagnostique. [Manage](./use/manage).
-- Build portable Skills/MCP packages and embed Go/TypeScript SDKs. [SDK](./sdk/) · [Build](./build/).
+- Instale em vários agentes, adicione Skills avulsas, use o catálogo assinado, Git/SSH e arquivos. [Instalar](./use/install).
+- Separe projeto e usuário com `uap.toml` / `uap.lock`; atualize, repare e diagnostique. [Gerenciar](./use/manage).
+- Crie pacotes Skills/MCP portáteis e integre os SDKs Go e TypeScript. [SDK](./sdk/) · [Criar](./build/).
 
 
 

@@ -231,7 +231,7 @@ func TestContractClarity_RuntimeMetadataAndDocsStayAligned(t *testing.T) {
 	mustContain(t, currentReadme, "npx universal-agent-plugins add context7")
 	mustContain(t, currentReadme, "## Build plugins")
 	currentProse := strings.Join(strings.Fields(currentReadme), " ")
-	mustContain(t, currentProse, "root `plugin.json`, with optional `skills/` and `mcp.json`")
+	mustContainEither(t, currentProse, "root `plugin.json`, with optional `skills/` and `mcp.json`", "root `plugin.json`, plus optional `skills/` and `mcp.json`")
 	mustContain(t, currentProse, "In qualified authoring builds, `agentplugins author` is the public authoring entrypoint.")
 	mustContain(t, currentProse, "npm install -g universal-agent-plugins")
 	mustContain(t, currentProse, "agentplugins-v*")
@@ -239,11 +239,11 @@ func TestContractClarity_RuntimeMetadataAndDocsStayAligned(t *testing.T) {
 	mustNotContain(t, currentProse, "plugin-kit-ai")
 	mustNotContain(t, currentProse, "Milestone A")
 	mustNotContain(t, currentProse, "Historical authoring and development")
-	mustContain(t, currentProse, "In qualified/source builds, MCP execution is available through `author test` and `author dev`.")
-	mustContain(t, currentProse, "Dependency bootstrap apply currently requires Linux; dry-run planning can be used on other platforms.")
-	mustContain(t, currentProse, "Linux, successful process-containment and bubblewrap preflights, and a supported system Node path.")
-	mustContain(t, currentProse, "Client projection, export/bundle, and publication are not exposed by the current authoring CLI.")
-	mustContain(t, currentProse, "`plugin.json` is the only supported authoring manifest.")
+	mustContainEither(t, currentProse, "In qualified/source builds, MCP execution is available through `author test` and `author dev`.", "`author test` and `author dev` can run MCP servers.")
+	mustContainEither(t, currentProse, "Dependency bootstrap apply currently requires Linux; dry-run planning can be used on other platforms.", "Dependency bootstrap apply and local stdio development require Linux; bootstrap dry-run works elsewhere.")
+	mustContainEither(t, currentProse, "Linux, successful process-containment and bubblewrap preflights, and a supported system Node path.", "Stdio checks need process containment, bubblewrap, and a supported system Node path")
+	mustContainEither(t, currentProse, "Client projection, export/bundle, and publication are not exposed by the current authoring CLI.", "Client projection, export/bundle, and publication are not exposed by the authoring CLI.")
+	mustContainEither(t, currentProse, "`plugin.json` is the only supported authoring manifest.", "Only `plugin.json` is supported as the package manifest:")
 	mustContain(t, string(sdkReadme), "`(*plugin-kit-ai.App).Gemini()`")
 	mustContain(t, string(sdkReadme), "`github.com/777genius/plugin-kit-ai/sdk/gemini`")
 	mustContain(t, string(sdkReadme), "## Gemini Example")
@@ -825,6 +825,14 @@ func assertCapabilityContract(t *testing.T, entries map[string]map[string]any, k
 	}
 	if got := entry["contract_class"]; got != wantContract {
 		t.Fatalf("%s contract_class = %v want %q", key, got, wantContract)
+	}
+}
+
+// Accept either published wording while requiring the same documented contract.
+func mustContainEither(t *testing.T, text, first, second string) {
+	t.Helper()
+	if !strings.Contains(text, first) && !strings.Contains(text, second) {
+		t.Fatalf("missing either contract phrase %q or %q", first, second)
 	}
 }
 

@@ -33,9 +33,9 @@ localeDisposition: "current-translation"
 </div>
 ## Autres capacités de UAP
 
-- Installez pour plusieurs agents, ajoutez des Skills autonomes, utilisez le catalogue signé, Git/SSH et les archives. [Install](./use/install).
-- Séparez projet et utilisateur avec `uap.toml` / `uap.lock`; mettez à jour, réparez et diagnostiquez. [Manage](./use/manage).
-- Build portable Skills/MCP packages and embed Go/TypeScript SDKs. [SDK](./sdk/) · [Build](./build/).
+- Installez pour plusieurs agents, ajoutez des Skills autonomes, utilisez le catalogue signé, Git/SSH et les archives. [Installer](./use/install).
+- Séparez projet et utilisateur avec `uap.toml` / `uap.lock`; mettez à jour, réparez et diagnostiquez. [Gérer](./use/manage).
+- Créez des paquets Skills/MCP portables et intégrez les SDK Go et TypeScript. [SDK](./sdk/) · [Créer](./build/).
 
 
 

@@ -56,7 +56,7 @@ func (resolver dependencyResolver) Candidates(ctx context.Context, requirement e
 	return candidates, nil
 }
 
-func (resolver dependencyResolver) Eligible(ctx context.Context, pkg environment.LockedPackage, targets []string) (bool, error) {
+func (resolver dependencyResolver) Eligible(ctx context.Context, pkg environment.LockedPackage, targets []string) (eligible bool, resultErr error) {
 	if pkg.Source.Registry == nil {
 		return true, nil
 	}
@@ -65,9 +65,14 @@ func (resolver dependencyResolver) Eligible(ctx context.Context, pkg environment
 	pkg.Targets = append([]string{}, targets...)
 	loaded, err := materializeLockedPackage(ctx, resolver.app, pkg, false, nil)
 	if loaded.cleanup != nil {
-		defer func() { _ = loaded.cleanup() }()
+		defer func() {
+			if cleanupErr := loaded.cleanup(); cleanupErr != nil {
+				eligible = false
+				resultErr = errors.Join(resultErr, fmt.Errorf("%w: %w", errDependencySnapshotCleanup, cleanupErr))
+			}
+		}()
 	}
-	if errors.Is(err, domain.ErrDirectoryIneligible) {
+	if dependencyPolicyRefusal(err) {
 		return false, nil
 	}
 	return err == nil, err
@@ -80,7 +85,7 @@ func (resolver dependencyResolver) AcquireCandidate(ctx context.Context, require
 	}
 	loaded, err := resolver.app.acquireDirectory(ctx, requirement.Registry.Distribution, request)
 	if err != nil {
-		if errors.Is(err, domain.ErrDirectoryIneligible) {
+		if dependencyPolicyRefusal(err) {
 			// Immutable MCP metadata can establish ineligibility only after fetch.
 			return environment.ResolvedPackage{}, fmt.Errorf("%w: %w", environment.ErrCandidateIneligible, err)
 		}
@@ -103,6 +108,14 @@ func (resolver dependencyResolver) AcquireCandidate(ctx context.Context, require
 	}
 	result := environment.ResolvedPackage{Package: pkg, Dependencies: facts}
 	return result, resolver.finishLoaded(ctx, loaded, pkg)
+}
+
+// A policy refusal permits another candidate; cleanup and cancellation do not.
+// Shared snapshot loading can preserve both identities in one joined error.
+func dependencyPolicyRefusal(err error) bool {
+	return errors.Is(err, domain.ErrDirectoryIneligible) &&
+		!errors.Is(err, errDependencySnapshotCleanup) &&
+		!errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
 }
 
 func dependencyManifestAlias(name string) string {

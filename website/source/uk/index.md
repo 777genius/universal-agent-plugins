@@ -34,9 +34,9 @@ translationRequired: true
 </div>
 ## Інші можливості UAP
 
-- Установлюйте для кількох агентів, обирайте окремі Skills, підписаний каталог, Git/SSH та архіви. [Install](./use/install).
-- Відокремлюйте проєкт і користувача через `uap.toml` / `uap.lock`; оновлюйте й перевіряйте стан. [Manage](./use/manage).
-- Build portable Skills/MCP packages and embed Go/TypeScript SDKs. [SDK](./sdk/) · [Build](./build/).
+- Установлюйте для кількох агентів, обирайте окремі Skills, підписаний каталог, Git/SSH та архіви. [Установлення](./use/install).
+- Відокремлюйте проєкт і користувача через `uap.toml` / `uap.lock`; оновлюйте й перевіряйте стан. [Керування](./use/manage).
+- Створюйте переносні пакети Skills/MCP та інтегруйте SDK Go і TypeScript. [SDK](./sdk/) · [Створення](./build/).
 
 
 

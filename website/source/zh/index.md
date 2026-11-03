@@ -33,9 +33,9 @@ localeDisposition: "current-translation"
 </div>
 ## UAP 的更多功能
 
-- 为多个代理安装插件，添加独立 Skills，使用签名目录、Git/SSH 或归档来源。 [Install](./use/install).
-- 通过 `uap.toml` / `uap.lock` 隔离用户和项目；更新、修复和诊断状态。 [Manage](./use/manage).
-- Build portable Skills/MCP packages and embed Go/TypeScript SDKs. [SDK](./sdk/) · [Build](./build/).
+- 为多个代理安装插件，添加独立 Skills，使用签名目录、Git/SSH 或归档来源。 [安装](./use/install).
+- 通过 `uap.toml` / `uap.lock` 隔离用户和项目；更新、修复和诊断状态。 [管理](./use/manage).
+- 构建可移植的 Skills/MCP 包，并集成 Go 与 TypeScript SDK。 [SDK](./sdk/) · [构建](./build/).
 
 
 

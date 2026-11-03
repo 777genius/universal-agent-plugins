@@ -128,6 +128,8 @@ func pmIntegrityGraphLimitRefusal(t *testing.T) {
 }
 
 func pmIntegrityRecordedGraphCompatibility(t *testing.T) {
+	t.Run("retained-over-limit", pmIntegrityRetainedGraphContraction)
+	t.Run("contraction-routes", pmIntegrityContractionRoutes)
 	for _, tc := range []struct {
 		shape string
 		count int

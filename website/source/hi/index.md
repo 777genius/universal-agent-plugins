@@ -33,9 +33,9 @@ translationRequired: true
 </div>
 ## UAP की अन्य सुविधाएँ
 
-- कई एजेंटों में इंस्टॉल करें, अलग Skills जोड़ें, हस्ताक्षरित कैटलॉग, Git/SSH या आर्काइव चुनें। [Install](./use/install).
-- `uap.toml` / `uap.lock` से प्रोजेक्ट और उपयोगकर्ता अलग रखें; अपडेट, मरम्मत और जाँच करें। [Manage](./use/manage).
-- Build portable Skills/MCP packages and embed Go/TypeScript SDKs. [SDK](./sdk/) · [Build](./build/).
+- कई एजेंटों में इंस्टॉल करें, अलग Skills जोड़ें, हस्ताक्षरित कैटलॉग, Git/SSH या आर्काइव चुनें। [इंस्टॉल](./use/install).
+- `uap.toml` / `uap.lock` से प्रोजेक्ट और उपयोगकर्ता अलग रखें; अपडेट, मरम्मत और जाँच करें। [प्रबंधन](./use/manage).
+- पोर्टेबल Skills/MCP पैकेज बनाएँ और Go तथा TypeScript SDK जोड़ें। [SDK](./sdk/) · [निर्माण](./build/).
 
 
 

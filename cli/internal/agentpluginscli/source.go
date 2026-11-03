@@ -256,11 +256,15 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	exactRequest.DependencyIdentity = environment.DependencyIdentity
 	checked, err := domain.ResolveDirectory(bundle.Snapshot, exactRequest)
 	if err != nil || checked.DistributionID != selection.DistributionID || checked.ReleaseSequence != selection.ReleaseSequence {
-		_ = loaded.cleanup()
 		if err != nil {
-			return loadedPackage{}, fmt.Errorf("acquired exact Directory release failed compatibility recheck: %w", err)
+			err = fmt.Errorf("acquired exact Directory release failed compatibility recheck: %w", err)
+		} else {
+			err = errors.New("acquired exact Directory release changed during compatibility recheck")
 		}
-		return loadedPackage{}, fmt.Errorf("acquired exact Directory release changed during compatibility recheck")
+		if cleanupErr := loaded.cleanup(); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("%w: %w", errDependencySnapshotCleanup, cleanupErr))
+		}
+		return loadedPackage{}, err
 	}
 	// The preparation resolver intentionally accepts exactly ChatGPT. Compose
 	// mixed requests by checking peers against its exact immutable selection with
