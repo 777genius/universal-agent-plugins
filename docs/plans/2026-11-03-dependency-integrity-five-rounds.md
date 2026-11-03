@@ -1,7 +1,8 @@
 # Dependency integrity: five implementation rounds
 
-Date: 2026-11-03. Baseline: `2d2c4f331e8b3c674240f8b1b83fbd0b7c0f1aba`.
-Status: **Plan revision 2 — three first-round critiques addressed; re-review pending. Implementation has not started.**
+Date: 2026-11-03. Research baseline: `2d2c4f331e8b3c674240f8b1b83fbd0b7c0f1aba`.
+Implementation base also includes `b5221a9adb561bdc8e4a89499c4113e359641e9a` (#679).
+Status: **Plan revision 2 approved by all three independent critics after revision and re-review. Implementation is authorized within this plan.**
 
 ## Owner request and delivery boundary
 
@@ -45,8 +46,8 @@ Current UAP already contains the relevant work from
 Open [#682](https://github.com/777genius/universal-agent-plugins/pull/682) and
 [#683](https://github.com/777genius/universal-agent-plugins/pull/683) decompose
 installer/CLI code; their declared scope excludes dependency orchestration.
-Open [#679](https://github.com/777genius/universal-agent-plugins/pull/679) owns
-project doctor/native readiness. This PR excludes those features and avoids its
+Merged [#679](https://github.com/777genius/universal-agent-plugins/pull/679) owns
+project doctor/native readiness and is included in the implementation base. This PR excludes those features and avoids its
 existing `dependencymanifest/decode_test.go` by using a separate regression file.
 
 The new work concentrates on the remaining **agreement → cached package → graph
@@ -370,12 +371,16 @@ All three requested revisions before implementation. Revision 2 dispositions:
 | Initial budgets reject benign graphs due repeated expansion | Replace fixed-point rescans with deterministic worklist; specify counts and tested 1,024-root/256-chain envelope; single lifetime budget. |
 | Shared ownership/race claims too broad | Assign helpers and integration ownership, preserve domain purity/contained links, specify allowed effects and exclude atime guarantees. |
 
-Re-review revision 2 before implementation. This is plan review, not the deferred
+All three critics re-reviewed revision 2 and approved it without remaining
+planning blockers. The lifecycle critic additionally required unsorted historical
+inventory acceptance in both comparison and operational SDK copies (without lock
+rewrites), and retained the 1,024-root/256-chain budget gates. These are included
+in implementation acceptance. This approval is plan review, not the deferred
 final code-critic loop.
 
 ## Delivery checklist
 
-- [ ] Plan reviewed by multiple independent critics and revised/re-reviewed.
+- [x] Plan reviewed by three independent critics and revised/re-reviewed; all approved revision 2.
 - [ ] Round 1 implemented and focused regressions pass.
 - [ ] Round 2 implemented and focused regressions pass.
 - [ ] Round 3 implemented and focused regressions pass.
