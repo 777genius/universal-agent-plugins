@@ -82,14 +82,12 @@ func TestResolutionBudgetStructuralAdmission(t *testing.T) {
 			}
 		})
 	}
-	for _, lock := range []Lock{{Packages: make([]LockedPackage, limits.nodes+1)}, {Packages: []LockedPackage{{RequiredBy: make([]RequiredBy, limits.demands+1)}}}} {
-		if err := validateGraphLimits(lock); !errors.Is(err, ErrResolutionLimit) {
-			t.Fatalf("oversized recorded graph not rejected before traversal: %v", err)
+	for _, counts := range [][2]int{{limits.nodes + 1, 0}, {1, limits.demands + 1}} {
+		if err := limits.admitGraph(counts[0], counts[1]); !errors.Is(err, ErrResolutionLimit) {
+			t.Fatalf("oversized solving graph not rejected: %v", err)
 		}
 	}
-	atLimit := Lock{Packages: make([]LockedPackage, limits.nodes)}
-	atLimit.Packages[0].RequiredBy = make([]RequiredBy, limits.demands)
-	if err := validateGraphLimits(atLimit); err != nil {
+	if err := limits.admitGraph(limits.nodes, limits.demands); err != nil {
 		t.Fatalf("exact structural boundary was rejected: %v", err)
 	}
 }

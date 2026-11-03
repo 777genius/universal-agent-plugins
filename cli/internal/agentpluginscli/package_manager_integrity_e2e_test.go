@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -44,7 +43,8 @@ func pmIntegrityGraphFixture(t *testing.T) cliFixture {
 
 // These portable agreements contain exact, structurally valid pin coordinates.
 // Tree inspects the agreement alone: absent payloads must not trigger fetching,
-// client discovery, installation or security refresh even at the graph ceiling.
+// client discovery, installation or security refresh. Recorded graphs may be
+// larger than the budgets used for fresh dependency solving.
 func pmIntegrityRecordedGraph(shape string, count int) ([]environment.LockedPackage, []string) {
 	pins := make([]environment.LockedPackage, count)
 	roots := []string{}
@@ -64,8 +64,8 @@ func pmIntegrityRecordedGraph(shape string, count int) ([]environment.LockedPack
 		}
 	}
 	if shape == "dense-overflow" {
-		// All consumers are distinct and every node is a root. Refusal must be
-		// the resource limit, not an incidental duplicate or unreachable edge.
+		// All consumers are distinct and every node is a root. This is a valid
+		// historical graph beyond the fresh solver's demand budget.
 		edges := 0
 		for i := range pins {
 			for j := range pins {
@@ -84,8 +84,8 @@ func pmIntegrityLargeRecordedTree(t *testing.T) {
 	for _, tc := range []struct {
 		shape string
 		count int
-	}{{"independent", 1024}, {"chain", 256}} {
-		t.Run(tc.shape, func(t *testing.T) {
+	}{{"independent", 1024}, {"chain", 256}, {"independent", 1025}, {"dense-overflow", 92}} {
+		t.Run(fmt.Sprintf("%s-%d", tc.shape, tc.count), func(t *testing.T) {
 			f := pmIntegrityGraphFixture(t)
 			pins, roots := pmIntegrityRecordedGraph(tc.shape, tc.count)
 			writeDependencyCheckAgreement(t, f, pins, roots...)
@@ -110,66 +110,82 @@ func pmIntegrityLargeRecordedTree(t *testing.T) {
 }
 
 func pmIntegrityGraphLimitRefusal(t *testing.T) {
+	f := pmIntegrityGraphFixture(t)
+	pins, roots := pmIntegrityRecordedGraph("independent", 1025)
+	writeDependencyCheckAgreement(t, f, pins, roots...)
+	_, lock := f.app.dependencyPaths()
+	if err := os.Remove(lock); err != nil {
+		t.Fatal(err)
+	}
+	before := pmIntegrityPersistentFiles(t, f)
+	out, stderr, err := f.execute(false, "deps", "lock", "--format", "json")
+	if !errors.Is(err, environment.ErrResolutionLimit) {
+		t.Fatalf("fresh oversized roots escaped solving admission: %v stdout=%s stderr=%s", err, out, stderr)
+	}
+	pmArchiveAssertEqual(t, "refused solving persistent files", before, pmIntegrityPersistentFiles(t, f))
+}
+
+func pmIntegrityRecordedGraphCompatibility(t *testing.T) {
 	for _, tc := range []struct {
 		shape string
 		count int
 	}{{"independent", 1025}, {"dense-overflow", 92}} {
-		for _, operation := range []string{"tree", "check", "import", "lock"} {
+		for _, operation := range []string{"check", "import", "shrink"} {
 			t.Run(tc.shape+"/"+operation, func(t *testing.T) {
 				f := pmIntegrityGraphFixture(t)
 				pins, roots := pmIntegrityRecordedGraph(tc.shape, tc.count)
 				writeDependencyCheckAgreement(t, f, pins, roots...)
-				args := []string{"deps", operation, "--format", "json"}
-				if operation == "import" {
+				manifest, lock := f.app.dependencyPaths()
+				unrelated := freshRestoreFiles(t, f.app.EnvironmentStoreRoot, f.store.Path, f.app.ManagedRoot, f.operations, f.app.UserHome)
+				switch operation {
+				case "check":
+					before := observeDependencyCheckFiles(t, f.root)
+					// The graph is valid; bytes were intentionally not cached.
+					// Offline check must admit the lock and report unavailable
+					// packages, with no source acquisition or synthetic cap error.
+					report, _ := executeDependencyCheck(t, f, dependencyCheckUnavailable)
+					packages, validLock := 0, false
+					for _, check := range report.Checks {
+						validLock = validLock || check.Stage == "lock" && check.Outcome == dependencyCheckValid
+						if check.Stage == "package" && check.Code == "package_unavailable" {
+							packages++
+						}
+					}
+					if !validLock || packages != len(pins) {
+						t.Fatalf("recorded graph was not fully admitted: lock=%t packages=%d", validLock, packages)
+					}
+					assertDependencyCheckFilesUnchanged(t, f.root, before)
+				case "import":
 					exchange := filepath.Join(f.root, "exchange")
 					if err := os.Mkdir(exchange, 0o700); err != nil {
 						t.Fatal(err)
 					}
-					mp, lp := f.app.dependencyPaths()
-					dependencyWrite(t, filepath.Join(exchange, "uap.toml"), dependencyRead(t, mp))
-					dependencyWrite(t, filepath.Join(exchange, "uap.lock"), dependencyRead(t, lp))
+					manifestBytes, lockBytes := dependencyRead(t, manifest), dependencyRead(t, lock)
+					dependencyWrite(t, filepath.Join(exchange, "uap.toml"), manifestBytes)
+					dependencyWrite(t, filepath.Join(exchange, "uap.lock"), lockBytes)
 					writeDependencyCheckAgreement(t, f, nil)
-					args = append(args, exchange, "--yes")
-				}
-				before := observeDependencyCheckFiles(t, f.root)
-				persistentBefore := pmIntegrityPersistentFiles(t, f)
-				if operation == "check" {
-					report, _ := executeDependencyCheck(t, f, dependencyCheckError)
-					requireDependencyCheckCode(t, report, "graph_limit")
-				} else {
-					out, stderr, err := f.execute(false, args...)
-					if !errors.Is(err, environment.ErrResolutionLimit) {
-						t.Fatalf("%s failed outside graph admission: %v stdout=%s stderr=%s", operation, err, out, stderr)
+					dependencyRun(t, f, "deps", "import", exchange, "--yes", "--format", "json")
+					if dependencyRead(t, manifest) != manifestBytes || dependencyRead(t, lock) != lockBytes {
+						t.Fatal("historical agreement changed during import")
+					}
+				case "shrink":
+					// Keep the original lock while explicitly reducing intent.
+					// New solver limits must not trap users in an old graph.
+					dependencyWrite(t, manifest, "schema_version = 1\n")
+					dependencyRun(t, f, "deps", "lock", "--format", "json")
+					requirements, err := readDependencyManifest(manifest)
+					if err != nil {
+						t.Fatal(err)
+					}
+					reduced, err := readDependencyLock(lock, requirements)
+					if err != nil || len(reduced.Packages) != 0 {
+						t.Fatalf("could not reduce historical graph: packages=%d error=%v", len(reduced.Packages), err)
 					}
 				}
-				if operation == "lock" {
-					// Mutation commands reserve their coordination lock before
-					// admission. The agreement, cache and installed state must
-					// nevertheless remain byte-for-byte and timestamp stable.
-					pmArchiveAssertEqual(t, "refused lock persistent files", persistentBefore, pmIntegrityPersistentFiles(t, f))
-				} else {
-					assertDependencyCheckFilesUnchanged(t, f.root, before)
-				}
+				pmArchiveAssertEqual(t, "unrelated persistent files", unrelated, freshRestoreFiles(t, f.app.EnvironmentStoreRoot, f.store.Path, f.app.ManagedRoot, f.operations, f.app.UserHome))
 			})
 		}
 	}
-	t.Run("fresh-resolution", func(t *testing.T) {
-		f := pmIntegrityGraphFixture(t)
-		pins, roots := pmIntegrityRecordedGraph("independent", 1025)
-		writeDependencyCheckAgreement(t, f, pins, roots...)
-		_, lock := f.app.dependencyPaths()
-		if err := os.Remove(lock); err != nil {
-			t.Fatal(err)
-		}
-		before := pmIntegrityPersistentFiles(t, f)
-		out, stderr, err := f.execute(false, "deps", "lock", "--format", "json")
-		if !errors.Is(err, environment.ErrResolutionLimit) {
-			t.Fatalf("fresh oversized roots escaped admission: %v stdout=%s stderr=%s", err, out, stderr)
-		}
-		if !reflect.DeepEqual(before, pmIntegrityPersistentFiles(t, f)) {
-			t.Fatal("oversized fresh resolution published agreement, cache or installed state")
-		}
-	})
 }
 
 func pmIntegrityPersistentFiles(t *testing.T, f cliFixture) map[string]freshRestoreStamp {

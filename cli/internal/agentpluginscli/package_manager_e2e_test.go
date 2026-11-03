@@ -89,6 +89,7 @@ func packageManagerAgreementCases() map[string]func(*testing.T) {
 		"embedded-manifest-size-refusal": pmIntegrityEmbeddedManifestAdmission,
 		"graph-large-recorded-tree":      pmIntegrityLargeRecordedTree,
 		"graph-resource-limit-refusal":   pmIntegrityGraphLimitRefusal,
+		"graph-recorded-compatibility":   pmIntegrityRecordedGraphCompatibility,
 		"offline-check-valid-noop":       pmIntegrityOfflineScopes,
 		"offline-check-damaged-state":    TestDependencyCheckDamagedStateCLI,
 		"offline-check-declared-graph":   TestDependencyCheckDeclaredGraphCLI,

@@ -85,6 +85,7 @@
     "embedded-manifest-size-refusal",
     "graph-large-recorded-tree",
     "graph-resource-limit-refusal",
+    "graph-recorded-compatibility",
     "offline-check-valid-noop",
     "offline-check-damaged-state",
     "offline-check-declared-graph",

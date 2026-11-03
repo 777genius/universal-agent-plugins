@@ -15,6 +15,8 @@ type resolutionLimits struct {
 }
 
 func defaultResolutionLimits() resolutionLimits {
+	// These bound fresh search work, not the validity of a recorded agreement.
+	// Historical pins must remain inspectable and removable without re-solving.
 	return resolutionLimits{nodes: 1024, demands: 8192, states: 4096, work: 8388608}
 }
 
@@ -64,23 +66,6 @@ func (limits resolutionLimits) admitGraph(nodes, demands int) error {
 	}
 	if demands > limits.demands {
 		return resolutionLimit("graph demands", limits.demands)
-	}
-	return nil
-}
-
-// Apply structural admission before traversing untrusted lock edges. Counts are
-// bounded before summation, including duplicate entries later rejected by policy.
-func validateGraphLimits(lock Lock) error {
-	limits := defaultResolutionLimits()
-	if err := limits.admitGraph(len(lock.Packages), 0); err != nil {
-		return err
-	}
-	demands := 0
-	for _, pkg := range lock.Packages {
-		if len(pkg.RequiredBy) > limits.demands-demands {
-			return resolutionLimit("graph demands", limits.demands)
-		}
-		demands += len(pkg.RequiredBy)
 	}
 	return nil
 }

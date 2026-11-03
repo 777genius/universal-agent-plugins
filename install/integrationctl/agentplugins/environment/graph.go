@@ -13,21 +13,33 @@ import (
 // Including an absent alias lets callers select removals from an older lock.
 func (lock Lock) ClosureAliases(aliases []string) []string {
 	selected := map[string]bool{}
+	queue := []string{}
 	for _, alias := range aliases {
-		selected[alias] = true
+		if !selected[alias] {
+			selected[alias] = true
+			queue = append(queue, alias)
+		}
 	}
-	for changed := true; changed; {
-		changed = false
-		for _, pkg := range lock.Packages {
-			for _, edge := range pkg.RequiredBy {
-				if selected[edge.Alias] && !selected[pkg.Alias] {
-					selected[pkg.Alias] = true
-					changed = true
-				}
+	children := graphChildren(lock)
+	for next := 0; next < len(queue); next++ {
+		for _, alias := range children[queue[next]] {
+			if !selected[alias] {
+				selected[alias] = true
+				queue = append(queue, alias)
 			}
 		}
 	}
 	return sortedKeys(selected)
+}
+
+func graphChildren(lock Lock) map[string][]string {
+	children := map[string][]string{}
+	for _, pkg := range lock.Packages {
+		for _, edge := range pkg.RequiredBy {
+			children[edge.Alias] = append(children[edge.Alias], pkg.Alias)
+		}
+	}
+	return children
 }
 
 // SamePin compares immutable acquisition identity independently of graph intent.
@@ -82,7 +94,8 @@ func validateGraph(lock Lock, requirements Requirements) error {
 		byAlias[pkg.Alias], sources[pkg.SourceKey] = pkg, pkg.Alias
 	}
 	for alias, requirement := range requirements.Dependencies {
-		pkg, exists := lock.PackageForRequirement(requirement)
+		key, _ := requirement.SourceKey()
+		pkg, exists := byAlias[sources[key]]
 		if !exists {
 			return fmt.Errorf("lock is missing alias %q", alias)
 		}
@@ -93,7 +106,7 @@ func validateGraph(lock Lock, requirements Requirements) error {
 	if err := validateEdges(byAlias); err != nil {
 		return err
 	}
-	targets := inheritedTargets(requirements, lock)
+	targets := inheritedTargets(requirements, lock, sources)
 	for _, pkg := range lock.Packages {
 		expected := sortedKeys(targets[pkg.Alias])
 		if len(expected) == 0 {
@@ -185,32 +198,33 @@ func validateRequiredBySource(pkg LockedPackage, edge RequiredBy) error {
 	return nil
 }
 
-func inheritedTargets(requirements Requirements, lock Lock) map[string]map[string]bool {
+func inheritedTargets(requirements Requirements, lock Lock, sources map[string]string) map[string]map[string]bool {
 	targets := map[string]map[string]bool{}
 	for _, pkg := range lock.Packages {
 		targets[pkg.Alias] = map[string]bool{}
 	}
+	type targetBinding struct{ alias, target string }
+	queue := []targetBinding{}
 	for client, aliases := range requirements.Targets {
 		for _, alias := range aliases {
 			req, ok := requirements.Dependencies[alias]
 			if !ok {
 				continue
 			}
-			if pkg, found := lock.PackageForRequirement(req); found {
-				targets[pkg.Alias][client] = true
+			key, _ := req.SourceKey()
+			if binding, found := sources[key]; found && !targets[binding][client] {
+				targets[binding][client] = true
+				queue = append(queue, targetBinding{alias: binding, target: client})
 			}
 		}
 	}
-	for changed := true; changed; {
-		changed = false
-		for _, pkg := range lock.Packages {
-			for _, edge := range pkg.RequiredBy {
-				for target := range targets[edge.Alias] {
-					if !targets[pkg.Alias][target] {
-						targets[pkg.Alias][target] = true
-						changed = true
-					}
-				}
+	children := graphChildren(lock)
+	for next := 0; next < len(queue); next++ {
+		binding := queue[next]
+		for _, alias := range children[binding.alias] {
+			if !targets[alias][binding.target] {
+				targets[alias][binding.target] = true
+				queue = append(queue, targetBinding{alias: alias, target: binding.target})
 			}
 		}
 	}
