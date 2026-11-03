@@ -256,6 +256,23 @@ def matches_pinned_skill_bytes(project, skill_path, blob_sha1):
         return False
 
 
+def has_target_registration(response, identity, target):
+    """Inspect failed add's list without requiring a verified/active binding."""
+    if not isinstance(response, dict):
+        return False
+    data = response.get("data")
+    installations = data.get("installations") if isinstance(data, dict) else None
+    if not isinstance(installations, list):
+        return False
+    return any(
+        isinstance(node, dict) and node.get("name") == identity
+        and isinstance(node.get("clients"), list)
+        and any(isinstance(client, dict) and client.get("client_id") == target
+                for client in node["clients"])
+        for node in installations
+    )
+
+
 def matching_installations(response, identity, target, kind, item):
     """No substring matching: inspect the entire parsed list response."""
     if not isinstance(response, dict):
@@ -487,10 +504,14 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     skill_bytes_match = (kind == "skill" and matches_pinned_skill_bytes(
         project, skill_path, item["skill_md_git_blob_sha1"]))
     listed = (call([cli, "list", "--target", target, *scope, "--format", "json"],
-                   env, project, 30) if output["exit_code"] == 0 else None)
+                   env, project, 30))
     listed_json = listed.pop("_json", None) if listed else None
     matching = matching_installations(listed_json, identity, target, kind, item)
     listed_identity = len(matching) == 1
+    failed_install_registered = has_target_registration(listed_json, identity, target) if (
+        output["exit_code"] != 0) else False
+    failed_install_residue = bool(output["exit_code"] != 0 and (
+        failed_install_registered or native_attribution or skill_path))
     prepared_binding = bool(listed_identity and kind == "plugin" and any(
         client.get("client_id") == target and client.get("verification") == "package_validated"
         and client.get("activation") == "manual_activation_required"
@@ -559,6 +580,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
         status = "external-native-uninstall-required"
     elif installed:
         status = "cleanup-failed"
+    elif failed_install_residue:
+        status = "failed-install-residue"
     elif install_refused and "manual_activation_required" in diagnostics and "cgroup" in diagnostics:
         status = "host-containment-unavailable"
     elif install_refused and ("not detected" in diagnostics or "not available" in diagnostics
@@ -583,6 +606,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
             "lock_written": bool(locked), "lock_contains_identity": bool(lock_contains),
             "lock_exact_source_pinned": lock_pinned, "skill_bytes_match": bool(skill_bytes_match),
             "listed_identity": listed_identity, "prepared_binding": prepared_binding,
+            "failed_install_registered": failed_install_registered,
+            "failed_install_residue": failed_install_residue,
             "matched_installation_ids": sorted(old_ids),
             "native_uninstall": native_uninstall, "cleanup": cleanup, "post_remove_list": post_list,
             "post_removal_skill": post_removal_skill, "post_lock_pinned": post_lock_pinned,

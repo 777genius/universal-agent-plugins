@@ -154,6 +154,20 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                          "unmanaged native neighbor must survive\\n")
                         self.assertTrue(evidence["sentinels_preserved"])
 
+    def test_failed_add_inspects_pending_registration_without_false_matches(self):
+        audit = load_audit()
+        pending = {"data": {"installations": [
+            {"name": "atlassian", "clients": [
+                {"client_id": "grok", "verification": "pending"}]},
+            {"name": "other", "clients": [{"client_id": "codex"}]},
+        ]}}
+        self.assertTrue(audit.has_target_registration(pending, "atlassian", "grok"))
+        self.assertFalse(audit.has_target_registration(pending, "atlassian", "codex"))
+        self.assertFalse(audit.has_target_registration(pending, "other", "grok"))
+        for malformed in (None, [], {}, {"data": {"installations": "bad"}},
+                          {"data": {"installations": [None, "bad"]}}):
+            self.assertFalse(audit.has_target_registration(malformed, "atlassian", "grok"))
+
     def test_real_signed_release_target_refusal_is_not_an_installer_bug(self):
         audit = load_audit()
         reproduced = (
