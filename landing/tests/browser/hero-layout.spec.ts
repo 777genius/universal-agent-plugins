@@ -208,7 +208,7 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   // After seven seconds the hidden warm-up frame is intentional. It must not
   // become an active, focusable or autoplay-enabled player without a gesture.
   const muxFrames = page.locator('iframe[src*="player.mux.com"]');
-  await expect(muxFrames.locator(':scope:not(.hero-demo-video__preload)')).toHaveCount(0);
+  await expect(page.locator('iframe[src*="player.mux.com"]:not(.hero-demo-video__preload)')).toHaveCount(0);
   expect(await muxFrames.evaluateAll((frames) => frames.every((frame) =>
     frame.getAttribute('aria-hidden') === 'true' &&
     frame.hasAttribute('inert') && frame.getAttribute('tabindex') === '-1' &&
