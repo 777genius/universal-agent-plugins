@@ -275,11 +275,22 @@ func backupPreviousKiroSkills(transactionRoot string, previousByID map[string]do
 		} else if err != nil {
 			return err
 		}
+		// Native ownership can change after the first read-only preparation.
+		// Reject late edits before moving them, and verify the isolated copy
+		// again after rename to detect changes in the remaining race window.
+		if err := verifyKiroSkillDigest(object, false); err != nil {
+			return fmt.Errorf("verify managed Kiro skill before backup %q: %w", object.LogicalName, err)
+		}
 		backup := filepath.Join(transactionRoot, "old-"+object.LogicalName)
 		if err := renameKiroDirectoryExclusive(object.Path, backup, rename); err != nil {
 			return fmt.Errorf("backup Kiro skill %q: %w", object.LogicalName, err)
 		}
 		backups[id] = backup
+		isolated := object
+		isolated.Path = backup
+		if err := verifyKiroSkillDigest(isolated, false); err != nil {
+			return fmt.Errorf("verify isolated Kiro skill backup %q: %w", object.LogicalName, err)
+		}
 	}
 	return nil
 }
