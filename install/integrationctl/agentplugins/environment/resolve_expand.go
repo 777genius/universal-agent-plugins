@@ -7,35 +7,80 @@ import (
 	"sort"
 )
 
-func (solver *graphSolver) expand(choices map[string]ResolvedPackage) (map[string]graphNode, error) {
-	nodes := map[string]graphNode{}
-	for key, node := range solver.roots {
+type graphExpansion struct {
+	nodes   map[string]graphNode
+	queue   []string
+	pending map[string]bool
+	demands int
+}
+
+func (solver *graphSolver) expand(ctx context.Context, choices map[string]ResolvedPackage) (map[string]graphNode, error) {
+	if err := solver.budget.limits.admitGraph(len(solver.roots), 0); err != nil {
+		return nil, err
+	}
+	work := graphExpansion{nodes: map[string]graphNode{}, queue: sortedKeys(solver.roots), pending: map[string]bool{}}
+	for _, key := range work.queue {
+		node := solver.roots[key]
 		node.requirement = solver.nodeRequirement(key, node.requirement, choices)
 		node.targets = append([]string{}, node.targets...)
 		node.demands = append([]graphDemand{}, node.demands...)
-		nodes[key] = node
+		work.nodes[key] = node
+		work.pending[key] = true
 	}
-	changed := true
-	for changed {
-		changed = false
-		for _, key := range sortedKeys(nodes) {
-			node := nodes[key]
-			selected, ok := choices[key]
-			if !ok {
-				continue
-			}
-			for _, distribution := range sortedKeys(selected.Dependencies) {
-				req, err := solver.dependencyRequirement(distribution, selected.Dependencies[distribution], choices)
-				if err != nil {
-					return nil, err
-				}
-				if mergeGraphDemand(nodes, node, req) {
-					changed = true
-				}
-			}
+	for len(work.queue) > 0 {
+		if err := solver.budget.consumeWork(ctx, 1); err != nil {
+			return nil, err
+		}
+		key := work.queue[0]
+		work.queue[0] = ""
+		work.queue = work.queue[1:]
+		work.pending[key] = false
+		selected, ok := choices[key]
+		if !ok {
+			continue
+		}
+		if err := solver.expandDependencies(ctx, choices, &work, work.nodes[key], selected.Dependencies); err != nil {
+			return nil, err
 		}
 	}
-	return nodes, nil
+	return work.nodes, nil
+}
+
+func (solver *graphSolver) expandDependencies(ctx context.Context, choices map[string]ResolvedPackage, work *graphExpansion, parent graphNode, dependencies map[string]Requirement) error {
+	if len(dependencies) > solver.budget.limits.demands {
+		return resolutionLimit("graph demands", solver.budget.limits.demands)
+	}
+	if err := solver.budget.checkWork(ctx, len(dependencies)); err != nil {
+		return err
+	}
+	for _, declaration := range sortedKeys(dependencies) {
+		if err := solver.budget.consumeWork(ctx, 1); err != nil {
+			return err
+		}
+		req, err := solver.dependencyRequirement(declaration, dependencies[declaration], choices)
+		if err != nil {
+			return err
+		}
+		if err := work.merge(parent, req, solver.budget.limits); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (work *graphExpansion) merge(parent graphNode, req Requirement, limits resolutionLimits) error {
+	key, _ := acquisitionSourceKey(req)
+	before := len(work.nodes[key].demands)
+	changed := mergeGraphDemand(work.nodes, parent, req)
+	work.demands += len(work.nodes[key].demands) - before
+	if err := limits.admitGraph(len(work.nodes), work.demands); err != nil {
+		return err
+	}
+	if changed && !work.pending[key] {
+		work.queue = append(work.queue, key)
+		work.pending[key] = true
+	}
+	return nil
 }
 
 func mergeGraphDemand(nodes map[string]graphNode, parent graphNode, req Requirement) bool {
@@ -86,7 +131,7 @@ func requirementSelector(req Requirement) Selector {
 func (solver *graphSolver) nodeRequirement(key string, req Requirement, choices map[string]ResolvedPackage) Requirement {
 	if pin, ok := solver.pins[key]; ok {
 		req.Alias = pin.Alias
-	} else if root, ok := solver.roots[key]; ok && aliasPattern.MatchString(solver.requirements.Dependencies[rootDeclaration(solver.requirements, key)].Alias) {
+	} else if root, ok := solver.roots[key]; ok && aliasPattern.MatchString(root.requirement.Alias) {
 		req.Alias = root.requirement.Alias
 	} else if chosen, ok := choices[key]; ok && chosen.Package.Alias != "" {
 		req.Alias = chosen.Package.Alias
@@ -114,16 +159,6 @@ func acquisitionSourceKey(req Requirement) (string, error) {
 	return req.SourceKey()
 }
 
-func rootDeclaration(requirements Requirements, source string) string {
-	for declaration, req := range requirements.Dependencies {
-		key, _ := req.SourceKey()
-		if key == source {
-			return declaration
-		}
-	}
-	return ""
-}
-
 func (solver *graphSolver) dependencyRequirement(declaration string, req Requirement, choices map[string]ResolvedPackage) (Requirement, error) {
 	if declaration != req.Alias {
 		return Requirement{}, fmt.Errorf("dependency key %q does not match declaration %q", declaration, req.Alias)
@@ -147,6 +182,9 @@ func unionTargets(a, b []string) []string {
 }
 
 func (solver *graphSolver) describe(ctx context.Context, pkg LockedPackage) (ResolvedPackage, error) {
+	if err := ctx.Err(); err != nil {
+		return ResolvedPackage{}, err
+	}
 	cacheKey := pkg.SourceKey + "\x00" + pkg.TreeDigest
 	if cached, ok := solver.descriptions[cacheKey]; ok {
 		return cached, nil
@@ -158,11 +196,17 @@ func (solver *graphSolver) describe(ctx context.Context, pkg LockedPackage) (Res
 	if err != nil {
 		return ResolvedPackage{}, err
 	}
+	if err := ctx.Err(); err != nil {
+		return ResolvedPackage{}, err
+	}
 	solver.descriptions[cacheKey] = selected
 	return selected, nil
 }
 
 func (solver *graphSolver) checkTargets(ctx context.Context, node graphNode, pkg LockedPackage) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if solver.graph == nil {
 		return ErrDependencyFactsUnavailable
 	}
@@ -171,6 +215,9 @@ func (solver *graphSolver) checkTargets(ctx context.Context, node graphNode, pkg
 	}
 	eligible, err := solver.graph.Eligible(ctx, pkg, node.targets)
 	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if !eligible {

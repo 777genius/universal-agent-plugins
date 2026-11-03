@@ -420,7 +420,13 @@ func ManifestDigest(requirements Requirements) (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
+// ErrManifestDigestMismatch distinguishes stale intent from malformed lock data.
+var ErrManifestDigestMismatch = errors.New("lock manifest digest does not match current intent")
+
 func (lock Lock) Validate(requirements Requirements) error {
+	if err := validateGraphLimits(lock); err != nil {
+		return err
+	}
 	if lock.LockVersion != LockVersion {
 		return fmt.Errorf("unsupported lock_version %d", lock.LockVersion)
 	}
@@ -429,7 +435,7 @@ func (lock Lock) Validate(requirements Requirements) error {
 		return err
 	}
 	if lock.ManifestDigest != digest {
-		return errors.New("lock manifest digest does not match current intent")
+		return ErrManifestDigestMismatch
 	}
 	return validateGraph(lock, requirements)
 }
@@ -437,6 +443,9 @@ func (lock Lock) Validate(requirements Requirements) error {
 // ValidateCompatiblePins checks old pin identity using its recorded selectors;
 // compatibility with changed intent is decided by resolution.
 func (lock Lock) ValidateCompatiblePins(_ Requirements) error {
+	if err := validateGraphLimits(lock); err != nil {
+		return err
+	}
 	if lock.LockVersion != LockVersion {
 		return fmt.Errorf("unsupported lock_version %d", lock.LockVersion)
 	}

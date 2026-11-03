@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -185,7 +186,7 @@ func TestDependencyTreeHumanLabelsDoNotAlterGraph(t *testing.T) {
 		},
 	}
 	var output bytes.Buffer
-	if err := renderDependencyTree(&output, tree); err != nil {
+	if err := renderDependencyTree(context.Background(), &output, tree); err != nil {
 		t.Fatal(err)
 	}
 	s := output.String()
@@ -206,7 +207,7 @@ func TestDependencyTreeHumanLabelsDoNotAlterGraph(t *testing.T) {
 
 func TestDependencyTreeEmptyLockIsExplicit(t *testing.T) {
 	var output bytes.Buffer
-	if err := renderDependencyTree(&output, dependencyTree{Roots: []string{}, Packages: []environment.LockedPackage{}}); err != nil {
+	if err := renderDependencyTree(context.Background(), &output, dependencyTree{Roots: []string{}, Packages: []environment.LockedPackage{}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := output.String(); got != "No packages are recorded in this lock.\n" {
@@ -223,7 +224,7 @@ func TestDependencyTreeIndentedPackageCanAlsoBeDirectRoot(t *testing.T) {
 		},
 	}
 	var out bytes.Buffer
-	if err := renderDependencyTree(&out, tree); err != nil {
+	if err := renderDependencyTree(context.Background(), &out, tree); err != nil {
 		t.Fatal(err)
 	}
 	human := out.String()
