@@ -15,7 +15,7 @@ func validatePolicy(p domain.DirectoryReleasePolicy) error {
 	if _, err := parseSemver(p.MinimumInstallerVersion); err != nil {
 		return fmt.Errorf("invalid minimum installer version")
 	}
-	if p.Targets == nil || len(p.Targets) < 1 || p.CurrentEvidence == nil {
+	if len(p.Targets) == 0 || p.CurrentEvidence == nil {
 		return fmt.Errorf("targets/evidence arrays required")
 	}
 	clients := map[domain.ClientID]bool{}
@@ -66,7 +66,7 @@ func validateSourcePath(sourcePath string) error {
 			return fmt.Errorf("unsafe source path")
 		}
 		for _, r := range part {
-			if !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || strings.ContainsRune("._-", r)) {
+			if !strings.ContainsRune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-", r) {
 				return fmt.Errorf("unsafe source path")
 			}
 		}
