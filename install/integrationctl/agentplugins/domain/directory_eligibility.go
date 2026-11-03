@@ -66,6 +66,7 @@ func distributionByID(snapshot DirectorySnapshot, product DirectoryProduct, id s
 	}
 	return nil
 }
+
 func targetByClient(values []DirectoryTarget, client ClientID) *DirectoryTarget {
 	for i := range values {
 		if values[i].Client == client {
@@ -74,6 +75,7 @@ func targetByClient(values []DirectoryTarget, client ClientID) *DirectoryTarget 
 	}
 	return nil
 }
+
 func evidenceByID(snapshot DirectorySnapshot, id string) *DirectoryEvidence {
 	for i := range snapshot.Evidence {
 		if snapshot.Evidence[i].ID == id {
@@ -82,6 +84,7 @@ func evidenceByID(snapshot DirectorySnapshot, id string) *DirectoryEvidence {
 	}
 	return nil
 }
+
 func isRevoked(snapshot DirectorySnapshot, distribution string, sequence uint64) bool {
 	for _, item := range snapshot.Revocations {
 		if item.DistributionID == distribution && item.ReleaseSequence == sequence {
@@ -90,6 +93,7 @@ func isRevoked(snapshot DirectorySnapshot, distribution string, sequence uint64)
 	}
 	return false
 }
+
 func containsString(values []string, value string) bool {
 	for _, item := range values {
 		if item == value {
@@ -98,6 +102,7 @@ func containsString(values []string, value string) bool {
 	}
 	return false
 }
+
 func containsScope(values []InstallScope, value InstallScope) bool {
 	for _, item := range values {
 		if item == value {
@@ -106,6 +111,7 @@ func containsScope(values []InstallScope, value InstallScope) bool {
 	}
 	return false
 }
+
 func uniqueClients(values []ClientID) []ClientID {
 	seen := map[ClientID]bool{}
 	out := []ClientID{}
@@ -117,6 +123,7 @@ func uniqueClients(values []ClientID) []ClientID {
 	}
 	return out
 }
+
 func ineligibleError(id string, reasons []eligibilityReason) error {
 	parts := make([]string, 0, len(reasons))
 	noSafeUpdate := false
@@ -132,6 +139,7 @@ func ineligibleError(id string, reasons []eligibilityReason) error {
 	}
 	return fmt.Errorf("%w in %q: %s", ErrDirectoryIneligible, id, strings.Join(parts, "; "))
 }
+
 func joinDiagnosticMessages(values []DirectoryDiagnostic) string {
 	parts := make([]string, 0, len(values))
 	for _, v := range values {
@@ -139,4 +147,3 @@ func joinDiagnosticMessages(values []DirectoryDiagnostic) string {
 	}
 	return strings.Join(parts, "; ")
 }
-
