@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"reflect"
@@ -171,6 +172,28 @@ func TestProjectNativeGuidanceForTwelveAgents(t *testing.T) {
 		if len(a) != 1 || !strings.Contains(a[0], want) {
 			t.Fatalf("incorrect recovery for %s: %#v", status, a)
 		}
+	}
+}
+
+func TestProjectReadinessHumanOutputSanitizesTerminalControls(t *testing.T) {
+	t.Parallel()
+	var output bytes.Buffer
+	renderProjectReadiness(&output, []projectReadinessRecord{{
+		InstallationID: "install\x1b[2J\u202e",
+		ClientID:       "pi\x1b]52;c;clipboard\a\u202d",
+		Status:         "prepared_native_unverified\nforged",
+		NativeEvidence: "native_execution_not_observed_by_doctor",
+		NextActions:    []string{"Review \x1b[31mproject\u202e trust"},
+	}})
+	got := output.String()
+	for _, control := range []rune{'\x1b', '\a', '\u202e', '\u202d', '\r'} {
+		if strings.ContainsRune(got, control) {
+			t.Fatalf("project readiness emitted terminal/bidi control %U: %q", control, got)
+		}
+	}
+	if strings.Count(got, "\n") != 3 || !strings.Contains(got, "Project readiness (recorded facts") ||
+		!strings.Contains(got, "install/pi") || !strings.Contains(got, "Next:") {
+		t.Fatalf("project readiness human output lost safe diagnostics: %q", got)
 	}
 }
 

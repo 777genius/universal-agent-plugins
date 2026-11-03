@@ -259,15 +259,7 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %d\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Tracked installations"), report.InstallationCount)
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %d\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Open recovery operations"), report.OpenOperationCount)
-	if len(report.ProjectReadiness) > 0 {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Project readiness (recorded facts, not live client execution):")
-		for _, item := range report.ProjectReadiness {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s/%s: %s (native: %s)\n", item.InstallationID, item.ClientID, item.Status, item.NativeEvidence)
-			for _, action := range item.NextActions {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "    Next:", action)
-			}
-		}
-	}
+	renderProjectReadiness(cmd.OutOrStdout(), report.ProjectReadiness)
 	for _, finding := range report.Findings {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  [%s] %s: %s\n", finding.Status, finding.Code, finding.Message)
 		if finding.InstallationID != "" {
@@ -284,6 +276,24 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return renderInstallation(cmd.OutOrStdout(), *report.Installation)
 	}
 	return nil
+}
+
+// renderProjectReadiness is the only human-output boundary for project records.
+// State-derived identifiers and guidance must never inject terminal control
+// sequences; JSON output retains its usual escaping and structured values.
+func renderProjectReadiness(out io.Writer, records []projectReadinessRecord) {
+	if len(records) == 0 {
+		return
+	}
+	_, _ = fmt.Fprintln(out, "Project readiness (recorded facts, not live client execution):")
+	for _, item := range records {
+		_, _ = fmt.Fprintf(out, "  %s/%s: %s (native: %s)\n",
+			prompt.SafeText(item.InstallationID), prompt.SafeText(item.ClientID),
+			prompt.SafeText(item.Status), prompt.SafeText(item.NativeEvidence))
+		for _, action := range item.NextActions {
+			_, _ = fmt.Fprintln(out, "    Next:", prompt.SafeText(action))
+		}
+	}
 }
 
 // A generic "healthy" sentinel is valid only when no more-specific observer
