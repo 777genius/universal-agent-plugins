@@ -47,7 +47,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/vendor-proof" "$HOME/.local/bin"
           export PATH="$HOME/.local/bin:$PATH"
           case "$TARGET" in
-            cursor) URL="https://cursor.com/install"; BIN="cursor-agent" ;;
+            cursor) URL="https://downloads.cursor.com/production/25b52e7d03ebf2d5608914158e119f7992432a34/linux/x64/deb/amd64/deb/cursor_3.28.7_amd64.deb"; BIN="cursor" ;;
             kiro) URL="https://cli.kiro.dev/install"; BIN="kiro-cli" ;;
             windsurf) URL="https://cli.devin.ai/install.sh"; BIN="devin" ;;
             grok) URL="https://x.ai/cli/install.sh"; BIN="grok" ;;
@@ -62,10 +62,10 @@ jobs:
               ;;
           esac
           printf '%s\n' "$URL" > "$RUNNER_TEMP/vendor-proof/source.txt"
-          if [[ "$TARGET" == vscode ]]; then
-            curl -fsSL --retry 2 "$URL" -o "$RUNNER_TEMP/code.deb"
-            sha256sum "$RUNNER_TEMP/code.deb" > "$RUNNER_TEMP/vendor-proof/artifact.sha256"
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$RUNNER_TEMP/code.deb"
+          if [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
+            curl -fsSL --retry 2 "$URL" -o "$RUNNER_TEMP/$TARGET.deb"
+            sha256sum "$RUNNER_TEMP/$TARGET.deb" > "$RUNNER_TEMP/vendor-proof/artifact.sha256"
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$RUNNER_TEMP/$TARGET.deb"
           else
             curl -fsSL --retry 2 "$URL" -o "$RUNNER_TEMP/vendor-install.sh"
             sha256sum "$RUNNER_TEMP/vendor-install.sh" > "$RUNNER_TEMP/vendor-proof/installer.sha256"
