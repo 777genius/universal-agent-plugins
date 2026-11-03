@@ -708,9 +708,12 @@ try {
       // Check one desktop visit against the exact published, digest-validated
       // reports already loaded above. Browser/API traffic is never mocked.
       if (locale === 'en' && width === 1280) {
-        await page.goto(new URL(`${prefix}plugins/?tab=skills&skillScan=scanned`, site).href, {
-          waitUntil: 'domcontentloaded',
-        });
+        // Stay in the same Nuxt app: a full page reload resets the scoped
+        // manifest cache and cannot test cross-catalog request reuse.
+        await page.evaluate(
+          async (target) => document.querySelector('#__nuxt').__vue_app__.config.globalProperties.$router.push(target),
+          `${site.pathname}${prefix}plugins/?tab=skills&skillScan=scanned`,
+        );
         await hydrated(page);
         const catalog = page.locator('.skills-catalog');
         await expect(catalog.getByRole('button', { name: /^Filters/ })).toBeVisible();
