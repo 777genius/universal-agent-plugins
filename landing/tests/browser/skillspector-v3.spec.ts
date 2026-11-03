@@ -567,7 +567,7 @@ for (const width of [1280, 390]) {
     const summary = assessment.locator(':scope > summary');
     await expect(summary).toContainText('12/13 scanned');
     await expect(summary).toContainText('1 previous');
-    await expect(summary).not.toContainText('Skill scan · Previous check');
+    await expect(summary).not.toContainText('Skill scan · Outdated scan');
     await summary.click();
     await expect(assessment.locator('.skillspector__advice')).toContainText(
       'Some Skill results were imported from older scan formats',
@@ -672,7 +672,7 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
     if (mode === 'stale') {
       // A source revision mismatch has no verified current inventory denominator.
       // Report prior evidence without implying that the old 13 roots are current.
-      await expect(assessment.locator(':scope > summary')).toContainText('Previous check');
+      await expect(assessment.locator(':scope > summary')).toContainText('Outdated scan');
     }
     await assessment.locator(':scope > summary').click();
     if (mode === 'stale') {
@@ -683,7 +683,7 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
         'Older report only',
       );
       await expect(assessment.locator('.skillspector__record-summary').first()).toContainText(
-        'Previous check',
+        'Outdated scan',
       );
     }
     if (mode === 'stale' || mode === 'unsupported') {

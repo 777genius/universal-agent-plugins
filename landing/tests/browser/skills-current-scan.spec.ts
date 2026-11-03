@@ -86,7 +86,7 @@ test('default Skills browse shows only a physically executed current source scan
   await expect(cards.first()).toHaveAttribute(
     'data-skill-id', 'skills-sh:affaan-m/ecc:recsys-pipeline-architect',
   );
-  await expect(cards.first().locator('.skillspector > summary')).not.toContainText('Previous check');
+  await expect(cards.first().locator('.skillspector > summary')).not.toContainText('Outdated scan');
   await expect(page.locator('.skills-catalog__scan-notice')).toBeVisible();
   expect(verifiedShards()).toBe(1);
   await page.goto('plugins/?tab=skills&skillScan=all');
@@ -102,7 +102,7 @@ test('historical-only report does not count as a current scan and can be browsed
   await page.getByRole('button', { name: 'Browse all installable Skills' }).click();
   await expect(page.locator('.skills-catalog .skill-card')).toHaveCount(2);
   await expect(page).toHaveURL(/skillScan=all/);
-  await expect(page.locator('.skill-card').first().locator('.skillspector > summary')).toContainText('Previous check');
+  await expect(page.locator('.skill-card').first().locator('.skillspector > summary')).toContainText('Outdated scan');
   expect(errors).toEqual([]);
 });
 
