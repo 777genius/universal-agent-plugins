@@ -1,18 +1,17 @@
 {
   "schema_version": 1,
-  "provenance": "Registry reviewed product ids and upstream SKILL.md frontmatter observed 2026-11-03. Sources are not claimed installed until run evidence exists.",
+  "provenance": "Registry reviewed eligible product identities and additional Sanity public Agent Plugins 1.0; excludes suspended registry products. 30 upstream SKILL.md frontmatter observed 2026-11-03. No install is claimed before execution.",
   "registry_repository": "777genius/universal-agent-plugins-registry",
   "registry_inventory_commit": "0627020e5546354d111926c18d768bacae989890",
   "plugin_aliases": [
-    "agent-code-navigator",
     "atlassian",
-    "chrome-devtools",
+    "context7",
+    "777genius/chrome-devtools-bridge",
     "cloudflare",
     "cloudflare-bindings",
     "cloudflare-docs",
     "cloudflare-observability",
     "cloudflare-radar",
-    "context7",
     "docker-hub",
     "figma",
     "firebase",
@@ -33,7 +32,8 @@
     "stripe",
     "supabase",
     "tinyfish",
-    "vercel"
+    "vercel",
+    "github:sanity-io/agent-toolkit@3ed3a143f8d3413faa7790ac0b2274fd3a8a6320"
   ],
   "skills": [
     {
@@ -263,5 +263,10 @@
     "kimi",
     "qoder",
     "pi"
-  ]
+  ],
+  "plugin_provenance_notes": {
+    "atlassian": "active reviewed distribution; eligible release must satisfy CLI minimum",
+    "777genius/chrome-devtools-bridge": "explicit active reviewed distribution selected because product default is suspended",
+    "github:sanity-io/agent-toolkit@3ed3a143f8d3413faa7790ac0b2274fd3a8a6320": "independent Sanity Agent Plugins 1.0 package at verified exact main SHA, manifest name sanity; unreviewed direct source must pass CLI security checks"
+  }
 }
