@@ -142,17 +142,15 @@ test('project examples require pinned complete sources, not user-only Directory 
     const projectBlocks = chunks.filter((chunk) =>
       (chunk.startsWith('sh\n') || chunk.startsWith('bash\n')) && chunk.includes('--scope project'));
     assert.ok(projectBlocks.length, path + ': missing project command');
-    if (path === 'README.md') {
-      // The README teaches source syntax with placeholders. Runnable guides
-      // must still use an exact immutable source, not a user-only alias.
-      assert.ok(projectBlocks.some((chunk) =>
-        chunk.includes('github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH')),
-        path + ': missing full-commit project template');
+    if (path === 'README.md' && projectBlocks.some((chunk) =>
+      chunk.includes('github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH'))) {
+      // A placeholder example must tell readers to select a reviewed, full immutable pin.
       assert.match(source, /pinned Git source from the\s*\[catalog\]/,
         path + ': template must require a pinned catalog source');
       assert.ok(source.includes('full 40-character commit hash'),
         path + ': template must require an immutable commit');
     } else {
+      // Executable examples in the old README and every localized guide stay pinned.
       assert.ok(projectBlocks.some((chunk) =>
         chunk.includes('github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab')),
         path + ': missing exact pinned project source');
@@ -171,10 +169,11 @@ test('README retains the available installer and canonical client limitations', 
   assert.match(text, /\[(?:Build plugins|Build a plugin)\]\(#build-plugins\)/);
   // The public entry uses the nine-language gateway, not a forced English locale.
   assert.match(text, /\[(?:Read the documentation|Documentation)\]\(https:\/\/universal-agent-plugins\.com\/docs\/\)/);
-  assert.ok(text.includes('Native installer [releases](https://github.com/777genius/universal-agent-plugins/releases)'));
-  assert.match(
-    text,
-    /\*\*npm — Node\.js 22\+:\*\*\n\n```bash\nnpm install (?:--global|-g) universal-agent-plugins\nagentplugins add context7\n```/,
+  assert.match(text, /(?:\[Native Agent Plugins releases\]|Native installer \[releases\])\(https:\/\/github\.com\/777genius\/universal-agent-plugins\/releases\)/);
+  assert.ok(
+    /(?:^|\n)[^\n]*\b[Ii]nstall\b[^\n]*\blatest\b[^\n]*Node\.js 22\+[^\n]*:\n\n```bash\nnpm install (?:--global|-g) universal-agent-plugins\n```/.test(text) ||
+    /\*\*npm — Node\.js 22\+:\*\*\n\n```bash\nnpm install (?:--global|-g) universal-agent-plugins\nagentplugins add context7\n```/.test(text),
+    'README must document the unpinned npm CLI install on Node.js 22+',
   );
   assert.doesNotMatch(text, /npm install (?:--global|-g) universal-agent-plugins@\d+\.\d+\.\d+/);
   assert.doesNotMatch(
@@ -185,7 +184,11 @@ test('README retains the available installer and canonical client limitations', 
     text,
     /Availability is unverified|candidate commands are not current installation advice/,
   );
-  assert.ok(text.includes('Codex supports stdio and Streamable HTTP MCP, but excludes SSE components'));
+  assert.ok(
+    text.includes('For Codex, declared MCP SSE is unsupported') ||
+    text.includes('Codex supports stdio and Streamable HTTP MCP, but excludes SSE components'),
+    'README must state that Codex excludes SSE MCP',
+  );
   assert.ok(text.includes('docs/CODEX_TRANSPORT_EVIDENCE.md'));
   assert.match(text, /\[(?:Go SDK integration guide|Go SDK)\]\(sdk\/README\.md\)/);
   assert.ok(existsSync(fileURLToPath(new URL('sdk/README.md', root))));
