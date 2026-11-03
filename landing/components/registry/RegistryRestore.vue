@@ -25,7 +25,8 @@ let copyRequest = 0;
 let disposed = false;
 function resetCopy() {
   copyRequest += 1;
-  if (reset) clearTimeout(reset);
+  if (reset !== undefined) clearTimeout(reset);
+  reset = undefined;
   copied.value = null;
   copyFailed.value = null;
 }
@@ -47,7 +48,9 @@ async function copyCommand(which: 1 | 2 | 3) {
   if (projectPreviewOnly.value) return;
   const command = which === 1 ? commands.value.install : which === 2 ? commands.value.restore : commands.value.export;
   if (!command) return;
-  const request = ++copyRequest;
+  // An earlier feedback timer must not invalidate a new pending clipboard write.
+  resetCopy();
+  const request = copyRequest;
   const selectedMode = mode.value;
   let success = false;
   try {
@@ -224,7 +227,7 @@ async function copyCommand(which: 1 | 2 | 3) {
   &__package { display: flex; flex-wrap: wrap; gap: 1.4cqw; align-items: baseline; margin: 2cqw 0 0; color: #e0e6ff;
     font-family: 'JetBrains Mono', monospace; font-size: clamp(9px, 2.4cqw, 15px); line-height: 1.35; overflow-wrap: anywhere;
     strong { color: #00f0ff; font-weight: 700; } }
-  &__screen:has(.typed-command[data-complete='false']) &__package { visibility: hidden; }
+  &__screen:has(.typed-command[data-typing='true']) &__package { visibility: hidden; }
   &__terminal { display: flex; gap: 1.5cqw; min-width: 0; margin-block-start: 3cqw; font-family: 'JetBrains Mono', monospace;
     font-size: clamp(9px, 2.35cqw, 16px); line-height: 1.4; color: #e0e6ff; letter-spacing: -.025em; }
   &__prompt { color: #00f0ff; flex: none; }

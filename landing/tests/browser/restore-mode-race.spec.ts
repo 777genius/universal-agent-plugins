@@ -37,3 +37,51 @@ test('a delayed clipboard denial cannot copy stale Global commands after switchi
   await expect(section.locator('.registry-restore__copy-status')).toBeEmpty();
   await expect(section).toHaveAttribute('data-mode', 'project');
 });
+
+test('the previous feedback timer cannot suppress a slower second copy result', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('./');
+  await hydrated(page);
+  const section = page.locator('#restore-environment');
+  await section.locator('[data-mode-option="global"]').click();
+  await page.evaluate(() => {
+    let calls = 0;
+    const state = window as typeof window & { resolveSecondCopy?: () => void };
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: () => {
+        calls += 1;
+        return calls === 1 ? Promise.resolve() : new Promise<void>((resolve) => { state.resolveSecondCopy = resolve; });
+      } },
+    });
+  });
+  const buttons = section.locator('.registry-restore__screen .registry-restore__copy');
+  await buttons.first().click();
+  await expect(section.locator('.registry-restore__copy-status')).toHaveText('Copied: My computer');
+  await buttons.last().click();
+  await page.waitForFunction(() => typeof (window as typeof window & { resolveSecondCopy?: unknown }).resolveSecondCopy === 'function');
+  // Deliberately exceed the first copy's 1600 ms feedback lifetime.
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve) => setTimeout(resolve, 1800));
+    (window as typeof window & { resolveSecondCopy: () => void }).resolveSecondCopy();
+  });
+  await expect(section.locator('.registry-restore__copy-status')).toHaveText("Copied: Teammate's computer");
+  await expect(buttons.last()).toHaveText('Copied');
+});
+
+test('static project example keeps terminal output readable without JavaScript', async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false, baseURL });
+  try {
+    const page = await context.newPage();
+    await page.goto('./');
+    const section = page.locator('#restore-environment');
+    await expect(section).toHaveAttribute('data-mode', 'project');
+    await expect(section.locator('.registry-restore__package').first()).toBeVisible();
+    await expect(section.locator('.registry-restore__package').last()).toBeVisible();
+    await expect(section.locator('.typed-command__visible').first()).toHaveText('npx -y universal-agent-plugins install marketing-kit --scope project');
+    await expect(section.locator('.typed-command__visible').last()).toHaveText('npx -y universal-agent-plugins install');
+    await expect(page.locator('.hero-demo-video iframe')).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
