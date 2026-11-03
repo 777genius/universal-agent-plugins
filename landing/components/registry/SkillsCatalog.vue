@@ -129,7 +129,7 @@ const staleDate = computed(() => {
       <AppSelect
         v-if="!query.trim()"
         v-model="scanMode"
-        leading-icon="shield-check"
+        leading-icon="trust"
         :label="t('registryUi.skills.scanFilterLabel')"
         :options="scanOptions"
       />
