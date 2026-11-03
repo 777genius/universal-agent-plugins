@@ -8,6 +8,7 @@ import { chromium, expect } from '@playwright/test';
 import { createI18n } from 'vue-i18n';
 import { loadI18nMessages } from './load-i18n-messages.ts';
 import { createSkillSpectorClient } from '../utils/skillSpectorCatalog.ts';
+import { hasCurrentPublishedScan } from '../utils/skillSpectorCurrent.ts';
 import {
   decodeSkillSpectorManifestV3,
   decodeSkillSpectorShardV3,
@@ -51,6 +52,7 @@ const parse = (bytes) => JSON.parse(new TextDecoder('utf-8', { fatal: true }).de
 const sourceFiles = [
   'scripts/skillspector-live-smoke.mjs',
   'utils/skillSpectorCatalog.ts',
+  'utils/skillSpectorCurrent.ts',
   'utils/skillSpectorV3.ts',
   'utils/skillSpector.ts',
   'utils/skillSpectorDiagnostics.ts',
@@ -702,6 +704,65 @@ try {
       );
       await panel.locator('.skillspector__dialog').screenshot({ path: resolve(output, `plugin-${locale}-${width}.png`) });
       await panel.locator('.skillspector__dialog-close').click();
+      // The production catalog's DEFAULT discovery must show real, currently
+      // inspected Skills — not an empty filtered list or historic badges.
+      // Check one desktop visit against the exact published, digest-validated
+      // reports already loaded above. Browser/API traffic is never mocked.
+      if (locale === 'en' && width === 1280) {
+        await page.goto(new URL(`${prefix}plugins/?tab=skills`, site).href, {
+          waitUntil: 'domcontentloaded',
+        });
+        await hydrated(page);
+        const catalog = page.locator('.skills-catalog');
+        await expect(catalog.locator('.skills-catalog__scan-notice')).toBeVisible();
+        await expect(catalog.locator('.skills-catalog__scan-coverage')).toBeVisible();
+        const cards = catalog.locator('.skill-card');
+        await expect(cards.first()).toBeVisible({ timeout: 90_000 });
+        const count = await cards.count();
+        assert.ok(count <= 48, 'Default current-scan page must obey the display bound');
+        await expect(catalog.locator('.skill-card details.skillspector')).toHaveCount(count, {
+          timeout: 60_000,
+        });
+        const visible = await cards.evaluateAll((elements) =>
+          elements.map((element) => ({
+            id: element.getAttribute('data-skill-id'),
+            sourceUrl: element.querySelector('.plugin-card__source-label a')?.getAttribute('href'),
+            statusClass: element.querySelector('details.skillspector')?.className,
+          })),
+        );
+        for (const item of visible) {
+          const identity = /^skills-sh:([^:]+):([^:]+)$/.exec(item.id || '');
+          assert.ok(identity, `Visible Skill has ambiguous source identity: ${item.id}`);
+          const repository = /^https:\/\/github\.com\/([^/]+\/[^/]+)(?:\/|$)/i.exec(item.sourceUrl || '')?.[1];
+          assert.equal(
+            repository?.toLowerCase(),
+            identity[1].toLowerCase(),
+            `Visible Skill source disagrees with its catalog identity: ${item.id}`,
+          );
+          const canonical = repository.toLowerCase();
+          const report = reports.get(canonical);
+          assert.ok(report, `No published v3 report for visible Skill: ${item.id}`);
+          assert.ok(
+            hasCurrentPublishedScan(report, {
+              repository: canonical,
+              sourceStateId: canonical + '/' + identity[2],
+              name: identity[2],
+            }),
+            `Visible Skill lacks a completed, current, inspected report: ${item.id}`,
+          );
+          assert.ok(
+            !/skillspector--(?:loading|unavailable|stale|pending|unsupported|notChecked)/.test(
+              item.statusClass || '',
+            ),
+            `Visible Skill card misrepresents scan state: ${item.id}`,
+          );
+        }
+        evidence.current_skill_catalog = {
+          default_mode: 'scanned',
+          cards_verified: count,
+          visible_skill_ids: visible.map((item) => item.id),
+        };
+      }
       const standaloneAssessment = skillSpectorAssessment(standalone.report, {
         kind: 'skill',
         repository: standalone.listing.source.repository,
