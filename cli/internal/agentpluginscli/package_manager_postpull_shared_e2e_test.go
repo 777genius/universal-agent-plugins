@@ -27,17 +27,25 @@ func pmPostPullGit(t *testing.T, root string, args ...string) string {
 	// A test must not inherit routing, tracing, identity or other Git
 	// configuration from a developer's current worktree. The fixture uses
 	// only disposable local repositories and does not need remote credentials.
-	env := make([]string, 0, len(os.Environ())+3)
+	// Git also derives its implicit excludes/attributes files from HOME and
+	// XDG_CONFIG_HOME. Without a private home, a developer-wide *.ignore rule
+	// can hide leaked untracked files and make the oracle falsely pass.
+	isolatedHome := t.TempDir()
+	env := make([]string, 0, len(os.Environ())+6)
 	for _, value := range os.Environ() {
 		key, _, _ := strings.Cut(value, "=")
-		if strings.HasPrefix(strings.ToUpper(key), "GIT_") {
+		switch upper := strings.ToUpper(key); {
+		case strings.HasPrefix(upper, "GIT_"), upper == "HOME",
+			upper == "USERPROFILE", upper == "XDG_CONFIG_HOME":
 			continue
 		}
 		env = append(env, value)
 	}
 	command.Env = append(env,
+		"HOME="+isolatedHome, "USERPROFILE="+isolatedHome,
+		"XDG_CONFIG_HOME="+isolatedHome,
 		"GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0",
-		"GIT_CONFIG_GLOBAL="+filepath.Join(t.TempDir(), "empty-global-gitconfig"))
+		"GIT_CONFIG_GLOBAL="+filepath.Join(isolatedHome, "empty-global-gitconfig"))
 	out, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("real Git %q failed: %v: %s", args, err, out)
@@ -68,12 +76,44 @@ func pmPostPullAbsent(t *testing.T, path string) {
 	}
 }
 
+
+func pmPostPullGitHostIgnoreNegativeControl(t *testing.T) {
+	t.Helper()
+	// An external HOME with a global ignore for *.ghost must not make the
+	// checked-out test repo appear clean when it contains a stray file.
+	t.Run("host-global-ignore-cannot-hide-untracked", func(t *testing.T) {
+		host := t.TempDir()
+		config := filepath.Join(host, ".config")
+		if err := os.MkdirAll(filepath.Join(config, "git"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(config, "git", "ignore"), []byte("*.ghost\\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("HOME", host)
+		t.Setenv("USERPROFILE", host)
+		t.Setenv("XDG_CONFIG_HOME", config)
+		root := filepath.Join(t.TempDir(), "disposable-git")
+		if err := os.MkdirAll(root, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		pmPostPullGit(t, root, "init", "-q", "-b", "main")
+		if err := os.WriteFile(filepath.Join(root, "orphan.ghost"), []byte("an unexpected file"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if status := pmPostPullGit(t, root, "status", "--porcelain", "--untracked-files=all"); !strings.Contains(status, "orphan.ghost") {
+			t.Fatalf("host-global excludes hid an orphaned untracked file: %q", status)
+		}
+	})
+}
+
 // C9: APM #3188 reports agent-visible orphan Skills after git pull drops a
 // dependency. This scenario strengthens the previously proven one-root case:
 // two parents share child C, and only the *last* removal may retire C. The
 // teammate never has the prior portable agreement (Git overwrote it); only
 // local durable owner receipts can determine what must be reconciled.
 func pmEvolutionPostPullSharedOwnerAndDrift(t *testing.T) {
+	pmPostPullGitHostIgnoreNegativeControl(t)
 	graph := pmArchiveGraph{"a": {"c"}, "b": {"c"}, "c": nil}
 	origin := newPMArchiveOrigin(t, graph)
 	root := t.TempDir()

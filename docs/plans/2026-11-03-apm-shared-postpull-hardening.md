@@ -36,3 +36,7 @@ The first real macOS ARM Package Manager E2E on HEAD `3c3e1a05` **failed** in th
 **Architecture critic correction:** do not replace UAP's transactional coordinator with a new global rollback engine for a test-only parity claim. The observed partial behavior is within the existing published mutation contract. A separately scoped future improvement could preflight native projections for all batch removals, but that changes native verification, race and client compatibility boundaries and must be researched and reviewed independently.
 
 **Review/qualification reset:** previous HEAD `3c3e1a05` is a **failed** E2E and cannot count as successful. The corrected test must pass on all four OS runners at the new exact HEAD, with independent Strix/CodeRabbit review; otherwise do not merge.
+
+## Critic round 5 — Git global excludes can fake clean checkouts
+
+Strix review at HEAD `fa63cb6` found a valid low-severity false-PASS pathway: Git resolves default ignore and attributes from the host HOME/XDG_CONFIG_HOME even with empty GIT_CONFIG_GLOBAL, so an untracked file may be invisible to `git status --porcelain`. The integration helper now strips inherited HOME/USERPROFILE/XDG_CONFIG_HOME and supplies an isolated temporary home for every subprocess. A hostile host-wide `*.ghost` ignore is installed in a disposable parent-test environment; the negative control requires a rogue `orphan.ghost` to remain visible in a real local Git status, so missing fixture isolation fails. This is evidence/test isolation, not a product feature or a security claim about APM itself.
