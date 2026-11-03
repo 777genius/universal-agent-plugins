@@ -157,23 +157,73 @@ func pmEvolutionPostPullSharedOwnerAndDrift(t *testing.T) {
 	pmPostPullNoUntracked(t, teammateRoot)
 	finalPortable := freshRestoreFiles(t, mp, lp)
 	dependencyWrite(t, nativeC, "user edited managed Skill; preserve on refusal\n")
-	beforeRefusal := pmEvolutionFiles(t, teammate)
+	// The engine can commit earlier, independently safe removals before a later
+	// native refusal; the public result must then report a partial operation.
+	// Never equate a nonzero exit with a transaction-wide rollback.
+	pendingC := freshRestoreFiles(t, nativeC, managedC)
 	downloads = origin.counts()
 	_, err = teammate.executePM(t.Context(), t, "", false, "install", "--locked", "--yes", "--format", "json")
 	if err == nil {
 		t.Fatal("last-consumer removal silently deleted an edited native Skill")
 	}
-	pmArchiveAssertEqual(t, "last-consumer refusal preserved durable and native files", beforeRefusal, pmEvolutionFiles(t, teammate))
+	pmArchiveAssertEqual(t, "failed cleanup kept edited native C and package bytes", pendingC, freshRestoreFiles(t, nativeC, managedC))
 	pmArchiveAssertEqual(t, "failed cleanup preserved portable lock", finalPortable, freshRestoreFiles(t, mp, lp))
 	pmArchiveAssertEqual(t, "failed cleanup did not fetch a source", downloads, origin.counts())
 	pmArchiveAssertEqual(t, "failed cleanup preserved user files", foreignBefore, freshRestoreFiles(t, foreign, userData))
 	if got := dependencyRead(t, nativeC); got != "user edited managed Skill; preserve on refusal\n" {
 		t.Fatalf("last-consumer refusal overwrote edited Skill: %q", got)
 	}
+	// Read committed native/owner facts independently of CLI's failed exit.
+	// A previously completed removal of A is acceptable only if *both* native
+	// and managed A are absent, and its owner receipt is gone. Otherwise A must
+	// remain fully intact. A mismatched/unknown partial cannot be credited.
+	partial, inspectErr := teammate.app.Installer.Inspect(t.Context())
+	if inspectErr != nil || partial.Recovery.Required {
+		t.Fatalf("last-consumer refusal left uninspectable or uncertain receipts: %+v %v", partial.Recovery, inspectErr)
+	}
+	live := map[string]bool{}
+	for _, installation := range partial.Installations {
+		for _, binding := range installation.Bindings {
+			if binding.Owner == nil || binding.ClientID != "gemini" ||
+				binding.Owner.Alias != "a" && binding.Owner.Alias != "c" {
+				t.Fatalf("foreign/unknown live binding after refusal: %+v", binding)
+			}
+			if live[binding.Owner.Alias] {
+				t.Fatalf("duplicate live binding for %q", binding.Owner.Alias)
+			}
+			live[binding.Owner.Alias] = true
+			if binding.Owner.Alias == "c" && (binding.BindingID != initial["c/gemini"].BindingID ||
+				binding.TargetPath != initial["c/gemini"].TargetPath) {
+				t.Fatalf("refusal changed shared C ownership: %+v", binding)
+			}
+		}
+	}
+	if !live["c"] {
+		t.Fatal("edited shared C lost its durable owner receipt")
+	}
+	for _, receipt := range partial.EnvironmentReceipts {
+		if receipt.Alias == "c" && receipt.ClientID == "gemini" {
+			continue
+		}
+		if receipt.Alias == "a" && receipt.ClientID == "gemini" && live["a"] {
+			continue
+		}
+		t.Fatalf("orphan or contradictory live environment receipt: %+v", receipt)
+	}
+	for _, path := range []string{initial["a/gemini"].TargetPath, filepath.Join(nativeRoot, "skills", "a", "SKILL.md")} {
+		if live["a"] {
+			if _, statErr := os.Lstat(path); statErr != nil {
+				t.Fatalf("owned A retained in state but missing on disk %q: %v", path, statErr)
+			}
+		} else {
+			pmPostPullAbsent(t, path)
+		}
+	}
 	facts = readDependencyStatusTestFacts(t, teammate.run(t, "deps", "status", "--format", "json"))
 	if !facts["not_synced"] && !facts["partial"] {
 		t.Fatalf("refused last-consumer cleanup was falsely reported synced: %v", facts)
 	}
+	t.Logf("native drift caused a truthful %s removal with shared C and unrelated user bytes preserved", map[bool]string{true: "partial", false: "preflight"}[!live["a"]])
 
 	// The user explicitly restores the known original owned bytes. One
 	// locked retry retires A and C; a second invocation must be a no-op.

@@ -25,3 +25,14 @@ Status: research / critique first, **not** a claim of E2E success. Draft PR unti
 
 ## Merge evidence
 Use GitHub PR reviews (security, transaction, architecture) and existing required CI; fix confirmed source/test defects on same branch. Capture full four-platform portable `run/pass` evidence at the **final HEAD** and verify no open blocking findings before squash-merge. Recheck resulting `main` tree and post-merge CI separately. Public npm releases/tags are out of scope absent a release request.
+
+
+## Critic round 4 — observed E2E failure and corrected transaction contract (2026-11-03)
+
+The first real macOS ARM Package Manager E2E on HEAD `3c3e1a05` **failed** in the new scenario after a deliberately edited native C Skill. Inspection of the failure's before/after artifacts established that the installer refused C removal but had already committed the independent removal of A, including exact native settings and durable receipts. It did **not** silently delete the edited C. Our first test incorrectly required a whole-batch rollback: the existing coordinator implements per-binding commits and explicitly reports partial outcomes. Suppressing this failure or claiming full atomicity would be misleading.
+
+**Security/data-loss critic correction:** retain strict invariants for C's edited bytes + original binding/receipt, unrelated foreign Skill and user-data, portable intent, no source downloads. Allow A to be either wholly retained or wholly removed, **but** require its native and managed state to agree with durable ownership, no orphan/unknown receipts, and `deps status` to return `partial` or `not_synced`. A later explicit owner correction and locked retry must clean up both A and C; the final repeat must be a real no-op. The test independently checks state, actual files and status. This is **not** permission for silent partial deletion or a success exit after drift; no generic rollback claim.
+
+**Architecture critic correction:** do not replace UAP's transactional coordinator with a new global rollback engine for a test-only parity claim. The observed partial behavior is within the existing published mutation contract. A separately scoped future improvement could preflight native projections for all batch removals, but that changes native verification, race and client compatibility boundaries and must be researched and reviewed independently.
+
+**Review/qualification reset:** previous HEAD `3c3e1a05` is a **failed** E2E and cannot count as successful. The corrected test must pass on all four OS runners at the new exact HEAD, with independent Strix/CodeRabbit review; otherwise do not merge.
