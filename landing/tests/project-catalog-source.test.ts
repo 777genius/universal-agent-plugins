@@ -51,11 +51,12 @@ test('Marketing Kit pinned parent cannot bypass user-only Registry dependencies 
   plugin.name = 'marketing-kit';
   plugin.install_source = 'marketing-kit';
   plugin.installable = true;
-  plugin.distributions[0]!.releases[0]!.source = {
+  // Keep required source-digest fixture fields while testing the user-only policy gate.
+  Object.assign(plugin.distributions[0]!.releases[0]!.source, {
     repository: '777genius/universal-agent-plugins-registry',
     revision: 'c5bcedd4ecf12585a8a50401852e57a44891ebec',
     path: 'plugins/marketing-kit',
-  };
+  });
   const manual = projectCatalogSelection(plugin, ['codex']);
   assert.equal(manual.resolution.distribution, undefined);
   assert.equal(projectCatalogAutomaticSelection(plugin), undefined);
