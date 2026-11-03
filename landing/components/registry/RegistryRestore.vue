@@ -54,6 +54,8 @@ async function copyCommand(which: 1 | 2 | 3) {
     await navigator.clipboard.writeText(command);
     success = true;
   } catch {
+    // Do not start a stale fallback or steal focus after switching modes/unmounting.
+    if (disposed || request !== copyRequest || mode.value !== selectedMode) return;
     const previouslyFocused = document.activeElement;
     const field = document.createElement('textarea');
     field.value = command;
