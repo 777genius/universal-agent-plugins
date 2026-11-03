@@ -53,6 +53,7 @@ func (p *managementLocalSkill) applyLocalRestore(ctx context.Context) (managemen
 	}
 	return out, err
 }
+
 func (p *managementLocalSkill) localUnchanged(err error) (management.Outcome, error) {
 	state := management.Failed
 	if errors.Is(err, context.Canceled) {
@@ -64,9 +65,11 @@ func (p *managementLocalSkill) localUnchanged(err error) (management.Outcome, er
 	out.Result.Message = "Local Skill files were not changed"
 	return out, err
 }
+
 func (p *managementLocalSkill) localInterrupted(err error) (management.Outcome, error) {
 	return management.Outcome{State: management.Interrupted, Diagnostics: []management.Diagnostic{managementDiagnostic("LOCAL_RECOVERY_REQUIRED", "Local Skill completion is uncertain; restore this operation using its retained receipt")}}, err
 }
+
 func (p *managementLocalSkill) localSuccess(mutated bool, receipt *localSkillReceipt) management.Outcome {
 	result := management.OperationResult{Outcome: "completed", Mutated: mutated, Message: "Reviewed local Skill operation completed", Items: []management.OperationItem{{Alias: p.input.SkillName, TargetId: p.root.TargetId, Status: "completed", DestinationPath: filepath.Join(p.root.Path, p.input.SkillName)}}, NextActions: []management.NextAction{}}
 	if !mutated {

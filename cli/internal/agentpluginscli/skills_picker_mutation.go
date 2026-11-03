@@ -32,6 +32,7 @@ func (s *skillsCatalogSession) prepare(ctx context.Context, input skillspicker.P
 	}
 	return skillsPickerPrepared{prepared}, nil
 }
+
 func (s *skillsCatalogSession) selection(candidate skillsource.Candidate) SkillsSelection {
 	selector := environment.Selector{Kind: environment.SelectorRef, Value: s.source.RequestedSelector}
 	switch s.source.RequestedSelector {
@@ -59,6 +60,7 @@ func (p skillsPickerPrepared) Review() skillspicker.Plan {
 	}
 	return review
 }
+
 func (p skillsPickerPrepared) Check(ctx context.Context) error {
 	err := p.PreparedSkillsBatch.Check(ctx)
 	if errors.Is(err, ErrSkillsPlanStale) {
@@ -66,6 +68,7 @@ func (p skillsPickerPrepared) Check(ctx context.Context) error {
 	}
 	return err
 }
+
 func (p skillsPickerPrepared) Apply(ctx context.Context) (skillspicker.Outcome, error) {
 	result, err := p.PreparedSkillsBatch.Apply(ctx)
 	if errors.Is(err, ErrSkillsPlanStale) {
@@ -73,6 +76,7 @@ func (p skillsPickerPrepared) Apply(ctx context.Context) (skillspicker.Outcome, 
 	}
 	return skillBatchOutcome(result), err
 }
+
 func skillBatchOutcome(result SkillsBatchResult) skillspicker.Outcome {
 	outcome := skillspicker.Outcome{State: skillspicker.OperationState(result.Status), Items: []skillspicker.OperationItem{}, Diagnostics: []skillspicker.Diagnostic{}, Result: skillspicker.OperationResult{Message: fmt.Sprintf("Skills installation %s", result.Status), RepairInstructions: append([]string{}, result.RepairInstructions...)}}
 	for _, item := range result.Items {

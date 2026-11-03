@@ -57,6 +57,7 @@ func (app App) skillSourceAcquirer(scratch string) (skillsource.Acquirer, error)
 	a.TempRoot = scratch
 	return skillsource.Acquirer{Acquirer: a}, nil
 }
+
 func (app App) openSkillsCatalog(ctx context.Context, input SkillsPickerRequest) (*skillsCatalogSession, error) {
 	if err := app.checkSkillsContext(nil); err != nil {
 		return nil, err
@@ -120,9 +121,11 @@ func (app App) StartSkillsPicker(ctx context.Context, input SkillsPickerRequest)
 	}
 	return server, nil
 }
+
 func (s *skillsCatalogSession) callbacks() skillspicker.Callbacks {
 	return skillspicker.Callbacks{Scan: s.scan, Preview: s.preview, Targets: s.app.skillsTargets, Prepare: s.prepare, Progress: s.scanProgress}
 }
+
 func (s *skillsCatalogSession) scan(ctx context.Context, scope string) (skillspicker.Catalog, error) {
 	s.mu.Lock()
 	first := !s.scanned
@@ -172,6 +175,7 @@ func (s *skillsCatalogSession) scan(ctx context.Context, scope string) (skillspi
 	s.mu.Unlock()
 	return catalog, nil
 }
+
 func newSkillCatalogID() string {
 	id, err := newOperationGroupID()
 	if err != nil {

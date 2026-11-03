@@ -33,9 +33,11 @@ type localSkillReceipt struct {
 func (b *ManagementBackend) localSkillManager() dirswap.Manager {
 	return dirswap.Manager{JournalDir: filepath.Join(b.config.StateRoot, "local-skills", "journals")}
 }
+
 func (b *ManagementBackend) localSkillReceiptPath(id string) string {
 	return filepath.Join(b.config.StateRoot, "local-skills", "receipts", id+".json")
 }
+
 func (b *ManagementBackend) saveLocalSkillReceipt(receipt localSkillReceipt) error {
 	body, err := json.Marshal(receipt)
 	if err != nil {
@@ -56,6 +58,7 @@ func (b *ManagementBackend) saveLocalSkillReceipt(receipt localSkillReceipt) err
 	}
 	return atomicfile.Write(b.localSkillReceiptPath(receipt.OperationID), append(body, '\n'), 0600)
 }
+
 func (b *ManagementBackend) readLocalSkillReceipt(id string, root management.LocalSkillRoot, name string) (*localSkillReceipt, error) {
 	receipt, err := b.loadLocalSkillReceipt(id)
 	if err != nil || receipt == nil {
@@ -66,6 +69,7 @@ func (b *ManagementBackend) readLocalSkillReceipt(id string, root management.Loc
 	}
 	return receipt, nil
 }
+
 func (b *ManagementBackend) loadLocalSkillReceipt(id string) (*localSkillReceipt, error) {
 	if !localSkillSHA(id) {
 		return nil, localSkillRefusal("INVALID_REQUEST", "Restore requires a retained local operation identity")
@@ -119,9 +123,11 @@ func (b *ManagementBackend) loadLocalSkillReceipt(id string) (*localSkillReceipt
 	}
 	return &receipt, nil
 }
+
 func validLocalSkillReceipt(receipt localSkillReceipt, id string) bool {
 	return receipt.Version == 1 && receipt.OperationID == id && receipt.RootID != "" && filepath.IsAbs(receipt.RootPath) && filepath.Clean(receipt.RootPath) == receipt.RootPath && localSkillName(receipt.SkillName) && receipt.BackupName == id && localSkillSHA(receipt.BeforeDigest) && localSkillSHA(receipt.AfterDigest) && (receipt.Phase == "prepared" || receipt.Phase == "committed")
 }
+
 func (p *managementLocalSkill) validateRestoreSnapshot() error {
 	manager := p.backend.localSkillManager()
 	journal, err := manager.Load(p.input.RestoreOperationId)

@@ -26,6 +26,7 @@ func (s *skillsCatalogSession) preview(ctx context.Context, id string) (skillspi
 	}
 	return preview, nil
 }
+
 func (app App) skillsTargets(ctx context.Context) ([]skillspicker.Target, error) {
 	if err := app.checkSkillsContext(nil); err != nil {
 		return nil, err

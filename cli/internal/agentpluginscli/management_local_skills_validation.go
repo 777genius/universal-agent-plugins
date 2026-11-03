@@ -19,6 +19,7 @@ func (p *managementLocalSkill) Check(ctx context.Context) error {
 	defer func() { _ = unlock() }()
 	return p.check(ctx)
 }
+
 func (p *managementLocalSkill) check(ctx context.Context) error {
 	if p.closed {
 		return management.ErrPlanStale
@@ -46,6 +47,7 @@ func (p *managementLocalSkill) check(ctx context.Context) error {
 	}
 	return nil
 }
+
 func (p *managementLocalSkill) verifyChanges(tree localSkillTree) error {
 	files := map[string]localSkillFile{}
 	for _, file := range tree.Files {
@@ -59,6 +61,7 @@ func (p *managementLocalSkill) verifyChanges(tree localSkillTree) error {
 	}
 	return nil
 }
+
 func localSkillRootAnchor(root string) (string, os.FileInfo, error) {
 	for {
 		info, err := os.Stat(root)
@@ -78,6 +81,7 @@ func localSkillRootAnchor(root string) (string, os.FileInfo, error) {
 		root = parent
 	}
 }
+
 func localSkillObserve(rootPath, name string, keep bool) (localSkillTree, error) {
 	root, err := os.OpenRoot(rootPath)
 	if os.IsNotExist(err) {
@@ -89,6 +93,7 @@ func localSkillObserve(rootPath, name string, keep bool) (localSkillTree, error)
 	defer func() { _ = root.Close() }()
 	return readLocalSkillTree(root, name, keep)
 }
+
 func (b *ManagementBackend) localSkillUnowned(ctx context.Context, target string) error {
 	if b.app.Installer == nil || b.app.StateStore == nil {
 		return localSkillRefusal("OWNERSHIP_UNAVAILABLE", "Authoritative installation ownership is unavailable")

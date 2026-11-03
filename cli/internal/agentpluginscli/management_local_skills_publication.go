@@ -51,6 +51,7 @@ func (p *managementLocalSkill) Apply(ctx context.Context, progress func(manageme
 	}
 	return p.publishLocalTree(ctx, root, before, desired)
 }
+
 func (p *managementLocalSkill) publishLocalTree(ctx context.Context, root *os.Root, before, desired localSkillTree) (out management.Outcome, resultErr error) {
 	if err := ctx.Err(); err != nil {
 		return p.localUnchanged(err)
@@ -88,6 +89,7 @@ func (p *managementLocalSkill) publishLocalTree(ctx context.Context, root *os.Ro
 	}
 	return p.localSuccess(true, &receipt), nil
 }
+
 func (p *managementLocalSkill) localSwapInput(_ context.Context, root *os.Root, before, desired localSkillTree, stage *localSkillStage) dirswap.Input {
 	input := dirswap.Input{OperationID: p.operationID, ClientBindingID: "local-skill", Sequence: 1, OwnedBase: p.root.Path, ActivePath: filepath.Join(p.root.Path, p.input.SkillName), Remove: !desired.Exists, RequireAbsent: !before.Exists}
 	if stage != nil {
@@ -108,6 +110,7 @@ func (p *managementLocalSkill) localSwapInput(_ context.Context, root *os.Root, 
 	}
 	return input
 }
+
 func (p *managementLocalSkill) localSwapFailure(ctx context.Context, root *os.Root, before localSkillTree, swap dirswap.Receipt, cause error) (management.Outcome, error) {
 	if swap.OperationID == "" {
 		return p.localUnchanged(cause)
@@ -123,9 +126,11 @@ func (p *managementLocalSkill) localSwapFailure(ctx context.Context, root *os.Ro
 	}
 	return p.localUnchanged(cause)
 }
+
 func (b *ManagementBackend) localSkillBackupRoot() string {
 	return filepath.Join(b.config.StateRoot, "local-skills", "backups")
 }
+
 func (p *managementLocalSkill) prepareLocalPublication(before, desired localSkillTree) (localSkillReceipt, *localSkillStage, error) {
 	receipt := localSkillReceipt{Version: 1, OperationID: p.operationID, RootID: p.root.Id, RootPath: p.root.Path, SkillName: p.input.SkillName, BeforeDigest: before.digest(), AfterDigest: desired.digest(), BeforeExists: before.Exists, BackupName: p.operationID, Phase: "prepared"}
 	if before.Exists {
@@ -142,6 +147,7 @@ func (p *managementLocalSkill) prepareLocalPublication(before, desired localSkil
 	stage, err := stageLocalSkill(filepath.Dir(p.root.Path), p.operationID, desired)
 	return receipt, stage, err
 }
+
 func (b *ManagementBackend) backupLocalSkill(id string, tree localSkillTree) error {
 	directory := b.localSkillBackupRoot()
 	if err := pathcontract.RequireContainedChild(b.config.StateRoot, directory); err != nil {
@@ -193,6 +199,7 @@ func stageLocalSkill(parent, id string, tree localSkillTree) (*localSkillStage, 
 	}
 	return stage, nil
 }
+
 func (s *localSkillStage) close(remove bool) error {
 	defer func() { _ = s.root.Close() }()
 	if !remove {

@@ -174,6 +174,7 @@ func parseLocalSkillChanges(input management.LocalSkillRequest) ([]localSkillCha
 	}
 	return out, nil
 }
+
 func localSkillSHA(value string) bool {
 	if len(value) != 64 {
 		return false
@@ -187,9 +188,11 @@ func localSkillSHA(value string) bool {
 	}
 	return true
 }
+
 func localSkillRefusal(code, message string) error {
 	return &management.Refusal{Code: code, Message: message, Status: 409}
 }
+
 func (p *managementLocalSkill) Review() management.Plan { return p.review }
 func (p *managementLocalSkill) OperationIDs() []string  { return []string{p.operationID} }
 func (p *managementLocalSkill) Close() {
