@@ -100,6 +100,43 @@ runner failure at private repository initialization in `TestDependencyTransferGr
 the unchanged real-Git path remains subject to supported-host E2E rather than a
 local runner substitution or skipped qualification.
 
+### Windows E2E observation follow-up
+
+Full E2E run `41679005312` on head
+`38271ca2af3bd52270964d31de6181cd321e89b1` passed on Linux and both macOS
+architectures. Windows completed the real executable/scanner, installation and
+composition phases, but 17 offline no-mutation leaf assertions failed on
+directories (15 staging directories and two data directories), including
+commands that return before any store access. The original assertion did not
+identify which metadata predicate differed. This is a qualification failure,
+not an approved exception.
+
+Two independent critics traced a likely oracle problem: Windows `DirEntry.Info`
+returns cached enumeration metadata, and walking a recently modified directory
+can refresh that record. [Microsoft's explanation of NTFS directory-entry metadata](https://devblogs.microsoft.com/oldnewthing/20111226-00/?p=8813/)
+distinguishes this cached enumeration copy from current handle-based metadata.
+The corrected test helper observes regular files/directories
+through fresh handle `Stat`, capturing identity at observation time, and retains
+all entry, identity, mode, timestamp and byte comparisons. Links and special
+files retain non-following observations with identity captured immediately.
+An observer-only positive control, nine real mutation/replacement negative
+controls, and detailed enumeration/handle diagnostics now run within the
+existing offline E2E case on every platform; its case inventory is unchanged.
+No production flushing change, sleeps, skipped case, tolerated timestamp drift,
+or reduced assertion is authorized by this investigation. Independent review
+and successful native Windows evidence are required before this is resolved.
+The ordinary Windows CLI suite in Terminal UI job `126067297670` subsequently
+reported the same observation failures, including status scenarios using the
+same helper; no separate production failure appeared in that log.
+
+The CLI critic independently approved the correction. Check/status regressions
+passed (1.933s), six existing offline E2E cases passed (0.299s; 43 test/subtest
+pass events including 11 observer-control events), and both configured CLI lint
+gates reported zero issues. An independent focused rerun passed (0.337s) and
+four affected E2E cases passed (0.228s). Windows tagged tests cross-compiled.
+These are local and review results; the native follow-up must still confirm
+the baseline metadata discrepancy and pass the full Windows qualification.
+
 ## Evidence and overlap inventory
 
 Upstream issue descriptions are reports, not reproductions performed by this PR.

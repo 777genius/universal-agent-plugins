@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,52 +116,6 @@ func writeDependencyCheckAgreement(t *testing.T, f cliFixture, pins []environmen
 		t.Fatal(err)
 	}
 	return lock
-}
-
-type dependencyCheckFileObservation struct {
-	info os.FileInfo
-	body []byte
-}
-
-func observeDependencyCheckFiles(t *testing.T, root string) map[string]dependencyCheckFileObservation {
-	t.Helper()
-	files := map[string]dependencyCheckFileObservation{}
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		observation := dependencyCheckFileObservation{info: info}
-		if info.Mode().IsRegular() {
-			observation.body, err = os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-		}
-		files[path] = observation
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return files
-}
-
-func assertDependencyCheckFilesUnchanged(t *testing.T, root string, before map[string]dependencyCheckFileObservation) {
-	t.Helper()
-	after := observeDependencyCheckFiles(t, root)
-	if len(before) != len(after) {
-		t.Fatalf("offline check changed persistent directory entries: before=%d after=%d", len(before), len(after))
-	}
-	for path, expected := range before {
-		actual, ok := after[path]
-		if !ok || !os.SameFile(expected.info, actual.info) || expected.info.Mode() != actual.info.Mode() || !expected.info.ModTime().Equal(actual.info.ModTime()) || !bytes.Equal(expected.body, actual.body) {
-			t.Fatalf("offline check changed persistent file %s", path)
-		}
-	}
 }
 
 func executeDependencyCheck(t *testing.T, f cliFixture, outcome dependencyCheckOutcome, args ...string) (dependencyCheckReport, string) {

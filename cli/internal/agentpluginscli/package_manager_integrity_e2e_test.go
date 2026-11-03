@@ -22,6 +22,8 @@ func pmIntegrityEmbeddedManifestAdmission(t *testing.T) {
 }
 
 func pmIntegrityOfflineScopes(t *testing.T) {
+	t.Run("observer-no-command", TestDependencyCheckObservationWithoutCommand)
+	t.Run("observer-mutation-controls", TestDependencyCheckObservationDetectsMutations)
 	t.Run("user", TestDependencyCheckOfflineCLI)
 	t.Run("project", TestDependencyCheckProjectScopeCLI)
 }
