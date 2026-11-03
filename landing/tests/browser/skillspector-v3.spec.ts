@@ -67,11 +67,23 @@ async function setup(
     | 'truncated'
     | 'unsupportedSource' = 'mixed',
   reportGate?: Promise<void>,
+  withSecurity = false,
 ) {
   const errors = await offline(page);
   const index = registryFixture();
   const plugin = index.plugins[0]!;
   plugin.components = ['skills'];
+  if (withSecurity) {
+    plugin.security = {
+      generated_at: '2026-11-03T00:00:00Z',
+      scanner: { id: 'fixture-scanner', version: '1.0.0' },
+      policy: { id: 'fixture-policy', version: 1, digest: `sha256:${'a'.repeat(64)}` },
+      outcome: 'warnings',
+      counts: { blocking: 0, warnings: 1, total: 1 },
+      scanned_files: 1,
+      findings: [],
+    };
+  }
   const manifest = structuredClone(fixture);
   const shard = structuredClone(producerShard);
   Object.assign(plugin.source, {
@@ -427,6 +439,19 @@ async function setup(
     body,
   };
 }
+test('automated review and Skill scan have separate lines on plugin cards', async ({ page }) => {
+  const { assessment } = await setup(page, 'mixed', undefined, true);
+  const group = assessment.locator('xpath=ancestor::*[contains(@class, "plugin-card__assessments")]');
+  const security = group.locator('.plugin-card__security');
+  await expect(security).toBeVisible();
+  await expect(assessment.locator(':scope > summary')).toBeVisible();
+  const reviewBox = await security.boundingBox();
+  const scanBox = await assessment.locator(':scope > summary').boundingBox();
+  expect(reviewBox).not.toBeNull();
+  expect(scanBox).not.toBeNull();
+  expect(scanBox!.y).toBeGreaterThanOrEqual(reviewBox!.y + reviewBox!.height - 1);
+});
+
 for (const width of [1280, 390]) {
   test(`v3 reports 13 checks and 10 incomplete and puts review context before technical details (${width})`, async ({
     page,

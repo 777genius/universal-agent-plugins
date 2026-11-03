@@ -411,13 +411,10 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
 <style scoped lang="scss">
 .plugin-card__assessments {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: flex-start;
-  gap: 0 12px;
+  gap: 8px;
   min-width: 0;
-}
-.plugin-card__assessments :deep(.skillspector[open]) {
-  flex-basis: 100%;
 }
 .plugin-card__actions {
   display: flex;
