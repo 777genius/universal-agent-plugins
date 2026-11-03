@@ -159,7 +159,7 @@ try {
     assert.equal(result?.status(), 200, 'No-remarks filter page must be HTTP 200');
     await expect(defaultCatalog).toHaveAttribute('aria-busy', 'false', { timeout: 90000 });
     await expect(defaultCatalog.locator('.catalog-meta [role="status"]')).toHaveCount(0);
-    await defaultCatalog.getByRole('button', { name: 'Filters', exact: true }).click();
+    await defaultCatalog.getByRole('button', { name: /^Filters/ }).click();
     await expect(page.locator('input[aria-labelledby="skills-filter-remarks-label"]')).toBeChecked();
     if (scanned) {
       await expect(page.locator('input[aria-labelledby="skills-filter-scanned-label"]')).toBeChecked();

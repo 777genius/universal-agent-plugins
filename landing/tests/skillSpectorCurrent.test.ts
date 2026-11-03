@@ -76,6 +76,19 @@ test('published evidence requires exact source, revision, path, completed execut
   assert.equal(hasCurrentPublishedScan(legacy as unknown as SkillSpectorDisplayReport, subject), false);
 });
 
+test('canonical repository identity tolerates GitHub casing but rejects different sources', () => {
+  const subject = publishedScanSubject(listing)!;
+  const uppercase = currentReport();
+  uppercase.source_states[0]!.repository = 'Affaan-M/ECC';
+  assert.equal(hasCurrentPublishedScan(uppercase, subject), true);
+  const clean = cleanReport();
+  clean.source_states[0]!.repository = 'Affaan-M/ECC';
+  assert.equal(hasNoPublishedRemarks(clean, subject), true);
+  const wrong = currentReport();
+  wrong.source_states[0]!.repository = 'Other/Repo';
+  assert.equal(hasCurrentPublishedScan(wrong, subject), false);
+});
+
 test('unmatched and ambiguous provider source IDs never inherit unrelated scan evidence', () => {
   const valid = publishedScanSubject(listing);
   assert.deepEqual(valid, {

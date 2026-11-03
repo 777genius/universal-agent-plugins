@@ -45,7 +45,8 @@ export function currentPublishedScan(
   const state = states[0];
   if (
     !state ||
-    state.repository !== subject.repository ||
+    typeof state.repository !== 'string' ||
+    state.repository.toLowerCase() !== subject.repository ||
     state.current !== true ||
     state.state !== 'resolved' ||
     state.reason !== null ||
