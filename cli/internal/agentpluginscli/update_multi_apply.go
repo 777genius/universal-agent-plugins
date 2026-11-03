@@ -2,6 +2,8 @@ package agentpluginscli
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
@@ -23,6 +25,10 @@ func (prepared *preparedUpdateMany) planUpdate(ctx context.Context) (*preparedUp
 	planned, err := prepared.service.UpdateGroup(ctx, usecase.GroupInput{
 		Targets: prepared.inputs, CompatibilityChecks: prepared.compatibility, OperationGroupID: operationID, DryRun: true, OnlinePreview: !prepared.dryRun,
 	})
+	if countErr := validateUpdateResultCount(len(planned.Targets), len(prepared.inputs), err); countErr != nil {
+		prepared.cleanup()
+		return nil, countErr
+	}
 	retainPreparedClients(prepared.inputs, planned.PreparedClients)
 	retainPreparedClients(prepared.compatibility, planned.PreparedClients)
 	prepared.recordPlannedTargets(&result, planned, operationID)
@@ -59,6 +65,11 @@ func applyPreparedUpdate(ctx context.Context, prepared *preparedUpdateMany) (upd
 	applied, groupErr := prepared.service.UpdateGroup(ctx, usecase.GroupInput{
 		Targets: prepared.inputs, CompatibilityChecks: prepared.compatibility, OperationGroupID: result.OperationID, Confirmed: true,
 	})
+	if countErr := validateUpdateResultCount(len(applied.Targets), len(prepared.inputs), groupErr); countErr != nil {
+		result.Status, result.Succeeded, result.Failed = "apply_failed", 0, len(prepared.inputs)
+		result.Targets = result.Targets[:0]
+		return result, countErr
+	}
 	result.Status, result.Targets, result.Succeeded = string(applied.Phase), result.Targets[:0], 0
 	for index, targetResult := range applied.Targets {
 		output := newAddResultData(prepared.inputs[index].Envelope, targetResult, false)
@@ -76,6 +87,16 @@ func applyPreparedUpdate(ctx context.Context, prepared *preparedUpdateMany) (upd
 		return result, groupErr
 	}
 	return result, nil
+}
+
+// A group engine may return partial results when it also returns an error.
+// A result with no error must cover every selected target; extra results are
+// always invalid because their indices have no selected-client authority.
+func validateUpdateResultCount(got, selected int, groupErr error) error {
+	if got > selected || (groupErr == nil && got != selected) {
+		return errors.Join(fmt.Errorf("update engine returned %d results for %d selected targets", got, selected), groupErr)
+	}
+	return nil
 }
 
 func (prepared *preparedUpdateMany) cleanup() {
