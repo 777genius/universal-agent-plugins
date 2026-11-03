@@ -7,6 +7,9 @@ export default defineNuxtPlugin((nuxtApp) => {
     const original = router.options.scrollBehavior;
     router.options.scrollBehavior = (to, from, savedPosition) => {
       if (savedPosition) return savedPosition;
+      // Finish catalog anchor positioning before typing can update the query.
+      if (to.hash === '#plugins' && document.querySelector('#plugins .unified-catalog'))
+        return { el: '#plugins', behavior: 'instant' };
       if (
         to.path.replace(/\/$/, '') === from.path.replace(/\/$/, '') &&
         JSON.stringify(to.query) !== JSON.stringify(from.query) &&
