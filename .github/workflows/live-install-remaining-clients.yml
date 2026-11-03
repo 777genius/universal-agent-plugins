@@ -19,7 +19,10 @@ concurrency:
 jobs:
   remaining-client-install:
     name: Full 30 ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
-    runs-on: ubuntu-24.04
+    # Linux hosted runners do not delegate cgroup v2 for Kiro's required
+    # duplex MCP containment. Test the real native client on macOS instead
+    # of weakening that security guard or labelling a blocked Linux run green.
+    runs-on: ${{ matrix.target == 'kiro' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 80
     strategy:
       fail-fast: false
@@ -81,7 +84,8 @@ jobs:
           fi
           hash -r
           command -v "$BIN" | tee "$RUNNER_TEMP/vendor-proof/executable.txt"
-          timeout 30s "$BIN" --version | tee "$RUNNER_TEMP/vendor-proof/version.txt"
+          python3 -c 'import subprocess,sys;sys.exit(subprocess.run([sys.argv[1],"--version"], timeout=30).returncode)' "$BIN" \
+            | tee "$RUNNER_TEMP/vendor-proof/version.txt"
       - name: Build CLI under test (not the already-published binary)
         run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Run real acquisitions and report every source and outcome
