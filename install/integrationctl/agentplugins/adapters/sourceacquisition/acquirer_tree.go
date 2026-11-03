@@ -11,6 +11,7 @@ import (
 func executablePathsFromTree(tree []byte, subpath string) ([]string, error) {
 	return executablePathsFromTreePolicy(tree, subpath, true)
 }
+
 func executablePathsFromTreePolicy(tree []byte, subpath string, allowRootGitlinks bool) ([]string, error) {
 	var executable []string
 	prefix := ""
@@ -55,4 +56,3 @@ func executablePathsFromTreePolicy(tree []byte, subpath string, allowRootGitlink
 	}
 	return executable, nil
 }
-
