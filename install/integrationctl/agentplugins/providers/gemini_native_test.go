@@ -14,7 +14,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-
 func TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry(t *testing.T) {
 	configRoot := filepath.Join(t.TempDir(), ".gemini")
 	foreign := filepath.Join(configRoot, "skills", "human", "SKILL.md")
