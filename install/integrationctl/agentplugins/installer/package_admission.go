@@ -43,13 +43,34 @@ func validateAcquiredRequest(req Request) error {
 	return nil
 }
 func validateAcquiredExecutables(root string, files []string) error {
+	return validatePackageExecutableFiles(root, files,
+		"acquired snapshot executable path is invalid",
+		"acquired snapshot executable is not a regular package file")
+}
+
+// validatePackageExecutableFiles bounds metadata reads to the source package.
+// An os.Root handle enforces traversal containment even when an attacker
+// changes a parent directory into a symlink between validation and Lstat.
+func validatePackageExecutableFiles(root string, files []string, invalidPath, invalidFile string) error {
+	if len(files) == 0 {
+		return nil
+	}
+	source, err := os.OpenRoot(root)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrInvalidRequest, invalidFile)
+	}
+	defer source.Close()
 	for _, relative := range files {
-		if relative == "." || relative == ".." || path.IsAbs(relative) || path.Clean(relative) != relative || strings.HasPrefix(relative, "../") || strings.Contains(relative, `\`) || filepath.VolumeName(relative) != "" {
-			return fmt.Errorf("%w: acquired snapshot executable path is invalid", ErrInvalidRequest)
+		local := filepath.FromSlash(relative)
+		if relative == "" || relative == "." || relative == ".." ||
+			path.IsAbs(relative) || path.Clean(relative) != relative ||
+			strings.HasPrefix(relative, "../") || strings.Contains(relative, `\`) ||
+			filepath.VolumeName(relative) != "" || !filepath.IsLocal(local) {
+			return fmt.Errorf("%w: %s", ErrInvalidRequest, invalidPath)
 		}
-		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(relative)))
+		info, err := source.Lstat(local)
 		if err != nil || !info.Mode().IsRegular() {
-			return fmt.Errorf("%w: acquired snapshot executable is not a regular package file", ErrInvalidRequest)
+			return fmt.Errorf("%w: %s", ErrInvalidRequest, invalidFile)
 		}
 	}
 	return nil
