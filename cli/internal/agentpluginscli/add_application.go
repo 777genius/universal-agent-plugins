@@ -14,30 +14,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
-func runAdd(ctx context.Context, cmd *cobra.Command, app App, opts *options, source string, activationComplete, authComplete bool) error {
-	return runAddWithClients(ctx, cmd, app, opts, source, activationComplete, authComplete, nil)
-}
-
-func runAddWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *options, source string, activationComplete, authComplete bool, clients []domain.DetectedClient) error {
-	targets, err := parseTargetOption(opts.target)
-	if err != nil {
-		return err
-	}
-	_, detected, err := preflightAddTargets(ctx, app, opts, source, targets, clients)
-	if err != nil {
-		return err
-	}
-	writeProgress(app, opts.format, "Resolving and validating Agent Plugin...")
-	loaded, err := app.loadPackageFor(ctx, source, withDetectedClients(app.addResolutionRequest(source, targets), detected))
-	if err != nil {
-		return err
-	}
-	if loaded.cleanup != nil {
-		defer loaded.cleanup()
-	}
-	return runAddLoaded(ctx, cmd, app, opts, loaded, activationComplete, authComplete, detectedClientValues(detected), false)
-}
-
 func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
 	if err := rejectImperativePackageRequirements(loaded); err != nil {
 		return err

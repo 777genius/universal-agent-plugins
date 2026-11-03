@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
@@ -84,84 +82,6 @@ func renderAddMultiDryRun(writer io.Writer, result addMultiResult) error {
 	}
 	if _, err := fmt.Fprintln(writer, "No changes made (dry run)."); err != nil {
 		return err
-	}
-	return nil
-}
-
-func renderAddMultiApplySummary(writer io.Writer, result addMultiResult, envelope domain.PackageEnvelope) error {
-	theme := terminaltheme.For(writer)
-	title := batchApplyHeadline(result, envelope)
-	if _, err := fmt.Fprintln(writer, theme.Text(terminaltheme.Label, title)); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintln(writer); err != nil {
-		return err
-	}
-	width := utf8.RuneCountInString("Client")
-	for _, target := range result.Targets {
-		if name := batchTargetLabel(target); utf8.RuneCountInString(name) > width {
-			width = utf8.RuneCountInString(name)
-		}
-	}
-	if _, err := fmt.Fprintf(writer, "%-*s  %s\n", width, "Client", "Result"); err != nil {
-		return err
-	}
-	for _, target := range result.Targets {
-		label := batchTargetLabel(target)
-		kind := classifyBatchPresentation(target)
-		if _, err := fmt.Fprintf(writer, "%-*s  %s\n", width, prompt.SafeText(label), theme.Text(batchResultTone(kind), string(kind))); err != nil {
-			return err
-		}
-	}
-	attention := make([]addTargetResult, 0, len(result.Targets))
-	for _, target := range result.Targets {
-		switch classifyBatchPresentation(target) {
-		case batchPresentationAttested, batchPresentationSetupRequired, batchPresentationSignInRequired, batchPresentationFailed, batchPresentationNotCompleted, batchPresentationRolledBack:
-			attention = append(attention, target)
-		}
-	}
-	if len(attention) == 0 {
-		return nil
-	}
-	if _, err := fmt.Fprintln(writer); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintln(writer, theme.Text(terminaltheme.Warning, "Needs attention")); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintln(writer); err != nil {
-		return err
-	}
-	for index, target := range attention {
-		if index > 0 {
-			if _, err := fmt.Fprintln(writer); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprintln(writer, prompt.SafeText(batchTargetLabel(target))); err != nil {
-			return err
-		}
-		if err := renderOpenCodeRuntimeNotice(writer, target.Output.Result); err != nil {
-			return err
-		}
-		for _, line := range batchAttentionLines(target) {
-			for _, part := range strings.Split(line, "\n") {
-				if strings.TrimSpace(part) == "" {
-					continue
-				}
-				if _, err := fmt.Fprintf(writer, "  %s\n", prompt.SafeText(part)); err != nil {
-					return err
-				}
-			}
-		}
-		if target.RetryCommand != "" {
-			if _, err := fmt.Fprintln(writer, "  Retry:"); err != nil {
-				return err
-			}
-			if _, err := fmt.Fprintf(writer, "    %s\n", prompt.SafeText(target.RetryCommand)); err != nil {
-				return err
-			}
-		}
 	}
 	return nil
 }

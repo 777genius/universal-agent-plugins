@@ -51,25 +51,6 @@ func revalidateLoadedTargetIntents(
 	return fmt.Errorf("selected target %s is not available for this package: %s; no target was changed", first.Client, first.Reason)
 }
 
-func containsClientID(targets []domain.ClientID, wanted domain.ClientID) bool {
-	for _, target := range targets {
-		if target == wanted {
-			return true
-		}
-	}
-	return false
-}
-
-func withoutClientID(targets []domain.ClientID, excluded domain.ClientID) []domain.ClientID {
-	filtered := make([]domain.ClientID, 0, len(targets))
-	for _, target := range targets {
-		if target != excluded {
-			filtered = append(filtered, target)
-		}
-	}
-	return filtered
-}
-
 func appendDeferredChatGPT(result *addMultiResult, cmd *cobra.Command, loaded loadedPackage) {
 	personal, _ := personalMappingTarget(domain.SupportedClientIDs())
 	action := chatGPTRegistrationResumeAction(cmd, loaded.envelope.Source.RequestedSource, []domain.ClientID{personal})
