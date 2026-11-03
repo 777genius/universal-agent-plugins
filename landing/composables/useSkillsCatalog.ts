@@ -52,6 +52,7 @@ export function useSkillsCatalog(
     else loading.value = true;
     failed.value = false;
     if (!append) scanReportUnavailable.value = false;
+    let reportUnavailable = false;
 
     const requireCurrentScan = scannedOnly.value;
     const nextLimit = append ? displayed.value.length + 48 : 48;
@@ -81,7 +82,7 @@ export function useSkillsCatalog(
       } catch {
         // Missing, malformed and unavailable evidence all fail closed.
         // The user may still explicitly choose the unfiltered catalog.
-        scanReportUnavailable.value = true;
+        reportUnavailable = true;
         return false;
       }
     }
@@ -130,6 +131,7 @@ export function useSkillsCatalog(
       }
       if (request !== generation) return;
       items.value = collected;
+      if (requireCurrentScan) scanReportUnavailable.value ||= reportUnavailable;
       pending.value = requireCurrentScan ? queue : [];
       displayLimit.value = nextLimit;
       metadata.value = latest;
