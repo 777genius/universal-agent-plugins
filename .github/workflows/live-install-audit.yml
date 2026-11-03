@@ -141,16 +141,18 @@ jobs:
             codex) npm install --global @openai/codex@0.153.4 ;;
             claude) npm install --global @anthropic-ai/claude-code@2.1.263 ;;
             opencode) npm install --global opencode-ai@1.18.34 ;;
-            gemini) npm install --global @google/gemini-cli ;;
-            copilot) npm install --global @github/copilot ;;
+            gemini) npm install --global @google/gemini-cli@0.66.0 ;;
+            copilot) npm install --global @github/copilot@1.0.105 ;;
             cline) npm install --global cline@3.0.74 ;;
-            kimi) npm install --global @moonshot-ai/kimi-code ;;
-            qoder) npm install --global @qoder-ai/qodercli ;;
-            pi) npm install --global @mariozechner/pi-coding-agent ;;
+            kimi) npm install --global @moonshot-ai/kimi-code@2.4.1 ;;
+            qoder) npm install --global @qoder-ai/qodercli@1.1.81 ;;
+            pi) npm install --global --ignore-scripts @earendil-works/pi-coding-agent@1.5.0 ;;
             *) exit 2 ;;
           esac
-          command -v "$TARGET"
-          timeout 25s "$TARGET" --version
+          binary="$TARGET"
+          if [[ "$TARGET" == qoder ]]; then binary=qodercli; fi
+          command -v "$binary"
+          timeout 25s "$binary" --version
       - name: Build PR source CLI with current signed Registry eligibility version
         run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Attempt all 30 independent pinned sources in isolated profiles
