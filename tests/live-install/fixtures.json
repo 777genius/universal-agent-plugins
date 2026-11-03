@@ -26,11 +26,11 @@
     "supabase",
     "vercel",
     "github:sanity-io/agent-toolkit@3ed3a143f8d3413faa7790ac0b2274fd3a8a6320",
-    "github:AvdLee/SwiftUI-Agent-Skill@204dba7c67256a8b707ee3fbc5759a824191974",
+    "github:AvdLee/SwiftUI-Agent-Skill@204dba7c67256a8b707ee3fbc5759a824191974f",
     "github:AvdLee/Swift-Concurrency-Agent-Skill@d5770817d2622e1585b1f7eaebc791a9cb0959c8",
     "github:GoogleCloudPlatform/google-cloud-storage-plugin@b346e39698fcdfdc711ca3ee35e41c8dbaa1aa2b",
     "github:K-Dense-AI/claude-scientific-writer@529b9f73ab4b48925027145800d7b49e96ccfd3c",
-    "github:obra/the-elements-of-style@05fc4f0d2b97b7c042dd9949ad658568e4a1324",
+    "github:obra/the-elements-of-style@05fc4f0d2b97b7c042dd9949ad658568e4a1324e",
     "github:perplexityai/api-platform-developers@78f568a867bc7bc44ce625318b60ac0d86802c5f",
     "github:ollygarden/opentelemetry-agent-skills@fd2e9456032f42f7a2cc3b0a47f40803fa700671",
     "github:microsoft/rayfin@0979439a7a0806abd0ee48c2619b37f297ae1324"
@@ -300,11 +300,11 @@
     "github:sanity-io/agent-toolkit@3ed3a143f8d3413faa7790ac0b2274fd3a8a6320": "independent Sanity Agent Plugins 1.0 package at verified exact main SHA, manifest name sanity; unreviewed direct source must pass CLI security checks"
   },
   "plugin_declared_names": {
-    "github:AvdLee/SwiftUI-Agent-Skill@204dba7c67256a8b707ee3fbc5759a824191974": "swiftui-expert",
+    "github:AvdLee/SwiftUI-Agent-Skill@204dba7c67256a8b707ee3fbc5759a824191974f": "swiftui-expert",
     "github:AvdLee/Swift-Concurrency-Agent-Skill@d5770817d2622e1585b1f7eaebc791a9cb0959c8": "swift-concurrency",
     "github:GoogleCloudPlatform/google-cloud-storage-plugin@b346e39698fcdfdc711ca3ee35e41c8dbaa1aa2b": "google-cloud-storage",
     "github:K-Dense-AI/claude-scientific-writer@529b9f73ab4b48925027145800d7b49e96ccfd3c": "claude-scientific-writer",
-    "github:obra/the-elements-of-style@05fc4f0d2b97b7c042dd9949ad658568e4a1324": "elements-of-style",
+    "github:obra/the-elements-of-style@05fc4f0d2b97b7c042dd9949ad658568e4a1324e": "elements-of-style",
     "github:perplexityai/api-platform-developers@78f568a867bc7bc44ce625318b60ac0d86802c5f": "perplexity-platform",
     "github:ollygarden/opentelemetry-agent-skills@fd2e9456032f42f7a2cc3b0a47f40803fa700671": "opentelemetry-agent-skills",
     "github:microsoft/rayfin@0979439a7a0806abd0ee48c2619b37f297ae1324": "rayfin",
