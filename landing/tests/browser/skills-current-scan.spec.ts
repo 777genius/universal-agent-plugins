@@ -296,10 +296,13 @@ test('filtered search retains candidates past 64 inspections, displays past 48 a
 test('outage fails selected filters closed and explicit retry recovers without changing default catalog', async ({
   page,
 }) => {
+  // On CI, overlapping browser workers can delay Nuxt hydration and the
+  // expected two bounded 503 retries. Assert settlement, not 5-second speed.
+  test.setTimeout(90_000);
   const fixture = await prepare(page);
   fixture.setUnavailable(true);
   await page.goto('plugins/?tab=skills&skillRemarks=none');
-  await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false', { timeout: 30_000 });
   await expect(cards(page)).toHaveCount(0);
   await expect(
     page.getByText('Some scan reports could not be verified. Those Skills were excluded.'),

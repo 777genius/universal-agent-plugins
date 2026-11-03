@@ -410,6 +410,7 @@ async function setup(
     };
     Object.assign(manifest.source_states[0]!, {
       state: 'unsupported',
+      current: false,
       reason: 'unsupported_source_type',
       selected_ids: [],
     });
