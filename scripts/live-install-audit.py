@@ -46,7 +46,7 @@ def validate_fixtures(doc):
     skills = doc["skills"]
     targets = doc["targets"]
     if len(names) != 30 or len(set(names)) != 30:
-        raise ValueError("Must have exactly 30 different registry aliases")
+        raise ValueError("Must have exactly 30 distinct plugin sources")
     if len(skills) != 30 or len(set((v["repo"], v["name"]) for v in skills)) != 30:
         raise ValueError("Must have exactly 30 distinct Skills")
     if set(targets) != set(NATIVE_ROOTS):
@@ -142,7 +142,9 @@ def do_case(cli, target, kind, item, index, runroot):
                DO_NOT_TRACK="1")
     before = snapshot(native_roots)
     if kind == "plugin":
-        identity = item
+        identity = ("chrome-devtools" if item == "777genius/chrome-devtools-bridge"
+                    else "sanity" if item.startswith("github:sanity-io/agent-toolkit@")
+                    else item)
         args = ["add", item, "--target", target, "--scope", "user", "--format", "json"]
         scope = ["--scope", "user"]
     else:
@@ -157,20 +159,47 @@ def do_case(cli, target, kind, item, index, runroot):
     locked = (project / "uap.toml").is_file() and (project / "uap.lock").is_file()
     lock_contains = locked and identity in (project / "uap.lock").read_text(encoding="utf-8")
     listed = call([cli, "list", "--target", target, *scope, "--format", "json"], env, project, 30) if output["exit_code"] == 0 else None
-    listed_identity = bool(listed and listed["exit_code"] == 0 and identity in listed["stdout_tail"])
+    listed_identity = False
+    if listed and listed["exit_code"] == 0:
+        try:
+            installations = json.loads(listed["stdout_tail"])["data"]["installations"]
+            # Installation UUID/name may be normalized for raw Skills. Require
+            # matching native target, verified on-disk materialization and
+            # exact source identity instead of a loose substring in stdout.
+            expected = item if kind == "plugin" else f'{item["repo"]}/skills/{item["folder"]}'
+            for installation in installations:
+                target_verified = any(
+                    client.get("client_id") == target and
+                    client.get("verification") == "installation_verified"
+                    for client in installation.get("clients", []))
+                source = installation.get("source", "")
+                if target_verified and (
+                    (kind == "plugin" and (installation.get("name") == identity or
+                      source == expected or identity in source.split("/"))) or
+                    (kind == "skill" and source == expected)
+                ):
+                    listed_identity = True
+                    break
+        except (ValueError, TypeError, KeyError):
+            pass
     # For a project Skill, require source-bound persisted state and native SKILL.md;
     # for a user plugin require a real native profile delta plus managed list.
-    installed = (output["exit_code"] == 0 and
+    installed = (output["exit_code"] == 0 and listed_identity and
                  ((kind == "skill" and bool(skill_path) and lock_contains) or
-                  (kind == "plugin" and bool(changed) and listed_identity)))
+                  (kind == "plugin" and bool(changed))))
     cleanup = None
     if installed:
         cleanup = call([cli, "remove", identity, "--target", target, *scope,
                         "--format", "json"], env, project, 60)
     sentinels_preserved = (sentinel.read_text() == "foreign content never belongs to UAP\n" and
                            user_sentinel.read_text() == "foreign profile content never belongs to UAP\n")
+    post_removal_skill = skill_file_present(project, target, identity) if kind == "skill" and cleanup else None
+    removal_verified = bool(
+        cleanup and cleanup["exit_code"] == 0 and
+        (kind != "skill" or post_removal_skill is None)
+    )
     diagnostics = (output["stdout_tail"] + "\n" + output["stderr_tail"]).lower()
-    if installed and cleanup and cleanup["exit_code"] == 0 and sentinels_preserved:
+    if installed and removal_verified and sentinels_preserved:
         status = "passed"
     elif installed:
         status = "cleanup-failed"
@@ -188,7 +217,8 @@ def do_case(cli, target, kind, item, index, runroot):
             "native_file_delta": len(changed), "skill_path": skill_path,
             "lock_written": bool(locked), "lock_contains_identity": bool(lock_contains),
             "listed_identity": listed_identity, "cleanup": cleanup,
-            "sentinels_preserved": sentinels_preserved}
+            "post_removal_skill": post_removal_skill,
+            "removal_verified": removal_verified, "sentinels_preserved": sentinels_preserved}
 
 
 def main():
