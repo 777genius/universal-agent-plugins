@@ -23,3 +23,7 @@ This is a **security problem in the new test harness**, not evidence of a defect
 - **Scope:** this PR's E2E harness and one focused regression only. A green test must not imply a user profile was touched, nor that activation happened.
 
 **Status:** fix and regression now pushed. `isolated_client_env` clears ambient per-client overrides and Git configuration injection, validates home/data roots under the disposable case and assigns every native client override inside it. `scripts/test_live_install_audit_env.py` injects hostile parent paths and verifies confinement; both live CI workflows run this guard before installs. **Final-head CI and Strix re-review are still required.**
+
+## Windows profile-path follow-up
+
+The same inherited-environment risk applies to `APPDATA` and `LOCALAPPDATA`, which can override the location of GUI-client profiles on Windows even when `HOME` and `USERPROFILE` are isolated. The small follow-up fixes those two variables at the **same subprocess environment boundary**, setting them to `home/AppData/Roaming` and `home/AppData/Local`. The existing focused test now injects hostile outside paths for both, requiring their effective child values to be inside the disposable case. This is confined to the test harness, not any production adapter or vendor configuration.
