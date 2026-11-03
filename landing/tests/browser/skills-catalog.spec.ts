@@ -442,6 +442,32 @@ test('catalog backfills 48 installable Skills across real upstream pages', async
   await expect(cards.first().getByRole('button', { name: /Install/ })).toHaveCount(1);
 });
 
+
+test('document API rejects noncanonical remote source detail links without a failed fetch', async ({ page }) => {
+  let documentRequests = 0;
+  await page.route('https://api.universal-agent-plugins.com/v1/skills/document?**', route => {
+    documentRequests++;
+    return route.fulfill({ status: 400, json: { error: 'invalid_request' } });
+  });
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', route =>
+    route.fulfill({ json: {
+      items: [{ ...skill(), id: 'skills-sh:anthropics/skills.git:frontend-design',
+        source: { kind: 'external', url: 'https://www.skills.sh/' },
+        providerUrl: 'https://www.skills.sh/', availability: 'unsupported-source' }],
+      page: 0, total: 1, hasMore: false, view: 'popular',
+      cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' },
+    } }),
+  );
+  await page.goto('plugins/?tab=skills');
+  const card = page.locator('.skills-catalog .skill-card').first();
+  await expect(card).toHaveCount(1);
+  await expect(card.getByRole('button', { name: 'Install frontend-design' })).toBeVisible();
+  await expect(card.getByRole('link', { name: 'frontend-design', exact: true })).toHaveCount(0);
+  await page.goto('skills/?id=skills-sh%3Aanthropics%2Fskills.git%3Afrontend-design&q=frontend-design');
+  await expect(page.getByRole('heading', { name: 'Skill not found' })).toBeVisible();
+  expect(documentRequests).toBe(0);
+});
+
 test('explicit legacy GitHub URL sources display a safe install command', async ({ page }) => {
   await page.route('https://api.universal-agent-plugins.com/v1/skills**', route =>
     route.fulfill({ json: {
