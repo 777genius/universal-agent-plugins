@@ -219,7 +219,10 @@ def matching_installations(response, identity, target, kind, item):
         clients = node.get("clients", [])
         if not isinstance(clients, list) or not any(
             isinstance(client, dict) and client.get("client_id") == target and
-            client.get("verification") == "installation_verified"
+            (client.get("verification") == "installation_verified" or
+             (kind == "plugin" and client.get("materialization") == "materialized" and
+              client.get("verification") == "package_validated" and
+              client.get("activation") == "manual_activation_required"))
             for client in clients):
             continue
         source = node.get("source", "")
@@ -234,6 +237,17 @@ def matching_installations(response, identity, target, kind, item):
         else:
             accepted = node.get("name") == identity
         if accepted and node.get("installation_id"):
+            # A catalogue name is not enough to prove the selected signed
+            # distribution: tie reviewed aliases to the signed directory
+            # product and ensure immutable source revision/digests exist.
+            if kind == "plugin" and isinstance(item, str) and not item.startswith("github:"):
+                directory = node.get("directory", {})
+                if not isinstance(directory, dict) or (
+                    (item == "777genius/chrome-devtools-bridge" and
+                     directory.get("recorded_distribution") != item) or
+                    (item != "777genius/chrome-devtools-bridge" and
+                     directory.get("product_id") != item)):
+                    continue
             result.append(node)
     return result
 
@@ -346,6 +360,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     listed_json = listed.pop("_json", None) if listed else None
     matching = matching_installations(listed_json, identity, target, kind, item)
     listed_identity = len(matching) == 1
+    prepared_binding = bool(listed_identity and kind == "plugin" and any(
+        client.get("client_id") == target and client.get("verification") == "package_validated"
+        and client.get("activation") == "manual_activation_required"
+        for client in matching[0].get("clients", []) if isinstance(client, dict)))
     # Name and file presence alone are insufficient. A true Skill pass also
     # proves the immutable source in the portable lock AND exact upstream bytes.
     installed = bool(
@@ -399,8 +417,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     if target == "chatgpt" and kind == "plugin" and output["exit_code"] == 0:
         status = "manual-setup-prepared"
     elif installed and removal_verified and sentinels_preserved:
-        status = ("passed" if kind == "skill" or native_attribution else
-                  "package-installed-native-unqualified")
+        status = ("package-installed-native-unqualified" if kind == "plugin" and not native_attribution
+                  else "prepared-lifecycle-passed" if prepared_binding else "passed")
     elif installed and cleanup and "external removal requires explicit attestation" in (
             cleanup.get("stderr_tail", "") + cleanup.get("stdout_tail", "")).lower():
         status = "external-native-uninstall-required"
@@ -427,7 +445,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
             "native_identity_files": native_attribution, "skill_path": skill_path,
             "lock_written": bool(locked), "lock_contains_identity": bool(lock_contains),
             "lock_exact_source_pinned": lock_pinned, "skill_bytes_match": bool(skill_bytes_match),
-            "listed_identity": listed_identity, "matched_installation_ids": sorted(old_ids),
+            "listed_identity": listed_identity, "prepared_binding": prepared_binding,
+            "matched_installation_ids": sorted(old_ids),
             "native_uninstall": native_uninstall, "cleanup": cleanup, "post_remove_list": post_list,
             "post_removal_skill": post_removal_skill, "post_lock_pinned": post_lock_pinned,
             "removal_verified": removal_verified, "post_list_schema_valid": post_list_schema_valid,
@@ -491,6 +510,8 @@ def main():
                               "status": result["status"]}), flush=True)
     passed = sum(r["status"] == "passed" for r in report["results"])
     report["passed"] = passed
+    report["prepared_lifecycle_passed"] = sum(
+        r["status"] == "prepared-lifecycle-passed" for r in report["results"])
     report["full_coverage"] = args.limit == 30 and report["cases_attempted"] == 30
     save()
     print(f'{args.target} {args.kind}: {passed}/{args.limit} passed; attempted={report["cases_attempted"]}')
