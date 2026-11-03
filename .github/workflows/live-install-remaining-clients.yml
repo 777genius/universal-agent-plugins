@@ -43,7 +43,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           mkdir -p "$RUNNER_TEMP/vendor-proof" "$HOME/.local/bin"
           export PATH="$HOME/.local/bin:$PATH"
           case "$TARGET" in
