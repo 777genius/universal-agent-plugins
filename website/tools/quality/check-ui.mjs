@@ -122,6 +122,12 @@ async function runSmoke(browser, base) {
   }
 
   await page.goto(`${base}/en/`, { waitUntil: "networkidle" });
+  await page.locator(".VPNavBarMenu").getByRole("link", { name: "SDK", exact: true }).click();
+  if (!page.url().includes("/en/sdk/")) {
+    errors.push("Top navigation SDK link did not navigate to /en/sdk/.");
+  }
+
+  await page.goto(`${base}/en/`, { waitUntil: "networkidle" });
   const editLink = page.getByRole("link", { name: "Edit this page", exact: true });
   if ((await editLink.count()) < 1) {
     errors.push("Hand-authored page is missing the visible edit link.");
