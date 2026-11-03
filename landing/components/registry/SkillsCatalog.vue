@@ -13,6 +13,7 @@ const initial = restoreSkillsQuery(route.query);
 const query = ref(initial.query);
 const view = ref<SkillsView>(initial.view);
 const scanMode = ref<SkillsScanView>(route.query.skillScan === 'all' ? 'all' : 'scanned');
+/** Normalize the URL state, including the explicitly requested unfiltered mode. */
 const routeState = () => ({
   ...restoreSkillsQuery(route.query),
   scanMode: route.query.skillScan === 'all' ? 'all' : 'scanned',
@@ -20,6 +21,7 @@ const routeState = () => ({
 let syncing = false;
 let disposed = false;
 let pending: string | undefined;
+/** Compare route and local state without overwriting a newer user selection. */
 const fingerprint = () => JSON.stringify({
   query: query.value.trim(),
   view: view.value,
@@ -35,6 +37,7 @@ watch(
     scanMode.value = restored.scanMode as SkillsScanView;
   },
 );
+/** Serialize changes to avoid navigation races while keeping the shareable filter URL. */
 async function syncQuery() {
   if (syncing) return;
   syncing = true;

@@ -42,6 +42,7 @@ export function useSkillsCatalog(
   // and its SHA-256 verified shards are shared with the card's detail viewer.
   const maxPagesPerLoad = 5;
   const maxCandidatesPerLoad = 64;
+  /** Load one bounded window, retaining candidates not yet verified across pagination. */
   async function load(append = false) {
     if (searchTooShort.value) return;
     controller?.abort();
@@ -73,6 +74,7 @@ export function useSkillsCatalog(
           v3: String(config.public.skillspectorV3ManifestUrl),
         })
       : undefined;
+    /** Match a candidate to inspected, current publication evidence; fail closed on errors. */
     async function eligible(skill: SkillListing) {
       const subject = publishedScanSubject(skill);
       if (!subject || !client) return false;
@@ -144,6 +146,7 @@ export function useSkillsCatalog(
       }
     }
   }
+  /** Invalidate stale async work before debouncing a new query, sort or scan mode. */
   function schedule() {
     ++generation;
     controller?.abort();
@@ -170,6 +173,7 @@ export function useSkillsCatalog(
     controller?.abort();
     if (timer) clearTimeout(timer);
   });
+  /** Reveal buffered results before requesting another bounded acquisition window. */
   function showMore() {
     if (remaining.value) displayLimit.value += 48;
     else if ((pending.value.length || metadata.value?.hasMore) && !loadingMore.value)
