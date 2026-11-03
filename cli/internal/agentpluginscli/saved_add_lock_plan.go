@@ -11,9 +11,10 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
-	"github.com/spf13/cobra"
 )
 
 func seedSavedAdd(snapshot environmentSnapshot, requirement environment.Requirement, pin environment.LockedPackage) environment.Lock {
