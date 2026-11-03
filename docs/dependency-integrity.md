@@ -6,10 +6,12 @@ It succeeds only when that local agreement and every recorded package can be
 verified. It does not establish whether a native client can use the installation.
 
 This document describes the source implementation in
-[PR #690](https://github.com/777genius/universal-agent-plugins/pull/690).
+[PR #690](https://github.com/777genius/universal-agent-plugins/pull/690) and its
+[graph-efficiency follow-up, PR #697](https://github.com/777genius/universal-agent-plugins/pull/697).
 It does not imply that a published CLI release contains the command. The
 [five-round implementation plan](plans/2026-11-03-dependency-integrity-five-rounds.md)
-records the evidence, compatibility decisions, and acceptance scenarios.
+and [graph follow-up plan](plans/2026-11-03-dependency-graph-efficiency-and-reduction.md)
+record the evidence, compatibility decisions, and acceptance scenarios.
 
 ## Commands and scope
 
@@ -109,12 +111,12 @@ agreement paths; account for that when publishing CI artifacts.
 | 1. Identical immutable admission | Warm cache replay and cold acquisition compare the tree digest, manifest digest, actual executable inventory, and any nonempty recorded version. Cache availability must not change which immutable facts are accepted. |
 | 2. Strict store metadata | Metadata is bounded on both read and publication by the existing package-file ceiling, strict JSON, and validated against the actual sealed snapshot. Corrupt metadata is distinct from absence, permission failures, and cancellation. Store `Source` metadata is advisory; the lock supplies source identity because identical content may be shared across origins. |
 | 3. One manifest boundary | Root, embedded package, and direct in-memory decoder callers share the same dependency-manifest byte limit and parser. Package sidecars retain root-contained link support; authority files and store metadata reject leaf links. |
-| 4. Bounded graph work | Resolution has structural and request-wide work budgets, including failed search branches, and checks cancellation during expansion and search. Limit exhaustion is terminal, not a dependency conflict eligible for more backtracking. Recorded and imported locks retain semantic validation without inheriting fresh-solver size caps; indexed lookup and adjacency traversal keep that validation efficient. |
+| 4. Bounded graph work | Fresh resolution has structural and search-wide work budgets, including failed branches, and checks cancellation during expansion and search. Limit exhaustion is terminal, not a dependency conflict eligible for more backtracking. Recorded/imported locks and verified existing-pin closure retain semantic validation without inheriting fresh-search caps; indexed lookup and adjacency traversal keep verification efficient. |
 | 5. Truthful local diagnostics | `deps check` gates local integrity without acquisition or persistent mutation. Missing bytes, invalid bytes, operational errors, and cancellation remain distinct outcomes. |
 
 For authoritative locks, absent, `null`, and empty executable inventories all
 mean the empty set. An executable-bearing package cannot satisfy such a pin.
-Unsorted historical lists are compared using canonical copies without rewriting
+Unsorted historical executable inventories are compared using canonical copies without rewriting
 the healthy lock; unsafe paths and duplicate or case-fold-colliding entries are
 rejected. Omitted historical versions may be hydrated, but a nonempty conflicting
 version cannot be replaced silently. Receipt-only repair is a separate incomplete
@@ -127,17 +129,67 @@ uses the existing `domain.DefaultMaxFileBytes` package-file bound, so a legal
 large inventory written by an older version is not refused by a new 4 MiB cap.
 Store executable
 inventories remain within the package limit of 10,000 files. Resolution admits
-at most 1,024 source nodes and 8,192 dependency demands, with 4,096 search states
+at most 1,024 source nodes and 8,192 dependency edges (direct-root demands do not
+consume that edge allowance), with 4,096 search states
 and 8,388,608 work events per fresh resolution. These budgets protect active
 search; they are not limits on the validity of an already recorded graph. Tree,
 check and import of older large locks retain the existing document byte limits
-and all pin/edge/target validation. Manifest edits still invoke resolution, even
-when removing a dependency: reducing 1,026 roots to 1,025 still exceeds the new
-solver ceiling. Reducing an old graph to an admitted graph (including empty or
-one retained package) is supported. No claim is made that every removal bypasses
-search budgets. A graph below the solver
-node/edge ceilings can still exhaust its work budget; there is no promise that
-every topology below those counts can be freshly resolved.
+and all pin/edge/target validation. A graph below the fresh node/edge ceilings can
+still exhaust its work budget; there is no promise that every topology below
+those counts can be freshly resolved.
+
+## Reducing an existing dependency graph
+
+Saved `remove`, explicit `deps lock`, and unlocked `deps sync` after a manifest
+edit can retain a verified closed set of previous immutable pins without candidate
+search. This permits a 1,026-package agreement to shrink to 1,025, or a target to
+be removed while the remaining graph still exceeds fresh-search counts. The
+traversal checks cancellation and retains document/package admission; it does not
+consume fresh search states or inherit the four fresh-search ceilings.
+
+The path applies when no packages are selected for update, current roots retain
+their previous source and recorded requested selector, every reached declaration
+is satisfied by a previous pin, and inherited targets satisfy the existing
+compatible-pin eligibility exemption. It reads verified declarations from the
+current roots and rebuilds edges from those facts. It does not read removed
+unreachable packages, or follow an unnecessary old edge merely to authorize its
+removal. A retained transitive package may become a root when its recorded intent
+matches; the lock does not preserve the old direct-root set.
+
+The returned packages retain their ownership aliases and immutable coordinates,
+digests and executable inventories. An absent historical version can gain the
+version verified from package bytes; a conflicting recorded version remains an
+error. Missing or unnecessary recorded edges may be rebuilt by explicit resolution
+when the old agreement's structural pin/edge validation otherwise succeeds.
+
+| Situation | Behavior |
+| --- | --- |
+| Retained bytes are valid and cached | Verify the retained closure without candidate enumeration, moving-ref lookup or source download. |
+| Retained bytes are missing | Existing acquisition may fetch the exact recorded immutable source, preserving scope, Directory and security checks. |
+| Retained bytes are corrupt, a callback fails, or snapshot cleanup fails | Return the integrity/operational error; do not treat it as permission to refresh candidates or replace the cache. |
+| A source/selector changes, a target expands, an update is selected, or a required old pin is absent | Use normal fresh resolution and its existing limits. |
+| Historical targets do not meet the existing eligibility exemption, including its ordering semantics | Use the existing solver and policy callbacks. Valid unordered targets are not a new malformed-lock error. |
+| Ordinary `install` has an existing lock that disagrees with the manifest, with or without `--locked` | Continue refusing the mismatched pair; explicitly resolve the intended agreement before installation. |
+
+Thus not every edit or removal bypasses search. Exact install and same-digest
+replay keep strict declaration verification; they do not silently repair a recorded
+graph. Plain `deps import` still transfers a structurally valid agreement without
+acquiring package bytes. `deps import --install` verifies the retained package
+declarations as part of installation, while `deps check` reads local snapshots only.
+
+Fresh solving carries graph state between candidate choices and undoes failed
+branch changes. Prepared declarations retain strict validation, source callbacks
+retain deterministic requirement/candidate order, and eligibility callbacks remain
+uncached. The recorded-edge comparison builds one operation-local index and
+preserves duplicate and selector-distinct evidence. These changes reduce repeated
+graph computation; they do not imply the same speedup for source downloads or
+native installation.
+
+Environment locking, preimage checks, publication order and binding transactions
+remain unchanged. Failures before publication preserve the saved agreement;
+existing post-publication partial-result and retry semantics still apply.
+
+## Native file admission
 
 On Unix, strict leaf opens use no-follow and nonblocking admission so a FIFO swap
 cannot stall the open; opened handles and final file identity are checked.

@@ -202,7 +202,9 @@ func newPMArchiveEnvironment(t *testing.T, origin *pmArchiveOrigin, mixed bool) 
 
 func (f pmArchiveEnvironment) executePM(ctx context.Context, t *testing.T, input string, terminal bool, args ...string) (string, error) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	// Large archive fixtures perform dozens of durable native installs. Leave
+	// runner I/O headroom while retaining a bounded command deadline.
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	var stdout, stderr bytes.Buffer
 	app := f.app
