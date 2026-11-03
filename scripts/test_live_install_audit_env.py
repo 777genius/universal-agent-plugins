@@ -1,0 +1,66 @@
+"""Prevent the live acceptance harness from touching ambient client profiles."""
+import importlib.util
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import unittest
+from unittest.mock import patch
+
+
+def load_audit():
+    file = Path(__file__).resolve().parent / "live-install-audit.py"
+    spec = importlib.util.spec_from_file_location("live_install_audit", file)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class IsolatedClientEnvironmentTest(unittest.TestCase):
+    def test_rebinds_all_client_overrides_and_strips_git_injection(self):
+        audit = load_audit()
+        hostile = {key: "/outside/actual-user-profile" for key in audit.PROFILE_ENV_KEYS}
+        hostile.update({
+            "HOME": "/outside/actual-user-home",
+            "USERPROFILE": "/outside/actual-user-home",
+            "XDG_CONFIG_HOME": "/outside/config",
+            "XDG_DATA_HOME": "/outside/data",
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.hooksPath",
+            "GIT_CONFIG_VALUE_0": "/outside/hooks",
+            "GIT_SSH_COMMAND": "/outside/host-ssh",
+            "SSH_ASKPASS": "/outside/host-askpass",
+        })
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary) / "case"
+            home, data = case / "home", case / "uap-data"
+            home.mkdir(parents=True)
+            data.mkdir()
+            with patch.dict(os.environ, hostile):
+                env = audit.isolated_client_env(home, case, data)
+            for key in audit.PROFILE_ENV_KEYS:
+                if key in env:
+                    self.assertTrue(Path(env[key]).is_relative_to(home), (key, env[key]))
+                else:
+                    self.assertNotIn(key, env)
+            for key in ("HOME", "USERPROFILE", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
+                        "XDG_CACHE_HOME", "XDG_STATE_HOME", "GIT_CONFIG_GLOBAL",
+                        "AGENTPLUGINS_HOME", "TMPDIR"):
+                self.assertTrue(Path(env[key]).is_relative_to(case), (key, env[key]))
+            self.assertEqual(env["GEMINI_CLI_HOME"], str(home))
+            for key in ("GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0",
+                        "GIT_SSH_COMMAND", "SSH_ASKPASS"):
+                self.assertNotIn(key, env)
+
+    def test_refuses_case_data_outside_disposable_root(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            case, home, outside = parent / "case", parent / "case/home", parent / "outside"
+            home.mkdir(parents=True)
+            outside.mkdir()
+            with self.assertRaisesRegex(ValueError, "disposable case"):
+                audit.isolated_client_env(home, case, outside)
+
+
+if __name__ == "__main__":
+    unittest.main()
