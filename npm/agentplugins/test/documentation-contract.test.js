@@ -113,7 +113,11 @@ test("root documentation recommends the native Go installer without hiding npm",
     return;
   }
   const markdown = fs.readFileSync(documents[0][1], "utf8");
-  assert.match(markdown, /The native CLI does not require Node\.js/i);
+  const prose = markdown.replace(/\s+/g, " ");
+  assert.match(
+    prose,
+    /(?:The native CLI does not require Node\.js|Only npm requires Node\.js; Homebrew and the native scripts do not)/i
+  );
   assert.match(markdown, /brew install 777genius\/agentplugins\/agentplugins/);
   assert.match(
     markdown,
