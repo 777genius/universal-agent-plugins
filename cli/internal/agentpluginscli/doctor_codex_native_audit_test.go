@@ -192,12 +192,9 @@ func TestCodexDoctorDepthScanRespectsMultilineQuoteSkip(t *testing.T) {
 	t.Parallel()
 	const limit = 6
 	for _, quote := range []string{`"`, `'`} {
-		payload := "[mcp_servers.demo]
-label = " + strings.Repeat(quote, 4) + "x" +
-			strings.Repeat(quote, 3) + "
-command = " +
-			strings.Repeat("[", limit+1) + "0" + strings.Repeat("]", limit+1) + "
-"
+		payload := "[mcp_servers.demo]\nlabel = " + strings.Repeat(quote, 4) + "x" +
+			strings.Repeat(quote, 3) + "\ncommand = " +
+			strings.Repeat("[", limit+1) + "0" + strings.Repeat("]", limit+1) + "\n"
 		var parsed map[string]any
 		if err := toml.Unmarshal([]byte(payload), &parsed); err != nil {
 			t.Fatalf("adversarial fixture must be valid TOML: %v", err)
