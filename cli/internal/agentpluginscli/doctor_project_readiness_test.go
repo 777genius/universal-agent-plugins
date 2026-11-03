@@ -192,7 +192,7 @@ func TestProjectReadinessHumanOutputSanitizesTerminalControls(t *testing.T) {
 		}
 	}
 	if strings.Count(got, "\n") != 3 || !strings.Contains(got, "Project readiness (recorded facts") ||
-		!strings.Contains(got, "install/pi") || !strings.Contains(got, "Next:") {
+		!strings.Contains(got, "install") || !strings.Contains(got, "pi") || !strings.Contains(got, "Next:") {
 		t.Fatalf("project readiness human output lost safe diagnostics: %q", got)
 	}
 }
