@@ -37,11 +37,14 @@ func resolveDependencySyncCandidate(ctx context.Context, app App, opts *options,
 }
 
 func verifyDependencyDeclarations(ctx context.Context, app App, lock environment.Lock) error {
-	bySource := make(map[string]environment.LockedPackage, len(lock.Packages))
-	for _, pin := range lock.Packages {
-		bySource[pin.SourceKey] = pin
+	index, err := indexDependencyDeclarations(ctx, lock)
+	if err != nil {
+		return err
 	}
 	for _, pin := range lock.Packages {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		resolved, err := readReplayDependency(ctx, app, pin)
 		if err != nil {
 			return fmt.Errorf("verify %s pinned manifest; run agentplugins deps lock: %w", pin.Alias, err)
@@ -49,7 +52,7 @@ func verifyDependencyDeclarations(ctx context.Context, app App, lock environment
 		if pin.Version != "" && pin.Version != resolved.Package.Version {
 			return fmt.Errorf("%s version differs from pinned manifest; run agentplugins deps lock", pin.Alias)
 		}
-		if err := verifyDeclaredEdges(pin.Alias, resolved.Dependencies, bySource); err != nil {
+		if err := index.verifyDeclaredEdges(ctx, pin.Alias, resolved.Dependencies); err != nil {
 			return err
 		}
 	}
@@ -77,32 +80,4 @@ func readReplayDependency(ctx context.Context, app App, pin environment.LockedPa
 		return environment.ResolvedPackage{}, err
 	}
 	return environment.ResolvedPackage{Package: pin, Dependencies: facts}, nil
-}
-
-func verifyDeclaredEdges(parent string, declarations map[string]environment.Requirement, bySource map[string]environment.LockedPackage) error {
-	expected := make(map[string]environment.Selector, len(declarations))
-	for _, requirement := range declarations {
-		key, err := requirement.SourceKey()
-		if err != nil {
-			return err
-		}
-		selector := requirement.RequestedSelector()
-		expected[key] = selector
-	}
-	for key, pin := range bySource {
-		for _, edge := range pin.RequiredBy {
-			if edge.Alias != parent {
-				continue
-			}
-			selector, exists := expected[key]
-			if !exists || selector != edge.Selector {
-				return fmt.Errorf("%s has an unexpected dependency edge to %s; run agentplugins deps lock", parent, pin.Alias)
-			}
-			delete(expected, key)
-		}
-	}
-	if len(expected) != 0 {
-		return fmt.Errorf("%s pinned manifest declares missing dependency edges; run agentplugins deps lock", parent)
-	}
-	return nil
 }
