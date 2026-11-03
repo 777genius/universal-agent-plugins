@@ -1,32 +1,47 @@
 import type { SkillsCatalogPage, SkillsView, SkillListing } from '~/types/skillsCatalog';
 import { skillInstallCommand } from '~/utils/skillsCatalog';
+import { hasCurrentPublishedScan, publishedScanSubject } from '~/utils/skillSpectorCurrent';
+import { sharedSkillSpectorClient } from '~/composables/useSkillSpector';
 
-/** A request belongs to exactly one search/view; late responses cannot replace it. */
-export function useSkillsCatalog(query: Ref<string>, view: Ref<SkillsView>) {
+export type SkillsScanView = 'scanned' | 'all';
+
+/** Request generations isolate search/view/filter changes from late API or scan responses. */
+export function useSkillsCatalog(
+  query: Ref<string>,
+  view: Ref<SkillsView>,
+  scanView?: Ref<SkillsScanView>,
+) {
   const config = useRuntimeConfig();
+  const app = useNuxtApp();
   const items = shallowRef<SkillListing[]>([]);
+  const pending = shallowRef<SkillListing[]>([]);
   const metadata = shallowRef<SkillsCatalogPage>();
   const loading = ref(true);
   const loadingMore = ref(false);
   const failed = ref(false);
+  const scanReportUnavailable = ref(false);
   const displayLimit = ref(48);
   let controller: AbortController | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let generation = 0;
   let mounted = false;
+
   const searchTooShort = computed(() => {
     const length = [...query.value.trim()].length;
     return length > 0 && length < 2;
   });
+  const scannedOnly = computed(() => scanView?.value === 'scanned' && !query.value.trim());
   const displayed = computed(() => items.value.slice(0, displayLimit.value));
   const remaining = computed(() => Math.max(0, items.value.length - displayLimit.value));
   const hasMore = computed(() =>
-    remaining.value > 0 || (!query.value.trim() && Boolean(metadata.value?.hasMore)),
+    remaining.value > 0 ||
+    (!query.value.trim() && (pending.value.length > 0 || Boolean(metadata.value?.hasMore))),
   );
 
-  // Never drop an installable Skill merely because an upstream page contains
-  // unresolvable listings. Requests are bounded to avoid exhausting the provider.
+  // Keep bounded acquisition separate from the scan queue. The published report
+  // and its SHA-256 verified shards are shared with the card's detail viewer.
   const maxPagesPerLoad = 5;
+  const maxCandidatesPerLoad = 64;
   async function load(append = false) {
     if (searchTooShort.value) return;
     controller?.abort();
@@ -36,43 +51,86 @@ export function useSkillsCatalog(query: Ref<string>, view: Ref<SkillsView>) {
     if (append) loadingMore.value = true;
     else loading.value = true;
     failed.value = false;
+    if (!append) scanReportUnavailable.value = false;
 
+    const requireCurrentScan = scannedOnly.value;
     const nextLimit = append ? displayed.value.length + 48 : 48;
-    const collected = append ? [...items.value] : [] as SkillListing[];
-    const seen = new Set(collected.map(item => item.id));
+    const collected: SkillListing[] = append ? [...items.value] : [];
+    const queue: SkillListing[] = append && requireCurrentScan ? [...pending.value] : [];
+    const seen = new Set([...collected, ...queue].map((item) => item.id));
     const search = query.value.trim();
-    let latest: SkillsCatalogPage | undefined;
-    let pageNumber = append ? (metadata.value?.page ?? 0) + 1 : 0;
+    let latest = append ? metadata.value : undefined;
+    let pageNumber = append ? (metadata.value?.page ?? -1) + 1 : 0;
+    let moreUpstream = !append || Boolean(metadata.value?.hasMore);
+    let fetched = 0;
+    let evaluated = 0;
+
+    const client = requireCurrentScan
+      ? sharedSkillSpectorClient(app, {
+          v1: String(config.public.skillspectorReportsUrl),
+          v2: String(config.public.skillspectorManifestUrl),
+          v3: String(config.public.skillspectorV3ManifestUrl),
+        })
+      : undefined;
+    async function eligible(skill: SkillListing) {
+      const subject = publishedScanSubject(skill);
+      if (!subject || !client) return false;
+      try {
+        const report = await client.reportFor(subject.repository);
+        return hasCurrentPublishedScan(report, subject);
+      } catch {
+        // Missing, malformed and unavailable evidence all fail closed.
+        // The user may still explicitly choose the unfiltered catalog.
+        scanReportUnavailable.value = true;
+        return false;
+      }
+    }
+
     try {
-      for (let count = 0; count < maxPagesPerLoad; count++) {
-        const params = new URLSearchParams({ view: search ? 'popular' : view.value, page: String(pageNumber) });
+      while (collected.length < nextLimit && !signal.aborted) {
+        if (requireCurrentScan && queue.length && evaluated < maxCandidatesPerLoad) {
+          const batch = queue.splice(0, Math.min(8, maxCandidatesPerLoad - evaluated));
+          const decisions = await Promise.all(batch.map(eligible));
+          if (request !== generation) return;
+          evaluated += batch.length;
+          batch.forEach((item, index) => {
+            if (decisions[index]) collected.push(item);
+          });
+          continue;
+        }
+        if ((requireCurrentScan && (queue.length || evaluated >= maxCandidatesPerLoad)) ||
+            !moreUpstream || fetched >= maxPagesPerLoad) break;
+
+        const params = new URLSearchParams({
+          view: search ? 'popular' : view.value,
+          page: String(pageNumber),
+        });
         if (search) params.set('q', search);
         const endpoint = String(config.public.skillsCatalogEndpoint);
-        const response = await fetch(`${endpoint}${endpoint.includes('?') ? '&' : '?'}${params}`, {
-          signal,
-          headers: { Accept: 'application/json' },
-        });
+        const response = await fetch(
+          endpoint + (endpoint.includes('?') ? '&' : '?') + params,
+          { signal, headers: { Accept: 'application/json' } },
+        );
         if (!response.ok) throw new Error('Catalog unavailable');
         const page = (await response.json()) as SkillsCatalogPage;
         if (!Array.isArray(page.items) || typeof page.hasMore !== 'boolean' ||
-            page.page !== pageNumber || !page.cache)
-          throw new Error('Invalid catalog');
+            page.page !== pageNumber || !page.cache) throw new Error('Invalid catalog');
         if (request !== generation) return;
+        fetched++;
+        pageNumber++;
+        moreUpstream = !search && page.hasMore && page.items.length > 0;
         for (const item of page.items) {
           if (!item || typeof item !== 'object' || typeof item.id !== 'string') continue;
-          if (!seen.has(item.id) && skillInstallCommand(item)) {
-            seen.add(item.id);
-            collected.push(item);
-          }
+          if (seen.has(item.id) || !skillInstallCommand(item)) continue;
+          seen.add(item.id);
+          if (requireCurrentScan) queue.push(item);
+          else collected.push(item);
         }
         latest = page;
-        // Search has no pagination in the public API, even if a future upstream
-        // payload mistakenly exposes hasMore=true.
-        if (!page.hasMore || !page.items.length || collected.length >= nextLimit || search) break;
-        pageNumber++;
       }
       if (request !== generation) return;
       items.value = collected;
+      pending.value = requireCurrentScan ? queue : [];
       displayLimit.value = nextLimit;
       metadata.value = latest;
     } catch {
@@ -89,17 +147,17 @@ export function useSkillsCatalog(query: Ref<string>, view: Ref<SkillsView>) {
     controller?.abort();
     if (timer) clearTimeout(timer);
     items.value = [];
+    pending.value = [];
     metadata.value = undefined;
     failed.value = false;
+    scanReportUnavailable.value = false;
     loadingMore.value = false;
     loading.value = !searchTooShort.value;
     displayLimit.value = 48;
     if (mounted && !searchTooShort.value)
-      timer = setTimeout(() => {
-        void load();
-      }, 300);
+      timer = setTimeout(() => { void load(); }, 300);
   }
-  watch([query, view], schedule);
+  watch([query, view, () => scanView?.value], schedule);
   onMounted(() => {
     mounted = true;
     loading.value = !searchTooShort.value;
@@ -112,7 +170,8 @@ export function useSkillsCatalog(query: Ref<string>, view: Ref<SkillsView>) {
   });
   function showMore() {
     if (remaining.value) displayLimit.value += 48;
-    else if (metadata.value?.hasMore && !loadingMore.value) void load(true);
+    else if ((pending.value.length || metadata.value?.hasMore) && !loadingMore.value)
+      void load(true);
   }
   return {
     displayed,
@@ -123,8 +182,10 @@ export function useSkillsCatalog(query: Ref<string>, view: Ref<SkillsView>) {
     failed,
     remaining,
     hasMore,
+    scannedOnly,
+    scanReportUnavailable,
     searchTooShort,
     showMore,
-    retry: () => load(!query.value.trim() && Boolean(items.value.length)),
+    retry: () => load(false),
   };
 }
