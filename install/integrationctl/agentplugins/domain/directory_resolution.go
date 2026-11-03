@@ -106,4 +106,3 @@ func orderedDistributions(snapshot DirectorySnapshot, product DirectoryProduct) 
 	}
 	return result
 }
-

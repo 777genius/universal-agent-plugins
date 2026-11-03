@@ -2,8 +2,8 @@ package exampleclient
 
 import (
 	"go/parser"
-	"os"
 	"go/token"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
