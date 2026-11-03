@@ -14,8 +14,20 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// The macOS temp directory may be spelled /var/... while the filesystem
+// resolves it through /private/var/.... Gemini deliberately refuses aliases:
+// exercise the real canonical profile instead of weakening production policy.
+func canonicalGeminiTestRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(root, ".gemini")
+}
+
 func TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry(t *testing.T) {
-	configRoot := filepath.Join(t.TempDir(), ".gemini")
+	configRoot := canonicalGeminiTestRoot(t)
 	foreign := filepath.Join(configRoot, "skills", "human", "SKILL.md")
 	settings := filepath.Join(configRoot, "settings.json")
 	writeTestFile(t, foreign, "human authored Skill; preserve\n")
@@ -72,7 +84,7 @@ func TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry(t *testing.T
 }
 
 func TestGeminiLateNativeSkillDriftRefusesBeforeRename(t *testing.T) {
-	configRoot := filepath.Join(t.TempDir(), ".gemini")
+	configRoot := canonicalGeminiTestRoot(t)
 	writeTestFile(t, filepath.Join(configRoot, "settings.json"),
 		`{"theme":"night","mcpServers":{"unmanaged":{"url":"https://foreign.test/sse"}}}`)
 	activeV1, desiredV1 := geminiNativeFixture(t, configRoot, "v1", "https://docs.test/v1")
