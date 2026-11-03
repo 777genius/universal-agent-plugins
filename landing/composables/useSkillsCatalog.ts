@@ -186,6 +186,6 @@ export function useSkillsCatalog(
     scanReportUnavailable,
     searchTooShort,
     showMore,
-    retry: () => load(false),
+    retry: () => load(!query.value.trim() && Boolean(items.value.length)),
   };
 }
