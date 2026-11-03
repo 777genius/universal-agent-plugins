@@ -40,42 +40,48 @@ test('staged Skills interface renders every live catalog install command truthfu
   const cards = page.locator('.skills-catalog .skill-card');
   await expect(cards.first()).toBeVisible({ timeout: 30000 });
   assert.ok(livePage && livePage.items.length > 0, 'The live Skills API returned no items');
+  // Source-unavailable Skills are intentionally hidden. The real API page
+  // can contain entries with no safe installation command (e.g. Feishu).
+  // Compare cards to eligible source metadata, not the raw API total.
   const sample = livePage.items;
-  const initial = Math.min(sample.length, 48);
+  const eligible = sample.filter(item => Boolean(skillInstallCommand(item)));
+  assert.ok(eligible.length > 0, 'No command-eligible Skills in live catalog');
+  const initial = Math.min(eligible.length, 48);
   await expect(cards).toHaveCount(initial);
 
-  // Show every record on the first real API page, not only the first 48 cards.
-  for (let count = initial; count < sample.length; count = Math.min(count + 48, sample.length)) {
+  // This browser test verifies real API data and UI filtering; the separate
+  // native and published npm jobs prove actual installation on real sources.
+  for (let count = initial; count < eligible.length; count = Math.min(count + 48, eligible.length)) {
     await page.getByRole('button', { name: /Show more Skills/ }).last().click();
-    await expect(cards).toHaveCount(Math.min(count + 48, sample.length));
+    await expect(cards).toHaveCount(Math.min(count + 48, eligible.length));
   }
 
-  let installable = 0;
-  let legacyRecovered = 0;
-  let firstInstallable = -1;
-  for (const [index, item] of sample.entries()) {
-    const command = skillInstallCommand(item);
-    const button = cards.nth(index).getByRole('button', { name: `Install ${item.title}`, exact: true });
-    if (command) {
-      installable++;
-      if (firstInstallable === -1) firstInstallable = index;
-      if (item.availability === 'unsupported-source') legacyRecovered++;
-      await expect(button, `Missing install for real listing ${item.id}`).toHaveCount(1);
-    } else {
-      await expect(button, `Unsafe install exposed for real listing ${item.id}`).toHaveCount(0);
-    }
+  const renderedIds = await cards.evaluateAll(nodes =>
+    nodes.map(node => node.getAttribute('data-skill-id')));
+  expect(renderedIds).toEqual(eligible.map(item => item.id));
+  const unavailable = sample.filter(item => !skillInstallCommand(item));
+  for (const item of unavailable) {
+    expect(renderedIds, `Unsafe source must be hidden: ${item.id}`).not.toContain(item.id);
   }
-  assert.ok(installable > 0, 'No install commands visible for live Skills catalog');
-  assert.ok(firstInstallable >= 0);
-  await cards.nth(firstInstallable).getByRole('button', {
-    name: `Install ${sample[firstInstallable]!.title}`,
-    exact: true,
+
+  let legacyRecovered = 0;
+  for (const [index, item] of eligible.entries()) {
+    if (item.availability === 'unsupported-source') legacyRecovered++;
+    await expect(
+      cards.nth(index).getByRole('button', { name: `Install ${item.title}`, exact: true }),
+      `Missing command for actual source ${item.id}`,
+    ).toHaveCount(1);
+  }
+
+  await cards.first().getByRole('button', {
+    name: `Install ${eligible[0]!.title}`, exact: true,
   }).click();
-  await expect(cards.nth(firstInstallable).locator('.command-snippet code')).toHaveText(
-    skillInstallCommand(sample[firstInstallable]!)!,
+  await expect(cards.first().locator('.command-snippet code')).toHaveText(
+    skillInstallCommand(eligible[0]!)!,
   );
   console.log(JSON.stringify({
-    live: true, checked: sample.length, installable, legacyRecovered,
-    unavailable: sample.length - installable,
+    live: true, checked: sample.length, commandEligible: eligible.length,
+    legacyRecovered, hidden: unavailable.length,
+    physicalInstallationProvenHere: false,
   }));
 });
