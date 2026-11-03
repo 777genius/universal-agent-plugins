@@ -41,210 +41,240 @@
       "ref": "ca45fc496a3436251f191354091d557da31c15b5",
       "folder": "frontend-design",
       "name": "frontend-design",
-      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/frontend-design"
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/frontend-design",
+      "skill_md_git_blob_sha1": "a5333457c414d20d625f307df945842c0952ecc3"
     },
     {
       "repo": "anthropics/skills",
       "ref": "ca45fc496a3436251f191354091d557da31c15b5",
       "folder": "pdf",
       "name": "pdf",
-      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/pdf"
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/pdf",
+      "skill_md_git_blob_sha1": "d3e046a5ae107a6cb23cfb16c219837094ab35d3"
     },
     {
       "repo": "anthropics/skills",
       "ref": "ca45fc496a3436251f191354091d557da31c15b5",
       "folder": "docx",
       "name": "docx",
-      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/docx"
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/docx",
+      "skill_md_git_blob_sha1": "fb954a460a1ea2294e9595e87fecce8df043eeba"
     },
     {
       "repo": "anthropics/skills",
       "ref": "ca45fc496a3436251f191354091d557da31c15b5",
       "folder": "pptx",
       "name": "pptx",
-      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/pptx"
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/pptx",
+      "skill_md_git_blob_sha1": "41cd2306977f269bb1d8169a9643b35053aa66bd"
     },
     {
       "repo": "anthropics/skills",
       "ref": "ca45fc496a3436251f191354091d557da31c15b5",
       "folder": "xlsx",
       "name": "xlsx",
-      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/xlsx"
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/xlsx",
+      "skill_md_git_blob_sha1": "9da54804cc8c938586f89363c8da3b3a6e2a563d"
     },
     {
       "repo": "anthropics/skills",
       "ref": "ca45fc496a3436251f191354091d557da31c15b5",
       "folder": "skill-creator",
       "name": "skill-creator",
-      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/skill-creator"
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/skill-creator",
+      "skill_md_git_blob_sha1": "65b3a402dbd09b8e83f9d637c6b553875189085c"
     },
     {
       "repo": "anthropics/skills",
       "ref": "ca45fc496a3436251f191354091d557da31c15b5",
       "folder": "mcp-builder",
       "name": "mcp-builder",
-      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/mcp-builder"
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/mcp-builder",
+      "skill_md_git_blob_sha1": "d61a9056202a0f8b2d064c896e62f415c45b1bf1"
     },
     {
       "repo": "anthropics/skills",
       "ref": "ca45fc496a3436251f191354091d557da31c15b5",
       "folder": "webapp-testing",
       "name": "webapp-testing",
-      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/webapp-testing"
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/webapp-testing",
+      "skill_md_git_blob_sha1": "4726215301db64a0cc4d41fc3219c61f37a30f4a"
     },
     {
       "repo": "anthropics/skills",
       "ref": "ca45fc496a3436251f191354091d557da31c15b5",
       "folder": "algorithmic-art",
       "name": "algorithmic-art",
-      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/algorithmic-art"
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/algorithmic-art",
+      "skill_md_git_blob_sha1": "634f6fa42e4e697fa6afd293acd7fb8246574876"
     },
     {
       "repo": "anthropics/skills",
       "ref": "ca45fc496a3436251f191354091d557da31c15b5",
       "folder": "brand-guidelines",
       "name": "brand-guidelines",
-      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/brand-guidelines"
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/brand-guidelines",
+      "skill_md_git_blob_sha1": "47c72c607bdb5dd81bdea5de2b5e4f3992a5fd59"
     },
     {
       "repo": "vercel-labs/agent-skills",
       "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
       "folder": "composition-patterns",
       "name": "vercel-composition-patterns",
-      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/composition-patterns"
+      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/composition-patterns",
+      "skill_md_git_blob_sha1": "d07025bf943345bc1cf15eb923594f889ff881f0"
     },
     {
       "repo": "vercel-labs/agent-skills",
       "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
       "folder": "deploy-to-vercel",
       "name": "deploy-to-vercel",
-      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/deploy-to-vercel"
+      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/deploy-to-vercel",
+      "skill_md_git_blob_sha1": "f3bb68ba31294f0edf81fdb326ddc2666a24e0e0"
     },
     {
       "repo": "vercel-labs/agent-skills",
       "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
       "folder": "react-best-practices",
       "name": "vercel-react-best-practices",
-      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/react-best-practices"
+      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/react-best-practices",
+      "skill_md_git_blob_sha1": "237988de4a66dd8a71d30a2c24ebe1a86b58d04e"
     },
     {
       "repo": "vercel-labs/agent-skills",
       "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
       "folder": "react-native-skills",
       "name": "vercel-react-native-skills",
-      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/react-native-skills"
+      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/react-native-skills",
+      "skill_md_git_blob_sha1": "73401865dd7440a43c5243b107a3763e0d2f4aae"
     },
     {
       "repo": "vercel-labs/agent-skills",
       "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
       "folder": "react-view-transitions",
       "name": "vercel-react-view-transitions",
-      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/react-view-transitions"
+      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/react-view-transitions",
+      "skill_md_git_blob_sha1": "665db73fe55b2504d1123857f14606472cdefd0a"
     },
     {
       "repo": "vercel-labs/agent-skills",
       "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
       "folder": "vercel-optimize",
       "name": "vercel-optimize",
-      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/vercel-optimize"
+      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/vercel-optimize",
+      "skill_md_git_blob_sha1": "c8a6d6d7075b2cc3f7921da89de86e6926f78985"
     },
     {
       "repo": "vercel-labs/agent-skills",
       "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
       "folder": "web-design-guidelines",
       "name": "web-design-guidelines",
-      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/web-design-guidelines"
+      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/web-design-guidelines",
+      "skill_md_git_blob_sha1": "ceae92ab319216a68274168fba9b63b998b65997"
     },
     {
       "repo": "vercel-labs/agent-skills",
       "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
       "folder": "writing-guidelines",
       "name": "writing-guidelines",
-      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/writing-guidelines"
+      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/writing-guidelines",
+      "skill_md_git_blob_sha1": "63facf310252a990d154bed12b3dcdd295ba771a"
     },
     {
       "repo": "cloudflare/skills",
       "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
       "folder": "cloudflare",
       "name": "cloudflare",
-      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/cloudflare"
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/cloudflare",
+      "skill_md_git_blob_sha1": "695d8d6db7553e5fc151393ea891e00e44fd9477"
     },
     {
       "repo": "cloudflare/skills",
       "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
       "folder": "workers-best-practices",
       "name": "workers-best-practices",
-      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/workers-best-practices"
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/workers-best-practices",
+      "skill_md_git_blob_sha1": "d150906f403b130b68e7e47b958c4e46fbd053f3"
     },
     {
       "repo": "cloudflare/skills",
       "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
       "folder": "durable-objects",
       "name": "durable-objects",
-      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/durable-objects"
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/durable-objects",
+      "skill_md_git_blob_sha1": "80fb75785e42c023cd3cdcbf5b9a9ac6909ecc25"
     },
     {
       "repo": "cloudflare/skills",
       "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
       "folder": "nextjs-on-cloudflare",
       "name": "nextjs-on-cloudflare",
-      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/nextjs-on-cloudflare"
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/nextjs-on-cloudflare",
+      "skill_md_git_blob_sha1": "765fd91d545f537ae99fdfac3326ecc566ec3c5f"
     },
     {
       "repo": "cloudflare/skills",
       "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
       "folder": "web-perf",
       "name": "web-perf",
-      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/web-perf"
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/web-perf",
+      "skill_md_git_blob_sha1": "9c70b7079aef1fbac9af3669bd38d5dfb712f4b7"
     },
     {
       "repo": "cloudflare/skills",
       "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
       "folder": "workers-profiling",
       "name": "workers-profiling",
-      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/workers-profiling"
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/workers-profiling",
+      "skill_md_git_blob_sha1": "792be905e836a3a892200f2c9f5a3ecbdc710314"
     },
     {
       "repo": "remotion-dev/skills",
       "ref": "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271",
       "folder": "remotion-best-practices",
       "name": "remotion-best-practices",
-      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-best-practices"
+      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-best-practices",
+      "skill_md_git_blob_sha1": "9adb9f6b0029586d2590a6bbae024693b16ec921"
     },
     {
       "repo": "remotion-dev/skills",
       "ref": "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271",
       "folder": "remotion-captions",
       "name": "remotion-captions",
-      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-captions"
+      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-captions",
+      "skill_md_git_blob_sha1": "e3603180e50a5c11898bec266ccc3dd3b93ca2b7"
     },
     {
       "repo": "remotion-dev/skills",
       "ref": "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271",
       "folder": "remotion-interactivity",
       "name": "remotion-interactivity",
-      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-interactivity"
+      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-interactivity",
+      "skill_md_git_blob_sha1": "6f2f4547149bda5f6f2e5369cdbe1b7e6b61a8e4"
     },
     {
       "repo": "remotion-dev/skills",
       "ref": "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271",
       "folder": "remotion-maps",
       "name": "remotion-maps",
-      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-maps"
+      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-maps",
+      "skill_md_git_blob_sha1": "10b9269e6e0ec81bd0110dd795099b5ff8998c94"
     },
     {
       "repo": "remotion-dev/skills",
       "ref": "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271",
       "folder": "remotion-render",
       "name": "remotion-render",
-      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-render"
+      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-render",
+      "skill_md_git_blob_sha1": "67700b89473c0bd92b5ae588e6484946c8224085"
     },
     {
       "repo": "remotion-dev/skills",
       "ref": "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271",
       "folder": "remotion-upgrade",
       "name": "remotion-upgrade",
-      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-upgrade"
+      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-upgrade",
+      "skill_md_git_blob_sha1": "3f06e753b757863ec3abae805ea7bdc53725c5c9"
     }
   ],
   "targets": [
