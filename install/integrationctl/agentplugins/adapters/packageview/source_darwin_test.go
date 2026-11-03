@@ -306,7 +306,12 @@ func detachFixture(image, mount string, directory *fixtureDirectory) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var diagnostics strings.Builder
-	for attempt := 1; attempt <= 4; attempt++ {
+	// macOS Disk Arbitration may still hold a just-unmounted APFS device for
+	// several seconds. Retry only a verified, owned whole-device detach while
+	// resource-busy; each retry rechecks native inventory and pinned directory
+	// identity. No forced detach or relaxation of foreign ownership is allowed.
+	const maxDetachAttempts = 12
+	for attempt := 1; attempt <= maxDetachAttempts; attempt++ {
 		target, e := fixtureDetachTarget(ctx, image, mount, directory)
 		if e != nil {
 			return fmt.Errorf("%sverify fixture before detach: %w", diagnostics.String(), e)
@@ -323,10 +328,14 @@ func detachFixture(image, mount string, directory *fixtureDirectory) error {
 		if target == "" {
 			return nil
 		}
-		if detachErr == nil || !strings.Contains(strings.ToLower(string(out)), "resource busy") || attempt == 4 {
+		if detachErr == nil || !strings.Contains(strings.ToLower(string(out)), "resource busy") || attempt == maxDetachAttempts {
 			return fmt.Errorf("%sfixture still attached at %s", diagnostics.String(), mount)
 		}
-		timer := time.NewTimer(time.Duration(attempt) * 250 * time.Millisecond)
+		delay := time.Duration(attempt) * 250 * time.Millisecond
+		if delay > 1500*time.Millisecond {
+			delay = 1500 * time.Millisecond
+		}
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
