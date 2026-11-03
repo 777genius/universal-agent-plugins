@@ -24,6 +24,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             "USERPROFILE": "/outside/actual-user-home",
             "XDG_CONFIG_HOME": "/outside/config",
             "XDG_DATA_HOME": "/outside/data",
+            "APPDATA": "/outside/real/windows-roaming",
+            "LOCALAPPDATA": "/outside/real/windows-local",
             "GIT_CONFIG_COUNT": "1",
             "GIT_CONFIG_KEY_0": "core.hooksPath",
             "GIT_CONFIG_VALUE_0": "/outside/hooks",
@@ -44,7 +46,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     self.assertNotIn(key, env)
             for key in ("HOME", "USERPROFILE", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
                         "XDG_CACHE_HOME", "XDG_STATE_HOME", "GIT_CONFIG_GLOBAL",
-                        "AGENTPLUGINS_HOME", "TMPDIR"):
+                        "APPDATA", "LOCALAPPDATA", "AGENTPLUGINS_HOME", "TMPDIR"):
                 self.assertTrue(Path(env[key]).resolve().is_relative_to(case.resolve()), (key, env[key]))
             self.assertEqual(env["GEMINI_CLI_HOME"], str(home))
             for key in ("GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0",
