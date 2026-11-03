@@ -96,7 +96,7 @@ jobs:
         run: python -B -m unittest discover -s scripts -p test_package_manager_ci_policy.py
       - name: Execute the full portable catalog
         run: python -B scripts/package-manager-e2e.py --output "${{ runner.temp }}/package-manager-e2e"
-      - name: Verify agreement-file limits, leaf identities and ownership refusals
+      - name: Verify native failure boundaries, agreement files and ownership refusals
         shell: bash
         run: |
           set -euo pipefail
@@ -108,12 +108,21 @@ jobs:
           ) >> "$events"
           go test -count=1 -timeout=8m -json ./cli/internal/agentpluginscli \
             -run '^(TestDependencyAgreementOversizedBytesFailClosed|TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized|TestDependencyAgreementReaderRejectsSymlinkAndKeepsTarget|TestDependencyIntentFilesRejectOversizedWriteWithoutMutation|TestSkillsReviewForeignDestinationSafeGuidance|TestSkillsReviewManagedSkillChanged|TestDependencyCandidateSizePreflightProtectsManifestAndLock|TestDependencyManagementRecoveryReaderIsBounded|TestGeneratedOversizedLockRefusesBeforeStorePublication)$' >> "$events"
+          (
+            cd install/integrationctl/agentplugins
+            go test -count=1 -timeout=8m -json ./providers ./clients/kiro \
+              -run '^(TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry|TestGeminiLateNativeSkillDriftRefusesBeforeRename|TestClineLateNativeSkillDriftRefusesBeforeRename|TestKiroNativeBackupRejectsEditDuringRenameWithoutDeletingUserBytes)$'
+          ) >> "$events"
           python - "$events" <<'PY'
           import json
           import sys
           with open(sys.argv[1], encoding="utf-8") as stream:
               events = [json.loads(line) for line in stream if line.strip()]
           tests = {
+              "TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry",
+              "TestGeminiLateNativeSkillDriftRefusesBeforeRename",
+              "TestClineLateNativeSkillDriftRefusesBeforeRename",
+              "TestKiroNativeBackupRejectsEditDuringRenameWithoutDeletingUserBytes",
               "TestValidateLeafID",
               "TestDependencyAgreementOversizedBytesFailClosed",
               "TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized",
@@ -136,7 +145,7 @@ jobs:
                   raise SystemExit(f"Go package {package} failed")
           if any(item.get("Action") in {"fail", "skip"} for item in events):
               raise SystemExit("agreement boundary suite failed or skipped")
-          print("Ten policy tests executed and passed; no false-green or skipped checks")
+          print("Fourteen critical policy and native ownership tests ran and passed; no false-green or skips")
           PY
       - name: Verify Win32 Unicode aliases across ZIP, TAR, source and snapshot
         shell: bash
