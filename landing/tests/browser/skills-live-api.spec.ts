@@ -36,7 +36,7 @@ test('staged Skills interface renders every live catalog install command truthfu
     });
   });
 
-  await page.goto('plugins/?tab=skills');
+  await page.goto('plugins/?tab=skills&skillScan=all');
   const cards = page.locator('.skills-catalog .skill-card');
   await expect(cards.first()).toBeVisible({ timeout: 30000 });
   assert.ok(livePage && livePage.items.length > 0, 'The live Skills API returned no items');

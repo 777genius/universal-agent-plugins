@@ -294,6 +294,11 @@ function dropTransientFailures<T>(cache: Map<string, CachedRequest<T>>): void {
 }
 
 /** Shared session cache; transient failures recover on explicit retry or later demand. */
+export interface SkillSpectorCoverageSummary {
+  generatedAt: string;
+  coverage: SkillSpectorManifestV3['coverage'];
+}
+
 export function createSkillSpectorClient(
   manifestUrl: string,
   legacyUrl: string,
@@ -314,6 +319,7 @@ export function createSkillSpectorClient(
     string,
     CachedRequest<SkillSpectorReport | SkillSpectorManifest | SkillSpectorManifestV3>
   >();
+  let legacyFallback = false;
   const loadManifest = () =>
     cachedRequest(manifests, 'manifest', () =>
       v3ManifestUrl
@@ -324,7 +330,10 @@ export function createSkillSpectorClient(
               throw error;
             })
         : legacyManifest(),
-    );
+    ).then((manifest) => {
+      legacyFallback = Boolean(v3ManifestUrl && manifest.schema_version !== 3);
+      return manifest;
+    });
   const repositories = new Map<string, CachedRequest<SkillSpectorDisplayReport>>();
   const shards = new Map<string, CachedRequest<SkillSpectorRecord[]>>();
   let active = 0;
@@ -414,6 +423,35 @@ export function createSkillSpectorClient(
   };
   return {
     reportFor,
+    retryFailedRequests() {
+      // A missing v3 publication may have appeared since this successful legacy fallback.
+      // Preserve validated v3 snapshots; only explicit filter retry revisits fallback.
+      if (legacyFallback) {
+        manifests.clear();
+        repositories.clear();
+        legacyFallback = false;
+      }
+      dropTransientFailures(manifests);
+      dropTransientFailures(shards);
+      dropTransientFailures(repositories);
+    },
+    async currentSourceStateIds(): Promise<ReadonlySet<string>> {
+      const manifest = await loadManifest();
+      if (manifest.schema_version !== 3) return new Set();
+      const ids: string[] = [];
+      for (const state of manifest.source_states) {
+        if (state.current === true && state.state === 'resolved' &&
+            typeof state.id === 'string' && Array.isArray(state.selected_ids) &&
+            state.selected_ids.length === 1) ids.push(state.id);
+      }
+      return new Set(ids);
+    },
+    async coverageSummary(): Promise<SkillSpectorCoverageSummary | undefined> {
+      const manifest = await loadManifest();
+      return manifest.schema_version === 3
+        ? { generatedAt: manifest.generated_at, coverage: manifest.coverage }
+        : undefined;
+    },
     retryReportFor(repositoryName: string): Promise<SkillSpectorDisplayReport> {
       // Preserve validated successful results and requests still in flight.
       // Only previously failed transport requests are eligible for re-fetch.

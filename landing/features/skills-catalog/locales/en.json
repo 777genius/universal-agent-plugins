@@ -68,6 +68,34 @@
         "viewPublisher": "View publisher source",
         "revision": "Source revision",
         "rawDocument": "View complete SKILL.md source"
+      },
+      "scanFilterLabel": "Scan coverage",
+      "scanModes": {
+        "scanned": "With a current scan",
+        "all": "All installable Skills"
+      },
+      "scanNotice": "Only Skills with an executed scan of their currently published source are shown. Partial coverage is labeled; scanning does not guarantee safety or installation.",
+      "scanNone": "No Skills with a current scan were found in this bounded selection.",
+      "scanHelp": "Switch to All installable Skills to browse without scan evidence.",
+      "scanClear": "Browse all installable Skills",
+      "scanReportUnavailable": "Some scan reports could not be verified. Those Skills were excluded.",
+      "scanSnapshot": "Published {date}: {complete} complete, {partial} partial, {error} failed, {pending} awaiting a current check ({stale} have older reports), out of {selected} selected scan targets.",
+      "scanSnapshotHelp": "This is the latest published static-scan snapshot, not live service uptime or a guarantee of safety.",
+      "filters": {
+        "button": "Filters",
+        "active": "{count} active filters",
+        "title": "Filter Skills",
+        "close": "Close",
+        "description": "Changes apply immediately. Both filters can be used together.",
+        "scanned": "Scanned by SkillSpector",
+        "scannedHelp": "Current source inspected. Partial checks are included and labeled.",
+        "noRemarks": "No remarks",
+        "noRemarksHelp": "Complete current static analysis with zero content findings. Incomplete or unavailable checks are excluded. This does not guarantee safety.",
+        "reset": "Reset filters",
+        "moreCandidates": "More Skills can be checked",
+        "moreCandidatesHelp": "No matches in this window. Show more to check the remaining candidates.",
+        "noMatches": "No Skills match these filters",
+        "noMatchesHelp": "Try another search or reset the filters to browse all installable Skills."
       }
     },
     "directoryPage": {

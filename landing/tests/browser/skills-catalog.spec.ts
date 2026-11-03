@@ -44,7 +44,7 @@ test('Skills search reveals install choices, copies the exact command and surviv
       },
     });
   });
-  await page.goto('plugins/?tab=skills');
+  await page.goto('plugins/?tab=skills&skillScan=all');
   const catalog = page.locator('.skills-catalog');
   await expect(
     page.getByRole('heading', { level: 1, name: 'Find your Skills', exact: true }),
@@ -98,7 +98,7 @@ test('Skills search reveals install choices, copies the exact command and surviv
   await expect(
     catalog.locator('.skill-card').first().locator('.plugin-card__install-panel pre'),
   ).toContainText('--target codex');
-  await page.goto('./?tab=skills');
+  await page.goto('./?tab=skills&skillScan=all');
   await expect(
     page.getByRole('heading', { level: 2, name: 'Find your Skills', exact: true }),
   ).toBeVisible();
@@ -122,7 +122,7 @@ test('Skills renders in 48-item increments and requests the next upstream page o
       },
     });
   });
-  await page.goto('plugins/?tab=skills');
+  await page.goto('plugins/?tab=skills&skillScan=all');
   const catalog = page.locator('.skills-catalog');
   await expect(catalog.locator('.skill-card')).toHaveCount(48);
   await expect(catalog.locator('.catalog-count')).toHaveText('Showing 48 Skills');
@@ -160,7 +160,7 @@ test('unresolvable external Skills are hidden without fetching SkillSpector repo
       cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' },
     } }),
   );
-  await page.goto('plugins/?tab=skills');
+  await page.goto('plugins/?tab=skills&skillScan=all');
   await expect(page.locator('.skills-catalog .skill-card')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'No matching Skills' })).toBeVisible();
   expect(reports).toEqual([]);
@@ -212,7 +212,7 @@ test('legacy API website publisher offers safe Install while malformed sources r
     });
   });
 
-  await page.goto('plugins/?tab=skills');
+  await page.goto('plugins/?tab=skills&skillScan=all');
   const cards = page.locator('.skills-catalog .skill-card');
   await expect(cards).toHaveCount(1);
   const recovered = cards.first();
@@ -246,7 +246,7 @@ test('known non-installable Feishu sources are hidden even with canonical HTTPS 
       cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' },
     } }),
   );
-  await page.goto('plugins/?tab=skills');
+  await page.goto('plugins/?tab=skills&skillScan=all');
   await expect(page.locator('.skills-catalog .skill-card')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'No matching Skills' })).toBeVisible();
 });
@@ -288,7 +288,7 @@ test('unverified GitHub Skill names open the installer picker without guessing a
       },
     }),
   );
-  await page.goto('plugins/?tab=skills');
+  await page.goto('plugins/?tab=skills&skillScan=all');
   const card = page.locator('.skills-catalog .skill-card').first();
   await card.getByRole('button', { name: 'Install Unverified listing', exact: true }).click();
   await expect(card.locator('.command-snippet code')).toHaveText(
@@ -344,7 +344,7 @@ test('Website publisher Skills install with UAP and open their own detail page',
       },
     }),
   );
-  await page.goto('plugins/?tab=skills');
+  await page.goto('plugins/?tab=skills&skillScan=all');
   const card = page.locator('.skills-catalog .skill-card');
   await expect(card).not.toContainText('No verified install source');
   await expect(card.getByRole('link', { name: 'Publisher source' })).toHaveAttribute(
@@ -433,7 +433,7 @@ test('catalog backfills 48 installable Skills across real upstream pages', async
         cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' } },
     });
   });
-  await page.goto('plugins/?tab=skills');
+  await page.goto('plugins/?tab=skills&skillScan=all');
   const cards = page.locator('.skills-catalog .skill-card');
   await expect(cards).toHaveCount(48);
   expect(requested).toEqual([0, 1]);
@@ -458,7 +458,7 @@ test('document API rejects noncanonical remote source detail links without a fai
       cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' },
     } }),
   );
-  await page.goto('plugins/?tab=skills');
+  await page.goto('plugins/?tab=skills&skillScan=all');
   const card = page.locator('.skills-catalog .skill-card').first();
   await expect(card).toHaveCount(1);
   await expect(card.getByRole('button', { name: 'Install frontend-design' })).toBeVisible();
@@ -478,7 +478,7 @@ test('explicit legacy GitHub URL sources display a safe install command', async 
       cache: { status: 'fresh', fetchedAt: '2026-11-02T10:00:00Z' },
     } }),
   );
-  await page.goto('plugins/?tab=skills');
+  await page.goto('plugins/?tab=skills&skillScan=all');
   const card = page.locator('.skills-catalog .skill-card').first();
   await expect(card).toHaveCount(1);
   await card.getByRole('button', { name: 'Install frontend-design' }).click();

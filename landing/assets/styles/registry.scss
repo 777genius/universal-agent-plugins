@@ -410,7 +410,8 @@ img {
   inset: 0;
   z-index: 11000;
 }
-.hero-demo-video__launch {
+// Outrank Vuetify's later [type="button"] color reset regardless of stylesheet order.
+.hero-demo-video .hero-demo-video__launch {
   position: absolute;
   inset: 0;
   width: 100%;

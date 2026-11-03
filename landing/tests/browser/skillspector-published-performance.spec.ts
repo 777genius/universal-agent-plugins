@@ -103,7 +103,7 @@ async function publishedHome(page: Page, context: BrowserContext, isolated = fal
   const report = page.locator(
     `[data-install-source=${JSON.stringify(isolated ? 'i18n-state-00' : cloudflareSource)}] details.skillspector`,
   );
-  await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 checked · 10 not fully checked|Coverage has limits)/);
+  await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 checked · 10 not fully checked|Incomplete scan)/);
   return { report, errors, requests, registryRequests: () => registryRequests };
 }
 
@@ -147,7 +147,7 @@ test('published large reports keep closed cards unmounted after real data and ap
   expect(noSkills).toEqual(expectedNoSkills);
   await expect(page.locator('details.skillspector')).toHaveCount(expectedSources.length);
   await expect(page.locator('.skillspector__details')).toHaveCount(0);
-  await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 checked · 10 not fully checked|Coverage has limits)/);
+  await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 checked · 10 not fully checked|Incomplete scan)/);
   expect(requests.get('index.json')).toBe(1);
   for (const shard of shards) expect(requests.get(shard.path)).toBe(1);
   expect(errors).toEqual([]);

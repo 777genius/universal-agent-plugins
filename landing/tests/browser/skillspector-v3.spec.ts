@@ -67,11 +67,23 @@ async function setup(
     | 'truncated'
     | 'unsupportedSource' = 'mixed',
   reportGate?: Promise<void>,
+  withSecurity = false,
 ) {
   const errors = await offline(page);
   const index = registryFixture();
   const plugin = index.plugins[0]!;
   plugin.components = ['skills'];
+  if (withSecurity) {
+    plugin.security = {
+      generated_at: '2026-11-03T00:00:00Z',
+      scanner: { id: 'fixture-scanner', version: '1.0.0' },
+      policy: { id: 'fixture-policy', version: 1, digest: `sha256:${'a'.repeat(64)}` },
+      outcome: 'warnings',
+      counts: { blocking: 0, warnings: 1, total: 1 },
+      scanned_files: 1,
+      findings: [],
+    };
+  }
   const manifest = structuredClone(fixture);
   const shard = structuredClone(producerShard);
   Object.assign(plugin.source, {
@@ -398,6 +410,7 @@ async function setup(
     };
     Object.assign(manifest.source_states[0]!, {
       state: 'unsupported',
+      current: false,
       reason: 'unsupported_source_type',
       selected_ids: [],
     });
@@ -414,7 +427,7 @@ async function setup(
       : route.fulfill({ body, contentType: 'application/json' });
   });
   await projections(page, index);
-  await navigate(page, '/plugins/', 'en', standalone ? '?tab=skills' : '?q=i18n-state-00');
+  await navigate(page, '/plugins/', 'en', standalone ? '?tab=skills&skillScan=all' : '?q=i18n-state-00');
   return {
     assessment: page.locator(
       standalone
@@ -427,6 +440,19 @@ async function setup(
     body,
   };
 }
+test('automated review and Skill scan have separate lines on plugin cards', async ({ page }) => {
+  const { assessment } = await setup(page, 'mixed', undefined, true);
+  const group = assessment.locator('xpath=ancestor::*[contains(@class, "plugin-card__assessments")]');
+  const security = group.locator('.plugin-card__security');
+  await expect(security).toBeVisible();
+  await expect(assessment.locator(':scope > summary')).toBeVisible();
+  const reviewBox = await security.boundingBox();
+  const scanBox = await assessment.locator(':scope > summary').boundingBox();
+  expect(reviewBox).not.toBeNull();
+  expect(scanBox).not.toBeNull();
+  expect(scanBox!.y).toBeGreaterThanOrEqual(reviewBox!.y + reviewBox!.height - 1);
+});
+
 for (const width of [1280, 390]) {
   test(`v3 reports 13 checks and 10 incomplete and puts review context before technical details (${width})`, async ({
     page,
@@ -542,7 +568,7 @@ for (const width of [1280, 390]) {
     const summary = assessment.locator(':scope > summary');
     await expect(summary).toContainText('12/13 scanned');
     await expect(summary).toContainText('1 previous');
-    await expect(summary).not.toContainText('Skill scan · Previous check');
+    await expect(summary).not.toContainText('Skill scan · Outdated scan');
     await summary.click();
     await expect(assessment.locator('.skillspector__advice')).toContainText(
       'Some Skill results were imported from older scan formats',
@@ -593,7 +619,7 @@ for (const mode of ['singleLimited', 'pendingLimited'] as const) {
       await expect(assessment).toHaveClass(/skillspector--incomplete/);
       await expect(assessment.locator(':scope > summary')).toContainText(
         mode === 'singleLimited'
-          ? 'Skill scan · Coverage has limits'
+          ? 'Skill scan · Incomplete scan'
           : 'Skill scan · 1/5 checked · 4 awaiting · 1 not fully checked',
       );
       await expect(assessment.locator(':scope > summary')).not.toContainText('Incomplete check');
@@ -647,7 +673,7 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
     if (mode === 'stale') {
       // A source revision mismatch has no verified current inventory denominator.
       // Report prior evidence without implying that the old 13 roots are current.
-      await expect(assessment.locator(':scope > summary')).toContainText('Previous check');
+      await expect(assessment.locator(':scope > summary')).toContainText('Outdated scan');
     }
     await assessment.locator(':scope > summary').click();
     if (mode === 'stale') {
@@ -658,7 +684,7 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
         'Older report only',
       );
       await expect(assessment.locator('.skillspector__record-summary').first()).toContainText(
-        'Previous check',
+        'Outdated scan',
       );
     }
     if (mode === 'stale' || mode === 'unsupported') {
@@ -747,7 +773,7 @@ test('v3 distinguishes selected roots from known complete plugin inventory', asy
   // Every selected Skill has an executed partial or complete scan. The absent
   // package inventory changes the denominator's provenance, not the result.
   await expect(assessment.locator(':scope > summary')).toContainText(
-    'Skill scan · Coverage has limits',
+    'Skill scan · Incomplete scan',
   );
   await assessment.locator(':scope > summary').click();
   await expect(assessment.locator('.skillspector__advice')).toContainText(
@@ -895,10 +921,20 @@ test('unsupported standalone sources do not render cards or fetch reports', asyn
     }),
   );
   await projections(page, registryFixture());
-  await navigate(page, '/plugins/', 'en', '?tab=skills');
+  // The explicit all-Skills mode must not fetch scanner evidence for an
+  // unsupported, non-installable source.
+  await navigate(page, '/plugins/', 'en', '?tab=skills&skillScan=all');
+  await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('.skill-card')).toHaveCount(0);
+  expect(requests).toEqual([]);
+
+  // The explicit scanned filter consults the global publication index.
+  // No per-source shard may be loaded for an unsupported source.
+  await navigate(page, '/plugins/', 'en', '?tab=skills&skillScan=scanned');
+  await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false');
   await expect(page.locator('.skill-card')).toHaveCount(0);
   await expect(page.locator('.skillspector--noSkills')).toHaveCount(0);
-  expect(requests).toEqual([]);
+  expect(requests.every(url => url.endsWith('/index.json'))).toBe(true);
   expect(errors).toEqual([]);
 });
 

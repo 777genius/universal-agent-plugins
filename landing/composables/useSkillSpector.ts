@@ -7,6 +7,19 @@ import {
 
 const clients = new WeakMap<object, ReturnType<typeof createSkillSpectorClient>>();
 
+/** One content-digest-validated client per Nuxt app. */
+export function sharedSkillSpectorClient(
+  app: object,
+  urls: { v1: string; v2: string; v3: string },
+) {
+  let client = clients.get(app);
+  if (!client) {
+    client = createSkillSpectorClient(urls.v2, urls.v1, fetch, urls.v3);
+    clients.set(app, client);
+  }
+  return client;
+}
+
 /** Shared immutable report cache, with loading/failure state local to the requested repository. */
 export function useSkillSpector(subject: MaybeRefOrGetter<SkillSpectorSubject | undefined>) {
   const config = useRuntimeConfig();
@@ -16,19 +29,11 @@ export function useSkillSpector(subject: MaybeRefOrGetter<SkillSpectorSubject | 
   const recoverable = ref(false);
   const mounted = ref(false);
   let generation = 0;
-  const getClient = () => {
-    let client = clients.get(app);
-    if (!client) {
-      client = createSkillSpectorClient(
-        String(config.public.skillspectorManifestUrl),
-        String(config.public.skillspectorReportsUrl),
-        fetch,
-        String(config.public.skillspectorV3ManifestUrl),
-      );
-      clients.set(app, client);
-    }
-    return client;
-  };
+  const getClient = () => sharedSkillSpectorClient(app, {
+    v1: String(config.public.skillspectorReportsUrl),
+    v2: String(config.public.skillspectorManifestUrl),
+    v3: String(config.public.skillspectorV3ManifestUrl),
+  });
   const load = async (repository: string, current: number, retryFailed = false) => {
     report.value = undefined;
     recoverable.value = false;
