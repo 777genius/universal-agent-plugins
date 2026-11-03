@@ -364,7 +364,7 @@ Pin compatible SDK and CLI versions separately; see the
 
 ## Build plugins
 
-Create a folder with a root `plugin.json`, plus optional `skills/` and `mcp.json`.
+Create a package with a root `plugin.json`, with optional `skills/` and `mcp.json`.
 Validate and install it with the [local-package commands](#more-commands).
 The [Build guide](https://universal-agent-plugins.com/docs/en/build/) covers
 Skills and MCP packages; start with the
@@ -384,12 +384,12 @@ agentplugins author inspect ./my-plugin
 agentplugins author test ./my-plugin
 ```
 
-`author test` and `author dev` can run MCP servers. Dependency bootstrap apply
-and local stdio development require Linux; bootstrap dry-run works elsewhere.
-Stdio checks need process containment, bubblewrap, and a supported system Node
-path; see the [stdio guide](https://universal-agent-plugins.com/docs/en/build/mcp-stdio.html).
-Client projection, export/bundle, and publication are not exposed by the
-authoring CLI.
+In qualified/source builds, MCP execution is available through `author test` and `author dev`.
+Dependency bootstrap apply currently requires Linux; dry-run planning can be used on other platforms.
+Local stdio runtime checks and development require Linux, successful process-containment and bubblewrap preflights, and a supported system Node path.
+See the [stdio guide](https://universal-agent-plugins.com/docs/en/build/mcp-stdio.html) for prerequisites.
+Client projection, export/bundle, and publication are not exposed by the current authoring CLI.
+`plugin.json` is the only supported authoring manifest.
 
 [Native Agent Plugins releases](https://github.com/777genius/universal-agent-plugins/releases)
 use `agentplugins-v*` tags; they do not include these authoring commands.
