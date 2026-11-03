@@ -81,8 +81,7 @@ one repository, use [project installation](#install-for-one-project).
 
 ### Install the CLI
 
-Choose one method. Only npm requires Node.js; Homebrew and the native scripts
-do not.
+Choose one method. The native CLI does not require Node.js; only npm does.
 
 **macOS and Linux — Homebrew:**
 
