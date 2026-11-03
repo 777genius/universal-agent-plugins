@@ -44,13 +44,16 @@ export function hasCurrentPublishedScan(
     item.state === 'resolved',
   );
   if (!state || !Array.isArray(state.selected_ids) || state.selected_ids.length !== 1 ||
-      typeof state.revision !== 'string') return false;
+      typeof state.revision !== 'string' || typeof state.path !== 'string') return false;
+  const selectedId: unknown = state.selected_ids[0];
+  if (typeof selectedId !== 'string') return false;
   return report.records.some((record) =>
-    record.id === state.selected_ids[0] &&
+    record.id === selectedId &&
     record.kind === 'standalone_skill' &&
     record.skill_name === subject.name &&
     record.source.repository.toLowerCase() === subject.repository &&
     record.source.revision === state.revision &&
+    record.source.path === state.path &&
     record.target_revision === state.revision &&
     record.freshness === 'current' &&
     record.execution?.state === 'completed' &&
