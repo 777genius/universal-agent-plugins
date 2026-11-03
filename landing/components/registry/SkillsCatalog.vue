@@ -1,7 +1,21 @@
 <script setup lang="ts">
 import type { SkillsView } from '~/types/skillsCatalog';
-import type { SkillsScanView } from '~/composables/useSkillsCatalog';
-import { restoreSkillsQuery, skillsCatalogQuery } from '~/utils/skillsCatalog';
+import {
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogOverlay,
+  DialogPortal,
+  DialogRoot,
+  DialogTitle,
+  DialogTrigger,
+} from 'reka-ui';
+import {
+  restoreSkillsQuery,
+  restoreSkillsFilters,
+  skillsCatalogQuery,
+  skillsFiltersQuery,
+} from '~/utils/skillsCatalog';
 import { canonicalPath } from '~/utils/seo';
 
 defineProps<{ hideHeading?: boolean }>();
@@ -12,21 +26,29 @@ const router = useRouter();
 const initial = restoreSkillsQuery(route.query);
 const query = ref(initial.query);
 const view = ref<SkillsView>(initial.view);
-const scanMode = ref<SkillsScanView>(route.query.skillScan === 'all' ? 'all' : 'scanned');
+const filters = ref(restoreSkillsFilters(route.query));
+const filtersOpen = ref(false);
+const activeFilterCount = computed(
+  () => Number(filters.value.scannedOnly) + Number(filters.value.noRemarksOnly),
+);
+function clearFilters() {
+  filters.value = { scannedOnly: false, noRemarksOnly: false };
+}
 /** Normalize the URL state, including the explicitly requested unfiltered mode. */
 const routeState = () => ({
   ...restoreSkillsQuery(route.query),
-  scanMode: route.query.skillScan === 'all' ? 'all' : 'scanned',
+  ...restoreSkillsFilters(route.query),
 });
 let syncing = false;
 let disposed = false;
 let pending: string | undefined;
 /** Compare route and local state without overwriting a newer user selection. */
-const fingerprint = () => JSON.stringify({
-  query: query.value.trim(),
-  view: view.value,
-  scanMode: scanMode.value,
-});
+const fingerprint = () =>
+  JSON.stringify({
+    query: query.value.trim(),
+    view: view.value,
+    ...filters.value,
+  });
 watch(
   () => route.query,
   () => {
@@ -34,7 +56,7 @@ watch(
     if (JSON.stringify(restored) === pending) return;
     query.value = restored.query;
     view.value = restored.view;
-    scanMode.value = restored.scanMode as SkillsScanView;
+    filters.value = { scannedOnly: restored.scannedOnly, noRemarksOnly: restored.noRemarksOnly };
   },
 );
 /** Serialize changes to avoid navigation races while keeping the shareable filter URL. */
@@ -45,9 +67,10 @@ async function syncQuery() {
     while (!disposed) {
       if (fingerprint() === JSON.stringify(routeState())) break;
       pending = fingerprint();
-      const params = skillsCatalogQuery(query.value, view.value, route.query);
-      if (scanMode.value === 'all') params.skillScan = 'all';
-      else delete params.skillScan;
+      const params = skillsFiltersQuery(
+        skillsCatalogQuery(query.value, view.value, route.query),
+        filters.value,
+      );
       const failure = await router.replace({
         path: canonicalPath(route.path),
         query: params,
@@ -60,7 +83,7 @@ async function syncQuery() {
     syncing = false;
   }
 }
-watch([query, view, scanMode], () => {
+watch([query, view, () => filters.value.scannedOnly, () => filters.value.noRemarksOnly], () => {
   void syncQuery();
 });
 onScopeDispose(() => {
@@ -69,9 +92,8 @@ onScopeDispose(() => {
 const {
   displayed,
   metadata,
-  scannedOnly,
+  requiresReport,
   scanReportUnavailable,
-  scanOverview,
   loading,
   loadingMore,
   failed,
@@ -79,19 +101,12 @@ const {
   searchTooShort,
   showMore,
   retry,
-} = useSkillsCatalog(query, view, scanMode);
-const scanOptions = computed(() => [
-  { value: 'scanned' as const, label: t('registryUi.skills.scanModes.scanned') },
-  { value: 'all' as const, label: t('registryUi.skills.scanModes.all') },
-]);
+} = useSkillsCatalog(query, view, filters);
 const viewOptions = computed(() =>
   (['popular', 'trending', 'hot'] as const).map((value) => ({
     value,
     label: t(`registryUi.skills.views.${value}`),
   })),
-);
-const scanOverviewDate = computed(() =>
-  scanOverview.value ? d(new Date(scanOverview.value.generatedAt), { dateStyle: 'medium', timeStyle: 'short' }) : '',
 );
 const staleDate = computed(() => {
   const date = metadata.value?.cache.fetchedAt;
@@ -131,28 +146,84 @@ const staleDate = computed(() => {
         :label="t('registryUi.skills.sortLabel')"
         :options="viewOptions"
       />
-      <AppSelect
-        v-if="!query.trim()"
-        v-model="scanMode"
-        leading-icon="trust"
-        :label="t('registryUi.skills.scanFilterLabel')"
-        :options="scanOptions"
-      />
-    </div>
-    <p v-if="scannedOnly" class="skills-catalog__scan-notice">
-      {{ t('registryUi.skills.scanNotice') }}
-    </p>
-    <div v-if="scannedOnly && scanOverview" class="skills-catalog__scan-coverage" role="status">
-      <p>{{ t('registryUi.skills.scanSnapshot', {
-        date: scanOverviewDate,
-        complete: n(scanOverview.coverage.complete),
-        partial: n(scanOverview.coverage.partial),
-        error: n(scanOverview.coverage.error),
-        pending: n(scanOverview.coverage.pending),
-        stale: n(scanOverview.coverage.stale),
-        selected: n(scanOverview.coverage.selected),
-      }) }}</p>
-      <p>{{ t('registryUi.skills.scanSnapshotHelp') }}</p>
+      <DialogRoot v-model:open="filtersOpen">
+        <DialogTrigger as-child>
+          <button type="button" class="button button--secondary skills-filters__trigger">
+            <FilterIcon name="filters" />
+            <span>{{ t('registryUi.skills.filters.button') }}</span>
+            <span
+              v-if="activeFilterCount"
+              class="skills-filters__count"
+              :aria-label="t('registryUi.skills.filters.active', { count: activeFilterCount })"
+            >
+              {{ n(activeFilterCount) }}
+            </span>
+          </button>
+        </DialogTrigger>
+        <DialogPortal>
+          <DialogOverlay class="skills-filters__overlay" />
+          <DialogContent class="skills-filters__dialog">
+            <div class="skills-filters__heading">
+              <DialogTitle>{{ t('registryUi.skills.filters.title') }}</DialogTitle>
+              <DialogClose as-child>
+                <button
+                  type="button"
+                  class="skills-filters__close"
+                  :aria-label="t('registryUi.skills.filters.close')"
+                >
+                  ×
+                </button>
+              </DialogClose>
+            </div>
+            <DialogDescription class="skills-filters__description">
+              {{ t('registryUi.skills.filters.description') }}
+            </DialogDescription>
+            <label class="skills-filters__option">
+              <input
+                v-model="filters.scannedOnly"
+                type="checkbox"
+                aria-labelledby="skills-filter-scanned-label"
+                aria-describedby="skills-filter-scanned-help"
+              />
+              <span>
+                <strong id="skills-filter-scanned-label">{{ t('registryUi.skills.filters.scanned') }}</strong>
+                <span id="skills-filter-scanned-help">{{
+                  t('registryUi.skills.filters.scannedHelp')
+                }}</span>
+              </span>
+            </label>
+            <label class="skills-filters__option">
+              <input
+                v-model="filters.noRemarksOnly"
+                type="checkbox"
+                aria-labelledby="skills-filter-remarks-label"
+                aria-describedby="skills-filter-remarks-help"
+              />
+              <span>
+                <strong id="skills-filter-remarks-label">{{ t('registryUi.skills.filters.noRemarks') }}</strong>
+                <span id="skills-filter-remarks-help">{{
+                  t('registryUi.skills.filters.noRemarksHelp')
+                }}</span>
+              </span>
+            </label>
+            <div class="skills-filters__actions">
+              <button
+                type="button"
+                class="button button--secondary"
+                :disabled="!activeFilterCount"
+                @click="clearFilters"
+              >
+                {{ t('registryUi.skills.filters.reset') }}
+              </button>
+              <DialogClose as-child>
+                <button type="button" class="button button--primary">
+                  {{ t('registryUi.skills.filters.close') }}
+                </button>
+              </DialogClose>
+            </div>
+          </DialogContent>
+        </DialogPortal>
+      </DialogRoot>
     </div>
     <div class="catalog-meta">
       <div aria-live="polite">
@@ -162,7 +233,7 @@ const staleDate = computed(() => {
         <p v-else-if="!loading && !searchTooShort && displayed.length" class="catalog-count">
           {{ t('registryUi.skills.loaded', { count: n(displayed.length) }) }}
         </p>
-        <p v-if="scannedOnly && scanReportUnavailable" role="status">
+        <p v-if="requiresReport && scanReportUnavailable" role="status">
           {{ t('registryUi.skills.scanReportUnavailable') }}
         </p>
         <p
@@ -202,11 +273,46 @@ const staleDate = computed(() => {
         <SkillCard v-for="skill in displayed" :key="skill.id" :skill="skill" />
       </div>
       <div v-else class="empty-state">
-        <h3>{{ t(scannedOnly ? 'registryUi.skills.scanNone' : 'registryUi.skills.noMatches') }}</h3>
-        <p>{{ t(scannedOnly ? 'registryUi.skills.scanHelp' : 'registryUi.skills.noMatchesHelp') }}</p>
-        <button type="button" class="button button--secondary"
-          @click="scannedOnly ? scanMode = 'all' : query = ''">
-          {{ t(scannedOnly ? 'registryUi.skills.scanClear' : 'registryUi.skills.clearSearch') }}
+        <h3>
+          {{
+            t(
+              requiresReport
+                ? hasMore
+                  ? 'registryUi.skills.filters.moreCandidates'
+                  : 'registryUi.skills.filters.noMatches'
+                : 'registryUi.skills.noMatches',
+            )
+          }}
+        </h3>
+        <p>
+          {{
+            t(
+              requiresReport
+                ? hasMore
+                  ? 'registryUi.skills.filters.moreCandidatesHelp'
+                  : 'registryUi.skills.filters.noMatchesHelp'
+                : 'registryUi.skills.noMatchesHelp',
+            )
+          }}
+        </p>
+        <button
+          type="button"
+          class="button button--secondary"
+          @click="requiresReport ? clearFilters() : (query = '')"
+        >
+          {{
+            t(requiresReport ? 'registryUi.skills.filters.reset' : 'registryUi.skills.clearSearch')
+          }}
+        </button>
+      </div>
+      <div v-if="scanReportUnavailable" class="catalog-more">
+        <button
+          type="button"
+          class="button button--secondary"
+          :disabled="loadingMore"
+          @click="retry"
+        >
+          {{ t(loadingMore ? 'registryUi.skills.loading' : 'registryUi.skills.retry') }}
         </button>
       </div>
       <div v-if="hasMore || failed" class="catalog-more">

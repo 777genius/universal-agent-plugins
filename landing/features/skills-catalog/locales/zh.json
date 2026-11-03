@@ -80,7 +80,23 @@
       "scanClear": "查看所有可安装技能",
       "scanReportUnavailable": "部分扫描报告无法验证，因此已排除相应技能。",
       "scanSnapshot": "发布于 {date}：在 {selected} 个扫描目标中，{complete} 个完整、{partial} 个部分完成、{error} 个失败、{pending} 个没有当前扫描（其中 {stale} 个仅有旧报告）。",
-      "scanSnapshotHelp": "这是最新发布的静态扫描快照，不代表服务实时可用性，也不保证安全。"
+      "scanSnapshotHelp": "这是最新发布的静态扫描快照，不代表服务实时可用性，也不保证安全。",
+      "filters": {
+        "button": "筛选",
+        "active": "已启用 {count} 项筛选",
+        "title": "筛选技能",
+        "close": "关闭",
+        "description": "更改立即生效。两个筛选条件可同时使用。",
+        "scanned": "已由 SkillSpector 扫描",
+        "scannedHelp": "已检查当前源代码。包含部分检查结果，并明确标注。",
+        "noRemarks": "无检查发现",
+        "noRemarksHelp": "当前静态分析完整且没有内容问题发现。不完整或不可用的检查会被排除。这不保证安全。",
+        "reset": "重置筛选",
+        "moreCandidates": "还可检查更多技能",
+        "moreCandidatesHelp": "此批次没有匹配项。显示更多以检查剩余候选项。",
+        "noMatches": "没有符合筛选条件的技能",
+        "noMatchesHelp": "尝试其他搜索或重置筛选，浏览所有可安装的技能。"
+      }
     },
     "directoryPage": {
       "pluginDirectory": "插件目录",

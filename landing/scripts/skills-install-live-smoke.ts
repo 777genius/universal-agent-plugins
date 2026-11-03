@@ -21,8 +21,8 @@ const report = {
   installable: 0,
   legacy_recovered: 0,
   unsupported: 0,
-  scanned_default_shown: 0,
-  scanned_default_snapshot: null as string | null,
+  default_all_shown: 0,
+  scanned_filter_shown: 0,
   page_errors: [] as string[],
   failure: null as string | null,
 };
@@ -84,26 +84,21 @@ try {
   await expect(cards.first().locator('.command-snippet code')).toHaveText(
     skillInstallCommand(selected)!,
   );
-  // Separately accept the deployed default (no filter override) against real
-  // SkillSpector publication bytes; the explicit-all pass above proves CLI
-  // command coverage, not the accuracy of the default scan-only view.
+  // Verify default all-Skills discovery, then opt into current inspected evidence.
   await page.screenshot({ path: join(output, 'skills-catalog-all.png'), fullPage: true });
-  const defaultPage = await page.goto(
-    'https://universal-agent-plugins.com/plugins/?tab=skills',
-    { waitUntil: 'domcontentloaded', timeout: 35000 },
-  );
-  assert.equal(defaultPage?.status(), 200, 'Default Skills page must be HTTP 200');
+  await page.goto('https://universal-agent-plugins.com/plugins/?tab=skills',
+    { waitUntil: 'domcontentloaded', timeout: 35000 });
   const defaultCatalog = page.locator('.skills-catalog');
   await expect(defaultCatalog).toHaveAttribute('aria-busy', 'false', { timeout: 90000 });
+  await expect(defaultCatalog.getByRole('button', { name: 'Filters', exact: true })).toBeVisible();
+  report.default_all_shown = await defaultCatalog.locator('.skill-card').count();
+  assert.ok(report.default_all_shown > 0, 'Default catalog must show installable Skills');
+  await page.goto('https://universal-agent-plugins.com/plugins/?tab=skills&skillScan=scanned',
+    { waitUntil: 'domcontentloaded', timeout: 35000 });
+  await expect(defaultCatalog).toHaveAttribute('aria-busy', 'false', { timeout: 90000 });
   const defaultCards = defaultCatalog.locator('.skill-card');
-  report.scanned_default_shown = await defaultCards.count();
-  const scanSnapshot = defaultCatalog.locator('.skills-catalog__scan-coverage');
-  await expect(scanSnapshot).toBeVisible({ timeout: 15000 });
-  report.scanned_default_snapshot = (await scanSnapshot.innerText()).trim();
-  assert.ok(report.scanned_default_snapshot.includes('complete'),
-    'Live default catalog must explain completed vs incomplete scan coverage');
-  assert.ok(report.scanned_default_shown > 0,
-    'Live default Skills catalog must show at least one current physically scanned Skill');
+  report.scanned_filter_shown = await defaultCards.count();
+  assert.ok(report.scanned_filter_shown > 0, 'Scanned filter must show current inspected Skills');
   for (const status of ['stale', 'notChecked', 'pending', 'unavailable', 'unsupported']) {
     await expect(defaultCards.locator('.skillspector--' + status))
       .toHaveCount(0, { timeout: 10000 });

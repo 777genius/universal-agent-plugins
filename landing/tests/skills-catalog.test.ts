@@ -7,6 +7,8 @@ import type { SkillListing } from '../types/skillsCatalog.ts';
 import {
   catalogModeQuery,
   restoreSkillsQuery,
+  restoreSkillsFilters,
+  skillsFiltersQuery,
   skillsCatalogQuery,
   skillInstallCommand,
   skillNeedsManualSelection,
@@ -347,7 +349,7 @@ function catalogHarness() {
     new URL('../composables/useSkillsCatalog.ts', import.meta.url),
     'utf8',
   )
-    .replace(/^import[^\n]+\n/gm, '')
+    .replace(/^import[\s\S]*?;\n/gm, '')
     .replace('export function', 'function');
   const useCatalog = runInNewContext(stripTypeScriptTypes(source) + '\nuseSkillsCatalog;', {
     computed,
@@ -603,4 +605,41 @@ test('malformed DTOs disable their own Install action without crashing the catal
   assert.equal(skillInstallCommand({ ...skill, id: undefined as unknown as string }), undefined);
   assert.equal(skillInstallCommand({ ...skill, source: null as unknown as SkillListing['source'] }), undefined);
   assert.equal(skillInstallCommand(null as unknown as SkillListing), undefined);
+});
+
+test('Skill filters default unchecked and serialize each independent checkbox without losing other URL state', () => {
+  const none = { scannedOnly: false, noRemarksOnly: false };
+  for (const params of [
+    {},
+    { skillScan: 'all' },
+    { skillScan: 'unknown', skillRemarks: 'some' },
+    { skillScan: ['scanned'], skillRemarks: ['none'] },
+  ])
+    assert.deepEqual(restoreSkillsFilters(params), none);
+  const existing = {
+    tab: 'skills',
+    q: 'frontend',
+    skillView: 'hot',
+    source: 'keep',
+    skillScan: 'all',
+  };
+  for (const [filters, expected] of [
+    [none, {}],
+    [{ scannedOnly: true, noRemarksOnly: false }, { skillScan: 'scanned' }],
+    [{ scannedOnly: false, noRemarksOnly: true }, { skillRemarks: 'none' }],
+    [
+      { scannedOnly: true, noRemarksOnly: true },
+      { skillScan: 'scanned', skillRemarks: 'none' },
+    ],
+  ] as const) {
+    const route = skillsFiltersQuery(existing, filters);
+    assert.deepEqual(route, {
+      tab: 'skills',
+      q: 'frontend',
+      skillView: 'hot',
+      source: 'keep',
+      ...expected,
+    });
+    assert.deepEqual(restoreSkillsFilters(route), filters);
+  }
 });

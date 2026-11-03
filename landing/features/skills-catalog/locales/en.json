@@ -80,7 +80,23 @@
       "scanClear": "Browse all installable Skills",
       "scanReportUnavailable": "Some scan reports could not be verified. Those Skills were excluded.",
       "scanSnapshot": "Published {date}: {complete} complete, {partial} partial, {error} failed, {pending} awaiting a current check ({stale} have older reports), out of {selected} selected scan targets.",
-      "scanSnapshotHelp": "This is the latest published static-scan snapshot, not live service uptime or a guarantee of safety."
+      "scanSnapshotHelp": "This is the latest published static-scan snapshot, not live service uptime or a guarantee of safety.",
+      "filters": {
+        "button": "Filters",
+        "active": "{count} active filters",
+        "title": "Filter Skills",
+        "close": "Close",
+        "description": "Changes apply immediately. Both filters can be used together.",
+        "scanned": "Scanned by SkillSpector",
+        "scannedHelp": "Current source inspected. Partial checks are included and labeled.",
+        "noRemarks": "No remarks",
+        "noRemarksHelp": "Complete current static analysis with zero content findings. Incomplete or unavailable checks are excluded. This does not guarantee safety.",
+        "reset": "Reset filters",
+        "moreCandidates": "More Skills can be checked",
+        "moreCandidatesHelp": "No matches in this window. Show more to check the remaining candidates.",
+        "noMatches": "No Skills match these filters",
+        "noMatchesHelp": "Try another search or reset the filters to browse all installable Skills."
+      }
     },
     "directoryPage": {
       "pluginDirectory": "Plugin directory",

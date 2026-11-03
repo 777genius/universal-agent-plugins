@@ -923,12 +923,13 @@ test('unsupported standalone sources do not render cards or fetch reports', asyn
   // The explicit all-Skills mode must not fetch scanner evidence for an
   // unsupported, non-installable source.
   await navigate(page, '/plugins/', 'en', '?tab=skills&skillScan=all');
+  await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false');
   await expect(page.locator('.skill-card')).toHaveCount(0);
   expect(requests).toEqual([]);
 
-  // The default scanned-only browse now consults the global publication
-  // index. Index requests are expected; no per-source shard may be loaded.
-  await navigate(page, '/plugins/', 'en', '?tab=skills');
+  // The explicit scanned filter consults the global publication index.
+  // No per-source shard may be loaded for an unsupported source.
+  await navigate(page, '/plugins/', 'en', '?tab=skills&skillScan=scanned');
   await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false');
   await expect(page.locator('.skill-card')).toHaveCount(0);
   await expect(page.locator('.skillspector--noSkills')).toHaveCount(0);

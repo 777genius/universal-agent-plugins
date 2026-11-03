@@ -1,22 +1,27 @@
 import type { SkillsCatalogPage, SkillsView, SkillListing } from '~/types/skillsCatalog';
 import { skillInstallCommand } from '~/utils/skillsCatalog';
-import { hasCurrentPublishedScan, publishedScanSubject } from '~/utils/skillSpectorCurrent';
+import type { SkillsFilters } from '~/utils/skillsCatalog';
+import {
+  hasCurrentPublishedScan,
+  hasNoPublishedRemarks,
+  publishedScanSubject,
+} from '~/utils/skillSpectorCurrent';
 import { sharedSkillSpectorClient } from '~/composables/useSkillSpector';
 import type { SkillSpectorCoverageSummary } from '~/utils/skillSpectorCatalog';
 
-export type SkillsScanView = 'scanned' | 'all';
-
-/** Request generations isolate search/view/filter changes from late API or scan responses. */
+/** Request generations isolate search/filter changes from late API or report responses. */
 export function useSkillsCatalog(
   query: Ref<string>,
   view: Ref<SkillsView>,
-  scanView?: Ref<SkillsScanView>,
+  filters?: Ref<SkillsFilters>,
 ) {
   const config = useRuntimeConfig();
   const app = useNuxtApp();
   const items = shallowRef<SkillListing[]>([]);
   const pending = shallowRef<SkillListing[]>([]);
+  const unavailable = shallowRef<SkillListing[]>([]);
   const metadata = shallowRef<SkillsCatalogPage>();
+  const upstreamMore = ref(false);
   const loading = ref(true);
   const loadingMore = ref(false);
   const failed = ref(false);
@@ -32,20 +37,19 @@ export function useSkillsCatalog(
     const length = [...query.value.trim()].length;
     return length > 0 && length < 2;
   });
-  const scannedOnly = computed(() => scanView?.value === 'scanned' && !query.value.trim());
+  const requiresReport = computed(() =>
+    Boolean(filters?.value.scannedOnly || filters?.value.noRemarksOnly),
+  );
   const displayed = computed(() => items.value.slice(0, displayLimit.value));
   const remaining = computed(() => Math.max(0, items.value.length - displayLimit.value));
-  const hasMore = computed(() =>
-    remaining.value > 0 ||
-    (!query.value.trim() && (pending.value.length > 0 || Boolean(metadata.value?.hasMore))),
+  const hasMore = computed(
+    () => remaining.value > 0 || pending.value.length > 0 || upstreamMore.value,
   );
-
-  // Keep bounded acquisition separate from the scan queue. The published report
-  // and its SHA-256 verified shards are shared with the card's detail viewer.
   const maxPagesPerLoad = 5;
   const maxCandidatesPerLoad = 64;
-  /** Load one bounded window, retaining candidates not yet verified across pagination. */
-  async function load(append = false) {
+
+  /** A bounded acquisition window retains every queued candidate for continuation or retry. */
+  async function load(append = false, retryEvidence = false) {
     if (searchTooShort.value) return;
     controller?.abort();
     controller = new AbortController();
@@ -54,21 +58,21 @@ export function useSkillsCatalog(
     if (append) loadingMore.value = true;
     else loading.value = true;
     failed.value = false;
-    if (!append) scanReportUnavailable.value = false;
-    let reportUnavailable = false;
-
-    const requireCurrentScan = scannedOnly.value;
+    const requireCurrentScan = requiresReport.value;
+    const requireNoRemarks = Boolean(filters?.value.noRemarksOnly);
     const nextLimit = append ? displayed.value.length + 48 : 48;
-    const collected: SkillListing[] = append ? [...items.value] : [];
-    const queue: SkillListing[] = append && requireCurrentScan ? [...pending.value] : [];
-    const seen = new Set([...collected, ...queue].map((item) => item.id));
+    const collected = append ? [...items.value] : [];
+    const queue = append ? [...pending.value] : [];
+    const rejected = append && !retryEvidence ? [...unavailable.value] : [];
+    if (append && retryEvidence) queue.unshift(...unavailable.value);
+    const seen = new Set([...collected, ...queue, ...rejected].map((item) => item.id));
     const search = query.value.trim();
     let latest = append ? metadata.value : undefined;
     let pageNumber = append ? (metadata.value?.page ?? -1) + 1 : 0;
-    let moreUpstream = !append || Boolean(metadata.value?.hasMore);
+    let moreUpstream = !append || upstreamMore.value;
     let fetched = 0;
     let evaluated = 0;
-
+    let reportUnavailable = false;
     const client = requireCurrentScan
       ? sharedSkillSpectorClient(app, {
           v1: String(config.public.skillspectorReportsUrl),
@@ -76,30 +80,42 @@ export function useSkillsCatalog(
           v3: String(config.public.skillspectorV3ManifestUrl),
         })
       : undefined;
-    /** Match a candidate to inspected, current publication evidence; fail closed on errors. */
+    if (retryEvidence) client?.retryFailedRequests();
     const summaryPromise = client?.coverageSummary().catch(() => {
       reportUnavailable = true;
       return undefined;
     });
-    async function eligible(skill: SkillListing) {
+    async function eligible(skill: SkillListing): Promise<'yes' | 'no' | 'unavailable'> {
       const subject = publishedScanSubject(skill);
-      if (!subject || !client) return false;
+      if (!subject || !client) return 'no';
       try {
         const report = await client.reportFor(subject.repository);
-        return hasCurrentPublishedScan(report, subject);
+        return (
+          requireNoRemarks
+            ? hasNoPublishedRemarks(report, subject)
+            : hasCurrentPublishedScan(report, subject)
+        )
+          ? 'yes'
+          : 'no';
       } catch {
-        // Missing, malformed and unavailable evidence all fail closed.
-        // The user may still explicitly choose the unfiltered catalog.
-        reportUnavailable = true;
-        return false;
+        return 'unavailable';
       }
     }
-
+    function commit(overview?: SkillSpectorCoverageSummary) {
+      items.value = collected;
+      pending.value = queue;
+      unavailable.value = rejected;
+      metadata.value = latest;
+      upstreamMore.value = moreUpstream;
+      displayLimit.value = nextLimit;
+      scanOverview.value = requireCurrentScan ? overview : undefined;
+      scanReportUnavailable.value =
+        requireCurrentScan && (reportUnavailable || !overview || rejected.length > 0);
+    }
     try {
-      // The v3 source-state index is a cheap candidate prefilter, never scan
-      // evidence by itself. Final authorization still verifies the SHA-256 shard.
-      const currentSourceIds = requireCurrentScan
-        ? await client?.currentSourceStateIds().catch(() => {
+      // This index skips impossible candidates. Only verified shards establish eligibility.
+      const currentSourceIds = client
+        ? await client.currentSourceStateIds().catch(() => {
             reportUnavailable = true;
             return undefined;
           })
@@ -112,55 +128,68 @@ export function useSkillsCatalog(
           if (request !== generation) return;
           evaluated += batch.length;
           batch.forEach((item, index) => {
-            if (decisions[index]) collected.push(item);
+            if (decisions[index] === 'yes') collected.push(item);
+            else if (decisions[index] === 'unavailable') rejected.push(item);
           });
           continue;
         }
-        if ((requireCurrentScan && (queue.length || evaluated >= maxCandidatesPerLoad)) ||
-            !moreUpstream || fetched >= maxPagesPerLoad) break;
-
+        if (
+          (requireCurrentScan && (queue.length || evaluated >= maxCandidatesPerLoad)) ||
+          !moreUpstream ||
+          fetched >= maxPagesPerLoad
+        )
+          break;
         const params = new URLSearchParams({
           view: search ? 'popular' : view.value,
           page: String(pageNumber),
         });
         if (search) params.set('q', search);
         const endpoint = String(config.public.skillsCatalogEndpoint);
-        const response = await fetch(
-          endpoint + (endpoint.includes('?') ? '&' : '?') + params,
-          { signal, headers: { Accept: 'application/json' } },
-        );
+        const response = await fetch(endpoint + (endpoint.includes('?') ? '&' : '?') + params, {
+          signal,
+          headers: { Accept: 'application/json' },
+        });
         if (!response.ok) throw new Error('Catalog unavailable');
         const page = (await response.json()) as SkillsCatalogPage;
-        if (!Array.isArray(page.items) || typeof page.hasMore !== 'boolean' ||
-            page.page !== pageNumber || !page.cache) throw new Error('Invalid catalog');
+        if (
+          !Array.isArray(page.items) ||
+          typeof page.hasMore !== 'boolean' ||
+          page.page !== pageNumber ||
+          !page.cache
+        )
+          throw new Error('Invalid catalog');
         if (request !== generation) return;
         fetched++;
         pageNumber++;
+        // Provider search supports page zero only; its candidate queue still paginates locally.
         moreUpstream = !search && page.hasMore && page.items.length > 0;
         for (const item of page.items) {
-          if (!item || typeof item !== 'object' || typeof item.id !== 'string') continue;
-          if (seen.has(item.id) || !skillInstallCommand(item)) continue;
+          if (
+            !item ||
+            typeof item !== 'object' ||
+            typeof item.id !== 'string' ||
+            seen.has(item.id) ||
+            !skillInstallCommand(item)
+          )
+            continue;
           seen.add(item.id);
           if (requireCurrentScan) {
             const subject = publishedScanSubject(item);
-            if (subject && currentSourceIds?.has(subject.sourceStateId)) queue.push(item);
+            if (subject && (!currentSourceIds || currentSourceIds.has(subject.sourceStateId)))
+              queue.push(item);
           } else collected.push(item);
         }
         latest = page;
       }
       const overview = await summaryPromise;
       if (request !== generation) return;
-      // v2/v1 fallback has no current-scan coverage. An absent v3 snapshot
-      // must be reported as unavailable, not as an empty verified selection.
-      if (requireCurrentScan && !overview) reportUnavailable = true;
-      items.value = collected;
-      scanOverview.value = requireCurrentScan ? overview : undefined;
-      if (requireCurrentScan) scanReportUnavailable.value ||= reportUnavailable;
-      pending.value = requireCurrentScan ? queue : [];
-      displayLimit.value = nextLimit;
-      metadata.value = latest;
+      commit(overview);
     } catch {
-      if (request === generation && !signal.aborted) failed.value = true;
+      const overview = await summaryPromise;
+      if (request === generation && !signal.aborted) {
+        commit(overview);
+        failed.value = true;
+      }
     } finally {
       if (request === generation) {
         loading.value = false;
@@ -168,14 +197,15 @@ export function useSkillsCatalog(
       }
     }
   }
-  /** Invalidate stale async work before debouncing a new query, sort or scan mode. */
   function schedule() {
     ++generation;
     controller?.abort();
     if (timer) clearTimeout(timer);
     items.value = [];
     pending.value = [];
+    unavailable.value = [];
     metadata.value = undefined;
+    upstreamMore.value = false;
     failed.value = false;
     scanReportUnavailable.value = false;
     scanOverview.value = undefined;
@@ -183,9 +213,14 @@ export function useSkillsCatalog(
     loading.value = !searchTooShort.value;
     displayLimit.value = 48;
     if (mounted && !searchTooShort.value)
-      timer = setTimeout(() => { void load(); }, 300);
+      timer = setTimeout(() => {
+        void load();
+      }, 300);
   }
-  watch([query, view, () => scanView?.value], schedule);
+  watch(
+    [query, view, () => filters?.value.scannedOnly, () => filters?.value.noRemarksOnly],
+    schedule,
+  );
   onMounted(() => {
     mounted = true;
     loading.value = !searchTooShort.value;
@@ -196,11 +231,9 @@ export function useSkillsCatalog(
     controller?.abort();
     if (timer) clearTimeout(timer);
   });
-  /** Reveal buffered results before requesting another bounded acquisition window. */
   function showMore() {
     if (remaining.value) displayLimit.value += 48;
-    else if ((pending.value.length || metadata.value?.hasMore) && !loadingMore.value)
-      void load(true);
+    else if ((pending.value.length || upstreamMore.value) && !loadingMore.value) void load(true);
   }
   return {
     displayed,
@@ -211,11 +244,11 @@ export function useSkillsCatalog(
     failed,
     remaining,
     hasMore,
-    scannedOnly,
+    requiresReport,
     scanReportUnavailable,
     scanOverview,
     searchTooShort,
     showMore,
-    retry: () => load(!query.value.trim() && Boolean(items.value.length)),
+    retry: () => load(Boolean(metadata.value || items.value.length), true),
   };
 }

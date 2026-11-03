@@ -419,6 +419,11 @@ export function createSkillSpectorClient(
   };
   return {
     reportFor,
+    retryFailedRequests() {
+      dropTransientFailures(manifests);
+      dropTransientFailures(shards);
+      dropTransientFailures(repositories);
+    },
     async currentSourceStateIds(): Promise<ReadonlySet<string>> {
       const manifest = await loadManifest();
       if (manifest.schema_version !== 3) return new Set();

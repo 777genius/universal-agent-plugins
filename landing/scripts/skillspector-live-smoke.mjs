@@ -704,22 +704,20 @@ try {
       );
       await panel.locator('.skillspector__dialog').screenshot({ path: resolve(output, `plugin-${locale}-${width}.png`) });
       await panel.locator('.skillspector__dialog-close').click();
-      // The production catalog's DEFAULT discovery must show real, currently
-      // inspected Skills — not an empty filtered list or historic badges.
+      // The explicit scanned filter must show real, currently inspected Skills.
       // Check one desktop visit against the exact published, digest-validated
       // reports already loaded above. Browser/API traffic is never mocked.
       if (locale === 'en' && width === 1280) {
-        await page.goto(new URL(`${prefix}plugins/?tab=skills`, site).href, {
+        await page.goto(new URL(`${prefix}plugins/?tab=skills&skillScan=scanned`, site).href, {
           waitUntil: 'domcontentloaded',
         });
         await hydrated(page);
         const catalog = page.locator('.skills-catalog');
-        await expect(catalog.locator('.skills-catalog__scan-notice')).toBeVisible();
-        await expect(catalog.locator('.skills-catalog__scan-coverage')).toBeVisible();
+        await expect(catalog.getByRole('button', { name: /^Filters/ })).toBeVisible();
         const cards = catalog.locator('.skill-card');
         await expect(cards.first()).toBeVisible({ timeout: 90_000 });
         const count = await cards.count();
-        assert.ok(count <= 48, 'Default current-scan page must obey the display bound');
+        assert.ok(count <= 48, 'Filtered Skills page must obey the display bound');
         await expect(catalog.locator('.skill-card details.skillspector')).toHaveCount(count, {
           timeout: 60_000,
         });
@@ -758,7 +756,7 @@ try {
           );
         }
         evidence.current_skill_catalog = {
-          default_mode: 'scanned',
+          filter: 'scanned',
           cards_verified: count,
           visible_skill_ids: visible.map((item) => item.id),
         };
