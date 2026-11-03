@@ -39,15 +39,16 @@ export function currentPublishedScan(
   subject: PublishedScanSubject,
 ): SkillSpectorRecord | undefined {
   if (report.schema_version !== 3) return undefined;
-  const state = report.source_states.find(
-    (item) =>
-      item.id === subject.sourceStateId &&
-      item.repository === subject.repository &&
-      item.current === true &&
-      item.state === 'resolved',
-  );
+  // Contradictory resolution rows must not be bypassed by finding one positive row.
+  const states = report.source_states.filter((item) => item.id === subject.sourceStateId);
+  if (states.length !== 1) return undefined;
+  const state = states[0];
   if (
     !state ||
+    state.repository !== subject.repository ||
+    state.current !== true ||
+    state.state !== 'resolved' ||
+    state.reason !== null ||
     !Array.isArray(state.selected_ids) ||
     state.selected_ids.length !== 1 ||
     typeof state.revision !== 'string' ||

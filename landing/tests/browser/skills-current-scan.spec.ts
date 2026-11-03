@@ -163,6 +163,7 @@ async function prepare(
   });
   return {
     errors,
+    manifest,
     catalogRequests,
     setUnavailable: (value: boolean) => {
       unavailable = value;
@@ -187,6 +188,40 @@ async function closeFilters(page: Page) {
   await page.keyboard.press('Escape');
 }
 const allNames = ['clean', 'dirty', 'partial', 'empty', 'error', 'historical', 'unscanned'];
+
+test('explicit filter retry recovers a newly published v3 after fulfilled legacy fallback', async ({ page }) => {
+  const fixture = await prepare(page);
+  let fallback = true;
+  await page.route('**/reports/skillspector/v3/index.json', route =>
+    fallback ? route.fulfill({ status: 404 }) : route.fulfill({ json: fixture.manifest }));
+  await page.goto('plugins/?tab=skills&skillRemarks=none');
+  await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false');
+  await expect(cards(page)).toHaveCount(0);
+  await expect(page.getByText('Some scan reports could not be verified. Those Skills were excluded.')).toBeVisible();
+  fallback = false;
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expectedIds(page, ['clean']);
+  expect(fixture.catalogRequests.length).toBe(2);
+  expect(fixture.errors).toEqual([]);
+});
+
+test('contradictory duplicate source states fail both filters closed at the verified manifest boundary', async ({ page }) => {
+  const fixture = await prepare(page);
+  const forged = structuredClone(fixture.manifest);
+  forged.source_states.push({ ...structuredClone(forged.source_states[0]!),
+    current: false, state: 'unresolved', reason: 'ambiguous_name', selected_ids: [],
+    candidates: ['skills/one', 'skills/two'] });
+  await page.route('**/reports/skillspector/v3/index.json', route => route.fulfill({ json: forged }));
+  for (const query of ['skillScan=scanned', 'skillRemarks=none']) {
+    await page.goto(`plugins/?tab=skills&${query}`);
+    await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false');
+    await expect(cards(page)).toHaveCount(0);
+    await expect(page.getByText('Some scan reports could not be verified. Those Skills were excluded.')).toBeVisible();
+  }
+  await page.goto('plugins/?tab=skills');
+  await expectedIds(page, allNames);
+  expect(fixture.errors).toEqual([]);
+});
 
 test('default all Skills and independent filters use exact current records during browse and search', async ({
   page,

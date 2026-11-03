@@ -65,6 +65,7 @@ test('published evidence requires exact source, revision, path, completed execut
     report => { report.source_states[0]!.current = false; },
     report => { report.source_states[0]!.state = 'historical'; },
     report => { report.source_states[0]!.revision = 'f'.repeat(40); },
+    report => { report.source_states[0]!.reason = 'ambiguous_name'; },
   ];
   for (const change of variants) {
     const report = currentReport();
@@ -204,4 +205,19 @@ test('no remarks requires complete current exact-root evidence and zero findings
   dirty.records.push(neighbor);
   assert.equal(hasCurrentPublishedScan(dirty, subject), true);
   assert.equal(hasNoPublishedRemarks(dirty, subject), false);
+});
+
+test('duplicate positive or contradictory source resolution cannot authorize either evidence filter', () => {
+  const subject = publishedScanSubject(listing)!;
+  for (const contradictory of [false, true]) {
+    const report = cleanReport();
+    const duplicate = structuredClone(report.source_states[0]!);
+    if (contradictory) Object.assign(duplicate, {
+      current: false, state: 'unresolved', reason: 'ambiguous_name',
+      selected_ids: [], candidates: ['skills/one', 'skills/two'],
+    });
+    report.source_states.push(duplicate);
+    assert.equal(hasCurrentPublishedScan(report, subject), false);
+    assert.equal(hasNoPublishedRemarks(report, subject), false);
+  }
 });

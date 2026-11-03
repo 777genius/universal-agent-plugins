@@ -319,6 +319,7 @@ export function createSkillSpectorClient(
     string,
     CachedRequest<SkillSpectorReport | SkillSpectorManifest | SkillSpectorManifestV3>
   >();
+  let legacyFallback = false;
   const loadManifest = () =>
     cachedRequest(manifests, 'manifest', () =>
       v3ManifestUrl
@@ -329,7 +330,10 @@ export function createSkillSpectorClient(
               throw error;
             })
         : legacyManifest(),
-    );
+    ).then((manifest) => {
+      legacyFallback = Boolean(v3ManifestUrl && manifest.schema_version !== 3);
+      return manifest;
+    });
   const repositories = new Map<string, CachedRequest<SkillSpectorDisplayReport>>();
   const shards = new Map<string, CachedRequest<SkillSpectorRecord[]>>();
   let active = 0;
@@ -420,6 +424,13 @@ export function createSkillSpectorClient(
   return {
     reportFor,
     retryFailedRequests() {
+      // A missing v3 publication may have appeared since this successful legacy fallback.
+      // Preserve validated v3 snapshots; only explicit filter retry revisits fallback.
+      if (legacyFallback) {
+        manifests.clear();
+        repositories.clear();
+        legacyFallback = false;
+      }
       dropTransientFailures(manifests);
       dropTransientFailures(shards);
       dropTransientFailures(repositories);

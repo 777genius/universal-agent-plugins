@@ -249,6 +249,10 @@ export function useSkillsCatalog(
     scanOverview,
     searchTooShort,
     showMore,
-    retry: () => load(Boolean(metadata.value || items.value.length), true),
+    retry: () => load(
+      Boolean(metadata.value || items.value.length) &&
+        (!requiresReport.value || Boolean(scanOverview.value)),
+      true,
+    ),
   };
 }
