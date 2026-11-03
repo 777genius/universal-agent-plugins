@@ -108,8 +108,8 @@ jobs:
             -run '^(TestDependencyAgreementOversizedBytesFailClosed|TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized|TestDependencyAgreementReaderRejectsSymlinkAndKeepsTarget|TestDependencyIntentFilesRejectOversizedWriteWithoutMutation|TestSkillsReviewForeignDestinationSafeGuidance|TestSkillsReviewManagedSkillChanged|TestDependencyCandidateSizePreflightProtectsManifestAndLock|TestDependencyManagementRecoveryReaderIsBounded|TestGeneratedOversizedLockRefusesBeforeStorePublication)$' >> "$events"
           (
             cd install/integrationctl/agentplugins
-            go test -count=1 -timeout=8m -json ./providers ./clients/kiro ./clients/shared \
-              -run '^(TestDigestSkillDirectoryRequiresRealDirectoryRoot|TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry|TestGeminiLateNativeSkillDriftRefusesBeforeRename|TestClineLateNativeSkillDriftRefusesBeforeRename|TestKiroNativeBackupRejectsEditDuringRenameWithoutDeletingUserBytes)$'
+            go test -count=1 -timeout=8m -json ./providers ./clients/kiro ./clients/shared ./transaction \
+              -run '^(TestDigestSkillDirectoryRequiresRealDirectoryRoot|TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry|TestGeminiLateNativeSkillDriftRefusesBeforeRename|TestClineLateNativeSkillDriftRefusesBeforeRename|TestKiroNativeBackupRejectsEditDuringRenameWithoutDeletingUserBytes|TestDirectoryVerificationFailurePreservesForeignBytesAndOriginalError|TestRemovalApplyFailureReportsRollbackFailureAndPreservesBackup)$'
           ) | tee -a "$events"
           python - "$events" <<'PY'
           import json
@@ -122,6 +122,8 @@ jobs:
               "TestGeminiLateNativeSkillDriftRefusesBeforeRename",
               "TestClineLateNativeSkillDriftRefusesBeforeRename",
               "TestKiroNativeBackupRejectsEditDuringRenameWithoutDeletingUserBytes",
+              "TestDirectoryVerificationFailurePreservesForeignBytesAndOriginalError",
+              "TestRemovalApplyFailureReportsRollbackFailureAndPreservesBackup",
               "TestValidateLeafID",
               "TestDependencyAgreementOversizedBytesFailClosed",
               "TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized",
@@ -144,7 +146,7 @@ jobs:
                   raise SystemExit(f"Go package {package} failed")
           if any(item.get("Action") in {"fail", "skip"} for item in events):
               raise SystemExit("agreement boundary suite failed or skipped")
-          print("Fifteen critical policy and native ownership tests ran and passed; no false-green or skips")
+          print("Seventeen critical policy and native ownership tests ran and passed; no false-green or skips")
           PY
       - name: Execute the full portable catalog
         run: python -B scripts/package-manager-e2e.py --output "${{ runner.temp }}/package-manager-e2e"
