@@ -364,6 +364,7 @@ function catalogHarness() {
     useRuntimeConfig: () => ({
       public: { skillsCatalogEndpoint: 'https://example.com/v1/skills' },
     }),
+    useNuxtApp: () => ({}),
     setTimeout: (callback: () => void, delay: number) => {
       assert.equal(delay, 300);
       timers.set(++timerId, callback);

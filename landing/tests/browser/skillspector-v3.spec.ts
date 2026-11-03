@@ -426,7 +426,7 @@ async function setup(
       : route.fulfill({ body, contentType: 'application/json' });
   });
   await projections(page, index);
-  await navigate(page, '/plugins/', 'en', standalone ? '?tab=skills' : '?q=i18n-state-00');
+  await navigate(page, '/plugins/', 'en', standalone ? '?tab=skills&skillScan=all' : '?q=i18n-state-00');
   return {
     assessment: page.locator(
       standalone

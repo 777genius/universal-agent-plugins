@@ -12,7 +12,7 @@ const output = process.env.UAP_SKILLS_INSTALL_REPORT_DIR || '/tmp/uap-skills-ins
 mkdirSync(output, { recursive: true });
 const report = {
   checked_at: new Date().toISOString(),
-  site: 'https://universal-agent-plugins.com/plugins/?tab=skills',
+  site: 'https://universal-agent-plugins.com/plugins/?tab=skills&skillScan=all',
   api: 'https://api.universal-agent-plugins.com/v1/skills',
   published_sha: process.env.UAP_LANDING_DEPLOYMENT_SHA || null,
   browser_response: 0,

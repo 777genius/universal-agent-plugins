@@ -168,7 +168,7 @@ for (const mobile of [false, true]) {
       await expect(card.locator('.plugin-card__install-panel pre')).toContainText(
         'npx -y universal-agent-plugins add i18n-state-00',
       );
-      await navigate(page, '/plugins/', 'en', '?tab=skills');
+      await navigate(page, '/plugins/', 'en', '?tab=skills&skillScan=all');
       const skill = page.locator('.skill-card').first();
       await expect(skill.locator('.skillspector')).toHaveClass(/skillspector--stale/);
       await skill.locator('.skillspector > summary').click();
@@ -185,7 +185,7 @@ for (const mobile of [false, true]) {
       await expect(skill.locator('.plugin-card__install-panel pre')).toContainText(
         'skills add https://github.com/anthropics/skills --skill frontend-design',
       );
-      await navigate(page, '/plugins/', 'ru', '?tab=skills');
+      await navigate(page, '/plugins/', 'ru', '?tab=skills&skillScan=all');
       await expect(page.locator('.skill-card .skillspector > summary')).toContainText(
         wording('ru')('registryUi.skillSpector.stale'),
       );

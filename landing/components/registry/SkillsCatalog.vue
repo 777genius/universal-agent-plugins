@@ -76,12 +76,10 @@ const {
   showMore,
   retry,
 } = useSkillsCatalog(query, view, scanMode);
-const scanOptions = computed(() =>
-  (['scanned', 'all'] as const).map((value) => ({
-    value,
-    label: t('registryUi.skills.scanModes.' + value),
-  })),
-);
+const scanOptions = computed(() => [
+  { value: 'scanned' as const, label: t('registryUi.skills.scanModes.scanned') },
+  { value: 'all' as const, label: t('registryUi.skills.scanModes.all') },
+]);
 const viewOptions = computed(() =>
   (['popular', 'trending', 'hot'] as const).map((value) => ({
     value,
