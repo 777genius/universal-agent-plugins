@@ -9,7 +9,9 @@ const locales = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'];
 const currentRoutes = [
   '', 'build', 'build/checks', 'build/handoff', 'build/hybrid', 'build/layout',
   'build/mcp-remote', 'build/mcp-stdio', 'build/skill', 'build/skills',
-  'guide/quickstart', 'reference/client-compatibility', 'use', 'use/install', 'use/manage',
+  'guide/quickstart', 'reference/client-compatibility',
+  'sdk', 'sdk/go-hooks', 'sdk/go-installer', 'sdk/host-detection', 'sdk/typescript-management',
+  'use', 'use/install', 'use/manage',
 ];
 
 test('committed availability covers every current public source route without rewriting historical dispositions', async () => {

@@ -142,9 +142,11 @@ test('project examples require pinned complete sources, not user-only Directory 
     const projectBlocks = chunks.filter((chunk) =>
       (chunk.startsWith('sh\n') || chunk.startsWith('bash\n')) && chunk.includes('--scope project'));
     assert.ok(projectBlocks.length, path + ': missing project command');
-    assert.ok(projectBlocks.some((chunk) =>
-      chunk.includes('github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab')),
-      path + ': missing exact pinned project source');
+    const source = path === 'README.md'
+      ? 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH'
+      : 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab';
+    assert.ok(projectBlocks.some((chunk) => chunk.includes(source)),
+      path + ': missing explicitly pinned project source');
     for (const chunk of projectBlocks) {
       assert.ok(!chunk.includes('add context7'), path + ': user-only alias offered for project');
     }
@@ -156,17 +158,17 @@ test('README retains the available installer and canonical client limitations', 
   assert.ok(text.includes('## Use plugins'));
   assert.ok(text.includes('## Build plugins'));
   assert.ok(text.includes('### Quick start'));
-  assert.ok(text.includes('[Build plugins](#build-plugins)'));
+  assert.ok(text.includes('[Build a plugin](#build-plugins)'));
   // The public entry uses the nine-language gateway, not a forced English locale.
   assert.ok(
     text.includes(
-      '[Read the documentation](https://universal-agent-plugins.com/docs/)',
+      '[Documentation](https://universal-agent-plugins.com/docs/)',
     ),
   );
-  assert.ok(text.includes('Native Agent Plugins releases'));
+  assert.ok(text.includes('Native installer [releases]'));
   assert.match(
     text,
-    /(?:^|\n)[^\n]*\b[Ii]nstall\b[^\n]*\blatest\b[^\n]*Node\.js 22\+[^\n]*:\n\n```bash\nnpm install (?:--global|-g) universal-agent-plugins\n```/,
+    /\*\*npm — Node\.js 22\+:\*\*\n\n```bash\nnpm install (?:--global|-g) universal-agent-plugins\nagentplugins add context7\n```/,
   );
   assert.doesNotMatch(text, /npm install (?:--global|-g) universal-agent-plugins@\d+\.\d+\.\d+/);
   assert.doesNotMatch(
@@ -177,9 +179,10 @@ test('README retains the available installer and canonical client limitations', 
     text,
     /Availability is unverified|candidate commands are not current installation advice/,
   );
-  assert.ok(text.includes('For Codex, declared MCP SSE is unsupported'));
+  assert.ok(text.includes('Codex supports stdio and Streamable HTTP'));
   assert.ok(text.includes('docs/CODEX_TRANSPORT_EVIDENCE.md'));
-  assert.ok(text.includes('[Go SDK integration guide](sdk/README.md)'));
+  assert.ok(text.includes('[Go SDK](sdk/README.md)'));
+  assert.ok(text.includes('[SDK integration guides](https://universal-agent-plugins.com/docs/en/sdk/)'));
   assert.ok(existsSync(fileURLToPath(new URL('sdk/README.md', root))));
   const showcase = read('landing/components/sections/BuiltWithSection.vue');
   assert.ok(showcase.includes('https://github.com/777genius/universal-agent-plugins/blob/main/sdk/README.md'));
