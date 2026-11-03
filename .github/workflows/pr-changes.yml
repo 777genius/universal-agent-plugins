@@ -11,7 +11,7 @@ on:
         description: Go sources, module files, lint configuration or the lint baseline changed.
         value: ${{ jobs.classify.outputs.lint }}
       management_sdk:
-        description: The Management SDK, its contract, generated DTO or root module changed.
+        description: The Management SDK, its contract or production CLI source/build inputs changed.
         value: ${{ jobs.classify.outputs.management_sdk }}
       authoring:
         description: Something beyond documentation and web content changed, or a path is unsafe on Windows.
@@ -73,8 +73,11 @@ jobs:
             if (( status == 0 )); then echo true; else echo false; fi
           }
           lint="$(has '' '(\.go$|(^|/)go\.(mod|sum)$|^go\.work(\.sum)?$|^\.golangci\.yml$|^scripts/(check-lint-baseline\.sh|lint-baseline-renames\.txt)$|^\.github/workflows/(ci|lint|pr-changes)\.yml$)')"
-          # SDK Go fixtures build with GOWORK=off against the root module.
-          management_sdk="$(has '' '^(sdks/typescript/|contracts/management/|cli/internal/agentpluginscli/management/|go\.(mod|sum)$|\.github/workflows/(ci|management-sdk|pr-changes)\.yml$)')"
+          # The SDK suite also builds and runs the production CLI. Include its
+          # composition, shared code, embedded assets and module/workspace inputs,
+          # not just management-named files. Full source trees avoid a fragile
+          # per-file dependency list as application ownership moves between them.
+          management_sdk="$(has '' '^(sdks/typescript/|contracts/management/|(cli|internal|install/integrationctl|plugininstall|sdk)/|go\.(mod|sum)$|go\.work(\.sum)?$|\.github/workflows/(ci|management-sdk|pr-changes)\.yml$)')"
           # Authoring lanes skip only documentation and web content: root
           # Markdown, docs/, website/, landing/ and assets/. They also run for a
           # path a Windows checkout rejects, because their Windows lanes are the
