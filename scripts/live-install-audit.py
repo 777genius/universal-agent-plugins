@@ -406,6 +406,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
         status = "external-native-uninstall-required"
     elif installed:
         status = "cleanup-failed"
+    elif "manual_activation_required" in diagnostics and "cgroup" in diagnostics:
+        status = "host-containment-unavailable"
     elif "not detected" in diagnostics or "not available" in diagnostics or "target_unavailable" in diagnostics:
         status = "target-unavailable"
     elif "unsupported" in diagnostics or "not supported" in diagnostics:
@@ -451,7 +453,8 @@ def main():
     report = {"checked_at": datetime.now(timezone.utc).isoformat(),
               "target": args.target, "kind": args.kind, "cli": args.cli,
               "fixture_count": len(cases), "cases_attempted": 0,
-              "full_coverage": args.limit == 30, "results": []}
+              "source_selection_complete": args.limit == 30,
+              "full_coverage": False, "results": []}
     report_file = report_dir / f"{args.target}-{args.kind}.json"
     def save():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
@@ -488,8 +491,9 @@ def main():
                               "status": result["status"]}), flush=True)
     passed = sum(r["status"] == "passed" for r in report["results"])
     report["passed"] = passed
+    report["full_coverage"] = args.limit == 30 and report["cases_attempted"] == 30
     save()
-    print(f'{args.target} {args.kind}: {passed}/{args.limit} passed; full={args.limit == 30}')
+    print(f'{args.target} {args.kind}: {passed}/{args.limit} passed; attempted={report["cases_attempted"]}')
     return 0 if passed == args.limit else 1
 
 
