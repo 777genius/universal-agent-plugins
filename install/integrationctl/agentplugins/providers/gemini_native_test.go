@@ -14,6 +14,109 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+
+func TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry(t *testing.T) {
+	configRoot := filepath.Join(t.TempDir(), ".gemini")
+	foreign := filepath.Join(configRoot, "skills", "human", "SKILL.md")
+	settings := filepath.Join(configRoot, "settings.json")
+	writeTestFile(t, foreign, "human authored Skill; preserve\n")
+	writeTestFile(t, settings, `{"theme":"night","mcpServers":{"unmanaged":{"url":"https://foreign.test/sse"}}}`)
+	active, desired := geminiNativeFixture(t, configRoot, "v1", "https://docs.test/v1")
+
+	// The descriptor and immutable native plan are valid, but the staged Skill
+	// source vanishes before CopyDir. No installation or rollback has started.
+	if err := os.RemoveAll(filepath.Join(active, "skills", "docs")); err != nil {
+		t.Fatal(err)
+	}
+	beforeSettings, err := os.ReadFile(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeForeign, err := os.ReadFile(foreign)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignInfo, err := os.Lstat(filepath.Dir(foreign))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = gemini.ApplyGeminiNativeMutation(configRoot, active, nil, desired)
+	var effect *shared.NativeEffectError
+	if !errors.As(err, &effect) || effect.Effect != domain.NativeEffectUnchanged {
+		t.Fatalf("staging refusal must have unchanged native effect, got %T: %v", err, err)
+	}
+	entries, err := os.ReadDir(filepath.Join(configRoot, "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "human" {
+		t.Fatalf("failed native staging left transaction residue or changed foreign Skills: %v", entries)
+	}
+	if after, err := os.Lstat(filepath.Dir(foreign)); err != nil || !os.SameFile(foreignInfo, after) {
+		t.Fatalf("foreign Skill directory identity changed: %v", err)
+	}
+	if body, err := os.ReadFile(foreign); err != nil || string(body) != string(beforeForeign) {
+		t.Fatalf("foreign Skill bytes changed: %q %v", body, err)
+	}
+	if body, err := os.ReadFile(settings); err != nil || string(body) != string(beforeSettings) {
+		t.Fatalf("refused stage changed native MCP settings: %q %v", body, err)
+	}
+
+	// Explicitly restore the source and prove that no leaked transaction blocks
+	// a subsequent real install or forces adoption of the foreign Skill.
+	writeTestFile(t, filepath.Join(active, "skills", "docs", "SKILL.md"), "v1\n")
+	if err := gemini.ApplyGeminiNativeMutation(configRoot, active, nil, desired); err != nil {
+		t.Fatalf("retry after repaired staged input: %v", err)
+	}
+	assertGeminiNativeState(t, configRoot, "v1", "https://docs.test/v1", true)
+}
+
+func TestGeminiLateNativeSkillDriftRefusesBeforeRename(t *testing.T) {
+	configRoot := filepath.Join(t.TempDir(), ".gemini")
+	writeTestFile(t, filepath.Join(configRoot, "settings.json"),
+		`{"theme":"night","mcpServers":{"unmanaged":{"url":"https://foreign.test/sse"}}}`)
+	activeV1, desiredV1 := geminiNativeFixture(t, configRoot, "v1", "https://docs.test/v1")
+	if err := gemini.ApplyGeminiNativeMutation(configRoot, activeV1, nil, desiredV1); err != nil {
+		t.Fatal(err)
+	}
+	activeV2, desiredV2 := geminiNativeFixture(t, configRoot, "v2", "https://docs.test/v2")
+	liveSkill := filepath.Join(configRoot, "skills", "docs", "SKILL.md")
+	const edit = "edited after native identity preflight; do not rename\n"
+	injected := false
+	capacity := func(previous, desired int) (int, error) {
+		injected = true
+		writeTestFile(t, liveSkill, edit)
+		return shared.CheckedCombinedCapacity(previous, desired)
+	}
+	renamed := 0
+	rename := func(oldPath, newPath string) error {
+		renamed++
+		return os.Rename(oldPath, newPath)
+	}
+	err := gemini.ApplyGeminiNativeMutationWithKernelRenameAndCapacity(
+		configRoot, activeV2, desiredV1, desiredV2, nativeconfig.New(), rename, capacity)
+	if !injected || err == nil || !strings.Contains(err.Error(), "before backup") || renamed != 0 {
+		t.Fatalf("late native edit did not fail before any rename: injected=%t renames=%d err=%v", injected, renamed, err)
+	}
+	if body, err := os.ReadFile(liveSkill); err != nil || string(body) != edit {
+		t.Fatalf("late native edit not preserved: %q %v", body, err)
+	}
+	if paths, err := filepath.Glob(filepath.Join(configRoot, "skills", ".agentplugins-native-*")); err != nil || len(paths) != 0 {
+		t.Fatalf("native refusal leaked transaction directories: %v %v", paths, err)
+	}
+	document := readObject(t, filepath.Join(configRoot, "settings.json"))
+	server := document["mcpServers"].(map[string]any)["docs"].(map[string]any)
+	if server["httpUrl"] != "https://docs.test/v1" {
+		t.Fatalf("late refusal changed MCP state: %+v", server)
+	}
+	writeTestFile(t, liveSkill, "v1\n")
+	if err := gemini.ApplyGeminiNativeMutation(configRoot, activeV2, desiredV1, desiredV2); err != nil {
+		t.Fatalf("explicit correction and retry failed: %v", err)
+	}
+	assertGeminiNativeState(t, configRoot, "v2", "https://docs.test/v2", true)
+}
+
 func TestGeminiSkillRollbackRetainsOnlyBackupWhenRestoreRenameFails(t *testing.T) {
 	configRoot := filepath.Join(t.TempDir(), ".gemini")
 	activeV1, desiredV1 := geminiNativeFixture(t, configRoot, "v1", "https://docs.test/v1")
