@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_env.py'
       - 'tests/live-install/fixtures.json'
       - 'install/integrationctl/agentplugins/adapters/securityscan/scanner*.go'
       - '.github/workflows/live-install-audit.yml'
@@ -46,6 +47,8 @@ jobs:
       # The Go source defaults to 0.1.0-development; signed directory policies
       # require an ordinary release-semver CLI. This is still the PR source
       # binary, NOT the published agentplugins-v0.1.95 release.
+      - name: Refuse ambient native-profile and Git configuration leakage
+        run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
       - name: Verify exact empty-stderr LintAI exit diagnostic
         run: go test ./install/integrationctl/agentplugins/adapters/securityscan -run '^TestCommandScannerIncludesNonzeroExitWhenStderrIsEmpty$' -count=1
       - name: Build actual PR CLI with current eligible directory version policy
