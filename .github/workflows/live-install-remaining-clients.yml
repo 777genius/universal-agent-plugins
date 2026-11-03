@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_env.py'
       - 'tests/live-install/fixtures.json'
   workflow_dispatch:
 
@@ -41,6 +42,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      - name: Refuse inherited real client profile overrides before live cases
+        run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
       - name: Acquire actual public vendor client where a headless Linux build exists
         id: vendor-install
         # Preserve a complete explicit client-unavailable record even when a
