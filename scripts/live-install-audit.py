@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -192,6 +193,50 @@ def matching_installations(response, identity, target, kind, item):
     return result
 
 
+def uninstall_native_codex_plugin(identity, home, case_root, env, cwd):
+    """Perform the documented *actual* Codex uninstall before attestation.
+
+    This never touches an ambient account: the config and managed marketplace
+    must both be contained within this case's disposable profile.
+    """
+    config = home / ".codex/config.toml"
+    if not config.is_file() or config.is_symlink():
+        return {"completed": False, "reason": "managed Codex native config absent"}
+    try:
+        state = tomllib.loads(config.read_text(encoding="utf-8"))
+        plugins = state.get("plugins", {})
+        candidates = [name for name in plugins
+                      if isinstance(name, str) and name.startswith(identity + "@")]
+        if len(candidates) != 1:
+            return {"completed": False, "reason": "cannot identify one managed plugin"}
+        spec = candidates[0]
+        marketplace = spec.split("@", 1)[1]
+        entry = state.get("marketplaces", {}).get(marketplace)
+        if not isinstance(entry, dict) or entry.get("source_type", "local") != "local":
+            return {"completed": False, "reason": "managed local marketplace cannot be verified"}
+        source = Path(entry.get("source", ""))
+        if not source.is_absolute() or not source.resolve().is_relative_to(case_root.resolve()):
+            return {"completed": False, "reason": "marketplace source outside disposable case"}
+    except (OSError, TypeError, ValueError):
+        return {"completed": False, "reason": "cannot parse owned Codex config"}
+    isolated = dict(env, CODEX_HOME=str(home / ".codex"))
+    remove_plugin = call(["codex", "plugin", "remove", spec, "--json"], isolated, cwd, 40)
+    remove_plugin.pop("_json", None)
+    remove_market = call(["codex", "plugin", "marketplace", "remove", marketplace, "--json"],
+                         isolated, cwd, 40) if remove_plugin["exit_code"] == 0 else None
+    if remove_market:
+        remove_market.pop("_json", None)
+    try:
+        after = tomllib.loads(config.read_text(encoding="utf-8")) if config.exists() else {}
+        no_plugin = spec not in after.get("plugins", {})
+        no_market = marketplace not in after.get("marketplaces", {})
+    except (OSError, ValueError, TypeError):
+        no_plugin = no_market = False
+    return {"completed": bool(remove_plugin["exit_code"] == 0 and no_plugin and no_market),
+            "plugin_remove": remove_plugin, "marketplace_remove": remove_market,
+            "native_plugin_absent": no_plugin, "native_marketplace_absent": no_market}
+
+
 def do_case(cli, target, kind, item, index, runroot):
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
@@ -252,9 +297,18 @@ def do_case(cli, target, kind, item, index, runroot):
          (bool(skill_path) and lock_pinned and skill_bytes_match))
     )
     cleanup = None
+    native_uninstall = None
     if installed:
+        # Codex explicitly requires external uninstall before UAP can settle a
+        # user-scope plugin removal. We execute and verify the real native
+        # plugin + marketplace commands, never attest on a guessed state.
+        if kind == "plugin" and target == "codex":
+            native_uninstall = uninstall_native_codex_plugin(
+                identity, home, case_root, env, project)
+        attestation = (["--external-uninstalled"] if
+                       native_uninstall and native_uninstall["completed"] else [])
         cleanup = call([cli, "remove", identity, "--target", target, *scope,
-                        "--format", "json"], env, project, 60)
+                        *attestation, "--format", "json"], env, project, 60)
         cleanup.pop("_json", None)
     sentinels_preserved = (sentinel.read_text() == "foreign content never belongs to UAP\n" and
                            user_sentinel.read_text() == "foreign profile content never belongs to UAP\n")
@@ -306,7 +360,7 @@ def do_case(cli, target, kind, item, index, runroot):
             "lock_written": bool(locked), "lock_contains_identity": bool(lock_contains),
             "lock_exact_source_pinned": lock_pinned, "skill_bytes_match": bool(skill_bytes_match),
             "listed_identity": listed_identity, "matched_installation_ids": sorted(old_ids),
-            "cleanup": cleanup, "post_remove_list": post_list,
+            "native_uninstall": native_uninstall, "cleanup": cleanup, "post_remove_list": post_list,
             "post_removal_skill": post_removal_skill, "post_lock_pinned": post_lock_pinned,
             "removal_verified": removal_verified, "sentinels_preserved": sentinels_preserved}
 
