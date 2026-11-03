@@ -129,7 +129,15 @@ func lookupStdioCommand(root, command string, environment any, dataRoots ...stri
 			continue
 		}
 		for _, suffix := range suffixes {
-			info, err := os.Stat(filepath.Join(dir, command+suffix))
+			name := command + suffix
+			// Explicit PATH elements are absolute, but command names must remain
+			// local to that entry (including on Windows).
+			if !filepath.IsLocal(name) {
+				continue
+			}
+			// #nosec G703 -- read-only lookup under an absolute authored PATH
+			// entry, with a local relative command name; never executes or writes.
+			info, err := os.Stat(filepath.Join(dir, name))
 			if unexpectedPathIO(err) {
 				return err
 			}

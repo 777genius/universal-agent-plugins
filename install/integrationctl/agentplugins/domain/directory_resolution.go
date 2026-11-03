@@ -136,8 +136,8 @@ func findDirectoryProduct(snapshot DirectorySnapshot, selector string) (Director
 				if match != nil {
 					return DirectoryProduct{}, "", fmt.Errorf("%w: qualified distribution %q", ErrDirectoryAmbiguous, selector)
 				}
-				copy := snapshot.Products[i]
-				match = &copy
+				productCopy := snapshot.Products[i]
+				match = &productCopy
 			}
 		}
 		if match == nil {
@@ -224,7 +224,7 @@ func chooseDirectoryRelease(snapshot DirectorySnapshot, product DirectoryProduct
 			continue
 		}
 		if distribution.Status == DistributionSuspended && request.Operation != DirectoryRemove && request.Operation != DirectoryRepair && request.Operation != DirectoryRematerialize && request.Operation != DirectoryReproduce &&
-			!(exactRecorded && (request.Operation == DirectoryInstall || request.Operation == DirectoryNewTarget)) {
+			(!exactRecorded || (request.Operation != DirectoryInstall && request.Operation != DirectoryNewTarget)) {
 			reasons = append(reasons, eligibilityReason{"distribution_suspended", "distribution is suspended for this operation"})
 			continue
 		}
