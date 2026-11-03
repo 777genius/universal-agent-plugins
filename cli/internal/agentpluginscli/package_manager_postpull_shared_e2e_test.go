@@ -18,10 +18,26 @@ func pmPostPullGit(t *testing.T, root string, args ...string) string {
 	command := exec.CommandContext(t.Context(), "git", append([]string{
 		"-C", root,
 		"-c", "core.autocrlf=false",
+		"-c", "commit.gpgsign=false",
+		"-c", "tag.gpgsign=false",
+		"-c", "core.hooksPath=" + filepath.Join(t.TempDir(), "disabled-hooks"),
 		"-c", "user.name=777genius",
 		"-c", "user.email=fixture@example.invalid",
 	}, args...)...)
-	command.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0")
+	// A test must not inherit routing, tracing, identity or other Git
+	// configuration from a developer's current worktree. The fixture uses
+	// only disposable local repositories and does not need remote credentials.
+	env := make([]string, 0, len(os.Environ())+3)
+	for _, value := range os.Environ() {
+		key, _, _ := strings.Cut(value, "=")
+		if strings.HasPrefix(strings.ToUpper(key), "GIT_") {
+			continue
+		}
+		env = append(env, value)
+	}
+	command.Env = append(env,
+		"GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0",
+		"GIT_CONFIG_GLOBAL="+filepath.Join(t.TempDir(), "empty-global-gitconfig"))
 	out, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("real Git %q failed: %v: %s", args, err, out)
