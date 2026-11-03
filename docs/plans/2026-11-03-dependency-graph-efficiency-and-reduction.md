@@ -1,7 +1,7 @@
 # Dependency graph efficiency and safe reduction
 
 Date: 2026-11-03. Research baseline: `07ab910b75e397c9f223078e3c7d9f701f2f36a6`.
-Status: **Research complete. Initial plan for self-review and independent criticism; implementation has not started.**
+Status: **Research and root self-review complete. Published in draft PR #697; independent plan criticism is next. Implementation has not started.**
 Delivery: one draft PR, publish this plan immediately, then publish each coherent implementation increment. Complete E2E, independent review/fixes and the authorized merge. No release is included.
 
 ## 1. Goal and scope
@@ -57,6 +57,7 @@ The shared-hub failure consumed 8,388,531 work events under the unchanged 8,388,
 - Actual saved `remove`, edited-manifest `deps lock`, and unlocked changed-intent `deps sync` encounter that limit. Their baseline refusals preserve manifest, lock, cache, state, managed files and operation files.
 - Ordinary `install` with any existing lock is already strict, like `install --locked`. An edited manifest produces a digest mismatch. This is a required behavior to preserve, not an opportunity to silently re-resolve on install.
 - `verifyDeclaredEdges` scans all recorded packages/edges for each parent, producing an avoidable cross-product during exact replay/check/import of large graphs.
+- Root inspection found that cold exact replay discards snapshot cleanup errors in `readReplayDependency`, while warm `describePinnedDependency` preserves them. Reproduce this directly and align the cold path with the existing joined-error contract as part of retained-package verification; do not build a new cleanup abstraction.
 - Existing large-history tests mostly drop everything or retain one independent pin. They do not cover a contraction that still exceeds fresh-search counts.
 - `BenchmarkVersionSelectionSharedGraph` is currently a small star. Keep its useful historical cases, but add real shared-hub and high-fan-in shapes.
 
@@ -136,9 +137,9 @@ Acceptance: 1,026 to 1,025 roots; target-only removal above the node limit; reta
 
 Owner: CLI verification lane. Primary files: `deps_replay.go`, `deps_check.go`, related private helper/regression files.
 
-Build the recorded edge lookup once per verification operation, indexed by consumer/parent, and use it to compare each verified declaration set. Retain source lookup and exact missing/unexpected-edge diagnostics. Exact replay, imported agreement verification and offline check must use the same narrow comparison helper rather than duplicate indexing policy.
+Build the recorded edge lookup once per verification operation, indexed by consumer/parent, and use it to compare each verified declaration set. Preserve every recorded edge, including duplicates and selector-distinct entries: an index must not overwrite evidence that the current comparison rejects. Retain source lookup and the existing missing/unexpected-edge error categories and wording. The current map iteration does not define which of several independent errors appears first; do not claim byte-for-byte ordering compatibility for those cases. Exact replay, imported agreement verification and offline check must use the same narrow comparison helper rather than duplicate indexing policy.
 
-Do not cache verification across commands or skip package byte verification. Keep context checks, snapshot cleanup, stable issue codes, `deps check` outcomes and offline side-effect guarantees. A malformed or mismatched graph must not become accepted merely because lookup is faster.
+Do not cache verification across commands or skip package byte verification. Keep context checks, snapshot cleanup, stable issue codes, `deps check` outcomes and offline side-effect guarantees. A malformed or mismatched graph must not become accepted merely because lookup is faster. Add a focused cold-acquisition cleanup regression, then preserve both the original failure and `errDependencySnapshotCleanup` when cleanup fails; a cleanup failure must not publish a usable resolved package or fall back to candidate search.
 
 Acceptance: same verdicts/diagnostics for missing, extra, incompatible and shared edges, with representative large-graph evidence showing the repeated full-lock scan removed. Retain ordinary descriptive `deps status` behavior.
 
@@ -201,8 +202,8 @@ Publish the researched plan first. Root then self-reviews and publishes any corr
 - [x] Fresh-main inspection and overlap inventory.
 - [x] Three independent research lanes, reproduced failures and baseline measurements.
 - [x] Initial bounded plan written before production edits.
-- [ ] Initial plan published in draft PR.
-- [ ] Root self-review completed and corrections published.
+- [x] Initial plan published in [draft PR #697](https://github.com/777genius/universal-agent-plugins/pull/697).
+- [x] Root self-review completed; corrections published before independent criticism.
 - [ ] Three independent plan critics; findings addressed before implementation.
 - [ ] A: candidate ownership and prepared graph facts.
 - [ ] B: incremental active resolution and rollback.
@@ -212,3 +213,7 @@ Publish the researched plan first. Root then self-reviews and publishes any corr
 - [ ] F: independent combined-code review/fixes, final native E2E and authorized merge.
 
 Final evidence must distinguish observations from hypotheses, local fixtures from native execution, fresh solving from exact replay, and pre-publication preservation from existing post-publication partial results.
+
+### Root self-review disposition
+
+The initial plan was published as `ad97755797b20a39e2b59f448ec3486cc8372b8d` before any production edit. Self-review tightened the edge-index contract to preserve multiplicity and selector evidence, distinguished error identity from unspecified map iteration order, and identified the ignored cold-replay cleanup result for focused reproduction and repair. The existing public-command routing, old-root proof limitation, exact immutable cold acquisition, removed-package exclusion and unchanged search ceilings were checked against the source. No new API, policy layer, mandatory workflow, or unrelated platform scope was added.
