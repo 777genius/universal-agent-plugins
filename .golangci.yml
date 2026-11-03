@@ -569,6 +569,10 @@ linters:
       - path: ^install/integrationctl/agentplugins/adapters/directoryv1/validate\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
+      # Existing validation rules moved unchanged to cohesive files in stack 2.
+      - path: ^install/integrationctl/agentplugins/adapters/directoryv1/validate_(policy|required_fields)\.go$
+        linters: [funlen, gocyclo, gocognit]
+        text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/adapters/discoveryv1/cache\.go$
         linters: [funlen, gocyclo]
         text: 'too many statements|cyclomatic complexity'
@@ -635,10 +639,22 @@ linters:
       - path: ^install/integrationctl/agentplugins/adapters/sourceacquisition/acquirer\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
+      # Preserve the exact pre-existing source-acquirer size baseline after split.
+      - path: ^install/integrationctl/agentplugins/adapters/sourceacquisition/acquirer_(transport|tree)\.go$
+        linters: [funlen, gocyclo, gocognit]
+        text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/adapters/statemigration/migrate\.go$
         linters: [revive, funlen, gocyclo]
         text: 'file length is|is too long|too many statements|cyclomatic complexity'
+      # Legacy state conversion was relocated; no schema or algorithm changed.
+      - path: ^install/integrationctl/agentplugins/adapters/statemigration/migrate_legacy_mapping\.go$
+        linters: [funlen, gocyclo]
+        text: 'is too long|too many statements|cyclomatic complexity'
       - path: ^install/integrationctl/agentplugins/adapters/statev2/store\.go$
+        linters: [funlen, gocyclo, gocognit]
+        text: 'too many statements|cyclomatic complexity|cognitive complexity'
+      # Preserve the old stored-state validation baseline under its new path.
+      - path: ^install/integrationctl/agentplugins/adapters/statev2/state_validation\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/conformance/author\.go$
@@ -668,6 +684,12 @@ linters:
       - path: ^install/integrationctl/agentplugins/domain/directory\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
+      # The next focused files contain exact pre-existing high-complexity
+      # functions moved from directory.go. Retain its measured legacy baseline;
+      # no new functions or complexity are exempted by this relocation.
+      - path: ^install/integrationctl/agentplugins/domain/directory_(eligibility|resolution)\.go$
+        linters: [funlen, gocyclo, gocognit]
+        text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/managedstdio/launcher\.go$
         linters: [gocyclo]
         text: 'cyclomatic complexity'
@@ -677,6 +699,11 @@ linters:
       - path: ^install/integrationctl/agentplugins/transaction/kernel\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
+      # Exact unchanged kernel operation bodies relocated into cohesive files.
+      # Keep the same per-rule baseline, not an unrestricted path suppression.
+      - path: ^install/integrationctl/agentplugins/transaction/kernel_directory_(write|remove|recovery)\.go$
+        linters: [funlen, gocyclo, gocognit]
+        text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/packagesnapshot/snapshot\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'is too long|too many statements|cyclomatic complexity|cognitive complexity'

@@ -2,6 +2,7 @@ package exampleclient
 
 import (
 	"go/parser"
+	"os"
 	"go/token"
 	"path/filepath"
 	"runtime"
@@ -25,7 +26,7 @@ func TestExampleClientInjectsWithoutGenericImports(t *testing.T) {
 	contracttest.RunHostDetector(t, New())
 	assertDoesNotImport(t, "planner/planner.go")
 	assertDoesNotImport(t, "providers/activator.go")
-	assertDoesNotImport(t, "usecase/service.go")
+	assertPackageDoesNotImport(t, "usecase")
 	assertDoesNotImport(t, "adapters/clientdetect/detector.go")
 }
 
@@ -47,5 +48,26 @@ func assertDoesNotImport(t *testing.T, rel string) {
 		if strings.Trim(spec.Path.Value, `"`) == exampleImport {
 			t.Errorf("%s imports %s; generic packages must not name the example adapter", rel, exampleImport)
 		}
+	}
+}
+
+// Check every production compilation unit, not one historical service.go path.
+// A new usecase file must not silently import the example test client.
+func assertPackageDoesNotImport(t *testing.T, rel string) {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", "..", ".."))
+	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		assertDoesNotImport(t, filepath.ToSlash(filepath.Join(rel, entry.Name())))
 	}
 }

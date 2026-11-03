@@ -94,7 +94,7 @@ func (migrator Migrator) load() ([]byte, legacyState, error) {
 		return nil, legacyState{}, fmt.Errorf("legacy and Agent Plugins state paths are required")
 	}
 	if _, err := os.Stat(migrator.V2Store.Path); err == nil {
-		return nil, legacyState{}, fmt.Errorf("Agent Plugins state already exists; migration is not idempotent over authoritative state")
+		return nil, legacyState{}, fmt.Errorf("agent plugins state already exists; migration is not idempotent over authoritative state")
 	} else if !os.IsNotExist(err) {
 		return nil, legacyState{}, err
 	}
