@@ -150,6 +150,9 @@ export function useSkillsCatalog(
       }
       const overview = await summaryPromise;
       if (request !== generation) return;
+      // v2/v1 fallback has no current-scan coverage. An absent v3 snapshot
+      // must be reported as unavailable, not as an empty verified selection.
+      if (requireCurrentScan && !overview) reportUnavailable = true;
       items.value = collected;
       scanOverview.value = requireCurrentScan ? overview : undefined;
       if (requireCurrentScan) scanReportUnavailable.value ||= reportUnavailable;

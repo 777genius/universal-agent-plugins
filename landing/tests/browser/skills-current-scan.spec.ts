@@ -139,3 +139,36 @@ test('failed published reports never produce a verified Skill card', async ({ pa
   await expect(page.getByText('Some scan reports could not be verified. Those Skills were excluded.')).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('legacy v2 fallback is explicitly unavailable, never an empty verified scan', async ({ page }) => {
+  const errors = await offline(page);
+  const requests: string[] = [];
+  page.on('request', request => {
+    if (request.url().includes('/reports/skillspector/')) requests.push(request.url());
+  });
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', route =>
+    route.fulfill({ json: {
+      items: [skill('affaan-m/ecc', 'recsys-pipeline-architect')],
+      page: 0, total: 1, hasMore: false, view: 'popular',
+      cache: { status: 'fresh', fetchedAt: evidence.generated_at },
+    } }),
+  );
+
+  // offline() supplies a v3 404 and a structurally valid v2 manifest.
+  await page.goto('plugins/?tab=skills');
+  const catalog = page.locator('.skills-catalog');
+  await expect(catalog).toHaveAttribute('aria-busy', 'false');
+  await expect(catalog.locator('.skill-card')).toHaveCount(0);
+  await expect(catalog.locator('.skills-catalog__scan-coverage')).toHaveCount(0);
+  await expect(catalog.getByText(
+    'Some scan reports could not be verified. Those Skills were excluded.',
+  )).toBeVisible();
+  expect(requests.some(url => url.endsWith('/v3/index.json'))).toBe(true);
+  expect(requests.some(url => url.endsWith('/v2/index.json'))).toBe(true);
+
+  // The opt-in all-installable mode still exposes the independently
+  // installable Skill, without assigning it current scan evidence.
+  await page.goto('plugins/?tab=skills&skillScan=all');
+  await expect(catalog.locator('.skill-card')).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
