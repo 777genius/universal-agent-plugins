@@ -12,6 +12,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 )
 
+// TestDirectoryVerificationFailurePreservesForeignBytesAndOriginalError verifies that
+// failed publication reports quoted recovery paths without losing user bytes or committing state.
 func TestDirectoryVerificationFailurePreservesForeignBytesAndOriginalError(t *testing.T) {
 	kernel, mutation, store := transactionFixture(t, "foreign-rollback")
 	original := errors.New("original publication verification failed")
@@ -90,6 +92,8 @@ func TestDirectoryRejectsBackupDriftBeforeStateCommit(t *testing.T) {
 	}
 }
 
+// TestRemovalApplyFailureReportsRollbackFailureAndPreservesBackup verifies that
+// failed removal preserves the backup, original error and quoted recovery location.
 func TestRemovalApplyFailureReportsRollbackFailureAndPreservesBackup(t *testing.T) {
 	kernel, mutation, store := transactionFixture(t, "remove-backup-drift")
 	original := errors.New("original removal failed")
