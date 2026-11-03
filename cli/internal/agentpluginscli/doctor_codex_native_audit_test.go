@@ -96,9 +96,9 @@ func TestCodexDoctorDetectsMissingSkillOrMCPWithoutTouchingForeign(t *testing.T)
 		t.Run(c.name, func(t *testing.T) {
 			inst, root := codexDoctorFixture(t)
 			paths := map[string]string{
-				"skill": filepath.Join(root, ".agents", "skills", "demo"),
+				"skill":     filepath.Join(root, ".agents", "skills", "demo"),
 				"skillfile": filepath.Join(root, ".agents", "skills", "demo", "SKILL.md"),
-				"mcp": filepath.Join(root, ".codex", "config.toml"),
+				"mcp":       filepath.Join(root, ".codex", "config.toml"),
 			}
 			if err := os.RemoveAll(paths[c.remove]); err != nil {
 				t.Fatal(err)

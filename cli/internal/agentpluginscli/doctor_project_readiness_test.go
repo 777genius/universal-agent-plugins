@@ -56,20 +56,76 @@ func TestProjectReadinessStatusPrecedence(t *testing.T) {
 		change func(*domain.Installation, *domain.ClientBinding)
 		want   string
 	}{
-		{"prepared", func(*domain.Installation, *domain.ClientBinding) {}, "prepared_native_unverified"},
-		{"needs rebind", func(i *domain.Installation, _ *domain.ClientBinding) { i.NeedsRebind = true }, "source_rebind_required"},
-		{"failed verification", func(_ *domain.Installation, b *domain.ClientBinding) { b.Verification = domain.VerificationFailed }, "failed"},
-		{"failed activation", func(_ *domain.Installation, b *domain.ClientBinding) { b.Activation = domain.ActivationFailed }, "failed"},
-		{"failed authentication", func(_ *domain.Installation, b *domain.ClientBinding) { b.Authentication = domain.AuthenticationFailed }, "failed"},
-		{"degraded materialization", func(_ *domain.Installation, b *domain.ClientBinding) { b.Materialization = domain.MaterializationDegraded }, "failed"},
-		{"policy blocked", func(_ *domain.Installation, b *domain.ClientBinding) { b.Policy = domain.PolicyBlocked }, "policy_blocked"},
-		{"policy approval", func(_ *domain.Installation, b *domain.ClientBinding) { b.Policy = domain.PolicyApprovalRequired }, "policy_approval_required"},
-		{"auth pending", func(_ *domain.Installation, b *domain.ClientBinding) { b.Authentication = domain.AuthenticationPending }, "authentication_pending"},
-		{"staged", func(_ *domain.Installation, b *domain.ClientBinding) { b.Materialization = domain.MaterializationStaged }, "materialization_pending"},
-		{"manual", func(_ *domain.Installation, b *domain.ClientBinding) { b.Activation = domain.ActivationManual }, "manual_activation_required"},
-		{"active but no runtime observation", func(_ *domain.Installation, b *domain.ClientBinding) { b.Activation = domain.ActivationActive }, "native_unverified"},
-		{"previous runtime", func(_ *domain.Installation, b *domain.ClientBinding) { b.Activation = domain.ActivationActive; b.Verification = domain.VerificationRuntime }, "runtime_verified_in_record_only"},
-		{"not qualified", func(_ *domain.Installation, b *domain.ClientBinding) { b.Activation = domain.ActivationNotRequired }, "not_qualified"},
+		{
+			name:   "prepared",
+			change: func(*domain.Installation, *domain.ClientBinding) {},
+			want:   "prepared_native_unverified",
+		},
+		{
+			name:   "needs rebind",
+			change: func(i *domain.Installation, _ *domain.ClientBinding) { i.NeedsRebind = true },
+			want:   "source_rebind_required",
+		},
+		{
+			name:   "failed verification",
+			change: func(_ *domain.Installation, b *domain.ClientBinding) { b.Verification = domain.VerificationFailed },
+			want:   "failed",
+		},
+		{
+			name:   "failed activation",
+			change: func(_ *domain.Installation, b *domain.ClientBinding) { b.Activation = domain.ActivationFailed },
+			want:   "failed",
+		},
+		{
+			name:   "failed authentication",
+			change: func(_ *domain.Installation, b *domain.ClientBinding) { b.Authentication = domain.AuthenticationFailed },
+			want:   "failed",
+		},
+		{
+			name:   "degraded materialization",
+			change: func(_ *domain.Installation, b *domain.ClientBinding) { b.Materialization = domain.MaterializationDegraded },
+			want:   "failed",
+		},
+		{
+			name:   "policy blocked",
+			change: func(_ *domain.Installation, b *domain.ClientBinding) { b.Policy = domain.PolicyBlocked },
+			want:   "policy_blocked",
+		},
+		{
+			name:   "policy approval",
+			change: func(_ *domain.Installation, b *domain.ClientBinding) { b.Policy = domain.PolicyApprovalRequired },
+			want:   "policy_approval_required",
+		},
+		{
+			name:   "auth pending",
+			change: func(_ *domain.Installation, b *domain.ClientBinding) { b.Authentication = domain.AuthenticationPending },
+			want:   "authentication_pending",
+		},
+		{
+			name:   "staged",
+			change: func(_ *domain.Installation, b *domain.ClientBinding) { b.Materialization = domain.MaterializationStaged },
+			want:   "materialization_pending",
+		},
+		{
+			name:   "manual",
+			change: func(_ *domain.Installation, b *domain.ClientBinding) { b.Activation = domain.ActivationManual },
+			want:   "manual_activation_required",
+		},
+		{
+			name:   "active but no runtime observation",
+			change: func(_ *domain.Installation, b *domain.ClientBinding) { b.Activation = domain.ActivationActive },
+			want:   "native_unverified",
+		},
+		{
+			name:   "previous runtime",
+			change: func(_ *domain.Installation, b *domain.ClientBinding) { b.Activation = domain.ActivationActive; b.Verification = domain.VerificationRuntime },
+			want:   "runtime_verified_in_record_only",
+		},
+		{
+			name:   "not qualified",
+			change: func(_ *domain.Installation, b *domain.ClientBinding) { b.Activation = domain.ActivationNotRequired },
+			want:   "not_qualified",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

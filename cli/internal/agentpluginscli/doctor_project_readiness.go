@@ -43,7 +43,7 @@ func projectReadinessRecords(state domain.StateFileV2, selected *domain.Installa
 				evidence = "recorded_runtime_verification_not_rechecked"
 			}
 			records = append(records, projectReadinessRecord{
-				InstallationID: installation.InstallationID,
+				InstallationID:  installation.InstallationID,
 				BindingID:       binding.ClientBindingID,
 				ClientID:        binding.ClientID,
 				Status:          status,

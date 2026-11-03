@@ -273,6 +273,19 @@ func TestEffectiveDependencyDrift(t *testing.T) {
 	for _, control := range []string{"go.work", "install/integrationctl/go.mod"} {
 		t.Run(control, func(t *testing.T) {
 			dir := newSourceFixture(t)
+			// This historical fixture predates the patched TOML parser.
+			// Align its module graph before querying with GOPROXY=off.
+			for _, module := range []string{"go.mod", "cli/go.mod", "install/integrationctl/go.mod", "install/integrationctl/agentplugins/go.mod"} {
+				path := filepath.Join(dir, module)
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				updated := bytes.ReplaceAll(data,
+					[]byte("github.com/pelletier/go-toml/v2 v2.3.0"),
+					[]byte("github.com/pelletier/go-toml/v2 v2.4.3"))
+				writeFixture(t, dir, module, updated)
+			}
 			replacement := filepath.Join(filepath.Dir(control), "docs-pflag-replacement")
 			writeFixture(t, dir, filepath.ToSlash(filepath.Join(replacement, "go.mod")), []byte("module github.com/spf13/pflag\n\ngo 1.22\n"))
 			path := filepath.Join(dir, control)

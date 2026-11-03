@@ -282,63 +282,77 @@ func doctorNativeEntryStatus(root *os.Root, path string, last, directory bool) s
 	}
 }
 
-// doctorNativeNestingBounded is a non-recursive defense in depth for TOML.
-// A byte cap alone does not limit recursion; strings/comments aren't nesting.
+// doctorNativeNestingBounded prevents adversarial TOML nesting from reaching a
+// recursive parser. Comments and string literals do not contribute to depth.
 func doctorNativeNestingBounded(contents []byte, limit int) bool {
-	depth := 0
-	var quote byte
-	multiline, escaped, comment := false, false, false
+	var scan doctorTOMLDepthScan
 	for i := 0; i < len(contents); i++ {
-		b := contents[i]
-		if comment {
-			if b == '\n' || b == '\r' {
-				comment = false
-			}
-			continue
-		}
-		if quote != 0 {
-			if quote == '"' {
-				if escaped {
-					escaped = false
-					continue
-				}
-				if b == '\\' {
-					escaped = true
-					continue
-				}
-			}
-			if b == quote {
-				if !multiline {
-					quote = 0
-				} else if i+2 < len(contents) && contents[i+1] == quote && contents[i+2] == quote {
-					quote = 0
-					multiline = false
-					i += 2
-				}
-			}
-			continue
-		}
-		switch b {
-		case '#':
-			comment = true
-		case '\'', '"':
-			quote = b
-			multiline = i+2 < len(contents) && contents[i+1] == b && contents[i+2] == b
-			if multiline {
-				i += 2
-			}
-		case '[', '{':
-			depth++
-			if depth > limit {
-				return false
-			}
-		case ']', '}':
-			if depth > 0 {
-				depth--
-			}
+		if !scan.advance(contents, &i, limit) {
+			return false
 		}
 	}
 	return true
+}
+
+type doctorTOMLDepthScan struct {
+	depth     int
+	quote     byte
+	multiline bool
+	escaped   bool
+	comment   bool
+}
+
+func (s *doctorTOMLDepthScan) advance(contents []byte, pos *int, limit int) bool {
+	b := contents[*pos]
+	if s.comment {
+		s.comment = b != '\n' && b != '\r'
+		return true
+	}
+	if s.quote != 0 {
+		s.advanceQuoted(contents, pos, b)
+		return true
+	}
+	switch b {
+	case '#':
+		s.comment = true
+	case '\'', '"':
+		s.quote = b
+		s.multiline = *pos+2 < len(contents) && contents[*pos+1] == b && contents[*pos+2] == b
+		if s.multiline {
+			*pos += 2
+		}
+	case '[', '{':
+		s.depth++
+		return s.depth <= limit
+	case ']', '}':
+		if s.depth > 0 {
+			s.depth--
+		}
+	}
+	return true
+}
+
+func (s *doctorTOMLDepthScan) advanceQuoted(contents []byte, pos *int, b byte) {
+	if s.quote == '"' && s.escaped {
+		s.escaped = false
+		return
+	}
+	if s.quote == '"' && b == '\\' {
+		s.escaped = true
+		return
+	}
+	if b != s.quote {
+		return
+	}
+	if !s.multiline {
+		s.quote = 0
+		return
+	}
+	if *pos+2 < len(contents) && contents[*pos+1] == b && contents[*pos+2] == b {
+		s.quote = 0
+		s.multiline = false
+		*pos += 2
+	}
 }
 
 func doctorNativeRead(root *os.Root, path string) ([]byte, string) {

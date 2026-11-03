@@ -30,10 +30,10 @@ func TestProjectDoctorReadinessProductionCompositionE2E(t *testing.T) {
 		Data struct {
 			ReadOnly         bool `json:"read_only"`
 			ProjectReadiness []struct {
-				ClientID       string `json:"client_id"`
-				InstallationID string `json:"installation_id"`
-				Status         string `json:"status"`
-				NativeEvidence string `json:"native_evidence"`
+				ClientID       string   `json:"client_id"`
+				InstallationID string   `json:"installation_id"`
+				Status         string   `json:"status"`
+				NativeEvidence string   `json:"native_evidence"`
 				NextActions    []string `json:"next_actions"`
 			} `json:"project_readiness"`
 			Findings []struct {
