@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -29,7 +30,7 @@ func TestDirectoryVerificationFailurePreservesForeignBytesAndOriginalError(t *te
 		t.Fatal(loadErr)
 	}
 	for _, path := range []string{r.ActivePath, r.BackupPath, r.QuarantinePath, filepath.Join(kernel.Directory.JournalDir, mutation.OperationID+".json")} {
-		if !strings.Contains(err.Error(), path) {
+		if !strings.Contains(err.Error(), strconv.Quote(path)) {
 			t.Fatalf("recovery path missing: %s in %v", path, err)
 		}
 	}
@@ -116,8 +117,8 @@ func TestRemovalApplyFailureReportsRollbackFailureAndPreservesBackup(t *testing.
 	if loadErr != nil {
 		t.Fatal(loadErr)
 	}
-	if !strings.Contains(err.Error(), r.BackupPath) {
-		t.Fatal("backup path missing")
+	if !strings.Contains(err.Error(), strconv.Quote(r.BackupPath)) {
+		t.Fatalf("backup path %q missing from recovery error: %v", r.BackupPath, err)
 	}
 	assertTransactionBody(t, r.BackupPath, "old")
 	body, readErr := os.ReadFile(filepath.Join(r.BackupPath, "foreign"))
