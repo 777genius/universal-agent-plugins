@@ -27,9 +27,9 @@
 Install, update, and remove Agent Plugins 1.0 packages across your AI agents with one CLI.
 Save your setup in `uap.toml` and `uap.lock` to restore it on another computer or share it with a project.
 
-[Documentation](https://universal-agent-plugins.com/docs/) ·
+[Read the documentation](https://universal-agent-plugins.com/docs/) ·
 [Browse plugins](https://universal-agent-plugins.com/plugins/) ·
-[Build a plugin](#build-plugins)
+[Build plugins](#build-plugins)
 
 [Quick start](#quick-start) · [Project installation](#install-for-one-project) ·
 [Supported clients](#supported-clients) · [SDK](#already-built-with-uap-sdk)
@@ -85,12 +85,13 @@ irm https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/ins
 & "$HOME\.local\bin\agentplugins.exe" add context7
 ```
 
-**npm — Node.js 22+:**
+Install the latest CLI with npm (Node.js 22+):
 
 ```bash
 npm install -g universal-agent-plugins
-agentplugins add context7
 ```
+
+Then run `agentplugins add context7`.
 
 The native installers verify the binary's published SHA-256 and version and
 install into `$HOME/.local/bin` (override with `AGENTPLUGINS_BIN_DIR`). Individual
@@ -117,16 +118,16 @@ Explicit project scope requires CLI 0.1.93+.
 Open your project folder and choose a compatible package from the
 [catalog](https://universal-agent-plugins.com/plugins/).
 
-**Add a plugin**
+**Add a plugin — pinned GitLab example**
 
 ```sh
 cd /path/to/project
-agentplugins add github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH \
+agentplugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab \
   --scope project --target codex
 ```
 
-Replace the example source with the package’s pinned Git source from the catalog;
-omit `//PACKAGE_PATH` for a package at the repository root. Short catalog names
+For another package, use its pinned Git source from the catalog; omit
+`//PACKAGE_PATH` for a package at the repository root. Short catalog names
 such as `context7` currently work only in user scope.
 
 Commit `uap.toml` and `uap.lock`; add `.uap/` to `.gitignore`.
@@ -240,8 +241,8 @@ preparation is not a portable saved dependency. Prepare it separately if you
 want to save other clients. See the [Context7 setup guide](docs/CONTEXT7_CHATGPT_KIRO_E2E.md).
 
 A prepared installation may still need a reload, OAuth, or client approval.
-Codex supports stdio and Streamable HTTP MCP, but excludes SSE components;
-see [transport details](docs/CODEX_TRANSPORT_EVIDENCE.md). The
+For Codex, declared MCP SSE is unsupported; use stdio or Streamable HTTP.
+See [transport details](docs/CODEX_TRANSPORT_EVIDENCE.md). The
 [compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
 records tested client versions, platforms, and remaining steps.
 
@@ -317,7 +318,7 @@ or the client vendors.
   </tr>
 </table>
 
-The [Go SDK](sdk/README.md) provides typed runtime hooks and client-specific
+The [Go SDK integration guide](sdk/README.md) covers typed runtime hooks and client-specific
 handlers. Reusable [Go installer components](install/integrationctl/agentplugins/installer/README.md)
 support client integration.
 The [TypeScript Management SDK](sdks/typescript/README.md), published as
@@ -344,7 +345,7 @@ agentplugins author test ./my-plugin
 The [Build guide](https://universal-agent-plugins.com/docs/en/build/) covers
 Skills, remote and stdio MCP, hybrid packages, and installation. Start with the
 [Use / Build quickstart](https://universal-agent-plugins.com/docs/en/guide/quickstart.html).
-Native installer [releases](https://github.com/777genius/universal-agent-plugins/releases)
+[Native Agent Plugins releases](https://github.com/777genius/universal-agent-plugins/releases)
 use `agentplugins-v*` tags.
 
 <details>
