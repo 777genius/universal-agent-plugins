@@ -133,6 +133,27 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             "stderr_tail": "release does not support complete target set",
         }))
 
+    def test_every_native_plugin_client_preserves_foreign_profile_file(self):
+        audit = load_audit()
+        refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
+                   "timeout": False, "_json": None}
+        with TemporaryDirectory() as temporary:
+            with patch.object(audit, "call", return_value=refused):
+                for target, roots in audit.NATIVE_ROOTS.items():
+                    if not roots:
+                        continue  # ChatGPT is remote/manual, no fabricated native profile
+                    with self.subTest(target=target):
+                        runroot = Path(temporary).resolve() / target
+                        evidence = audit.do_case(
+                            "/unused/audit-cli", target, "plugin", "atlassian", 0,
+                            runroot, {}
+                        )
+                        foreign = runroot / "plugin-00/home" / roots[0] / "foreign-neighbor.txt"
+                        self.assertTrue(foreign.is_file())
+                        self.assertEqual(foreign.read_text(),
+                                         "unmanaged native neighbor must survive\\n")
+                        self.assertTrue(evidence["sentinels_preserved"])
+
     def test_real_signed_release_target_refusal_is_not_an_installer_bug(self):
         audit = load_audit()
         reproduced = (

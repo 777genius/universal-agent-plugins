@@ -449,7 +449,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     native_roots = [home / v for v in NATIVE_ROOTS[target]]
     # A foreign file lives adjacent to installed native user artifacts.
     # Its content and position are independent from UAP-managed receipts.
-    native_foreign = (native_roots[0] / "foreign-neighbor.txt") if target == "codex" else None
+    native_foreign = (native_roots[0] / "foreign-neighbor.txt") if native_roots else None
     if native_foreign:
         native_foreign.parent.mkdir(parents=True, exist_ok=True)
         native_foreign.write_text("unmanaged native neighbor must survive\n")
