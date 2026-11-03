@@ -35,10 +35,13 @@ PROJECT_SKILL_ROOTS = {
     "qoder": [".uap/managed/clients/qoder"], "pi": [".pi/skills"],
 }
 EXECUTABLE = {
-    "codex": "codex", "copilot": "copilot", "cline": "cline", "claude": "claude",
-    "gemini": "gemini", "opencode": "opencode", "pi": "pi",
-    "kiro": "kiro", "grok": "grok", "kimi": "kimi",
-    "qoder": "qoder", "windsurf": "devin",
+    "codex": ("codex",), "copilot": ("copilot",), "cline": ("cline",),
+    "claude": ("claude",), "gemini": ("gemini",),
+    "opencode": ("opencode",), "pi": ("pi",),
+    "cursor": ("cursor-agent", "cursor"), "vscode": ("code",),
+    "kiro": ("kiro-cli", "kiro"), "grok": ("grok",),
+    "kimi": ("kimi",), "qoder": ("qoder", "qodercli"),
+    "windsurf": ("devin", "windsurf"),
 }
 
 
@@ -452,9 +455,11 @@ def main():
     report_file = report_dir / f"{args.target}-{args.kind}.json"
     def save():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
-    expected_binary = EXECUTABLE.get(args.target)
-    if expected_binary and shutil.which(expected_binary) is None:
-        report["blocker"] = f"Genuine {expected_binary} client executable is not installed"
+    eligible_binaries = EXECUTABLE.get(args.target, ())
+    if eligible_binaries and not any(shutil.which(name) for name in eligible_binaries):
+        report["blocker"] = (
+            "Genuine client executable not installed; tried " + ", ".join(eligible_binaries)
+        )
         report["results"] = [{"target": args.target, "kind": args.kind,
                               "status": "client-unavailable", "identity": v if args.kind == "plugin" else v["name"]}
                              for v in selected]
