@@ -1,0 +1,15 @@
+{
+  "shell": {
+    "restoreDemo": {
+      "scopeLabel": "Область установки",
+      "projectLabel": "Проект",
+      "globalLabel": "Глобально",
+      "projectSubtitle": "Пример Marketing Kit — одинаковые версии плагинов в вашем проекте.",
+      "globalSubtitle": "Пример Marketing Kit — перенесите глобальный набор плагинов на другой компьютер.",
+      "projectHandoff": "Добавьте uap.toml и uap.lock в Git. Коллега запускает install в проекте.",
+      "globalHandoff": "Экспортируйте и передайте оба файла. Импорт заменит глобальный набор после подтверждения.",
+      "projectUnavailable": "Это пример для проекта: текущий выпуск Marketing Kit поддерживает только глобальную установку.",
+      "exportLabel": "Экспортировать эти файлы"
+    }
+  }
+}
