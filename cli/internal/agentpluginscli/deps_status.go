@@ -122,30 +122,18 @@ func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lo
 		count   int
 		byAlias map[string]*environment.LockedPackage
 	}
-	// Match EqualFold, including its Unicode simple-fold equivalents, without
-	// changing how historical product IDs participate in offline lookup.
-	fold := func(value string) string {
-		return strings.Map(func(r rune) rune {
-			for {
-				next := unicode.SimpleFold(r)
-				if next <= r {
-					return next
-				}
-				r = next
-			}
-		}, value)
-	}
 	byName := map[string]*registryMatches{}
 	for i := range lock.Packages {
 		pkg := &lock.Packages[i]
 		if pkg.Source.Registry == nil {
 			continue
 		}
-		product, basename := fold(pkg.Source.Registry.ProductID), fold(path.Base(pkg.Source.Registry.DistributionID))
-		for index, name := range []string{product, basename} {
-			if index == 1 && name == product {
-				continue
-			}
+		product, basename := foldDependencyRegistryName(pkg.Source.Registry.ProductID), foldDependencyRegistryName(path.Base(pkg.Source.Registry.DistributionID))
+		names := []string{product}
+		if basename != product {
+			names = append(names, basename)
+		}
+		for _, name := range names {
 			matches := byName[name]
 			if matches == nil {
 				matches = &registryMatches{first: pkg, byAlias: map[string]*environment.LockedPackage{}}
@@ -161,7 +149,7 @@ func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lo
 		if requirement.Registry == nil || strings.Contains(requirement.Registry.Distribution, "/") {
 			continue
 		}
-		matches := byName[fold(requirement.Registry.Distribution)]
+		matches := byName[foldDependencyRegistryName(requirement.Registry.Distribution)]
 		if matches == nil {
 			continue
 		}
@@ -180,6 +168,20 @@ func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lo
 		requirements.Dependencies[key] = requirement
 	}
 	return nil
+}
+
+// Match EqualFold, including its Unicode simple-fold equivalents, without
+// changing how historical product IDs participate in offline lookup.
+func foldDependencyRegistryName(value string) string {
+	return strings.Map(func(r rune) rune {
+		for {
+			next := unicode.SimpleFold(r)
+			if next <= r {
+				return next
+			}
+			r = next
+		}
+	}, value)
 }
 
 func appendBindingStatusFacts(fact *dependencyStatusFact, binding installer.InspectedBinding, pkg environment.LockedPackage, environmentIDs ...string) {

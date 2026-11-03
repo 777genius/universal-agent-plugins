@@ -29,3 +29,5 @@ func openRegularNoFollow(path string) (*os.File, error) {
 func openRootReadFile(root *os.Root, name string) (*os.File, error) {
 	return root.OpenFile(name, os.O_RDONLY|unix.O_NONBLOCK, 0)
 }
+
+func regularReadAvailability(os.FileInfo) error { return nil }

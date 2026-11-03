@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
-	"github.com/spf13/cobra"
 )
 
 func productionProjectCheckCommand(t *testing.T, app agentpluginscli.App, project string) (*cobra.Command, *bytes.Buffer, map[string][]byte) {

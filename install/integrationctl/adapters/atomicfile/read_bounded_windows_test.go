@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"golang.org/x/sys/windows"
@@ -22,7 +23,7 @@ func TestAdmittedWindowsReaderPreservesDeleteSharing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	if err := Write(path, []byte("after"), 0o600); err != nil {
 		t.Fatalf("admitted reader blocked atomic publication: %v", err)
 	}
@@ -59,7 +60,7 @@ func TestAdmittedWindowsReaderUnicodeLongPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	if err := Write(path, []byte("after"), 0o600); err != nil {
 		t.Fatalf("long-path reader blocked atomic publication: %v", err)
 	}
@@ -114,6 +115,58 @@ func TestWindowsRegularReadDedupAndUnsafeAttributes(t *testing.T) {
 				var pathError *os.PathError
 				if !errors.As(err, &pathError) || pathError.Path != "metadata.json" || errors.Is(err, ErrUnsafeFile) {
 					t.Fatalf("availability failure lost operational identity: %v", err)
+				}
+			}
+		})
+	}
+}
+
+type windowsReadFileInfo struct {
+	os.FileInfo
+	mode       os.FileMode
+	attributes uint32
+}
+
+func (info windowsReadFileInfo) Mode() os.FileMode { return info.mode }
+func (info windowsReadFileInfo) Sys() any {
+	return &syscall.Win32FileAttributeData{FileAttributes: info.attributes}
+}
+
+func TestWindowsRegularReadAvailabilityBeforeTypeAdmission(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "metadata.json")
+	if err := os.WriteFile(path, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	base, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name       string
+		mode       os.FileMode
+		attributes uint32
+		want       error
+	}{
+		{"regular", 0o600, windows.FILE_ATTRIBUTE_NORMAL, nil},
+		{"offline-regular", 0o600, windows.FILE_ATTRIBUTE_OFFLINE, windows.ERROR_FILE_OFFLINE},
+		{"offline-placeholder", os.ModeIrregular, windows.FILE_ATTRIBUTE_REPARSE_POINT | windows.FILE_ATTRIBUTE_OFFLINE, windows.ERROR_FILE_OFFLINE},
+		{"recall-on-open-placeholder", os.ModeIrregular, windows.FILE_ATTRIBUTE_REPARSE_POINT | windows.FILE_ATTRIBUTE_RECALL_ON_OPEN, windows.ERROR_FILE_OFFLINE},
+		{"recall-on-read-placeholder", os.ModeIrregular, windows.FILE_ATTRIBUTE_REPARSE_POINT | windows.FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS, windows.ERROR_FILE_OFFLINE},
+		{"available-irregular", os.ModeIrregular, windows.FILE_ATTRIBUTE_REPARSE_POINT, ErrUnsafeFile},
+		{"symlink", os.ModeSymlink, windows.FILE_ATTRIBUTE_REPARSE_POINT, ErrUnsafeFile},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// This is the shared pre-open admission, using the FileInfo shape Go
+			// returns for cloud reparse points. The handle helper alone misses it.
+			info := windowsReadFileInfo{FileInfo: base, mode: tc.mode, attributes: tc.attributes}
+			err := admitRegularRead(info, 16)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("pre-open admission=%v want=%v", err, tc.want)
+			}
+			if tc.want == windows.ERROR_FILE_OFFLINE {
+				var pathError *os.PathError
+				if !errors.As(err, &pathError) || errors.Is(err, ErrUnsafeFile) {
+					t.Fatalf("unavailable placeholder became repairable corruption: %v", err)
 				}
 			}
 		})

@@ -5,9 +5,10 @@ import (
 	"path"
 	"strings"
 
+	"golang.org/x/text/cases"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
-	"golang.org/x/text/cases"
 )
 
 // ValidateExecutableInventory checks portable package-member names without

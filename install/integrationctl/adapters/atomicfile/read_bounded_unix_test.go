@@ -55,7 +55,7 @@ func TestBoundedReaderFIFOReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	if file, err := OpenRootReadFile(root, "uap.toml"); !errors.Is(err, ErrUnsafeFile) {
 		if file != nil {
 			_ = file.Close()

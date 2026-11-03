@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -83,10 +84,8 @@ func windowsRegularReadPath(path string) (string, error) {
 }
 
 func admitWindowsRegularRead(path string, attributes, reparseTag uint32) error {
-	// Refuse unavailable bytes without reading or hydrating them. Availability
-	// failures are operational and must not authorize replacing stored evidence.
-	if attributes&(windows.FILE_ATTRIBUTE_OFFLINE|windows.FILE_ATTRIBUTE_RECALL_ON_OPEN|windows.FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS) != 0 {
-		return &os.PathError{Op: "open", Path: path, Err: windows.ERROR_FILE_OFFLINE}
+	if err := windowsReadAvailability(path, attributes); err != nil {
+		return err
 	}
 	// Go's os.FileInfo treats IO_REPARSE_TAG_DEDUP as regular: Windows Server
 	// optimization can transparently deduplicate an ordinary persistent file.
@@ -94,6 +93,22 @@ func admitWindowsRegularRead(path string, attributes, reparseTag uint32) error {
 	const reparseTagDedup = 0x80000013
 	if attributes&(windows.FILE_ATTRIBUTE_DIRECTORY|windows.FILE_ATTRIBUTE_DEVICE) != 0 || attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 && reparseTag != reparseTagDedup {
 		return fmt.Errorf("%w: %s is a reparse, directory or device file", ErrUnsafeFile, path)
+	}
+	return nil
+}
+
+func regularReadAvailability(info os.FileInfo) error {
+	// Cloud placeholders are ModeIrregular in Go. Inspect availability before
+	// generic type admission so unavailable bytes are not repairable corruption.
+	if data, ok := info.Sys().(*syscall.Win32FileAttributeData); ok {
+		return windowsReadAvailability(info.Name(), data.FileAttributes)
+	}
+	return nil
+}
+
+func windowsReadAvailability(path string, attributes uint32) error {
+	if attributes&(windows.FILE_ATTRIBUTE_OFFLINE|windows.FILE_ATTRIBUTE_RECALL_ON_OPEN|windows.FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS) != 0 {
+		return &os.PathError{Op: "open", Path: path, Err: windows.ERROR_FILE_OFFLINE}
 	}
 	return nil
 }

@@ -82,19 +82,9 @@ func renderDependencyTree(ctx context.Context, writer io.Writer, tree dependency
 			return err
 		}
 	}
-	packages := make(map[string]environment.LockedPackage, len(tree.Packages))
-	children := make(map[string][]string)
-	for _, pkg := range tree.Packages {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		packages[pkg.Alias] = pkg
-		for _, edge := range pkg.RequiredBy {
-			children[edge.Alias] = append(children[edge.Alias], pkg.Alias)
-		}
-	}
-	for alias := range children {
-		sort.Strings(children[alias])
+	packages, children, err := indexDependencyTree(ctx, tree.Packages)
+	if err != nil {
+		return err
 	}
 	seen := make(map[string]bool)
 	type visit struct {
@@ -111,15 +101,7 @@ func renderDependencyTree(ctx context.Context, writer io.Writer, tree dependency
 		}
 		current := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
-		indent := strings.Repeat("  ", min(current.depth, 32))
-		if current.depth > 32 {
-			indent += fmt.Sprintf("[depth %d] ", current.depth)
-		}
-		reference := ""
-		if seen[current.alias] {
-			reference = " (reference)"
-		}
-		if _, err := fmt.Fprintf(writer, "%s%s %s%s\n", indent, current.alias, dependencyTreeVersion(packages[current.alias]), reference); err != nil {
+		if err := renderDependencyTreeNode(writer, current.alias, packages[current.alias], current.depth, seen[current.alias]); err != nil {
 			return err
 		}
 		if seen[current.alias] {
@@ -139,6 +121,37 @@ func renderDependencyTree(ctx context.Context, writer io.Writer, tree dependency
 		return err
 	}
 	return nil
+}
+
+func indexDependencyTree(ctx context.Context, locked []environment.LockedPackage) (map[string]environment.LockedPackage, map[string][]string, error) {
+	packages := make(map[string]environment.LockedPackage, len(locked))
+	children := make(map[string][]string)
+	for _, pkg := range locked {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		packages[pkg.Alias] = pkg
+		for _, edge := range pkg.RequiredBy {
+			children[edge.Alias] = append(children[edge.Alias], pkg.Alias)
+		}
+	}
+	for alias := range children {
+		sort.Strings(children[alias])
+	}
+	return packages, children, nil
+}
+
+func renderDependencyTreeNode(writer io.Writer, alias string, pkg environment.LockedPackage, depth int, seen bool) error {
+	indent := strings.Repeat("  ", min(depth, 32))
+	if depth > 32 {
+		indent += fmt.Sprintf("[depth %d] ", depth)
+	}
+	reference := ""
+	if seen {
+		reference = " (reference)"
+	}
+	_, err := fmt.Fprintf(writer, "%s%s %s%s\n", indent, alias, dependencyTreeVersion(pkg), reference)
+	return err
 }
 
 func dependencyTreeVersion(pkg environment.LockedPackage) string {

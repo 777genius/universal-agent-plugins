@@ -18,7 +18,7 @@ func TestStoreReadsLargeInventoryFromPreviousWriter(t *testing.T) {
 	if err := os.MkdirAll(parent, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	var executables []string
+	executables := make([]string, 0, 8_000)
 	for index := range 8_000 {
 		name := filepath.Join(parent, fmt.Sprintf("script-%04d", index))
 		if err := os.WriteFile(name, []byte("#!/bin/sh\n"), 0o600); err != nil {
@@ -34,7 +34,7 @@ func TestStoreReadsLargeInventoryFromPreviousWriter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer packagedigest.Remove(snapshot)
+	defer func() { _ = packagedigest.Remove(snapshot) }()
 	store := Store{Root: filepath.Join(t.TempDir(), "store"), TempRoot: t.TempDir()}
 	entry, err := store.entryPath(snapshot.DigestAlgorithm, snapshot.TreeDigest)
 	if err != nil {

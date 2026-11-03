@@ -126,7 +126,7 @@ func snapshotVerificationError(err error) error {
 func discardSnapshot(snapshot domain.PackageSnapshot, cause error) error {
 	if err := packagedigest.Remove(snapshot); err != nil {
 		// A cleanup I/O failure must not authorize quarantine through ErrMismatch.
-		return fmt.Errorf("discard verification snapshot after %v: %w", cause, err)
+		return fmt.Errorf("discard verification snapshot after %s: %w", cause.Error(), err)
 	}
 	return cause
 }

@@ -2,7 +2,7 @@
 
 Date: 2026-11-03. Research baseline: `2d2c4f331e8b3c674240f8b1b83fbd0b7c0f1aba`.
 Implementation base also includes `b5221a9adb561bdc8e4a89499c4113e359641e9a` (#679).
-Status: **All five rounds are published in draft PR #690. At the owner's follow-up, three independent code critics identified compatibility and diagnostic defects; revision 3 corrections are implemented, tested and approved on independent re-review within the stated scope. Full platform qualification remains deferred.**
+Status: **All five rounds and revision 3 corrections are published in PR #690. The owner has now requested complete E2E qualification, further independent review and fixes, and merge if the resulting change is sound. Revision 4 review corrections are complete; exact final platform evidence and the merge outcome are recorded in the PR.**
 
 ## Owner request and delivery boundary
 
@@ -14,11 +14,74 @@ where files and responsibilities are separable. Commit and immediately publish
 each coherent increment; do not wait for the full remote CI matrix after every
 commit. The owner requested the strongest available models and reasoning effort.
 
-The final code-critic loop was initially deferred and was started after the owner's follow-up questioning the new limits. The original draft boundary remains.
-This delivery stays draft: no merge, release, readiness transition, or claim of
-complete cross-platform/native qualification. Focused regression and integration
-checks are still part of implementation. Do not change or disable existing CI
-gates. Size follows useful coverage, not an artificial line-count target.
+The final code-critic loop was initially deferred and was started after the owner's follow-up questioning the new limits. On 2026-11-03 the owner explicitly extended the task to complete E2E, independent review and corrections, and merge if qualification is successful. This supersedes the original draft-only boundary and authorizes the readiness transition needed by the existing CI. It does not authorize a release.
+Do not change or disable existing CI gates. Size follows useful coverage, not an artificial line-count target.
+
+## Revision 4: final qualification and merge plan
+
+1. Read the current PR head, review threads and check results. Preserve unrelated work and use the exact published head for CI evidence. Diagnose existing lint failures before changing code.
+2. Run the existing full portable package-manager workflow on Linux, Windows, macOS ARM and macOS Intel by marking the PR ready. Require actual complete case inventories, unchanged-source evidence and the real executable/scanner phase; a restricted local subset or cross-compilation is supplementary evidence only.
+3. Have three independent critics examine graph/compatibility policy, filesystem/cache admission, and CLI/composition/architecture. Each must also assess whether the plan or implementation adds unnecessary restrictions or abstractions. Prefer demonstrated behavioral defects and minimal corrections; do not grow the feature scope or add CI policy.
+4. Reproduce findings, make focused fixes, and have a different critic re-review each correction. Run the directly relevant regressions before publication and the existing required qualification on the final code. Triage GitHub review comments with the same evidence standard; do not dismiss or resolve an unresolved defect.
+5. After source edits settle, independently review the complete diff and final evidence from behavior and maintainability perspectives. Record concrete outcomes and any remaining boundaries, keeping historical verification distinct from final-head results.
+6. Merge only after the final head has passed the applicable existing gates, full four-platform package-manager E2E, and independent review with no unresolved material findings. Use the expected head SHA when merging and verify the resulting main-branch commit. Do not bypass protection, weaken assertions, add skip paths or publish a release.
+
+The previously documented active-solver tradeoffs remain review inputs, not an invitation to increase all budgets or add another policy layer. Any newly identified regression needs a minimal, separately explained correction before it is treated as resolved.
+
+### Revision 4 review corrections and local evidence
+
+Four additional independent GPT-6 Astra/ultra critics reviewed graph semantics,
+filesystem/cache admission, CLI/composition/architecture, and E2E evidence. All
+approved the qualification plan. Their concrete source finding was that Go marks
+unavailable Windows cloud placeholders as `ModeIrregular`, so shared type
+admission could return `ErrUnsafeFile` before the Windows availability check and
+therefore authorize store corruption handling. Availability attributes are now
+checked before regular-file admission; no irregular or redirecting file becomes
+admissible. The new regression uses Go-shaped synthetic `FileInfo`, not a live
+cloud volume.
+
+The initial remote lint failures were also corrected: explicit read-only handle
+cleanup, snapshot fixture cleanup, inventory preallocation, import grouping,
+integer range, and small extractions for tree indexing/rendering and Unicode
+registry-name normalization. Operational snapshot cleanup still suppresses
+corruption classification deliberately. No lint exemption, dependency, feature
+flag or product admission rule was added.
+
+The CLI critic independently approved the filesystem correction, and the
+storage critic independently approved the CLI extractions. The evidence critic
+confirmed the existing Windows jobs did not run the five bounded-reader tests;
+the existing Windows held-reader E2E step now executes and validates those tests
+alongside its original publication test, retaining the JSON log in the same
+artifact. Workflow routing, platform matrix and draft/ready policy are unchanged.
+
+Local verification after these corrections, using Go 1.26.10:
+
+- Configured changed-line lint and full-file architecture/size lint passed for
+  all three changed Go modules, without exclusions or baseline expansion.
+- Full atomicfile, environmentstore, packagedigest and dependencymanifest
+  packages passed (0.016s, 20.140s, 0.058s and 0.032s respectively).
+- Focused CLI/production checks passed after final extraction (3.554s / 0.173s);
+  race verification passed (2.073s / 1.526s). Cleanup-refusal subcases ran without
+  skips. Independent tree/status and registry-association reruns passed.
+- Independent environment tests passed (2.881s). A scratch-only differential
+  oracle compared baseline/current resolution and old-pin replay on 2,000 seeded
+  conflicting/shared/cyclic graphs with multiple targets; results, exact locks
+  and failure text matched (1.780s).
+- All 19 existing Python package-manager evidence/CI-policy tests passed.
+  Windows atomicfile tests cross-compiled. Native execution remains distinct
+  evidence supplied by the final remote Windows job.
+
+Current main contains the installer/CLI refactors from #682/#683 at
+`b68f83b5587e974995415ed936562f852e5ddf33`. Their paths do not overlap this PR,
+and Git's combined merge tree is conflict-free. GitHub's PR jobs check the
+synthetic merge commit; final evidence must identify its parents as the
+published PR head and current base. Full E2E includes all 82 registered cases,
+production installation/composition inventories and the real executable/scanner
+phase. That phase is an imperative nonempty lifecycle; it does not separately
+execute every new composed `deps check` scenario.
+
+The PR description is the final exact-head CI and review ledger, allowing it to
+record completed evidence without changing already qualified source files.
 
 ## Evidence and overlap inventory
 

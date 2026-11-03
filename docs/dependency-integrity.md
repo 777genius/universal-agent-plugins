@@ -6,7 +6,7 @@ It succeeds only when that local agreement and every recorded package can be
 verified. It does not establish whether a native client can use the installation.
 
 This document describes the source implementation in
-[draft PR #690](https://github.com/777genius/universal-agent-plugins/pull/690).
+[PR #690](https://github.com/777genius/universal-agent-plugins/pull/690).
 It does not imply that a published CLI release contains the command. The
 [five-round implementation plan](plans/2026-11-03-dependency-integrity-five-rounds.md)
 records the evidence, compatibility decisions, and acceptance scenarios.
@@ -146,8 +146,12 @@ or irregular files, and accepts NTFS deduplicated files that Go treats as regula
 Offline or recall-dependent bytes produce an operational error without hydration
 and without authorizing cache replacement.
 These mechanisms do not claim complete protection against arbitrary concurrent
-parent-directory changes. The implementation's Linux tests and Windows/Darwin
-cross-compilation are separate evidence; cross-compilation does not establish
+parent-directory changes. Exact-commit platform qualification is recorded in
+[PR #690](https://github.com/777genius/universal-agent-plugins/pull/690).
+The existing Windows E2E step executes real long-path and held-reader publication
+tests alongside the attribute-admission regressions. DEDUP and cloud-placeholder
+cases validate attribute handling with fixtures; they do not provision an NTFS
+deduplication or cloud-provider volume. Cross-compilation alone does not establish
 native Windows or Darwin runtime behavior.
 
 ## Status and explicit recovery

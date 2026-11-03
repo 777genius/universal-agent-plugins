@@ -39,7 +39,7 @@ func readBoundedRegularFile(path string, limit int64, open func(string) (*os.Fil
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	opened, err := file.Stat()
 	if err != nil {
 		return nil, err
@@ -75,6 +75,9 @@ func readBoundedRegularFile(path string, limit int64, open func(string) (*os.Fil
 }
 
 func admitRegularRead(info os.FileInfo, limit int64) error {
+	if err := regularReadAvailability(info); err != nil {
+		return err
+	}
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("%w: expected a regular non-symlink file", ErrUnsafeFile)
 	}

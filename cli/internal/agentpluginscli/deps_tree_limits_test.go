@@ -26,7 +26,7 @@ func (writer *dependencyTreeCancelWriter) Write(body []byte) (int, error) {
 
 func TestDependencyTreeCancellationDuringRendering(t *testing.T) {
 	tree := dependencyTree{Roots: []string{"p000"}}
-	for i := 0; i < 256; i++ {
+	for i := range 256 {
 		pkg := environment.LockedPackage{Alias: fmt.Sprintf("p%03d", i), Version: "1.0.0"}
 		if i > 0 {
 			pkg.RequiredBy = []environment.RequiredBy{{Alias: fmt.Sprintf("p%03d", i-1)}}

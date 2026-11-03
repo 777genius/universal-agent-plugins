@@ -141,7 +141,7 @@ func TestStoreRejectsDirectoryAndLinkExecutableClaims(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer packagedigest.Remove(snapshot)
+			defer func() { _ = packagedigest.Remove(snapshot) }()
 			store := Store{Root: filepath.Join(t.TempDir(), "store"), TempRoot: t.TempDir()}
 			pkg, err := store.Put(t.Context(), snapshot)
 			if err != nil {
@@ -305,7 +305,7 @@ func TestStoreIdenticalContentRetainsAdvisoryFirstOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer packagedigest.Remove(verified)
+	defer func() { _ = packagedigest.Remove(verified) }()
 	if verified.Source.RequestedSource != "first-origin" {
 		t.Fatalf("shared cache provenance unexpectedly rewritten: %+v", verified.Source)
 	}

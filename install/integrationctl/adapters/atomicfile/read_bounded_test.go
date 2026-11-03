@@ -95,7 +95,7 @@ func TestAuthorityAndRootedReadHaveDifferentLinkPolicies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	file, err := OpenRootReadFile(root, "uap.toml")
 	if err != nil {
 		t.Fatalf("contained link refused: %v", err)
