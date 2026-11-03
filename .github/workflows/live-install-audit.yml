@@ -42,8 +42,11 @@ jobs:
           npm install --global @openai/codex@0.153.4
           command -v codex
           codex --version
-      - name: Build actual CLI under audit
-        run: go build -trimpath -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
+      # The Go source defaults to 0.1.0-development; signed directory policies
+      # require an ordinary release-semver CLI. This is still the PR source
+      # binary, NOT the published agentplugins-v0.1.95 release.
+      - name: Build actual PR CLI with current eligible directory version policy
+        run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Run isolated real source install and remove; preserve per-case proof
         env:
           AUDIT_REPORT_DIR: ${{ runner.temp }}/live-audit-report
