@@ -149,6 +149,38 @@ def attributable_native_changes(native_roots, changes, identity):
     return sorted(set(found))
 
 
+def native_identity_residuals(native_roots, identity, observed_paths, target):
+    """After remove, reject any remaining named native file/config entry.
+
+    Codex may retain its downloaded source cache after its native plugin and
+    marketplace are removed; that cache is not active client configuration.
+    """
+    leftover = []
+    for root in native_roots:
+        prefix = root.name + "/"
+        for observed in observed_paths:
+            if not observed.startswith(prefix):
+                continue
+            relative = observed[len(prefix):]
+            if target == "codex" and relative.startswith("plugins/cache/"):
+                continue
+            file = root / relative
+            if file.is_symlink():
+                leftover.append(observed + ": symlink")
+                continue
+            if not file.is_file():
+                continue
+            try:
+                if identity.casefold() in relative.casefold():
+                    leftover.append(observed)
+                elif file.stat().st_size <= 1024 * 1024 and identity.casefold() in file.read_text(
+                        encoding="utf-8", errors="replace").casefold():
+                    leftover.append(observed)
+            except OSError:
+                leftover.append(observed + ": unreadable")
+    return sorted(set(leftover))
+
+
 def skill_file_present(project, target, skill_name):
     for relative_root in PROJECT_SKILL_ROOTS.get(target, []):
         base = project / relative_root
@@ -408,9 +440,12 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     old_ids = {entry["installation_id"] for entry in matching}
     post_lock_pinned = bool(kind == "skill" and (project / "uap.lock").exists()
                             and locked_skill_is_pinned(project, item, target))
+    native_residuals = (native_identity_residuals(native_roots, identity, native_attribution, target)
+                        if cleanup and cleanup["exit_code"] == 0 and kind == "plugin" else [])
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
+        and (kind != "plugin" or not native_residuals)
         and (kind != "skill" or (post_removal_skill is None and not post_lock_pinned))
     )
     diagnostics = (output["stdout_tail"] + "\n" + output["stderr_tail"]).lower()
@@ -449,7 +484,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
             "matched_installation_ids": sorted(old_ids),
             "native_uninstall": native_uninstall, "cleanup": cleanup, "post_remove_list": post_list,
             "post_removal_skill": post_removal_skill, "post_lock_pinned": post_lock_pinned,
-            "removal_verified": removal_verified, "post_list_schema_valid": post_list_schema_valid,
+            "removal_verified": removal_verified, "native_residuals": native_residuals,
+            "post_list_schema_valid": post_list_schema_valid,
             "sentinels_preserved": sentinels_preserved}
 
 
