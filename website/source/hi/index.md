@@ -26,7 +26,18 @@ translationRequired: true
     <h2>प्लगइन बनाएँ</h2>
     <p>plugin.json, Skills और MCP कॉन्फ़िगरेशन के साथ मानक पैकेज लिखें। सोर्स से बने पैकेज निर्माण टूल जानें।</p>
   </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>UAP को जोड़ें</h2>
+    <p>Hooks, एजेंट पहचान, Go इंस्टॉलर और TypeScript प्रबंधन।</p>
+  </a>
 </div>
+## UAP की अन्य सुविधाएँ
+
+- कई एजेंटों में इंस्टॉल करें, अलग Skills जोड़ें, हस्ताक्षरित कैटलॉग, Git/SSH या आर्काइव चुनें। [Install](./use/install).
+- `uap.toml` / `uap.lock` से प्रोजेक्ट और उपयोगकर्ता अलग रखें; अपडेट, मरम्मत और जाँच करें। [Manage](./use/manage).
+- Build portable Skills/MCP packages and embed Go/TypeScript SDKs. [SDK](./sdk/) · [Build](./build/).
+
+
 
 ## अपना पहला प्लगइन इंस्टॉल करें {#install-your-first-plugin}
 

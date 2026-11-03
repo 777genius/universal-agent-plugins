@@ -27,7 +27,18 @@ translationRequired: true
     <h2>Створення плагінів</h2>
     <p>Напишіть стандартний пакет із plugin.json, Skills та конфігурацією MCP. Ознайомтеся з інструментами розробки, доступними у збірці з вихідного коду.</p>
   </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>Інтегрувати UAP</h2>
+    <p>Hooks, визначення агента, Go installer і керування з TypeScript.</p>
+  </a>
 </div>
+## Інші можливості UAP
+
+- Установлюйте для кількох агентів, обирайте окремі Skills, підписаний каталог, Git/SSH та архіви. [Install](./use/install).
+- Відокремлюйте проєкт і користувача через `uap.toml` / `uap.lock`; оновлюйте й перевіряйте стан. [Manage](./use/manage).
+- Build portable Skills/MCP packages and embed Go/TypeScript SDKs. [SDK](./sdk/) · [Build](./build/).
+
+
 
 ## Установіть свій перший плагін {#install-your-first-plugin}
 

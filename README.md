@@ -38,6 +38,7 @@ setup on another computer or with your team.
   - [Quick start](#quick-start)
   - [Install the CLI](#install-the-cli)
 - [What the CLI does](#what-the-cli-does)
+- [More capabilities](#more-capabilities)
 - [Install for one project](#install-for-one-project)
 - [Restore your plugin setup](#restore-your-plugin-setup)
 - [Install from other sources](#install-from-other-sources)
@@ -125,6 +126,22 @@ Code in `main` may not be released yet.
 - Records exact versions for repeatable installs.
 - Updates, repairs, and removes managed files without overwriting unrelated content.
 - Reports any remaining approval, sign-in, or reload steps.
+
+## More capabilities
+
+| Need | How UAP helps |
+| --- | --- |
+| Multiple agents | `add --target codex,claude` with separate outcomes and any remaining activation steps. |
+| Standalone Skills | `skills add` with a browser picker or explicit `--skill` selections; see [Skills installation](https://universal-agent-plugins.com/docs/en/use/install.html#install-agent-skills). |
+| Sources outside the registry | Reviewed local package directories, Git/SSH sources and complete ZIP/TAR archives; see [source formats](docs/DIRECT_PACKAGE_SOURCES.md). |
+| Team/project reproducibility | Commit `uap.toml` and `uap.lock`, then run `install --locked --scope project`. |
+| Moving a user setup | `deps export` and `deps import --install`; no credentials or live data are exported. |
+| Maintenance | `doctor`, `outdated`, `update --dry-run`, `repair --dry-run`, explicit remove and scope flags. |
+| Application integration | [Go Installer](https://universal-agent-plugins.com/docs/en/sdk/go-installer.html) or [TypeScript Management SDK](https://universal-agent-plugins.com/docs/en/sdk/typescript-management.html). |
+| Typed agent callbacks | [Go Hooks SDK](https://universal-agent-plugins.com/docs/en/sdk/go-hooks.html), with event- and release-specific support. |
+
+File preparation, native activation, MCP execution and authentication are
+separate checkpoints. Check each target's result after a multi-agent operation.
 
 ## Install for one project
 
@@ -366,7 +383,8 @@ Pin compatible SDK and CLI versions separately; see the
 
 ## Build plugins
 
-Create a folder with a root `plugin.json`, plus optional `skills/` and `mcp.json`.
+Create a package directory with root `plugin.json`, with optional `skills/` and `mcp.json`.
+`plugin.json` is the only supported authoring manifest.
 Validate and install it with the [local-package commands](#more-commands).
 The [Build guide](https://universal-agent-plugins.com/docs/en/build/) covers
 Skills and MCP packages; start with the
@@ -386,12 +404,11 @@ agentplugins author inspect ./my-plugin
 agentplugins author test ./my-plugin
 ```
 
-`author test` and `author dev` can run MCP servers. Dependency bootstrap apply
-and local stdio development require Linux; bootstrap dry-run works elsewhere.
-Stdio checks need process containment, bubblewrap, and a supported system Node
-path; see the [stdio guide](https://universal-agent-plugins.com/docs/en/build/mcp-stdio.html).
-Client projection, export/bundle, and publication are not exposed by the
-authoring CLI.
+In qualified/source builds, MCP execution is available through `author test` and `author dev`.
+Dependency bootstrap apply currently requires Linux; dry-run planning can be used on other platforms.
+Local stdio development requires Linux, successful process-containment and bubblewrap preflights, and a supported system Node path.
+See the [stdio guide](https://universal-agent-plugins.com/docs/en/build/mcp-stdio.html).
+Client projection, export/bundle, and publication are not exposed by the current authoring CLI.
 
 Native installer [releases](https://github.com/777genius/universal-agent-plugins/releases)
 use `agentplugins-v*` tags; they do not include these authoring commands.

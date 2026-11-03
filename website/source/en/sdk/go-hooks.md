@@ -61,6 +61,23 @@ This example demonstrates **registration and dispatch**, not automatic delivery.
 
 For the documented stable event subset, see the [SDK's runtime boundary](https://github.com/777genius/universal-agent-plugins/blob/main/sdk/README.md#runtime-contract-boundary). It includes Claude `Stop` / `PreToolUse` / `UserPromptSubmit`, Codex `Notify`, Gemini's promoted nine-hook path and the documented Qoder hooks in current source. Other events can be `public-beta`; consult the **version-specific** support matrix and [stability policy](https://github.com/777genius/universal-agent-plugins/blob/main/sdk/STABILITY.md). In particular, Cursor's stop observer is **beta**, not equivalent to a qualified native Cursor integration.
 
+## Examples of event-level capabilities
+
+| Agent | Example events | Typical use |
+| --- | --- | --- |
+| Claude Code | `PreToolUse`, `UserPromptSubmit`, `Stop` | Observe tool calls, prompts or turn completion |
+| Codex | `Notify` | Handle native notifications |
+| Gemini CLI | `BeforeModel`, `AfterModel`, `BeforeToolSelection` | Observe or intentionally adjust model/tool selection |
+| Gemini CLI | `BeforeTool`, `AfterTool`, `BeforeAgent`, `AfterAgent`, `SessionStart`, `SessionEnd` | Control tool/turn flows or emit advisory session messages |
+| Qoder | `session_start`, `user_prompt_submit`, `post_tool_use`, `stop` | Respond to the native Qoder lifecycle |
+
+For Gemini, `gemini.BeforeToolContinue()` is a no-op, while
+`gemini.BeforeToolRewriteInputValue(...)` rewrites validated tool input.
+`gemini.BeforeToolSelectionAllowOnly(...)` emits an accepted `ANY` allowlist.
+`SessionStart` and `SessionEnd` are advisory, not stop/decision controls.
+See the [Go runtime source documentation](https://github.com/777genius/universal-agent-plugins/blob/main/sdk/README.md#gemini-example)
+and the pinned version's stability policy before changing control flow.
+
 ## Event lifecycle
 
 1. Agent launches the configured hook executable and supplies its native event (stdin or invocation-specific transport).

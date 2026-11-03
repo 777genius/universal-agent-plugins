@@ -35,6 +35,23 @@ Use the SDKs when you are **embedding Universal Agent Plugins in another applica
 
 The TypeScript SDK's `checkUpdates` method exists in SDK 0.1.1 but **is not served by CLI 0.1.95 or older**. Select a newer qualified engine or a pinned source build before using it. A documented method is not evidence that every released engine has it.
 
+## Features and where to find them
+
+| Task | Read this | Important boundary |
+| --- | --- | --- |
+| Signed catalog, direct Git/archives, standalone Skills and project scope | [Install guide](../use/install) | Source trust and client support differ |
+| `uap.toml`, `uap.lock`, export/import, update, repair and removal | [Maintenance](../use/manage) | Installed does not mean authenticated |
+| Claude/Codex/Gemini/Qoder typed hook events | [Go Hooks](./go-hooks) | Event maturity varies by release |
+| Identify the host invoking a hook | [Host detection](./host-detection) | Default JSON signals cover Claude and Codex |
+| Prepare, confirm, apply, inspect, recover and migrate state | [Go Installer](./go-installer) | Explicit plan and profile authority |
+| Native profile discovery, Skill preview/edit, operation tracking and update checks | [TypeScript Management](./typescript-management) | SDK methods need matching engine capabilities |
+| Author a portable `plugin.json` package with Skills and MCP | [Build guide](../build/) | `author` tools are source-build-only |
+
+**Choose by task.** The CLI installs for users; the TypeScript SDK manages
+a private Go engine from Node/desktop; the Go installer facade embeds install
+authority; the Hooks SDK handles callbacks inside native clients. None of these
+operations alone proves that a remote MCP call succeeded.
+
 ## The three integration layers
 
 1. **Hooks runtime:** Agent invokes your Go executable; it reads its native event and writes a typed response. This does not install packages.
