@@ -2,6 +2,7 @@
 import type { SkillListing, SkillsView } from '~/types/skillsCatalog';
 import { skillClients } from '~/data/skillClients';
 import {
+  skillDetailIdAvailable,
   skillIdentityFromId,
   skillMatchesSelection,
   skillInstallCommand,
@@ -18,7 +19,7 @@ const selectedSkill = useState<SkillListing | null>('skills-catalog:selected-ski
 
 const listingId = computed(() => {
   const value = route.query.id;
-  return typeof value === 'string' && skillIdentityFromId(value) ? value : '';
+  return typeof value === 'string' && skillDetailIdAvailable(value) ? value : '';
 });
 const sourceIdentity = computed(() => skillIdentityFromId(listingId.value));
 function queryName(): string {

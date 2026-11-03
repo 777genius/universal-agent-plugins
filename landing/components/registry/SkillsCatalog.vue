@@ -66,15 +66,6 @@ const viewOptions = computed(() =>
     label: t(`registryUi.skills.views.${value}`),
   })),
 );
-const collectionTotal = computed(() => {
-  const total = metadata.value?.total;
-  return typeof total === 'number' &&
-    Number.isSafeInteger(total) &&
-    total > 0 &&
-    total >= displayed.value.length
-    ? total
-    : undefined;
-});
 const staleDate = computed(() => {
   const date = metadata.value?.cache.fetchedAt;
   return date && Number.isFinite(Date.parse(date))
@@ -120,14 +111,7 @@ const staleDate = computed(() => {
           {{ t('registryUi.skills.searchResults', { count: n(displayed.length) }) }}
         </p>
         <p v-else-if="!loading && !searchTooShort && displayed.length" class="catalog-count">
-          {{
-            collectionTotal
-              ? t('registryUi.skills.collectionShown', {
-                  count: n(displayed.length),
-                  total: n(collectionTotal),
-                })
-              : t('registryUi.skills.loaded', { count: n(displayed.length) })
-          }}
+          {{ t('registryUi.skills.loaded', { count: n(displayed.length) }) }}
         </p>
         <p
           v-if="metadata?.cache.status === 'stale'"

@@ -39,7 +39,8 @@
     "cascade-remove-drift",
     "prune-drift-after-lock",
     "competing-lock-writers",
-    "selective-cache-hydration"
+    "selective-cache-hydration",
+    "git-pull-shared-owner-drift"
   ],
   "adversarial": [
     "foreign-native-settings",
@@ -58,6 +59,7 @@
   "agreement": [
     "manifest-rejections",
     "saved-source-admission-refusal",
+    "oversized-agreement-refusal",
     "manifest-locations",
     "version-intent-preservation",
     "transfer-replacement-noop",

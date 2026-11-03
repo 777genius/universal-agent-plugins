@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -43,5 +44,38 @@ func TestSkillsReviewTimeoutPreservesSpecificRefusal(t *testing.T) {
 	}
 	if strings.Contains(refusal.Message, "private-secret") {
 		t.Fatalf("provider output leaked: %q", refusal.Message)
+	}
+}
+
+func TestSkillsReviewForeignDestinationSafeGuidance(t *testing.T) {
+	for _, cause := range []error{nativeconfig.ErrCollision, nativeconfig.ErrNotOwned} {
+		// A lower-level adapter may embed arbitrary provider paths or secrets.
+		unsafe := fmt.Errorf("private-secret: /private/home: %w", cause)
+		var refusal *skillspicker.ReviewRefusal
+		if !errors.As((&skillsCatalogSession{}).reviewRefusal(unsafe), &refusal) {
+			t.Fatal("expected public review refusal")
+		}
+		if refusal.Code != "FOREIGN_DESTINATION" || refusal.Retryable {
+			t.Fatalf("wrong collision guidance: %+v", refusal)
+		}
+		for _, expected := range []string{"does not own", "rename or remove", "will not overwrite"} {
+			if !strings.Contains(refusal.Message, expected) {
+				t.Fatalf("missing actionable collision guidance %q: %s", expected, refusal.Message)
+			}
+		}
+		if strings.Contains(refusal.Message, "private-secret") || strings.Contains(refusal.Message, "/private/home") {
+			t.Fatalf("private adapter diagnostics escaped to HTTP: %s", refusal.Message)
+		}
+	}
+}
+
+func TestSkillsReviewManagedSkillChanged(t *testing.T) {
+	cause := fmt.Errorf("secret plugin path: %w", installer.ErrManagedSkillChanged)
+	var refusal *skillspicker.ReviewRefusal
+	if !errors.As((&skillsCatalogSession{}).reviewRefusal(cause), &refusal) || refusal.Code != "MANAGED_SKILL_CHANGED" {
+		t.Fatalf("managed edit lost its safe guidance: %+v", refusal)
+	}
+	if strings.Contains(refusal.Message, "secret plugin path") || !strings.Contains(refusal.Message, "edited outside UAP") {
+		t.Fatalf("unsafe or unhelpful managed-edits refusal: %+v", refusal)
 	}
 }

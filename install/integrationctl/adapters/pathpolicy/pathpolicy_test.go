@@ -108,7 +108,7 @@ func TestValidateLeafID(t *testing.T) {
 			t.Errorf("ValidateLeafID(%q): %v", valid, err)
 		}
 	}
-	for _, invalid := range []string{"", ".", "..", "../escape", `..\\escape`, "/tmp/escape", `C:\\escape`, "name..part", "name.", "CON", "nul.txt", "has space"} {
+	for _, invalid := range []string{"", ".", "..", "../escape", `..\\escape`, "/tmp/escape", `C:\\escape`, "name..part", "name.", "CON", "nul.txt", "has space", " id ", "\tid", "id\n", " CON", "valid\r\n"} {
 		if err := ValidateLeafID(invalid); err == nil {
 			t.Errorf("ValidateLeafID(%q) succeeded, want rejection", invalid)
 		}
