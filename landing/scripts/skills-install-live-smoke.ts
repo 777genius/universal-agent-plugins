@@ -21,6 +21,7 @@ const report = {
   installable: 0,
   legacy_recovered: 0,
   unsupported: 0,
+  scanned_default_shown: 0,
   failure: null as string | null,
 };
 const browser = await chromium.launch({ headless: true });
@@ -80,6 +81,27 @@ try {
   await expect(cards.first().locator('.command-snippet code')).toHaveText(
     skillInstallCommand(selected)!,
   );
+  // Separately accept the deployed default (no filter override) against real
+  // SkillSpector publication bytes; the explicit-all pass above proves CLI
+  // command coverage, not the accuracy of the default scan-only view.
+  await page.screenshot({ path: join(output, 'skills-catalog-all.png'), fullPage: true });
+  const defaultPage = await page.goto(
+    'https://universal-agent-plugins.com/plugins/?tab=skills',
+    { waitUntil: 'domcontentloaded', timeout: 35000 },
+  );
+  assert.equal(defaultPage?.status(), 200, 'Default Skills page must be HTTP 200');
+  const defaultCatalog = page.locator('.skills-catalog');
+  await expect(defaultCatalog).toHaveAttribute('aria-busy', 'false', { timeout: 90000 });
+  const defaultCards = defaultCatalog.locator('.skill-card');
+  report.scanned_default_shown = await defaultCards.count();
+  assert.ok(report.scanned_default_shown > 0,
+    'Live default Skills catalog must show at least one current physically scanned Skill');
+  for (const status of ['stale', 'notChecked', 'pending', 'unavailable', 'unsupported']) {
+    await expect(defaultCards.locator('.skillspector--' + status))
+      .toHaveCount(0, { timeout: 10000 });
+  }
+  await expect(defaultCards.first().locator('.skillspector > summary'))
+    .toBeVisible({ timeout: 15000 });
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {
   report.failure = error instanceof Error ? error.message : String(error);
