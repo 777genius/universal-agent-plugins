@@ -120,6 +120,19 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "disposable case"):
                 audit.isolated_client_env(home, case, outside)
 
+    def test_success_diagnostics_and_timeout_are_never_source_refusals(self):
+        audit = load_audit()
+        for exit_code in (0, None):
+            self.assertFalse(audit.is_cli_refusal({
+                "exit_code": exit_code,
+                "stdout_tail": '{"result":"success","component_support":"unsupported"}',
+                "stderr_tail": "target_unavailable",
+            }))
+        self.assertTrue(audit.is_cli_refusal({
+            "exit_code": 1,
+            "stderr_tail": "release does not support complete target set",
+        }))
+
     def test_real_signed_release_target_refusal_is_not_an_installer_bug(self):
         audit = load_audit()
         reproduced = (

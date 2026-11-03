@@ -168,6 +168,11 @@ def source_target_incompatibility(diagnostic):
     return "release does not support complete target set" in diagnostic.lower()
 
 
+def is_cli_refusal(output):
+    """Diagnostic words cannot turn a successful add or timeout into a refusal."""
+    return type(output.get("exit_code")) is int and output["exit_code"] != 0
+
+
 def native_identity_residuals(native_roots, identity, observed_paths, target):
     """After remove, reject any remaining named native file/config entry.
 
@@ -543,6 +548,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
         and (kind != "skill" or (post_removal_skill is None and not post_lock_pinned))
     )
     diagnostics = (output["stdout_tail"] + "\n" + output["stderr_tail"]).lower()
+    install_refused = is_cli_refusal(output)
     if target == "chatgpt" and kind == "plugin" and output["exit_code"] == 0:
         status = "manual-setup-prepared"
     elif installed and removal_verified and sentinels_preserved:
@@ -553,16 +559,17 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
         status = "external-native-uninstall-required"
     elif installed:
         status = "cleanup-failed"
-    elif "manual_activation_required" in diagnostics and "cgroup" in diagnostics:
+    elif install_refused and "manual_activation_required" in diagnostics and "cgroup" in diagnostics:
         status = "host-containment-unavailable"
-    elif "not detected" in diagnostics or "not available" in diagnostics or "target_unavailable" in diagnostics:
+    elif install_refused and ("not detected" in diagnostics or "not available" in diagnostics
+                             or "target_unavailable" in diagnostics):
         status = "target-unavailable"
-    elif ("unsupported" in diagnostics or "not supported" in diagnostics
-          or source_target_incompatibility(diagnostics)):
+    elif install_refused and ("unsupported" in diagnostics or "not supported" in diagnostics
+                              or source_target_incompatibility(diagnostics)):
         status = "documented-or-source-unsupported"
-    elif "minimum installer version" in diagnostics:
+    elif install_refused and "minimum installer version" in diagnostics:
         status = "test-build-version-policy"
-    elif "distribution is suspended" in diagnostics:
+    elif install_refused and "distribution is suspended" in diagnostics:
         status = "expected-suspended-policy"
     elif output["exit_code"] == 0:
         status = "incomplete-native-proof"
