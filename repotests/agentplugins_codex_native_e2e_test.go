@@ -225,6 +225,48 @@ func nativeSession(t *testing.T, f *nativeFixture, client, label, revision, oper
 	if inventory.NextCursor != nil {
 		t.Fatal("unexpected inventory pagination; refusing incomplete evidence")
 	}
+	// Codex emits startup statuses asynchronously. A newly started native
+	// process can still be "starting" when the first inventory arrives, even
+	// though its independently correlated startup failure is imminent. Await
+	// that exact terminal failure with a strict deadline; never accept ready,
+	// absent, duplicate or tool-bearing failed servers as proof.
+	if label == "partial_failure" {
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			status := ""
+			for _, server := range inventory.Data {
+				if server.PluginID != f.PluginID || server.Name != "startup-failure" {
+					continue
+				}
+				if status != "" {
+					t.Fatal("duplicate startup-failure native server")
+				}
+				if len(server.Tools) != 0 {
+					t.Fatal("startup-failure server advertised tools")
+				}
+				status = server.RuntimeStatus
+			}
+			if status == "failed" {
+				break
+			}
+			if status != "starting" {
+				t.Fatalf("unexpected startup-failure native status: %q", status)
+			}
+			if !time.Now().Before(deadline) {
+				t.Fatal("startup-failure native server did not transition to failed within bounded deadline")
+			}
+			time.Sleep(25 * time.Millisecond)
+			b = r.must(t, "mcpServerStatus/list", map[string]any{"threadId": thread.Thread.ID, "limit": 100})
+			inventory.Data = nil
+			inventory.NextCursor = nil
+			if err := json.Unmarshal(b, &inventory); err != nil {
+				t.Fatal(err)
+			}
+			if inventory.NextCursor != nil {
+				t.Fatal("unexpected inventory pagination during startup-failure observation")
+			}
+		}
+	}
 	var observed nativeFacts
 	count := 0
 	serverNames := map[string]bool{}
