@@ -13,6 +13,7 @@ import {
   skillRepositoryUrl,
   skillPublisherUrl,
   skillDetailRoute,
+  skillDetailIdAvailable,
   skillIdentityFromId,
   skillMatchesSelection,
 } from '../utils/skillsCatalog.ts';
@@ -125,6 +126,22 @@ test('Skill metadata cannot inject shell syntax or external install sources', ()
     }),
     undefined,
   );
+});
+
+test('Skill document URLs accept only the document API source grammar', () => {
+  for (const id of [
+    'skills-sh:anthropics/skills:frontend-design',
+    'skills-sh:uizze.com:ui-radar',
+    'skills-sh:Open.Feishu.Cn:lark-mail',
+  ]) assert.equal(skillDetailIdAvailable(id), true, id);
+  for (const id of [
+    'skills-sh:owner/repo.git:frontend-design',
+    'skills-sh:https://github.com/owner/repo:frontend-design',
+    'skills-sh:https://publisher.com/skills:review',
+    'skills-sh:owner/repo/tree/main/skills/frontend-design:frontend-design',
+    'skills-sh:open.feishu.cn/lark-cli/skills/regular:lark-mail',
+    'skills-sh:owner/repo:bad\\nname',
+  ]) assert.equal(skillDetailIdAvailable(id), false, id);
 });
 
 test('HTTPS publishers use their origin and exact names, never a listing page or guessed selector', () => {
