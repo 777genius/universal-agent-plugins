@@ -117,12 +117,12 @@
       "skill_md_git_blob_sha1": "47c72c607bdb5dd81bdea5de2b5e4f3992a5fd59"
     },
     {
-      "repo": "vercel-labs/agent-skills",
-      "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
-      "folder": "composition-patterns",
-      "name": "vercel-composition-patterns",
-      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/composition-patterns",
-      "skill_md_git_blob_sha1": "d07025bf943345bc1cf15eb923594f889ff881f0"
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "agents-sdk",
+      "name": "agents-sdk",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/agents-sdk",
+      "skill_md_git_blob_sha1": "46dc611f3f7666461dbd14f5f809e82629b3bfa4"
     },
     {
       "repo": "vercel-labs/agent-skills",
@@ -133,28 +133,28 @@
       "skill_md_git_blob_sha1": "f3bb68ba31294f0edf81fdb326ddc2666a24e0e0"
     },
     {
-      "repo": "vercel-labs/agent-skills",
-      "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
-      "folder": "react-best-practices",
-      "name": "vercel-react-best-practices",
-      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/react-best-practices",
-      "skill_md_git_blob_sha1": "237988de4a66dd8a71d30a2c24ebe1a86b58d04e"
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "cf-cli",
+      "name": "cf-cli",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/cf-cli",
+      "skill_md_git_blob_sha1": "80eb0c47454f5bfde7b27ce158d9ff18b58124bd"
     },
     {
-      "repo": "vercel-labs/agent-skills",
-      "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
-      "folder": "react-native-skills",
-      "name": "vercel-react-native-skills",
-      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/react-native-skills",
-      "skill_md_git_blob_sha1": "73401865dd7440a43c5243b107a3763e0d2f4aae"
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "gateway-workers",
+      "name": "gateway-workers",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/gateway-workers",
+      "skill_md_git_blob_sha1": "186698948bf711f3ca12c516e4fec6715ad14c77"
     },
     {
-      "repo": "vercel-labs/agent-skills",
-      "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
-      "folder": "react-view-transitions",
-      "name": "vercel-react-view-transitions",
-      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/react-view-transitions",
-      "skill_md_git_blob_sha1": "665db73fe55b2504d1123857f14606472cdefd0a"
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "wrangler",
+      "name": "wrangler",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/wrangler",
+      "skill_md_git_blob_sha1": "d5cef1c15fd2434202c33f071cf502b5d69b141d"
     },
     {
       "repo": "vercel-labs/agent-skills",
