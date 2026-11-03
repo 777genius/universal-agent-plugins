@@ -3,47 +3,43 @@ package management
 import (
 	"context"
 	"errors"
-	"net/http"
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/777genius/plugin-kit-ai/cli/internal/loopbackapi"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 )
 
-func (s *Server) runApply(plan *planEntry, record acceptance, unlock func() error) {
-	defer s.workers.Done()
+func (a *Application) runApply(plan *planEntry, record Observation, unlock func() error) {
+	defer a.workers.Done()
 	defer func() { _ = unlock() }()
 	defer plan.prepared.Close()
-	s.mu.Lock()
-	running := s.running[record.Operation.OperationId]
+	a.mu.Lock()
+	running := a.running[record.Operation.OperationId]
 	running.record.Operation.State = Running
 	running.record.Operation.Phase = "preflight"
 	ctx := running.ctx
-	s.mu.Unlock()
-	outcome, panicked, err := executePrepared(ctx, plan.prepared, func(p Progress) { s.progress(record.Operation.OperationId, p) })
-	s.mu.Lock()
-	record = s.running[record.Operation.OperationId].record
-	s.mu.Unlock()
-	record.Operation = finishOperation(record.Operation, outcome, err, panicked)
-	if err = s.store.save(record); err != nil {
+	a.mu.Unlock()
+	outcome, panicked, err := executePrepared(ctx, plan.prepared, func(p Progress) { a.progress(record.Operation.OperationId, p) })
+	a.mu.Lock()
+	record = cloneObservation(a.running[record.Operation.OperationId].record)
+	a.mu.Unlock()
+	record.Operation = finishOperation(record.Operation, outcome, err, panicked, a.opts.Lock.IsActive(err))
+	if err = a.opts.Store.Save(cloneObservation(record)); err != nil {
 		record.Operation.State = Interrupted
 		record.Operation.Result = nil
 		record.Operation.Diagnostics = append(record.Operation.Diagnostics, Diagnostic{
 			Code: "OUTCOME_NOT_PERSISTED", Message: "The final result could not be saved; inspect before another mutation", Severity: DiagnosticSeverityError})
 	}
 	if err == nil && record.Operation.State == Succeeded {
-		if linkErr := s.reconcileObservations(plan, record.Operation.OperationId, outcome); linkErr != nil {
+		if linkErr := a.reconcileObservations(plan, record.Operation.OperationId, outcome); linkErr != nil {
 			record.Operation.Diagnostics = append(record.Operation.Diagnostics, Diagnostic{Code: "RECOVERY_OBSERVATION_UNAVAILABLE", Message: "Files were reconciled but accepted history could not be settled; inspect and prepare recovery again", Severity: DiagnosticSeverityWarning})
-			_ = s.store.save(record)
+			_ = a.opts.Store.Save(cloneObservation(record))
 		}
 	}
-	s.mu.Lock()
+	a.mu.Lock()
 	running.cancel()
-	delete(s.running, record.Operation.OperationId)
-	delete(s.plans, plan.review.PlanId)
-	s.mu.Unlock()
+	delete(a.running, record.Operation.OperationId)
+	delete(a.plans, plan.review.PlanId)
+	a.mu.Unlock()
 }
 
 func executePrepared(ctx context.Context, p Prepared, progress func(Progress)) (outcome Outcome, panicked bool, err error) {
@@ -56,7 +52,7 @@ func executePrepared(ctx context.Context, p Prepared, progress func(Progress)) (
 	return
 }
 
-func finishOperation(op Operation, outcome Outcome, err error, panicked bool) Operation {
+func finishOperation(op Operation, outcome Outcome, err error, panicked, active bool) Operation {
 	op.UpdatedAt = time.Now().UTC()
 	op.Phase = "complete"
 	op.State = outcome.State
@@ -68,14 +64,14 @@ func finishOperation(op Operation, outcome Outcome, err error, panicked bool) Op
 		return op
 	}
 	if err != nil {
-		op.Diagnostics = append(op.Diagnostics, publicFailure(err))
+		op.Diagnostics = append(op.Diagnostics, publicFailure(err, active))
 		if op.State == Succeeded {
 			op.State = Interrupted
 			return op
 		}
 	}
 	if outcome.Result.Outcome != "" {
-		result := outcome.Result
+		result := *cloneOperation(Operation{Result: &outcome.Result}).Result
 		if result.LocalSkillBackup != nil {
 			backup := *result.LocalSkillBackup
 			observedAt := op.UpdatedAt
@@ -98,10 +94,10 @@ func finishOperation(op Operation, outcome Outcome, err error, panicked bool) Op
 	return op
 }
 
-func (s *Server) progress(id string, progress Progress) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	running := s.running[id]
+func (a *Application) progress(id string, progress Progress) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	running := a.running[id]
 	if running == nil {
 		return
 	}
@@ -118,71 +114,32 @@ func (s *Server) progress(id string, progress Progress) {
 	op.UpdatedAt = time.Now().UTC()
 }
 
-func (s *Server) operation(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	if !validID(id) {
-		writeError(w, 400, "INVALID_REQUEST", "Invalid operation identity", false)
-		return
-	}
-	if op, ok := s.memoryOperation(id); ok {
-		loopbackapi.WriteJSON(w, 200, op)
-		return
-	}
-	record, err := s.store.byOperation(id)
-	if err != nil {
-		writeError(w, 503, "OBSERVATION_UNAVAILABLE", "Accepted-operation history cannot be read safely", true)
-		return
-	}
-	if record == nil {
-		writeError(w, 404, "OPERATION_NOT_FOUND", "Unknown or expired operation; inspect environment before retrying effects", false)
-		return
-	}
-	op, err := s.observe(r.Context(), *record)
-	if err != nil {
-		writeError(w, 503, "OBSERVATION_UNAVAILABLE", "Accepted work cannot be observed safely", true)
-		return
-	}
-	loopbackapi.WriteJSON(w, 200, op)
-}
-
-func (s *Server) memoryOperation(id string) (Operation, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if running := s.running[id]; running != nil {
+func (a *Application) memoryOperation(id string) (Operation, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if running := a.running[id]; running != nil {
 		return cloneOperation(running.record.Operation), true
 	}
 	return Operation{}, false
 }
 
-func cloneOperation(op Operation) Operation {
-	op.Items = append([]OperationItem{}, op.Items...)
-	op.Diagnostics = append([]Diagnostic{}, op.Diagnostics...)
-	if op.Result != nil {
-		result := *op.Result
-		result.Items = append([]OperationItem{}, result.Items...)
-		result.NextActions = append([]NextAction{}, result.NextActions...)
-		op.Result = &result
-	}
-	return op
-}
-
 // An accepted record without a live lock is interrupted, not a job to replay.
-func (s *Server) observe(ctx context.Context, record acceptance) (Operation, error) {
-	if op, ok := s.memoryOperation(record.Operation.OperationId); ok {
+func (a *Application) observe(ctx context.Context, record Observation) (Operation, error) {
+	if op, ok := a.memoryOperation(record.Operation.OperationId); ok {
 		return op, nil
 	}
 	if terminal(record.Operation.State) {
 		return record.Operation, nil
 	}
-	unlock, err := s.mutationLock.Acquire(ctx)
-	if errors.Is(err, processlock.ErrActive) {
+	unlock, err := a.opts.Lock.Acquire(ctx)
+	if a.opts.Lock.IsActive(err) {
 		return record.Operation, nil
 	}
 	if err != nil {
 		return Operation{}, err
 	}
 	defer func() { _ = unlock() }()
-	current, err := s.store.byRequest(record.Operation.RequestId)
+	current, err := a.opts.Store.ByRequest(record.Operation.RequestId)
 	if err != nil || current == nil {
 		return Operation{}, errors.New("accepted observation disappeared")
 	}
@@ -195,14 +152,14 @@ func (s *Server) observe(ctx context.Context, record acceptance) (Operation, err
 	current.Operation.Result = nil
 	current.Operation.Diagnostics = append(current.Operation.Diagnostics, Diagnostic{
 		Code: "PROCESS_INTERRUPTED", Message: "The accepting process ended; inspect and prepare recovery without repeating the request", Severity: DiagnosticSeverityWarning})
-	if err = s.store.save(*current); err != nil {
+	if err = a.opts.Store.Save(cloneObservation(*current)); err != nil {
 		return Operation{}, err
 	}
 	return current.Operation, nil
 }
 
-func (s *Server) environmentOperations(ctx context.Context) ([]Operation, []LocalSkillBackup, error) {
-	records, err := s.store.list()
+func (a *Application) environmentOperations(ctx context.Context) ([]Operation, []LocalSkillBackup, error) {
+	records, err := a.opts.Store.List()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -211,7 +168,7 @@ func (s *Server) environmentOperations(ctx context.Context) ([]Operation, []Loca
 	for _, record := range records {
 		op := record.Operation
 		if pendingOperation(op) {
-			op, err = s.observe(ctx, record)
+			op, err = a.observe(ctx, record)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -234,7 +191,7 @@ func localSkillRestorePoint(op Operation) *LocalSkillBackup {
 	if op.Action != LocalSkill || op.LocalSkill == nil || op.Result == nil || op.Result.LocalSkillBackup == nil {
 		return nil
 	}
-	backup := *op.Result.LocalSkillBackup
+	backup := *cloneBackup(op.Result.LocalSkillBackup)
 	if backup.OperationId != op.OperationId || backup.RootId != op.LocalSkill.RootId || backup.SkillName != op.LocalSkill.SkillName {
 		return nil
 	}
@@ -267,47 +224,65 @@ func pendingOperation(op Operation) bool {
 	return false
 }
 
-func (s *Server) cancelOperation(w http.ResponseWriter, r *http.Request) {
-	if r.ContentLength != 0 {
-		var input struct{}
-		if !loopbackapi.Decode(w, r, &input, writeError) {
-			return
-		}
+func (a *Application) Operation(ctx context.Context, id string) (Operation, error) {
+	ctx, leave, err := a.admit(ctx)
+	if err != nil {
+		return Operation{}, err
 	}
-	id := r.PathValue("id")
-	if !validID(id) {
-		writeError(w, 400, "INVALID_REQUEST", "Invalid operation identity", false)
-		return
+	defer leave()
+	if !ValidID(id) {
+		return Operation{}, refusal(400, "INVALID_REQUEST", "Invalid operation identity", false)
 	}
-	s.mu.Lock()
-	running := s.running[id]
+	if op, ok := a.memoryOperation(id); ok {
+		return op, nil
+	}
+	record, err := a.opts.Store.ByOperation(id)
+	if err != nil {
+		return Operation{}, refusal(503, "OBSERVATION_UNAVAILABLE", "Accepted-operation history cannot be read safely", true)
+	}
+	if record == nil {
+		return Operation{}, refusal(404, "OPERATION_NOT_FOUND", "Unknown or expired operation; inspect environment before retrying effects", false)
+	}
+	op, err := a.observe(ctx, *record)
+	if err != nil {
+		return Operation{}, refusal(503, "OBSERVATION_UNAVAILABLE", "Accepted work cannot be observed safely", true)
+	}
+	return cloneOperation(op), nil
+}
+
+func (a *Application) CancelOperation(ctx context.Context, id string) (Operation, error) {
+	ctx, leave, err := a.admit(ctx)
+	if err != nil {
+		return Operation{}, err
+	}
+	defer leave()
+	if !ValidID(id) {
+		return Operation{}, refusal(400, "INVALID_REQUEST", "Invalid operation identity", false)
+	}
+	a.mu.Lock()
+	running := a.running[id]
 	if running != nil {
 		running.record.Operation.Phase = "cancellation_requested"
 		cancel := running.cancel
 		op := cloneOperation(running.record.Operation)
-		s.mu.Unlock()
+		a.mu.Unlock()
 		cancel()
-		loopbackapi.WriteJSON(w, 202, op)
-		return
+		return op, nil
 	}
-	s.mu.Unlock()
-	record, err := s.store.byOperation(id)
+	a.mu.Unlock()
+	record, err := a.opts.Store.ByOperation(id)
 	if err != nil {
-		writeError(w, 503, "OBSERVATION_UNAVAILABLE", "Cannot determine operation state", true)
-		return
+		return Operation{}, refusal(503, "OBSERVATION_UNAVAILABLE", "Cannot determine operation state", true)
 	}
 	if record == nil {
-		writeError(w, 404, "OPERATION_NOT_FOUND", "Operation not found", false)
-		return
+		return Operation{}, refusal(404, "OPERATION_NOT_FOUND", "Operation not found", false)
 	}
-	op, err := s.observe(r.Context(), *record)
+	op, err := a.observe(ctx, *record)
 	if err != nil {
-		writeError(w, 503, "OBSERVATION_UNAVAILABLE", "Cannot inspect operation state", true)
-		return
+		return Operation{}, refusal(503, "OBSERVATION_UNAVAILABLE", "Cannot inspect operation state", true)
 	}
 	if terminal(op.State) {
-		loopbackapi.WriteJSON(w, 202, op)
-		return
+		return cloneOperation(op), nil
 	}
-	writeError(w, 409, "CANCEL_UNAVAILABLE", "This process does not own the running operation; reconnect to its host", false)
+	return Operation{}, refusal(409, "CANCEL_UNAVAILABLE", "This process does not own the running operation; reconnect to its host", false)
 }

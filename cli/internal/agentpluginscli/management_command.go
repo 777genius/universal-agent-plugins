@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/managementhttp"
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/managementstate"
 )
 
 func newManagementCommand(app App) *cobra.Command {
@@ -59,11 +61,16 @@ func runManagementServer(ctx context.Context, app App, input io.Reader, output i
 	if err != nil {
 		return err
 	}
-	defer backend.Close()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	server, err := management.Start(ctx, management.Options{Backend: backend, ContextID: backend.ContextID(), EnvironmentID: backend.EnvironmentID(), IntentRoot: backend.config.DependenciesRoot, StateRoot: backend.config.StateRoot, EngineVersion: configured.Version})
+	application, err := composeManagementApplication(ctx, backend, configured.Version)
 	if err != nil {
+		backend.Close()
+		return err
+	}
+	server, err := managementhttp.Start(ctx, application)
+	if err != nil {
+		application.Close()
 		return err
 	}
 	defer server.Close()
@@ -76,4 +83,20 @@ func runManagementServer(ctx context.Context, app App, input io.Reader, output i
 	case <-ctx.Done():
 	}
 	return nil
+}
+
+// The caller owns backend cleanup until successful application construction.
+// A successful application is handed to the HTTP host or closed by its caller.
+func composeManagementApplication(ctx context.Context, backend *ManagementBackend, version string) (*management.Application, error) {
+	store, err := managementstate.NewStore(backend.config.StateRoot, backend.EnvironmentID())
+	if err != nil {
+		return nil, err
+	}
+	lock, err := managementstate.NewLock(backend.config.StateRoot)
+	if err != nil {
+		return nil, err
+	}
+	return management.NewApplication(ctx, management.Options{Backend: backend, Store: store, Lock: lock,
+		ContextID: backend.ContextID(), EnvironmentID: backend.EnvironmentID(),
+		IntentRoot: backend.config.DependenciesRoot, EngineVersion: version})
 }
