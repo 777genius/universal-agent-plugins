@@ -255,6 +255,8 @@ func (solver *graphSolver) candidates(ctx context.Context, node graphNode) ([]Ca
 	if err := solver.budget.consumeWork(ctx, len(candidates)); err != nil {
 		return nil, err
 	}
+	// Providers may retain or share their metadata array across resolutions.
+	candidates = append([]Candidate(nil), candidates...)
 	sort.Slice(candidates, func(i, j int) bool {
 		c := CompareVersions(candidates[i].Version, candidates[j].Version)
 		return c > 0 || c == 0 && candidates[i].ReleaseSequence > candidates[j].ReleaseSequence
