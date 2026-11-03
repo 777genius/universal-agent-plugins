@@ -20,6 +20,13 @@ jobs:
         with:
           node-version: '22.21.1'
           package-manager-cache: false
+      - name: Install official Codex CLI for client detection (no login)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --prefix "$RUNNER_TEMP/codex-client" @openai/codex
+          echo "$RUNNER_TEMP/codex-client/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/codex-client/bin/codex" --version
       - name: Install the published CLI through npx and add Context7
         shell: bash
         run: |
@@ -44,6 +51,17 @@ jobs:
       AGENTPLUGINS_VERSION: '0.1.95'
       AGENTPLUGINS_BIN_DIR: ${{ github.workspace }}/native-bin
     steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.21.1'
+          package-manager-cache: false
+      - name: Install official Codex CLI for client detection (no login)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --prefix "$RUNNER_TEMP/codex-client" @openai/codex
+          echo "$RUNNER_TEMP/codex-client/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/codex-client/bin/codex" --version
       - name: Install published binary using the README shell entrypoint
         shell: bash
         run: |
@@ -74,6 +92,17 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 20
     steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.21.1'
+          package-manager-cache: false
+      - name: Install official Codex CLI for client detection (no login)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --prefix "$RUNNER_TEMP/codex-client" @openai/codex
+          echo "$RUNNER_TEMP/codex-client/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/codex-client/bin/codex" --version
       - name: Install published CLI through its Homebrew tap
         shell: bash
         run: |
@@ -88,6 +117,16 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 20
     steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.21.1'
+          package-manager-cache: false
+      - name: Install official Codex CLI for client detection (no login)
+        shell: pwsh
+        run: |
+          npm install --global --prefix "$env:RUNNER_TEMP\codex-client" @openai/codex
+          if ($LASTEXITCODE -ne 0) { throw 'Codex CLI install failed' }
+          "$env:RUNNER_TEMP\codex-client" | Out-File -FilePath $env:GITHUB_PATH -Append
       - name: Install published CLI with the README PowerShell entrypoint
         shell: pwsh
         run: |
