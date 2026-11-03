@@ -88,6 +88,7 @@
     "graph-recorded-compatibility",
     "offline-check-valid-noop",
     "offline-check-damaged-state",
+    "offline-check-content-errors",
     "offline-check-declared-graph",
     "offline-check-concurrent-edit",
     "offline-check-cancellation"

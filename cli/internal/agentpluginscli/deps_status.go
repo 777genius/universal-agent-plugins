@@ -10,6 +10,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -113,34 +114,62 @@ func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 }
 
 func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lock environment.Lock) error {
+	// Index both names once: a large imported lock must not cause a full scan
+	// for every short declaration. Alias lookup within a colliding name is also
+	// indexed, preserving the existing explicit-alias preference.
+	type registryMatches struct {
+		first   *environment.LockedPackage
+		count   int
+		byAlias map[string]*environment.LockedPackage
+	}
+	// Match EqualFold, including its Unicode simple-fold equivalents, without
+	// changing how historical product IDs participate in offline lookup.
+	fold := func(value string) string {
+		return strings.Map(func(r rune) rune {
+			for {
+				next := unicode.SimpleFold(r)
+				if next <= r {
+					return next
+				}
+				r = next
+			}
+		}, value)
+	}
+	byName := map[string]*registryMatches{}
+	for i := range lock.Packages {
+		pkg := &lock.Packages[i]
+		if pkg.Source.Registry == nil {
+			continue
+		}
+		product, basename := fold(pkg.Source.Registry.ProductID), fold(path.Base(pkg.Source.Registry.DistributionID))
+		for index, name := range []string{product, basename} {
+			if index == 1 && name == product {
+				continue
+			}
+			matches := byName[name]
+			if matches == nil {
+				matches = &registryMatches{first: pkg, byAlias: map[string]*environment.LockedPackage{}}
+				byName[name] = matches
+			}
+			matches.count++
+			if matches.byAlias[pkg.Alias] == nil {
+				matches.byAlias[pkg.Alias] = pkg
+			}
+		}
+	}
 	for key, requirement := range requirements.Dependencies {
 		if requirement.Registry == nil || strings.Contains(requirement.Registry.Distribution, "/") {
 			continue
 		}
-		var candidates []environment.LockedPackage
-		for _, pkg := range lock.Packages {
-			source := pkg.Source.Registry
-			if source == nil {
-				continue
-			}
-			if strings.EqualFold(requirement.Registry.Distribution, source.ProductID) || strings.EqualFold(requirement.Registry.Distribution, path.Base(source.DistributionID)) {
-				candidates = append(candidates, pkg)
-			}
+		matches := byName[fold(requirement.Registry.Distribution)]
+		if matches == nil {
+			continue
 		}
 		// Preserve an existing unambiguous alias association; otherwise require a
 		// unique source match. Full lock validation follows this offline lookup.
-		var selected *environment.LockedPackage
-		for i := range candidates {
-			if candidates[i].Alias == key {
-				selected = &candidates[i]
-				break
-			}
-		}
-		if selected == nil && len(candidates) == 1 {
-			selected = &candidates[0]
-		}
-		if len(candidates) == 0 {
-			continue
+		selected := matches.byAlias[key]
+		if selected == nil && matches.count == 1 {
+			selected = matches.first
 		}
 		if selected == nil {
 			return fmt.Errorf("dependency %q cannot be mapped unambiguously to uap.lock registry facts; use its canonical distribution", key)

@@ -92,6 +92,7 @@ func packageManagerAgreementCases() map[string]func(*testing.T) {
 		"graph-recorded-compatibility":   pmIntegrityRecordedGraphCompatibility,
 		"offline-check-valid-noop":       pmIntegrityOfflineScopes,
 		"offline-check-damaged-state":    TestDependencyCheckDamagedStateCLI,
+		"offline-check-content-errors":   TestDependencyCheckMissingPackageContentAndTemporaryStorage,
 		"offline-check-declared-graph":   TestDependencyCheckDeclaredGraphCLI,
 		"offline-check-concurrent-edit":  TestDependencyCheckRechecksAgreementAndCleansSnapshot,
 		"offline-check-cancellation":     pmIntegrityOfflineCancellation,

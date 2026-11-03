@@ -19,7 +19,10 @@ import (
 
 // MaxMetadataBytes is the serialized store-envelope ceiling, including the
 // writer's final newline. Both publication and inspection enforce this limit.
-const MaxMetadataBytes int64 = 4 << 20
+// Use the existing package-file ceiling: a supported 32 MiB dependency lock can
+// already contain a large executable inventory, and store provenance adds its
+// own JSON overhead. A smaller metadata ceiling must not invalidate that cache.
+const MaxMetadataBytes int64 = domain.DefaultMaxFileBytes
 
 func decodeMetadata(body []byte) (Metadata, error) {
 	if int64(len(body)) > MaxMetadataBytes {

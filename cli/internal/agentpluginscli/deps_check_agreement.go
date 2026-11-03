@@ -47,6 +47,9 @@ func inspectDependencyAgreement(ctx context.Context, app App) (dependencyChecked
 		return agreement, []dependencyCheckResult{*issue}
 	}
 	agreement.requirements, err = readDependencyManifestBytes(manifestPath, agreement.manifest.body)
+	if ctx.Err() != nil {
+		return agreement, []dependencyCheckResult{dependencyCanceledResult("manifest")}
+	}
 	if err != nil {
 		return agreement, []dependencyCheckResult{dependencyInvalidDocument("manifest", manifestPath)}
 	}
@@ -59,7 +62,11 @@ func inspectDependencyAgreement(ctx context.Context, app App) (dependencyChecked
 	if issue != nil {
 		return agreement, append(checks, *issue)
 	}
-	if err := canonicalizeRequirementsFromLock(&agreement.requirements, agreement.lock); err != nil {
+	err = canonicalizeRequirementsFromLock(&agreement.requirements, agreement.lock)
+	if ctx.Err() != nil {
+		return agreement, append(checks, dependencyCanceledResult("lock"))
+	}
+	if err != nil {
 		return agreement, append(checks, dependencyInvalidDocument("lock", lockPath))
 	}
 	return agreement, append(checks, dependencyCheckResult{Stage: "lock", Outcome: dependencyCheckValid, Path: lockPath})
@@ -73,14 +80,16 @@ func inspectDependencyLockFile(ctx context.Context, path string, requirements en
 		return environment.Lock{}, file, issue
 	}
 	lock, err := decodeDependencyLockBytes(file.body, requirements, false)
+	if ctx.Err() != nil {
+		issue := dependencyCanceledResult("lock")
+		issue.Path = path
+		return environment.Lock{}, file, &issue
+	}
 	if err == nil {
 		return lock, file, nil
 	}
 	issue := dependencyInvalidDocument("lock", path)
-	if errors.Is(err, environment.ErrResolutionLimit) {
-		issue.Outcome, issue.Code = dependencyCheckError, "graph_limit"
-		issue.Message = "The recorded graph exceeds the supported inspection limits. Preserve the agreement and reduce its scope before retrying."
-	} else if errors.Is(err, environment.ErrManifestDigestMismatch) {
+	if errors.Is(err, environment.ErrManifestDigestMismatch) {
 		issue.Code = "lock_stale"
 		issue.Message = "The lock describes different dependency intent. Review the manifest change before explicitly running deps lock."
 	}

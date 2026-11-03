@@ -113,7 +113,7 @@ func (store Store) inspectSnapshot(ctx context.Context, entryRoot string) (Packa
 // Only corrupt contents authorize replacement. Permissions, temporary-storage
 // failures and cancellation must not be disguised as repairable corruption.
 func snapshotVerificationError(err error) error {
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, packagedigest.ErrSnapshotStorage) {
 		return err
 	}
 	var pathError *os.PathError

@@ -25,6 +25,25 @@ func (app App) environmentID() string {
 }
 
 func (app App) forOptions(opts *options) (App, error) {
+	selected, err := app.selectScopeForOptions(opts)
+	if err != nil {
+		return App{}, err
+	}
+	if selected.scope() == domain.ScopeProject {
+		if err := selected.checkProjectNamespace(); err != nil {
+			return App{}, err
+		}
+		if err := selected.checkProjectTargets(opts.target); err != nil {
+			return App{}, err
+		}
+	}
+	return selected, nil
+}
+
+// Scope selection is independent of installed-state inspection. Read-only
+// agreement checks reuse it without making unrelated installation state an
+// availability dependency; other commands retain the full forOptions preflight.
+func (app App) selectScopeForOptions(opts *options) (App, error) {
 	if err := validateCommonOptions(opts); err != nil {
 		return App{}, err
 	}
@@ -46,14 +65,6 @@ func (app App) forOptions(opts *options) (App, error) {
 	}
 	if selected.scope() != scope || selected.ProjectRoot != root {
 		return App{}, fmt.Errorf("selected runtime does not match requested scope and project root")
-	}
-	if scope == domain.ScopeProject {
-		if err := selected.checkProjectNamespace(); err != nil {
-			return App{}, err
-		}
-		if err := selected.checkProjectTargets(opts.target); err != nil {
-			return App{}, err
-		}
 	}
 	return selected, nil
 }
@@ -158,7 +169,21 @@ func (app App) checkProjectNamespace() error {
 	if app.scope() != domain.ScopeProject {
 		return nil
 	}
-	if app.Installer == nil || app.StateStore == nil || app.Lifecycle.Paths == nil {
+	if app.StateStore == nil {
+		return fmt.Errorf("project runtime requires an installer, scoped state store and path policy")
+	}
+	if err := app.checkProjectNamespacePaths(); err != nil {
+		return err
+	}
+	_, err := app.StateStore.Load()
+	return err
+}
+
+func (app App) checkProjectNamespacePaths() error {
+	if app.scope() != domain.ScopeProject {
+		return nil
+	}
+	if app.Installer == nil || app.Lifecycle.Paths == nil {
 		return fmt.Errorf("project runtime requires an installer, scoped state store and path policy")
 	}
 	if err := app.Installer.CheckProjectNamespace(); err != nil {
@@ -167,6 +192,5 @@ func (app App) checkProjectNamespace() error {
 	if err := app.Lifecycle.Paths.RequireContainedChild(filepath.Join(app.ProjectRoot, ".uap"), app.EnvironmentLockPath); err != nil {
 		return fmt.Errorf("unsafe project environment lock: %w", err)
 	}
-	_, err := app.StateStore.Load()
-	return err
+	return nil
 }
