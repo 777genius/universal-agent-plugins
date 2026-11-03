@@ -185,6 +185,9 @@ test('no remarks requires complete current exact-root evidence and zero findings
       r.records[0]!.freshness = 'historical';
     },
     (r) => {
+      r.records[0]!.execution!.exit_code = 1;
+    },
+    (r) => {
       r.records[0]!.execution!.state = 'failed';
     },
   ];

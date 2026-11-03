@@ -93,6 +93,7 @@ export function hasNoPublishedRemarks(
   const coverage = record.coverage;
   return Boolean(
     record.status === 'complete' &&
+    record.execution?.exit_code === 0 &&
     coverage?.status === 'complete' &&
     record.legacy_format === undefined &&
     record.scanner?.id === report.scanner.id &&
