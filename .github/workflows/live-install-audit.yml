@@ -1,0 +1,64 @@
+name: Live installer audit (30 plugins + 30 Skills)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'scripts/live-install-audit.py'
+      - 'tests/live-install/fixtures.json'
+      - '.github/workflows/live-install-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-install-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  native-pilot:
+    name: Real ${{ matrix.target }} / ${{ matrix.kind }} source install (pilot)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [codex]
+        kind: [plugin, skill]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Install genuine native Codex CLI without model subscription
+        run: |
+          npm install --global @openai/codex@0.153.4
+          command -v codex
+          codex --version
+      - name: Build actual CLI under audit
+        run: go build -trimpath -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
+      - name: Run isolated real source install and remove; preserve per-case proof
+        env:
+          AUDIT_REPORT_DIR: ${{ runner.temp }}/live-audit-report
+          AUDIT_KIND: ${{ matrix.kind }}
+          AUDIT_TARGET: ${{ matrix.target }}
+        run: |
+          python3 scripts/live-install-audit.py \
+            --cli "$RUNNER_TEMP/agentplugins-audit" \
+            --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 2 \
+            --report-dir "$AUDIT_REPORT_DIR"
+      - name: Upload audit JSON on success or failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: live-install-pilot-${{ matrix.target }}-${{ matrix.kind }}
+          path: ${{ runner.temp }}/live-audit-report/
+          if-no-files-found: warn
+          retention-days: 14
