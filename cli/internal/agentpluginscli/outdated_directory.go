@@ -6,7 +6,6 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
 func inspectOutdatedInstallation(bundle directoryv1.VerifiedBundle, bundleOK bool, detected map[domain.ClientID]domain.DetectedClient, detectionErr error, installerVersion string, installation domain.Installation, scope string) outdatedInstallation {
