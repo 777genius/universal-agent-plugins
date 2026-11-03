@@ -53,6 +53,42 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         "GIT_SSH_COMMAND", "SSH_ASKPASS"):
                 self.assertNotIn(key, env)
 
+    def test_drops_unrelated_credentials_but_retains_public_runtime_plumbing(self):
+        audit = load_audit()
+        trusted = {
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "HTTPS_PROXY": "http://proxy.invalid:3128",
+            "LANG": "C.UTF-8",
+        }
+        canaries = {
+            "OPENAI_API_KEY": "never-forward-openai-canary",
+            "ANTHROPIC_API_KEY": "never-forward-anthropic-canary",
+            "GH_TOKEN": "never-forward-gh-canary",
+            "GITHUB_TOKEN": "never-forward-github-canary",
+            "ACTIONS_RUNTIME_TOKEN": "never-forward-actions-canary",
+            "AWS_SECRET_ACCESS_KEY": "never-forward-aws-canary",
+            "NPM_TOKEN": "never-forward-npm-canary",
+            "SSH_AUTH_SOCK": "/outside/ssh-agent.sock",
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.hooksPath",
+            "GIT_CONFIG_VALUE_0": "/outside/hooks",
+            "CODEX_HOME": "/outside/real-codex-profile",
+        }
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve() / "case"
+            home, data = case / "home", case / "uap-data"
+            home.mkdir(parents=True)
+            data.mkdir()
+            with patch.dict(os.environ, {**trusted, **canaries}, clear=True):
+                env = audit.isolated_client_env(home, case, data)
+        for key, value in trusted.items():
+            self.assertEqual(env[key], value)
+        for key in canaries:
+            if key != "CODEX_HOME":
+                self.assertNotIn(key, env)
+        self.assertTrue(Path(env["CODEX_HOME"]).is_relative_to(home))
+        self.assertEqual(env["CI"], "true")
+
     def test_refuses_case_data_outside_disposable_root(self):
         audit = load_audit()
         with TemporaryDirectory() as temporary:

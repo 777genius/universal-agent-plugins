@@ -357,6 +357,20 @@ PROFILE_ENV_KEYS = {
 }
 
 
+
+# A third-party package may launch processes during a live installation.
+# The audit requires public network access, not the runner's account tokens.
+# An explicit allowlist is safer than blacklisting secret-name families.
+INHERITED_RUNTIME_ENV_KEYS = frozenset({
+    "PATH", "PATHEXT", "SystemRoot", "SYSTEMROOT", "WINDIR", "COMSPEC",
+    "OS", "USER", "LOGNAME",
+    "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "LC_MESSAGES", "TZ", "TERM",
+    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+    "http_proxy", "https_proxy", "all_proxy", "no_proxy",
+    "SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE",
+    "REQUESTS_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "GIT_SSL_CAINFO",
+})
+
 def isolated_client_env(home, case_root, data):
     """Every native client authority root must belong to this disposable case."""
     home, case_root, data = (p.resolve(strict=True) for p in (home, case_root, data))
@@ -365,9 +379,7 @@ def isolated_client_env(home, case_root, data):
     # Native profile overrides, Git config injection and host SSH helpers must
     # not escape the case even if a maintainer runs this script locally.
     env = {key: value for key, value in os.environ.items()
-           if key not in PROFILE_ENV_KEYS and not key.startswith("GIT_CONFIG_")
-           and key not in ("GIT_SSH_COMMAND", "GIT_ASKPASS", "SSH_ASKPASS",
-                           "APPDATA", "LOCALAPPDATA")}
+           if key in INHERITED_RUNTIME_ENV_KEYS}
     temp = case_root / "tmp"
     temp.mkdir(exist_ok=True)
     roots = {
