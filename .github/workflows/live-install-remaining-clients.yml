@@ -39,6 +39,11 @@ jobs:
         with:
           node-version: '24'
       - name: Acquire actual public vendor client where a headless Linux build exists
+        id: vendor-install
+        # Preserve a complete explicit client-unavailable record even when a
+        # genuine vendor installer needs login (e.g. Devin). The audit itself
+        # still exits nonzero: a vendor failure cannot be a successful install.
+        continue-on-error: true
         env:
           TARGET: ${{ matrix.target }}
         shell: bash
