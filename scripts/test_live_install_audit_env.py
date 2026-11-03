@@ -31,7 +31,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             "SSH_ASKPASS": "/outside/host-askpass",
         })
         with TemporaryDirectory() as temporary:
-            case = Path(temporary) / "case"
+            case = Path(temporary).resolve() / "case"
             home, data = case / "home", case / "uap-data"
             home.mkdir(parents=True)
             data.mkdir()
@@ -54,7 +54,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
     def test_refuses_case_data_outside_disposable_root(self):
         audit = load_audit()
         with TemporaryDirectory() as temporary:
-            parent = Path(temporary)
+            parent = Path(temporary).resolve()
             case, home, outside = parent / "case", parent / "case/home", parent / "outside"
             home.mkdir(parents=True)
             outside.mkdir()
