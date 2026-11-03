@@ -22,4 +22,4 @@ This is a **security problem in the new test harness**, not evidence of a defect
 - **Architecture:** one helper, no daemon, feature flag, new public API, installer code, vendor profile mutation or scan-policy exception.
 - **Scope:** this PR's E2E harness and one focused regression only. A green test must not imply a user profile was touched, nor that activation happened.
 
-**Status:** plan recorded before fix; rerun and review required.
+**Status:** fix and regression now pushed. `isolated_client_env` clears ambient per-client overrides and Git configuration injection, validates home/data roots under the disposable case and assigns every native client override inside it. `scripts/test_live_install_audit_env.py` injects hostile parent paths and verifies confinement; both live CI workflows run this guard before installs. **Final-head CI and Strix re-review are still required.**
