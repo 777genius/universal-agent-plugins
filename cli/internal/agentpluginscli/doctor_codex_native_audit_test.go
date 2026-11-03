@@ -192,15 +192,17 @@ func TestCodexDoctorDepthScanRespectsMultilineQuoteSkip(t *testing.T) {
 	t.Parallel()
 	const limit = 6
 	for _, quote := range []string{`"`, `'`} {
-		payload := "[mcp_servers.demo]\nlabel = " + strings.Repeat(quote, 4) + "x" +
-			strings.Repeat(quote, 3) + "\ncommand = " +
-			strings.Repeat("[", limit+1) + "0" + strings.Repeat("]", limit+1) + "\n"
-		var parsed map[string]any
-		if err := toml.Unmarshal([]byte(payload), &parsed); err != nil {
-			t.Fatalf("adversarial fixture must be valid TOML: %v", err)
-		}
-		if doctorNativeNestingBounded([]byte(payload), limit) {
-			t.Fatalf("deep arrays were hidden by a multiline %s quote boundary", quote)
+		for _, closers := range []int{3, 4, 5} {
+			payload := "[mcp_servers.demo]\nlabel = " + strings.Repeat(quote, 4) + "x" +
+				strings.Repeat(quote, closers) + "\ncommand = " +
+				strings.Repeat("[", limit+1) + "0" + strings.Repeat("]", limit+1) + "\n"
+			var parsed map[string]any
+			if err := toml.Unmarshal([]byte(payload), &parsed); err != nil {
+				t.Fatalf("multiline quote fixture with %d closing quotes must be valid TOML: %v", closers, err)
+			}
+			if doctorNativeNestingBounded([]byte(payload), limit) {
+				t.Fatalf("deep arrays were masked by %d closing %s quotes", closers, quote)
+			}
 		}
 	}
 }

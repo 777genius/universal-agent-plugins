@@ -312,8 +312,7 @@ func (s *doctorTOMLDepthScan) advance(contents []byte, pos *int, limit int) bool
 		return true
 	}
 	if s.quote != 0 {
-		s.advanceQuoted(contents, pos, b)
-		return true
+		return s.advanceQuoted(contents, pos, b)
 	}
 	switch b {
 	case '#':
@@ -335,27 +334,37 @@ func (s *doctorTOMLDepthScan) advance(contents []byte, pos *int, limit int) bool
 	return true
 }
 
-func (s *doctorTOMLDepthScan) advanceQuoted(contents []byte, pos *int, b byte) {
+func (s *doctorTOMLDepthScan) advanceQuoted(contents []byte, pos *int, b byte) bool {
 	if s.quote == '"' && s.escaped {
 		s.escaped = false
-		return
+		return true
 	}
 	if s.quote == '"' && b == '\\' {
 		s.escaped = true
-		return
+		return true
 	}
 	if b != s.quote {
-		return
+		return true
 	}
 	if !s.multiline {
 		s.quote = 0
-		return
+		return true
 	}
 	if *pos+2 < len(contents) && contents[*pos+1] == b && contents[*pos+2] == b {
+		end := *pos + 3
+		for end < len(contents) && contents[end] == b {
+			end++
+		}
+		// A TOML multiline closing delimiter may contain 3, 4, or 5
+		// quotes. Never let trailing quote characters reopen a string.
+		if end-*pos > 5 {
+			return false
+		}
 		s.quote = 0
 		s.multiline = false
-		*pos += 2
+		*pos = end - 1
 	}
+	return true
 }
 
 func doctorNativeRead(root *os.Root, path string) ([]byte, string) {
