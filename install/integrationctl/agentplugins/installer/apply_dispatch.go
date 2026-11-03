@@ -96,7 +96,7 @@ func (e *Engine) prepareApplyResources(ctx context.Context, prepared *PreparedOp
 		}
 	}
 	if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
-		return result, err
+		return Result{Operation: op, Outcome: OutcomeConflict, Reason: "profile_changed"}, err
 	}
 	if err := e.ensureDirs(); err != nil {
 		result = Result{Operation: op, Outcome: OutcomeIncomplete, Reason: err.Error()}
