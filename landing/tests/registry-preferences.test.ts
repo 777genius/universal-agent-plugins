@@ -102,6 +102,9 @@ test('explicit card delivery summary follows the winning scoped release rather t
   instance.state.updateTargets(['codex']);
   instance.state.updateAutoDetect(false);
   instance.state.updateScope('project');
+  assert.equal(instance.state.deliverySummary.value, '', 'entering project restores CLI-side detection');
+  assert.equal(instance.state.command.value, 'npx -y universal-agent-plugins add gitlab --scope project');
+  instance.state.updateAutoDetect(false);
   assert.equal(instance.state.deliverySummary.value, 'Agents: 0 automatic setup · 1 need follow-up');
   assert.match(instance.state.command.value, /--target codex --scope project$/);
   instance.state.updateScope('user');
