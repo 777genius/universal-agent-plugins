@@ -361,7 +361,8 @@ def isolated_client_env(home, case_root, data):
     # not escape the case even if a maintainer runs this script locally.
     env = {key: value for key, value in os.environ.items()
            if key not in PROFILE_ENV_KEYS and not key.startswith("GIT_CONFIG_")
-           and key not in ("GIT_SSH_COMMAND", "GIT_ASKPASS", "SSH_ASKPASS")}
+           and key not in ("GIT_SSH_COMMAND", "GIT_ASKPASS", "SSH_ASKPASS",
+                           "APPDATA", "LOCALAPPDATA")}
     temp = case_root / "tmp"
     temp.mkdir(exist_ok=True)
     roots = {
@@ -384,6 +385,8 @@ def isolated_client_env(home, case_root, data):
         "XDG_CACHE_HOME": str(home / ".cache"),
         "XDG_DATA_HOME": str(home / ".local/share"),
         "XDG_STATE_HOME": str(home / ".local/state"),
+        "APPDATA": str(home / "AppData/Roaming"),
+        "LOCALAPPDATA": str(home / "AppData/Local"),
         "AGENTPLUGINS_HOME": str(data),
         "TMPDIR": str(temp), "TEMP": str(temp), "TMP": str(temp),
         "GIT_CONFIG_NOSYSTEM": "1",
