@@ -37,7 +37,7 @@ func TestProjectDoctorReadinessProductionCompositionE2E(t *testing.T) {
 				NextActions    []string `json:"next_actions"`
 			} `json:"project_readiness"`
 			Findings []struct {
-				Code string `json:"code"`
+				Code   string `json:"code"`
 				Status string `json:"status"`
 			} `json:"findings"`
 		} `json:"data"`

@@ -286,7 +286,7 @@ func doctorNativeEntryStatus(root *os.Root, path string, last, directory bool) s
 // recursive parser. Comments and string literals do not contribute to depth.
 func doctorNativeNestingBounded(contents []byte, limit int) bool {
 	var scan doctorTOMLDepthScan
-	for i := 0; i < len(contents); i++ {
+	for i := range contents {
 		if !scan.advance(contents, &i, limit) {
 			return false
 		}

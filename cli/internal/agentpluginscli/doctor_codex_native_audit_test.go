@@ -210,11 +210,13 @@ func TestCodexDoctorRecognizesMultipleOwnedServersInOneDocument(t *testing.T) {
 func TestCodexDoctorRejectsDriftedNativeOwnershipReceipts(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name string
+		name   string
 		mutate func(*domain.ClientBinding, string)
-		want string
+		want   string
 	}{
-		{"skill path escaped", func(b *domain.ClientBinding, root string) { b.NativeObjects[0].Path = filepath.Join(filepath.Dir(root), "outside") }, "codex_project_path_mismatch"},
+		{"skill path escaped", func(b *domain.ClientBinding, root string) {
+			b.NativeObjects[0].Path = filepath.Join(filepath.Dir(root), "outside")
+		}, "codex_project_path_mismatch"},
 		{"MCP points to user profile", func(b *domain.ClientBinding, _ string) { b.NativeObjects[1].Path = "/tmp/user-global-config.toml" }, "codex_project_path_mismatch"},
 		{"invalid skill name", func(b *domain.ClientBinding, _ string) { b.NativeObjects[0].LogicalName = "../foreign" }, "codex_project_invalid_skill_receipt"},
 		{"invalid MCP name", func(b *domain.ClientBinding, _ string) { b.NativeObjects[1].LogicalName = ".." }, "codex_project_invalid_mcp_receipt"},
