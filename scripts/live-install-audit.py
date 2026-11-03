@@ -339,6 +339,63 @@ def uninstall_native_codex_plugin(identity, home, case_root, env, cwd):
             "native_plugin_absent": no_plugin, "native_marketplace_absent": no_market}
 
 
+# These native-client overrides supersede HOME/XDG in real UAP client adapters.
+# Strip the few additional explicit-config knobs before creating one case's
+# exact roots. Never allow a caller's existing AI client profile into this E2E.
+PROFILE_ENV_KEYS = {
+    "CODEX_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_CONFIG_DIR",
+    "GEMINI_CLI_HOME", "QODER_CONFIG_DIR", "PI_CODING_AGENT_DIR",
+    "KIMI_CODE_HOME", "KIMI_CODE_CACHE_DIR", "GROK_HOME",
+    "CLINE_DATA_DIR", "CLINE_MCP_SETTINGS_PATH",
+    "OPENCODE_CONFIG", "OPENCODE_CONFIG_DIR", "OPENCODE_DATA_DIR",
+    "CURSOR_USER_DATA_DIR",
+}
+
+
+def isolated_client_env(home, case_root, data):
+    """Every native client authority root must belong to this disposable case."""
+    home, case_root, data = (p.resolve(strict=True) for p in (home, case_root, data))
+    if not home.is_relative_to(case_root) or not data.is_relative_to(case_root):
+        raise ValueError("audit profile paths are not inside the disposable case")
+    # Native profile overrides, Git config injection and host SSH helpers must
+    # not escape the case even if a maintainer runs this script locally.
+    env = {key: value for key, value in os.environ.items()
+           if key not in PROFILE_ENV_KEYS and not key.startswith("GIT_CONFIG_")
+           and key not in ("GIT_SSH_COMMAND", "GIT_ASKPASS", "SSH_ASKPASS")}
+    temp = case_root / "tmp"
+    temp.mkdir(exist_ok=True)
+    roots = {
+        "CODEX_HOME": home / ".codex",
+        "CLAUDE_CONFIG_DIR": home / ".claude",
+        "GEMINI_CLI_HOME": home,  # Gemini appends /.gemini itself
+        "QODER_CONFIG_DIR": home / ".qoder",
+        "PI_CODING_AGENT_DIR": home / ".pi/agent",
+        "KIMI_CODE_HOME": home / ".kimi-code",
+        "KIMI_CODE_CACHE_DIR": home / ".cache/kimi-code",
+        "GROK_HOME": home / ".grok",
+        "CLINE_DATA_DIR": home / ".cline/data",
+        "CLINE_MCP_SETTINGS_PATH": home / ".cline/data/settings/cline_mcp_settings.json",
+    }
+    if any(not path.is_relative_to(home) for path in roots.values()):
+        raise ValueError("native profile would escape disposable home")
+    env.update({
+        "HOME": str(home), "USERPROFILE": str(home),
+        "XDG_CONFIG_HOME": str(home / ".config"),
+        "XDG_CACHE_HOME": str(home / ".cache"),
+        "XDG_DATA_HOME": str(home / ".local/share"),
+        "XDG_STATE_HOME": str(home / ".local/state"),
+        "AGENTPLUGINS_HOME": str(data),
+        "TMPDIR": str(temp), "TEMP": str(temp), "TMP": str(temp),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": str(case_root / "empty.gitconfig"),
+        "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never",
+        "KIMI_CODE_NO_AUTO_UPDATE": "1",
+        "CI": "true", "DO_NOT_TRACK": "1",
+        **{key: str(path) for key, path in roots.items()},
+    })
+    return env
+
+
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
@@ -368,15 +425,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     # only an empty isolated profile and is never counted as agent detection.
     if target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ)
-    env.update(HOME=str(home), USERPROFILE=str(home),
-               XDG_CONFIG_HOME=str(home / ".config"),
-               XDG_CACHE_HOME=str(home / ".cache"),
-               XDG_DATA_HOME=str(home / ".local/share"),
-               AGENTPLUGINS_HOME=str(data),
-               GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=str(case_root / "empty.gitconfig"),
-               GIT_TERMINAL_PROMPT="0", GCM_INTERACTIVE="never", CI="true",
-               DO_NOT_TRACK="1")
+    env = isolated_client_env(home, case_root, data)
     before = snapshot(native_roots)
     if kind == "plugin":
         identity = plugin_declared_names.get(item, item)
