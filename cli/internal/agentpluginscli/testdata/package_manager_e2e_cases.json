@@ -22,7 +22,11 @@
     "partial-commit-locked-retry",
     "mixed-source-target-union",
     "portable-cold-restore",
-    "skill-typo-retains-installed"
+    "skill-typo-retains-installed",
+    "pin-envelope-warm-cold-refusal",
+    "pin-inventory-order-noop",
+    "pin-legacy-version-hydration",
+    "recorded-repair-inventory-hydration"
   ],
   "transport": [
     "zip",
@@ -77,6 +81,14 @@
     "direct-source-promotion",
     "direct-source-selector-refusal",
     "occupied-declaration-key",
-    "lock-json-duplicate-refusal"
+    "lock-json-duplicate-refusal",
+    "embedded-manifest-size-refusal",
+    "graph-large-recorded-tree",
+    "graph-resource-limit-refusal",
+    "offline-check-valid-noop",
+    "offline-check-damaged-state",
+    "offline-check-declared-graph",
+    "offline-check-concurrent-edit",
+    "offline-check-cancellation"
   ]
 }

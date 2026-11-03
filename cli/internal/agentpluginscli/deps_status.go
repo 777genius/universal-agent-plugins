@@ -40,6 +40,7 @@ type dependencyExcludedTarget struct {
 }
 
 type dependencyStatus struct {
+	Diagnostics      []dependencyCheckResult    `json:"diagnostics,omitempty"`
 	ExcludedTargets  []dependencyExcludedTarget `json:"excluded_targets"`
 	Scope            string                     `json:"scope"`
 	ManifestPath     string                     `json:"manifest_path"`
@@ -83,11 +84,12 @@ func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 		status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"manifest_missing"}})
 	} else {
 		status.ManifestDigest, _ = environment.ManifestDigest(requirements)
-		var lockErr error
-		lock, lockErr = readDependencyLock(lockPath, requirements)
-		validLock = lockErr == nil
+		var issue *dependencyCheckResult
+		lock, _, issue = inspectDependencyLockFile(cmd.Context(), lockPath, requirements)
+		validLock = issue == nil
 		status.ValidLock = validLock
-		if lockErr != nil {
+		if issue != nil {
+			status.Diagnostics = append(status.Diagnostics, *issue)
 			status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"not_synced"}})
 		} else {
 			if err := canonicalizeRequirementsFromLock(&requirements, lock); err != nil {
@@ -273,6 +275,11 @@ func renderDependencyStatus(cmd *cobra.Command, opts *options, status dependency
 	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Dependency environment (%s)\nManifest: %s\nLock: %s\nSupported targets: %s\n", status.Scope, status.ManifestPath, status.LockPath, strings.Join(status.SupportedTargets, ", ")); err != nil {
 		return err
 	}
+	for _, diagnostic := range status.Diagnostics {
+		if err := renderDependencyCheckResult(cmd.OutOrStdout(), diagnostic); err != nil {
+			return err
+		}
+	}
 	for _, fact := range status.Facts {
 		name := fact.Alias
 		if fact.ClientID != "" {
@@ -309,7 +316,7 @@ func renderDependencyStatusGuidance(writer io.Writer, status dependencyStatus) e
 	case !status.ValidLock:
 		explanation = "No valid uap.lock was found. Inspect uap.toml and uap.lock before making changes; locked installation is not available yet."
 	default:
-		explanation = "Inspect exact saved versions and dependency relationships: agentplugins deps tree"
+		explanation = "Inspect exact saved versions and dependency relationships: agentplugins deps tree. Check local agreement and cached package integrity without fetching: agentplugins deps check"
 	}
 	if _, err := fmt.Fprintln(writer, "\n"+explanation); err != nil {
 		return err
@@ -387,10 +394,15 @@ func hasDependencyBinding(state installer.Inspection, sourceKey, target string) 
 
 func appendStoreStatus(ctx context.Context, app App, fact *dependencyStatusFact, algorithm string) {
 	if _, err := app.dependencyStore().Get(ctx, algorithm, fact.PackageDigest); err != nil {
-		if errors.Is(err, environmentstore.ErrMismatch) {
+		switch {
+		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+			fact.Facts = append(fact.Facts, "store_canceled")
+		case errors.Is(err, environmentstore.ErrMismatch):
 			fact.Facts = append(fact.Facts, "store_mismatch")
-		} else {
+		case errors.Is(err, environmentstore.ErrMissing):
 			fact.Facts = append(fact.Facts, "store_missing")
+		default:
+			fact.Facts = append(fact.Facts, "store_unreadable")
 		}
 	}
 }
