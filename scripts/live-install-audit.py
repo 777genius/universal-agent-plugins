@@ -35,7 +35,7 @@ PROJECT_SKILL_ROOTS = {
     "qoder": [".uap/managed/clients/qoder"], "pi": [".pi/skills"],
 }
 EXECUTABLE = {
-    "codex": "codex", "copilot": "copilot", "claude": "claude",
+    "codex": "codex", "copilot": "copilot", "cline": "cline", "claude": "claude",
     "gemini": "gemini", "opencode": "opencode", "pi": "pi",
     "kiro": "kiro", "grok": "grok", "kimi": "kimi",
     "qoder": "qoder", "windsurf": "devin",
@@ -67,7 +67,8 @@ def validate_fixtures(doc):
 def call(argv, env, cwd, timeout=105):
     try:
         p = subprocess.run(argv, cwd=cwd, env=env, capture_output=True,
-                           text=True, errors="replace", timeout=timeout, check=False)
+                           text=True, errors="replace", stdin=subprocess.DEVNULL,
+                           timeout=timeout, check=False)
         try:
             parsed_json = json.loads(p.stdout)
         except ValueError:
@@ -104,6 +105,36 @@ def snapshot(root):
                 except OSError:
                     pass
     return found
+
+
+def attributable_native_changes(native_roots, changes, identity):
+    """A changed unrelated config cannot claim the plugin was projected.
+
+    Evidence must come from the managed name in the changed path or content,
+    cross-checked with the exact verified CLI installation record.
+    """
+    found = []
+    for root in native_roots:
+        if not root.is_dir() or root.is_symlink():
+            continue
+        for relpath, _digest in changes:
+            prefix = root.name + "/"
+            if not relpath.startswith(prefix):
+                continue
+            leaf = root / relpath[len(prefix):]
+            if leaf.is_symlink() or not leaf.is_file():
+                continue
+            try:
+                if leaf.stat().st_size > 1024 * 1024:
+                    continue
+                owned_name = identity.casefold() in relpath.casefold()
+                owned_content = identity.casefold() in leaf.read_text(
+                    encoding="utf-8", errors="replace").casefold()
+                if owned_name or owned_content:
+                    found.append(relpath)
+            except OSError:
+                continue
+    return sorted(set(found))
 
 
 def skill_file_present(project, target, skill_name):
@@ -278,6 +309,7 @@ def do_case(cli, target, kind, item, index, runroot):
     output = call([cli, *args], env, project)
     output.pop("_json", None)
     changed = set(snapshot(native_roots).items()) - set(before.items())
+    native_attribution = attributable_native_changes(native_roots, changed, identity)
     skill_path = skill_file_present(project, target, identity) if kind == "skill" else None
     locked = (project / "uap.toml").is_file() and (project / "uap.lock").is_file()
     lock_contains = locked and identity in (project / "uap.lock").read_text(encoding="utf-8")
@@ -338,7 +370,11 @@ def do_case(cli, target, kind, item, index, runroot):
     if target == "chatgpt" and kind == "plugin" and output["exit_code"] == 0:
         status = "manual-setup-prepared"
     elif installed and removal_verified and sentinels_preserved:
-        status = "passed" if kind == "skill" or changed else "package-installed-native-unqualified"
+        status = ("passed" if kind == "skill" or native_attribution else
+                  "package-installed-native-unqualified")
+    elif installed and cleanup and "external removal requires explicit attestation" in (
+            cleanup.get("stderr_tail", "") + cleanup.get("stdout_tail", "")).lower():
+        status = "external-native-uninstall-required"
     elif installed:
         status = "cleanup-failed"
     elif "not detected" in diagnostics or "not available" in diagnostics or "target_unavailable" in diagnostics:
@@ -356,7 +392,8 @@ def do_case(cli, target, kind, item, index, runroot):
     return {"kind": kind, "index": index, "identity": identity, "target": target,
             "source": item if kind == "plugin" else item["source"],
             "status": status, "install": output, "list": listed,
-            "native_file_delta": len(changed), "skill_path": skill_path,
+            "native_file_delta": len(changed),
+            "native_identity_files": native_attribution, "skill_path": skill_path,
             "lock_written": bool(locked), "lock_contains_identity": bool(lock_contains),
             "lock_exact_source_pinned": lock_pinned, "skill_bytes_match": bool(skill_bytes_match),
             "listed_identity": listed_identity, "matched_installation_ids": sorted(old_ids),
