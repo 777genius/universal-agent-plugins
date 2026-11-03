@@ -291,6 +291,19 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     user_sentinel = home / "foreign-untouched.txt"
     user_sentinel.write_text("foreign profile content never belongs to UAP\n")
     native_roots = [home / v for v in NATIVE_ROOTS[target]]
+    # A foreign file lives adjacent to installed native user artifacts.
+    # Its content and position are independent from UAP-managed receipts.
+    native_foreign = (native_roots[0] / "foreign-neighbor.txt") if target == "codex" else None
+    if native_foreign:
+        native_foreign.parent.mkdir(parents=True, exist_ok=True)
+        native_foreign.write_text("unmanaged native neighbor must survive\n")
+    # A pre-existing, unrelated project Skill is an independently owned neighbor.
+    project_skill_roots = PROJECT_SKILL_ROOTS.get(target, [])
+    project_foreign = ((project / project_skill_roots[0] / "foreign-neighbor" / "SKILL.md")
+                       if kind == "skill" and project_skill_roots else None)
+    if project_foreign:
+        project_foreign.parent.mkdir(parents=True, exist_ok=True)
+        project_foreign.write_text("---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
     # Presence of an actual binary comes from the workflow; a config directory is
     # only an empty isolated profile and is never counted as agent detection.
     if target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
@@ -352,19 +365,23 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
                         *attestation, "--format", "json"], env, project, 60)
         cleanup.pop("_json", None)
     sentinels_preserved = (sentinel.read_text() == "foreign content never belongs to UAP\n" and
-                           user_sentinel.read_text() == "foreign profile content never belongs to UAP\n")
+                           user_sentinel.read_text() == "foreign profile content never belongs to UAP\n" and
+                           (not native_foreign or native_foreign.read_text() ==
+                            "unmanaged native neighbor must survive\n") and
+                           (not project_foreign or project_foreign.read_text() ==
+                            "---\nname: foreign-neighbor\ndescription: unrelated\n---\n"))
     post_removal_skill = skill_file_present(project, target, identity) if kind == "skill" and cleanup else None
     post_list = (call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
     post_list_json = post_list.pop("_json", None) if post_list else None
     remaining_ids = set()
+    post_list_schema_valid = False
     if isinstance(post_list_json, dict):
         try:
-            remaining_ids = {
-                entry.get("installation_id")
-                for entry in post_list_json["data"]["installations"]
-                if isinstance(entry, dict)
-            }
+            entries = post_list_json["data"]["installations"]
+            if isinstance(entries, list) and all(isinstance(v, dict) for v in entries):
+                post_list_schema_valid = True
+                remaining_ids = {entry.get("installation_id") for entry in entries}
         except (KeyError, TypeError):
             pass
     old_ids = {entry["installation_id"] for entry in matching}
@@ -372,7 +389,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
                             and locked_skill_is_pinned(project, item, target))
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
-        and isinstance(post_list_json, dict) and old_ids.isdisjoint(remaining_ids)
+        and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
         and (kind != "skill" or (post_removal_skill is None and not post_lock_pinned))
     )
     diagnostics = (output["stdout_tail"] + "\n" + output["stderr_tail"]).lower()
@@ -408,7 +425,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
             "listed_identity": listed_identity, "matched_installation_ids": sorted(old_ids),
             "native_uninstall": native_uninstall, "cleanup": cleanup, "post_remove_list": post_list,
             "post_removal_skill": post_removal_skill, "post_lock_pinned": post_lock_pinned,
-            "removal_verified": removal_verified, "sentinels_preserved": sentinels_preserved}
+            "removal_verified": removal_verified, "post_list_schema_valid": post_list_schema_valid,
+            "sentinels_preserved": sentinels_preserved}
 
 
 def main():
