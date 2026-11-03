@@ -130,7 +130,7 @@ func TestProjectNativeGuidanceForTwelveAgents(t *testing.T) {
 		"gemini":   ".gemini/settings.json",
 		"copilot":  ".github/skills",
 		"cursor":   "Cursor",
-		"pi":       "trust",
+		"pi":       ".pi/skills",
 		"kimi":     ".kimi-code/mcp.json",
 		"windsurf": "Devin",
 		"kiro":     "Kiro",
@@ -151,8 +151,13 @@ func TestProjectNativeGuidanceForTwelveAgents(t *testing.T) {
 		})
 	}
 	pi := strings.Join(projectReadinessActions("pi", "prepared_native_unverified"), " ")
-	if !strings.Contains(pi, "does not project portable Skills or MCP servers") {
-		t.Fatalf("Pi guidance claimed unsupported portable component installation: %q", pi)
+	for _, component := range []string{".pi/extensions", ".pi/skills", ".pi/mcp.json", "prepared files do not prove a tool call"} {
+		if !strings.Contains(pi, component) {
+			t.Fatalf("Pi project guidance missed supported native component %q: %s", component, pi)
+		}
+	}
+	if strings.Contains(pi, "does not project portable Skills or MCP servers") {
+		t.Fatalf("Pi project guidance inherited the user-scope-only limitation: %s", pi)
 	}
 	for status, want := range map[string]string{
 		"source_rebind_required":   "source identity",
