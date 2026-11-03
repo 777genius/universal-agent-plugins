@@ -79,6 +79,12 @@ func (txn *geminiSkillTxn) backupPrevious() error {
 		} else if err != nil {
 			return err
 		}
+		// A user can edit the Skill after the earlier native preparation check.
+		// Refuse without moving it; still verify the isolated backup after rename
+		// to close the remaining concurrent-replacement window.
+		if err := verifyGeminiSkill(object, false); err != nil {
+			return fmt.Errorf("verify managed Gemini skill before backup %q: %w", object.LogicalName, err)
+		}
 		backup := filepath.Join(txn.transactionRoot, "old-"+object.LogicalName)
 		if err := txn.rename(object.Path, backup); err != nil {
 			return fmt.Errorf("backup Gemini skill %q: %w", object.LogicalName, err)
