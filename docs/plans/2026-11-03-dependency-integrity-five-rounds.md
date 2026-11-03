@@ -2,7 +2,7 @@
 
 Date: 2026-11-03. Research baseline: `2d2c4f331e8b3c674240f8b1b83fbd0b7c0f1aba`.
 Implementation base also includes `b5221a9adb561bdc8e4a89499c4113e359641e9a` (#679).
-Status: **Plan revision 2 approved by all three independent critics after revision and re-review. Implementation is authorized within this plan.**
+Status: **All five rounds implemented and published in draft PR #690 after revision 2 received three independent plan approvals. Focused verification is complete; final code criticism and full platform qualification remain deferred.**
 
 ## Owner request and delivery boundary
 
@@ -333,7 +333,10 @@ R4 can follow one completed lane or be handled by the integrator. R5
 depends on the shared checks from R1–R3 and is integrated after their APIs settle.
 Assign exclusive file ownership; only the integrator changes command registration,
 the plan/review ledger, shared E2E catalog and workflow-facing evidence fixtures.
-No worker commits another worker's uncommitted files.
+No worker commits another worker's uncommitted files. After the core APIs settled,
+the integrator delegated exclusive ownership of the three E2E catalog files to
+the R1 worker and a new status-regression file to the R3/R4 worker; publication
+and plan ownership remained with the integrator.
 
 Before changes, focused `environment` and `environmentstore` packages passed on
 Go 1.26.10. During each round run the changed package and its relevant real CLI
@@ -378,13 +381,94 @@ rewrites), and retained the 1,024-root/256-chain budget gates. These are include
 in implementation acceptance. This approval is plan review, not the deferred
 final code-critic loop.
 
+## Implementation and verification ledger
+
+Draft: [#690](https://github.com/777genius/universal-agent-plugins/pull/690).
+Implementation head: `8269559d70b0d5c482e54ce8312cba85e204b1d4`.
+The documentation-only completion commit follows that head; the PR description
+records the published branch head. Workers used GPT-6 Astra with ultra reasoning,
+as requested. The three independent critics reviewed and approved the plan before
+production edits; this is separate from a final review of the implemented code.
+
+Published implementation increments:
+
+| Commit | Content |
+| --- | --- |
+| `9d581b539978107532eb5b477a721bc6609c3173` | R1–R3 together, including their shared strict reader and verified-snapshot contracts. |
+| `f170b2f6265557a86a5670d8e9aa5ca6de894061` | R4 resolver budget, strict/compatible lock admission and iterative cancellable tree rendering. |
+| `8269559d70b0d5c482e54ce8312cba85e204b1d4` | R5 offline check, precise descriptive status, maintainer documentation and composed catalog cases. |
+
+The missing executable-inventory warm-lock regression failed on the baseline
+before its fix. Oversized embedded-manifest and direct-decoder regressions also
+failed before their production changes. These were reproduced UAP defects;
+the upstream issue reports remain motivation rather than UAP exploit evidence.
+
+| Verification | Observed result |
+| --- | --- |
+| R1 immutable replay | 20 warm/cold × lock/install tamper cases passed; unsorted historical inventories preserve agreement bytes and mtimes; old absent versions and explicit receipt repair remain supported. |
+| R2 atomic-file/store suites | Linux focused and race suites passed; strict JSON, FIFO substitution, real executable membership, exact cap boundaries, 10,000-member inventory, snapshot cleanup and repair preservation covered. |
+| R2 cross-compilation | Windows amd64 and Darwin arm64 test binaries for both atomicfile and environmentstore compiled successfully; they were not executed on those platforms. |
+| R3 manifest admission | Shared decoder boundary tests and CLI cold/warm lock/install/imperative refusal passed, including contained links and existing nonstandard-format controls. |
+| R4 environment regression | Complete environment package passed; candidate enumeration, backtracking lifetime budgets, terminal exhaustion and callback cancellation covered. |
+| R4 public-command boundaries | Tree accepts 1,024 roots and a 256-node chain; tree/check/import/lock reject 1,025 nodes or 8,193 recorded edges. Fresh oversized resolution performs no source acquisition. |
+| R5 offline check | Empty/nonempty agreement, user/project isolation, unsafe namespace refusal, corrupted/absent metadata or payload, pin/graph mismatch, concurrent edits, cancellation and snapshot cleanup passed with forbidden source/native/security effects. |
+| R5 status | Existing and new status tests passed; missing/malformed/conflicted/stale lock diagnostics preserve successful descriptive exit and `not_synced`; missing/corrupt/unreadable/canceled store remain distinct. |
+| Integrated race check | Environment and CLI focused resolution/integrity/status/tree suites passed with `-race` (32.272s and 7.005s respectively). |
+| Existing archive compatibility | 59/59 archive-safe CLI catalog scenarios passed (65.778s), with their required run/pass events verified by the existing Python validator. |
+| Existing production composition | 10/10 installation catalog scenarios (11.618s) and 3/3 ZIP lifecycle/scope restore journeys (7.517s) passed. |
+| New composed E2E catalog | 12/12 new cases passed (3.970s); evidence validator confirmed 79 test/subtest passes, no skipped cases. Catalog now contains 80 cases in the existing six groups. |
+| Architecture and evidence tooling | All six existing dependency-direction/import-boundary gates and all 13 Python evidence-validator tests passed. Formatting and diff whitespace checks passed. |
+
+Deterministic positive resolver measurements:
+
+| Graph | Search states | Work events |
+| --- | ---: | ---: |
+| 1,024 independent roots | 1,025 | 1,576,448 |
+| 256-node chain | 257 | 99,455 |
+| One root with 64 children | 66 | 10,661 |
+| Dense shared 64-node DAG | 65 | 93,665 |
+| 64-node cycle | 65 | 6,434 |
+
+Representative reproducible commands, with Go 1.26.10:
+
+```sh
+go test ./install/integrationctl/adapters/atomicfile \
+  ./install/integrationctl/agentplugins/adapters/environmentstore \
+  ./install/integrationctl/agentplugins/adapters/dependencymanifest \
+  ./install/integrationctl/agentplugins/environment -count=1
+
+go test -race ./install/integrationctl/agentplugins/environment \
+  ./cli/internal/agentpluginscli \
+  -run 'Test(Resolution|Dependency(Check|Status|Tree|Pin|RecordedRepair|PackageManifest))' -count=1
+
+go test -tags=uappm_e2e ./cli/internal/agentpluginscli \
+  -run '^TestPackageManagerE2E$/(agreement|registry)/(pin-envelope-warm-cold-refusal|pin-inventory-order-noop|pin-legacy-version-hydration|recorded-repair-inventory-hydration|embedded-manifest-size-refusal|graph-large-recorded-tree|graph-resource-limit-refusal|offline-check-valid-noop|offline-check-damaged-state|offline-check-declared-graph|offline-check-concurrent-edit|offline-check-cancellation)$' \
+  -count=1 -json
+
+python3 scripts/test_package_manager_e2e.py
+```
+
+Environment-specific verification limits are recorded explicitly. The host
+provided duplicate case variants of proxy environment variables; test child
+processes normalized those keys while retaining the remaining environment and
+`HOME`. The protected production Git runner still fails during private `git init`
+in this container, before the changed admission logic. New local-Git regression
+fixtures use the repository's existing `directGitTestRunner` with real disposable
+repositories; production process containment is unchanged. This does not qualify
+the production Git transport. Archive and production ZIP compatibility passed.
+
+Full `make lint` was not run because `golangci-lint` is unavailable. The complete
+remote multi-OS CI/native-client matrix, unchanged-binary production-scanner
+qualification, and the owner's later code-critic/fix loop were not run. No
+workflow was changed or disabled, no release was made, and the PR remains draft.
+
 ## Delivery checklist
 
 - [x] Plan reviewed by three independent critics and revised/re-reviewed; all approved revision 2.
-- [ ] Round 1 implemented and focused regressions pass.
-- [ ] Round 2 implemented and focused regressions pass.
-- [ ] Round 3 implemented and focused regressions pass.
-- [ ] Round 4 implemented and focused regressions pass.
-- [ ] Round 5 implemented and composed CLI scenarios pass.
-- [ ] All intended changes published in one draft PR; exact final head recorded.
-- [ ] Remaining CI/platform/final-review work described accurately.
+- [x] Round 1 implemented and focused regressions pass.
+- [x] Round 2 implemented and focused regressions pass.
+- [x] Round 3 implemented and focused regressions pass.
+- [x] Round 4 implemented and focused regressions pass.
+- [x] Round 5 implemented and composed CLI scenarios pass.
+- [x] All intended changes published in one draft PR; branch head recorded in its description.
+- [x] Remaining CI/platform/final-review work described accurately.
