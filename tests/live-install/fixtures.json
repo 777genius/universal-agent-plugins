@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "provenance": "21 active signed-directory packages + 9 independent complete public Agent Plugins 1.0 packages (including less-popular upstreams), exact 40-hex source commit and declared manifest name checked 2026-11-03. Thirty distinct SKILL.md sources also pinned. Do not treat external source security refusals as passed installs.",
+  "provenance": "21 active signed Directory packages + 9 independent upstream Agent Plugins 1.0 packages at full 40-hex Git commits; five independent packages that blocked on upstream symlinks/LintAI runtime errors were retained in historical failure evidence and replaced in the current positive acceptance set with five no-symlink candidates; all direct package manifests were inspected but current installability remains unqualified until live E2E.",
   "registry_repository": "777genius/universal-agent-plugins-registry",
   "registry_inventory_commit": "0627020e5546354d111926c18d768bacae989890",
   "plugin_aliases": [
@@ -26,14 +26,14 @@
     "supabase",
     "vercel",
     "github:sanity-io/agent-toolkit@3ed3a143f8d3413faa7790ac0b2274fd3a8a6320",
-    "github:AvdLee/SwiftUI-Agent-Skill@204dba7c67256a8b707ee3fbc5759a824191974f",
-    "github:AvdLee/Swift-Concurrency-Agent-Skill@d5770817d2622e1585b1f7eaebc791a9cb0959c8",
+    "github:gemini-cli-extensions/sre@4130b149c0b069ef2028e42b3b9f3f84cce935e6",
+    "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d",
     "github:GoogleCloudPlatform/google-cloud-storage-plugin@b346e39698fcdfdc711ca3ee35e41c8dbaa1aa2b",
     "github:K-Dense-AI/claude-scientific-writer@529b9f73ab4b48925027145800d7b49e96ccfd3c",
     "github:obra/the-elements-of-style@05fc4f0d2b97b7c042dd9949ad658568e4a1324e",
-    "github:perplexityai/api-platform-developers@78f568a867bc7bc44ce625318b60ac0d86802c5f",
-    "github:ollygarden/opentelemetry-agent-skills@fd2e9456032f42f7a2cc3b0a47f40803fa700671",
-    "github:microsoft/rayfin@0979439a7a0806abd0ee48c2619b37f297ae1324"
+    "github:cometchat/cometchat-skills@8652f1ea41d12e5058123db1e4e6babef9c918f1",
+    "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e",
+    "github:workato-devs/recipe-skills@afa1e729a013061c7b328271fadcdf240091cf3c"
   ],
   "skills": [
     {
@@ -300,15 +300,15 @@
     "github:sanity-io/agent-toolkit@3ed3a143f8d3413faa7790ac0b2274fd3a8a6320": "independent Sanity Agent Plugins 1.0 package at verified exact main SHA, manifest name sanity; unreviewed direct source must pass CLI security checks"
   },
   "plugin_declared_names": {
-    "github:AvdLee/SwiftUI-Agent-Skill@204dba7c67256a8b707ee3fbc5759a824191974f": "swiftui-expert",
-    "github:AvdLee/Swift-Concurrency-Agent-Skill@d5770817d2622e1585b1f7eaebc791a9cb0959c8": "swift-concurrency",
     "github:GoogleCloudPlatform/google-cloud-storage-plugin@b346e39698fcdfdc711ca3ee35e41c8dbaa1aa2b": "google-cloud-storage",
     "github:K-Dense-AI/claude-scientific-writer@529b9f73ab4b48925027145800d7b49e96ccfd3c": "claude-scientific-writer",
     "github:obra/the-elements-of-style@05fc4f0d2b97b7c042dd9949ad658568e4a1324e": "elements-of-style",
-    "github:perplexityai/api-platform-developers@78f568a867bc7bc44ce625318b60ac0d86802c5f": "perplexity-platform",
-    "github:ollygarden/opentelemetry-agent-skills@fd2e9456032f42f7a2cc3b0a47f40803fa700671": "opentelemetry-agent-skills",
-    "github:microsoft/rayfin@0979439a7a0806abd0ee48c2619b37f297ae1324": "rayfin",
     "github:sanity-io/agent-toolkit@3ed3a143f8d3413faa7790ac0b2274fd3a8a6320": "sanity",
-    "777genius/chrome-devtools-bridge": "chrome-devtools"
+    "777genius/chrome-devtools-bridge": "chrome-devtools",
+    "github:gemini-cli-extensions/sre@4130b149c0b069ef2028e42b3b9f3f84cce935e6": "sre-extension",
+    "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d": "itential-builder",
+    "github:cometchat/cometchat-skills@8652f1ea41d12e5058123db1e4e6babef9c918f1": "cometchat-skills",
+    "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e": "uizze-ui-slop",
+    "github:workato-devs/recipe-skills@afa1e729a013061c7b328271fadcdf240091cf3c": "recipe-skills"
   }
 }
