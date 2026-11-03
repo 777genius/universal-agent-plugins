@@ -31,8 +31,23 @@ Save your setup in `uap.toml` and `uap.lock` to restore it on another computer o
 [Browse plugins](https://universal-agent-plugins.com/plugins/) ·
 [Build a plugin](#build-plugins)
 
-[Quick start](#quick-start) · [Project installation](#install-for-one-project) ·
-[Supported clients](#supported-clients) · [SDK](#already-built-with-uap-sdk)
+## Contents
+
+- [Use plugins](#use-plugins)
+  - [Quick start](#quick-start)
+  - [Install the CLI](#install-the-cli)
+- [What the CLI does](#what-the-cli-does)
+- [Install for one project](#install-for-one-project)
+- [Restore your plugin setup](#restore-your-plugin-setup)
+- [Any Agent Plugins 1.0 package](#any-agent-plugins-10-package)
+- [Supported clients](#supported-clients)
+- [More commands](#more-commands)
+- [Find and verify plugins](#find-and-verify-plugins)
+- [Lifecycle safety](#lifecycle-safety)
+- [Already built with UAP SDK](#already-built-with-uap-sdk)
+- [Build plugins](#build-plugins)
+- [Contributing](#contributing)
+- [License](#license)
 
 <a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
 
