@@ -1,7 +1,7 @@
 # Dependency graph efficiency and safe reduction
 
 Date: 2026-11-03. Research baseline: `07ab910b75e397c9f223078e3c7d9f701f2f36a6`.
-Status: **A–E implemented and locally verified in PR #697. All three independent final code reviews approve after corrections; native qualification and merge are tracked in the PR's final delivery ledger.**
+Status: **A–F implemented and qualified in PR #697: all 18 registered checks passed on source `4adb6c8`, including four-platform native E2E and the required authoring aggregate. Final pull-request metadata and merge identity are tracked in the PR delivery ledger.**
 Delivery: one draft PR, publish this plan immediately, then publish each coherent implementation increment. Complete E2E, independent review/fixes and the authorized merge. No release is included.
 
 ## 1. Goal and scope
@@ -227,7 +227,7 @@ Publish the researched plan first. Root then self-reviews and publishes any corr
 - [x] C: verified existing-pin closure.
 - [x] D: indexed declaration verification.
 - [x] E: public-command lifecycle integration/regressions.
-- [ ] F: independent combined-code review/fixes, final native E2E and authorized merge.
+- [x] F: independent combined-code review/fixes, final native E2E and integration into `main`; PR closure reconciliation tracked separately in the PR delivery ledger.
 
 Final evidence must distinguish observations from hypotheses, local fixtures from native execution, fresh solving from exact replay, and pre-publication preservation from existing post-publication partial results.
 
@@ -284,4 +284,4 @@ All three independent code reviewers approved their scopes after corrections. Th
 
 The CLI reviewer reproduced one further late Directory-policy owner that discarded cleanup failure after reading actual acquired runtime metadata. That specific owner now joins the existing cleanup sentinel. Both the unchanged scratch reproducer and permanent normal-cleanup/refused-cleanup regressions pass; ordinary policy fallback is preserved, and combined operational failure remains terminal. The reviewer then approved index, cleanup, public E2E and documentation with no outstanding findings.
 
-The complete environment race suite also passes (21.743 s). Local targeted suites, configured lint, differential evidence and independent reviews are complete. Native four-platform E2E, applicable repository gates, final GitHub review status and the actual authorized merge remain recorded against the final source head in the PR ledger; no local-only result is represented as native qualification.
+The complete environment race suite also passes (21.743 s). Local targeted suites, configured lint, differential evidence and independent reviews are complete. The final source head `4adb6c8f7d7b1cc70384af2eb6ecea190e8f427b` passed all 18 registered GitHub workflows; the [native package-manager E2E](https://github.com/777genius/universal-agent-plugins/actions/runs/41734470176) passed on Ubuntu 24.04, Windows 2025, macOS ARM and macOS Intel with no false-green critical skips and four uploaded evidence artifacts. The [native authoring acceptance](https://github.com/777genius/universal-agent-plugins/actions/runs/41734470076), [required tests](https://github.com/777genius/universal-agent-plugins/actions/runs/41734470255) and [landing E2E](https://github.com/777genius/universal-agent-plugins/actions/runs/41734470322) also passed. Final code/review status and merge identity are recorded in the PR ledger; no local-only result is represented as native qualification.
