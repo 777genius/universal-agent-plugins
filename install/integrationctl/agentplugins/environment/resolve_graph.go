@@ -43,9 +43,11 @@ type graphDemand struct {
 	parent      string
 }
 type graphNode struct {
-	requirement Requirement
-	demands     []graphDemand
-	targets     []string
+	requirement               Requirement
+	demands                   []graphDemand
+	targets                   []string
+	demandIndex               map[graphDemandIdentity]struct{}
+	acceptanceKnown, accepted bool
 }
 type graphSolver struct {
 	resolver     Resolver
@@ -56,6 +58,7 @@ type graphSolver struct {
 	pins         map[string]LockedPackage
 	descriptions map[string]ResolvedPackage
 	budget       resolutionBudget
+	active       *activeGraph
 }
 
 type graphConflict struct{ message string }
@@ -84,10 +87,20 @@ func newGraphSolver(resolver Resolver, requirements Requirements, previous Lock,
 }
 
 func (solver *graphSolver) resolve(ctx context.Context) (Lock, error) {
-	choices, nodes, err := solver.search(ctx, map[string]ResolvedPackage{})
+	choices, nodes, retained, err := solver.tryPinnedContraction(ctx)
 	if err != nil {
 		return Lock{}, err
 	}
+	if !retained {
+		choices, nodes, err = solver.search(ctx, map[string]ResolvedPackage{})
+		if err != nil {
+			return Lock{}, err
+		}
+	}
+	return solver.finalizeLock(choices, nodes)
+}
+
+func (solver *graphSolver) finalizeLock(choices map[string]ResolvedPackage, nodes map[string]graphNode) (Lock, error) {
 	digest, _ := ManifestDigest(solver.requirements)
 	out := Lock{LockVersion: LockVersion, ManifestDigest: digest, Packages: []LockedPackage{}}
 	for key, node := range nodes {
@@ -141,17 +154,24 @@ func (solver *graphSolver) search(ctx context.Context, choices map[string]Resolv
 	if err := solver.budget.enterSearch(ctx); err != nil {
 		return nil, nil, err
 	}
-	nodes, err := solver.expand(ctx, choices)
-	if err != nil {
+	if solver.active == nil {
+		active, err := solver.newActiveGraph(ctx, choices)
+		if err != nil {
+			return nil, nil, err
+		}
+		solver.active = active
+	}
+	if err := solver.propagate(ctx, choices, solver.active); err != nil {
 		return nil, nil, err
 	}
-	for _, key := range sortedKeys(nodes) {
+	nodes := solver.active.nodes
+	for _, key := range solver.active.keys {
 		if err := solver.budget.consumeWork(ctx, 1); err != nil {
 			return nil, nil, err
 		}
 		node := nodes[key]
 		if selected, ok := choices[key]; ok {
-			if !nodeAccepts(node, selected.Package) {
+			if !solver.active.accepts(key, selected.Package) {
 				return nil, nil, conflictFor(key, node)
 			}
 			if err := solver.checkTargets(ctx, node, selected.Package); err != nil {
@@ -159,7 +179,15 @@ func (solver *graphSolver) search(ctx context.Context, choices map[string]Resolv
 			}
 			continue
 		}
+		req, err := solver.representativeRequirement(ctx, key, node)
+		if err != nil {
+			return nil, nil, err
+		}
+		node.requirement = req
 		return solver.choose(ctx, key, node, choices)
+	}
+	if err := solver.finalizeRepresentatives(ctx); err != nil {
+		return nil, nil, err
 	}
 	if err := validateGraphAliases(nodes); err != nil {
 		return nil, nil, err
@@ -294,12 +322,16 @@ func (solver *graphSolver) try(ctx context.Context, key string, selected Resolve
 	if solver.downgrades(key, selected.Package.Version) {
 		return nil, nil, graphConflict{message: fmt.Sprintf("update would downgrade %s from %s to %s; change the declared intent explicitly", key, solver.pins[key].Version, selected.Package.Version)}
 	}
-	cloned := make(map[string]ResolvedPackage, len(choices)+1)
-	for key, value := range choices {
-		cloned[key] = value
+	checkpoint, demands := len(solver.active.undo), solver.active.demands
+	choices[key] = selected
+	solver.active.enqueue(key)
+	found, nodes, err := solver.search(ctx, choices)
+	if err != nil {
+		solver.active.rollback(checkpoint, demands)
+		delete(choices, key)
+		delete(solver.active.prepared, key)
 	}
-	cloned[key] = selected
-	return solver.search(ctx, cloned)
+	return found, nodes, err
 }
 
 func (solver *graphSolver) downgrades(key, version string) bool {
@@ -312,6 +344,10 @@ func nodeAccepts(node graphNode, pkg LockedPackage) bool {
 	if pkg.SourceKey != key {
 		return false
 	}
+	return nodeDemandsAccept(node, pkg)
+}
+
+func nodeDemandsAccept(node graphNode, pkg LockedPackage) bool {
 	for _, demand := range node.demands {
 		req := demand.requirement
 		if req.Registry != nil {
@@ -347,12 +383,7 @@ func conflictFor(key string, node graphNode) error {
 		if name == "" {
 			name = demand.requirement.Alias
 		}
-		var selector Selector
-		if demand.requirement.Registry != nil {
-			selector = requirementSelector(demand.requirement)
-		} else {
-			selector = requirementSelector(demand.requirement)
-		}
+		selector := requirementSelector(demand.requirement)
 		parts = append(parts, name+" "+string(selector.Kind)+" "+selector.Value)
 	}
 	sort.Strings(parts)
