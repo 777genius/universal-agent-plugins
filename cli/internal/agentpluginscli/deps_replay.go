@@ -59,7 +59,7 @@ func verifyDependencyDeclarations(ctx context.Context, app App, lock environment
 	return nil
 }
 
-func readReplayDependency(ctx context.Context, app App, pin environment.LockedPackage) (environment.ResolvedPackage, error) {
+func readReplayDependency(ctx context.Context, app App, pin environment.LockedPackage) (resolved environment.ResolvedPackage, resultErr error) {
 	resolved, err := describePinnedDependency(ctx, app, pin)
 	if err == nil {
 		return resolved, nil
@@ -72,7 +72,12 @@ func readReplayDependency(ctx context.Context, app App, pin environment.LockedPa
 		return environment.ResolvedPackage{}, err
 	}
 	if loaded.cleanup != nil {
-		defer func() { _ = loaded.cleanup() }()
+		defer func() {
+			if cleanupErr := loaded.cleanup(); cleanupErr != nil {
+				resolved = environment.ResolvedPackage{}
+				resultErr = errors.Join(resultErr, fmt.Errorf("%w: %w", errDependencySnapshotCleanup, cleanupErr))
+			}
+		}()
 	}
 	pin.Version = loaded.envelope.Manifest.Version
 	facts, err := packageDependencyFacts(loaded.envelope)

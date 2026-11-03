@@ -96,16 +96,10 @@ func inspectLocalDependencies(ctx context.Context, app App) dependencyCheckRepor
 			continue
 		}
 		report.add(dependencyCheckResult{Stage: "package", Alias: pin.Alias, Outcome: dependencyCheckValid})
-		if err := index.verifyDeclaredEdges(ctx, pin.Alias, resolved.Dependencies); err != nil {
-			if ctx.Err() != nil {
-				issue := dependencyCanceledResult("graph")
-				issue.Alias = pin.Alias
-				report.add(issue)
-				break
-			}
-			report.add(dependencyCheckResult{Stage: "graph", Alias: pin.Alias, Outcome: dependencyCheckInvalid, Code: "graph_declarations_mismatch", Message: "Recorded dependency edges differ from this exact cached package's declarations. Preserve the agreement and review it before explicitly resolving a replacement lock."})
-		} else {
-			report.add(dependencyCheckResult{Stage: "graph", Alias: pin.Alias, Outcome: dependencyCheckValid})
+		check := dependencyGraphCheckResult(ctx, pin.Alias, index.verifyDeclaredEdges(ctx, pin.Alias, resolved.Dependencies))
+		report.add(check)
+		if check.Outcome == dependencyCheckCanceled {
+			break
 		}
 	}
 	if report.Outcome == dependencyCheckValid {
@@ -114,6 +108,18 @@ func inspectLocalDependencies(ctx context.Context, app App) dependencyCheckRepor
 		}
 	}
 	return report
+}
+
+func dependencyGraphCheckResult(ctx context.Context, alias string, err error) dependencyCheckResult {
+	if ctx.Err() != nil {
+		issue := dependencyCanceledResult("graph")
+		issue.Alias = alias
+		return issue
+	}
+	if err != nil {
+		return dependencyCheckResult{Stage: "graph", Alias: alias, Outcome: dependencyCheckInvalid, Code: "graph_declarations_mismatch", Message: "Recorded dependency edges differ from this exact cached package's declarations. Preserve the agreement and review it before explicitly resolving a replacement lock."}
+	}
+	return dependencyCheckResult{Stage: "graph", Alias: alias, Outcome: dependencyCheckValid}
 }
 
 func dependencyPackageCheckFailure(alias string, err error) dependencyCheckResult {

@@ -39,9 +39,10 @@ func TestDependencyDeclarationIndexPreservesEdgeEvidence(t *testing.T) {
 			}
 			err = index.verifyDeclaredEdges(t.Context(), "parent", tc.declarations)
 			want := ""
-			if tc.want == "unexpected" {
+			switch tc.want {
+			case "unexpected":
 				want = "parent has an unexpected dependency edge to child; run agentplugins deps lock"
-			} else if tc.want == "missing" {
+			case "missing":
 				want = "parent pinned manifest declares missing dependency edges; run agentplugins deps lock"
 			}
 			if want == "" && err != nil || want != "" && (err == nil || err.Error() != want) {
@@ -104,9 +105,13 @@ func (ctx *dependencyIndexCancelContext) Err() error {
 }
 
 func TestDependencyDeclarationIndexCancellation(t *testing.T) {
-	lock := environment.Lock{Packages: []environment.LockedPackage{{Alias: "child", SourceKey: "directory:acme/child", RequiredBy: make([]environment.RequiredBy, 12000)}}}
-	for i := range lock.Packages[0].RequiredBy {
-		lock.Packages[0].RequiredBy[i] = environment.RequiredBy{Alias: "parent", Selector: environment.Selector{Kind: environment.SelectorRange, Value: "^1.0"}}
+	lock := environment.Lock{Packages: []environment.LockedPackage{{Alias: "parent", SourceKey: "directory:acme/parent"}}}
+	declarations := make(map[string]environment.Requirement, 12000)
+	selector := environment.Selector{Kind: environment.SelectorRange, Value: "^1.0"}
+	for i := range 12000 {
+		alias := fmt.Sprintf("child%d", i)
+		lock.Packages = append(lock.Packages, environment.LockedPackage{Alias: alias, SourceKey: "directory:acme/" + alias, RequiredBy: []environment.RequiredBy{{Alias: "parent", Selector: selector}}})
+		declarations[alias] = environment.Requirement{Alias: alias, Registry: &environment.RegistrySource{Distribution: "acme/" + alias, Selector: selector}}
 	}
 	ctx := &dependencyIndexCancelContext{Context: t.Context(), remaining: 50}
 	if _, err := indexDependencyDeclarations(ctx, lock); !errors.Is(err, context.Canceled) {
@@ -116,9 +121,13 @@ func TestDependencyDeclarationIndexCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx = &dependencyIndexCancelContext{Context: t.Context(), remaining: 2}
-	requirement := environment.Requirement{Alias: "child", Registry: &environment.RegistrySource{Distribution: "acme/child", Selector: environment.Selector{Kind: environment.SelectorRange, Value: "^1.0"}}}
-	if err := index.verifyDeclaredEdges(ctx, "parent", map[string]environment.Requirement{"child": requirement}); !errors.Is(err, context.Canceled) {
-		t.Fatalf("edge comparison ignored cancellation: %v", err)
+	if err := index.verifyDeclaredEdges(t.Context(), "parent", declarations); err != nil {
+		t.Fatalf("admitted graph inherited a fresh-search ceiling: %v", err)
+	}
+	for _, remaining := range []int{50, len(declarations) + 50} {
+		ctx = &dependencyIndexCancelContext{Context: t.Context(), remaining: remaining}
+		if err := index.verifyDeclaredEdges(ctx, "parent", declarations); !errors.Is(err, context.Canceled) {
+			t.Fatalf("large declaration/edge comparison ignored cancellation: %v", err)
+		}
 	}
 }
