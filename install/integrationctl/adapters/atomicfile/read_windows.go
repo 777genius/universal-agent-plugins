@@ -22,6 +22,10 @@ func ReadFile(path string) ([]byte, error) {
 	return body, err
 }
 
+// OpenReadFile opens a file with Windows delete sharing, allowing other
+// processes to atomically publish a replacement while the reader holds it.
+func OpenReadFile(path string) (*os.File, error) { return openReadFile(path) }
+
 func openReadFile(path string) (*os.File, error) {
 	absolute, err := filepath.Abs(path)
 	if err != nil {

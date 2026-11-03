@@ -50,3 +50,54 @@ func TestSavedSourceAdmissionRefusalDoesNotPublish(t *testing.T) {
 		})
 	}
 }
+
+// The real deps lock command must reject an oversized pre-existing agreement
+// *before* source acquisition, receipt publication or lock replacement.
+// Both manifest and lock entry points are checked on every qualification OS.
+func TestDependencyAgreementOversizedCLIRefusesWithoutSideEffects(t *testing.T) {
+	for _, which := range []string{"uap.toml", "uap.lock"} {
+		t.Run(which, func(t *testing.T) {
+			fixture, source := dependencyLockRaceFixture(t)
+			manifest, lock := fixture.app.dependencyPaths()
+			path, limit := manifest, maxDependencyManifestBytes
+			if which == "uap.lock" {
+				path, limit = lock, maxDependencyLockBytes
+			}
+			f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0o600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := f.Truncate(limit + 1); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.Close(); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			acquired := false
+			source.beforeSnapshot = func() error {
+				acquired = true
+				return fmt.Errorf("untrusted source acquired before oversized agreement refusal")
+			}
+			_, _, err = fixture.execute(false, "deps", "lock", "--format", "json")
+			if err == nil || !strings.Contains(err.Error(), "exceeds") {
+				t.Fatalf("oversized %s did not refuse at admission: %v", which, err)
+			}
+			if acquired {
+				t.Fatal("oversized agreement attempted untrusted acquisition")
+			}
+			after, err := os.Stat(path)
+			if err != nil || !os.SameFile(before, after) || before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) {
+				t.Fatalf("oversized %s was changed by refusal: %v", which, err)
+			}
+			for _, candidate := range []string{fixture.store.Path, fixture.app.EnvironmentStoreRoot} {
+				if _, statErr := os.Lstat(candidate); !os.IsNotExist(statErr) {
+					t.Fatalf("oversized agreement published persistent state at %s: %v", candidate, statErr)
+				}
+			}
+		})
+	}
+}

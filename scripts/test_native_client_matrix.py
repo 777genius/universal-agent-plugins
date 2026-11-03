@@ -151,6 +151,7 @@ class NativeMatrixTests(unittest.TestCase):
         self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
         self.assertNotIn("TestAgentpluginsCodexNativeProjectComponentsLifecycle", released.CLIENT_TESTS["codex"])
         self.assertNotIn("TestAgentpluginsCodexNativeTrustedProjectMCP", released.CLIENT_TESTS["codex"])
+        self.assertNotIn("TestAgentpluginsCodexNativeProjectModelForeignMCP", released.CLIENT_TESTS["codex"])
 
     def test_source_project_proof_selects_exact_required_claude_tests(self):
         pattern, required = matrix.select_native_tests("claude", project_components=True)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/environmentstore"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -64,11 +65,11 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 		return dependencyLockResult{}, err
 	}
 	manifestPath, lockPath := app.dependencyPaths()
-	manifestBefore, manifestReadErr := os.ReadFile(manifestPath)
+	manifestBefore, manifestReadErr := readDependencyDocument(manifestPath, maxDependencyManifestBytes)
 	if manifestReadErr != nil {
 		return dependencyLockResult{}, manifestReadErr
 	}
-	lockBefore, lockReadErr := os.ReadFile(lockPath)
+	lockBefore, lockReadErr := readDependencyDocument(lockPath, maxDependencyLockBytes)
 	if os.IsNotExist(lockReadErr) {
 		lockBefore = nil
 	} else if lockReadErr != nil {
@@ -122,6 +123,16 @@ func publishResolvedDependencyLock(ctx context.Context, app App, manifestPath, l
 	if err := checkDependencyLockInputs(manifestPath, lockPath, manifestBefore, lockBefore); err != nil {
 		return err
 	}
+	// Preflight the complete candidate before hydrating immutable storage.
+	// Otherwise an oversized generated lock can fail after durable side effects.
+	var candidate []byte
+	if changed {
+		var err error
+		candidate, err = encodeDependencyLockBytes(locked)
+		if err != nil {
+			return err
+		}
+	}
 	if err := ensureDependencyStore(ctx, app, locked); err != nil {
 		return err
 	}
@@ -132,7 +143,7 @@ func publishResolvedDependencyLock(ctx context.Context, app App, manifestPath, l
 		return err
 	}
 	if changed {
-		return writeDependencyLock(lockPath, locked)
+		return atomicfile.Write(lockPath, candidate, 0o600)
 	}
 	return nil
 }

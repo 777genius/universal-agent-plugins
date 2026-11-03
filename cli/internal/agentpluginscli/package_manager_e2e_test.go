@@ -61,6 +61,7 @@ func packageManagerAgreementCases() map[string]func(*testing.T) {
 	return map[string]func(*testing.T){
 		"manifest-rejections":            TestDependencyManifestRejectsUnknownConflictingAndMissingIntent,
 		"saved-source-admission-refusal": TestSavedSourceAdmissionRefusalDoesNotPublish,
+		"oversized-agreement-refusal":    TestDependencyAgreementOversizedCLIRefusesWithoutSideEffects,
 		"manifest-locations":             TestDependencyManifestErrorLocations,
 		"version-intent-preservation":    TestVersionSelectionManifestForms,
 		"transfer-replacement-noop":      TestDependencyTransferReplacementAndNoop,
