@@ -9,6 +9,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/environmentstore"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -19,8 +20,8 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 		return loadedPackage{}, errors.New("unsupported locked skill normalizer")
 	}
 	store := app.dependencyStore()
-	if pkg, err := store.Get(ctx, locked.DigestAlgorithm, locked.TreeDigest); err == nil {
-		return loadStoredDependency(ctx, app, pkg, locked, recorded, operation...)
+	if snapshot, err := store.Snapshot(ctx, locked.DigestAlgorithm, locked.TreeDigest); err == nil {
+		return loadStoredDependencySnapshot(ctx, app, snapshot, locked, recorded, operation...)
 	} else if !errors.Is(err, environmentstore.ErrMissing) {
 		return loadedPackage{}, err
 	}
@@ -40,9 +41,9 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 	if err != nil {
 		return loadedPackage{}, err
 	}
-	if loaded.envelope.TreeDigest != locked.TreeDigest || loaded.envelope.ManifestDigest != locked.ManifestDigest {
+	if err := validateDependencyPinEnvelope(locked, loaded.envelope); err != nil {
 		_ = loaded.cleanup()
-		return loadedPackage{}, errors.New("immutable fetch does not match uap.lock")
+		return loadedPackage{}, err
 	}
 	checked, err := verifyLockedDirectory(ctx, app, loaded, locked, recorded, operation...)
 	if err != nil {
@@ -52,7 +53,7 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 	loaded = checked
 	if publish {
 		sealed := domain.PackageSnapshot{Root: loaded.envelope.SnapshotRoot, TreeDigest: loaded.envelope.TreeDigest,
-			DigestAlgorithm: locked.DigestAlgorithm, ExecutableFiles: append([]string{}, locked.ExecutableFiles...), Source: loaded.envelope.Source}
+			DigestAlgorithm: locked.DigestAlgorithm, ExecutableFiles: canonicalDependencyExecutables(loaded.envelope.ExecutableFiles), Source: loaded.envelope.Source}
 		_, err = store.Put(ctx, sealed)
 	} else {
 		return loaded, nil
@@ -64,11 +65,22 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 	if cleanupErr != nil {
 		return loadedPackage{}, cleanupErr
 	}
-	pkg, err := store.Get(ctx, locked.DigestAlgorithm, locked.TreeDigest)
+	snapshot, err = store.Snapshot(ctx, locked.DigestAlgorithm, locked.TreeDigest)
 	if err != nil {
 		return loadedPackage{}, err
 	}
-	return loadStoredDependency(ctx, app, pkg, locked, recorded, operation...)
+	return loadStoredDependencySnapshot(ctx, app, snapshot, locked, recorded, operation...)
+}
+
+func loadStoredDependencySnapshot(ctx context.Context, app App, snapshot domain.PackageSnapshot, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
+	pkg := environmentstore.Package{Root: snapshot.Root, Metadata: environmentstore.Metadata{TreeDigest: snapshot.TreeDigest, DigestAlgorithm: snapshot.DigestAlgorithm, ExecutableFiles: snapshot.ExecutableFiles}}
+	loaded, err := loadStoredDependency(ctx, app, pkg, locked, recorded, operation...)
+	if err != nil {
+		_ = packagedigest.Remove(snapshot)
+		return loadedPackage{}, err
+	}
+	loaded.cleanup = func() error { return packagedigest.Remove(snapshot) }
+	return loaded, nil
 }
 
 func dependencySourceHint(locked environment.LockedPackage) string {
@@ -95,9 +107,8 @@ func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Pac
 	if _, err := packageDependencyFacts(envelope); err != nil {
 		return loadedPackage{}, err
 	}
-	if envelope.LoaderKind != domain.LoaderKindAgentPlugins || envelope.TreeDigest != locked.TreeDigest ||
-		envelope.ManifestDigest != locked.ManifestDigest {
-		return loadedPackage{}, errors.New("stored dependency failed strict standard-loader identity checks")
+	if err := validateDependencyPinEnvelope(locked, envelope); err != nil {
+		return loadedPackage{}, err
 	}
 	var assessment *domain.SecurityAssessment
 	if app.SecurityEvaluator != nil {
@@ -471,6 +482,13 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 	if action.Action == environment.ActionInstall {
 		operation = domain.DirectoryNewTarget
 	}
+	if action.Action == "repair" && action.Package.ExecutableFiles == nil {
+		pin, err := hydrateRecordedDependencyInventory(ctx, adapter.app, *action.Package)
+		if err != nil {
+			return nil, err
+		}
+		*action.Package = pin
+	}
 	loaded, err := materializeLockedPackage(ctx, adapter.app, *action.Package, false, recorded, operation)
 	if err != nil {
 		return nil, err
@@ -490,13 +508,10 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 	if adapter.consent != nil {
 		adapter.consent[loaded.envelope.TreeDigest] = loaded.securityAuthorized
 	}
-	if action.Action == "repair" && action.Package.ExecutableFiles == nil {
-		action.Package.ExecutableFiles = append([]string{}, loaded.envelope.ExecutableFiles...)
-	}
 	request.PackageRoot = loaded.envelope.SnapshotRoot
-	request.ExecutableFiles = append([]string{}, action.Package.ExecutableFiles...)
+	request.ExecutableFiles = canonicalDependencyExecutables(action.Package.ExecutableFiles)
 	request.AcquiredSnapshot = &domain.AcquiredSnapshot{Source: loaded.envelope.Source, TreeDigest: action.Package.TreeDigest,
-		DigestAlgorithm: action.Package.DigestAlgorithm, ExecutableFiles: append([]string{}, action.Package.ExecutableFiles...),
+		DigestAlgorithm: action.Package.DigestAlgorithm, ExecutableFiles: canonicalDependencyExecutables(action.Package.ExecutableFiles),
 		OriginMode: loaded.origin, Directory: loaded.directory, Compatibility: loaded.hints}
 	request.Assessment = &installer.Assessment{TreeDigest: action.Package.TreeDigest, Outcome: installer.AssessmentAllow, Reason: "authorized by CLI security policy for exact pinned bytes"}
 	request.RequiredComponents = requiredFacadeComponents(loaded.envelope)

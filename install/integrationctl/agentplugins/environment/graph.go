@@ -126,7 +126,7 @@ func validatePin(pkg LockedPackage) error {
 	if pkg.DigestAlgorithm != TreeDigestAlgorithm || !validGraphDigest(pkg.TreeDigest) || !validGraphDigest(pkg.ManifestDigest) {
 		return errors.New("invalid locked digest")
 	}
-	return nil
+	return ValidateExecutableInventory(pkg.ExecutableFiles)
 }
 
 func validGraphDigest(value string) bool {

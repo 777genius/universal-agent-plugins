@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
@@ -115,20 +116,18 @@ func (resolver dependencyResolver) DescribePinned(ctx context.Context, pin envir
 
 // Read pinned source facts locally, without checking eligibility for a new install.
 func describePinnedDependency(ctx context.Context, app App, pin environment.LockedPackage) (environment.ResolvedPackage, error) {
-	pkg, err := app.dependencyStore().Get(ctx, pin.DigestAlgorithm, pin.TreeDigest)
+	snapshot, err := app.dependencyStore().Snapshot(ctx, pin.DigestAlgorithm, pin.TreeDigest)
 	if err != nil {
 		return environment.ResolvedPackage{}, err
 	}
-	input := domain.LoadInput{SnapshotRoot: pkg.Root, TreeDigest: pkg.Metadata.TreeDigest, ExecutableFiles: append([]string{}, pkg.Metadata.ExecutableFiles...), Source: identityFromLocked(pin)}
+	defer func() { _ = packagedigest.Remove(snapshot) }()
+	input := domain.LoadInput{SnapshotRoot: snapshot.Root, TreeDigest: snapshot.TreeDigest, ExecutableFiles: append([]string{}, snapshot.ExecutableFiles...), Source: identityFromLocked(pin)}
 	envelope, err := app.loadStandardEnvelope(ctx, input)
 	if err != nil {
 		return environment.ResolvedPackage{}, err
 	}
-	if envelope.LoaderKind != domain.LoaderKindAgentPlugins || envelope.TreeDigest != pin.TreeDigest || envelope.ManifestDigest != pin.ManifestDigest {
-		return environment.ResolvedPackage{}, errors.New("stored dependency failed strict standard-loader identity checks")
-	}
-	if pin.Version != "" && pin.Version != envelope.Manifest.Version {
-		return environment.ResolvedPackage{}, errors.New("stored dependency version differs from uap.lock")
+	if err := validateDependencyPinEnvelope(pin, envelope); err != nil {
+		return environment.ResolvedPackage{}, err
 	}
 	pin.Version = envelope.Manifest.Version
 	facts, err := packageDependencyFacts(envelope)
