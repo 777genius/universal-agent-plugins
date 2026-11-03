@@ -2,8 +2,8 @@
 
 Date: 2026-11-04. Research base: `999c25fcd22ab0cbd4c775aa6acc83e7cf422c3a`.
 Branch: `refactor/foundation-boundaries-20261104`.
-Status: implementation published; first independent implementation review fixes
-are under qualification before a second review round.
+Status: implementation and first review fixes published; second-round concurrent
+observation corrections are under qualification before a third review round.
 PR: https://github.com/777genius/universal-agent-plugins/pull/700.
 
 ## Goal and scope decision
@@ -118,12 +118,17 @@ the application.
    and forgotten by its backend before deleting its observation; a refusal
    retains that record without blocking new work below the budget.
 10. Panics, invalid/nonterminal outcomes and missing results remain uncertainty.
-    After a final save fails, the current owner must persist an Interrupted
-    observation without a result while holding the mutation lock, or stop
-    serving if that conservative save also fails. Two failed writes cannot
-    guarantee a durable marker: restart observes whichever complete version-1
-    record survived, without executing it. A successful HTTP call must not
-    manufacture installation, activation, authentication or recovery proof.
+    Any final save failure cancels the current owner before it attempts to save
+    an Interrupted observation without a result under the held mutation lock.
+    Already-admitted history reads must reject snapshots after that stop. Even
+    when the conservative write succeeds, the caller must reopen the host; this
+    deliberately conservative storage-failure behavior avoids retaining a host
+    with invalidated terminal snapshots. Two failed writes cannot guarantee a
+    durable marker: restart observes whichever complete version-1 record
+    survived, without executing it. This is a current-owner guarantee, not
+    cross-process invalidation of a file already read by another host. A
+    successful HTTP call must not manufacture installation, activation,
+    authentication or recovery proof.
 11. JSON version/fields, SHA-256 filenames, environment partitioning, regular-file
     and symlink checks, atomic writes and 0700/0600 modes remain compatible.
 12. `manage serve` keeps one strict startup JSON line (64 KiB), private IPv4
@@ -259,12 +264,11 @@ free of architectural debt.
     then recheck lifetime after retention before acceptance. The inherited
     mutex/cancellation deadlock is covered with backend cleanup that waits on
     its supplied context; no acceptance or execution occurs during shutdown.
-  - On final-save failure, persist conservative uncertainty under the held
-    mutation lock; if that save also fails, stop current-session admission and
-    drain normally. The inherited implementation discarded its local uncertain
-    snapshot, so publication followed by a sync error could expose success and
-    admit another mutation. Tests cover first errors before/after publication
-    and all four combinations of continued before/after publication failures.
+  - The first correction attempted conservative persistence under the held
+    mutation lock and stopped the current session if that also failed. The
+    inherited implementation discarded its local uncertain snapshot, so
+    publication followed by a sync error could expose success and admit another
+    mutation. The second review below strengthened the current-owner policy.
 - Qualification at `d32c43c7`: all three Management packages passed uncached
   race tests; SDK build, typecheck and all 48 tests passed (zero skips), including
   the same actual-CLI characterization; packed consumer, generated contract,
@@ -274,7 +278,26 @@ free of architectural debt.
   This container's Node 24 test process needs `NODE_USE_ENV_PROXY=0` for an
   existing fixture that deliberately supplies invalid proxies; product code and
   the hosted Node 22.21.1 workflow are unchanged.
-- Second implementation review and final-head evidence: pending.
+- Implementation review round 2 at `79a386ff`: all three critics reproduced
+  delayed accepted-history reads escaping after persistent-failure shutdown.
+  Inspection required its own guard because terminal records bypassed observe.
+  The lifecycle critic also captured a transient successful record before a
+  successful conservative replacement; its delayed replay returned stale
+  success after the running entry disappeared.
+  - All three critics accepted the smaller correction: cancel this owner on
+    every final-save error, still attempt conservative persistence under the
+    lock, and require reopening. This avoids a terminal-record reread layer,
+    doubled history I/O, cache or generation protocol.
+  - Observation checks authoritative application lifetime after checking live
+    work and after a lock-held durable reread. Inspection prefers live operation
+    state over a terminal file published by an unfinished worker and checks
+    application lifetime before returning its history view.
+  - Regression tests hold captured successful snapshots across both successful
+    and failed conservative writes, through replay and inspection. Both views
+    refuse from the old owner. Separate tests reopen after a successful fallback
+    and verify Interrupted observation, replay without effects, and continued
+    refusal of unrelated mutation.
+- Third implementation review and final-head evidence: pending.
 - Before production changes, the actual CLI + SDK characterization passed on
   Go 1.26.10: `node --experimental-strip-types --test test/production-engine.test.ts`
   from `sdks/typescript` (27.63 s including source build; one pass, zero failures

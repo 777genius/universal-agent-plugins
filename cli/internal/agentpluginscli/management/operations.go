@@ -24,17 +24,18 @@ func (a *Application) runApply(plan *planEntry, record Observation, unlock func(
 	a.mu.Unlock()
 	record.Operation = finishOperation(record.Operation, outcome, err, panicked, a.opts.Lock.IsActive(err))
 	if err = a.opts.Store.Save(cloneObservation(record)); err != nil {
+		// Final persistence failure invalidates this owner's history snapshots,
+		// including reads already in flight. Reopen to observe surviving history.
+		a.cancel()
 		record.Operation.State = Interrupted
 		record.Operation.Phase = "interrupted"
 		record.Operation.Result = nil
 		record.Operation.Diagnostics = append(record.Operation.Diagnostics, Diagnostic{
 			Code: "OUTCOME_NOT_PERSISTED", Message: "The final result could not be saved; inspect before another mutation", Severity: DiagnosticSeverityError})
-		// A failed save can already have published the terminal record. Replace
-		// it with uncertainty before releasing the mutation lock. If that also
-		// fails, stop this owner; restart must inspect whichever record survived.
-		if saveErr := a.opts.Store.Save(cloneObservation(record)); saveErr != nil {
-			a.cancel()
-		}
+		// A failed save can already have published the terminal record. Attempt
+		// to replace it with uncertainty before releasing the mutation lock.
+		// Shutdown waits for this write; it does not require an active context.
+		_ = a.opts.Store.Save(cloneObservation(record))
 	}
 	if err == nil && record.Operation.State == Succeeded {
 		if linkErr := a.reconcileObservations(plan, record.Operation.OperationId, outcome); linkErr != nil {
@@ -132,7 +133,11 @@ func (a *Application) memoryOperation(id string) (Operation, bool) {
 
 // An accepted record without a live lock is interrupted, not a job to replay.
 func (a *Application) observe(ctx context.Context, record Observation) (Operation, error) {
-	if op, ok := a.memoryOperation(record.Operation.OperationId); ok {
+	op, running := a.memoryOperation(record.Operation.OperationId)
+	if err := a.ctx.Err(); err != nil {
+		return Operation{}, err
+	}
+	if running {
 		return op, nil
 	}
 	if terminal(record.Operation.State) {
@@ -149,6 +154,9 @@ func (a *Application) observe(ctx context.Context, record Observation) (Operatio
 	current, err := a.opts.Store.ByRequest(record.Operation.RequestId)
 	if err != nil || current == nil {
 		return Operation{}, errors.New("accepted observation disappeared")
+	}
+	if err := a.ctx.Err(); err != nil {
+		return Operation{}, err
 	}
 	if terminal(current.Operation.State) {
 		return current.Operation, nil
@@ -174,6 +182,9 @@ func (a *Application) environmentOperations(ctx context.Context) ([]Operation, [
 	pending, backups := []Operation{}, []LocalSkillBackup{}
 	for _, record := range records {
 		op := record.Operation
+		if current, running := a.memoryOperation(op.OperationId); running {
+			op = current
+		}
 		if pendingOperation(op) {
 			op, err = a.observe(ctx, record)
 			if err != nil {
@@ -188,6 +199,9 @@ func (a *Application) environmentOperations(ctx context.Context) ([]Operation, [
 				backups = append(backups, *backup)
 			}
 		}
+	}
+	if err := a.ctx.Err(); err != nil {
+		return nil, nil, err
 	}
 	return pending, backups, nil
 }

@@ -48,10 +48,7 @@ func TestApplicationFinalSaveFailureRetainsUncertainty(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			prepared := &applicationTestPrepared{}
 			backend := &applicationTestBackend{prepare: func(context.Context, ChangeRequest, string) (Prepared, error) {
-				if prepared.calls.Load() == 0 {
-					return prepared, nil
-				}
-				return &applicationTestPrepared{}, nil
+				return prepared, nil
 			}}
 			app, store, _ := newApplicationTest(t, backend)
 			prepared.apply = func(context.Context, func(Progress)) (Outcome, error) {
@@ -65,16 +62,30 @@ func TestApplicationFinalSaveFailureRetainsUncertainty(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			observed := awaitApplicationTest(t, app, op.OperationId)
+			awaitApplicationSignal(t, app.Done())
+			_, err = app.Operation(t.Context(), op.OperationId)
+			requireRefusal(t, err, "SESSION_EXPIRED")
+			opts := app.opts
+			opts.ContextID = "reopened-capture"
+			opts.Backend = &applicationTestBackend{}
+			reopened, err := NewApplication(t.Context(), opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(reopened.Close)
+			observed, err := reopened.Operation(t.Context(), op.OperationId)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if observed.State != Interrupted || observed.Result != nil || !hasApplicationDiagnostic(observed, "OUTCOME_NOT_PERSISTED") {
 				t.Fatal("failed final save lost uncertainty", observed)
 			}
-			replayed, err := app.Apply(t.Context(), plan.PlanId, op.RequestId)
+			replayed, err := reopened.Apply(t.Context(), plan.PlanId, op.RequestId)
 			if err != nil || replayed.State != Interrupted || replayed.OperationId != op.OperationId || prepared.calls.Load() != 1 {
 				t.Fatal("uncertain outcome replayed effects", replayed, err)
 			}
-			next := prepareApplicationTest(t, app)
-			_, err = app.Apply(t.Context(), next.PlanId, "next-mutation-request-123456")
+			next := prepareApplicationTest(t, reopened)
+			_, err = reopened.Apply(t.Context(), next.PlanId, "next-mutation-request-123456")
 			requireRefusal(t, err, "RECOVERY_REQUIRED")
 		})
 	}

@@ -278,6 +278,13 @@ acceptance; retries keep their original identity. Persisted observations are
 never jobs to replay. Storage implements lookup/list/save/delete; the application
 alone decides whether uncertainty is settled and private undo can be forgotten.
 
+A final outcome-save error cancels the current application before a conservative
+Interrupted write is attempted under the same lock. History reads already in
+flight cannot publish their snapshots after that stop. The caller must reopen
+the host even when the conservative write succeeds. If both writes fail, restart
+can only inspect whichever complete version-1 record survived; there is no new
+durable marker, job replay, or cross-process snapshot invalidation protocol.
+
 `management-application`, `management-http-adapter` and `management-state-adapter`
 in depguard, mirrored in `internal/archtest`, enforce these import directions.
 The source scan covers platform/build-tagged files and tests negative fixtures.
