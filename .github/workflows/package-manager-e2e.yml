@@ -94,8 +94,6 @@ jobs:
         run: python -B -m unittest discover -s scripts -p test_package_manager_e2e.py
       - name: Check CI policy rejection cases
         run: python -B -m unittest discover -s scripts -p test_package_manager_ci_policy.py
-      - name: Execute the full portable catalog
-        run: python -B scripts/package-manager-e2e.py --output "${{ runner.temp }}/package-manager-e2e"
       - name: Verify native failure boundaries, agreement files and ownership refusals
         shell: bash
         run: |
@@ -112,7 +110,7 @@ jobs:
             cd install/integrationctl/agentplugins
             go test -count=1 -timeout=8m -json ./providers ./clients/kiro ./clients/shared \
               -run '^(TestDigestSkillDirectoryRequiresRealDirectoryRoot|TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry|TestGeminiLateNativeSkillDriftRefusesBeforeRename|TestClineLateNativeSkillDriftRefusesBeforeRename|TestKiroNativeBackupRejectsEditDuringRenameWithoutDeletingUserBytes)$'
-          ) >> "$events"
+          ) | tee -a "$events"
           python - "$events" <<'PY'
           import json
           import sys
@@ -148,6 +146,8 @@ jobs:
               raise SystemExit("agreement boundary suite failed or skipped")
           print("Fifteen critical policy and native ownership tests ran and passed; no false-green or skips")
           PY
+      - name: Execute the full portable catalog
+        run: python -B scripts/package-manager-e2e.py --output "${{ runner.temp }}/package-manager-e2e"
       - name: Verify Win32 Unicode aliases across ZIP, TAR, source and snapshot
         shell: bash
         run: |
