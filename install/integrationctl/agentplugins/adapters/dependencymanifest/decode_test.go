@@ -105,7 +105,7 @@ func TestDecodeRejectsInvalidManifestWithSourceLocation(t *testing.T) {
 		{"schema type", "schema_version=\"1\"", ":1:"},
 		{"schema version", "schema_version=2", ":1:"},
 		{"unknown", "schema_version=1\n[dev-dependencies]\na=\"1.0.0\"", ":2:"},
-		{"duplicate", "schema_version=1\nschema_version=1", ":1:"},
+		{"duplicate", "schema_version=1\nschema_version=1", ":2:"},
 		{"dependency type", "schema_version=1\n[dependencies]\na=42", ":3:"},
 		{"dependencies type", "schema_version=1\ndependencies=[]", ":2:"},
 		{"target type", "schema_version=1\n[targets]\ncodex=[1]", ":3:"},

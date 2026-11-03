@@ -99,14 +99,18 @@ class EvidenceAcceptanceTests(unittest.TestCase):
                   f"subprocess.Popen([sys.executable,'-c',{child!r}],stdout=sys.stdout); time.sleep(60)")
         process = subprocess.Popen([sys.executable, "-c", parent], stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, start_new_session=True)
+        needs_cleanup = True
         try:
             self.assertTrue(select.select([process.stdout], [], [], 5)[0], "child never became ready")
             self.assertEqual(process.stdout.readline(), b"ready\n")
             RUNNER.stop_owned_process(process)
+            needs_cleanup = False
             self.assertTrue(select.select([process.stdout], [], [], 5)[0], "descendant kept the pipe open")
             self.assertEqual(process.stdout.read(), b"")
         finally:
-            RUNNER.stop_owned_process(process)
+            # A second killpg after successful cleanup may raise EPERM on macOS.
+            if needs_cleanup:
+                RUNNER.stop_owned_process(process)
             process.stdout.close()
             process.stderr.close()
 

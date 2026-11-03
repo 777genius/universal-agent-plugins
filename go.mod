@@ -15,7 +15,7 @@ require (
 require (
 	github.com/creachadair/tomledit v0.0.29 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect
-	github.com/pelletier/go-toml/v2 v2.3.0 // indirect
+	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd // indirect
 	golang.org/x/sync v0.22.0 // indirect
