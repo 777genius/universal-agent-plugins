@@ -2,7 +2,8 @@
 
 Date: 2026-11-04. Research base: `999c25fcd22ab0cbd4c775aa6acc83e7cf422c3a`.
 Branch: `refactor/foundation-boundaries-20261104`.
-Status: research complete; independent plan review before implementation.
+Status: research and three independent plan reviews complete; baseline E2E first.
+PR: https://github.com/777genius/universal-agent-plugins/pull/700.
 
 ## Goal and scope decision
 
@@ -65,9 +66,13 @@ generic repository, durable job queue, feature flag or public command is needed.
 
 The store port exposes only lookup by request/operation, list, save and delete.
 An observation is still a version-1 correlation record, never executable
-authority. The lock port exposes acquisition and classification of an active
-lock error, preserving existing lock-error diagnostics without importing the
-concrete process-lock implementation into the application.
+authority. The lock port exposes nonblocking acquisition and classification of
+an active lock error, preserving existing diagnostics without importing the
+concrete process-lock implementation into the application. Active ownership must
+return an error, not wait: observation inside the second replay check can attempt
+the same process lock. One acquisition spans replay, revalidation, admission,
+retention and acceptance, then transfers to execution through final persistence
+and reconciliation. Every early return releases it.
 
 The application exposes the existing operations as methods returning existing
 DTOs and typed refusals: session/catalog/inspection/update reads, ordinary and
@@ -84,9 +89,11 @@ the application.
 1. Request replay is checked before retained-plan lookup or expiry, then checked
    again under the cross-process mutation lock. Same request plus same plan
    returns the original operation. Reusing the identity for another plan fails.
-2. Prepared authority is rechecked before durable acceptance. The acceptance
-   record must be saved before any effect or worker execution. A persistence
-   error consumes no executable authority and starts no effect.
+2. Prepared authority is rechecked before durable acceptance. No worker or
+   effect starts until acceptance saving succeeds. A save error may nevertheless
+   leave an acceptance record visible after atomic publication; retain the same
+   request identity, preserve that record, and observe it without repeating
+   effects. Test failure before writing and publication followed by an error.
 3. Accepted execution derives from the application lifetime, not an HTTP
    request. Losing a response or canceling a polling request does not repeat or
    cancel accepted work. Explicit cancellation and shutdown retain their meaning.
@@ -118,6 +125,22 @@ the application.
     loopback bootstrap, and stdin-EOF shutdown. `manage discover` remains passive.
     OpenAPI, generated DTO bytes, SDK public API and installation semantics stay
     unchanged.
+13. The application owns retained snapshots. Direct callers cannot change a
+    retained review or operation through returned slices/pointers. Detach the
+    retained review and operation data that crosses this new boundary; do not
+    invent a second model or blanket-copy every backend response.
+
+### Shutdown and construction ownership
+
+The application owns backend cleanup after successful construction; the caller
+owns cleanup before that handoff. The HTTP server owns the listener and its
+successful application handoff. Listener-start or bootstrap-write failure closes
+the constructed application and any opened transport. HTTP Close first stops
+transport admission and closes connections, including body decoders, then closes
+application admission/cancels work and waits for admitted calls and operations.
+Application cancellation also closes transport through the same idempotent path.
+`Done` signals completed cleanup. No second operation/worker owner is introduced.
+Tests must cover a blocked admitted call and failed process startup output.
 
 ## Implementation and publication sequence
 
@@ -131,6 +154,13 @@ the application.
   names; do not report them as passes or change product policy to accommodate the
   container. Normalize only the test process environment where appropriate and
   use existing hosted gates for native/protected-process qualification.
+- Before production extraction, add and run the deterministic actual CLI + SDK
+  journey described in phase 3 as a standalone characterization commit. Use
+  explicit disposable captured paths and a separate authoring root without a
+  target binding. Assert `local_skill` capability, not native availability. Use
+  an explicitly bounded child environment. Preparation must not mutate the
+  authoring tree or dependency manifest/lock; existing lock-directory creation
+  is not prohibited. Rerun this same journey after extraction.
 
 ### 1. Separate contracts, observation storage and application ownership
 
@@ -158,15 +188,18 @@ the application.
 
 ### 3. Production E2E and architecture enforcement
 
-- Add one deterministic TypeScript SDK journey launching the actual built CLI
+- Keep the baseline TypeScript SDK journey launching the actual built CLI
   with isolated roots. Exercise session authentication, local Skill
   create/edit/delete, exact request replay, explicit close/restart, observation
   and exact restore, including one small binary file. Assert preparation has no
   effects and local authoring does not create dependency manifest/lock state.
 - Reuse the existing SDK workflow and consumer checks. Provision the real source
   CLI for this journey explicitly; test-fixture hosts remain protocol tests.
-- Extend path classification to management bridge files and both new packages,
-  with positive/negative path cases. Include affected native-SDK triggers.
+- Extend path classification to production CLI/core inputs, loopback support,
+  workspace/nested module manifests, management bridge files and both new
+  packages, with positive/negative path cases. The actual CLI build makes a
+  narrow management-only classifier insufficient. Include affected native-SDK
+  triggers.
 - Add a source-based import guard for application and adapter boundaries,
   including negative build-tagged fixtures. Keep current architecture guards and
   lint limits; no new suppression or legacy baseline expansion.
@@ -201,4 +234,9 @@ free of architectural debt.
 - Baseline: `go test -count=1 ./cli/internal/agentpluginscli/management/...` PASS
   (Go 1.26.10, 0.394 s). Broad Management CLI baseline is not qualified locally
   because of the observed host/process restrictions described in phase 0.
-- Plan reviews, implementation reviews and final-head evidence: pending.
+- Plan criticism: all three independent reviewers accepted the chosen scope and
+  package direction after these corrections: move real-process E2E before code;
+  specify save ambiguity, nonblocking/continuous lock lifetime and shutdown
+  ownership; cover actual CLI build inputs in CI; detach retained snapshots at
+  the new direct-call boundary. No new framework or domain DTO duplication.
+- Implementation reviews and final-head evidence: pending.
