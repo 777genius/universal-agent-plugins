@@ -1,0 +1,102 @@
+name: Remaining client live installation audit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/live-install-remaining-clients.yml'
+      - 'scripts/live-install-audit.py'
+      - 'tests/live-install/fixtures.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remaining-client-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  remaining-client-install:
+    name: Full 30 ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        target: [cursor, kiro, windsurf, grok, vscode, chatgpt]
+        kind: [plugin, skill]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Acquire actual public vendor client where a headless Linux build exists
+        env:
+          TARGET: ${{ matrix.target }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p "$RUNNER_TEMP/vendor-proof" "$HOME/.local/bin"
+          export PATH="$HOME/.local/bin:$PATH"
+          case "$TARGET" in
+            cursor) URL="https://cursor.com/install"; BIN="cursor-agent" ;;
+            kiro) URL="https://cli.kiro.dev/install"; BIN="kiro-cli" ;;
+            windsurf) URL="https://cli.devin.ai/install.sh"; BIN="devin" ;;
+            grok) URL="https://x.ai/cli/install.sh"; BIN="grok" ;;
+            vscode)
+              URL="https://update.code.visualstudio.com/latest/linux-deb-x64/stable"
+              BIN="code"
+              ;;
+            chatgpt)
+              echo "ChatGPT is a remote/manual app target; no Linux agent executable" \
+                | tee "$RUNNER_TEMP/vendor-proof/manual-client.txt"
+              exit 0
+              ;;
+          esac
+          printf '%s\n' "$URL" > "$RUNNER_TEMP/vendor-proof/source.txt"
+          if [[ "$TARGET" == vscode ]]; then
+            curl -fsSL --retry 2 "$URL" -o "$RUNNER_TEMP/code.deb"
+            sha256sum "$RUNNER_TEMP/code.deb" > "$RUNNER_TEMP/vendor-proof/artifact.sha256"
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$RUNNER_TEMP/code.deb"
+          else
+            curl -fsSL --retry 2 "$URL" -o "$RUNNER_TEMP/vendor-install.sh"
+            sha256sum "$RUNNER_TEMP/vendor-install.sh" > "$RUNNER_TEMP/vendor-proof/installer.sha256"
+            bash -n "$RUNNER_TEMP/vendor-install.sh" || exit 1
+            # Execute only official vendor bootstrap in an ephemeral hosted
+            # runner, never on a contributor's host or with account secrets.
+            bash "$RUNNER_TEMP/vendor-install.sh"
+          fi
+          hash -r
+          command -v "$BIN" | tee "$RUNNER_TEMP/vendor-proof/executable.txt"
+          timeout 30s "$BIN" --version | tee "$RUNNER_TEMP/vendor-proof/version.txt"
+      - name: Build CLI under test (not the already-published binary)
+        run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
+      - name: Run real acquisitions and report every source and outcome
+        env:
+          AUDIT_KIND: ${{ matrix.kind }}
+          AUDIT_TARGET: ${{ matrix.target }}
+        shell: bash
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          python3 scripts/live-install-audit.py \
+            --cli "$RUNNER_TEMP/agentplugins-audit" \
+            --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 30 \
+            --report-dir "$RUNNER_TEMP/live-audit-report"
+      - name: Preserve exact per-case evidence, even if vendor install or CLI fails
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: remaining-client-${{ matrix.target }}-${{ matrix.kind }}
+          path: |
+            ${{ runner.temp }}/live-audit-report/
+            ${{ runner.temp }}/vendor-proof/
+          if-no-files-found: warn
+          retention-days: 14
