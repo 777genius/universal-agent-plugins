@@ -59,7 +59,7 @@ func validatePackageExecutableFiles(root string, files []string, invalidPath, in
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrInvalidRequest, invalidFile)
 	}
-	defer source.Close()
+	defer func() { _ = source.Close() }()
 	for _, relative := range files {
 		local := filepath.FromSlash(relative)
 		if relative == "" || relative == "." || relative == ".." ||
