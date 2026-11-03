@@ -95,9 +95,9 @@ func TestProjectReadinessSortedAndScopedAcrossPopularClients(t *testing.T) {
 	state := domain.StateFileV2{Installations: []domain.Installation{
 		{InstallationID: "b", Clients: map[string]domain.ClientBinding{
 			"hidden-user": {ClientID: "claude", Scope: string(domain.ScopeUser), Materialization: domain.MaterializationMaterialized},
-			"removed": {ClientID: "opencode", Scope: string(domain.ScopeProject), Materialization: domain.MaterializationAbsent},
-			"z": {ClientID: "pi", ClientBindingID: "z", Scope: string(domain.ScopeProject), Materialization: domain.MaterializationMaterialized, Activation: domain.ActivationPrepared},
-			"a": {ClientID: "codex", ClientBindingID: "a", Scope: string(domain.ScopeProject), Materialization: domain.MaterializationMaterialized, Activation: domain.ActivationPrepared},
+			"removed":     {ClientID: "opencode", Scope: string(domain.ScopeProject), Materialization: domain.MaterializationAbsent},
+			"z":           {ClientID: "pi", ClientBindingID: "z", Scope: string(domain.ScopeProject), Materialization: domain.MaterializationMaterialized, Activation: domain.ActivationPrepared},
+			"a":           {ClientID: "codex", ClientBindingID: "a", Scope: string(domain.ScopeProject), Materialization: domain.MaterializationMaterialized, Activation: domain.ActivationPrepared},
 		}},
 		{InstallationID: "a", Clients: map[string]domain.ClientBinding{
 			"c": {ClientID: "opencode", ClientBindingID: "c", Scope: string(domain.ScopeProject), Materialization: domain.MaterializationMaterialized, Activation: domain.ActivationPrepared},
@@ -124,18 +124,18 @@ func TestProjectReadinessSortedAndScopedAcrossPopularClients(t *testing.T) {
 func TestProjectNativeGuidanceForTwelveAgents(t *testing.T) {
 	t.Parallel()
 	for client, expected := range map[string]string{
-		"codex": ".codex/config.toml",
-		"claude": "/reload-plugins",
+		"codex":    ".codex/config.toml",
+		"claude":   "/reload-plugins",
 		"opencode": "v1/v2",
-		"gemini": ".gemini/settings.json",
-		"copilot": ".github/skills",
-		"cursor": "Cursor",
-		"pi": "trust",
-		"kimi": ".kimi-code/mcp.json",
+		"gemini":   ".gemini/settings.json",
+		"copilot":  ".github/skills",
+		"cursor":   "Cursor",
+		"pi":       "trust",
+		"kimi":     ".kimi-code/mcp.json",
 		"windsurf": "Devin",
-		"kiro": "Kiro",
-		"cline": "Cline",
-		"vscode": ".vscode/mcp.json",
+		"kiro":     "Kiro",
+		"cline":    "Cline",
+		"vscode":   ".vscode/mcp.json",
 	} {
 		t.Run(client, func(t *testing.T) {
 			actions := projectReadinessActions(client, "prepared_native_unverified")
@@ -155,12 +155,12 @@ func TestProjectNativeGuidanceForTwelveAgents(t *testing.T) {
 		t.Fatalf("Pi guidance claimed unsupported portable component installation: %q", pi)
 	}
 	for status, want := range map[string]string{
-		"source_rebind_required": "source identity",
-		"failed": "explicit review",
-		"policy_blocked": "policy",
+		"source_rebind_required":   "source identity",
+		"failed":                   "explicit review",
+		"policy_blocked":           "policy",
 		"policy_approval_required": "consent",
-		"authentication_pending": "authentication",
-		"materialization_pending": "recover",
+		"authentication_pending":   "authentication",
+		"materialization_pending":  "recover",
 	} {
 		a := projectReadinessActions("codex", status)
 		if len(a) != 1 || !strings.Contains(a[0], want) {
@@ -178,7 +178,7 @@ func TestDoctorReadOnlyPublicProjectMatrixEmptyWithoutInstallations(t *testing.T
 	}
 	var response struct {
 		Data struct {
-			ReadOnly bool `json:"read_only"`
+			ReadOnly         bool                     `json:"read_only"`
 			ProjectReadiness []projectReadinessRecord `json:"project_readiness"`
 		} `json:"data"`
 	}
