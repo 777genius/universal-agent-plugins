@@ -35,6 +35,11 @@ func appendSkillDigest(hash io.Writer, root, path string, entry fs.DirEntry) err
 		return err
 	}
 	if relative == "." {
+		// WalkDir's root is not visited as an ordinary member. Never let a
+		// root file, symlink or reparse point inherit the empty-directory digest.
+		if !entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("managed Skill root is not a real directory")
+		}
 		return nil
 	}
 	if entry.Type()&os.ModeSymlink != 0 {
