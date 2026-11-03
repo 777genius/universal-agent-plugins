@@ -2,7 +2,7 @@
 
 Date: 2026-11-03. Research baseline: `2d2c4f331e8b3c674240f8b1b83fbd0b7c0f1aba`.
 Implementation base also includes `b5221a9adb561bdc8e4a89499c4113e359641e9a` (#679).
-Status: **All five rounds implemented and published in draft PR #690 after revision 2 received three independent plan approvals. Focused verification is complete; final code criticism and full platform qualification remain deferred.**
+Status: **All five rounds are published in draft PR #690. At the owner's follow-up, three independent code critics identified compatibility and diagnostic defects; revision 3 corrections are implemented, tested and approved on independent re-review within the stated scope. Full platform qualification remains deferred.**
 
 ## Owner request and delivery boundary
 
@@ -14,7 +14,7 @@ where files and responsibilities are separable. Commit and immediately publish
 each coherent increment; do not wait for the full remote CI matrix after every
 commit. The owner requested the strongest available models and reasoning effort.
 
-The requested final code-critic loop is a later, separately requested phase.
+The final code-critic loop was initially deferred and was started after the owner's follow-up questioning the new limits. The original draft boundary remains.
 This delivery stays draft: no merge, release, readiness transition, or claim of
 complete cross-platform/native qualification. Focused regression and integration
 checks are still part of implementation. Do not change or disable existing CI
@@ -167,16 +167,19 @@ errors as operational errors, because mismatch authorizes repair/quarantine.
 Preserve ordinary repair
 and quarantine behavior; never use an invalid metadata field to select a path.
 
-Use an explicit 4 MiB metadata envelope, applied both before publishing and while
-reading. Validate a 10,000-member inventory with deep portable paths and JSON
+Use the existing 64 MiB package-file envelope (`domain.DefaultMaxFileBytes`)
+for serialized store metadata, applied before publishing and while reading.
+Revision 3 replaces the original 4 MiB metadata cap after a legal old-writer
+cache regression was reproduced. Validate a 10,000-member inventory with deep portable paths and JSON
 escaping overhead; unusually larger serialized metadata is explicitly rejected
 before publication, rather than creating an entry the reader cannot reopen.
 Add exact-limit boundary coverage. Payload links keep their existing policy.
 
 The strict reader must avoid blocking during opening if a regular file is swapped
 for a FIFO: use a nonblocking/no-follow leaf open on Unix and a reparse-aware
-file-handle open on Windows, preserve Windows delete sharing, inspect the opened
-handle and recheck identity. Test the inspection-to-open swap using an explicit
+file-handle open on Windows, preserve Windows delete sharing and long paths,
+inspect the opened handle and recheck identity. Regular NTFS deduplicated files
+remain readable; redirecting reparse points remain refused. Test the inspection-to-open swap using an explicit
 local test seam/subprocess, not sleeps. This guarantee does not claim to prevent
 all hostile concurrent modification of arbitrary parent directories.
 
@@ -225,8 +228,9 @@ Acceptance:
 ## Round 4 — cancellable and bounded graph resolution
 
 Owner files: `environment/resolve_graph.go`, `resolve_expand.go`, a small pure
-graph-limit module and tests. The integrator wires structural admission into both
-`Lock.Validate` and `ValidateCompatiblePins` and bounds/cancels `deps tree` output.
+graph-limit module and tests. Budgets apply to fresh solving. Recorded-lock
+validation uses indexed source lookup and adjacency target propagation without
+inheriting those solver caps; the integrator bounds/cancels `deps tree` output.
 Do not change source selection policy or introduce a solver.
 
 Check context cancellation within fixed-point expansion, candidate enumeration
@@ -236,11 +240,15 @@ operation and never reset by backtracking or a new candidate. Count work
 deterministically; shared nodes and
 duplicate edges must not create duplicate graph identity. A budget exhaustion is
 a typed terminal `ErrResolutionLimit`, never a version conflict that triggers
-more backtracking. Structural admission also applies to existing/imported locks
-before expensive edge/target traversal, including status, check and tree.
+more backtracking. Existing/imported locks retain schema, pin, edge and target
+validation, with efficient indexed/adjacency traversal. They are not rejected
+merely because they exceed the budgets for a new search. This preserves read,
+import and locked replay of previously valid large agreements. Resolution-based
+edits, including reductions, must still fit active-solver budgets; reduction to
+an admitted graph is supported, not an unlimited removal fast path.
 
-Use 1,024 distinct source nodes and 8,192 recorded graph demands as structural
-ceilings. Use 4,096 search states and 8,388,608 work events per resolution. One
+Use 1,024 distinct source nodes and 8,192 graph demands as active-solver
+structural ceilings. Use 4,096 search states and 8,388,608 work events per resolution. One
 work event is a node processed during expansion/search, an examined dependency
 declaration (including duplicates), or an enumerated candidate (including rejected
 candidates). Check candidate-list budget before sorting/callbacks. These are
@@ -256,8 +264,8 @@ fanout64, dense shared DAGs and cycles. They must fit the default budget. If the
 do not, revise the implementation/plan rather than silently lower acceptance.
 
 Tree formatting uses bounded indentation (32 levels, with explicit depth after
-that) and context checks per emitted node/edge; graph structural limits apply
-before output. References and cycles remain explicit. Do not introduce topological
+that) and context checks per emitted node/edge. The existing 32 MiB lock
+document bound applies to input; recorded graphs do not inherit solver counts. References and cycles remain explicit. Do not introduce topological
 startup ordering or claim that exceeding a resource budget makes the graph invalid.
 
 Acceptance:
@@ -265,8 +273,9 @@ Acceptance:
 - Cancellation is observed inside expansion and before further source callbacks.
 - Very wide/deep and adversarial backtracking fixtures terminate with the typed
   limit error; CLI does not publish a partial lock or deploy target files.
-- Existing/imported structurally oversized locks fail before expensive validation
-  or large tree output; deeply nested admitted locks render bounded output.
+- Existing/imported large locks remain inspectable and reducible without source
+  callbacks. Efficient semantic validation preserves invalid-graph refusals;
+  deeply nested admitted locks render bounded-indentation output.
 - Existing cycles, diamond/shared graphs, high fan-out, selected updates,
   compatible old transitive pins, exact pins and deterministic no-op graphs pass.
 - Avoid timing-only tests. Use known work counts and controlled cancellation.
@@ -378,15 +387,75 @@ All three critics re-reviewed revision 2 and approved it without remaining
 planning blockers. The lifecycle critic additionally required unsorted historical
 inventory acceptance in both comparison and operational SDK copies (without lock
 rewrites), and retained the 1,024-root/256-chain budget gates. These are included
-in implementation acceptance. This approval is plan review, not the deferred
-final code-critic loop.
+in implementation acceptance. These are the historical revision 2 decisions.
+Revision 3 below supersedes the metadata cap and recorded-graph admission choices
+after concrete code-review counterexamples.
 
-## Implementation and verification ledger
+## Postimplementation code review — revision 3
+
+The owner's follow-up asked whether the limits could make behavior worse.
+Three new independent code critics reviewed graph/resource behavior, input and
+cache compatibility, and actual CLI diagnostics/cleanup. The initial code was
+not approved unchanged. The following corrections are part of this PR:
+
+| Confirmed finding | Correction |
+| --- | --- |
+| A legal 8,000-executable package with only 80,000 payload bytes produced 4,736,215 bytes of old-writer metadata; the new 4 MiB reader rejected it as corrupt. | Derive the symmetric metadata ceiling from the existing 64 MiB package-file limit, and retain an old-writer/new-reader regression. The 4 MiB dependency-manifest limit is separate and unchanged. |
+| A valid 1,025-node lock (600,691 bytes) and a 129-node/8,256-edge lock (606,041 bytes) became unreadable and could not be reduced to empty. | Remove fresh-solver size admission from semantic lock validation. Index source lookup and propagate targets through adjacency queues; keep solver budgets local to active solving. |
+| Raw Windows `CreateFile` lost Go's long-path normalization and rejected regular NTFS DEDUP files. | Preserve extended drive/UNC paths and delete sharing; admit the regular DEDUP tag while refusing redirected/irregular/unavailable files. Native Windows execution remains a separate gate. |
+| Missing temporary storage returned `ENOENT`, which could be mislabeled as corrupt cache and authorize quarantine. | Mark temporary-output failures at their source in the snapshot builder; preserve operational error identity even when temporary storage is nested under the input tree. |
+| Offline/recall-dependent Windows files were labeled unsafe and therefore repairable corruption. | Preserve a Windows filesystem operational error without reading or hydrating unavailable bytes. |
+| A missing required `plugin.json` in verified bytes was mislabeled as a storage-access error. | Classify content absence after snapshot verification as invalid package content, keeping pre-snapshot I/O operational. |
+| Snapshot cleanup failure could still return a successful offline verdict and leave temporary files behind. | Propagate cleanup failures as operational errors; an integrity check cannot report success after failed cleanup. |
+| Short registry-name mapping scanned all pins for every root, and cancellation during decode could be overwritten by another verdict. | Index registry names and aliases once; observe cancellation after admission before reporting its result. |
+| The actual project CLI could block on a FIFO in unrelated installed state before checking the agreement, even after cancellation. | Reuse scope/namespace identity and path guards while separating integrity checking from installed-state parsing. Existing status and mutation preflight remain intact. |
+
+The remaining solver ceilings are deliberately not described as harmless to
+every valid input. A conflict-free graph of 1 root, 8 shared hubs and 1,000 leaves
+(1,009 nodes, 8,008 edges) exhausted the work budget at state 892 after about
+29 seconds and 2.60 GB cumulative allocations in a zero-I/O fixture. Raising all
+budgets would increase resource exposure. The correction protects historical
+agreement usability while keeping an explicit resource ceiling on fresh search.
+The 1,024-node chain and flat graphs fit the current budget; these observations
+are examples, not a capacity guarantee for every topology.
+
+A second reviewer also reproduced partial reduction from 1,026 roots to 1,025
+roots hitting the solver ceiling. This remains an explicit scope boundary:
+manifest edits invoke resolution, so only reductions whose resulting search fits
+the budget are supported. Reading, inspection and import do not inherit that
+ceiling. No blanket claim is made that every removal is limit-free.
+
+Fixes were re-reviewed by a different critic from their author. The second
+round found the nested-temporary-directory error-classification case and the
+actual production project-state FIFO blockage; both were corrected and checked
+again. All three reviewers now approve their reviewed scope, with no remaining
+reproduced code blocker. The partial-reduction limit and unexecuted native
+platform qualification remain explicit limitations, not completed checks.
+
+| Final revision 3 verification | Result |
+| --- | --- |
+| Full environment suite and historical graph regressions | Passed; independent rerun also passed. |
+| Full packagedigest and environmentstore suites | Passed; store run 19.432s includes exact 64 MiB boundaries, real old-writer cache, nested/outside missing temp output and missing input. |
+| Independent registry-canonicalizer comparison | 10,000 deterministic old/new parity cases passed. |
+| Focused public-command E2E catalog | 14/14 selected cases passed in 4.831s; existing validator verified 82 test/subtest pass events with no skips. Catalog now contains 82 cases. |
+| Production project integrity commands | Invalid unrelated state and FIFO state passed; namespace and agreement unchanged; ordinary status retains state preflight. |
+| Final CLI and production command race check | Passed (2.166s and 1.600s). |
+| Architecture gates | All six existing gates passed again. |
+| Windows strict-reader tests | Final test binary cross-compiled; native long-path, share-delete, DEDUP and offline filesystem execution remain unperformed. |
+| Formatting and whitespace | Passed. |
+
+Published review corrections: `7563132ddd3525f8617a44800ae4f4e70c942638`
+(recorded graph compatibility) and `a2ec8fa994fb831a4ee6225df5b17bc52c3db573`
+(cache/Windows/temporary-storage/CLI/scope fixes). The following documentation
+commit records the dispositions. No merge, release or broad platform
+qualification is implied by this review phase.
+
+## Initial implementation and verification ledger (before revision 3)
 
 Draft: [#690](https://github.com/777genius/universal-agent-plugins/pull/690).
 Implementation head: `8269559d70b0d5c482e54ce8312cba85e204b1d4`.
-The documentation-only completion commit follows that head; the PR description
-records the published branch head. Workers used GPT-6 Astra with ultra reasoning,
+That head records the initial implementation before revision 3. The PR
+description records the latest published branch head and subsequent fixes. Workers used GPT-6 Astra with ultra reasoning,
 as requested. The three independent critics reviewed and approved the plan before
 production edits; this is separate from a final review of the implemented code.
 
@@ -459,7 +528,8 @@ the production Git transport. Archive and production ZIP compatibility passed.
 
 Full `make lint` was not run because `golangci-lint` is unavailable. The complete
 remote multi-OS CI/native-client matrix, unchanged-binary production-scanner
-qualification, and the owner's later code-critic/fix loop were not run. No
+qualification were not run. The code-critic/fix loop is recorded separately in
+the revision 3 section above. No
 workflow was changed or disabled, no release was made, and the PR remains draft.
 
 ## Delivery checklist
@@ -471,4 +541,5 @@ workflow was changed or disabled, no release was made, and the PR remains draft.
 - [x] Round 4 implemented and focused regressions pass.
 - [x] Round 5 implemented and composed CLI scenarios pass.
 - [x] All intended changes published in one draft PR; branch head recorded in its description.
-- [x] Remaining CI/platform/final-review work described accurately.
+- [x] Remaining CI/platform work described accurately.
+- [x] Revision 3 code-review findings fixed, tested and independently re-reviewed within the documented scope.

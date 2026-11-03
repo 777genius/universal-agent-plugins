@@ -31,8 +31,9 @@ The report identifies the selected scope and agreement paths.
 
 Targets come from `uap.toml`; inherited `--target` is rejected. The command checks
 the registry's scope policy for those declared targets without detecting installed
-native clients. Project scope retains the existing read-only namespace and scoped
-state preflight. A target unsupported in the
+native clients. Project scope retains namespace identity and path-containment
+checks. Integrity inspection does not parse unrelated installed-state files;
+`deps status` and mutating commands retain their installed-state preflight. A target unsupported in the
 selected scope produces `scope_targets_unsupported`. Manually prepared targets
 that cannot be saved dependency targets remain excluded. `--format` accepts
 `human` (default) or `json`. A dry-run flag is unnecessary: checking already has no
@@ -80,7 +81,7 @@ Consumers should use outcomes and codes instead of matching explanatory text.
 | `valid` | The reported stage was verified; overall validity requires every necessary stage. | Successful entries omit `code`. |
 | `invalid` | Observed input violates schema, immutable identity, or declaration rules. | `manifest_invalid`, `lock_invalid`, `lock_stale`, `store_mismatch`, `package_invalid`, `graph_declarations_mismatch` |
 | `unavailable` | Required agreement files or exact cached package bytes are absent. | `manifest_missing`, `lock_missing`, `package_unavailable` |
-| `error` | Operational conditions, scope policy, concurrent change, or supported graph limits prevent inspection. | `scope_unavailable`, `scope_targets_unsupported`, `manifest_unreadable`, `lock_unreadable`, `store_unreadable`, `agreement_changed`, `graph_limit` |
+| `error` | Operational failures, unsupported scope or concurrent changes prevent inspection. | `scope_unavailable`, `scope_targets_unsupported`, `manifest_unreadable`, `lock_unreadable`, `store_unreadable`, `snapshot_cleanup_failed`, `agreement_changed` |
 | `canceled` | Cancellation or a deadline interrupted inspection. | `check_canceled` |
 
 Independent package failures can appear together. A stage whose prerequisites
@@ -106,9 +107,9 @@ agreement paths; account for that when publishing CI artifacts.
 | Round | Contract |
 | --- | --- |
 | 1. Identical immutable admission | Warm cache replay and cold acquisition compare the tree digest, manifest digest, actual executable inventory, and any nonempty recorded version. Cache availability must not change which immutable facts are accepted. |
-| 2. Strict store metadata | Metadata is bounded on both read and publication, strict JSON, and validated against the actual sealed snapshot. Corrupt metadata is distinct from absence, permission failures, and cancellation. Store `Source` metadata is advisory; the lock supplies source identity because identical content may be shared across origins. |
+| 2. Strict store metadata | Metadata is bounded on both read and publication by the existing package-file ceiling, strict JSON, and validated against the actual sealed snapshot. Corrupt metadata is distinct from absence, permission failures, and cancellation. Store `Source` metadata is advisory; the lock supplies source identity because identical content may be shared across origins. |
 | 3. One manifest boundary | Root, embedded package, and direct in-memory decoder callers share the same dependency-manifest byte limit and parser. Package sidecars retain root-contained link support; authority files and store metadata reject leaf links. |
-| 4. Bounded graph work | Resolution has structural and request-wide work budgets, including failed search branches, and checks cancellation during expansion and search. Limit exhaustion is terminal, not a dependency conflict eligible for more backtracking. Existing/imported locks also receive structural admission. |
+| 4. Bounded graph work | Resolution has structural and request-wide work budgets, including failed search branches, and checks cancellation during expansion and search. Limit exhaustion is terminal, not a dependency conflict eligible for more backtracking. Recorded and imported locks retain semantic validation without inheriting fresh-solver size caps; indexed lookup and adjacency traversal keep that validation efficient. |
 | 5. Truthful local diagnostics | `deps check` gates local integrity without acquisition or persistent mutation. Missing bytes, invalid bytes, operational errors, and cancellation remain distinct outcomes. |
 
 For authoritative locks, absent, `null`, and empty executable inventories all
@@ -121,15 +122,29 @@ input: it may hydrate missing facts from verified exact bytes, without relaxing
 the lock contract.
 
 Current ceilings are 4 MiB for dependency manifests, 32 MiB for `uap.lock`, and
-4 MiB for store metadata, including serialized JSON overhead. Store executable
+64 MiB for store metadata, including serialized JSON overhead. The metadata ceiling
+uses the existing `domain.DefaultMaxFileBytes` package-file bound, so a legal
+large inventory written by an older version is not refused by a new 4 MiB cap.
+Store executable
 inventories remain within the package limit of 10,000 files. Resolution admits
-at most 1,024 source nodes and 8,192 recorded demands, with 4,096 search states
-and 8,388,608 work events per resolution. These are admission ceilings, not a
-promise that every graph below the structural counts will fit the work budget.
+at most 1,024 source nodes and 8,192 dependency demands, with 4,096 search states
+and 8,388,608 work events per fresh resolution. These budgets protect active
+search; they are not limits on the validity of an already recorded graph. Tree,
+check and import of older large locks retain the existing document byte limits
+and all pin/edge/target validation. Manifest edits still invoke resolution, even
+when removing a dependency: reducing 1,026 roots to 1,025 still exceeds the new
+solver ceiling. Reducing an old graph to an admitted graph (including empty or
+one retained package) is supported. No claim is made that every removal bypasses
+search budgets. A graph below the solver
+node/edge ceilings can still exhaust its work budget; there is no promise that
+every topology below those counts can be freshly resolved.
 
 On Unix, strict leaf opens use no-follow and nonblocking admission so a FIFO swap
 cannot stall the open; opened handles and final file identity are checked.
-Windows admission rejects reparse/irregular files while retaining delete sharing.
+Windows admission preserves long paths and delete sharing, rejects redirecting
+or irregular files, and accepts NTFS deduplicated files that Go treats as regular.
+Offline or recall-dependent bytes produce an operational error without hydration
+and without authorizing cache replacement.
 These mechanisms do not claim complete protection against arbitrary concurrent
 parent-directory changes. The implementation's Linux tests and Windows/Darwin
 cross-compilation are separate evidence; cross-compilation does not establish
