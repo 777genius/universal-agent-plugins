@@ -5,8 +5,6 @@ package sourceacquisition
 import (
 	"bytes"
 	"fmt"
-	"path"
-	"sort"
 	"strings"
 )
 
@@ -58,63 +56,3 @@ func executablePathsFromTreePolicy(tree []byte, subpath string, allowRootGitlink
 	return executable, nil
 }
 
-func packagePathsFromTree(tree []byte) ([]string, error) {
-	manifestRoots := map[string]struct{}{}
-	componentRoots := map[string]struct{}{}
-	rootPortable, rootNative := false, false
-	for _, record := range bytes.Split(tree, []byte{0}) {
-		if len(record) == 0 {
-			continue
-		}
-		metadata, filename, ok := bytes.Cut(record, []byte{'\t'})
-		fields := bytes.Fields(metadata)
-		if !ok || len(fields) != 3 || len(filename) == 0 {
-			return nil, fmt.Errorf("git tree returned a malformed entry")
-		}
-		mode, objectType := string(fields[0]), string(fields[1])
-		if objectType != "blob" || (mode != "100644" && mode != "100755") {
-			continue
-		}
-		name := string(filename)
-		if name == "plugin.json" {
-			rootPortable = true
-		}
-		if name == ".codex-plugin/plugin.json" {
-			rootNative = true
-		}
-		if path.Base(name) == "plugin.json" {
-			manifestRoots[path.Dir(name)] = struct{}{}
-		}
-		if path.Base(name) == "mcp.json" {
-			componentRoots[path.Dir(name)] = struct{}{}
-		}
-		for offset := 0; offset < len(name); {
-			index := strings.Index(name[offset:], "/skills/")
-			if index < 0 {
-				break
-			}
-			root := name[:offset+index]
-			if root != "" {
-				componentRoots[root] = struct{}{}
-			}
-			offset += index + len("/skills/")
-		}
-	}
-	if rootPortable || rootNative {
-		return []string{""}, nil
-	}
-	candidates := make([]string, 0)
-	for root := range manifestRoots {
-		if root == "." {
-			continue
-		}
-		if _, err := normalizeSubpath(root); err != nil {
-			continue
-		}
-		if _, packageShaped := componentRoots[root]; packageShaped {
-			candidates = append(candidates, root)
-		}
-	}
-	sort.Strings(candidates)
-	return candidates, nil
-}

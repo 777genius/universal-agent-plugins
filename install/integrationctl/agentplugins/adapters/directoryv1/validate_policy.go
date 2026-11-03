@@ -8,48 +8,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-func validatePolicy(p domain.DirectoryReleasePolicy) error {
-	if p.Status != domain.ReleaseActive && p.Status != domain.ReleaseSuperseded && p.Status != domain.ReleaseRevoked {
-		return fmt.Errorf("invalid status")
-	}
-	if _, err := parseSemver(p.MinimumInstallerVersion); err != nil {
-		return fmt.Errorf("invalid minimum installer version")
-	}
-	if len(p.Targets) == 0 || p.CurrentEvidence == nil {
-		return fmt.Errorf("targets/evidence arrays required")
-	}
-	clients := map[domain.ClientID]bool{}
-	for _, t := range p.Targets {
-		expectedDelivery, supportedDelivery := domain.ExpectedDirectoryDelivery(t.Client)
-		if !validClient(t.Client) || clients[t.Client] || len(t.Scopes) != 1 || t.Scopes[0] != domain.ScopeUser || !supportedDelivery || t.Delivery != expectedDelivery {
-			return fmt.Errorf("invalid target")
-		}
-		clients[t.Client] = true
-		if t.Authentication != domain.AuthenticationRequirementNotRequired && t.Authentication != domain.AuthenticationRequirementRequired && t.Authentication != domain.AuthenticationRequirementUnknown {
-			return fmt.Errorf("invalid target authentication")
-		}
-		definition, ok := domain.ClientDefinitionFor(t.Client)
-		if ok && definition.Capabilities.AppSupport != domain.SupportUnsupported {
-			if t.AppBinding == nil || t.AppBinding.AppKey == "" || t.AppBinding.ID == "" || t.AppBinding.MCPServer == "" {
-				return fmt.Errorf("chatgpt app binding required")
-			}
-			if err := domain.ValidateAppBindingIdentity(t.AppBinding.AppKey, t.AppBinding.ID, t.AppBinding.MCPServer); err != nil {
-				return fmt.Errorf("invalid chatgpt app binding: %w", err)
-			}
-		} else if t.AppBinding != nil {
-			return fmt.Errorf("app binding only allowed for chatgpt")
-		}
-	}
-	seen := map[string]bool{}
-	for _, id := range p.CurrentEvidence {
-		if !evidenceIDPattern.MatchString(id) || seen[id] {
-			return fmt.Errorf("invalid current evidence ID")
-		}
-		seen[id] = true
-	}
-	return nil
-}
-
 func validateSource(s domain.DirectorySource) error {
 	if !repositoryPattern.MatchString(s.Repository) || !shaPattern.MatchString(s.Revision) {
 		return fmt.Errorf("malformed immutable source")
