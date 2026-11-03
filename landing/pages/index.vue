@@ -12,6 +12,7 @@ const registryFaqItems = computed(() =>
 );
 
 const registry = await useRegistryPage({ discovery: true });
+const marketingKitPlugin = computed(() => registry.plugins.find((plugin) => plugin.name === 'marketing-kit'));
 const showcaseAvailable = computed(() =>
   registry.plugins.some(
     (plugin) => plugin.name === 'agent-notifications' && !isTemporarilyUnlisted(plugin),
@@ -53,10 +54,7 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
       mainEntity: registryFaqItems.value.map((item) => ({
         '@type': 'Question',
         name: item.question,
-        acceptedAnswer: {
-          '@type': 'Answer',
-          text: item.answer,
-        },
+        acceptedAnswer: { '@type': 'Answer', text: item.answer },
       })),
     },
   ],
@@ -67,7 +65,7 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
   <div class="registry-surface unified-home">
     <PageBackground />
     <RegistryHero :registry="registry" />
-    <RegistryRestore />
+    <RegistryRestore :plugin="marketingKitPlugin" />
     <RegistryDependencies />
     <RegistryDirectory :registry="registry" />
     <RegistryWhy />

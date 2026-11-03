@@ -44,7 +44,8 @@ for (const width of [1440, 390, 320]) {
     await setSignedMirrorTestTime(page);
     const requests: string[] = [];
     await page.route('https://player.mux.com/**', (route) => {
-      requests.push(route.request().url());
+      // Delayed idle preloading is covered separately; only gestures may launch playback.
+      if (new URL(route.request().url()).searchParams.has('autoplay')) requests.push(route.request().url());
       return route.fulfill({ contentType: 'text/html', body: fakePlayer });
     });
     await page.setViewportSize({ width, height: 1000 });
@@ -53,7 +54,7 @@ for (const width of [1440, 390, 320]) {
     const demo = page.locator('.hero-demo-video');
     const button = demo.getByRole('button', { name: 'Watch demo' });
     await expect(button).toBeVisible();
-    await expect(demo.locator('iframe')).toHaveCount(0);
+    await expect(demo.locator('iframe:not(.hero-demo-video__preload)')).toHaveCount(0);
     expect(requests).toHaveLength(0);
     const installBefore = await page.locator('.hero__window').evaluate(
       (element) => element.getBoundingClientRect().top + window.scrollY,
@@ -149,7 +150,6 @@ test('denied fullscreen still launches a viewport-filling autoplay player on one
     .getAttribute('data-subscribed')).toBe('ended');
   const close = demo.getByRole('button', { name: 'Close demo' });
   await expect(close).toBeVisible();
-  // A sticky header must not intercept clicks in the top-right fallback controls.
   await expect.poll(() => close.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     return document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) === element;
@@ -190,7 +190,7 @@ test('missing Fullscreen API uses an accessible fullscreen overlay', async ({ pa
 
 test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ page }) => {
   test.skip(process.env.UAP_E2E_LIVE_VIDEO !== '1', 'Explicit live CDN check; offline tests mock Player.js protocol.');
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   await setSignedMirrorTestTime(page);
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -201,13 +201,20 @@ test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ pa
     await expect.poll(() => demo.locator('img').evaluate(
       (image: HTMLImageElement) => image.complete && image.naturalWidth > 0,
     ), { timeout: 30_000 }).toBe(true);
+    const warm = demo.locator('iframe.hero-demo-video__preload');
+    await expect(warm).toBeAttached({ timeout: 15_000 });
+    await expect(warm).toHaveAttribute('src', /\?preload=auto$/);
+    const video = page.frameLocator('.hero-demo-video iframe').locator('video');
+    await expect(video).toBeAttached({ timeout: 30_000 });
+    // This is real Mux media, not a stub: warming must not start playback.
+    expect(await video.evaluate((element: HTMLVideoElement) => ({ paused: element.paused, time: element.currentTime })))
+      .toEqual({ paused: true, time: 0 });
     const directory = process.env.UAP_LANDING_SCREENSHOT_DIR;
     if (directory) {
       mkdirSync(directory, { recursive: true });
       await page.screenshot({ path: resolve(directory, `hero-video-poster-${width}.png`) });
     }
     await demo.getByRole('button', { name: 'Watch demo' }).click();
-    const video = page.frameLocator('.hero-demo-video iframe').locator('video');
     await expect(video).toBeAttached({ timeout: 30_000 });
     await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.currentTime),
       { timeout: 30_000 }).toBeGreaterThan(1);

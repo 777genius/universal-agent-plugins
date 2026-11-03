@@ -1,0 +1,15 @@
+{
+  "shell": {
+    "restoreDemo": {
+      "scopeLabel": "安装范围",
+      "projectLabel": "项目",
+      "globalLabel": "全局",
+      "projectSubtitle": "Marketing Kit 示例：让项目中的插件版本保持一致。",
+      "globalSubtitle": "Marketing Kit 示例：将全局插件配置迁移到另一台电脑。",
+      "projectHandoff": "将 uap.toml 和 uap.lock 提交到 Git。队友在项目中运行 install。",
+      "globalHandoff": "导出并分享这两个文件。确认后，导入会替换全局配置。",
+      "projectUnavailable": "此处仅为项目示例：当前 Marketing Kit 版本仅支持全局安装。",
+      "exportLabel": "导出这些文件"
+    }
+  }
+}

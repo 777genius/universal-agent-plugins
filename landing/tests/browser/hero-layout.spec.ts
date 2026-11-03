@@ -205,7 +205,17 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   expect(preview.y - (supported.y + supported.height)).toBeGreaterThanOrEqual(15);
   expect(install.y + install.height).toBeLessThan(preview.y);
   await expect(page.locator('.hero__demo .hero-demo-video')).toHaveCount(0);
-  await expect(page.locator('iframe[src*="player.mux.com"]')).toHaveCount(0);
+  // After seven seconds the hidden warm-up frame is intentional. It must not
+  // become an active, focusable or autoplay-enabled player without a gesture.
+  const muxFrames = page.locator('iframe[src*="player.mux.com"]');
+  await expect(page.locator('iframe[src*="player.mux.com"]:not(.hero-demo-video__preload)')).toHaveCount(0);
+  expect(await muxFrames.evaluateAll((frames) => frames.every((frame) =>
+    frame.getAttribute('aria-hidden') === 'true' &&
+    frame.hasAttribute('inert') && frame.getAttribute('tabindex') === '-1' &&
+    !new URL((frame as HTMLIFrameElement).src).searchParams.has('autoplay') &&
+    !(frame.getAttribute('allow') || '').includes('autoplay') &&
+    getComputedStyle(frame).visibility === 'hidden',
+  ))).toBe(true);
   await expect(page.locator('.hero-quick-start__footer')).toHaveCount(0);
   await capture(page, 'hero-early-reveal');
 });

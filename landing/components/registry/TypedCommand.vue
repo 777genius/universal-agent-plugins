@@ -71,6 +71,7 @@ onBeforeUnmount(() => {
     ref="host"
     class="typed-command"
     :data-complete="complete ? 'true' : 'false'"
+    :data-typing="clientReady && !complete && !reducedMotion ? 'true' : 'false'"
     :data-command="command"
   >
     <span class="typed-command__measure" aria-hidden="true">{{ command }}</span>
