@@ -142,10 +142,10 @@ test('project examples require pinned complete sources, not user-only Directory 
     const projectBlocks = chunks.filter((chunk) =>
       (chunk.startsWith('sh\n') || chunk.startsWith('bash\n')) && chunk.includes('--scope project'));
     assert.ok(projectBlocks.length, path + ': missing project command');
-    const source = path === 'README.md'
+    const expectedSource = path === 'README.md'
       ? 'github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH'
       : 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab';
-    assert.ok(projectBlocks.some((chunk) => chunk.includes(source)),
+    assert.ok(projectBlocks.some((chunk) => chunk.includes(expectedSource)),
       path + ': missing explicitly pinned project source');
     for (const chunk of projectBlocks) {
       assert.ok(!chunk.includes('add context7'), path + ': user-only alias offered for project');
