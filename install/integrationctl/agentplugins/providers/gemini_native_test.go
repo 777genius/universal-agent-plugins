@@ -54,8 +54,9 @@ func TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry(t *testing.T
 
 	err = gemini.ApplyGeminiNativeMutation(configRoot, active, nil, desired)
 	var effect *shared.NativeEffectError
-	if !errors.As(err, &effect) || effect.Effect != domain.NativeEffectUnchanged {
-		t.Fatalf("staging refusal must have unchanged native effect, got %T: %v", err, err)
+	if !errors.As(err, &effect) || effect.Effect != domain.NativeEffectUnchanged ||
+		!strings.Contains(err.Error(), "stage Gemini skill") {
+		t.Fatalf("missing source must refuse at native Skill staging with unchanged effect, got %T: %v", err, err)
 	}
 	entries, err := os.ReadDir(filepath.Join(configRoot, "skills"))
 	if err != nil {
