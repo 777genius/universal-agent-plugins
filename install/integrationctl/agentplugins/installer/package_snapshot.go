@@ -67,14 +67,10 @@ func snapshotRequestPackage(ctx context.Context, tempRoot string, req Request) (
 	if req.ExecutableFiles == nil {
 		return snapshotLocalPackage(ctx, tempRoot, req.PackageRoot)
 	}
-	for _, relative := range req.ExecutableFiles {
-		if relative == "." || relative == ".." || path.IsAbs(relative) || path.Clean(relative) != relative || strings.HasPrefix(relative, "../") || strings.Contains(relative, `\`) || filepath.VolumeName(relative) != "" {
-			return domain.PackageSnapshot{}, fmt.Errorf("%w: invalid snapshot executable path", ErrInvalidRequest)
-		}
-		info, err := os.Lstat(filepath.Join(req.PackageRoot, filepath.FromSlash(relative)))
-		if err != nil || !info.Mode().IsRegular() {
-			return domain.PackageSnapshot{}, fmt.Errorf("%w: snapshot executable is not a regular package file", ErrInvalidRequest)
-		}
+	if err := validatePackageExecutableFiles(req.PackageRoot, req.ExecutableFiles,
+		"invalid snapshot executable path",
+		"snapshot executable is not a regular package file"); err != nil {
+		return domain.PackageSnapshot{}, err
 	}
 	source := domain.SourceIdentity{RequestedSource: req.PackageRoot, CanonicalSource: req.PackageRoot, SourceBindingHint: "direct-local"}
 	return (packagedigest.Builder{TempRoot: tempRoot}).SnapshotWithExecutables(ctx, req.PackageRoot, source, req.ExecutableFiles)
