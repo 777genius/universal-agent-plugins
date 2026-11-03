@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -180,6 +182,29 @@ func TestCodexDoctorDepthCheckIgnoresCommentsAndQuotedValues(t *testing.T) {
 	}
 	if got := doctorSingleProject(t, inst); len(got) != 0 {
 		t.Fatalf("valid TOML strings/comments misclassified: %+v", got)
+	}
+}
+
+// TOML permits one or two quote characters after an opening triple-quote.
+// An index-over-range loop ignores advance()'s delimiter skipping and can
+// incorrectly hide a subsequent deep array as if it were inside the string.
+func TestCodexDoctorDepthScanRespectsMultilineQuoteSkip(t *testing.T) {
+	t.Parallel()
+	const limit = 6
+	for _, quote := range []string{`"`, `'`} {
+		payload := "[mcp_servers.demo]
+label = " + strings.Repeat(quote, 4) + "x" +
+			strings.Repeat(quote, 3) + "
+command = " +
+			strings.Repeat("[", limit+1) + "0" + strings.Repeat("]", limit+1) + "
+"
+		var parsed map[string]any
+		if err := toml.Unmarshal([]byte(payload), &parsed); err != nil {
+			t.Fatalf("adversarial fixture must be valid TOML: %v", err)
+		}
+		if doctorNativeNestingBounded([]byte(payload), limit) {
+			t.Fatalf("deep arrays were hidden by a multiline %s quote boundary", quote)
+		}
 	}
 }
 
