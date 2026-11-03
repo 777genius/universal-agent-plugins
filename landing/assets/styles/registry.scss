@@ -430,11 +430,13 @@ img {
   font-weight: 750;
 }
 .hero-demo-video__launch span {
+  color: #fff;
   max-width: calc(100% - 32px);
   text-align: center;
   text-wrap: balance;
 }
 .hero-demo-video__launch svg {
+  color: #fff;
   flex-shrink: 0;
   width: clamp(76px, 11cqw, 156px);
   height: clamp(76px, 11cqw, 156px);
