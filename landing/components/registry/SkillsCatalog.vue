@@ -71,6 +71,7 @@ const {
   metadata,
   scannedOnly,
   scanReportUnavailable,
+  scanOverview,
   loading,
   loadingMore,
   failed,
@@ -88,6 +89,9 @@ const viewOptions = computed(() =>
     value,
     label: t(`registryUi.skills.views.${value}`),
   })),
+);
+const scanOverviewDate = computed(() =>
+  scanOverview.value ? d(new Date(scanOverview.value.generatedAt), { dateStyle: 'medium', timeStyle: 'short' }) : '',
 );
 const staleDate = computed(() => {
   const date = metadata.value?.cache.fetchedAt;
@@ -138,6 +142,18 @@ const staleDate = computed(() => {
     <p v-if="scannedOnly" class="skills-catalog__scan-notice">
       {{ t('registryUi.skills.scanNotice') }}
     </p>
+    <div v-if="scannedOnly && scanOverview" class="skills-catalog__scan-coverage" role="status">
+      <p>{{ t('registryUi.skills.scanSnapshot', {
+        date: scanOverviewDate,
+        complete: n(scanOverview.coverage.complete),
+        partial: n(scanOverview.coverage.partial),
+        error: n(scanOverview.coverage.error),
+        pending: n(scanOverview.coverage.pending),
+        stale: n(scanOverview.coverage.stale),
+        selected: n(scanOverview.coverage.selected),
+      }) }}</p>
+      <p>{{ t('registryUi.skills.scanSnapshotHelp') }}</p>
+    </div>
     <div class="catalog-meta">
       <div aria-live="polite">
         <p v-if="query.trim() && !searchTooShort && !loading && !failed" class="catalog-count">

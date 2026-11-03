@@ -78,7 +78,9 @@
       "scanNone": "在本次有限范围内未找到具有当前扫描结果的技能。",
       "scanHelp": "切换到所有可安装技能以查看没有当前扫描证据的条目。",
       "scanClear": "查看所有可安装技能",
-      "scanReportUnavailable": "部分扫描报告无法验证，因此已排除相应技能。"
+      "scanReportUnavailable": "部分扫描报告无法验证，因此已排除相应技能。",
+      "scanSnapshot": "发布于 {date}：在 {selected} 个扫描目标中，{complete} 个完整、{partial} 个部分完成、{error} 个失败、{pending} 个没有当前扫描（其中 {stale} 个仅有旧报告）。",
+      "scanSnapshotHelp": "这是最新发布的静态扫描快照，不代表服务实时可用性，也不保证安全。"
     },
     "directoryPage": {
       "pluginDirectory": "插件目录",

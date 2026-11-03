@@ -2,6 +2,7 @@ import type { SkillsCatalogPage, SkillsView, SkillListing } from '~/types/skills
 import { skillInstallCommand } from '~/utils/skillsCatalog';
 import { hasCurrentPublishedScan, publishedScanSubject } from '~/utils/skillSpectorCurrent';
 import { sharedSkillSpectorClient } from '~/composables/useSkillSpector';
+import type { SkillSpectorCoverageSummary } from '~/utils/skillSpectorCatalog';
 
 export type SkillsScanView = 'scanned' | 'all';
 
@@ -20,6 +21,7 @@ export function useSkillsCatalog(
   const loadingMore = ref(false);
   const failed = ref(false);
   const scanReportUnavailable = ref(false);
+  const scanOverview = shallowRef<SkillSpectorCoverageSummary>();
   const displayLimit = ref(48);
   let controller: AbortController | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -75,6 +77,10 @@ export function useSkillsCatalog(
         })
       : undefined;
     /** Match a candidate to inspected, current publication evidence; fail closed on errors. */
+    const summaryPromise = client?.coverageSummary().catch(() => {
+      reportUnavailable = true;
+      return undefined;
+    });
     async function eligible(skill: SkillListing) {
       const subject = publishedScanSubject(skill);
       if (!subject || !client) return false;
@@ -131,8 +137,10 @@ export function useSkillsCatalog(
         }
         latest = page;
       }
+      const overview = await summaryPromise;
       if (request !== generation) return;
       items.value = collected;
+      scanOverview.value = requireCurrentScan ? overview : undefined;
       if (requireCurrentScan) scanReportUnavailable.value ||= reportUnavailable;
       pending.value = requireCurrentScan ? queue : [];
       displayLimit.value = nextLimit;
@@ -156,6 +164,7 @@ export function useSkillsCatalog(
     metadata.value = undefined;
     failed.value = false;
     scanReportUnavailable.value = false;
+    scanOverview.value = undefined;
     loadingMore.value = false;
     loading.value = !searchTooShort.value;
     displayLimit.value = 48;
@@ -190,6 +199,7 @@ export function useSkillsCatalog(
     hasMore,
     scannedOnly,
     scanReportUnavailable,
+    scanOverview,
     searchTooShort,
     showMore,
     retry: () => load(!query.value.trim() && Boolean(items.value.length)),

@@ -78,7 +78,9 @@
       "scanNone": "Nenhuma Skill com análise atual foi encontrada nesta seleção limitada.",
       "scanHelp": "Selecione todas as Skills instaláveis para ver entradas sem análise atual.",
       "scanClear": "Ver todas as Skills instaláveis",
-      "scanReportUnavailable": "Não foi possível verificar alguns relatórios. Essas Skills foram excluídas."
+      "scanReportUnavailable": "Não foi possível verificar alguns relatórios. Essas Skills foram excluídas.",
+      "scanSnapshot": "Publicado em {date}: {complete} análises completas, {partial} parciais, {error} com falha e {pending} sem análise atual ({stale} com relatórios antigos), de {selected} alvos selecionados.",
+      "scanSnapshotHelp": "Este é o resumo publicado mais recente da análise estática, não um indicador de disponibilidade em tempo real nem uma garantia de segurança."
     },
     "directoryPage": {
       "pluginDirectory": "Diretório de plugins",

@@ -294,6 +294,11 @@ function dropTransientFailures<T>(cache: Map<string, CachedRequest<T>>): void {
 }
 
 /** Shared session cache; transient failures recover on explicit retry or later demand. */
+export interface SkillSpectorCoverageSummary {
+  generatedAt: string;
+  coverage: SkillSpectorManifestV3['coverage'];
+}
+
 export function createSkillSpectorClient(
   manifestUrl: string,
   legacyUrl: string,
@@ -414,6 +419,12 @@ export function createSkillSpectorClient(
   };
   return {
     reportFor,
+    async coverageSummary(): Promise<SkillSpectorCoverageSummary | undefined> {
+      const manifest = await loadManifest();
+      return manifest.schema_version === 3
+        ? { generatedAt: manifest.generated_at, coverage: manifest.coverage }
+        : undefined;
+    },
     retryReportFor(repositoryName: string): Promise<SkillSpectorDisplayReport> {
       // Preserve validated successful results and requests still in flight.
       // Only previously failed transport requests are eligible for re-fetch.

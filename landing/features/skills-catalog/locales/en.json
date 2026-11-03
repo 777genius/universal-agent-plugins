@@ -78,7 +78,9 @@
       "scanNone": "No Skills with a current scan were found in this bounded selection.",
       "scanHelp": "Switch to All installable Skills to browse without scan evidence.",
       "scanClear": "Browse all installable Skills",
-      "scanReportUnavailable": "Some scan reports could not be verified. Those Skills were excluded."
+      "scanReportUnavailable": "Some scan reports could not be verified. Those Skills were excluded.",
+      "scanSnapshot": "Published {date}: {complete} complete, {partial} partial, {error} failed, {pending} awaiting a current check ({stale} have older reports), out of {selected} selected scan targets.",
+      "scanSnapshotHelp": "This is the latest published static-scan snapshot, not live service uptime or a guarantee of safety."
     },
     "directoryPage": {
       "pluginDirectory": "Plugin directory",

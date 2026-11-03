@@ -88,9 +88,13 @@ test('default Skills browse shows only a physically executed current source scan
   );
   await expect(cards.first().locator('.skillspector > summary')).not.toContainText('Outdated scan');
   await expect(page.locator('.skills-catalog__scan-notice')).toBeVisible();
+  await expect(page.locator('.skills-catalog__scan-coverage')).toContainText(
+    '1 complete, 0 partial, 0 failed, 0 awaiting a current check',
+  );
   expect(verifiedShards()).toBe(1);
   await page.goto('plugins/?tab=skills&skillScan=all');
   await expect(cards).toHaveCount(2);
+  await expect(page.locator('.skills-catalog__scan-coverage')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -110,6 +114,7 @@ test('failed published reports never produce a verified Skill card', async ({ pa
   const { errors } = await prepare(page, 'unavailable');
   await page.goto('plugins/?tab=skills');
   await expect(page.locator('.skills-catalog .skill-card')).toHaveCount(0);
+  await expect(page.locator('.skills-catalog__scan-coverage')).toHaveCount(0);
   await expect(page.getByText('Some scan reports could not be verified. Those Skills were excluded.')).toBeVisible();
   expect(errors).toEqual([]);
 });
