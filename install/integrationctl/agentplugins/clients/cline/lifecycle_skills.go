@@ -85,6 +85,13 @@ func (txn *clineSkillTxn) backupPrevious() error {
 		} else if err != nil {
 			return err
 		}
+		// A late user edit is not permission to move a managed Skill into the
+		// private backup root. Keep the isolated post-rename digest check below.
+		if digest, err := shared.DigestSkillDirectory(object.Path); err != nil {
+			return fmt.Errorf("inspect Cline skill before backup %q: %w", object.LogicalName, err)
+		} else if digest != object.ManagedDigest {
+			return fmt.Errorf("managed Cline skill %q changed before backup", object.LogicalName)
+		}
 		backup := filepath.Join(txn.transactionRoot, "old-"+object.LogicalName)
 		if err := txn.rename(object.Path, backup); err != nil {
 			return err

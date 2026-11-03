@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -52,6 +54,53 @@ func TestKiroNativeLifecycleRejectsUnmanagedCollisionWithoutMutation(t *testing.
 	}
 	if _, err := os.Stat(filepath.Join(configRoot, "settings", "mcp.json")); !os.IsNotExist(err) {
 		t.Fatalf("MCP config was mutated after collision: %v", err)
+	}
+}
+
+func TestKiroNativeBackupRejectsEditDuringRenameWithoutDeletingUserBytes(t *testing.T) {
+	configRoot := filepath.Join(t.TempDir(), ".kiro")
+	mcpPath := filepath.Join(configRoot, "settings", "mcp.json")
+	writeTestFile(t, mcpPath, `{"telemetry":{"enabled":false},"mcpServers":{"unmanaged":{"url":"https://example.test/mcp"}}}`)
+	activeV1, previous := kiroNativeFixture(t, configRoot, "v1", "https://docs.example.test/v1")
+	if err := applyKiroNativeMutation(configRoot, activeV1, nil, previous); err != nil {
+		t.Fatal(err)
+	}
+	beforeMCP, err := os.ReadFile(mcpPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeV2, desired := kiroNativeFixture(t, configRoot, "v2", "https://docs.example.test/v2")
+	liveRoot := filepath.Join(configRoot, "skills", "docs")
+	liveFile := filepath.Join(liveRoot, "SKILL.md")
+	const edited = "human edit at Kiro native backup boundary\n"
+	injected := false
+	rename := func(oldPath, newPath string) error {
+		if oldPath == liveRoot && strings.HasPrefix(filepath.Base(newPath), "old-") {
+			injected = true
+			writeTestFile(t, liveFile, edited)
+		}
+		return os.Rename(oldPath, newPath)
+	}
+	effect, err := applyKiroNativeMutationWithKernelAndOps(configRoot, activeV2, previous, desired, nativeconfig.New(), rename, os.RemoveAll)
+	if !injected || err == nil || effect != domain.NativeEffectUnchanged ||
+		!strings.Contains(err.Error(), "verify isolated Kiro skill backup") {
+		t.Fatalf("concurrent edit was not recovered as unchanged: injected=%t effect=%s err=%v", injected, effect, err)
+	}
+	if body, err := os.ReadFile(liveFile); err != nil || string(body) != edited {
+		t.Fatalf("Kiro removed or rewrote edited native Skill: %q %v", body, err)
+	}
+	if body, err := os.ReadFile(mcpPath); err != nil || string(body) != string(beforeMCP) {
+		t.Fatalf("native refusal changed MCP settings: %q %v", body, err)
+	}
+	if paths, err := filepath.Glob(filepath.Join(configRoot, "skills", ".agentplugins-native-*")); err != nil || len(paths) != 0 {
+		t.Fatalf("recoverable backup leaked after successful rollback: %v %v", paths, err)
+	}
+	writeTestFile(t, liveFile, "v1\n")
+	if err := applyKiroNativeMutation(configRoot, activeV2, previous, desired); err != nil {
+		t.Fatalf("explicit correction and retry: %v", err)
+	}
+	if body, err := os.ReadFile(liveFile); err != nil || string(body) != "v2\n" {
+		t.Fatalf("Kiro native retry installed wrong Skill: %q %v", body, err)
 	}
 }
 
