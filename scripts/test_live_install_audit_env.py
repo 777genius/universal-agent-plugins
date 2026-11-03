@@ -63,6 +63,19 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "disposable case"):
                 audit.isolated_client_env(home, case, outside)
 
+    def test_real_signed_release_target_refusal_is_not_an_installer_bug(self):
+        audit = load_audit()
+        reproduced = (
+            'agentplugins: no eligible directory release for "marketing-kit": '
+            '777genius/marketing-kit: release does not support complete target set; missing grok'
+        )
+        self.assertTrue(audit.source_target_incompatibility(reproduced))
+        self.assertFalse(audit.source_target_incompatibility(
+            "agentplugins: unexpected failure while writing native plugin configuration"))
+        self.assertFalse(audit.source_target_incompatibility(
+            "agentplugins: lintai security scan failed: exit status 2"))
+
+
 
 if __name__ == "__main__":
     unittest.main()
