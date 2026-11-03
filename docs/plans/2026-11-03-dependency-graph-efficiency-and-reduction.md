@@ -1,7 +1,7 @@
 # Dependency graph efficiency and safe reduction
 
 Date: 2026-11-03. Research baseline: `07ab910b75e397c9f223078e3c7d9f701f2f36a6`.
-Status: **Research and root self-review complete. Published in draft PR #697; independent plan criticism is next. Implementation has not started.**
+Status: **Research, root self-review and three independent plan reviews complete; findings incorporated before implementation in draft PR #697.**
 Delivery: one draft PR, publish this plan immediately, then publish each coherent implementation increment. Complete E2E, independent review/fixes and the authorized merge. No release is included.
 
 ## 1. Goal and scope
@@ -70,7 +70,7 @@ The following contracts must remain:
 - Lexicographic source selection; existing candidate sorting/tie-breaking, old-pin reuse, exact-release preference, selected-update rules and downgrade protection.
 - Stable ownership aliases supplied by recorded pins, roots or acquired package manifests. Declaration-local names do not redefine environment ownership.
 - Current immutable pin checks, executable inventories, manifest limits and snapshot cleanup/error identity.
-- Fresh-search ceilings: 1,024 sources, 8,192 dependency demands, 4,096 states, 8,388,608 work events. Count actual work; do not reset lifetime counters on rollback or hide candidate enumeration.
+- Fresh-search ceilings: 1,024 sources, 8,192 dependency demands, 4,096 states, 8,388,608 work events. Count actual fresh-search work; do not reset its lifetime counters on rollback or hide candidate enumeration. Verified historical closure is a cancellation-aware traversal, not fresh search, and does not inherit any of these four ceilings.
 - Terminal resource exhaustion, cancellation and operational failures. Only actual dependency conflicts are eligible for candidate backtracking.
 - Current `Eligible` callback behavior and compatible-pin exemption. Eligibility can surface Directory/scope/security/immutable-content errors and must not become an unreviewed policy cache.
 - Existing environment locks, input/preimage checks and publication/application ordering. No promise of universal rollback after publication; existing partial-result/retry behavior remains truthful.
@@ -98,6 +98,10 @@ Owner: solver lane, integrated by root. Retain the existing DFS/candidate solver
 5. Reuse a pure acceptance result only while selected immutable pin, source identity and full demand set are unchanged. Invalidate/restore that state with its branch; no eligibility callback result is cached by this optimization.
 6. Build and validate the final lock through one existing finalization path, with deterministic packages, `RequiredBy`, selectors, targets and manifest digest.
 
+Preserve the representative requirement passed to source callbacks, not just the final intersection of demands. The old expansion starts with sorted roots and a deterministic breadth-first queue. For roots `a,z`, edges `a -> b`, `b -> zz (^1.0)` and `z -> zz (^1.5)`, selecting `z` changes the representative for `zz` to `^1.5`; retaining the earlier first-seen requirement is incorrect. Prefer a narrow read-only traversal of prepared facts only when distinct competing requirements make callback selection ambiguous. Root precedence and equivalent requirements need no traversal; preserve exact-release promotion and conflicts between distinct exact releases. Charge this actual fresh work and keep cancellation checks. Do not introduce general dynamic graph-ranking machinery without measured need.
+
+The 8,192 demand ceiling counts dependency edges, excluding direct-root demands. Preserve the deduplication identity of child source, parent owner alias and selector. Admit fresh declaration/candidate batches before sorting, copying or preparation. Include dense roots-plus-edges coverage, exact edge boundary and one-over refusal; do not freeze incidental work totals that should decrease with actual work.
+
 Acceptance: the previously failing 1,009-node/8,008-edge graph resolves successfully and validates under the same limits; representative independent, deep, cyclic, fan-in and dense shapes show measured allocation/work reductions. Record before/after metrics on equivalent successful workloads separately from the old early-failure case. No wall-clock assertion enters CI.
 
 Rollback regressions must cover a rejected candidate adding unique nodes, a shared descendant, new targets, stricter demands, alias changes and exact-release promotion. The accepted lower-candidate result must match a clean resolution without the rejected branch. Preserve cancellation inside preparation/propagation and after every callback class.
@@ -113,15 +117,21 @@ The previous lock does not preserve the old set of direct roots. Therefore, do n
 - No aliases selected for update.
 - Every current root maps to a previous source key and the same recorded requested selector. Preserve stable locked aliases, including a logical declaration-key rename where current contracts allow it.
 - A new source, changed selector/source, expanded targets, or selected update makes this path inapplicable. Continue through existing fresh resolution rather than introducing a new refusal.
+- Complete cheap applicability checks for every root before the first `DescribePinned` callback. Clearly fresh oversized requests must retain their existing early refusal without acquisition.
+- Require the existing compatible-pin eligibility exemption for every reached pin. Do not infer a broader exemption from mathematical target containment: a valid old lock can contain unsorted targets, for which the current helper invokes `Eligible`. Such nonexempt histories fall back to existing fresh resolution; they are not newly classified as malformed. Preserve the original callback behavior there.
 - Keep `ValidateCompatiblePins` and its schema, duplicate alias/source, malformed pin, unknown consumer, selector and inventory checks before this attempt.
 
 ### Verified traversal
 
 Traverse current roots using verified `DescribePinned` declarations, loading each reached pin once within the request. Use a deterministic queue for shared/cyclic graphs and target propagation. Do not first traverse every old `RequiredBy` edge and load that closure: old unnecessary edges must not cause unrelated removed packages to be read.
 
+Compare described packages with the recorded immutable pin before using their declarations. Preserve the old ownership alias. Hydrating a previously absent Version is allowed, as in existing replay; a present version and every other immutable field must remain identical. Only graph intent (`Targets`, `RequiredBy`, requested selectors) may be rebuilt through existing finalization rules.
+
 An absent old child, incompatible demand or target expansion makes the shortcut inapplicable before publication. Resolver failures, cancellation, corrupt retained content, malformed manifests, immutable fact mismatches and cleanup failures remain terminal; they do not turn into a speculative candidate retry.
 
 Rebuild candidate edges from verified package declarations and validate the final lock against current requirements. Missing/unnecessary recorded edges must not newly prohibit explicit `deps lock` reconstruction or changed-intent sync: those commands already rebuild facts. Exact install and exact same-digest replay keep their existing stricter edge verification before this path.
+
+Historical traversal checks cancellation during preparation, queue processing and target propagation, and after callbacks. It bypasses fresh source/demand/state/work ceilings, including the fresh per-package declaration preflight. On inapplicability discard speculative nodes, choices, queues, local counts and acceptance state. Retain only successfully validated immutable descriptions/prepared facts; apply those into clean fresh roots under ordinary fresh admission/work charging. Fresh-search counters are initialized once and never reset during search or backtracking. This separation adds no new historical-graph ceiling and cannot exempt a fresh solve from its existing limits.
 
 ### Acquisition and application boundaries
 
@@ -137,11 +147,15 @@ Acceptance: 1,026 to 1,025 roots; target-only removal above the node limit; reta
 
 Owner: CLI verification lane. Primary files: `deps_replay.go`, `deps_check.go`, related private helper/regression files.
 
-Build the recorded edge lookup once per verification operation, indexed by consumer/parent, and use it to compare each verified declaration set. Preserve every recorded edge, including duplicates and selector-distinct entries: an index must not overwrite evidence that the current comparison rejects. Retain source lookup and the existing missing/unexpected-edge error categories and wording. The current map iteration does not define which of several independent errors appears first; do not claim byte-for-byte ordering compatibility for those cases. Exact replay, imported agreement verification and offline check must use the same narrow comparison helper rather than duplicate indexing policy.
+Build the recorded edge lookup once per verification operation, indexed by consumer/parent, and use it to compare each verified declaration set. Preserve every recorded edge, including duplicates and selector-distinct entries: an index must not overwrite evidence that the current comparison rejects. Retain source lookup and the existing missing/unexpected-edge error categories and wording. The current map iteration does not define which of several independent errors appears first; do not claim byte-for-byte ordering compatibility for those cases. Exact replay, import-with-install verification and offline check must use the same narrow comparison helper rather than duplicate indexing policy.
 
 Do not cache verification across commands or skip package byte verification. Keep context checks, snapshot cleanup, stable issue codes, `deps check` outcomes and offline side-effect guarantees. A malformed or mismatched graph must not become accepted merely because lookup is faster. Add a focused cold-acquisition cleanup regression, then preserve both the original failure and `errDependencySnapshotCleanup` when cleanup fails; a cleanup failure must not publish a usable resolved package or fall back to candidate search.
 
+Bound this cleanup repair to the existing retained verification/materialization owners: `readReplayDependency`, the pin/Directory failure branches in `materializeLockedPackage`, the failure branch in `loadStoredDependencySnapshot`, and the existing `loadSnapshotMode` failure closure where loader/declaration/digest/security failures are cleaned up. Reuse local joining conventions; add no installer-wide lifecycle abstraction and claim no repair of every CLI cleanup path. Preserve cleanup/cancellation precedence over `ErrDirectoryIneligible` conversion in `Eligible` and, where shared loading can deliver the joined error, `AcquireCandidate`. A pure policy refusal may backtrack; policy refusal joined with cleanup failure must remain terminal. Regressions use real verified payloads and deterministic snapshot-ownership cleanup refusal, including success, pin mismatch and joined policy refusal, without privilege-dependent permission skips.
+
 Acceptance: same verdicts/diagnostics for missing, extra, incompatible and shared edges, with representative large-graph evidence showing the repeated full-lock scan removed. Retain ordinary descriptive `deps status` behavior.
+
+Explicit index regressions cover identical duplicate edges; two distinct compatible selectors from one parent where only one is declared (both edge orders reject); legitimate shared parents with different selectors; empty declarations; and missing child sources. Preserve current duplicate-source declaration semantics rather than broadening syntax in this optimization.
 
 ## 8. Work package E — end-to-end lifecycle integration
 
@@ -154,22 +168,25 @@ Owner: root/CLI E2E lane after the pure contracts settle. Extend existing graph 
 | Edited manifest + unlocked `deps sync` | Use the compatible existing-pin path where applicable, then normal installation composition. |
 | Ordinary `install` with an old mismatched lock; `install --locked` | Continue refusing manifest digest mismatch; no silent contraction/re-resolution. |
 | Exact install after the contracted agreement is saved | Replay/verify the new pair through the existing path. |
-| Import and `deps check` | Verify the resulting agreement and actual retained packages, preserving exact/strict/offline contracts. |
+| Plain `deps import` | Continue transferring a structurally valid exact agreement without acquiring package bytes. |
+| `deps import --install` and `deps check` | Verify retained declarations through the common comparison helper; offline check reads local snapshots only. |
 | Dry run, cancellation, corrupt retained cache, input race, recovery/drift refusal | Preserve the existing failure and publication boundary; report partial application honestly where that existing contract applies. |
 | User/project selection | Retain namespace, agreement and binding isolation; no unrelated state/client activity is newly authorized. |
 
 Use valid cached payloads for retained-package scenarios. The old graph fixture deliberately contains missing payloads and forbidden acquisition and cannot be reused to imply that retained verification may ignore missing content. Avoid a huge Cartesian product: use a representative large portable lifecycle plus small focused critical boundary regressions.
 
+Register the retained-over-limit journey inside the existing `agreement/graph-recorded-compatibility` catalog case so the normal four-platform runner actually executes it. Assert expected sources, aliases, targets and edges independently of the returned lock. Keep large graph-shape permutations mainly in pure environment tests; smaller CLI fixtures cover the distinct route and authority boundaries.
+
 ## 9. Work package F — verification, reviews and final delivery
 
 During development run only relevant package/regression suites and configured lint for changed modules. New unit tests target the changed graph/rollback/authority boundaries, not every helper. Keep benchmarks separate from default test execution and retain profile binaries outside the repository.
 
-Before marking ready:
+Before merge:
 
 1. Run the complete environment suite, targeted CLI lifecycle/check/replay suites, appropriate race checks, existing architecture/size lint and formatting.
 2. Compare baseline/new behavior on a bounded generated differential corpus: shared/cyclic graphs, insertion-order permutations, multiple candidates, existing pins, targets, conflicts and selected updates. Expected improvements over a baseline resource refusal are recorded separately; equivalent completed searches must keep locks and meaningful error/callback behavior. Keep any reference-engine copy scratch-only, not as a second maintained implementation.
 3. Independently review behavior/compatibility, rollback/resource correctness, and CLI/architecture/verification. Fix demonstrated findings minimally and have a different reviewer assess corrections.
-4. Run the existing full package-manager E2E on Linux, Windows, macOS ARM and macOS Intel on the final code, plus the existing applicable repository gates. Audit actual inventories, no hidden test skips, clean source/commit identity, real executable/scanner phase and retained artifacts.
+4. After implementation, local checks and independent review/fixes, mark the PR ready once so the existing policy starts full package-manager E2E on Linux, Windows, macOS ARM and macOS Intel, plus applicable repository gates. Audit actual inventories, no hidden test skips, clean source/commit identity, real executable/scanner phase and retained artifacts. Do not manually duplicate this matrix while the PR is still draft.
 5. Resolve material GitHub review findings, verify exact head/current base integration, merge with expected head SHA, and verify the actual merge tree. A queued/unrun/skipped case is not a pass. CodeRabbit quota or other unavailable external review is not counted as approval.
 
 No full platform matrix is manually repeated after each small increment. Publish each coherent increment immediately; use the existing draft/ready CI policy. The final PR description is the exact-head evidence/merge ledger so recording finished results does not force a source-only CI restart.
@@ -204,7 +221,7 @@ Publish the researched plan first. Root then self-reviews and publishes any corr
 - [x] Initial bounded plan written before production edits.
 - [x] Initial plan published in [draft PR #697](https://github.com/777genius/universal-agent-plugins/pull/697).
 - [x] Root self-review completed; corrections published before independent criticism.
-- [ ] Three independent plan critics; findings addressed before implementation.
+- [x] Three independent plan critics; findings addressed before implementation.
 - [ ] A: candidate ownership and prepared graph facts.
 - [ ] B: incremental active resolution and rollback.
 - [ ] C: verified existing-pin closure.
@@ -217,3 +234,21 @@ Final evidence must distinguish observations from hypotheses, local fixtures fro
 ### Root self-review disposition
 
 The initial plan was published as `ad97755797b20a39e2b59f448ec3486cc8372b8d` before any production edit. Self-review tightened the edge-index contract to preserve multiplicity and selector evidence, distinguished error identity from unspecified map iteration order, and identified the ignored cold-replay cleanup result for focused reproduction and repair. The existing public-command routing, old-root proof limitation, exact immutable cold acquisition, removed-package exclusion and unchanged search ceilings were checked against the source. No new API, policy layer, mandatory workflow, or unrelated platform scope was added.
+
+### Independent plan review disposition
+
+Three separate critics used the strongest requested model/effort and inspected the current source. They found no need for another framework, workflow, PR split or expanded platform scope. Root accepted the following concrete corrections before production implementation:
+
+| Review | Finding | Disposition |
+| --- | --- | --- |
+| Algorithm/rollback | P1: first-discovery incremental state can change the representative selector passed to a source. | Preserve current root/BFS precedence where observable; use a small ambiguous-only lookup, with callback-argument regression and mixed-selector measurements. |
+| Algorithm/rollback | P1: historical traversal and fallback could accidentally inherit fresh ceilings or leak speculative state. | Separate cancellation-aware history proof from all four fresh budgets; preflight every root, discard branch state on fallback, retain only validated immutable facts. |
+| Algorithm/rollback | P2: direct roots must not consume the dependency-edge allowance. | Explicitly preserve edge-count identity and boundary regressions. |
+| Compatibility/authority | P1: set containment could broaden the existing eligibility exemption for valid unordered historical targets. | Reuse the current exemption; nonexempt histories follow the old solver, preserving policy callbacks. |
+| Both graph critics | P2: strict identity comparison could reject old absent-Version hydration. | Permit only existing version enrichment; keep stable aliases and every other immutable identity field. |
+| Compatibility/authority | P2: cold snapshot cleanup is discarded at multiple retained-materialization owners. | Reproduced success and pin-mismatch cases; name the bounded repair chain and preserve terminal cleanup precedence over policy refusal. |
+| Scope/E2E | P2: import wording could expand ordinary transfer authority. | Distinguish plain offline transfer, import with installation, and local-only check. |
+| Scope/E2E | P2: requiring the native matrix before ready contradicts draft CI policy. | Complete local review, mark ready once, then use existing native gates before merge. |
+| Scope/E2E | P2: selector-distinct edges need explicit index acceptance. | Test both edge orders, duplicate evidence, legitimate shared parents and missing/empty cases in the common comparator. |
+
+Scratch probes reproduced representative-selector changes, unordered-target eligibility behavior, and discarded cold cleanup failures against unchanged production code. Root also recorded a reproducible 96-seed, 564-resolution differential baseline spanning fresh/permuted graphs, replay, selected updates, contraction and changed selectors. Source callbacks and final lock hashes are retained for comparison; no reference engine is added to the repository. The existing description cache is currently used only for one recorded pin per source; any reuse for candidates must preserve the selected package identity rather than substitute a cached whole package based only on tree equality.
