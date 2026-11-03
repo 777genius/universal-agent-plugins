@@ -3,6 +3,7 @@
 package agentpluginscli
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -257,14 +258,44 @@ func pmEvolutionPostPullSharedOwnerAndDrift(t *testing.T) {
 	if !live["c"] {
 		t.Fatal("edited shared C lost its durable owner receipt")
 	}
+	seenCReceipt := false
 	for _, receipt := range partial.EnvironmentReceipts {
 		if receipt.Alias == "c" && receipt.ClientID == "gemini" {
+			if seenCReceipt {
+				t.Fatal("duplicate durable receipt for shared C")
+			}
+			seenCReceipt = true
 			continue
 		}
 		if receipt.Alias == "a" && receipt.ClientID == "gemini" && live["a"] {
 			continue
 		}
 		t.Fatalf("orphan or contradictory live environment receipt: %+v", receipt)
+	}
+	if !seenCReceipt {
+		t.Fatal("edited C retained a native binding but lost its environment receipt")
+	}
+	// A stale native MCP entry is just as dangerous as an orphan Skill.
+	// Its presence must agree with A's durable ownership, while the shared C
+	// and the unrelated user's MCP entry must remain exactly active.
+	var nativeSettings struct {
+		Servers  map[string]map[string]any `json:"mcpServers"`
+		Sentinel string                    `json:"sentinel"`
+	}
+	if err := json.Unmarshal([]byte(dependencyRead(t, filepath.Join(nativeRoot, "settings.json"))), &nativeSettings); err != nil {
+		t.Fatal(err)
+	}
+	if nativeSettings.Sentinel != "preserve foreign settings" ||
+		nativeSettings.Servers["foreign.test"]["httpUrl"] != "https://foreign.test/mcp" ||
+		nativeSettings.Servers["c"]["httpUrl"] != "https://example.test/pm/c" {
+		t.Fatalf("refusal lost foreign/native C MCP registration: %+v", nativeSettings)
+	}
+	if serverA, present := nativeSettings.Servers["a"]; present != live["a"] ||
+		present && serverA["httpUrl"] != "https://example.test/pm/a" {
+		t.Fatalf("native A MCP outlived or disagreed with durable ownership: present=%t owner=%t value=%+v", present, live["a"], serverA)
+	}
+	if len(nativeSettings.Servers) != 2+map[bool]int{true: 1, false: 0}[live["a"]] {
+		t.Fatalf("unexpected foreign/stale native MCP registrations: %+v", nativeSettings.Servers)
 	}
 	for _, path := range []string{initial["a/gemini"].TargetPath, filepath.Join(nativeRoot, "skills", "a", "SKILL.md")} {
 		if live["a"] {
