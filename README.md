@@ -363,7 +363,7 @@ Pin compatible SDK and CLI versions separately; see the
 
 ## Build plugins
 
-Create a folder with a root `plugin.json`, plus optional `skills/` and `mcp.json`.
+Create a folder with a root `plugin.json`, with optional `skills/` and `mcp.json`.
 Validate and install it with the [local-package commands](#more-commands).
 The [Build guide](https://universal-agent-plugins.com/docs/en/build/) covers
 Skills and MCP packages; start with the
