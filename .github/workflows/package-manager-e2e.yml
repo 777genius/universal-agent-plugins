@@ -110,8 +110,8 @@ jobs:
             -run '^(TestDependencyAgreementOversizedBytesFailClosed|TestDependencyAgreementDiskBoundaryRejectsNonRegularAndOversized|TestDependencyAgreementReaderRejectsSymlinkAndKeepsTarget|TestDependencyIntentFilesRejectOversizedWriteWithoutMutation|TestSkillsReviewForeignDestinationSafeGuidance|TestSkillsReviewManagedSkillChanged|TestDependencyCandidateSizePreflightProtectsManifestAndLock|TestDependencyManagementRecoveryReaderIsBounded|TestGeneratedOversizedLockRefusesBeforeStorePublication)$' >> "$events"
           (
             cd install/integrationctl/agentplugins
-            go test -count=1 -timeout=8m -json ./providers ./clients/kiro \
-              -run '^(TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry|TestGeminiLateNativeSkillDriftRefusesBeforeRename|TestClineLateNativeSkillDriftRefusesBeforeRename|TestKiroNativeBackupRejectsEditDuringRenameWithoutDeletingUserBytes)$'
+            go test -count=1 -timeout=8m -json ./providers ./clients/kiro ./clients/shared \
+              -run '^(TestDigestSkillDirectoryRequiresRealDirectoryRoot|TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry|TestGeminiLateNativeSkillDriftRefusesBeforeRename|TestClineLateNativeSkillDriftRefusesBeforeRename|TestKiroNativeBackupRejectsEditDuringRenameWithoutDeletingUserBytes)$'
           ) >> "$events"
           python - "$events" <<'PY'
           import json
@@ -119,6 +119,7 @@ jobs:
           with open(sys.argv[1], encoding="utf-8") as stream:
               events = [json.loads(line) for line in stream if line.strip()]
           tests = {
+              "TestDigestSkillDirectoryRequiresRealDirectoryRoot",
               "TestGeminiStagingFailureCleansPrivateTransactionAndAllowsRetry",
               "TestGeminiLateNativeSkillDriftRefusesBeforeRename",
               "TestClineLateNativeSkillDriftRefusesBeforeRename",
@@ -145,7 +146,7 @@ jobs:
                   raise SystemExit(f"Go package {package} failed")
           if any(item.get("Action") in {"fail", "skip"} for item in events):
               raise SystemExit("agreement boundary suite failed or skipped")
-          print("Fourteen critical policy and native ownership tests ran and passed; no false-green or skips")
+          print("Fifteen critical policy and native ownership tests ran and passed; no false-green or skips")
           PY
       - name: Verify Win32 Unicode aliases across ZIP, TAR, source and snapshot
         shell: bash
