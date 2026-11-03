@@ -420,8 +420,9 @@ img {
   flex-direction: column;
   gap: clamp(10px, 1.4vw, 24px);
   border: 0;
-  color: var(--primary);
-  background: rgba(4, 7, 15, 0.34);
+  // The poster is always darkened, so its play icon and label need theme-independent contrast.
+  color: #fff;
+  background: rgba(4, 7, 15, 0.6);
   cursor: pointer;
   // Cap the label and play icon on wide displays without shrinking the mobile target.
   font-size: clamp(18px, 4cqw, 56px);
