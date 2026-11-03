@@ -5,9 +5,6 @@ package environmentstore
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -50,16 +47,31 @@ type Package struct {
 }
 
 func (store Store) Put(ctx context.Context, snapshot domain.PackageSnapshot) (Package, error) {
+	if err := ctx.Err(); err != nil {
+		return Package{}, err
+	}
 	if err := store.validate(); err != nil {
 		return Package{}, err
 	}
+	metadata, err := metadataForSnapshot(snapshot)
+	if err != nil {
+		return Package{}, err
+	}
+	// The writer uses the reader's exact envelope before any persistent work.
+	if _, err := encodeMetadata(metadata); err != nil {
+		return Package{}, err
+	}
+	snapshot.ExecutableFiles = metadata.ExecutableFiles
 	sealed, err := (packagedigest.Builder{TempRoot: store.tempRoot()}).SnapshotWithExecutables(ctx, snapshot.Root, snapshot.Source, snapshot.ExecutableFiles)
 	if err != nil {
-		return Package{}, fmt.Errorf("%w: %w", ErrMismatch, err)
+		return Package{}, snapshotVerificationError(err)
 	}
+	sealedInventory := append([]string{}, sealed.ExecutableFiles...)
 	sealedDigest, sealedAlgorithm := sealed.TreeDigest, sealed.DigestAlgorithm
-	_ = packagedigest.Remove(sealed)
-	if sealedDigest != snapshot.TreeDigest || sealedAlgorithm != snapshot.DigestAlgorithm {
+	if err := packagedigest.Remove(sealed); err != nil {
+		return Package{}, err
+	}
+	if sealedDigest != snapshot.TreeDigest || sealedAlgorithm != snapshot.DigestAlgorithm || !equalStrings(sealedInventory, snapshot.ExecutableFiles) {
 		return Package{}, fmt.Errorf("%w: acquired snapshot changed before publication", ErrMismatch)
 	}
 	lock := processlock.Lock{Path: store.lockPath()}
@@ -86,56 +98,6 @@ func (store Store) Put(ctx context.Context, snapshot domain.PackageSnapshot) (Pa
 		return existing, nil
 	}
 	return store.publish(ctx, snapshot, destination, replaceCorrupt)
-}
-
-func (store Store) Get(ctx context.Context, algorithm, digest string) (Package, error) {
-	if err := store.validate(); err != nil {
-		return Package{}, err
-	}
-	destination, err := store.entryPath(algorithm, digest)
-	if err != nil {
-		return Package{}, err
-	}
-	pkg, ok, err := store.inspect(ctx, destination)
-	if err != nil {
-		return Package{}, err
-	}
-	if !ok {
-		return Package{}, ErrMissing
-	}
-	if pkg.Metadata.DigestAlgorithm != algorithm || pkg.Metadata.TreeDigest != digest {
-		return Package{}, ErrMismatch
-	}
-	return pkg, nil
-}
-
-func (store Store) inspect(ctx context.Context, entryRoot string) (Package, bool, error) {
-	metadataBody, err := os.ReadFile(filepath.Join(entryRoot, "metadata.json"))
-	if os.IsNotExist(err) {
-		if _, statErr := os.Lstat(entryRoot); statErr == nil {
-			return Package{}, false, ErrMismatch
-		}
-		return Package{}, false, nil
-	}
-	if err != nil {
-		return Package{}, false, err
-	}
-	var metadata Metadata
-	if err := json.Unmarshal(metadataBody, &metadata); err != nil {
-		return Package{}, false, fmt.Errorf("%w: decode environment store metadata: %w", ErrMismatch, err)
-	}
-	packageRoot := filepath.Join(entryRoot, "package")
-	snapshot, err := (packagedigest.Builder{TempRoot: store.tempRoot()}).SnapshotWithExecutables(ctx, packageRoot, metadata.Source, append([]string{}, metadata.ExecutableFiles...))
-	if err != nil {
-		return Package{}, false, fmt.Errorf("%w: %w", ErrMismatch, err)
-	}
-	verifiedDigest := snapshot.TreeDigest
-	_ = packagedigest.Remove(snapshot)
-	if metadata.SchemaVersion != 1 || metadata.DigestAlgorithm != domain.TreeDigestAlgorithm ||
-		!digestHex.MatchString(strings.TrimPrefix(verifiedDigest, "sha256:")) || verifiedDigest != metadata.TreeDigest {
-		return Package{}, false, ErrMismatch
-	}
-	return Package{Root: packageRoot, Metadata: metadata}, true, nil
 }
 
 func (store Store) validate() error {
@@ -260,12 +222,6 @@ func equalStrings(left, right []string) bool {
 	return true
 }
 
-func MetadataDigest(metadata Metadata) string {
-	body, _ := json.Marshal(metadata)
-	sum := sha256.Sum256(body)
-	return "sha256:" + hex.EncodeToString(sum[:])
-}
-
 func (store Store) publish(ctx context.Context, snapshot domain.PackageSnapshot, destination string, replaceCorrupt bool) (Package, error) {
 	if err := os.MkdirAll(filepath.Join(store.Root, ".staging"), 0o700); err != nil {
 		return Package{}, err
@@ -315,13 +271,15 @@ func (store Store) stageSnapshot(ctx context.Context, snapshot domain.PackageSna
 	if err := copyTree(snapshot.Root, filepath.Join(stage, "package"), snapshot.ExecutableFiles); err != nil {
 		return Metadata{}, err
 	}
-	metadata := Metadata{SchemaVersion: 1, DigestAlgorithm: snapshot.DigestAlgorithm, TreeDigest: snapshot.TreeDigest,
-		ExecutableFiles: append([]string{}, snapshot.ExecutableFiles...), Source: snapshot.Source}
-	body, err := json.MarshalIndent(metadata, "", "  ")
+	metadata, err := metadataForSnapshot(snapshot)
 	if err != nil {
 		return Metadata{}, err
 	}
-	if err := atomicfile.Write(filepath.Join(stage, "metadata.json"), append(body, '\n'), 0o600); err != nil {
+	body, err := encodeMetadata(metadata)
+	if err != nil {
+		return Metadata{}, err
+	}
+	if err := atomicfile.Write(filepath.Join(stage, "metadata.json"), body, 0o600); err != nil {
 		return Metadata{}, err
 	}
 	verified, _, err := store.inspect(ctx, stage)

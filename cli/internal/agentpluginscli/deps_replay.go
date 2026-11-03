@@ -57,9 +57,9 @@ func verifyDependencyDeclarations(ctx context.Context, app App, lock environment
 }
 
 func readReplayDependency(ctx context.Context, app App, pin environment.LockedPackage) (environment.ResolvedPackage, error) {
-	_, err := app.dependencyStore().Get(ctx, pin.DigestAlgorithm, pin.TreeDigest)
+	resolved, err := describePinnedDependency(ctx, app, pin)
 	if err == nil {
-		return describePinnedDependency(ctx, app, pin)
+		return resolved, nil
 	}
 	if !errors.Is(err, environmentstore.ErrMissing) {
 		return environment.ResolvedPackage{}, err

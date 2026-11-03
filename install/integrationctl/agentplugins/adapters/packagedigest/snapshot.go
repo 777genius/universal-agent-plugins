@@ -63,7 +63,7 @@ func (builder Builder) snapshot(ctx context.Context, sourceRoot string, source d
 	}
 	tempRoot, err := os.MkdirTemp(builder.TempRoot, "agentplugins-package-*")
 	if err != nil {
-		return domain.PackageSnapshot{}, fmt.Errorf("create package snapshot: %w", err)
+		return domain.PackageSnapshot{}, snapshotStorageError(fmt.Errorf("create package snapshot: %w", err))
 	}
 	root := filepath.Join(tempRoot, "root")
 	cleanup := func(err error) (domain.PackageSnapshot, error) {
@@ -72,7 +72,7 @@ func (builder Builder) snapshot(ctx context.Context, sourceRoot string, source d
 		return domain.PackageSnapshot{}, err
 	}
 	if err := os.Mkdir(root, 0o700); err != nil {
-		return cleanup(fmt.Errorf("create package snapshot root: %w", err))
+		return cleanup(snapshotStorageError(fmt.Errorf("create package snapshot root: %w", err)))
 	}
 	digest := sha256.New()
 	frame(digest, []byte(digestDomain))
@@ -85,12 +85,12 @@ func (builder Builder) snapshot(ctx context.Context, sourceRoot string, source d
 		switch item.kind {
 		case "directory":
 			if err := os.Mkdir(destination, 0o700); err != nil {
-				return cleanup(fmt.Errorf("create snapshot directory %q: %w", item.rel, err))
+				return cleanup(snapshotStorageError(fmt.Errorf("create snapshot directory %q: %w", item.rel, err)))
 			}
 			writeEntryHeader(digest, item, 0)
 		case "symlink":
 			if err := os.Symlink(item.target, destination); err != nil {
-				return cleanup(fmt.Errorf("create snapshot symlink %q: %w", item.rel, err))
+				return cleanup(snapshotStorageError(fmt.Errorf("create snapshot symlink %q: %w", item.rel, err)))
 			}
 			writeEntryHeader(digest, item, 0)
 		case "file":
@@ -103,7 +103,7 @@ func (builder Builder) snapshot(ctx context.Context, sourceRoot string, source d
 		}
 	}
 	if err := seal(root, entries); err != nil {
-		return cleanup(err)
+		return cleanup(snapshotStorageError(err))
 	}
 	return domain.PackageSnapshot{
 		Root: root, TreeDigest: "sha256:" + hex.EncodeToString(digest.Sum(nil)),
@@ -380,16 +380,16 @@ func copyAndHash(item entry, destination string, digest hash.Hash) error {
 	}
 	out, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
 	if err != nil {
-		return fmt.Errorf("create snapshot file %q: %w", item.rel, err)
+		return snapshotStorageError(fmt.Errorf("create snapshot file %q: %w", item.rel, err))
 	}
 	writeEntryHeader(digest, item, item.size)
-	written, copyErr := io.Copy(io.MultiWriter(out, digest), io.LimitReader(source, item.size+1))
+	written, copyErr := io.Copy(io.MultiWriter(snapshotStorageWriter{out}, digest), io.LimitReader(source, item.size+1))
 	closeErr := out.Close()
 	if copyErr != nil {
 		return fmt.Errorf("copy package file %q: %w", item.rel, copyErr)
 	}
 	if closeErr != nil {
-		return fmt.Errorf("close snapshot file %q: %w", item.rel, closeErr)
+		return snapshotStorageError(fmt.Errorf("close snapshot file %q: %w", item.rel, closeErr))
 	}
 	if written != item.size {
 		return fmt.Errorf("package file %q changed size while snapshotting", item.rel)

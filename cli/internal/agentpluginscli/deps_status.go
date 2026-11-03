@@ -10,6 +10,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -40,6 +41,7 @@ type dependencyExcludedTarget struct {
 }
 
 type dependencyStatus struct {
+	Diagnostics      []dependencyCheckResult    `json:"diagnostics,omitempty"`
 	ExcludedTargets  []dependencyExcludedTarget `json:"excluded_targets"`
 	Scope            string                     `json:"scope"`
 	ManifestPath     string                     `json:"manifest_path"`
@@ -83,11 +85,12 @@ func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 		status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"manifest_missing"}})
 	} else {
 		status.ManifestDigest, _ = environment.ManifestDigest(requirements)
-		var lockErr error
-		lock, lockErr = readDependencyLock(lockPath, requirements)
-		validLock = lockErr == nil
+		var issue *dependencyCheckResult
+		lock, _, issue = inspectDependencyLockFile(cmd.Context(), lockPath, requirements)
+		validLock = issue == nil
 		status.ValidLock = validLock
-		if lockErr != nil {
+		if issue != nil {
+			status.Diagnostics = append(status.Diagnostics, *issue)
 			status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"not_synced"}})
 		} else {
 			if err := canonicalizeRequirementsFromLock(&requirements, lock); err != nil {
@@ -111,34 +114,50 @@ func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 }
 
 func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lock environment.Lock) error {
+	// Index both names once: a large imported lock must not cause a full scan
+	// for every short declaration. Alias lookup within a colliding name is also
+	// indexed, preserving the existing explicit-alias preference.
+	type registryMatches struct {
+		first   *environment.LockedPackage
+		count   int
+		byAlias map[string]*environment.LockedPackage
+	}
+	byName := map[string]*registryMatches{}
+	for i := range lock.Packages {
+		pkg := &lock.Packages[i]
+		if pkg.Source.Registry == nil {
+			continue
+		}
+		product, basename := foldDependencyRegistryName(pkg.Source.Registry.ProductID), foldDependencyRegistryName(path.Base(pkg.Source.Registry.DistributionID))
+		names := []string{product}
+		if basename != product {
+			names = append(names, basename)
+		}
+		for _, name := range names {
+			matches := byName[name]
+			if matches == nil {
+				matches = &registryMatches{first: pkg, byAlias: map[string]*environment.LockedPackage{}}
+				byName[name] = matches
+			}
+			matches.count++
+			if matches.byAlias[pkg.Alias] == nil {
+				matches.byAlias[pkg.Alias] = pkg
+			}
+		}
+	}
 	for key, requirement := range requirements.Dependencies {
 		if requirement.Registry == nil || strings.Contains(requirement.Registry.Distribution, "/") {
 			continue
 		}
-		var candidates []environment.LockedPackage
-		for _, pkg := range lock.Packages {
-			source := pkg.Source.Registry
-			if source == nil {
-				continue
-			}
-			if strings.EqualFold(requirement.Registry.Distribution, source.ProductID) || strings.EqualFold(requirement.Registry.Distribution, path.Base(source.DistributionID)) {
-				candidates = append(candidates, pkg)
-			}
+		matches := byName[foldDependencyRegistryName(requirement.Registry.Distribution)]
+		if matches == nil {
+			continue
 		}
 		// Preserve an existing unambiguous alias association; otherwise require a
 		// unique source match. Full lock validation follows this offline lookup.
-		var selected *environment.LockedPackage
-		for i := range candidates {
-			if candidates[i].Alias == key {
-				selected = &candidates[i]
-				break
-			}
-		}
-		if selected == nil && len(candidates) == 1 {
-			selected = &candidates[0]
-		}
-		if len(candidates) == 0 {
-			continue
+		selected := matches.byAlias[key]
+		if selected == nil && matches.count == 1 {
+			selected = matches.first
 		}
 		if selected == nil {
 			return fmt.Errorf("dependency %q cannot be mapped unambiguously to uap.lock registry facts; use its canonical distribution", key)
@@ -149,6 +168,20 @@ func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lo
 		requirements.Dependencies[key] = requirement
 	}
 	return nil
+}
+
+// Match EqualFold, including its Unicode simple-fold equivalents, without
+// changing how historical product IDs participate in offline lookup.
+func foldDependencyRegistryName(value string) string {
+	return strings.Map(func(r rune) rune {
+		for {
+			next := unicode.SimpleFold(r)
+			if next <= r {
+				return next
+			}
+			r = next
+		}
+	}, value)
 }
 
 func appendBindingStatusFacts(fact *dependencyStatusFact, binding installer.InspectedBinding, pkg environment.LockedPackage, environmentIDs ...string) {
@@ -273,6 +306,11 @@ func renderDependencyStatus(cmd *cobra.Command, opts *options, status dependency
 	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Dependency environment (%s)\nManifest: %s\nLock: %s\nSupported targets: %s\n", status.Scope, status.ManifestPath, status.LockPath, strings.Join(status.SupportedTargets, ", ")); err != nil {
 		return err
 	}
+	for _, diagnostic := range status.Diagnostics {
+		if err := renderDependencyCheckResult(cmd.OutOrStdout(), diagnostic); err != nil {
+			return err
+		}
+	}
 	for _, fact := range status.Facts {
 		name := fact.Alias
 		if fact.ClientID != "" {
@@ -309,7 +347,7 @@ func renderDependencyStatusGuidance(writer io.Writer, status dependencyStatus) e
 	case !status.ValidLock:
 		explanation = "No valid uap.lock was found. Inspect uap.toml and uap.lock before making changes; locked installation is not available yet."
 	default:
-		explanation = "Inspect exact saved versions and dependency relationships: agentplugins deps tree"
+		explanation = "Inspect exact saved versions and dependency relationships: agentplugins deps tree. Check local agreement and cached package integrity without fetching: agentplugins deps check"
 	}
 	if _, err := fmt.Fprintln(writer, "\n"+explanation); err != nil {
 		return err
@@ -387,10 +425,15 @@ func hasDependencyBinding(state installer.Inspection, sourceKey, target string) 
 
 func appendStoreStatus(ctx context.Context, app App, fact *dependencyStatusFact, algorithm string) {
 	if _, err := app.dependencyStore().Get(ctx, algorithm, fact.PackageDigest); err != nil {
-		if errors.Is(err, environmentstore.ErrMismatch) {
+		switch {
+		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+			fact.Facts = append(fact.Facts, "store_canceled")
+		case errors.Is(err, environmentstore.ErrMismatch):
 			fact.Facts = append(fact.Facts, "store_mismatch")
-		} else {
+		case errors.Is(err, environmentstore.ErrMissing):
 			fact.Facts = append(fact.Facts, "store_missing")
+		default:
+			fact.Facts = append(fact.Facts, "store_unreadable")
 		}
 	}
 }

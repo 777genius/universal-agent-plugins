@@ -25,6 +25,12 @@ func TestPackageManagerE2E(t *testing.T) {
 		"evolution":   packageManagerEvolutionCases(),
 		"adversarial": packageManagerAdversarialCases(),
 	}
+	// Exact Git executable modes require the registry transport qualification;
+	// the remaining integrity cases need no Git or native client process.
+	groups["registry"]["pin-envelope-warm-cold-refusal"] = TestDependencyPinInventoryTamperingWarmAndColdCLI
+	groups["registry"]["pin-inventory-order-noop"] = TestDependencyPinUnsortedInventoryPreservesAgreementCLI
+	groups["registry"]["pin-legacy-version-hydration"] = TestDependencyPinLegacyVersionHydrationWarmAndColdCLI
+	groups["registry"]["recorded-repair-inventory-hydration"] = TestDependencyRecordedRepairHydratesInventoryWarmAndColdCLI
 	var catalog map[string][]string
 	if err := json.Unmarshal(packageManagerCaseCatalog, &catalog); err != nil {
 		t.Fatal(err)
@@ -80,5 +86,15 @@ func packageManagerAgreementCases() map[string]func(*testing.T) {
 		"direct-source-selector-refusal": TestDirectSavedPromotionRejectsSelectorOrAliasChanges,
 		"occupied-declaration-key":       TestDirectSavedPromotionRejectsOccupiedDeclarationKey,
 		"lock-json-duplicate-refusal":    pmAgreementDuplicateJSONKeysFailClosed,
+		"embedded-manifest-size-refusal": pmIntegrityEmbeddedManifestAdmission,
+		"graph-large-recorded-tree":      pmIntegrityLargeRecordedTree,
+		"graph-resource-limit-refusal":   pmIntegrityGraphLimitRefusal,
+		"graph-recorded-compatibility":   pmIntegrityRecordedGraphCompatibility,
+		"offline-check-valid-noop":       pmIntegrityOfflineScopes,
+		"offline-check-damaged-state":    TestDependencyCheckDamagedStateCLI,
+		"offline-check-content-errors":   TestDependencyCheckMissingPackageContentAndTemporaryStorage,
+		"offline-check-declared-graph":   TestDependencyCheckDeclaredGraphCLI,
+		"offline-check-concurrent-edit":  TestDependencyCheckRechecksAgreementAndCleansSnapshot,
+		"offline-check-cancellation":     pmIntegrityOfflineCancellation,
 	}
 }

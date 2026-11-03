@@ -55,6 +55,7 @@ type graphSolver struct {
 	roots        map[string]graphNode
 	pins         map[string]LockedPackage
 	descriptions map[string]ResolvedPackage
+	budget       resolutionBudget
 }
 
 type graphConflict struct{ message string }
@@ -63,7 +64,7 @@ func (err graphConflict) Error() string        { return err.message }
 func (err graphConflict) Is(target error) bool { return target == ErrDependencyConflict }
 
 func newGraphSolver(resolver Resolver, requirements Requirements, previous Lock, update map[string]bool) *graphSolver {
-	solver := &graphSolver{resolver: resolver, requirements: requirements, update: map[string]bool{}, roots: map[string]graphNode{}, pins: map[string]LockedPackage{}, descriptions: map[string]ResolvedPackage{}}
+	solver := &graphSolver{resolver: resolver, requirements: requirements, update: map[string]bool{}, roots: map[string]graphNode{}, pins: map[string]LockedPackage{}, descriptions: map[string]ResolvedPackage{}, budget: resolutionBudget{limits: defaultResolutionLimits()}}
 	solver.graph, _ = resolver.(GraphResolver)
 	for _, pkg := range previous.Packages {
 		solver.pins[pkg.SourceKey] = pkg
@@ -137,14 +138,17 @@ func setRequested(pkg *LockedPackage, req Requirement) {
 }
 
 func (solver *graphSolver) search(ctx context.Context, choices map[string]ResolvedPackage) (map[string]ResolvedPackage, map[string]graphNode, error) {
-	if err := ctx.Err(); err != nil {
+	if err := solver.budget.enterSearch(ctx); err != nil {
 		return nil, nil, err
 	}
-	nodes, err := solver.expand(choices)
+	nodes, err := solver.expand(ctx, choices)
 	if err != nil {
 		return nil, nil, err
 	}
 	for _, key := range sortedKeys(nodes) {
+		if err := solver.budget.consumeWork(ctx, 1); err != nil {
+			return nil, nil, err
+		}
 		node := nodes[key]
 		if selected, ok := choices[key]; ok {
 			if !nodeAccepts(node, selected.Package) {
@@ -204,15 +208,14 @@ func (solver *graphSolver) choose(ctx context.Context, key string, node graphNod
 }
 
 func (solver *graphSolver) chooseCandidates(ctx context.Context, key string, node graphNode, choices map[string]ResolvedPackage, last error) (map[string]ResolvedPackage, map[string]graphNode, error) {
-	candidates, err := solver.graph.Candidates(ctx, node.requirement, node.targets)
+	candidates, err := solver.candidates(ctx, node)
 	if err != nil {
 		return nil, nil, err
 	}
-	sort.Slice(candidates, func(i, j int) bool {
-		c := CompareVersions(candidates[i].Version, candidates[j].Version)
-		return c > 0 || c == 0 && candidates[i].ReleaseSequence > candidates[j].ReleaseSequence
-	})
 	for _, candidate := range candidates {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
 		if !candidateAccepts(node, candidate) || solver.downgrades(key, candidate.Version) {
 			continue
 		}
@@ -239,6 +242,26 @@ func (solver *graphSolver) chooseCandidates(ctx context.Context, key string, nod
 	return nil, nil, conflictFor(key, node)
 }
 
+func (solver *graphSolver) candidates(ctx context.Context, node graphNode) ([]Candidate, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	candidates, err := solver.graph.Candidates(ctx, node.requirement, node.targets)
+	if err != nil {
+		return nil, err
+	}
+	// All returned candidates were enumerated, including rejected or unused ones.
+	// Charge before sorting so an oversized provider response cannot evade limits.
+	if err := solver.budget.consumeWork(ctx, len(candidates)); err != nil {
+		return nil, err
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		c := CompareVersions(candidates[i].Version, candidates[j].Version)
+		return c > 0 || c == 0 && candidates[i].ReleaseSequence > candidates[j].ReleaseSequence
+	})
+	return candidates, nil
+}
+
 func (solver *graphSolver) chooseExact(ctx context.Context, key string, node graphNode, choices map[string]ResolvedPackage, last error) (map[string]ResolvedPackage, map[string]graphNode, error) {
 	if last != nil {
 		return nil, nil, last
@@ -246,9 +269,15 @@ func (solver *graphSolver) chooseExact(ctx context.Context, key string, node gra
 	if solver.graph == nil {
 		return nil, nil, ErrDependencyFactsUnavailable
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	old, ok := solver.pins[key]
 	pkg, err := solver.resolver.Resolve(ctx, node.requirement, node.targets, pinOrNil(old, ok), solver.update[key])
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
 	pkg.Targets = append([]string{}, node.targets...)
