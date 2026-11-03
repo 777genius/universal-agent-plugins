@@ -42,7 +42,7 @@ jobs:
     timeout-minutes: 20
     env:
       AGENTPLUGINS_VERSION: '0.1.95'
-      AGENTPLUGINS_BIN_DIR: ${{ runner.temp }}/native-bin
+      AGENTPLUGINS_BIN_DIR: ${{ github.workspace }}/native-bin
     steps:
       - name: Install published binary using the README shell entrypoint
         shell: bash
