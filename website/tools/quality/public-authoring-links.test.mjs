@@ -136,5 +136,6 @@ test('README promotes the canonical quickstart and current build section', () =>
   }
   assert.match(source, /^### Quick start$/m);
   assert.match(source, /^## Build plugins$/m);
-  assert.match(source, /\[Build plugins\]\(#build-plugins\)/);
+  assert.match(source, /\[Build a plugin\]\(#build-plugins\)/);
+  assert.match(source, /\[SDK\]\(#already-built-with-uap-sdk\)/);
 });

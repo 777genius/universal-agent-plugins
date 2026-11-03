@@ -24,272 +24,182 @@
 [![Agent Skills 1.0](https://img.shields.io/badge/Agent%20Skills-1.0.0-7257FF)](https://agentskills.my/specification)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
+Install, update, and remove Agent Plugins 1.0 packages across your AI agents with one CLI.
+Save your setup in `uap.toml` and `uap.lock` to restore it on another computer or share it with a project.
 
-## Table of contents
+[Documentation](https://universal-agent-plugins.com/docs/) ·
+[Browse plugins](https://universal-agent-plugins.com/plugins/) ·
+[Build a plugin](#build-plugins)
 
-- [Use plugins](#use-plugins)
-  - [Quick start](#quick-start)
-- [What the CLI does](#what-the-cli-does)
-- [Restore your plugin setup](#restore-your-plugin-setup)
-- [Install for one project](#install-for-one-project)
-- [Any Agent Plugins 1.0 package](#any-agent-plugins-10-package)
-- [Supported clients](#supported-clients)
-- [Already built with UAP SDK](#already-built-with-uap-sdk)
-- [Find and verify plugins](#find-and-verify-plugins)
-- [Lifecycle safety](#lifecycle-safety)
-- [More commands](#more-commands)
-- [Build plugins](#build-plugins)
-- [Contributing](#contributing)
-- [License](#license)
-
-**Keep a reproducible set of plugins and dependencies, and carry it to another
-computer.** The manifest records what you need; the lockfile pins the exact
-packages to restore. This workflow ships in the published CLI; see
-[Restore your plugin setup](#restore-your-plugin-setup). For the published
-installer, start with the [Quick start](#quick-start).
-
-Our [installer automation principle](docs/INSTALLER_AUTOMATION_PRINCIPLE.md) is to complete every ownership-safe client step automatically and ask the user only for genuine external approvals, authentication, or reloads.
-
-[Read the documentation](https://universal-agent-plugins.com/docs/) ·
-[Browse plugins](https://universal-agent-plugins.com/plugins/)
+[Quick start](#quick-start) · [Project installation](#install-for-one-project) ·
+[Supported clients](#supported-clients) · [SDK](#already-built-with-uap-sdk)
 
 <a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
 
-<details>
-<summary>More interface screenshots</summary>
-
-<img width="423" height="234" alt="Additional Universal Agent Plugins interface screenshot 1" src="https://github.com/user-attachments/assets/3f8786ea-bb3a-4869-aabe-99b245364b3d" />
-<img width="1079" height="584" alt="Additional Universal Agent Plugins interface screenshot 2" src="https://github.com/user-attachments/assets/898d66b9-3942-4725-9a26-ec2fe01ad7c0" />
-<img width="669" height="125" alt="Additional Universal Agent Plugins interface screenshot 3" src="https://github.com/user-attachments/assets/3bd5d39f-5b35-4475-8b0c-94b85e992d29" />
-
-</details>
-
 ## Use plugins
-
-Install, inspect, update, repair, and remove packages with the existing installer.
-The [Use guide](https://universal-agent-plugins.com/docs/en/use/) walks through this journey.
-See [Build plugins](#build-plugins) below to create and check a package.
 
 ### Quick start
 
-With Node.js 22+, run:
+With Node.js 22+:
 
 ```bash
 npx universal-agent-plugins add context7
 ```
 
-The CLI automatically finds compatible agents, including Codex and Claude Code.
-Choose agents if several are found; a single detected agent is selected automatically.
-Follow the printed setup steps, then start a new agent session.
+The CLI finds compatible agents, including Codex and Claude Code. Choose agents
+when prompted, follow any printed setup steps, then start a new agent session.
 
-The current verified native release is [CLI **0.1.95**](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95).
-It adds an owned local management API (`manage serve`), read-only local profile
-discovery (`manage discover`) and native Pi extensions. See the
-[management guide](https://universal-agent-plugins.com/docs/en/use/manage.html#local-management-api) and
-[Pi compatibility](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html#pi-native-extensions).
-npm and Homebrew versions may lag; check `agentplugins version` (or
-`npx universal-agent-plugins version`) before relying on release-specific
-behavior. Use the native installer for the verified release. Changes in
-`main` are **not** automatically available in an older published CLI.
-Automatic project selection requires 0.1.94; explicit project-scope commands
-work since 0.1.93.
+**Choose your agents**
 
-<details>
-<summary>Other installation options</summary>
+<img width="423" height="234" alt="Choose which AI agents receive the plugin" src="https://github.com/user-attachments/assets/3f8786ea-bb3a-4869-aabe-99b245364b3d" />
 
-<details>
-<summary><strong>macOS</strong></summary>
+**Review the installation plan — Playwright example**
 
-With Homebrew:
+<img width="1079" height="584" alt="Review the Playwright installation plan for Codex, Claude Code and Gemini CLI" src="https://github.com/user-attachments/assets/898d66b9-3942-4725-9a26-ec2fe01ad7c0" />
+
+**Follow installation progress — Playwright example**
+
+<img width="669" height="125" alt="Track Playwright installation progress across three AI agents" src="https://github.com/user-attachments/assets/3bd5d39f-5b35-4475-8b0c-94b85e992d29" />
+
+### Install the CLI
+
+The native CLI does not require Node.js. Install it once to use `agentplugins` directly.
+
+**macOS and Linux — Homebrew:**
 
 ```bash
 brew install 777genius/agentplugins/agentplugins
 agentplugins add context7
 ```
 
-Without Homebrew, use the native installer:
+**macOS and Linux — native installer:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.sh | sh -s -- add context7
 ```
 
-</details>
-
-<details>
-<summary><strong>Linux</strong></summary>
-
-Install the matching native binary and add your first plugin:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.sh | sh -s -- add context7
-```
-
-Homebrew also works on Linux: run `brew install 777genius/agentplugins/agentplugins`,
-then `agentplugins add context7`.
-
-</details>
-
-<details>
-<summary><strong>Windows</strong></summary>
-
-Run in PowerShell:
+**Windows — PowerShell:**
 
 ```powershell
 irm https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.ps1 | iex
 & "$HOME\.local\bin\agentplugins.exe" add context7
 ```
 
-</details>
-
-To install the latest installer globally with Node.js 22+:
+**npm — Node.js 22+:**
 
 ```bash
 npm install -g universal-agent-plugins
+agentplugins add context7
 ```
 
-Homebrew and the installers select the native binary for your OS and architecture.
-The installer scripts verify its published SHA-256 and reported version, then
-replace the CLI atomically. They install into `$HOME/.local/bin` unless
-`AGENTPLUGINS_BIN_DIR` is set.
+The native installers verify the binary's published SHA-256 and version and
+install into `$HOME/.local/bin` (override with `AGENTPLUGINS_BIN_DIR`). Individual
+plugins can require additional runtimes; the CLI checks these before installation.
+See [native installation](docs/NATIVE_INSTALL.md) for options and troubleshooting.
 
-The native CLI does not require Node.js. The `npx` option requires Node.js 22+
-and downloads and runs the verified Go binary. Individual plugins may have
-their own runtime requirements, which the CLI checks before installation.
-
-The plugin package is downloaded and verified once, then prepared for each
-selected agent.
-
-</details>
-
-[Browse plugins](https://universal-agent-plugins.com/plugins/)
+The verified native release is [CLI **0.1.95**](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95),
+including local management and native Pi extensions. npm and Homebrew can lag;
+check `agentplugins version` before using release-specific features. Features
+in `main` may require a source build.
 
 ## What the CLI does
 
-- installs one plugin in one or several supported agents;
-- updates, repairs, and removes only files it manages;
-- delivers only the package components supported by each selected client;
-- reports unsupported components, remaining activation, sign-in and reload steps
-  instead of treating preparation as verified runtime execution.
-
-## Restore your plugin setup
-
-These commands are part of the published CLI (`agentplugins` 0.1.90 and later).
-The [Quick start](#quick-start) above covers installation.
-
-On the source computer, open a folder to use for the transfer and run:
-
-```sh
-agentplugins deps export
-```
-
-Copy that folder to the new computer, install the required target clients,
-and open the copied folder. Then restore the recorded plugins and dependencies:
-
-```sh
-agentplugins deps import --install
-```
-
-The optional directory argument defaults to the current folder. By default,
-export reads the global user environment and import writes it. Only `uap.toml` and `uap.lock`
-are transferred. Restore verifies exact locked packages from still-available
-sources or the destination cache for targets supported by the selected dependency
-environment. Run `agentplugins deps status` to see supported and excluded targets
-for your installed CLI; see the [dependency guide](docs/UAP_DEPENDENCIES.md) for
-the scope and client boundaries.
-
-Authentication, client settings, secrets and plugin data need separate setup
-or backup. Transferring the files does not guarantee offline installation.
-See [Restore on another machine](https://universal-agent-plugins.com/docs/en/use/manage.html#restore-on-another-machine)
-for confirmation prompts, supported restore behavior and recovery.
-
-[Install Agent Skills](docs/AGENT_SKILLS_INSTALLER.md) with `agentplugins skills add`
-from a GitHub repository or from an HTTPS publisher that serves a `.well-known`
-Skills index. Publisher installs take an exact `--skill` name. The local browser
-picker and saved dependencies are included.
+- Installs a package in one or several agents, delivering the components each supports.
+- Saves dependencies and exact package pins for repeatable installation.
+- Updates, repairs, and removes files it manages while preserving unrelated content.
+- Reports remaining activation, authentication, and reload steps.
 
 ## Install for one project
 
-**Released in CLI 0.1.93:** explicit project scope accepts complete package
-sources. Signed Directory v1 registry aliases (for example `context7`) remain
-**user-only**: for a compatible reviewed package, copy the exact pinned Git
-source from the [catalog](https://universal-agent-plugins.com/plugins/) instead
-of reusing its registry alias. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` and
-`PACKAGE_PATH` with the selected source (omit `//PACKAGE_PATH` for a package at
-the repository root), and `/path/to/project` with an existing directory. The
-first command saves the direct-source dependency and its lock; the second
-restores it. The command below uses a historical GitLab commit as a real syntax
-example, **not a current catalog review**. For an actual setup copy the current
-reviewed source and compatible target; the placeholder format is `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`.
-For standalone Skills, replace `owner/repository` with a real source:
+Use project scope to keep a repository's plugins separate from your user setup.
+Explicit project scope requires CLI 0.1.93+.
+
+Open your project folder and choose a compatible package from the
+[catalog](https://universal-agent-plugins.com/plugins/).
+
+**Add a plugin**
 
 ```sh
-agentplugins add github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab --target codex \
-  --scope project --project-root /path/to/project
-agentplugins install --locked --scope project --project-root /path/to/project
-agentplugins skills add owner/repository --ui \
-  --scope project --project-root /path/to/project
+cd /path/to/project
+agentplugins add github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH \
+  --scope project --target codex
 ```
 
-The portable `uap.toml` and `uap.lock` live in that project. Local receipts,
-recovery state and retained data live under `.uap/`; the user's environment
-remains separate. Add and maintenance commands default to user scope; explicit project scope
-without `--project-root` uses the current directory. In CLI 0.1.94, argumentless
-`agentplugins install` selects project scope when that exact directory contains a
-regular `uap.toml`; it never searches parents. Explicit scope wins. An existing
-lock is checked strictly before install/repair, while a missing lock permits
-first-install resolution. Use `update` to advance pins; `--locked` also requires
-a lock to exist. Native capabilities and activation
-requirements depend on the client. ChatGPT has no native project installation.
-See [Project installation](docs/PROJECT_INSTALLATION.md)
-for supported-target reporting, update/repair/removal and portable restore.
-The [current project support table](docs/PROJECT_CLIENT_SUPPORT.md) records each
-client's component paths and activation limits; user-scope compatibility below
-is a separate contract.
+Replace the example source with the package’s pinned Git source from the catalog;
+omit `//PACKAGE_PATH` for a package at the repository root. Short catalog names
+such as `context7` currently work only in user scope.
 
-VS Code project scope prepares `.github/skills` and owned `.vscode/mcp.json`
-servers for one local folder. Its Prepared result leaves workspace/server trust
-and runtime selection to the client. See [VS Code project preparation](docs/PROJECT_INSTALLATION.md#vs-code-project-preparation).
+Commit `uap.toml` and `uap.lock`; add `.uap/` to `.gitignore`.
+From the root of another checkout, run:
+
+```sh
+agentplugins install --locked --scope project
+```
+
+To install standalone Skills instead:
+
+```sh
+agentplugins skills add owner/repository --ui --scope project
+```
+
+Replace `owner/repository` with the actual Skills repository. Use
+`--project-root /path/to/project` when running outside the project folder.
+
+Add and maintenance commands otherwise default to user scope.
+
+Client support varies by component. ChatGPT has no native project installation.
+See [project installation](docs/PROJECT_INSTALLATION.md) for lifecycle commands
+and [project client support](docs/PROJECT_CLIENT_SUPPORT.md) for paths and activation.
+
+## Restore your plugin setup
+
+To move your user setup to another computer, export it into an empty transfer folder:
+
+```sh
+agentplugins deps export /path/to/transfer
+```
+
+Copy that folder to the new computer, install the target agents, and restore:
+
+```sh
+agentplugins deps import /path/to/transfer --install
+```
+
+Export and import use the user environment by default and transfer only
+`uap.toml` and `uap.lock`. Exact packages must still be available from their
+sources or the destination cache. Authentication, secrets, client settings, and
+plugin data need separate setup or backup.
+
+Run `agentplugins deps status` to check supported targets. See the
+[dependency guide](docs/UAP_DEPENDENCIES.md) and
+[restore guide](https://universal-agent-plugins.com/docs/en/use/manage.html#restore-on-another-machine)
+for supported environments and recovery.
 
 ## Any Agent Plugins 1.0 package
 
-Install from the registry, a local package, Git over HTTPS or SSH, or a complete
-HTTPS archive. `plugin.json` is the sole supported authoring manifest.
+Install reviewed registry packages, local packages, Git sources over HTTPS or
+SSH, or complete HTTPS/local archives. `plugin.json` is the only supported
+authoring manifest.
 
-<details>
-<summary>Package layout and portability</summary>
+| File or folder | Purpose |
+| --- | --- |
+| `plugin.json` | Required package manifest |
+| `skills/` | Optional reusable instructions |
+| `mcp.json` | Optional MCP servers |
+| `hooks/` | Optional client-specific extensions |
 
-The installed package is standard-first:
+Skills and MCP are portable components; hooks and other native extensions depend
+on the client. See [direct package sources](docs/DIRECT_PACKAGE_SOURCES.md) for
+source syntax, credentials, and immutable archive pins.
 
-```text
-plugin.json
-├── skills/       optional reusable instructions
-├── mcp.json      optional MCP servers
-└── hooks/        optional client-specific extension
-```
-
-Skills and MCP are portable components. Hooks and other client-specific
-extensions depend on the target client; they do not imply portable behavior.
-
-You can also install a local package or a pinned GitHub package without adding
-it to the registry. Direct-install examples are collected near the end of this
-README.
-
-**Released in CLI 0.1.93:** direct sources include arbitrary HTTPS and SSH Git,
-GitHub/GitLab/Azure browser URLs, and complete HTTPS/local ZIP/TAR/TAR.GZ/TGZ
-packages. See [Direct complete package sources](docs/DIRECT_PACKAGE_SOURCES.md)
-for syntax, native credentials, immutable archive byte pins and supported limits.
-These complete-package `agentplugins add` transports do not import standalone
-skill files as plugins. The separate `agentplugins skills add`
-workflow above installs raw Agent Skills through deterministic normalization.
-
-Other manifest formats are ignored and cannot override `plugin.json`.
-
-</details>
+For standalone Agent Skills, use `agentplugins skills add` with a GitHub repository
+or an HTTPS publisher's `.well-known` Skills index. Publisher installs require
+an exact `--skill` name. See [installing Skills](docs/AGENT_SKILLS_INSTALLER.md).
 
 ## Supported clients
 
-The CLI has adapters for:
+The table describes user-scope delivery. See the separate
+[project support table](docs/PROJECT_CLIENT_SUPPORT.md) for project installations.
 
 | Client | Delivery |
 | --- | --- |
@@ -309,73 +219,94 @@ The CLI has adapters for:
 | <img src="landing/public/client-icons/qoder.svg" width="24" height="24" alt="" align="middle"> Qoder | native skills/MCP plugin; Qoder CLI install and verification when available |
 | <img src="landing/public/client-icons/pi.svg" width="24" height="24" alt="" align="middle"> Pi | native extensions in released user scope; project Skills/MCP are separately qualified in source builds |
 
-In the verified 0.1.95 user-scope release, Pi installs packages declaring a
-[native Pi extension](docs/PI_NATIVE_EXTENSION_CONTRACT.md). Run
-`npx universal-agent-plugins add ./my-plugin --target pi`, then reload or
-restart Pi. Newer project-scope Pi Extensions, Skills and MCP preparation
-(and a scripted local-model tool-call test) are documented in the
-[project support evidence](docs/PROJECT_CLIENT_SUPPORT.md); do not infer
-that these source-only qualifications ship in 0.1.95 or prove vendor login.
+Pi native extensions ship in the 0.1.95 user-scope release. Project Pi
+Extensions, Skills, and MCP preparation are qualified in source builds and do
+not ship in that release. See the [Pi extension contract](docs/PI_NATIVE_EXTENSION_CONTRACT.md).
 
-Grok Build, Kimi Code, and Qoder accept automatic user-scope installation of portable skills and MCP servers through `agentplugins add ./my-plugin --target grok,kimi,qoder`. All three adapters support stdio and Streamable HTTP MCP. The CLI verifies native registration and supports update and removal. A running client still needs a reload, and MCP authentication/connectivity is verified in that client.
+Grok Build, Kimi Code, and Qoder install portable skills and MCP servers in user
+scope, with stdio and Streamable HTTP support. Qoder also preserves native
+hooks, commands, and bundled binaries. See [portable commands](docs/UAP_COMMANDS.md)
+for command delivery and client limits.
 
-Qoder also preserves target-native `hooks/**`, `commands/**`, and bundled `bin/**` files for native discovery. Its Go SDK supports `SessionStart`, `UserPromptSubmit`, `PostToolUse`, and `Stop`. These native files are separate from portable conversion. Ordinary [portable commands](docs/UAP_COMMANDS.md) are delivered as skills to Grok Build, Kimi Code and Qoder, not converted into native command files; explicit-only commands remain withheld until the client can enforce that restriction. Portable agents, hooks and LSP components remain outside these three adapters' supported scope.
-
-Compatibility depends on the package and client. The CLI tells you what is
-installed, prepared, or still needs activation or sign-in.
-
-See the [client compatibility evidence](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
-for tested client versions, platforms, and release-specific limitations.
-
-<details>
-<summary>Context7 setup for ChatGPT and Kiro</summary>
+For guided Context7 setup in ChatGPT and Kiro:
 
 ```bash
 npx universal-agent-plugins add context7 --target chatgpt,kiro --no-save
 ```
 
-This mixed example uses `--no-save` because ChatGPT preparation is not a saved
-portable dependency. To keep other clients in a saved environment, prepare
-ChatGPT separately.
+ChatGPT requires Developer Mode and custom apps, plus manual package installation
+and selection in a new chat. `--no-save` is required here because ChatGPT
+preparation is not a portable saved dependency. Prepare it separately if you
+want to save other clients. See the [Context7 setup guide](docs/CONTEXT7_CHATGPT_KIRO_E2E.md).
 
-- ChatGPT: the CLI guides you to create a Developer Mode app for
-  `https://mcp.context7.com/mcp` with **No authentication**, accepts the
-  resulting `asdk_app_...` ID, and prepares a personal marketplace package.
-  You still install that package and select Context7 in a new chat. When other
-  clients are selected too, the CLI installs them first and reports ChatGPT as
-  a separate setup step instead of cancelling the whole batch.
-- Kiro: the CLI installs its owned skills and MCP entry while preserving
-  unrelated configuration. On macOS and Windows it reports the remaining
-  Kiro OAuth/restart step instead of claiming automatic runtime verification.
+A prepared installation may still need a reload, OAuth, or client approval.
+Codex supports stdio and Streamable HTTP MCP, but excludes SSE components;
+see [transport details](docs/CODEX_TRANSPORT_EVIDENCE.md). The
+[compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
+records tested client versions, platforms, and remaining steps.
 
-The same retained installation supports repeat add, update, repair, remove,
-and reinstall. ChatGPT availability still depends on an account or workspace
-where Developer Mode and custom apps are enabled.
+## More commands
 
-See the [real Context7 ChatGPT and Kiro E2E evidence](docs/CONTEXT7_CHATGPT_KIRO_E2E.md).
+Omit `--target` to choose agents interactively; name them explicitly in scripts.
 
-</details>
+```bash
+# Find and inspect packages
+agentplugins search docs
+agentplugins info context7
 
-<details>
-<summary>Compatibility and Codex MCP transport limits</summary>
+# Install in specific agents
+agentplugins add context7 --target codex,claude
 
-A schema pass means that the package is well-formed; it does not prove runtime,
-OAuth, or activation in every client.
+# Maintain an installed plugin
+agentplugins update context7 --target codex,claude
+agentplugins repair context7 --target codex,claude
+agentplugins remove context7 --target codex,claude
+agentplugins outdated --all
+agentplugins update --all
+agentplugins doctor
 
-For Codex, declared MCP SSE is unsupported; stdio and Streamable HTTP retain
-their existing adapter support. Valid SSE components are excluded from Codex
-delivery without invalidating the package. See [transport evidence and lifecycle
-behavior](docs/CODEX_TRANSPORT_EVIDENCE.md).
+# Validate and try a local package
+agentplugins validate ./my-plugin
+agentplugins add ./my-plugin
+```
 
-</details>
+Local directory installs do not save portable dependencies. Use a pinned direct
+source when you want a setup that another computer can restore.
+
+## Find and verify plugins
+
+[Browse the catalog](https://universal-agent-plugins.com/plugins/) or use
+`agentplugins search`. Reviewed Directory entries and unreviewed Discovery
+results are labelled separately. Discovery metadata is not an endorsement;
+packages are validated again before installation.
+
+Direct installs do not need a registry entry. To list your package, see
+[registry contributions](https://github.com/777genius/universal-agent-plugins-registry/blob/main/CONTRIBUTING.md).
+
+## Lifecycle safety
+
+The CLI validates packages and preflights selected clients before changing them.
+Use `--dry-run` to preview managed changes; security checks may still download
+scanner binaries or metadata. No install telemetry is sent.
+
+Updates and removal check recorded ownership. Unrelated files and externally
+edited entries are preserved; conflicts come with recovery instructions.
+Failures roll back where ownership permits. Check each target's result after a
+multi-agent operation. Repair checks managed files; authentication and runtime
+behavior still need verification in the client.
+
+See [removal safety](docs/REMOVAL_SAFETY.md) for ownership, retained data, and
+external uninstall requirements. The
+[installer automation principle](docs/INSTALLER_AUTOMATION_PRINCIPLE.md)
+explains which steps the CLI completes and which require your involvement.
+
+UAP is an independent community project, unaffiliated with OpenAI, Agent Plugins,
+or the client vendors.
 
 ## Already built with UAP SDK
 
-Build with reusable Go installer components and typed runtime hooks. The
-[TypeScript Management SDK](sdks/typescript/README.md) is published on npm as
-`universal-agent-plugins-management-sdk` and drives the `agentplugins` 0.1.95+
-management engine. Its README covers engine compatibility and package checks.
-Pin the SDK and engine independently.
+For Go Hooks, agent host detection, the Go installer facade and typed TypeScript
+management, see the [SDK integration guides](https://universal-agent-plugins.com/docs/en/sdk/).
 
 <table>
   <tr>
@@ -389,139 +320,22 @@ Pin the SDK and engine independently.
   </tr>
 </table>
 
-Read the [Go SDK integration guide](sdk/README.md) for typed runtime hooks and
-client-specific handlers.
-
-## Find and verify plugins
-
-Use `agentplugins search` or browse the registry to find plugins.
-Reviewed registry entries and unreviewed discovery results are labelled separately.
-
-<details>
-<summary>How discovery results are verified</summary>
-
-`search` combines the reviewed Registry Directory with a signed public Discovery
-Index containing conformant package paths. Discovery records are
-unreviewed metadata, not endorsements. They install only through a
-publisher-qualified exact-SHA selector and are validated again before mutation.
-
-</details>
-
-The registry is optional for direct installs, but it makes reviewed short names,
-provenance, compatibility notes, and safe discovery convenient:
-
-[Browse the registry](https://universal-agent-plugins.com/plugins/) ·
-[Submit a package](https://github.com/777genius/universal-agent-plugins-registry/blob/main/CONTRIBUTING.md)
-
-## Lifecycle safety
-
-The CLI checks packages before installation and changes only files it manages.
-Use `--dry-run` to preview changes. OAuth and consent stay under your control.
-No install telemetry is sent.
-
-Removal checks recorded ownership before changing managed files or configuration
-entries. Foreign content and externally edited entries are preserved; unresolved
-ownership produces a conflict or a recovery instruction. Plugin data and shared
-source caches can be retained intentionally. Some clients require an explicit
-external uninstall before UAP can settle its own binding.
-
-Lifecycle tests include file inventories and foreign-content checks. Real native
-runs, deterministic adapter tests and manual setup are different kinds of
-evidence; their coverage depends on the client, version, platform and scope.
-See [removal safety](docs/REMOVAL_SAFETY.md) and the
-[client compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
-for those boundaries.
-
-<details>
-<summary>Ownership and rollback</summary>
-
-Before changing a client, the CLI validates the source and preflights every
-selected target. `--dry-run` prints the plan without applying managed client changes.
-Security checks may still acquire scanner binaries or metadata. Managed files
-and state are committed together; failures roll back what ownership proves safe
-or stop with a repair command. Preview does not activate a plugin or sign you in.
-Repair checks managed files; it does not prove external OAuth or runtime behavior.
-A multi-target operation can have partial results; inspect each target and its
-recovery instruction before retrying.
-
-</details>
-
-The CLI is an independent community project. It is not affiliated with OpenAI,
-Agent Plugins, or the vendors shown above.
-
-## More commands
-
-For normal interactive use, omit `--target` and choose agents in the prompt.
-Use `--target` in scripts, CI, or whenever you want to name clients explicitly.
-
-```bash
-# Find and inspect plugins
-agentplugins search docs
-agentplugins info context7
-
-# Install in specific agents
-agentplugins add context7 --target codex,claude
-
-# Manage an installed plugin
-agentplugins update context7 --target codex,claude
-agentplugins repair context7 --target codex,claude
-agentplugins remove context7 --target codex,claude
-agentplugins outdated --all
-agentplugins update --all
-agentplugins doctor
-
-# Install a local Agent Plugins 1.0 package
-agentplugins validate ./my-plugin
-agentplugins add ./my-plugin
-```
-
-<details>
-<summary>Install directly from an exact GitHub commit</summary>
-
-```bash
-# Install the only Agent Plugins package found at an exact commit
-agentplugins add \
-  owner/repository@0123456789abcdef0123456789abcdef01234567
-
-# Choose a package explicitly when a repository contains several
-agentplugins add \
-  owner/repository@0123456789abcdef0123456789abcdef01234567//path/to/plugin
-```
-
-These historical GitHub selectors require a full 40-character commit SHA.
-Branches, tags, and abbreviated SHAs are rejected in this spelling. When no
-package path is given, the CLI uses a
-valid root `plugin.json` or auto-selects the only valid nested package that has
-`mcp.json` or `skills/`. If several packages match, it lists them and asks for
-an explicit `//path`. Repositories with more than 16 possible packages require
-an explicit path before candidate packages are fetched. The selected canonical
-path and package digest are stored for safe replay. Direct full-SHA installations
-remain immutable; use `switch` to move to another exact source. `repair` reapplies
-the recorded source, and `remove` changes only files owned by the CLI.
-
-</details>
+The [Go SDK](sdk/README.md) provides typed runtime hooks and client-specific
+handlers. Reusable [Go installer components](install/integrationctl/agentplugins/installer/README.md)
+support client integration.
+The [TypeScript Management SDK](sdks/typescript/README.md), published as
+`universal-agent-plugins-management-sdk`, controls the CLI 0.1.95+ management
+engine. Pin SDK and engine versions independently; see the
+[management guide](https://universal-agent-plugins.com/docs/en/use/manage.html#local-management-api).
 
 ## Build plugins
 
-Create a portable Agent Plugins 1.0 package manually from a root `plugin.json`, with
-optional `skills/` and `mcp.json`, then validate and install it with the commands
-above. The current npm and native installer releases do not include
-`agentplugins author`.
+Create a package with a root `plugin.json`, with optional `skills/` and `mcp.json`,
+then validate and install it using the local-package commands above.
 
-The [Build guide](https://universal-agent-plugins.com/docs/en/build/) covers package structure,
-remote MCP, stdio MCP, hybrid packages, and the handoff to installation. Its
-authoring commands require a qualified authoring build or a source build.
-See the [Use / Build quickstart](https://universal-agent-plugins.com/docs/en/guide/quickstart.html).
-[Native Agent Plugins releases](https://github.com/777genius/universal-agent-plugins/releases) use the `agentplugins-v*` tag prefix.
-
-<details>
-<summary>Qualified/source-build authoring commands (not in the current installer release)</summary>
-
-In qualified authoring builds, `agentplugins author` is the public authoring
-entrypoint. These examples require such a build or a current source build;
-installing the latest npm or native installer does not provide them.
-
-Create and check a Skill package:
+The current npm and native installer releases do not include `agentplugins author`.
+In qualified authoring builds, `agentplugins author` is the public authoring entrypoint.
+These commands require a qualified authoring build or a current source build:
 
 ```bash
 agentplugins author init ./my-plugin --template skill --name my-plugin
@@ -530,78 +344,37 @@ agentplugins author inspect ./my-plugin
 agentplugins author test ./my-plugin
 ```
 
-Current source builds also include JSON maintenance, dependency bootstrap, and
-a continuous MCP development loop. For a separate stdio MCP package, start with
-an absent `./local-tools` destination:
+The [Build guide](https://universal-agent-plugins.com/docs/en/build/) covers
+Skills, remote and stdio MCP, hybrid packages, and installation. Start with the
+[Use / Build quickstart](https://universal-agent-plugins.com/docs/en/guide/quickstart.html).
+Native installer [releases](https://github.com/777genius/universal-agent-plugins/releases)
+use `agentplugins-v*` tags.
 
-```bash
-agentplugins author init ./local-tools --template mcp-stdio --runtime node \
-  --name local-tools --description "Local Node MCP tools"
-agentplugins author normalize ./local-tools --document plugin.json
-agentplugins author normalize ./local-tools --document mcp.json --write
-```
+<details>
+<summary>Source-build authoring requirements</summary>
 
-After reviewing the generated source and satisfying the Linux dependency and
-runtime prerequisites in the [stdio guide](https://universal-agent-plugins.com/docs/en/build/mcp-stdio.html),
-select its actual server explicitly:
-
-```bash
-agentplugins author bootstrap ./local-tools --dry-run
-agentplugins author bootstrap ./local-tools
-agentplugins author dev ./local-tools --server local-tools
-```
-
-Normalization plans are read-only until `--write`. To import an existing Claude
-MCP configuration, select its actual strict-JSON file and a new absent output:
-
-```bash
-agentplugins author import native ./claude.json --from claude \
-  --output /absolute/path/to/new-plugin --name new-plugin \
-  --description "Imported Claude MCP package" --write
-```
-
-Native import reads only the explicit strict-JSON Claude file and accepts safe
-stdio `command`/`args` entries. Entries with `env`, `type` or `url`, including
-HTTP servers, are skipped; it publishes only to an absent output. These
-commands become supported installation guidance after a signed `agentplugins`
-authoring release passes the public-channel checks.
-
-Authoring validation and project doctor are distinct from installer
-`agentplugins validate` and `agentplugins doctor`. In qualified/source builds,
-MCP execution is available through `author test` and `author dev`.
-Dependency bootstrap apply currently requires Linux; dry-run planning can be
-used on other platforms. Local stdio runtime checks and development also require
-Linux, successful process-containment and bubblewrap preflights, and a supported
-system Node path. See the
-[stdio guide](https://universal-agent-plugins.com/docs/en/build/mcp-stdio.html)
-for those prerequisites. Client projection,
-export/bundle, and publication are not exposed by the current authoring CLI.
-OAuth and activation inside a supported client still require client-specific
-verification.
-`plugin.json` is the only supported authoring manifest. JSON maintenance does
-not add a YAML reader, fallback, or migration workflow.
+In qualified/source builds, MCP execution is available through `author test` and `author dev`.
+Dependency bootstrap apply currently requires Linux; dry-run planning can be used on other platforms.
+Local stdio runtime checks and development require Linux, successful process-containment and bubblewrap preflights, and a supported system Node path.
+See the [stdio guide](https://universal-agent-plugins.com/docs/en/build/mcp-stdio.html)
+for prerequisites and the development loop. Client projection, export/bundle, and publication are not exposed by the current authoring CLI.
+`plugin.json` is the only supported authoring manifest.
 
 </details>
 
 ## Contributing
 
-Contributor checks:
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow. Run:
 
 ```bash
 go test ./...
 make vet
 ```
 
-- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Security policy: [SECURITY.md](SECURITY.md)
-- Support boundary: [docs/SUPPORT.md](docs/SUPPORT.md)
-- Native CLI installation: [docs/NATIVE_INSTALL.md](docs/NATIVE_INSTALL.md)
-- Portable commands: [docs/UAP_COMMANDS.md](docs/UAP_COMMANDS.md)
-- Client E2E evidence: [docs/AGENTPLUGINS_CLIENT_E2E.md](docs/AGENTPLUGINS_CLIENT_E2E.md)
-- Registry repository: https://github.com/777genius/universal-agent-plugins-registry
+[Security policy](SECURITY.md) · [Support boundary](docs/SUPPORT.md) ·
+[Client E2E evidence](docs/AGENTPLUGINS_CLIENT_E2E.md)
 
 ## License
 
-Universal Agent Plugins is licensed under the [Apache License 2.0](LICENSE).
-Third-party components retain their original licenses; see [NOTICE](NOTICE) for
-attribution.
+[Apache License 2.0](LICENSE). Third-party components retain their original
+licenses; see [NOTICE](NOTICE).
