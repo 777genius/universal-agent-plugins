@@ -38,15 +38,17 @@ func ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 	if err != nil {
 		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
-	if err := txn.stageDesired(); err != nil {
-		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
-	}
+	// Staging may fail after creating a private transaction directory. Arm
+	// cleanup before touching the staged source, not only before native writes.
 	mcpMayWrite := false
 	defer func() {
 		if txn.cleanup && txn.transactionRoot != "" {
 			_ = os.RemoveAll(txn.transactionRoot)
 		}
 	}()
+	if err := txn.stageDesired(); err != nil {
+		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+	}
 	// A failed restore leaves the only recoverable copy inside transactionRoot.
 	// Keep that directory intact and report its exact location to the caller.
 	defer func() {
