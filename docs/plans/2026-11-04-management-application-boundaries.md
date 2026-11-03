@@ -2,7 +2,8 @@
 
 Date: 2026-11-04. Research base: `999c25fcd22ab0cbd4c775aa6acc83e7cf422c3a`.
 Branch: `refactor/foundation-boundaries-20261104`.
-Status: research and three independent plan reviews complete; baseline E2E first.
+Status: implementation published; first independent implementation review fixes
+are under qualification before a second review round.
 PR: https://github.com/777genius/universal-agent-plugins/pull/700.
 
 ## Goal and scope decision
@@ -116,9 +117,13 @@ the application.
    bounded directory scan and 1 MiB record limit. Private undo data is verified
    and forgotten by its backend before deleting its observation; a refusal
    retains that record without blocking new work below the budget.
-10. Panics, invalid/nonterminal outcomes, missing results and unsuccessful final
-    persistence remain uncertainty. A successful HTTP call must not manufacture
-    installation, activation, authentication or recovery proof.
+10. Panics, invalid/nonterminal outcomes and missing results remain uncertainty.
+    After a final save fails, the current owner must persist an Interrupted
+    observation without a result while holding the mutation lock, or stop
+    serving if that conservative save also fails. Two failed writes cannot
+    guarantee a durable marker: restart observes whichever complete version-1
+    record survived, without executing it. A successful HTTP call must not
+    manufacture installation, activation, authentication or recovery proof.
 11. JSON version/fields, SHA-256 filenames, environment partitioning, regular-file
     and symlink checks, atomic writes and 0700/0600 modes remain compatible.
 12. `manage serve` keeps one strict startup JSON line (64 KiB), private IPv4
@@ -138,7 +143,10 @@ successful application handoff. Listener-start or bootstrap-write failure closes
 the constructed application and any opened transport. HTTP Close first stops
 transport admission and closes connections, including body decoders, then closes
 application admission/cancels work and waits for admitted calls and operations.
-Application cancellation also closes transport through the same idempotent path.
+Application Close delivers cancellation before acquiring its mutex, so backend
+retention cleanup holding that mutex can finish. Acceptance rechecks lifetime
+after cleanup, before persisting new authority. Cancellation also closes
+transport through the same idempotent path.
 `Done` signals completed cleanup. No second operation/worker owner is introduced.
 Tests must cover a blocked admitted call and failed process startup output.
 
@@ -239,7 +247,34 @@ free of architectural debt.
   specify save ambiguity, nonblocking/continuous lock lifetime and shutdown
   ownership; cover actual CLI build inputs in CI; detach retained snapshots at
   the new direct-call boundary. No new framework or domain DTO duplication.
-- Implementation reviews and final-head evidence: pending.
+- Implementation review round 1 at `d32c43c7`: three fresh independent critics
+  reviewed concurrency/lifetime, persistence/recovery, and transport/SDK/CI.
+  Integration found no actionable defect. The other lanes reproduced three
+  findings; their corrections and focused regression coverage are in this PR:
+  - Preserve non-nil empty installer IDs with `slices.Clone`; admission must
+    continue emitting `[]`, not `null`, for empty native/recovery operations.
+    Tests cover nil, empty and populated values through actual application
+    admission, including caller mutation of the populated slice.
+  - Deliver shutdown cancellation before waiting for the application mutex,
+    then recheck lifetime after retention before acceptance. The inherited
+    mutex/cancellation deadlock is covered with backend cleanup that waits on
+    its supplied context; no acceptance or execution occurs during shutdown.
+  - On final-save failure, persist conservative uncertainty under the held
+    mutation lock; if that save also fails, stop current-session admission and
+    drain normally. The inherited implementation discarded its local uncertain
+    snapshot, so publication followed by a sync error could expose success and
+    admit another mutation. Tests cover first errors before/after publication
+    and all four combinations of continued before/after publication failures.
+- Qualification at `d32c43c7`: all three Management packages passed uncached
+  race tests; SDK build, typecheck and all 48 tests passed (zero skips), including
+  the same actual-CLI characterization; packed consumer, generated contract,
+  architecture and CI path-policy checks passed. The broad CLI Management run
+  had exactly the same 15 supervised-Git/procfs failures as the baseline and no
+  additional failures. This is not a claim that the whole CLI suite passed.
+  This container's Node 24 test process needs `NODE_USE_ENV_PROXY=0` for an
+  existing fixture that deliberately supplies invalid proxies; product code and
+  the hosted Node 22.21.1 workflow are unchanged.
+- Second implementation review and final-head evidence: pending.
 - Before production changes, the actual CLI + SDK characterization passed on
   Go 1.26.10: `node --experimental-strip-types --test test/production-engine.test.ts`
   from `sdks/typescript` (27.63 s including source build; one pass, zero failures

@@ -25,9 +25,16 @@ func (a *Application) runApply(plan *planEntry, record Observation, unlock func(
 	record.Operation = finishOperation(record.Operation, outcome, err, panicked, a.opts.Lock.IsActive(err))
 	if err = a.opts.Store.Save(cloneObservation(record)); err != nil {
 		record.Operation.State = Interrupted
+		record.Operation.Phase = "interrupted"
 		record.Operation.Result = nil
 		record.Operation.Diagnostics = append(record.Operation.Diagnostics, Diagnostic{
 			Code: "OUTCOME_NOT_PERSISTED", Message: "The final result could not be saved; inspect before another mutation", Severity: DiagnosticSeverityError})
+		// A failed save can already have published the terminal record. Replace
+		// it with uncertainty before releasing the mutation lock. If that also
+		// fails, stop this owner; restart must inspect whichever record survived.
+		if saveErr := a.opts.Store.Save(cloneObservation(record)); saveErr != nil {
+			a.cancel()
+		}
 	}
 	if err == nil && record.Operation.State == Succeeded {
 		if linkErr := a.reconcileObservations(plan, record.Operation.OperationId, outcome); linkErr != nil {

@@ -3,6 +3,7 @@ package management
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -205,7 +206,7 @@ func (a *Application) accept(plan *planEntry, requestID string) (Observation, er
 		return Observation{}, ErrPlanStale
 	}
 	now := time.Now().UTC()
-	record := Observation{Version: 1, EnvironmentID: a.opts.EnvironmentID, IntentRoot: a.opts.IntentRoot, ContextID: a.opts.ContextID, Fingerprint: digest(plan.review.PlanId), InstallerIDs: append([]string(nil), plan.prepared.OperationIDs()...), Operation: Operation{
+	record := Observation{Version: 1, EnvironmentID: a.opts.EnvironmentID, IntentRoot: a.opts.IntentRoot, ContextID: a.opts.ContextID, Fingerprint: digest(plan.review.PlanId), InstallerIDs: slices.Clone(plan.prepared.OperationIDs()), Operation: Operation{
 		EnvironmentId: a.opts.EnvironmentID, Action: plan.review.Action, LocalSkill: plan.localSkill, OperationId: plan.operationID, PlanId: plan.review.PlanId, RequestId: requestID, ContextId: a.opts.ContextID,
 		State: Queued, Phase: "preflight", Items: []OperationItem{}, Diagnostics: []Diagnostic{}, Total: len(plan.review.Actions), CreatedAt: now, UpdatedAt: now,
 	}}
@@ -217,6 +218,11 @@ func (a *Application) accept(plan *planEntry, requestID string) (Observation, er
 			return Observation{}, refusal(409, "HISTORY_FULL", "Retained operation history is full; unresolved identities cannot be discarded", false)
 		}
 		return Observation{}, refusal(503, "OBSERVATION_UNAVAILABLE", "Retained operation history cannot be read safely", true)
+	}
+	// Cleanup can wait for cancellation or outlive the review. It must not
+	// transfer authority after shutdown or expiry while holding the mutex.
+	if a.ctx.Err() != nil || !time.Now().Before(plan.review.ExpiresAt) {
+		return Observation{}, ErrPlanStale
 	}
 	if err := a.opts.Store.Save(cloneObservation(record)); err != nil {
 		// Atomic publication can be visible even after an error. Preserve the request

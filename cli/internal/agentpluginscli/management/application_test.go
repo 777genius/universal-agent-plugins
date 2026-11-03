@@ -14,6 +14,7 @@ type applicationTestStore struct {
 	mu             sync.Mutex
 	records        map[string]Observation
 	failSave       string
+	failSaves      []string
 	lookupCount    int
 	appearOnSecond *Observation
 }
@@ -58,6 +59,10 @@ func (s *applicationTestStore) Save(record Observation) error {
 	defer s.mu.Unlock()
 	mode := s.failSave
 	s.failSave = ""
+	if len(s.failSaves) > 0 {
+		mode = s.failSaves[0]
+		s.failSaves = s.failSaves[1:]
+	}
 	if mode == "before" {
 		return errors.New("save refused before publication")
 	}
@@ -93,7 +98,7 @@ func (*applicationTestLock) IsActive(err error) bool { return errors.Is(err, err
 type applicationTestBackend struct {
 	prepare func(context.Context, ChangeRequest, string) (Prepared, error)
 	session func(context.Context) (Session, error)
-	forget  func(Operation) error
+	forget  func(context.Context, Operation) error
 	closed  atomic.Int32
 }
 
@@ -127,9 +132,9 @@ func (b *applicationTestBackend) Prepare(ctx context.Context, input ChangeReques
 func (b *applicationTestBackend) PrepareLocalSkill(ctx context.Context, _ LocalSkillRequest, id string) (Prepared, error) {
 	return b.Prepare(ctx, ChangeRequest{Action: LocalSkill}, id)
 }
-func (b *applicationTestBackend) ForgetObservation(_ context.Context, op Operation) error {
+func (b *applicationTestBackend) ForgetObservation(ctx context.Context, op Operation) error {
 	if b.forget != nil {
-		return b.forget(op)
+		return b.forget(ctx, op)
 	}
 	return nil
 }
@@ -139,6 +144,7 @@ type applicationTestPrepared struct {
 	review        Plan
 	check         func(context.Context) error
 	apply         func(context.Context, func(Progress)) (Outcome, error)
+	operationIDs  func() []string
 	calls, closed atomic.Int32
 }
 
@@ -161,8 +167,13 @@ func (p *applicationTestPrepared) Apply(ctx context.Context, progress func(Progr
 	}
 	return applicationSuccess(), nil
 }
-func (*applicationTestPrepared) OperationIDs() []string { return []string{"retained-installer-id"} }
-func (p *applicationTestPrepared) Close()               { p.closed.Add(1) }
+func (p *applicationTestPrepared) OperationIDs() []string {
+	if p.operationIDs != nil {
+		return p.operationIDs()
+	}
+	return []string{"retained-installer-id"}
+}
+func (p *applicationTestPrepared) Close() { p.closed.Add(1) }
 func applicationSuccess() Outcome {
 	return Outcome{State: Succeeded, Result: OperationResult{Outcome: "completed", Items: []OperationItem{}, NextActions: []NextAction{}}}
 }
@@ -441,7 +452,7 @@ func TestCleanupRefusalRetainsHistoryWithoutBlockingBelowBudget(t *testing.T) {
 	var forgetCalls atomic.Int32
 	var refuse atomic.Bool
 	refuse.Store(true)
-	backend := &applicationTestBackend{forget: func(Operation) error {
+	backend := &applicationTestBackend{forget: func(context.Context, Operation) error {
 		forgetCalls.Add(1)
 		if refuse.Load() {
 			return errors.New("private backup changed")

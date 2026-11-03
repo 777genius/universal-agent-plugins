@@ -75,10 +75,12 @@ func (a *Application) Done() <-chan struct{}     { return a.done }
 // a wait group. Accepted work and unaccepted prepared objects have one owner.
 func (a *Application) Close() {
 	a.closeOnce.Do(func() {
+		// Retention may hold mu while backend cleanup waits for this context.
+		// Cancel first; admission also checks ctx before adding any worker.
+		a.cancel()
 		a.mu.Lock()
 		a.closed = true
 		a.mu.Unlock()
-		a.cancel()
 		a.workers.Wait()
 		a.mu.Lock()
 		var pending []Prepared
