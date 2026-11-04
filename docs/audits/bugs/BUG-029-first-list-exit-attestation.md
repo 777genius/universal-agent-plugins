@@ -22,4 +22,4 @@ Change only the harness qualification gate and one counterexample regression. Pr
 
 ## Status
 
-Plan and source-backed code path recorded. Regression and final-head verification pending.
+Regression committed in `9653665e54ae2d325b7438852d7f2fc6c0159477`. Harness gate fixed in `736af6d330e987ad23b6bcb51286ac79e37aa11d`. Both commits pushed to PR #698. The counterexample now asserts initial list exit=1, matching parsed JSON, **no repeat add**, **no remove**, and `incomplete-native-proof`. CI and fresh full-lane ZIPs on the final documentation HEAD are pending; no final-HEAD PASS or merge authorization.
