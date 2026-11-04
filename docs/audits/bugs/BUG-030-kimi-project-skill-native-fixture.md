@@ -37,3 +37,20 @@ Two preconditions confirmed from real source/ZIP; narrow workflow and harness co
 **Security/diagnostic critic:** The raw `PLAN_REJECTED` fallback deliberately redacts arbitrary provider errors. Fix typed categorization if it is the confirmed cause, not by printing inner errors or treating an unknown native-client condition as success.
 
 **State after this run:** 30/30 live Kimi Skills still failing; the original fixture correction is merged into this PR, product cause not yet verified, regression and final rerun pending.
+
+## Source-traced Kimi failure boundary and proposed three-line repair
+
+The entire actual source path explains a likely **product preflight omission** without guessing from the native npm launcher:
+
+- `install/integrationctl/agentplugins/adapters/clientdetect/detector.go`: `Detect(ctx)` calls `detect(ctx,false,nil)` and **does not** populate `DetectedClient.Version`; only the explicitly targeted `DetectTargetsWithVersionProbe` may do so.
+- `cli/internal/agentpluginscli/skills_batch_prepare.go`: `prepareSkillsBindings` calls `detectDependencyClients(ctx,app)` (the no-version detector), then `preflightDependencyAdapter` **without** the existing `adapter.preflightProjectVersions` helper.
+- `cli/internal/agentpluginscli/deps_sync.go`: the ordinary saved-dependency `preflightDependencyActions` **already calls** `adapter.preflightProjectVersions` before `preflightDependencyAdapter`. The Skills path omitted this existing step. `adapter.Prepare` otherwise forwards `ClientVersion: client.Version` to Installer.
+- `install/integrationctl/agentplugins/clients/kimi/scope.go`: `CheckPlanPrecondition` calls `currentKimi` and rejects missing or other versions; a genuine CLI `--version` observed by the *Python harness* is not proof that the independently created **Go request** carries that version.
+
+**Minimal proposed fix:** call existing `adapter.preflightProjectVersions(ctx, prepared.Bindings)` in `prepareSkillsBindings` after detection and before `preflightDependencyAdapter`, returning any error without mutation. This preserves the 2.3.1/2.3.2 gate, target identity matching, explicit project-scope selection, and fail-closed behavior; no new probing subsystem. On success, the detected map bound to the same request carries the selected verified version. No change to native Kimi adapter, package resolver, scanner or signed Registry.
+
+**Review 1 — privacy/scope:** `ensureSelectedProjectVersions` only invokes the **targeted** bounded, profile-bound native `--version` probe for explicitly selected project clients with missing version. It cannot run an arbitrary unselected vendor. However Kimi `--version` may initialize its own profile/cache; do not call it from ambient `Detect` or arbitrary catalogue scans, and verify the user-facing preparation contract before accepting wider behavior. This must not turn profile trust or activation into an attestation.
+
+**Review 2 — correctness/freshness:** the selected Go version must be bound to the original config root/executable and compared before use (already enforced by `selectedProjectVersion`). The user's CLI outer `--version` in the ZIP is independent and insufficient. Test both a positive versioned Kimi project case and empty/mismatched version fail-closed with source-only fixtures, then verify 30 actual sources, repeats and cleanup on CI. Do not map all `PLAN_REJECTED` to version errors merely from this hypothesis.
+
+**State:** source-explained likely root cause, not yet full E2E proof; code must be evaluated by real CI and independent review.
