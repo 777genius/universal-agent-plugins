@@ -29,4 +29,4 @@ Only the E2E proof layer and frozen fixture change. No installer or Registry pol
 
 ## Status
 
-Plan recorded before implementation; final-head CI and independent CodeRabbit/Strix qualification remain mandatory.
+Minimal source-selector correction and exact-source regression pushed in commits `7bd2b0e` and `2246108`. The CLI exposes `repository/subpath` as `list.source`, while `directory.recorded_distribution` is separately matched to the frozen distribution; distribution-only and absent/forged source are rejected. Public diagnostic evidence now preserves safe multi-component source paths. **Final-head Python, CI, complete live ZIP evidence, and CodeRabbit/Strix re-review remain pending; do not count historical pilots or merge.**
