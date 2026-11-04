@@ -942,5 +942,58 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertTrue(native["native_residuals"])
 
 
+    def test_copilot_settings_probe_redacts_values_and_keeps_refusals(self):
+        # BUG-019: distinguish a qualified native key from incidental text,
+        # never include native settings contents in retained E2E artifacts.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve() / "plugin-00"
+            home = case / "home"
+            settings = home / ".copilot/settings.json"
+            settings.parent.mkdir(parents=True)
+            self.assertEqual(
+                audit.copilot_settings_sanitized_shape(home, case, "atlassian"),
+                {"status": "absent"})
+            settings.write_text(
+                '{"plugins":{"atlassian@agentplugins-aaaaaaaaaaaa":true},'
+                '"unmanaged":{"secret":"confidential-password-123",'
+                '"url":"https://example.invalid/atlassian"}}')
+            proof = audit.copilot_settings_sanitized_shape(home, case, "atlassian")
+            self.assertEqual(proof["status"], "parsed")
+            self.assertEqual(proof["allowed_sections"], ["plugins"])
+            self.assertEqual(proof["match_counts"]["qualified_key"], 1)
+            self.assertEqual(proof["match_counts"]["reference_value"], 1)
+            self.assertEqual(proof["match_counts"]["exact_key"], 0)
+            self.assertNotIn("confidential-password-123", str(proof))
+            self.assertNotIn("example.invalid", str(proof))
+            self.assertNotIn("unmanaged", str(proof))
+            settings.write_text('{"plugins":{}}')
+            clean = audit.copilot_settings_sanitized_shape(home, case, "atlassian")
+            self.assertEqual(clean["status"], "parsed")
+            self.assertFalse(any(clean["match_counts"].values()))
+
+    def test_copilot_settings_probe_rejects_unsafe_paths_and_bad_json(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            case, outside = root / "case", root / "outside"
+            settings = case / "home/.copilot/settings.json"
+            settings.parent.mkdir(parents=True)
+            outside.write_text('{"plugins":{"atlassian":true}}')
+            settings.symlink_to(outside)
+            self.assertEqual(audit.copilot_settings_sanitized_shape(
+                case / "home", case, "atlassian")["status"], "unsafe-path")
+            settings.unlink()
+            settings.write_text('{"invalid-json"')
+            self.assertEqual(audit.copilot_settings_sanitized_shape(
+                case / "home", case, "atlassian")["status"],
+                "unreadable-or-invalid-json")
+            settings.write_bytes(b"X" * (1024 * 1024 + 1))
+            self.assertEqual(audit.copilot_settings_sanitized_shape(
+                case / "home", case, "atlassian")["status"],
+                "not-regular-or-too-large")
+
+
+
 if __name__ == "__main__":
     unittest.main()
