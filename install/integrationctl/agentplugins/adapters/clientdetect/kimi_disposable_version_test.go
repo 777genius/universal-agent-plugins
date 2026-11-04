@@ -103,3 +103,52 @@ func TestKimiTargetedVersionProbeUsesDisposableProfile(t *testing.T) {
 		})
 	}
 }
+
+// If a caller points TMPDIR into the selected profile, refuse before launching
+// any version process or writing a temporary cache beneath user data.
+func TestKimiVersionProbeRejectsTempRootInsideOriginalProfile(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "home")
+	profile := filepath.Join(home, ".kimi-code")
+	if err := os.MkdirAll(profile, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(key, profile)
+	}
+	if filepath.Clean(os.TempDir()) != filepath.Clean(profile) {
+		t.Skip("runtime temp root does not observe platform temporary-directory override")
+	}
+	registry, err := clients.NewRegistry(kimi.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	detector := NewOS(home)
+	detector.Registry = registry
+	executable := filepath.Join(base, "kimi")
+	if runtime.GOOS == "windows" {
+		executable += ".exe"
+	}
+	if err := os.WriteFile(executable, []byte("fixture"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	detector.LookPath = func(name string) (string, error) {
+		if name == "kimi" {
+			return executable, nil
+		}
+		return "", os.ErrNotExist
+	}
+	probes := 0
+	detector.ProbeVersionWithEnvironment = func(context.Context, string, []string) (string, error) {
+		probes++
+		return "2.3.2", nil
+	}
+	detected, err := detector.DetectTargetsWithVersionProbe(context.Background(), []domain.ClientID{domain.ClientKimi})
+	if err != nil || len(detected) != 1 || detected[0].DetectionError == nil || probes != 0 {
+		t.Fatalf("overlapping native probe ran or was accepted: %+v probes=%d err=%v", detected, probes, err)
+	}
+	entries, err := os.ReadDir(profile)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("overlapping native profile was modified: %v %+v", err, entries)
+	}
+}

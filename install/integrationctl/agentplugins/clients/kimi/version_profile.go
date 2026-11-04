@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	_ clients.VersionProbeEnvironment        = (*Adapter)(nil)
-	_ clients.DisposableVersionProbeProfile  = (*Adapter)(nil)
-	_ clients.ProjectVersionRequirement      = (*Adapter)(nil)
+	_ clients.VersionProbeEnvironment       = (*Adapter)(nil)
+	_ clients.DisposableVersionProbeProfile = (*Adapter)(nil)
+	_ clients.ProjectVersionRequirement     = (*Adapter)(nil)
 )
 
 func (*Adapter) RequiresProjectVersion(client domain.DetectedClient) bool {
