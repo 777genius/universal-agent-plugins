@@ -1149,7 +1149,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             managed_foreign = project / ".uap/managed/clients/qoder/foreign-neighbor"
             self.assertTrue(foreign.is_file())
             self.assertEqual(foreign.read_text(encoding="utf-8"),
-                             "---\\nname: foreign-neighbor\\ndescription: unrelated\\n---\\n")
+                             "---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
             self.assertFalse(managed_foreign.exists())
             self.assertTrue(row["sentinels_preserved"])
 
