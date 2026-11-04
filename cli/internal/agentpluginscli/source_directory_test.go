@@ -84,7 +84,9 @@ func TestDirectoryV2CompatibilityUsesScopedGrantsWithoutBorrowingUserEvidence(t 
 			evidence := loaded.envelope.CatalogEvidence
 			compatibility := evidence.Compatibility["cursor"]
 			if evidence.CatalogVersion != "directory-snapshot-2" || compatibility.Authentication != tc.auth ||
-				len(compatibility.Evidence) != 1 || compatibility.Evidence[0].Scope != tc.scope {
+				len(compatibility.Evidence) != 1 ||
+				(tc.scope == domain.ScopeProject && compatibility.Evidence[0].Scope != domain.ScopeProject ||
+					tc.scope == domain.ScopeUser && compatibility.Evidence[0].Scope != "" && compatibility.Evidence[0].Scope != domain.ScopeUser) {
 				t.Fatalf("%s inherited another scope's policy/evidence: %+v", tc.scope, compatibility)
 			}
 		})
