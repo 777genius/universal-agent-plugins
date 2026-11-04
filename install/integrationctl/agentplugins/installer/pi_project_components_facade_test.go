@@ -243,6 +243,40 @@ func TestPiUserNativeSkillsMCPFacadeAndForeignIsolation(t *testing.T) {
 				}
 				return result
 			}
+			// Both foreign directory owners and foreign MCP keys must refuse
+			// before a new global binding claims them. The unrelated foreign
+			// entry must survive both failed attempts byte for byte.
+			refuse := func(reason string) {
+				t.Helper()
+				prepared, err := engine.Prepare(context.Background(), request(OpInstall, "TEST-pi-global"))
+				if err != nil {
+					return
+				}
+				result, applyErr := engine.Apply(context.Background(), prepared, Decision{Confirmed: true})
+				closeErr := prepared.Close()
+				if closeErr != nil {
+					t.Fatal(closeErr)
+				}
+				if applyErr == nil && result.Outcome == OutcomeCompleted {
+					t.Fatal("Pi global adopted foreign "+reason)
+				}
+			}
+			occupiedSkill := filepath.Join(profile, "skills", "pi-managed", "SKILL.md")
+			write(occupiedSkill, "foreign Skill\n")
+			refuse("Skill")
+			if body, err := os.ReadFile(occupiedSkill); err != nil || string(body) != "foreign Skill\n" {
+				t.Fatal("Pi global foreign Skill changed after refusal", err)
+			}
+			if err := os.RemoveAll(filepath.Dir(occupiedSkill)); err != nil {
+				t.Fatal(err)
+			}
+			occupiedMCP := `{"other":"keep","mcpServers":{"foreign":{"url":"https://foreign.invalid/mcp"},"pi-managed":{"url":"https://occupied.invalid/mcp"}}}`+"\n"
+			write(filepath.Join(profile, "mcp.json"), occupiedMCP)
+			refuse("MCP")
+			if body, err := os.ReadFile(filepath.Join(profile, "mcp.json")); err != nil || string(body) != occupiedMCP {
+				t.Fatal("Pi global foreign MCP member changed after refusal", err)
+			}
+			write(filepath.Join(profile, "mcp.json"), foreign)
 			installed := do(request(OpInstall, "TEST-pi-global"))
 			if installed.Binding.Scope != string(domain.ScopeUser) || filepath.Dir(installed.Binding.TargetPath) != filepath.Join(profile, "extensions") {
 				t.Fatal("global Pi binding is not under the selected physical profile")
