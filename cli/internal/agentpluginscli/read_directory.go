@@ -280,7 +280,7 @@ func inspectDistribution(snapshot domain.DirectorySnapshot, product domain.Direc
 				// V2 grants are scoped individually; evidence from another
 				// grant for the same client must not appear under this scope.
 				scopes = []domain.InstallScope{target.Scope}
-				evidenceIDs = append(append([]string(nil), policy.CurrentEvidence...), target.CurrentEvidence...)
+				evidenceIDs = evidenceIDsForV2Grant(snapshot, policy, target)
 			}
 			result.Targets = append(result.Targets, publicTargetCompatibility{
 				Client: target.Client, Scopes: scopes, Delivery: target.Delivery, Evidence: evidenceIDs,
@@ -315,4 +315,26 @@ func evidenceIDsForClient(snapshot domain.DirectorySnapshot, distribution string
 		}
 	}
 	return ids
+}
+
+// V2 compatibility rows must not claim policy-level evidence belonging to
+// another client or scope. Full release evidence remains visible separately.
+func evidenceIDsForV2Grant(snapshot domain.DirectorySnapshot, policy domain.DirectoryReleasePolicy, target domain.DirectoryTarget) []string {
+	ids := append(append([]string(nil), policy.CurrentEvidence...), target.CurrentEvidence...)
+	filtered := make([]string, 0, len(ids))
+	for _, id := range ids {
+		for _, evidence := range snapshot.Evidence {
+			if evidence.ID != id {
+				continue
+			}
+			if evidence.Level == "schema" && evidence.Client == "" && evidence.Scope == "" {
+				filtered = append(filtered, id)
+			} else if evidence.Client == target.Client &&
+				(evidence.Scope == target.Scope || target.Scope == domain.ScopeUser && evidence.Scope == "") {
+				filtered = append(filtered, id)
+			}
+			break
+		}
+	}
+	return filtered
 }

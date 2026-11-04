@@ -312,7 +312,7 @@ func TestPublicDirectoryV2ScopesDoNotBorrowAnotherGrantEvidence(t *testing.T) {
 			Releases: []domain.DirectoryRelease{{Sequence: 7}},
 			ReleasePolicies: []domain.DirectoryReleasePolicy{{
 				ReleaseSequence: 7,
-				CurrentEvidence: []string{"schema-pass"},
+				CurrentEvidence: []string{"schema-pass", "cursor-policy-runtime", "project-policy-materialization"},
 				Targets: []domain.DirectoryTarget{
 					{Client: domain.ClientCodex, Scope: domain.ScopeUser, CurrentEvidence: []string{"user-runtime"}},
 					{Client: domain.ClientCodex, Scope: domain.ScopeProject, CurrentEvidence: []string{"project-runtime"}},
@@ -321,6 +321,8 @@ func TestPublicDirectoryV2ScopesDoNotBorrowAnotherGrantEvidence(t *testing.T) {
 		}},
 		Evidence: []domain.DirectoryEvidence{
 			{ID: "schema-pass", DistributionID: id, ReleaseSequence: 7, Level: "schema"},
+			{ID: "cursor-policy-runtime", DistributionID: id, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCursor, Scope: domain.ScopeUser},
+			{ID: "project-policy-materialization", DistributionID: id, ReleaseSequence: 7, Level: "materialization", Client: domain.ClientCodex, Scope: domain.ScopeProject},
 			{ID: "user-runtime", DistributionID: id, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeUser},
 			{ID: "project-runtime", DistributionID: id, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeProject},
 		},
@@ -331,11 +333,11 @@ func TestPublicDirectoryV2ScopesDoNotBorrowAnotherGrantEvidence(t *testing.T) {
 	}
 	for i, check := range []struct {
 		scope domain.InstallScope
-		id    string
-	}{{domain.ScopeUser, "user-runtime"}, {domain.ScopeProject, "project-runtime"}} {
+		wantEvidence string
+	}{{domain.ScopeUser, "schema-pass,user-runtime"}, {domain.ScopeProject, "schema-pass,project-policy-materialization,project-runtime"}} {
 		row := result.Targets[i]
 		if row.Client != domain.ClientCodex || len(row.Scopes) != 1 || row.Scopes[0] != check.scope ||
-			len(row.Evidence) != 2 || row.Evidence[0] != "schema-pass" || row.Evidence[1] != check.id {
+			strings.Join(row.Evidence, ",") != check.wantEvidence {
 			t.Fatalf("v2 %s grant leaked another scope's evidence: %+v", check.scope, row)
 		}
 	}
