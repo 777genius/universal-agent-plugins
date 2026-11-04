@@ -1222,11 +1222,17 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     runroot = outer / poisoned
                     case = runroot / "plugin-00"
 
+                    injected = set()
+
                     def injected_mkdir(path, *args, **kwargs):
                         result = original_mkdir(path, *args, **kwargs)
-                        if poisoned == "home" and path == case:
+                        # Path.mkdir(parents=True) may retry the same path.
+                        # Plant a symlink exactly once, before the next guard.
+                        if not injected and poisoned == "home" and path == case:
+                            injected.add(poisoned)
                             (case / "home").symlink_to(foreign, target_is_directory=True)
-                        elif poisoned == "local-parent" and path == case / "home":
+                        elif not injected and poisoned == "local-parent" and path == case / "home":
+                            injected.add(poisoned)
                             (case / "home/.local").symlink_to(
                                 foreign, target_is_directory=True)
                         return result
@@ -1235,6 +1241,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                           self.assertRaisesRegex(ValueError, "nested audit directory")):
                         audit.do_case("/unused/agentplugins", "codex", "plugin",
                                       "atlassian", 0, runroot, {})
+                    self.assertEqual(injected, {poisoned})
                     self.assertEqual(list(foreign.iterdir()), [])
 
     def test_failed_first_list_cannot_attest_plugin_lifecycle(self):
