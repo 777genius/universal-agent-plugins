@@ -168,7 +168,7 @@ func validateV2Distributions(snapshot domain.DirectorySnapshot, products map[str
 		for _, release := range distribution.Releases {
 			key := releaseKey(distribution.ID, release.Sequence)
 			date, err := parseTimestamp(release.PublishedAt)
-			if err != nil || date.After(start) || release.Sequence < 1 || releases[key].Sequence != 0 ||
+			if err != nil || date.After(start) || release.Sequence < 1 || release.PackageVersion == "" || releases[key].Sequence != 0 ||
 				release.ManifestName != product.ManifestName || release.AgentPluginsSchema != supportedPluginSchema ||
 				release.TreeDigestAlgorithm != domain.TreeDigestAlgorithm ||
 				!digestPattern.MatchString(release.TreeDigest) || !digestPattern.MatchString(release.ManifestDigest) {

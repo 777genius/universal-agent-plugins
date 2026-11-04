@@ -95,3 +95,31 @@ func TestV2RejectsScopeOrGrantDowngrade(t *testing.T) {
 		t.Fatalf("v2 grant borrowed legacy scopes: %v", err)
 	}
 }
+
+func TestV2RejectsMissingImmutablePackageVersion(t *testing.T) {
+	snapshot, _, _ := v2SignedFixture(t)
+	for _, tc := range []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{"omitted", func(release map[string]any) { delete(release, "package_version") }},
+		{"empty", func(release map[string]any) { release["package_version"] = "" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var raw map[string]any
+			if err := json.Unmarshal(snapshot, &raw); err != nil {
+				t.Fatal(err)
+			}
+			distribution := raw["distributions"].([]any)[0].(map[string]any)
+			release := distribution["releases"].([]any)[0].(map[string]any)
+			tc.mutate(release)
+			payload, err := json.Marshal(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ParseV2Snapshot(payload); !errors.Is(err, ErrStrictJSON) {
+				t.Fatalf("v2 accepted %s package_version: %v", tc.name, err)
+			}
+		})
+	}
+}
