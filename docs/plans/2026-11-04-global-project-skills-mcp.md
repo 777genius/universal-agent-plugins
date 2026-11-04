@@ -163,6 +163,54 @@ adapter admission. Devin-only evidence не разрешает legacy Windsurf �
   а не граф. Его смысл сохраняется; он не используется как closure fingerprint.
 - Повторно используем existing resolver и validated lock, добавляя только bounded
   canonicalization. Новый lock schema или browser resolver не нужен.
+**Точный сериализатор closure-v1 (до реализации; test vectors для publisher и CLI).**
+Вход — уже верифицированные resolved Lock/pins и только транзитивные **required** рёбра от
+выбранного root. Структура JSON содержит ровно `format: "uap-directory-closure-v1"`,
+`client`, `scope` (`user` или `project`), `root`, `nodes`, `required_edges`.
+`root` и `nodes[].id` имеют форму `distribution_id#release_sequence`, где sequence —
+каноническое десятичное целое без ведущих нулей. Каждый узел содержит *ровно* поля
+`id`, `distribution_id`, `release_sequence`, `manifest_name`, `package_source`
+(`repository`, `revision`, `path`), `tree_digest`, `manifest_digest`,
+`minimum_installer_version`. Значения pins берутся из точной подписанной release/
+lock authority, не из mutable workspace. Ребро содержит ровно `from` и `to`.
+
+Узлы сортируются по байтам UTF-8 `id`, required-рёбра — лексикографически по
+(`from`, `to`). Повторы ID/рёбер, неоднозначные ID, отсутствующий root,
+висячие рёбра, циклы и required-узлы, не достижимые от root, — ошибка, не
+дедупликация или fallback. Необязательные зависимости не включаются; все
+обязательные коллекции присутствуют (в том числе `required_edges: []`), `null`
+и пропуск обязательных полей запрещены. `package_source.path` сохраняет ровно
+подписанную строку, включая пустую, если это разрешено source-контрактом.
+Нет OS/HOME, токенов, случайных ID установки, user paths и state timestamps.
+
+Сериализация — *существующий* Registry `canonical_json`: строки/ключи NFC,
+casefold-коллизии запрещены, только целые JSON numbers в safe range, ключи
+сортируются, UTF-8 без ASCII escape, `sort_keys=True`, `separators=(",", ":")`,
+ровно один завершающий LF. `closure_digest = sha256:` + lowercase hex SHA-256
+от `"UAP-DIRECTORY-CLOSURE-SHA256-V1\\0"` (один NUL, не два печатных символа),
+затем `uint64_be(len(canonical_bytes))`, затем `canonical_bytes`. Включённые
+в каждый pin installer floors связывают digest с policy; подписанный
+`canonical_closure.minimum_installer_version` равен семантическому максимуму
+floors required-узлов. Владелец publisher и читатель CLI проверяют **одинаковые**
+байты и векторы до выдачи любого `eligible=true`.
+
+Векторы (каждый JSON — **одна строка + LF**; значение digest рассчитано от
+полных UTF-8 байтов, включая LF):
+
+```json
+{"client":"codex","format":"uap-directory-closure-v1","nodes":[{"distribution_id":"owner/tool","id":"owner/tool#7","manifest_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","manifest_name":"tool","minimum_installer_version":"1.0.0","package_source":{"path":"plugin","repository":"owner/tool","revision":"1111111111111111111111111111111111111111"},"release_sequence":7,"tree_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"required_edges":[],"root":"owner/tool#7","scope":"project"}
+```
+`len=553`, `sha256:d1da8cc1af2b9a529ceac5d211aec9472a7bfc79ad31e23ef1cbe71111d94471` (root без зависимостей, floor `1.0.0`).
+
+```json
+{"client":"codex","format":"uap-directory-closure-v1","nodes":[{"distribution_id":"owner/child","id":"owner/child#2","manifest_digest":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","manifest_name":"child","minimum_installer_version":"1.1.0","package_source":{"path":"src/child","repository":"owner/child","revision":"2222222222222222222222222222222222222222"},"release_sequence":2,"tree_digest":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},{"distribution_id":"owner/tool","id":"owner/tool#7","manifest_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","manifest_name":"tool","minimum_installer_version":"1.0.0","package_source":{"path":"plugin","repository":"owner/tool","revision":"1111111111111111111111111111111111111111"},"release_sequence":7,"tree_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"required_edges":[{"from":"owner/tool#7","to":"owner/child#2"}],"root":"owner/tool#7","scope":"project"}
+```
+`len=1032`, `sha256:b1ed744bb4fd47696c00f3cb6bef67b5adf314631b3353670d44ae0d39dbb00d` (один required child, floor `1.1.0`).
+
+Изменение `client`, `scope`, pin, required edge или узлового floor меняет digest.
+Физические A/B root-пути проверяются отдельно на runtime/ownership границе;
+подписанный closure не должен зависеть от выбранного каталога пользователя.
+
 - User evidence не квалифицирует Project. A/B/user fixture имеет независимые canonical
   roots; реальные абсолютные пути пользователя не публикуются в каталоге.
 - Optional `canonical_closure` на grant содержит `eligible`, `closure_digest` и
