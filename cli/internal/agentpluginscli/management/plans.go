@@ -229,6 +229,11 @@ func (a *Application) accept(plan *planEntry, requestID string) (Observation, er
 		// identity and any visible observation; no worker or effect starts here.
 		return Observation{}, refusal(503, "ACCEPTANCE_UNAVAILABLE", "Acceptance could not be persisted; retain this request identity before retrying", true)
 	}
+	if a.ctx.Err() != nil {
+		// Shutdown can cancel while Save holds the mutex. Keep the accepted
+		// identity for restart, but leave prepared cleanup with Close.
+		return Observation{}, refusal(410, "SESSION_EXPIRED", "The process stopped after accepting this request; retain its identity and reopen to observe it", false)
+	}
 	ctx, cancel := context.WithCancel(a.ctx)
 	plan.acceptedRequest = requestID
 	a.running[plan.operationID] = &runningOperation{record: cloneObservation(record), ctx: ctx, cancel: cancel}

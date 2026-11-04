@@ -2,9 +2,9 @@
 
 Date: 2026-11-04. Research base: `999c25fcd22ab0cbd4c775aa6acc83e7cf422c3a`.
 Branch: `refactor/foundation-boundaries-20261104`.
-Status: implementation and three independent implementation review rounds
-complete; local qualification passed with the baseline CLI environment failures
-documented below. Hosted qualification remains pending in GitHub's queue.
+Status: three implementation review rounds completed; end-to-end continuation
+integrates current main and closes a subsequently reproduced acceptance/shutdown
+window. Current-head hosted qualification and merge are the remaining gates.
 PR: https://github.com/777genius/universal-agent-plugins/pull/700.
 
 ## Goal and scope decision
@@ -369,7 +369,49 @@ their success is not claimed by this ledger. The PR has no submitted external
 review findings as of this qualification snapshot. CodeRabbit reported its free
 review limit; Strix security review was still in progress. These external waits
 do not replace the completed independent critic rounds or justify bypassing a
-repository gate. No release, deployment or merge is part of this delivery.
+repository gate. The original delivery stopped at a reviewed PR; the owner's
+continuation below extends completion through qualified integration and merge.
+
+## End-to-end continuation (2026-11-04)
+
+The owner requested continuing to the complete result, including successful
+checks and necessary merge. Keep the researched refactor scope and existing
+release/deployment exclusions; complete the integration of this PR into main
+after applicable checks and reviews pass on its actual head.
+
+- Main advanced to `e6dc2e7f8c9b0eeabe6f37bdaa1bc3aa80382d2f` through #697.
+  Its changed files have no intersection with this refactor. An independent
+  integration critic reviewed the shared resolver/declaration-check seams and
+  found no signature or ownership incompatibility. Merge commit `b989f148`
+  integrates that exact main without conflict; qualification must include the
+  environment suite, Management backend journeys and the production CLI/SDK.
+- Strix completed security review with no open security findings, but described
+  a correctness window during acceptance persistence. An independent critic
+  reproduced cancellation both before and after publication: the old owner
+  still transferred to a worker after shutdown. Check the application lifetime
+  immediately after a successful acceptance Save. On shutdown, preserve the
+  durable identity, refuse with SESSION_EXPIRED and retain prepared cleanup in
+  Close. A fresh application observes Interrupted without execution. Do not use
+  the HTTP request context or add a post-acceptance review-expiry rule.
+- The focused regression pauses acceptance Save on both sides of publication,
+  verifies no Apply call, exactly-once backend/prepared cleanup and lock release,
+  then reopens and replays the original accepted identity without effects.
+- Codecov's lower patch coverage partly reflected cross-package instrumentation
+  loss after moving HTTP tests. An independent unchanged-test comparison raised
+  application coverage from 56.4% to 74.0% and catalog lifecycle from 0% to 85.7%
+  using only shared instrumentation. Preserve every existing module profile and
+  add/upload one profile instrumenting only the three Management packages. No
+  redundant unit tests or broad CLI instrumentation are needed for that metric.
+- Actual job inspection found a working Namespace Linux pool and queued GitHub
+  hosted classifiers/native jobs. Keep the existing runner routing and all
+  platform gates. Do not use `ci:github-hosted` to move healthy Linux work into
+  the same hosted queue; do not rerun queued jobs without a concrete failure.
+- Completion requires independent review of these corrections, successful
+  applicable current-head jobs (with intentional conditional skips identified),
+  no unresolved in-scope review findings, and an exact-head merge followed by
+  verification of the resulting main. Current evidence and final merge/check
+  links are recorded in PR #700 so evidence-only updates do not continually
+  cancel the qualification being awaited.
 - Before production changes, the actual CLI + SDK characterization passed on
   Go 1.26.10: `node --experimental-strip-types --test test/production-engine.test.ts`
   from `sdks/typescript` (27.63 s including source build; one pass, zero failures
