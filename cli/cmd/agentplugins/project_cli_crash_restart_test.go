@@ -141,6 +141,12 @@ func TestPublicCLICrashAfterDurablePhaseRecovery(t *testing.T) {
 	if status() {
 		t.Fatal("second cold public CLI still reports pending recovery")
 	}
+	var repeated struct {
+		Outcome string `json:"outcome"`
+	}
+	if err := json.Unmarshal(run("deps", "recover", "--yes"), &repeated); err != nil || repeated.Outcome != "unchanged" {
+		t.Fatalf("repeated recovery must be idempotent: outcome=%q, error=%v", repeated.Outcome, err)
+	}
 	if _, err := os.Lstat(journal); !os.IsNotExist(err) {
 		t.Fatalf("recovery left a live journal: %v", err)
 	}
