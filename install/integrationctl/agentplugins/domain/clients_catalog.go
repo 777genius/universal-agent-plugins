@@ -168,6 +168,7 @@ var clientDefinitions = []ClientDefinition{
 		BindsNativeProfileRoot:   true,
 		DiscoversNativeHooks:     true,
 		HonorsOpenAIMCPAuthHints: true,
+		LegacyPreparedProjectPackageReceipt: true,
 	}), LifecycleNativeConfig), SupportNative, SupportNative),
 	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,

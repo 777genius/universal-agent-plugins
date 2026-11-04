@@ -27,11 +27,12 @@ func preparedProjectFileCandidate(input AddInput, plan domain.DeliveryPlan) bool
 	// a mismatched client or package ID must reach the fail-closed verifier,
 	// rather than escape into a native-capability fallback. The exact identity
 	// check belongs to matchPreparedProjectBinding.
-	// Only a Qoder-selected project uses this legacy package-only native
-	// compatibility lane. Other clients retain their own lifecycle verifier.
-	// Either side can identify Qoder so a mismatched client still fails closed.
-	if (input.Client.ClientID == domain.ClientQoder || plan.ClientID == domain.ClientQoder) &&
-		len(plan.PreviousNativeObjects) == 1 {
+	// The client table, not this generic use case, declares legacy package-only
+	// project compatibility. Either identity may identify a legacy binding:
+	// mismatched identities still enter the fail-closed authority verifier.
+	legacy := domain.ClientTraitsFor(input.Client.ClientID).LegacyPreparedProjectPackageReceipt ||
+		domain.ClientTraitsFor(plan.ClientID).LegacyPreparedProjectPackageReceipt
+	if legacy && len(plan.PreviousNativeObjects) == 1 {
 		object := plan.PreviousNativeObjects[0]
 		if object.Kind == "managed_package_directory" && object.Path == plan.ActivePath {
 			return true
