@@ -134,6 +134,40 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             "stderr_tail": "release does not support complete target set",
         }))
 
+    def test_kiro_darwin_containment_refusal_remains_nonpass(self):
+        # BUG-048: a real Kiro 3.0.0 macOS CLI returns this exact
+        # fail-closed diagnostic before any native profile mutation.
+        audit = load_audit()
+        darwin = ("manual_activation_required: automatic native Kiro MCP lifecycle "
+                  "containment preflight failed: safe duplex process containment "
+                  "unavailable on Darwin; manual activation required")
+        linux = "manual_activation_required: cgroup v2 delegation unavailable"
+        for diagnostic in (darwin, linux):
+            with self.subTest(diagnostic=diagnostic):
+                self.assertTrue(audit.host_containment_refusal(diagnostic))
+                refused = {"exit_code": 1, "stdout_tail": "",
+                           "stderr_tail": diagnostic, "timeout": False,
+                           "_json": {"data": {"installations": []}}}
+                with TemporaryDirectory() as temporary:
+                    with patch.object(audit, "call", return_value=refused):
+                        evidence = audit.do_case(
+                            "/unused/audit-cli", "kiro", "plugin", "atlassian",
+                            0, Path(temporary).resolve(), {})
+                self.assertEqual(evidence["status"], "host-containment-unavailable")
+                self.assertFalse(evidence["listed_identity"])
+                self.assertFalse(evidence["failed_install_residue"])
+        for diagnostic in (
+            "manual_activation_required: native Kiro registry invalid",
+            "safe duplex process containment unavailable on Darwin",
+            "native process failed; unexpected exception",
+        ):
+            self.assertFalse(audit.host_containment_refusal(diagnostic))
+        # The same words in an otherwise successful response must not
+        # qualify a refusal. The CLI's nonzero exit remains mandatory.
+        self.assertFalse(audit.is_cli_refusal({
+            "exit_code": 0, "stderr_tail": darwin, "stdout_tail": "",
+            "timeout": False}))
+
     def test_every_native_plugin_client_preserves_foreign_profile_file(self):
         audit = load_audit()
         refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",

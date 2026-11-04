@@ -290,6 +290,14 @@ def is_cli_refusal(output):
     return type(output.get("exit_code")) is int and output["exit_code"] != 0
 
 
+def host_containment_refusal(diagnostic):
+    """Selected native process custody was explicitly unavailable, not a bad source."""
+    diagnostic = diagnostic.casefold()
+    return ("manual_activation_required" in diagnostic and
+            ("cgroup" in diagnostic or
+             "safe duplex process containment unavailable" in diagnostic))
+
+
 def passive_native_path(target, relative):
     """Downloaded caches and run logs are not active native registrations."""
     return ((target == "codex" and relative.startswith("plugins/cache/"))
@@ -1281,7 +1289,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         status = "cleanup-failed"
     elif failed_install_residue:
         status = "failed-install-residue"
-    elif install_refused and "manual_activation_required" in diagnostics and "cgroup" in diagnostics:
+    elif install_refused and host_containment_refusal(diagnostics):
         status = "host-containment-unavailable"
     elif install_refused and ("not detected" in diagnostics or "not available" in diagnostics
                              or "target_unavailable" in diagnostics):
