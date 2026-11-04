@@ -317,7 +317,10 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
                 for server_name, tool in (("pi-managed","echo"),("pi-http","ping")):
                     entries=[entry for entry in observed_mcp.get("servers",[])
                              if entry.get("name")==server_name]
-                    if len(entries)!=1 or entries[0].get("scope")!="user" or (
+                    # Pinned upstream Pi v1.4.0 reports `global`, not UAP's `user`.
+                    # The native shell contract is explicit in upstream
+                    # packages/coding-agent/src/extensions/mcp/{config,cli}.ts.
+                    if len(entries)!=1 or entries[0].get("scope")!="global" or (
                             entries[0].get("state")!="connected") or tool not in entries[0].get("tools",[]):
                         # Preserve the strict native gate. Report only bounded,
                         # non-secret status fields to distinguish a scope-name
