@@ -230,7 +230,7 @@ func (layout ProjectComponents) Inspect(components []domain.ComponentDecision, m
 			return clients.RegistryIndeterminate, err
 		}
 		if present && !owned {
-			if component.Kind == domain.ComponentSkill {
+			if component.Kind == domain.ComponentSkill && layout.Codec == nativeconfig.CodecCodex {
 				return clients.RegistryCollision, fmt.Errorf("%w: project skill %q", domain.ErrForeignSkillDestination, component.Name)
 			}
 			return clients.RegistryCollision, nil
