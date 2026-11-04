@@ -24,7 +24,7 @@ func TestAgentpluginsCodexNativeForeignSkillCLIRefusal(t *testing.T) {
 	stages := map[string]nativeStage{
 		"native_foreign_discovery": {Status: "not_evaluated"},
 		"public_cli_refusal":      {Status: "not_evaluated"},
-		"published_baseline":     {Status: "not_evaluated"},
+		"published_baseline":      {Status: "not_evaluated"},
 		"foreign_preservation":    {Status: "not_evaluated"},
 	}
 	evidence := f.evidence(t, stages)
