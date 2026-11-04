@@ -1133,6 +1133,44 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
 
 
+    def test_kimi_skill_uses_real_isolated_git_worktree(self):
+        audit = load_audit()
+        self.assertTrue(audit.GIT_EXECUTABLE and Path(audit.GIT_EXECUTABLE).is_file())
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve() / "case"
+            home, project, data = case / "home", case / "project", case / "uap-data"
+            for directory in (home, project, data):
+                directory.mkdir(parents=True)
+            env = audit.isolated_client_env(home, case, data)
+            audit.initialize_kimi_project_git_root(project, env, case)
+            self.assertTrue((project / ".git").is_dir())
+            self.assertFalse((project / ".git").is_symlink())
+            # Real Git must recognize this disposable root; an empty marker is not enough.
+            checked = audit.call([audit.GIT_EXECUTABLE, "-C", str(project),
+                                  "rev-parse", "--show-toplevel"], env, project, 30)
+            self.assertEqual(checked["exit_code"], 0)
+            self.assertEqual(Path(checked["stdout_tail"].strip()).resolve(), project)
+            with self.assertRaisesRegex(RuntimeError, "prerequisite unavailable"):
+                audit.initialize_kimi_project_git_root(project, env, case / "outside")
+
+    def test_kimi_git_precondition_is_not_applied_to_other_lanes(self):
+        audit = load_audit()
+        failed = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
+                  "timeout": False, "_json": {"data": {"installations": []}}}
+        fixture = {"name": "frontend-design", "source": "unused"}
+        with TemporaryDirectory() as temporary, \\
+             patch.object(audit, "call", return_value=failed), \\
+             patch.object(audit, "initialize_kimi_project_git_root") as initialize:
+            root = Path(temporary).resolve()
+            audit.do_case("/unused/agentplugins", "kimi", "plugin",
+                          "atlassian", 0, root / "kimi-plugin", {})
+            audit.do_case("/unused/agentplugins", "qoder", "skill",
+                          fixture, 0, root / "qoder-skill", {})
+            self.assertEqual(initialize.call_count, 0)
+            audit.do_case("/unused/agentplugins", "kimi", "skill",
+                          fixture, 0, root / "kimi-skill", {})
+            self.assertEqual(initialize.call_count, 1)
+
     def test_failed_first_list_cannot_attest_plugin_lifecycle(self):
         # BUG-029: matching JSON from a failed list is not an attestation.
         audit = load_audit()

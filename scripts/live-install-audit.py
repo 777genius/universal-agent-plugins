@@ -54,6 +54,9 @@ AGENT_BINARIES = {
     for candidates in EXECUTABLE.values() for name in candidates
     if (path := shutil.which(name))
 }
+# Git is a host test prerequisite, not a client plugin or an acquired package.
+# Resolve it before executing any third-party installation source.
+GIT_EXECUTABLE = str(Path(path).resolve()) if (path := shutil.which("git")) else None
 
 
 def validate_fixtures(doc):
@@ -790,6 +793,20 @@ def copilot_settings_sanitized_shape(home, case_root, identity):
             "allowed_sections": sections, "match_counts": counts}
 
 
+def initialize_kimi_project_git_root(project, env, case_root):
+    """Create a real Git worktree for Kimi project Skill discovery, inside one case."""
+    if (not GIT_EXECUTABLE or not Path(GIT_EXECUTABLE).is_file()
+            or not project.is_dir() or project.is_symlink()
+            or not project.resolve().is_relative_to(case_root.resolve())):
+        raise RuntimeError("genuine isolated Kimi Git prerequisite unavailable")
+    result = call([GIT_EXECUTABLE, "-c", "core.hooksPath=/dev/null",
+                   "init", "--quiet"], env, project, 30)
+    marker = project / ".git"
+    if (result["exit_code"] != 0 or not marker.is_dir() or marker.is_symlink()
+            or not marker.resolve().is_relative_to(project.resolve())):
+        raise RuntimeError("genuine isolated Kimi project git init failed")
+
+
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             signed_release_pins=None):
     case_root = runroot / f"{kind}-{index:02d}"
@@ -833,6 +850,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
     env = isolated_client_env(home, case_root, data)
+    if target == "kimi" and kind == "skill":
+        initialize_kimi_project_git_root(project, env, case_root)
     before = snapshot(native_roots)
     if kind == "plugin":
         identity = plugin_declared_names.get(item, item)

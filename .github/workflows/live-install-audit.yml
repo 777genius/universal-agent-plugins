@@ -144,6 +144,7 @@ jobs:
         id: native-install
         env:
           TARGET: ${{ matrix.target }}
+          KIND: ${{ matrix.kind }}
         shell: bash
         run: |
           set -euo pipefail
@@ -154,7 +155,14 @@ jobs:
             gemini) npm install --global @google/gemini-cli@0.66.0 ;;
             copilot) npm install --global @github/copilot@1.0.105 ;;
             cline) npm install --global cline@3.0.74 ;;
-            kimi) npm install --global @moonshot-ai/kimi-code@2.4.1 ;;
+            kimi)
+              # Project Skills qualify only against observed 2.3.1/2.3.2.
+              if [[ "$KIND" == "skill" ]]; then
+                npm install --global @moonshot-ai/kimi-code@2.3.2
+              else
+                npm install --global @moonshot-ai/kimi-code@2.4.1
+              fi
+              ;;
             qoder) npm install --global @qoder-ai/qodercli@1.1.81 ;;
             pi) npm install --global --ignore-scripts @earendil-works/pi-coding-agent@1.5.0 ;;
             *) exit 2 ;;
