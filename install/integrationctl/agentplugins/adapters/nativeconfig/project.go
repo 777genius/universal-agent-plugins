@@ -237,10 +237,8 @@ func projectBaseServer(codec Codec, server Server, placeholders Placeholders) (m
 		return nil, fmt.Errorf("%s remote MCP server does not accept remote_transport", codec)
 	}
 	entry := map[string]any{urlKey: url}
-	if codec == CodecOpenCode {
-		entry["type"] = "remote"
-	} else if codec == CodecQoder {
-		entry["type"] = "http"
+	if codec == CodecOpenCode || codec == CodecQoder {
+		entry["type"] = map[Codec]string{CodecOpenCode: "remote", CodecQoder: "http"}[codec]
 	}
 	if len(headers) > 0 {
 		entry["headers"] = headers
