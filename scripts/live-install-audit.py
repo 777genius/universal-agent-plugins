@@ -176,10 +176,10 @@ def exact_native_identity(text, identity):
         # TOML/YAML-style native registrations: exact keys or identity fields.
         # An unrelated URL such as https://github.com cannot qualify "github".
         return bool(
-            re.search(r"(?mi)^\\s*['\\\"]?" + escaped + r"['\\\"]?\\s*[:=]", text)
+            re.search(r"""(?mi)^\s*['"]?""" + escaped + r"""['"]?\s*[:=]""", text)
             or re.search(
-                r"(?mi)^\\s*(?:name|id|plugin|plugin_id|identity)\\s*[:=]\\s*"
-                r"['\\\"]?" + escaped + r"['\\\"]?\\s*(?:$|[,#}])", text)
+                r"""(?mi)^\s*(?:name|id|plugin|plugin_id|identity)\s*[:=]\s*"""
+                r"""['"]?""" + escaped + r"""['"]?\s*(?:$|[,#}])""", text)
         )
 
 
