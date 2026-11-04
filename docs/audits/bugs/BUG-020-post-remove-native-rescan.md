@@ -21,4 +21,4 @@ Do not require deleting unrelated regular native settings that do **not** contai
 
 ## Status
 
-Plan recorded before narrow code change. Implementation, focused regression, final-head CI and independent re-review pending.
+Plan committed before implementation. The native post-remove rescan and a focused late-registration/clean-control regression are committed and pushed. **Final-head Python/required CI, live per-source JSON ZIP and independent Strix/CodeRabbit clearance are pending**. No previous PASS is upgraded; squash merge remains blocked.
