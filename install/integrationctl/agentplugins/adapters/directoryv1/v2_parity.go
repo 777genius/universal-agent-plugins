@@ -14,6 +14,9 @@ func validateV2RecordParity(snapshot domain.DirectorySnapshot) error {
 	if err := validateV2ProductSelectors(snapshot.Products); err != nil {
 		return err
 	}
+	if err := validateV2ProductDistributionOwnership(snapshot); err != nil {
+		return err
+	}
 	if err := validateV2ReleaseComponents(snapshot.Distributions); err != nil {
 		return err
 	}
@@ -114,6 +117,24 @@ func validateV2EvidenceDimensions(evidence []domain.DirectoryEvidence) error {
 			return strictError("duplicate v2 current evidence applicability tuple")
 		}
 		tuples[tuple] = true
+	}
+	return nil
+}
+
+func validateV2ProductDistributionOwnership(snapshot domain.DirectorySnapshot) error {
+	owners := map[string]string{}
+	for _, product := range snapshot.Products {
+		for _, id := range product.Distributions {
+			if owner := owners[id]; owner != "" && owner != product.ID {
+				return strictError("v2 distribution %q is claimed by both %q and %q", id, owner, product.ID)
+			}
+			owners[id] = product.ID
+		}
+	}
+	for _, distribution := range snapshot.Distributions {
+		if owners[distribution.ID] != distribution.ProductID {
+			return strictError("v2 distribution %q differs from product owner", distribution.ID)
+		}
 	}
 	return nil
 }

@@ -79,3 +79,18 @@ func TestV2RejectsCrossProductSelectorTakeover(t *testing.T) {
 		t.Fatalf("v2 failed to reject cross-product alias takeover: %v", err)
 	}
 }
+
+func TestV2RejectsCrossProductDistributionTakeover(t *testing.T) {
+	var snapshot domain.DirectorySnapshot
+	signed, _, _ := v2SignedFixture(t)
+	if err := json.Unmarshal(signed, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	other := snapshot.Products[0]
+	other.ID, other.ManifestName = "other", "other"
+	other.Aliases, other.ReservedAliases = []string{"other"}, []string{"other"}
+	snapshot.Products = append(snapshot.Products, other)
+	if err := validateV2ProductDistributionOwnership(snapshot); !errors.Is(err, ErrStrictJSON) {
+		t.Fatalf("v2 allowed a second product to claim a foreign distribution: %v", err)
+	}
+}
