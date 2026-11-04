@@ -297,6 +297,9 @@ func TestProjectComponentsForeignSkillRefusalPreservesForeignFiles(t *testing.T)
 
 func TestProjectComponentsPreflightForeignSkillCarriesTypedCause(t *testing.T) {
 	mutation := componentFixture(t)
+	// Codex receives the new typed source-specific UI refusal; generic clients
+	// retain their existing RegistryCollision finding without an error.
+	mutation.Layout.Codec = nativeconfig.CodecCodex
 	path := mutation.Desired[0].Path
 	componentWrite(t, filepath.Join(path, "SKILL.md"), "foreign instructions\n")
 	selected := []domain.ComponentDecision{{
