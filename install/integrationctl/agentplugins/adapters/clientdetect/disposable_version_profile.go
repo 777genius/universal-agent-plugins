@@ -28,6 +28,12 @@ func versionProbeEnvironment(adapter clients.Adapter, profile clients.VersionPro
 	if err != nil {
 		return nil, noop, err
 	}
+	// Preserve the selected Kimi profile's preexisting no-alias contract.
+	// A disposable child must not turn a redirected original profile into
+	// valid host identity merely because this probe never writes there.
+	if original != originalRoot {
+		return nil, noop, fmt.Errorf("native version profile contains a symlink alias")
+	}
 	relative, err := filepath.Rel(original, tempBase)
 	if err != nil || relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))) {
 		return nil, noop, fmt.Errorf("native version temp root overlaps selected profile")

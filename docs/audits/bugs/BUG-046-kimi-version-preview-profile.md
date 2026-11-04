@@ -7,7 +7,7 @@ At PR #698 HEAD `5e16be5`, `PrepareSkills` calls targeted project version detect
 ## Minimal scope and implementation
 
 1. Reuse the existing targeted version detector and synchronous, timeout-bounded version process. Add one opt-in client capability for a **disposable version profile**; only Kimi opts in. Do not add a second detector, feature flag, or client-ID branch to generic logic.
-2. Before creating the scratch profile, fail closed if the selected profile contains the OS temp directory. Canonicalize the private profile, bind Kimi's existing supported environment variables to it, and delete it after the process has exited, including failures.
+2. Before creating the scratch profile, fail closed if the selected profile is symlink-aliased or contains the OS temp directory. Canonicalize the private profile, bind Kimi's existing supported environment variables to it, and delete it after the process has exited, including failures.
 3. Keep the *original* detected executable, config root, version identity comparison, and the explicit Kimi 2.3.1/2.3.2 admission gate. Do not infer activation or a successful native install from a version response.
 4. Run focused Go + Python regressions, Required, native E2E and final-head raw 30-source Kimi Skills. No old artifact counts as current-head evidence.
 

@@ -152,3 +152,25 @@ func TestKimiVersionProbeRejectsTempRootInsideOriginalProfile(t *testing.T) {
 		t.Fatalf("overlapping native profile was modified: %v %+v", err, entries)
 	}
 }
+
+func TestKimiVersionProbeRejectsAliasedOriginalBeforeExecution(t *testing.T) {
+	root := t.TempDir()
+	native := filepath.Join(root, "native")
+	if err := os.Mkdir(native, 0700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "selected-profile-link")
+	if err := os.Symlink(native, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	adapter := kimi.New()
+	environment, cleanup, err := versionProbeEnvironment(adapter, adapter, link)
+	defer cleanup()
+	if err == nil || len(environment) != 0 {
+		t.Fatalf("selected profile symlink was accepted: %v env=%v", err, environment)
+	}
+	entries, err := os.ReadDir(native)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("aliased original profile was modified: %v %+v", err, entries)
+	}
+}
