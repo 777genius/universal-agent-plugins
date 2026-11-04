@@ -1,5 +1,6 @@
 """Prevent the live acceptance harness from touching ambient client profiles."""
 import importlib.util
+import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
