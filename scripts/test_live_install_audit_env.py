@@ -154,6 +154,16 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                          "unmanaged native neighbor must survive\n")
                         self.assertTrue(evidence["sentinels_preserved"])
 
+    def test_vendor_bootstrap_requires_reviewed_bytes_and_preserves_runner_toolchain(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        self.assertIn("sha256sum -c -", workflow)
+        self.assertIn("verification-blocked.txt", workflow)
+        self.assertIn("dpkg-deb --extract", workflow)
+        self.assertNotIn("sudo DEBIAN_FRONTEND", workflow)
+        self.assertNotIn('export PATH="$HOME/.local/bin:$PATH"', workflow)
+        self.assertIn(":/usr/bin:/sbin:/bin:", workflow)
+
     def test_failed_add_inspects_pending_registration_without_false_matches(self):
         audit = load_audit()
         pending = {"data": {"installations": [
