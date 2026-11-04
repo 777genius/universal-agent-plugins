@@ -152,10 +152,20 @@ let browser;
 try {
   let publication = process.env.UAP_SKILLSPECTOR_PUBLICATION_COMMIT || publicationMatch[1];
   if (!/^[0-9a-f]{40}$/.test(publication)) {
-    const ref = await json(
-      `https://api.github.com/repos/777genius/universal-agent-plugins-registry/git/ref/heads/${encodeURIComponent(publication)}`,
-    );
-    publication = ref.object?.sha;
+    // Anonymous GitHub API requests can return 403 on shared CI runners.
+    // Resolve the exact public ref via Git smart HTTP, then pin all report reads.
+    assert.equal(publication, 'skillspector-reports', 'Expected the public report branch');
+    const gitEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+    // A runner's inherited Git settings must not disable TLS verification.
+    delete gitEnv.GIT_SSL_NO_VERIFY;
+    const remote = execFileSync(
+      'git',
+      ['-c', 'http.sslVerify=true', 'ls-remote', '--heads', 'https://github.com/777genius/universal-agent-plugins-registry.git', 'refs/heads/skillspector-reports'],
+      { encoding: 'utf8', timeout: 30_000, maxBuffer: 4096, env: gitEnv },
+    ).trim();
+    const match = /^([0-9a-f]{40})\trefs\/heads\/skillspector-reports$/.exec(remote);
+    assert.ok(match, 'Expected exactly one immutable SHA for the public report branch');
+    publication = match[1];
   }
   assert.match(publication || '', /^[0-9a-f]{40}$/, 'Expected an immutable publication commit');
   const immutableUrl = manifestUrl.replace(
