@@ -64,10 +64,6 @@ func deactivateQoderNative(ctx context.Context, env clients.Env, request domain.
     objects := qoderNativeOwned(request.NativeObjects)
     layout := qoderComponents(request.TargetContext.ProjectRoot)
     if err := layout.ValidateObjects(objects); err != nil { return out, err }
-    if err := qoderHigherPriorityConflicts(domain.DeliveryPlan{
-        TargetContext: request.TargetContext, Scope:domain.ScopeProject,
-        Components: qoderDecisions(objects),
-    }); err != nil { return out, err }
     if !request.Confirmed {
         out.UserActions = []string{"Remove only exactly owned Qoder project Skills and MCP members; leave the user profile and foreign config untouched."}
         return out, nil
@@ -85,16 +81,6 @@ func deactivateQoderNative(ctx context.Context, env clients.Env, request domain.
     out.ExternalRemovalComplete = true
     out.UserActions = append(out.UserActions, "Restart Qoder to clear previously loaded project Skills and MCP tools.")
     return out, nil
-}
-
-func qoderDecisions(objects []domain.NativeObjectOwnership) []domain.ComponentDecision {
-    selected := make([]domain.ComponentDecision, 0, len(objects))
-    for _, object := range objects {
-        kind := domain.ComponentSkill
-        if object.Kind == qoderProjectMCPKind { kind = domain.ComponentMCPServer }
-        selected = append(selected, domain.ComponentDecision{Name:object.LogicalName, Kind:kind, Support:domain.SupportNative})
-    }
-    return selected
 }
 
 // Foreign local MCP and user Skill wins native selection. A policy conflict

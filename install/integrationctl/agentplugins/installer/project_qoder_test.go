@@ -172,16 +172,20 @@ func TestProjectQoderPublicPreparedLifecycleNeverCallsNative(t *testing.T) {
 				t.Fatal("first installation lost mutation")
 			}
 			binding := f.binding(t)
-			if binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled || binding.NativeProfileRoot != filepath.Join(a, ".uap", "managed", "clients", "qoder") || len(binding.NativeObjects) != 1 || binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil {
-				t.Fatalf("bundle claimed native ownership %+v", binding)
+			if binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled || binding.NativeProfileRoot != filepath.Join(a, ".uap", "managed", "clients", "qoder") || len(binding.NativeObjects) != 2 || binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil {
+				t.Fatalf("Qoder project native receipt/activation differs %+v", binding)
 			}
 			view := filepath.Join(binding.TargetLocator, ".agentplugins-qoder-native")
 			if claudeSDKBytes(t, filepath.Join(view, "skills", "docs", "SKILL.md")) != skill {
 				t.Fatal("actual native view missing")
 			}
-			if !strings.Contains(strings.Join(installed.ManualActions, " "), view) {
-				t.Fatal("native import boundary not retained", installed.ManualActions)
-			}
+			if !strings.Contains(strings.Join(installed.ManualActions, " "), "Restart Qoder") {
+                t.Fatal("native project activation boundary not retained", installed.ManualActions)
+            }
+            nativeSkill := filepath.Join(a, ".qoder", "skills", "docs", "SKILL.md")
+            if claudeSDKBytes(t, nativeSkill) != skill {
+                t.Fatal("Qoder native Project Skill did not materialize")
+            }
 			data := filepath.Join(a, ".uap", "caller-data", "keep")
 			claudeSDKWrite(t, data, "persistent caller data")
 			for _, op := range []installer.Operation{installer.OpInstall, installer.OpUpdate, installer.OpRepair} {
@@ -222,9 +226,9 @@ func TestProjectQoderPublicPreparedLifecycleNeverCallsNative(t *testing.T) {
 			if got := f.binding(t); got.Activation != domain.ActivationPrepared || got.Verification != domain.VerificationInstalled {
 				t.Fatalf("repaired file proof lost: %+v", got)
 			}
-			if claudeSDKBytes(t, filepath.Join(view, "skills", "docs", "SKILL.md")) != skill {
-				t.Fatal("repair followed later source")
-			}
+			if claudeSDKBytes(t, filepath.Join(view, "skills", "docs", "SKILL.md")) != skill || claudeSDKBytes(t, nativeSkill) != skill {
+                t.Fatal("repair followed later source or lost native Skill")
+            }
 			if err := os.RemoveAll(binding.TargetLocator); err != nil {
 				t.Fatal(err)
 			}
@@ -235,14 +239,17 @@ func TestProjectQoderPublicPreparedLifecycleNeverCallsNative(t *testing.T) {
 			if out := f.apply(t, installer.OpUpdate); !out.Mutated {
 				t.Fatal("changed source update hid mutation")
 			}
-			if claudeSDKBytes(t, filepath.Join(view, "skills", "docs", "SKILL.md")) != advanced {
-				t.Fatal("update did not deliver current source")
-			}
+			if claudeSDKBytes(t, filepath.Join(view, "skills", "docs", "SKILL.md")) != advanced || claudeSDKBytes(t, nativeSkill) != advanced {
+                t.Fatal("update did not deliver current source to native Skill")
+            }
 			current := f.binding(t)
 			if current.ClientBindingID != binding.ClientBindingID || current.TargetLocator != binding.TargetLocator {
 				t.Fatal("update changed exact authority")
 			}
 			f.apply(t, installer.OpRemove)
+            if _, err := os.Lstat(filepath.Dir(nativeSkill)); !os.IsNotExist(err) {
+                t.Fatal("owned Qoder native Skill survived remove", err)
+            }
 			if _, err := os.Lstat(binding.TargetLocator); !os.IsNotExist(err) {
 				t.Fatal("bundle survived removal", err)
 			}
