@@ -572,6 +572,53 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             malformed["signed_release_pins"]), [])
 
 
+    def test_namespaced_github_bridge_is_a_single_pinned_distribution(self):
+        # BUG-038: default product "github" selects per-target eligible releases;
+        # pin one real explicitly named distribution for reproducible 30x30 E2E.
+        audit = load_audit()
+        doc = json.loads(audit.FIXTURES.read_text())
+        pin = doc["signed_release_pins"]["777genius/github-bridge"]
+        self.assertEqual(doc["plugin_declared_names"]["777genius/github-bridge"], "github")
+        self.assertNotIn("github", doc["plugin_aliases"])
+        self.assertEqual(doc["plugin_aliases"].count("777genius/github-bridge"), 1)
+        revision = {
+            "distribution_id": pin["distribution"],
+            "resolved_revision": pin["revision"],
+            "release_sequence": pin["sequence"],
+            "tree_digest": pin["tree_digest"],
+            "manifest_digest": pin["manifest_digest"],
+        }
+        directory = {
+            "product_id": "github",
+            "recorded_distribution": pin["distribution"],
+            "recorded_revision": pin["revision"],
+            "recorded_release_sequence": pin["sequence"],
+        }
+        node = {
+            "name": "github", "installation_id": "native-owned-bridge",
+            "source": pin["repository"] + "/" + pin["path"],
+            "directory": directory,
+            "clients": [{"client_id": "opencode", "verification": "installation_verified",
+                         "package_revision": revision}],
+        }
+        def selected():
+            return audit.matching_installations(
+                {"data": {"installations": [node]}}, "github", "opencode",
+                "plugin", "777genius/github-bridge", doc["signed_release_pins"])
+        self.assertEqual(len(selected()), 1)
+        for key, value in (("recorded_distribution", "github/github"),
+                           ("recorded_revision", "0" * 40),
+                           ("recorded_release_sequence", 1)):
+            with self.subTest(key=key):
+                node["directory"] = dict(directory, **{key: value})
+                self.assertEqual(selected(), [])
+        node["directory"] = directory
+        node["clients"][0]["package_revision"] = dict(revision, tree_digest="sha256:" + "0" * 64)
+        self.assertEqual(selected(), [])
+        node["clients"][0]["package_revision"] = revision
+        node["clients"][0]["client_id"] = "codex"
+        self.assertEqual(selected(), [])
+
     def test_direct_git_revision_must_belong_to_verified_client(self):
         audit = load_audit()
         sha = "a" * 40

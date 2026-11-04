@@ -71,7 +71,7 @@ def validate_fixtures(doc):
         raise ValueError("All 15 advertised adapters must be represented")
     direct = doc["plugin_declared_names"]
     exact_git = [v for v in names if v.startswith("github:")]
-    if set(direct) != set(exact_git + ["777genius/chrome-devtools-bridge"]):
+    if set(direct) != set(exact_git + ["777genius/chrome-devtools-bridge", "777genius/github-bridge"]):
         raise ValueError("All external manifest identities must be supplied and no stale alias mappings")
     pins = doc.get("signed_release_pins")
     signed_aliases = set(names) - set(exact_git)
@@ -96,6 +96,9 @@ def validate_fixtures(doc):
             raise ValueError("Direct plugin source is not a pinned root package")
         if not re.fullmatch(r"[a-z][a-z0-9-]*", direct[plugin]):
             raise ValueError("Invalid direct package declared identity")
+    for alias in ("777genius/chrome-devtools-bridge", "777genius/github-bridge"):
+        if not re.fullmatch(r"[a-z][a-z0-9-]*", direct[alias]):
+            raise ValueError("Invalid namespaced distribution manifest identity")
     for skill in skills:
         if not re.fullmatch(r"[0-9a-f]{40}", skill["ref"]):
             raise ValueError("Skill lacks a complete immutable commit")
@@ -560,7 +563,7 @@ def matching_installations(response, identity, target, kind, item, signed_releas
         source = node.get("source", "")
         if kind == "skill":
             accepted = source == expected_source
-        elif item == "777genius/chrome-devtools-bridge":
+        elif item in ("777genius/chrome-devtools-bridge", "777genius/github-bridge"):
             accepted = node.get("name") == identity and isinstance(source, str)
         elif isinstance(item, str) and item.startswith("github:"):
             expected_repo = item.split("@", 1)[0][len("github:"):].casefold()

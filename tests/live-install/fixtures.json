@@ -12,7 +12,7 @@
     "figma",
     "firebase",
     "firecrawl",
-    "github",
+    "777genius/github-bridge",
     "gitlab",
     "greptile",
     "heroku",
@@ -309,7 +309,8 @@
     "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d": "itential-builder",
     "github:cometchat/cometchat-skills@8652f1ea41d12e5058123db1e4e6babef9c918f1": "cometchat-skills",
     "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e": "uizze-ui-slop",
-    "github:workato-devs/recipe-skills@afa1e729a013061c7b328271fadcdf240091cf3c": "recipe-skills"
+    "github:workato-devs/recipe-skills@afa1e729a013061c7b328271fadcdf240091cf3c": "recipe-skills",
+    "777genius/github-bridge": "github"
   },
   "signed_release_pins": {
     "atlassian": {
@@ -383,15 +384,6 @@
       "sequence": 1,
       "tree_digest": "sha256:a99ca95c810a29494ab55e6a1b827d88b89f27a3572f10e7918098914d1570ad",
       "manifest_digest": "sha256:5dd4a55467b3149a3cd253b465796b1f021d66eab9244b8faed627b0209f4bf6"
-    },
-    "github": {
-      "distribution": "github/github",
-      "repository": "github/github-mcp-server",
-      "path": "agent-plugin",
-      "revision": "59847fb6204b276dcdbe10eaf14ebe3a73176948",
-      "sequence": 1,
-      "tree_digest": "sha256:277d1d6ac82febff8dcb43808f158308f04f57eb03f9621163bd0d1941d8e7a0",
-      "manifest_digest": "sha256:4500bfe9a78f736c0300fde137595bc47d16582b12727aef062eb0f2b86735f1"
     },
     "gitlab": {
       "distribution": "777genius/gitlab",
@@ -500,6 +492,15 @@
       "sequence": 1,
       "tree_digest": "sha256:d5089e23eccc6fe58e82be33512e25d0ee523d61f21fa42ff1e0f5bc4bad6c9c",
       "manifest_digest": "sha256:23f7cd28573c4ab10943178db05a47f2af3639518a334449c23d89b19562ef74"
+    },
+    "777genius/github-bridge": {
+      "distribution": "777genius/github-bridge",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/github",
+      "revision": "ae72693705e9567d43dca63351fcf63147884f4a",
+      "sequence": 2,
+      "tree_digest": "sha256:2ce143ac1068f56e8674b1160c6c82515d0387529d5dbf13f03b2e080a3953d0",
+      "manifest_digest": "sha256:ea444f4814659dde61a78073d55377abd04d34fe9c09af7c9bbb41c93097523e"
     }
   }
 }
