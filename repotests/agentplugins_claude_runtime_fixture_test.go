@@ -184,14 +184,14 @@ func claudeRuntimeSession(t *testing.T, f *nativeFixture, cf *claudeNativeFixtur
 		if facts.PID <= 0 {
 			t.Fatal("native MCP child PID missing")
 		}
-		childPIDs[facts.PID] = struct{}{}
 		for _, p := range []string{facts.Root, facts.Data, facts.CWD} {
 			nativeRequireContained(t, f.Root, p)
 		}
 		if strings.Contains(name, "http") {
 			seen["http"] = true
-			continue
+			continue // The fixture-owned HTTP bridge lives until t.Cleanup, not CLI exit.
 		}
+		childPIDs[facts.PID] = struct{}{}
 		currentMarker := filepath.Join(facts.Data, "native-marker.txt")
 		if markerPath != "" && markerPath != currentMarker {
 			t.Fatal("stdio tools do not share PLUGIN_DATA")
