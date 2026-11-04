@@ -80,3 +80,7 @@ jobs:
         env:
           LINT_BASE: ${{ inputs.lint-base }}
         run: bash scripts/check-lint-baseline.sh "$LINT_BASE"
+
+      - name: Legacy baseline negative E2E
+        if: matrix.name == 'root'
+        run: bash scripts/test-lint-baseline-growth.sh

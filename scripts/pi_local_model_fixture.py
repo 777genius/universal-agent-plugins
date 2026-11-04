@@ -19,7 +19,10 @@ CODE = (
 
 
 class ScriptedPiModel:
-    def __init__(self):
+    def __init__(self, tool_name="echo"):
+        if tool_name not in ("echo", "ping"):
+            raise ValueError("unqualified Pi tool fixture")
+        code = CODE.replace("__echo", "__" + tool_name)
         self.lock = threading.Lock()
         self.requests = 0
         self.tool_seen = 0
@@ -78,7 +81,7 @@ class ScriptedPiModel:
                 if call:
                     delta = {"role": "assistant", "tool_calls": [{
                         "index": 0, "id": CALL_ID, "type": "function",
-                        "function": {"name": name, "arguments": json.dumps({"code": CODE})}
+                        "function": {"name": name, "arguments": json.dumps({"code": code})}
                     }]}
                     finish = "tool_calls"
                 if request.get("stream"):

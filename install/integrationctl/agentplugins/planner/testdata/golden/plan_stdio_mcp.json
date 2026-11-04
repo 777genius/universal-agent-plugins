@@ -663,7 +663,7 @@
   "pi": {
     "Error": "",
     "Plan": {
-      "Activation": "failed",
+      "Activation": "prepared",
       "ActivePath": "\u003croot\u003e/clients/pi/extensions/demo-0123456789ab",
       "Authentication": "not_checked",
       "ClientID": "pi",
@@ -671,18 +671,18 @@
         {
           "Kind": "skill",
           "Name": "docs",
-          "Reason": "component_not_supported_by_client",
+          "Reason": "",
           "Source": "",
           "SourceName": "",
-          "Support": "unsupported"
+          "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
-          "Reason": "component_not_supported_by_client",
+          "Reason": "",
           "Source": "",
           "SourceName": "",
-          "Support": "unsupported"
+          "Support": "native"
         }
       ],
       "DeclaredName": "demo",
@@ -702,7 +702,7 @@
       "PreviousNativeObjects": null,
       "Scope": "user",
       "SelectedDelivery": {},
-      "Status": "unsupported",
+      "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/clients/pi",
       "TargetContext": {
         "ProjectRoot": "",
@@ -710,11 +710,13 @@
         "UserConfigRoot": "\u003croot\u003e/clients/pi"
       },
       "TargetRoot": "\u003croot\u003e/clients/pi/extensions",
-      "UserActions": null,
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "Reload resources or restart Pi to discover user Skills and MCP; installed files do not prove an authenticated connection or model tool call."
+      ],
       "Verification": "package_validated",
       "Warnings": [
-        "authentication_not_catalog_verified",
-        "no_supported_components"
+        "authentication_not_catalog_verified"
       ]
     }
   },

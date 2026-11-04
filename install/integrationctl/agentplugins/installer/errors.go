@@ -10,6 +10,7 @@ import (
 
 var (
 	ErrManagedSkillChanged      = domain.ErrManagedSkillChanged
+	ErrForeignSkillDestination  = domain.ErrForeignSkillDestination
 	ErrInvalidConfig            = errors.New("installer config rejected")
 	ErrUnsupported              = errors.New("installer operation is not published in this beta")
 	ErrInvalidHandle            = errors.New("prepared operation does not belong to this engine")

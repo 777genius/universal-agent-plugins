@@ -89,8 +89,8 @@ REQUIRED_TESTS = {
     "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended", "TestAgentpluginsOpenCodeNativeCommandsLifecycle"},
 }
 PROJECT_TESTS = {
-    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP"},
-    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery", "TestAgentpluginsClaudeNativeTrustedProjectMCPCall"},
+    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP", "TestAgentpluginsCodexNativeForeignSkillCLIRefusal"},
+    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery", "TestAgentpluginsClaudeNativeTrustedProjectMCPCall", "TestAgentpluginsClaudeNativeSecondaryProfileIsolation"},
     "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
 }
 
@@ -515,6 +515,25 @@ def main():
             identity["installer_version_measured"] = measured
             if measured != "agentplugins " + release["version"]:
                 raise RuntimeError(f"released installer version mismatch: {measured!r}")
+        # Compare only the current-source Codex project gate with the actual
+        # immutable published 0.1.95 binary, verified via release manifest and
+        # GitHub Actions build attestations. Never rebuild the baseline.
+        if args.client == "codex" and args.project_components and not args.release_tag and args.release_state == "public":
+            release_dir = binary_dir / "published-uap-0.1.95"
+            release_dir.mkdir()
+            published, proof = provision_release(source, release_dir, args.target,
+                "agentplugins-v0.1.95", "ec85ee7d759944b9799e451c96bfc1859f9d5533",
+                "777genius/universal-agent-plugins")
+            digest = hashlib.sha256(published.read_bytes()).hexdigest()
+            if digest != proof["binary_sha256"]:
+                raise RuntimeError("published comparison binary mismatch")
+            measured = subprocess.check_output([str(published), "version"], cwd=project, env=env,
+                                               encoding="utf-8", errors="strict", timeout=30).strip()
+            if measured != "agentplugins 0.1.95":
+                raise RuntimeError("published comparison version mismatch")
+            identity["published_uap_0_1_95"] = {**proof, "measured_version": measured}
+            env["AGENTPLUGINS_PUBLISHED_UAP_BIN"] = str(published)
+            env["AGENTPLUGINS_PUBLISHED_UAP_SHA256"] = digest
         prefix = "AGENTPLUGINS_" + args.client.upper()
         env[prefix + "_NATIVE_E2E"] = "1"
         if args.project_components:
@@ -563,13 +582,45 @@ def main():
                         destination = output / fixture.name / path.name
                         destination.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copyfile(path, destination)
+        # An OS-test PASS alone does not qualify the required A/B profile
+        # inventory. Admit the exact current-source evidence shape as well.
+        if args.client == "claude" and "TestAgentpluginsClaudeNativeSecondaryProfileIsolation" in required_tests:
+            matches = list(output.glob("uap-claude-native-evidence-*/claude-secondary-profile-evidence.json"))
+            if len(matches) != 1:
+                project_artifact_errors.append("missing or ambiguous Claude A/B profile evidence")
+            else:
+                try:
+                    observed = json.loads(matches[0].read_text(encoding="utf-8"))
+                    roots = {"profile_A", "profile_B", "state_A", "state_B", "shared_home",
+                             "xdg_config", "xdg_data", "xdg_cache", "xdg_state"}
+                    checkpoints = {"before_any_native_command", "after_version_probe",
+                                   "after_A_native_only_initialization", "after_A_install",
+                                   "after_B_install_attempt", "after_A_replay", "after_B_only_remove"}
+                    if observed.get("source_commit") != identity["commit"]:
+                        raise ValueError("Claude evidence commit does not match HEAD")
+                    if observed.get("source_version") != env[prefix + "_VERSION"]:
+                        raise ValueError("Claude evidence client version mismatch")
+                    if not observed.get("shared_disposable_home") or not observed.get("distinct_config_and_state_roots"):
+                        raise ValueError("Claude disposable profile boundary unproved")
+                    for step in ("native_only_probe", "profile_A_install", "profile_B_install",
+                                 "A_replay", "B_only_remove"):
+                        if observed.get("stages", {}).get(step, {}).get("status") != "passed":
+                            raise ValueError("Claude A/B stage incomplete: " + step)
+                    for stage in checkpoints:
+                        for field in ("snapshots", "file_inventories"):
+                            if not roots.issubset(observed.get(field, {}).get(stage, {})):
+                                raise ValueError("Claude " + field + " incomplete at " + stage)
+                        if stage != "before_any_native_command" and not roots.issubset(observed.get("file_changes", {}).get(stage, {})):
+                            raise ValueError("Claude per-file delta incomplete at " + stage)
+                except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+                    project_artifact_errors.append("Claude A/B evidence admission failed: " + str(exc))
         if project_artifact_errors:
             identity["status"] = "failed"
             identity["project_artifact_admission_errors"] = project_artifact_errors
         identity["artifact_sha256"] = {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in output.rglob("*") if p.is_file()}
         (output / "runner-evidence.json").write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
         if native_passed and project_artifact_errors:
-            raise RuntimeError("new OpenCode project artifact admission failed; bounded failure evidence retained")
+            raise RuntimeError("native artifact admission failed; bounded failure evidence retained")
 
 
 if __name__ == "__main__":

@@ -259,4 +259,67 @@ if ! compare_rules "$work_dir/base" "$work_dir/head" >"$work_dir/violations"; th
   exit 1
 fi
 
+# Existing exclusions cannot grow either. The configured revive file limit
+# already guards new files; this ratchet covers grandfathered production Go
+# paths and compares source tokens, ignoring comments/blank lines even on
+# platform-tagged files. It does not add new lint exclusions or dependencies.
+legacy_checked=0
+legacy_failures=0
+legacy_counter=""
+while IFS=$'\t' read -r pattern _linters _message region; do
+  [[ "$region" == "baseline" ]] || continue
+  if ! current_path="$(literal_path "$pattern")"; then
+    echo "check-lint-baseline: invalid legacy path pattern: $pattern" >&2
+    exit 1
+  fi
+  [[ "$current_path" == *.go ]] || continue
+  if [[ -L "$current_path" ]]; then
+    echo "check-lint-baseline: refusing symlinked legacy source: $current_path" >&2
+    exit 1
+  fi
+  [[ -f "$current_path" ]] || continue
+
+  old_path="$current_path"
+  while IFS=$'\t' read -r _old_pattern _new_pattern source target; do
+    if [[ "$target" == "$current_path" ]]; then
+      old_path="$source"
+      break
+    fi
+  done <"$work_dir/renames"
+
+  if ! git cat-file -e "$BASE_REF:$old_path" 2>/dev/null; then
+    echo "check-lint-baseline: legacy exemption has no original source: $current_path" >&2
+    exit 1
+  fi
+  if git diff --quiet "$BASE_REF" -- "$old_path" "$current_path"; then
+    continue
+  fi
+  if [[ -z "$legacy_counter" ]]; then
+    legacy_counter="$work_dir/legacy-go-lines"
+    GOWORK=off GO111MODULE=off go build -o "$legacy_counter" ./scripts/legacy-go-lines
+  fi
+  git show "$BASE_REF:$old_path" >"$work_dir/legacy-original.go"
+  legacy_checked=$((legacy_checked + 1))
+  # The tool reads stdin only: the checked shell controls both file handles,
+  # avoiding a path-traversal entry point in the Go counter.
+  if ! old_count="$("$legacy_counter" <"$work_dir/legacy-original.go")"; then
+    legacy_failures=$((legacy_failures + 1))
+    continue
+  fi
+  if ! current_count="$("$legacy_counter" <"$current_path")"; then
+    legacy_failures=$((legacy_failures + 1))
+    continue
+  fi
+  if (( current_count > old_count )); then
+    echo "legacy-go-lines: $current_path grew from $old_count to $current_count code lines" >&2
+    legacy_failures=$((legacy_failures + 1))
+  fi
+done <"$work_dir/head"
+
+if (( legacy_failures > 0 )); then
+  echo "check-lint-baseline: $legacy_failures legacy Go file(s) grew or failed lexical validation" >&2
+  exit 1
+fi
+echo "check-lint-baseline: legacy code line ratchet ok ($legacy_checked changed production files checked)"
+
 echo "check-lint-baseline: ok (${head_count} exclusion rules, was ${base_count} at ${BASE_REF})"

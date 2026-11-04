@@ -170,9 +170,10 @@ var clientDefinitions = []ClientDefinition{
 		HonorsOpenAIMCPAuthHints: true,
 		LegacyPreparedProjectPackageReceipt: true,
 	}), LifecycleNativeConfig), SupportNative, SupportNative),
-	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
+	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
 		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,
+		TracksNativeEffects: true,
 	})), ActivationAutomatic), LifecyclePrepared), SupportNative, SupportNative),
 }
 

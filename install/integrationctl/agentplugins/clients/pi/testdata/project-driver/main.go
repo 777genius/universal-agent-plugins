@@ -15,9 +15,16 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 8 {
-		fmt.Fprintln(os.Stderr, "usage: project-driver STATE USER_PROFILE PROJECT SOURCE OPERATION INSTALLATION_ID OUTPUT")
+	if len(os.Args) != 8 && len(os.Args) != 9 {
+		fmt.Fprintln(os.Stderr, "usage: project-driver STATE USER_PROFILE PROJECT SOURCE OPERATION INSTALLATION_ID OUTPUT [user|project]")
 		os.Exit(2)
+	}
+	scope := domain.ScopeProject
+	if len(os.Args) == 9 {
+		scope = domain.InstallScope(os.Args[8])
+		if scope != domain.ScopeUser && scope != domain.ScopeProject {
+			fail(fmt.Errorf("unsupported Pi E2E scope %q", scope))
+		}
 	}
 	registry, err := clients.NewRegistry(pi.NewProject())
 	if err != nil {
@@ -27,15 +34,21 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
+	// The script's PROJECT argument is the Pi process working directory.
+	// UAP's user-scope engine must not be configured as a project engine.
+	projectRoot := ""
+	if scope == domain.ScopeProject {
+		projectRoot = os.Args[3]
+	}
 	engine, err := installer.New(installer.Config{
-		ProjectRoot: os.Args[3], StateRoot: os.Args[1],
+		ProjectRoot: projectRoot, StateRoot: os.Args[1],
 		Registry: registry, HelperExecutable: helper, TrustedLocalPackages: true,
 	})
 	if err != nil {
 		fail(err)
 	}
 	request := installer.Request{
-		Scope: domain.ScopeProject, ProjectRoot: os.Args[3],
+		Scope: scope, ProjectRoot: projectRoot,
 		Operation: installer.Operation(os.Args[5]), ClientID: "pi",
 		ClientConfigRoot: os.Args[2], PackageRoot: os.Args[4],
 		InstallationID: os.Args[6],
@@ -53,7 +66,7 @@ func main() {
 		fail(closeErr)
 	}
 	if result.Outcome != installer.OutcomeCompleted && result.Outcome != installer.OutcomeUnchanged {
-		fail(fmt.Errorf("incomplete UAP Pi project operation: %s", result.Outcome))
+		fail(fmt.Errorf("incomplete UAP Pi scoped operation: %s", result.Outcome))
 	}
 	// Stable, minimal public E2E receipt: never copy internal state, native
 	// configuration or credentials into uploaded CI artifacts.
