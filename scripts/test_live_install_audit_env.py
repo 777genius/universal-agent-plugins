@@ -594,10 +594,6 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertFalse(delayed["removal_verified"])
         self.assertEqual(delayed["native_residuals"], [".grok/new-settings.json"])
 
-
-if __name__ == "__main__":
-    unittest.main()
-
     def test_large_native_file_rewrite_changes_snapshot(self):
         audit = load_audit()
         with TemporaryDirectory() as temporary:
@@ -715,3 +711,7 @@ if __name__ == "__main__":
         self.assertFalse(native["removal_verified"])
         self.assertEqual(native["status"], "cleanup-failed")
         self.assertTrue(native["native_residuals"])
+
+
+if __name__ == "__main__":
+    unittest.main()
