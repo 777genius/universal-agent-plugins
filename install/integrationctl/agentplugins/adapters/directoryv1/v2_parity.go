@@ -2,6 +2,8 @@ package directoryv1
 
 import (
 	"unicode/utf8"
+	"strings"
+	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -13,6 +15,9 @@ func validateV2RecordParity(snapshot domain.DirectorySnapshot) error {
 		return err
 	}
 	if err := validateV2ReleaseComponents(snapshot.Distributions); err != nil {
+		return err
+	}
+	if err := validateV2EvidenceDimensions(snapshot.Evidence); err != nil {
 		return err
 	}
 	seen := map[string]bool{}
@@ -79,6 +84,36 @@ func validateV2ReleaseComponents(distributions []domain.DirectoryDistribution) e
 				seen[component] = true
 			}
 		}
+	}
+	return nil
+}
+
+func validateV2EvidenceDimensions(evidence []domain.DirectoryEvidence) error {
+	tuples := map[string]bool{}
+	for _, item := range evidence {
+		// Schema evidence needs a witnessed publisher workflow. A package-wide
+		// reviewed_external record cannot silently satisfy that stronger lane.
+		if !item.HasTrustedEligibilityProvenance() {
+			return strictError("v2 evidence lacks trusted eligibility provenance")
+		}
+		if item.Level != "schema" &&
+			(item.ClientVersion == "" || item.InstallerVersion == "" ||
+				item.OS == "" || item.Architecture == "" || item.ObservedAt == "") {
+			return strictError("v2 client evidence lacks observed applicability dimensions")
+		}
+		if item.Artifact.Path == "" {
+			return strictError("v2 evidence artifact path is missing")
+		}
+		tuple := strings.Join([]string{
+			item.DistributionID, fmt.Sprint(item.ReleaseSequence),
+			item.PackageTreeDigest, item.Level, string(item.Client), string(item.Scope),
+			item.ClientVersion, item.InstallerVersion, item.DependencyIdentity,
+			item.OS, item.Architecture,
+		}, "\x00")
+		if tuples[tuple] {
+			return strictError("duplicate v2 current evidence applicability tuple")
+		}
+		tuples[tuple] = true
 	}
 	return nil
 }

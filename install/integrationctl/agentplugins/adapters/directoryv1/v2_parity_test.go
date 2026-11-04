@@ -29,6 +29,16 @@ func TestV2PortableIdentityParityWithV1(t *testing.T) {
 				{DistributionID: "owner/tool", ReleaseSequence: 9},
 			}
 		}},
+		{"untrusted schema evidence", func(s *domain.DirectorySnapshot) {
+			s.Evidence[0].Trust = &domain.DirectoryEvidenceTrust{Kind: "reviewed_external"}
+		}},
+		{"duplicate evidence applicability", func(s *domain.DirectorySnapshot) {
+			duplicate := s.Evidence[0]
+			duplicate.ID = "duplicated-schema-pass"
+			s.Evidence = append(s.Evidence, duplicate)
+			s.Distributions[0].ReleasePolicies[0].CurrentEvidence = append(
+				s.Distributions[0].ReleasePolicies[0].CurrentEvidence, duplicate.ID)
+		}},
 		{"invalid provenance", func(s *domain.DirectorySnapshot) {
 			s.Distributions[0].Releases[0].BuildProvenance = &domain.DirectoryBuildProvenance{
 				UpstreamRepository: "invalid/repo@tag", UpstreamRevision: "bad",
