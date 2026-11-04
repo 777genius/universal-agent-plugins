@@ -390,6 +390,19 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertFalse(audit.native_identity_residuals(
                 [root], "managed", [".codex/unknown-link"], "codex"))
 
+    def test_unreadable_walk_marker_cannot_disappear_from_cleanup_evidence(self):
+        # BUG-017: os.walk onerror creates a synthetic path; lstat cannot find
+        # that marker, but a failed enumeration must not be counted as clean.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".codex"
+            root.mkdir()
+            reported = audit.native_identity_residuals(
+                [root], "atlassian",
+                [".codex/restricted-dir/.walk-error"], "codex")
+            self.assertEqual(reported, [
+                ".codex/restricted-dir/.walk-error: unreadable-walk"])
+
     def test_foreign_sentinel_symlink_cannot_fake_preservation(self):
         audit = load_audit()
         with TemporaryDirectory() as temporary:
