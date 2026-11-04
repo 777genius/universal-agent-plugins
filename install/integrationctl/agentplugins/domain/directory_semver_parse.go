@@ -11,6 +11,7 @@ type directorySemverVersion struct {
 	core [3]uint64
 	pre  []string
 }
+
 func parseDirectorySemver(value string) (directorySemverVersion, error) {
 	var v directorySemverVersion
 	value = strings.SplitN(strings.TrimSpace(value), "+", 2)[0]
