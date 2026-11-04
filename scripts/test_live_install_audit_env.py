@@ -644,6 +644,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "native profile"):
                 audit.isolated_client_env(home, case, data)
             (home / ".codex").unlink()
+            (case / "tmp").rmdir()
             (case / "tmp").symlink_to(foreign, target_is_directory=True)
             with self.assertRaisesRegex(ValueError, "temp root"):
                 audit.isolated_client_env(home, case, data)
@@ -660,7 +661,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         audit = load_audit()
         identity = "demo-skill"
         item = {"name": identity, "folder": identity, "repo": "example/skills",
-                "ref": "a" * 40, "source": "https://github.com/example/skills"}
+                "ref": "a" * 40, "source": "https://github.com/example/skills",
+                "skill_md_git_blob_sha1": "b" * 40}
         match = [{"name": identity, "installation_id": "skill-1",
                   "clients": [{"client_id": "claude",
                                "verification": "installation_verified"}]}]
