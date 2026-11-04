@@ -175,6 +175,12 @@ func TestPiScopedAdapterPreconditionPreservesGlobalAndProjectAuthority(t *testin
 	}
 	detected := domain.DetectedClient{ClientID: domain.ClientPi, ConfigRoot: user}
 	adapter := NewProject()
+	// Planner calls this precondition before target resolution. A valid user
+	// profile must be admitted even though TargetAnchor/Root/ActivePath are nil.
+	preTarget := domain.DeliveryPlan{ClientID: domain.ClientPi, Scope: domain.ScopeUser, NativeRegistryRoot: user}
+	if err := adapter.CheckPlanPrecondition(clients.PlanInput{Client: detected, TargetContext: target}, &preTarget); err != nil {
+		t.Fatalf("Pi Global pre-target precondition was rejected: %v", err)
+	}
 	if err := adapter.CheckPlanPrecondition(clients.PlanInput{Client: detected, TargetContext: target}, &plan); err != nil {
 		t.Fatalf("Pi Global was rejected by project-aware adapter: %v", err)
 	}

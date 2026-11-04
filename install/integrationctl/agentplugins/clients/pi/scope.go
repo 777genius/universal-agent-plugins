@@ -86,13 +86,13 @@ func projectPiRoot(client domain.DetectedClient, target domain.TargetContext, pl
 
 func (adapter *ProjectAdapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
 	if in.TargetContext.Scope == domain.ScopeUser && plan.Scope == domain.ScopeUser {
-		// This adapter also handles Global after native component enablement.
-		// Preserve the original Pi extension preconditions and user authority.
-		if err := validatePlan(*plan); err != nil {
-			return err
-		}
-		if err := piSelectedAuthority(in.Client, *plan); err != nil {
-			return err
+		// This hook runs before ResolveTarget. The planned target/active paths
+		// are still empty, so check the original user authority now and leave
+		// complete layout validation to RefinePlan and activation preflight.
+		if in.Client.ClientID != domain.ClientPi ||
+			in.TargetContext.UserConfigRoot != in.Client.ConfigRoot ||
+			plan.NativeRegistryRoot != in.Client.ConfigRoot {
+			return fmt.Errorf("Pi user precondition differs from selected original profile")
 		}
 		return adapter.Adapter.CheckPlanPrecondition(in, plan)
 	}
