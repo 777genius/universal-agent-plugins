@@ -611,7 +611,6 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 f'[plugins."atlassian@{key}"]\nenabled = true\n'
                 f'[marketplaces.{key}]\nsource_type = "local"\n'
                 f'source = "{managed}"\n')
-            config.write_text(config.read_text().replace("\\\n", "\n"))
             changes = list(audit.snapshot([root]).items())
             self.assertEqual(
                 audit.attributable_native_changes([root], changes, "atlassian", "codex"),
@@ -622,9 +621,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertFalse(audit.codex_owned_native_config(
                 config, "atlassian-wrong", case))
             escaped = Path(temporary).parent / "other-account"
-            config.write_text(config.read_text().replace(str(managed), str(escaped)))
             self.assertFalse(audit.codex_owned_native_config(config, "atlassian", case))
-            config.write_text(config.read_text().replace(str(escaped), str(managed))
                               .replace(f"agentplugins-{'a' * 12}", "random-market"))
             self.assertFalse(audit.codex_owned_native_config(config, "atlassian", case))
 
