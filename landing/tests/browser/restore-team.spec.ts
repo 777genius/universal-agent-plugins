@@ -26,7 +26,9 @@ for (const theme of ['dark', 'light'] as const) {
     test(`marketing-kit restore ${locale} ${theme} at ${width}px`, async ({ page, context }, testInfo) => {
       await page.setViewportSize({ width, height: 1000 });
       await page.emulateMedia({ reducedMotion: 'reduce' });
-      await context.addInitScript((value) => localStorage.setItem('theme', value), theme);
+      await context.addInitScript((value) => {
+        if (window === window.top) localStorage.setItem('theme', value);
+      }, theme);
       await page.goto(locale === 'en' ? './' : `./${locale}/`);
       await hydrated(page);
       await expect(page.locator('.v-application')).toHaveClass(new RegExp(`v-theme--${theme}`));
@@ -65,8 +67,17 @@ for (const theme of ['dark', 'light'] as const) {
           const screen = section.locator('.registry-restore__screen').nth(index);
           const commandBox = (await screen.locator('.registry-restore__terminal').boundingBox())!;
           const outputBox = (await screen.locator('.registry-restore__package').boundingBox())!;
-          expect(outputBox.y).toBeGreaterThanOrEqual(commandBox.y + commandBox.height - 1);
+          expect(outputBox.y - commandBox.y - commandBox.height).toBeGreaterThanOrEqual(4);
           await expect(screen.locator('.registry-restore__package')).toHaveCSS('visibility', 'visible');
+          const fonts = await screen.evaluate((element) => ({
+            command: parseFloat(getComputedStyle(element.querySelector('.registry-restore__terminal')!).fontSize),
+            output: parseFloat(getComputedStyle(element.querySelector('.registry-restore__package')!).fontSize),
+          }));
+          expect(fonts.output).toBeLessThan(fonts.command);
+          for (const part of await screen.locator('.registry-restore__package > *').all()) {
+            await expect(part).toHaveCSS('color', 'rgb(164, 166, 173)');
+            await expect(part).toHaveCSS('font-weight', '400');
+          }
         }
         await expect(section.locator('.registry-restore__export')).toHaveCount(mode === 'global' ? 1 : 0);
         if (mode === 'global') await expect(section.locator('.registry-restore__export code')).toHaveText(exportCommand);
@@ -76,14 +87,9 @@ for (const theme of ['dark', 'light'] as const) {
           await expect(copyButtons.first()).toHaveAccessibleName(/Copy command: My computer/);
           await expect(copyButtons.last()).toHaveAccessibleName(/Copy command: Teammate.s computer/);
         }
-        if (mode === 'project' && await section.getAttribute('data-project-qualified') === 'false') {
-          await expect(copyButtons.first()).toBeDisabled();
-          await expect(copyButtons.last()).toBeDisabled();
-          await expect(section.locator('.registry-restore__qualification')).toBeVisible();
-        } else {
-          await expect(copyButtons.first()).toBeEnabled();
-          await expect(copyButtons.last()).toBeEnabled();
-        }
+        await expect(copyButtons.first()).toBeEnabled();
+        await expect(copyButtons.last()).toBeEnabled();
+        await expect(section.locator('.registry-restore__qualification')).toHaveCount(0);
         expect(await copyButtons.evaluateAll((buttons) => buttons.every((button) => {
           const { width: hitWidth, height: hitHeight } = button.getBoundingClientRect();
           return hitWidth >= 24 && hitHeight >= 24;
@@ -177,51 +183,55 @@ test('manifest unfolds on first view, folds into icon and reopens on hover', asy
   await expect(file).toHaveAttribute('aria-expanded', 'false');
 });
 
-test('Global typing copies complete install, export and import commands and mode changes reset it', async ({ page, context }) => {
+test('both modes copy complete commands during typing and reset feedback on mode changes', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('./');
   await hydrated(page);
   const section = page.locator('#restore-environment');
   await section.scrollIntoViewIfNeeded();
-  await section.locator('[data-mode-option="global"]').click();
   const buttons = section.locator('.registry-restore__screen .registry-restore__copy');
-  for (let i = 0; i < 2; i++) {
-    await buttons.nth(i).focus();
-    await buttons.nth(i).press('Enter');
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(commands.global[i]);
-    await expect(section.locator('.registry-restore__copy-status')).toContainText('Copied:');
+  for (const mode of ['project', 'global', 'project'] as const) {
+    await section.locator(`[data-mode-option="${mode}"]`).click();
+    await expect(section.locator('.registry-restore__copy-status')).toBeEmpty();
+    for (let i = 0; i < 2; i++) {
+      await buttons.nth(i).focus();
+      await buttons.nth(i).press('Enter');
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(commands[mode][i]);
+      await expect(section.locator('.registry-restore__copy-status')).toContainText('Copied:');
+    }
+    if (mode === 'global') {
+      await section.locator('.registry-restore__export button').click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(exportCommand);
+    }
   }
-  await section.locator('.registry-restore__export button').click();
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(exportCommand);
-  await section.locator('[data-mode-option="project"]').click();
-  await section.locator('[data-mode-option="global"]').click();
-  await expect(section.locator('.registry-restore__copy-status')).toBeEmpty();
   for (let i = 0; i < 2; i++) await expect(section.locator('.typed-command').nth(i)).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });
-  await expect(section.locator('.typed-command__visible')).toHaveText([...commands.global]);
+  await expect(section.locator('.typed-command__visible')).toHaveText([...commands.project]);
   await expect(section.locator('.registry-restore__package').first()).toHaveCSS('visibility', 'visible');
 });
 
-test('clipboard denial announces failure and restores copy-button focus', async ({ page }) => {
-  await page.goto('./');
-  await hydrated(page);
-  const section = page.locator('#restore-environment');
-  await section.locator('[data-mode-option="global"]').click();
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Permission denied'); } } });
-    Object.defineProperty(document, 'execCommand', { configurable: true, value: () => false });
+for (const mode of ['project', 'global'] as const) {
+  test(`${mode} clipboard denial announces failure and restores copy-button focus`, async ({ page }) => {
+    await page.goto('./');
+    await hydrated(page);
+    const section = page.locator('#restore-environment');
+    await section.locator(`[data-mode-option="${mode}"]`).click();
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Permission denied'); } } });
+      Object.defineProperty(document, 'execCommand', { configurable: true, value: () => false });
+    });
+    const copy = section.locator('.registry-restore__screen .registry-restore__copy').first();
+    await copy.focus();
+    await copy.press('Enter');
+    await expect(copy).toBeFocused();
+    await expect(copy).toHaveText('Copy failed');
+    await expect(section.locator('.registry-restore__copy-status')).toContainText('Copy failed: My computer');
+    await expect(copy).toHaveAccessibleName('Copy failed: My computer');
   });
-  const copy = section.locator('.registry-restore__screen .registry-restore__copy').first();
-  await copy.focus();
-  await copy.press('Enter');
-  await expect(copy).toBeFocused();
-  await expect(copy).toHaveText('Copy failed');
-  await expect(section.locator('.registry-restore__copy-status')).toContainText('Copy failed: My computer');
-  await expect(copy).toHaveAccessibleName('Copy failed: My computer');
-});
+}
 
 for (const qualified of [false, true]) {
-  test(`Project example honors signed project qualification: ${qualified}`, async ({ page, context }) => {
+  test(`copying the Project example is independent of catalog qualification: ${qualified}`, async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     const errors = await offline(page);
     const index = registryFixture();
@@ -239,17 +249,13 @@ for (const qualified of [false, true]) {
     await projections(page, index);
     await navigate(page, '/', 'en');
     const section = page.locator('#restore-environment');
-    await expect(section).toHaveAttribute('data-project-qualified', String(qualified));
-    const copy = section.locator('.registry-restore__screen .registry-restore__copy').first();
-    if (qualified) {
-      await expect(copy).toBeEnabled();
-      await copy.click();
-      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(commands.project[0]);
-      await expect(section.locator('.registry-restore__qualification')).toHaveCount(0);
-    } else {
-      await expect(copy).toBeDisabled();
-      await expect(section.locator('.registry-restore__qualification')).toContainText('Global-only');
+    const copy = section.locator('.registry-restore__screen .registry-restore__copy');
+    for (let i = 0; i < 2; i++) {
+      await expect(copy.nth(i)).toBeEnabled();
+      await copy.nth(i).click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(commands.project[i]);
     }
+    await expect(section.locator('.registry-restore__qualification')).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 }
