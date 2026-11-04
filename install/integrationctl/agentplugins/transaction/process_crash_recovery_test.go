@@ -34,6 +34,10 @@ func runPostCommitCrashChild(root string) {
 }
 
 func runDirectoryCrashChild(root, faultPhase string, exitCode int) {
+	operationID := "crash-after-activated"
+	if faultPhase == dirswap.PhaseCommitPending {
+		operationID = "post-state-commit-crash"
+	}
 	store := statev2.Store{Path: filepath.Join(root, "state-v2.json")}
 	state, err := store.Load()
 	if err != nil || len(state.Installations) != 1 {
@@ -43,7 +47,7 @@ func runDirectoryCrashChild(root, faultPhase string, exitCode int) {
 	installation := state.Installations[0]
 	binding := onlyClient(installation)
 	mutation := DirectoryMutation{
-		OperationID:     "crash-after-activated",
+		OperationID:     operationID,
 		InstallationID:  installation.InstallationID,
 		ClientBindingID: binding.ClientBindingID,
 		Sequence:        1,
@@ -162,8 +166,8 @@ func TestDirectoryProcessCrashAfterActivationRecovers(t *testing.T) {
 }
 
 // Commit-side crash is a different journal decision: the state receipt was
- // durably saved before the child terminated in a separate OS process.
- // Recovery must keep the new publication, not restore the old backup.
+// durably saved before the child terminated in a separate OS process.
+// Recovery must keep the new publication, not restore the old backup.
 func TestDirectoryProcessCrashAfterStateCommitRecovers(t *testing.T) {
 	if root := os.Getenv(postCommitRootEnv); root != "" {
 		runPostCommitCrashChild(root)
@@ -172,7 +176,7 @@ func TestDirectoryProcessCrashAfterStateCommitRecovers(t *testing.T) {
 	kernel, mutation, store := transactionFixture(t, "post-state-commit-crash")
 	root := filepath.Dir(store.Path)
 	foreign := filepath.Join(mutation.OwnedBase, "foreign-neighbor.txt")
-	if err := os.WriteFile(foreign, []byte("untouched\\n"), 0o600); err != nil {
+	if err := os.WriteFile(foreign, []byte("untouched\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	initial, err := store.Load()
@@ -227,7 +231,7 @@ func TestDirectoryProcessCrashAfterStateCommitRecovers(t *testing.T) {
 	if _, err := os.Lstat(open[0].BackupPath); !os.IsNotExist(err) {
 		t.Fatalf("committed old backup not cleared: %v", err)
 	}
-	if body, err := os.ReadFile(foreign); err != nil || string(body) != "untouched\\n" {
+	if body, err := os.ReadFile(foreign); err != nil || string(body) != "untouched\n" {
 		t.Fatalf("foreign neighbor changed: %q %v", body, err)
 	}
 }
