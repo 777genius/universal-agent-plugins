@@ -33,6 +33,7 @@ import (
 type nativeFixture struct {
 	Root, Project, Home, CodexHome, Package, Probe, Events, Nonce string
 	PluginID, ClientBinDir, HTTPURL, RedirectURL                  string
+	ExtraEnv []string // test-owned synthetic names only; never inherited from the host
 	ProviderRequests                                              chan []byte
 }
 type nativeStage struct {
@@ -52,6 +53,7 @@ type nativeFacts struct {
 	Marker   string   `json:"marker"`
 	PID      int      `json:"pid"`
 	Session  string   `json:"session"`
+	CanaryDigest string `json:"canary_digest,omitempty"`
 }
 
 func nativeWrite(t *testing.T, path string, b []byte, mode os.FileMode) {
@@ -129,7 +131,7 @@ func (f *nativeFixture) env(binDir string) []string {
 	if clientDir == "" {
 		clientDir = binDir
 	}
-	return append(nativePlatformEnvironment(f.Root, f.Home, binDir, clientDir), "AGENTPLUGINS_HOME="+filepath.Join(f.Root, "installer-state"), "CODEX_HOME="+f.CodexHome)
+	return append(append(nativePlatformEnvironment(f.Root, f.Home, binDir, clientDir), "AGENTPLUGINS_HOME="+filepath.Join(f.Root, "installer-state"), "CODEX_HOME="+f.CodexHome), f.ExtraEnv...)
 }
 func (f *nativeFixture) writePackage(t *testing.T, revision, version string) {
 	t.Helper()
