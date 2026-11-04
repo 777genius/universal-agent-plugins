@@ -18,12 +18,22 @@ import (
 const (
 	crashProcessRootEnv  = "UAP_TEST_TRANSACTION_CRASH_ROOT_20261102"
 	crashProcessExitCode = 83
+	postCommitRootEnv    = "UAP_TEST_TRANSACTION_COMMIT_CRASH_ROOT_20261104"
+	postCommitExitCode   = 84
 )
 
 // This is a separate OS process, not a callback returning an error. Exit after
 // the new active directory and phase=activated journal have been durably written,
 // but before the installer can save its ownership receipt.
 func runPostWriteCrashChild(root string) {
+	runDirectoryCrashChild(root, dirswap.PhaseActivated, crashProcessExitCode)
+}
+
+func runPostCommitCrashChild(root string) {
+	runDirectoryCrashChild(root, dirswap.PhaseCommitPending, postCommitExitCode)
+}
+
+func runDirectoryCrashChild(root, faultPhase string, exitCode int) {
 	store := statev2.Store{Path: filepath.Join(root, "state-v2.json")}
 	state, err := store.Load()
 	if err != nil || len(state.Installations) != 1 {
@@ -51,8 +61,8 @@ func runPostWriteCrashChild(root string) {
 	kernel := Kernel{StateStore: store, Directory: dirswap.Manager{
 		JournalDir: filepath.Join(root, "operations-v2"),
 		Fault: func(phase string) error {
-			if phase == dirswap.PhaseActivated {
-				os.Exit(crashProcessExitCode)
+			if phase == faultPhase {
+				os.Exit(exitCode)
 			}
 			return nil
 		},
@@ -148,5 +158,76 @@ func TestDirectoryProcessCrashAfterActivationRecovers(t *testing.T) {
 	}
 	if got, err := os.ReadFile(foreign); err != nil || string(got) != "unmanaged contents\n" {
 		t.Fatalf("clean retry damaged unmanaged data: %q %v", got, err)
+	}
+}
+
+// Commit-side crash is a different journal decision: the state receipt was
+ // durably saved before the child terminated in a separate OS process.
+ // Recovery must keep the new publication, not restore the old backup.
+func TestDirectoryProcessCrashAfterStateCommitRecovers(t *testing.T) {
+	if root := os.Getenv(postCommitRootEnv); root != "" {
+		runPostCommitCrashChild(root)
+		return
+	}
+	kernel, mutation, store := transactionFixture(t, "post-state-commit-crash")
+	root := filepath.Dir(store.Path)
+	foreign := filepath.Join(mutation.OwnedBase, "foreign-neighbor.txt")
+	if err := os.WriteFile(foreign, []byte("untouched\\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	initial, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertTransactionBody(t, mutation.ActivePath, "old")
+	child := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestDirectoryProcessCrashAfterStateCommitRecovers$", "-test.count=1")
+	child.Env = append(os.Environ(), postCommitRootEnv+"="+root)
+	output, err := child.CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != postCommitExitCode {
+		t.Fatalf("child did not exit after durable state commit: exit=%v, output=%q", err, output)
+	}
+	assertTransactionBody(t, mutation.ActivePath, "new")
+	open, err := kernel.Directory.ListOpen()
+	if err != nil || len(open) != 1 || open[0].Phase != dirswap.PhaseCommitPending ||
+		open[0].OperationID != mutation.OperationID {
+		t.Fatalf("expected durable commit-pending journal: %+v, %v", open, err)
+	}
+	assertTransactionBody(t, open[0].BackupPath, "old")
+	committed, err := store.Load()
+	if err != nil || reflect.DeepEqual(initial, committed) {
+		t.Fatalf("state commit not visible after crash: %v", err)
+	}
+	owned := onlyClient(committed.Installations[0])
+	if len(owned.Receipts) != 1 || owned.Receipts[0].Phase != ReceiptPhaseStateCommitted ||
+		owned.Receipts[0].OperationID != mutation.OperationID {
+		t.Fatalf("durable commit receipt missing before recovery: %+v", owned.Receipts)
+	}
+	restarted := Kernel{StateStore: statev2.Store{Path: store.Path}, Directory: dirswap.Manager{
+		JournalDir: filepath.Join(root, "operations-v2"),
+	}}
+	for range 2 {
+		if err := restarted.Recover(t.Context()); err != nil {
+			t.Fatalf("restarted idempotent commit recovery: %v", err)
+		}
+	}
+	assertTransactionBody(t, mutation.ActivePath, "new")
+	after, err := restarted.StateStore.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	owned = onlyClient(after.Installations[0])
+	if len(owned.Receipts) != 1 || owned.Receipts[0].Phase != ReceiptPhaseCommitted ||
+		owned.Receipts[0].OperationID != mutation.OperationID {
+		t.Fatalf("commit recovery failed to finalize exact ownership: %+v", owned.Receipts)
+	}
+	if pending, err := restarted.Directory.ListOpen(); err != nil || len(pending) != 0 {
+		t.Fatalf("post-commit journal not settled: %+v, %v", pending, err)
+	}
+	if _, err := os.Lstat(open[0].BackupPath); !os.IsNotExist(err) {
+		t.Fatalf("committed old backup not cleared: %v", err)
+	}
+	if body, err := os.ReadFile(foreign); err != nil || string(body) != "untouched\\n" {
+		t.Fatalf("foreign neighbor changed: %q %v", body, err)
 	}
 }
