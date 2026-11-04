@@ -19,4 +19,4 @@ Repeat must use the *same* source, target, scope, project, disposable HOME and p
 
 No new feature flags or generic test framework. A handful of captured command outcomes and explicit predicates in the existing `do_case` is sufficient. The existing complete removal, lock pin, native state and foreign-sentinel checks still apply. If the native client mutates a legitimate log, retain evidence and classify conservatively rather than delete unknown files.
 
-**Status:** code gap reproduced, plan recorded; implementation and final-head evidence pending.
+**Status:** repeat-add source/identity/native-state/lock oracle and regression pushed; full latest-head E2E and independent clearance still pending.
