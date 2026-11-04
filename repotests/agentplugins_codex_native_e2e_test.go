@@ -569,6 +569,20 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 		t.Fatal("non-mutating same-source add changed state or managed/cache content")
 	}
 	stages["unchanged"] = nativeStage{Status: "passed", Reason: "Unchanged package: explicit mutated=false and identical state/managed/cache bytes; authentication convergence not claimed"}
+
+	// The public CLI's global installation contract is --scope user, also
+	// selected when --scope is omitted. The real Codex registry must remain
+	// byte-identical when the same package is replayed with explicit scope.
+	nativeAttempt(stages, "explicit_user_scope", "unchanged-explicit-user-installer.json")
+	explicitUser := nativeInstaller(t, f, installer, client, "unchanged-explicit-user", "add", f.Package, "--scope", "user")
+	if err := nativeUnchangedResult(explicitUser); err != nil {
+		t.Fatalf("explicit user scope diverged from default Codex install: %v", err)
+	}
+	if nativeSHA(t, statePath) != unchangedState || nativeTreeDigest(t, active) != unchangedManaged || nativeTreeDigest(t, c.Root) != unchangedCache {
+		t.Fatal("explicit user scope replay mutated the Codex user installation")
+	}
+	stages["explicit_user_scope"] = nativeStage{Status: "passed", Reason: "genuine Codex CLI install idempotence, explicit user/default scope parity and identical state/managed/cache bytes"}
+ 
 	// A changed existing directory deliberately loses provable content ownership.
 	// Verify fail-closed protection, then restore only bytes this fixture saved.
 	nativeAttempt(stages, "owned_artifact_guard", "owned-guard.log")
