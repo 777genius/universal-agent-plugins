@@ -153,3 +153,44 @@ func TestPiRefineAndInspectRejectPlanReboundFromOriginalUser(t *testing.T) {
 		}
 	}
 }
+
+func TestPiScopedAdapterPreconditionPreservesGlobalAndProjectAuthority(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := filepath.Join(root, "home", ".pi", "agent")
+	if err := os.MkdirAll(user, 0700); err != nil {
+		t.Fatal(err)
+	}
+	target, err := domain.NewTargetContext(domain.ScopeUser, "", user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	native := filepath.Join(user, "extensions")
+	plan := domain.DeliveryPlan{
+		ClientID: domain.ClientPi, Scope: domain.ScopeUser, TargetContext: target,
+		NativeRegistryRoot: user, TargetAnchor: user, TargetRoot: native,
+		PhysicalArtifactID: "TEST-pi-user", ActivePath: filepath.Join(native, "TEST-pi-user"),
+	}
+	detected := domain.DetectedClient{ClientID: domain.ClientPi, ConfigRoot: user}
+	adapter := NewProject()
+	if err := adapter.CheckPlanPrecondition(clients.PlanInput{Client: detected, TargetContext: target}, &plan); err != nil {
+		t.Fatalf("Pi Global was rejected by project-aware adapter: %v", err)
+	}
+	other := filepath.Join(root, "other", ".pi", "agent")
+	if err := os.MkdirAll(other, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.CheckPlanPrecondition(clients.PlanInput{
+		Client: domain.DetectedClient{ClientID: domain.ClientPi, ConfigRoot: other},
+		TargetContext: target,
+	}, &plan); err == nil {
+		t.Fatal("Pi Global precondition adopted another selected user profile")
+	}
+	mismatch := plan
+	mismatch.Scope = domain.ScopeProject
+	if err := adapter.CheckPlanPrecondition(clients.PlanInput{Client: detected, TargetContext: target}, &mismatch); err == nil {
+		t.Fatal("Pi mixed scope was accepted")
+	}
+}

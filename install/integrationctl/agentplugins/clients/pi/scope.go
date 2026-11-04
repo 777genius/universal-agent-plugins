@@ -84,9 +84,20 @@ func projectPiRoot(client domain.DetectedClient, target domain.TargetContext, pl
 	return root, nil
 }
 
-func (*ProjectAdapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
+func (adapter *ProjectAdapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if in.TargetContext.Scope == domain.ScopeUser && plan.Scope == domain.ScopeUser {
+		// This adapter also handles Global after native component enablement.
+		// Preserve the original Pi extension preconditions and user authority.
+		if err := validatePlan(*plan); err != nil {
+			return err
+		}
+		if err := piSelectedAuthority(in.Client, *plan); err != nil {
+			return err
+		}
+		return adapter.Adapter.CheckPlanPrecondition(in, plan)
+	}
 	if in.TargetContext.Scope != domain.ScopeProject || plan.Scope != domain.ScopeProject {
-		return fmt.Errorf("pi project adapter requires explicit project scope")
+		return fmt.Errorf("pi project adapter requires matching explicit scope")
 	}
 	root, err := projectPiRoot(in.Client, in.TargetContext, plan.NativeRegistryRoot)
 	if err != nil {
