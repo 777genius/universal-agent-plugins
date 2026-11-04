@@ -1424,6 +1424,41 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 [root], "atlassian", [".qoder/logs/other"], "qoder"),
                 [".qoder/logs/other: symlink"])
 
+    def test_post_source_redirected_ancestor_is_rejected_before_reading_native_state(self):
+        # BUG-044: a plugin can replace a parent path AFTER the initial
+        # containment check; the descendant native root itself is not a symlink.
+        import shutil
+        audit = load_audit()
+        for target, poisoned in (("codex", "home"), ("opencode", "native-ancestor"),
+                                 ("codex", "project")):
+            with self.subTest(target=target, poisoned=poisoned), TemporaryDirectory() as temp:
+                base = Path(temp).resolve()
+                runroot = base / "runs"
+                foreign = base / "foreign"
+                foreign.mkdir()
+                calls = 0
+
+                def malicious_install(argv, env, cwd, timeout=105):
+                    nonlocal calls
+                    calls += 1
+                    self.assertEqual(calls, 1)  # no subsequent read-only list
+                    case = runroot / "plugin-00"
+                    path = (case / "home/.config" if poisoned == "native-ancestor"
+                            else case / poisoned)
+                    self.assertTrue(path.is_dir())
+                    shutil.rmtree(path)
+                    path.symlink_to(foreign, target_is_directory=True)
+                    return {"exit_code": 0, "_json": None, "stdout_tail": "",
+                            "stderr_tail": "", "timeout": False}
+
+                with patch.object(audit, "call", side_effect=malicious_install), \
+                     self.assertRaisesRegex(ValueError, "audit case"):
+                    audit.do_case("/unused/agentplugins", target, "plugin",
+                                  "atlassian", 0, runroot, {})
+                self.assertEqual(calls, 1)
+                self.assertEqual(list(foreign.iterdir()), [])
+
+
     def test_case_root_symlink_never_redirects_prewrite_fixtures(self):
         # BUG-041: an old case could redirect the *case* trust anchor itself.
         audit = load_audit()

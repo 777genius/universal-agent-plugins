@@ -957,6 +957,31 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
     env = isolated_client_env(home, case_root, data)
+    def assert_case_unchanged():
+        # Native clients and acquired packages execute as subprocesses.
+        # Re-anchor before and after each call; otherwise an ancestor symlink
+        # can make os.walk/read_text silently inspect a foreign profile.
+        try:
+            if (runroot.is_symlink() or case_root.is_symlink()
+                    or runroot.resolve(strict=True) != canonical_runroot
+                    or case_root.resolve(strict=True) != canonical_case):
+                raise ValueError("audit case root changed after external execution")
+            for path in (home, project, data):
+                if not path.is_dir() or not path_inside_case(path, case_root):
+                    raise ValueError("audit case profile/project root was redirected")
+            for path in (*native_roots,
+                         *(project / rel for rel in project_skill_roots)):
+                if not path_inside_case(path, case_root):
+                    raise ValueError("audit case native/project ancestor was redirected")
+        except (OSError, RuntimeError) as error:
+            raise ValueError("audit case root became unavailable") from error
+
+    def audited_call(*args, **kwargs):
+        assert_case_unchanged()
+        outcome = call(*args, **kwargs)
+        assert_case_unchanged()
+        return outcome
+
     if target == "kimi" and kind == "skill":
         initialize_kimi_project_git_root(project, env, case_root)
     before = snapshot(native_roots)
@@ -972,7 +997,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         scope = ["--scope", "project", "--project-root", str(project)]
     copilot_before = (copilot_settings_sanitized_shape(home, case_root, identity)
                       if kind == "plugin" and target == "copilot" else None)
-    output = call([cli, *args], env, project)
+    output = audited_call([cli, *args], env, project)
     output.pop("_json", None)
     copilot_after_add = (copilot_settings_sanitized_shape(home, case_root, identity)
                          if copilot_before is not None else None)
@@ -984,7 +1009,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     lock_pinned = bool(kind == "skill" and locked and locked_skill_is_pinned(project, item, target))
     skill_bytes_match = (kind == "skill" and matches_pinned_skill_bytes(
         project, skill_path, item["skill_md_git_blob_sha1"]))
-    listed = (call([cli, "list", "--target", target, *scope, "--format", "json"],
+    listed = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                    env, project, 30))
     listed_json = listed.pop("_json", None) if listed else None
     matching = matching_installations(listed_json, identity, target, kind, item,
@@ -1029,9 +1054,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 for path in lock_paths
             )
         before_repeat_lock = lock_state()
-        repeat_add = call([cli, *args], env, project)
+        repeat_add = audited_call([cli, *args], env, project)
         repeat_add.pop("_json", None)
-        repeat_list = call([cli, "list", "--target", target, *scope, "--format", "json"],
+        repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
         repeat_list_json = repeat_list.pop("_json", None)
         repeat_matches = matching_installations(
@@ -1051,6 +1076,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if target == "qoder" and kind == "plugin" and installed and repeat_verified:
         qoder_native_before_remove = qoder_native_plugin_state(
             home, env, project, identity, matching[0].get("version"))
+        assert_case_unchanged()
     cleanup = None
     native_uninstall = None
     if installed:
@@ -1060,15 +1086,17 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if kind == "plugin" and target == "codex":
             native_uninstall = uninstall_native_codex_plugin(
                 identity, home, case_root, env, project)
+            assert_case_unchanged()
         attestation = (["--external-uninstalled"] if
                        native_uninstall and native_uninstall["completed"] else [])
-        cleanup = call([cli, "remove", identity, "--target", target, *scope,
+        cleanup = audited_call([cli, "remove", identity, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
         cleanup.pop("_json", None)
     qoder_native_after_remove = None
     if target == "qoder" and kind == "plugin" and cleanup and cleanup["exit_code"] == 0:
         qoder_native_after_remove = qoder_native_plugin_state(
             home, env, project, identity)
+        assert_case_unchanged()
     copilot_after_remove = (copilot_settings_sanitized_shape(home, case_root, identity)
                             if copilot_before is not None and cleanup else None)
     sentinels_preserved = (
@@ -1088,7 +1116,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     post_removal_leftovers = (
         skill_removal_leftovers(project, target, identity, skill_path)
         if kind == "skill" and cleanup else [])
-    post_list = (call([cli, "list", "--target", target, *scope, "--format", "json"],
+    post_list = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
     post_list_json = post_list.pop("_json", None) if post_list else None
     remaining_ids = set()
