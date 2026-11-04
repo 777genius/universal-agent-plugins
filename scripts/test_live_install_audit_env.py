@@ -683,8 +683,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         state["installed"] = True
                     elif argv[1] == "remove":
                         skill.unlink()
+                        skill.parent.rmdir()
+                        (project / "uap.lock").unlink()
                         state["installed"] = False
                         if residue == "symlink":
+                            skill.parent.mkdir()
                             skill.symlink_to(project / "unmanaged")
                         elif residue == "native":
                             (native / "agent-registry.json").write_text(
