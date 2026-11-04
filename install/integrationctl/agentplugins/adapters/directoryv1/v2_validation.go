@@ -3,6 +3,7 @@ package directoryv1
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -214,7 +215,7 @@ func validateV2Policy(policy domain.DirectoryReleasePolicy) error {
 	for _, grant := range policy.Targets {
 		key := string(grant.Client) + "\x00" + string(grant.Scope)
 		floor, err := parseSemver(grant.MinimumInstallerVersion)
-		if err != nil || floor < baseFloor || len(grant.Scopes) > 0 || seen[key] ||
+		if err != nil || slices.Compare(floor[:], baseFloor[:]) < 0 || len(grant.Scopes) > 0 || seen[key] ||
 			!oneOf(string(grant.Scope), "user", "project") {
 			return strictError("invalid or duplicate v2 scoped grant")
 		}
@@ -229,7 +230,7 @@ func validateV2Policy(policy domain.DirectoryReleasePolicy) error {
 			if !digestPattern.MatchString(closure.ClosureDigest) {
 				return strictError("invalid v2 closure digest")
 			}
-			if _, err := parseSemver(closure.MinimumInstallerVersion); err != nil {
+			if minimum, err := parseSemver(closure.MinimumInstallerVersion); err != nil || slices.Compare(minimum[:], floor[:]) < 0 {
 				return strictError("invalid v2 closure minimum")
 			}
 		}
