@@ -332,7 +332,7 @@ func TestPublicDirectoryV2ScopesDoNotBorrowAnotherGrantEvidence(t *testing.T) {
 		t.Fatalf("expected independent v2 grant rows, got %+v", result.Targets)
 	}
 	for i, check := range []struct {
-		scope domain.InstallScope
+		scope        domain.InstallScope
 		wantEvidence string
 	}{{domain.ScopeUser, "schema-pass,user-runtime"}, {domain.ScopeProject, "schema-pass,project-policy-materialization,project-runtime"}} {
 		row := result.Targets[i]
