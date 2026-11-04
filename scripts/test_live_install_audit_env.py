@@ -168,6 +168,65 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                           {"data": {"installations": [None, "bad"]}}):
             self.assertFalse(audit.has_target_registration(malformed, "atlassian", "grok"))
 
+    def test_signed_release_requires_same_verified_target_and_immutable_metadata(self):
+        audit = load_audit()
+        directory = {
+            "product_id": "atlassian",
+            "recorded_distribution": "777genius/atlassian",
+            "recorded_revision": "a" * 40,
+            "recorded_release_sequence": 1,
+        }
+        revision = {
+            "distribution_id": "777genius/atlassian",
+            "resolved_revision": "a" * 40,
+            "release_sequence": 1,
+            "tree_digest": "sha256:" + "b" * 64,
+            "manifest_digest": "sha256:" + "c" * 64,
+        }
+        verified = {"client_id": "codex", "verification": "installation_verified",
+                    "package_revision": revision}
+        node = {"name": "atlassian", "installation_id": "valid-id",
+                "source": "777genius/atlassian", "directory": directory,
+                "clients": [verified]}
+        def matching():
+            return audit.matching_installations(
+                {"data": {"installations": [node]}}, "atlassian", "codex",
+                "plugin", "atlassian",
+            )
+        self.assertEqual(len(matching()), 1)
+        for key, value in (("resolved_revision", "d" * 40),
+                           ("distribution_id", "wrong/package"),
+                           ("release_sequence", 2),
+                           ("tree_digest", "sha256:short"),
+                           ("manifest_digest", None)):
+            with self.subTest(key=key):
+                broken = dict(revision, **{key: value})
+                node["clients"] = [dict(verified, package_revision=broken)]
+                self.assertEqual(matching(), [])
+        node["clients"] = [
+            dict(verified, package_revision={}),
+            {"client_id": "codex", "verification": "pending",
+             "package_revision": revision},
+        ]
+        self.assertEqual(matching(), [])
+        node["clients"] = [dict(verified, client_id="grok")]
+        self.assertEqual(matching(), [])
+
+    def test_direct_git_revision_must_belong_to_verified_client(self):
+        audit = load_audit()
+        sha = "a" * 40
+        item = "github:obra/the-elements-of-style@" + sha
+        node = {"name": "elements-of-style", "source": "obra/the-elements-of-style",
+                "installation_id": "valid-id", "clients": [
+                    {"client_id": "kiro", "verification": "installation_verified",
+                     "package_revision": {}},
+                    {"client_id": "kiro", "verification": "pending",
+                     "package_revision": {"resolved_revision": sha}},
+                ]}
+        response = {"data": {"installations": [node]}}
+        self.assertEqual(audit.matching_installations(
+            response, "elements-of-style", "kiro", "plugin", item), [])
+
     def test_real_signed_release_target_refusal_is_not_an_installer_bug(self):
         audit = load_audit()
         reproduced = (

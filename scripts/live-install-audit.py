@@ -273,6 +273,27 @@ def has_target_registration(response, identity, target):
     )
 
 
+def recorded_signed_release_matches(directory, revision):
+    """Bind a verified client's package to the recorded signed release."""
+    if not isinstance(directory, dict) or not isinstance(revision, dict):
+        return False
+    distribution = directory.get("recorded_distribution")
+    commit = directory.get("recorded_revision")
+    sequence = directory.get("recorded_release_sequence")
+    if (not isinstance(distribution, str) or not distribution
+            or not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit)
+            or type(sequence) is not int or sequence < 1):
+        return False
+    return bool(
+        revision.get("distribution_id") == distribution
+        and revision.get("resolved_revision") == commit
+        and revision.get("release_sequence") == sequence
+        and all(isinstance(revision.get(key), str)
+                and re.fullmatch(r"sha256:[0-9a-f]{64}", revision[key])
+                for key in ("tree_digest", "manifest_digest"))
+    )
+
+
 def matching_installations(response, identity, target, kind, item):
     """No substring matching: inspect the entire parsed list response."""
     if not isinstance(response, dict):
@@ -290,13 +311,17 @@ def matching_installations(response, identity, target, kind, item):
         if not isinstance(node, dict):
             continue
         clients = node.get("clients", [])
-        if not isinstance(clients, list) or not any(
-            isinstance(client, dict) and client.get("client_id") == target and
+        if not isinstance(clients, list):
+            continue
+        verified_clients = [
+            client for client in clients
+            if isinstance(client, dict) and client.get("client_id") == target and
             (client.get("verification") == "installation_verified" or
              (kind == "plugin" and client.get("materialization") == "materialized" and
               client.get("verification") == "package_validated" and
               client.get("activation") == "manual_activation_required"))
-            for client in clients):
+        ]
+        if not verified_clients:
             continue
         source = node.get("source", "")
         if kind == "skill":
@@ -316,9 +341,9 @@ def matching_installations(response, identity, target, kind, item):
             if kind == "plugin" and isinstance(item, str) and item.startswith("github:"):
                 commit = item.rsplit("@", 1)[-1]
                 if not any(
-                    isinstance(client, dict) and client.get("client_id") == target
-                    and client.get("package_revision", {}).get("resolved_revision") == commit
-                    for client in clients
+                    isinstance(client.get("package_revision"), dict)
+                    and client["package_revision"].get("resolved_revision") == commit
+                    for client in verified_clients
                 ):
                     continue
             # A catalogue name is not enough to prove the selected signed
@@ -331,6 +356,10 @@ def matching_installations(response, identity, target, kind, item):
                      directory.get("recorded_distribution") != item) or
                     (item != "777genius/chrome-devtools-bridge" and
                      directory.get("product_id") != item)):
+                    continue
+                if not any(recorded_signed_release_matches(
+                        directory, client.get("package_revision"))
+                        for client in verified_clients):
                     continue
             result.append(node)
     return result

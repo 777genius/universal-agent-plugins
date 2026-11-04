@@ -19,4 +19,4 @@ This is an **audit proof weakness**, not evidence that the production Directory 
 - **Integrity critic:** Product name alone is not the selected signed artifact. The E2E proof must bind recorded distribution to the exact resolved immutable revision and cryptographic digests.
 - **Scope critic:** Validate metadata already present in real CLI `list`; do not introduce a new registry API, third-party signer, trust bypass, or a production data-model migration.
 
-**State:** confirmed by a minimal code-path counterexample; narrow test and fix pending final-head CI.
+**State:** exact signed-release binding and verified-client regressions pushed in PR #698; final-head native artifact inspection and CI pending.
