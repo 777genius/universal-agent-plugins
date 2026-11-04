@@ -921,9 +921,10 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 		t.Fatal("selected profile B changed unselected profile A")
 	}
 	if second["result"] != "success" {
-		t.Fatalf("secondary profile B install not yet qualified (no authority bypass permitted): %+v", second)
+		stages["profile_B_install"] = claudeNativeStage{Status: "blocked", Reason: "native identity ownership unresolved in the cold selected B profile"}
+	} else {
+		stages["profile_B_install"] = claudeNativeStage{Status: "passed"}
 	}
-	stages["profile_B_install"] = claudeNativeStage{Status: "passed"}
 	f.ConfigDir, f.StateHome = rootA, stateA
 	stableB := nativeTreeDigest(t, rootB)
 	replayed := claudeRunInstaller(t, f, installer, clientDir, "A-replay", "add", f.PackageRoot, "--target", "claude")
@@ -933,6 +934,9 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 	assertSentinels()
 	stages["A_replay"] = claudeNativeStage{Status: "passed"}
 	capture("after_A_replay")
+	if second["result"] != "success" {
+		t.Fatalf("cold B install still blocked by native identity; A was preserved on B refusal and A replay: %+v", second)
+	}
 	f.ConfigDir, f.StateHome = rootB, stateB
 	stableA = nativeTreeDigest(t, rootA)
 	removed := claudeRunInstaller(t, f, installer, clientDir, "B-only-remove", "remove", "claude-native-proof", "--target", "claude")
