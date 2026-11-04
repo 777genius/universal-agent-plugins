@@ -319,7 +319,17 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
                              if entry.get("name")==server_name]
                     if len(entries)!=1 or entries[0].get("scope")!="user" or (
                             entries[0].get("state")!="connected") or tool not in entries[0].get("tools",[]):
-                        raise RuntimeError("genuine Pi global MCP server not connected: "+server_name)
+                        # Preserve the strict native gate. Report only bounded,
+                        # non-secret status fields to distinguish a scope-name
+                        # mismatch from a failed genuine MCP connection.
+                        observed=[{
+                            "name": item.get("name"), "scope": item.get("scope"),
+                            "state": item.get("state"),
+                            "tools": item.get("tools",[])[:12]
+                                if isinstance(item.get("tools"), list) else None,
+                        } for item in entries[:2]]
+                        raise RuntimeError("genuine Pi global MCP server not connected: "+
+                                           server_name+" observed="+json.dumps(observed,sort_keys=True)[:600])
                 global_logs=list((state_root/"plugin-data").glob("**/pi-mcp-methods.log"))
                 if len(global_logs)!=1 or not all(x in global_logs[0].read_text().splitlines()
                                                  for x in ("initialize","tools/list")):
