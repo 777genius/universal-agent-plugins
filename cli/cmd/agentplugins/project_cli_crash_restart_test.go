@@ -120,7 +120,15 @@ func TestPublicCLICrashAfterDurablePhaseRecovery(t *testing.T) {
 		command.Dir = journey.a
 		stdout, err := command.Output()
 		if err != nil {
-			t.Fatalf("fresh public CLI %s failed: %v", strings.Join(args, " "), err)
+			stderr := ""
+			var exit *exec.ExitError
+			if errors.As(err, &exit) {
+				stderr = string(exit.Stderr)
+				if len(stderr) > 4096 {
+					stderr = stderr[:4096]
+				}
+			}
+			t.Fatalf("fresh public CLI %s failed: %v; stderr=%q", strings.Join(args, " "), err, stderr)
 		}
 		return stdout
 	}

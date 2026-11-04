@@ -95,9 +95,9 @@ func TestAgentpluginsCodexNativeForeignSkillCLIRefusal(t *testing.T) {
 		"--project-root", f.base.Project, "--no-ui", "--yes", "--format", "json"}
 	// First run the genuine published 0.1.95 CLI against the same occupied
 	// project: its historical PLAN_REJECTED is a baseline, not a feature PASS.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	prior := exec.CommandContext(ctx, published, argv...)
+	baselineCtx, baselineCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer baselineCancel()
+	prior := exec.CommandContext(baselineCtx, published, argv...)
 	prior.Env = append(f.base.env(filepath.Dir(f.client)), "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0")
 	prior.Dir = f.base.Project
 	var baselineOut, baselineErr bytes.Buffer
@@ -106,7 +106,7 @@ func TestAgentpluginsCodexNativeForeignSkillCLIRefusal(t *testing.T) {
 	var baselineRefusal struct{ Code, Message string }
 	var baselineCode *exec.ExitError
 	if !errors.As(baselineExit, &baselineCode) || baselineCode.ExitCode() != 1 ||
-		json.Unmarshal(baselineOut.Bytes(), &baselineRefusal) != nil || ctx.Err() != nil ||
+		json.Unmarshal(baselineOut.Bytes(), &baselineRefusal) != nil || baselineCtx.Err() != nil ||
 		baselineRefusal.Code != "PLAN_REJECTED" {
 		t.Fatalf("published UAP 0.1.95 baseline differs: exit=%v, structured code=%q", baselineExit, baselineRefusal.Code)
 	}
@@ -122,6 +122,9 @@ func TestAgentpluginsCodexNativeForeignSkillCLIRefusal(t *testing.T) {
 	f.requireForeign(t)
 	nativeJSON(t, filepath.Join(f.base.Root, "foreign-skill-published-0.1.95.json"), baselineRefusal)
 	stages["published_baseline"] = nativeStage{Status: "passed", Reason: "attested released UAP 0.1.95 returned generic PLAN_REJECTED with same genuine pinned Codex; foreign bytes unchanged"}
+	baselineCancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
 	cmd := exec.CommandContext(ctx, f.installer, argv...)
 	cmd.Env = append(f.base.env(filepath.Dir(f.client)), "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0")
 	cmd.Dir = f.base.Project
