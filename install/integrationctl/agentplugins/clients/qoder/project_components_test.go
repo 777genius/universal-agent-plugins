@@ -8,6 +8,7 @@ import (
     "testing"
 
     "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+    "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
     "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
     "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -50,8 +51,28 @@ func TestQoderProjectMixedSkillsStdioHTTPNativeLifecycle(t *testing.T) {
     if _, err := os.Stat(filepath.Join(project, ".qoder", "skills", "docs", "SKILL.md")); err != nil { t.Fatal(err) }
     mutation.Previous = append([]domain.NativeObjectOwnership(nil), objects...)
     if err := mutation.Apply(context.Background()); err != nil { t.Fatal(err) }
-    mutation.Desired, mutation.Servers = nil, nil
-    if err := mutation.Apply(context.Background()); err != nil { t.Fatal(err) }
+    // User/local policy may change after installation. It must affect future
+    // selection, never the permission to remove our exact owned project bytes.
+    qoderWrite(t, filepath.Join(user, "skills", "docs", "SKILL.md"), "foreign user shadow")
+    local := filepath.Join(project, ".qoder", "settings.local.json")
+    qoderWrite(t, local, `{"mcpServers":{"stdio":{"command":"foreign-local"}}}`)
+    if err := qoderHigherPriorityConflicts(plan); err == nil {
+        t.Fatal("shadowed installation was not detected before activation")
+    }
+    removed, err := deactivateQoderNative(context.Background(), clients.Env{NativeConfig:mutation.Kernel},
+        domain.DeactivationRequest{
+            TargetContext:domain.TargetContext{Scope:domain.ScopeProject, ProjectRoot:project, UserConfigRoot:user},
+            NativeObjects:objects, Confirmed:true,
+        })
+    if err != nil || !removed.ExternalRemovalComplete {
+        t.Fatalf("owned removal was blocked by later foreign priority: %+v %v", removed, err)
+    }
+    if data, err := os.ReadFile(filepath.Join(user, "skills", "docs", "SKILL.md")); err != nil || string(data) != "foreign user shadow" {
+        t.Fatalf("remove changed foreign user Skill: %q %v", data, err)
+    }
+    if data, err := os.ReadFile(local); err != nil || string(data) != `{"mcpServers":{"stdio":{"command":"foreign-local"}}}` {
+        t.Fatalf("remove changed foreign local MCP: %q %v", data, err)
+    }
     if _, err := os.Lstat(filepath.Join(project, ".qoder", "skills", "docs")); !os.IsNotExist(err) { t.Fatalf("owned skill survives removal: %v", err) }
     content, err = os.ReadFile(path)
     if err != nil || strings.Contains(string(content), `"stdio"`) || strings.Contains(string(content), `"http"`) || !strings.Contains(string(content), `"foreign"`) {
