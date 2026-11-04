@@ -847,6 +847,69 @@ func TestClaudeWindowsMCPProjection(t *testing.T) {
 	}
 }
 
+// claudeProfileFiles records only metadata and content hashes, never contents.
+// WalkDir does not traverse links; symlink targets are hashed without opening.
+type claudeProfileFile struct {
+	Kind string `json:"kind"`
+	SHA256 string `json:"sha256"`
+	Mode string `json:"mode"`
+	Size int64 `json:"size"`
+}
+
+type claudeProfileChange struct {
+	Path string `json:"path"`
+	Before *claudeProfileFile `json:"before,omitempty"`
+	After *claudeProfileFile `json:"after,omitempty"`
+}
+
+func claudeProfileFiles(t *testing.T, root string) map[string]claudeProfileFile {
+	t.Helper()
+	files := map[string]claudeProfileFile{}
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		f := claudeProfileFile{Mode: info.Mode().String(), Size: info.Size()}
+		var body []byte
+		switch {
+		case info.Mode()&os.ModeSymlink != 0:
+			f.Kind = "symlink"
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			body = []byte(target) // link text only; never open its destination
+		case info.Mode().IsRegular():
+			f.Kind = "file"
+			body, err = os.ReadFile(path)
+			if err != nil || int64(len(body)) != info.Size() {
+				return fmt.Errorf("incomplete native profile inventory for %q: %v", rel, err)
+			}
+		default:
+			return fmt.Errorf("unsupported native profile entry type at %q", rel)
+		}
+		h := sha256.Sum256(body)
+		f.SHA256 = hex.EncodeToString(h[:])
+		files[filepath.ToSlash(rel)] = f
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("incomplete Claude native profile inventory: %v", err)
+	}
+	return files
+}
+
 // TestAgentpluginsClaudeNativeSecondaryProfileIsolation is a genuine pinned
 // user-scope A→B→A test with a shared disposable HOME, not two unrelated users.
 // Every new root belongs to this fixture; no native auth or model is requested.
@@ -905,13 +968,55 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 			t.Fatalf("native selected profile plugin count=%d wantInstalled=%t", count, installed)
 		}
 	}
+	// Both installer state roots and all shared XDG roots are independent
+	// observed boundaries. A cold B is not initialized by enumerating files.
+	roots := map[string]string{
+		"profile_A": rootA, "profile_B": rootB,
+		"state_A": stateA, "state_B": stateB,
+		"shared_home": f.Home,
+		"xdg_config": filepath.Join(f.Root, "xdg-config"),
+		"xdg_data": filepath.Join(f.Root, "xdg-data"),
+		"xdg_cache": filepath.Join(f.Root, "xdg-cache"),
+		"xdg_state": filepath.Join(f.Root, "xdg-state"),
+	}
+	if err := os.MkdirAll(roots["xdg_state"], 0700); err != nil {
+		t.Fatal(err)
+	}
 	snapshots := map[string]map[string]string{}
+	fileInventories := map[string]map[string]map[string]claudeProfileFile{}
+	fileChanges := map[string]map[string][]claudeProfileChange{}
+	previous := map[string]map[string]claudeProfileFile{}
 	capture := func(stage string) {
 		t.Helper()
-		snapshots[stage] = map[string]string{
-			"profile_A": nativeTreeDigest(t, rootA),
-			"profile_B": nativeTreeDigest(t, rootB),
-			"shared_home": nativeTreeDigest(t, f.Home),
+		snapshots[stage] = map[string]string{}
+		fileInventories[stage] = map[string]map[string]claudeProfileFile{}
+		fileChanges[stage] = map[string][]claudeProfileChange{}
+		for label, path := range roots {
+			snapshots[stage][label] = nativeTreeDigest(t, path)
+			current := claudeProfileFiles(t, path)
+			fileInventories[stage][label] = current
+			if prior, ok := previous[label]; ok {
+				changes := []claudeProfileChange{}
+				for file, before := range prior {
+					after, found := current[file]
+					if !found {
+						b := before
+						changes = append(changes, claudeProfileChange{Path: file, Before: &b})
+					} else if before != after {
+						b, a := before, after
+						changes = append(changes, claudeProfileChange{Path: file, Before: &b, After: &a})
+					}
+				}
+				for file, after := range current {
+					if _, found := prior[file]; !found {
+						a := after
+						changes = append(changes, claudeProfileChange{Path: file, After: &a})
+					}
+				}
+				sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
+				fileChanges[stage][label] = changes
+			}
+			previous[label] = current
 		}
 	}
 	capture("before_any_native_command")
@@ -933,6 +1038,7 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 			"source_version": os.Getenv("AGENTPLUGINS_CLAUDE_VERSION"),
 			"shared_disposable_home": true, "distinct_config_and_state_roots": true,
 			"model_execution": "NOT_RUN", "stages": stages, "snapshots": snapshots,
+			"file_inventories": fileInventories, "file_changes": fileChanges,
 		})
 	}()
 	// Record A's native-only initialization separately. B intentionally
