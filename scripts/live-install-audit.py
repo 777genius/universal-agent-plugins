@@ -606,8 +606,9 @@ def matching_installations(response, identity, target, kind, item, signed_releas
                         directory.get("recorded_distribution") != pin["distribution"] or
                         directory.get("recorded_revision") != pin["revision"] or
                         directory.get("recorded_release_sequence") != pin["sequence"] or
-                        (item not in ("777genius/chrome-devtools-bridge", "777genius/github-bridge") and
-                         directory.get("product_id") != item)):
+                        (item != "777genius/chrome-devtools-bridge" and
+                         directory.get("product_id") !=
+                         ("github" if item == "777genius/github-bridge" else item))):
                     continue
                 if not any(
                         recorded_signed_release_matches(
