@@ -893,8 +893,11 @@ func claudeProfileFiles(t *testing.T, root string) map[string]claudeProfileFile 
 		case info.Mode().IsRegular():
 			f.Kind = "file"
 			body, err = os.ReadFile(path)
-			if err != nil || int64(len(body)) != info.Size() {
-				return fmt.Errorf("incomplete native profile inventory for %q: %v", rel, err)
+			if err != nil {
+				return fmt.Errorf("read native profile inventory file %q: %w", rel, err)
+			}
+			if int64(len(body)) != info.Size() {
+				return fmt.Errorf("native profile inventory file %q changed during read", rel)
 			}
 		default:
 			return fmt.Errorf("unsupported native profile entry type at %q", rel)
@@ -1033,9 +1036,9 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 	}
 	defer func() {
 		nativeJSON(t, filepath.Join(f.Root, "claude-secondary-profile-evidence.json"), map[string]any{
-			"source_commit": os.Getenv("AGENTPLUGINS_INSTALLER_COMMIT"),
-			"claude_binary_sha256": claudeSHA256(t, client),
-			"source_version": os.Getenv("AGENTPLUGINS_CLAUDE_VERSION"),
+			"source_commit":          os.Getenv("AGENTPLUGINS_INSTALLER_COMMIT"),
+			"claude_binary_sha256":   claudeSHA256(t, client),
+			"source_version":         os.Getenv("AGENTPLUGINS_CLAUDE_VERSION"),
 			"shared_disposable_home": true, "distinct_config_and_state_roots": true,
 			"model_execution": "NOT_RUN", "stages": stages, "snapshots": snapshots,
 			"file_inventories": fileInventories, "file_changes": fileChanges,
