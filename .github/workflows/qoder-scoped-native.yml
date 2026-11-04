@@ -1,0 +1,45 @@
+name: Qoder scoped native regression
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/qoder-scoped-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qoder-scoped-native-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  qoder-native:
+    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Check scoped Qoder Skills/MCP ownership and isolation
+        run: go test -count=1 -timeout=4m ./install/integrationctl/agentplugins/clients/qoder -run '^TestQoderProject'
+      - name: Run exact pinned Qoder native Skills lifecycle
+        run: python3 scripts/project_native_runtime.py --client qoder --output '${{ runner.temp }}/qoder-scoped-native'
+      - name: Upload bounded native observations, including failures
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: qoder-scoped-native-${{ github.run_id }}
+          path: ${{ runner.temp }}/qoder-scoped-native/upload/
+          if-no-files-found: warn
+          retention-days: 14
