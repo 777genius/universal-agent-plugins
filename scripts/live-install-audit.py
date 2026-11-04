@@ -552,6 +552,42 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
         (kind == "plugin" or
          (bool(skill_path) and lock_pinned and skill_bytes_match))
     )
+    # BUG-016: a single successful add/remove cannot attest idempotence.
+    # Repeat the same source and target only after the first registered add;
+    # keep native, managed and foreign state inside the same disposable case.
+    repeat_add = None
+    repeat_list = None
+    repeat_identity_ids = []
+    repeat_native_unchanged = None
+    repeat_lock_unchanged = None
+    repeat_verified = False
+    if installed:
+        before_repeat_native = snapshot(native_roots)
+        lock_root = project if kind == "skill" else data
+        lock_paths = (lock_root / "uap.toml", lock_root / "uap.lock")
+        def lock_state():
+            return tuple(
+                (path.is_file() and not path.is_symlink(),
+                 path.read_bytes() if path.is_file() and not path.is_symlink() else None)
+                for path in lock_paths
+            )
+        before_repeat_lock = lock_state()
+        repeat_add = call([cli, *args], env, project)
+        repeat_add.pop("_json", None)
+        repeat_list = call([cli, "list", "--target", target, *scope, "--format", "json"],
+                           env, project, 30)
+        repeat_list_json = repeat_list.pop("_json", None)
+        repeat_matches = matching_installations(repeat_list_json, identity, target, kind, item)
+        repeat_identity_ids = sorted(
+            entry["installation_id"] for entry in repeat_matches)
+        repeat_native_unchanged = snapshot(native_roots) == before_repeat_native
+        repeat_lock_unchanged = lock_state() == before_repeat_lock
+        repeat_verified = bool(
+            repeat_add["exit_code"] == 0 and repeat_list["exit_code"] == 0
+            and len(repeat_matches) == 1
+            and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
+            and repeat_native_unchanged and repeat_lock_unchanged
+        )
     cleanup = None
     native_uninstall = None
     if installed:
@@ -599,9 +635,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     )
     diagnostics = (output["stdout_tail"] + "\n" + output["stderr_tail"]).lower()
     install_refused = is_cli_refusal(output)
-    if target == "chatgpt" and kind == "plugin" and installed and removal_verified and sentinels_preserved:
+    if installed and removal_verified and sentinels_preserved and not repeat_verified:
+        status = "repeat-add-unqualified"
+    elif target == "chatgpt" and kind == "plugin" and installed and removal_verified and sentinels_preserved and repeat_verified:
         status = "manual-setup-prepared"
-    elif installed and removal_verified and sentinels_preserved:
+    elif installed and removal_verified and sentinels_preserved and repeat_verified:
         status = ("package-installed-native-unqualified" if kind == "plugin" and not native_attribution
                   else "prepared-lifecycle-passed" if prepared_binding else "passed")
     elif installed and cleanup and "external removal requires explicit attestation" in (
@@ -635,6 +673,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
             "lock_written": bool(locked), "lock_contains_identity": bool(lock_contains),
             "lock_exact_source_pinned": lock_pinned, "skill_bytes_match": bool(skill_bytes_match),
             "listed_identity": listed_identity, "prepared_binding": prepared_binding,
+            "repeat_add": repeat_add, "repeat_list": repeat_list,
+            "repeat_installation_ids": repeat_identity_ids,
+            "repeat_native_unchanged": repeat_native_unchanged,
+            "repeat_lock_unchanged": repeat_lock_unchanged,
+            "repeat_verified": repeat_verified,
             "failed_install_registered": failed_install_registered,
             "failed_install_residue": failed_install_residue,
             "matched_installation_ids": sorted(old_ids),
