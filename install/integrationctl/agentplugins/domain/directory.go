@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -232,38 +231,11 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 // compareSemver is used only for the installer compatibility floor. Directory
 // release ordering always uses signed release sequence.
 func compareSemver(left, right string) (int, error) {
-	type version struct {
-		core [3]uint64
-		pre  []string
-	}
-	parse := func(value string) (version, error) {
-		var v version
-		value = strings.SplitN(strings.TrimSpace(value), "+", 2)[0]
-		parts := strings.SplitN(value, "-", 2)
-		core := strings.Split(parts[0], ".")
-		if len(core) != 3 {
-			return v, errors.New("not semver")
-		}
-		for i, s := range core {
-			n, e := strconv.ParseUint(s, 10, 64)
-			if e != nil || (len(s) > 1 && s[0] == '0') {
-				return v, errors.New("not semver")
-			}
-			v.core[i] = n
-		}
-		if len(parts) == 2 {
-			if parts[1] == "" {
-				return v, errors.New("not semver")
-			}
-			v.pre = strings.Split(parts[1], ".")
-		}
-		return v, nil
-	}
-	a, e := parse(left)
+	a, e := parseDirectorySemver(left)
 	if e != nil {
 		return 0, e
 	}
-	b, e := parse(right)
+	b, e := parseDirectorySemver(right)
 	if e != nil {
 		return 0, e
 	}

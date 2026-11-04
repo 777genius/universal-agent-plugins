@@ -221,16 +221,16 @@ func validateV2Policy(policy domain.DirectoryReleasePolicy) error {
 		}
 		seen[key] = true
 		delivery, ok := domain.ExpectedDirectoryDelivery(grant.Client)
-		if !ok || delivery != grant.Delivery || grant.Client == domain.ClientChatGPT && grant.Scope == domain.ScopeProject ||
-			grant.CurrentEvidence == nil {
+		definition, defined := domain.ClientDefinitionFor(grant.Client)
+		if !ok || !defined || delivery != grant.Delivery ||
+			!slices.Contains(definition.Capabilities.Scopes, grant.Scope) || grant.CurrentEvidence == nil {
 			return strictError("invalid v2 grant delivery or evidence")
 		}
 		if !oneOf(string(grant.Authentication), string(domain.AuthenticationRequirementNotRequired),
 			string(domain.AuthenticationRequirementRequired), string(domain.AuthenticationRequirementUnknown)) {
 			return strictError("invalid v2 target authentication")
 		}
-		definition, defined := domain.ClientDefinitionFor(grant.Client)
-		if defined && definition.Capabilities.AppSupport != domain.SupportUnsupported {
+		if definition.Capabilities.AppSupport != domain.SupportUnsupported {
 			if grant.AppBinding == nil || grant.AppBinding.AppKey == "" ||
 				grant.AppBinding.ID == "" || grant.AppBinding.MCPServer == "" {
 				return strictError("v2 app-capable client requires app binding")

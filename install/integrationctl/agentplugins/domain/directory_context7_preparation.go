@@ -50,6 +50,13 @@ func isContext7PreparationSource(distribution DirectoryDistribution, release Dir
 }
 
 func hasContext7PreparationPromotion(snapshot DirectorySnapshot, distribution DirectoryDistribution, release DirectoryRelease, policy DirectoryReleasePolicy) bool {
+	// Source-only preparation is never allowed when a matching ChatGPT-purpose
+	// target is already declared, including one in another installation scope.
+	for _, target := range policy.Targets {
+		if declaresDirectoryPreparation(target.Client, DirectoryResolveContext7ChatGPTPreparation) {
+			return false
+		}
+	}
 	for _, target := range policy.Targets {
 		delivery, supported := ExpectedDirectoryDelivery(target.Client)
 		// Schema-2 grants carry one explicit scope; schema-1 carries the
