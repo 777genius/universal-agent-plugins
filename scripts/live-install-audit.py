@@ -85,8 +85,8 @@ def validate_fixtures(doc):
         if (not all(isinstance(pin[key], str) and pin[key]
                     for key in ("distribution", "repository", "path"))
                 or type(pin["sequence"]) is not int or pin["sequence"] < 1
-                or (pin["revision"] is not None
-                    and not re.fullmatch(r"[0-9a-f]{40}", pin["revision"]))
+                or not isinstance(pin["revision"], str)
+                or not re.fullmatch(r"[0-9a-f]{40}", pin["revision"])
                 or any(not isinstance(pin[key], str) or
                        re.fullmatch(r"sha256:[0-9a-f]{64}", pin[key]) is None
                        for key in ("tree_digest", "manifest_digest"))):
