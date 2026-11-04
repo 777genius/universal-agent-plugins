@@ -844,9 +844,6 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 	}
 	f := newClaudeNativeFixture(t)
 	clientDir := filepath.Dir(client)
-	if measured, want := claudeVersionString(t, f, client), os.Getenv("AGENTPLUGINS_CLAUDE_VERSION"); want == "" || measured != want {
-		t.Fatalf("unqualified Claude binary/version: %q", measured)
-	}
 	rootA, stateA := f.ConfigDir, f.StateHome
 	rootB, stateB := filepath.Join(f.Root, "claude-config-B"), filepath.Join(f.Root, "installer-state-B")
 	for _, path := range []string{rootB, stateB} {
@@ -876,6 +873,10 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 		}
 	}
 	capture("before_any_native_command")
+	if measured, want := claudeVersionString(t, f, client), os.Getenv("AGENTPLUGINS_CLAUDE_VERSION"); want == "" || measured != want {
+		t.Fatalf("unqualified Claude binary/version: %q", measured)
+	}
+	capture("after_version_probe")
 	stages := map[string]claudeNativeStage{
 		"native_only_probe": {Status: "not_evaluated"},
 		"profile_A_install": {Status: "not_evaluated"},
