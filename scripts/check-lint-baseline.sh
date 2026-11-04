@@ -273,6 +273,10 @@ while IFS=$'\t' read -r pattern _linters _message region; do
     exit 1
   fi
   [[ "$current_path" == *.go ]] || continue
+  if [[ -L "$current_path" ]]; then
+    echo "check-lint-baseline: refusing symlinked legacy source: $current_path" >&2
+    exit 1
+  fi
   [[ -f "$current_path" ]] || continue
 
   old_path="$current_path"
