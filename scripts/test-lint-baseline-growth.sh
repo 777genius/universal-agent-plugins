@@ -73,20 +73,12 @@ cat >> .golangci.yml <<'CFG'
         linters: [revive]
         text: 'file length is'
 CFG
-expect_fail '^legacy/new.go
-git mv legacy/old_linux.go legacy/renamed_linux.go
-sed 's@old_linux@renamed_linux@g' .golangci.yml > "$fixture/config-renamed"
-cp "$fixture/config-renamed" .golangci.yml
-expect_fail 'new'
-printf '%s\t%s\n' '^legacy/old_linux\.go$' '^legacy/renamed_linux\.go$' > scripts/lint-baseline-renames.txt
-run_gate
-printf '%s\n' 'legacy baseline growth integration E2E: PASS'
-
+expect_fail '^legacy/new.go$'
 git checkout -- .golangci.yml
 git mv legacy/old_linux.go legacy/renamed_linux.go
 sed 's@old_linux@renamed_linux@g' .golangci.yml > "$fixture/config-renamed"
 cp "$fixture/config-renamed" .golangci.yml
-expect_fail 'new'
+expect_fail '^legacy/renamed_linux\.go$'
 printf '%s\t%s\n' '^legacy/old_linux\.go$' '^legacy/renamed_linux\.go$' > scripts/lint-baseline-renames.txt
 run_gate
 printf '%s\n' 'legacy baseline growth integration E2E: PASS'
