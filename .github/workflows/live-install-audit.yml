@@ -44,6 +44,7 @@ jobs:
         with:
           node-version: '24'
       - name: Install genuine native Codex CLI without model subscription
+        id: native-install-pilot
         run: |
           npm install --global @openai/codex@0.153.4
           command -v codex
@@ -59,6 +60,7 @@ jobs:
         run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Run isolated real source install and remove; preserve per-case proof
         env:
+          AUDIT_VENDOR_OUTCOME: ${{ steps.native-install-pilot.outcome }}
           AUDIT_REPORT_DIR: ${{ runner.temp }}/live-audit-report
           AUDIT_KIND: ${{ matrix.kind }}
           AUDIT_TARGET: ${{ matrix.target }}
@@ -90,11 +92,14 @@ jobs:
         with:
           node-version: '24'
       - name: Install the actual public npm installer and Codex
+        id: published-install
         run: |
           npm install --global universal-agent-plugins@0.1.95 @openai/codex@0.153.4
           agentplugins version
           codex --version
       - name: Real published-package smoke (two sources per kind)
+        env:
+          AUDIT_VENDOR_OUTCOME: ${{ steps.published-install.outcome }}
         run: |
           mkdir -p "$RUNNER_TEMP/published-proof"
           result=0
