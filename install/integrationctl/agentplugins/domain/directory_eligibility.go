@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-func directoryEligibilityTargets(targets []ClientID) []ClientID {
+func directoryEligibilityTargets(targets []ClientID, scope InstallScope) []ClientID {
 	complete := append([]ClientID(nil), targets...)
 	for _, target := range targets {
-		complete = append(complete, BackendSiblings(target)...)
+		complete = append(complete, BackendSiblingsForScope(target, scope)...)
 	}
 	return uniqueClients(complete)
 }

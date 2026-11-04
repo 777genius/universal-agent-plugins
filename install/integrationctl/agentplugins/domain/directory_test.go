@@ -306,6 +306,28 @@ func TestResolveDirectoryRejectsEveryRecordedImmutableReleaseRebind(t *testing.T
 	}
 }
 
+// Copilot's project registry is independent of the user's shared Copilot/VS Code
+// backend. Project grants must not require VS Code; user grants still must.
+func TestResolveDirectoryProjectCopilotDoesNotBorrowUserBackend(t *testing.T) {
+	release := testRelease(1, "1.0.0")
+	policy := testPolicy(1, ClientCopilot)
+	policy.Targets[0].Scopes = []InstallScope{ScopeProject}
+	distribution := testDistribution("owner/tool", DistributionCommunity, []DirectoryRelease{release}, []DirectoryReleasePolicy{policy})
+	snapshot := DirectorySnapshot{Sequence: 1,
+		Products: []DirectoryProduct{{ID: "tool", ManifestName: "tool", DefaultDistribution: distribution.ID, Distributions: []string{distribution.ID}}},
+		Distributions: []DirectoryDistribution{distribution}}
+	project := request("tool", ClientCopilot)
+	project.Scope = ScopeProject
+	if got, err := ResolveDirectory(snapshot, project); err != nil || got.DistributionID != distribution.ID {
+		t.Fatalf("project Copilot inherited unrelated user backend grant: %+v %v", got, err)
+	}
+	user := request("tool", ClientCopilot)
+	snapshot.Distributions[0].ReleasePolicies[0].Targets[0].Scopes = []InstallScope{ScopeUser, ScopeProject}
+	if _, err := ResolveDirectory(snapshot, user); !errors.Is(err, ErrDirectoryIneligible) {
+		t.Fatalf("user Copilot no longer requires shared VS Code grant: %v", err)
+	}
+}
+
 func TestResolveDirectoryRequiresCompleteSharedSurfaceEligibility(t *testing.T) {
 	for _, selected := range []ClientID{ClientCopilot, ClientVSCode} {
 		t.Run(string(selected), func(t *testing.T) {
