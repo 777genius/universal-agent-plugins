@@ -5,11 +5,26 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
+
+// reportSkillsPreparationRefusal makes browser, terminal and HTTPS publisher
+// reviews use the same sanitized, typed refusal path.
+func reportSkillsPreparationRefusal(cmd *cobra.Command, opts *options, s *skillsCatalogSession, err error) error {
+	if cmd.Context().Err() != nil {
+		return cmd.Context().Err()
+	}
+	var refusal *skillspicker.ReviewRefusal
+	if errors.As(s.reviewRefusal(err), &refusal) {
+		return skillsMissingSelection(cmd, opts, refusal.Code, refusal.Message, []skillspicker.Candidate{})
+	}
+	return err
+}
 
 func (s *skillsCatalogSession) reviewRefusal(err error) error {
 	refusal := &skillspicker.ReviewRefusal{Code: "PLAN_REJECTED", Message: "Review one Skill and target at a time to identify the refused selection, or inspect agentplugins deps status for recovery guidance"}
