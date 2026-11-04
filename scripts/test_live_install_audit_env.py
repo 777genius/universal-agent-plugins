@@ -595,6 +595,51 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertEqual(delayed["native_residuals"], [".grok/new-settings.json"])
 
 
+
+    def test_post_remove_reminted_identity_under_new_id_fails_cleanup(self):
+        # BUG-022: disjoint old IDs do not prove this package/target is gone.
+        audit = load_audit()
+        source = "github:example/native-plugin@" + ("a" * 40)
+        old = {"name": "atlassian", "installation_id": "owned-old",
+               "clients": [{"client_id": "grok",
+                            "verification": "installation_verified"}]}
+        reminted = {"name": "atlassian", "installation_id": "owned-new",
+                    "clients": [{"client_id": "grok",
+                                 "verification": "installation_verified"}]}
+        with TemporaryDirectory() as temporary:
+            runroot = Path(temporary).resolve()
+            native = runroot / "plugin-00/home/.grok/managed-plugin.json"
+            state = {"removed": False}
+
+            def fake_call(argv, env, cwd, timeout=105):
+                command = argv[1]
+                if command == "add" and not native.exists():
+                    native.write_text('{"name":"atlassian"}')
+                elif command == "remove":
+                    native.unlink()
+                    state["removed"] = True
+                entries = [reminted] if state["removed"] else [old]
+                return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                        "timeout": False,
+                        "_json": {"data": {"installations": entries}}}
+
+            with patch.object(audit, "call", side_effect=fake_call):
+                with patch.object(audit, "matching_installations", return_value=[old]):
+                    result = audit.do_case(
+                        "/unused/agentplugins", "grok", "plugin", source, 0,
+                        runroot, {source: "atlassian"})
+        self.assertTrue(result["listed_identity"])
+        self.assertTrue(result["repeat_verified"])
+        self.assertTrue(result["sentinels_preserved"])
+        self.assertEqual(result["cleanup"]["exit_code"], 0)
+        self.assertTrue(result["post_list_schema_valid"])
+        self.assertEqual(result["native_residuals"], [])
+        self.assertEqual(result["matched_installation_ids"], ["owned-old"])
+        self.assertTrue(result["post_remove_identity_registered"])
+        self.assertFalse(result["removal_verified"])
+        self.assertEqual(result["status"], "cleanup-failed")
+
+
     def test_codex_native_registration_requires_exact_local_marketplace(self):
         # The actual Codex CLI owns [plugins."name@agentplugins-<hash>"].
         # A source cache, arbitrary URL or unrelated marketplace is not proof.
