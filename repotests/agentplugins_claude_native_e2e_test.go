@@ -391,6 +391,7 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 		"version_update":          {Status: "not_evaluated", Reason: "not reached"},
 		"same_version_refresh":    {Status: "not_evaluated", Reason: "not reached"},
 		"unchanged":               {Status: "not_evaluated", Reason: "not reached"},
+		"explicit_user_scope":    {Status: "not_evaluated", Reason: "not reached"},
 		"owned_repair":            {Status: "not_evaluated", Reason: "not reached"},
 		"foreign_content_inside_managed_directory_blocked": {Status: "not_evaluated", Reason: "not reached"},
 		"remove":        {Status: "not_evaluated", Reason: "not reached"},
@@ -540,7 +541,6 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	// Explicit global/user scope must select the same native Claude profile as
 	// the default scope. Prove it through the actual Claude CLI and physical
 	// state rather than treating a successful command as sufficient evidence.
-	stages["explicit_user_scope"] = claudeNativeStage{Status: "not_evaluated", Reason: "real native replay not reached"}
 	explicitUser := claudeRunInstaller(t, f, installer, clientDir, "update-explicit-user", "update", "claude-native-proof", "--target", "claude", "--scope", "user")
 	claudeAssertMutated(t, explicitUser, false)
 	if nativeTreeDigest(t, installPath) != beforeManagedTree || claudeSHA256(t, statePath) != beforeStateDigest {
