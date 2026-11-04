@@ -42,12 +42,16 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 		return loadedPackage{}, err
 	}
 	if err := validateDependencyPinEnvelope(locked, loaded.envelope); err != nil {
-		_ = loaded.cleanup()
+		if cleanupErr := loaded.cleanup(); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("%w: %w", errDependencySnapshotCleanup, cleanupErr))
+		}
 		return loadedPackage{}, err
 	}
 	checked, err := verifyLockedDirectory(ctx, app, loaded, locked, recorded, operation...)
 	if err != nil {
-		_ = loaded.cleanup()
+		if cleanupErr := loaded.cleanup(); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("%w: %w", errDependencySnapshotCleanup, cleanupErr))
+		}
 		return loadedPackage{}, err
 	}
 	loaded = checked
@@ -76,7 +80,9 @@ func loadStoredDependencySnapshot(ctx context.Context, app App, snapshot domain.
 	pkg := environmentstore.Package{Root: snapshot.Root, Metadata: environmentstore.Metadata{TreeDigest: snapshot.TreeDigest, DigestAlgorithm: snapshot.DigestAlgorithm, ExecutableFiles: snapshot.ExecutableFiles}}
 	loaded, err := loadStoredDependency(ctx, app, pkg, locked, recorded, operation...)
 	if err != nil {
-		_ = packagedigest.Remove(snapshot)
+		if cleanupErr := packagedigest.Remove(snapshot); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("%w: %w", errDependencySnapshotCleanup, cleanupErr))
+		}
 		return loadedPackage{}, err
 	}
 	loaded.cleanup = func() error { return packagedigest.Remove(snapshot) }

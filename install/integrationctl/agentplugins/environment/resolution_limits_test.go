@@ -160,8 +160,13 @@ func TestResolutionCancellationInsideExpansion(t *testing.T) {
 	requirements, resolver := resolutionFixture("fanout", 65)
 	solver := newGraphSolver(resolver, requirements, Lock{}, nil)
 	selected := resolver.packages["acme/node0000"][0]
+	choices := map[string]ResolvedPackage{selected.Package.SourceKey: selected}
+	work, err := solver.newActiveGraph(t.Context(), choices)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx := &expansionCancellation{Context: context.Background(), remaining: 5}
-	_, err := solver.expand(ctx, map[string]ResolvedPackage{selected.Package.SourceKey: selected})
+	err = solver.propagate(ctx, choices, work)
 	if !errors.Is(err, context.Canceled) || solver.budget.work >= 65 || resolver.candidates != 0 {
 		t.Fatalf("cancellation did not interrupt expansion: err=%v work=%d callbacks=%d", err, solver.budget.work, resolver.candidates)
 	}
