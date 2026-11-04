@@ -83,14 +83,20 @@ func (adapter *ProjectAdapter) RefinePlan(ctx context.Context, in clients.PlanIn
 	return nil
 }
 
-func (adapter *ProjectAdapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+// piInspectionAuthority keeps observed native state tied to the originally
+// selected client/profile, independently of self-consistent plan fields.
+func piInspectionAuthority(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan) error {
 	if err := ctx.Err(); err != nil {
-		return clients.RegistryIndeterminate, err
+		return err
 	}
 	if err := validatePlan(plan); err != nil {
-		return clients.RegistryIndeterminate, err
+		return err
 	}
-	if err := piSelectedAuthority(client, plan); err != nil {
+	return piSelectedAuthority(client, plan)
+}
+
+func (adapter *ProjectAdapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+	if err := piInspectionAuthority(ctx, client, plan); err != nil {
 		return clients.RegistryIndeterminate, err
 	}
 	found, err := inspectPackage(plan, managed != nil && managed.TargetLocator == plan.ActivePath)
@@ -198,26 +204,7 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 	if len(userOwned) == 0 && len(projectOwned) == 0 {
 		return adapter.Adapter.Deactivate(ctx, env, request)
 	}
-	switch request.TargetContext.Scope {
-	case domain.ScopeProject:
-		if _, err := projectPiRoot(request.Client, request.TargetContext, request.NativeRegistryRoot); err != nil {
-			return out, err
-		}
-	case domain.ScopeUser:
-		if request.NativeRegistryRoot != request.Client.ConfigRoot {
-			return out, fmt.Errorf("pi user profile differs from original authority")
-		}
-		if err := validateProfile(request.NativeRegistryRoot); err != nil {
-			return out, err
-		}
-	default:
-		return out, fmt.Errorf("unsupported Pi removal scope")
-	}
-	objects := piScopedNative(request.NativeObjects, request.TargetContext.Scope)
-	if len(objects) != len(userOwned)+len(projectOwned) {
-		return out, fmt.Errorf("pi native component receipts mix installation scopes")
-	}
-	layout, err := piComponents(request.NativeRegistryRoot, request.TargetContext.Scope)
+	layout, objects, err := piNativeRemovalLayout(request, len(userOwned)+len(projectOwned))
 	if err != nil {
 		return out, err
 	}
@@ -263,6 +250,32 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 	legacy.UserActions = append(out.UserActions, legacy.UserActions...)
 	legacy.UserActions = append(legacy.UserActions, "Restart Pi to clear previously loaded Skills and MCP connections.")
 	return legacy, nil
+}
+
+
+func piNativeRemovalLayout(request domain.DeactivationRequest, totalNative int) (shared.ProjectComponents, []domain.NativeObjectOwnership, error) {
+	var zero shared.ProjectComponents
+	switch request.TargetContext.Scope {
+	case domain.ScopeProject:
+		if _, err := projectPiRoot(request.Client, request.TargetContext, request.NativeRegistryRoot); err != nil {
+			return zero, nil, err
+		}
+	case domain.ScopeUser:
+		if request.NativeRegistryRoot != request.Client.ConfigRoot {
+			return zero, nil, fmt.Errorf("pi user profile differs from original authority")
+		}
+		if err := validateProfile(request.NativeRegistryRoot); err != nil {
+			return zero, nil, err
+		}
+	default:
+		return zero, nil, fmt.Errorf("unsupported Pi removal scope")
+	}
+	objects := piScopedNative(request.NativeObjects, request.TargetContext.Scope)
+	if len(objects) != totalNative {
+		return zero, nil, fmt.Errorf("pi native component receipts mix installation scopes")
+	}
+	layout, err := piComponents(request.NativeRegistryRoot, request.TargetContext.Scope)
+	return layout, objects, err
 }
 
 func piDesiredServers(root string, objects []domain.NativeObjectOwnership, mcpKind string) (map[string]nativeconfig.Server, error) {
