@@ -17,4 +17,4 @@ One [remaining unresolved Strix inline thread](https://github.com/777genius/univ
 
 ## State
 
-Real code-order gap and current Strix remark confirmed. Minimal fix and current-head full verification pending; the remaining thread stays open until source and focused regressions are inspected.
+Real code-order gap and current Strix remark confirmed. Minimal fix and current-head full verification pending; the remaining thread stays open until source changes and focused regressions are inspected.
