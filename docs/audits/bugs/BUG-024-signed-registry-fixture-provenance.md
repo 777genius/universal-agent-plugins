@@ -15,6 +15,10 @@ Strix independent review on 2026-11-04 reproduced a false-PASS case: `matching_i
 3. Require the verified `list` installation's source, signed recorded distribution and revision, sequence and both digests to match the pinned expectation. Reject absent/forged source or changed release without comparing to `list`'s own values only.
 4. Regress a forged same-name/signed-looking release with missing or wrong source, wrong digest, and happy exact immutable known release. Rerun focused unittest, Required and both live 15-adapter workflows; inspect source-by-source JSON artifacts on final HEAD.
 
+## Reproduced new pilot failure and source-selector contract
+
+Exact HEAD `d5283e482c7a00d4b6366ee1c1d990a373d69a6c` ran 33/33 Python regressions successfully, but both real Codex plugin pilot cases returned `incomplete-native-proof`. Static inspection of the **actual CLI serializer** `cli/internal/agentpluginscli/read.go:586-590,643-682` confirms `publicInstallationView.Source` is **`publicRepositoryPath(installation.Source.Repository, installation.Source.PackageSubpath)`**, i.e. `repository/package/path`, **not** `directory.recorded_distribution`. Our initial frozen-pin guard erroneously compared these different authority fields and caused the pilot failure. The correction must compare reported `source` to the frozen repository+path, and independently compare `directory.recorded_distribution` to the pinned distribution. This does not relax immutable revision or digest checks. Regress both legitimate repository/path source and forged/missing sources before any new PASS.
+
 ## Critical review round 1 — supply chain
 
 Self-consistency of data returned by a live Registry is not independent provenance. No mutable tag, unsigned release or unresolved revision may be promoted to PASS. Do not weaken BUG-009's fail-closed checks.
