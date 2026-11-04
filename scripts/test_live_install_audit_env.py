@@ -386,6 +386,18 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertNotIn('export PATH="$HOME/.local/bin:$PATH"', workflow)
         self.assertIn(":/usr/bin:/sbin:/bin:", workflow)
 
+    def test_kiro_native_archive_is_pinned_before_extraction(self):
+        # Independently pinned Homebrew Cask 3.0.0, not a mutable install script.
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        self.assertIn("https://desktop-release.q.us-east-1.amazonaws.com/3.0.0/kirocli-universal-darwin.zip", workflow)
+        self.assertIn('kiro) SHA256="0a8f067c4fe6a23a231aa3a18e3e4332120ef9ed3d2d7b6eea907beb8b4cdd8b"', workflow)
+        self.assertNotIn('kiro) URL="https://cli.kiro.dev/install"', workflow)
+        self.assertLess(workflow.index('sha256_file -c -'),
+                        workflow.index('ditto -x -k "$artifact"'))
+        self.assertIn('test -f "$executable" && test -x "$executable" && test ! -L "$executable"', workflow)
+        self.assertNotIn('export PATH="$HOME/.local/bin:$PATH"', workflow)
+
     def test_failed_add_inspects_pending_registration_without_false_matches(self):
         audit = load_audit()
         pending = {"data": {"installations": [

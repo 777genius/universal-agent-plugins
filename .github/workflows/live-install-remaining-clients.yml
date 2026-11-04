@@ -64,7 +64,7 @@ jobs:
           export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.local/bin"
           case "$TARGET" in
             cursor) URL="https://downloads.cursor.com/production/25b52e7d03ebf2d5608914158e119f7992432a34/linux/x64/deb/amd64/deb/cursor_3.28.7_amd64.deb"; BIN="cursor" ;;
-            kiro) URL="https://cli.kiro.dev/install"; BIN="kiro-cli" ;;
+            kiro) URL="https://desktop-release.q.us-east-1.amazonaws.com/3.0.0/kirocli-universal-darwin.zip"; BIN="kiro-cli" ;;
             windsurf) URL="https://cli.devin.ai/install.sh"; BIN="devin" ;;
             grok) URL="https://x.ai/cli/install.sh"; BIN="grok" ;;
             vscode)
@@ -83,7 +83,7 @@ jobs:
           case "$TARGET" in
             cursor) SHA256="" ;; # Needs official release digest review
             vscode) SHA256="" ;; # Mutable latest URL must first be pinned
-            kiro) SHA256="" ;; # Needs official installer digest review
+            kiro) SHA256="0a8f067c4fe6a23a231aa3a18e3e4332120ef9ed3d2d7b6eea907beb8b4cdd8b" ;; # Homebrew/homebrew-cask Casks/k/kiro-cli.rb @ 7191fc89
             windsurf) SHA256="" ;; # Needs official installer digest review
             grok) SHA256="" ;; # Needs official installer digest review
           esac
@@ -96,6 +96,8 @@ jobs:
           }
           if [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
             artifact="$RUNNER_TEMP/$TARGET.deb"
+          elif [[ "$TARGET" == kiro ]]; then
+            artifact="$RUNNER_TEMP/kirocli-universal-darwin.zip"
           else
             artifact="$RUNNER_TEMP/vendor-install.sh"
           fi
@@ -111,6 +113,14 @@ jobs:
             mkdir -p "$RUNNER_TEMP/vendor-root"
             dpkg-deb --extract "$artifact" "$RUNNER_TEMP/vendor-root"
             export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+          elif [[ "$TARGET" == kiro ]]; then
+            # This archive is verified above against the independently pinned
+            # Homebrew Cask release, not a mutable vendor installer script.
+            mkdir -p "$RUNNER_TEMP/vendor-root"
+            ditto -x -k "$artifact" "$RUNNER_TEMP/vendor-root"
+            executable="$RUNNER_TEMP/vendor-root/kirocli/bin/kiro-cli"
+            test -f "$executable" && test -x "$executable" && test ! -L "$executable"
+            ln -s "$executable" "$HOME/.local/bin/kiro-cli"
           else
             bash -n "$artifact"
             bash "$artifact"
