@@ -27,7 +27,7 @@ const (
 // project components remain inside the independently selected workspace.
 func piComponents(root string, scope domain.InstallScope) (shared.ProjectComponents, error) {
 	layout := shared.ProjectComponents{
-		SkillsRoot:   filepath.Join(root, "skills"),
+		SkillsRoot:  filepath.Join(root, "skills"),
 		ConfigPaths: nativeconfig.Paths{JSON: filepath.Join(root, "mcp.json")},
 		Codec:       nativeconfig.CodecMCPServers,
 	}
@@ -47,7 +47,6 @@ func piComponents(root string, scope domain.InstallScope) (shared.ProjectCompone
 	}
 	return layout, nil
 }
-
 
 // Stage only the project-selected native components. Everything outside the
 // sealed active package is written later by the existing ownership kernel.
