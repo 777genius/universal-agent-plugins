@@ -900,6 +900,56 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     home, env, home, "atlassian")["status"], "unqualified-prerequisites")
 
 
+    def test_native_residual_uses_exact_tokens_not_url_substrings(self):
+        # BUG-042: a native URL hostname is not the managed GitHub plugin.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".copilot"
+            root.mkdir()
+            settings = root / "settings.json"
+            observed = [".copilot/settings.json"]
+            settings.write_text('{"homepage": "https://github.com/other/repo"}')
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "github", observed, "copilot"), [])
+            # A foreign marketplace plugin is also not UAP's managed namespace.
+            settings.write_text('{"enabledPlugins":{"github@foreign":true}}')
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "github", observed, "copilot"), [])
+            settings.write_text(
+                '{"enabledPlugins":{"github@agentplugins-aaaaaaaaaaaa":false}}')
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "github", observed, "copilot"), observed)
+            settings.write_text('{"plugins":{"github":{"enabled":true}}}')
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "github", observed, "copilot"), observed)
+            settings.write_text("unrelated" * 150000)
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "github", observed, "copilot"),
+                [observed[0] + ": unscanned-too-large"])
+            settings.unlink()
+            try:
+                settings.symlink_to(root / "missing")
+            except (OSError, NotImplementedError):
+                return
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "github", observed, "copilot"),
+                [observed[0] + ": symlink"])
+
+    def test_invalid_utf8_skill_name_still_visible_to_readonly_oracle(self):
+        # BUG-043: malformed source bytes are not rewritten or omitted.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            project = Path(temporary).resolve() / "project"
+            target = project / ".claude/skills/raw"
+            target.mkdir(parents=True)
+            skill = target / "SKILL.md"
+            source = b"\xff\xfe---\nname: raw\n---\n"
+            skill.write_bytes(source)
+            self.assertEqual(audit.skill_file_present(project, "claude", "raw"),
+                             ".claude/skills/raw/SKILL.md")
+            self.assertIsNone(audit.skill_file_present(project, "claude", "foreign"))
+            self.assertEqual(skill.read_bytes(), source)
+
     def test_qoder_passive_cache_does_not_hide_active_residue_or_symlinks(self):
         # BUG-018: observed Qoder cache and run manifests outlive native remove.
         audit = load_audit()

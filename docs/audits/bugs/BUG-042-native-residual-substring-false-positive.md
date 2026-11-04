@@ -21,4 +21,4 @@ Do not fix a false-negative by ignoring all native settings. Retain exact manage
 
 ## Status
 
-Finding independently reported and verified in current source; narrowly scoped regression and implementation pending. No final-head acceptance or merge approval.
+Narrow token-aware path/content matcher and focused negative regression implemented on the PR. Full exact-head runner CI and 900-case qualification still pending; no merge approval.

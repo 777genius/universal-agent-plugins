@@ -386,11 +386,25 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
                     leftover.append(observed + ": non-regular")
                 elif passive_native_path(target, relative):
                     continue
-                elif identity.casefold() in relative.casefold():
+                elif any(
+                        part.casefold() == identity.casefold()
+                        or Path(part).stem.casefold() == identity.casefold()
+                        or re.fullmatch(
+                            re.escape(identity) + r"@agentplugins-[0-9a-f]{12}",
+                            Path(part).stem, re.IGNORECASE)
+                        for part in Path(relative).parts):
                     leftover.append(observed)
-                elif file.stat().st_size <= 1024 * 1024 and identity.casefold() in file.read_text(
-                        encoding="utf-8", errors="replace").casefold():
-                    leftover.append(observed)
+                elif file.stat().st_size > 1024 * 1024:
+                    # Unread content must never count as clean native state.
+                    leftover.append(observed + ": unscanned-too-large")
+                else:
+                    contents = file.read_text(encoding="utf-8", errors="replace")
+                    qualified = re.search(
+                        r"(?<![A-Za-z0-9_./:-])" + re.escape(identity)
+                        + r"@agentplugins-[0-9a-f]{12}(?![A-Za-z0-9_./-])",
+                        contents, re.IGNORECASE)
+                    if exact_native_identity(contents, identity) or qualified:
+                        leftover.append(observed)
             except FileNotFoundError:
                 continue
             except OSError:
@@ -445,7 +459,7 @@ def skill_file_present(project, target, skill_name):
             if not path_inside_case(f, case_root) or not f.is_file():
                 continue
             try:
-                head = f.read_text(encoding="utf-8")[:3000]
+                head = f.read_text(encoding="utf-8", errors="replace")[:3000]
             except OSError:
                 continue
             if re.search(r"(?m)^name:\s*['\"]?" + re.escape(skill_name) + r"['\"]?\s*$", head):

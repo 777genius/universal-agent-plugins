@@ -20,4 +20,4 @@ Catching `UnicodeDecodeError` and returning `None` would hide leftover payloads 
 
 ## Status
 
-Review finding confirmed in source. Focused test/code implementation and current-head full E2E pending; no merge approval.
+Diagnostic UTF-8 replacement and raw-byte-retention regression implemented on the PR. Full exact-head runner CI and 900-case qualification still pending; no merge approval.
