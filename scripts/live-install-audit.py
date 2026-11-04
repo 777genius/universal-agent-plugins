@@ -306,30 +306,51 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
     return sorted(set(leftover))
 
 
+def path_inside_case(path, case_root):
+    """Reject intermediate symlinks as well as escaping or unreadable roots."""
+    try:
+        if case_root.is_symlink() or not path.is_relative_to(case_root):
+            return False
+        if not path.resolve().is_relative_to(case_root.resolve(strict=True)):
+            return False
+        cursor = path
+        while cursor != case_root:
+            if cursor.is_symlink():
+                return False
+            cursor = cursor.parent
+        return True
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+
 def skill_removal_leftovers(project, target, skill_name, installed_path=None):
-    """Reject surviving Skill paths, including symlinks and unreadable entries."""
+    """Reject surviving Skills and substituted intermediate project roots."""
     leftovers = []
+    case_root = project.parent
     for relative_root in PROJECT_SKILL_ROOTS.get(target, []):
         base = project / relative_root
         named = base / skill_name
-        if base.is_symlink():
-            leftovers.append(str(base.relative_to(project)) + ": symlink")
-        elif named.is_symlink() or named.exists():
+        if not path_inside_case(base, case_root) or not path_inside_case(named, case_root):
+            leftovers.append(str(base.relative_to(project)) + ": unsafe ancestor")
+        elif named.exists() or named.is_symlink():
             leftovers.append(str(named.relative_to(project)))
     if installed_path:
         path = project / installed_path
-        if path.is_symlink() or path.exists():
+        if not path_inside_case(path, case_root):
+            leftovers.append(str(installed_path) + ": unsafe ancestor")
+        elif path.exists() or path.is_symlink():
             leftovers.append(str(path.relative_to(project)))
     return sorted(set(leftovers))
 
 
 def skill_file_present(project, target, skill_name):
+    case_root = project.parent
     for relative_root in PROJECT_SKILL_ROOTS.get(target, []):
         base = project / relative_root
-        if not base.exists() or base.is_symlink():
+        if not path_inside_case(base, case_root) or not base.is_dir():
             continue
         for f in base.rglob("SKILL.md"):
-            if f.is_symlink() or not f.is_file():
+            if not path_inside_case(f, case_root) or not f.is_file():
                 continue
             try:
                 head = f.read_text(encoding="utf-8")[:3000]
@@ -618,12 +639,13 @@ def isolated_client_env(home, case_root, data):
     return env
 
 
-def preserved_regular_text(path, expected):
-    """Do not let a replacement symlink impersonate an unmanaged sentinel."""
+def preserved_regular_text(path, expected, case_root):
+    """Require a real in-case foreign sentinel, not a symlinked impersonation."""
     if path is None:
         return True
     try:
-        return not path.is_symlink() and path.is_file() and path.read_text() == expected
+        return (path_inside_case(path, case_root) and path.is_file()
+                and path.read_text() == expected)
     except OSError:
         return False
 
@@ -758,11 +780,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
                         *attestation, "--format", "json"], env, project, 60)
         cleanup.pop("_json", None)
     sentinels_preserved = (
-        preserved_regular_text(sentinel, "foreign content never belongs to UAP\n")
-        and preserved_regular_text(user_sentinel, "foreign profile content never belongs to UAP\n")
-        and preserved_regular_text(native_foreign, "unmanaged native neighbor must survive\n")
+        preserved_regular_text(sentinel, "foreign content never belongs to UAP\n", case_root)
+        and preserved_regular_text(user_sentinel, "foreign profile content never belongs to UAP\n", case_root)
+        and preserved_regular_text(native_foreign, "unmanaged native neighbor must survive\n", case_root)
         and preserved_regular_text(
-            project_foreign, "---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
+            project_foreign, "---\nname: foreign-neighbor\ndescription: unrelated\n---\n", case_root)
     )
     post_removal_skill = skill_file_present(project, target, identity) if kind == "skill" and cleanup else None
     post_removal_leftovers = (
