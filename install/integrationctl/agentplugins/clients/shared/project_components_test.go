@@ -279,6 +279,11 @@ func TestProjectComponentsForeignSkillRefusalPreservesForeignFiles(t *testing.T)
 	}
 	if err := mutation.Apply(context.Background()); !errors.Is(err, domain.ErrForeignSkillDestination) {
 		t.Fatalf("foreign project Skill refused without typed ownership cause: %v", err)
+	} else {
+		var located *domain.ForeignSkillDestinationError
+		if errors.As(err, &located) {
+			t.Fatalf("non-Codex client acquired Codex-specific occupied path: %+v", located)
+		}
 	}
 	for path, want := range map[string]string{
 		occupied: "foreign selected skill\\n",
@@ -308,6 +313,10 @@ func TestProjectComponentsPreflightForeignSkillCarriesTypedCause(t *testing.T) {
 	finding, err := mutation.Layout.Inspect(selected, nil, nativeconfig.New())
 	if finding != clients.RegistryCollision || !errors.Is(err, domain.ErrForeignSkillDestination) {
 		t.Fatalf("preflight foreign Skill result = %v, %v", finding, err)
+	}
+	var located *domain.ForeignSkillDestinationError
+	if !errors.As(err, &located) || located.RelativePath != ".agents/skills/docs/SKILL.md" {
+		t.Fatalf("foreign destination is not a safe project-relative Skill path: %+v", located)
 	}
 	if got, err := os.ReadFile(filepath.Join(path, "SKILL.md")); err != nil || string(got) != "foreign instructions\n" {
 		t.Fatalf("preflight changed foreign bytes: %q, %v", got, err)

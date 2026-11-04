@@ -89,7 +89,7 @@ REQUIRED_TESTS = {
     "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended", "TestAgentpluginsOpenCodeNativeCommandsLifecycle"},
 }
 PROJECT_TESTS = {
-    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP"},
+    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP", "TestAgentpluginsCodexNativeForeignSkillCLIRefusal"},
     "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery", "TestAgentpluginsClaudeNativeTrustedProjectMCPCall", "TestAgentpluginsClaudeNativeSecondaryProfileIsolation"},
     "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
 }
@@ -515,6 +515,25 @@ def main():
             identity["installer_version_measured"] = measured
             if measured != "agentplugins " + release["version"]:
                 raise RuntimeError(f"released installer version mismatch: {measured!r}")
+        # Compare only the current-source Codex project gate with the actual
+        # immutable published 0.1.95 binary, verified via release manifest and
+        # GitHub Actions build attestations. Never rebuild the baseline.
+        if args.client == "codex" and args.project_components and not args.release_tag and args.release_state == "public":
+            release_dir = binary_dir / "published-uap-0.1.95"
+            release_dir.mkdir()
+            published, proof = provision_release(source, release_dir, args.target,
+                "agentplugins-v0.1.95", "ec85ee7d759944b9799e451c96bfc1859f9d5533",
+                "777genius/universal-agent-plugins")
+            digest = hashlib.sha256(published.read_bytes()).hexdigest()
+            if digest != proof["binary_sha256"]:
+                raise RuntimeError("published comparison binary mismatch")
+            measured = subprocess.check_output([str(published), "version"], cwd=project, env=env,
+                                               encoding="utf-8", errors="strict", timeout=30).strip()
+            if measured != "agentplugins 0.1.95":
+                raise RuntimeError("published comparison version mismatch")
+            identity["published_uap_0_1_95"] = {**proof, "measured_version": measured}
+            env["AGENTPLUGINS_PUBLISHED_UAP_BIN"] = str(published)
+            env["AGENTPLUGINS_PUBLISHED_UAP_SHA256"] = digest
         prefix = "AGENTPLUGINS_" + args.client.upper()
         env[prefix + "_NATIVE_E2E"] = "1"
         if args.project_components:
