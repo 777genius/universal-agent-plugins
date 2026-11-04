@@ -883,6 +883,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     with self.subTest(listing=listing), patch.object(audit, "call", return_value=response(listing)):
                         self.assertNotEqual(audit.copilot_native_plugin_state(
                             home, env, home, "atlassian", "0.1.0")["status"], "installed")
+                with patch.object(audit, "call", return_value=response([
+                        dict(valid, name="renamed-plugin")])):
+                    self.assertEqual(audit.copilot_native_plugin_state(
+                        home, env, home, "atlassian")["status"],
+                        "unqualified-reminted-managed")
                 with patch.object(audit, "call", return_value=response([], exit_code=1)):
                     self.assertNotEqual(audit.copilot_native_plugin_state(
                         home, env, home, "atlassian")["status"], "absent")

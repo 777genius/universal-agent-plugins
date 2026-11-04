@@ -19,3 +19,7 @@ The official [Copilot CLI plugin reference](https://docs.github.com/en/copilot/r
 **Security and non-destructive cleanup critic:** Settings may encode deliberate user-level disabled preferences, including policy overrides; broad JSON editing or ignoring the whole `.copilot` directory would corrupt user data or hide active plugins. Preserve raw file and report the narrow disabled-only exception. Native command runs in disposable, case-anchored profile through an absolute prebound executable; it cannot grant authentication or bypass trust/containment. Existing non-active passive cache semantics are unchanged.
 
 **Status:** narrow fixture-only correction and regression pushed in #698; final-head native CLI behavior, independent review and all 30 source ZIPs still unverified. No merge authorization.
+
+### Third source-integrity challenge: reminted identity under same managed namespace
+
+The native list must not report `absent` when a package from the disposable case reappears under a different `name` but a UAP-managed `agentplugins-12hex` marketplace. BUG-045 now rejects **any** unexpected managed marketplace row, even if the name is reminted; foreign unrelated marketplaces are not treated as our removal receipts. Added a targeted native JSON negative test. This is a stricter acceptance oracle, not native deletion or a broader product API.

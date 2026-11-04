@@ -378,11 +378,15 @@ def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None)
                 or ("marketplace" in entry and entry["marketplace"] is not None
                     and not isinstance(entry["marketplace"], str))):
             return {"status": "unqualified-schema"}
-        if entry["name"] != identity:
-            continue
         market = entry.get("marketplace")
-        if (not isinstance(market, str)
-                or not re.fullmatch(r"agentplugins-[0-9a-f]{12}", market)):
+        managed = (isinstance(market, str)
+                   and re.fullmatch(r"agentplugins-[0-9a-f]{12}", market))
+        if entry["name"] != identity:
+            # A managed marketplace under a reminted name is not native absence.
+            if managed:
+                return {"status": "unqualified-reminted-managed"}
+            continue
+        if not managed:
             return {"status": "unqualified-foreign-name"}
         if (entry["enabled"] is not True
                 or (entry.get("version") is not None
