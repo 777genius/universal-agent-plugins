@@ -37,6 +37,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Evaluate the actual PR HEAD, not the synthetic pull/merge ref.
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
         with:
           package_json_file: landing/package.json
