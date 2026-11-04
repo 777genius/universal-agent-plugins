@@ -334,7 +334,7 @@
       "distribution": "777genius/chrome-devtools-bridge",
       "repository": "777genius/universal-agent-plugins-registry",
       "path": "plugins/chrome-devtools",
-      "revision": null,
+      "revision": "ae72693705e9567d43dca63351fcf63147884f4a",
       "sequence": 3,
       "tree_digest": "sha256:b1ff05c14b80f38f2c71961f60540f6e55072cd09c2c828cdeb2df445b5a1bcc",
       "manifest_digest": "sha256:d14e6529884e7f57d1a2ac6280baef1f3bd052aa3080f9c62ea8458c89b70a90"
@@ -343,7 +343,7 @@
       "distribution": "777genius/cloudflare-bridge",
       "repository": "777genius/universal-agent-plugins-registry",
       "path": "plugins/cloudflare",
-      "revision": null,
+      "revision": "4d7d8e075e1b0d899965496bacf2811be5d94091",
       "sequence": 1,
       "tree_digest": "sha256:29e6dee60be2acf06370ed182de228f101eb5d643809b87019d84e1b27f3408b",
       "manifest_digest": "sha256:ed0c1776a5ff085de37447f8f0c28ed04148dce47c7dffabb550b08989e97465"
@@ -370,16 +370,16 @@
       "distribution": "777genius/firebase",
       "repository": "777genius/universal-agent-plugins-registry",
       "path": "plugins/firebase",
-      "revision": null,
-      "sequence": 7,
-      "tree_digest": "sha256:54db4f001002190ef47800795229bb8674409ba44b6ef05a7f07aacad43e5eaa",
-      "manifest_digest": "sha256:d7673ee02e5ffdd6efa929ce437c769f56afb4a85fb9fdb2e5cb7f6179813019"
+      "revision": "70813b60f87d0022457189efae5365d7c17cd3a1",
+      "sequence": 6,
+      "tree_digest": "sha256:685949b123f14739cefee527a3db4723f7444407c4b718023513f25af03d7523",
+      "manifest_digest": "sha256:ddf8c3ef2689d58aa8f6b78fd36af1d8733d2a56a9bad8ee19b1a78c10ec01b4"
     },
     "firecrawl": {
       "distribution": "777genius/firecrawl-bridge",
       "repository": "777genius/universal-agent-plugins-registry",
       "path": "plugins/firecrawl",
-      "revision": null,
+      "revision": "ae6c26c07d844f01ff085b7f25f511dc9f53a6b8",
       "sequence": 1,
       "tree_digest": "sha256:a99ca95c810a29494ab55e6a1b827d88b89f27a3572f10e7918098914d1570ad",
       "manifest_digest": "sha256:5dd4a55467b3149a3cd253b465796b1f021d66eab9244b8faed627b0209f4bf6"
@@ -433,7 +433,7 @@
       "distribution": "777genius/marketing-kit",
       "repository": "777genius/universal-agent-plugins-registry",
       "path": "plugins/marketing-kit",
-      "revision": null,
+      "revision": "c5bcedd4ecf12585a8a50401852e57a44891ebec",
       "sequence": 1,
       "tree_digest": "sha256:8918c0f0222bd735fd0eef3cacf90b5a9351fb213483d1558a65b9911624e68a",
       "manifest_digest": "sha256:40b18a6b33c6392134aff7beafb9a91eaeecf46ce765e0e888cdc743dd284ea2"
@@ -460,9 +460,9 @@
       "distribution": "777genius/playwright-bridge",
       "repository": "777genius/universal-agent-plugins-registry",
       "path": "plugins/playwright",
-      "revision": null,
-      "sequence": 2,
-      "tree_digest": "sha256:ff3c74bb5760fea47003130f3984d48234892330325a7cad35a7bc973acc9cf6",
+      "revision": "128b01ff2b4f7242ad061ad823d5e4018af6b2e4",
+      "sequence": 1,
+      "tree_digest": "sha256:8f0c8ac610974293c4f91f1ecb782fbe9d740f79f84cafe40fdfed1db234d103",
       "manifest_digest": "sha256:8419b5c9e67894c2312048c4fe30e3ea920d00101d02641230183dd7ab4d3b31"
     },
     "sentry": {
