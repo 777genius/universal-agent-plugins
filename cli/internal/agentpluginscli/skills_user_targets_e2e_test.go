@@ -68,6 +68,10 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 	if len(state.EnvironmentReceipts) != 2 {
 		t.Fatalf("expected two owned receipts: %+v", state.EnvironmentReceipts)
 	}
+	// A clean manifest/lock is insufficient evidence: check the native
+	// projection trees and unrelated neighbor bytes independently.
+	managedBefore := make(map[string]map[string]savedJourneyFile)
+	foreignNeighbors := make(map[string]string)
 	for _, target := range []string{"codex", "claude"} {
 		binding := savedJourneyBinding(t, state, target)
 		if binding.Scope != string(domain.ScopeUser) || binding.ClientBindingID == "" {
@@ -83,6 +87,14 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 		if readErr != nil || string(body) != "original resource" {
 			t.Fatalf("%s lost pinned raw Skill resources: %q; %v", target, body, readErr)
 		}
+		managedBefore[target] = savedJourneyTree(t, binding.TargetLocator)
+		// This file belongs to neither UAP nor the tested package; neither
+		// target's removal may delete or overwrite it.
+		neighbor := filepath.Join(filepath.Dir(binding.TargetLocator), "foreign-user-neighbor-"+target+".txt")
+		if err := os.WriteFile(neighbor, []byte("foreign-owned-"+target), 0600); err != nil {
+			t.Fatal(err)
+		}
+		foreignNeighbors[target] = neighbor
 	}
 
 	// In the public CLI, global is the default user scope. Replaying with an
@@ -91,6 +103,12 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 	j.run(t, "deps", "sync", "--locked", "--yes", "--scope", "user", "--format", "json")
 	if after := savedJourneyTree(t, j.cli.app.DependenciesRoot); !reflect.DeepEqual(before, after) {
 		t.Fatalf("explicit user replay changed locked environment: %s", savedJourneyDifferences(before, after))
+	}
+	for _, target := range []string{"codex", "claude"} {
+		path := savedJourneyBinding(t, state, target).TargetLocator
+		if after := savedJourneyTree(t, path); !reflect.DeepEqual(managedBefore[target], after) {
+			t.Fatalf("explicit user replay changed %s native projection: %s", target, savedJourneyDifferences(managedBefore[target], after))
+		}
 	}
 	if _, _, err := j.cli.execute(false, "skills", "add", "invalid.example/skills", "--scope", "user", "--project-root", t.TempDir(), "--skill", "pdf", "--target", "codex", "--yes"); err == nil {
 		t.Fatal("contradictory user scope and project root passed validation")
@@ -112,8 +130,17 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 	if len(afterCodex.EnvironmentReceipts) != 1 {
 		t.Fatal("removing Codex damaged Claude's receipt")
 	}
+	if after := savedJourneyTree(t, claudeBefore.TargetLocator); !reflect.DeepEqual(managedBefore["claude"], after) {
+		t.Fatalf("removing Codex changed Claude native bytes: %s", savedJourneyDifferences(managedBefore["claude"], after))
+	}
 	j.run(t, "remove", "pdf", "--target", "claude", "--external-uninstalled", "--scope", "user", "--format", "json")
 	if remaining := j.state(t).EnvironmentReceipts; len(remaining) != 0 {
 		t.Fatalf("raw Skill removal left live ownership receipts: %+v", remaining)
+	}
+	for target, path := range foreignNeighbors {
+		body, err := os.ReadFile(path)
+		if err != nil || string(body) != "foreign-owned-"+target {
+			t.Fatalf("%s removal modified an unowned native neighbor %s: %q; %v", target, path, body, err)
+		}
 	}
 }
