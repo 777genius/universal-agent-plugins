@@ -7,7 +7,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 type Service struct {
@@ -37,7 +36,7 @@ type Service struct {
 	Stager             ports.PackageStager
 	Activator          ports.ClientActivator
 	Legacy             ports.LegacyLifecycle
-	LegacyLock         legacyports.LockManager
+	LegacyLock         ports.MutationLock
 	Lock               ports.MutationLock
 	Kernel             transaction.Kernel
 	NativeObserver     NativeIdentityObserver

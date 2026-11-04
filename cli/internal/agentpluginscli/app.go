@@ -17,7 +17,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 type DirectoryClient interface {
@@ -85,7 +84,7 @@ type App struct {
 	Lifecycle       usecase.Service
 	StateMigrator   *statemigration.Migrator
 	LegacyLifecycle ports.LegacyLifecycle
-	LegacyStateLock legacyports.LockManager
+	LegacyStateLock ports.MutationLock
 	Input           io.Reader
 	Output          io.Writer
 	ErrorOutput     io.Writer
