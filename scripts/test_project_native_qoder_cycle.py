@@ -105,7 +105,7 @@ class QoderCycleContracts(unittest.TestCase):
             with self.subTest(fault=fault), self.assertRaises(ValueError): cycle.members(bodies, SOURCE)
 
     def test_source_state_payload_absence_retention_and_noop_bytes_refuse(self):
-        for fault in ("source", "caller", "foreign", "registry", "profile-extra", "anonymous-mode", "binding", "view", "digest", "data-allocated", "owner", "missing-path", "missing-receipt", "noop-bytes", "noop-retained-bytes", "state-extra", "receipt"):
+        for fault in ("source", "caller", "foreign", "registry", "profile-extra", "anonymous-mode", "binding", "view", "digest", "data-allocated", "owner", "native-skill", "missing-path", "missing-receipt", "noop-bytes", "noop-retained-bytes", "state-extra", "receipt"):
             bodies = container()
             def change(rows):
                 p = {row["stage"]: row["value"] for row in rows}
@@ -120,6 +120,7 @@ class QoderCycleContracts(unittest.TestCase):
                 elif fault == "digest": p["add-a"]["binding"]["native_objects"][0]["managed_digest"] = "sha256:" + "0" * 64
                 elif fault == "data-allocated": p["add-b"]["data"]["allocated"] = True
                 elif fault == "owner": p["remove-a"]["data"]["owner"] = stream(b"{}")
+                elif fault == "native-skill": p["add-a"]["delivery"]["native_skill"] = stream(b"wrong")
                 elif fault == "missing-path": p["missing-a"]["path"] += "/skills"
                 elif fault == "missing-receipt": p["missing-a"]["object"]["path"] = "/foreign"
                 elif fault == "noop-bytes": p["repeat-add-a"]["state"] = stream(base64.b64decode(p["repeat-add-a"]["state"]["body"]) + b" ")

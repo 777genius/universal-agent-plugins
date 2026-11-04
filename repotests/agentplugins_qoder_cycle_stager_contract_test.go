@@ -17,6 +17,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/qoder"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
@@ -108,8 +109,9 @@ func qoderCycleStageInert(t *testing.T, c *qoderSkillsCycle, key string) {
 	if err := os.Rename(delivery.StagingPath, delivery.ActivePath); err != nil {
 		t.Fatal(err)
 	}
-	request := domain.ActivationRequest{Client: client, Plan: plan, Delivery: delivery, DeclaredName: qoderCycleName, BackendExecutable: c.f.client}
-	out, err := qoder.New().Activate(c.f.ctx, clients.Env{}, request)
+	request := domain.ActivationRequest{Client: client, Plan: plan, Delivery: delivery, DeclaredName: qoderCycleName, BackendExecutable: c.f.client,
+		PreviousNativeObjects: r.Binding.NativeObjects}
+	out, err := qoder.New().Activate(c.f.ctx, clients.Env{NativeConfig: nativeconfig.New()}, request)
 	if err != nil || out.Activation != domain.ActivationPrepared || out.Verification != domain.VerificationInstalled {
 		t.Fatal("actual inert Qoder adapter", err)
 	}
@@ -131,7 +133,8 @@ func qoderCycleStageInert(t *testing.T, c *qoderSkillsCycle, key string) {
 	c.binding(t, r, i)
 	c.delivery(t, r)
 	digest, err := qoderCycleExpectedDigest(c.f.ctx, r.Key, r.Revision, r.Nonce)
-	if err != nil || r.Binding.NativeObjects[0].ManagedDigest != digest {
+	if err != nil || len(r.Binding.NativeObjects) != 2 || r.Binding.NativeObjects[0].ManagedDigest != digest ||
+		!reflect.DeepEqual(r.Binding.NativeObjects[1], qoderCycleExpectedNativeSkill(r)) {
 		t.Fatal("independently framed authored payload differs from actual stager digest", err)
 	}
 	c.data(t, r, i)
