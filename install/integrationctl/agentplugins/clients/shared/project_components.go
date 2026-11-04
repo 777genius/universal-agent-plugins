@@ -230,6 +230,9 @@ func (layout ProjectComponents) Inspect(components []domain.ComponentDecision, m
 			return clients.RegistryIndeterminate, err
 		}
 		if present && !owned {
+			if component.Kind == domain.ComponentSkill {
+				return clients.RegistryCollision, fmt.Errorf("%w: project skill %q", domain.ErrForeignSkillDestination, component.Name)
+			}
 			return clients.RegistryCollision, nil
 		}
 		if present {
