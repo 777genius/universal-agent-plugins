@@ -537,6 +537,22 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	}
 	stages["unchanged"] = claudeNativeStage{Status: "passed", Reason: "mutated:false plus byte-identical managed-directory tree digest and state-file digest before/after a byte-identical re-apply"}
 
+	// Explicit global/user scope must select the same native Claude profile as
+	// the default scope. Prove it through the actual Claude CLI and physical
+	// state rather than treating a successful command as sufficient evidence.
+	stages["explicit_user_scope"] = claudeNativeStage{Status: "not_evaluated", Reason: "real native replay not reached"}
+	explicitUser := claudeRunInstaller(t, f, installer, clientDir, "update-explicit-user", "update", "claude-native-proof", "--target", "claude", "--scope", "user")
+	claudeAssertMutated(t, explicitUser, false)
+	if nativeTreeDigest(t, installPath) != beforeManagedTree || claudeSHA256(t, statePath) != beforeStateDigest {
+		t.Fatal("explicit user scope replay mutated the Claude Code user installation")
+	}
+	entries = claudePluginList(t, f, client, "list-explicit-user")
+	if len(entries) != 1 || entries[0].ID != "claude-native-proof@skills-dir" || !entries[0].Enabled || entries[0].InstallPath != installPath {
+		t.Fatalf("explicit user scope changed the exact native Claude Code plugin: %+v", entries)
+	}
+	stages["explicit_user_scope"] = claudeNativeStage{Status: "passed", Reason: "genuine Claude CLI plugin list and byte-identical user installation after explicit --scope user"}
+ 
+
 	// absent-directory repair (mirrors the Codex C3 absent-repair scenario;
 	// unlike Codex's `plugin list`, Claude Code's own list command does not
 	// fail globally when a managed directory is missing, so no analogous
