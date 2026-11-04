@@ -84,18 +84,40 @@ func deterministicDependencyIdentity(envelope domain.PackageEnvelope, targets []
 	return result
 }
 
-func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.VerifiedBundle, selection domain.DirectorySelection, policy domain.DirectoryReleasePolicy, environment directoryEvidenceEnvironment) error {
+func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.VerifiedBundle, selection domain.DirectorySelection, policy domain.DirectoryReleasePolicy, environment directoryEvidenceEnvironment, scopes ...domain.InstallScope) error {
 	if err := validateDirectoryCompatibilityPolicy(policy); err != nil {
 		return err
 	}
+	schema := bundle.Snapshot.SnapshotSchemaVersion
+	if schema == 0 {
+		schema = 1 // Historical lightweight tests omitted the verified snapshot metadata.
+	}
+	if schema != 1 && schema != 2 {
+		return fmt.Errorf("unsupported Directory snapshot schema %d", schema)
+	}
+	scope := domain.ScopeUser
+	if len(scopes) > 0 && scopes[0] != "" {
+		scope = scopes[0]
+	}
+	ids := append([]string(nil), policy.CurrentEvidence...)
+	if schema == 2 {
+		for _, target := range policy.Targets {
+			if target.Scope == scope {
+				ids = append(ids, target.CurrentEvidence...)
+			}
+		}
+	}
 	compatibility := make(map[string]domain.CatalogCompatibility, len(policy.Targets))
-	current := currentDirectoryEvidence(bundle.Snapshot.Sequence, bundle.Snapshot.Evidence, policy.CurrentEvidence)
+	current := currentDirectoryEvidence(bundle.Snapshot.Sequence, bundle.Snapshot.Evidence, ids, schema)
 	for _, target := range policy.Targets {
+		if schema == 2 && target.Scope != scope {
+			continue // Never let another scope overwrite the selected client report.
+		}
 		capabilities, _ := clientplanner.Capabilities(target.Client)
 		packageMode, _ := stableCatalogPackageMode(capabilities.PackageMode)
 		applicable := make([]domain.DirectoryEvidence, 0, len(current))
 		for _, evidence := range current {
-			if evidence.HasTrustedEligibilityProvenanceAtSequence(bundle.Snapshot.Sequence) && directoryEvidenceApplies(evidence, selection, target.Client, environment) {
+			if directoryTrustedReportEvidence(evidence, bundle.Snapshot.Sequence, schema) && directoryEvidenceApplies(evidence, selection, target.Client, environment, scope) {
 				applicable = append(applicable, evidence)
 			}
 		}
@@ -119,7 +141,7 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 	}
 	loaded.hints.Compatibility = cloneCatalogCompatibility(compatibility)
 	loaded.envelope.CatalogEvidence = &domain.CatalogEvidence{
-		SchemaVersion: 1, CatalogVersion: "directory-snapshot-1", Digest: bundle.Digest,
+		SchemaVersion: 1, CatalogVersion: fmt.Sprintf("directory-snapshot-%d", schema), Digest: bundle.Digest,
 		Revision: bundle.Snapshot.SourceCommit, MinimumCLIVersion: policy.MinimumInstallerVersion,
 		AgentPluginsSchema: loaded.envelope.SchemaURI, Compatibility: cloneCatalogCompatibility(compatibility),
 		CurrentEvidence: append([]domain.DirectoryEvidence(nil), current...),
@@ -127,26 +149,36 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 	return nil
 }
 
-func currentDirectoryEvidence(sequence uint64, history []domain.DirectoryEvidence, ids []string) []domain.DirectoryEvidence {
+func currentDirectoryEvidence(sequence uint64, history []domain.DirectoryEvidence, ids []string, schemas ...int) []domain.DirectoryEvidence {
 	byID := make(map[string]domain.DirectoryEvidence, len(history))
 	for _, evidence := range history {
 		byID[evidence.ID] = evidence
 	}
 	current := make([]domain.DirectoryEvidence, 0, len(ids))
 	for _, id := range ids {
-		if evidence, ok := byID[id]; ok && evidence.HasTrustedProvenanceAtSequence(sequence) {
+		if evidence, ok := byID[id]; ok &&
+			(len(schemas) > 0 && schemas[0] == 2 && evidence.HasTrustedProvenance() ||
+				(len(schemas) == 0 || schemas[0] != 2) && evidence.HasTrustedProvenanceAtSequence(sequence)) {
 			current = append(current, evidence)
 		}
 	}
 	return current
 }
 
-func directoryEvidenceApplies(evidence domain.DirectoryEvidence, selection domain.DirectorySelection, client domain.ClientID, environment directoryEvidenceEnvironment) bool {
+func directoryEvidenceApplies(evidence domain.DirectoryEvidence, selection domain.DirectorySelection, client domain.ClientID, environment directoryEvidenceEnvironment, scopes ...domain.InstallScope) bool {
 	if evidence.DistributionID != selection.DistributionID || evidence.ReleaseSequence != selection.ReleaseSequence || evidence.PackageTreeDigest != selection.TreeDigest {
 		return false
 	}
 	if evidence.Level == "schema" {
 		return evidence.Client == ""
+	}
+	scope := domain.ScopeUser
+	if len(scopes) > 0 && scopes[0] != "" {
+		scope = scopes[0]
+	}
+	if scope == domain.ScopeProject && evidence.Scope != domain.ScopeProject ||
+		scope == domain.ScopeUser && evidence.Scope != "" && evidence.Scope != domain.ScopeUser {
+		return false
 	}
 	if evidence.Client != client || !directoryEvidenceDimensionMatches(evidence.InstallerVersion, environment.InstallerVersion) ||
 		!directoryEvidenceDimensionMatches(evidence.OS, environment.OS) || !directoryEvidenceDimensionMatches(evidence.Architecture, environment.Architecture) {
@@ -163,6 +195,13 @@ func directoryEvidenceApplies(evidence domain.DirectoryEvidence, selection domai
 
 func directoryEvidenceDimensionMatches(recorded, actual string) bool {
 	return recorded == "" || recorded == actual
+}
+
+func directoryTrustedReportEvidence(evidence domain.DirectoryEvidence, sequence uint64, schema int) bool {
+	if schema == 2 {
+		return evidence.HasTrustedEligibilityProvenance()
+	}
+	return evidence.HasTrustedEligibilityProvenanceAtSequence(sequence)
 }
 
 func directoryVerification(evidence []domain.DirectoryEvidence) string {

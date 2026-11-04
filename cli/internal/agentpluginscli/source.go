@@ -317,7 +317,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	}
 	loaded.distributionSuspended = distribution.Status == domain.DistributionSuspended
 	loaded.releaseRevoked = policy.Status == domain.ReleaseRevoked || snapshotRevokes(bundle.Snapshot, selection)
-	if err := applyDirectoryCompatibility(&loaded, bundle, selection, *policy, environment); err != nil {
+	if err := applyDirectoryCompatibility(&loaded, bundle, selection, *policy, environment, app.scope()); err != nil {
 		_ = loaded.cleanup()
 		return loadedPackage{}, err
 	}

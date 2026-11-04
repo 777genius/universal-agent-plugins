@@ -41,6 +41,56 @@ type localBackedSourceAcquirer struct {
 	verifiedCalls  int
 }
 
+func TestDirectoryV2CompatibilityUsesScopedGrantsWithoutBorrowingUserEvidence(t *testing.T) {
+	bundle := readModelBundle()
+	bundle.Snapshot.SnapshotSchemaVersion, bundle.Snapshot.Sequence = 2, 1
+	distribution := bundle.Snapshot.Distributions[0]
+	policy := distribution.ReleasePolicies[1]
+	user := policy.Targets[0]
+	user.Scope, user.Scopes = domain.ScopeUser, nil
+	user.Authentication = domain.AuthenticationRequirementRequired
+	user.CurrentEvidence = []string{"cursor-runtime-current"}
+	project := user
+	project.Scope = domain.ScopeProject
+	project.Authentication = domain.AuthenticationRequirementNotRequired
+	project.CurrentEvidence = []string{"project-runtime-current"}
+	policy.Targets = []domain.DirectoryTarget{project, user}
+	policy.CurrentEvidence = nil
+	selected := domain.DirectorySelection{DistributionID: distribution.ID,
+		ReleaseSequence: distribution.Releases[1].Sequence,
+		TreeDigest: distribution.Releases[1].TreeDigest}
+	runtime := bundle.Snapshot.Evidence[1]
+	runtime.ID, runtime.Scope = "project-runtime-current", domain.ScopeProject
+	bundle.Snapshot.Evidence = append(bundle.Snapshot.Evidence, runtime)
+	environment := directoryEvidenceEnvironment{
+		InstallerVersion: runtime.InstallerVersion, OS: runtime.OS,
+		Architecture: runtime.Architecture,
+		ClientVersions: map[domain.ClientID]string{domain.ClientCursor: runtime.ClientVersion},
+		DependencyIdentity: map[domain.ClientID]string{domain.ClientCursor: runtime.DependencyIdentity},
+	}
+	for _, tc := range []struct {
+		name string
+		scope domain.InstallScope
+		auth domain.AuthenticationRequirement
+	}{
+		{"project", domain.ScopeProject, domain.AuthenticationRequirementNotRequired},
+		{"user", domain.ScopeUser, domain.AuthenticationRequirementRequired},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			loaded := loadedPackage{}
+			if err := applyDirectoryCompatibility(&loaded, bundle, selected, policy, environment, tc.scope); err != nil {
+				t.Fatal(err)
+			}
+			evidence := loaded.envelope.CatalogEvidence
+			compatibility := evidence.Compatibility["cursor"]
+			if evidence.CatalogVersion != "directory-snapshot-2" || compatibility.Authentication != tc.auth ||
+				len(compatibility.Evidence) != 1 || compatibility.Evidence[0].Scope != tc.scope {
+				t.Fatalf("%s inherited another scope's policy/evidence: %+v", tc.scope, compatibility)
+			}
+		})
+	}
+}
+
 func TestDirectoryCompatibilityUsesStablePublicPackageModes(t *testing.T) {
 	policy := domain.DirectoryReleasePolicy{Targets: []domain.DirectoryTarget{
 		{Client: domain.ClientCodex, Delivery: "managed", Authentication: domain.AuthenticationRequirementUnknown},

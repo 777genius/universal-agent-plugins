@@ -360,7 +360,7 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	}
 	loaded.directory = &domain.DirectoryOrigin{ProductID: selection.ProductID, DistributionID: selection.DistributionID, DistributionKind: selection.DistributionKind, DesiredReleaseSequence: selection.ReleaseSequence, SnapshotSchema: bundle.Snapshot.SnapshotSchemaVersion, SnapshotSequence: selection.SnapshotSequence, SnapshotDigest: bundle.Digest}
 	loaded.directorySelection = &selection
-	if err := applyDirectoryCompatibility(&loaded, bundle, selection, *policy, evidenceEnv); err != nil {
+	if err := applyDirectoryCompatibility(&loaded, bundle, selection, *policy, evidenceEnv, app.scope()); err != nil {
 		return loadedPackage{}, err
 	}
 	return loaded, nil
