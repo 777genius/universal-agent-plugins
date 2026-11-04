@@ -846,6 +846,86 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertNotIn("OPENAI_API_KEY", env)
 
 
+    def test_copilot_native_registry_requires_exact_managed_identity(self):
+        # BUG-045: local CLI JSON evidence, not a settings-file string match.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            profile = home / ".copilot"
+            profile.mkdir(parents=True)
+            native = str(Path(temporary) / "trusted-copilot")
+            env = {"HOME": str(home)}
+            valid = {"name": "atlassian", "marketplace": "agentplugins-aaaaaaaaaaaa",
+                     "version": "0.1.0", "enabled": True, "source": "local"}
+            def response(items, exit_code=0):
+                return {"exit_code": exit_code, "_json": items}
+            with patch.dict(audit.AGENT_BINARIES, {"copilot": native}, clear=True):
+                with patch.object(audit, "call", return_value=response([valid])) as executed:
+                    self.assertEqual(audit.copilot_native_plugin_state(
+                        home, env, home, "atlassian", "0.1.0"), {"status": "installed"})
+                    self.assertEqual(executed.call_args.args[0],
+                                     [native, "plugin", "list", "--json"])
+                    self.assertEqual(executed.call_args.args[1]["COPILOT_HOME"], str(profile))
+                with patch.object(audit, "call", return_value=response([])):
+                    self.assertEqual(audit.copilot_native_plugin_state(
+                        home, env, home, "atlassian")["status"], "absent")
+                wrong = [
+                    dict(valid, marketplace="foreign"),
+                    dict(valid, version="2.0.0"),
+                    dict(valid, enabled=False),
+                    dict(valid, name="atlassian@agentplugins-aaaaaaaaaaaa"),
+                ]
+                for row in wrong:
+                    with self.subTest(row=row), patch.object(audit, "call", return_value=response([row])):
+                        self.assertNotEqual(audit.copilot_native_plugin_state(
+                            home, env, home, "atlassian", "0.1.0")["status"], "installed")
+                for listing in ([valid, valid], {"plugins": [valid]}, ["malformed"]):
+                    with self.subTest(listing=listing), patch.object(audit, "call", return_value=response(listing)):
+                        self.assertNotEqual(audit.copilot_native_plugin_state(
+                            home, env, home, "atlassian", "0.1.0")["status"], "installed")
+                with patch.object(audit, "call", return_value=response([], exit_code=1)):
+                    self.assertNotEqual(audit.copilot_native_plugin_state(
+                        home, env, home, "atlassian")["status"], "absent")
+                with patch.dict(audit.AGENT_BINARIES, {}, clear=True):
+                    self.assertEqual(audit.copilot_native_plugin_state(
+                        home, env, home, "atlassian")["status"], "unqualified-prerequisites")
+
+    def test_copilot_disabled_setting_needs_native_absence_and_exact_owned_shape(self):
+        audit = load_audit()
+        before = {"status": "absent"}
+        after_add = {"status": "parsed",
+                     "enabled_plugin_value_counts": {"true": 1, "false": 0, "non_boolean": 0}}
+        after_remove = {
+            "status": "parsed", "allowed_sections": ["enabledPlugins"],
+            "enabled_plugin_value_counts": {"true": 0, "false": 1, "non_boolean": 0},
+            "match_counts": {"exact_key": 0, "qualified_key": 1, "reference_key": 0,
+                             "exact_value": 0, "qualified_value": 0, "reference_value": 0},
+        }
+        installed, absent = {"status": "installed"}, {"status": "absent"}
+        residuals = [".copilot/settings.json"]
+        def qualified(*args):
+            return audit.copilot_disabled_preference_only(*args)
+        self.assertTrue(qualified(before, after_add, after_remove,
+                                  installed, absent, residuals))
+        for native_after, left in ((installed, residuals),
+                                   (absent, [".copilot/settings.json", ".copilot/other.json"]),
+                                   ({"status": "unqualified-list"}, residuals)):
+            self.assertFalse(qualified(before, after_add, after_remove,
+                                       installed, native_after, left))
+        for key, value in (("true", 1), ("false", 0), ("non_boolean", 1)):
+            bad = json.loads(json.dumps(after_remove))
+            bad["enabled_plugin_value_counts"][key] = value
+            self.assertFalse(qualified(before, after_add, bad,
+                                       installed, absent, residuals))
+        for key, value in (("qualified_key", 2), ("reference_value", 1)):
+            bad = json.loads(json.dumps(after_remove))
+            bad["match_counts"][key] = value
+            self.assertFalse(qualified(before, after_add, bad,
+                                       installed, absent, residuals))
+        self.assertFalse(qualified({"status": "parsed"}, after_add, after_remove,
+                                   installed, absent, residuals))
+
+
     def test_qoder_native_cli_proves_owned_registration_and_removal(self):
         # BUG-039: exact native local ID+version only, never cache evidence.
         audit = load_audit()

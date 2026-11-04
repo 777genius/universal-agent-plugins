@@ -31,3 +31,9 @@ This establishes **enabled→disabled** native settings transition, not a contin
 **Ownership critic:** Do not take suffix `@agentplugins-<12 hex>` alone as proof of ownership without UAP receipt and the exact installed target. **Evidence critic:** an unchanged disabled key is not native activation but is still file residue; the accepted cleanup contract must be explicit before relaxing it.
 
 **State:** diagnostic delivered and live observation proved; UAP product fix and cleanup qualification **not yet completed**.
+
+## Exact native CLI qualification proposal (2026-11-04)
+
+Official [Copilot plugin reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference) documents `copilot plugin list --json` as a flat array `{name, marketplace?, version?, enabled, source, installedFrom?}`. We now use the genuine, pre-bound CLI with `COPILOT_HOME` restricted to each disposable case to require an exact enabled `name@agentplugins-12hex` native registration after repeat-add and **no same-name registration after uninstall**. A malformed, unknown, foreign, duplicate or failed listing is non-PASS. The version field is optional upstream; when it is present it must equal UAP's independently verified package version. The native JSON payload and account settings are never exported.
+
+Only when the before/add/remove sanitized shapes prove one originally absent, UAP-created, exact qualified `enabledPlugins: true→false` key and **only** `.copilot/settings.json` remains after native removal do we permit this *disabled preference residue* as a non-active setting; retain it explicitly in the JSON audit instead of deleting user preferences. Full native absence and all existing source/lock/repeat/foreign/symlink checks remain mandatory. This is an E2E oracle qualification, **not** a product installer modification or a claim that 23 historical cases passed. Independent current-head live CI and review still required.

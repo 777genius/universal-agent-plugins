@@ -354,6 +354,68 @@ def qoder_native_plugin_state(home, env, cwd, identity, expected_version=None):
     return {"status": "unqualified-identity-or-version"}
 
 
+def copilot_native_plugin_state(home, env, cwd, identity, expected_version=None):
+    """Read documented Copilot plugin list JSON from the original isolated profile."""
+    profile = home / ".copilot"
+    executable = AGENT_BINARIES.get("copilot")
+    if (not executable or not Path(executable).is_absolute()
+            or not profile.is_dir() or profile.is_symlink()
+            or not path_inside_case(profile, home)):
+        return {"status": "unqualified-prerequisites"}
+    native_env = dict(env, COPILOT_HOME=str(profile))
+    observed = call([executable, "plugin", "list", "--json"], native_env, cwd, 30)
+    entries = observed.get("_json")
+    if observed.get("exit_code") != 0 or not isinstance(entries, list) or len(entries) > 1024:
+        return {"status": "unqualified-list"}
+    found = 0
+    for entry in entries:
+        if (not isinstance(entry, dict)
+                or not isinstance(entry.get("name"), str)
+                or not isinstance(entry.get("enabled"), bool)
+                or not isinstance(entry.get("source"), str)
+                or ("version" in entry and entry["version"] is not None
+                    and not isinstance(entry["version"], str))
+                or ("marketplace" in entry and entry["marketplace"] is not None
+                    and not isinstance(entry["marketplace"], str))):
+            return {"status": "unqualified-schema"}
+        if entry["name"] != identity:
+            continue
+        market = entry.get("marketplace")
+        if (not isinstance(market, str)
+                or not re.fullmatch(r"agentplugins-[0-9a-f]{12}", market)):
+            return {"status": "unqualified-foreign-name"}
+        if (entry["enabled"] is not True
+                or (entry.get("version") is not None
+                    and entry["version"] != expected_version)):
+            return {"status": "unqualified-activation-or-version"}
+        found += 1
+    if found == 0:
+        return {"status": "absent"}
+    if found == 1 and isinstance(expected_version, str) and expected_version:
+        return {"status": "installed"}
+    return {"status": "unqualified-identity"}
+
+
+def copilot_disabled_preference_only(before, after_add, after_remove,
+                                    native_before, native_after, residuals):
+    """Accept no active registration, without deleting a vendor's disabled preference."""
+    if (not isinstance(before, dict) or before.get("status") != "absent"
+            or not isinstance(after_add, dict) or after_add.get("status") != "parsed"
+            or not isinstance(after_remove, dict) or after_remove.get("status") != "parsed"
+            or not isinstance(native_before, dict) or native_before.get("status") != "installed"
+            or not isinstance(native_after, dict) or native_after.get("status") != "absent"
+            or residuals != [".copilot/settings.json"]
+            or after_remove.get("allowed_sections") != ["enabledPlugins"]):
+        return False
+    expected_after = {"exact_key": 0, "qualified_key": 1, "reference_key": 0,
+                      "exact_value": 0, "qualified_value": 0, "reference_value": 0}
+    return (after_add.get("enabled_plugin_value_counts") ==
+            {"true": 1, "false": 0, "non_boolean": 0}
+            and after_remove.get("enabled_plugin_value_counts") ==
+            {"true": 0, "false": 1, "non_boolean": 0}
+            and after_remove.get("match_counts") == expected_after)
+
+
 def native_identity_residuals(native_roots, identity, observed_paths, target):
     """After remove, reject any remaining named native file/config entry.
 
@@ -1077,6 +1139,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         qoder_native_before_remove = qoder_native_plugin_state(
             home, env, project, identity, matching[0].get("version"))
         assert_case_unchanged()
+    copilot_native_before_remove = None
+    if target == "copilot" and kind == "plugin" and installed and repeat_verified:
+        copilot_native_before_remove = copilot_native_plugin_state(
+            home, env, project, identity, matching[0].get("version"))
+        assert_case_unchanged()
     cleanup = None
     native_uninstall = None
     if installed:
@@ -1097,8 +1164,6 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         qoder_native_after_remove = qoder_native_plugin_state(
             home, env, project, identity)
         assert_case_unchanged()
-    copilot_after_remove = (copilot_settings_sanitized_shape(home, case_root, identity)
-                            if copilot_before is not None and cleanup else None)
     sentinels_preserved = (
         preserved_regular_text(sentinel, "foreign content never belongs to UAP\n", case_root)
         and preserved_regular_text(user_sentinel, "foreign profile content never belongs to UAP\n", case_root)
@@ -1119,6 +1184,13 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     post_list = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
     post_list_json = post_list.pop("_json", None) if post_list else None
+    copilot_native_after_remove = None
+    if target == "copilot" and kind == "plugin" and cleanup and cleanup["exit_code"] == 0:
+        copilot_native_after_remove = copilot_native_plugin_state(
+            home, env, project, identity)
+        assert_case_unchanged()
+    copilot_after_remove = (copilot_settings_sanitized_shape(home, case_root, identity)
+                            if copilot_before is not None and cleanup else None)
     remaining_ids = set()
     post_list_schema_valid = False
     if isinstance(post_list_json, dict):
@@ -1163,6 +1235,12 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 path = root / relative
                 if passive_native_path(target, relative) and path.is_file() and not path.is_symlink():
                     passive_retained.append(observed)
+    copilot_disabled_setting_retained = bool(
+        target == "copilot" and kind == "plugin"
+        and copilot_disabled_preference_only(
+            copilot_before, copilot_after_add, copilot_after_remove,
+            copilot_native_before_remove, copilot_native_after_remove,
+            native_residuals))
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
@@ -1170,7 +1248,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
              or (qoder_native_after_remove is not None
                  and qoder_native_after_remove["status"] == "absent"))
         and not post_remove_identity_registered
-        and not native_residuals
+        and (not native_residuals or copilot_disabled_setting_retained)
         and (kind != "skill" or (post_removal_skill is None
                                   and not post_removal_leftovers and not post_lock_pinned
                                   and not post_skill_tree_delta))
@@ -1187,7 +1265,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                            (target == "qoder" and
                             (qoder_native_before_remove is None or
                              qoder_native_before_remove["status"] != "registered"))
-                           or (target != "qoder" and not native_attribution)))
+                           or (target == "copilot" and
+                               (copilot_native_before_remove is None or
+                                copilot_native_before_remove["status"] != "installed"))
+                           or (target not in ("qoder", "copilot") and not native_attribution)))
                   else "prepared-lifecycle-passed" if prepared_binding else "passed")
     elif installed and cleanup and "external removal requires explicit attestation" in (
             cleanup.get("stderr_tail", "") + cleanup.get("stdout_tail", "")).lower():
@@ -1243,6 +1324,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "qoder_passive_log_link_verified": qoder_passive_log_link_verified,
             "qoder_native_after_repeat": qoder_native_before_remove,
             "qoder_native_after_remove": qoder_native_after_remove,
+            "copilot_native_after_repeat": copilot_native_before_remove,
+            "copilot_native_after_remove": copilot_native_after_remove,
+            "copilot_disabled_setting_retained": copilot_disabled_setting_retained,
             "post_list_schema_valid": post_list_schema_valid,
             "post_remove_identity_registered": post_remove_identity_registered,
             "sentinels_preserved": sentinels_preserved}
