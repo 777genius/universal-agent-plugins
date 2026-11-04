@@ -541,6 +541,7 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	// Explicit global/user scope must select the same native Claude profile as
 	// the default scope. Prove it through the actual Claude CLI and physical
 	// state rather than treating a successful command as sufficient evidence.
+	stages["explicit_user_scope"] = claudeNativeStage{Status: "failed", Reason: "real native explicit user replay did not complete"}
 	explicitUser := claudeRunInstaller(t, f, installer, clientDir, "update-explicit-user", "update", "claude-native-proof", "--target", "claude", "--scope", "user")
 	claudeAssertMutated(t, explicitUser, false)
 	if nativeTreeDigest(t, installPath) != beforeManagedTree || claudeSHA256(t, statePath) != beforeStateDigest {
@@ -551,7 +552,7 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 		t.Fatalf("explicit user scope changed the exact native Claude Code plugin: %+v", entries)
 	}
 	stages["explicit_user_scope"] = claudeNativeStage{Status: "passed", Reason: "genuine Claude CLI plugin list and byte-identical user installation after explicit --scope user"}
- 
+
 
 	// absent-directory repair (mirrors the Codex C3 absent-repair scenario;
 	// unlike Codex's `plugin list`, Claude Code's own list command does not
