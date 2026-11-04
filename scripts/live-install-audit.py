@@ -62,6 +62,24 @@ def validate_fixtures(doc):
     exact_git = [v for v in names if v.startswith("github:")]
     if set(direct) != set(exact_git + ["777genius/chrome-devtools-bridge"]):
         raise ValueError("All external manifest identities must be supplied and no stale alias mappings")
+    pins = doc.get("signed_release_pins")
+    signed_aliases = set(names) - set(exact_git)
+    if not isinstance(pins, dict) or set(pins) != signed_aliases:
+        raise ValueError("Missing frozen Registry release pins for signed aliases")
+    for alias, pin in pins.items():
+        if not isinstance(pin, dict) or set(pin) != {
+                "distribution", "repository", "path", "revision",
+                "sequence", "tree_digest", "manifest_digest"}:
+            raise ValueError(f"Invalid frozen signed release pin: {alias}")
+        if (not all(isinstance(pin[key], str) and pin[key]
+                    for key in ("distribution", "repository", "path"))
+                or type(pin["sequence"]) is not int or pin["sequence"] < 1
+                or (pin["revision"] is not None
+                    and not re.fullmatch(r"[0-9a-f]{40}", pin["revision"]))
+                or any(not isinstance(pin[key], str) or
+                       re.fullmatch(r"sha256:[0-9a-f]{64}", pin[key]) is None
+                       for key in ("tree_digest", "manifest_digest"))):
+            raise ValueError(f"Malformed frozen signed release pin: {alias}")
     for plugin in exact_git:
         if not re.fullmatch(r"github:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[a-f0-9]{40}", plugin):
             raise ValueError("Direct plugin source is not a pinned root package")
@@ -433,8 +451,9 @@ def recorded_signed_release_matches(directory, revision):
     )
 
 
-def matching_installations(response, identity, target, kind, item):
-    """No substring matching: inspect the entire parsed list response."""
+def matching_installations(response, identity, target, kind, item, signed_release_pins=None):
+    """Verify the frozen Registry release, never only live self-consistency."""
+    signed_release_pins = signed_release_pins or {}
     if not isinstance(response, dict):
         return []
     try:
@@ -492,15 +511,25 @@ def matching_installations(response, identity, target, kind, item):
             # distribution: tie reviewed aliases to the signed directory
             # product and ensure immutable source revision/digests exist.
             if kind == "plugin" and isinstance(item, str) and not item.startswith("github:"):
+                pin = signed_release_pins.get(item)
                 directory = node.get("directory", {})
-                if not isinstance(directory, dict) or (
-                    (item == "777genius/chrome-devtools-bridge" and
-                     directory.get("recorded_distribution") != item) or
-                    (item != "777genius/chrome-devtools-bridge" and
-                     directory.get("product_id") != item)):
+                # The frozen Registry records six unresolved source revisions.
+                # A mutable release is NOT a verified native install: fail closed.
+                if not isinstance(pin, dict) or not isinstance(pin.get("revision"), str):
                     continue
-                if not any(recorded_signed_release_matches(
-                        directory, client.get("package_revision"))
+                if (source != pin["distribution"] or
+                        not isinstance(directory, dict) or
+                        directory.get("recorded_distribution") != pin["distribution"] or
+                        directory.get("recorded_revision") != pin["revision"] or
+                        directory.get("recorded_release_sequence") != pin["sequence"] or
+                        (item != "777genius/chrome-devtools-bridge" and
+                         directory.get("product_id") != item)):
+                    continue
+                if not any(
+                        recorded_signed_release_matches(
+                            directory, client.get("package_revision"))
+                        and client["package_revision"].get("tree_digest") == pin["tree_digest"]
+                        and client["package_revision"].get("manifest_digest") == pin["manifest_digest"]
                         for client in verified_clients):
                     continue
             result.append(node)
@@ -650,7 +679,8 @@ def preserved_regular_text(path, expected, case_root):
         return False
 
 
-def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
+def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
+            signed_release_pins=None):
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
     project = case_root / "project"
@@ -712,7 +742,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     listed = (call([cli, "list", "--target", target, *scope, "--format", "json"],
                    env, project, 30))
     listed_json = listed.pop("_json", None) if listed else None
-    matching = matching_installations(listed_json, identity, target, kind, item)
+    matching = matching_installations(listed_json, identity, target, kind, item,
+                                     signed_release_pins)
     listed_identity = len(matching) == 1
     failed_install_registered = has_target_registration(listed_json, identity, target) if (
         output["exit_code"] != 0) else False
@@ -754,7 +785,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
         repeat_list = call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
         repeat_list_json = repeat_list.pop("_json", None)
-        repeat_matches = matching_installations(repeat_list_json, identity, target, kind, item)
+        repeat_matches = matching_installations(
+            repeat_list_json, identity, target, kind, item, signed_release_pins)
         repeat_identity_ids = sorted(
             entry["installation_id"] for entry in repeat_matches)
         repeat_native_unchanged = snapshot(native_roots) == before_repeat_native
@@ -981,7 +1013,8 @@ def main():
         for i, item in enumerate(selected):
             try:
                 result = do_case(cli, args.target, args.kind, item, i, runroot,
-                                 doc["plugin_declared_names"])
+                                 doc["plugin_declared_names"],
+                                 doc["signed_release_pins"])
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
                           "status": "harness-error", "error": repr(e)}
