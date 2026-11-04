@@ -24,9 +24,18 @@ func TestAgentpluginsCodexNativeForeignSkillCLIRefusal(t *testing.T) {
 	stages := map[string]nativeStage{
 		"native_foreign_discovery": {Status: "not_evaluated"},
 		"public_cli_refusal":      {Status: "not_evaluated"},
+		"published_baseline":     {Status: "not_evaluated"},
 		"foreign_preservation":    {Status: "not_evaluated"},
 	}
 	evidence := f.evidence(t, stages)
+	published := nativeBinary(t, "AGENTPLUGINS_PUBLISHED_UAP_BIN")
+	if digest := os.Getenv("AGENTPLUGINS_PUBLISHED_UAP_SHA256"); len(digest) != 64 || nativeSHA(t, published) != digest {
+		t.Fatal("published UAP binary does not match attested release digest")
+	}
+	if got, err := nativeCommand(t, f.base, published, "published-uap-version", "version"); err != nil || strings.TrimSpace(string(got)) != "agentplugins 0.1.95" {
+		t.Fatalf("unexpected published UAP 0.1.95: %q %v", got, err)
+	}
+	evidence["published_uap_0_1_95_sha256"] = nativeSHA(t, published)
 	defer func() {
 		f.writeEvidence(t, evidence)
 		if err := nativeStageFailures(stages); err != nil {
@@ -84,8 +93,33 @@ func TestAgentpluginsCodexNativeForeignSkillCLIRefusal(t *testing.T) {
 	argv := []string{"skills", "add", "777genius/universal-agent-plugins@" + sourceCommit + "//" + sourcePath,
 		"--skill", name, "--target", "codex", "--scope", "project",
 		"--project-root", f.base.Project, "--no-ui", "--yes", "--format", "json"}
+	// First run the genuine published 0.1.95 CLI against the same occupied
+	// project: its historical PLAN_REJECTED is a baseline, not a feature PASS.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
+	prior := exec.CommandContext(ctx, published, argv...)
+	prior.Env = append(f.base.env(filepath.Dir(f.client)), "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0")
+	prior.Dir = f.base.Project
+	var baselineOut, baselineErr bytes.Buffer
+	prior.Stdout, prior.Stderr = &baselineOut, &baselineErr
+	baselineExit := prior.Run()
+	var baselineRefusal struct { Code, Message string }
+	var baselineCode *exec.ExitError
+	if !errors.As(baselineExit, &baselineCode) || baselineCode.ExitCode() != 1 ||
+		json.Unmarshal(baselineOut.Bytes(), &baselineRefusal) != nil || ctx.Err() != nil ||
+		baselineRefusal.Code != "PLAN_REJECTED" {
+		t.Fatalf("published UAP 0.1.95 baseline differs: exit=%v, structured code=%q", baselineExit, baselineRefusal.Code)
+	}
+	if strings.Contains(baselineRefusal.Message, f.base.Project) ||
+		strings.Contains(baselineRefusal.Message, f.base.Home) {
+		t.Fatal("published UAP disclosed an absolute foreign project path")
+	}
+	if got := nativeTreeDigest(t, filepath.Join(f.base.Project, ".agents", "skills")); got != before {
+		t.Fatal("published UAP 0.1.95 changed the occupied/neighbor Skill tree")
+	}
+	f.requireForeign(t)
+	nativeJSON(t, filepath.Join(f.base.Root, "foreign-skill-published-0.1.95.json"), baselineRefusal)
+	stages["published_baseline"] = nativeStage{Status: "passed", Reason: "attested released UAP 0.1.95 returned generic PLAN_REJECTED with same genuine pinned Codex; foreign bytes unchanged"}
 	cmd := exec.CommandContext(ctx, f.installer, argv...)
 	cmd.Env = append(f.base.env(filepath.Dir(f.client)), "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0")
 	cmd.Dir = f.base.Project
