@@ -1,6 +1,7 @@
 package pi
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -103,5 +104,52 @@ func TestPiProjectRejectsAliasedDiscoveryAndUserOverlap(t *testing.T) {
 	target.ProjectRoot = filepath.Join(root, "user")
 	if _, err := projectPiRoot(client, target, ""); err == nil {
 		t.Fatal("Pi project contains original user profile")
+	}
+}
+
+func TestPiRefineAndInspectRejectPlanReboundFromOriginalUser(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := filepath.Join(root, "home", ".pi", "agent")
+	other := filepath.Join(root, "other", ".pi", "agent")
+	project := filepath.Join(root, "project")
+	for _, path := range []string{original, other, project} {
+		if err := os.MkdirAll(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The plan is internally valid for original, but the actual selected
+	// client is bound to other. Neither planning nor read-only inspection may
+	// silently inherit the plan's synthetic user authority.
+	actual := domain.DetectedClient{ClientID: domain.ClientPi, ConfigRoot: other}
+	for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
+		target, err := domain.NewTargetContext(scope, "", original)
+		if scope == domain.ScopeProject {
+			target, err = domain.NewTargetContext(scope, project, original)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		anchor := original
+		if scope == domain.ScopeProject {
+			anchor = filepath.Join(project, ".pi")
+		}
+		plan := domain.DeliveryPlan{
+			ClientID: domain.ClientPi, Scope: scope,
+			TargetContext: target, TargetAnchor: anchor,
+			NativeRegistryRoot: anchor, TargetRoot: filepath.Join(anchor, "extensions"),
+			PhysicalArtifactID: "TEST-owned-pi", ActivePath: filepath.Join(anchor, "extensions", "TEST-owned-pi"),
+		}
+		if err := validatePlan(plan); err != nil {
+			t.Fatalf("%s plan should be internally valid: %v", scope, err)
+		}
+		if err := NewProject().RefinePlan(context.Background(), clients.PlanInput{Client: actual}, &plan); err == nil {
+			t.Fatalf("%s plan borrowed original user profile from its own target", scope)
+		}
+		if _, err := NewProject().InspectNativeRegistry(context.Background(), clients.Env{}, actual, plan, nil); err == nil {
+			t.Fatalf("%s inspection borrowed original user profile from its own target", scope)
+		}
 	}
 }

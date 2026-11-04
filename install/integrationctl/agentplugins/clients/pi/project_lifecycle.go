@@ -14,11 +14,35 @@ import (
 const piProjectComponentAction = "Review project trust in Pi and reload or restart the session to load project Skills and MCP; authentication, active connections and model calls are not implied by file installation."
 const piUserComponentAction = "Reload resources or restart Pi to discover user Skills and MCP; installed files do not prove an authenticated connection or model tool call."
 
+// piSelectedAuthority checks the selected real client separately from the
+// planned target. validatePlan alone checks self-consistency and cannot prove
+// that a project plan kept the originally detected user profile.
+func piSelectedAuthority(client domain.DetectedClient, plan domain.DeliveryPlan) error {
+	if client.ClientID != domain.ClientPi {
+		return fmt.Errorf("Pi selected client identity differs")
+	}
+	switch plan.Scope {
+	case domain.ScopeProject:
+		_, err := projectPiRoot(client, plan.TargetContext, plan.NativeRegistryRoot)
+		return err
+	case domain.ScopeUser:
+		if client.ConfigRoot != plan.TargetAnchor || client.ConfigRoot != plan.NativeRegistryRoot {
+			return fmt.Errorf("Pi user target differs from selected original profile")
+		}
+		return validateProfile(client.ConfigRoot)
+	default:
+		return fmt.Errorf("unsupported Pi component scope")
+	}
+}
+
 // RefinePlan makes only the explicitly selected project-native component
 // selection ready. An extension-only project remains valid; an unsupported
 // portable component never becomes an implied native capability.
 func (adapter *ProjectAdapter) RefinePlan(ctx context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
 	if err := validatePlan(*plan); err != nil {
+		return err
+	}
+	if err := piSelectedAuthority(in.Client, *plan); err != nil {
 		return err
 	}
 	found := false
@@ -58,6 +82,9 @@ func (adapter *ProjectAdapter) InspectNativeRegistry(ctx context.Context, env cl
 		return clients.RegistryIndeterminate, err
 	}
 	if err := validatePlan(plan); err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	if err := piSelectedAuthority(client, plan); err != nil {
 		return clients.RegistryIndeterminate, err
 	}
 	found, err := inspectPackage(plan, managed != nil && managed.TargetLocator == plan.ActivePath)

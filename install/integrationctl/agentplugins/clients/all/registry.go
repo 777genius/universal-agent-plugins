@@ -50,7 +50,7 @@ func buildRegistry(project bool) *clients.Registry {
 	if project {
 		workspace = vscode.NewProject()
 		cursorComponents = cursor.NewProject()
- 	}
+	}
 	registry, err := clients.NewRegistry(
 		piComponents,
 		codex.New(),
