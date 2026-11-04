@@ -1,9 +1,9 @@
 package directoryv1
 
 import (
-	"unicode/utf8"
-	"strings"
 	"fmt"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
