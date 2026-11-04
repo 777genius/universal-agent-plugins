@@ -1265,7 +1265,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             future = root / "run" / "plugin-00"
             future.parent.mkdir()
             future.symlink_to(foreign, target_is_directory=True)
-            with self.assertRaises(FileExistsError):
+            # The explicit preflight must reject redirected case roots before
+            # mkdir or any third-party command can traverse the link.
+            with self.assertRaisesRegex(ValueError, "audit case root is redirected"):
                 audit.do_case("/unused/audit-cli", "codex", "plugin",
                               "atlassian", 0, future.parent, {})
             self.assertEqual(list(foreign.iterdir()), [])
