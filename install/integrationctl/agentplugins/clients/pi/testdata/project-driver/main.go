@@ -34,15 +34,21 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
+	// The script's PROJECT argument is the Pi process working directory.
+	// UAP's user-scope engine must not be configured as a project engine.
+	projectRoot := ""
+	if scope == domain.ScopeProject {
+		projectRoot = os.Args[3]
+	}
 	engine, err := installer.New(installer.Config{
-		ProjectRoot: os.Args[3], StateRoot: os.Args[1],
+		ProjectRoot: projectRoot, StateRoot: os.Args[1],
 		Registry: registry, HelperExecutable: helper, TrustedLocalPackages: true,
 	})
 	if err != nil {
 		fail(err)
 	}
 	request := installer.Request{
-		Scope: scope, ProjectRoot: os.Args[3],
+		Scope: scope, ProjectRoot: projectRoot,
 		Operation: installer.Operation(os.Args[5]), ClientID: "pi",
 		ClientConfigRoot: os.Args[2], PackageRoot: os.Args[4],
 		InstallationID: os.Args[6],
