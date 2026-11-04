@@ -21,4 +21,4 @@ This is an **E2E harness containment vulnerability**, not a claim that a product
 
 ## State
 
-Confirmed by local executable repro. Root guards and regression pending implementation, final-head CI pending, no merge approval.
+Confirmed by local executable repro. Narrow root guards and a three-case symlink regression implemented in this PR; final-head Python/CI and real-case ZIP requalification are still pending. No merge approval.

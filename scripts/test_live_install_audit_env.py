@@ -1374,6 +1374,49 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 [root], "atlassian", [".qoder/logs/other"], "qoder"),
                 [".qoder/logs/other: symlink"])
 
+    def test_case_root_symlink_never_redirects_prewrite_fixtures(self):
+        # BUG-041: an old case could redirect the *case* trust anchor itself.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve()
+            foreign = outer / "foreign"
+            foreign.mkdir()
+            for poisoned in ("case-root", "run-root", "post-mkdir-swap"):
+                with self.subTest(poisoned=poisoned):
+                    root = outer / poisoned
+                    case = root / "plugin-00"
+                    if poisoned == "run-root":
+                        root.symlink_to(foreign, target_is_directory=True)
+                    else:
+                        root.mkdir()
+                        if poisoned == "case-root":
+                            case.symlink_to(foreign, target_is_directory=True)
+                    original_mkdir = Path.mkdir
+                    modified = False
+
+                    def post_mkdir(path, *args, **kwargs):
+                        nonlocal modified
+                        result = original_mkdir(path, *args, **kwargs)
+                        if poisoned == "post-mkdir-swap" and path == case and not modified:
+                            modified = True
+                            case.rmdir()
+                            case.symlink_to(foreign, target_is_directory=True)
+                        return result
+
+                    with (patch.object(Path, "mkdir", post_mkdir),
+                          patch.object(audit, "call") as call,
+                          self.assertRaisesRegex(ValueError, "audit (case|run) root")):
+                        audit.do_case("/unused/agentplugins", "codex", "plugin",
+                                      "atlassian", 0, root, {})
+                    call.assert_not_called()
+                    self.assertEqual(list(foreign.iterdir()), [])
+                    if poisoned != "run-root":
+                        # Leave the root available for the next disposable case.
+                        case.unlink()
+                        root.rmdir()
+                    else:
+                        root.unlink()
+
     def test_case_creation_never_writes_through_planted_child_symlinks(self):
         audit = load_audit()
         original_mkdir = Path.mkdir

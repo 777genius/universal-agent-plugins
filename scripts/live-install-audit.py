@@ -888,9 +888,20 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     home = case_root / "home"
     project = case_root / "project"
     data = case_root / "uap-data"
-    # A previous untrusted case must not plant a symlink at a later case path.
-    # Fail before writing even a sentinel outside the disposable run root.
-    case_root.mkdir(parents=True)
+    # A previous case can plant a symlink at the *case root* itself. Resolving
+    # that link and using its destination as the trust anchor is not containment.
+    if runroot.is_symlink() or runroot.parent.is_symlink() or not runroot.parent.is_dir():
+        raise ValueError("audit run root is redirected or unavailable")
+    runroot.mkdir(exist_ok=True)
+    if runroot.is_symlink() or not runroot.is_dir():
+        raise ValueError("audit run root is redirected")
+    canonical_runroot = runroot.resolve(strict=True)
+    if case_root.is_symlink():
+        raise ValueError("audit case root is redirected")
+    case_root.mkdir(exist_ok=True)
+    if (runroot.is_symlink() or case_root.is_symlink() or not case_root.is_dir()
+            or case_root.resolve(strict=True).parent != canonical_runroot):
+        raise ValueError("audit case root escaped disposable run root")
     canonical_case = case_root.resolve(strict=True)
     for path in (home, project, data, home / ".config", home / ".cache", home / ".local/share"):
         # Never create a descendant through an already redirected parent.
