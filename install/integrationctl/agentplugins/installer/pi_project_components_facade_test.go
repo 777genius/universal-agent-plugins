@@ -197,7 +197,7 @@ func TestPiUserNativeSkillsMCPFacadeAndForeignIsolation(t *testing.T) {
 			}
 			write(filepath.Join(source, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"uap-pi-global-components","version":"1.0.0"}`)
 			skillBody := func(revision string) string {
-				return "---\nname: pi-managed\ndescription: Pi global scoped facade E2E\n---\n"+revision+"\n"
+				return "---\nname: pi-managed\ndescription: Pi global scoped facade E2E\n---\n" + revision + "\n"
 			}
 			write(filepath.Join(source, "skills", "pi-managed", "SKILL.md"), skillBody("first"))
 			servers := func(url string) {
