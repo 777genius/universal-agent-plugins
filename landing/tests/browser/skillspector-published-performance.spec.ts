@@ -60,7 +60,11 @@ async function publishedHome(page: Page, context: BrowserContext, isolated = fal
   await setSignedMirrorTestTime(page);
   const mirrorTime = await page.evaluate(() => Date.now());
   await page.clock.setFixedTime(new Date(Math.max(mirrorTime, Date.parse(manifest.generated_at))));
-  await context.addInitScript(() => localStorage.setItem('theme', 'light'));
+  await context.addInitScript(() => {
+    // Context scripts also run in child frames, including opaque error documents
+    // after offline() blocks the delayed Mux preload. Only the app owns this theme.
+    if (window === window.top) localStorage.setItem('theme', 'light');
+  });
   let registryRequests = 0;
   const requests = new Map<string, number>();
   await page.route('**/reports/skillspector/v3/**', (route) => {
@@ -150,6 +154,15 @@ test('published large reports keep closed cards unmounted after real data and ap
   await expect(report.locator(':scope > summary')).toContainText(/Skill scan · (13\/13 checked · 10 not fully checked|Incomplete scan)/);
   expect(requests.get('index.json')).toBe(1);
   for (const shard of shards) expect(requests.get(shard.path)).toBe(1);
+  // Exercise the delayed preload even on fast runners: the offline Chromium
+  // frame must reach its opaque error document before checking all page errors.
+  const preload = page.locator('.hero-demo-video iframe');
+  await expect(preload).toBeAttached({ timeout: 15_000 });
+  await expect(preload).toHaveAttribute('src', /^https:\/\/player\.mux\.com\/.+\?preload=auto$/);
+  await expect.poll(() => page.frames().some((frame) =>
+    frame.parentFrame() === page.mainFrame() && frame.url().startsWith('chrome-error://'),
+  ), { timeout: 15_000 }).toBe(true);
+  await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
   expect(errors).toEqual([]);
 });
 
