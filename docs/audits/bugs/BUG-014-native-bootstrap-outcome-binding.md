@@ -21,4 +21,4 @@ A native binary's presence or `--version` output cannot replace a successful boo
 
 Use exactly the existing GitHub Actions `steps.<id>.outcome` binding in both workflow matrices, and a static test that fails if that link disappears. Preserve actual failed native job conclusions. The removed-API guard continues checking every existing product location; only paraphrase the historical bug document. Formatting changes must not influence classification.
 
-**Status:** reproduced, plan recorded; fixes and final-head evidence pending.
+**Status:** source fix and regression pushed; workflow binding implemented. Final-head CI/E2E and independent security review remain pending.
