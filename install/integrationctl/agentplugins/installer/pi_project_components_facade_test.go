@@ -173,3 +173,139 @@ func TestPiProjectNativeSkillsMCPFacadeAAndB(t *testing.T) {
 		}
 	}
 }
+
+ 
+// The same public facade and component kernel used by the Project A/B test
+// must bind global objects to the original physical Pi profile. The project
+// directories below are canaries: they are never eligible user targets.
+func TestPiUserNativeSkillsMCPFacadeAndForeignIsolation(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, profile := range []string{filepath.Join(root, "home", ".pi", "agent"), filepath.Join(root, "custom-pi-profile")} {
+		t.Run(filepath.Base(filepath.Dir(profile))+"-"+filepath.Base(profile), func(t *testing.T) {
+			source, state := filepath.Join(root, "source-"+filepath.Base(profile)), filepath.Join(root, "state-"+filepath.Base(profile))
+			projectA, projectB := filepath.Join(root, "A-"+filepath.Base(profile)), filepath.Join(root, "B-"+filepath.Base(profile))
+			write := func(path, body string) {
+				t.Helper()
+				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			write(filepath.Join(source, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"uap-pi-global-components","version":"1.0.0"}`)
+			skillBody := func(revision string) string {
+				return "---\nname: pi-managed\ndescription: Pi global scoped facade E2E\n---\n"+revision+"\n"
+			}
+			write(filepath.Join(source, "skills", "pi-managed", "SKILL.md"), skillBody("first"))
+			servers := func(url string) {
+				write(filepath.Join(source, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"pi-managed":{"type":"streamable-http","url":"`+url+`"}}}`)
+			}
+			servers("https://example.invalid/first")
+			foreign := `{"other":"keep","mcpServers":{"foreign":{"url":"https://foreign.invalid/mcp"}}}`+"\n"
+			write(filepath.Join(profile, "mcp.json"), foreign)
+			write(filepath.Join(profile, "extensions", "foreign.ts"), "// foreign user extension\n")
+			for _, project := range []string{projectA, projectB} {
+				write(filepath.Join(project, ".pi", "mcp.json"), foreign)
+				write(filepath.Join(project, ".pi", "skills", "existing", "SKILL.md"), "foreign project skill\n")
+			}
+			registry, err := clients.NewRegistry(pi.NewProject())
+			if err != nil {
+				t.Fatal(err)
+			}
+			helper, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			engine, err := New(Config{StateRoot: state, Registry: registry,
+				HelperExecutable: helper, TrustedLocalPackages: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := func(op Operation, id string) Request {
+				return Request{Operation: op, Scope: domain.ScopeUser,
+					ClientID: "pi", ClientConfigRoot: profile, PackageRoot: source,
+					InstallationID: id}
+			}
+			do := func(req Request) Result {
+				t.Helper()
+				prepared, err := engine.Prepare(context.Background(), req)
+				if err != nil {
+					t.Fatal("Pi global prepare:", err)
+				}
+				result, applyErr := engine.Apply(context.Background(), prepared, Decision{Confirmed: true})
+				closeErr := prepared.Close()
+				if applyErr != nil || closeErr != nil || result.Outcome != OutcomeCompleted {
+					t.Fatalf("Pi global %s: %+v apply=%v close=%v", req.Operation, result, applyErr, closeErr)
+				}
+				return result
+			}
+			installed := do(request(OpInstall, "TEST-pi-global"))
+			if installed.Binding.Scope != string(domain.ScopeUser) || filepath.Dir(installed.Binding.TargetPath) != filepath.Join(profile, "extensions") {
+				t.Fatal("global Pi binding is not under the selected physical profile")
+			}
+			if _, err := os.Lstat(filepath.Join(installed.Binding.TargetPath, "index.ts")); !os.IsNotExist(err) {
+				t.Fatal("extension-less global Skill/MCP accidentally became executable")
+			}
+			skill := filepath.Join(profile, "skills", "pi-managed", "SKILL.md")
+			if body, err := os.ReadFile(skill); err != nil || !bytes.Equal(body, []byte(skillBody("first"))) {
+				t.Fatal("Pi global skill was not installed", err)
+			}
+			mcp := filepath.Join(profile, "mcp.json")
+			if body, err := os.ReadFile(mcp); err != nil || !bytes.Contains(body, []byte("pi-managed")) || !bytes.Contains(body, []byte("foreign")) {
+				t.Fatal("Pi global MCP was not installed alongside foreign configuration", err)
+			}
+			write(filepath.Join(source, "skills", "pi-managed", "SKILL.md"), skillBody("second"))
+			servers("https://example.invalid/second")
+			do(request(OpUpdate, installed.InstallationID))
+			if body, err := os.ReadFile(skill); err != nil || !bytes.Equal(body, []byte(skillBody("second"))) {
+				t.Fatal("Pi global owned Skill was not updated", err)
+			}
+			if err := os.RemoveAll(filepath.Dir(skill)); err != nil {
+				t.Fatal(err)
+			}
+			do(request(OpRepair, installed.InstallationID))
+			if _, err := os.Stat(skill); err != nil {
+				t.Fatal("Pi global exact missing Skill was not repaired", err)
+			}
+			managedMCP, err := os.ReadFile(mcp)
+			if err != nil {
+				t.Fatal(err)
+			}
+			write(skill, "foreign edit\n")
+			prepared, err := engine.Prepare(context.Background(), request(OpRemove, installed.InstallationID))
+			if err == nil {
+				result, applyErr := engine.Apply(context.Background(), prepared, Decision{Confirmed: true})
+				_ = prepared.Close()
+				if applyErr == nil && result.Outcome == OutcomeCompleted {
+					t.Fatal("edited-owned Pi global Skill was erased")
+				}
+			}
+			if actual, err := os.ReadFile(mcp); err != nil || !bytes.Equal(actual, managedMCP) {
+				t.Fatal("failed Global removal mutated Pi MCP", err)
+			}
+			write(skill, skillBody("second"))
+			do(request(OpRemove, installed.InstallationID))
+			if _, err := os.Lstat(skill); !os.IsNotExist(err) {
+				t.Fatal("global Skill survived exact removal")
+			}
+			if body, err := os.ReadFile(mcp); err != nil || bytes.Contains(body, []byte("pi-managed")) || !bytes.Contains(body, []byte("foreign")) {
+				t.Fatal("global MCP removal deleted foreign member or retained owned server", err)
+			}
+			if body, err := os.ReadFile(filepath.Join(profile, "extensions", "foreign.ts")); err != nil || string(body) != "// foreign user extension\n" {
+				t.Fatal("foreign user Pi extension changed", err)
+			}
+			for _, project := range []string{projectA, projectB} {
+				if body, err := os.ReadFile(filepath.Join(project, ".pi", "mcp.json")); err != nil || !bytes.Equal(body, []byte(foreign)) {
+					t.Fatal("Pi global changed independent project MCP", err)
+				}
+				if body, err := os.ReadFile(filepath.Join(project, ".pi", "skills", "existing", "SKILL.md")); err != nil || string(body) != "foreign project skill\n" {
+					t.Fatal("Pi global changed independent project Skill", err)
+				}
+			}
+		})
+	}
+}
