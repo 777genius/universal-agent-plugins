@@ -47,6 +47,14 @@ EXECUTABLE = {
     "windsurf": ("devin", "windsurf"),
 }
 
+# Bind native client commands before running any untrusted package lifecycle.
+# In particular, Codex removal attestation must not resolve a new PATH entry.
+AGENT_BINARIES = {
+    name: str(Path(path).resolve())
+    for candidates in EXECUTABLE.values() for name in candidates
+    if (path := shutil.which(name))
+}
+
 
 def validate_fixtures(doc):
     names = doc["plugin_aliases"]
@@ -591,6 +599,9 @@ def uninstall_native_codex_plugin(identity, home, case_root, env, cwd):
     This never touches an ambient account: the config and managed marketplace
     must both be contained within this case's disposable profile.
     """
+    codex_bin = AGENT_BINARIES.get("codex")
+    if not codex_bin or not Path(codex_bin).is_absolute() or not Path(codex_bin).is_file():
+        return {"completed": False, "reason": "pinned Codex executable unavailable"}
     config = home / ".codex/config.toml"
     if not config.is_file() or config.is_symlink():
         return {"completed": False, "reason": "managed Codex native config absent"}
@@ -612,9 +623,9 @@ def uninstall_native_codex_plugin(identity, home, case_root, env, cwd):
     except (OSError, TypeError, ValueError):
         return {"completed": False, "reason": "cannot parse owned Codex config"}
     isolated = dict(env, CODEX_HOME=str(home / ".codex"))
-    remove_plugin = call(["codex", "plugin", "remove", spec, "--json"], isolated, cwd, 40)
+    remove_plugin = call([codex_bin, "plugin", "remove", spec, "--json"], isolated, cwd, 40)
     remove_plugin.pop("_json", None)
-    remove_market = call(["codex", "plugin", "marketplace", "remove", marketplace, "--json"],
+    remove_market = call([codex_bin, "plugin", "marketplace", "remove", marketplace, "--json"],
                          isolated, cwd, 40) if remove_plugin["exit_code"] == 0 else None
     if remove_market:
         remove_market.pop("_json", None)
@@ -813,6 +824,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if project_foreign:
         project_foreign.parent.mkdir(parents=True, exist_ok=True)
         project_foreign.write_text("---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
+    # An installed Skill must leave the complete project Skill tree unchanged
+    # after remove, not just its old SKILL.md pathname.
+    before_skill_tree = (snapshot([project / name for name in project_skill_roots])
+                         if kind == "skill" else {})
     # Presence of an actual binary comes from the workflow; a config directory is
     # only an empty isolated profile and is never counted as agent detection.
     if target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
@@ -928,6 +943,12 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         and preserved_regular_text(
             project_foreign, "---\nname: foreign-neighbor\ndescription: unrelated\n---\n", case_root)
     )
+    post_skill_tree_delta = []
+    if kind == "skill" and cleanup:
+        after_skill_tree = snapshot([project / name for name in project_skill_roots])
+        post_skill_tree_delta = sorted(
+            path for path in before_skill_tree.keys() | after_skill_tree.keys()
+            if before_skill_tree.get(path) != after_skill_tree.get(path))
     post_removal_skill = skill_file_present(project, target, identity) if kind == "skill" and cleanup else None
     post_removal_leftovers = (
         skill_removal_leftovers(project, target, identity, skill_path)
@@ -981,7 +1002,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         and not post_remove_identity_registered
         and not native_residuals
         and (kind != "skill" or (post_removal_skill is None
-                                  and not post_removal_leftovers and not post_lock_pinned))
+                                  and not post_removal_leftovers and not post_lock_pinned
+                                  and not post_skill_tree_delta))
     )
     diagnostics = (output["stdout_tail"] + "\n" + output["stderr_tail"]).lower()
     install_refused = is_cli_refusal(output)
@@ -1039,6 +1061,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                                        if copilot_before is not None else None),
             "post_removal_skill": post_removal_skill,
             "post_removal_leftovers": post_removal_leftovers,
+            "post_skill_tree_delta": post_skill_tree_delta,
             "post_lock_pinned": post_lock_pinned,
             "removal_verified": removal_verified, "native_residuals": native_residuals,
             "retained_passive_native_files": sorted(set(passive_retained)),
@@ -1096,7 +1119,7 @@ def main():
         save()
         print(report["blocker"], file=sys.stderr)
         return 2
-    if eligible_binaries and not any(shutil.which(name) for name in eligible_binaries):
+    if eligible_binaries and not any(AGENT_BINARIES.get(name) for name in eligible_binaries):
         report["blocker"] = (
             "Genuine client executable not installed; tried " + ", ".join(eligible_binaries)
         )
@@ -1121,7 +1144,8 @@ def main():
         probe_env = isolated_client_env(probe_home, probe_case, probe_data)
         report["cli_version"] = version_evidence([cli, "version"], probe_env, probe_case)
         if eligible_binaries:
-            native = next(name for name in eligible_binaries if shutil.which(name))
+            native = next(AGENT_BINARIES[name] for name in eligible_binaries
+                          if AGENT_BINARIES.get(name))
             report["client_binary"] = native
             report["client_version"] = version_evidence([native, "--version"], probe_env, probe_case)
         save()

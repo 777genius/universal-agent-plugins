@@ -154,6 +154,113 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                          "unmanaged native neighbor must survive\n")
                         self.assertTrue(evidence["sentinels_preserved"])
 
+
+    def test_relocated_skill_payload_never_qualifies_as_removed(self):
+        # BUG-027: dropping SKILL.md and moving a payload used to evade
+        # both the identity scan and the known installation path check.
+        import shutil
+        audit = load_audit()
+        item = {"name": "demo-skill", "source": "https://github.com/example/repo",
+                "skill_md_git_blob_sha1": "a" * 40}
+        installed = [{"name": "demo-skill", "installation_id": "owned-install",
+                      "clients": [{"client_id": "claude"}]}]
+        def success(rows=None):
+            return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                    "timeout": False,
+                    "_json": {"data": {"installations": rows or []}}}
+
+        for relocate in (True, False):
+            with self.subTest(relocate=relocate), TemporaryDirectory() as tmp:
+                state = {"added": 0, "removed": False}
+                project = Path(tmp) / "skill-00/project"
+
+                def fake_call(argv, env, cwd, timeout=105):
+                    operation = argv[1]
+                    skill_dir = project / ".claude/skills/demo-skill"
+                    if operation == "skills":
+                        if state["added"] == 0:
+                            (skill_dir / "scripts").mkdir(parents=True)
+                            (skill_dir / "SKILL.md").write_text("name: demo-skill\\n")
+                            (skill_dir / "scripts/payload.sh").write_text("echo payload\\n")
+                            (project / "uap.toml").write_text("demo-skill")
+                            (project / "uap.lock").write_text("demo-skill")
+                        state["added"] += 1
+                    elif operation == "remove":
+                        if relocate:
+                            moved = skill_dir.with_name("other")
+                            skill_dir.rename(moved)
+                            (moved / "SKILL.md").unlink()
+                        else:
+                            shutil.rmtree(skill_dir)
+                        (project / "uap.toml").unlink()
+                        (project / "uap.lock").unlink()
+                        state["removed"] = True
+                    elif operation == "list":
+                        return success([] if state["removed"] else installed)
+                    else:
+                        raise AssertionError(argv)
+                    return success()
+
+                with patch.object(audit, "call", side_effect=fake_call), \\
+                     patch.object(audit, "matching_installations", return_value=installed), \\
+                     patch.object(audit, "locked_skill_is_pinned", return_value=True), \\
+                     patch.object(audit, "matches_pinned_skill_bytes", return_value=True):
+                    evidence = audit.do_case(
+                        "/unused/agentplugins", "claude", "skill", item, 0,
+                        Path(tmp), {})
+
+                self.assertTrue(evidence["sentinels_preserved"])
+                self.assertIsNone(evidence["post_removal_skill"])
+                self.assertEqual(evidence["post_removal_leftovers"], [])
+                if relocate:
+                    self.assertIn("skills/other/scripts/payload.sh",
+                                  evidence["post_skill_tree_delta"])
+                    self.assertFalse(evidence["removal_verified"])
+                    self.assertEqual(evidence["status"], "cleanup-failed")
+                else:
+                    self.assertEqual(evidence["post_skill_tree_delta"], [])
+                    self.assertTrue(evidence["removal_verified"])
+                    self.assertEqual(evidence["status"], "passed")
+
+    def test_codex_remove_attests_only_pinned_absolute_executable(self):
+        # BUG-028: an untrusted package must not shadow codex on PATH.
+        audit = load_audit()
+        with TemporaryDirectory() as tmp:
+            case = Path(tmp).resolve() / "case"
+            home = case / "home"
+            conf = home / ".codex/config.toml"
+            conf.parent.mkdir(parents=True)
+            market_dir = case / "managed-marketplace"
+            market_dir.mkdir(parents=True)
+            market = "agentplugins-012345abcdef"
+            conf.write_text(
+                '[plugins."demo@' + market + '"]\\nenabled = true\\n'
+                '[marketplaces.' + market + ']\\nsource_type = "local"\\n'
+                'source = "' + str(market_dir) + '"\\n')
+            commands = []
+            def fake_call(argv, env, cwd, timeout=40):
+                commands.append(argv)
+                if len(commands) == 2:
+                    conf.write_text("")
+                return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                        "timeout": False, "_json": None}
+            pinned = case / "trusted-codex"
+            pinned.write_text("test executable")
+            with patch.dict(audit.AGENT_BINARIES, {"codex": str(pinned)}, clear=True), \\
+                 patch.object(audit, "call", side_effect=fake_call):
+                result = audit.uninstall_native_codex_plugin(
+                    "demo", home, case, {"HOME": str(home)}, case)
+            self.assertTrue(result["completed"])
+            self.assertEqual(len(commands), 2)
+            self.assertTrue(all(cmd[0] == str(pinned) for cmd in commands))
+            with patch.dict(audit.AGENT_BINARIES, {}, clear=True), \\
+                 patch.object(audit, "call") as forbidden:
+                refused = audit.uninstall_native_codex_plugin(
+                    "demo", home, case, {}, case)
+                forbidden.assert_not_called()
+            self.assertFalse(refused["completed"])
+            self.assertIn("pinned", refused["reason"])
+
     def test_chatgpt_prepared_requires_registration_and_verified_cleanup(self):
         # BUG-013: a zero-exit CLI can still leave no managed installation.
         audit = load_audit()
