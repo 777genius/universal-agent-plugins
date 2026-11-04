@@ -26,4 +26,4 @@ The change must not relax `path_inside_case`, change native deletion classificat
 
 ## Status
 
-Plan recorded. Implementation, tests and final-head CI qualification required before this entry can be called fixed.
+Implementation and two focused regressions pushed (commits `113ca2d`, `78266b1`, `23cbe88`). Critic rounds above assess scope and failure modes but are **not** independent approval. Original invalid UTF-8 canary uses actual `b"\\xff\\xfe"` bytes. Required CI, current-head live ZIP evidence and independent CodeRabbit/Strix clearance are still pending; no merge authorization.
