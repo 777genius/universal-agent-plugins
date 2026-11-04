@@ -58,20 +58,20 @@ func TestDirectoryV2CompatibilityUsesScopedGrantsWithoutBorrowingUserEvidence(t 
 	policy.CurrentEvidence = nil
 	selected := domain.DirectorySelection{DistributionID: distribution.ID,
 		ReleaseSequence: distribution.Releases[1].Sequence,
-		TreeDigest: distribution.Releases[1].TreeDigest}
-	runtime := bundle.Snapshot.Evidence[1]
-	runtime.ID, runtime.Scope = "project-runtime-current", domain.ScopeProject
+		TreeDigest:      distribution.Releases[1].TreeDigest}
+	observed := bundle.Snapshot.Evidence[1]
+	observed.ID, observed.Scope = "project-runtime-current", domain.ScopeProject
 	bundle.Snapshot.Evidence = append(bundle.Snapshot.Evidence, runtime)
 	environment := directoryEvidenceEnvironment{
-		InstallerVersion: runtime.InstallerVersion, OS: runtime.OS,
-		Architecture: runtime.Architecture,
-		ClientVersions: map[domain.ClientID]string{domain.ClientCursor: runtime.ClientVersion},
-		DependencyIdentity: map[domain.ClientID]string{domain.ClientCursor: runtime.DependencyIdentity},
+		InstallerVersion: observed.InstallerVersion, OS: observed.OS,
+		Architecture:       observed.Architecture,
+		ClientVersions:     map[domain.ClientID]string{domain.ClientCursor: observed.ClientVersion},
+		DependencyIdentity: map[domain.ClientID]string{domain.ClientCursor: observed.DependencyIdentity},
 	}
 	for _, tc := range []struct {
-		name string
+		name  string
 		scope domain.InstallScope
-		auth domain.AuthenticationRequirement
+		auth  domain.AuthenticationRequirement
 	}{
 		{"project", domain.ScopeProject, domain.AuthenticationRequirementNotRequired},
 		{"user", domain.ScopeUser, domain.AuthenticationRequirementRequired},

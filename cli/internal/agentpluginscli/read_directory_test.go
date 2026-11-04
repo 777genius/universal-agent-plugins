@@ -308,7 +308,7 @@ func TestPublicDirectoryV2ScopesDoNotBorrowAnotherGrantEvidence(t *testing.T) {
 	snapshot := domain.DirectorySnapshot{
 		SnapshotSchemaVersion: 2,
 		Distributions: []domain.DirectoryDistribution{{
-			ID: id,
+			ID:       id,
 			Releases: []domain.DirectoryRelease{{Sequence: 7}},
 			ReleasePolicies: []domain.DirectoryReleasePolicy{{
 				ReleaseSequence: 7,

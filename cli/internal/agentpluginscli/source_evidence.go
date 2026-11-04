@@ -122,21 +122,11 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 			}
 		}
 		entry := domain.CatalogCompatibility{Package: packageMode, Verification: directoryVerification(applicable), Authentication: target.Authentication, Evidence: applicable, EvidenceOutcomes: directoryEvidenceOutcomes(applicable)}
-		if target.AppBinding != nil {
-			server, ok := loaded.envelope.MCP.Servers[target.AppBinding.MCPServer]
-			if !ok || !loaded.envelope.MCP.Enabled {
-				return fmt.Errorf("signed Directory ChatGPT app binding references missing MCP server %q", target.AppBinding.MCPServer)
-			}
-			mcpURL, ok := server.Decoded["url"].(string)
-			if !ok {
-				return fmt.Errorf("signed Directory ChatGPT app binding MCP server %q has no remote URL", target.AppBinding.MCPServer)
-			}
-			binding := domain.CatalogAppBinding{AppKey: target.AppBinding.AppKey, ID: target.AppBinding.ID, MCPServer: target.AppBinding.MCPServer, MCPURL: mcpURL}
-			if err := catalog.ValidateAppBindingReference(binding); err != nil {
-				return fmt.Errorf("signed Directory ChatGPT app binding is invalid: %w", err)
-			}
-			entry.AppBinding = &binding
+		appBinding, err := directoryCatalogAppBinding(loaded.envelope, target.AppBinding)
+		if err != nil {
+			return err
 		}
+		entry.AppBinding = appBinding
 		compatibility[string(target.Client)] = entry
 	}
 	loaded.hints.Compatibility = cloneCatalogCompatibility(compatibility)
@@ -147,6 +137,25 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 		CurrentEvidence: append([]domain.DirectoryEvidence(nil), current...),
 	}
 	return nil
+}
+
+func directoryCatalogAppBinding(envelope domain.PackageEnvelope, target *domain.DirectoryAppBinding) (*domain.CatalogAppBinding, error) {
+	if target == nil {
+		return nil, nil
+	}
+	server, ok := envelope.MCP.Servers[target.MCPServer]
+	if !ok || !envelope.MCP.Enabled {
+		return nil, fmt.Errorf("signed Directory ChatGPT app binding references missing MCP server %q", target.MCPServer)
+	}
+	mcpURL, ok := server.Decoded["url"].(string)
+	if !ok {
+		return nil, fmt.Errorf("signed Directory ChatGPT app binding MCP server %q has no remote URL", target.MCPServer)
+	}
+	binding := domain.CatalogAppBinding{AppKey: target.AppKey, ID: target.ID, MCPServer: target.MCPServer, MCPURL: mcpURL}
+	if err := catalog.ValidateAppBindingReference(binding); err != nil {
+		return nil, fmt.Errorf("signed Directory ChatGPT app binding is invalid: %w", err)
+	}
+	return &binding, nil
 }
 
 func currentDirectoryEvidence(sequence uint64, history []domain.DirectoryEvidence, ids []string, schemas ...int) []domain.DirectoryEvidence {
