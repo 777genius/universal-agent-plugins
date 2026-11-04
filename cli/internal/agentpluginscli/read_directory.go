@@ -107,7 +107,7 @@ func inspectDirectoryProduct(ctx context.Context, app App, state domain.StateFil
 	if err != nil {
 		return publicProductInspection{}, err
 	}
-	bundle, err := app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
+	bundle, err := app.DirectoryClient.Load(ctx, directoryFloorForClient(state, app.DirectoryClient))
 	if err != nil {
 		return publicProductInspection{}, fmt.Errorf("load signed Directory: %w", err)
 	}
@@ -204,7 +204,7 @@ func inspectInstalledProduct(ctx context.Context, app App, state domain.StateFil
 }
 
 func directoryBundleForRead(ctx context.Context, app App, state domain.StateFileV2, allowNetwork bool) (directoryv1.VerifiedBundle, bool, error) {
-	floor := installedDirectoryFloor(state)
+	floor := directoryFloorForClient(state, app.DirectoryClient)
 	if allowNetwork && app.DirectoryClient != nil {
 		bundle, err := app.DirectoryClient.Load(ctx, floor)
 		if err == nil {

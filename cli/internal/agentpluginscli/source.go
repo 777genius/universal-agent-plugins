@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/catalog"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
@@ -159,7 +158,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	if err != nil {
 		return loadedPackage{}, err
 	}
-	bundle, err := app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
+	bundle, err := app.DirectoryClient.Load(ctx, directoryFloorForClient(state, app.DirectoryClient))
 	if err != nil {
 		return loadedPackage{}, fmt.Errorf("load signed Directory: %w", err)
 	}
@@ -221,10 +220,10 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	if request.RequestedSelector != "" {
 		snapshot.Source.RequestedSource = request.RequestedSelector
 	}
-	snapshot.Source.SourceBindingHint = "directory-v1"
+	snapshot.Source.SourceBindingHint = fmt.Sprintf("directory-v%d", bundle.Snapshot.SnapshotSchemaVersion)
 	origin := &domain.DirectoryOrigin{
 		ProductID: selection.ProductID, DistributionID: selection.DistributionID, DistributionKind: selection.DistributionKind,
-		DesiredReleaseSequence: selection.ReleaseSequence, SnapshotSchema: directoryv1.SnapshotSchemaVersion,
+		DesiredReleaseSequence: selection.ReleaseSequence, SnapshotSchema: bundle.Snapshot.SnapshotSchemaVersion,
 		SnapshotSequence: selection.SnapshotSequence, SnapshotDigest: bundle.Digest,
 	}
 	load := app.loadSnapshot

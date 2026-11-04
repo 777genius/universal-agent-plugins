@@ -236,9 +236,24 @@ func snapshotRevokes(snapshot domain.DirectorySnapshot, selection domain.Directo
 }
 
 func installedDirectoryFloor(state domain.StateFileV2) uint64 {
+	return installedDirectoryFloorForSchema(state, directoryv1.SnapshotSchemaVersion)
+}
+
+// directoryFloorForClient separates v1 and v2 monotonic sequence spaces.
+// Existing v1 test clients retain historical behavior without new interfaces.
+func directoryFloorForClient(state domain.StateFileV2, client DirectoryClient) uint64 {
+	schema := directoryv1.SnapshotSchemaVersion
+	if scoped, ok := client.(interface{ SnapshotSchema() int }); ok {
+		schema = scoped.SnapshotSchema()
+	}
+	return installedDirectoryFloorForSchema(state, schema)
+}
+
+func installedDirectoryFloorForSchema(state domain.StateFileV2, schema int) uint64 {
 	var floor uint64
 	for _, installation := range state.Installations {
-		if installation.Directory != nil && installation.Directory.SnapshotSchema == directoryv1.SnapshotSchemaVersion && installation.Directory.SnapshotSequence > floor {
+		if installation.Directory != nil && installation.Directory.SnapshotSchema == schema &&
+			installation.Directory.SnapshotSequence > floor {
 			floor = installation.Directory.SnapshotSequence
 		}
 	}

@@ -134,7 +134,7 @@ func (app App) directoryLifecycleIntents(
 	installation domain.Installation,
 	explicit map[domain.ClientID]domain.InstallIntent,
 ) (domain.Installation, map[domain.ClientID]domain.InstallIntent, error) {
-	bundle, err := app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
+	bundle, err := app.DirectoryClient.Load(ctx, directoryFloorForClient(state, app.DirectoryClient))
 	if err != nil {
 		return installation, explicit, err
 	}

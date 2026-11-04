@@ -11,6 +11,8 @@ import (
 // V2Client has a separate authenticated bootstrap and last-known-good cache.
 // Its transport reuses the existing bounded same-origin HTTP client; the
 // production schema-1 client is not changed or automatically downgraded.
+func (V2Client) SnapshotSchema() int { return 2 }
+
 type V2Client struct {
 	Transport Client
 	Cache Cache
