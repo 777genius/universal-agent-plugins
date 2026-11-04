@@ -2,7 +2,7 @@
 
 ## Reproduced cause
 
-The exact PR HEAD `5e79cf1a2d34a900f7fb5a542b39d134c8b29057` still has four observable oracle weaknesses, confirmed against the source following the independent [CodeRabbit review](https://github.com/777genius/universal-agent-plugins/pull/698#pullrequestreview-5762784607):
+The exact PR HEAD `5e79cf1a2d34a900f7fb5a542b39d134c8b29057` still has five observable oracle weaknesses, confirmed against the source following the independent [CodeRabbit review](https://github.com/777genius/universal-agent-plugins/pull/698#pullrequestreview-5762784607):
 
 1. `snapshot()` silently ignores new native symlink entries and unreadable files, so removal residue may be omitted even when an installation touched them.
 2. `locked_skill_is_pinned()` accepts incomplete/non-hex `sha256:` lock values.
