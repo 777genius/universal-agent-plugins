@@ -41,8 +41,20 @@ func configureProjectQoder(t *testing.T, app agentpluginscli.App, user string, r
 	}
 	app.Installer = engine
 	app.Detector = projectQoderDetector{user}
-	app.Lifecycle.Activator = providers.Activator{Registry: app.ClientRegistry, Runner: runner}
-	app.Lifecycle.NativeObserver = providers.NativeIdentityObserver{Stager: app.Lifecycle.Stager, Registry: app.ClientRegistry, Runner: runner}
+	// Retain the composition root's explicit native file kernel. This test
+	// substitutes only command execution and the selected client identity.
+	activator, ok := app.Lifecycle.Activator.(providers.Activator)
+	if !ok || activator.NativeConfig == nil {
+		t.Fatal("Qoder fixture requires the composed native config kernel")
+	}
+	activator.Registry, activator.Runner = app.ClientRegistry, runner
+	app.Lifecycle.Activator = activator
+	observer, ok := app.Lifecycle.NativeObserver.(providers.NativeIdentityObserver)
+	if !ok || observer.NativeConfig == nil {
+		t.Fatal("Qoder fixture requires the composed native observer kernel")
+	}
+	observer.Stager, observer.Registry, observer.Runner = app.Lifecycle.Stager, app.ClientRegistry, runner
+	app.Lifecycle.NativeObserver = observer
 	compose := app.ForScope
 	app.ForScope = func(scope domain.InstallScope, root string) (agentpluginscli.App, error) {
 		selected, err := compose(scope, root)
@@ -123,12 +135,36 @@ func TestProjectQoderSavedLifecycleSeparatesUserAndProjects(t *testing.T) {
 	}
 }
 
+// Both project paths must hold exactly the selected immutable package, MCP
+// member and Skill directory; no inferred user/global ownership is allowed.
+func projectQoderAssertNativeReceipts(t *testing.T, b domain.ClientBinding, project string) {
+	t.Helper()
+	objects := b.NativeObjects
+	if len(objects) != 3 ||
+		objects[0].Kind != "managed_package_directory" || objects[0].Path != b.TargetLocator ||
+		objects[1].ObjectID != "qoder_project_mcp_server:docs" ||
+		objects[1].Kind != "qoder_project_mcp_server" ||
+		objects[1].Path != filepath.Join(project, ".mcp.json") ||
+		objects[2].ObjectID != "qoder_project_skill_directory:docs" ||
+		objects[2].Kind != "qoder_project_skill_directory" ||
+		objects[2].Path != filepath.Join(project, ".qoder", "skills", "docs") ||
+		objects[2].SourceRelative != "skills/docs" {
+		t.Fatalf("Qoder project component receipt authority differs: %+v", objects)
+	}
+	for _, object := range objects {
+		if !strings.HasPrefix(object.ManagedDigest, "sha256:") || object.ProtectionClass != "managed" {
+			t.Fatalf("Qoder project receipt does not carry exact owned digest: %+v", object)
+		}
+	}
+}
+
 func projectQoderOwned(t *testing.T, j projectJourney, project, expected string) (domain.Installation, domain.ClientBinding) {
 	t.Helper()
 	installation, b := j.owned(t, project)
-	if b.ClientID != "qoder" || b.Scope != "project" || b.NativeProfileRoot != filepath.Join(project, ".uap", "managed", "clients", "qoder") || b.Activation != domain.ActivationPrepared || b.Verification != domain.VerificationInstalled || len(b.NativeObjects) != 2 {
+	if b.ClientID != "qoder" || b.Scope != "project" || b.NativeProfileRoot != filepath.Join(project, ".uap", "managed", "clients", "qoder") || b.Activation != domain.ActivationPrepared || b.Verification != domain.VerificationInstalled {
 		t.Fatalf("Qoder lost exact project native authority %+v", b)
 	}
+	projectQoderAssertNativeReceipts(t, b, project)
 	if projectJourneyRead(t, filepath.Join(project, ".qoder", "skills", "docs", "SKILL.md")) != expected ||
 		projectJourneyRead(t, filepath.Join(b.TargetLocator, ".agentplugins-qoder-native", "skills", "docs", "SKILL.md")) != expected {
 		t.Fatal("native import view differs from selected immutable skill")
@@ -206,9 +242,10 @@ func projectQoderDirectOwned(t *testing.T, j projectJourney, expected string) (d
 	}
 	installation := state.Installations[0]
 	for _, binding := range installation.Clients {
-		if binding.ClientID != "qoder" || binding.Scope != "project" || binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled || binding.NativeProfileRoot != filepath.Join(j.a, ".uap", "managed", "clients", "qoder") || len(binding.NativeObjects) != 2 {
+		if binding.ClientID != "qoder" || binding.Scope != "project" || binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled || binding.NativeProfileRoot != filepath.Join(j.a, ".uap", "managed", "clients", "qoder") {
 			t.Fatal("direct native Skill receipt ownership differs")
 		}
+		projectQoderAssertNativeReceipts(t, binding, j.a)
 		if projectJourneyRead(t, filepath.Join(j.a, ".qoder", "skills", "docs", "SKILL.md")) != expected ||
 			projectJourneyRead(t, filepath.Join(binding.TargetLocator, ".agentplugins-qoder-native", "skills", "docs", "SKILL.md")) != expected {
 			t.Fatal("direct Qoder native view does not match frozen source")

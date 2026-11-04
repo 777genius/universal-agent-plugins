@@ -12,6 +12,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/qoder"
@@ -151,7 +152,8 @@ func TestProjectQoderClosedViewAndNeutralDiscovery(t *testing.T) {
 	}
 	projectGeminiAssert(t, filepath.Join(f.source, "hooks", "hooks.json"), "raw source; never import root")
 	runner := &qoderForbiddenRunner{}
-	actor := providers.Activator{Registry: f.registry, Runner: runner}
+	kernel := nativeconfig.New()
+	actor := providers.Activator{Registry: f.registry, Runner: runner, NativeConfig: &kernel}
 	out, err := actor.Activate(t.Context(), f.request)
 	qoderPrepared(t, out, err)
 	actions := strings.Join(out.UserActions, " ")
@@ -174,7 +176,7 @@ func TestProjectQoderClosedViewAndNeutralDiscovery(t *testing.T) {
 		if enabled {
 			nativeRunner = runner
 		}
-		observer := providers.NativeIdentityObserver{Registry: f.registry, Stager: f.stager}
+		observer := providers.NativeIdentityObserver{Registry: f.registry, Stager: f.stager, NativeConfig: &kernel}
 		if nativeRunner != nil {
 			observer.Runner = nativeRunner
 		}
