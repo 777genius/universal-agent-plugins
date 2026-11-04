@@ -863,6 +863,30 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 		}
 	}
 	claudeWriteFixturePackage(t, f.PackageRoot, "claude-native-proof", "1.0.0")
+	wantSkill, err := os.ReadFile(filepath.Join(f.PackageRoot, "skills", "demo-skill", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProfilePlugin := func(root, label string, installed bool) {
+		t.Helper()
+		count := 0
+		for _, entry := range claudePluginList(t, f, client, label) {
+			if entry.ID != "claude-native-proof@skills-dir" {
+				continue
+			}
+			count++
+			if !entry.Enabled || entry.Scope != "user" ||
+				!strings.HasPrefix(filepath.Clean(entry.InstallPath), root+string(filepath.Separator)) {
+				t.Fatalf("native plugin identity was not bound to the selected user profile")
+			}
+			if body := claudeReadInstalledSkill(t, entry.InstallPath); !bytes.Equal(body, wantSkill) {
+				t.Fatal("selected profile plugin content differs from pinned fixture")
+			}
+		}
+		if count > 1 || installed != (count == 1) {
+			t.Fatalf("native selected profile plugin count=%d wantInstalled=%t", count, installed)
+		}
+	}
 	snapshots := map[string]map[string]string{}
 	capture := func(stage string) {
 		t.Helper()
@@ -908,6 +932,7 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 	if first["result"] != "success" {
 		t.Fatalf("A install did not succeed: %+v", first)
 	}
+	requireProfilePlugin(rootA, "A-list-after-install", true)
 	stages["profile_A_install"] = claudeNativeStage{Status: "passed"}
 	capture("after_A_install")
 	assertSentinels()
@@ -925,6 +950,7 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 	if second["result"] != "success" {
 		stages["profile_B_install"] = claudeNativeStage{Status: "blocked", Reason: "native identity ownership unresolved in the cold selected B profile"}
 	} else {
+		requireProfilePlugin(rootB, "B-list-after-install", true)
 		stages["profile_B_install"] = claudeNativeStage{Status: "passed"}
 	}
 	f.ConfigDir, f.StateHome = rootA, stateA
@@ -934,6 +960,7 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 		t.Fatalf("A replay modified B or failed: %+v", replayed)
 	}
 	assertSentinels()
+	requireProfilePlugin(rootA, "A-list-after-replay", true)
 	stages["A_replay"] = claudeNativeStage{Status: "passed"}
 	capture("after_A_replay")
 	if second["result"] != "success" {
@@ -958,6 +985,9 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 		t.Fatalf("B-only removal changed A or failed: %+v", removed)
 	}
 	assertSentinels()
+	requireProfilePlugin(rootB, "B-list-after-remove", false)
 	stages["B_only_remove"] = claudeNativeStage{Status: "passed"}
 	capture("after_B_only_remove")
+	f.ConfigDir, f.StateHome = rootA, stateA
+	requireProfilePlugin(rootA, "A-list-after-B-remove", true)
 }
