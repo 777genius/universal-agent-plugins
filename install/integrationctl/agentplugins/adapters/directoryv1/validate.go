@@ -485,6 +485,11 @@ func requireSnapshotFields(body []byte) error {
 		return err
 	}
 	for _, e := range evidence {
+		// Domain evidence is shared with future protocols; v1 wire evidence
+		// remains strict and never accepts a scoped identity, including null.
+		if _, present := e["scope"]; present {
+			return fmt.Errorf("schema-1 evidence cannot contain scope")
+		}
 		required := []string{"schema_version", "id", "distribution_id", "release_sequence", "package_tree_digest", "level", "outcome", "artifact"}
 		if legacyEvidence {
 			if _, present := e["trust"]; present {
