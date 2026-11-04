@@ -3,90 +3,84 @@ package management
 import (
 	"context"
 	"errors"
-	"net/http"
+	"slices"
 	"time"
-
-	"github.com/777genius/plugin-kit-ai/cli/internal/loopbackapi"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 )
 
-func (s *Server) prepare(w http.ResponseWriter, r *http.Request) {
-	var input ChangeRequest
-	if !loopbackapi.Decode(w, r, &input, writeError) {
-		return
+func (a *Application) Prepare(ctx context.Context, input ChangeRequest) (Plan, error) {
+	ctx, leave, err := a.admit(ctx)
+	if err != nil {
+		return Plan{}, err
 	}
+	defer leave()
 	if !validChange(input) {
-		writeError(w, 400, "INVALID_REQUEST", "Invalid action or bounded selection", false)
-		return
+		return Plan{}, refusal(400, "INVALID_REQUEST", "Invalid action or bounded selection", false)
 	}
-	if !s.reservePreparation(w, true) {
-		return
+	if err := a.reservePreparation(true); err != nil {
+		return Plan{}, err
 	}
-	defer func() { s.mu.Lock(); s.preparing = false; s.mu.Unlock() }()
-	ctx, cancel := s.requestContext(r)
+	defer a.releasePreparation()
+	ctx, cancel := operationContext(ctx)
 	defer cancel()
-	if input.Action == Recover && input.OperationId != "" && !s.validateRecovery(w, input) {
-		return
+	input = cloneChange(input)
+	if input.Action == Recover && input.OperationId != "" {
+		if err := a.validateRecovery(input); err != nil {
+			return Plan{}, err
+		}
 	}
-	operationID := loopbackapi.RandomID()
-	prepared, err := s.opts.Backend.Prepare(ctx, input, operationID)
+	operationID := randomID()
+	prepared, err := a.opts.Backend.Prepare(ctx, cloneChange(input), operationID)
 	if err != nil {
 		if prepared != nil {
 			prepared.Close()
 		}
-		writeBackendError(w, err)
-		return
+		return Plan{}, err
 	}
-	s.retainPrepared(ctx, w, input, operationID, prepared, nil, nil)
+	return a.retainPrepared(ctx, input, operationID, prepared, nil, nil)
 }
 
-// retainPrepared is the sole place where a backend's retained authority receives
-// a public review identity. Ordinary and local Skill changes share this lifecycle.
-func (s *Server) retainPrepared(ctx context.Context, w http.ResponseWriter, input ChangeRequest, operationID string, prepared Prepared, localSkill *LocalSkillIdentity, restorePoint *LocalSkillBackup) {
+// retainPrepared is the sole ownership transfer from preparation to retained
+// review. Public snapshots contain no mutable references to retained authority.
+func (a *Application) retainPrepared(ctx context.Context, input ChangeRequest, operationID string, prepared Prepared, localSkill *LocalSkillIdentity, restorePoint *LocalSkillBackup) (Plan, error) {
 	if prepared == nil {
-		writeError(w, 500, "INVALID_PREPARATION", "No prepared authority was retained", false)
-		return
+		return Plan{}, refusal(500, "INVALID_PREPARATION", "No prepared authority was retained", false)
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed || ctx.Err() != nil {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed || ctx.Err() != nil {
 		prepared.Close()
-		writeError(w, 410, "SESSION_EXPIRED", "Preparation was interrupted", false)
-		return
+		return Plan{}, refusal(410, "SESSION_EXPIRED", "Preparation was interrupted", false)
 	}
-	review := prepared.Review()
-	review.PlanId = loopbackapi.RandomID()
-	review.ContextId = s.opts.ContextID
-	review.ExpiresAt = time.Now().Add(s.opts.PlanLifetime).UTC()
+	review := clonePlan(prepared.Review())
+	review.PlanId = randomID()
+	review.ContextId = a.opts.ContextID
+	review.ExpiresAt = time.Now().Add(a.opts.PlanLifetime).UTC()
 	review.Action = input.Action
-	review.RestorePoint = restorePoint
+	review.RestorePoint = cloneBackup(restorePoint)
 	normalizePlan(&review)
-	s.plans[review.PlanId] = &planEntry{localSkill: localSkill, review: review, prepared: prepared, operationID: operationID, request: input}
-	loopbackapi.WriteJSON(w, 200, review)
+	a.plans[review.PlanId] = &planEntry{localSkill: localSkill, review: review, prepared: prepared, operationID: operationID, request: cloneChange(input)}
+	return clonePlan(review), nil
 }
 
-func (s *Server) reservePreparation(w http.ResponseWriter, needsReviewSlot bool) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed || s.preparing || len(s.running) > 0 {
-		writeError(w, 409, "OPERATION_IN_PROGRESS", "Wait for the current operation or preparation", true)
-		return false
+func (a *Application) reservePreparation(needsReviewSlot bool) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed || a.preparing || len(a.running) > 0 {
+		return refusal(409, "OPERATION_IN_PROGRESS", "Wait for the current operation or preparation", true)
 	}
 	count := 0
-	for _, p := range s.plans {
+	for _, p := range a.plans {
 		if p.acceptedRequest == "" {
 			count++
 		}
 	}
-	// Applying retained authority consumes no new review slot. Reaching the
-	// preparation limit must not prevent an existing plan from being applied.
 	if needsReviewSlot && count >= 16 {
-		writeError(w, 409, "REVIEW_LIMIT", "Wait for old reviews to expire", true)
-		return false
+		return refusal(409, "REVIEW_LIMIT", "Wait for old reviews to expire", true)
 	}
-	s.preparing = true
-	return true
+	a.preparing = true
+	return nil
 }
+func (a *Application) releasePreparation() { a.mu.Lock(); a.preparing = false; a.mu.Unlock() }
 
 func validChange(input ChangeRequest) bool {
 	if !input.Action.Valid() || input.Action == LocalSkill || !validIDs(input.TargetIds, 128) || !validIDs(input.Aliases, 2000) || !validIDs(input.CandidateIds, 2000) {
@@ -96,32 +90,26 @@ func validChange(input ChangeRequest) bool {
 		return false
 	}
 	if input.Action == Recover {
-		return (input.OperationId == "" || validID(input.OperationId)) && len(input.Aliases) == 0 && len(input.TargetIds) == 0
+		return (input.OperationId == "" || ValidID(input.OperationId)) && len(input.Aliases) == 0 && len(input.TargetIds) == 0
 	}
 	return input.OperationId == ""
 }
-
-func (s *Server) validateRecovery(w http.ResponseWriter, input ChangeRequest) bool {
-	record, err := s.store.byOperation(input.OperationId)
+func (a *Application) validateRecovery(input ChangeRequest) error {
+	record, err := a.opts.Store.ByOperation(input.OperationId)
 	if err != nil {
-		writeError(w, 503, "OBSERVATION_UNAVAILABLE", "Cannot inspect the accepted operation", true)
-		return false
+		return refusal(503, "OBSERVATION_UNAVAILABLE", "Cannot inspect the accepted operation", true)
 	}
 	if record == nil {
-		writeError(w, 404, "OPERATION_NOT_FOUND", "The operation does not belong to this environment", false)
-		return false
+		return refusal(404, "OPERATION_NOT_FOUND", "The operation does not belong to this environment", false)
 	}
 	if record.Operation.LocalSkill != nil {
-		writeError(w, 409, "LOCAL_RECOVERY_REQUIRED", "Prepare a local Skill restore; native recovery cannot settle local file effects", false)
-		return false
+		return refusal(409, "LOCAL_RECOVERY_REQUIRED", "Prepare a local Skill restore; native recovery cannot settle local file effects", false)
 	}
-	if record.IntentRoot != s.opts.IntentRoot {
-		writeError(w, 409, "RECOVERY_CONTEXT_CHANGED", "Reopen the original dependency root to reconcile this accepted operation", false)
-		return false
+	if record.IntentRoot != a.opts.IntentRoot {
+		return refusal(409, "RECOVERY_CONTEXT_CHANGED", "Reopen the original dependency root to reconcile this accepted operation", false)
 	}
-	return true
+	return nil
 }
-
 func normalizePlan(p *Plan) {
 	if p.Actions == nil {
 		p.Actions = []PlanAction{}
@@ -137,28 +125,26 @@ func normalizePlan(p *Plan) {
 	}
 }
 
-func (s *Server) apply(w http.ResponseWriter, r *http.Request) {
-	var input ApplyRequest
-	if !loopbackapi.Decode(w, r, &input, writeError) {
-		return
-	}
-	id := r.PathValue("id")
-	if !validID(id) || !validRequestID(input.RequestId) {
-		writeError(w, 400, "INVALID_REQUEST", "Invalid plan or request identity", false)
-		return
-	}
-	// This lookup intentionally precedes plan lookup and expiry validation.
-	if s.replay(r.Context(), w, id, input.RequestId) {
-		return
-	}
-	if !s.reservePreparation(w, false) {
-		return
-	}
-	defer func() { s.mu.Lock(); s.preparing = false; s.mu.Unlock() }()
-	unlock, err := s.mutationLock.Acquire(r.Context())
+func (a *Application) Apply(ctx context.Context, planID, requestID string) (Operation, error) {
+	ctx, leave, err := a.admit(ctx)
 	if err != nil {
-		writeError(w, 409, "OPERATION_IN_PROGRESS", "Another management process owns a mutation; inspect or retry the same request", true)
-		return
+		return Operation{}, err
+	}
+	defer leave()
+	if !ValidID(planID) || !ValidRequestID(requestID) {
+		return Operation{}, refusal(400, "INVALID_REQUEST", "Invalid plan or request identity", false)
+	}
+	// Accepted identities are replayed before plan lookup or expiry validation.
+	if op, found, err := a.replay(ctx, planID, requestID); found || err != nil {
+		return op, err
+	}
+	if err := a.reservePreparation(false); err != nil {
+		return Operation{}, err
+	}
+	defer a.releasePreparation()
+	unlock, err := a.opts.Lock.Acquire(ctx)
+	if err != nil {
+		return Operation{}, refusal(409, "OPERATION_IN_PROGRESS", "Another management process owns a mutation; inspect or retry the same request", true)
 	}
 	handedOff := false
 	defer func() {
@@ -166,166 +152,158 @@ func (s *Server) apply(w http.ResponseWriter, r *http.Request) {
 			_ = unlock()
 		}
 	}()
-	if s.replay(r.Context(), w, id, input.RequestId) {
-		return
+	if op, found, err := a.replay(ctx, planID, requestID); found || err != nil {
+		return op, err
 	}
-	plan := s.planForApply(w, id, input.RequestId)
-	if plan == nil {
-		return
-	}
-	if err = s.checkPrepared(r, plan.prepared); err != nil {
-		writeBackendError(w, ErrPlanStale)
-		return
-	}
-	record, err := s.accept(plan, input.RequestId)
+	plan, err := a.planForApply(planID, requestID)
 	if err != nil {
-		writeBackendError(w, err)
-		return
+		return Operation{}, err
+	}
+	if err := a.checkPrepared(ctx, plan.prepared); err != nil {
+		return Operation{}, ErrPlanStale
+	}
+	record, err := a.accept(plan, requestID)
+	if err != nil {
+		return Operation{}, err
 	}
 	handedOff = true
-	go s.runApply(plan, record, unlock)
-	loopbackapi.WriteJSON(w, http.StatusAccepted, record.Operation)
+	go a.runApply(plan, record, unlock)
+	return cloneOperation(record.Operation), nil
 }
-
-func (s *Server) replay(ctx context.Context, w http.ResponseWriter, planID, requestID string) bool {
-	record, err := s.store.byRequest(requestID)
+func (a *Application) replay(ctx context.Context, planID, requestID string) (Operation, bool, error) {
+	record, err := a.opts.Store.ByRequest(requestID)
 	if err != nil {
-		writeError(w, 503, "OBSERVATION_UNAVAILABLE", "Cannot determine whether the request was accepted; retain its identity", true)
-		return true
+		return Operation{}, false, refusal(503, "OBSERVATION_UNAVAILABLE", "Cannot determine whether the request was accepted; retain its identity", true)
 	}
 	if record == nil {
-		return false
+		return Operation{}, false, nil
 	}
 	if record.Fingerprint != digest(planID) {
-		writeError(w, 409, "REQUEST_ID_CONFLICT", "This request identity was accepted for different input", false)
-		return true
+		return Operation{}, true, refusal(409, "REQUEST_ID_CONFLICT", "This request identity was accepted for different input", false)
 	}
-	op, err := s.observe(ctx, *record)
+	op, err := a.observe(ctx, *record)
 	if err != nil {
-		writeError(w, 503, "OBSERVATION_UNAVAILABLE", "Cannot observe accepted work; retain its identity", true)
-		return true
+		return Operation{}, true, refusal(503, "OBSERVATION_UNAVAILABLE", "Cannot observe accepted work; retain its identity", true)
 	}
-	loopbackapi.WriteJSON(w, 202, op)
-	return true
+	return cloneOperation(op), true, nil
 }
-
-func (s *Server) planForApply(w http.ResponseWriter, id, requestID string) *planEntry {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	plan := s.plans[id]
+func (a *Application) planForApply(id, requestID string) (*planEntry, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	plan := a.plans[id]
 	if plan == nil || !plan.review.Confirmable || !time.Now().Before(plan.review.ExpiresAt) {
-		writeError(w, 409, "PLAN_STALE", "Prepare a fresh confirmable review", false)
-		return nil
+		return nil, refusal(409, "PLAN_STALE", "Prepare a fresh confirmable review", false)
 	}
 	if plan.acceptedRequest != "" && plan.acceptedRequest != requestID {
-		writeError(w, 409, "PLAN_ALREADY_ACCEPTED", "This plan was already accepted; observe the original request", false)
-		return nil
+		return nil, refusal(409, "PLAN_ALREADY_ACCEPTED", "This plan was already accepted; observe the original request", false)
 	}
-	return plan
+	return plan, nil
 }
-
-func (s *Server) accept(plan *planEntry, requestID string) (acceptance, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed || s.ctx.Err() != nil || !time.Now().Before(plan.review.ExpiresAt) {
-		return acceptance{}, ErrPlanStale
+func (a *Application) accept(plan *planEntry, requestID string) (Observation, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed || a.ctx.Err() != nil || !time.Now().Before(plan.review.ExpiresAt) {
+		return Observation{}, ErrPlanStale
 	}
 	now := time.Now().UTC()
-	record := acceptance{Version: 1, EnvironmentID: s.opts.EnvironmentID, IntentRoot: s.opts.IntentRoot, ContextID: s.opts.ContextID, Fingerprint: digest(plan.review.PlanId),
-		InstallerIDs: plan.prepared.OperationIDs(), Operation: Operation{
-			EnvironmentId: s.opts.EnvironmentID, Action: plan.review.Action, LocalSkill: plan.localSkill, OperationId: plan.operationID, PlanId: plan.review.PlanId, RequestId: requestID, ContextId: s.opts.ContextID,
-			State: Queued, Phase: "preflight", Items: []OperationItem{}, Diagnostics: []Diagnostic{},
-			Total: len(plan.review.Actions), CreatedAt: now, UpdatedAt: now,
-		}}
-	if err := s.admitMutation(plan); err != nil {
-		return acceptance{}, err
+	record := Observation{Version: 1, EnvironmentID: a.opts.EnvironmentID, IntentRoot: a.opts.IntentRoot, ContextID: a.opts.ContextID, Fingerprint: digest(plan.review.PlanId), InstallerIDs: slices.Clone(plan.prepared.OperationIDs()), Operation: Operation{
+		EnvironmentId: a.opts.EnvironmentID, Action: plan.review.Action, LocalSkill: plan.localSkill, OperationId: plan.operationID, PlanId: plan.review.PlanId, RequestId: requestID, ContextId: a.opts.ContextID,
+		State: Queued, Phase: "preflight", Items: []OperationItem{}, Diagnostics: []Diagnostic{}, Total: len(plan.review.Actions), CreatedAt: now, UpdatedAt: now,
+	}}
+	if err := a.admitMutation(plan); err != nil {
+		return Observation{}, err
 	}
-	if err := s.store.reserve(now, s.forgetObservation); err != nil {
-		if errors.Is(err, errHistoryFull) {
-			return acceptance{}, &Refusal{Code: "HISTORY_FULL", Message: "Retained operation history is full; unresolved identities cannot be discarded", Status: 409}
+	if err := a.reserveHistory(now); err != nil {
+		if errors.Is(err, ErrHistoryFull) {
+			return Observation{}, refusal(409, "HISTORY_FULL", "Retained operation history is full; unresolved identities cannot be discarded", false)
 		}
-		return acceptance{}, &Refusal{Code: "OBSERVATION_UNAVAILABLE", Retryable: true, Message: "Retained operation history cannot be read safely", Status: 503}
+		return Observation{}, refusal(503, "OBSERVATION_UNAVAILABLE", "Retained operation history cannot be read safely", true)
 	}
-	if err := s.store.save(record); err != nil {
-		return acceptance{}, &Refusal{Code: "ACCEPTANCE_UNAVAILABLE", Retryable: true, Message: "Acceptance could not be persisted; retain this request identity before retrying", Status: 503}
+	// Cleanup can wait for cancellation or outlive the review. It must not
+	// transfer authority after shutdown or expiry while holding the mutex.
+	if a.ctx.Err() != nil || !time.Now().Before(plan.review.ExpiresAt) {
+		return Observation{}, ErrPlanStale
 	}
-	ctx, cancel := context.WithCancel(s.ctx)
+	if err := a.opts.Store.Save(cloneObservation(record)); err != nil {
+		// Atomic publication can be visible even after an error. Preserve the request
+		// identity and any visible observation; no worker or effect starts here.
+		return Observation{}, refusal(503, "ACCEPTANCE_UNAVAILABLE", "Acceptance could not be persisted; retain this request identity before retrying", true)
+	}
+	if a.ctx.Err() != nil {
+		// Shutdown can cancel while Save holds the mutex. Keep the accepted
+		// identity for restart, but leave prepared cleanup with Close.
+		return Observation{}, refusal(410, "SESSION_EXPIRED", "The process stopped after accepting this request; retain its identity and reopen to observe it", false)
+	}
+	ctx, cancel := context.WithCancel(a.ctx)
 	plan.acceptedRequest = requestID
-	s.running[plan.operationID] = &runningOperation{record: record, ctx: ctx, cancel: cancel}
-	s.workers.Add(1)
-	// Store the accepted context cancellation in the running record, not HTTP request.
+	a.running[plan.operationID] = &runningOperation{record: cloneObservation(record), ctx: ctx, cancel: cancel}
+	a.workers.Add(1)
 	return record, nil
 }
 
-func publicFailure(err error) Diagnostic {
+func publicFailure(err error, active bool) Diagnostic {
 	code, message := "OPERATION_FAILED", "Operation did not complete; inspect the result before retrying"
 	if errors.Is(err, ErrPlanStale) {
 		code, message = "PLAN_STALE", "Installer facts changed; prepare a fresh review"
 	}
-	if errors.Is(err, processlock.ErrActive) {
+	if active {
 		code, message = "OPERATION_IN_PROGRESS", "Another installer owns this environment"
 	}
 	return Diagnostic{Code: code, Message: message, Severity: DiagnosticSeverityError}
 }
-
-func (s *Server) discardPlan(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	if !validID(id) {
-		writeError(w, 400, "INVALID_REQUEST", "Invalid plan identity", false)
-		return
+func (a *Application) DiscardPlan(ctx context.Context, id string) error {
+	_, leave, err := a.admit(ctx)
+	if err != nil {
+		return err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	p := s.plans[id]
+	defer leave()
+	if !ValidID(id) {
+		return refusal(400, "INVALID_REQUEST", "Invalid plan identity", false)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	p := a.plans[id]
 	if p == nil {
-		w.WriteHeader(http.StatusNoContent)
-		return
+		return nil
 	}
-	if p.acceptedRequest != "" || s.preparing {
-		writeError(w, 409, "PLAN_IN_USE", "An accepted or currently checked plan cannot be discarded", false)
-		return
+	if p.acceptedRequest != "" || a.preparing {
+		return refusal(409, "PLAN_IN_USE", "An accepted or currently checked plan cannot be discarded", false)
 	}
 	p.prepared.Close()
-	delete(s.plans, id)
-	w.WriteHeader(http.StatusNoContent)
+	delete(a.plans, id)
+	return nil
 }
 
-// admitMutation runs while both the session mutex and cross-process management
-// lock are held. A new request may not bypass durable uncertainty after restart.
-// Fresh recovery reviews are permitted to settle each category independently.
-func (s *Server) admitMutation(plan *planEntry) error {
+// admitMutation runs with both the application mutex and mutation lock held.
+func (a *Application) admitMutation(plan *planEntry) error {
 	if plan.request.Action == Recover || plan.localSkill != nil && plan.request.OperationId != "" {
 		return nil
 	}
-	records, err := s.store.list()
+	records, err := a.opts.Store.List()
 	if err != nil {
-		return &Refusal{Code: "OBSERVATION_UNAVAILABLE", Retryable: true, Message: "Cannot prove that accepted work is settled", Status: 503}
+		return refusal(503, "OBSERVATION_UNAVAILABLE", "Cannot prove that accepted work is settled", true)
 	}
 	for _, record := range records {
 		if pendingOperation(record.Operation) {
-			return &Refusal{Code: "RECOVERY_REQUIRED", Message: "Inspect and prepare recovery for accepted work before a new mutation", Status: 409}
+			return refusal(409, "RECOVERY_REQUIRED", "Inspect and prepare recovery for accepted work before a new mutation", false)
 		}
 	}
 	return nil
 }
-
-func (s *Server) checkPrepared(r *http.Request, prepared Prepared) error {
-	ctx, cancel := s.requestContext(r)
+func (a *Application) checkPrepared(ctx context.Context, prepared Prepared) error {
+	ctx, cancel := operationContext(ctx)
 	defer cancel()
 	return prepared.Check(ctx)
 }
-
-// Expiry removes only verified private undo data; accepted uncertainty is never
-// eligible. Implementations without local-authoring support cannot prune it.
-func (s *Server) forgetObservation(record acceptance) error {
+func (a *Application) forgetObservation(record Observation) error {
 	if record.Operation.LocalSkill == nil {
 		return nil
 	}
-	backend, ok := s.opts.Backend.(interface {
+	backend, ok := a.opts.Backend.(interface {
 		ForgetObservation(context.Context, Operation) error
 	})
 	if !ok {
 		return errors.New("local observation cleanup is unavailable")
 	}
-	return backend.ForgetObservation(s.ctx, record.Operation)
+	return backend.ForgetObservation(a.ctx, cloneOperation(record.Operation))
 }

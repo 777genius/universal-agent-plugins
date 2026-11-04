@@ -1,30 +1,29 @@
 package management
 
-import (
-	"context"
-	"net/http"
-)
+import "context"
 
 type skillCatalogDisposer interface {
 	DiscardSkillsCatalog(context.Context, string) error
 }
 
-func (s *Server) discardSkillsCatalog(w http.ResponseWriter, r *http.Request) {
-	backend, ok := s.opts.Backend.(skillCatalogDisposer)
+func (a *Application) SupportsCatalogDiscard() bool {
+	_, ok := a.opts.Backend.(skillCatalogDisposer)
+	return ok
+}
+func (a *Application) DiscardSkillsCatalog(ctx context.Context, id string) error {
+	ctx, leave, err := a.admit(ctx)
+	if err != nil {
+		return err
+	}
+	defer leave()
+	backend, ok := a.opts.Backend.(skillCatalogDisposer)
 	if !ok {
-		writeError(w, 422, "CAPABILITY_UNAVAILABLE", "This engine cannot release Skill discovery sessions independently", false)
-		return
+		return refusal(422, "CAPABILITY_UNAVAILABLE", "This engine cannot release Skill discovery sessions independently", false)
 	}
-	id := r.PathValue("catalogId")
-	if !validID(id) {
-		writeError(w, 400, "INVALID_REQUEST", "Invalid catalog identity", false)
-		return
+	if !ValidID(id) {
+		return refusal(400, "INVALID_REQUEST", "Invalid catalog identity", false)
 	}
-	ctx, cancel := s.requestContext(r)
+	ctx, cancel := operationContext(ctx)
 	defer cancel()
-	if err := backend.DiscardSkillsCatalog(ctx, id); err != nil {
-		writeBackendError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return backend.DiscardSkillsCatalog(ctx, id)
 }

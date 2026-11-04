@@ -1,9 +1,11 @@
-package management
+package managementhttp
 
 import (
 	"net/http"
 	"sync/atomic"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 )
 
 func TestReviewCapacityDoesNotPreventApplyingRetainedPlan(t *testing.T) {
@@ -11,26 +13,26 @@ func TestReviewCapacityDoesNotPreventApplyingRetainedPlan(t *testing.T) {
 		name, path string
 		body       any
 	}{
-		{name: "dependency", path: "/api/v1/plans", body: ChangeRequest{Action: Sync}},
+		{name: "dependency", path: "/api/v1/plans", body: management.ChangeRequest{Action: management.Sync}},
 		{name: "local skill", path: "/api/v1/skills/local/plans", body: map[string]any{"action": "upsert", "rootId": "local", "skillName": "draft", "files": []any{}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var prepared atomic.Int32
-			server := newTestServer(t, "", "capture", &testBackend{makePlan: func(ChangeRequest, string) Prepared {
+			server := newTestServer(t, "", "capture", &testBackend{makePlan: func(management.ChangeRequest, string) management.Prepared {
 				prepared.Add(1)
 				return &testPrepared{}
 			}})
-			var review Plan
+			var review management.Plan
 			for range 16 {
 				requestJSON(t, server, http.MethodPost, tc.path, tc.body, http.StatusOK, &review)
 			}
-			var refusal APIError
+			var refusal management.APIError
 			requestJSON(t, server, http.MethodPost, tc.path, tc.body, http.StatusConflict, &refusal)
 			if refusal.Code != "REVIEW_LIMIT" || prepared.Load() != 16 {
 				t.Fatalf("review capacity did not refuse new preparation: %+v, calls=%d", refusal, prepared.Load())
 			}
 			op := applyTest(t, server, review, "capacity-request-123456")
-			if got := awaitTerminal(t, server, op.OperationId); got.State != Succeeded {
+			if got := awaitTerminal(t, server, op.OperationId); got.State != management.Succeeded {
 				t.Fatalf("retained plan could not complete at capacity: %+v", got)
 			}
 			requestJSON(t, server, http.MethodPost, tc.path, tc.body, http.StatusOK, nil)

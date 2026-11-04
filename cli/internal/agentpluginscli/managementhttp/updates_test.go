@@ -1,4 +1,4 @@
-package management
+package managementhttp
 
 import (
 	"context"
@@ -9,11 +9,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 )
 
 func TestExplicitUpdateCheckRouteValidatesSelectionAndNormalizesArrays(t *testing.T) {
 	server := newTestServer(t, "", "capture", nil)
-	var out UpdateCheck
+	var out management.UpdateCheck
 	requestJSON(t, server, "POST", "/api/v1/environment/check-updates", map[string]any{"all": true}, 200, &out)
 	if out.ContextId != "capture" || out.Entries == nil || out.Diagnostics == nil {
 		t.Fatal(out)
@@ -38,9 +40,9 @@ func TestExplicitUpdateCheckRouteValidatesSelectionAndNormalizesArrays(t *testin
 
 type deadlineUpdateCheckBackend struct{ testBackend }
 
-func (deadlineUpdateCheckBackend) CheckUpdates(ctx context.Context, _ UpdateCheckRequest) (UpdateCheck, error) {
+func (deadlineUpdateCheckBackend) CheckUpdates(ctx context.Context, _ management.UpdateCheckRequest) (management.UpdateCheck, error) {
 	<-ctx.Done()
-	return UpdateCheck{}, fmt.Errorf("source check: %w", ctx.Err())
+	return management.UpdateCheck{}, fmt.Errorf("source check: %w", ctx.Err())
 }
 
 func TestExplicitUpdateCheckDeadlineIsRetryable(t *testing.T) {
@@ -49,9 +51,9 @@ func TestExplicitUpdateCheckDeadlineIsRetryable(t *testing.T) {
 	request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/environment/check-updates", strings.NewReader(`{"all":true}`))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
-	server := Server{opts: Options{Backend: &deadlineUpdateCheckBackend{}}, ctx: t.Context()}
+	server := newTestServer(t, "", "capture", &deadlineUpdateCheckBackend{})
 	server.checkUpdates(response, request)
-	var out APIError
+	var out management.APIError
 	if err := json.Unmarshal(response.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}

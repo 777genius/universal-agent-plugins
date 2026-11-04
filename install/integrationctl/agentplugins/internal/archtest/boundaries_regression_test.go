@@ -16,6 +16,8 @@ import (
 func TestLayerBoundariesRejectClientRegressions(t *testing.T) {
 	t.Parallel()
 	const root = modulePath + "/" + agentplugins + "/clients"
+	const managementDir = "cli/internal/agentpluginscli/"
+	const managementRoot = modulePath + "/" + managementDir
 	type boundaryCase struct {
 		name, file, imported, build string
 		forbidden                   bool
@@ -55,6 +57,29 @@ func TestLayerBoundariesRejectClientRegressions(t *testing.T) {
 		{"dispatcher fixture registry", agentplugins + "/providers/fixture_test.go", root + "/all", "", false},
 		{"installer fixture registry", agentplugins + "/installer/fixture_test.go", root + "/all", "", false},
 		{"ignored test data", agentplugins + "/providers/testdata/fixture.go", root + "/futureagent", "", false},
+		{"management HTTP dependency", managementDir + "management/new.go", "net/http", "", true},
+		{"management Windows I/O", managementDir + "management/new_windows.go", "os", "//go:build windows\n\n", true},
+		{"management tagged subprocess", managementDir + "management/new.go", "os/exec", "//go:build architecture_fixture\n\n", true},
+		{"management CLI dependency", managementDir + "management/new.go", strings.TrimSuffix(managementRoot, "/"), "", true},
+		{"management Cobra dependency", managementDir + "management/new.go", "github.com/spf13/cobra", "", true},
+		{"management transport back edge", managementDir + "management/new.go", managementRoot + "managementhttp", "", true},
+		{"management store back edge", managementDir + "management/new.go", managementRoot + "managementstate", "", true},
+		{"management concrete lock", managementDir + "management/new.go", modulePath + "/" + agentplugins + "/adapters/processlock", "", true},
+		{"management pure standard library", managementDir + "management/new.go", "context", "", false},
+		{"HTTP application port", managementDir + "managementhttp/new.go", managementRoot + "management", "", false},
+		{"HTTP private guard", managementDir + "managementhttp/new.go", modulePath + "/cli/internal/loopbackapi", "", false},
+		{"HTTP transport standard library", managementDir + "managementhttp/new.go", "net/http", "", false},
+		{"HTTP store construction", managementDir + "managementhttp/new.go", managementRoot + "managementstate", "", true},
+		{"HTTP look-alike contract", managementDir + "managementhttp/new.go", managementRoot + "managementfuture", "", true},
+		{"HTTP direct files", managementDir + "managementhttp/new.go", "os", "", true},
+		{"state application port", managementDir + "managementstate/new.go", managementRoot + "management", "", false},
+		{"state atomic persistence", managementDir + "managementstate/new.go", modulePath + "/install/integrationctl/adapters/atomicfile", "", false},
+		{"state concrete lock", managementDir + "managementstate/new.go", modulePath + "/" + agentplugins + "/adapters/processlock", "", false},
+		{"state filesystem", managementDir + "managementstate/new.go", "os", "", false},
+		{"state HTTP dependency", managementDir + "managementstate/new.go", "net/http", "", true},
+		{"state process execution", managementDir + "managementstate/new.go", "os/exec", "", true},
+		{"state transport back edge", managementDir + "managementstate/new.go", managementRoot + "managementhttp", "", true},
+		{"HTTP test may compose store", managementDir + "managementhttp/new_test.go", managementRoot + "managementstate", "", false},
 	}
 	// Preserve coverage of every current adapter as well as unborn names above.
 	identities := domain.SupportedClientIDs()
