@@ -38,3 +38,21 @@
 - **State consistency:** a failure to acquire the legacy lock or verify its absence must leave v2 materialization unmodified.
 - **Crash during reconciliation:** retain atomic state v2 storage; no change to durable state format.
 - **OS lock semantics:** preserve the existing legacy `locks.FileLock` implementation and root; verify on hosted CI.
+
+## Implemented on this Draft branch
+
+- **P0 — dependency inversion:** `agentplugins/usecase.Service.LegacyLock` now accepts the same `ports.MutationLock` seam already used for the new mutation lock. Only `adapters/legacylock.StateLock` names the old `integrationctl/ports.LockManager`. `cli/cmd/agentplugins` owns composition, preserving the existing `~/.plugin-kit-ai/locks/state.lock` physical namespace. The old state-migration caller receives the same adapter.
+- **P0 — reconciliation safety:** after the old `Legacy.Remove` returns, acquire the legacy-state lock, verify the old state is absent, and hold that lock until the state-v2 save returns. The outer new mutation lock still covers the use-case operation. The code does **not** nest the old `Legacy.Remove` within its own lock.
+- **P0 tests:** verify `StateStore.Save` runs under the old lock, successful and failed saves release it, failed saves preserve v2, reappearance refuses reconciliation, and the new adapter contends with the **same actual file lock** on both directions. No journal/receipt schema changes.
+- **P1 — bounded CLI splits:** `read.go` fell from 740 to 380 physical lines, separating read commands and public DTO rendering; `lifecycle.go` fell from 1,005 to 428, separating command wiring, result presentation and existing selection helpers. Functions were moved without modifying their bodies or public format. Risky transaction/multi-target functions remain on their original paths.
+- **Architecture ratchet:** add both depguard and executable archtest enforcement against importing legacy `integrationctl/ports` from the new use case. Narrow the grandfathered `file length is` suppressions for the two shortened CLI files, with **no new exclusions**.
+
+### Critical reviews, evidence and limitations
+
+1. **Safety perspective:** the lock must begin only after legacy removal returns; verifying absence and saving v2 must share one lock lifetime. Existing concurrent-reappearance and new lock-held-save / failure tests enforce the contract.
+2. **Architecture perspective:** prefer the existing `ports.MutationLock` interface and one adapter over a new lock framework or a duplicate state engine. No additional domain aggregate, event bus, feature flag or dependency has been added.
+3. **Compatibility perspective:** adapter uses the exact old `"state"` key and underlying `locks.FileLock`, and all moved CLI declarations stay in the same Go package. The exported Go `Service.LegacyLock` field type changes; Go callers outside the repository constructing this internal-oriented application service may require adaptation, even though CLI and JSON contracts are unchanged.
+4. **Independent review:** a manual full CodeRabbit review was requested on PR #713, but the service reported a rate-limit refusal rather than review findings. Do **not** count it as a completed independent review.
+5. **Hosted CI:** checks on the final PR HEAD, not older superseded commits, are the release gate. Earlier CI identified an import-ordering defect in `cli_test.go`, which has been corrected; successful checks on superseded commits are not final-head evidence. No claim of fully passed CI until that exact HEAD finishes.
+
+**Remaining scope:** leave multi-target transaction orchestration, client-specific native transitions and the live Directory/dependency PR changes untouched in this Draft. Follow-up refactors need their own characterization and E2E proof, not an inflated diff.
