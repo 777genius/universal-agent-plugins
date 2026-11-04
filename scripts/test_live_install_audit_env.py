@@ -151,7 +151,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         foreign = runroot / "plugin-00/home" / roots[0] / "foreign-neighbor.txt"
                         self.assertTrue(foreign.is_file())
                         self.assertEqual(foreign.read_text(),
-                                         "unmanaged native neighbor must survive\\n")
+                                         "unmanaged native neighbor must survive\n")
                         self.assertTrue(evidence["sentinels_preserved"])
 
     def test_failed_add_inspects_pending_registration_without_false_matches(self):

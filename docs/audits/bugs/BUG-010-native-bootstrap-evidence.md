@@ -15,4 +15,4 @@ In `.github/workflows/live-install-audit.yml`'s `real-native-cli-matrix`, a fail
 - **False evidence critic:** An uploaded empty or absent artifact is not a source-by-source test. Recover an explicit 30-row `client-unavailable` result without hiding the bootstrap's red status.
 - **Infrastructure critic:** Avoid `continue-on-error` on the critical vendor bootstrap and avoid starting work on a canceled job. This is a two-line workflow-only control-flow fix, not a new retry framework.
 
-**State:** source-backed workflow proof gap; scoped workflow correction and final-head CI pending.
+**State:** minimal two-step workflow correction committed; real failed-bootstrap artifact and final-head CI verification still pending. The parent `needs: native-pilot` remains a separate gate: matrix jobs are not launched if the pilot fails.

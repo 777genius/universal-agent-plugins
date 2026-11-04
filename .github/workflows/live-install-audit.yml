@@ -154,8 +154,10 @@ jobs:
           command -v "$binary"
           timeout 25s "$binary" --version
       - name: Build PR source CLI with current signed Registry eligibility version
+        if: ${{ !cancelled() }} # BUG-010: retain negative evidence after native bootstrap failure
         run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Attempt all 30 independent pinned sources in isolated profiles
+        if: ${{ !cancelled() }} # Missing client produces explicit non-PASS source rows
         env:
           TARGET: ${{ matrix.target }}
           KIND: ${{ matrix.kind }}
