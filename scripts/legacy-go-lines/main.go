@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"go/scanner"
 	"go/token"
 	"os"
@@ -42,23 +43,21 @@ func codeLines(source []byte) (int, error) {
 }
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: legacy-go-lines <base.go> <current.go>")
+	if len(os.Args) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: legacy-go-lines < source.go")
 		os.Exit(2)
 	}
-	var counts [2]int
-	for i, path := range os.Args[1:] {
-		content, err := os.ReadFile(path)
+	// The caller opens an already-selected source file. Do not accept a
+	// filesystem path argument (and never traverse caller-controlled paths).
+	content, err := io.ReadAll(os.Stdin)
+	if err == nil {
+		var count int
+		count, err = codeLines(content)
 		if err == nil {
-			counts[i], err = codeLines(content)
-		}
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "legacy-go-lines: %s: %v\n", path, err)
-			os.Exit(2)
+			fmt.Println(count)
+			return
 		}
 	}
-	if counts[1] > counts[0] {
-		fmt.Fprintf(os.Stderr, "legacy-go-lines: %s grew from %d to %d code lines\n", os.Args[2], counts[0], counts[1])
-		os.Exit(1)
-	}
+	fmt.Fprintf(os.Stderr, "legacy-go-lines: %v\n", err)
+	os.Exit(2)
 }
