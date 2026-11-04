@@ -22,6 +22,7 @@ func (adapter *ProjectAdapter) RefinePlan(ctx context.Context, in clients.PlanIn
 		return err
 	}
 	found := false
+	components := false
 	for _, component := range plan.Components {
 		if component.Support == domain.SupportUnsupported {
 			continue
@@ -29,6 +30,7 @@ func (adapter *ProjectAdapter) RefinePlan(ctx context.Context, in clients.PlanIn
 		switch component.Kind {
 		case domain.ComponentSkill, domain.ComponentMCPServer:
 			found = true
+			components = true
 		case domain.ComponentExtension:
 			if component.Name != Namespace {
 				return fmt.Errorf("unknown Pi extension")
@@ -37,6 +39,10 @@ func (adapter *ProjectAdapter) RefinePlan(ctx context.Context, in clients.PlanIn
 		default:
 			return fmt.Errorf("unqualified Pi component")
 		}
+	}
+	if plan.Scope == domain.ScopeUser && !components {
+		// Preserve historical user extension-only activation semantics.
+		return adapter.Adapter.RefinePlan(ctx, in, plan)
 	}
 	shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, found)
 	action := piUserComponentAction
@@ -70,7 +76,7 @@ func (adapter *ProjectAdapter) InspectNativeRegistry(ctx context.Context, env cl
 			selected = append(selected, component)
 		}
 	}
-	if len(selected) == 0 && prior == nil {
+	if len(selected) == 0 && (prior == nil || len(prior.NativeObjects) == 0) {
 		return found, nil
 	}
 	layout, err := piComponents(plan.NativeRegistryRoot, plan.Scope)
@@ -96,9 +102,6 @@ func (adapter *ProjectAdapter) Activate(ctx context.Context, env clients.Env, re
 	if err := adapter.PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	if request.ActivationComplete {
-		return domain.ActivationOutcome{}, fmt.Errorf("pi runtime activation cannot be attested by the installer")
-	}
 	if request.Delivery.ClientID != domain.ClientPi || request.Delivery.ActivePath != request.Plan.ActivePath {
 		return domain.ActivationOutcome{}, fmt.Errorf("pi activation differs from selected delivery")
 	}
@@ -106,6 +109,9 @@ func (adapter *ProjectAdapter) Activate(ctx context.Context, env clients.Env, re
 	previous := piScopedNative(request.PreviousNativeObjects, request.Plan.Scope)
 	if len(objects) == 0 && len(previous) == 0 {
 		return adapter.Adapter.Activate(ctx, env, request)
+	}
+	if request.ActivationComplete {
+		return domain.ActivationOutcome{}, fmt.Errorf("pi runtime activation cannot be attested by the installer")
 	}
 	if _, err := adapter.ProjectActiveNative(ctx, request.Delivery.ActivePath, domain.PackageEnvelope{}, request.Plan, ""); err != nil {
 		return domain.ActivationOutcome{}, err
@@ -167,6 +173,11 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 		return out, fmt.Errorf("unsupported Pi removal scope")
 	}
 	objects := piScopedNative(request.NativeObjects, request.TargetContext.Scope)
+	if len(objects) == 0 {
+		// Old extension-only user/project receipts retain their exact legacy
+		// file-removal path and no new native-effects or user actions.
+		return adapter.Adapter.Deactivate(ctx, env, request)
+	}
 	layout, err := piComponents(request.NativeRegistryRoot, request.TargetContext.Scope)
 	if err != nil {
 		return out, err
