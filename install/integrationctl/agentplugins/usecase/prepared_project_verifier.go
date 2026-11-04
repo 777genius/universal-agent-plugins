@@ -20,8 +20,17 @@ func (e *preparedProjectVerificationError) Unwrap() error { return e.cause }
 
 func preparedProjectFileCandidate(input AddInput, plan domain.DeliveryPlan) bool {
 	project := input.Scope == domain.ScopeProject || plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject || plan.TargetContext.ProjectRoot != ""
+	if !project {
+		return false
+	}
+	// Preserve Qoder's previously installed package-only prepared receipts even
+	// after new Project plans acquire native Skills and MCP support. This is a
+	// receipt-generation boundary, not an implicit migration of old ownership.
+	if input.Client.ClientID == domain.ClientQoder && len(plan.PreviousNativeObjects) == 1 {
+		return plan.PreviousNativeObjects[0].Kind == "managed_package_directory"
+	}
 	traits := (domain.SelectedDelivery{}).EffectiveTraitsForScope(input.Client.ClientID, domain.ScopeProject)
-	return project && traits.LifecycleKind == domain.LifecyclePrepared && !traits.TracksNativeEffects
+	return traits.LifecycleKind == domain.LifecyclePrepared && !traits.TracksNativeEffects
 }
 
 // Applicability is separate from authority and capability. A malformed project
