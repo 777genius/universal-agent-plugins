@@ -157,6 +157,7 @@ func claudeRuntimeSession(t *testing.T, f *nativeFixture, cf *claudeNativeFixtur
 		t.Fatalf("expected %d platform-supported tools returned through native client, got %d; see gateway evidence", expectedTools, len(g.results))
 	}
 	seen := map[string]bool{}
+	childPIDs := map[int]struct{}{}
 	var markerPath string
 	for name, raw := range g.results {
 		var blocks []struct {
@@ -180,6 +181,10 @@ func claudeRuntimeSession(t *testing.T, f *nativeFixture, cf *claudeNativeFixtur
 			t.Fatalf("uncorrelated facts: %+v", facts)
 		}
 		nativeAssertEvent(t, f, facts)
+		if facts.PID <= 0 {
+			t.Fatal("native MCP child PID missing")
+		}
+		childPIDs[facts.PID] = struct{}{}
 		for _, p := range []string{facts.Root, facts.Data, facts.CWD} {
 			nativeRequireContained(t, f.Root, p)
 		}
@@ -207,6 +212,12 @@ func claudeRuntimeSession(t *testing.T, f *nativeFixture, cf *claudeNativeFixtur
 	}
 	if !seen["http"] || !seen["default"] || !seen["explicit"] {
 		t.Fatal("native tool inventory does not match platform contract")
+	}
+	// The native CLI may close before its stdio MCP subprocesses release their
+	// working directories. Verify their exact observed PIDs have exited before
+	// the next lifecycle mutation (Windows otherwise refuses a safe rename).
+	for pid := range childPIDs {
+		claudeWaitForOwnedProbeExit(t, pid)
 	}
 	return markerPath
 }
