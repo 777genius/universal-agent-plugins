@@ -19,4 +19,4 @@ A GitHub Actions merge checkout incorporates the base branch and should not be m
 
 The PR HEAD is not a secret and is only needed in the parent harness. Existing child environment allowlists must continue dropping GitHub workflow variables and tokens. No CI workaround, no special dispatch success state and no security-policy change.
 
-**Status:** reproduced and plan recorded; fix/verification pending.
+**Status:** separate checkout/PR HEAD fields and workflow injection pushed with regression; final-head ZIP verification and independent review still pending.
