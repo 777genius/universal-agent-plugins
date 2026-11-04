@@ -2,6 +2,8 @@ name: SkillSpector production acceptance
 
 on:
   pull_request:
+    # A draft PR skips the publication gate; rerun it when the PR becomes reviewable.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "landing/components/registry/SkillSpectorAssessment.vue"
       - "landing/features/skillspector/**"
