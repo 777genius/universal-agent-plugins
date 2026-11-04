@@ -181,14 +181,28 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertFalse(empty["listed_identity"])
         self.assertIsNone(empty["cleanup"])
 
+        # Initial add/list, repeat add/list, then failed remove.
         failed_remove = run_case(
-            [response(0), response(0), response(1)], matched)
+            [response(0), response(0), response(0), response(0), response(1)], matched)
         self.assertEqual(failed_remove["status"], "cleanup-failed")
         self.assertFalse(failed_remove["removal_verified"])
 
+        # Full lifecycle may qualify only with an exact, successful repeat.
+        failed_repeat = run_case(
+            [response(0), response(0), response(1), response(0), response(0), response(0)],
+            matched)
+        self.assertEqual(failed_repeat["status"], "repeat-add-unqualified")
+        self.assertFalse(failed_repeat["repeat_verified"])
+        self.assertTrue(failed_repeat["removal_verified"])
+
         prepared = run_case(
-            [response(0), response(0), response(0), response(0)], matched)
+            [response(0), response(0), response(0), response(0), response(0), response(0)],
+            matched)
         self.assertEqual(prepared["status"], "manual-setup-prepared")
+        self.assertTrue(prepared["repeat_verified"])
+        self.assertTrue(prepared["repeat_native_unchanged"])
+        self.assertTrue(prepared["repeat_lock_unchanged"])
+        self.assertEqual(prepared["repeat_installation_ids"], ["isolated-owned-install"])
         self.assertTrue(prepared["listed_identity"])
         self.assertTrue(prepared["removal_verified"])
         self.assertTrue(prepared["sentinels_preserved"])
