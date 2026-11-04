@@ -73,7 +73,13 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 		if binding.Scope != string(domain.ScopeUser) || binding.ClientBindingID == "" {
 			t.Fatalf("%s has wrong user scope/identity: %+v", target, binding)
 		}
-		body, readErr := os.ReadFile(filepath.Join(binding.TargetLocator, "skills", "pdf", "references", "note.txt"))
+		// Claude's official plugin layout keeps the portable raw Skill below
+		// a manager-owned runtime directory; Codex stages it at package root.
+		skillRoot := binding.TargetLocator
+		if target == "claude" {
+			skillRoot = filepath.Join(skillRoot, ".agentplugins-runtime")
+		}
+		body, readErr := os.ReadFile(filepath.Join(skillRoot, "skills", "pdf", "references", "note.txt"))
 		if readErr != nil || string(body) != "original resource" {
 			t.Fatalf("%s lost pinned raw Skill resources: %q; %v", target, body, readErr)
 		}
