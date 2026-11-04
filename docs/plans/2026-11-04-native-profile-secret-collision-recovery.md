@@ -1,6 +1,6 @@
 # UAP native lifecycle qualification: Claude profiles, Codex MCP, Skill collisions, crash recovery
 
-**Date:** 2026-11-04. **Base:** `87b769a8f546b0bb1c25c4c34422f3f756995697`. **Status:** draft pre-code plan; research/spikes first. **PR:** one bounded PR, no release.
+**Date:** 2026-11-04. **Base:** `87b769a8f546b0bb1c25c4c34422f3f756995697`. **Status:** implementation and native proof spikes in progress; **merge blocked** until exact-HEAD CI and independent final reviews. **PR:** one bounded PR, no release.
 
 ## Goal and acceptance
 
@@ -101,3 +101,16 @@ The reviewer also confirmed the `requireAbsent` Skill-specific untyped error was
 | Native agent runtime activation | Not proved by filesystem recovery | Controlled actual native client tool/session observation | Separate client-version/OS cell |
 
 Status rules, **per test assertion**: `PASS` only when the specific oracle actually ran and passed; `FAIL` on a supported correct invocation with observed invariant violation; `BLOCKED` when prerequisites/cause/observer/barrier were insufficient; `UNSUPPORTED` only with an explicit pinned contract showing unsupported behavior; `NOT_RUN` when not executed. Missing identity, link or cleanup evidence is inconclusive, never a successful protection oracle.
+
+## Execution ledger — current branch (not final acceptance)
+
+| Lane | Implemented on branch | Status / next evidence |
+| --- | --- | --- |
+| D1 #629 | Domain-specific `ErrForeignSkillDestination` in shared project preflight and `requireAbsent`, mapped to existing safe `FOREIGN_DESTINATION` picker refusal. Added owned/foreign negative tests. | **NOT_RUN on current final HEAD** until a real `skills add` / picker review proves the typed cause survives every boundary; mapping unit alone is insufficient. |
+| R1 crash | Added real child-process exit at durable `PhaseCommitPending`, reconstructed-kernel recovery of desired bytes/committed receipt and idempotence; enrolled both crash tests in strict four-OS Package manager E2E. | **NOT_RUN on final HEAD** until actual run/pass events and artifacts are inspected. CLI/Management process-crash stage remains separately NOT_RUN. |
+| M1 #642 | Extended existing Codex native trusted-project MCP direct-call fixture: matched negative canary, manual Codex-native `env_vars` test on only one server, restored config. Probe returns only SHA-256 of synthetic environment value; no UAP forwarder or standard reinterpretation added. | **NOT_RUN** until pinned Codex native macOS/Windows cells execute. Positive native capability does not establish production opt-in host authorization. |
+| C1 #641 | Added native user A→B→A/selected B remove fixture with shared disposable HOME, distinct client/UAP roots and filesystem digests before/after native-only initialization and operations. | **NOT_RUN** until genuine pinned Claude cells execute. An indeterminate B refusal remains a **blocked qualification**; never bypass ownership merely to pass a test. |
+
+### Evidence and review rules
+
+Never promote a queued/skipped GitHub workflow into native PASS. Four-OS portable CI qualifies filesystem/package manager invariants, while native runner currently pins Claude 2.1.263 and Codex 0.153.4 on macOS ARM64/Windows AMD64. Run both native cells for new test names and inspect actual per-stage artifacts. If a profile/canary lane fails, stop the merge, diagnose exactly and narrow product scope rather than fabricate support. CodeRabbit reviewed both plan rounds; code review discovered and we corrected an invalid YAML pipeline. Strix review is unavailable due to upstream billing and is **not counted as approval**.
