@@ -77,6 +77,13 @@ type VersionProbeEnvironment interface {
 	VersionProbeEnvironment(configRoot string) ([]string, error)
 }
 
+// DisposableVersionProbeProfile opts a side-effecting native --version command
+// into a private, short-lived profile. The detected client's original identity
+// and executable remain unchanged; only the child process environment differs.
+type DisposableVersionProbeProfile interface {
+	RequiresDisposableVersionProbeProfile() bool
+}
+
 // ProjectVersionRequirement identifies an adapter's selected hosts that need
 // an observed version before project mutation. It is a pure eligibility check;
 // the caller retains selection, execution and version-admission authority.

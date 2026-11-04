@@ -181,8 +181,35 @@ func (detector Detector) detectClient(ctx context.Context, host clients.Host, ad
 		var environment []string
 		switch profile := adapter.(type) {
 		case clients.VersionProbeEnvironment:
+			root := client.ConfigRoot
+			if isolated, ok := adapter.(clients.DisposableVersionProbeProfile); ok && isolated.RequiresDisposableVersionProbeProfile() {
+				// Refuse an ambient TMPDIR inside the selected profile before
+				// creating a single directory. Never probe a vendor against
+				// the original profile during interactive review or dry-run.
+				tempBase, err := clients.CanonicalDirectory(os.TempDir(), os.Lstat, filepath.EvalSymlinks)
+				if err != nil {
+					return client, err
+				}
+				original, err := clients.CanonicalDirectory(root, os.Lstat, filepath.EvalSymlinks)
+				if err != nil {
+					return client, err
+				}
+				relative, err := filepath.Rel(original, tempBase)
+				if err != nil || relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))) {
+					return client, fmt.Errorf("native version temp root overlaps selected profile")
+				}
+				private, err := os.MkdirTemp(tempBase, "agentplugins-version-profile-")
+				if err != nil {
+					return client, err
+				}
+				defer func() { _ = os.RemoveAll(private) }()
+				root, err = filepath.EvalSymlinks(private)
+				if err != nil {
+					return client, err
+				}
+			}
 			var err error
-			environment, err = profile.VersionProbeEnvironment(client.ConfigRoot)
+			environment, err = profile.VersionProbeEnvironment(root)
 			if err != nil {
 				return client, err
 			}

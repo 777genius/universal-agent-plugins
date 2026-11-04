@@ -13,13 +13,18 @@ import (
 )
 
 var (
-	_ clients.VersionProbeEnvironment   = (*Adapter)(nil)
-	_ clients.ProjectVersionRequirement = (*Adapter)(nil)
+	_ clients.VersionProbeEnvironment        = (*Adapter)(nil)
+	_ clients.DisposableVersionProbeProfile  = (*Adapter)(nil)
+	_ clients.ProjectVersionRequirement      = (*Adapter)(nil)
 )
 
 func (*Adapter) RequiresProjectVersion(client domain.DetectedClient) bool {
 	return client.ClientID == domain.ClientKimi
 }
+
+// Kimi 2.3.2 bootstraps cache workers before parsing --version. Never point a
+// preview-time probe at the selected user's profile.
+func (*Adapter) RequiresDisposableVersionProbeProfile() bool { return true }
 
 // Kimi bootstraps native workers and staged-update handling before printing its
 // version. Bind its supported profile/cache controls without inventing a HOME.
