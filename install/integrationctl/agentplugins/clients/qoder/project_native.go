@@ -146,6 +146,17 @@ func qoderHigherPriorityUserSkill(plan domain.DeliveryPlan) error {
 }
 
 func qoderHigherPriorityLocalMCP(plan domain.DeliveryPlan) error {
+	selected := map[string]bool{}
+	for _, component := range plan.Components {
+		if component.Support != domain.SupportUnsupported && component.Kind == domain.ComponentMCPServer {
+			selected[component.Name] = true
+		}
+	}
+	// A Skills-only delivery must not depend on unrelated local MCP settings,
+	// which might even be malformed or inaccessible.
+	if len(selected) == 0 {
+		return nil
+	}
 	project := plan.TargetContext.ProjectRoot
 	local := filepath.Join(project, ".qoder", "settings.local.json")
 	if err := pathpolicy.RequireContainedChild(project, local); err != nil {
@@ -177,11 +188,9 @@ func qoderHigherPriorityLocalMCP(plan domain.DeliveryPlan) error {
 	if !ok {
 		return fmt.Errorf("qoder local MCP settings are ambiguous")
 	}
-	for _, component := range plan.Components {
-		if component.Support != domain.SupportUnsupported && component.Kind == domain.ComponentMCPServer {
-			if _, found := servers[component.Name]; found {
-				return fmt.Errorf("qoder higher-priority local MCP server %q shadows selected project server", component.Name)
-			}
+	for name := range selected {
+		if _, found := servers[name]; found {
+			return fmt.Errorf("qoder higher-priority local MCP server %q shadows selected project server", name)
 		}
 	}
 	return nil

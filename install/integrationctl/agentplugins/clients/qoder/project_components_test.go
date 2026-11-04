@@ -124,6 +124,18 @@ func TestQoderProjectPriorityAndTransportNegative(t *testing.T) {
 	if err := qoderHigherPriorityConflicts(plan); err == nil {
 		t.Fatal("local qoder MCP priority was ignored")
 	}
+	// Skills-only project operations cannot require a valid MCP settings file.
+	qoderWrite(t, filepath.Join(project, ".qoder", "settings.local.json"), `{"mcpServers":`)
+	skillsOnly := plan
+	skillsOnly.Components = plan.Components[:1]
+	if err := qoderHigherPriorityConflicts(skillsOnly); err != nil {
+		t.Fatalf("skills-only delivery consulted unrelated MCP configuration: %v", err)
+	}
+	mcpOnly := plan
+	mcpOnly.Components = plan.Components[1:]
+	if err := qoderHigherPriorityConflicts(mcpOnly); err == nil {
+		t.Fatal("MCP delivery ignored ambiguous higher-priority local settings")
+	}
 	for _, value := range []string{
 		`{"mcpServers":{"api":{"type":"sse","url":"https://invalid.test"}}}`,
 		`{"mcpServers":{"api":{"type":"http","url":"https://valid.test","trust":true}}}`,
