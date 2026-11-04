@@ -2,11 +2,13 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/locks"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/legacylock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -56,7 +58,7 @@ func TestRemoveLegacyAbortsReconcileWhenLegacyStateReappears(t *testing.T) {
 	}
 	legacy := &legacyLifecycleStub{exists: true, reappearAfterRemove: true}
 	service := testService(Service{
-		StateStore: store, Legacy: legacy, LegacyLock: locks.FileLock{BaseDir: filepath.Join(root, "legacy-locks")},
+		StateStore: store, Legacy: legacy, LegacyLock: legacylock.StateLock{Manager: locks.FileLock{BaseDir: filepath.Join(root, "legacy-locks")}},
 		Lock:   processlock.Lock{Path: filepath.Join(root, "mutation.lock")},
 		Kernel: transaction.Kernel{StateStore: store, Directory: dirswap.Manager{JournalDir: filepath.Join(root, "operations")}},
 	})
@@ -97,8 +99,10 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 				t.Fatal(err)
 			}
 			legacy := &legacyLifecycleStub{exists: initiallyPresent}
+			legacySpy := &inspectedLegacyStateLock{}
 			service := testService(Service{
-				StateStore: store, Legacy: legacy, LegacyLock: locks.FileLock{BaseDir: filepath.Join(root, "legacy-locks")},
+				StateStore: observingLegacyStateStore{StateStore: store, lock: legacySpy},
+				Legacy: legacy, LegacyLock: legacySpy,
 				Lock:   processlock.Lock{Path: filepath.Join(root, "mutation.lock")},
 				Kernel: transaction.Kernel{StateStore: store, Directory: dirswap.Manager{JournalDir: filepath.Join(root, "operations")}},
 			})
@@ -118,6 +122,9 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 			if legacy.removeCalls != wantCalls {
 				t.Fatalf("remove calls = %d, want %d", legacy.removeCalls, wantCalls)
 			}
+			if legacySpy.held {
+				t.Fatal("legacy state lock was not released after reconciliation")
+			}
 			updated, err := store.Load()
 			if err != nil {
 				t.Fatal(err)
@@ -128,4 +135,31 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 			}
 		})
 	}
+}
+
+type inspectedLegacyStateLock struct{ held bool }
+
+func (lock *inspectedLegacyStateLock) Acquire(context.Context) (ports.UnlockFunc, error) {
+	if lock.held {
+		return nil, fmt.Errorf("legacy state lock reacquired while already held")
+	}
+	lock.held = true
+	return func() error {
+		lock.held = false
+		return nil
+	}, nil
+}
+
+// observingLegacyStateStore proves the state-v2 save occurs while the
+// legacy state lock is held, not after the negative observation releases it.
+type observingLegacyStateStore struct {
+	transaction.StateStore
+	lock *inspectedLegacyStateLock
+}
+
+func (store observingLegacyStateStore) Save(state domain.StateFileV2) error {
+	if !store.lock.held {
+		return fmt.Errorf("reconciliation wrote state-v2 without the legacy state lock")
+	}
+	return store.StateStore.Save(state)
 }

@@ -128,7 +128,7 @@ func (session *migrateStateSession) migrateExpected() error {
 	if session.app.LegacyStateLock == nil {
 		return fmt.Errorf("legacy state lock is required")
 	}
-	legacyRelease, err := session.app.LegacyStateLock.Acquire(session.ctx, "state")
+	legacyRelease, err := session.app.LegacyStateLock.Acquire(session.ctx)
 	if err != nil {
 		return fmt.Errorf("acquire legacy state lock: %w", err)
 	}

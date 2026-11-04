@@ -21,6 +21,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminalprompts"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/locks"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/legacylock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -3165,7 +3166,7 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 			SourceAcquirer: sourceacquisition.Acquirer{TempRoot: root},
 			PackageLoader:  packageLoader, NativePackageLoader: loader.OpenAILoader{Loader: packageLoader},
 			Lifecycle:       lifecycle,
-			LegacyStateLock: locks.FileLock{BaseDir: filepath.Join(root, "legacy-locks")},
+			LegacyStateLock: legacylock.StateLock{Manager: locks.FileLock{BaseDir: filepath.Join(root, "legacy-locks")}},
 		},
 	}
 }
