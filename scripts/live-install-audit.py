@@ -723,8 +723,8 @@ def preserved_regular_text(path, expected, case_root):
         return True
     try:
         return (path_inside_case(path, case_root) and path.is_file()
-                and path.read_text() == expected)
-    except OSError:
+                and path.read_text(encoding="utf-8") == expected)
+    except (OSError, UnicodeError):
         return False
 
 
@@ -760,10 +760,12 @@ def copilot_settings_sanitized_shape(home, case_root, identity):
             counts["reference_" + role] += 1
     stack = [(doc, 0)]
     nodes = 0
+    depth_truncated = False
     while stack and nodes < 10000:
         value, depth = stack.pop()
         nodes += 1
         if depth >= 32:
+            depth_truncated = True
             continue
         if isinstance(value, dict):
             for key, child in value.items():
@@ -773,7 +775,7 @@ def copilot_settings_sanitized_shape(home, case_root, identity):
             stack.extend((child, depth + 1) for child in value)
         elif isinstance(value, str):
             match(value, "value")
-    return {"status": "parsed" if not stack else "truncated",
+    return {"status": "truncated" if stack or depth_truncated else "parsed",
             "allowed_sections": sections, "match_counts": counts}
 
 
