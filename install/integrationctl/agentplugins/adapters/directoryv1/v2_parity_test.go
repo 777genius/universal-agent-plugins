@@ -94,3 +94,42 @@ func TestV2RejectsCrossProductDistributionTakeover(t *testing.T) {
 		t.Fatalf("v2 allowed a second product to claim a foreign distribution: %v", err)
 	}
 }
+
+func TestV2RequiresExactProjectRuntimeEvidence(t *testing.T) {
+	signed, _, _ := v2SignedFixture(t)
+	var original domain.DirectorySnapshot
+	if err := json.Unmarshal(signed, &original); err != nil {
+		t.Fatal(err)
+	}
+	// A schema record cannot stand in for a real client/project MCP call.
+	policy := &original.Distributions[0].ReleasePolicies[0]
+	project := policy.Targets[0]
+	project.Scope = domain.ScopeProject
+	project.CurrentEvidence = []string{"schema-pass"}
+	policy.Targets = append(policy.Targets, project)
+	body, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseV2Snapshot(body); !errors.Is(err, ErrStrictJSON) {
+		t.Fatalf("project grant borrowed common schema evidence: %v", err)
+	}
+	// A genuine, exact scoped runtime receipt is required; another client's
+	// result never qualifies this client even when both use the same package.
+	runtime := original.Evidence[0]
+	runtime.ID, runtime.Client, runtime.Scope = "project-runtime", domain.ClientCursor, domain.ScopeProject
+	runtime.Level, runtime.Outcome = "runtime", "passed"
+	runtime.ClientVersion, runtime.InstallerVersion = "1.0.0", "1.2.3"
+	runtime.OS, runtime.Architecture, runtime.ObservedAt = "linux", "amd64", "2026-08-20T10:30:00Z"
+	original.Evidence = append(original.Evidence, runtime)
+	policy.Targets[len(policy.Targets)-1].CurrentEvidence = []string{runtime.ID}
+	body, _ = json.Marshal(original)
+	if _, err := ParseV2Snapshot(body); !errors.Is(err, ErrStrictJSON) {
+		t.Fatalf("project grant borrowed other client's runtime: %v", err)
+	}
+	original.Evidence[len(original.Evidence)-1].Client = domain.ClientCodex
+	body, _ = json.Marshal(original)
+	if _, err := ParseV2Snapshot(body); err != nil {
+		t.Fatalf("exact client/project runtime evidence should qualify: %v", err)
+	}
+}

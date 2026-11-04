@@ -23,6 +23,9 @@ func validateV2RecordParity(snapshot domain.DirectorySnapshot) error {
 	if err := validateV2EvidenceDimensions(snapshot.Evidence); err != nil {
 		return err
 	}
+	if err := validateV2ProjectGrantEvidence(snapshot); err != nil {
+		return err
+	}
 	seen := map[string]bool{}
 	for _, item := range snapshot.Revocations {
 		key := releaseKey(item.DistributionID, item.ReleaseSequence)
@@ -134,6 +137,42 @@ func validateV2ProductDistributionOwnership(snapshot domain.DirectorySnapshot) e
 	for _, distribution := range snapshot.Distributions {
 		if owners[distribution.ID] != distribution.ProductID {
 			return strictError("v2 distribution %q differs from product owner", distribution.ID)
+		}
+	}
+	return nil
+}
+
+func validateV2ProjectGrantEvidence(snapshot domain.DirectorySnapshot) error {
+	evidence := make(map[string]domain.DirectoryEvidence, len(snapshot.Evidence))
+	for _, item := range snapshot.Evidence {
+		evidence[item.ID] = item
+	}
+	for _, distribution := range snapshot.Distributions {
+		for _, policy := range distribution.ReleasePolicies {
+			for _, grant := range policy.Targets {
+				if grant.Scope != domain.ScopeProject {
+					continue // Legacy user evidence is preserved only for Global.
+				}
+				runtimePassed := false
+				for _, id := range grant.CurrentEvidence {
+					item, ok := evidence[id]
+					if !ok {
+						return strictError("v2 project grant references missing evidence")
+					}
+					if item.Level == "schema" && item.Client == "" && item.Scope == "" {
+						continue
+					}
+					if item.Client != grant.Client || item.Scope != domain.ScopeProject {
+						return strictError("v2 project grant borrows evidence from another client or scope")
+					}
+					if item.Level == "runtime" && item.Outcome == "passed" {
+						runtimePassed = true
+					}
+				}
+				if !runtimePassed {
+					return strictError("v2 project grant lacks exact passed runtime evidence")
+				}
+			}
 		}
 	}
 	return nil
