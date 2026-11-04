@@ -3,6 +3,14 @@ name: Coverage
 on:
   push:
     branches: [main]
+    # Go coverage is unaffected by documentation/web-only changes. Preserve
+    # all release-required main checks; this workflow is not a release gate.
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'website/**'
+      - 'landing/**'
+      - 'assets/**'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
