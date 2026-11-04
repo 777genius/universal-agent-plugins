@@ -8,7 +8,7 @@
 
 1. Refuse running vendor-provided code until the **exact downloaded bytes** match a repository-reviewed SHA-256. Never treat a computed hash of an unreviewed live download as a security pin. Explicitly report missing digests as vendor-bootstrap blockers; do not turn them into PASS.
 2. Append vendor bins *after* runner-controlled system tool paths. For vendor `.deb`, extract unprivileged instead of running root maintainer scripts. Missing client binaries remain `client-unavailable` in the 30-row evidence.
-3. Preserve an explicit negative-path artifact and guard-test the workflow. Only add real immutable SHA values after independent source review and successful real downloads; until then the five vendor lanes intentionally cannot qualify.
+3. Download but never execute unreviewed vendor bytes; record their observed SHA-256 in `vendor-proof/observed-untrusted.sha256` so independent reviewers can inspect the candidate. Use `shasum -a 256` on macOS if GNU `sha256sum` is absent. Preserve negative-path artifact and guard-test the workflow. Only add real immutable SHA values after independent source review and successful real downloads; until then five vendor lanes cannot qualify.
 
 ## Two critical reviews
 

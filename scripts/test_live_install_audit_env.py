@@ -157,7 +157,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
     def test_vendor_bootstrap_requires_reviewed_bytes_and_preserves_runner_toolchain(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     ".github/workflows/live-install-remaining-clients.yml").read_text()
-        self.assertIn("sha256sum -c -", workflow)
+        self.assertIn("sha256_file -c -", workflow)
+        self.assertIn("observed-untrusted.sha256", workflow)
+        self.assertIn("shasum -a 256", workflow)
         self.assertIn("verification-blocked.txt", workflow)
         self.assertIn("dpkg-deb --extract", workflow)
         self.assertNotIn("sudo DEBIAN_FRONTEND", workflow)

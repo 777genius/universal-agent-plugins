@@ -74,34 +74,42 @@ jobs:
               ;;
           esac
           printf '%s\n' "$URL" > "$RUNNER_TEMP/vendor-proof/source.txt"
-          # BUG-012: immutable reviewer-approved digests are required before
-          # any third-party installer is executed. No pin: honest unavailable
-          # evidence, not a silently trusted latest download.
+          # BUG-012: download, fingerprint, and preserve proposed vendor bytes;
+          # never execute without a separately reviewed immutable digest pin.
           case "$TARGET" in
-            cursor) SHA256="" ;; # Pin official cursor_3.28.7_amd64.deb before use
-            vscode) SHA256="" ;; # Replace mutable latest URL and pin that release
-            kiro) SHA256="" ;; # Pin and review official installer bytes
-            windsurf) SHA256="" ;; # Pin and review official installer bytes
-            grok) SHA256="" ;; # Pin and review official installer bytes
+            cursor) SHA256="" ;; # Needs official release digest review
+            vscode) SHA256="" ;; # Mutable latest URL must first be pinned
+            kiro) SHA256="" ;; # Needs official installer digest review
+            windsurf) SHA256="" ;; # Needs official installer digest review
+            grok) SHA256="" ;; # Needs official installer digest review
           esac
+          sha256_file() {
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$@"
+            else
+              shasum -a 256 "$@" # macOS runner
+            fi
+          }
+          if [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
+            artifact="$RUNNER_TEMP/$TARGET.deb"
+          else
+            artifact="$RUNNER_TEMP/vendor-install.sh"
+          fi
+          curl -fsSL --retry 2 "$URL" -o "$artifact"
+          sha256_file "$artifact" > "$RUNNER_TEMP/vendor-proof/observed-untrusted.sha256"
           if [[ ! "${SHA256:-}" =~ ^[0-9a-f]{64}$ ]]; then
-            echo "Missing reviewed SHA-256 for $TARGET: unsafe vendor bootstrap not executed" \
+            echo "Missing reviewed SHA-256 for $TARGET: downloaded bytes are NOT approved to execute" \
               | tee "$RUNNER_TEMP/vendor-proof/verification-blocked.txt"
             exit 3
           fi
+          printf '%s  %s\\n' "$SHA256" "$artifact" | sha256_file -c -
           if [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
-            curl -fsSL --retry 2 "$URL" -o "$RUNNER_TEMP/$TARGET.deb"
-            printf '%s  %s\n' "$SHA256" "$RUNNER_TEMP/$TARGET.deb" | sha256sum -c -
-            sha256sum "$RUNNER_TEMP/$TARGET.deb" > "$RUNNER_TEMP/vendor-proof/artifact.sha256"
             mkdir -p "$RUNNER_TEMP/vendor-root"
-            dpkg-deb --extract "$RUNNER_TEMP/$TARGET.deb" "$RUNNER_TEMP/vendor-root"
+            dpkg-deb --extract "$artifact" "$RUNNER_TEMP/vendor-root"
             export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
           else
-            curl -fsSL --retry 2 "$URL" -o "$RUNNER_TEMP/vendor-install.sh"
-            printf '%s  %s\n' "$SHA256" "$RUNNER_TEMP/vendor-install.sh" | sha256sum -c -
-            sha256sum "$RUNNER_TEMP/vendor-install.sh" > "$RUNNER_TEMP/vendor-proof/installer.sha256"
-            bash -n "$RUNNER_TEMP/vendor-install.sh"
-            bash "$RUNNER_TEMP/vendor-install.sh"
+            bash -n "$artifact"
+            bash "$artifact"
           fi
           hash -r
           command -v "$BIN" | tee "$RUNNER_TEMP/vendor-proof/executable.txt"
