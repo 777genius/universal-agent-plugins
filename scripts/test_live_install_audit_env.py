@@ -532,5 +532,62 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertFalse(audit.passive_native_path("qoder", "settings.json"))
 
 
+    def test_post_remove_native_rescan_detects_late_registration(self):
+        # BUG-020: a native setting written by remove after the add snapshot
+        # must not be mistaken for a successful full lifecycle.
+        audit = load_audit()
+        identity = "atlassian"
+        source = "github:example/native-plugin@" + ("a" * 40)
+        matched = [{"name": identity, "installation_id": "owned-once",
+                    "clients": [{"client_id": "grok", "verification": "installation_verified"}]}]
+
+        def verify_case(late_registration):
+            with TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                native = root / "plugin-00/home/.grok"
+                managed = native / "managed-plugin.json"
+                late = native / "new-settings.json"
+                state = {"installed": False, "add_count": 0}
+
+                def fake_call(argv, env, cwd, timeout=105):
+                    operation = argv[1]
+                    if operation == "add":
+                        state["add_count"] += 1
+                        if state["add_count"] == 1:
+                            managed.write_text('{"name":"atlassian"}')
+                        state["installed"] = True
+                    elif operation == "remove":
+                        managed.unlink()
+                        if late_registration:
+                            late.write_text('{"nativePlugin":"atlassian"}')
+                        state["installed"] = False
+                    installations = matched if state["installed"] else []
+                    return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                            "timeout": False,
+                            "_json": {"data": {"installations": installations}}}
+
+                with patch.object(audit, "call", side_effect=fake_call), \
+                     patch.object(audit, "matching_installations", return_value=matched):
+                    evidence = audit.do_case("/unused/agentplugins", "grok", "plugin",
+                                             source, 0, root, {source: identity})
+                self.assertTrue(evidence["listed_identity"])
+                self.assertTrue(evidence["repeat_verified"])
+                self.assertTrue(evidence["sentinels_preserved"])
+                self.assertTrue(evidence["post_list_schema_valid"])
+                self.assertEqual(evidence["cleanup"]["exit_code"], 0)
+                self.assertIn(".grok/managed-plugin.json", evidence["native_identity_files"])
+                return evidence
+
+        clean = verify_case(False)
+        self.assertEqual(clean["status"], "passed")
+        self.assertTrue(clean["removal_verified"])
+        self.assertEqual(clean["native_residuals"], [])
+
+        delayed = verify_case(True)
+        self.assertEqual(delayed["status"], "cleanup-failed")
+        self.assertFalse(delayed["removal_verified"])
+        self.assertEqual(delayed["native_residuals"], [".grok/new-settings.json"])
+
+
 if __name__ == "__main__":
     unittest.main()
