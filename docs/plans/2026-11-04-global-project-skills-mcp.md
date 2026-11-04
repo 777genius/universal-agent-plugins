@@ -1,11 +1,13 @@
-# Global / Project: Skills и MCP для девяти агентов
+# Global / Project: сначала шесть клиентов, три адаптера отдельно
 
-Дата решения владельца: 2026-11-04. Статус: план принят после двух раундов независимой проверки; реализация ещё не выполнена.
+Дата решения владельца: 2026-11-04. Редакция 6+3 принята после двух раундов независимой проверки. Реализация ещё не выполнена.
 
 Этот документ задаёт последующую реализацию. Наличие плана или draft PR не означает,
 что новый CLI, подписанный Directory v2 либо новая совместимость уже выпущены.
-Текущий запрос разрешает подготовить план, исправить его после двух раундов review,
-сохранить его в основном draft PR и сразу публиковать каждый коммит этой ветки.
+Последняя инструкция разрешает реализацию и ранний merge основной части после
+применимых проверок. Все PR при разработке — draft; каждый законченный commit сразу
+push. Qoder, Pi и Devin ведутся в отдельных PR и не блокируют основную шестёрку.
+Публикация релиза остаётся отдельным этапом с действующими release gates.
 
 ## 1. Результат и границы scope
 
@@ -16,12 +18,13 @@ MCP; запись конфигурации без подтверждённого
 
 | Статус программы | Клиенты | Новая работа |
 | --- | --- | --- |
-| Active | Claude Code, Codex, OpenCode, Cursor, Gemini CLI, GitHub Copilot CLI, Qoder, Pi, Windsurf/Devin | Skills + MCP в обоих scopes; зависимости и lifecycle; проверенные разрешения каталога |
+| Main #707, первый merge | Claude Code, Codex, OpenCode, Cursor, Gemini CLI, GitHub Copilot CLI | Shared scope/Directory/dependencies + существующие пути шести клиентов; Skills/MCP и Marketing Kit |
+| Отдельные parallel draft PR | Qoder, Pi, Windsurf/Devin | По одному адаптеру в PR; свои native gates, lifecycle и доказательства; main их не ждёт |
 | Deferred | Cline, Kimi Code, Kiro, Grok Build | Только явный TODO в разделе 12; не расширять совместимость в этом этапе |
 | Excluded | ChatGPT, VS Code | Не добавлять поддержку, отдельные адаптеры/конфиги/фикстуры либо новые compatibility claims |
 
 Это актуальная приоритизация именно этой программы. Она заменяет прежний широкий
-список целей для нового scoped Directory rollout. Существующие исходники,
+список целей и зависимость общего merge от девяти клиентов. Существующие исходники,
 установки, разрешения user scope и полезные тесты отложенных/исключённых клиентов
 сохраняются; новая runtime denylist из этой таблицы не создаётся.
 
@@ -206,7 +209,11 @@ adapter admission. Devin-only evidence не разрешает legacy Windsurf �
   manifests, locks, receipts, native config и authoritative cache.
 
 Для операций, которым существующая политика требует Directory read/authorization,
-протокол выбирается до загрузки, без retry через другой protocol:
+протокол выбирается до загрузки, без retry через другой protocol. Таблица ниже
+применяется к final v2 candidate N ПОСЛЕ explicit CLI release-preparation cutover.
+До него production constructor/bootstrap и fresh user/legacy restore routing остаются
+v1; main merge не добавляет обязательный v2 network/bootstrap dependency (§8).
+Новые v2-only операции до cutover не рекламируются как выпущенные.
 
 | Операция | Протокол и authority |
 | --- | --- |
@@ -223,258 +230,289 @@ adapter admission. Devin-only evidence не разрешает legacy Windsurf �
 локальные операции. Удаление owned установки остаётся возможным при недоступном,
 истёкшем или отозвавшем пакет каталоге; install authorization не является правом удаления.
 
-## 5. Реализация по рабочим пакетам
+## 5. Основной PR и независимые адаптеры
 
-| ID | Работа и основные места | Зависит от | Критерий завершения |
+### Основной #707: один согласованный набор для шести клиентов
+
+| ID | Работа и основные места | Зависит от | Проверяемый выход |
 | --- | --- | --- | --- |
-| P0 | Перечитать AGENTS/owner scope, обновить overlap PR heads; зафиксировать v2 examples; сразу проверить Devin profile selection и native prerequisites всех active lanes | Этот план и review | Wire/normalization/authorization договорены; ранние host blockers известны до большой adapter работы |
-| P1 | Registry `schemas/`, `scripts/directory_publication.py`, preparer/CAS/readiness, version-specific profiles | P0 | V1 preserved; v2 scope/evidence validated; exact sources/old policies сохранены |
-| P2 | UAP `adapters/directoryv1/` и тонкий v2 decoder; shared verification/cache через текущие границы | P0 | Оба формата проверяются независимо и нормализуются в один domain path |
-| P3 | `domain/directory_*`, `agentpluginscli/source.go`, `deps_sync.go`, `compose.go` | P2; P1 fixtures | Actual protocol identity, per-child scope, fresh project locked restore, scope-aware siblings, mutation-free dry-run |
-| P4 | Qoder Project: native component ownership вместо обязательного native import | P0; существующий kernel | Skills и оба MCP transport обнаруживаются; native shared import cache не присваивается UAP |
-| P5 | Pi Global: Skills/MCP через переиспользуемое component ownership | P0; существующий kernel | User Skills/MCP работают; native extension route и Project сохранены |
-| P6 | Devin Global profile, Skills/MCP; legacy Windsurf preservation | P0 host/profile gate | Доказаны global native discovery и lifecycle; scope/profile/root receipt согласованы |
-| P7 | `cmd/agentplugins-registry-mirror`, landing codecs/types, capabilities generator и selection UI | P0 fixtures; P1–P3 contract | Одинаковые client/scope/closure решения CLI и сайта; реальный catalog gate не заменён demo bypass |
-| P8 | Marketing Kit closure и остальные active catalog cases; controlled native probes | P1–P7 | Применимые assertion outcomes на exact head, qualified binary/profile и preserved user/A/B |
-| P9 | Документация, independent implementation reviews, release rehearsal и coordinated rollout | P8 | Все заявленные targets подтверждены; публикация только по отдельному release authorization |
+| M0 | Уточнить exact heads/rules; закрепить v2 examples, six-client matrix и существующие oracles | Два review изменённого плана | Один контракт, известные baseline/native ограничения, нет зависимости от трёх leaves |
+| M1 | Registry schemas, publisher, readiness и scoped policy/evidence | M0 | V1 preserved; signed v2/closure и paired CAS проверены в отдельном связанном Registry PR |
+| M2 | UAP strict readers/cache/bootstrap, normalized domain eligibility | M0 | Оба формата нормализуются в один путь; прежний v1 decoder остаётся строгим |
+| M3 | CLI composition, per-child authorization, project cold lock restore, receipt routing/dry-run | M2, M1 fixtures | Пакет и required closure устанавливаются в оба scopes через настоящий CLI; отказ до mutation |
+| M4 | Mirror/landing codecs/types, scoped capabilities и selection | M0 fixtures; M1–M3 integration | CLI/site согласованы; production до cutover сохраняет v1/released commands (§8) |
+| M5 | Шесть существующих adapters + Marketing Kit: небольшие assertions в существующих suites | M3/M4 | Changed-path install/update/repair/remove/restore E2E; честный native evidence inventory |
+| M6 | Документация, independent code review, final-head CI и merge основного PR | M1–M5 code gates | Код merged после его gates; отсутствующие native/release claims остаются открытыми отдельно |
 
-### P4: Qoder
+Ни один из M0–M6 не зависит от окончания Qoder/Pi/Devin. Новую core-функцию проверяем
+в одной вертикали; не создаём шесть PR для одинакового изменения каталога/CLI.
+Marketing Kit требует явного расширения root grant на Copilot: наличие разрешений
+Copilot у трёх children не разрешает root автоматически.
 
-Использовать существующие shared native component/config операции и текущие проектные
-Skills paths после exact native проверки. MCP писать в существующий допустимый project
-config (`.qoder/settings.json` либо `.mcp.json`) по одному детерминированному правилу.
-Обнаруживать конфликтующие `.qoder/settings.local.json`, flags и foreign ownership.
-Проверять effective source, сохранение пользовательских записей и точное удаление.
-Старый manual import path сохраняется; импортированный самим Qoder общий cache не
-становится owned только потому, что исходный bundle подготовил UAP.
+### Три отдельных draft PR
 
-### P5: Pi
+| Leaf | Ветка от актуального main | Единственная новая возможность | План/PR |
+| --- | --- | --- | --- |
+| Qoder | `feat/qoder-project-components-20261104` | Native Project Skills + MCP, preserve prepared-import | [Draft #708](https://github.com/777genius/universal-agent-plugins/pull/708) |
+| Pi | `feat/pi-global-components-20261104` | Generic Global Skills + MCP, preserve extension route | [Draft #709](https://github.com/777genius/universal-agent-plugins/pull/709) |
+| Windsurf/Devin | `feat/devin-global-components-20261104` | Qualified Devin Global Skills + MCP, preserve Cascade | [Draft #710](https://github.com/777genius/universal-agent-plugins/pull/710) |
 
-Переиспользовать `project_components.go`, shared component mutation и lifecycle для
-user roots `.pi/agent/skills` и `.pi/agent/mcp.json` с учётом реального native profile.
-Не менять семантику extension route, не строить MCP bridge. Обновить user capability
-лишь вместе с реализацией и native evidence. Project trust остаётся решением хоста.
+У каждого leaf собственный короткий Markdown-план, два plan review, code review и
+свои native gates. Его branch не наследует всю незавершённую серию #707. После merge
+общей границы leaf один раз обновляет базу. Central metadata/shared helpers вносит
+единственный integrator в ТОТ ЖЕ leaf PR как минимальный atomic patch: adapter и
+нужные traits входят в один проверенный merge result. Не выпускать capability-only
+commit на main до реализации; владение shared files не означает отдельный ранний merge. Это не причина ждать другие leaves.
 
-### P6: Windsurf / Devin — обязательный отдельный gate
+Local/Git native spike не требует Directory v2. Подписанный grant требует своей
+доказанной реализации и фактически опубликованной версии CLI; детали в §8.
 
-Сейчас Global route — legacy Cascade MCP + prepared-only Skills. Поэтому прежний
-запас `0–180` production LOC не покрывает поставленную цель. Нужен Devin Global route.
+## 6. Параллельная работа и владение файлами
 
-Официальные native пути: Global Skills `~/.config/devin/skills`, MCP
-`~/.config/devin/mcp_config.json`; Windows использует `%APPDATA%/devin`. Project —
-`.devin/skills` и `.devin/mcp_config.json`. XDG/APPDATA authority берётся из исходного
-пользовательского окружения. Эти пути не объявляются путями старого Windsurf IDE.
+Доступны четыре слота: integrator и три исполнителя. Приоритет слотов — критический
+путь основной шестёрки. Отдельные PR позволяют независимо готовить, проверять и
+мержить leaves; обещание семи одновременно работающих исполнителей не делается.
 
-До записи кода подтвердить выбор одного executable/version/profile при coexistence
-`windsurf` и `devin`. Сегодня detection предпочитает windsurf, а ConfigRoot относится
-к legacy channel. Нельзя молча менять этот приоритет, переиспользовать Cascade root
-как Devin root или переносить receipts между профилями. Использовать существующий
-selection contract; если он не выражает точный профиль, переоценить только этот участок.
-
-Переиспользовать `CodecDevin`, `devinComponents`, `devinDesiredServers`, shared ownership
-и native activation checks. Не добавлять облачный `devin plugins install` lifecycle.
-Точная наблюдавшаяся версия — `3000.11.205`; документация новой версии сама по себе
-не расширяет admission. Проверить main-config migration, local/project overrides,
-legacy imports и отсутствие mutation legacy Cascade. UAP сам миграцию не запускает.
-
-Global Skill и MCP должны обнаруживаться реальным Devin из двух чистых проектов.
-Проверить Skills source, stdio/HTTP initialize/list/call, global update/remove и
-сохранение A/B/foreign/legacy state. Если native gate не проходит, девятый target
-остаётся BLOCKED; нельзя заменить его prepared-only успехом или молча исключить из DoD.
-
-## 6. Параллельная работа без конфликтов
-
-Доступная модель выполнения: один интегратор и три workers. Это четыре параллельных
-направления после короткого согласования контракта; девять адаптеров не требуют
-девяти независимых переписанных установщиков.
-
-| Владелец | Исключительная область записи | Что передаёт соседям |
+| Владелец | Исключительная область записи | Передача результата |
 | --- | --- | --- |
-| Integrator | Этот план, final integration, mirror/landing/UX, итоговый evidence index; `clients/shared/*` и требуемые `adapters/nativeconfig/*` изменения | Contract examples, минимальные shared fixes, решения по findings, exact integration SHA |
-| Worker A | Registry schemas/publisher/readiness/policy/evidence data | Signed fixtures и versioned publication contract |
-| Worker B | UAP readers/cache/domain/CLI/composition, central capabilities | Verified Directory facade, grant selection и actual protocol identity |
-| Worker C | Qoder/Pi/Windsurf adapter files и их native ownership cases | Capability deltas Worker B; qualification results Integrator |
+| Integrator | План/owner scope, `clients/shared/*`, нужные `adapters/nativeconfig/*`, native evidence reconciliation, итоговый merge | Contract examples, shared fixes, final SHA, bounded central requests |
+| Worker A | Registry schema/publisher/readiness/policy/evidence | Signed fixtures и совместимая публикация; после M1 слот получает один leaf |
+| Worker B | UAP readers/cache/domain/CLI/composition, central capabilities | Reader/grants/receipt integration; после M3 слот получает другой leaf |
+| Worker C | Mirror/landing/scoped selection и существующий browser suite | Совместимый site consumer; после M4 слот получает третий leaf |
 
-Сначала P0; Worker C проверяет Devin host/profile spike до последовательной P4/P5/P6 работы.
-Затем A ведёт P1, B — P2/P3, C — P4/P5/P6, Integrator — P7 на
-зафиксированных fixtures. Внутри C независимые adapter slices идут по готовности;
-освободившийся worker может взять следующий slice после явной передачи владения.
-Для review временно освобождать worker slot; не считать пятого исполнителя доступным.
+M1, M2/M3 и M4 стартуют параллельно после M0. Integrator параллельно проводит короткие
+host/profile prerequisites и проверяет минимальные leaf requests. По мере освобождения
+слотов Qoder, Pi и Devin ведутся одновременно, каждый в своей ветке/рабочем каталоге.
+Если общий путь ещё требует помощи, он получает приоритет над очередным leaf slice.
+Review занимает существующий слот; владелец файла передаётся явно, без двойных edits.
 
-Не редактировать параллельно `clients_catalog.go`, `project_policy.go`, composition
-или `clients/shared`. Shared change оформляется как конкретный запрос владельцу,
-без generic framework и без расходящихся копий helper. Integration/merge/release
-операции выполняет один владелец последовательно.
+Не менять параллельно `clients_catalog.go`, `project_policy.go`, composition или shared
+kernel. При пересечении #698/#704 — прочитать новый exact HEAD/diff/checks, принять
+подходящий фикс один раз. Не блокировать всю работу из-за непересекающегося внешнего PR.
+Workers/reviewers — GPT-6.1-sol xhigh по owner selection; локальные targeted checks
+выполняются до commit, законченный commit сразу push.
 
-## 7. E2E: проверять утверждения, переиспользовать инфраструктуру
+## 7. Минимальные достаточные проверки
 
-### Общие gates — один набор
+### Сначала использовать существующий тест
 
-- Замороженный released CLI 0.1.95 читает обновлённый v1 и сохраняет user lifecycle.
-- V2 positive и negative wire/signature/schema/floor/expiry/revocation/cache cases.
-- Scope mismatch, отсутствующий root/один required child, wrong source/tree/lock,
-  неподдерживаемый компонент/transport, stale authorization evidence: отказ до mutation.
-  Отсутствие matching runtime proof само по себе не запрещает установку (§4.2).
-- Fresh project restore из lock с пустым receipt/cache; exact retained source reuse;
-  запрет moving-ref refresh или project-to-user downgrade.
-- Тот же root и тот же `node`, но изменённый required child pin; revoked/missing child;
-  stale canonical summary; unchanged closure; старый valid lock при новой canonical
-  closure/floor. Proof и eligibility должны изменяться только по своим входам.
-- Existing v1 receipt lifecycle, fresh legacy user lock, v2-only added target,
-  unknown legacy protocol metadata и выбранный feed load failure: explicit routing.
-- Offline remove собственных v1/v2 установок при expired/revoked/unavailable feed:
-  existing ownership policy действует без новой обязательной загрузки Directory.
-- Существующие dependency graph/conflict/transaction/crash tests повторно используются.
-  Добавляются только отсутствующие scope/closure assertions, без девяти копий solver harness.
+Перед новым test file назвать конкретный отсутствующий assertion и ближайший helper.
+Добавлять scope/protocol/profile row либо небольшой helper в существующую suite;
+не писать отдельный solver/crypto/transaction/lifecycle harness на каждого клиента.
 
-### Каждый active client и оба scopes
+| Existing suite | Что переиспользовать | Что действительно добавить |
+| --- | --- | --- |
+| `adapters/directoryv1/directoryv1_test.go`, `cache_concurrency_test.go` | Signed fixtures, fetch/signature/expiry/rollback, реальные cache races | Strict v2 dimensions и cross-protocol/cache/floor isolation |
+| `domain/directory_locked_restore_test.go` | Existing policy mutation table | Qualified v2 project positive и v1 project rejection |
+| `cli/internal/agentpluginscli/deps_fresh_restore_e2e_test.go` | Real Git graph, cold store, exact pins, no-effects helper | Scope/protocol parameter, missing/revoked child, changed closure |
+| `directory_rollout_semantics_test.go`, `deps_snapshot*_test.go` | Receipt/source identity, late refusal/cleanup | Explicit v1/v2 routing, added target, offline ownership-only remove |
+| Registry `tests/test_directory_publication*.py` | Signing/source fixtures и реальный Git/CAS | Two-view atomic commit, immutable readback и bootstrap projection |
+| Registry `tests/test_catalog_publication_readiness.py` | Qualification identity и uncovered expansion rejection | Six main target grants/closure; separate leaf expansion later |
+| Existing per-client facade/composed lifecycle and native collectors | User/A/B/foreign, source attribution, restart/remove | Только новые scope/closure/profile assertions; existing reruns не считать новым кодом |
+| Existing Landing/browser suite | Themes/mobile/Copy/selection | Scope+closure matrix и сохранение текущего released path до cutover |
 
-Использовать genuine pinned binary и независимые user/A/B roots. К каждой проверке
-привязать source HEAD, native binary/version/profile, OS/architecture и exact closure.
+### Общие рискованные границы — один набор
 
-1. Install Skills-only, MCP-only и mixed fixture; проверить native effective source.
-2. Install Marketing Kit с тремя обязательными зависимостями, repeat и cold restore.
-3. Update/repair, restart и remove: сохранить другие scopes и foreign neighbors/data.
-4. Проверить одинаковые имена и native precedence. Не требовать, чтобы Global побеждал
-   более приоритетный Project/local override; проверять предусмотренный host результат.
-5. Минимальный runtime gate программы: genuine admitted client/profile выполняет
-   controlled stdio и Streamable HTTP initialize/list/call в обоих scopes. Existing
-   oracles переиспользуются. Неподтверждённая ячейка остаётся BLOCKED и не закрывает
-   target; это не девять новых harness и не SaaS OAuth проверка каждого пакета.
-   Stub executable, только tools/list или наличие файлов не дают runtime PASS.
-6. Для новых Qoder Project, Pi Global, Devin Global — дополнительные ownership,
-   profile selection, source-path, edited-owned-content и removal cases.
-7. Fresh-process repair/remove старых Qoder prepared-import, Pi extension-only и
-   Cascade user receipts: dispatch по existing recorded physical profile/native
-   object kind. Не мигрировать старую установку и не усыновлять Qoder cache неявно.
-   Если persisted identity не различает routes, переоценить этот узкий gap до кода.
-8. Devin-only evidence + selected legacy Windsurf/unknown version не даёт
-   unconditional compatible/installed claim; проверить и CLI, и site labeling.
+- Замороженный released CLI 0.1.95 сохраняет v1 user behavior; strict v1 не принимает v2.
+- Два composition assertions: pre-cutover source-built production CLI сохраняет fresh
+  v1 user install/restore без v2 dependency; final candidate N использует exact
+  authenticated v2 bootstrap, выбранный v2 failure терминален.
+- V2 scope/schema/signature substitution, независимые floors/cache/high-water marks;
+  existing expiry/revocation/equal-sequence/concurrent-cache tests переиспользуются.
+- Один missing/revoked required child или wrong source/tree/lock запрещает mutation,
+  даже если root из Git. Changed child при том же root и `node` меняет closure digest.
+- Старый valid lock не обязан равняться новой canonical closure/floor. Отсутствующий
+  matching runtime proof не превращается в новый install ban.
+- Fresh Project restore с пустыми receipts/cache, exact pins без moving refresh;
+  v1 receipt lifecycle, v2 added target, terminal selected-protocol failure и dry-run.
+- Offline owned remove при expired/revoked/unavailable feed; scope A не меняет user/B/foreign.
+- Paired publication через один ledger/CAS, incomplete stage/conflict/retry/readback;
+  authenticated bootstrap без фиктивного нового native/closure proof.
 
-Платформы: переиспользовать существующие Linux/macOS/Windows lanes. Новый native claim
-привязан к реально проверенной платформе; platform-dependent пути новых adapters
-проверить на всех заявленных платформах. Не умножать весь SaaS-каталог на каждую OS.
+### Main merge: проверяется реально изменённый путь
 
-### Marketing Kit и остальной каталог
+Использовать настоящий собранный CLI и существующие local/Git/Directory fixtures для
+install → repeat → update/repair → cold restore → remove и no-mutation refusals.
+Проверить six-client selection и root+required children Marketing Kit в обоих scopes;
+компонентные source/config assertions различаются по клиенту, общий graph не копируется.
+Один mixed fixture (Skill + stdio + HTTP) и небольшая таблица Skills-only/MCP-only
+достаточны там, где existing builders уже выражают эти варианты.
 
-Root `777genius/marketing-kit@0.1.0` — Skills; required children: Notion HTTP,
-HubSpot CRM HTTP, Playwright Bridge stdio. Qualification должна охватывать полную
-closure, а не только root. Не писать Marketing-specific policy bypass.
+Native evidence inventory фиксирует, какой настоящий profile/version/platform уже
+проверен и какой outcome ещё BLOCKED. Два известных research case не являются green
+oracles: `TestAgentpluginsClaudeNativeTrustedProjectMCPCall` квалифицирует foreign
+config, а `TestAgentpluginsCursorNativeProjectRuntimeAttempt` намеренно завершает
+capture с `t.Fatal`. Не переименовывать их в подтверждение UAP-managed MCP и не
+назначать их новыми обязательными green gates без реальной недостающей реализации.
 
-Для остальных active compatible distributions использовать общий case generator
-по exact signed source. Сохранять suspended/revoked state; не оживлять такие пакеты
-ради фразы «все». Required unsupported cases остаются отказами с причиной.
+Merge безопасного общего кода проходит после changed-path E2E, independent review и
+существующих applicable gates. Он не требует окончания трёх leaves и сам по себе
+не добавляет неподтверждённые native grants или публичные обещания.
 
-Контролируемые MCP fixtures доказывают клиент/transport/scope. Реальный SaaS OAuth
-проверяется отдельным opt-in smoke при наличии disposable account и разрешений.
-Отсутствие такого аккаунта — NOT_RUN/BLOCKED для OAuth claim; оно не подделывается
-fixture success и не обнуляет отдельно доказанную доставку/обнаружение конфигурации.
+### Native qualification и новые compatibility grants
 
-### Сайт и выпуск
+Для каждого нового заявленного client/profile/scope требуется genuine pinned binary,
+exact source HEAD, platform и closure: native Skill source плюс controlled stdio и
+Streamable HTTP initialize/list/call, restart и exact removal с user/A/B preservation.
+Недоказанная ячейка остаётся BLOCKED для этого grant/release claim. Prepared/files/list
+не заменяют actual call. Leaf имеет те же правила, но собственную матрицу и срок.
 
-- Совпадают agent/scope/closure eligibility CLI и сайта на положительных и отрицательных fixtures.
-- Выбор Global/Project, команды, Copy, подписи, обе темы и mobile проверяются существующим Landing E2E.
-- Новые публичные команды согласованы с опубликованным CLI; demo #702 остаётся иллюстрацией.
-- Зелёные applicable CI и independent review относятся к exact final integration HEAD.
-- После разрешённой публикации: protected publisher, immutable read-back обоих feed,
-  released CLI smoke, Pages и browser production smoke. Без них release status не completed.
+Новая матрица native qualification содержит шесть main клиентов; новые leaf features
+квалифицируются отдельно. Existing applicable all-client/Pi Project/другие baseline
+CI checks сохраняются без вырезания клиентов ради очереди. Не умножать
+общие policy negatives или весь SaaS каталог на все agents/OS. Сохранять native priority:
+Global не обязан перекрывать Project/local policy. Не добавлять OAuth broker, provider
+framework или новые model harness ради неизвестного upstream поведения.
 
-## 8. PR, коммиты и порядок публикации
+Marketing Kit root — Skills, children — Notion HTTP, HubSpot CRM HTTP, Playwright
+Bridge stdio. Проверяется вся closure, без Marketing-specific bypass. Реальный SaaS
+OAuth — отдельный opt-in smoke с разрешённым disposable account; без него нет OAuth
+PASS, но отдельно доказанная доставка конфигурации сохраняет собственный статус.
+Suspended/revoked packages не включаются ради заявления «все пакеты».
 
-Основной draft PR: [UAP #707](https://github.com/777genius/universal-agent-plugins/pull/707).
-Сначала в нём план, owner-scope ссылка и результаты
-двух review rounds. Последующие UAP изменения могут продолжать эту же ветку.
-Каждый законченный commit сразу push; не накапливать локальную неотправленную серию.
+### Сайт
 
-Registry находится в другом репозитории: его implementation требует отдельного linked
-PR. Это связанный deliverable основной программы, а не попытка включить два repo в
-один физический PR. Пустой Registry PR только ради ссылки сейчас не создаётся.
+Новая логика scope/closure проверяется authenticated fixtures в существующем browser
+suite, включая Copy, обе темы и mobile. Production до release cutover продолжает
+проверенный v1 и команды актуального released CLI (§8); fixture feed не становится
+production authority. После разрешённого cutover нужны actual full-feed/released
+binary read-back, Pages и browser production smoke.
 
-### Первый v2 bootstrap: две публикации Registry и один CLI release N
+## 8. PR, очередь GitHub Actions и публикация
 
-1. Подготовить reviewed implementation и выбрать будущую версию N по существующему
-   release runbook, когда на выпуск есть authorization. До final UAP release freeze
-   Registry публикует начальный signed v2 bootstrap с эквивалентными legacy user facts
-   и обновлённым v1. Нет project/Pi/new Devin grants и новых closure/runtime/OAuth claims.
-   Floor каждого bootstrap grant — `max(old floor, N)`; source/status/delivery/auth и
-   исходные evidence identities сохраняются, old proof не переименовывается в proof N.
-2. Bootstrap gate сохраняет все existing released-CLI v1 parity/readiness checks.
-   Дополнительно проверяет strict v1-to-v2 semantic projection, actual signatures и
-   pure v2 decoding на pinned source-built reader. Нельзя писать, что старый released
-   CLI прочитал v2. Это ограниченная format-transition проверка, а не feature flag
-   или отмена readiness. Bootstrap legacy user facts используют эквивалентную legacy
-   eligibility semantics; новый native/closure proof из них не фабрикуется.
-3. Включить authenticated v2 bootstrap в финальный UAP candidate N; заморозить tag
-   на reviewed main commit. Выполнить существующие draft qualification, шесть native
-   platform proofs и frozen receipt verification. При authorized promotion GitHub и
-   npm публикуют те же проверенные bytes без rebuild. Действуют все environment gates.
-4. Actual published N квалифицирует новые scoped grants active девятки. Registry
-   публикует полный qualified v2, поддерживая v1. До появления новых grants CLI
-   честно отказывает именно в ещё не разрешённых новых сценариях; baseline user
-   authorization сохраняется, а сайт не обещает готовность этих новых сценариев.
-5. Только после released-binary/full-feed read-back переключить реальные site
-   selectors на v2 summaries и проверить production. Ранний demo #702 остаётся примером.
+### Отдельные PR и merge порядок
 
-Первый v2 bootstrap уже существует к моменту freeze/publication N, поэтому нет
-цикла «reader требует bootstrap, publisher требует выпущенный новый reader».
-Нельзя пропускать финальную проверку actual embedded bytes или публиковать новый
-compatibility claim на основании source-built bootstrap decoder.
-Плановый draft сам по себе не разрешает публичный release.
+Основной [UAP #707](https://github.com/777genius/universal-agent-plugins/pull/707)
+содержит shared code, шесть простых клиентов, mirror/site и этот план. Registry —
+другой repo, поэтому имеет один связанный draft implementation PR. Qoder/Pi/Devin —
+три независимых draft PR из §5, без переноса общей серии или копий shared фиксов.
 
-Не удалять опубликованные immutable artifacts при rollback. Сохранить последний
-безопасный reader/v1 path; отозвать ошибочный grant новой policy publication по
-существующим правилам. Project failure не лечится установкой в user scope.
+Сначала merge готовой основной части после её exact-head gates и post-merge проверки.
+Затем каждый готовый leaf проходит собственный merge; один leaf не ждёт два других.
+Документировать фактический native/release статус, а не приравнивать merged code к
+опубликованной новой совместимости. Все source/baseline старых клиентов сохраняются.
 
-## 9. Оценка строк кода
+### Работа с очередью без изменения gates
 
-Это engineering estimate, не измеренный diff. Считаются добавленные и существенно
-изменённые handwritten строки один раз, не additions+deletions. Сгенерированные feeds,
-evidence dumps, locks, binaries, vendored code, планы и пользовательская документация
-(включая переводы) не включены. Документация остаётся deliverable P9; изменения journey
-pages выпускаются во всех девяти поддерживаемых locales по AGENTS. Уже существующие
-тесты повторно запускаются; они не считаются заново написанными.
+1. Draft при разработке. До commit — локальные targeted checks в изолированной ветке;
+   каждый законченный commit немедленно push. Не создавать микро-коммиты на каждую
+   assertion, не копить уже готовые commits и не использовать skip-ci.
+2. Coherent main batches: contract/reader/domain → CLI authorization/restore →
+   mirror/site/selection и docs. Independent Registry/leaf code проверяется параллельно.
+3. Draft не выключает всё: Core fast и Landing могут работать; native workflow может
+   сработать от изменения своего test path. Не переименовывать файлы для обхода filters.
+4. Final docs/review disposition записать до freeze последнего code HEAD. Filters
+   смотрят на cumulative PR diff: поздний docs-only push тоже перезапустит применимые
+   workflow. Runtime receipts хранить в existing CI artifacts, не дописывать их новым
+   code commit после успешной квалификации без необходимости.
+5. Одна ready/full-CI волна сначала для main; final native matrices leaves запускать
+   по мере освобождения очереди. Разработка leaves при этом остаётся параллельной.
+6. Не дублировать активный PR run ручным dispatch: у manual runs отдельная concurrency
+   group. Retry только реально failed/cancelled job с исправленной причиной; queued
+   не является failure. Не отменять чужие workflows и не менять глобальные runner vars.
+7. Существующий documented `ci:github-hosted` использовать адресно лишь при доказанной
+   подходящей очереди; не подменять genuine physical-host admission или platform proof.
 
-| Активный адаптер | Реализация | Тесты/fixtures | Содержание |
-| --- | ---: | ---: | --- |
-| Claude Code | 0–120 | 350–900 | Остаточные native MCP/profile/precedence проверки; reuse #704 |
-| Codex | 0–100 | 250–650 | Scoped dependency regressions; reuse env/ownership fixes |
-| OpenCode | 0–180 | 400–1 000 | Существующие V1/V2 profiles; не расширять несовместимые provider routes |
-| Cursor | 0–100 | 250–650 | Effective discovery/call/activation boundaries |
-| Gemini CLI | 0–80 | 150–400 | Существующий qualified route; targeted regression |
-| Copilot CLI | 0–200 | 250–700 | Config source/precedence и scoped closure; не открывать shared-family commands |
-| Qoder | 650–1 400 | 1 000–2 200 | Native Project Skills/MCP |
-| Pi | 500–1 000 | 900–1 800 | Native Global Skills/MCP |
-| Windsurf/Devin | 650–1 300 | 1 000–2 200 | Новый Devin Global profile/Skills/MCP; legacy preservation |
-| **Адаптеры, расширенный allowance** | **1 800–4 480** | **4 550–10 500** | |
+### Merge-safe CLI и сайт до релиза
 
-Нулевые нижние границы означают существующий путь. Верхние включают локальное hardening
-и оставшуюся native qualification, а не обязательную перепись каждого адаптера.
+Main добавляет v2 decoder, normalized policy и test fixtures. До отдельного CLI
+release-preparation cutover production constructor/embedded bootstrap и normal fresh
+user install/cold legacy restore используют прежний явный v1 path. Source-built CLI
+после main merge не должен зависеть от ещё отсутствующего v2 bootstrap. V2 integration
+проверяется через существующую explicit authenticated fixture boundary.
 
-| Общая работа | Реализация/schema/workflow | Тесты/harness |
+После actual initial signed v2 bootstrap publication отдельный CLI release-preparation
+commit переключает production composition/default new-operation routing на v2 и
+закрепляет actual embedded bytes ДО freeze candidate N. Это явное изменение release
+composition, без runtime flags, availability probes либо try-v2-then-v1 fallback.
+
+До более позднего site cutover production mirror/site явно сохраняет authenticated
+v1 и текущие released-CLI commands.
+Не пробовать отсутствующий v2 с тихим fallback, не вводить readiness feature flag и
+не показывать Project/Pi/Devin claim по test fixture. Новые source-built integration
+cases получают explicit signed fixture/bootstrap через существующую test boundary.
+Переход production feed/schema и real selectors — отдельный release cutover commit
+после actual published N + full qualified v2 + read-back. Это изменение версии
+протокола в релизе, а не новый параллельный механизм настройки совместимости.
+
+### Первый v2 bootstrap: две публикации Registry и один основной CLI release N
+
+1. По существующему release authorization/runbook выбрать N. До final release freeze
+   Registry публикует signed v2 bootstrap с эквивалентными legacy user facts и обновляет
+   v1. Нет новых project/Pi/Qoder/Devin grants или вымышленных closure/runtime/OAuth claims.
+   Floor grant — `max(old floor, N)`; source/status/delivery/auth/evidence сохраняются.
+2. Все existing released-CLI v1 parity/readiness gates сохранены. Добавить bounded
+   strict v1→v2 semantic projection, actual signatures и pinned source-built decoding;
+   не писать, что старый released CLI прочитал v2, и не переименовывать старый proof в N.
+3. После доступности actual signed v2 bootstrap выполнить CLI composition cutover
+   выше и включить authenticated bytes в final candidate N; затем freeze. Frozen main tag,
+   existing draft qualification, шесть native platform proofs, receipt verification,
+   protected promotion и npm используют те же bytes без rebuild и без ослабления gates.
+4. Actual published N квалифицирует новые grants основной шестёрки и полную Marketing
+   closure, включая Copilot root. Полная paired v2/v1 публикация включает только
+   действительно квалифицированные новые grants. При BLOCKED cell не выпускать
+   неподтверждённую claim и не объявлять шестёрку полностью квалифицированной.
+5. После full-feed/released-binary read-back выполнить production cutover сайта и smoke.
+   Общий rollout не ждёт Qoder/Pi/Devin, их baseline policies остаются прежними.
+
+Поздний leaf получает собственный grant floor по первой реально опубликованной CLI
+версии, содержащей его adapter; автоматически ставить N нельзя. Каждый leaf добавляет
+квалифицированные grants через existing paired publisher независимо от других leaves.
+Ему не нужен третий wire format, второй resolver или повторное открытие общего PR.
+Новая инструкция разрешает implementation/merge; публикация release требует своего
+owner authorization по AGENTS, который не заменяется этим планом.
+
+## 9. Пересмотренная оценка строк кода
+
+Считаются gross added/meaningfully modified handwritten строки один раз, не сумма
+additions+deletions. Existing test bodies и повторные прогоны не являются новым LOC.
+Generated feeds/evidence/locks/binaries/vendor, планы, public docs и переводы исключены.
+Документация изменённого поведения остаётся deliverable; journey pages обновляются
+во всех девяти maintained locales. Число строк — оценка, не цель расходования бюджета.
+
+| Основной клиент | Production LOC | NEW test/assertion LOC |
 | --- | ---: | ---: |
-| Scoped v2 schema и semantic validators | 350–650 | 450–800 |
-| Prepare/sign/CAS и поддерживаемая co-publication v1 | 550–1 000 | 700–1 300 |
-| Scoped evidence/readiness | 450–850 | 900–1 700 |
-| Go readers/cache/bootstrap/floors | 450–850 | 800–1 400 |
-| CLI identity/children/lock/repair/dry-run | 450–800 | 800–1 400 |
-| Reusable catalog closure qualification | 150–350 | 350–700 |
-| Mirror/landing/scope capabilities/selection | 600–1 100 | 800–1 500 |
-| **Общая часть** | **3 000–5 600** | **4 800–8 800** |
+| Claude Code | 0–120 | 50–140 |
+| Codex | 0–100 | 30–90 |
+| OpenCode | 0–180 | 50–140 |
+| Cursor | 0–100 | 50–140 |
+| Gemini CLI | 0–80 | 20–60 |
+| GitHub Copilot CLI | 0–200 | 50–180 |
+| **Шесть клиентов, сверх shared** | **0–780** | **250–750** |
 
-| Бюджет | Реализация | Тесты | Сумма |
+Это thin rows/smokes в existing suites. Нулевой production минимум означает существующий
+route; верхняя граница — локальный hardening, а не перепись адаптера. Unknown native
+runtime gap не считается заранее решённым этим небольшим allowance (§7/10).
+
+| Общая работа | Production/schema/workflow LOC | NEW tests/harness LOC |
+| --- | ---: | ---: |
+| Scoped schemas/semantic normalization | 350–650 | 200–350 |
+| Prepare/sign/CAS/bootstrap co-publication | 550–1 000 | 400–650 |
+| Closure/evidence/readiness | 450–850 | 400–700 |
+| Go readers/cache/bootstrap/floors | 450–850 | 350–600 |
+| CLI routing/children/lock/repair/dry-run | 450–800 | 350–600 |
+| Reusable Marketing/catalog integration | 150–350 | 100–200 |
+| Mirror/landing/scoped selection | 600–1 100 | 300–550 |
+| **Shared, один раз** | **3 000–5 600** | **2 100–3 650** |
+
+| PR / объём | Production LOC | NEW tests/fixtures LOC | Вместе |
 | --- | ---: | ---: | ---: |
-| Shared + три реальные feature gaps (Qoder/Pi/Devin) | 4 800–9 300 | 7 700–15 000 | **12 500–24 300** |
-| С остаточной qualification/hardening всей активной девятки | 4 800–10 080 | 9 350–19 300 | **14 150–29 380** |
+| **Main #707 + связанный Registry, шесть клиентов** | **3 000–6 380** | **2 350–4 400** | **5 350–10 780** |
+| Qoder Project, отдельный PR | 650–1 400 | 400–800 | 1 050–2 200 |
+| Pi Global, отдельный PR | 500–1 000 | 250–550 | 750–1 550 |
+| Devin Global, отдельный PR | 650–1 300 | 400–850 | 1 050–2 150 |
+| **Вся программа 6+3** | **4 800–10 080** | **3 400–6 600** | **8 200–16 680** |
 
-Вторая строка включает первую. Shared учитывается один раз. Marketing Kit marginal
-0–100 production +200–450 scenario/test LOC уже внутри общей суммы. Дополнительно
-150–450 handwritten policy-data LOC; они не являются новым executable subsystem.
-ChatGPT, VS Code и четыре deferred adapters в эти суммы не входят.
+Дополнительно 150–450 handwritten policy-data LOC. Marketing marginal 0–100 production
+и 200–450 scenario/test LOC уже распределены внутри shared, не добавляются сверху.
+Leaf totals не включают повторно общий HTTP probe, central metadata и Directory.
+ChatGPT/VS Code и четыре deferred клиента не включены.
 
-Ранний механический пересчёт без уточнения Windsurf давал 12 850–26 960 LOC.
-Он заменён этой оценкой: подготовленные Global Skills не закрывают новое требование.
-Devin spike/profile имеет confidence 6/10; при несовместимом selection/state contract
-переоценить этот slice, не скрывать увеличение внутри общего refactor.
+Предыдущие 14 150–29 380 total (9 350–19 300 tests) заменены этой оценкой. Снижение
+обосновано existing signed fixtures, cold-restore/CAS helpers, параметризацией одного
+mixed case и compact mutation tables (§7), а не удалением meaningful E2E. Shared
+production диапазон сохраняется до измеренного diff; количество новых тестов может
+вырасти только из конкретного выявленного риска, не ради coverage/LOC цели.
 
 ## 10. Риски и критерии остановки
 
@@ -495,25 +533,36 @@ Devin spike/profile имеет confidence 6/10; при несовместимо�
 уточнение scope; не расширять portable standard. Ошибки реального host/OAuth не
 маскировать patch-ами фикстур. Непрошедший active target не исчезает из итогового отчёта.
 
-## 11. Definition of Done будущей реализации
+## 11. Раздельные критерии готовности
 
-- [ ] Все девять active клиентов имеют подтверждённые Skills и MCP user/project пути
-      в явно заявленных native profiles/platforms; prepared-only storage не считается discovery.
-- [ ] Controlled native stdio и HTTP initialize/list/call подтверждены в обоих scopes
-      для каждого заявленного active profile; ни одна обязательная ячейка не скрыта skip-ом.
-- [ ] Совместимая mandatory closure, включая Marketing Kit, устанавливается в оба scopes.
-- [ ] Cold lock restore, update, repair, remove и user/A/B/foreign preservation проверены.
-- [ ] V1 старых клиентов продолжает обслуживаться; v2 не ломает их parser/expiry/authorization.
-- [ ] Неподдержанные/отозванные/неразрешённые случаи отказывают до mutation с полезной причиной.
-- [ ] Deferred/excluded baseline сохранён; новых claims для них нет.
-- [ ] Два раунда plan review и независимое implementation review закрыли применимые findings.
-- [ ] Applicable exact-head CI, native evidence и browser checks прошли; skip не выдан за PASS.
-- [ ] Markdown/public docs и actual site selection соответствуют released CLI/feed.
-- [ ] При отдельном release authorization выполнены protected publication и production read-back.
+### Основной код и ранний merge
 
-Последние publication пункты относятся к будущему выпуску. Текущий plan-only draft
-готов, когда документ исправлен после двух review rounds, сохранён в GitHub и ссылки
-проверены; это не выполнение checkbox-ов реализации.
+- [ ] Два review изменённого 6+3 плана закрыты; code review исправлен до отсутствия применимых findings.
+- [ ] Shared v2/closure/CLI integration реализована для шести existing clients; Marketing root/children и Copilot root учтены.
+- [ ] Changed-path CLI install/update/repair/remove/cold-restore E2E в обоих scopes проходит.
+- [ ] V1/old-lock/old-receipt и offline removal сохранены; wrong/revoked/missing child отказывает до mutation.
+- [ ] Main production site/commands сохраняют released behavior до отдельного cutover.
+- [ ] Existing baseline всех остальных клиентов сохранён; leaf capabilities не включены преждевременно.
+- [ ] Applicable exact final HEAD CI и review успешны; ready/merge и post-merge checks завершены.
+- [ ] Новые Qoder/Pi/Devin leaf features/matrices/completion не входят в required main
+      aggregate и не задерживают merge; existing applicable baseline checks сохранены.
+
+### Новая публичная совместимость и release
+
+- [ ] Шесть main client profiles имеют genuine native Skills и stdio/HTTP initialize/list/call в заявленных scopes/platforms.
+- [ ] Marketing Kit полностью авторизован/квалифицирован в обоих scopes, включая root+required children.
+- [ ] Actual released N, authenticated bootstrap, immutable promotion/npm и paired v1/v2 read-back подтверждены.
+- [ ] Published signed grants и site selection содержат только реально доказанные claims; production smoke завершён.
+
+### Каждый leaf отдельно
+
+- [ ] Его два plan reviews и independent code review закрыты; scoped implementation, old-receipt/native gates выполнены.
+- [ ] Свой exact-head CI, merge и post-merge checks завершены независимо от других leaves.
+- [ ] Новые grants/public claims получают actual first supported released version и собственное native evidence.
+
+Merged main code не закрывает автоматически public/native/release пункты. Заблокированная
+native ячейка остаётся явно открытой; отдельные листья не превращаются в скрытую зависимость
+основного PR. Полное завершение всей программы требует соответствующих outcomes всех её частей.
 
 ## 12. Отложенные TODO
 
@@ -527,7 +576,9 @@ Devin spike/profile имеет confidence 6/10; при несовместимо�
 Deferred TODO не является скрытой зависимостью текущего этапа. ChatGPT и VS Code
 исключены; возвращаются в отдельный scope только по новой приоритизации владельца.
 
-## 13. Самопроверка и два раунда критики
+## 13. Самопроверка и критика
+
+### История принятого общего контракта до разбиения 6+3
 
 Каждый formal round читает конкретную версию этого документа. Findings содержат
 severity, место, сценарий ошибки и минимальное исправление. Integrator проверяет
@@ -568,8 +619,50 @@ runtime proof. Других изменений implementation contract посл�
 
 Самопроверка подтвердила арифметику всех таблиц, восемь относительных ссылок и точное
 совпадение опубликованных plan/owner файлов с локальной версией, прочитанной критиками.
-Future implementation DoD выше остаётся открытым; эти review не заменяют будущие
-проверки кода, настоящих клиентов, релиза и production.
+Эти первые review относятся к прежнему монолитному разбиению, сохранённому в commit
+`73bf2d04904c52b5adb9782983c7481fa0242a56`. Они не подменяют проверку новой редакции 6+3.
+
+### Два раунда новой редакции 6+3
+
+| Этап | Статус | Проверяемые решения |
+| --- | --- | --- |
+| Self-check | Выполнен для draft | 6+3+deferred/excluded; новые суммы; leaf independence; CI queue и merge/release границы |
+| Split round 1 | Завершён; все findings закрыты во втором round | Один High CLI staging finding, уточнения baseline checks/xhigh и same-leaf atomic integration |
+| Split round 2 | PASS, без открытых findings | Main: Registry 9/10, adapters 9,2/10, integration 9,3/10. Leaf plans независимо приняты Registry и integration |
+
+Split round 1 читал main SHA-256
+`053b0e7408247a837c1c2581756dc909767bea33480cfdc93f3125a83d9323ef`, owner
+`a1cb26ede0d91e29b6bd37c07a18a5b3f4d21a83dc15a2d6bd36133e7b6bb15a` и три leaf drafts.
+Registry: NEEDS_CHANGES 8/10; integration: NEEDS_CHANGES 8,7/10; adapters/main: PASS 9/10.
+Integration critic независимо проверил три leaf plans; adapter author проводил для
+собственных leaf docs только self-check, что не считается independent approval.
+
+| Finding | Минимальное исправление для round 2 |
+| --- | --- |
+| S1-R1 / S1-I1 High: ранний CLI merge может требовать ещё отсутствующий v2 bootstrap | Production v1 до явного CLI cutover после signed bootstrap; cutover до freeze N; два composition assertions |
+| S1-I2 Low: main aggregate можно прочитать как удаление baseline клиентов | Исключены только новые leaf features/matrices/completion; existing baseline явно сохранён |
+| S1-A1 P3: текущие model footers high/xhigh расходились с owner xhigh | Все текущие footers согласованы на xhigh; исторические решения сохранены |
+| Root self-check: физическое место central patch | Integrator вносит patch в тот же leaf PR/merge result, без раннего capability-only main commit |
+
+Split round 2 прочитал main 674 строки и owner 130 строк, а также каждый leaf целиком.
+Все замечания таблицы выше CLOSED. Точные SHA-256 reviewed snapshots:
+
+| Документ | SHA-256 |
+| --- | --- |
+| Main | `ab88ef93ce954c6ee86d6784ecabbdf75b22ac7a4238165e39f8e9c5f84a1e6f` |
+| Owner | `8ae66122c66726a786dc04a4321e594b564a38afad6dec289363ea54ff0e2f87` |
+| Qoder | `dc96efaef9ad5fad0534823c6ba2a4b3f56c5376ee9dd5ab9f225782a3d65c42` |
+| Pi | `91dd1ffd9f83597429a3dcb783065163ed5461595668c073f5ad69d24d61543a` |
+| Devin | `e027216a31775489fd59b4f28eb3aff64156659d2d50b5d5c62b40bce77284cc` |
+
+Независимые leaf verdicts во втором round: Registry — 9/10 для каждого;
+integration — Qoder 9,2/10, Pi 9,3/10, Devin 9,1/10. Авторские self-checks отдельно
+и не считаются независимым approval. После review добавлены только журналы, статусы
+и фактические ссылки на draft PR #708/#709/#710; implementation contract не изменён.
+
+Новая версия не меняет принятый §4 authority contract. Проверяются изменённые
+приоритеты, PR boundaries, budgets, queue strategy и каждый leaf plan; before-code
+review gate сохраняется. Будущая реализация/нативные outcomes здесь не объявлены PASS.
 
 ## 14. Источники и обязательные правила
 
@@ -592,6 +685,6 @@ Future implementation DoD выше остаётся открытым; эти rev
   [precedence](https://docs.devin.ai/cli/reference/configuration/global-vs-local),
   [existing exact-version evidence](project-install-e2e/windsurf-devin-implementation-evidence.md).
 
-Workers/reviewers используют GPT-6.1-sol high/xhigh согласно текущему owner scope.
+Workers/reviewers используют GPT-6.1-sol xhigh согласно текущему owner scope.
 Перед будущими edits перечитать AGENTS на новом HEAD. Никаких feature flags либо
 ослабления existing safety/architecture gates ради зелёного результата.

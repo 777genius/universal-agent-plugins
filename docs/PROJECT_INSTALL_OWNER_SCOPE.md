@@ -1,5 +1,36 @@
 # Project installation: owner scope clarification
 
+## Six-client first merge and three independent adapters, 2026-11-04
+
+The latest owner instruction prioritizes one main implementation PR (#707) for
+Claude Code, Codex, OpenCode, Cursor, Gemini CLI and Copilot CLI together with the
+shared scoped Directory/dependency work. Qoder, Pi and Windsurf/Devin each get a
+separate draft PR. They remain active work, but their implementation, native proof
+and release do not gate the six-client main merge. Cline, Kimi, Kiro and Grok remain
+deferred; ChatGPT and VS Code remain excluded, preserving existing source/baselines.
+
+Implement the revised Markdown plan after its two review rounds, keep PRs draft
+while developing, push every completed commit immediately, and merge the main
+work as early as its applicable E2E/review/CI gates allow. Prefer targeted additions
+to existing tests and meaningful E2E over duplicate fixtures or coverage volume.
+Use one integrator and the available parallel workers with explicit file ownership;
+workers/reviewers use GPT-6.1-sol xhigh for this work. Do not invent extra slots.
+
+Respect the GitHub Actions queue: coherent locally checked commits, no duplicate
+manual/PR runs, finish documentation before final qualification freeze, and avoid
+starting all leaf final native matrices while main is waiting. Preserve required
+gates, original native authority and truthful evidence. Main code merge is distinct
+from new public compatibility/release qualification. Production CLI constructor/bootstrap and fresh-user routing retain v1 until an
+explicit release-preparation cutover after actual signed v2 bootstrap and before
+freeze N. Site/commands retain the released v1 path until the later qualified
+full-feed cutover. No runtime flag or fallback is introduced. This instruction
+authorizes implementation and merge; the existing public-release authorization rule
+still applies. It supersedes the earlier plan-only request below.
+
+See the [current 6+3 implementation plan](plans/2026-11-04-global-project-skills-mcp.md)
+for main/leaf ownership, lean estimates, gates, deferred TODOs and the review ledger.
+
+
 ## Scoped Directory delivery reprioritization, 2026-11-04
 
 The owner narrowed the new Global/Project Skills+MCP program to nine active
