@@ -32,7 +32,19 @@ type cacheRecord struct {
 
 var ErrCacheRollback = errors.New("directory cache would roll back last-known-good sequence")
 
+type cacheVerifier func([]byte, []byte, TrustStore) (VerifiedBundle, error)
+
 func (cache Cache) Load(trust TrustStore) (VerifiedBundle, error) {
+	return cache.loadVerified(trust, VerifyBundle, SnapshotSchemaVersion)
+}
+
+// LoadV2 reads an independent cache record using only the schema-2 signature
+// domain. Callers must pass a separate cache path and enforce its own floor.
+func (cache Cache) LoadV2(trust TrustStore) (VerifiedBundle, error) {
+	return cache.loadVerified(trust, VerifyV2Bundle, 2)
+}
+
+func (cache Cache) loadVerified(trust TrustStore, verifier cacheVerifier, schema int) (VerifiedBundle, error) {
 	if cache.Path == "" {
 		return VerifiedBundle{}, os.ErrNotExist
 	}
@@ -65,7 +77,7 @@ func (cache Cache) Load(trust TrustStore) (VerifiedBundle, error) {
 	if err := requireRootFields(body, "schema_version", "sequence", "snapshot", "envelope"); err != nil {
 		return VerifiedBundle{}, fmt.Errorf("invalid directory cache: %w", err)
 	}
-	if record.SchemaVersion != SnapshotSchemaVersion || record.Sequence < 1 {
+	if record.SchemaVersion != schema || record.Sequence < 1 {
 		return VerifiedBundle{}, fmt.Errorf("invalid directory cache identity")
 	}
 	snapshot, err := base64.StdEncoding.Strict().DecodeString(record.Snapshot)
@@ -76,7 +88,7 @@ func (cache Cache) Load(trust TrustStore) (VerifiedBundle, error) {
 	if err != nil {
 		return VerifiedBundle{}, fmt.Errorf("invalid cached envelope encoding: %w", err)
 	}
-	bundle, err := VerifyBundle(snapshot, envelope, trust)
+	bundle, err := verifier(snapshot, envelope, trust)
 	if err != nil {
 		return VerifiedBundle{}, err
 	}
@@ -101,6 +113,37 @@ func (cache Cache) Store(candidate VerifiedBundle, trust TrustStore) error {
 		return ErrCacheRollback
 	}
 	return err
+}
+
+// StoreV2 re-verifies a separately signed v2 candidate before an atomic
+// cache update. It does not alter schema-1 cache semantics or file paths.
+func (cache Cache) StoreV2(candidate VerifiedBundle, trust TrustStore) error {
+	verified, err := VerifyV2Bundle(candidate.SnapshotBytes, candidate.EnvelopeBytes, trust)
+	if err != nil {
+		return err
+	}
+	authoritative, err := cache.reconcileVersion(verified, trust, VerifyV2Bundle, 2, true)
+	if err == nil && authoritative.Snapshot.Sequence > verified.Snapshot.Sequence {
+		return ErrCacheRollback
+	}
+	return err
+}
+
+func (cache Cache) ReconcileV2(candidate VerifiedBundle, trust TrustStore) (VerifiedBundle, error) {
+	verified, err := VerifyV2Bundle(candidate.SnapshotBytes, candidate.EnvelopeBytes, trust)
+	if err != nil {
+		return VerifiedBundle{}, err
+	}
+	return cache.reconcileVersion(verified, trust, VerifyV2Bundle, 2, true)
+}
+
+func (cache Cache) ObserveV2(candidate VerifiedBundle, trust TrustStore) (VerifiedBundle, error) {
+	verified, err := VerifyV2Bundle(candidate.SnapshotBytes, candidate.EnvelopeBytes, trust)
+	if err != nil {
+		return VerifiedBundle{}, err
+	}
+	verified.Source = candidate.Source
+	return cache.reconcileVersion(verified, trust, VerifyV2Bundle, 2, false)
 }
 
 // Reconcile linearizes a verified candidate with the process-shared cache and
@@ -130,6 +173,10 @@ func (cache Cache) Observe(candidate VerifiedBundle, trust TrustStore) (Verified
 }
 
 func (cache Cache) reconcileVerified(verified VerifiedBundle, trust TrustStore, persist bool) (VerifiedBundle, error) {
+	return cache.reconcileVersion(verified, trust, VerifyBundle, SnapshotSchemaVersion, persist)
+}
+
+func (cache Cache) reconcileVersion(verified VerifiedBundle, trust TrustStore, verifier cacheVerifier, schema int, persist bool) (VerifiedBundle, error) {
 	if cache.Path == "" {
 		return VerifiedBundle{}, errors.New("directory cache path is empty")
 	}
@@ -148,7 +195,13 @@ func (cache Cache) reconcileVerified(verified VerifiedBundle, trust TrustStore, 
 		return VerifiedBundle{}, fmt.Errorf("lock directory cache: %w", err)
 	}
 	defer unlock()
-	if current, loadErr := cache.Load(trust); loadErr == nil && current.Snapshot.Sequence >= verified.Snapshot.Sequence {
+	current, loadErr := cache.loadVerified(trust, verifier, schema)
+	// V2 must never overwrite a schema-1 cache accidentally reused at the
+	// same path (or replace corrupted signed authority with a fresh snapshot).
+	if schema == 2 && loadErr != nil && !errors.Is(loadErr, os.ErrNotExist) {
+		return VerifiedBundle{}, fmt.Errorf("refuse replacement of unreadable v2 cache: %w", loadErr)
+	}
+	if loadErr == nil && current.Snapshot.Sequence >= verified.Snapshot.Sequence {
 		if current.Snapshot.Sequence > verified.Snapshot.Sequence {
 			return current, nil
 		}
@@ -160,7 +213,7 @@ func (cache Cache) reconcileVerified(verified VerifiedBundle, trust TrustStore, 
 	if !persist {
 		return verified, nil
 	}
-	record := cacheRecord{SchemaVersion: SnapshotSchemaVersion, Sequence: verified.Snapshot.Sequence, Snapshot: base64.StdEncoding.EncodeToString(verified.SnapshotBytes), Envelope: base64.StdEncoding.EncodeToString(verified.EnvelopeBytes)}
+	record := cacheRecord{SchemaVersion: schema, Sequence: verified.Snapshot.Sequence, Snapshot: base64.StdEncoding.EncodeToString(verified.SnapshotBytes), Envelope: base64.StdEncoding.EncodeToString(verified.EnvelopeBytes)}
 	body, err := json.Marshal(record)
 	if err != nil {
 		return VerifiedBundle{}, err
