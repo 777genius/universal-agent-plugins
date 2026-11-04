@@ -212,6 +212,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         # This static guard joins the GitHub step outcome to the harness refusal.
         workflows = (
             (".github/workflows/live-install-audit.yml", "native-install"),
+            (".github/workflows/live-install-audit.yml", "native-install-pilot"),
+            (".github/workflows/live-install-audit.yml", "published-install"),
             (".github/workflows/live-install-remaining-clients.yml", "vendor-install"),
         )
         for relative_path, step_id in workflows:
@@ -258,6 +260,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertFalse(audit.vendor_bootstrap_attested())
         with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}):
             self.assertTrue(audit.vendor_bootstrap_attested())
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(audit.vendor_bootstrap_attested())
+        with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": ""}):
+            self.assertFalse(audit.vendor_bootstrap_attested())
 
     def test_vendor_bootstrap_requires_reviewed_bytes_and_preserves_runner_toolchain(self):
         workflow = (Path(__file__).resolve().parents[1] /
@@ -377,7 +383,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertEqual(initial[".codex/linked-dir"], "symlink")
             self.assertIn(".codex/managed.yaml", initial)
             self.assertNotIn(".codex/linked-dir/unrelated.txt", initial)
-            with patch.object(Path, "read_bytes", side_effect=OSError("unreadable")):
+            with patch.object(Path, "open", side_effect=OSError("unreadable")):
                 invalid = audit.snapshot([root])
             self.assertEqual(invalid[".codex/managed.yaml"], "unreadable")
             self.assertIn("unknown-link: symlink", " ".join(
@@ -591,3 +597,121 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_large_native_file_rewrite_changes_snapshot(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".grok"
+            root.mkdir()
+            native = root / "managed.json"
+            native.write_bytes(b"A" * (5 * 1024 * 1024))
+            before = audit.snapshot([root])
+            native.write_bytes(b"B" * (5 * 1024 * 1024))
+            after = audit.snapshot([root])
+            self.assertNotEqual(before, after)
+            self.assertEqual(len(before[".grok/managed.json"]), 64)
+            self.assertNotIn("too-large", after.values())
+
+    def test_native_attribution_excludes_cache_and_unrelated_url(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".qoder"
+            cache = root / "plugins/cache/local/github/app.json"
+            url = root / "settings.json"
+            native = root / "plugins/installed_plugins_v2.json"
+            for f in (cache, url, native):
+                f.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text('{"name":"github"}')
+            url.write_text('{"repository":"https://github.com/other/repo"}')
+            native.write_text('{"plugins":{"github":{"enabled":true}}}')
+            files = audit.snapshot([root])
+            changes = list(files.items())
+            credited = audit.attributable_native_changes([root], changes, "github", "qoder")
+            self.assertEqual(credited, [".qoder/plugins/installed_plugins_v2.json"])
+            self.assertFalse(audit.exact_native_identity(
+                'source = "https://github.com/example/package"', "github"))
+            self.assertTrue(audit.exact_native_identity(
+                'name = "github"', "github"))
+
+    def test_native_and_temp_symlink_escape_rejected_before_untrusted_writes(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            case = root / "case"
+            home = case / "home"
+            data = case / "uap-data"
+            foreign = root / "foreign"
+            foreign.mkdir()
+            home.mkdir(parents=True)
+            data.mkdir()
+            (home / ".codex").symlink_to(foreign, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "native profile"):
+                audit.isolated_client_env(home, case, data)
+            (home / ".codex").unlink()
+            (case / "tmp").symlink_to(foreign, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "temp root"):
+                audit.isolated_client_env(home, case, data)
+
+            future = root / "run" / "plugin-00"
+            future.parent.mkdir()
+            future.symlink_to(foreign, target_is_directory=True)
+            with self.assertRaises(FileExistsError):
+                audit.do_case("/unused/audit-cli", "codex", "plugin",
+                              "atlassian", 0, future.parent, {})
+            self.assertEqual(list(foreign.iterdir()), [])
+
+    def test_skill_removal_rejects_surviving_links_and_native_registration(self):
+        audit = load_audit()
+        identity = "demo-skill"
+        item = {"name": identity, "folder": identity, "repo": "example/skills",
+                "ref": "a" * 40, "source": "https://github.com/example/skills"}
+        match = [{"name": identity, "installation_id": "skill-1",
+                  "clients": [{"client_id": "claude",
+                               "verification": "installation_verified"}]}]
+
+        def check(residue):
+            with TemporaryDirectory() as temporary:
+                runroot = Path(temporary)
+                project = runroot / "skill-00/project"
+                native = runroot / "skill-00/home/.claude"
+                skill = project / ".claude/skills/demo-skill/SKILL.md"
+                state = {"installed": False}
+                def fake_call(argv, env, cwd, timeout=105):
+                    if argv[1] == "skills":
+                        skill.parent.mkdir(parents=True, exist_ok=True)
+                        skill.write_text("---\nname: demo-skill\n---\n")
+                        (project / "uap.toml").write_text("demo-skill\n")
+                        (project / "uap.lock").write_text('{"name":"demo-skill"}')
+                        state["installed"] = True
+                    elif argv[1] == "remove":
+                        skill.unlink()
+                        state["installed"] = False
+                        if residue == "symlink":
+                            skill.symlink_to(project / "unmanaged")
+                        elif residue == "native":
+                            (native / "agent-registry.json").write_text(
+                                '{"skills":{"demo-skill":{}}}')
+                    return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                            "timeout": False,
+                            "_json": {"data": {"installations":
+                                               match if state["installed"] else []}}}
+                with patch.object(audit, "call", side_effect=fake_call), \
+                     patch.object(audit, "locked_skill_is_pinned", return_value=True), \
+                     patch.object(audit, "matches_pinned_skill_bytes", return_value=True):
+                    evidence = audit.do_case("/unused/agentplugins", "claude", "skill",
+                                             item, 0, runroot, {})
+                self.assertTrue(evidence["installed"] if "installed" in evidence
+                                else evidence["listed_identity"])
+                self.assertTrue(evidence["repeat_verified"])
+                return evidence
+        clean = check(None)
+        self.assertTrue(clean["removal_verified"])
+        self.assertEqual(clean["status"], "passed")
+        linked = check("symlink")
+        self.assertFalse(linked["removal_verified"])
+        self.assertEqual(linked["status"], "cleanup-failed")
+        self.assertTrue(linked["post_removal_leftovers"])
+        native = check("native")
+        self.assertFalse(native["removal_verified"])
+        self.assertEqual(native["status"], "cleanup-failed")
+        self.assertTrue(native["native_residuals"])
