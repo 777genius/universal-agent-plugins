@@ -132,4 +132,19 @@ func TestV2RequiresExactProjectRuntimeEvidence(t *testing.T) {
 	if _, err := ParseV2Snapshot(body); err != nil {
 		t.Fatalf("exact client/project runtime evidence should qualify: %v", err)
 	}
+	digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	original.Distributions[0].ReleasePolicies[0].Targets[2].CanonicalClosure = &domain.DirectoryCanonicalClosure{
+		Eligible: true, ClosureDigest: digest, MinimumInstallerVersion: "1.0.0",
+	}
+	original.Evidence[len(original.Evidence)-1].ClosureDigest =
+		"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	body, _ = json.Marshal(original)
+	if _, err := ParseV2Snapshot(body); !errors.Is(err, ErrStrictJSON) {
+		t.Fatalf("project grant accepted unrelated closure runtime: %v", err)
+	}
+	original.Evidence[len(original.Evidence)-1].ClosureDigest = digest
+	body, _ = json.Marshal(original)
+	if _, err := ParseV2Snapshot(body); err != nil {
+		t.Fatalf("exact signed project closure runtime rejected: %v", err)
+	}
 }

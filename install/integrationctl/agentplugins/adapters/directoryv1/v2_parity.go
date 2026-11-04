@@ -110,6 +110,9 @@ func validateV2EvidenceDimensions(evidence []domain.DirectoryEvidence) error {
 		if item.Artifact.Path == "" {
 			return strictError("v2 evidence artifact path is missing")
 		}
+		if item.ClosureDigest != "" && !digestPattern.MatchString(item.ClosureDigest) {
+			return strictError("v2 evidence has invalid closure digest")
+		}
 		tuple := strings.Join([]string{
 			item.DistributionID, fmt.Sprint(item.ReleaseSequence),
 			item.PackageTreeDigest, item.Level, string(item.Client), string(item.Scope),
@@ -165,7 +168,9 @@ func validateV2ProjectGrantEvidence(snapshot domain.DirectorySnapshot) error {
 					if item.Client != grant.Client || item.Scope != domain.ScopeProject {
 						return strictError("v2 project grant borrows evidence from another client or scope")
 					}
-					if item.Level == "runtime" && item.Outcome == "passed" {
+					if item.Level == "runtime" && item.Outcome == "passed" &&
+						(grant.CanonicalClosure == nil || !grant.CanonicalClosure.Eligible ||
+							item.ClosureDigest == grant.CanonicalClosure.ClosureDigest) {
 						runtimePassed = true
 					}
 				}
