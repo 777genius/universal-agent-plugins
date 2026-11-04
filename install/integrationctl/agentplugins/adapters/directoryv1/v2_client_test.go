@@ -50,6 +50,19 @@ func TestV2ClientFreshBootstrapAndOfflineExactCache(t *testing.T) {
 	if _, err := client.Transport.fetchV2(context.Background()); err == nil {
 		t.Fatal("network fixture should no longer be available")
 	}
+	// Read-only inspection may show expired signed provenance; it must never
+	// enable an install from a stale snapshot or ignore receipt floors.
+	client.Transport.Now = func() time.Time { return fixtureNow.Add(365 * 24 * time.Hour) }
+	local, err := client.LoadLocal(1)
+	if err != nil || local.Digest != accepted.Digest || local.Source != BundleSourceCache {
+		t.Fatalf("v2 read-only offline provenance unavailable: %+v %v", local, err)
+	}
+	if _, err := client.LoadLocal(2); !errors.Is(err, ErrRollback) {
+		t.Fatalf("v2 read-only inspection ignored installed floor: %v", err)
+	}
+	if _, err := client.Load(context.Background(), 1); !errors.Is(err, ErrExpired) {
+		t.Fatalf("expired v2 provenance was allowed to authorize install: %v", err)
+	}
 }
 
 func TestV2ClientRefusesV1BootstrapAndSharedCachePath(t *testing.T) {
@@ -63,6 +76,9 @@ func TestV2ClientRefusesV1BootstrapAndSharedCachePath(t *testing.T) {
 	client.Cache.Path = client.Transport.Cache.Path
 	if _, err := client.Load(context.Background(), 0); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("v2 accepted same v1/v2 cache path: %v", err)
+	}
+	if _, err := client.LoadLocal(0); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("read-only v2 accepted same v1/v2 cache path: %v", err)
 	}
 	client.Cache.Path = filepath.Join(t.TempDir(), "schema-2.json")
 	client.Embedded.Envelope = []byte("{}")
