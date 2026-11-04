@@ -52,8 +52,9 @@ func isContext7PreparationSource(distribution DirectoryDistribution, release Dir
 func hasContext7PreparationPromotion(snapshot DirectorySnapshot, distribution DirectoryDistribution, release DirectoryRelease, policy DirectoryReleasePolicy) bool {
 	for _, target := range policy.Targets {
 		delivery, supported := ExpectedDirectoryDelivery(target.Client)
-		if supported && target.Delivery == delivery && (containsScope(target.Scopes, ScopeUser) || containsScope(target.Scopes, ScopeProject)) &&
-			hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target.Client) {
+		passed := containsScope(target.Scopes, ScopeUser) && hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target.Client, ScopeUser) ||
+			containsScope(target.Scopes, ScopeProject) && hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target.Client, ScopeProject)
+		if supported && target.Delivery == delivery && passed {
 			return true
 		}
 	}

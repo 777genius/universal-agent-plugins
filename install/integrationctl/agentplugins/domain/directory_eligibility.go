@@ -16,11 +16,12 @@ func directoryEligibilityTargets(targets []ClientID, scope InstallScope) []Clien
 // hasPassedUpstreamMaterialization is the static promotion/package gate. Its
 // environment dimensions describe the isolated promotion run and must not be
 // mistaken for evidence about the caller's local environment.
-func hasPassedUpstreamMaterialization(snapshot DirectorySnapshot, distribution DirectoryDistribution, release DirectoryRelease, policy DirectoryReleasePolicy, client ClientID) bool {
+func hasPassedUpstreamMaterialization(snapshot DirectorySnapshot, distribution DirectoryDistribution, release DirectoryRelease, policy DirectoryReleasePolicy, client ClientID, scope InstallScope) bool {
 	for _, evidenceID := range policy.CurrentEvidence {
 		evidence := evidenceByID(snapshot, evidenceID)
 		if evidence != nil && evidence.HasTrustedEligibilityProvenanceAtSequence(snapshot.Sequence) && evidence.DistributionID == distribution.ID && evidence.ReleaseSequence == release.Sequence &&
-			evidence.PackageTreeDigest == release.TreeDigest && evidence.Client == client && evidence.Level == "materialization" && evidence.Outcome == "passed" {
+			evidence.PackageTreeDigest == release.TreeDigest && evidence.Client == client && evidence.Level == "materialization" && evidence.Outcome == "passed" &&
+			(scope == ScopeProject && evidence.Scope == ScopeProject || scope == ScopeUser && (evidence.Scope == "" || evidence.Scope == ScopeUser)) {
 			return true
 		}
 	}
@@ -33,6 +34,11 @@ func directoryEvidenceApplies(e DirectoryEvidence, distribution DirectoryDistrib
 	}
 	if e.Level == "schema" {
 		return e.Client == ""
+	}
+	// Historical V1 evidence is scoped to the user environment only.
+	if request.Scope == ScopeProject && e.Scope != ScopeProject ||
+		request.Scope == ScopeUser && e.Scope != "" && e.Scope != ScopeUser {
+		return false
 	}
 	if e.Client != client || !evidenceDimensionMatches(e.InstallerVersion, request.InstallerVersion) ||
 		!evidenceDimensionMatches(e.OS, request.OS) || !evidenceDimensionMatches(e.Architecture, request.Architecture) {

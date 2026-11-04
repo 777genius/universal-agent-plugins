@@ -51,6 +51,15 @@ func TestResolveDirectoryLockedRestoreProjectRequiresV2Grant(t *testing.T) {
 		target := &snapshot.Distributions[2].ReleasePolicies[0].Targets[i]
 		target.Scopes = []InstallScope{ScopeUser, ScopeProject}
 	}
+	if _, err := ResolveDirectory(snapshot, request); !errors.Is(err, ErrDirectoryIneligible) {
+		t.Fatalf("project grant incorrectly reused user-only promotion evidence: %v", err)
+	}
+	for i := range snapshot.Evidence {
+		evidence := &snapshot.Evidence[i]
+		if evidence.Client == ClientCodex && evidence.ReleaseSequence == request.DesiredReleaseSequence {
+			evidence.Scope = ScopeProject
+		}
+	}
 	got, err := ResolveDirectory(snapshot, request)
 	if err != nil || got.ReleaseSequence != request.DesiredReleaseSequence || got.DistributionID != "owner/tool" {
 		t.Fatalf("qualified v2 Project exact restore failed: %+v %v", got, err)

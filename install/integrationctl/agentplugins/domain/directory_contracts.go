@@ -139,6 +139,9 @@ type DirectoryEvidence struct {
 	Level              string                    `json:"level"`
 	Outcome            string                    `json:"outcome"`
 	Client             ClientID                  `json:"client,omitempty"`
+	// V1 evidence has no scope and remains user-only. Project evidence in V2
+	// must identify its scope explicitly to prevent cross-scope promotion.
+	Scope              InstallScope              `json:"scope,omitempty"`
 	ClientVersion      string                    `json:"client_version,omitempty"`
 	InstallerVersion   string                    `json:"installer_version,omitempty"`
 	AdapterVersion     string                    `json:"adapter_version,omitempty"`

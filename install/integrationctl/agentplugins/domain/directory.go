@@ -191,7 +191,7 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 			if !supported || entry.Delivery != delivery {
 				return &eligibilityReason{"incompatible_delivery", fmt.Sprintf("release delivery %q is incompatible with %s; expected %q", entry.Delivery, target, delivery)}
 			}
-			if distribution.Kind == DistributionUpstream && !hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target) {
+			if distribution.Kind == DistributionUpstream && !hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target, request.Scope) {
 				return &eligibilityReason{"upstream_materialization_required", "upstream release lacks current passed materialization evidence for " + string(target)}
 			}
 		}
