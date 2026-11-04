@@ -210,28 +210,33 @@ func TestDirectoryProcessCrashAfterStateCommitRecovers(t *testing.T) {
 	restarted := Kernel{StateStore: statev2.Store{Path: store.Path}, Directory: dirswap.Manager{
 		JournalDir: filepath.Join(root, "operations-v2"),
 	}}
+	assertRecovered := func() {
+		t.Helper()
+		assertTransactionBody(t, mutation.ActivePath, "new")
+		after, err := restarted.StateStore.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		owned = onlyClient(after.Installations[0])
+		if len(owned.Receipts) != 1 || owned.Receipts[0].Phase != ReceiptPhaseCommitted ||
+			owned.Receipts[0].OperationID != mutation.OperationID {
+			t.Fatalf("commit recovery failed to finalize exact ownership: %+v", owned.Receipts)
+		}
+		if pending, err := restarted.Directory.ListOpen(); err != nil || len(pending) != 0 {
+			t.Fatalf("post-commit journal not settled: %+v, %v", pending, err)
+		}
+		if _, err := os.Lstat(open[0].BackupPath); !os.IsNotExist(err) {
+			t.Fatalf("committed old backup not cleared: %v", err)
+		}
+		if body, err := os.ReadFile(foreign); err != nil || string(body) != "untouched\n" {
+			t.Fatalf("foreign neighbor changed: %q %v", body, err)
+		}
+	}
 	for range 2 {
 		if err := restarted.Recover(t.Context()); err != nil {
 			t.Fatalf("restarted idempotent commit recovery: %v", err)
 		}
-	}
-	assertTransactionBody(t, mutation.ActivePath, "new")
-	after, err := restarted.StateStore.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	owned = onlyClient(after.Installations[0])
-	if len(owned.Receipts) != 1 || owned.Receipts[0].Phase != ReceiptPhaseCommitted ||
-		owned.Receipts[0].OperationID != mutation.OperationID {
-		t.Fatalf("commit recovery failed to finalize exact ownership: %+v", owned.Receipts)
-	}
-	if pending, err := restarted.Directory.ListOpen(); err != nil || len(pending) != 0 {
-		t.Fatalf("post-commit journal not settled: %+v, %v", pending, err)
-	}
-	if _, err := os.Lstat(open[0].BackupPath); !os.IsNotExist(err) {
-		t.Fatalf("committed old backup not cleared: %v", err)
-	}
-	if body, err := os.ReadFile(foreign); err != nil || string(body) != "untouched\n" {
-		t.Fatalf("foreign neighbor changed: %q %v", body, err)
+		// Assert immediately after each call, including the first recovery.
+		assertRecovered()
 	}
 }
