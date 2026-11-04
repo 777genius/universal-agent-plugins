@@ -145,7 +145,10 @@ func TestProjectQoderClosedViewAndNeutralDiscovery(t *testing.T) {
 			t.Fatalf("unqualified native path %s: %v", path, err)
 		}
 	}
-	projectGeminiAssert(t, filepath.Join(plan.ActivePath, ".mcp.json"), "raw source; never import root")
+	mcpBody, err := os.ReadFile(filepath.Join(plan.ActivePath, ".mcp.json"))
+	if err != nil || !strings.Contains(string(mcpBody), `"docs"`) || !strings.Contains(string(mcpBody), `"type": "http"`) || strings.Contains(string(mcpBody), "raw source; never import root") {
+		t.Fatalf("selected project MCP projection was not staged: %s %v", mcpBody, err)
+	}
 	projectGeminiAssert(t, filepath.Join(f.source, "hooks", "hooks.json"), "raw source; never import root")
 	runner := &qoderForbiddenRunner{}
 	actor := providers.Activator{Registry: f.registry, Runner: runner}

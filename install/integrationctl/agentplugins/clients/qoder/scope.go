@@ -104,9 +104,19 @@ func (*Adapter) QualifyPlan(in clients.PlanInput, plan *domain.DeliveryPlan) err
 		return err
 	}
 	for i := range plan.Components {
-		if plan.Components[i].Kind != domain.ComponentSkill && plan.Components[i].Kind != domain.ComponentMCPServer {
-			plan.Components[i].Support = domain.SupportUnsupported
-			plan.Components[i].Reason = "Qoder project supports only native Skills and stdio/HTTP MCP"
+		component := &plan.Components[i]
+		switch component.Kind {
+		case domain.ComponentSkill:
+			// Portable and projected command Skills retain their existing selection.
+		case domain.ComponentMCPServer:
+			server, exists := in.Envelope.MCP.Servers[component.Name]
+			if !exists || (server.Type != "stdio" && server.Type != "streamable-http") {
+				component.Support = domain.SupportUnsupported
+				component.Reason = "Qoder project MCP supports stdio and streamable HTTP only"
+			}
+		default:
+			component.Support = domain.SupportUnsupported
+			component.Reason = "Qoder project supports only native Skills and stdio/HTTP MCP"
 		}
 	}
 	return nil
