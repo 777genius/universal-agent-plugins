@@ -1,0 +1,281 @@
+package pluginkitairepo_test
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+)
+
+// This immutable Agent Skills 1.0 fixture has no commands or credentials.
+// The native suite fetches it through the actual public CLI, rather than
+// injecting a Git acquisition adapter or asserting only prepared files.
+const nativeRawUserSkillCommit = "7155140441b93db3a7b36dcd7e00291cafe608f9"
+const nativeRawUserSkillSource = "777genius/universal-agent-plugins@" + nativeRawUserSkillCommit + "//tests/fixtures/uap_apm/skills/benchmark-note"
+const nativeRawUserSkillName = "benchmark-note"
+
+func nativeRawUserInstall(t *testing.T, root, dir string, env []string, installer, target, label string, explicit bool, repeated bool) {
+	t.Helper()
+	args := []string{"skills", "add", nativeRawUserSkillSource, "--skill", nativeRawUserSkillName, "--target", target, "--no-ui", "--yes"}
+	if explicit {
+		args = append(args, "--scope", "user")
+	}
+	result, err := commandsRunInstaller(t, root, dir, env, installer, label, args...)
+	items, _ := result["items"].([]any)
+	if err != nil || result["status"] != "succeeded" || len(items) != 1 {
+		t.Fatalf("%s: native raw Skill CLI failed: %v; %+v", label, err, result)
+	}
+	item, _ := items[0].(map[string]any)
+	status, _ := item["status"].(string)
+	if !repeated && status != "succeeded" || repeated && status != "unchanged" {
+		t.Fatalf("%s: unexpected per-target raw Skill outcome: %v", label, result)
+	}
+}
+
+func nativeRawUserState(t *testing.T, statePath, target, profile string) (domain.StateFileV2, domain.ClientBinding) {
+	t.Helper()
+	body, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state domain.StateFileV2
+	if err := json.Unmarshal(body, &state); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Installations) != 1 || len(state.EnvironmentReceipts) != 1 {
+		t.Fatalf("%s: expected exactly one raw Skill and receipt: %+v", target, state)
+	}
+	installed := state.Installations[0]
+	binding, ok := installed.Clients[target]
+	if !ok || installed.DeclaredName != nativeRawUserSkillName ||
+		installed.Source.ResolvedRevision != nativeRawUserSkillCommit ||
+		binding.ClientID != target || binding.Scope != "user" ||
+		binding.TargetLocator == "" || binding.PhysicalArtifact == "" ||
+		binding.ClientBindingID == "" || binding.NativeProfileRoot != profile ||
+		binding.Verification != domain.VerificationInstalled ||
+		state.EnvironmentReceipts[0].ClientID != target {
+		t.Fatalf("%s: raw Skill lost immutable user/native identity: %+v; %+v", target, installed, binding)
+	}
+	return state, binding
+}
+
+func nativeRawUserFiles(t *testing.T, binding domain.ClientBinding, client string) {
+	t.Helper()
+	root := binding.TargetLocator
+	if client == "claude" {
+		root = filepath.Join(root, ".agentplugins-runtime")
+	}
+	for relative, digest := range map[string]string{
+		"skills/benchmark-note/SKILL.md": "53e39c4f1dcaa4c2ed1196654678ede091b71fb837f77a1beb07ba556abc1198",
+		"skills/benchmark-note/references/fixture.txt": "674bbf87f1469969103f15f60ea1389829fe431dfca5439da1fc57da211d1f2f",
+	} {
+		if actual := nativeSHA(t, filepath.Join(root, filepath.FromSlash(relative))); actual != digest {
+			t.Fatalf("%s: normalized Skill changed pinned Agent Skills 1.0 bytes at %s: %s", client, relative, actual)
+		}
+	}
+}
+
+func nativeRawUserRemove(t *testing.T, root, dir string, env []string, installer, target, statePath, active string, external bool) {
+	t.Helper()
+	args := []string{"remove", nativeRawUserSkillName, "--target", target, "--scope", "user"}
+	if external {
+		args = append(args, "--external-uninstalled")
+	}
+	result, err := commandsRunInstaller(t, root, dir, env, installer, "raw-user-remove", args...)
+	if err != nil || result["result"] != "success" {
+		t.Fatalf("%s: raw Skill removal did not complete: %v; %+v", target, err, result)
+	}
+	if _, err := os.Lstat(active); !os.IsNotExist(err) {
+		t.Fatalf("%s: managed raw Skill survived removal: %v", target, err)
+	}
+	body, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state domain.StateFileV2
+	if err := json.Unmarshal(body, &state); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.EnvironmentReceipts) != 0 {
+		t.Fatalf("%s: removal left a live environment receipt: %+v", target, state.EnvironmentReceipts)
+	}
+	for _, installation := range state.Installations {
+		if _, ok := installation.Clients[target]; ok {
+			t.Fatalf("%s: removed native binding is still registered", target)
+		}
+	}
+}
+
+func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginID, active, label string, want bool) {
+	t.Helper()
+	listing, err := nativeCommand(t, f, client, label+"-plugins", "plugin", "list", "--json")
+	if err != nil {
+		t.Fatalf("Codex native plugin list: %v; %s", err, listing)
+	}
+	var inventory struct {
+		Installed []struct {
+			ID string `json:"pluginId"`
+			Installed bool `json:"installed"`
+			Enabled bool `json:"enabled"`
+			Source struct { Path string `json:"path"` } `json:"source"`
+		} `json:"installed"`
+	}
+	if err := json.Unmarshal(listing, &inventory); err != nil {
+		t.Fatal(err)
+	}
+	present := 0
+	for _, plugin := range inventory.Installed {
+		if plugin.ID == pluginID {
+			if !plugin.Installed || !plugin.Enabled || plugin.Source.Path != active {
+				t.Fatalf("Codex raw Skill native registration is not exact: %+v", plugin)
+			}
+			present++
+		}
+	}
+	if (present == 1) != want || present > 1 {
+		t.Fatalf("Codex native plugin presence=%d want=%v", present, want)
+	}
+
+	r := startNativeRPC(t, f, client, label)
+	defer r.close()
+	r.must(t, "initialize", map[string]any{"clientInfo": map[string]string{"name": "uap_raw_user_skill", "version": "1.0.0"}, "capabilities": map[string]any{"experimentalApi": true}})
+	if err := json.NewEncoder(r.in).Encode(map[string]any{"method": "initialized"}); err != nil {
+		t.Fatal(err)
+	}
+	var skills struct {
+		Data []struct {
+			Skills []struct {
+				Name string `json:"name"`
+				Path string `json:"path"`
+				PluginID string `json:"pluginId"`
+				Enabled bool `json:"enabled"`
+			} `json:"skills"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(r.must(t, "skills/list", map[string]any{"cwds": []string{f.Project}, "forceReload": true}), &skills); err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	for _, group := range skills.Data {
+		for _, skill := range group.Skills {
+			if skill.PluginID != pluginID {
+				continue
+			}
+			if skill.Name != "benchmark-note:benchmark-note" || !skill.Enabled ||
+				!strings.HasSuffix(filepath.ToSlash(skill.Path), "/skills/benchmark-note/SKILL.md") {
+				t.Fatalf("Codex native raw Skill identity mismatch: %+v", skill)
+			}
+			nativeRequireContained(t, f.Root, skill.Path)
+			if got := nativeSHA(t, skill.Path); got != "53e39c4f1dcaa4c2ed1196654678ede091b71fb837f77a1beb07ba556abc1198" {
+				t.Fatalf("Codex native Skill body differs from pinned Git source: %s", got)
+			}
+			found++
+		}
+	}
+	if (found == 1) != want || found > 1 {
+		t.Fatalf("Codex native skills/list found=%d want=%v", found, want)
+	}
+}
+
+func TestAgentpluginsCodexNativeRawUserSkillLifecycle(t *testing.T) {
+	if os.Getenv("AGENTPLUGINS_CODEX_NATIVE_E2E") != "1" {
+		t.Skip("opt-in genuine Codex native user Skill E2E")
+	}
+	nativeRequireDisposable(t)
+	client, installer := nativeBinary(t, "AGENTPLUGINS_CODEX_BIN"), nativeBinary(t, "AGENTPLUGINS_INSTALLER_BIN")
+	if expected := os.Getenv("AGENTPLUGINS_CODEX_SHA256"); len(expected) != 64 || nativeSHA(t, client) != expected {
+		t.Fatal("genuine Codex executable SHA-256 pin mismatch")
+	}
+	f := newNativeFixture(t, true)
+	f.ClientBinDir = filepath.Dir(client)
+	nativeProvisionScanner(t, f)
+	version, err := nativeCommand(t, f, client, "raw-user-version", "--version")
+	if err != nil || strings.TrimSpace(string(version)) != "codex-cli "+os.Getenv("AGENTPLUGINS_CODEX_VERSION") {
+		t.Fatalf("wrong pinned Codex version: %q; %v", version, err)
+	}
+	nativeWrite(t, filepath.Join(f.CodexHome, "config.toml"), []byte("cli_auth_credentials_store = \"file\"\nmcp_oauth_credentials_store = \"file\"\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n"), 0600)
+	foreign := filepath.Join(f.CodexHome, "skills", "foreign-raw-user", "SKILL.md")
+	nativeWrite(t, foreign, []byte("---\nname: foreign-raw-user\ndescription: Unowned user Skill\n---\nPreserve me.\n"), 0600)
+	foreignSHA := nativeSHA(t, foreign)
+	env := f.env(filepath.Dir(client))
+	statePath := filepath.Join(f.Root, "installer-state", "state-v2.json")
+	nativeRawUserInstall(t, f.Root, f.Project, env, installer, "codex", "raw-user-add", true, false)
+	_, binding := nativeRawUserState(t, statePath, "codex", f.CodexHome)
+	nativeRawUserFiles(t, binding, "codex")
+	id := nativeRawUserSkillName + "@" + shared.ManagedMarketplaceName(binding.PhysicalArtifact)
+	codexNativeRawUserInventory(t, f, client, id, binding.TargetLocator, "raw-user-installed", true)
+	beforeState, beforeTree := nativeSHA(t, statePath), nativeTreeDigest(t, binding.TargetLocator)
+	nativeRawUserInstall(t, f.Root, f.Project, env, installer, "codex", "raw-user-repeat-default", false, true)
+	if nativeSHA(t, statePath) != beforeState || nativeTreeDigest(t, binding.TargetLocator) != beforeTree {
+		t.Fatal("Codex implicit user replay changed managed bytes or receipts")
+	}
+	codexNativeRawUserInventory(t, f, client, id, binding.TargetLocator, "raw-user-repeated", true)
+	nativeRawUserRemove(t, f.Root, f.Project, env, installer, "codex", statePath, binding.TargetLocator, true)
+	codexNativeRawUserInventory(t, f, client, id, binding.TargetLocator, "raw-user-removed", false)
+	if nativeSHA(t, foreign) != foreignSHA {
+		t.Fatal("Codex raw user lifecycle changed a foreign user Skill")
+	}
+}
+
+func TestAgentpluginsClaudeNativeRawUserSkillLifecycle(t *testing.T) {
+	if os.Getenv("AGENTPLUGINS_CLAUDE_NATIVE_E2E") != "1" {
+		t.Skip("opt-in genuine Claude Code native user Skill E2E")
+	}
+	nativeRequireDisposable(t)
+	client, installer := claudeNativeBinary(t, "AGENTPLUGINS_CLAUDE_BIN"), claudeNativeBinary(t, "AGENTPLUGINS_INSTALLER_BIN")
+	if expected := os.Getenv("AGENTPLUGINS_CLAUDE_SHA256"); len(expected) != 64 || claudeSHA256(t, client) != expected {
+		t.Fatal("genuine Claude Code executable SHA-256 pin mismatch")
+	}
+	f := newClaudeNativeFixture(t)
+	clientDir := filepath.Dir(client)
+	if got := claudeVersionString(t, f, client); got != os.Getenv("AGENTPLUGINS_CLAUDE_VERSION") {
+		t.Fatalf("wrong pinned Claude Code version %q", got)
+	}
+	nativeProvisionScanner(t, &nativeFixture{Root: f.Root})
+	foreign := filepath.Join(f.ConfigDir, "skills", "foreign-raw-user", "SKILL.md")
+	nativeWrite(t, foreign, []byte("---\nname: foreign-raw-user\ndescription: Unowned user Skill\n---\nPreserve me.\n"), 0600)
+	foreignSHA := nativeSHA(t, foreign)
+	env := f.env(clientDir)
+	statePath := filepath.Join(f.StateHome, "state-v2.json")
+	nativeRawUserInstall(t, f.Root, f.Root, env, installer, "claude", "raw-user-add", true, false)
+	_, binding := nativeRawUserState(t, statePath, "claude", f.ConfigDir)
+	nativeRawUserFiles(t, binding, "claude")
+	pluginID := nativeRawUserSkillName + "@skills-dir"
+	verify := func(label string, want bool) {
+		t.Helper()
+		entries := claudePluginList(t, f, client, label)
+		found := 0
+		for _, entry := range entries {
+			if entry.ID != pluginID {
+				continue
+			}
+			if !entry.Enabled || entry.InstallPath != binding.TargetLocator || entry.Scope != "user" {
+				t.Fatalf("Claude native raw Skill registration mismatch: %+v", entry)
+			}
+			found++
+		}
+		if (found == 1) != want || found > 1 {
+			t.Fatalf("Claude plugin list contains %d raw user entries, want=%v", found, want)
+		}
+	}
+	verify("raw-user-installed", true)
+	details := claudePluginDetails(t, f, client, pluginID, "raw-user-details")
+	if !strings.Contains(details, nativeRawUserSkillName) {
+		t.Fatal("Claude plugin details did not enumerate the installed raw Skill")
+	}
+	beforeState, beforeTree := claudeSHA256(t, statePath), nativeTreeDigest(t, binding.TargetLocator)
+	nativeRawUserInstall(t, f.Root, f.Root, env, installer, "claude", "raw-user-repeat-default", false, true)
+	if claudeSHA256(t, statePath) != beforeState || nativeTreeDigest(t, binding.TargetLocator) != beforeTree {
+		t.Fatal("Claude implicit user replay changed managed bytes or receipts")
+	}
+	verify("raw-user-repeated", true)
+	nativeRawUserRemove(t, f.Root, f.Root, env, installer, "claude", statePath, binding.TargetLocator, false)
+	verify("raw-user-removed", false)
+	if nativeSHA(t, foreign) != foreignSHA {
+		t.Fatal("Claude raw user lifecycle changed a foreign user Skill")
+	}
+}
