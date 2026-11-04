@@ -2,7 +2,6 @@ package directoryv1
 
 import (
 	"fmt"
-
 )
 
 // ParseV2Pointer validates the independently versioned signed Directory

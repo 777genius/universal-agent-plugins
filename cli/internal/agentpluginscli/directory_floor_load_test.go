@@ -18,7 +18,8 @@ func (s scopedFloorTestStore) Save(domain.StateFileV2) error {
 	return errors.New("read-only floor test unexpectedly wrote state")
 }
 
-type scopedFloorV2Spy struct { *fixedDirectoryClient }
+type scopedFloorV2Spy struct{ *fixedDirectoryClient }
+
 func (scopedFloorV2Spy) SnapshotSchema() int { return 2 }
 
 func TestDirectoryDependencyLoadKeepsIndependentReceiptHighWaters(t *testing.T) {
