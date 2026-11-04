@@ -181,11 +181,17 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 		return &eligibilityReason{"upstream_materialization_required", "Context7 preparation requires trusted materialization on a declared supported target"}
 	}
 	for _, target := range directoryEligibilityTargets(request.Targets, request.Scope) {
-		entry := targetByClient(policy.Targets, target)
+		entry := targetByClientScope(policy.Targets, target, request.Scope)
 		// Only absence of signed ChatGPT support can use the source-only lane.
 		if !(entry == nil && request.Purpose == DirectoryResolveContext7ChatGPTPreparation) {
-			if entry == nil || !containsScope(entry.Scopes, request.Scope) {
+			if entry == nil {
 				return &eligibilityReason{"incomplete_targets", "release does not support complete target set; missing " + string(target)}
+			}
+			if entry.MinimumInstallerVersion != "" {
+				comparison, err := compareSemver(request.InstallerVersion, entry.MinimumInstallerVersion)
+				if err != nil || comparison < 0 {
+					return &eligibilityReason{"installer_too_old", "minimum installer version for " + string(target) + "/" + string(request.Scope) + " is " + entry.MinimumInstallerVersion}
+				}
 			}
 			delivery, supported := ExpectedDirectoryDelivery(target)
 			if !supported || entry.Delivery != delivery {
@@ -195,7 +201,11 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 				return &eligibilityReason{"upstream_materialization_required", "upstream release lacks current passed materialization evidence for " + string(target)}
 			}
 		}
-		for _, evidenceID := range policy.CurrentEvidence {
+		evidenceIDs := policy.CurrentEvidence
+		if entry != nil && len(entry.CurrentEvidence) > 0 {
+			evidenceIDs = append(append([]string(nil), evidenceIDs...), entry.CurrentEvidence...)
+		}
+		for _, evidenceID := range evidenceIDs {
 			if e := evidenceByID(snapshot, evidenceID); e != nil && e.HasTrustedEligibilityProvenanceAtSequence(snapshot.Sequence) && directoryEvidenceApplies(*e, distribution, release, target, request) && (e.Level == "materialization" || e.Level == "discovery" || e.Level == "runtime" || e.Level == "oauth") && e.Outcome == "failed" {
 				return &eligibilityReason{"blocking_evidence", "current trusted " + e.Level + " evidence failed for " + string(target)}
 			}

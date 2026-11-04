@@ -352,6 +352,9 @@ func validatePolicy(p domain.DirectoryReleasePolicy) error {
 	clients := map[domain.ClientID]bool{}
 	for _, t := range p.Targets {
 		expectedDelivery, supportedDelivery := domain.ExpectedDirectoryDelivery(t.Client)
+		if t.Scope != "" || t.MinimumInstallerVersion != "" || t.CurrentEvidence != nil {
+			return fmt.Errorf("v1 target cannot carry scoped grant fields")
+		}
 		if !validClient(t.Client) || clients[t.Client] || len(t.Scopes) != 1 || t.Scopes[0] != domain.ScopeUser || !supportedDelivery || t.Delivery != expectedDelivery {
 			return fmt.Errorf("invalid target")
 		}
@@ -465,6 +468,11 @@ func requireSnapshotFields(body []byte) error {
 				return err
 			}
 			for _, target := range targets {
+				for _, key := range []string{"scope", "minimum_installer_version", "current_evidence", "canonical_closure"} {
+					if _, present := target[key]; present {
+						return fmt.Errorf("schema-1 target cannot contain %s", key)
+					}
+				}
 				if err := requiredMap(target, "client", "scopes", "delivery", "authentication"); err != nil {
 					return err
 				}

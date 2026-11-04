@@ -331,6 +331,51 @@ func TestResolveDirectoryProjectCopilotDoesNotBorrowUserBackend(t *testing.T) {
 	}
 }
 
+func TestResolveDirectoryScopeSpecificGrantsFloorAndEvidence(t *testing.T) {
+	release := testRelease(1, "1.0.0")
+	policy := testPolicy(1, ClientCodex)
+	user := policy.Targets[0]
+	user.Scope, user.Scopes = ScopeUser, nil
+	user.MinimumInstallerVersion = "1.0.0"
+	project := user
+	project.Scope = ScopeProject
+	project.MinimumInstallerVersion = "2.0.0"
+	project.CurrentEvidence = []string{"project-failed"}
+	policy.Targets = []DirectoryTarget{project, user} // Project deliberately comes first.
+	distribution := testDistribution("owner/tool", DistributionCommunity,
+		[]DirectoryRelease{release}, []DirectoryReleasePolicy{policy})
+	snapshot := DirectorySnapshot{SnapshotSchemaVersion: 2, Sequence: 18,
+		Products: []DirectoryProduct{{ID: "tool", ManifestName: "tool",
+			DefaultDistribution: distribution.ID, Distributions: []string{distribution.ID}}},
+		Distributions: []DirectoryDistribution{distribution},
+		Evidence: []DirectoryEvidence{testTrustedEvidence(DirectoryEvidence{
+			SchemaVersion: 1, ID: "project-failed", DistributionID: distribution.ID,
+			ReleaseSequence: 1, PackageTreeDigest: release.TreeDigest,
+			Client: ClientCodex, Scope: ScopeProject, ClientVersion: "test-client",
+			InstallerVersion: "1.2.3", OS: "linux", Architecture: "amd64",
+			Level: "runtime", Outcome: "failed",
+		})}}
+	userRequest := request("tool", ClientCodex)
+	if result, err := ResolveDirectory(snapshot, userRequest); err != nil || result.DistributionID != distribution.ID {
+		t.Fatalf("project policy changed independent user grant: %+v %v", result, err)
+	}
+	projectRequest := userRequest
+	projectRequest.Scope = ScopeProject
+	if _, err := ResolveDirectory(snapshot, projectRequest); !errors.Is(err, ErrDirectoryIneligible) ||
+		!strings.Contains(err.Error(), "minimum installer version") {
+		t.Fatalf("project floor was bypassed: %v", err)
+	}
+	projectRequest.InstallerVersion = "2.1.0"
+	if _, err := ResolveDirectory(snapshot, projectRequest); !errors.Is(err, ErrDirectoryIneligible) ||
+		!strings.Contains(err.Error(), "runtime evidence failed") {
+		t.Fatalf("project failed evidence was bypassed: %v", err)
+	}
+	snapshot.Evidence[0].Outcome = "passed"
+	if result, err := ResolveDirectory(snapshot, projectRequest); err != nil || result.DistributionID != distribution.ID {
+		t.Fatalf("qualified project grant rejected: %+v %v", result, err)
+	}
+}
+
 func TestResolveDirectoryRequiresCompleteSharedSurfaceEligibility(t *testing.T) {
 	for _, selected := range []ClientID{ClientCopilot, ClientVSCode} {
 		t.Run(string(selected), func(t *testing.T) {

@@ -17,7 +17,11 @@ func directoryEligibilityTargets(targets []ClientID, scope InstallScope) []Clien
 // environment dimensions describe the isolated promotion run and must not be
 // mistaken for evidence about the caller's local environment.
 func hasPassedUpstreamMaterialization(snapshot DirectorySnapshot, distribution DirectoryDistribution, release DirectoryRelease, policy DirectoryReleasePolicy, client ClientID, scope InstallScope) bool {
-	for _, evidenceID := range policy.CurrentEvidence {
+	evidenceIDs := policy.CurrentEvidence
+	if target := targetByClientScope(policy.Targets, client, scope); target != nil {
+		evidenceIDs = append(append([]string(nil), evidenceIDs...), target.CurrentEvidence...)
+	}
+	for _, evidenceID := range evidenceIDs {
 		evidence := evidenceByID(snapshot, evidenceID)
 		if evidence != nil && evidence.HasTrustedEligibilityProvenanceAtSequence(snapshot.Sequence) && evidence.DistributionID == distribution.ID && evidence.ReleaseSequence == release.Sequence &&
 			evidence.PackageTreeDigest == release.TreeDigest && evidence.Client == client && evidence.Level == "materialization" && evidence.Outcome == "passed" &&
@@ -73,9 +77,14 @@ func distributionByID(snapshot DirectorySnapshot, product DirectoryProduct, id s
 	return nil
 }
 
-func targetByClient(values []DirectoryTarget, client ClientID) *DirectoryTarget {
+// targetByClientScope never borrows a policy for another scope. V1 targets
+// contain a list of scopes; V2 grants carry exactly one explicit scope.
+func targetByClientScope(values []DirectoryTarget, client ClientID, scope InstallScope) *DirectoryTarget {
 	for i := range values {
-		if values[i].Client == client {
+		if values[i].Client != client {
+			continue
+		}
+		if values[i].Scope == scope || values[i].Scope == "" && containsScope(values[i].Scopes, scope) {
 			return &values[i]
 		}
 	}
