@@ -359,5 +359,128 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
 
 
+    def test_native_snapshot_keeps_symlinks_and_unreadable_paths(self):
+        # BUG-017: untrusted native entries must not disappear from evidence.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            root = home / ".codex"
+            root.mkdir()
+            owned = root / "managed.yaml"
+            owned.write_text("name: managed\n")
+            outside = home / "unrelated.txt"
+            outside.write_text("foreign\n")
+            (root / "unknown-link").symlink_to(outside)
+            (root / "linked-dir").symlink_to(home, target_is_directory=True)
+            initial = audit.snapshot([root])
+            self.assertEqual(initial[".codex/unknown-link"], "symlink")
+            self.assertEqual(initial[".codex/linked-dir"], "symlink")
+            self.assertIn(".codex/managed.yaml", initial)
+            self.assertNotIn(".codex/linked-dir/unrelated.txt", initial)
+            with patch.object(Path, "read_bytes", side_effect=OSError("unreadable")):
+                invalid = audit.snapshot([root])
+            self.assertEqual(invalid[".codex/managed.yaml"], "unreadable")
+            self.assertIn("unknown-link: symlink", " ".join(
+                audit.native_identity_residuals(
+                    [root], "managed", [".codex/unknown-link"], "codex")))
+            self.assertIn("managed.yaml", " ".join(
+                audit.native_identity_residuals(
+                    [root], "managed", [".codex/managed.yaml"], "codex")))
+            (root / "unknown-link").unlink()
+            self.assertFalse(audit.native_identity_residuals(
+                [root], "managed", [".codex/unknown-link"], "codex"))
+
+    def test_foreign_sentinel_symlink_cannot_fake_preservation(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            foreign = home / "foreign.txt"
+            matching = home / "matching.txt"
+            foreign.write_text("keep\n")
+            matching.write_text("keep\n")
+            self.assertTrue(audit.preserved_regular_text(foreign, "keep\n"))
+            foreign.unlink()
+            foreign.symlink_to(matching)
+            self.assertFalse(audit.preserved_regular_text(foreign, "keep\n"))
+            foreign.unlink()
+            self.assertFalse(audit.preserved_regular_text(foreign, "keep\n"))
+
+    def test_skill_lock_requires_two_complete_sha256_digests(self):
+        import json
+        audit = load_audit()
+        item = {"name": "standalone-skill", "folder": "standalone-skill",
+                "repo": "upstream/skills", "ref": "a" * 40}
+        package = {"alias": item["name"], "source": {"git": {
+            "kind": "skill", "skill": item["name"],
+            "repository": item["repo"], "commit": item["ref"],
+            "resolved_skill_path": "skills/" + item["folder"]}},
+            "targets": ["codex"],
+            "tree_digest": "sha256:" + "b" * 64,
+            "manifest_digest": "sha256:" + "c" * 64}
+        with TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            def qualified():
+                (project / "uap.lock").write_text(
+                    json.dumps({"packages": [package]}))
+                return audit.locked_skill_is_pinned(project, item, "codex")
+            self.assertTrue(qualified())
+            for malformed in ("sha256:", "sha256:bad", "sha256:" + "g" * 64,
+                              "sha256:" + "A" * 64, "sha256:" + "0" * 65):
+                for field in ("tree_digest", "manifest_digest"):
+                    with self.subTest(digest=malformed, field=field):
+                        original = package[field]
+                        package[field] = malformed
+                        self.assertFalse(qualified())
+                        package[field] = original
+
+    def test_direct_git_repository_identity_must_be_exact(self):
+        audit = load_audit()
+        sha = "a" * 40
+        item = "github:obra/the-elements-of-style@" + sha
+        node = {"name": "elements-of-style",
+                "source": "obra/the-elements-of-style",
+                "installation_id": "verified",
+                "clients": [{"client_id": "cline",
+                             "verification": "installation_verified",
+                             "package_revision": {"resolved_revision": sha}}]}
+        def qualify():
+            return audit.matching_installations(
+                {"data": {"installations": [node]}},
+                "elements-of-style", "cline", "plugin", item)
+        self.assertEqual(len(qualify()), 1)
+        for valid in ("github:obra/the-elements-of-style",
+                      "https://github.com/obra/the-elements-of-style"):
+            node["source"] = valid
+            self.assertEqual(len(qualify()), 1)
+        for spoof in ("mirror/obra/the-elements-of-style-fork",
+                      "obra/the-elements-of-style-other",
+                      "evil/obra/the-elements-of-style",
+                      "obra/the-elements-of-style?unverified=true"):
+            with self.subTest(source=spoof):
+                node["source"] = spoof
+                self.assertEqual(qualify(), [])
+
+    def test_proxy_url_userinfo_is_not_inherited_by_child(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary) / "case"
+            home, data = case / "home", case / "uap-data"
+            home.mkdir(parents=True)
+            data.mkdir()
+            with patch.dict(os.environ, {
+                "HTTPS_PROXY": "https://alice:secret@proxy.invalid:8443",
+                "http_proxy": "http://user:pw@proxy.invalid:3128",
+                "ALL_PROXY": "socks5://proxy.invalid:1080",
+                "NO_PROXY": "localhost",
+                "OPENAI_API_KEY": "never-pass",
+            }, clear=True):
+                env = audit.isolated_client_env(home, case, data)
+            self.assertEqual(env["HTTPS_PROXY"], "https://proxy.invalid:8443")
+            self.assertEqual(env["http_proxy"], "http://proxy.invalid:3128")
+            self.assertEqual(env["ALL_PROXY"], "socks5://proxy.invalid:1080")
+            self.assertEqual(env["NO_PROXY"], "localhost")
+            self.assertNotIn("OPENAI_API_KEY", env)
+
+
 if __name__ == "__main__":
     unittest.main()
