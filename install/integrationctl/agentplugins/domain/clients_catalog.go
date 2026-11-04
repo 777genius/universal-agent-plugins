@@ -163,11 +163,11 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:  LifecycleNativeConfig,
 	}), LifecycleNativeConfig),
 	withProjectComponents(withProjectScope(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:            LifecycleCLIRegistry,
-		BindsNativeProfileRoot:   true,
-		DiscoversNativeHooks:     true,
-		HonorsOpenAIMCPAuthHints: true,
+		InstallIntents:                      []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:                       LifecycleCLIRegistry,
+		BindsNativeProfileRoot:              true,
+		DiscoversNativeHooks:                true,
+		HonorsOpenAIMCPAuthHints:            true,
 		LegacyPreparedProjectPackageReceipt: true,
 	}), LifecycleNativeConfig), SupportNative, SupportNative),
 	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
