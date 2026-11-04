@@ -111,7 +111,9 @@ func TestAgentpluginsCodexNativeForeignSkillCLIRefusal(t *testing.T) {
 		t.Fatalf("published UAP 0.1.95 baseline differs: exit=%v, structured code=%q", baselineExit, baselineRefusal.Code)
 	}
 	if strings.Contains(baselineRefusal.Message, f.base.Project) ||
-		strings.Contains(baselineRefusal.Message, f.base.Home) {
+		strings.Contains(baselineRefusal.Message, f.base.Home) ||
+		strings.Contains(baselineErr.String(), f.base.Project) ||
+		strings.Contains(baselineErr.String(), f.base.Home) {
 		t.Fatal("published UAP disclosed an absolute foreign project path")
 	}
 	if got := nativeTreeDigest(t, filepath.Join(f.base.Project, ".agents", "skills")); got != before {
@@ -137,7 +139,7 @@ func TestAgentpluginsCodexNativeForeignSkillCLIRefusal(t *testing.T) {
 	if refusal.Code != "FOREIGN_DESTINATION" ||
 		!strings.Contains(refusal.Message, ".agents/skills/benchmark-note/SKILL.md") ||
 		strings.Contains(refusal.Message, f.base.Project) || strings.Contains(refusal.Message, f.base.Home) ||
-		strings.Contains(stderr.String(), f.base.Project) {
+		strings.Contains(stderr.String(), f.base.Project) || strings.Contains(stderr.String(), f.base.Home) {
 		t.Fatalf("unsafe or missing typed project-relative refusal: %q", refusal.Code)
 	}
 	nativeJSON(t, filepath.Join(f.base.Root, "foreign-skill-public-refusal.json"), refusal)
