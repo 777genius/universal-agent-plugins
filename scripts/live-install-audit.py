@@ -191,6 +191,12 @@ def is_cli_refusal(output):
     return type(output.get("exit_code")) is int and output["exit_code"] != 0
 
 
+def passive_native_path(target, relative):
+    """Downloaded caches and run logs are not active native registrations."""
+    return ((target == "codex" and relative.startswith("plugins/cache/"))
+            or (target == "qoder" and relative.startswith(("plugins/cache/", "logs/runs/"))))
+
+
 def native_identity_residuals(native_roots, identity, observed_paths, target):
     """After remove, reject any remaining named native file/config entry.
 
@@ -207,8 +213,6 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
             if not observed.startswith(prefix):
                 continue
             relative = observed[len(prefix):]
-            if target == "codex" and relative.startswith("plugins/cache/"):
-                continue
             file = root / relative
             try:
                 mode = file.lstat().st_mode
@@ -216,6 +220,8 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
                     leftover.append(observed + ": symlink")
                 elif not stat.S_ISREG(mode):
                     leftover.append(observed + ": non-regular")
+                elif passive_native_path(target, relative):
+                    continue
                 elif identity.casefold() in relative.casefold():
                     leftover.append(observed)
                 elif file.stat().st_size <= 1024 * 1024 and identity.casefold() in file.read_text(
@@ -683,6 +689,19 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
                                   native_attribution + unsafe_paths, target)
         if cleanup and cleanup["exit_code"] == 0 and kind == "plugin" else []
     )
+    # Preserve truthful disk-state evidence without equating passive cached
+    # source/log files to an active Qoder/Codex plugin registration.
+    passive_retained = []
+    if cleanup and cleanup["exit_code"] == 0:
+        for root in native_roots:
+            prefix = root.name + "/"
+            for observed in native_attribution:
+                if not observed.startswith(prefix):
+                    continue
+                relative = observed[len(prefix):]
+                path = root / relative
+                if passive_native_path(target, relative) and path.is_file() and not path.is_symlink():
+                    passive_retained.append(observed)
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
@@ -740,6 +759,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
             "native_uninstall": native_uninstall, "cleanup": cleanup, "post_remove_list": post_list,
             "post_removal_skill": post_removal_skill, "post_lock_pinned": post_lock_pinned,
             "removal_verified": removal_verified, "native_residuals": native_residuals,
+            "retained_passive_native_files": sorted(set(passive_retained)),
             "post_list_schema_valid": post_list_schema_valid,
             "sentinels_preserved": sentinels_preserved}
 
