@@ -2,13 +2,13 @@ package directoryv1
 
 import (
 	"context"
-	"errors"
 	"encoding/json"
-	"time"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestV2ClientFreshBootstrapAndOfflineExactCache(t *testing.T) {
