@@ -11,7 +11,6 @@ var ErrManagedSkillChanged = errors.New("managed skill changed outside agentplug
 // no matching UAP ownership. It must be left untouched.
 var ErrForeignSkillDestination = errors.New("foreign project Skill destination")
 
-
 // ForeignSkillDestinationError carries a project-relative path from a verified
 // native project layout. Error() never exposes paths or provider diagnostics.
 type ForeignSkillDestinationError struct {
