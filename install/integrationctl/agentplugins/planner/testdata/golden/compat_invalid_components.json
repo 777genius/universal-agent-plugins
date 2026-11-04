@@ -467,15 +467,15 @@
       "ExtensionSupport": "native",
       "MCPTransports": {
         "sse": "unsupported",
-        "stdio": "unsupported",
-        "streamable-http": "unsupported"
+        "stdio": "native",
+        "streamable-http": "native"
       },
       "PackageMode": "native",
       "Scopes": [
         "user",
         "project"
       ],
-      "SkillSupport": "unsupported"
+      "SkillSupport": "native"
     },
     "ClientID": "pi",
     "Components": [

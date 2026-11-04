@@ -709,15 +709,15 @@
       "ExtensionSupport": "native",
       "MCPTransports": {
         "sse": "unsupported",
-        "stdio": "unsupported",
-        "streamable-http": "unsupported"
+        "stdio": "native",
+        "streamable-http": "native"
       },
       "PackageMode": "native",
       "Scopes": [
         "user",
         "project"
       ],
-      "SkillSupport": "unsupported"
+      "SkillSupport": "native"
     },
     "ClientID": "pi",
     "Components": [
@@ -742,20 +742,16 @@
       {
         "Index": 1,
         "Kind": "mcp_server",
-        "Limitations": [
-          "component_not_supported_by_client"
-        ],
+        "Limitations": null,
         "Source": "",
-        "Support": "unsupported"
+        "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
-        "Limitations": [
-          "component_not_supported_by_client"
-        ],
+        "Limitations": null,
         "Source": "",
-        "Support": "unsupported"
+        "Support": "native"
       }
     ],
     "Limitations": [
