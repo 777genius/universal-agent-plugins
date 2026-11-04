@@ -193,6 +193,22 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertTrue(prepared["removal_verified"])
         self.assertTrue(prepared["sentinels_preserved"])
 
+    def test_both_native_matrices_bind_real_bootstrap_outcomes(self):
+        # BUG-014: present binary + failed native --version must never produce PASS.
+        # This static guard joins the GitHub step outcome to the harness refusal.
+        workflows = (
+            (".github/workflows/live-install-audit.yml", "native-install"),
+            (".github/workflows/live-install-remaining-clients.yml", "vendor-install"),
+        )
+        for relative_path, step_id in workflows:
+            with self.subTest(workflow=relative_path):
+                workflow = (Path(__file__).resolve().parents[1] / relative_path).read_text()
+                self.assertIn(f"id: {step_id}", workflow)
+                self.assertIn(
+                    "AUDIT_VENDOR_OUTCOME: ${{ steps." + step_id + ".outcome }}",
+                    workflow,
+                )
+
     def test_failed_vendor_bootstrap_cannot_inherit_unrelated_host_binary(self):
         audit = load_audit()
         with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "failure"}):
