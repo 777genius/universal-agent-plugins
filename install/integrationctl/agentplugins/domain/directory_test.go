@@ -313,9 +313,12 @@ func TestResolveDirectoryProjectCopilotDoesNotBorrowUserBackend(t *testing.T) {
 	policy := testPolicy(1, ClientCopilot)
 	policy.Targets[0].Scopes = []InstallScope{ScopeProject}
 	distribution := testDistribution("owner/tool", DistributionCommunity, []DirectoryRelease{release}, []DirectoryReleasePolicy{policy})
-	snapshot := DirectorySnapshot{Sequence: 1,
-		Products: []DirectoryProduct{{ID: "tool", ManifestName: "tool", DefaultDistribution: distribution.ID, Distributions: []string{distribution.ID}}},
-		Distributions: []DirectoryDistribution{distribution}}
+	snapshot := DirectorySnapshot{
+		SnapshotSchemaVersion: 2,
+		Sequence:              1,
+		Products:              []DirectoryProduct{{ID: "tool", ManifestName: "tool", DefaultDistribution: distribution.ID, Distributions: []string{distribution.ID}}},
+		Distributions:         []DirectoryDistribution{distribution},
+	}
 	project := request("tool", ClientCopilot)
 	project.Scope = ScopeProject
 	if got, err := ResolveDirectory(snapshot, project); err != nil || got.DistributionID != distribution.ID {
