@@ -103,6 +103,14 @@ type DirectoryReleasePolicy struct {
 	CurrentEvidence         []string          `json:"current_evidence"`
 }
 
+// DirectoryCanonicalClosure is a signed policy summary, not runtime proof.
+// Its exact digest is bound to the resolved immutable dependency graph.
+type DirectoryCanonicalClosure struct {
+	Eligible bool `json:"eligible"`
+	ClosureDigest string `json:"closure_digest,omitempty"`
+	MinimumInstallerVersion string `json:"minimum_installer_version,omitempty"`
+}
+
 type DirectoryTarget struct {
 	Client ClientID `json:"client"`
 	// V1 targets retain scopes; V2 grants use one scoped identity per target.
@@ -110,6 +118,7 @@ type DirectoryTarget struct {
 	Scope                   InstallScope              `json:"scope,omitempty"`
 	MinimumInstallerVersion string                    `json:"minimum_installer_version,omitempty"`
 	CurrentEvidence         []string                  `json:"current_evidence,omitempty"`
+	CanonicalClosure        *DirectoryCanonicalClosure `json:"canonical_closure,omitempty"`
 	Delivery                string                    `json:"delivery"`
 	Authentication          AuthenticationRequirement `json:"authentication"`
 	AppBinding              *DirectoryAppBinding      `json:"app_binding,omitempty"`
@@ -146,6 +155,7 @@ type DirectoryEvidence struct {
 	// V1 evidence has no scope and remains user-only. Project evidence in V2
 	// must identify its scope explicitly to prevent cross-scope promotion.
 	Scope              InstallScope              `json:"scope,omitempty"`
+	ClosureDigest      string                    `json:"closure_digest,omitempty"`
 	ClientVersion      string                    `json:"client_version,omitempty"`
 	InstallerVersion   string                    `json:"installer_version,omitempty"`
 	AdapterVersion     string                    `json:"adapter_version,omitempty"`

@@ -352,7 +352,7 @@ func validatePolicy(p domain.DirectoryReleasePolicy) error {
 	clients := map[domain.ClientID]bool{}
 	for _, t := range p.Targets {
 		expectedDelivery, supportedDelivery := domain.ExpectedDirectoryDelivery(t.Client)
-		if t.Scope != "" || t.MinimumInstallerVersion != "" || t.CurrentEvidence != nil {
+		if t.Scope != "" || t.MinimumInstallerVersion != "" || t.CurrentEvidence != nil || t.CanonicalClosure != nil {
 			return fmt.Errorf("v1 target cannot carry scoped grant fields")
 		}
 		if !validClient(t.Client) || clients[t.Client] || len(t.Scopes) != 1 || t.Scopes[0] != domain.ScopeUser || !supportedDelivery || t.Delivery != expectedDelivery {
@@ -495,8 +495,10 @@ func requireSnapshotFields(body []byte) error {
 	for _, e := range evidence {
 		// Domain evidence is shared with future protocols; v1 wire evidence
 		// remains strict and never accepts a scoped identity, including null.
-		if _, present := e["scope"]; present {
-			return fmt.Errorf("schema-1 evidence cannot contain scope")
+		for _, field := range []string{"scope", "closure_digest"} {
+			if _, present := e[field]; present {
+				return fmt.Errorf("schema-1 evidence cannot contain %s", field)
+			}
 		}
 		required := []string{"schema_version", "id", "distribution_id", "release_sequence", "package_tree_digest", "level", "outcome", "artifact"}
 		if legacyEvidence {
