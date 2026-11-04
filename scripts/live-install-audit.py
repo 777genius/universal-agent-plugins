@@ -213,6 +213,11 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
             if not observed.startswith(prefix):
                 continue
             relative = observed[len(prefix):]
+            # Synthetic os.walk error markers have no on-disk file to lstat.
+            # Retain the error as negative proof instead of treating it as gone.
+            if relative == ".walk-error" or relative.endswith("/.walk-error"):
+                leftover.append(observed + ": unreadable-walk")
+                continue
             file = root / relative
             try:
                 mode = file.lstat().st_mode
