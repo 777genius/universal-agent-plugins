@@ -2,8 +2,8 @@
 
 ## Reproduced failures on HEAD `82e9de0ef1499176962b66dccf023a6490e4bc82`
 
-- [Required CI job 126291888479](https://github.com/777genius/universal-agent-plugins/actions/runs/41743871931): `check-removed-contract-boundary.sh` rejects the literal `OPENCODE_CONFIG` names in `scripts/live-install-audit.py:420`. They are a negative profile-control allowlist for a disposable E2E process, **not** compatibility with a removed OpenCode public API. The product code and removed-contract enforcement must remain unchanged.
-- [Live pilot 126291888571](https://github.com/777genius/universal-agent-plugins/actions/runs/41743872036): all 14 native-foreign sentinel assertions compare an actual newline to literal backslash + n. The harness writes `"...survive\\n"` (actual newline in Python) and the test expects `"...survive\\\\n"`. On Linux and macOS the test prevents the live cases from starting.
+- [Required CI job 126291888479](https://github.com/777genius/universal-agent-plugins/actions/runs/41743871931): the removed-contract guard matched legacy OpenCode environment-key names used only as explicit negative-profile controls inside the disposable live harness. They do not restore the removed public API. Keep scanning product code unchanged.
+- [Live pilot 126291888571](https://github.com/777genius/universal-agent-plugins/actions/runs/41743872036): all 14 native foreign-neighbor sentinel assertions failed because the harness wrote a terminal newline byte (0x0A), but the test expected a literal backslash followed by `n`. This was a test expectation bug, not native file corruption.
 
 ## Narrow plan
 
