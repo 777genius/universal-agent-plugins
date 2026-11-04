@@ -292,6 +292,42 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                           {"data": {"installations": [None, "bad"]}}):
             self.assertFalse(audit.has_target_registration(malformed, "atlassian", "grok"))
 
+    def test_signed_release_observation_only_exposes_public_allowlisted_fields(self):
+        # BUG-025: diagnose revision drift without logging credentials.
+        audit = load_audit()
+        response = {"data": {"installations": [
+            {"name": "atlassian", "source": "777genius/atlassian",
+             "api_key": "secret-from-account",
+             "directory": {"recorded_distribution": "777genius/atlassian",
+                           "recorded_revision": "a" * 40,
+                           "recorded_release_sequence": 1,
+                           "private_config": "secret"},
+             "clients": [
+                 {"client_id": "codex",
+                  "package_revision": {
+                      "resolved_revision": "b" * 40, "release_sequence": 1,
+                      "tree_digest": "sha256:" + "c" * 64,
+                      "manifest_digest": "sha256:" + "d" * 64,
+                      "credential": "secret"}},
+                 {"client_id": "claude",
+                  "package_revision": {"credential": "other-secret"}},
+             ]}
+        ]}}
+        observed = audit.signed_release_public_observation(
+            response, "atlassian", "codex")
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(observed[0]["source"], "777genius/atlassian")
+        self.assertEqual(observed[0]["resolved_revision"], "b" * 40)
+        self.assertNotIn("secret", repr(observed))
+        response["data"]["installations"][0]["source"] = (
+            "https://alice:secret@host.invalid/private")
+        observed = audit.signed_release_public_observation(
+            response, "atlassian", "codex")
+        self.assertIsNone(observed[0]["source"])
+        self.assertEqual(audit.signed_release_public_observation(
+            response, "atlassian", "grok"), [])
+
+
     def test_signed_release_requires_same_verified_target_and_immutable_metadata(self):
         audit = load_audit()
         directory = {
