@@ -39,6 +39,9 @@ func qoderNativePreflight(env clients.Env, request domain.ActivationRequest) err
 	// Preflight runs before staging and must not require receipts that do not
 	// exist yet. The activation call below revalidates the exact delivered set.
 	if len(request.Delivery.NativeObjects) == 0 {
+		if request.Delivery.ActivePath != "" {
+			return fmt.Errorf("qoder staged project delivery lacks native ownership receipts")
+		}
 		return qoderHigherPriorityConflicts(request.Plan)
 	}
 	if err := validateQoderProjectSelection(request.Plan, qoderNativeOwned(request.Delivery.NativeObjects)); err != nil {
@@ -55,6 +58,9 @@ func qoderNativePreflight(env clients.Env, request domain.ActivationRequest) err
 }
 
 func activateQoderNative(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if request.Delivery.ActivePath == "" || len(request.Delivery.NativeObjects) == 0 {
+		return domain.ActivationOutcome{}, fmt.Errorf("qoder activation requires staged native ownership receipts")
+	}
 	if err := qoderNativePreflight(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
