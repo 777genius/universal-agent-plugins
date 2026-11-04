@@ -187,7 +187,7 @@ lock authority, не из mutable workspace. Ребро содержит ров�
 casefold-коллизии запрещены, только целые JSON numbers в safe range, ключи
 сортируются, UTF-8 без ASCII escape, `sort_keys=True`, `separators=(",", ":")`,
 ровно один завершающий LF. `closure_digest = sha256:` + lowercase hex SHA-256
-от `"UAP-DIRECTORY-CLOSURE-SHA256-V1\\0"` (один NUL, не два печатных символа),
+от `"UAP-DIRECTORY-CLOSURE-SHA256-V1\x00"` (один NUL, не два печатных символа),
 затем `uint64_be(len(canonical_bytes))`, затем `canonical_bytes`. Включённые
 в каждый pin installer floors связывают digest с policy; подписанный
 `canonical_closure.minimum_installer_version` равен семантическому максимуму
