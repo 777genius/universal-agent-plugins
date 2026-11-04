@@ -728,6 +728,55 @@ def preserved_regular_text(path, expected, case_root):
         return False
 
 
+
+def copilot_settings_sanitized_shape(home, case_root, identity):
+    """Observe *only* token shape, never export raw client settings or secrets."""
+    path = home / ".copilot/settings.json"
+    if not path_inside_case(path, case_root) or path.is_symlink():
+        return {"status": "unsafe-path"}
+    if not path.exists():
+        return {"status": "absent"}
+    try:
+        if not path.is_file() or path.stat().st_size > 1024 * 1024:
+            return {"status": "not-regular-or-too-large"}
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return {"status": "unreadable-or-invalid-json"}
+    if not isinstance(doc, (dict, list)):
+        return {"status": "unexpected-json-root"}
+    names = ("exact_key", "qualified_key", "reference_key",
+             "exact_value", "qualified_value", "reference_value")
+    counts = dict.fromkeys(names, 0)
+    qualified = re.compile(re.escape(identity) + r"@agentplugins-[0-9a-f]{12}", re.I)
+    allowed_sections = {"plugins", "installedPlugins", "enabledPlugins",
+                        "marketplaces", "pluginMarketplaces"}
+    sections = sorted(set(doc) & allowed_sections) if isinstance(doc, dict) else []
+    def match(value, role):
+        if value.casefold() == identity.casefold():
+            counts["exact_" + role] += 1
+        elif qualified.fullmatch(value):
+            counts["qualified_" + role] += 1
+        elif identity.casefold() in value.casefold():
+            counts["reference_" + role] += 1
+    stack = [(doc, 0)]
+    nodes = 0
+    while stack and nodes < 10000:
+        value, depth = stack.pop()
+        nodes += 1
+        if depth >= 32:
+            continue
+        if isinstance(value, dict):
+            for key, child in value.items():
+                match(key, "key")
+                stack.append((child, depth + 1))
+        elif isinstance(value, list):
+            stack.extend((child, depth + 1) for child in value)
+        elif isinstance(value, str):
+            match(value, "value")
+    return {"status": "parsed" if not stack else "truncated",
+            "allowed_sections": sections, "match_counts": counts}
+
+
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             signed_release_pins=None):
     case_root = runroot / f"{kind}-{index:02d}"
@@ -778,8 +827,12 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 "--target", target, "--scope", "project", "--project-root",
                 str(project), "--no-ui", "--yes", "--format", "json"]
         scope = ["--scope", "project", "--project-root", str(project)]
+    copilot_before = (copilot_settings_sanitized_shape(home, case_root, identity)
+                      if kind == "plugin" and target == "copilot" else None)
     output = call([cli, *args], env, project)
     output.pop("_json", None)
+    copilot_after_add = (copilot_settings_sanitized_shape(home, case_root, identity)
+                         if copilot_before is not None else None)
     changed = set(snapshot(native_roots).items()) - set(before.items())
     native_attribution = attributable_native_changes(native_roots, changed, identity, target)
     skill_path = skill_file_present(project, target, identity) if kind == "skill" else None
@@ -864,6 +917,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         cleanup = call([cli, "remove", identity, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
         cleanup.pop("_json", None)
+    copilot_after_remove = (copilot_settings_sanitized_shape(home, case_root, identity)
+                            if copilot_before is not None and cleanup else None)
     sentinels_preserved = (
         preserved_regular_text(sentinel, "foreign content never belongs to UAP\n", case_root)
         and preserved_regular_text(user_sentinel, "foreign profile content never belongs to UAP\n", case_root)
@@ -976,6 +1031,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "failed_install_residue": failed_install_residue,
             "matched_installation_ids": sorted(old_ids),
             "native_uninstall": native_uninstall, "cleanup": cleanup, "post_remove_list": post_list,
+            "copilot_settings_proof": ({"before": copilot_before,
+                                        "after_add": copilot_after_add,
+                                        "after_remove": copilot_after_remove}
+                                       if copilot_before is not None else None),
             "post_removal_skill": post_removal_skill,
             "post_removal_leftovers": post_removal_leftovers,
             "post_lock_pinned": post_lock_pinned,
