@@ -12,7 +12,7 @@ import (
 // distribution and one release for the complete target set; acquisition
 // failure is intentionally not a fallback input.
 func ResolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveRequest) (DirectorySelection, error) {
-	if err := validateDirectoryResolvePurpose(request); err != nil {
+	if err := validateDirectoryResolvePurpose(snapshot, request); err != nil {
 		return DirectorySelection{}, err
 	}
 	selector := strings.TrimSpace(request.Selector)

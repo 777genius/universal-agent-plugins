@@ -12,14 +12,17 @@ type DirectoryResolvePurpose string
 // Its selection is not signed ChatGPT compatibility or installation authority.
 const DirectoryResolveContext7ChatGPTPreparation DirectoryResolvePurpose = "context7_chatgpt_preparation"
 
-func validateDirectoryResolvePurpose(request DirectoryResolveRequest) error {
+func validateDirectoryResolvePurpose(snapshot DirectorySnapshot, request DirectoryResolveRequest) error {
 	switch request.Purpose {
 	case "":
 		return nil
 	case DirectoryResolveLockedRestore:
-		if request.Scope != ScopeUser || request.DesiredReleaseSequence == 0 || request.Recorded != nil || len(request.Targets) == 0 ||
+		// V1 is user-only. A verified V2 policy may restore exact project pins,
+		// but must still pass all current target and revocation checks.
+		validScope := request.Scope == ScopeUser || (request.Scope == ScopeProject && snapshot.SnapshotSchemaVersion == 2)
+		if !validScope || request.DesiredReleaseSequence == 0 || request.Recorded != nil || len(request.Targets) == 0 ||
 			(request.Operation != "" && request.Operation != DirectoryInstall) {
-			return fmt.Errorf("%w: locked restore requires an exact user-scope new install without recorded state", ErrDirectoryIneligible)
+			return fmt.Errorf("%w: locked restore requires an exact authorized-scope new install without recorded state", ErrDirectoryIneligible)
 		}
 		return nil
 	case DirectoryResolveContext7ChatGPTPreparation:
