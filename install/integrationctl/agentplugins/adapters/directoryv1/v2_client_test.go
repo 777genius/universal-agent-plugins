@@ -29,9 +29,14 @@ func TestV2ClientFreshBootstrapAndOfflineExactCache(t *testing.T) {
 	})
 	server := httptest.NewServer(handler)
 	client := V2Client{
-		Transport: Client{Origin: server.URL + "/registry/schemas/2/",
-			Trust: trust, HTTPClient: server.Client(), AllowHTTPForTests: true,
-			RequireEmbeddedBootstrap: true, Now: func() time.Time { return fixtureNow }},
+		Transport: Client{
+			Origin:                   server.URL + "/registry/schemas/2/",
+			Trust:                    trust,
+			HTTPClient:               server.Client(),
+			AllowHTTPForTests:        true,
+			RequireEmbeddedBootstrap: true,
+			Now:                      func() time.Time { return fixtureNow },
+		},
 		Cache: Cache{Path: filepath.Join(t.TempDir(), "v2-cache.json")},
 		Embedded: EmbeddedBundle{Snapshot: snapshot, Envelope: envelope},
 	}

@@ -26,4 +26,3 @@ func validatePointer(v Pointer) error {
 	}
 	return nil
 }
-

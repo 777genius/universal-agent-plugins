@@ -169,9 +169,9 @@ func TestV2RequiresExactProjectRuntimeEvidence(t *testing.T) {
 func TestV2UserGrantEvidenceScopeIsolation(t *testing.T) {
 	signed, _, _ := v2SignedFixture(t)
 	for _, tc := range []struct {
-		name string
-		client domain.ClientID
-		scope domain.InstallScope
+		name     string
+		client   domain.ClientID
+		scope    domain.InstallScope
 		accepted bool
 	}{
 		{"scoped user evidence", domain.ClientCodex, domain.ScopeUser, true},

@@ -50,7 +50,7 @@ func TestV2PointerValidationAndExactSignedBundle(t *testing.T) {
 
 func TestV2PointerRejectsCredentialAndPathDowngrades(t *testing.T) {
 	for _, tc := range []struct {
-		name string
+		name   string
 		mutate func(*Pointer)
 	}{
 		{"wrong high water", func(p *Pointer) { p.Sequence = 2 }},

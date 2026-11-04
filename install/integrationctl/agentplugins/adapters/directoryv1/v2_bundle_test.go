@@ -38,7 +38,8 @@ func v2SignedFixture(t *testing.T) ([]byte, []byte, TrustStore) {
 	envelope := Envelope{EnvelopeSchemaVersion: 2, SnapshotSchemaVersion: 2,
 		Sequence: 1, KeyID: key.ID, Algorithm: "Ed25519", SignatureDomain: SignatureDomainV2,
 		SnapshotDigest: "sha256:" + hex.EncodeToString(sum[:]),
-		Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(private, SnapshotSignatureMessageV2(snapshotBytes)))}
+		Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(private, SnapshotSignatureMessageV2(snapshotBytes))),
+	}
 	envelopeBytes, err := json.Marshal(envelope)
 	if err != nil {
 		t.Fatal(err)

@@ -19,8 +19,15 @@ func requireV2SnapshotFields(body []byte) error {
 		"evidence", "revocations"); err != nil {
 		return err
 	}
+	if err := requireV2DistributionFields(root["distributions"]); err != nil {
+		return err
+	}
+	return requireV2EvidenceFields(root["evidence"])
+}
+
+func requireV2DistributionFields(raw json.RawMessage) error {
 	var distributions []map[string]json.RawMessage
-	if err := json.Unmarshal(root["distributions"], &distributions); err != nil {
+	if err := json.Unmarshal(raw, &distributions); err != nil {
 		return err
 	}
 	for _, distribution := range distributions {
@@ -28,55 +35,71 @@ func requireV2SnapshotFields(body []byte) error {
 			"kind", "status", "packager", "releases", "release_policies"); err != nil {
 			return err
 		}
-		// Package version is mandatory on the v2 wire, though the published
-		// schema permits the explicit empty string (as it does for v1).
 		if err := requireV2ReleasePackageVersion(distribution["releases"]); err != nil {
 			return err
 		}
-		var policies []map[string]json.RawMessage
-		if err := json.Unmarshal(distribution["release_policies"], &policies); err != nil {
+		if err := requireV2PolicyFields(distribution["release_policies"]); err != nil {
 			return err
 		}
-		for _, policy := range policies {
-			if err := requiredMap(policy, "release_sequence", "status", "minimum_installer_version",
-				"targets", "current_evidence"); err != nil {
+	}
+	return nil
+}
+
+func requireV2PolicyFields(raw json.RawMessage) error {
+	var policies []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &policies); err != nil {
+		return err
+	}
+	for _, policy := range policies {
+		if err := requiredMap(policy, "release_sequence", "status", "minimum_installer_version",
+			"targets", "current_evidence"); err != nil {
+			return err
+		}
+		var targets []map[string]json.RawMessage
+		if err := json.Unmarshal(policy["targets"], &targets); err != nil {
+			return err
+		}
+		for _, target := range targets {
+			if err := requireV2GrantFields(target); err != nil {
 				return err
-			}
-			var targets []map[string]json.RawMessage
-			if err := json.Unmarshal(policy["targets"], &targets); err != nil {
-				return err
-			}
-			for _, target := range targets {
-				if _, old := target["scopes"]; old {
-					return fmt.Errorf("v2 grant cannot contain legacy scopes")
-				}
-				if err := requiredMap(target, "client", "scope", "delivery", "authentication",
-					"minimum_installer_version", "current_evidence"); err != nil {
-					return err
-				}
-				if raw, ok := target["canonical_closure"]; ok {
-					var closure map[string]json.RawMessage
-					if err := json.Unmarshal(raw, &closure); err != nil {
-						return err
-					}
-					if err := requiredMap(closure, "eligible"); err != nil {
-						return err
-					}
-					var eligible bool
-					if err := json.Unmarshal(closure["eligible"], &eligible); err != nil {
-						return err
-					}
-					if eligible {
-						if err := requiredMap(closure, "closure_digest", "minimum_installer_version"); err != nil {
-							return err
-						}
-					}
-				}
 			}
 		}
 	}
+	return nil
+}
+
+func requireV2GrantFields(target map[string]json.RawMessage) error {
+	if _, old := target["scopes"]; old {
+		return fmt.Errorf("v2 grant cannot contain legacy scopes")
+	}
+	if err := requiredMap(target, "client", "scope", "delivery", "authentication",
+		"minimum_installer_version", "current_evidence"); err != nil {
+		return err
+	}
+	raw, ok := target["canonical_closure"]
+	if !ok {
+		return nil
+	}
+	var closure map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &closure); err != nil {
+		return err
+	}
+	if err := requiredMap(closure, "eligible"); err != nil {
+		return err
+	}
+	var eligible bool
+	if err := json.Unmarshal(closure["eligible"], &eligible); err != nil {
+		return err
+	}
+	if eligible {
+		return requiredMap(closure, "closure_digest", "minimum_installer_version")
+	}
+	return nil
+}
+
+func requireV2EvidenceFields(raw json.RawMessage) error {
 	var evidence []map[string]json.RawMessage
-	if err := json.Unmarshal(root["evidence"], &evidence); err != nil {
+	if err := json.Unmarshal(raw, &evidence); err != nil {
 		return err
 	}
 	for _, item := range evidence {
@@ -185,32 +208,11 @@ func validateV2Distributions(snapshot domain.DirectorySnapshot, products map[str
 		if len(distribution.Releases) == 0 || len(distribution.Releases) != len(distribution.ReleasePolicies) {
 			return nil, nil, strictError("v2 release policies mismatch")
 		}
-		for _, release := range distribution.Releases {
-			key := releaseKey(distribution.ID, release.Sequence)
-			date, err := parseTimestamp(release.PublishedAt)
-			if err != nil || date.After(start) || release.Sequence < 1 || releases[key].Sequence != 0 ||
-				release.ManifestName != product.ManifestName || release.AgentPluginsSchema != supportedPluginSchema ||
-				release.TreeDigestAlgorithm != domain.TreeDigestAlgorithm ||
-				!digestPattern.MatchString(release.TreeDigest) || !digestPattern.MatchString(release.ManifestDigest) {
-				return nil, nil, strictError("invalid v2 immutable release")
-			}
-			if err := validateSource(release.PackageSource); err != nil {
-				return nil, nil, strictError("invalid v2 immutable source: %v", err)
-			}
-			if len(release.Components) == 0 {
-				return nil, nil, strictError("v2 components required")
-			}
-			releases[key] = release
+		if err := validateV2DistributionReleases(distribution, product, start, releases); err != nil {
+			return nil, nil, err
 		}
-		for _, policy := range distribution.ReleasePolicies {
-			key := releaseKey(distribution.ID, policy.ReleaseSequence)
-			if releases[key].Sequence == 0 || policies[key].ReleaseSequence != 0 {
-				return nil, nil, strictError("invalid or duplicate v2 release policy")
-			}
-			if err := validateV2Policy(policy); err != nil {
-				return nil, nil, err
-			}
-			policies[key] = policy
+		if err := validateV2DistributionPolicies(distribution, releases, policies); err != nil {
+			return nil, nil, err
 		}
 	}
 	for _, product := range products {
@@ -223,59 +225,126 @@ func validateV2Distributions(snapshot domain.DirectorySnapshot, products map[str
 	return releases, policies, nil
 }
 
+func validateV2DistributionReleases(distribution domain.DirectoryDistribution, product domain.DirectoryProduct,
+	start time.Time, releases map[string]domain.DirectoryRelease,
+) error {
+	for _, release := range distribution.Releases {
+		key := releaseKey(distribution.ID, release.Sequence)
+		date, err := parseTimestamp(release.PublishedAt)
+		if err != nil || date.After(start) || release.Sequence < 1 || releases[key].Sequence != 0 ||
+			release.ManifestName != product.ManifestName || release.AgentPluginsSchema != supportedPluginSchema ||
+			release.TreeDigestAlgorithm != domain.TreeDigestAlgorithm ||
+			!digestPattern.MatchString(release.TreeDigest) || !digestPattern.MatchString(release.ManifestDigest) {
+			return strictError("invalid v2 immutable release")
+		}
+		if err := validateSource(release.PackageSource); err != nil {
+			return strictError("invalid v2 immutable source: %v", err)
+		}
+		if len(release.Components) == 0 {
+			return strictError("v2 components required")
+		}
+		releases[key] = release
+	}
+	return nil
+}
+
+func validateV2DistributionPolicies(distribution domain.DirectoryDistribution,
+	releases map[string]domain.DirectoryRelease, policies map[string]domain.DirectoryReleasePolicy,
+) error {
+	for _, policy := range distribution.ReleasePolicies {
+		key := releaseKey(distribution.ID, policy.ReleaseSequence)
+		if releases[key].Sequence == 0 || policies[key].ReleaseSequence != 0 {
+			return strictError("invalid or duplicate v2 release policy")
+		}
+		if err := validateV2Policy(policy); err != nil {
+			return err
+		}
+		policies[key] = policy
+	}
+	return nil
+}
+
 func validateV2Policy(policy domain.DirectoryReleasePolicy) error {
 	if !oneOf(string(policy.Status), string(domain.ReleaseActive), string(domain.ReleaseSuperseded), string(domain.ReleaseRevoked)) {
 		return strictError("invalid v2 release status")
 	}
-	baseFloor, err := parseSemver(policy.MinimumInstallerVersion)
-	if err != nil || policy.Targets == nil || len(policy.Targets) == 0 || policy.CurrentEvidence == nil {
+	if _, err := parseSemver(policy.MinimumInstallerVersion); err != nil ||
+		policy.Targets == nil || len(policy.Targets) == 0 || policy.CurrentEvidence == nil {
 		return strictError("invalid v2 policy floor or target arrays")
 	}
 	seen := map[string]bool{}
 	for _, grant := range policy.Targets {
 		key := string(grant.Client) + "\x00" + string(grant.Scope)
-		floor, err := parseSemver(grant.MinimumInstallerVersion)
-		if err != nil || slices.Compare(floor[:], baseFloor[:]) < 0 || len(grant.Scopes) > 0 || seen[key] ||
-			!oneOf(string(grant.Scope), "user", "project") {
+		if seen[key] {
 			return strictError("invalid or duplicate v2 scoped grant")
 		}
 		seen[key] = true
-		delivery, ok := domain.ExpectedDirectoryDelivery(grant.Client)
-		definition, defined := domain.ClientDefinitionFor(grant.Client)
-		if !ok || !defined || delivery != grant.Delivery ||
-			!slices.Contains(definition.Capabilities.Scopes, grant.Scope) || grant.CurrentEvidence == nil {
-			return strictError("invalid v2 grant delivery or evidence")
-		}
-		if !oneOf(string(grant.Authentication), string(domain.AuthenticationRequirementNotRequired),
-			string(domain.AuthenticationRequirementRequired), string(domain.AuthenticationRequirementUnknown)) {
-			return strictError("invalid v2 target authentication")
-		}
-		if definition.Capabilities.AppSupport != domain.SupportUnsupported {
-			if grant.AppBinding == nil || grant.AppBinding.AppKey == "" ||
-				grant.AppBinding.ID == "" || grant.AppBinding.MCPServer == "" {
-				return strictError("v2 app-capable client requires app binding")
-			}
-			if err := domain.ValidateAppBindingIdentity(grant.AppBinding.AppKey,
-				grant.AppBinding.ID, grant.AppBinding.MCPServer); err != nil {
-				return strictError("invalid v2 app binding: %v", err)
-			}
-		} else if grant.AppBinding != nil {
-			return strictError("v2 app binding is not allowed for this client")
-		}
-		if err := validateV2EvidenceIDs(grant.CurrentEvidence); err != nil {
+		if err := validateV2Grant(grant, policy.MinimumInstallerVersion); err != nil {
 			return err
-		}
-		if grant.CanonicalClosure != nil && grant.CanonicalClosure.Eligible {
-			closure := grant.CanonicalClosure
-			if !digestPattern.MatchString(closure.ClosureDigest) {
-				return strictError("invalid v2 closure digest")
-			}
-			if minimum, err := parseSemver(closure.MinimumInstallerVersion); err != nil || slices.Compare(minimum[:], floor[:]) < 0 {
-				return strictError("invalid v2 closure minimum")
-			}
 		}
 	}
 	return validateV2EvidenceIDs(policy.CurrentEvidence)
+}
+
+func validateV2Grant(grant domain.DirectoryTarget, baseVersion string) error {
+	baseFloor, _ := parseSemver(baseVersion)
+	floor, err := parseSemver(grant.MinimumInstallerVersion)
+	if err != nil || slices.Compare(floor[:], baseFloor[:]) < 0 || len(grant.Scopes) > 0 ||
+		!oneOf(string(grant.Scope), "user", "project") {
+		return strictError("invalid or duplicate v2 scoped grant")
+	}
+	delivery, ok := domain.ExpectedDirectoryDelivery(grant.Client)
+	definition, defined := domain.ClientDefinitionFor(grant.Client)
+	if !ok || !defined || delivery != grant.Delivery ||
+		!slices.Contains(definition.Capabilities.Scopes, grant.Scope) || grant.CurrentEvidence == nil {
+		return strictError("invalid v2 grant delivery or evidence")
+	}
+	if !oneOf(string(grant.Authentication), string(domain.AuthenticationRequirementNotRequired),
+		string(domain.AuthenticationRequirementRequired), string(domain.AuthenticationRequirementUnknown)) {
+		return strictError("invalid v2 target authentication")
+	}
+	if err := validateV2GrantBinding(grant); err != nil {
+		return err
+	}
+	if err := validateV2EvidenceIDs(grant.CurrentEvidence); err != nil {
+		return err
+	}
+	if err := validateV2GrantClosure(grant, floor[:]); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateV2GrantBinding(grant domain.DirectoryTarget) error {
+	definition, _ := domain.ClientDefinitionFor(grant.Client)
+	if definition.Capabilities.AppSupport != domain.SupportUnsupported {
+		if grant.AppBinding == nil || grant.AppBinding.AppKey == "" ||
+			grant.AppBinding.ID == "" || grant.AppBinding.MCPServer == "" {
+			return strictError("v2 app-capable client requires app binding")
+		}
+		if err := domain.ValidateAppBindingIdentity(grant.AppBinding.AppKey,
+			grant.AppBinding.ID, grant.AppBinding.MCPServer); err != nil {
+			return strictError("invalid v2 app binding: %v", err)
+		}
+	} else if grant.AppBinding != nil {
+		return strictError("v2 app binding is not allowed for this client")
+	}
+	return nil
+}
+
+func validateV2GrantClosure(grant domain.DirectoryTarget, floor []int) error {
+	if grant.CanonicalClosure == nil || !grant.CanonicalClosure.Eligible {
+		return nil
+	}
+	closure := grant.CanonicalClosure
+	if !digestPattern.MatchString(closure.ClosureDigest) {
+		return strictError("invalid v2 closure digest")
+	}
+	minimum, err := parseSemver(closure.MinimumInstallerVersion)
+	if err != nil || slices.Compare(minimum[:], floor) < 0 {
+		return strictError("invalid v2 closure minimum")
+	}
+	return nil
 }
 
 // A signed policy may share one schema receipt across compatible targets,
@@ -295,38 +364,53 @@ func validateV2Evidence(snapshot domain.DirectorySnapshot,
 	releases map[string]domain.DirectoryRelease, policies map[string]domain.DirectoryReleasePolicy, generated time.Time,
 ) error {
 	byID := map[string]domain.DirectoryEvidence{}
-	for _, evidence := range snapshot.Evidence {
-		release := releases[releaseKey(evidence.DistributionID, evidence.ReleaseSequence)]
-		if evidence.SchemaVersion != 1 || !evidenceIDPattern.MatchString(evidence.ID) ||
-			byID[evidence.ID].ID != "" || release.Sequence == 0 ||
-			release.TreeDigest != evidence.PackageTreeDigest || !evidence.HasTrustedProvenance() {
-			return strictError("invalid v2 evidence identity or trust")
+	for _, item := range snapshot.Evidence {
+		if err := validateV2EvidenceRecord(item, releases, generated, byID); err != nil {
+			return err
 		}
-		if !oneOf(evidence.Level, "schema", "materialization", "discovery", "runtime", "oauth") ||
-			!oneOf(evidence.Outcome, "passed", "failed", "inconclusive", "not_tested", "not_applicable") {
-			return strictError("invalid v2 evidence level or outcome")
-		}
-		if evidence.Level == "schema" {
-			if evidence.Client != "" || evidence.Scope != "" {
-				return strictError("v2 schema evidence cannot name client or scope")
-			}
-		} else if !validClient(evidence.Client) ||
-			!oneOf(string(evidence.Scope), "", "user", "project") {
-			return strictError("invalid v2 evidence client scope")
-		}
-		if !digestPattern.MatchString(evidence.Artifact.Digest) ||
-			!repositoryPattern.MatchString(evidence.Artifact.Repository) ||
-			!shaPattern.MatchString(evidence.Artifact.Revision) {
-			return strictError("invalid v2 evidence artifact")
-		}
-		if evidence.ObservedAt != "" {
-			date, err := parseTimestamp(evidence.ObservedAt)
-			if err != nil || date.After(generated) {
-				return strictError("invalid v2 evidence observation time")
-			}
-		}
-		byID[evidence.ID] = evidence
+		byID[item.ID] = item
 	}
+	return validateV2EvidenceSelections(policies, byID)
+}
+
+func validateV2EvidenceRecord(evidence domain.DirectoryEvidence,
+	releases map[string]domain.DirectoryRelease, generated time.Time, byID map[string]domain.DirectoryEvidence,
+) error {
+	release := releases[releaseKey(evidence.DistributionID, evidence.ReleaseSequence)]
+	if evidence.SchemaVersion != 1 || !evidenceIDPattern.MatchString(evidence.ID) ||
+		byID[evidence.ID].ID != "" || release.Sequence == 0 ||
+		release.TreeDigest != evidence.PackageTreeDigest || !evidence.HasTrustedProvenance() {
+		return strictError("invalid v2 evidence identity or trust")
+	}
+	if !oneOf(evidence.Level, "schema", "materialization", "discovery", "runtime", "oauth") ||
+		!oneOf(evidence.Outcome, "passed", "failed", "inconclusive", "not_tested", "not_applicable") {
+		return strictError("invalid v2 evidence level or outcome")
+	}
+	if evidence.Level == "schema" {
+		if evidence.Client != "" || evidence.Scope != "" {
+			return strictError("v2 schema evidence cannot name client or scope")
+		}
+	} else if !validClient(evidence.Client) ||
+		!oneOf(string(evidence.Scope), "", "user", "project") {
+		return strictError("invalid v2 evidence client scope")
+	}
+	if !digestPattern.MatchString(evidence.Artifact.Digest) ||
+		!repositoryPattern.MatchString(evidence.Artifact.Repository) ||
+		!shaPattern.MatchString(evidence.Artifact.Revision) {
+		return strictError("invalid v2 evidence artifact")
+	}
+	if evidence.ObservedAt != "" {
+		date, err := parseTimestamp(evidence.ObservedAt)
+		if err != nil || date.After(generated) {
+			return strictError("invalid v2 evidence observation time")
+		}
+	}
+	return nil
+}
+
+func validateV2EvidenceSelections(policies map[string]domain.DirectoryReleasePolicy,
+	byID map[string]domain.DirectoryEvidence,
+) error {
 	selected := map[string]bool{}
 	for key, policy := range policies {
 		ids := append([]string(nil), policy.CurrentEvidence...)
@@ -346,3 +430,4 @@ func validateV2Evidence(snapshot domain.DirectorySnapshot,
 	}
 	return nil
 }
+
