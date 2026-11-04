@@ -3,6 +3,7 @@ package qoder
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -22,7 +23,7 @@ func (*Adapter) ManagedMCPSelection() clients.SelectionLayout {
 
 func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
 	if projectRequested(in.Plan) {
-		return projectBundle(ctx, in)
+		return projectNative(ctx, in)
 	}
 	manifest := shared.ManifestFromEnvelope(in.Envelope, shared.WithAuthorNameEmail())
 	if shared.ComponentKindPresent(in.Plan.Components, domain.ComponentSkill) {
@@ -51,4 +52,28 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 		return nil, err
 	}
 	return nil, nil
+}
+
+func projectNative(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+    if err := ctx.Err(); err != nil { return nil, err }
+    if err := validateProjectPlan(domain.DetectedClient{ClientID:domain.ClientQoder, ConfigRoot:in.Plan.TargetContext.UserConfigRoot}, in.Plan); err != nil {
+        return nil, err
+    }
+    names := shared.SupportedMCPNames(in.Plan)
+    if len(names) == 0 && shared.ComponentKindPresent(in.Plan.Components, domain.ComponentSkill) {
+        // Keep the old prepared-import view for a preexisting package-only receipt.
+        if _, err := projectBundle(ctx, in); err != nil { return nil, err }
+    } else {
+        if _, err := os.Lstat(filepath.Join(in.StagingPath, projectNativeView)); err == nil {
+            return nil, fmt.Errorf("unselected Qoder native-import view in mixed package")
+        } else if !os.IsNotExist(err) { return nil, err }
+    }
+    // Stdio has already been resolved by the existing projection contract.
+    // No OpenAI-only OAuth hints may become Qoder project authority.
+    if err := shared.ProjectMCPServers(shared.MCPProjection{
+        Root:in.StagingPath, Envelope:in.Envelope, Names:names,
+        Dialect:shared.MCPDialectOpenAI, PluginRoot:in.Plan.ActivePath,
+        DataPath:in.PluginDataPath,
+    }); err != nil { return nil, err }
+    return qoderProjectObjects(in.StagingPath, in.Plan)
 }

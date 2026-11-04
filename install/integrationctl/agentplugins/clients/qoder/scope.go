@@ -104,9 +104,9 @@ func (*Adapter) QualifyPlan(in clients.PlanInput, plan *domain.DeliveryPlan) err
 		return err
 	}
 	for i := range plan.Components {
-		if plan.Components[i].Kind != domain.ComponentSkill {
+		if plan.Components[i].Kind != domain.ComponentSkill && plan.Components[i].Kind != domain.ComponentMCPServer {
 			plan.Components[i].Support = domain.SupportUnsupported
-			plan.Components[i].Reason = "Qoder project preparation supports skill bundles only; native MCP, hooks and other resources are unqualified"
+			plan.Components[i].Reason = "Qoder project supports only native Skills and stdio/HTTP MCP"
 		}
 	}
 	return nil
@@ -132,13 +132,25 @@ func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding
 	if binding.TargetLocator != filepath.Join(root, binding.PhysicalArtifact) {
 		return fmt.Errorf("qoder project binding locator differs from physical artifact")
 	}
-	if len(binding.NativeObjects) != 1 {
-		return fmt.Errorf("qoder project binding requires its exact managed package receipt")
-	}
-	for _, object := range binding.NativeObjects {
-		if object.Kind != "managed_package_directory" || object.Path != binding.TargetLocator || object.ObjectID != "package:qoder:"+binding.PhysicalArtifact || object.ManagedDigest == "" {
-			return fmt.Errorf("qoder project binding contains foreign native ownership")
-		}
-	}
+	if len(binding.NativeObjects) == 0 {
+        return fmt.Errorf("qoder project binding requires exact owned package")
+    }
+    packageCount := 0
+    var components []domain.NativeObjectOwnership
+    for _, object := range binding.NativeObjects {
+        if object.Kind == "managed_package_directory" {
+            if object.Path != binding.TargetLocator || object.ObjectID != "package:qoder:"+binding.PhysicalArtifact || object.ManagedDigest == "" {
+                return fmt.Errorf("qoder project package receipt differs from managed artifact")
+            }
+            packageCount++
+        } else {
+            components = append(components, object)
+        }
+    }
+    if packageCount != 1 { return fmt.Errorf("qoder project package receipt is ambiguous") }
+    if len(components) > 0 {
+        if err := qoderComponents(project).ValidateObjects(components); err != nil { return err }
+    }
+
 	return pathpolicy.RequireContainedChild(project, binding.TargetLocator)
 }

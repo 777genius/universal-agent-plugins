@@ -30,7 +30,7 @@ func projectActions(plan domain.DeliveryPlan) []string {
 	}
 }
 
-func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequest) error {
+func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRequest) error {
 	if !projectRequested(request.Plan) {
 		return nil
 	}
@@ -49,18 +49,31 @@ func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequ
 	if (request.Delivery.ActivePath != "" && request.Delivery.ActivePath != request.Plan.ActivePath) || (request.Delivery.OwnedBase != "" && request.Delivery.OwnedBase != request.Plan.TargetRoot) || (request.DeclaredName != "" && request.DeclaredName != request.Plan.DeclaredName) {
 		return fmt.Errorf("qoder project delivered identity differs from plan")
 	}
-	_, err := selectedProjectSkills(request.Plan)
-	return err
+if qoderLegacyPrepared(request.PreviousNativeObjects) {
+        _, err := selectedProjectSkills(request.Plan)
+        return err
+    }
+    return qoderNativePreflight(env, request)
 }
 
 func activateProject(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+    if !qoderLegacyPrepared(request.PreviousNativeObjects) {
+        return activateQoderNative(ctx, env, request)
+    }
 	if err := New().PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
 	if request.Delivery.ClientID != domain.ClientQoder || request.Delivery.ActivePath != request.Plan.ActivePath || request.Delivery.OwnedBase != request.Plan.TargetRoot || request.DeclaredName != request.Plan.DeclaredName {
 		return domain.ActivationOutcome{}, fmt.Errorf("qoder project delivered identity differs from plan")
 	}
-	if err := verifyProjectBundle(ctx, request); err != nil {
+	legacy := request
+    legacy.Delivery.NativeObjects = nil
+    for _, object := range request.Delivery.NativeObjects {
+        if object.Kind == "managed_package_directory" {
+            legacy.Delivery.NativeObjects = append(legacy.Delivery.NativeObjects, object)
+        }
+    }
+    if err := verifyProjectBundle(ctx, legacy); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
 	outcome := shared.StartedActivation(request)
@@ -71,7 +84,7 @@ func activateProject(ctx context.Context, env clients.Env, request domain.Activa
 	return outcome, nil
 }
 
-func deactivateProject(ctx context.Context, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func deactivateProject(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
 	if err := ctx.Err(); err != nil {
 		return outcome, err
@@ -87,6 +100,9 @@ func deactivateProject(ctx context.Context, request domain.DeactivationRequest) 
 	if err := New().ValidateBindingProfile(root, binding); err != nil {
 		return outcome, err
 	}
+    if len(qoderNativeOwned(request.NativeObjects)) > 0 {
+        return deactivateQoderNative(ctx, env, request)
+    }
 	if !request.Confirmed {
 		outcome.UserActions = []string{"agentplugins will remove only its exact prepared Qoder project bundle"}
 		return outcome, nil
@@ -106,4 +122,9 @@ func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, o
 		}
 	}
 	return shared.InspectUnqualifiedPluginRoot(plan.TargetRoot, name, plan.ActivePath, owned)
+}
+
+func qoderLegacyPrepared(previous []domain.NativeObjectOwnership) bool {
+    if len(previous) != 1 { return false }
+    return previous[0].Kind == "managed_package_directory"
 }

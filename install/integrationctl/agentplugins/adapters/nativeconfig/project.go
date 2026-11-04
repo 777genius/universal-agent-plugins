@@ -239,6 +239,8 @@ func projectBaseServer(codec Codec, server Server, placeholders Placeholders) (m
 	entry := map[string]any{urlKey: url}
 	if codec == CodecOpenCode {
 		entry["type"] = "remote"
+	} else if codec == CodecQoder {
+		entry["type"] = "http"
 	}
 	if len(headers) > 0 {
 		entry["headers"] = headers
