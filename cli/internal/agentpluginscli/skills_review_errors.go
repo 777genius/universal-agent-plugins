@@ -20,7 +20,9 @@ func reportSkillsPreparationRefusal(cmd *cobra.Command, opts *options, s *skills
 		return ctxErr
 	}
 	refusal := s.reviewRefusal(err)
-	return skillsMissingSelection(cmd, opts, refusal.Code, refusal.Message, nil)
+	return emitSkillsSelectionIssue(cmd, opts, skillsSelectionError{
+		Code: refusal.Code, Message: refusal.Message, cause: err,
+	})
 }
 
 func (s *skillsCatalogSession) reviewRefusal(err error) *skillspicker.ReviewRefusal {
