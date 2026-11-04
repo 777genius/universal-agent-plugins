@@ -39,6 +39,12 @@ func piSelectedAuthority(client domain.DetectedClient, plan domain.DeliveryPlan)
 // selection ready. An extension-only project remains valid; an unsupported
 // portable component never becomes an implied native capability.
 func (adapter *ProjectAdapter) RefinePlan(ctx context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if plan.Scope == domain.ScopeUser && plan.TargetContext.Scope == "" {
+		// The generic pre-bound refiner contract has no selected physical
+		// user authority. Preserve the old extension-only projection;
+		// only the fully bound planner may promote new scoped components.
+		return adapter.Adapter.RefinePlan(ctx, in, plan)
+	}
 	if err := validatePlan(*plan); err != nil {
 		return err
 	}
@@ -184,6 +190,14 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 	if err := ctx.Err(); err != nil {
 		return out, err
 	}
+	// Old extension-only receipts do not carry the newly introduced native
+	// component ownership kinds or an explicit scope. Keep their exact
+	// historical offline removal route, including scope-less records.
+	userOwned := piScopedNative(request.NativeObjects, domain.ScopeUser)
+	projectOwned := piScopedNative(request.NativeObjects, domain.ScopeProject)
+	if len(userOwned) == 0 && len(projectOwned) == 0 {
+		return adapter.Adapter.Deactivate(ctx, env, request)
+	}
 	switch request.TargetContext.Scope {
 	case domain.ScopeProject:
 		if _, err := projectPiRoot(request.Client, request.TargetContext, request.NativeRegistryRoot); err != nil {
@@ -200,10 +214,8 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 		return out, fmt.Errorf("unsupported Pi removal scope")
 	}
 	objects := piScopedNative(request.NativeObjects, request.TargetContext.Scope)
-	if len(objects) == 0 {
-		// Old extension-only user/project receipts retain their exact legacy
-		// file-removal path and no new native-effects or user actions.
-		return adapter.Adapter.Deactivate(ctx, env, request)
+	if len(objects) != len(userOwned)+len(projectOwned) {
+		return out, fmt.Errorf("pi native component receipts mix installation scopes")
 	}
 	layout, err := piComponents(request.NativeRegistryRoot, request.TargetContext.Scope)
 	if err != nil {
