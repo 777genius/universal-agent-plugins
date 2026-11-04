@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -291,5 +292,21 @@ func TestProjectComponentsForeignSkillRefusalPreservesForeignFiles(t *testing.T)
 	gotConfig, err := os.ReadFile(mutation.Layout.ConfigPaths.JSON)
 	if err != nil || string(gotConfig) != string(beforeConfig) {
 		t.Fatalf("refusal changed foreign MCP settings: %v", err)
+	}
+}
+
+func TestProjectComponentsPreflightForeignSkillCarriesTypedCause(t *testing.T) {
+	mutation := componentFixture(t)
+	path := mutation.Desired[0].Path
+	componentWrite(t, filepath.Join(path, "SKILL.md"), "foreign instructions\n")
+	selected := []domain.ComponentDecision{{
+		Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportProjected,
+	}}
+	finding, err := mutation.Layout.Inspect(selected, nil, nativeconfig.New())
+	if finding != clients.RegistryCollision || !errors.Is(err, domain.ErrForeignSkillDestination) {
+		t.Fatalf("preflight foreign Skill result = %v, %v", finding, err)
+	}
+	if got, err := os.ReadFile(filepath.Join(path, "SKILL.md")); err != nil || string(got) != "foreign instructions\n" {
+		t.Fatalf("preflight changed foreign bytes: %q, %v", got, err)
 	}
 }
