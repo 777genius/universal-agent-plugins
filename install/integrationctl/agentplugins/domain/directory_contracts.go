@@ -104,15 +104,15 @@ type DirectoryReleasePolicy struct {
 }
 
 type DirectoryTarget struct {
-	Client         ClientID                  `json:"client"`
+	Client ClientID `json:"client"`
 	// V1 targets retain scopes; V2 grants use one scoped identity per target.
-	Scopes         []InstallScope            `json:"scopes,omitempty"`
-	Scope          InstallScope              `json:"scope,omitempty"`
-	MinimumInstallerVersion string          `json:"minimum_installer_version,omitempty"`
-	CurrentEvidence []string                `json:"current_evidence,omitempty"`
-	Delivery       string                    `json:"delivery"`
-	Authentication AuthenticationRequirement `json:"authentication"`
-	AppBinding     *DirectoryAppBinding      `json:"app_binding,omitempty"`
+	Scopes                  []InstallScope            `json:"scopes,omitempty"`
+	Scope                   InstallScope              `json:"scope,omitempty"`
+	MinimumInstallerVersion string                    `json:"minimum_installer_version,omitempty"`
+	CurrentEvidence         []string                  `json:"current_evidence,omitempty"`
+	Delivery                string                    `json:"delivery"`
+	Authentication          AuthenticationRequirement `json:"authentication"`
+	AppBinding              *DirectoryAppBinding      `json:"app_binding,omitempty"`
 }
 
 // ExpectedDirectoryDelivery returns the signed Directory delivery contract for
