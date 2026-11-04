@@ -14,6 +14,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # pull_request runs check out a synthetic merge commit; retain the source branch HEAD too.
+  AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+
 concurrency:
   group: live-install-audit-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
