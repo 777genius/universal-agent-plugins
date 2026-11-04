@@ -594,6 +594,40 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertFalse(delayed["removal_verified"])
         self.assertEqual(delayed["native_residuals"], [".grok/new-settings.json"])
 
+
+    def test_codex_native_registration_requires_exact_local_marketplace(self):
+        # The actual Codex CLI owns [plugins."name@agentplugins-<hash>"].
+        # A source cache, arbitrary URL or unrelated marketplace is not proof.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary)
+            root = case / "home/.codex"
+            root.mkdir(parents=True)
+            managed = case / "uap-data/managed"
+            managed.mkdir(parents=True)
+            config = root / "config.toml"
+            key = "agentplugins-" + "a" * 12
+            config.write_text(
+                f'[plugins."atlassian@{key}"]\\nenabled = true\\n'
+                f'[marketplaces.{key}]\\nsource_type = "local"\\n'
+                f'source = "{managed}"\\n')
+            config.write_text(config.read_text().replace("\\\\n", "\\n"))
+            changes = list(audit.snapshot([root]).items())
+            self.assertEqual(
+                audit.attributable_native_changes([root], changes, "atlassian", "codex"),
+                [".codex/config.toml"])
+            self.assertEqual(
+                audit.attributable_native_changes([root], changes, "github", "codex"),
+                [])
+            self.assertFalse(audit.codex_owned_native_config(
+                config, "atlassian-wrong", case))
+            escaped = Path(temporary).parent / "other-account"
+            config.write_text(config.read_text().replace(str(managed), str(escaped)))
+            self.assertFalse(audit.codex_owned_native_config(config, "atlassian", case))
+            config.write_text(config.read_text().replace(str(escaped), str(managed))
+                              .replace(f"agentplugins-{'a' * 12}", "random-market"))
+            self.assertFalse(audit.codex_owned_native_config(config, "atlassian", case))
+
     def test_large_native_file_rewrite_changes_snapshot(self):
         audit = load_audit()
         with TemporaryDirectory() as temporary:
