@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -189,6 +190,68 @@ func TestProjectSkillsComposedGitAndHTTPSLifecycle(t *testing.T) {
 			journey.assertOtherScopeUnchanged(t, journey.b, bNative, bState)
 		})
 	}
+}
+
+// BUG-033: the raw Skills CLI is distinct from a standard plugin add; the
+// Qoder project adapter must prepare a closed native-view bundle without
+// mutating the user's shared native registry or invoking the Qoder CLI.
+func TestQoderRawSkillProjectLifecycle(t *testing.T) {
+    source := newProjectSkillsSource(t, "git")
+    journey := newProjectJourney(t, source.transport)
+    user := filepath.Join(journey.home, ".qoder")
+    projectJourneyWrite(t, filepath.Join(user, "foreign-untouched.txt"), "foreign Qoder profile\\n")
+    runner := &projectQoderNoNative{}
+    journey.app = configureProjectQoder(t, projectSkillsGitAcquirer(
+        journey.app, source.transport.remote), user, runner)
+    beforeUser := securityFixtureTree(t, user)
+
+    command := exec.Command("git", "-C", source.transport.repo, "rev-parse", "HEAD")
+    commit, err := command.Output()
+    if err != nil {
+        t.Fatal(err)
+    }
+    selected, err := journey.app.ForScope(domain.ScopeProject, journey.a)
+    if err != nil {
+        t.Fatal(err)
+    }
+    preview, err := selected.PrepareSkills(context.Background(), agentpluginscli.SkillsBatchRequest{
+        Selections: []agentpluginscli.SkillsSelection{{
+            Repository: "uap-fixture/skills", Commit: strings.TrimSpace(string(commit)),
+            Name: "docs", Path: "skills/docs",
+            Selector: environment.Selector{Kind: environment.SelectorRef, Value: "main"},
+        }}, TargetIDs: []string{"qoder"},
+    })
+    if err != nil {
+        // Preserve the underlying typed/preflight cause in local test logs only;
+        // the public CLI's generic PLAN_REJECTED must not leak provider data.
+        t.Fatalf("raw Qoder project Skill preflight refused: %v", err)
+    }
+    preview.Close()
+
+    journey.run(t, journey.a, "skills", "add", source.input, "--skill", "docs",
+        "--target", "qoder", "--no-ui", "--yes", "--format", "json")
+    installed, binding := journey.owned(t, journey.a)
+    if binding.Scope != "project" || binding.ClientID != "qoder" ||
+        binding.Activation != domain.ActivationPrepared ||
+        binding.Verification != domain.VerificationInstalled {
+        t.Fatalf("raw Qoder Skill was not a prepared project binding: %+v", binding)
+    }
+    view := filepath.Join(binding.TargetLocator, ".agentplugins-qoder-native",
+        "skills", "docs", "SKILL.md")
+    if body := projectJourneyRead(t, view); body != projectJourneySkill {
+        t.Fatalf("Qoder closed-view Skill bytes differ from pinned source: %q", body)
+    }
+    journey.run(t, journey.a, "skills", "add", source.input, "--skill", "docs",
+        "--target", "qoder", "--no-ui", "--yes", "--format", "json")
+    repeated, _ := journey.owned(t, journey.a)
+    if installed.InstallationID != repeated.InstallationID {
+        t.Fatal("repeat raw Skill installation changed immutable package identity")
+    }
+    journey.run(t, journey.a, "remove", "docs", "--target", "qoder")
+    projectJourneyAbsent(t, binding.TargetLocator)
+    if runner.calls != 0 || !reflect.DeepEqual(beforeUser, securityFixtureTree(t, user)) {
+        t.Fatal("raw Qoder project Skill called native CLI or changed original user profile")
+    }
 }
 
 func TestProjectSkillsRejectUnsupportedBeforeAcquisition(t *testing.T) {
