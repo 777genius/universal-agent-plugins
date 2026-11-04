@@ -80,17 +80,17 @@ def selected_pin(args, name):
 # against the Go sources).
 PATTERNS = {
     "codex": r"^TestAgentpluginsCodexNative(Lifecycle|CommandsLifecycle)$",
-    "claude": r"^TestAgentpluginsClaudeNative(Lifecycle|RuntimeLifecycle|CommandsLifecycle|SecondaryProfileIsolation)$",
+    "claude": r"^TestAgentpluginsClaudeNative(Lifecycle|RuntimeLifecycle|CommandsLifecycle)$",
     "opencode": r"^TestAgentpluginsOpenCodeNative(Lifecycle|ToolCollision|RuntimeExtended|CommandsLifecycle)$",
 }
 REQUIRED_TESTS = {
     "codex": {"TestAgentpluginsCodexNativeLifecycle", "TestAgentpluginsCodexNativeCommandsLifecycle"},
-    "claude": {"TestAgentpluginsClaudeNativeLifecycle", "TestAgentpluginsClaudeNativeRuntimeLifecycle", "TestAgentpluginsClaudeNativeCommandsLifecycle", "TestAgentpluginsClaudeNativeSecondaryProfileIsolation"},
+    "claude": {"TestAgentpluginsClaudeNativeLifecycle", "TestAgentpluginsClaudeNativeRuntimeLifecycle", "TestAgentpluginsClaudeNativeCommandsLifecycle"},
     "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended", "TestAgentpluginsOpenCodeNativeCommandsLifecycle"},
 }
 PROJECT_TESTS = {
     "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP"},
-    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery", "TestAgentpluginsClaudeNativeTrustedProjectMCPCall"},
+    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery", "TestAgentpluginsClaudeNativeTrustedProjectMCPCall", "TestAgentpluginsClaudeNativeSecondaryProfileIsolation"},
     "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
 }
 
