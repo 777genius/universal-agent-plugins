@@ -293,6 +293,25 @@ def passive_native_path(target, relative):
             or (target == "qoder" and relative.startswith(("plugins/cache/", "logs/runs/"))))
 
 
+def qoder_passive_latest_log_link(root, file):
+    """Qualify only Qoder's real, contained run-log pointer, never a plugin link."""
+    logs = root / "logs"
+    if file != logs / "latest" or root.is_symlink() or logs.is_symlink():
+        return False
+    try:
+        relative = file.readlink()
+        if relative.is_absolute() or not path_inside_case(logs, root):
+            return False
+        destination = Path(os.path.normpath(str(logs / relative)))
+        if not any(destination.is_relative_to(logs / leaf)
+                   for leaf in ("runs", "sessions")):
+            return False
+        return (path_inside_case(destination, logs)
+                and (destination.is_file() or destination.is_dir()))
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+
 def native_identity_residuals(native_roots, identity, observed_paths, target):
     """After remove, reject any remaining named native file/config entry.
 
@@ -318,7 +337,9 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
             try:
                 mode = file.lstat().st_mode
                 if stat.S_ISLNK(mode):
-                    leftover.append(observed + ": symlink")
+                    if (target != "qoder" or relative != "logs/latest"
+                            or not qoder_passive_latest_log_link(root, file)):
+                        leftover.append(observed + ": symlink")
                 elif not stat.S_ISREG(mode):
                     leftover.append(observed + ": non-regular")
                 elif passive_native_path(target, relative):
@@ -1005,6 +1026,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # Preserve truthful disk-state evidence without equating passive cached
     # source/log files to an active Qoder/Codex plugin registration.
     passive_retained = []
+    qoder_passive_log_link_verified = None
+    if target == "qoder" and kind == "plugin" and cleanup:
+        qoder_passive_log_link_verified = qoder_passive_latest_log_link(
+            native_roots[0], native_roots[0] / "logs/latest")
     if cleanup and cleanup["exit_code"] == 0:
         for root in native_roots:
             prefix = root.name + "/"
@@ -1084,6 +1109,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "post_lock_pinned": post_lock_pinned,
             "removal_verified": removal_verified, "native_residuals": native_residuals,
             "retained_passive_native_files": sorted(set(passive_retained)),
+            "qoder_passive_log_link_verified": qoder_passive_log_link_verified,
             "post_list_schema_valid": post_list_schema_valid,
             "post_remove_identity_registered": post_remove_identity_registered,
             "sentinels_preserved": sentinels_preserved}

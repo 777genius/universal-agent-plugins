@@ -1172,6 +1172,44 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                           fixture, 0, root / "kimi-skill", {})
             self.assertEqual(initialize.call_count, 1)
 
+    def test_qoder_latest_log_link_only_qualifies_closed_run_diagnostics(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve() / ".qoder"
+            run = root / "logs" / "runs" / "session-1"
+            run.mkdir(parents=True)
+            (run / "qodercli.log").write_text("diagnostic only")
+            link = root / "logs/latest"
+            observed = [".qoder/logs/latest"]
+            link.symlink_to("runs/session-1", target_is_directory=True)
+            self.assertTrue(audit.qoder_passive_latest_log_link(root, link))
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "atlassian", observed, "qoder"), [])
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "atlassian", observed, "codex"),
+                [".qoder/logs/latest: symlink"])
+            link.unlink()
+            outside = root.parent / "outside"
+            outside.mkdir()
+            link.symlink_to("../../outside", target_is_directory=True)
+            self.assertFalse(audit.qoder_passive_latest_log_link(root, link))
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "atlassian", observed, "qoder"),
+                [".qoder/logs/latest: symlink"])
+            link.unlink()
+            link.symlink_to("runs/missing", target_is_directory=True)
+            self.assertFalse(audit.qoder_passive_latest_log_link(root, link))
+            link.unlink()
+            (root / "logs/runs/chain").symlink_to(run, target_is_directory=True)
+            link.symlink_to("runs/chain", target_is_directory=True)
+            self.assertFalse(audit.qoder_passive_latest_log_link(root, link))
+            link.unlink()
+            other = root / "logs/other"
+            other.symlink_to("runs/session-1", target_is_directory=True)
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "atlassian", [".qoder/logs/other"], "qoder"),
+                [".qoder/logs/other: symlink"])
+
     def test_failed_first_list_cannot_attest_plugin_lifecycle(self):
         # BUG-029: matching JSON from a failed list is not an attestation.
         audit = load_audit()
