@@ -422,7 +422,7 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	f := newNativeFixture(t, true)
 	f.ClientBinDir = filepath.Dir(client)
 	stages := map[string]nativeStage{}
-	for _, name := range []string{"install", "A_native_tool", "B_native_tool", "same_version_native_tool", "unchanged", "owned_repair", "native_cache_repair", "partial_failure", "all_unsupported", "remove", "repeat_remove", "foreign_preservation", "collision_drift", "immutable_git", "immutable_git_native", "http", "redirect_headers", "skill_context", "real_model_skill_use", "oauth"} {
+	for _, name := range []string{"install", "A_native_tool", "B_native_tool", "same_version_native_tool", "unchanged", "explicit_user_scope", "owned_repair", "native_cache_repair", "partial_failure", "all_unsupported", "remove", "repeat_remove", "foreign_preservation", "collision_drift", "immutable_git", "immutable_git_native", "http", "redirect_headers", "skill_context", "real_model_skill_use", "oauth"} {
 		stages[name] = nativeStage{Status: "not_evaluated", Reason: "not reached"}
 	}
 	evidence := map[string]any{"started_utc": time.Now().UTC().Format(time.RFC3339Nano), "os": runtime.GOOS, "arch": runtime.GOARCH, "profile": f.Root, "client_version": "0.153.4", "client_source": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a", "client_sha256": nativeSHA(t, client), "installer_sha256": nativeSHA(t, installer), "acquisition": "local_directory", "native_surface": "codex app-server direct thread MCP RPC", "stages": stages}
