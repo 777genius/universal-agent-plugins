@@ -52,6 +52,11 @@ func (cache Cache) reconcileVersion(verified VerifiedBundle, trust TrustStore, v
 	if !persist {
 		return verified, nil
 	}
+	// The process-shared lock remains held through the durable replacement.
+	return cache.writeVersionedRecord(verified, schema, directory)
+}
+
+func (cache Cache) writeVersionedRecord(verified VerifiedBundle, schema int, directory string) (VerifiedBundle, error) {
 	record := cacheRecord{SchemaVersion: schema, Sequence: verified.Snapshot.Sequence, Snapshot: base64.StdEncoding.EncodeToString(verified.SnapshotBytes), Envelope: base64.StdEncoding.EncodeToString(verified.EnvelopeBytes)}
 	body, err := json.Marshal(record)
 	if err != nil {
