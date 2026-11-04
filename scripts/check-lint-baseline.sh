@@ -300,7 +300,18 @@ while IFS=$'\t' read -r pattern _linters _message region; do
   fi
   git show "$BASE_REF:$old_path" >"$work_dir/legacy-original.go"
   legacy_checked=$((legacy_checked + 1))
-  if ! "$legacy_counter" "$work_dir/legacy-original.go" "$current_path"; then
+  # The tool reads stdin only: the checked shell controls both file handles,
+  # avoiding a path-traversal entry point in the Go counter.
+  if ! old_count="$("$legacy_counter" <"$work_dir/legacy-original.go")"; then
+    legacy_failures=$((legacy_failures + 1))
+    continue
+  fi
+  if ! current_count="$("$legacy_counter" <"$current_path")"; then
+    legacy_failures=$((legacy_failures + 1))
+    continue
+  fi
+  if (( current_count > old_count )); then
+    echo "legacy-go-lines: $current_path grew from $old_count to $current_count code lines" >&2
     legacy_failures=$((legacy_failures + 1))
   fi
 done <"$work_dir/head"
