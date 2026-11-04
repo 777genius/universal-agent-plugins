@@ -103,7 +103,7 @@ func TestAgentpluginsCodexNativeForeignSkillCLIRefusal(t *testing.T) {
 	var baselineOut, baselineErr bytes.Buffer
 	prior.Stdout, prior.Stderr = &baselineOut, &baselineErr
 	baselineExit := prior.Run()
-	var baselineRefusal struct { Code, Message string }
+	var baselineRefusal struct{ Code, Message string }
 	var baselineCode *exec.ExitError
 	if !errors.As(baselineExit, &baselineCode) || baselineCode.ExitCode() != 1 ||
 		json.Unmarshal(baselineOut.Bytes(), &baselineRefusal) != nil || ctx.Err() != nil ||
