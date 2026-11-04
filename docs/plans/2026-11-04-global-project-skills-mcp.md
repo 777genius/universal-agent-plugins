@@ -1,6 +1,6 @@
 # Global / Project: Skills и MCP для девяти агентов
 
-Дата решения владельца: 2026-11-04. Статус: draft плана, до двух раундов независимого review.
+Дата решения владельца: 2026-11-04. Статус: draft v2, исправления первого раунда внесены; второй review pending.
 
 Этот документ задаёт последующую реализацию. Наличие плана или draft PR не означает,
 что новый CLI, подписанный Directory v2 либо новая совместимость уже выпущены.
@@ -129,6 +129,7 @@ signature domain сохраняют прежнее поведение. Верс�
 | `minimum_installer_version` | Минимальная версия для этого grant; учитывает исходный release floor |
 | `delivery`, `authentication` | Поведение и оставшиеся шаги именно этого grant |
 | `current_evidence` | Evidence IDs этого client/scope/qualified native profile |
+| `canonical_closure`, если рассчитана | Подписанный итог текущей fresh resolution; контракт ниже |
 | `app_binding`, если уже существует | Только сохранение эквивалентного legacy user-контракта |
 
 Уникальность: `(distribution_id, release_sequence, client, scope)`. Не объединять два
@@ -138,17 +139,47 @@ release sequence, tree/manifest digests и component identity остаются �
 Два строгих wire decoder нормализуют проверенные данные в один существующий domain
 eligibility path. V1 target становится user grant с прежними условиями. V2 target
 имеет явный scope. Никакого `DirectoryResolverV2` или нового dependency graph engine.
+При нормализации сохраняются также package-wide/schema blocking evidence и release
+status; перенос evidence на уровень grant не должен отфильтровать общий запрет.
+
+Qualified native profile сохраняется в evidence, normalized eligibility и публичной
+подписи. CLI проверяет реально выбранные executable/version/root через существующий
+adapter admission. Devin-only evidence не разрешает legacy Windsurf или неизвестную
+версию; сайт называет этот путь Devin и показывает prerequisite. Новый реестр профилей
+для этого не вводится.
 
 ### 4.2. Evidence и closure
 
 - Client evidence связывает scope, exact package/release/tree, installer/adapter/native
   versions, platform и реально проверенный outcome. Schema evidence остаётся отдельным.
-- Qualification полного дерева связывается с exact dependency identity. Повторно
-  используем существующий resolver/identity calculation; браузер дерево не разрешает.
+- Для полного дерева вводится отдельный `closure_digest`: SHA-256 от детерминированно
+  сериализованных client/scope, root identity, canonical exact pins и required edges
+  уже проверенного resolved Lock/graph. Источники, revisions, paths, release sequences,
+  tree/manifest digests входят в pins; HOME, секреты и mutable state не входят.
+  Existing `deterministicDependencyIdentity` описывает runtime executable вроде `node`,
+  а не граф. Его смысл сохраняется; он не используется как closure fingerprint.
+- Повторно используем existing resolver и validated lock, добавляя только bounded
+  canonicalization. Новый lock schema или browser resolver не нужен.
 - User evidence не квалифицирует Project. A/B/user fixture имеет независимые canonical
   roots; реальные абсолютные пути пользователя не публикуются в каталоге.
-- Сайт получает подписанный результат совместимости closure. CLI всё равно повторно
-  авторизует каждый выбранный child при install/update/restore.
+- Optional `canonical_closure` на grant содержит `eligible`, `closure_digest` и
+  `minimum_installer_version`; при `eligible=true` digest и effective floor обязательны.
+  Scope/client/root release и snapshot authority задаются окружающим signed contract.
+  Floor равен максимуму применимых floors выбранных узлов. Существующие delivery/auth
+  display requirements агрегируются по required closure, а не только по root.
+- Это итог policy eligibility текущей fresh resolution, а не runtime evidence.
+  Evidence получает отдельный `closure_digest`; его authenticated artifact содержит
+  или закрепляет существующий validated lock. Допустимы несколько current proofs с
+  разными exact digests, пока их собственные pins/grants остаются разрешены.
+- На каждой публикации publisher заново проверяет canonical closure и применимость
+  retained proofs к текущим grants, floors, component constraints, statuses/revocations.
+  Отзыв required child инвалидирует затронутый summary/proof. Простое появление более
+  новой canonical версии не инвалидирует старую всё ещё разрешённую closure.
+- Сайт читает только authenticated canonical summary. CLI повторно авторизует все
+  фактически выбранные pins; старый valid lock не обязан совпадать с fresh digest и
+  не наследует floor более новой canonical closure. Runtime proof применим лишь к
+  собственному exact digest; отсутствие такого proof не становится новым запретом
+  установки при успешной существующей per-node authorization.
 - Наличие ровно одного неподдержанного required child запрещает новую compatibility claim.
 
 ### 4.3. Кэш, receipts, lock и публикация
@@ -165,17 +196,37 @@ eligibility path. V1 target становится user grant с прежними 
 - Publisher формирует v1 user view и v2 view из одного reviewed source model,
   используя существующие signer, immutable ledger и CAS promotion. Release identities
   не перевыпускаются только ради добавления scope.
-- Согласованно публиковать suspension/revocation. Проверить partial publication,
-  повтор promotion, independent expiry/refresh. V1 продолжает обновляться, а не
-  навсегда замораживается на истекающем snapshot.
+- Одна coordinated publication подготавливает оба immutable snapshot/envelope и оба
+  указателя latest; единица продвижения — один ledger commit и один existing CAS ref
+  update. Не выдавать частично подготовленные views за coordinated success. Проверить
+  повтор promotion, independent expiry/refresh и CDN stale read. V1 продолжает
+  обновляться, а не навсегда замораживается на истекающем snapshot.
 - Dry-run использует существующую staged clone/commit границу и не изменяет рабочие
   manifests, locks, receipts, native config и authoritative cache.
+
+Для операций, которым существующая политика требует Directory read/authorization,
+протокол выбирается до загрузки, без retry через другой protocol:
+
+| Операция | Протокол и authority |
+| --- | --- |
+| Existing validated v1 user receipt: требующий Directory read lifecycle | Explicit v1 compatibility purpose, прежняя receipt/floor authority |
+| Existing v2 receipt | V2 |
+| Новый install или cold lock restore без receipt | V2, в том числе старые exact user pins; отсутствие receipt не даёт installed-state privileges |
+| Project, Pi, новый Devin profile либо новый scope/client grant | V2 |
+| Явное добавление v2-only target к v1 установке | Exact same pin заново авторизуется в v2; resulting operation пишет фактическую v2 provenance, не переписывая unrelated receipts |
+
+Неуказанная protocol metadata в историческом состоянии читается только по уже
+валидированному legacy interpretation. Ошибка выбранного protocol терминальна;
+это не разрешение попробовать другой decoder или изменить scope.
+Не добавлять сетевую зависимость в receipt/ownership-only remove или иные ранее
+локальные операции. Удаление owned установки остаётся возможным при недоступном,
+истёкшем или отозвавшем пакет каталоге; install authorization не является правом удаления.
 
 ## 5. Реализация по рабочим пакетам
 
 | ID | Работа и основные места | Зависит от | Критерий завершения |
 | --- | --- | --- | --- |
-| P0 | Перечитать AGENTS/owner scope, обновить overlap PR heads; зафиксировать v2 positive/negative examples и host prerequisites | Этот план и review | Wire/normalization/authorization договорены; нет незаявленного клиента или новой engine abstraction |
+| P0 | Перечитать AGENTS/owner scope, обновить overlap PR heads; зафиксировать v2 examples; сразу проверить Devin profile selection и native prerequisites всех active lanes | Этот план и review | Wire/normalization/authorization договорены; ранние host blockers известны до большой adapter работы |
 | P1 | Registry `schemas/`, `scripts/directory_publication.py`, preparer/CAS/readiness, version-specific profiles | P0 | V1 preserved; v2 scope/evidence validated; exact sources/old policies сохранены |
 | P2 | UAP `adapters/directoryv1/` и тонкий v2 decoder; shared verification/cache через текущие границы | P0 | Оба формата проверяются независимо и нормализуются в один domain path |
 | P3 | `domain/directory_*`, `agentpluginscli/source.go`, `deps_sync.go`, `compose.go` | P2; P1 fixtures | Actual protocol identity, per-child scope, fresh project locked restore, scope-aware siblings, mutation-free dry-run |
@@ -238,12 +289,13 @@ Global Skill и MCP должны обнаруживаться реальным D
 
 | Владелец | Исключительная область записи | Что передаёт соседям |
 | --- | --- | --- |
-| Integrator | Этот план, final integration, mirror/landing/UX, итоговый evidence index | Contract examples, решения по спорным findings, exact integration SHA |
+| Integrator | Этот план, final integration, mirror/landing/UX, итоговый evidence index; `clients/shared/*` и требуемые `adapters/nativeconfig/*` изменения | Contract examples, минимальные shared fixes, решения по findings, exact integration SHA |
 | Worker A | Registry schemas/publisher/readiness/policy/evidence data | Signed fixtures и versioned publication contract |
 | Worker B | UAP readers/cache/domain/CLI/composition, central capabilities | Verified Directory facade, grant selection и actual protocol identity |
 | Worker C | Qoder/Pi/Windsurf adapter files и их native ownership cases | Capability deltas Worker B; qualification results Integrator |
 
-Сначала P0. Затем A ведёт P1, B — P2/P3, C — P4/P5/P6, Integrator — P7 на
+Сначала P0; Worker C проверяет Devin host/profile spike до последовательной P4/P5/P6 работы.
+Затем A ведёт P1, B — P2/P3, C — P4/P5/P6, Integrator — P7 на
 зафиксированных fixtures. Внутри C независимые adapter slices идут по готовности;
 освободившийся worker может взять следующий slice после явной передачи владения.
 Для review временно освобождать worker slot; не считать пятого исполнителя доступным.
@@ -263,6 +315,13 @@ Global Skill и MCP должны обнаруживаться реальным D
   неподдерживаемый компонент/transport, stale evidence: отказ до mutation.
 - Fresh project restore из lock с пустым receipt/cache; exact retained source reuse;
   запрет moving-ref refresh или project-to-user downgrade.
+- Тот же root и тот же `node`, но изменённый required child pin; revoked/missing child;
+  stale canonical summary; unchanged closure; старый valid lock при новой canonical
+  closure/floor. Proof и eligibility должны изменяться только по своим входам.
+- Existing v1 receipt lifecycle, fresh legacy user lock, v2-only added target,
+  unknown legacy protocol metadata и выбранный feed load failure: explicit routing.
+- Offline remove собственных v1/v2 установок при expired/revoked/unavailable feed:
+  existing ownership policy действует без новой обязательной загрузки Directory.
 - Существующие dependency graph/conflict/transaction/crash tests повторно используются.
   Добавляются только отсутствующие scope/closure assertions, без девяти копий solver harness.
 
@@ -276,10 +335,19 @@ Global Skill и MCP должны обнаруживаться реальным D
 3. Update/repair, restart и remove: сохранить другие scopes и foreign neighbors/data.
 4. Проверить одинаковые имена и native precedence. Не требовать, чтобы Global побеждал
    более приоритетный Project/local override; проверять предусмотренный host результат.
-5. Подтвердить stdio и controlled Streamable HTTP: initialize/list/call, где именно
-   эти claims публикуются. Stub executable и одно наличие файлов не дают native PASS.
+5. Минимальный runtime gate программы: genuine admitted client/profile выполняет
+   controlled stdio и Streamable HTTP initialize/list/call в обоих scopes. Existing
+   oracles переиспользуются. Неподтверждённая ячейка остаётся BLOCKED и не закрывает
+   target; это не девять новых harness и не SaaS OAuth проверка каждого пакета.
+   Stub executable, только tools/list или наличие файлов не дают runtime PASS.
 6. Для новых Qoder Project, Pi Global, Devin Global — дополнительные ownership,
    profile selection, source-path, edited-owned-content и removal cases.
+7. Fresh-process repair/remove старых Qoder prepared-import, Pi extension-only и
+   Cascade user receipts: dispatch по existing recorded physical profile/native
+   object kind. Не мигрировать старую установку и не усыновлять Qoder cache неявно.
+   Если persisted identity не различает routes, переоценить этот узкий gap до кода.
+8. Devin-only evidence + selected legacy Windsurf/unknown version не даёт
+   unconditional compatible/installed claim; проверить и CLI, и site labeling.
 
 Платформы: переиспользовать существующие Linux/macOS/Windows lanes. Новый native claim
 привязан к реально проверенной платформе; platform-dependent пути новых adapters
@@ -319,12 +387,36 @@ Registry находится в другом репозитории: его imple
 PR. Это связанный deliverable основной программы, а не попытка включить два repo в
 один физический PR. Пустой Registry PR только ради ссылки сейчас не создаётся.
 
-Порядок будущего rollout: implementation/review в обоих repo; release rehearsal на
-зафиксированных v2 fixtures; совместимая публикация reader CLI; qualified v2 grants и
-регулярно обновляемый v1; переключение реальных site selectors; production read-back.
-Если выпуск CLI и первый v2 snapshot требуют согласованной bootstrap последовательности,
-P0 фиксирует её до implementation; публичный install не должен попадать в промежуточный
-неработающий путь. Плановый draft сам по себе не разрешает публичный release.
+### Первый v2 bootstrap: две публикации Registry и один CLI release N
+
+1. Подготовить reviewed implementation и выбрать будущую версию N по существующему
+   release runbook, когда на выпуск есть authorization. До final UAP release freeze
+   Registry публикует начальный signed v2 bootstrap с эквивалентными legacy user facts
+   и обновлённым v1. Нет project/Pi/new Devin grants и новых closure/runtime/OAuth claims.
+   Floor каждого bootstrap grant — `max(old floor, N)`; source/status/delivery/auth и
+   исходные evidence identities сохраняются, old proof не переименовывается в proof N.
+2. Bootstrap gate сохраняет все existing released-CLI v1 parity/readiness checks.
+   Дополнительно проверяет strict v1-to-v2 semantic projection, actual signatures и
+   pure v2 decoding на pinned source-built reader. Нельзя писать, что старый released
+   CLI прочитал v2. Это ограниченная format-transition проверка, а не feature flag
+   или отмена readiness. Bootstrap legacy user facts используют эквивалентную legacy
+   eligibility semantics; новый native/closure proof из них не фабрикуется.
+3. Включить authenticated v2 bootstrap в финальный UAP candidate N; заморозить tag
+   на reviewed main commit. Выполнить существующие draft qualification, шесть native
+   platform proofs и frozen receipt verification. При authorized promotion GitHub и
+   npm публикуют те же проверенные bytes без rebuild. Действуют все environment gates.
+4. Actual published N квалифицирует новые scoped grants active девятки. Registry
+   публикует полный qualified v2, поддерживая v1. До появления новых grants CLI
+   честно отказывает именно в ещё не разрешённых новых сценариях; baseline user
+   authorization сохраняется, а сайт не обещает готовность этих новых сценариев.
+5. Только после released-binary/full-feed read-back переключить реальные site
+   selectors на v2 summaries и проверить production. Ранний demo #702 остаётся примером.
+
+Первый v2 bootstrap уже существует к моменту freeze/publication N, поэтому нет
+цикла «reader требует bootstrap, publisher требует выпущенный новый reader».
+Нельзя пропускать финальную проверку actual embedded bytes или публиковать новый
+compatibility claim на основании source-built bootstrap decoder.
+Плановый draft сам по себе не разрешает публичный release.
 
 Не удалять опубликованные immutable artifacts при rollback. Сохранить последний
 безопасный reader/v1 path; отозвать ошибочный grant новой policy publication по
@@ -334,7 +426,9 @@ P0 фиксирует её до implementation; публичный install не 
 
 Это engineering estimate, не измеренный diff. Считаются добавленные и существенно
 изменённые handwritten строки один раз, не additions+deletions. Сгенерированные feeds,
-evidence dumps, locks, binaries, vendored code и переводы не включены. Уже существующие
+evidence dumps, locks, binaries, vendored code, планы и пользовательская документация
+(включая переводы) не включены. Документация остаётся deliverable P9; изменения journey
+pages выпускаются во всех девяти поддерживаемых locales по AGENTS. Уже существующие
 тесты повторно запускаются; они не считаются заново написанными.
 
 | Активный адаптер | Реализация | Тесты/fixtures | Содержание |
@@ -402,6 +496,8 @@ Devin spike/profile имеет confidence 6/10; при несовместимо�
 
 - [ ] Все девять active клиентов имеют подтверждённые Skills и MCP user/project пути
       в явно заявленных native profiles/platforms; prepared-only storage не считается discovery.
+- [ ] Controlled native stdio и HTTP initialize/list/call подтверждены в обоих scopes
+      для каждого заявленного active profile; ни одна обязательная ячейка не скрыта skip-ом.
 - [ ] Совместимая mandatory closure, включая Marketing Kit, устанавливается в оба scopes.
 - [ ] Cold lock restore, update, repair, remove и user/A/B/foreign preservation проверены.
 - [ ] V1 старых клиентов продолжает обслуживаться; v2 не ломает их parser/expiry/authorization.
@@ -439,15 +535,28 @@ severity, место, сценарий ошибки и минимальное и
 
 | Этап | Статус | Результат |
 | --- | --- | --- |
-| Self-check v1 | Выполнен до formal review | Scope9, deferred4/excluded2, двойной repo, reusable kernels, новый Devin Global gap и арифметика учтены |
-| Independent round 1 | Pending | Architecture/registry, adapters/native acceptance, integration/estimate |
+| Self-check v1/v2 | Выполнен | Scope и суммы; exact source contract; no-cycle release; relative links и отсутствие implementation claims |
+| Independent round 1 | Три review завершены; исправления внесены в v2 | Два High contract findings и четыре acceptance/ownership/profile уточнения; перечислены ниже |
 | Independent round 2 | Pending | Повторная проверка исправленной версии теми же независимыми направлениями |
+
+Первый round читал все 468 строк commit `aa2b38a97c628fce6bdc8b42254c264c5347457b`
+(SHA-256 файла `15473e3064ca9d666e77d033c9b4ba1d83ac390184615ba42a8003fe64cc1d91`).
+
+| Finding | Исправление v2 | Проверка во втором round |
+| --- | --- | --- |
+| R1-R1 High: closure carrier/identity не определены | Canonical summary, отдельный closure digest, policy revalidation и old-lock semantics (§4.2) | Fresh/old lock, child revocation, no browser solver |
+| R1-R2 High: bootstrap cycle оставлен на потом | Конкретные bootstrap gates, routing table и 2 Registry publications +1 CLI release (§4.3/8) | Нет false release proof, downgrade либо missing-bootstrap window |
+| R1-A1: Devin-only claim может расшириться до legacy Windsurf | Native profile prerequisite и отрицательный fixture (§4.1/7) | CLI/site qualification одинаково ограничены |
+| R1-A2: новый route может перехватить old receipt lifecycle | Fresh-process replay трёх прежних receipt families (§7) | Recorded ownership остаётся authority |
+| R1-I1: MCP runtime floor был условным | Явный controlled native initialize/list/call gate и DoD (§7/11) | Discovery не закрывает runtime |
+| R1-I2: shared files без конкретного владельца | Integrator владеет shared/nativeconfig seam (§6) | Нет двойных edits; #704 учитывается |
 
 ## 14. Источники и обязательные правила
 
 - [PROJECT_INSTALL_OWNER_SCOPE](../PROJECT_INSTALL_OWNER_SCOPE.md),
   [capability preservation](../AUTHORING_CAPABILITY_PRESERVATION.md),
-  [project support matrix](../PROJECT_CLIENT_SUPPORT.md).
+  [project support matrix](../PROJECT_CLIENT_SUPPORT.md),
+  [release runbook](../agentplugins-release.md).
 - [Registry guardrails](https://github.com/777genius/universal-agent-plugins-registry/blob/6212d52ece6bcfefebb35c1420dbe694b087e9f3/docs/ECOSYSTEM_GUARDRAILS.md).
 - [V1 schema](https://github.com/777genius/universal-agent-plugins-registry/blob/6212d52ece6bcfefebb35c1420dbe694b087e9f3/schemas/directory-distribution.schema.json),
   [publisher](https://github.com/777genius/universal-agent-plugins-registry/blob/6212d52ece6bcfefebb35c1420dbe694b087e9f3/scripts/directory_publication.py),

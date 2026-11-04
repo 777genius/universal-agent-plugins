@@ -1,5 +1,33 @@
 # Project installation: owner scope clarification
 
+## Scoped Directory delivery reprioritization, 2026-11-04
+
+The owner narrowed the new Global/Project Skills+MCP program to nine active
+clients: Claude Code, Codex, OpenCode, Cursor, Gemini CLI, GitHub Copilot CLI,
+Qoder, Pi, and a genuinely qualified Windsurf/Devin native profile.
+
+Cline, Kimi Code, Kiro, and Grok Build are deferred with explicit follow-up TODOs.
+ChatGPT and VS Code are excluded from new implementation and qualification in
+this program. Preserve all existing source, supported behavior, legacy user
+policies and useful regression coverage for deferred/excluded clients. These
+planning statuses are not a runtime denylist and do not delete client IDs.
+The VS Code freeze remains in force.
+
+The requested immediate deliverable is a detailed Markdown plan, two rounds of
+independent review and corrections, and a main draft PR with every completed
+commit pushed immediately. This planning request does not authorize release
+publication or claim that implementation is complete.
+
+The current [Global/Project Skills+MCP plan](plans/2026-11-04-global-project-skills-mcp.md)
+records exact scope, the linked Registry deliverable, bounded parallel ownership,
+acceptance gates, estimates, and deferred TODOs. A prepared package containing
+Skills is not native discovery; a Devin-only qualification is not a blanket
+legacy Windsurf compatibility claim. Preserve the existing solver, lock, receipts,
+transaction/ownership kernels, native trust boundaries and legacy implementations.
+
+This decision supersedes older active-target lists below for this scoped Directory
+continuation only; it does not rewrite historical evidence or release status.
+
 ## Owner reprioritization, 2026-10-27
 
 The owner explicitly deferred VS Code: it is not a priority and is skipped in
@@ -68,3 +96,4 @@ provider integration. The concrete deferred work and acceptance criteria are
 recorded in [Registry security providers backlog](REGISTRY_SECURITY_PROVIDERS_BACKLOG.md).
 The current project program does not add provider dependencies, provider CI
 jobs, or third-party scans.
+
