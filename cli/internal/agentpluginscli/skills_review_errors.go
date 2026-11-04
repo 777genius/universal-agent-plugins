@@ -65,7 +65,7 @@ func (s *skillsCatalogSession) reviewRefusal(err error) *skillspicker.ReviewRefu
 	}
 	// Show only a checked project-relative path from the Codex ownership
 	// kernel. Never parse or echo an underlying provider error or host path.
-	if errors.Is(err, installer.ErrForeignSkillDestination) {
+	if refusal.Code == "FOREIGN_DESTINATION" && errors.Is(err, installer.ErrForeignSkillDestination) {
 		var foreign *domain.ForeignSkillDestinationError
 		if errors.As(err, &foreign) && safeCodexSkillRelative(foreign.RelativePath) {
 			refusal.Message = fmt.Sprintf("An unmanaged Codex project Skill already exists at %q. Inspect the file, rename or remove it yourself, then prepare a new review. UAP will not overwrite it.", foreign.RelativePath)

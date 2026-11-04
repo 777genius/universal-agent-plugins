@@ -279,6 +279,11 @@ func TestProjectComponentsForeignSkillRefusalPreservesForeignFiles(t *testing.T)
 	}
 	if err := mutation.Apply(context.Background()); !errors.Is(err, domain.ErrForeignSkillDestination) {
 		t.Fatalf("foreign project Skill refused without typed ownership cause: %v", err)
+	} else {
+		var located *domain.ForeignSkillDestinationError
+		if errors.As(err, &located) {
+			t.Fatalf("non-Codex client acquired Codex-specific occupied path: %+v", located)
+		}
 	}
 	for path, want := range map[string]string{
 		occupied: "foreign selected skill\\n",

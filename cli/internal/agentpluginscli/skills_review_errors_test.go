@@ -115,6 +115,15 @@ func TestSkillsPreparationRefusalJSONAndCancellation(t *testing.T) {
 	}
 }
 
+func TestSkillsReviewForeignDestinationCannotOverrideRecovery(t *testing.T) {
+	cause := fmt.Errorf("%w: %w", installer.ErrRecoveryRequired,
+		&domain.ForeignSkillDestinationError{RelativePath: ".agents/skills/docs/SKILL.md"})
+	refusal := (&skillsCatalogSession{}).reviewRefusal(cause)
+	if refusal.Code != "RECOVERY_REQUIRED" || strings.Contains(refusal.Message, ".agents/skills/") {
+		t.Fatalf("collision guidance overrode a more urgent recovery refusal: %+v", refusal)
+	}
+}
+
 func TestSkillsReviewForeignDestinationRelativePath(t *testing.T) {
 	for _, tc := range []struct {
 		name, relative string

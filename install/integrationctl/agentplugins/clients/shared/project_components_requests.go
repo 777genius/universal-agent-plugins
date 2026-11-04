@@ -64,7 +64,10 @@ func (mutation ProjectComponentMutation) requireAbsent(object domain.NativeObjec
 		if err != nil {
 			return err
 		}
-		return mutation.Layout.foreignSkillDestination(object.LogicalName)
+		if mutation.Layout.Codec == nativeconfig.CodecCodex {
+			return mutation.Layout.foreignSkillDestination(object.LogicalName)
+		}
+		return fmt.Errorf("%w: project skill %q exists without ownership", domain.ErrForeignSkillDestination, object.LogicalName)
 	}
 	present, _, err := mutation.Kernel.Inspect(mutation.Layout.ConfigPaths, mutation.Layout.Codec, object.LogicalName, nil)
 	if err != nil {
