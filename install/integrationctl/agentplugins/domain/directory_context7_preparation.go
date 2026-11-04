@@ -52,8 +52,16 @@ func isContext7PreparationSource(distribution DirectoryDistribution, release Dir
 func hasContext7PreparationPromotion(snapshot DirectorySnapshot, distribution DirectoryDistribution, release DirectoryRelease, policy DirectoryReleasePolicy) bool {
 	for _, target := range policy.Targets {
 		delivery, supported := ExpectedDirectoryDelivery(target.Client)
-		passed := containsScope(target.Scopes, ScopeUser) && hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target.Client, ScopeUser) ||
-			containsScope(target.Scopes, ScopeProject) && hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target.Client, ScopeProject)
+		// Schema-2 grants carry one explicit scope; schema-1 carries the
+		// historical scopes list. Do not infer a grant from the other wire.
+		grants := func(scope InstallScope) bool {
+			if snapshot.SnapshotSchemaVersion == 2 {
+				return target.Scope == scope && len(target.Scopes) == 0
+			}
+			return target.Scope == "" && containsScope(target.Scopes, scope)
+		}
+		passed := grants(ScopeUser) && hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target.Client, ScopeUser) ||
+			grants(ScopeProject) && hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target.Client, ScopeProject)
 		if supported && target.Delivery == delivery && passed {
 			return true
 		}

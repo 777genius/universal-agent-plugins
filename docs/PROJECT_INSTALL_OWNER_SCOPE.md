@@ -110,9 +110,9 @@ MCP operation, authentication, and release evidence require their own observed
 proof. A client without a native project registry must expose its supported
 component or explicit preparation path and state the remaining limitation.
 
-For this program, the owner's current model selection is **GPT-6.1 with high or
-xhigh reasoning** for workers and reviewers. This supersedes older repository
-model instructions for this program only. It does not relax review, evidence,
+For this program, the owner's current model selection is **GPT-6.1-sol with
+xhigh reasoning** for workers and reviewers. This is the latest instruction;
+older high-or-xhigh options are historical and do not expand worker slots. It does not relax review, evidence,
 filesystem authority, or release gates.
 
 Preserve useful legacy implementation and tests under

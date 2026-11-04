@@ -74,8 +74,8 @@ MCP; запись конфигурации без подтверждённого
 1. V1 schema, publisher и Go validator требуют `scopes == ["user"]`; Go decoder
    отвергает unknown fields. Добавление project/Pi в прежний endpoint сломает старых читателей.
 2. `DirectoryResolveLockedRestore` в `domain/directory_context7_preparation.go`
-   явно требует `ScopeUser`; новая установка из project lock должна получить отдельный
-   квалифицированный путь, сохранив exact source/current authorization checks.
+   допускает только `ScopeUser` для v1, но также `ScopeProject` для schema 2.
+   Обе ветки обязаны сохранять exact source/current authorization checks.
 3. CLI записывает hardcoded `directory-v1`; composition/dry-run привязаны к конкретному
    v1 client. Это нужно исправить через существующую границу, без второго resolver.
 4. `directoryEligibilityTargets` использует unscoped backend siblings; проверить
@@ -352,9 +352,12 @@ Merge безопасного общего кода проходит после c
 ### Native qualification и новые compatibility grants
 
 Для каждого нового заявленного client/profile/scope требуется genuine pinned binary,
-exact source HEAD, platform и closure: native Skill source плюс controlled stdio и
-Streamable HTTP initialize/list/call, restart и exact removal с user/A/B preservation.
-Недоказанная ячейка остаётся BLOCKED для этого grant/release claim. Prepared/files/list
+exact source HEAD, platform и closure. Нативная проверка обязательна **для каждого
+заявленного и поддержанного компонента**: Skill source — только если пакет объявляет
+Skills; stdio и Streamable HTTP initialize/list/call — только для соответствующих
+объявленных MCP-транспортов. Для applicable компонентов обязательны restart,
+exact removal и user/A/B preservation. Skills-only не требует MCP, MCP-only не
+требует Skill. Недоказанная applicable ячейка остаётся BLOCKED; Prepared/files/list
 не заменяют actual call. Leaf имеет те же правила, но собственную матрицу и срок.
 
 Новая матрица native qualification содержит шесть main клиентов; новые leaf features
