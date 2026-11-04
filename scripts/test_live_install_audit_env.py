@@ -527,35 +527,49 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             {"data": {"installations": [record]}}, "atlassian", "codex",
             "plugin", "atlassian"), [])
 
-    def test_frozen_inventory_requires_pins_and_null_revision_is_unqualified(self):
-        import json
+    def test_frozen_inventory_uses_published_sha_and_refuses_null_revision(self):
         audit = load_audit()
         doc = json.loads(audit.FIXTURES.read_text())
         audit.validate_fixtures(doc)
         self.assertEqual(len(doc["signed_release_pins"]), 21)
+        self.assertTrue(all(
+            isinstance(pin["revision"], str) and len(pin["revision"]) == 40
+            for pin in doc["signed_release_pins"].values()))
         missing = json.loads(json.dumps(doc))
         del missing["signed_release_pins"]["atlassian"]
         with self.assertRaisesRegex(ValueError, "Missing frozen Registry"):
             audit.validate_fixtures(missing)
-        null_pin = doc["signed_release_pins"]["cloudflare"]
-        self.assertIsNone(null_pin["revision"])
-        node = {"name": "cloudflare", "source": null_pin["distribution"],
-                "installation_id": "unqualified",
+
+        # A published SHA binds a read-only native receipt, but a future
+        # unbound review release never becomes acceptance evidence.
+        pin = doc["signed_release_pins"]["cloudflare"]
+        node = {"name": "cloudflare",
+                "source": pin["repository"] + "/" + pin["path"],
+                "installation_id": "verified-published",
                 "directory": {"product_id": "cloudflare",
-                              "recorded_distribution": null_pin["distribution"],
-                              "recorded_revision": "a" * 40,
-                              "recorded_release_sequence": null_pin["sequence"]},
+                              "recorded_distribution": pin["distribution"],
+                              "recorded_revision": pin["revision"],
+                              "recorded_release_sequence": pin["sequence"]},
                 "clients": [{"client_id": "claude",
                              "verification": "installation_verified",
                              "package_revision": {
-                                 "distribution_id": null_pin["distribution"],
-                                 "resolved_revision": "a" * 40,
-                                 "release_sequence": null_pin["sequence"],
-                                 "tree_digest": null_pin["tree_digest"],
-                                 "manifest_digest": null_pin["manifest_digest"]}}]}
+                                 "distribution_id": pin["distribution"],
+                                 "resolved_revision": pin["revision"],
+                                 "release_sequence": pin["sequence"],
+                                 "tree_digest": pin["tree_digest"],
+                                 "manifest_digest": pin["manifest_digest"]}}]}
+        response = {"data": {"installations": [node]}}
+        self.assertEqual(len(audit.matching_installations(
+            response, "cloudflare", "claude", "plugin", "cloudflare",
+            doc["signed_release_pins"])), 1)
+
+        malformed = json.loads(json.dumps(doc))
+        malformed["signed_release_pins"]["cloudflare"]["revision"] = None
+        with self.assertRaisesRegex(ValueError, "Malformed frozen signed release pin"):
+            audit.validate_fixtures(malformed)
         self.assertEqual(audit.matching_installations(
-            {"data": {"installations": [node]}}, "cloudflare", "claude",
-            "plugin", "cloudflare", doc["signed_release_pins"]), [])
+            response, "cloudflare", "claude", "plugin", "cloudflare",
+            malformed["signed_release_pins"]), [])
 
 
     def test_direct_git_revision_must_belong_to_verified_client(self):
