@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"runtime"
-
 )
 
 type Cache struct {
