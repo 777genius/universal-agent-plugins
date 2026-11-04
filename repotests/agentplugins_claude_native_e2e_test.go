@@ -5,6 +5,7 @@ package pluginkitairepo_test
 // alone cannot isolate the macOS keychain.
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
