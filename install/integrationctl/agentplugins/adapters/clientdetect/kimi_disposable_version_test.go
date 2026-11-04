@@ -22,7 +22,12 @@ func TestKimiTargetedVersionProbeUsesDisposableProfile(t *testing.T) {
 		fail bool
 	}{{"success", false}, {"probe-failed", true}} {
 		t.Run(test.name, func(t *testing.T) {
-			base := t.TempDir()
+			// macOS /var can alias /private/var. Match the production
+			// original-profile no-alias precondition on every runner.
+			base, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
 			home := filepath.Join(base, "home")
 			selected := filepath.Join(home, ".kimi-code")
 			if err := os.MkdirAll(selected, 0700); err != nil {
@@ -107,7 +112,10 @@ func TestKimiTargetedVersionProbeUsesDisposableProfile(t *testing.T) {
 // If a caller points TMPDIR into the selected profile, refuse before launching
 // any version process or writing a temporary cache beneath user data.
 func TestKimiVersionProbeRejectsTempRootInsideOriginalProfile(t *testing.T) {
-	base := t.TempDir()
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	home := filepath.Join(base, "home")
 	profile := filepath.Join(home, ".kimi-code")
 	if err := os.MkdirAll(profile, 0700); err != nil {
