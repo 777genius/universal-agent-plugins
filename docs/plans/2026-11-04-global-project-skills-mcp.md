@@ -1,6 +1,6 @@
 # Global / Project: Skills и MCP для девяти агентов
 
-Дата решения владельца: 2026-11-04. Статус: draft v2, исправления первого раунда внесены; второй review pending.
+Дата решения владельца: 2026-11-04. Статус: план принят после двух раундов независимой проверки; реализация ещё не выполнена.
 
 Этот документ задаёт последующую реализацию. Наличие плана или draft PR не означает,
 что новый CLI, подписанный Directory v2 либо новая совместимость уже выпущены.
@@ -172,7 +172,8 @@ adapter admission. Devin-only evidence не разрешает legacy Windsurf �
   или закрепляет существующий validated lock. Допустимы несколько current proofs с
   разными exact digests, пока их собственные pins/grants остаются разрешены.
 - На каждой публикации publisher заново проверяет canonical closure и применимость
-  retained proofs к текущим grants, floors, component constraints, statuses/revocations.
+  текущих referenced proofs к grants, floors, component constraints, statuses/revocations;
+  весь исторический evidence ledger заново не обрабатывается.
   Отзыв required child инвалидирует затронутый summary/proof. Простое появление более
   новой canonical версии не инвалидирует старую всё ещё разрешённую closure.
 - Сайт читает только authenticated canonical summary. CLI повторно авторизует все
@@ -312,7 +313,8 @@ Global Skill и MCP должны обнаруживаться реальным D
 - Замороженный released CLI 0.1.95 читает обновлённый v1 и сохраняет user lifecycle.
 - V2 positive и negative wire/signature/schema/floor/expiry/revocation/cache cases.
 - Scope mismatch, отсутствующий root/один required child, wrong source/tree/lock,
-  неподдерживаемый компонент/transport, stale evidence: отказ до mutation.
+  неподдерживаемый компонент/transport, stale authorization evidence: отказ до mutation.
+  Отсутствие matching runtime proof само по себе не запрещает установку (§4.2).
 - Fresh project restore из lock с пустым receipt/cache; exact retained source reuse;
   запрет moving-ref refresh или project-to-user downgrade.
 - Тот же root и тот же `node`, но изменённый required child pin; revoked/missing child;
@@ -379,7 +381,8 @@ fixture success и не обнуляет отдельно доказанную �
 
 ## 8. PR, коммиты и порядок публикации
 
-Основной draft PR находится в UAP. Сначала в нём план, owner-scope ссылка и результаты
+Основной draft PR: [UAP #707](https://github.com/777genius/universal-agent-plugins/pull/707).
+Сначала в нём план, owner-scope ссылка и результаты
 двух review rounds. Последующие UAP изменения могут продолжать эту же ветку.
 Каждый законченный commit сразу push; не накапливать локальную неотправленную серию.
 
@@ -536,20 +539,37 @@ severity, место, сценарий ошибки и минимальное и
 | Этап | Статус | Результат |
 | --- | --- | --- |
 | Self-check v1/v2 | Выполнен | Scope и суммы; exact source contract; no-cycle release; relative links и отсутствие implementation claims |
-| Independent round 1 | Три review завершены; исправления внесены в v2 | Два High contract findings и четыре acceptance/ownership/profile уточнения; перечислены ниже |
-| Independent round 2 | Pending | Повторная проверка исправленной версии теми же независимыми направлениями |
+| Independent round 1 | Три review завершены; все findings закрыты во втором round | Два High contract findings и четыре acceptance/ownership/profile уточнения; перечислены ниже |
+| Independent round 2 | PASS, три из трёх | Registry/зависимости: 9/10; adapters/native: 9/10; integration/оценка: 9,3/10. Новых обязательных исправлений нет |
 
 Первый round читал все 468 строк commit `aa2b38a97c628fce6bdc8b42254c264c5347457b`
 (SHA-256 файла `15473e3064ca9d666e77d033c9b4ba1d83ac390184615ba42a8003fe64cc1d91`).
 
-| Finding | Исправление v2 | Проверка во втором round |
+| Finding | Исправление v2 | Результат второго round |
 | --- | --- | --- |
-| R1-R1 High: closure carrier/identity не определены | Canonical summary, отдельный closure digest, policy revalidation и old-lock semantics (§4.2) | Fresh/old lock, child revocation, no browser solver |
-| R1-R2 High: bootstrap cycle оставлен на потом | Конкретные bootstrap gates, routing table и 2 Registry publications +1 CLI release (§4.3/8) | Нет false release proof, downgrade либо missing-bootstrap window |
-| R1-A1: Devin-only claim может расшириться до legacy Windsurf | Native profile prerequisite и отрицательный fixture (§4.1/7) | CLI/site qualification одинаково ограничены |
-| R1-A2: новый route может перехватить old receipt lifecycle | Fresh-process replay трёх прежних receipt families (§7) | Recorded ownership остаётся authority |
-| R1-I1: MCP runtime floor был условным | Явный controlled native initialize/list/call gate и DoD (§7/11) | Discovery не закрывает runtime |
-| R1-I2: shared files без конкретного владельца | Integrator владеет shared/nativeconfig seam (§6) | Нет двойных edits; #704 учитывается |
+| R1-R1 High: closure carrier/identity не определены | Canonical summary, отдельный closure digest, policy revalidation и old-lock semantics (§4.2) | CLOSED: fresh/old lock и child revocation согласованы; browser solver не нужен |
+| R1-R2 High: bootstrap cycle оставлен на потом | Конкретные bootstrap gates, routing table и 2 Registry publications +1 CLI release (§4.3/8) | CLOSED: нет false release proof, downgrade либо missing-bootstrap window |
+| R1-A1: Devin-only claim может расшириться до legacy Windsurf | Native profile prerequisite и отрицательный fixture (§4.1/7) | CLOSED: CLI/site qualification одинаково ограничены |
+| R1-A2: новый route может перехватить old receipt lifecycle | Fresh-process replay трёх прежних receipt families (§7) | CLOSED: recorded ownership остаётся authority |
+| R1-I1: MCP runtime floor был условным | Явный controlled native initialize/list/call gate и DoD (§7/11) | CLOSED: discovery не закрывает runtime |
+| R1-I2: shared files без конкретного владельца | Integrator владеет shared/nativeconfig seam (§6) | CLOSED: нет двойных edits; #704 учитывается |
+
+Второй round прочитал все 577 строк исправленного плана и 99 строк owner scope на commit
+`83991acca42b8e9c9eaaf8a2a45b1d7759b59cf2`. SHA-256 плана:
+`58b912cc51c0ded227beb8c30ba755244aba13f209d90e69ad9d8c7b20b7ef4f`;
+owner scope: `5520fe6de93cb03fff72022ddbba77ba21e0658da56d01bd85d3092bb10b8e57`.
+Оба hash проверены независимо. Оценки относятся к готовности плана, не к native PASS.
+
+Дополнительно закрыты замечания о сохранении schema-wide blocking evidence,
+единой CAS publication и явном исключении пользовательских docs из LOC. Финальная
+редакция уточняет два уже принятых правила: повторно проверяются current referenced
+proofs, а не вся история; stale authorization evidence отличается от отсутствующего
+runtime proof. Других изменений implementation contract после второго round нет.
+
+Самопроверка подтвердила арифметику всех таблиц, восемь относительных ссылок и точное
+совпадение опубликованных plan/owner файлов с локальной версией, прочитанной критиками.
+Future implementation DoD выше остаётся открытым; эти review не заменяют будущие
+проверки кода, настоящих клиентов, релиза и production.
 
 ## 14. Источники и обязательные правила
 
