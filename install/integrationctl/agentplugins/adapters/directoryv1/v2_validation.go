@@ -28,6 +28,11 @@ func requireV2SnapshotFields(body []byte) error {
 			"kind", "status", "packager", "releases", "release_policies"); err != nil {
 			return err
 		}
+		// Package version is mandatory on the v2 wire, though the published
+		// schema permits the explicit empty string (as it does for v1).
+		if err := requireV2ReleasePackageVersion(distribution["releases"]); err != nil {
+			return err
+		}
 		var policies []map[string]json.RawMessage
 		if err := json.Unmarshal(distribution["release_policies"], &policies); err != nil {
 			return err
@@ -77,6 +82,21 @@ func requireV2SnapshotFields(body []byte) error {
 	for _, item := range evidence {
 		if err := requiredMap(item, "schema_version", "id", "distribution_id",
 			"release_sequence", "package_tree_digest", "level", "outcome", "artifact", "trust"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// requireV2ReleasePackageVersion preserves the immutable release wire contract.
+// A zero-value Go string otherwise hides a missing JSON field.
+func requireV2ReleasePackageVersion(raw json.RawMessage) error {
+	var releases []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &releases); err != nil {
+		return err
+	}
+	for _, release := range releases {
+		if err := requiredMap(release, "package_version"); err != nil {
 			return err
 		}
 	}
@@ -168,7 +188,7 @@ func validateV2Distributions(snapshot domain.DirectorySnapshot, products map[str
 		for _, release := range distribution.Releases {
 			key := releaseKey(distribution.ID, release.Sequence)
 			date, err := parseTimestamp(release.PublishedAt)
-			if err != nil || date.After(start) || release.Sequence < 1 || release.PackageVersion == "" || releases[key].Sequence != 0 ||
+			if err != nil || date.After(start) || release.Sequence < 1 || releases[key].Sequence != 0 ||
 				release.ManifestName != product.ManifestName || release.AgentPluginsSchema != supportedPluginSchema ||
 				release.TreeDigestAlgorithm != domain.TreeDigestAlgorithm ||
 				!digestPattern.MatchString(release.TreeDigest) || !digestPattern.MatchString(release.ManifestDigest) {

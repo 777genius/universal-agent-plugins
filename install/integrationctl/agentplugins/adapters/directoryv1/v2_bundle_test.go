@@ -101,9 +101,10 @@ func TestV2RejectsMissingImmutablePackageVersion(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		mutate func(map[string]any)
+		valid  bool
 	}{
-		{"omitted", func(release map[string]any) { delete(release, "package_version") }},
-		{"empty", func(release map[string]any) { release["package_version"] = "" }},
+		{"omitted", func(release map[string]any) { delete(release, "package_version") }, false},
+		{"explicit empty", func(release map[string]any) { release["package_version"] = "" }, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var raw map[string]any
@@ -117,8 +118,9 @@ func TestV2RejectsMissingImmutablePackageVersion(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := ParseV2Snapshot(payload); !errors.Is(err, ErrStrictJSON) {
-				t.Fatalf("v2 accepted %s package_version: %v", tc.name, err)
+			_, err = ParseV2Snapshot(payload)
+			if tc.valid && err != nil || !tc.valid && !errors.Is(err, ErrStrictJSON) {
+				t.Fatalf("v2 package_version %s validity=%t: %v", tc.name, tc.valid, err)
 			}
 		})
 	}
