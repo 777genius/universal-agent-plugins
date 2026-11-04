@@ -589,8 +589,8 @@ def matching_installations(response, identity, target, kind, item, signed_releas
             if kind == "plugin" and isinstance(item, str) and not item.startswith("github:"):
                 pin = signed_release_pins.get(item)
                 directory = node.get("directory", {})
-                # The frozen Registry records six unresolved source revisions.
-                # A mutable release is NOT a verified native install: fail closed.
+                # The published signed snapshot must provide an immutable SHA.
+                # Even a self-consistent native receipt cannot replace that pin.
                 if not isinstance(pin, dict) or not isinstance(pin.get("revision"), str):
                     continue
                 # CLI `list.source` serializes the canonical repository/subpath;
