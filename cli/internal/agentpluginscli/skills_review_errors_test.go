@@ -93,8 +93,11 @@ func TestSkillsPreparationRefusalJSONAndCancellation(t *testing.T) {
 	cmd.SetOut(&stdout)
 	cause := fmt.Errorf("opaque-private-provider-detail: %w", installer.ErrForeignSkillDestination)
 	err := reportSkillsPreparationRefusal(cmd, &options{format: "json"}, &skillsCatalogSession{}, cause)
-	if err == nil {
-		t.Fatal("foreign destination was silently accepted")
+	if !errors.Is(err, installer.ErrForeignSkillDestination) {
+		t.Fatalf("foreign destination lost its internal error identity: %v", err)
+	}
+	if bytes.Contains(stdout.Bytes(), []byte("opaque-private-provider-detail")) {
+		t.Fatal("private cause was serialized into the public JSON response")
 	}
 	var result struct{ Code, Message string }
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
