@@ -26,7 +26,7 @@ func preparedProjectFileCandidate(input AddInput, plan domain.DeliveryPlan) bool
 	// A previously recorded package-only Project receipt remains eligible for
 	// exact prepared verification even if the client now has native components.
 	// Check the full package identity; do not branch here on a particular client.
-	if plan.ClientID == input.Client.ClientID && len(plan.PreviousNativeObjects) == 1 {
+	if len(plan.PreviousNativeObjects) == 1 {
 		object := plan.PreviousNativeObjects[0]
 		if object.Kind == "managed_package_directory" &&
 			object.ObjectID == "package:"+string(plan.ClientID)+":"+plan.PhysicalArtifactID &&
