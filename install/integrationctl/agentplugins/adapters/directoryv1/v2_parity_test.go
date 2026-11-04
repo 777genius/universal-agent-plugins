@@ -39,6 +39,23 @@ func TestV2PortableIdentityParityWithV1(t *testing.T) {
 			s.Distributions[0].ReleasePolicies[0].CurrentEvidence = append(
 				s.Distributions[0].ReleasePolicies[0].CurrentEvidence, duplicate.ID)
 		}},
+		{"unknown authentication", func(s *domain.DirectorySnapshot) {
+			s.Distributions[0].ReleasePolicies[0].Targets[0].Authentication = "untrusted"
+		}},
+		{"duplicate policy evidence ID", func(s *domain.DirectorySnapshot) {
+			p := &s.Distributions[0].ReleasePolicies[0]
+			p.CurrentEvidence = append(p.CurrentEvidence, p.CurrentEvidence[0])
+		}},
+		{"duplicate grant evidence ID", func(s *domain.DirectorySnapshot) {
+			g := &s.Distributions[0].ReleasePolicies[0].Targets[0]
+			g.CurrentEvidence = append(g.CurrentEvidence, g.CurrentEvidence[0])
+		}},
+		{"unknown evidence level", func(s *domain.DirectorySnapshot) {
+			s.Evidence[0].Level = "permission"
+		}},
+		{"unknown evidence outcome", func(s *domain.DirectorySnapshot) {
+			s.Evidence[0].Outcome = "unknown"
+		}},
 		{"invalid provenance", func(s *domain.DirectorySnapshot) {
 			s.Distributions[0].Releases[0].BuildProvenance = &domain.DirectoryBuildProvenance{
 				UpstreamRepository: "invalid/repo@tag", UpstreamRevision: "bad",

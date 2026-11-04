@@ -225,6 +225,26 @@ func validateV2Policy(policy domain.DirectoryReleasePolicy) error {
 			grant.CurrentEvidence == nil {
 			return strictError("invalid v2 grant delivery or evidence")
 		}
+		if !oneOf(string(grant.Authentication), string(domain.AuthenticationRequirementNotRequired),
+			string(domain.AuthenticationRequirementRequired), string(domain.AuthenticationRequirementUnknown)) {
+			return strictError("invalid v2 target authentication")
+		}
+		definition, defined := domain.ClientDefinitionFor(grant.Client)
+		if defined && definition.Capabilities.AppSupport != domain.SupportUnsupported {
+			if grant.AppBinding == nil || grant.AppBinding.AppKey == "" ||
+				grant.AppBinding.ID == "" || grant.AppBinding.MCPServer == "" {
+				return strictError("v2 app-capable client requires app binding")
+			}
+			if err := domain.ValidateAppBindingIdentity(grant.AppBinding.AppKey,
+				grant.AppBinding.ID, grant.AppBinding.MCPServer); err != nil {
+				return strictError("invalid v2 app binding: %v", err)
+			}
+		} else if grant.AppBinding != nil {
+			return strictError("v2 app binding is not allowed for this client")
+		}
+		if err := validateV2EvidenceIDs(grant.CurrentEvidence); err != nil {
+			return err
+		}
 		if grant.CanonicalClosure != nil && grant.CanonicalClosure.Eligible {
 			closure := grant.CanonicalClosure
 			if !digestPattern.MatchString(closure.ClosureDigest) {
@@ -234,6 +254,19 @@ func validateV2Policy(policy domain.DirectoryReleasePolicy) error {
 				return strictError("invalid v2 closure minimum")
 			}
 		}
+	}
+	return validateV2EvidenceIDs(policy.CurrentEvidence)
+}
+
+// A signed policy may share one schema receipt across compatible targets,
+// but it cannot repeat the same pointer within one applicability list.
+func validateV2EvidenceIDs(ids []string) error {
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if !evidenceIDPattern.MatchString(id) || seen[id] {
+			return strictError("invalid or duplicate v2 evidence pointer")
+		}
+		seen[id] = true
 	}
 	return nil
 }
@@ -248,6 +281,10 @@ func validateV2Evidence(snapshot domain.DirectorySnapshot,
 			byID[evidence.ID].ID != "" || release.Sequence == 0 ||
 			release.TreeDigest != evidence.PackageTreeDigest || !evidence.HasTrustedProvenance() {
 			return strictError("invalid v2 evidence identity or trust")
+		}
+		if !oneOf(evidence.Level, "schema", "materialization", "discovery", "runtime", "oauth") ||
+			!oneOf(evidence.Outcome, "passed", "failed", "inconclusive", "not_tested", "not_applicable") {
+			return strictError("invalid v2 evidence level or outcome")
 		}
 		if evidence.Level == "schema" {
 			if evidence.Client != "" || evidence.Scope != "" {
