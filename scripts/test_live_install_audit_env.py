@@ -1133,6 +1133,26 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
 
 
+    def test_qoder_foreign_skill_is_never_placed_in_uap_managed_bundle(self):
+        audit = load_audit()
+        item = {"name": "frontend-design", "source": "unused-fixture",
+                "skill_md_git_blob_sha1": "0" * 40}
+        refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
+                   "timeout": False, "_json": {"data": {"installations": []}}}
+        with TemporaryDirectory() as temporary:
+            runroot = Path(temporary).resolve()
+            with patch.object(audit, "call", return_value=refused):
+                row = audit.do_case("/unused/agentplugins", "qoder", "skill",
+                                    item, 0, runroot, {})
+            project = runroot / "skill-00/project"
+            foreign = project / ".qoder/skills/foreign-neighbor/SKILL.md"
+            managed_foreign = project / ".uap/managed/clients/qoder/foreign-neighbor"
+            self.assertTrue(foreign.is_file())
+            self.assertEqual(foreign.read_text(encoding="utf-8"),
+                             "---\\nname: foreign-neighbor\\ndescription: unrelated\\n---\\n")
+            self.assertFalse(managed_foreign.exists())
+            self.assertTrue(row["sentinels_preserved"])
+
     def test_kimi_skill_uses_real_isolated_git_worktree(self):
         audit = load_audit()
         self.assertTrue(audit.GIT_EXECUTABLE and Path(audit.GIT_EXECUTABLE).is_file())

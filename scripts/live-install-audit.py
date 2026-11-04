@@ -861,8 +861,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         native_foreign.write_text("unmanaged native neighbor must survive\n")
     # A pre-existing, unrelated project Skill is an independently owned neighbor.
     project_skill_roots = PROJECT_SKILL_ROOTS.get(target, [])
-    project_foreign = ((project / project_skill_roots[0] / "foreign-neighbor" / "SKILL.md")
-                       if kind == "skill" and project_skill_roots else None)
+    project_foreign = None
+    if kind == "skill" and project_skill_roots:
+        # Qoder's UAP-managed bundle is not an unmanaged native Skill location.
+        foreign_root = ".qoder/skills" if target == "qoder" else project_skill_roots[0]
+        project_foreign = project / foreign_root / "foreign-neighbor" / "SKILL.md"
     if project_foreign:
         project_foreign.parent.mkdir(parents=True, exist_ok=True)
         project_foreign.write_text("---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
