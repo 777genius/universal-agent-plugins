@@ -80,12 +80,12 @@ def selected_pin(args, name):
 # against the Go sources).
 PATTERNS = {
     "codex": r"^TestAgentpluginsCodexNative(Lifecycle|CommandsLifecycle)$",
-    "claude": r"^TestAgentpluginsClaudeNative(Lifecycle|RuntimeLifecycle|CommandsLifecycle)$",
+    "claude": r"^TestAgentpluginsClaudeNative(Lifecycle|RuntimeLifecycle|CommandsLifecycle|SecondaryProfileIsolation)$",
     "opencode": r"^TestAgentpluginsOpenCodeNative(Lifecycle|ToolCollision|RuntimeExtended|CommandsLifecycle)$",
 }
 REQUIRED_TESTS = {
     "codex": {"TestAgentpluginsCodexNativeLifecycle", "TestAgentpluginsCodexNativeCommandsLifecycle"},
-    "claude": {"TestAgentpluginsClaudeNativeLifecycle", "TestAgentpluginsClaudeNativeRuntimeLifecycle", "TestAgentpluginsClaudeNativeCommandsLifecycle"},
+    "claude": {"TestAgentpluginsClaudeNativeLifecycle", "TestAgentpluginsClaudeNativeRuntimeLifecycle", "TestAgentpluginsClaudeNativeCommandsLifecycle", "TestAgentpluginsClaudeNativeSecondaryProfileIsolation"},
     "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended", "TestAgentpluginsOpenCodeNativeCommandsLifecycle"},
 }
 PROJECT_TESTS = {
