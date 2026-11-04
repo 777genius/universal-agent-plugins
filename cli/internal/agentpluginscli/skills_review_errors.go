@@ -16,17 +16,14 @@ import (
 // reportSkillsPreparationRefusal makes browser, terminal and HTTPS publisher
 // reviews use the same sanitized, typed refusal path.
 func reportSkillsPreparationRefusal(cmd *cobra.Command, opts *options, s *skillsCatalogSession, err error) error {
-	if cmd.Context().Err() != nil {
-		return cmd.Context().Err()
+	if ctxErr := cmd.Context().Err(); ctxErr != nil {
+		return ctxErr
 	}
-	var refusal *skillspicker.ReviewRefusal
-	if errors.As(s.reviewRefusal(err), &refusal) {
-		return skillsMissingSelection(cmd, opts, refusal.Code, refusal.Message, []skillspicker.Candidate{})
-	}
-	return err
+	refusal := s.reviewRefusal(err)
+	return skillsMissingSelection(cmd, opts, refusal.Code, refusal.Message, nil)
 }
 
-func (s *skillsCatalogSession) reviewRefusal(err error) error {
+func (s *skillsCatalogSession) reviewRefusal(err error) *skillspicker.ReviewRefusal {
 	refusal := &skillspicker.ReviewRefusal{Code: "PLAN_REJECTED", Message: "Review one Skill and target at a time to identify the refused selection, or inspect agentplugins deps status for recovery guidance"}
 	switch {
 	case errors.Is(err, installer.ErrRecoveryRequired):
