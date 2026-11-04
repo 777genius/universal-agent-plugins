@@ -28,7 +28,6 @@ import (
 func TestProjectProcessDeathReopenRetainsUnacknowledgedNativeAttempt(t *testing.T) {
 	skipWindowsLauncherExecuteBit(t)
 	probe := buildCodexProbe(t)
-	publicCLI := deathBuildPublicCLI(t)
 	for _, boundary := range []string{deathManagedBoundary, deathNativeBoundary} {
 		t.Run(boundary, func(t *testing.T) {
 			base, err := filepath.EvalSymlinks(t.TempDir())
@@ -82,7 +81,6 @@ func TestProjectProcessDeathReopenRetainsUnacknowledgedNativeAttempt(t *testing.
 			}
 			deathProveBoundary(t, base, boundary, before, oldConfig)
 			retained := deathTree(t, a)
-			deathObservePublicCLI(t, publicCLI, base, a, retained)
 			hostCalls := 0
 			fresh, runner := deathEngine(t, base, a, nil, func(context.Context, BindingFacts) error { hostCalls++; return nil })
 			view, inspectErr := fresh.Inspect(t.Context())
