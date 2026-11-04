@@ -75,7 +75,7 @@ func TestV2ClientRefusesV1BootstrapAndSharedCachePath(t *testing.T) {
 	client := V2Client{
 		Transport: Client{Trust: trust, RequireEmbeddedBootstrap: true,
 			Cache: Cache{Path: filepath.Join(t.TempDir(), "schema-1.json")}},
-		Cache: Cache{Path: filepath.Join(t.TempDir(), "schema-2.json")},
+		Cache:    Cache{Path: filepath.Join(t.TempDir(), "schema-2.json")},
 		Embedded: EmbeddedBundle{Snapshot: snapshot, Envelope: envelope},
 	}
 	client.Cache.Path = client.Transport.Cache.Path
