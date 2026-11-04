@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -60,6 +63,14 @@ func (s *skillsCatalogSession) reviewRefusal(err error) *skillspicker.ReviewRefu
 		refusal.Message = "A source or client check timed out while preparing the review. Check network access and the selected clients' configuration, then prepare a new review."
 		refusal.Retryable = true
 	}
+	// Show only a checked project-relative path from the Codex ownership
+	// kernel. Never parse or echo an underlying provider error or host path.
+	if errors.Is(err, installer.ErrForeignSkillDestination) {
+		var foreign *domain.ForeignSkillDestinationError
+		if errors.As(err, &foreign) && safeCodexSkillRelative(foreign.RelativePath) {
+			refusal.Message = fmt.Sprintf("An unmanaged Codex project Skill already exists at %q. Inspect the file, rename or remove it yourself, then prepare a new review. UAP will not overwrite it.", foreign.RelativePath)
+		}
+	}
 	var selection *SkillsSelectionError
 	if errors.As(err, &selection) {
 		s.addCandidateRefusalContext(refusal, selection.CandidateID)
@@ -103,4 +114,14 @@ func skillOperationMessage(status skillspicker.OperationItemStatus, reason strin
 	default:
 		return "Installation stopped. Follow the operation's recovery instructions before retrying."
 	}
+}
+
+func safeCodexSkillRelative(relative string) bool {
+	parts := strings.Split(relative, "/")
+	if len(parts) != 4 || parts[0] != ".agents" || parts[1] != "skills" || parts[3] != "SKILL.md" {
+		return false
+	}
+	name := parts[2]
+	return name != "" && name != "." && name != ".." &&
+		!strings.ContainsAny(name, "\\/:") && sourceacquisition.ValidateSkillPath(name) == nil
 }

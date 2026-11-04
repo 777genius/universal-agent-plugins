@@ -309,6 +309,10 @@ func TestProjectComponentsPreflightForeignSkillCarriesTypedCause(t *testing.T) {
 	if finding != clients.RegistryCollision || !errors.Is(err, domain.ErrForeignSkillDestination) {
 		t.Fatalf("preflight foreign Skill result = %v, %v", finding, err)
 	}
+	var located *domain.ForeignSkillDestinationError
+	if !errors.As(err, &located) || located.RelativePath != ".agents/skills/docs/SKILL.md" {
+		t.Fatalf("foreign destination is not a safe project-relative Skill path: %+v", located)
+	}
 	if got, err := os.ReadFile(filepath.Join(path, "SKILL.md")); err != nil || string(got) != "foreign instructions\n" {
 		t.Fatalf("preflight changed foreign bytes: %q, %v", got, err)
 	}

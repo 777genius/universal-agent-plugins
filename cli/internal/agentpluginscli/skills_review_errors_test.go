@@ -13,6 +13,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -111,5 +112,33 @@ func TestSkillsPreparationRefusalJSONAndCancellation(t *testing.T) {
 	cmd.SetContext(ctx)
 	if err := reportSkillsPreparationRefusal(cmd, &options{format: "json"}, &skillsCatalogSession{}, cause); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled preparation unexpectedly emitted a review refusal: %v", err)
+	}
+}
+
+func TestSkillsReviewForeignDestinationRelativePath(t *testing.T) {
+	for _, tc := range []struct {
+		name, relative string
+		safe           bool
+	}{
+		{"valid", ".agents/skills/docs/SKILL.md", true},
+		{"absolute", "/private/secret/SKILL.md", false},
+		{"traversal", ".agents/skills/../SKILL.md", false},
+		{"nested", ".agents/skills/docs/private/SKILL.md", false},
+		{"malformed", ".agents/skills/private\\secret/SKILL.md", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := fmt.Errorf("private-provider-secret: %w", &domain.ForeignSkillDestinationError{RelativePath: tc.relative})
+			var refusal *skillspicker.ReviewRefusal
+			if !errors.As((&skillsCatalogSession{}).reviewRefusal(err), &refusal) {
+				t.Fatal("expected a public refusal")
+			}
+			if refusal.Code != "FOREIGN_DESTINATION" || strings.Contains(refusal.Message, "private-provider-secret") {
+				t.Fatalf("unsafe public refusal: %+v", refusal)
+			}
+			hasPath := strings.Contains(refusal.Message, ".agents/skills/docs/SKILL.md")
+			if hasPath != tc.safe || (!tc.safe && strings.Contains(refusal.Message, tc.relative)) {
+				t.Fatalf("unexpected relative path disclosure: %+v", refusal)
+			}
+		})
 	}
 }
