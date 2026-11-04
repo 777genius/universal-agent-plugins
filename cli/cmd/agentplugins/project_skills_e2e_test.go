@@ -205,7 +205,7 @@ func TestQoderRawSkillProjectLifecycle(t *testing.T) {
 		journey.app, source.transport.remote), user, runner)
 	beforeUser := securityFixtureTree(t, user)
 
-	command := exec.Command("git", "-C", source.transport.repo, "rev-parse", "HEAD")
+	command := exec.CommandContext(t.Context(), "git", "-C", source.transport.repo, "rev-parse", "HEAD")
 	commit, err := command.Output()
 	if err != nil {
 		t.Fatal(err)
