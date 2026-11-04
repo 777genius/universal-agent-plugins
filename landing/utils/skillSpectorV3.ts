@@ -156,7 +156,8 @@ function referenceContext(value: unknown, status: string, legacy: boolean) {
     if (reference.status === 'uninspected' && reference.disposition !== 'partial') fail();
     if (
       (['missing', 'ambiguous', 'uninspected'].includes(reference.status) ||
-        (reference.status === 'resolved' && reference.disposition !== 'analyzed')) &&
+        (reference.status === 'resolved' && reference.disposition !== 'analyzed') ||
+        (reference.status === 'rejected' && reference.disposition === 'partial')) &&
       (status === 'complete' || c.status === 'complete')
     )
       fail();
