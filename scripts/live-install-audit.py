@@ -183,6 +183,33 @@ def exact_native_identity(text, identity):
         )
 
 
+def codex_owned_native_config(path, identity, case_root):
+    """Codex stores exact plugin@marketplace keys, not bare plugin names."""
+    try:
+        state = tomllib.loads(path.read_text(encoding="utf-8"))
+        plugins = state.get("plugins", {})
+        markets = state.get("marketplaces", {})
+        if not isinstance(plugins, dict) or not isinstance(markets, dict):
+            return False
+        for spec in plugins:
+            if not isinstance(spec, str) or not spec.startswith(identity + "@"):
+                continue
+            marketplace = spec[len(identity) + 1:]
+            if not re.fullmatch(r"agentplugins-[a-f0-9]{12}", marketplace):
+                continue
+            entry = markets.get(marketplace)
+            if not isinstance(entry, dict) or entry.get("source_type", "local") != "local":
+                continue
+            source = entry.get("source")
+            if not isinstance(source, str) or not Path(source).is_absolute():
+                continue
+            if Path(source).resolve().is_relative_to(case_root.resolve()):
+                return True
+    except (OSError, TypeError, ValueError):
+        return False
+    return False
+
+
 def attributable_native_changes(native_roots, changes, identity, target):
     """Credit only identity-attributed active native state, not cached downloads."""
     found = []
@@ -209,9 +236,11 @@ def attributable_native_changes(native_roots, changes, identity, target):
                 )
                 # Larger files without an attributable path stay unqualified.
                 owned_content = (not owned_path and leaf.stat().st_size <= 1024 * 1024
-                                 and exact_native_identity(
-                                     leaf.read_text(encoding="utf-8", errors="replace"),
-                                     identity))
+                                 and (codex_owned_native_config(leaf, identity, root.parent.parent)
+                                      if target == "codex" and relative == "config.toml"
+                                      else exact_native_identity(
+                                          leaf.read_text(encoding="utf-8", errors="replace"),
+                                          identity)))
                 if owned_path or owned_content:
                     found.append(relpath)
             except OSError:
