@@ -51,6 +51,9 @@ func qoderProjectObjects(root string, plan domain.DeliveryPlan) ([]domain.Native
         switch component.Kind {
         case domain.ComponentSkill:
             relative := "skills/" + component.Name
+            if component.Support == domain.SupportProjected && component.Source == domain.ComponentSourceCommand {
+                relative = projectNativeView + "/skills/" + component.Name
+            }
             if err = pathpolicy.ValidateLeafID(component.Name); err == nil {
                 if _, statErr := os.Lstat(filepath.Join(root, relative, "SKILL.md")); statErr != nil {
                     err = statErr

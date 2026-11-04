@@ -60,8 +60,9 @@ func projectNative(ctx context.Context, in clients.ProjectionInput) ([]domain.Na
         return nil, err
     }
     names := shared.SupportedMCPNames(in.Plan)
-    if len(names) == 0 && shared.ComponentKindPresent(in.Plan.Components, domain.ComponentSkill) {
-        // Keep the old prepared-import view for a preexisting package-only receipt.
+    if shared.ComponentKindPresent(in.Plan.Components, domain.ComponentSkill) {
+        // Preserve the prepared-import view, including for preexisting package-only
+        // receipts whose portable components now also qualify for native MCP.
         if _, err := projectBundle(ctx, in); err != nil { return nil, err }
     } else {
         if _, err := os.Lstat(filepath.Join(in.StagingPath, projectNativeView)); err == nil {
