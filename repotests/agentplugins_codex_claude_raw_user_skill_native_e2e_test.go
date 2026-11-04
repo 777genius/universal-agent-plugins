@@ -272,8 +272,8 @@ func TestAgentpluginsClaudeNativeRawUserSkillLifecycle(t *testing.T) {
 	}
 	verify("raw-user-installed", true)
 	details := claudePluginDetails(t, f, client, pluginID, "raw-user-details")
-	if !strings.Contains(details, nativeRawUserSkillName) {
-		t.Fatal("Claude plugin details did not enumerate the installed raw Skill")
+	if !strings.Contains(details, nativeRawUserSkillName) || !strings.Contains(details, "Skills (1)") {
+		t.Fatalf("Claude plugin details did not report exactly one installed raw Skill: %s", details)
 	}
 	beforeState, beforeTree := claudeSHA256(t, statePath), nativeTreeDigest(t, binding.TargetLocator)
 	nativeRawUserInstall(t, f.Root, f.Root, env, installer, "claude", "raw-user-repeat-default", false, true)
