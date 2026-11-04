@@ -1,6 +1,8 @@
 package pluginkitairepo_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -50,8 +52,13 @@ func nativeRawUserState(t *testing.T, statePath, target, profile string) (domain
 		t.Fatalf("%s: expected exactly one raw Skill and receipt: %+v", target, state)
 	}
 	installed := state.Installations[0]
+	// Raw Skills normalize into an immutable synthetic plugin identity keyed
+	// by the exact source. It must never equal or shadow a user's Skill name.
+	sum := sha256.Sum256([]byte(installed.Source.StableSourceKey))
+	expectedName := "skill-" + hex.EncodeToString(sum[:])[:56]
 	binding, ok := installed.Clients[target]
-	if !ok || installed.DeclaredName != nativeRawUserSkillName ||
+	if !ok || installed.Source.StableSourceKey == "" ||
+		installed.DeclaredName != expectedName ||
 		installed.Source.ResolvedRevision != nativeRawUserSkillCommit ||
 		binding.ClientID != target || binding.Scope != "user" ||
 		binding.TargetLocator == "" || binding.PhysicalArtifact == "" ||
@@ -110,7 +117,7 @@ func nativeRawUserRemove(t *testing.T, root, dir string, env []string, installer
 	}
 }
 
-func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginID, active, label string, want bool) {
+func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginID, declaredName, active, label string, want bool) {
 	t.Helper()
 	listing, err := nativeCommand(t, f, client, label+"-plugins", "plugin", "list", "--json")
 	if err != nil {
@@ -165,7 +172,7 @@ func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginI
 			if skill.PluginID != pluginID {
 				continue
 			}
-			if skill.Name != "benchmark-note:benchmark-note" || !skill.Enabled ||
+			if skill.Name != declaredName+":"+nativeRawUserSkillName || !skill.Enabled ||
 				!strings.HasSuffix(filepath.ToSlash(skill.Path), "/skills/benchmark-note/SKILL.md") {
 				t.Fatalf("Codex native raw Skill identity mismatch: %+v", skill)
 			}
@@ -204,18 +211,19 @@ func TestAgentpluginsCodexNativeRawUserSkillLifecycle(t *testing.T) {
 	env := f.env(filepath.Dir(client))
 	statePath := filepath.Join(f.Root, "installer-state", "state-v2.json")
 	nativeRawUserInstall(t, f.Root, f.Project, env, installer, "codex", "raw-user-add", true, false)
-	_, binding := nativeRawUserState(t, statePath, "codex", f.CodexHome)
+	state, binding := nativeRawUserState(t, statePath, "codex", f.CodexHome)
 	nativeRawUserFiles(t, binding, "codex")
-	id := nativeRawUserSkillName + "@" + shared.ManagedMarketplaceName(binding.PhysicalArtifact)
-	codexNativeRawUserInventory(t, f, client, id, binding.TargetLocator, "raw-user-installed", true)
+	declaredName := state.Installations[0].DeclaredName
+	id := declaredName + "@" + shared.ManagedMarketplaceName(binding.PhysicalArtifact)
+	codexNativeRawUserInventory(t, f, client, id, declaredName, binding.TargetLocator, "raw-user-installed", true)
 	beforeState, beforeTree := nativeSHA(t, statePath), nativeTreeDigest(t, binding.TargetLocator)
 	nativeRawUserInstall(t, f.Root, f.Project, env, installer, "codex", "raw-user-repeat-default", false, true)
 	if nativeSHA(t, statePath) != beforeState || nativeTreeDigest(t, binding.TargetLocator) != beforeTree {
 		t.Fatal("Codex implicit user replay changed managed bytes or receipts")
 	}
-	codexNativeRawUserInventory(t, f, client, id, binding.TargetLocator, "raw-user-repeated", true)
+	codexNativeRawUserInventory(t, f, client, id, declaredName, binding.TargetLocator, "raw-user-repeated", true)
 	nativeRawUserRemove(t, f.Root, f.Project, env, installer, "codex", statePath, binding.TargetLocator, true)
-	codexNativeRawUserInventory(t, f, client, id, binding.TargetLocator, "raw-user-removed", false)
+	codexNativeRawUserInventory(t, f, client, id, declaredName, binding.TargetLocator, "raw-user-removed", false)
 	if nativeSHA(t, foreign) != foreignSHA {
 		t.Fatal("Codex raw user lifecycle changed a foreign user Skill")
 	}
@@ -242,9 +250,9 @@ func TestAgentpluginsClaudeNativeRawUserSkillLifecycle(t *testing.T) {
 	env := f.env(clientDir)
 	statePath := filepath.Join(f.StateHome, "state-v2.json")
 	nativeRawUserInstall(t, f.Root, f.Root, env, installer, "claude", "raw-user-add", true, false)
-	_, binding := nativeRawUserState(t, statePath, "claude", f.ConfigDir)
+	state, binding := nativeRawUserState(t, statePath, "claude", f.ConfigDir)
 	nativeRawUserFiles(t, binding, "claude")
-	pluginID := nativeRawUserSkillName + "@skills-dir"
+	pluginID := state.Installations[0].DeclaredName + "@skills-dir"
 	verify := func(label string, want bool) {
 		t.Helper()
 		entries := claudePluginList(t, f, client, label)
