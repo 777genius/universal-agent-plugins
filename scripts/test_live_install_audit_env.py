@@ -417,12 +417,42 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             matching = home / "matching.txt"
             foreign.write_text("keep\n")
             matching.write_text("keep\n")
-            self.assertTrue(audit.preserved_regular_text(foreign, "keep\n"))
+            self.assertTrue(audit.preserved_regular_text(foreign, "keep\n", home))
             foreign.unlink()
             foreign.symlink_to(matching)
-            self.assertFalse(audit.preserved_regular_text(foreign, "keep\n"))
+            self.assertFalse(audit.preserved_regular_text(foreign, "keep\n", home))
             foreign.unlink()
-            self.assertFalse(audit.preserved_regular_text(foreign, "keep\n"))
+            self.assertFalse(audit.preserved_regular_text(foreign, "keep\n", home))
+
+    def test_project_skill_intermediate_symlink_cannot_fake_cleanup(self):
+        # BUG-023: project/.claude can be swapped even when SKILL.md is regular.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            case = root / "case"
+            project = case / "project"
+            foreign = root / "foreign"
+            project.mkdir(parents=True)
+            foreign_skill_root = foreign / "skills"
+            (foreign_skill_root / "foreign-neighbor").mkdir(parents=True)
+            (foreign_skill_root / "demo-skill").mkdir()
+            marker = foreign_skill_root / "foreign-neighbor/SKILL.md"
+            marker.write_text("unmanaged identical sentinel\n")
+            (foreign_skill_root / "demo-skill/SKILL.md").write_text(
+                "---\nname: demo-skill\n---\n")
+            (project / ".claude").symlink_to(foreign, target_is_directory=True)
+            spoofed = project / ".claude/skills/foreign-neighbor/SKILL.md"
+            self.assertTrue(spoofed.is_file())
+            self.assertFalse(audit.preserved_regular_text(
+                spoofed, "unmanaged identical sentinel\n", case))
+            self.assertFalse(audit.path_inside_case(spoofed, case))
+            self.assertIsNone(audit.skill_file_present(project, "claude", "demo-skill"))
+            leftovers = audit.skill_removal_leftovers(
+                project, "claude", "demo-skill", ".claude/skills/demo-skill/SKILL.md")
+            self.assertIn(".claude/skills: unsafe ancestor", leftovers)
+            self.assertTrue(any("unsafe ancestor" in entry for entry in leftovers))
+            # No helper is permitted to mutate the foreign user's Skill.
+            self.assertEqual(marker.read_text(), "unmanaged identical sentinel\n")
 
     def test_skill_lock_requires_two_complete_sha256_digests(self):
         import json
