@@ -850,16 +850,16 @@ func TestClaudeWindowsMCPProjection(t *testing.T) {
 // claudeProfileFiles records only metadata and content hashes, never contents.
 // WalkDir does not traverse links; symlink targets are hashed without opening.
 type claudeProfileFile struct {
-	Kind string `json:"kind"`
+	Kind   string `json:"kind"`
 	SHA256 string `json:"sha256"`
-	Mode string `json:"mode"`
-	Size int64 `json:"size"`
+	Mode   string `json:"mode"`
+	Size   int64  `json:"size"`
 }
 
 type claudeProfileChange struct {
-	Path string `json:"path"`
+	Path   string             `json:"path"`
 	Before *claudeProfileFile `json:"before,omitempty"`
-	After *claudeProfileFile `json:"after,omitempty"`
+	After  *claudeProfileFile `json:"after,omitempty"`
 }
 
 func claudeProfileFiles(t *testing.T, root string) map[string]claudeProfileFile {
@@ -974,10 +974,10 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 		"profile_A": rootA, "profile_B": rootB,
 		"state_A": stateA, "state_B": stateB,
 		"shared_home": f.Home,
-		"xdg_config": filepath.Join(f.Root, "xdg-config"),
-		"xdg_data": filepath.Join(f.Root, "xdg-data"),
-		"xdg_cache": filepath.Join(f.Root, "xdg-cache"),
-		"xdg_state": filepath.Join(f.Root, "xdg-state"),
+		"xdg_config":  filepath.Join(f.Root, "xdg-config"),
+		"xdg_data":    filepath.Join(f.Root, "xdg-data"),
+		"xdg_cache":   filepath.Join(f.Root, "xdg-cache"),
+		"xdg_state":   filepath.Join(f.Root, "xdg-state"),
 	}
 	if err := os.MkdirAll(roots["xdg_state"], 0700); err != nil {
 		t.Fatal(err)
