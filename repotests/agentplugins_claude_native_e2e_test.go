@@ -937,7 +937,19 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 	stages["A_replay"] = claudeNativeStage{Status: "passed"}
 	capture("after_A_replay")
 	if second["result"] != "success" {
-		t.Fatalf("cold B install still blocked by native identity; A was preserved on B refusal and A replay: %+v", second)
+		// A probe only AFTER the failed B attempt cannot turn a cold-profile
+		// refusal into a false successful setup. Record native list evidence
+		// while preserving A's independently proven replay.
+		f.ConfigDir, f.StateHome = rootB, stateB
+		entries := claudePluginList(t, f, client, "B-native-list-after-refusal")
+		fromA := false
+		for _, entry := range entries {
+			if strings.HasPrefix(filepath.Clean(entry.InstallPath), rootA+string(filepath.Separator)) {
+				fromA = true
+			}
+		}
+		capture("after_B_native_list_diagnostic")
+		t.Fatalf("cold B install blocked; A replay preserved, B native list entries=%d, sibling_A_visible=%t", len(entries), fromA)
 	}
 	f.ConfigDir, f.StateHome = rootB, stateB
 	stableA = nativeTreeDigest(t, rootA)
