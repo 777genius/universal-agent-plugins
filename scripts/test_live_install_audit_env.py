@@ -1210,6 +1210,33 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 [root], "atlassian", [".qoder/logs/other"], "qoder"),
                 [".qoder/logs/other: symlink"])
 
+    def test_case_creation_never_writes_through_planted_child_symlinks(self):
+        audit = load_audit()
+        original_mkdir = Path.mkdir
+        with TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve()
+            foreign = outer / "foreign"
+            foreign.mkdir()
+            for poisoned in ("home", "local-parent"):
+                with self.subTest(poisoned=poisoned):
+                    runroot = outer / poisoned
+                    case = runroot / "plugin-00"
+
+                    def injected_mkdir(path, *args, **kwargs):
+                        result = original_mkdir(path, *args, **kwargs)
+                        if poisoned == "home" and path == case:
+                            (case / "home").symlink_to(foreign, target_is_directory=True)
+                        elif poisoned == "local-parent" and path == case / "home":
+                            (case / "home/.local").symlink_to(
+                                foreign, target_is_directory=True)
+                        return result
+
+                    with (patch.object(Path, "mkdir", injected_mkdir),
+                          self.assertRaisesRegex(ValueError, "nested audit directory")):
+                        audit.do_case("/unused/agentplugins", "codex", "plugin",
+                                      "atlassian", 0, runroot, {})
+                    self.assertEqual(list(foreign.iterdir()), [])
+
     def test_failed_first_list_cannot_attest_plugin_lifecycle(self):
         # BUG-029: matching JSON from a failed list is not an attestation.
         audit = load_audit()

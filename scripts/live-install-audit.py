@@ -837,11 +837,15 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # A previous untrusted case must not plant a symlink at a later case path.
     # Fail before writing even a sentinel outside the disposable run root.
     case_root.mkdir(parents=True)
+    canonical_case = case_root.resolve(strict=True)
     for path in (home, project, data, home / ".config", home / ".cache", home / ".local/share"):
+        # Never create a descendant through an already redirected parent.
+        if (path.is_symlink() or
+                not path.parent.resolve().is_relative_to(canonical_case)):
+            raise ValueError("nested audit directory escapes disposable case")
         path.mkdir(parents=True, exist_ok=True)
-    if any(not path.resolve().is_relative_to(case_root.resolve())
-           for path in (home, project, data)):
-        raise ValueError("case directory escapes disposable case")
+        if path.is_symlink() or not path.resolve().is_relative_to(canonical_case):
+            raise ValueError("nested audit directory escapes disposable case")
     native_roots = [home / v for v in NATIVE_ROOTS[target]]
     if any(not root.resolve().is_relative_to(case_root.resolve()) for root in native_roots):
         raise ValueError("native root escapes disposable case")
