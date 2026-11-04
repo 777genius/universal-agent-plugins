@@ -692,6 +692,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             "_json": {"data": {"installations":
                                                match if state["installed"] else []}}}
                 with patch.object(audit, "call", side_effect=fake_call), \
+                     patch.object(audit, "matching_installations", return_value=match), \
                      patch.object(audit, "locked_skill_is_pinned", return_value=True), \
                      patch.object(audit, "matches_pinned_skill_bytes", return_value=True):
                     evidence = audit.do_case("/unused/agentplugins", "claude", "skill",
