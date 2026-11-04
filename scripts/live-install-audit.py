@@ -461,7 +461,8 @@ def signed_release_public_observation(response, identity, target):
     def public_string(value, pattern):
         return value if isinstance(value, str) and re.fullmatch(pattern, value) else None
 
-    selector = r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?"
+    # Signed source paths include owner/repo/subdirectories, not just distribution IDs.
+    selector = r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+){1,8}"
     sha = r"[0-9a-f]{40}"
     digest = r"sha256:[0-9a-f]{64}"
     evidence = []
@@ -560,7 +561,12 @@ def matching_installations(response, identity, target, kind, item, signed_releas
                 # A mutable release is NOT a verified native install: fail closed.
                 if not isinstance(pin, dict) or not isinstance(pin.get("revision"), str):
                     continue
-                if (source != pin["distribution"] or
+                # CLI `list.source` serializes the canonical repository/subpath;
+                # the signed Directory distribution is an independent authority.
+                # Never compare those two different source-identifying fields.
+                expected_public_source = (
+                    pin["repository"].strip("/") + "/" + pin["path"].strip("/"))
+                if (source != expected_public_source or
                         not isinstance(directory, dict) or
                         directory.get("recorded_distribution") != pin["distribution"] or
                         directory.get("recorded_revision") != pin["revision"] or
