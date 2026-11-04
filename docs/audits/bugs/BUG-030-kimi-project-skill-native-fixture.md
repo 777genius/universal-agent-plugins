@@ -21,3 +21,19 @@ These two mismatches explain why this lane cannot qualify; they do **not** estab
 ## Status
 
 Two preconditions confirmed from real source/ZIP; narrow workflow and harness correction plus focused regressions **pending**. Preserve all 30 historical failed outcomes and do not merge on this report.
+
+## Exact current-head live counterexample — 2026-11-04
+
+[Run 41830588372, `live-install-full-kimi-skill`](https://github.com/777genius/universal-agent-plugins/actions/runs/41830588372), independently downloaded from artifact 13326923352, was executed at source HEAD `bb574a1eb04bf58feaa54eaeff51d078fc02c967`. The **real** `kimi --version` reports `2.3.2`. The new audit fixture performs actual `git init --quiet` in each isolated project before add. **All 30 separate pinned Skills still exit 1 with `PLAN_REJECTED`, `candidates:[]`**, with empty read-only UAP `list` afterward. The previous version/Git-root correction alone did **not** solve the real Kimi project Skills problem; all 30 remain non-PASS.
+
+### Corrected bounded root-cause plan (no production fix without a reproduced cause)
+
+1. Identify why the existing typed Kimi project preconditions did not produce actionable `TARGET_UNAVAILABLE`/specific rejection in `skillsCatalogSession.reviewRefusal`. Inspect the observed npm 2.3.2 `kimi` executable path versus canonical `dist/main.mjs` (the ZIP `client_binary` field resolves the launcher symlink), the Go `DetectedClient.Version`, nearest Git root, and the native ownership check. Do not assume the resolved path proves a product bug.
+2. Reproduce **one** pinned source failure on the exact 2.3.2 native CLI in a disposable project, with diagnostic error *category only*, not raw provider stderr or user settings. Add a hermetic targeted regression for the proven branch; preserve explicit 2.3.1/2.3.2 compatibility and native trust boundaries.
+3. Fix only the verified failed precondition or evidence bridge, re-run the one-case regression and the genuine 30-source lane; report no PASS until source acquisition, original bytes/lock, repeat add, native attribution and cleanup succeed.
+
+**Compatibility critic:** The npm symlink's resolved basename may be `main.mjs`, but the Go detector can retain a qualified `kimi` entrypoint; canonical-path observation alone does not authorize broadening admitted executables or versions.
+
+**Security/diagnostic critic:** The raw `PLAN_REJECTED` fallback deliberately redacts arbitrary provider errors. Fix typed categorization if it is the confirmed cause, not by printing inner errors or treating an unknown native-client condition as success.
+
+**State after this run:** 30/30 live Kimi Skills still failing; the original fixture correction is merged into this PR, product cause not yet verified, regression and final rerun pending.
