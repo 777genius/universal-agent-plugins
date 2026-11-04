@@ -30,4 +30,4 @@ Preserve normal native-file hashes and the existing signed-release proof. Do not
 
 ## Status
 
-Plan and source counterexamples recorded before code changes. Fix, focused tests, independent final-head review and final-head E2E **not yet qualified** as of this plan commit.
+Plan and source counterexamples were recorded **before** implementation. Narrow harness changes and regressions are **pushed**; follow-up critical pass additionally kept synthetic unreadable os.walk markers fail-closed. Final-head Python/CI E2E and independent CodeRabbit/Strix clearance remain **unqualified**, so no merge.
