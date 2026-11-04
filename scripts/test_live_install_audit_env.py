@@ -154,11 +154,19 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                          "unmanaged native neighbor must survive\n")
                         self.assertTrue(evidence["sentinels_preserved"])
 
+    def test_failed_vendor_bootstrap_cannot_inherit_unrelated_host_binary(self):
+        audit = load_audit()
+        with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "failure"}):
+            self.assertFalse(audit.vendor_bootstrap_attested())
+        with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}):
+            self.assertTrue(audit.vendor_bootstrap_attested())
+
     def test_vendor_bootstrap_requires_reviewed_bytes_and_preserves_runner_toolchain(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     ".github/workflows/live-install-remaining-clients.yml").read_text()
         self.assertIn("sha256_file -c -", workflow)
         self.assertIn("observed-untrusted.sha256", workflow)
+        self.assertIn("AUDIT_VENDOR_OUTCOME", workflow)
         self.assertIn("shasum -a 256", workflow)
         self.assertIn("verification-blocked.txt", workflow)
         self.assertIn("dpkg-deb --extract", workflow)

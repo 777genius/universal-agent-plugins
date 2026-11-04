@@ -121,6 +121,7 @@ jobs:
         env:
           AUDIT_KIND: ${{ matrix.kind }}
           AUDIT_TARGET: ${{ matrix.target }}
+          AUDIT_VENDOR_OUTCOME: ${{ steps.vendor-install.outcome }}
         shell: bash
         run: |
           export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"

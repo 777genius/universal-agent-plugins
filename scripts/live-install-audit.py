@@ -645,6 +645,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
             "sentinels_preserved": sentinels_preserved}
 
 
+def vendor_bootstrap_attested():
+    """A failed vendor bootstrap cannot qualify an unrelated runner binary."""
+    return os.environ.get("AUDIT_VENDOR_OUTCOME", "success") == "success"
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--cli", required=True)
@@ -678,6 +683,15 @@ def main():
     def save():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     eligible_binaries = EXECUTABLE.get(args.target, ())
+    if not vendor_bootstrap_attested():
+        report["blocker"] = "Vendor bootstrap was not verified; no native-client PASS is permitted"
+        report["results"] = [{"target": args.target, "kind": args.kind,
+                              "status": "client-unavailable",
+                              "identity": v if args.kind == "plugin" else v["name"]}
+                             for v in selected]
+        save()
+        print(report["blocker"], file=sys.stderr)
+        return 2
     if eligible_binaries and not any(shutil.which(name) for name in eligible_binaries):
         report["blocker"] = (
             "Genuine client executable not installed; tried " + ", ".join(eligible_binaries)
