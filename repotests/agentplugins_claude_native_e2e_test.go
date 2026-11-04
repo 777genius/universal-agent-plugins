@@ -5,6 +5,7 @@ package pluginkitairepo_test
 // alone cannot isolate the macOS keychain.
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -670,15 +671,23 @@ func claudeExpectedMCPInventory() string {
 func claudeWindowsStdioPlan(r map[string]any, names ...string) error {
 	data, _ := r["data"].(map[string]any)
 	targets, _ := data["targets"].([]any)
-	if len(targets) != 1 {
+	var result map[string]any
+	if len(targets) == 1 {
+		target, _ := targets[0].(map[string]any)
+		if target["target"] != "claude" {
+			return fmt.Errorf("unexpected Claude target: %+v", target)
+		}
+		output, _ := target["output"].(map[string]any)
+		result, _ = output["result"].(map[string]any)
+	} else if len(targets) == 0 {
+		// The single-target CLI can return an unchanged operation directly.
+		result, _ = data["result"].(map[string]any)
+	} else {
 		return fmt.Errorf("expected one Claude target: %+v", r)
 	}
-	target, _ := targets[0].(map[string]any)
-	output, _ := target["output"].(map[string]any)
-	result, _ := output["result"].(map[string]any)
 	plan, _ := result["plan"].(map[string]any)
 	components, _ := plan["components"].([]any)
-	if target["target"] != "claude" || plan["client_id"] != "claude" {
+	if plan["client_id"] != "claude" {
 		return fmt.Errorf("wrong client plan: %+v", plan)
 	}
 	for _, name := range names {
@@ -725,6 +734,15 @@ func claudeAssertWindowsStdio(t *testing.T, root, installPath string, names ...s
 }
 
 func TestClaudeWindowsStdioPlan(t *testing.T) {
+	// A repeated user-scope add returns data.result rather than data.targets.
+	const single = `{"data":{"result":{"mutated":false,"no_change":true,"plan":{"client_id":"claude","components":[{"kind":"mcp_server","name":"default","support":"projected"}]}}}}`
+	if err := claudeWindowsStdioPlan(map[string]any{}, "default"); err == nil {
+		t.Fatal("malformed result was accepted")
+	}
+	var direct map[string]any
+	if err := json.Unmarshal([]byte(single), &direct); err != nil || claudeWindowsStdioPlan(direct, "default") != nil {
+		t.Fatalf("legitimate no-change single-target result refused: %v", err)
+	}
 	const fixture = `{"data":{"targets":[{"target":"claude","output":{"result":{"plan":{"client_id":"claude","components":[{"kind":"mcp_server","name":"default","support":"projected"},{"kind":"mcp_server","name":"explicit","support":"projected"}]}}}}]}}`
 	for _, tc := range []struct {
 		name, input string
@@ -827,4 +845,276 @@ func TestClaudeWindowsMCPProjection(t *testing.T) {
 			}
 		})
 	}
+}
+
+// claudeProfileFiles records only metadata and content hashes, never contents.
+// WalkDir does not traverse links; symlink targets are hashed without opening.
+type claudeProfileFile struct {
+	Kind   string `json:"kind"`
+	SHA256 string `json:"sha256"`
+	Mode   string `json:"mode"`
+	Size   int64  `json:"size"`
+}
+
+type claudeProfileChange struct {
+	Path   string             `json:"path"`
+	Before *claudeProfileFile `json:"before,omitempty"`
+	After  *claudeProfileFile `json:"after,omitempty"`
+}
+
+func claudeProfileFiles(t *testing.T, root string) map[string]claudeProfileFile {
+	t.Helper()
+	files := map[string]claudeProfileFile{}
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		f := claudeProfileFile{Mode: info.Mode().String(), Size: info.Size()}
+		var body []byte
+		switch {
+		case info.Mode()&os.ModeSymlink != 0:
+			f.Kind = "symlink"
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			body = []byte(target) // link text only; never open its destination
+		case info.Mode().IsRegular():
+			f.Kind = "file"
+			body, err = os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("read native profile inventory file %q: %w", rel, err)
+			}
+			if int64(len(body)) != info.Size() {
+				return fmt.Errorf("native profile inventory file %q changed during read", rel)
+			}
+		default:
+			return fmt.Errorf("unsupported native profile entry type at %q", rel)
+		}
+		h := sha256.Sum256(body)
+		f.SHA256 = hex.EncodeToString(h[:])
+		files[filepath.ToSlash(rel)] = f
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("incomplete Claude native profile inventory: %v", err)
+	}
+	return files
+}
+
+// TestAgentpluginsClaudeNativeSecondaryProfileIsolation is a genuine pinned
+// user-scope A→B→A test with a shared disposable HOME, not two unrelated users.
+// Every new root belongs to this fixture; no native auth or model is requested.
+func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
+	if os.Getenv("AGENTPLUGINS_CLAUDE_NATIVE_E2E") != "1" {
+		t.Skip("opt-in real Claude A/B user profile E2E")
+	}
+	nativeRequireDisposable(t)
+	client := claudeNativeBinary(t, "AGENTPLUGINS_CLAUDE_BIN")
+	installer := claudeNativeBinary(t, "AGENTPLUGINS_INSTALLER_BIN")
+	if expected := os.Getenv("AGENTPLUGINS_CLAUDE_SHA256"); len(expected) != 64 || claudeSHA256(t, client) != expected {
+		t.Fatal("Claude binary pin mismatch")
+	}
+	f := newClaudeNativeFixture(t)
+	clientDir := filepath.Dir(client)
+	rootA, stateA := f.ConfigDir, f.StateHome
+	rootB, stateB := filepath.Join(f.Root, "claude-config-B"), filepath.Join(f.Root, "installer-state-B")
+	for _, path := range []string{rootB, stateB} {
+		if err := os.MkdirAll(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, root := range []string{rootA, rootB} {
+		nativeWrite(t, filepath.Join(root, "skills", "foreign-neighbor", "SKILL.md"), []byte("foreign fixture data\n"), 0600)
+	}
+	shaA, shaB := nativeSHA(t, filepath.Join(rootA, "skills", "foreign-neighbor", "SKILL.md")), nativeSHA(t, filepath.Join(rootB, "skills", "foreign-neighbor", "SKILL.md"))
+	assertSentinels := func() {
+		t.Helper()
+		if nativeSHA(t, filepath.Join(rootA, "skills", "foreign-neighbor", "SKILL.md")) != shaA ||
+			nativeSHA(t, filepath.Join(rootB, "skills", "foreign-neighbor", "SKILL.md")) != shaB {
+			t.Fatal("native cross-profile operation modified unrelated Skill bytes")
+		}
+	}
+	claudeWriteFixturePackage(t, f.PackageRoot, "claude-native-proof", "1.0.0")
+	wantSkill, err := os.ReadFile(filepath.Join(f.PackageRoot, "skills", "demo-skill", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireProfilePlugin := func(root, label string, installed bool) {
+		t.Helper()
+		count := 0
+		for _, entry := range claudePluginList(t, f, client, label) {
+			if entry.ID != "claude-native-proof@skills-dir" {
+				continue
+			}
+			count++
+			if !entry.Enabled || entry.Scope != "user" ||
+				!strings.HasPrefix(filepath.Clean(entry.InstallPath), root+string(filepath.Separator)) {
+				t.Fatalf("native plugin identity was not bound to the selected user profile")
+			}
+			if body := claudeReadInstalledSkill(t, entry.InstallPath); !bytes.Equal(body, wantSkill) {
+				t.Fatal("selected profile plugin content differs from pinned fixture")
+			}
+		}
+		if count > 1 || installed != (count == 1) {
+			t.Fatalf("native selected profile plugin count=%d wantInstalled=%t", count, installed)
+		}
+	}
+	// Both installer state roots and all shared XDG roots are independent
+	// observed boundaries. A cold B is not initialized by enumerating files.
+	roots := map[string]string{
+		"profile_A": rootA, "profile_B": rootB,
+		"state_A": stateA, "state_B": stateB,
+		"shared_home": f.Home,
+		"xdg_config":  filepath.Join(f.Root, "xdg-config"),
+		"xdg_data":    filepath.Join(f.Root, "xdg-data"),
+		"xdg_cache":   filepath.Join(f.Root, "xdg-cache"),
+		"xdg_state":   filepath.Join(f.Root, "xdg-state"),
+	}
+	if err := os.MkdirAll(roots["xdg_state"], 0700); err != nil {
+		t.Fatal(err)
+	}
+	snapshots := map[string]map[string]string{}
+	fileInventories := map[string]map[string]map[string]claudeProfileFile{}
+	fileChanges := map[string]map[string][]claudeProfileChange{}
+	previous := map[string]map[string]claudeProfileFile{}
+	capture := func(stage string) {
+		t.Helper()
+		snapshots[stage] = map[string]string{}
+		fileInventories[stage] = map[string]map[string]claudeProfileFile{}
+		fileChanges[stage] = map[string][]claudeProfileChange{}
+		for label, path := range roots {
+			snapshots[stage][label] = nativeTreeDigest(t, path)
+			current := claudeProfileFiles(t, path)
+			fileInventories[stage][label] = current
+			if prior, ok := previous[label]; ok {
+				changes := []claudeProfileChange{}
+				for file, before := range prior {
+					after, found := current[file]
+					if !found {
+						b := before
+						changes = append(changes, claudeProfileChange{Path: file, Before: &b})
+					} else if before != after {
+						b, a := before, after
+						changes = append(changes, claudeProfileChange{Path: file, Before: &b, After: &a})
+					}
+				}
+				for file, after := range current {
+					if _, found := prior[file]; !found {
+						a := after
+						changes = append(changes, claudeProfileChange{Path: file, After: &a})
+					}
+				}
+				sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
+				fileChanges[stage][label] = changes
+			}
+			previous[label] = current
+		}
+	}
+	capture("before_any_native_command")
+	if measured, want := claudeVersionString(t, f, client), os.Getenv("AGENTPLUGINS_CLAUDE_VERSION"); want == "" || measured != want {
+		t.Fatalf("unqualified Claude binary/version: %q", measured)
+	}
+	capture("after_version_probe")
+	stages := map[string]claudeNativeStage{
+		"native_only_probe": {Status: "not_evaluated"},
+		"profile_A_install": {Status: "not_evaluated"},
+		"profile_B_install": {Status: "not_evaluated"},
+		"A_replay":          {Status: "not_evaluated"},
+		"B_only_remove":     {Status: "not_evaluated"},
+	}
+	defer func() {
+		nativeJSON(t, filepath.Join(f.Root, "claude-secondary-profile-evidence.json"), map[string]any{
+			"source_commit":          os.Getenv("AGENTPLUGINS_INSTALLER_COMMIT"),
+			"claude_binary_sha256":   claudeSHA256(t, client),
+			"source_version":         os.Getenv("AGENTPLUGINS_CLAUDE_VERSION"),
+			"shared_disposable_home": true, "distinct_config_and_state_roots": true,
+			"model_execution": "NOT_RUN", "stages": stages, "snapshots": snapshots,
+			"file_inventories": fileInventories, "file_changes": fileChanges,
+		})
+	}()
+	// Record A's native-only initialization separately. B intentionally
+	// remains cold: probing B first could hide the original #641 failure.
+	for _, entry := range claudePluginList(t, f, client, "A-native-only") {
+		if entry.ID == "claude-native-proof@skills-dir" {
+			t.Fatal("cold A profile unexpectedly owns the plugin before UAP")
+		}
+	}
+	stages["native_only_probe"] = claudeNativeStage{Status: "passed", Reason: "A native-only initialized; B was deliberately left cold for the exact secondary-profile regression"}
+	capture("after_A_native_only_initialization")
+	preB, preBState := nativeTreeDigest(t, rootB), nativeTreeDigest(t, stateB)
+	f.ConfigDir, f.StateHome = rootA, stateA
+	first := claudeRunInstaller(t, f, installer, clientDir, "A-install", "add", f.PackageRoot, "--target", "claude")
+	if first["result"] != "success" {
+		t.Fatalf("A install did not succeed: %+v", first)
+	}
+	requireProfilePlugin(rootA, "A-list-after-install", true)
+	stages["profile_A_install"] = claudeNativeStage{Status: "passed"}
+	capture("after_A_install")
+	assertSentinels()
+	if nativeTreeDigest(t, rootB) != preB || nativeTreeDigest(t, stateB) != preBState {
+		t.Fatal("selected profile A changed unselected profile B or its UAP state")
+	}
+	f.ConfigDir, f.StateHome = rootB, stateB
+	stableA, stableAState := nativeTreeDigest(t, rootA), nativeTreeDigest(t, stateA)
+	second := claudeRunInstaller(t, f, installer, clientDir, "B-install", "add", f.PackageRoot, "--target", "claude")
+	capture("after_B_install_attempt")
+	assertSentinels()
+	if nativeTreeDigest(t, rootA) != stableA || nativeTreeDigest(t, stateA) != stableAState {
+		t.Fatal("selected profile B changed unselected profile A or its UAP state")
+	}
+	if second["result"] != "success" {
+		stages["profile_B_install"] = claudeNativeStage{Status: "blocked", Reason: "native identity ownership unresolved in the cold selected B profile"}
+	} else {
+		requireProfilePlugin(rootB, "B-list-after-install", true)
+		stages["profile_B_install"] = claudeNativeStage{Status: "passed"}
+	}
+	f.ConfigDir, f.StateHome = rootA, stateA
+	stableB, stableBState := nativeTreeDigest(t, rootB), nativeTreeDigest(t, stateB)
+	replayed := claudeRunInstaller(t, f, installer, clientDir, "A-replay", "add", f.PackageRoot, "--target", "claude")
+	if replayed["result"] != "success" || nativeTreeDigest(t, rootB) != stableB || nativeTreeDigest(t, stateB) != stableBState {
+		t.Fatalf("A replay modified B or failed: %+v", replayed)
+	}
+	assertSentinels()
+	requireProfilePlugin(rootA, "A-list-after-replay", true)
+	stages["A_replay"] = claudeNativeStage{Status: "passed"}
+	capture("after_A_replay")
+	if second["result"] != "success" {
+		// A probe only AFTER the failed B attempt cannot turn a cold-profile
+		// refusal into a false successful setup. Record native list evidence
+		// while preserving A's independently proven replay.
+		f.ConfigDir, f.StateHome = rootB, stateB
+		entries := claudePluginList(t, f, client, "B-native-list-after-refusal")
+		fromA := false
+		for _, entry := range entries {
+			if strings.HasPrefix(filepath.Clean(entry.InstallPath), rootA+string(filepath.Separator)) {
+				fromA = true
+			}
+		}
+		capture("after_B_native_list_diagnostic")
+		t.Fatalf("cold B install blocked; A replay preserved, B native list entries=%d, sibling_A_visible=%t", len(entries), fromA)
+	}
+	f.ConfigDir, f.StateHome = rootB, stateB
+	stableA, stableAState = nativeTreeDigest(t, rootA), nativeTreeDigest(t, stateA)
+	removed := claudeRunInstaller(t, f, installer, clientDir, "B-only-remove", "remove", "claude-native-proof", "--target", "claude")
+	if removed["result"] != "success" || nativeTreeDigest(t, rootA) != stableA || nativeTreeDigest(t, stateA) != stableAState {
+		t.Fatalf("B-only removal changed A or failed: %+v", removed)
+	}
+	assertSentinels()
+	requireProfilePlugin(rootB, "B-list-after-remove", false)
+	stages["B_only_remove"] = claudeNativeStage{Status: "passed"}
+	f.ConfigDir, f.StateHome = rootA, stateA
+	requireProfilePlugin(rootA, "A-list-after-B-remove", true)
+	capture("after_B_only_remove")
 }

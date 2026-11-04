@@ -115,6 +115,13 @@ entry may be removed or narrowed, never added or widened, and that applies to
 exclusions outside the markers too. A file leaves the block when it is split or
 simplified; it is never added to buy silence for new code.
 
+The same gate also rejects growth in **token-bearing Go code lines** in an
+existing, legacy-exempt production file compared with the PR base. Blank lines
+and comments do not count; reducing code lines passes. This applies to
+platform-tagged files even when lint runs on another OS. A verified rename keeps
+the original file's budget; a symlink at an exempt source path is refused.
+The rule is a no-growth ratchet, not a demand to split every old file in a PR.
+
 Moving an exempt file is the one case the rule cannot tell apart from buying
 silence for new code: the old path disappears and an unknown one appears. Declare
 the move in `scripts/lint-baseline-renames.txt` as
