@@ -36,14 +36,14 @@ func runPublicCLICrashChild(root string) {
 			return nil
 		}}
 	_, err := manager.Apply(context.Background(), dirswap.Input{
-		EnvironmentID: environment.EnvironmentProjectDefault,
-		OperationID: "public-cli-crash-before-backup",
+		EnvironmentID:   environment.EnvironmentProjectDefault,
+		OperationID:     "public-cli-crash-before-backup",
 		ClientBindingID: "disposable-pending-operation",
-		Sequence: 1,
-		OwnedBase: filepath.Join(namespace, "managed"),
-		ActivePath: filepath.Join(namespace, "managed", "unpublished-candidate"),
-		StagingPath: filepath.Join(namespace, "managed", ".unpublished-staging"),
-		RequireAbsent: true,
+		Sequence:        1,
+		OwnedBase:       filepath.Join(namespace, "managed"),
+		ActivePath:      filepath.Join(namespace, "managed", "unpublished-candidate"),
+		StagingPath:     filepath.Join(namespace, "managed", ".unpublished-staging"),
+		RequireAbsent:   true,
 	})
 	fmt.Fprintln(os.Stderr, "durable PhaseBackupPending exit was not reached:", err)
 	os.Exit(76)
