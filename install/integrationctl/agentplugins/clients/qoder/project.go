@@ -55,26 +55,34 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 }
 
 func projectNative(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
-    if err := ctx.Err(); err != nil { return nil, err }
-    if err := validateProjectPlan(domain.DetectedClient{ClientID:domain.ClientQoder, ConfigRoot:in.Plan.TargetContext.UserConfigRoot}, in.Plan); err != nil {
-        return nil, err
-    }
-    names := shared.SupportedMCPNames(in.Plan)
-    if shared.ComponentKindPresent(in.Plan.Components, domain.ComponentSkill) {
-        // Preserve the prepared-import view, including for preexisting package-only
-        // receipts whose portable components now also qualify for native MCP.
-        if _, err := projectBundle(ctx, in); err != nil { return nil, err }
-    } else {
-        if _, err := os.Lstat(filepath.Join(in.StagingPath, projectNativeView)); err == nil {
-            return nil, fmt.Errorf("unselected Qoder native-import view in mixed package")
-        } else if !os.IsNotExist(err) { return nil, err }
-    }
-    // Stdio has already been resolved by the existing projection contract.
-    // No OpenAI-only OAuth hints may become Qoder project authority.
-    if err := shared.ProjectMCPServers(shared.MCPProjection{
-        Root:in.StagingPath, Envelope:in.Envelope, Names:names,
-        Dialect:shared.MCPDialectOpenAI, PluginRoot:in.Plan.ActivePath,
-        DataPath:in.PluginDataPath,
-    }); err != nil { return nil, err }
-    return qoderProjectObjects(in.StagingPath, in.Plan)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := validateProjectPlan(domain.DetectedClient{ClientID: domain.ClientQoder, ConfigRoot: in.Plan.TargetContext.UserConfigRoot}, in.Plan); err != nil {
+		return nil, err
+	}
+	names := shared.SupportedMCPNames(in.Plan)
+	if shared.ComponentKindPresent(in.Plan.Components, domain.ComponentSkill) {
+		// Preserve the prepared-import view, including for preexisting package-only
+		// receipts whose portable components now also qualify for native MCP.
+		if _, err := projectBundle(ctx, in); err != nil {
+			return nil, err
+		}
+	} else {
+		if _, err := os.Lstat(filepath.Join(in.StagingPath, projectNativeView)); err == nil {
+			return nil, fmt.Errorf("unselected qoder native-import view in mixed package")
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+	// Stdio has already been resolved by the existing projection contract.
+	// No OpenAI-only OAuth hints may become Qoder project authority.
+	if err := shared.ProjectMCPServers(shared.MCPProjection{
+		Root: in.StagingPath, Envelope: in.Envelope, Names: names,
+		Dialect: shared.MCPDialectOpenAI, PluginRoot: in.Plan.ActivePath,
+		DataPath: in.PluginDataPath,
+	}); err != nil {
+		return nil, err
+	}
+	return qoderProjectObjects(in.StagingPath, in.Plan)
 }

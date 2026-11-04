@@ -226,15 +226,15 @@ func inspectProjectRegistry(ctx context.Context, env clients.Env, client domain.
 		}
 	}
 	// Old package-only receipts remain prepared-import; they never prove native registration.
-    if managed != nil && qoderLegacyPrepared(managed.NativeObjects) {
-        return clients.RegistryClear, nil
-    }
-    layout := qoderComponents(plan.TargetContext.ProjectRoot)
-    var previous *domain.ClientBinding
-    if managed != nil {
-        copy := *managed
-        copy.NativeObjects = qoderNativeOwned(managed.NativeObjects)
-        previous = &copy
-    }
-    return layout.Inspect(plan.Components, previous, env.NativeConfig)
+	if managed != nil && qoderLegacyPrepared(managed.NativeObjects) {
+		return clients.RegistryClear, nil
+	}
+	layout := qoderComponents(plan.TargetContext.ProjectRoot)
+	var previous *domain.ClientBinding
+	if managed != nil {
+		owned := *managed
+		owned.NativeObjects = qoderNativeOwned(managed.NativeObjects)
+		previous = &owned
+	}
+	return layout.Inspect(plan.Components, previous, env.NativeConfig)
 }

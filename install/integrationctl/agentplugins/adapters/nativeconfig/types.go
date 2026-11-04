@@ -18,7 +18,7 @@ const (
 	// Clients with different native transport keys require their own codec.
 	CodecMCPServers Codec = "mcpServers"
 	// CodecQoder retains Qoder CLI HTTP transport spelling in root .mcp.json.
-	CodecQoder Codec = "qoder-mcpServers"
+	CodecQoder      Codec = "qoder-mcpServers"
 	CodecCopilot    Codec = "copilot-mcpServers"
 	CodecVSCode     Codec = "vscode-project-servers"
 	CodecKimi       Codec = "kimi-project-mcpServers"

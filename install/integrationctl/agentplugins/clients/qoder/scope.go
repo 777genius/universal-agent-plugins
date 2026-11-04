@@ -133,24 +133,28 @@ func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding
 		return fmt.Errorf("qoder project binding locator differs from physical artifact")
 	}
 	if len(binding.NativeObjects) == 0 {
-        return fmt.Errorf("qoder project binding requires exact owned package")
-    }
-    packageCount := 0
-    var components []domain.NativeObjectOwnership
-    for _, object := range binding.NativeObjects {
-        if object.Kind == "managed_package_directory" {
-            if object.Path != binding.TargetLocator || object.ObjectID != "package:qoder:"+binding.PhysicalArtifact || object.ManagedDigest == "" {
-                return fmt.Errorf("qoder project package receipt differs from managed artifact")
-            }
-            packageCount++
-        } else {
-            components = append(components, object)
-        }
-    }
-    if packageCount != 1 { return fmt.Errorf("qoder project package receipt is ambiguous") }
-    if len(components) > 0 {
-        if err := qoderComponents(project).ValidateObjects(components); err != nil { return err }
-    }
+		return fmt.Errorf("qoder project binding requires exact owned package")
+	}
+	packageCount := 0
+	var components []domain.NativeObjectOwnership
+	for _, object := range binding.NativeObjects {
+		if object.Kind == "managed_package_directory" {
+			if object.Path != binding.TargetLocator || object.ObjectID != "package:qoder:"+binding.PhysicalArtifact || object.ManagedDigest == "" {
+				return fmt.Errorf("qoder project package receipt differs from managed artifact")
+			}
+			packageCount++
+		} else {
+			components = append(components, object)
+		}
+	}
+	if packageCount != 1 {
+		return fmt.Errorf("qoder project package receipt is ambiguous")
+	}
+	if len(components) > 0 {
+		if err := qoderComponents(project).ValidateObjects(components); err != nil {
+			return err
+		}
+	}
 
 	return pathpolicy.RequireContainedChild(project, binding.TargetLocator)
 }
