@@ -180,8 +180,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     if operation == "skills":
                         if state["added"] == 0:
                             (skill_dir / "scripts").mkdir(parents=True)
-                            (skill_dir / "SKILL.md").write_text("name: demo-skill\\n")
-                            (skill_dir / "scripts/payload.sh").write_text("echo payload\\n")
+                            (skill_dir / "SKILL.md").write_text("name: demo-skill\n")
+                            (skill_dir / "scripts/payload.sh").write_text("echo payload\n")
                             (project / "uap.toml").write_text("demo-skill")
                             (project / "uap.lock").write_text("demo-skill")
                         state["added"] += 1
@@ -201,9 +201,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         raise AssertionError(argv)
                     return success()
 
-                with patch.object(audit, "call", side_effect=fake_call), \\
-                     patch.object(audit, "matching_installations", return_value=installed), \\
-                     patch.object(audit, "locked_skill_is_pinned", return_value=True), \\
+                with patch.object(audit, "call", side_effect=fake_call), \
+                     patch.object(audit, "matching_installations", return_value=installed), \
+                     patch.object(audit, "locked_skill_is_pinned", return_value=True), \
                      patch.object(audit, "matches_pinned_skill_bytes", return_value=True):
                     evidence = audit.do_case(
                         "/unused/agentplugins", "claude", "skill", item, 0,
@@ -234,9 +234,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             market_dir.mkdir(parents=True)
             market = "agentplugins-012345abcdef"
             conf.write_text(
-                '[plugins."demo@' + market + '"]\\nenabled = true\\n'
-                '[marketplaces.' + market + ']\\nsource_type = "local"\\n'
-                'source = "' + str(market_dir) + '"\\n')
+                '[plugins."demo@' + market + '"]\nenabled = true\n'
+                '[marketplaces.' + market + ']\nsource_type = "local"\n'
+                'source = "' + str(market_dir) + '"\n')
             commands = []
             def fake_call(argv, env, cwd, timeout=40):
                 commands.append(argv)
@@ -246,14 +246,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         "timeout": False, "_json": None}
             pinned = case / "trusted-codex"
             pinned.write_text("test executable")
-            with patch.dict(audit.AGENT_BINARIES, {"codex": str(pinned)}, clear=True), \\
+            with patch.dict(audit.AGENT_BINARIES, {"codex": str(pinned)}, clear=True), \
                  patch.object(audit, "call", side_effect=fake_call):
                 result = audit.uninstall_native_codex_plugin(
                     "demo", home, case, {"HOME": str(home)}, case)
             self.assertTrue(result["completed"])
             self.assertEqual(len(commands), 2)
             self.assertTrue(all(cmd[0] == str(pinned) for cmd in commands))
-            with patch.dict(audit.AGENT_BINARIES, {}, clear=True), \\
+            with patch.dict(audit.AGENT_BINARIES, {}, clear=True), \
                  patch.object(audit, "call") as forbidden:
                 refused = audit.uninstall_native_codex_plugin(
                     "demo", home, case, {}, case)
