@@ -165,3 +165,45 @@ func TestV2RequiresExactProjectRuntimeEvidence(t *testing.T) {
 		t.Fatalf("exact signed project closure runtime rejected: %v", err)
 	}
 }
+
+func TestV2UserGrantEvidenceScopeIsolation(t *testing.T) {
+	signed, _, _ := v2SignedFixture(t)
+	for _, tc := range []struct {
+		name string
+		client domain.ClientID
+		scope domain.InstallScope
+		accepted bool
+	}{
+		{"scoped user evidence", domain.ClientCodex, domain.ScopeUser, true},
+		{"historical unscoped user evidence", domain.ClientCodex, "", true},
+		{"foreign project evidence", domain.ClientCodex, domain.ScopeProject, false},
+		{"foreign client evidence", domain.ClientCursor, domain.ScopeUser, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var snapshot domain.DirectorySnapshot
+			if err := json.Unmarshal(signed, &snapshot); err != nil {
+				t.Fatal(err)
+			}
+			runtime := snapshot.Evidence[0]
+			runtime.ID, runtime.Level, runtime.Outcome = "isolated-user-runtime", "runtime", "passed"
+			runtime.Client, runtime.Scope = tc.client, tc.scope
+			runtime.ClientVersion, runtime.InstallerVersion = "1.0.0", "1.2.3"
+			runtime.OS, runtime.Architecture = "linux", "amd64"
+			runtime.ObservedAt = "2026-08-20T10:30:00Z"
+			snapshot.Evidence = append(snapshot.Evidence, runtime)
+			grant := &snapshot.Distributions[0].ReleasePolicies[0].Targets[0]
+			if grant.Client != domain.ClientCodex || grant.Scope != domain.ScopeUser {
+				t.Fatal("unexpected v2 fixture grant identity")
+			}
+			grant.CurrentEvidence = append(grant.CurrentEvidence, runtime.ID)
+			body, err := json.Marshal(snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = ParseV2Snapshot(body)
+			if tc.accepted && err != nil || !tc.accepted && !errors.Is(err, ErrStrictJSON) {
+				t.Fatalf("v2 user grant evidence scope %s accepted=%t, err=%v", tc.scope, tc.accepted, err)
+			}
+		})
+	}
+}

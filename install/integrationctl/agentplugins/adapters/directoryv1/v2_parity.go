@@ -23,7 +23,7 @@ func validateV2RecordParity(snapshot domain.DirectorySnapshot) error {
 	if err := validateV2EvidenceDimensions(snapshot.Evidence); err != nil {
 		return err
 	}
-	if err := validateV2ProjectGrantEvidence(snapshot); err != nil {
+	if err := validateV2GrantEvidence(snapshot); err != nil {
 		return err
 	}
 	seen := map[string]bool{}
@@ -145,7 +145,7 @@ func validateV2ProductDistributionOwnership(snapshot domain.DirectorySnapshot) e
 	return nil
 }
 
-func validateV2ProjectGrantEvidence(snapshot domain.DirectorySnapshot) error {
+func validateV2GrantEvidence(snapshot domain.DirectorySnapshot) error {
 	evidence := make(map[string]domain.DirectoryEvidence, len(snapshot.Evidence))
 	for _, item := range snapshot.Evidence {
 		evidence[item.ID] = item
@@ -153,9 +153,8 @@ func validateV2ProjectGrantEvidence(snapshot domain.DirectorySnapshot) error {
 	for _, distribution := range snapshot.Distributions {
 		for _, policy := range distribution.ReleasePolicies {
 			for _, grant := range policy.Targets {
-				if grant.Scope != domain.ScopeProject {
-					continue // Legacy user evidence is preserved only for Global.
-				}
+				// Validate evidence ownership for *every* signed grant.
+				// Historic unscoped client evidence is compatible with user only.
 				runtimePassed := false
 				for _, id := range grant.CurrentEvidence {
 					item, ok := evidence[id]
@@ -165,16 +164,18 @@ func validateV2ProjectGrantEvidence(snapshot domain.DirectorySnapshot) error {
 					if item.Level == "schema" && item.Client == "" && item.Scope == "" {
 						continue
 					}
-					if item.Client != grant.Client || item.Scope != domain.ScopeProject {
-						return strictError("v2 project grant borrows evidence from another client or scope")
+					if item.Client != grant.Client ||
+						grant.Scope == domain.ScopeProject && item.Scope != domain.ScopeProject ||
+						grant.Scope == domain.ScopeUser && item.Scope != "" && item.Scope != domain.ScopeUser {
+						return strictError("v2 grant borrows evidence from another client or scope")
 					}
-					if item.Level == "runtime" && item.Outcome == "passed" &&
+					if grant.Scope == domain.ScopeProject && item.Level == "runtime" && item.Outcome == "passed" &&
 						(grant.CanonicalClosure == nil || !grant.CanonicalClosure.Eligible ||
 							item.ClosureDigest == grant.CanonicalClosure.ClosureDigest) {
 						runtimePassed = true
 					}
 				}
-				if !runtimePassed {
+				if grant.Scope == domain.ScopeProject && !runtimePassed {
 					return strictError("v2 project grant lacks exact passed runtime evidence")
 				}
 			}
