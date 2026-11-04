@@ -606,7 +606,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     data = case_root / "uap-data"
     # A previous untrusted case must not plant a symlink at a later case path.
     # Fail before writing even a sentinel outside the disposable run root.
-    case_root.mkdir()
+    case_root.mkdir(parents=True)
     for path in (home, project, data, home / ".config", home / ".cache", home / ".local/share"):
         path.mkdir(parents=True, exist_ok=True)
     if any(not path.resolve().is_relative_to(case_root.resolve())
