@@ -9,6 +9,8 @@ on:
       - 'scripts/pi_project_components_native_e2e.py'
       - 'scripts/pi_local_model_fixture.py'
       - 'install/integrationctl/agentplugins/clients/pi/**'
+      - 'install/integrationctl/agentplugins/clients/shared/**'
+      - 'install/integrationctl/agentplugins/adapters/nativeconfig/**'
       - 'install/integrationctl/agentplugins/clients/all/registry.go'
       - 'install/integrationctl/agentplugins/domain/clients_catalog.go'
       - 'install/integrationctl/agentplugins/domain/project_policy.go'
@@ -60,7 +62,7 @@ jobs:
           cache: false
       - name: Verify scoped Pi adapter and real UAP facade before native runtime
         working-directory: install/integrationctl/agentplugins
-        run: go test -count=1 -timeout=180s ./clients/pi ./clients/all ./planner ./installer -run 'TestPi(Project|Public|Bootstrap|User)'
+        run: go test -count=1 -timeout=180s ./clients/pi ./clients/all ./planner ./installer -run 'TestPi(Project|Public|Bootstrap|User|Refine|Scoped)'
       - name: Verify Python runner syntax without writing into source checkout
         shell: bash
         run: |
