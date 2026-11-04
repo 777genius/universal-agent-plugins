@@ -621,8 +621,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertFalse(audit.codex_owned_native_config(
                 config, "atlassian-wrong", case))
             escaped = Path(temporary).parent / "other-account"
+            config.write_text(config.read_text().replace(str(managed), str(escaped)))
             self.assertFalse(audit.codex_owned_native_config(config, "atlassian", case))
-                              .replace(f"agentplugins-{'a' * 12}", "random-market"))
+            config.write_text(
+                config.read_text().replace(str(escaped), str(managed))
+                .replace(f"agentplugins-{'a' * 12}", "random-market"))
             self.assertFalse(audit.codex_owned_native_config(config, "atlassian", case))
 
     def test_large_native_file_rewrite_changes_snapshot(self):
