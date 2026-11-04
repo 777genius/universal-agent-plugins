@@ -154,6 +154,45 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                          "unmanaged native neighbor must survive\n")
                         self.assertTrue(evidence["sentinels_preserved"])
 
+    def test_chatgpt_prepared_requires_registration_and_verified_cleanup(self):
+        # BUG-013: a zero-exit CLI can still leave no managed installation.
+        audit = load_audit()
+        source = "github:example/chatgpt-demo@" + ("a" * 40)
+        identity = "chatgpt-demo"
+        matched = [{"name": identity, "installation_id": "isolated-owned-install",
+                    "clients": [{"client_id": "chatgpt",
+                                 "verification": "installation_verified"}]}]
+
+        def response(exit_code, installations=None):
+            return {"exit_code": exit_code, "stdout_tail": "", "stderr_tail": "",
+                    "timeout": False,
+                    "_json": {"data": {"installations": installations or []}}}
+
+        def run_case(outputs, matches):
+            with TemporaryDirectory() as temporary:
+                with patch.object(audit, "call", side_effect=outputs), \
+                     patch.object(audit, "matching_installations", return_value=matches):
+                    return audit.do_case(
+                        "/unused/agentplugins", "chatgpt", "plugin", source, 0,
+                        Path(temporary).resolve(), {source: identity})
+
+        empty = run_case([response(0), response(0)], [])
+        self.assertEqual(empty["status"], "incomplete-native-proof")
+        self.assertFalse(empty["listed_identity"])
+        self.assertIsNone(empty["cleanup"])
+
+        failed_remove = run_case(
+            [response(0), response(0), response(1)], matched)
+        self.assertEqual(failed_remove["status"], "cleanup-failed")
+        self.assertFalse(failed_remove["removal_verified"])
+
+        prepared = run_case(
+            [response(0), response(0), response(0), response(0)], matched)
+        self.assertEqual(prepared["status"], "manual-setup-prepared")
+        self.assertTrue(prepared["listed_identity"])
+        self.assertTrue(prepared["removal_verified"])
+        self.assertTrue(prepared["sentinels_preserved"])
+
     def test_failed_vendor_bootstrap_cannot_inherit_unrelated_host_binary(self):
         audit = load_audit()
         with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "failure"}):

@@ -599,7 +599,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     )
     diagnostics = (output["stdout_tail"] + "\n" + output["stderr_tail"]).lower()
     install_refused = is_cli_refusal(output)
-    if target == "chatgpt" and kind == "plugin" and output["exit_code"] == 0:
+    if target == "chatgpt" and kind == "plugin" and installed and removal_verified and sentinels_preserved:
         status = "manual-setup-prepared"
     elif installed and removal_verified and sentinels_preserved:
         status = ("package-installed-native-unqualified" if kind == "plugin" and not native_attribution
