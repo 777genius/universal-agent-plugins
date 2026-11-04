@@ -18,29 +18,48 @@ import (
 const (
 	piProjectSkillKind = "pi_project_skill_directory"
 	piProjectMCPKind   = "pi_project_mcp_server"
+	piUserSkillKind    = "pi_user_skill_directory"
+	piUserMCPKind      = "pi_user_mcp_server"
 )
 
-func piProjectComponents(root string) shared.ProjectComponents {
-	return shared.ProjectComponents{
-		ProjectRoot: filepath.Dir(root),
-		SkillsRoot:  filepath.Join(root, "skills"),
+// piComponents binds the existing native component kernel to one selected
+// physical authority. The user layout stays inside the canonical Pi profile;
+// project components remain inside the independently selected workspace.
+func piComponents(root string, scope domain.InstallScope) (shared.ProjectComponents, error) {
+	layout := shared.ProjectComponents{
+		SkillsRoot: filepath.Join(root, "skills"),
 		ConfigPaths: nativeconfig.Paths{JSON: filepath.Join(root, "mcp.json")},
-		Codec:       nativeconfig.CodecMCPServers,
-		SkillKind:   piProjectSkillKind,
-		MCPKind:     piProjectMCPKind,
+		Codec: nativeconfig.CodecMCPServers,
 	}
+	switch scope {
+	case domain.ScopeUser:
+		if err := validateProfile(root); err != nil {
+			return layout, err
+		}
+		layout.ProjectRoot, layout.SkillKind, layout.MCPKind = root, piUserSkillKind, piUserMCPKind
+	case domain.ScopeProject:
+		layout.ProjectRoot, layout.SkillKind, layout.MCPKind = filepath.Dir(root), piProjectSkillKind, piProjectMCPKind
+		if filepath.Base(root) != ".pi" {
+			return layout, fmt.Errorf("pi project components require a .pi root")
+		}
+	default:
+		return layout, fmt.Errorf("unsupported Pi native component scope")
+	}
+	return layout, nil
+}
+
+func piProjectComponents(root string) shared.ProjectComponents {
+	layout, _ := piComponents(root, domain.ScopeProject)
+	return layout
 }
 
 // Stage only the project-selected native components. Everything outside the
 // sealed active package is written later by the existing ownership kernel.
 func (adapter *ProjectAdapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
-	if in.Plan.Scope != domain.ScopeProject {
-		return adapter.Adapter.Project(ctx, in)
-	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if _, err := projectPiRoot(domain.DetectedClient{ClientID: domain.ClientPi, ConfigRoot: in.Plan.TargetContext.UserConfigRoot}, in.Plan.TargetContext, in.Plan.NativeRegistryRoot); err != nil {
+	if err := validatePlan(in.Plan); err != nil {
 		return nil, err
 	}
 	if _, ok := in.Envelope.Manifest.Extensions[Namespace]; ok {
@@ -52,7 +71,7 @@ func (adapter *ProjectAdapter) Project(ctx context.Context, in clients.Projectio
 		// runnable Pi extension merely because its files were staged there.
 		for _, name := range []string{"index.ts", "index.js", DescriptorName} {
 			if _, err := os.Lstat(filepath.Join(in.StagingPath, name)); err == nil {
-				return nil, fmt.Errorf("project Skills/MCP package contains a native Pi entrypoint")
+				return nil, fmt.Errorf("Skills/MCP package contains an unowned native Pi entrypoint")
 			} else if !os.IsNotExist(err) {
 				return nil, err
 			}
@@ -77,14 +96,14 @@ func (adapter *ProjectAdapter) Project(ctx context.Context, in clients.Projectio
 // ProjectActiveNative re-reads the verified active package, not the original
 // source or a process-owned ambient Pi profile.
 func (adapter *ProjectAdapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, data string) ([]domain.NativeObjectOwnership, error) {
-	if plan.Scope != domain.ScopeProject {
-		return adapter.Adapter.ProjectActiveNative(ctx, root, envelope, plan, data)
-	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if err := validatePlan(plan); err != nil {
+		return nil, err
+	}
 	if root != plan.ActivePath {
-		return nil, fmt.Errorf("pi active project package path differs")
+		return nil, fmt.Errorf("pi active package path differs")
 	}
 	if len(envelope.Manifest.Extensions) == 0 {
 		body, err := os.ReadFile(filepath.Join(root, "plugin.json"))
@@ -102,7 +121,7 @@ func (adapter *ProjectAdapter) ProjectActiveNative(ctx context.Context, root str
 	} else {
 		for _, name := range []string{"index.ts", "index.js", DescriptorName} {
 			if _, err := os.Lstat(filepath.Join(root, name)); err == nil {
-				return nil, fmt.Errorf("pi project Skills/MCP package unexpectedly became an extension")
+				return nil, fmt.Errorf("pi Skills/MCP package unexpectedly became an extension")
 			} else if !os.IsNotExist(err) {
 				return nil, err
 			}
@@ -112,7 +131,10 @@ func (adapter *ProjectAdapter) ProjectActiveNative(ctx context.Context, root str
 }
 
 func piProjectObjects(staging string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
-	layout := piProjectComponents(plan.NativeRegistryRoot)
+	layout, err := piComponents(plan.NativeRegistryRoot, plan.Scope)
+	if err != nil {
+		return nil, err
+	}
 	objects := make([]domain.NativeObjectOwnership, 0)
 	for _, component := range plan.Components {
 		if component.Support == domain.SupportUnsupported {
@@ -196,10 +218,14 @@ func piProjectServer(root, name string) (nativeconfig.Server, error) {
 	return server, nil
 }
 
-func piProjectOnlyNative(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
+func piScopedNative(objects []domain.NativeObjectOwnership, scope domain.InstallScope) []domain.NativeObjectOwnership {
+	skillKind, mcpKind := piUserSkillKind, piUserMCPKind
+	if scope == domain.ScopeProject {
+		skillKind, mcpKind = piProjectSkillKind, piProjectMCPKind
+	}
 	selected := make([]domain.NativeObjectOwnership, 0, len(objects))
 	for _, object := range objects {
-		if object.Kind == piProjectSkillKind || object.Kind == piProjectMCPKind {
+		if object.Kind == skillKind || object.Kind == mcpKind {
 			selected = append(selected, object)
 		}
 	}
