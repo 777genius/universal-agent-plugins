@@ -1,11 +1,15 @@
 package agentpluginscli
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -77,5 +81,32 @@ func TestSkillsReviewManagedSkillChanged(t *testing.T) {
 	}
 	if strings.Contains(refusal.Message, "secret plugin path") || !strings.Contains(refusal.Message, "edited outside UAP") {
 		t.Fatalf("unsafe or unhelpful managed-edits refusal: %+v", refusal)
+	}
+}
+
+// The public HTTPS and terminal paths reuse the same refusal adapter. A
+// provider error must never reach structured output with its private details.
+func TestSkillsPreparationRefusalJSONAndCancellation(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cause := fmt.Errorf("opaque-private-provider-detail: %w", installer.ErrForeignSkillDestination)
+	err := reportSkillsPreparationRefusal(cmd, &options{format: "json"}, &skillsCatalogSession{}, cause)
+	if err == nil {
+		t.Fatal("foreign destination was silently accepted")
+	}
+	var result struct{ Code, Message string }
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Code != "FOREIGN_DESTINATION" || strings.Contains(result.Message, "opaque-private-provider-detail") {
+		t.Fatalf("public preparation diagnostic was not safe: %+v", result)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	cmd.SetContext(ctx)
+	if err := reportSkillsPreparationRefusal(cmd, &options{format: "json"}, &skillsCatalogSession{}, cause); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled preparation unexpectedly emitted a review refusal: %v", err)
 	}
 }
