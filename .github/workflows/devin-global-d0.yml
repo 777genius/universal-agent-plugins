@@ -1,0 +1,296 @@
+name: Devin Global D0 genuine source and MCP call probe
+on:
+  push:
+    branches:
+      - feat/devin-global-components-20261104
+    paths:
+      - .github/workflows/devin-global-d0.yml
+permissions:
+  contents: read
+concurrency:
+  group: devin-global-d0-only
+  cancel-in-progress: true
+jobs:
+  native-d0:
+    name: Fail closed unless genuine Devin source and stdio/HTTP calls observed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Download hash-verified Devin and observe real native profile, Skills and MCP
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import hashlib
+          import io
+          import json
+          import os
+          import pathlib
+          import shutil
+          import signal
+          import subprocess
+          import sys
+          import tarfile
+          import tempfile
+          import time
+          import urllib.request
+          
+          # One-off, evidence-only D0 spike on a disposable GitHub-hosted Linux VM.
+          # This deliberately does not mutate UAP product code or claim client E2E.
+          ROOT = pathlib.Path(os.environ["RUNNER_TEMP"]) / "devin-global-d0"
+          ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
+          report = {"status": "BLOCKED", "commit": os.environ.get("GITHUB_SHA"),
+                    "platform": "linux-amd64", "qualified_product_e2e": False,
+                    "commands": [], "native_rpc_events": []}
+          archive_url = "https://static.devin.ai/cli/3000.11.205/devin-3000.11.205-x86_64-unknown-linux.tar.gz"
+          archive_sha = "2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4"
+          binary_sha = "642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4"
+          trace = ROOT / "mcp-events.jsonl"
+          http_process = None
+          
+          # The same inert, isolated MCP implementation serves stdio and Streamable HTTP.
+          # Every event is observed at the actual transport, NEVER injected by the harness.
+          service = r"""
+          import json, os, pathlib, sys
+          from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+          
+          def emit(origin, message):
+              method = message.get("method")
+              event = {"transport": origin, "method": method}
+              if method == "tools/call":
+                  event["name"] = (message.get("params") or {}).get("name")
+                  event["nonce"] = ((message.get("params") or {}).get("arguments") or {}).get("nonce")
+              with open(os.environ["UAP_D0_TRACE"], "a", encoding="utf-8") as stream:
+                  stream.write(json.dumps(event, sort_keys=True) + "\n")
+              if "id" not in message:
+                  return None
+              result = None
+              if method == "initialize":
+                  requested = ((message.get("params") or {}).get("protocolVersion") or "2025-03-26")
+                  result = {"protocolVersion": requested, "capabilities": {"tools": {}},
+                            "serverInfo": {"name": "uap-d0-inert", "version": "1.0.0"}}
+              elif method == "tools/list":
+                  result = {"tools": [{"name": "nonce_echo", "description": "Echo inert test nonce",
+                                       "inputSchema": {"type": "object", "properties": {"nonce": {"type": "string"}},
+                                                       "required": ["nonce"]}}]}
+              elif method == "tools/call":
+                  args = ((message.get("params") or {}).get("arguments") or {})
+                  result = {"content": [{"type": "text", "text": "UAP_D0_ECHO:" + str(args.get("nonce", ""))}]}
+              elif method == "ping":
+                  result = {}
+              if result is None:
+                  return {"jsonrpc": "2.0", "id": message["id"],
+                          "error": {"code": -32601, "message": "Method not found"}}
+              return {"jsonrpc": "2.0", "id": message["id"], "result": result}
+          
+          if sys.argv[1] == "stdio":
+              for line in sys.stdin:
+                  try:
+                      message = json.loads(line)
+                      reply = emit("stdio", message)
+                      if reply is not None:
+                          sys.stdout.write(json.dumps(reply, separators=(",", ":")) + "\n")
+                          sys.stdout.flush()
+                  except (ValueError, TypeError):
+                      continue
+          elif sys.argv[1] == "http":
+              class Handler(BaseHTTPRequestHandler):
+                  def log_message(self, *args):
+                      pass
+                  def do_POST(self):
+                      if self.path != "/mcp":
+                          self.send_error(404)
+                          return
+                      length = int(self.headers.get("Content-Length", "0"))
+                      if not 0 < length <= 65536:
+                          self.send_error(413)
+                          return
+                      try:
+                          message = json.loads(self.rfile.read(length))
+                          reply = emit("http", message)
+                      except (ValueError, TypeError):
+                          self.send_error(400)
+                          return
+                      raw = json.dumps(reply, separators=(",", ":")).encode() if reply else b""
+                      self.send_response(200 if reply else 202)
+                      self.send_header("Content-Type", "application/json")
+                      self.send_header("Content-Length", str(len(raw)))
+                      self.end_headers()
+                      if raw:
+                          self.wfile.write(raw)
+                  def do_GET(self):
+                      self.send_response(405)
+                      self.send_header("Allow", "POST")
+                      self.send_header("Content-Length", "0")
+                      self.end_headers()
+              server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+              server.daemon_threads = True
+              pathlib.Path(os.environ["UAP_D0_PORT_FILE"]).write_text(str(server.server_address[1]))
+              server.serve_forever()
+          """
+          
+          def sha256_file(path):
+              digest = hashlib.sha256()
+              with open(path, "rb") as source:
+                  for part in iter(lambda: source.read(1 << 20), b""):
+                      digest.update(part)
+              return digest.hexdigest()
+          
+          def run_native(binary, argv, cwd, env, seconds=16):
+              with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+                  proc = subprocess.Popen([str(binary), *argv], cwd=cwd, env=env,
+                                          stdin=subprocess.DEVNULL, stdout=out, stderr=err,
+                                          start_new_session=True)
+                  expired = False
+                  try:
+                      proc.wait(timeout=seconds)
+                  except subprocess.TimeoutExpired:
+                      expired = True
+                      os.killpg(proc.pid, signal.SIGKILL)
+                      proc.wait(timeout=5)
+                  out.seek(0)
+                  err.seek(0)
+                  stdout, stderr = out.read(65537), err.read(65537)
+              record = {"argv": argv, "project": pathlib.Path(cwd).name, "exit": proc.returncode,
+                        "timeout": expired, "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
+                        "stderr_sha256": hashlib.sha256(stderr).hexdigest(),
+                        "output_bounded": len(stdout) <= 65536 and len(stderr) <= 65536,
+                        "global_skill_in_stdout": b"uap-d0-global" in stdout,
+                        "stdio_name_in_stdout": b"uap_d0_stdio" in stdout,
+                        "http_name_in_stdout": b"uap_d0_http" in stdout,
+                        "auth_diagnostic": any(word in (stdout + stderr).lower()
+                                               for word in (b"login", b"sign in", b"authentication", b"not authenticated"))}
+              if argv == ["skills", "list", "--json"]:
+                  try:
+                      record["parseable_json"] = isinstance(json.loads(stdout), (dict, list))
+                  except (ValueError, UnicodeDecodeError):
+                      record["parseable_json"] = False
+              report["commands"].append(record)
+              return record
+          
+          try:
+              if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
+                  raise RuntimeError("requires a disposable GitHub-hosted runner")
+              report["archive_source"] = archive_url
+              with urllib.request.urlopen(archive_url, timeout=100) as response:
+                  payload = response.read(73679376)
+              if len(payload) != 73679375 or hashlib.sha256(payload).hexdigest() != archive_sha:
+                  raise RuntimeError("official Devin archive hash or length mismatch")
+              executable = ROOT / "devin"
+              with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
+                  item = archive.getmember("bin/devin")
+                  if not item.isfile() or item.size != 217494824:
+                      raise RuntimeError("official Devin executable member mismatch")
+                  with archive.extractfile(item) as source, executable.open("xb") as target:
+                      shutil.copyfileobj(source, target, 1 << 20)
+              if sha256_file(executable) != binary_sha:
+                  raise RuntimeError("official Devin executable SHA256 mismatch")
+              executable.chmod(0o700)
+              del payload
+              report["native_executable_sha256"] = binary_sha
+              report["archive_sha256"] = archive_sha
+          
+              home = ROOT / "home"
+              config = home / ".config"
+              global_root = config / "devin"
+              (global_root / "skills" / "uap-d0-global").mkdir(mode=0o700, parents=True)
+              (global_root / "skills" / "uap-d0-global" / "SKILL.md").write_text(
+                  "---\nname: uap-d0-global\ndescription: Disposable genuine Global Skill source observation\n---\n"
+                  "When explicitly requested, call both inert nonce_echo MCP tools.\n")
+              projects = [ROOT / "a", ROOT / "b"]
+              for project in projects:
+                  project.mkdir()
+                  (project / ".devin").mkdir()
+              (projects[0] / ".devin" / "skills" / "uap-d0-project").mkdir(parents=True)
+              (projects[0] / ".devin" / "skills" / "uap-d0-project" / "SKILL.md").write_text(
+                  "---\nname: uap-d0-project\ndescription: Project A-only scope control\n---\n"
+                  "Project A only.\n")
+              for name in ("data", "state", "cache"):
+                  (home / name).mkdir(parents=True)
+              service_path = ROOT / "mcp-service.py"
+              service_path.write_text(service)
+              service_path.chmod(0o600)
+              env = {"HOME": str(home), "XDG_CONFIG_HOME": str(config),
+                     "XDG_DATA_HOME": str(home / "data"), "XDG_STATE_HOME": str(home / "state"),
+                     "XDG_CACHE_HOME": str(home / "cache"), "PATH": "/usr/bin:/bin",
+                     "LANG": "C.UTF-8", "TERM": "dumb", "CI": "true",
+                     "UAP_D0_TRACE": str(trace), "UAP_D0_PORT_FILE": str(ROOT / "port.txt")}
+              http_process = subprocess.Popen([sys.executable, str(service_path), "http"],
+                                              cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
+                                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                              start_new_session=True)
+              for _ in range(60):
+                  if (ROOT / "port.txt").exists():
+                      break
+                  if http_process.poll() is not None:
+                      raise RuntimeError("inert HTTP MCP server terminated")
+                  time.sleep(0.1)
+              if not (ROOT / "port.txt").exists():
+                  raise RuntimeError("inert HTTP MCP server did not bind loopback")
+              port = int((ROOT / "port.txt").read_text())
+              entries = {"mcpServers": {
+                  "uap_d0_stdio": {"command": sys.executable,
+                                   "args": [str(service_path), "stdio"],
+                                   "env": {"UAP_D0_TRACE": str(trace)}},
+                  "uap_d0_http": {"url": "http://127.0.0.1:" + str(port) + "/mcp", "transport": "http"}}}
+              (global_root / "mcp_config.json").write_text(json.dumps(entries))
+              report["original_profile"] = {"home": str(home), "xdg_config_home": str(config),
+                                            "native_global_root": str(global_root),
+                                            "selected_executable": str(executable),
+                                            "project_a": str(projects[0]), "project_b": str(projects[1])}
+              version = run_native(executable, ["--version"], projects[0], env)
+              if version["exit"] != 0 or version["timeout"] or not version["output_bounded"]:
+                  raise RuntimeError("genuine Devin version probe failed")
+              for project in projects:
+                  run_native(executable, ["skills", "list", "--json"], project, env)
+                  run_native(executable, ["mcp", "list"], project, env)
+              for project in projects:
+                  run_native(executable, ["-p", "Use the global uap-d0-global skill. Call "
+                                          "mcp__uap_d0_stdio__nonce_echo with nonce STDIO_D0_20261104, "
+                                          "then call mcp__uap_d0_http__nonce_echo with nonce HTTP_D0_20261104. "
+                                          "Report the two exact tool results; do not call any other tool."],
+                             project, env, seconds=35)
+              if trace.exists():
+                  for line in trace.read_text().splitlines()[:512]:
+                      event = json.loads(line)
+                      if event.get("transport") in ("stdio", "http") and event.get("method") in (
+                              "initialize", "tools/list", "tools/call", "notifications/initialized", "ping"):
+                          report["native_rpc_events"].append(event)
+              observed = report["native_rpc_events"]
+              source = [c for c in report["commands"] if c["argv"] == ["skills", "list", "--json"]]
+              checks = {"global_source_A_B": len(source) == 2 and all(
+                            c["exit"] == 0 and c.get("parseable_json") and c["global_skill_in_stdout"] for c in source)}
+              for transport, nonce in (("stdio", "STDIO_D0_20261104"), ("http", "HTTP_D0_20261104")):
+                  methods = {e["method"] for e in observed if e["transport"] == transport}
+                  calls = [e for e in observed if e["transport"] == transport and e["method"] == "tools/call"]
+                  checks[transport + "_initialize_list_call"] = {"initialize", "tools/list", "tools/call"} <= methods and any(
+                      c.get("name") == "nonce_echo" and c.get("nonce") == nonce for c in calls)
+              report["gates"] = checks
+              if all(checks.values()):
+                  report["status"] = "D0_NATIVE_SOURCE_AND_CALL_OBSERVED"
+              else:
+                  report["blocked_reason"] = "genuine Devin-driven source and both MCP transport calls were not all observed"
+          except Exception as exc:
+              report["blocked_reason"] = type(exc).__name__ + ": " + str(exc)[:240]
+          finally:
+              if http_process is not None and http_process.poll() is None:
+                  os.killpg(http_process.pid, signal.SIGKILL)
+                  http_process.wait(timeout=5)
+              (ROOT / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+              print(json.dumps({"status": report["status"], "gates": report.get("gates"),
+                                "blocked_reason": report.get("blocked_reason"),
+                                "commit": report["commit"]}, sort_keys=True))
+          sys.exit(0 if report["status"] == "D0_NATIVE_SOURCE_AND_CALL_OBSERVED" else 1)
+          PYTHON
+
+      - name: Retain exact-head negative or positive proof
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: devin-global-d0-native-transport
+          path: ${{ runner.temp }}/devin-global-d0/report.json
+          if-no-files-found: warn
+          retention-days: 14
