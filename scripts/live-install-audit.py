@@ -667,10 +667,12 @@ def main():
     cases = doc["plugin_aliases"] if args.kind == "plugin" else doc["skills"]
     selected = cases[:args.limit]
     source_sha = os.environ.get("GITHUB_SHA", "")
+    pr_head_sha = os.environ.get("AUDIT_PR_HEAD_SHA", "")
     workflow_run = os.environ.get("GITHUB_RUN_ID", "")
     report = {"checked_at": datetime.now(timezone.utc).isoformat(),
               "target": args.target, "kind": args.kind, "cli": args.cli,
               "github_sha": source_sha if re.fullmatch(r"[a-f0-9]{40}", source_sha) else None,
+              "pr_head_sha": pr_head_sha if re.fullmatch(r"[a-f0-9]{40}", pr_head_sha) else None,
               "github_run_id": workflow_run if workflow_run.isdigit() else None,
               "fixture_sha256": hashlib.sha256(FIXTURES.read_bytes()).hexdigest(),
               "platform": sys.platform, "architecture": platform.machine(),
