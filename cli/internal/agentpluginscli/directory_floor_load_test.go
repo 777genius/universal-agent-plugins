@@ -10,7 +10,7 @@ import (
 
 type scopedFloorTestStore struct {
 	state domain.StateFileV2
-	err error
+	err   error
 }
 
 func (s scopedFloorTestStore) Load() (domain.StateFileV2, error) { return s.state, s.err }
