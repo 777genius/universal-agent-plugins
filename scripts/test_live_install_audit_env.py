@@ -1157,7 +1157,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         audit = load_audit()
         failed = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
                   "timeout": False, "_json": {"data": {"installations": []}}}
-        fixture = {"name": "frontend-design", "source": "unused"}
+        fixture = {"name": "frontend-design", "source": "unused",
+                   "skill_md_git_blob_sha1": "0" * 40}
         with (TemporaryDirectory() as temporary,
               patch.object(audit, "call", return_value=failed),
               patch.object(audit, "initialize_kimi_project_git_root") as initialize):
