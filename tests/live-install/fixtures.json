@@ -310,5 +310,196 @@
     "github:cometchat/cometchat-skills@8652f1ea41d12e5058123db1e4e6babef9c918f1": "cometchat-skills",
     "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e": "uizze-ui-slop",
     "github:workato-devs/recipe-skills@afa1e729a013061c7b328271fadcdf240091cf3c": "recipe-skills"
+  },
+  "signed_release_pins": {
+    "atlassian": {
+      "distribution": "777genius/atlassian",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/atlassian",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:61e9343e636c6197067504b59b1a77c5466bad2ca97b59aacd5455d4c5301d7a",
+      "manifest_digest": "sha256:e83ade754f1251554622e4b48d596ebf72510bd7292b19a7793df4de8e546d04"
+    },
+    "context7": {
+      "distribution": "upstash/context7",
+      "repository": "upstash/context7",
+      "path": "plugins/agent-plugins/context7",
+      "revision": "769c6cd22c3d95462d1f55d789e9532cabefa5a9",
+      "sequence": 1,
+      "tree_digest": "sha256:08eed3b67f2e71a11b68baa594380c2f69ec1bc97584d701deaf7942ac34c0d8",
+      "manifest_digest": "sha256:d01781acd899aefa9445a290cf43a481230321934d62f9c8a2aab06a89718236"
+    },
+    "777genius/chrome-devtools-bridge": {
+      "distribution": "777genius/chrome-devtools-bridge",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/chrome-devtools",
+      "revision": null,
+      "sequence": 3,
+      "tree_digest": "sha256:b1ff05c14b80f38f2c71961f60540f6e55072cd09c2c828cdeb2df445b5a1bcc",
+      "manifest_digest": "sha256:d14e6529884e7f57d1a2ac6280baef1f3bd052aa3080f9c62ea8458c89b70a90"
+    },
+    "cloudflare": {
+      "distribution": "777genius/cloudflare-bridge",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/cloudflare",
+      "revision": null,
+      "sequence": 1,
+      "tree_digest": "sha256:29e6dee60be2acf06370ed182de228f101eb5d643809b87019d84e1b27f3408b",
+      "manifest_digest": "sha256:ed0c1776a5ff085de37447f8f0c28ed04148dce47c7dffabb550b08989e97465"
+    },
+    "docker-hub": {
+      "distribution": "777genius/docker-hub",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/docker-hub",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:5388e4d24222d40c57337f2d4a65559c70e34ecfd803cfe7fd41268ef722e3ba",
+      "manifest_digest": "sha256:413347fe45d0dbcbd5b4d5cf88eb7e0ec5c0cd080486ea4cb8c3f61f0bd7a95d"
+    },
+    "figma": {
+      "distribution": "777genius/figma",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/figma",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:3c8672413b34e3570c16bc3a31d8ca77da25d5e7ef302608c9c11da3d8c8a1a8",
+      "manifest_digest": "sha256:67fbfd8062a7f3d965ee63cc68f392a6afb1e8861e3bcc5fe1f70e7e9fadabba"
+    },
+    "firebase": {
+      "distribution": "777genius/firebase",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/firebase",
+      "revision": null,
+      "sequence": 7,
+      "tree_digest": "sha256:54db4f001002190ef47800795229bb8674409ba44b6ef05a7f07aacad43e5eaa",
+      "manifest_digest": "sha256:d7673ee02e5ffdd6efa929ce437c769f56afb4a85fb9fdb2e5cb7f6179813019"
+    },
+    "firecrawl": {
+      "distribution": "777genius/firecrawl-bridge",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/firecrawl",
+      "revision": null,
+      "sequence": 1,
+      "tree_digest": "sha256:a99ca95c810a29494ab55e6a1b827d88b89f27a3572f10e7918098914d1570ad",
+      "manifest_digest": "sha256:5dd4a55467b3149a3cd253b465796b1f021d66eab9244b8faed627b0209f4bf6"
+    },
+    "github": {
+      "distribution": "github/github",
+      "repository": "github/github-mcp-server",
+      "path": "agent-plugin",
+      "revision": "59847fb6204b276dcdbe10eaf14ebe3a73176948",
+      "sequence": 1,
+      "tree_digest": "sha256:277d1d6ac82febff8dcb43808f158308f04f57eb03f9621163bd0d1941d8e7a0",
+      "manifest_digest": "sha256:4500bfe9a78f736c0300fde137595bc47d16582b12727aef062eb0f2b86735f1"
+    },
+    "gitlab": {
+      "distribution": "777genius/gitlab",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/gitlab",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:ed37827bf8a1c65a36d6f2983ad9e8f7712f25669bd869970b221dbea3b862c2",
+      "manifest_digest": "sha256:1a181fab20d9520f5f006f4237e88d67cf58d29b9994dbc45ee4c80d2474e080"
+    },
+    "greptile": {
+      "distribution": "777genius/greptile",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/greptile",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:91f27a0beb56a229d213f88dc343d4b7a53a54d189b568f0e98aa119884a620e",
+      "manifest_digest": "sha256:05b29500564aede5274a6d21c0cf5bb4727e995045b04de170913b7ef2ae07bb"
+    },
+    "heroku": {
+      "distribution": "777genius/heroku",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/heroku",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:b8bf38abe09ad00b1368772a680f60586903113bd13535d643151487c67abb8e",
+      "manifest_digest": "sha256:5b7c088e290ed04b0eafe0275dc806e7c2153dd7cbe6b74d1c5f1d2961e9355a"
+    },
+    "linear": {
+      "distribution": "777genius/linear",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/linear",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:6d74545875e84110fc490981e72527e05e891ed0a67033a716184fb507001978",
+      "manifest_digest": "sha256:0b8ed223c21d206d802130ace7219b5c78af1903675640cc77f5195e4f86ef70"
+    },
+    "marketing-kit": {
+      "distribution": "777genius/marketing-kit",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/marketing-kit",
+      "revision": null,
+      "sequence": 1,
+      "tree_digest": "sha256:8918c0f0222bd735fd0eef3cacf90b5a9351fb213483d1558a65b9911624e68a",
+      "manifest_digest": "sha256:40b18a6b33c6392134aff7beafb9a91eaeecf46ce765e0e888cdc743dd284ea2"
+    },
+    "neon": {
+      "distribution": "777genius/neon",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/neon",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:eda9ec7ba831b2c6bd689ed57d0862bfe31903fcfbf82410bf8f2c6a3fa2e81a",
+      "manifest_digest": "sha256:6787894c7d3e033db05deee5e36358caf387493a98a78716d6db4b343e9c0698"
+    },
+    "notion": {
+      "distribution": "777genius/notion",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/notion",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:860fa6dd1830d0da2b8fed38195fa6ad6307082ac12d708118e5eb1c5d10f9b7",
+      "manifest_digest": "sha256:bbab30a4f062218d7a5fce2f6c818680d3c7adfaebdbaa3e523e15942a2f57e5"
+    },
+    "playwright": {
+      "distribution": "777genius/playwright-bridge",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/playwright",
+      "revision": null,
+      "sequence": 2,
+      "tree_digest": "sha256:ff3c74bb5760fea47003130f3984d48234892330325a7cad35a7bc973acc9cf6",
+      "manifest_digest": "sha256:8419b5c9e67894c2312048c4fe30e3ea920d00101d02641230183dd7ab4d3b31"
+    },
+    "sentry": {
+      "distribution": "777genius/sentry",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/sentry",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:cf7816d17894eb8f42db2587eef1ce2a31a145188879545414f840eaa477c5da",
+      "manifest_digest": "sha256:7606b1f8af700ea76590f0ae586ff8586f4dc370f536ceedbeab8d934494e42e"
+    },
+    "stripe": {
+      "distribution": "777genius/stripe",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/stripe",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:37867106f65c2acb5f5c64bebe4e5ce61f7e73dbb05f7d94d2f398dc913833fe",
+      "manifest_digest": "sha256:e70885fda5a4ce50c302891229e204bbf22904ec3f227670e5916d69f9b8b80d"
+    },
+    "supabase": {
+      "distribution": "777genius/supabase",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/supabase",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:4605084fd9f2f773c8eafa3741b31f639f5f5a8771320d8a7a91f5a5e1db1034",
+      "manifest_digest": "sha256:bb0672e8cd411b1c8e0872a5f7f0abc95f9c68f008802d42a2cd16a689deeb11"
+    },
+    "vercel": {
+      "distribution": "777genius/vercel",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/vercel",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:d5089e23eccc6fe58e82be33512e25d0ee523d61f21fa42ff1e0f5bc4bad6c9c",
+      "manifest_digest": "sha256:23f7cd28573c4ab10943178db05a47f2af3639518a334449c23d89b19562ef74"
+    }
   }
 }
