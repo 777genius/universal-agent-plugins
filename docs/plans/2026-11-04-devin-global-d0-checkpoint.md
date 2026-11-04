@@ -1,9 +1,11 @@
 # Devin Global D0: source/runtime gate and exact-profile authority
 
-2026-11-04. **BLOCKED — not a native Global E2E PASS.** This is an evidence
+2026-11-04. **PARTIAL source observation / BLOCKED runtime — not a native Global E2E PASS.** This is an evidence
 checkpoint for [#710](https://github.com/777genius/universal-agent-plugins/pull/710),
 not a change to the already reviewed implementation plan. Do not grant
 Windsurf-wide user Skills/MCP support or merge based on this note.
+
+Current 2026-11-04 audit: leaf head `ad6d5b85593b7320d64032d77b2ac65a6459ae51`, moving main `71565b1c2e6422f5841fe38b1db1f3c3fe9ceed3`; #698 `b7c335bfb06c1c2435916ec6f08a829b9bd7c7c3`, #704 merged as `a9c73541f7f5ce97a60578a31f16ec03d87565c2`, #707 `638601da9545f056d2202672a39581ba14e61249`. These are observed only, not integration bases. Read `AGENTS.md` and recheck all refs on any future code edit.
 
 ## Repository snapshot (recheck before edits)
 
@@ -21,28 +23,63 @@ Read before any product code: `AGENTS.md`, the accepted leaf plan,
   These are observation SHAs, **not** integration baselines to silently overwrite.
   #707 remains first main-merge priority.
 
-## What is genuinely established vs missing
+## Actual D0 execution — fixed Linux source evidence, blocked runtime
 
-The prior retained
-[project evidence](project-install-e2e/windsurf-devin-implementation-evidence.md)
-records an actual official Linux x86_64 archive for Devin `3000.11.205`
-(archive SHA-256
-`2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4`,
-extracted binary SHA-256
-`642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4`)
-and bounded, credential-free real `--version`/help execution. Its observed output
-was `devin 3000.11.205 (6dea39440ae3)`. This is **historical version/format
-evidence only**, not proof of current Global selection, source discovery, MCP
-handshake, tool calls, or an executable available in the present runtime.
+[One-shot GitHub Actions run #41874306904](https://github.com/777genius/universal-agent-plugins/actions/runs/41874306904)
+ran on **Ubuntu 24.04, linux-amd64** against exact branch HEAD
+`ad6d5b85593b7320d64032d77b2ac65a6459ae51` (2026-11-04 17:17 UTC).
+The job's final state is **failure by design**, not flaky/green:
+[retained JSON report (artifact #13345563632)](https://github.com/777genius/universal-agent-plugins/actions/runs/41874306904/artifacts/13345563632);
+artifact digest
+`sha256:7a1e99287a7bce868dbb789f4cbf3bc02ab5e74c065edfb5b61b9b64079508a6`.
+The report explicitly has `qualified_product_e2e=false` and `native_rpc_events=[]`.
 
-This run inspected the connected repository and the original evidence, but the
-current isolated execution host has **no `devin` executable** and cannot resolve
-github.com to obtain a binary. No genuine `devin skills list --json`,
-`devin mcp list/get`, source discovery, Devin-driven
-`initialize` / `tools/list` / `tools/call` or remote Streamable HTTP
-interaction has been executed. These stages are **BLOCKED / NOT OBSERVED**;
-existing inert collectors, direct RPC to a test server, test fixtures and
-green plan-only CI must not be promoted to native success.
+- **Binary/provenance observed:** genuine official Linux x86_64 archive
+  `3000.11.205` from `static.devin.ai`, archive SHA-256
+  `2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4`,
+  extracted executable SHA-256
+  `642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4`.
+  The real `--version` completed with exit 0; historical native output
+  is `devin 3000.11.205 (6dea39440ae3)`. The selected executable was
+  the verified `<RUNNER_TEMP>/devin-global-d0/devin` in an isolated host.
+  No evidence was obtained for Windows/macOS versions in **this** run.
+- **Offline native source discovery observed:** genuine
+  `devin skills list --json` exited 0, returned parseable JSON and named
+  `uap-d0-global` in both independent Project A and cold Project B.
+  `devin mcp list` exited 0 and listed *both* configured names
+  `uap_d0_stdio` and `uap_d0_http` in both projects.
+  This proves CLI-visible listings from original disposable
+  `HOME/.config/devin`, **not** native initialization of either MCP
+  connection, correct effective override source for all cases, a loaded Skill
+  in a model session, or an installed UAP component/receipt lifecycle.
+- **Agent source/call is BLOCKED:** the two authentic `devin -p`
+  invocations (A/B) each exited 1 with `auth_diagnostic=true`.
+  Neither configured inert MCP endpoint received even `initialize`;
+  `tools/list` and `tools/call` are equally **not observed**.
+  Both transport gates are false. No authentication token was injected,
+  an alternate provider impersonated, or harness RPC mistaken for a Devin call.
+
+The official [Commands & Flags](https://docs.devin.ai/cli/reference/commands)
+document `skills list`, `mcp list/get`, `auth status/login` and
+non-interactive `-p`, but **no supported offline MCP tool-call command**.
+[MCP overview](https://docs.devin.ai/cli/extensibility/mcp/overview)
+describes connections and tool execution by the agent; the
+[configuration reference](https://docs.devin.ai/cli/extensibility/mcp/configuration)
+confirms stdio and Streamable HTTP configs, not standalone `tools/call`.
+The [Devin auth guide](https://docs.devin.ai/cli/enterprise/devin-auth)
+describes credentialed account access; `credentials.toml` is a secret and must
+not be collected/copied from the user or committed. No documented native/offline
+alternative was verified as of this checkpoint. `mcp list/get` will not
+be relabelled an RPC test, and ACP/editor integration will not be expanded into
+an invented provider framework.
+
+**Remaining prerequisite, not waived:** user-approved authenticable native
+Devin CLI environment/provider plus exact host/profile/source provenance, then
+client-driven `initialize`, `tools/list`, `tools/call` with inert stdio+HTTP
+servers in the mixed A/B Global+Project cycle. Before that, this leaf stays
+draft, *no new user capability or production edit*, no independent post-code
+approval, no merge and no release. The original one-shot D0 workflow only runs
+when its own workflow file changes; do not dispatch a duplicate run.
 
 ## Confirmed design collision in current adapter
 
