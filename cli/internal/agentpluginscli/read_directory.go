@@ -41,10 +41,11 @@ type publicEvidence struct {
 }
 
 type publicTargetCompatibility struct {
-	Client   domain.ClientID       `json:"client"`
-	Scopes   []domain.InstallScope `json:"scopes"`
-	Delivery string                `json:"delivery"`
-	Evidence []string              `json:"evidence,omitempty"`
+	Client           domain.ClientID                   `json:"client"`
+	Scopes           []domain.InstallScope             `json:"scopes"`
+	Delivery         string                            `json:"delivery"`
+	Evidence         []string                          `json:"evidence,omitempty"`
+	CanonicalClosure *domain.DirectoryCanonicalClosure `json:"canonical_closure,omitempty"`
 }
 
 type publicDistribution struct {
@@ -276,14 +277,17 @@ func inspectDistribution(snapshot domain.DirectorySnapshot, product domain.Direc
 		for _, target := range policy.Targets {
 			scopes := append([]domain.InstallScope(nil), target.Scopes...)
 			evidenceIDs := evidenceIDsForClient(snapshot, id, release.Sequence, target.Client)
+			var canonical *domain.DirectoryCanonicalClosure
 			if snapshot.SnapshotSchemaVersion == 2 {
-				// V2 grants are scoped individually; evidence from another
-				// grant for the same client must not appear under this scope.
+				// Scoped v2 evidence and signed closure belong to this exact
+				// grant; never infer either from another client or legacy v1.
 				scopes = []domain.InstallScope{target.Scope}
 				evidenceIDs = evidenceIDsForV2Grant(snapshot, policy, target)
+				canonical = target.CanonicalClosure
 			}
 			result.Targets = append(result.Targets, publicTargetCompatibility{
 				Client: target.Client, Scopes: scopes, Delivery: target.Delivery, Evidence: evidenceIDs,
+				CanonicalClosure: canonical,
 			})
 		}
 	}

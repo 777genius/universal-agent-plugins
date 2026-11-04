@@ -315,7 +315,8 @@ func TestPublicDirectoryV2ScopesDoNotBorrowAnotherGrantEvidence(t *testing.T) {
 				CurrentEvidence: []string{"schema-pass", "cursor-policy-runtime", "project-policy-materialization"},
 				Targets: []domain.DirectoryTarget{
 					{Client: domain.ClientCodex, Scope: domain.ScopeUser, CurrentEvidence: []string{"user-runtime"}},
-					{Client: domain.ClientCodex, Scope: domain.ScopeProject, CurrentEvidence: []string{"project-runtime"}},
+					{Client: domain.ClientCodex, Scope: domain.ScopeProject, CurrentEvidence: []string{"project-runtime"},
+						CanonicalClosure: &domain.DirectoryCanonicalClosure{Eligible: false}},
 				},
 			}},
 		}},
@@ -345,5 +346,29 @@ func TestPublicDirectoryV2ScopesDoNotBorrowAnotherGrantEvidence(t *testing.T) {
 		if proof.ID == "project-runtime" && proof.Scope != domain.ScopeProject {
 			t.Fatalf("public evidence omitted its verified scope: %+v", proof)
 		}
+	}
+	if result.Targets[0].CanonicalClosure != nil ||
+		result.Targets[1].CanonicalClosure == nil || result.Targets[1].CanonicalClosure.Eligible {
+		t.Fatalf("v2 signed ineligible project closure was hidden or borrowed: %+v", result.Targets)
+	}
+	var output bytes.Buffer
+	if err := writeJSONOutput(&output, "directory-v2-test", result); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(output.String(), `"canonical_closure":{"eligible":false}`) != 1 {
+		t.Fatalf("v2 public output lost exact ineligible project closure: %s", output.String())
+	}
+	legacy := snapshot
+	legacy.SnapshotSchemaVersion = 1
+	legacyResult := inspectDistribution(legacy, domain.DirectoryProduct{DefaultDistribution: id}, id, 7)
+	if legacyResult.Targets[0].CanonicalClosure != nil || legacyResult.Targets[1].CanonicalClosure != nil {
+		t.Fatal("v1 output unexpectedly adopted v2 closure authority")
+	}
+	output.Reset()
+	if err := writeJSONOutput(&output, "directory-v1-test", legacyResult); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(output.String(), "canonical_closure") {
+		t.Fatalf("v1 public contract leaked v2 closure: %s", output.String())
 	}
 }
