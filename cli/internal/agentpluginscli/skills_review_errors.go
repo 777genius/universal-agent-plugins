@@ -20,7 +20,7 @@ func (s *skillsCatalogSession) reviewRefusal(err error) error {
 	case errors.Is(err, installer.ErrAssessmentRejected):
 		refusal.Code = "SECURITY_REVIEW_BLOCKED"
 		refusal.Message = "Automated security assessment blocked this selection. Remove this Skill or inspect its security findings before reviewing again."
-	case errors.Is(err, nativeconfig.ErrCollision), errors.Is(err, nativeconfig.ErrNotOwned):
+	case errors.Is(err, installer.ErrForeignSkillDestination), errors.Is(err, nativeconfig.ErrCollision), errors.Is(err, nativeconfig.ErrNotOwned):
 		refusal.Code = "FOREIGN_DESTINATION"
 		refusal.Message = "A selected client already has an entry at this destination that UAP does not own or can no longer verify. Inspect the existing entry, rename or remove it yourself, then prepare a new review. UAP will not overwrite it."
 	case errors.Is(err, installer.ErrManagedSkillChanged):
