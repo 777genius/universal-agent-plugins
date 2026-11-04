@@ -331,6 +331,32 @@ func TestResolveDirectoryProjectCopilotDoesNotBorrowUserBackend(t *testing.T) {
 	}
 }
 
+func TestResolveDirectoryV2SequenceOneRejectsLegacyUnsignedEvidence(t *testing.T) {
+	// Sequence 1 is deliberately valid in v2, but no longer authorizes
+	// schema-1 legacy evidence without an explicit trust object.
+	base := testDirectory()
+	base.SnapshotSchemaVersion = 2
+	base.Sequence = 1
+	for i := range base.Distributions[2].ReleasePolicies {
+		base.Distributions[2].ReleasePolicies[i].Targets[0].Scope = ScopeUser
+		base.Distributions[2].ReleasePolicies[i].Targets[0].Scopes = nil
+	}
+	for i := range base.Evidence {
+		base.Evidence[i].Trust = nil
+		base.Evidence[i].ProductID = base.Distributions[2].ProductID
+		base.Evidence[i].ManifestDigest = base.Distributions[2].Releases[i].ManifestDigest
+		base.Evidence[i].SourceRepository = base.Distributions[2].Releases[i].PackageSource.Repository
+		base.Evidence[i].SourceRevision = base.Distributions[2].Releases[i].PackageSource.Revision
+		base.Evidence[i].SourcePath = base.Distributions[2].Releases[i].PackageSource.Path
+	}
+	if directoryTrustedEligibilityEvidence(base, base.Evidence[0]) {
+		t.Fatal("v2 sequence 1 was treated as historical untrusted v1 evidence")
+	}
+	if _, err := ResolveDirectory(base, request("owner/tool", ClientCodex)); !errors.Is(err, ErrDirectoryIneligible) {
+		t.Fatalf("v2 upstream release accepted legacy evidence without trust: %v", err)
+	}
+}
+
 func TestResolveDirectoryScopeSpecificGrantsFloorAndEvidence(t *testing.T) {
 	release := testRelease(1, "1.0.0")
 	policy := testPolicy(1, ClientCodex)

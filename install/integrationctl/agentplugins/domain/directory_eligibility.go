@@ -13,6 +13,16 @@ func directoryEligibilityTargets(targets []ClientID, scope InstallScope) []Clien
 	return uniqueClients(complete)
 }
 
+// directoryTrustedEligibilityEvidence keeps v1's historical sequence cutover
+// independent from the new v2 sequence space. A v2 sequence 1 is not v1's
+// historical legacy-evidence lane: it must carry explicit signed provenance.
+func directoryTrustedEligibilityEvidence(snapshot DirectorySnapshot, evidence DirectoryEvidence) bool {
+	if snapshot.SnapshotSchemaVersion == 2 {
+		return evidence.HasTrustedEligibilityProvenance()
+	}
+	return evidence.HasTrustedEligibilityProvenanceAtSequence(snapshot.Sequence)
+}
+
 // hasPassedUpstreamMaterialization is the static promotion/package gate. Its
 // environment dimensions describe the isolated promotion run and must not be
 // mistaken for evidence about the caller's local environment.
@@ -23,7 +33,7 @@ func hasPassedUpstreamMaterialization(snapshot DirectorySnapshot, distribution D
 	}
 	for _, evidenceID := range evidenceIDs {
 		evidence := evidenceByID(snapshot, evidenceID)
-		if evidence != nil && evidence.HasTrustedEligibilityProvenanceAtSequence(snapshot.Sequence) && evidence.DistributionID == distribution.ID && evidence.ReleaseSequence == release.Sequence &&
+		if evidence != nil && directoryTrustedEligibilityEvidence(snapshot, *evidence) && evidence.DistributionID == distribution.ID && evidence.ReleaseSequence == release.Sequence &&
 			evidence.PackageTreeDigest == release.TreeDigest && evidence.Client == client && evidence.Level == "materialization" && evidence.Outcome == "passed" &&
 			(scope == ScopeProject && evidence.Scope == ScopeProject || scope == ScopeUser && (evidence.Scope == "" || evidence.Scope == ScopeUser)) {
 			return true
