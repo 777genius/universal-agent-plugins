@@ -312,10 +312,17 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         node = {"name": "atlassian", "installation_id": "valid-id",
                 "source": "777genius/atlassian", "directory": directory,
                 "clients": [verified]}
+        pins = {"atlassian": {
+            "distribution": "777genius/atlassian",
+            "repository": "777genius/universal-agent-plugins",
+            "path": "plugins/atlassian", "revision": "a" * 40,
+            "sequence": 1, "tree_digest": "sha256:" + "b" * 64,
+            "manifest_digest": "sha256:" + "c" * 64,
+        }}
         def matching():
             return audit.matching_installations(
                 {"data": {"installations": [node]}}, "atlassian", "codex",
-                "plugin", "atlassian",
+                "plugin", "atlassian", pins,
             )
         self.assertEqual(len(matching()), 1)
         for key, value in (("resolved_revision", "d" * 40),
@@ -335,6 +342,77 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertEqual(matching(), [])
         node["clients"] = [dict(verified, client_id="grok")]
         self.assertEqual(matching(), [])
+
+    def test_signed_release_rejects_forged_source_even_when_self_consistent(self):
+        audit = load_audit()
+        pin = {
+            "distribution": "777genius/atlassian",
+            "repository": "777genius/universal-agent-plugins",
+            "path": "plugins/atlassian", "revision": "a" * 40,
+            "sequence": 1, "tree_digest": "sha256:" + "b" * 64,
+            "manifest_digest": "sha256:" + "c" * 64,
+        }
+        directory = {"product_id": "atlassian", "recorded_distribution": pin["distribution"],
+                     "recorded_revision": pin["revision"], "recorded_release_sequence": 1}
+        revision = {"distribution_id": pin["distribution"], "resolved_revision": pin["revision"],
+                    "release_sequence": 1, "tree_digest": pin["tree_digest"],
+                    "manifest_digest": pin["manifest_digest"]}
+        record = {"name": "atlassian", "installation_id": "proof",
+                  "source": pin["distribution"], "directory": directory,
+                  "clients": [{"client_id": "codex", "verification": "installation_verified",
+                               "package_revision": revision}]}
+        def qualify():
+            return audit.matching_installations(
+                {"data": {"installations": [record]}}, "atlassian", "codex",
+                "plugin", "atlassian", {"atlassian": pin})
+        self.assertEqual(len(qualify()), 1)
+        for fake in ("evil/atlassian-fork", None):
+            record["source"] = fake
+            self.assertEqual(qualify(), [])
+        record["source"] = pin["distribution"]
+        original = record["directory"]
+        record["directory"] = dict(original, recorded_revision="d" * 40)
+        record["clients"][0]["package_revision"] = dict(
+            revision, resolved_revision="d" * 40)
+        self.assertEqual(qualify(), [])
+        record["directory"] = original
+        record["clients"][0]["package_revision"] = dict(
+            revision, tree_digest="sha256:" + "d" * 64)
+        self.assertEqual(qualify(), [])
+        self.assertEqual(audit.matching_installations(
+            {"data": {"installations": [record]}}, "atlassian", "codex",
+            "plugin", "atlassian"), [])
+
+    def test_frozen_inventory_requires_pins_and_null_revision_is_unqualified(self):
+        import json
+        audit = load_audit()
+        doc = json.loads(audit.FIXTURES.read_text())
+        audit.validate_fixtures(doc)
+        self.assertEqual(len(doc["signed_release_pins"]), 21)
+        missing = json.loads(json.dumps(doc))
+        del missing["signed_release_pins"]["atlassian"]
+        with self.assertRaisesRegex(ValueError, "Missing frozen Registry"):
+            audit.validate_fixtures(missing)
+        null_pin = doc["signed_release_pins"]["cloudflare"]
+        self.assertIsNone(null_pin["revision"])
+        node = {"name": "cloudflare", "source": null_pin["distribution"],
+                "installation_id": "unqualified",
+                "directory": {"product_id": "cloudflare",
+                              "recorded_distribution": null_pin["distribution"],
+                              "recorded_revision": "a" * 40,
+                              "recorded_release_sequence": null_pin["sequence"]},
+                "clients": [{"client_id": "claude",
+                             "verification": "installation_verified",
+                             "package_revision": {
+                                 "distribution_id": null_pin["distribution"],
+                                 "resolved_revision": "a" * 40,
+                                 "release_sequence": null_pin["sequence"],
+                                 "tree_digest": null_pin["tree_digest"],
+                                 "manifest_digest": null_pin["manifest_digest"]}}]}
+        self.assertEqual(audit.matching_installations(
+            {"data": {"installations": [node]}}, "cloudflare", "claude",
+            "plugin", "cloudflare", doc["signed_release_pins"]), [])
+
 
     def test_direct_git_revision_must_belong_to_verified_client(self):
         audit = load_audit()
