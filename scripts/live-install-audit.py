@@ -782,6 +782,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
         except (KeyError, TypeError):
             pass
     old_ids = {entry["installation_id"] for entry in matching}
+    # A successful remove must not re-register this identity under a new ID.
+    post_remove_identity_registered = bool(
+        post_list_schema_valid and has_target_registration(post_list_json, identity, target))
     post_lock_pinned = bool(kind == "skill" and (project / "uap.lock").exists()
                             and locked_skill_is_pinned(project, item, target))
     unsafe_paths = [path for path, digest in changed
@@ -811,6 +814,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
+        and not post_remove_identity_registered
         and not native_residuals
         and (kind != "skill" or (post_removal_skill is None
                                   and not post_removal_leftovers and not post_lock_pinned))
@@ -870,6 +874,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
             "removal_verified": removal_verified, "native_residuals": native_residuals,
             "retained_passive_native_files": sorted(set(passive_retained)),
             "post_list_schema_valid": post_list_schema_valid,
+            "post_remove_identity_registered": post_remove_identity_registered,
             "sentinels_preserved": sentinels_preserved}
 
 
