@@ -328,7 +328,11 @@ func assertNativeCanaryAbsentFromObservedFiles(t *testing.T, root, canary string
 		}
 		for _, needle := range needles {
 			if bytes.Contains(body, needle) {
-				return fmt.Errorf("synthetic canary persisted in observed fixture file")
+				rel, relErr := filepath.Rel(root, path)
+				if relErr != nil {
+					return fmt.Errorf("synthetic canary detected but fixture path attribution failed")
+				}
+				return fmt.Errorf("synthetic canary persisted in observed fixture file %q", filepath.ToSlash(rel))
 			}
 		}
 		return nil
