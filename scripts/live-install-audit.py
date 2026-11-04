@@ -1130,9 +1130,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         status = "manual-setup-prepared"
     elif installed and removal_verified and sentinels_preserved and repeat_verified:
         status = ("package-installed-native-unqualified" if (
-                       kind == "plugin" and not native_attribution
-                       and not (target == "qoder" and qoder_native_before_remove is not None
-                                and qoder_native_before_remove["status"] == "registered"))
+                       kind == "plugin" and (
+                           (target == "qoder" and
+                            (qoder_native_before_remove is None or
+                             qoder_native_before_remove["status"] != "registered"))
+                           or (target != "qoder" and not native_attribution)))
                   else "prepared-lifecycle-passed" if prepared_binding else "passed")
     elif installed and cleanup and "external removal requires explicit attestation" in (
             cleanup.get("stderr_tail", "") + cleanup.get("stdout_tail", "")).lower():
