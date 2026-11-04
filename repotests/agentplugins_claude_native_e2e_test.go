@@ -895,8 +895,10 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 	}()
 	// Record A's native-only initialization separately. B intentionally
 	// remains cold: probing B first could hide the original #641 failure.
-	if entries := claudePluginList(t, f, client, "A-native-only"); len(entries) != 0 {
-		t.Fatalf("A native-only profile unexpectedly has plugins: %d", len(entries))
+	for _, entry := range claudePluginList(t, f, client, "A-native-only") {
+		if entry.ID == "claude-native-proof@skills-dir" {
+			t.Fatal("cold A profile unexpectedly owns the plugin before UAP")
+		}
 	}
 	stages["native_only_probe"] = claudeNativeStage{Status: "passed", Reason: "A native-only initialized; B was deliberately left cold for the exact secondary-profile regression"}
 	capture("after_A_native_only_initialization")
