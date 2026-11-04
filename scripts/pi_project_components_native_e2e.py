@@ -225,6 +225,7 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
             # placing --approve before mcp routes to the generic CLI parser
             # and rejects --json before any native MCP exchange.
             args=[str(pi),"mcp","list","--json"]
+            before_project_http=len(http_probe.methods())
             output=run(args,project_a,env=env,timeout=55)
             if len(output)>1<<20:
                 raise RuntimeError("native project MCP inventory exceeds limit")
@@ -235,6 +236,11 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
                 if len(matching)!=1 or matching[0].get("scope")!="project" or (
                     matching[0].get("state")!="connected") or tool not in matching[0].get("tools",[]):
                     raise RuntimeError("real Pi did not connect and enumerate exact project MCP "+name)
+            # A connected inventory alone cannot qualify HTTP protocol methods.
+            # Require the actual pinned Pi child to initialize and list tools.
+            if not {"initialize","tools/list"}.issubset(
+                    set(http_probe.methods()[before_project_http:])):
+                raise RuntimeError("native project HTTP MCP initialize/tools-list absent")
             other=json.loads(run(args,project_b,env=env,timeout=55))
             if any(entry.get("name") in ("pi-managed","pi-http") for entry in other.get("servers",[])):
                 raise RuntimeError("untrusted Pi project B discovered project A MCP server")
@@ -312,8 +318,14 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
                 if sum(1 for item in observed_commands if item.get("source")=="skill" and
                        item.get("name")=="skill:pi-managed")!=1:
                     raise RuntimeError("genuine Pi did not discover scoped global Skill")
+                before_global_http=len(http_probe.methods())
                 observed_mcp=json.loads(run([str(pi),"mcp","list","--json"],
                                            project_c,env=native_env,timeout=55))
+                # Check every selected profile independently: previous project
+                # or default-profile protocol exchanges are not Global proof.
+                if not {"initialize","tools/list"}.issubset(
+                        set(http_probe.methods()[before_global_http:])):
+                    raise RuntimeError("native "+label+" Global HTTP MCP initialize/tools-list absent")
                 for server_name, tool in (("pi-managed","echo"),("pi-http","ping")):
                     entries=[entry for entry in observed_mcp.get("servers",[])
                              if entry.get("name")==server_name]
