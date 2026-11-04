@@ -352,7 +352,7 @@ func TestResolveDirectoryScopeSpecificGrantsFloorAndEvidence(t *testing.T) {
 			SchemaVersion: 1, ID: "project-failed", DistributionID: distribution.ID,
 			ReleaseSequence: 1, PackageTreeDigest: release.TreeDigest,
 			Client: ClientCodex, Scope: ScopeProject, ClientVersion: "test-client",
-			InstallerVersion: "1.2.3", OS: "linux", Architecture: "amd64",
+			InstallerVersion: "2.1.0", OS: "linux", Architecture: "amd64",
 			Level: "runtime", Outcome: "failed",
 		})}}
 	userRequest := request("tool", ClientCodex)
