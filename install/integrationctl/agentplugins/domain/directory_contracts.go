@@ -106,22 +106,22 @@ type DirectoryReleasePolicy struct {
 // DirectoryCanonicalClosure is a signed policy summary, not runtime proof.
 // Its exact digest is bound to the resolved immutable dependency graph.
 type DirectoryCanonicalClosure struct {
-	Eligible bool `json:"eligible"`
-	ClosureDigest string `json:"closure_digest,omitempty"`
+	Eligible                bool   `json:"eligible"`
+	ClosureDigest           string `json:"closure_digest,omitempty"`
 	MinimumInstallerVersion string `json:"minimum_installer_version,omitempty"`
 }
 
 type DirectoryTarget struct {
 	Client ClientID `json:"client"`
 	// V1 targets retain scopes; V2 grants use one scoped identity per target.
-	Scopes                  []InstallScope            `json:"scopes,omitempty"`
-	Scope                   InstallScope              `json:"scope,omitempty"`
-	MinimumInstallerVersion string                    `json:"minimum_installer_version,omitempty"`
-	CurrentEvidence         []string                  `json:"current_evidence,omitempty"`
+	Scopes                  []InstallScope             `json:"scopes,omitempty"`
+	Scope                   InstallScope               `json:"scope,omitempty"`
+	MinimumInstallerVersion string                     `json:"minimum_installer_version,omitempty"`
+	CurrentEvidence         []string                   `json:"current_evidence,omitempty"`
 	CanonicalClosure        *DirectoryCanonicalClosure `json:"canonical_closure,omitempty"`
-	Delivery                string                    `json:"delivery"`
-	Authentication          AuthenticationRequirement `json:"authentication"`
-	AppBinding              *DirectoryAppBinding      `json:"app_binding,omitempty"`
+	Delivery                string                     `json:"delivery"`
+	Authentication          AuthenticationRequirement  `json:"authentication"`
+	AppBinding              *DirectoryAppBinding       `json:"app_binding,omitempty"`
 }
 
 // ExpectedDirectoryDelivery returns the signed Directory delivery contract for
