@@ -55,6 +55,9 @@ func ParseV2Snapshot(body []byte) (domain.DirectorySnapshot, error) {
 	if err := validateV2Snapshot(snapshot); err != nil {
 		return snapshot, err
 	}
+	if err := validateV2RecordParity(snapshot); err != nil {
+		return snapshot, err
+	}
 	return snapshot, nil
 }
 
