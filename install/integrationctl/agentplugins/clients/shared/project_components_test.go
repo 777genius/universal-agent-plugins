@@ -2,6 +2,7 @@ package shared
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -262,5 +263,33 @@ func TestProjectComponentsSkillNamesStayFilesystemSafe(t *testing.T) {
 	skill.Path = filepath.Join(mutation.Layout.SkillsRoot, skill.LogicalName)
 	if err := mutation.Layout.ValidateObjects([]domain.NativeObjectOwnership{skill}); err == nil {
 		t.Fatal("skill directory accepted a space-bearing filesystem leaf")
+	}
+}
+
+func TestProjectComponentsForeignSkillRefusalPreservesForeignFiles(t *testing.T) {
+	mutation := componentFixture(t)
+	occupied := filepath.Join(mutation.Desired[0].Path, "SKILL.md")
+	neighbor := filepath.Join(mutation.Layout.SkillsRoot, "foreign-neighbor", "SKILL.md")
+	componentWrite(t, occupied, "foreign selected skill\\n")
+	componentWrite(t, neighbor, "foreign neighbor\\n")
+	beforeConfig, err := os.ReadFile(mutation.Layout.ConfigPaths.JSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mutation.Apply(context.Background()); !errors.Is(err, domain.ErrForeignSkillDestination) {
+		t.Fatalf("foreign project Skill refused without typed ownership cause: %v", err)
+	}
+	for path, want := range map[string]string{
+		occupied: "foreign selected skill\\n",
+		neighbor: "foreign neighbor\\n",
+	} {
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != want {
+			t.Fatalf("refusal changed foreign Skill %q: %q, %v", path, got, err)
+		}
+	}
+	gotConfig, err := os.ReadFile(mutation.Layout.ConfigPaths.JSON)
+	if err != nil || string(gotConfig) != string(beforeConfig) {
+		t.Fatalf("refusal changed foreign MCP settings: %v", err)
 	}
 }
