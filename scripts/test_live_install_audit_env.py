@@ -606,7 +606,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 {"data": {"installations": [node]}}, "github", "opencode",
                 "plugin", "777genius/github-bridge", doc["signed_release_pins"])
         self.assertEqual(len(selected()), 1)
-        for key, value in (("recorded_distribution", "github/github"),
+        for key, value in (("product_id", "forged-unrelated-product"),
+                            ("recorded_distribution", "github/github"),
                            ("recorded_revision", "0" * 40),
                            ("recorded_release_sequence", 1)):
             with self.subTest(key=key):
