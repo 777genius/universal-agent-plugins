@@ -26,3 +26,13 @@ An empty UAP list does not prove the native configuration is clean. Require nati
 ## Status
 
 Source-backed negative case reproduced. **Product root cause and fix not yet qualified.**
+
+## Latest real ZIP and narrow forensic work (2026-11-04)
+
+The genuine `copilot-plugin.json` from [run 41788848418, artifact 13303655153](https://github.com/777genius/universal-agent-plugins/actions/runs/41788848418/artifacts/13303655153) reproduces **23 `cleanup-failed`**, **6 `incomplete-native-proof`** and one source-target refusal. For the 23 completed removals, UAP's post-remove `list` is empty but `.copilot/settings.json` is still classified as an identity-bearing native residual. This is **not** 23 PASS, and the source ZIP intentionally does not contain user-profile JSON values. A settings path alone does not prove whether the residual is an active plugin, marketplace record or incidental retained value.
+
+**Minimal read-only next step before a product fix:** instrument the already isolated Copilot audit cases to collect the **same fixed native settings file** at three boundaries: before add, after add and after remove. Retain only bounded match counts for exact plugin-identity keys/values, `identity@agentplugins-<12 hex>` keys/values and other substring references, plus a small allowlisted set of structural root sections. Do **not** emit any settings values, credentials, arbitrary key names, source paths, or snapshots. Reject symlinks, unsafe paths, oversized/unreadable/malformed JSON. Add tests for a genuine qualified-key shape, a benign path substring, redaction, and an out-of-case symlink. The probe is evidence-only: it cannot change `cleanup-failed` into PASS or authorize `--external-uninstalled`.
+
+**Critic round 1 — privacy and containment:** independent JSON values must never appear in ZIP, including unknown nesting; no native file outside the disposable case may be read.
+
+**Critic round 2 — proof semantics:** distinguish a qualified registration-shaped token from an incidental substring; even a token is only evidence for investigation, not self-sufficient native activation or deletion proof. Preserve negative statuses and do not change Copilot/VS Code shared production removal until the exact owner and native schema are independently established.
