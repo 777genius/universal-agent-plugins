@@ -8,11 +8,13 @@ import platform
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import tomllib
 from datetime import datetime, timezone
+from urllib.parse import urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
@@ -109,27 +111,43 @@ def version_evidence(argv, env, cwd):
 
 
 def snapshot(root):
-    """Only regular files under native profile roots; ignore ephemeral UAP cache."""
+    """Record native entries without following symlinks or hiding read errors."""
     found = {}
     for target_root in root:
-        if not target_root.is_dir() or target_root.is_symlink():
+        if target_root.is_symlink():
+            found[f"{target_root.name}/.native-root"] = "symlink"
             continue
-        for base, dirs, files in os.walk(target_root, followlinks=False):
-            dirs[:] = [v for v in dirs if not (Path(base) / v).is_symlink()]
+        if not target_root.is_dir():
+            continue
+
+        def walk_error(error):
+            try:
+                relative = Path(error.filename).relative_to(target_root)
+                found[f"{target_root.name}/{relative}/.walk-error"] = "unreadable"
+            except (TypeError, ValueError):
+                found[f"{target_root.name}/.walk-error"] = "unreadable"
+
+        for base, dirs, files in os.walk(target_root, followlinks=False, onerror=walk_error):
+            for name in dirs[:]:
+                path = Path(base) / name
+                if path.is_symlink():
+                    found[f"{target_root.name}/{path.relative_to(target_root)}"] = "symlink"
+                    dirs.remove(name)
             for name in files:
-                p = Path(base) / name
-                if p.is_symlink() or not p.is_file():
-                    continue
-                relative = str(p.relative_to(target_root))
+                path = Path(base) / name
+                relative = str(path.relative_to(target_root))
                 try:
-                    st = p.stat()
-                    if st.st_size > 4 * 1024 * 1024:
-                        digest = "too-large"
+                    if path.is_symlink():
+                        digest = "symlink"
+                    elif not path.is_file():
+                        digest = "non-regular"
                     else:
-                        digest = hashlib.sha256(p.read_bytes()).hexdigest()
-                    found[f"{target_root.name}/{relative}"] = digest
+                        size = path.stat().st_size
+                        digest = ("too-large" if size > 4 * 1024 * 1024 else
+                                  hashlib.sha256(path.read_bytes()).hexdigest())
                 except OSError:
-                    pass
+                    digest = "unreadable"
+                found[f"{target_root.name}/{relative}"] = digest
     return found
 
 
@@ -182,6 +200,9 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
     leftover = []
     for root in native_roots:
         prefix = root.name + "/"
+        if root.is_symlink():
+            leftover.append(root.name + ": symlink")
+            continue
         for observed in observed_paths:
             if not observed.startswith(prefix):
                 continue
@@ -189,17 +210,19 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
             if target == "codex" and relative.startswith("plugins/cache/"):
                 continue
             file = root / relative
-            if file.is_symlink():
-                leftover.append(observed + ": symlink")
-                continue
-            if not file.is_file():
-                continue
             try:
-                if identity.casefold() in relative.casefold():
+                mode = file.lstat().st_mode
+                if stat.S_ISLNK(mode):
+                    leftover.append(observed + ": symlink")
+                elif not stat.S_ISREG(mode):
+                    leftover.append(observed + ": non-regular")
+                elif identity.casefold() in relative.casefold():
                     leftover.append(observed)
                 elif file.stat().st_size <= 1024 * 1024 and identity.casefold() in file.read_text(
                         encoding="utf-8", errors="replace").casefold():
                     leftover.append(observed)
+            except FileNotFoundError:
+                continue
             except OSError:
                 leftover.append(observed + ": unreadable")
     return sorted(set(leftover))
@@ -238,8 +261,8 @@ def locked_skill_is_pinned(project, item, target):
             and source.get("commit") == item["ref"]
             and (source.get("resolved_skill_path") == location or source.get("path") == location)
             and target in package["targets"]
-            and package.get("tree_digest", "").startswith("sha256:")
-            and package.get("manifest_digest", "").startswith("sha256:")
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", package.get("tree_digest", "")) is not None
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", package.get("manifest_digest", "")) is not None
         )
     except (OSError, ValueError, KeyError, TypeError):
         return False
@@ -330,8 +353,11 @@ def matching_installations(response, identity, target, kind, item):
             accepted = node.get("name") == identity and isinstance(source, str)
         elif isinstance(item, str) and item.startswith("github:"):
             expected_repo = item.split("@", 1)[0][len("github:"):].casefold()
-            accepted = (node.get("name") == identity and isinstance(source, str)
-                        and expected_repo in source.casefold())
+            recorded_repo = (re.sub(r"^(?:github:|https://github\.com/|git@github\.com:)",
+                                    "", source, flags=re.IGNORECASE)
+                             .split("@", 1)[0].removesuffix(".git").rstrip("/")
+                             if isinstance(source, str) else "")
+            accepted = node.get("name") == identity and recorded_repo.casefold() == expected_repo
         else:
             accepted = node.get("name") == identity
         if accepted and node.get("installation_id"):
@@ -445,6 +471,20 @@ def isolated_client_env(home, case_root, data):
     # not escape the case even if a maintainer runs this script locally.
     env = {key: value for key, value in os.environ.items()
            if key in INHERITED_RUNTIME_ENV_KEYS}
+    # Public proxy routing is useful, but embedded proxy credentials must not
+    # reach untrusted package install subprocesses.
+    for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
+                "http_proxy", "https_proxy", "all_proxy"):
+        if key not in env or "@" not in env[key]:
+            continue
+        try:
+            parsed = urlsplit(env[key])
+            if "@" in parsed.netloc:
+                env[key] = urlunsplit(parsed._replace(netloc=parsed.netloc.rsplit("@", 1)[1]))
+            else:
+                env.pop(key)
+        except ValueError:
+            env.pop(key)
     temp = case_root / "tmp"
     temp.mkdir(exist_ok=True)
     roots = {
@@ -479,6 +519,16 @@ def isolated_client_env(home, case_root, data):
         **{key: str(path) for key, path in roots.items()},
     })
     return env
+
+
+def preserved_regular_text(path, expected):
+    """Do not let a replacement symlink impersonate an unmanaged sentinel."""
+    if path is None:
+        return True
+    try:
+        return not path.is_symlink() and path.is_file() and path.read_text() == expected
+    except OSError:
+        return False
 
 
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
@@ -602,12 +652,13 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
         cleanup = call([cli, "remove", identity, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
         cleanup.pop("_json", None)
-    sentinels_preserved = (sentinel.read_text() == "foreign content never belongs to UAP\n" and
-                           user_sentinel.read_text() == "foreign profile content never belongs to UAP\n" and
-                           (not native_foreign or native_foreign.read_text() ==
-                            "unmanaged native neighbor must survive\n") and
-                           (not project_foreign or project_foreign.read_text() ==
-                            "---\nname: foreign-neighbor\ndescription: unrelated\n---\n"))
+    sentinels_preserved = (
+        preserved_regular_text(sentinel, "foreign content never belongs to UAP\n")
+        and preserved_regular_text(user_sentinel, "foreign profile content never belongs to UAP\n")
+        and preserved_regular_text(native_foreign, "unmanaged native neighbor must survive\n")
+        and preserved_regular_text(
+            project_foreign, "---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
+    )
     post_removal_skill = skill_file_present(project, target, identity) if kind == "skill" and cleanup else None
     post_list = (call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
@@ -625,8 +676,13 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     old_ids = {entry["installation_id"] for entry in matching}
     post_lock_pinned = bool(kind == "skill" and (project / "uap.lock").exists()
                             and locked_skill_is_pinned(project, item, target))
-    native_residuals = (native_identity_residuals(native_roots, identity, native_attribution, target)
-                        if cleanup and cleanup["exit_code"] == 0 and kind == "plugin" else [])
+    unsafe_paths = [path for path, digest in changed
+                    if digest in ("symlink", "unreadable", "non-regular")]
+    native_residuals = (
+        native_identity_residuals(native_roots, identity,
+                                  native_attribution + unsafe_paths, target)
+        if cleanup and cleanup["exit_code"] == 0 and kind == "plugin" else []
+    )
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
