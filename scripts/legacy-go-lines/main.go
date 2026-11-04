@@ -3,9 +3,9 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"go/scanner"
 	"go/token"
+	"io"
 	"os"
 	"strings"
 )
