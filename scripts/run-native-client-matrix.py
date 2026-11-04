@@ -593,7 +593,7 @@ def main():
                                 raise ValueError("Claude " + field + " incomplete at " + stage)
                         if stage != "before_any_native_command" and not roots.issubset(observed.get("file_changes", {}).get(stage, {})):
                             raise ValueError("Claude per-file delta incomplete at " + stage)
-                except (OSError, ValueError, KeyError, TypeError) as exc:
+                except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
                     project_artifact_errors.append("Claude A/B evidence admission failed: " + str(exc))
         if project_artifact_errors:
             identity["status"] = "failed"
