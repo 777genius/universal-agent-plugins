@@ -62,12 +62,26 @@ git checkout -- legacy/old_linux.go
 printf 'var platformGrowth = 2\n' >> legacy/old_windows.go
 expect_fail 'grew from'
 git checkout -- legacy/old_windows.go
+printf 'package fixture\n' > "$fixture/outside.go"
+rm legacy/old_windows.go
+ln -s ../outside.go legacy/old_windows.go
+expect_fail 'refusing symlinked legacy source'
+rm legacy/old_windows.go
+git checkout -- legacy/old_windows.go
 cat >> .golangci.yml <<'CFG'
       - path: ^legacy/new.go$
         linters: [revive]
         text: 'file length is'
 CFG
+expect_fail '^legacy/new.go
+git mv legacy/old_linux.go legacy/renamed_linux.go
+sed 's@old_linux@renamed_linux@g' .golangci.yml > "$fixture/config-renamed"
+cp "$fixture/config-renamed" .golangci.yml
 expect_fail 'new'
+printf '%s\t%s\n' '^legacy/old_linux\.go$' '^legacy/renamed_linux\.go$' > scripts/lint-baseline-renames.txt
+run_gate
+printf '%s\n' 'legacy baseline growth integration E2E: PASS'
+
 git checkout -- .golangci.yml
 git mv legacy/old_linux.go legacy/renamed_linux.go
 sed 's@old_linux@renamed_linux@g' .golangci.yml > "$fixture/config-renamed"
