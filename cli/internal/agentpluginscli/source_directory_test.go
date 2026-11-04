@@ -61,7 +61,7 @@ func TestDirectoryV2CompatibilityUsesScopedGrantsWithoutBorrowingUserEvidence(t 
 		TreeDigest:      distribution.Releases[1].TreeDigest}
 	observed := bundle.Snapshot.Evidence[1]
 	observed.ID, observed.Scope = "project-runtime-current", domain.ScopeProject
-	bundle.Snapshot.Evidence = append(bundle.Snapshot.Evidence, runtime)
+	bundle.Snapshot.Evidence = append(bundle.Snapshot.Evidence, observed)
 	environment := directoryEvidenceEnvironment{
 		InstallerVersion: observed.InstallerVersion, OS: observed.OS,
 		Architecture:       observed.Architecture,
