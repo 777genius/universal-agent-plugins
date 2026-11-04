@@ -319,7 +319,7 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	if app.DirectoryClient == nil {
 		return loadedPackage{}, errors.New("signed Directory is unavailable")
 	}
-	bundle, err := app.DirectoryClient.Load(ctx, 0)
+	bundle, err := app.loadAuthorizedDirectory(ctx)
 	if err != nil {
 		return loadedPackage{}, err
 	}

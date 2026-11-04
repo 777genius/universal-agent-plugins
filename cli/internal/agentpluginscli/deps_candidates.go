@@ -30,7 +30,7 @@ func (resolver dependencyResolver) Candidates(ctx context.Context, requirement e
 	if resolver.app.DirectoryClient == nil {
 		return nil, errors.New("signed Directory client is required")
 	}
-	bundle, err := resolver.app.DirectoryClient.Load(ctx, 0)
+	bundle, err := resolver.app.loadAuthorizedDirectory(ctx)
 	if err != nil {
 		return nil, err
 	}
