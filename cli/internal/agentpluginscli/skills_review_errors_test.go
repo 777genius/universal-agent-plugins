@@ -48,7 +48,7 @@ func TestSkillsReviewTimeoutPreservesSpecificRefusal(t *testing.T) {
 }
 
 func TestSkillsReviewForeignDestinationSafeGuidance(t *testing.T) {
-	for _, cause := range []error{nativeconfig.ErrCollision, nativeconfig.ErrNotOwned} {
+	for _, cause := range []error{nativeconfig.ErrCollision, nativeconfig.ErrNotOwned, installer.ErrForeignSkillDestination} {
 		// A lower-level adapter may embed arbitrary provider paths or secrets.
 		unsafe := fmt.Errorf("private-secret: /private/home: %w", cause)
 		var refusal *skillspicker.ReviewRefusal
