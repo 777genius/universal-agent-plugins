@@ -296,7 +296,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         # BUG-025: diagnose revision drift without logging credentials.
         audit = load_audit()
         response = {"data": {"installations": [
-            {"name": "atlassian", "source": "777genius/atlassian",
+            {"name": "atlassian", "source": "777genius/universal-agent-plugins/plugins/atlassian",
              "api_key": "secret-from-account",
              "directory": {"recorded_distribution": "777genius/atlassian",
                            "recorded_revision": "a" * 40,
@@ -316,7 +316,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         observed = audit.signed_release_public_observation(
             response, "atlassian", "codex")
         self.assertEqual(len(observed), 1)
-        self.assertEqual(observed[0]["source"], "777genius/atlassian")
+        self.assertEqual(observed[0]["source"], "777genius/universal-agent-plugins/plugins/atlassian")
         self.assertEqual(observed[0]["resolved_revision"], "b" * 40)
         self.assertNotIn("secret", repr(observed))
         response["data"]["installations"][0]["source"] = (
@@ -346,7 +346,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         verified = {"client_id": "codex", "verification": "installation_verified",
                     "package_revision": revision}
         node = {"name": "atlassian", "installation_id": "valid-id",
-                "source": "777genius/atlassian", "directory": directory,
+                "source": "777genius/universal-agent-plugins/plugins/atlassian", "directory": directory,
                 "clients": [verified]}
         pins = {"atlassian": {
             "distribution": "777genius/atlassian",
@@ -394,7 +394,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "release_sequence": 1, "tree_digest": pin["tree_digest"],
                     "manifest_digest": pin["manifest_digest"]}
         record = {"name": "atlassian", "installation_id": "proof",
-                  "source": pin["distribution"], "directory": directory,
+                  "source": "777genius/universal-agent-plugins/plugins/atlassian", "directory": directory,
                   "clients": [{"client_id": "codex", "verification": "installation_verified",
                                "package_revision": revision}]}
         def qualify():
@@ -402,10 +402,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 {"data": {"installations": [record]}}, "atlassian", "codex",
                 "plugin", "atlassian", {"atlassian": pin})
         self.assertEqual(len(qualify()), 1)
-        for fake in ("evil/atlassian-fork", None):
+        for fake in ("evil/atlassian-fork", pin["distribution"], None):
             record["source"] = fake
             self.assertEqual(qualify(), [])
-        record["source"] = pin["distribution"]
+        record["source"] = "777genius/universal-agent-plugins/plugins/atlassian"
         original = record["directory"]
         record["directory"] = dict(original, recorded_revision="d" * 40)
         record["clients"][0]["package_revision"] = dict(
