@@ -430,4 +430,3 @@ func validateV2EvidenceSelections(policies map[string]domain.DirectoryReleasePol
 	}
 	return nil
 }
-

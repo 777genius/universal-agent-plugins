@@ -37,7 +37,7 @@ func TestV2ClientFreshBootstrapAndOfflineExactCache(t *testing.T) {
 			RequireEmbeddedBootstrap: true,
 			Now:                      func() time.Time { return fixtureNow },
 		},
-		Cache: Cache{Path: filepath.Join(t.TempDir(), "v2-cache.json")},
+		Cache:    Cache{Path: filepath.Join(t.TempDir(), "v2-cache.json")},
 		Embedded: EmbeddedBundle{Snapshot: snapshot, Envelope: envelope},
 	}
 	accepted, err := client.Load(context.Background(), 0)

@@ -188,4 +188,3 @@ func validateV2GrantEvidenceTarget(grant domain.DirectoryTarget, evidence map[st
 	}
 	return nil
 }
-

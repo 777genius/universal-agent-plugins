@@ -63,7 +63,9 @@ func TestV2PointerRejectsCredentialAndPathDowngrades(t *testing.T) {
 			pointer := v2PointerFixture(t)
 			tc.mutate(&pointer)
 			data, err := json.Marshal(pointer)
-			if err != nil { t.Fatal(err) }
+			if err != nil {
+				t.Fatal(err)
+			}
 			if _, err := ParseV2Pointer(data); !errors.Is(err, ErrStrictJSON) {
 				t.Fatalf("unsafe v2 pointer accepted: %v", err)
 			}

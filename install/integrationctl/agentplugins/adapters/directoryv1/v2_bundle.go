@@ -95,9 +95,9 @@ func VerifyV2Bundle(snapshotBytes, envelopeBytes []byte, trust TrustStore) (Veri
 	return VerifiedBundle{
 		SnapshotBytes: append([]byte(nil), snapshotBytes...),
 		EnvelopeBytes: append([]byte(nil), envelopeBytes...),
-		Snapshot: snapshot,
-		Envelope: envelope,
-		Digest: digest,
-		Source: BundleSourceVerified,
+		Snapshot:      snapshot,
+		Envelope:      envelope,
+		Digest:        digest,
+		Source:        BundleSourceVerified,
 	}, nil
 }
