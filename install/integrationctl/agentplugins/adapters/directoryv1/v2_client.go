@@ -11,13 +11,13 @@ import (
 // V2Client has a separate authenticated bootstrap and last-known-good cache.
 // Its transport reuses the existing bounded same-origin HTTP client; the
 // production schema-1 client is not changed or automatically downgraded.
-func (V2Client) SnapshotSchema() int { return 2 }
-
 type V2Client struct {
 	Transport Client
-	Cache Cache
-	Embedded EmbeddedBundle
+	Cache     Cache
+	Embedded  EmbeddedBundle
 }
+
+func (V2Client) SnapshotSchema() int { return 2 }
 
 // validateConfig keeps read-only inspection on the same signed trust and
 // isolated cache authority as install-time loading.
@@ -68,7 +68,7 @@ func (client V2Client) loadLocal(floor uint64) (VerifiedBundle, VerifiedBundle, 
 		bundle, err := VerifyV2Bundle(client.Embedded.Snapshot, client.Embedded.Envelope, trust)
 		if err != nil {
 			if client.Transport.RequireEmbeddedBootstrap {
-				return embedded, VerifiedBundle{}, 0, fmt.Errorf("%w: %v", ErrBootstrapNotReady, err)
+				return embedded, VerifiedBundle{}, 0, fmt.Errorf("%w: %w", ErrBootstrapNotReady, err)
 			}
 		} else {
 			embedded = bundle
@@ -169,13 +169,14 @@ func (client V2Client) Load(ctx context.Context, installedFloor uint64) (Verifie
 	}
 	remote, remoteErr := client.Transport.fetchV2(ctx)
 	if remoteErr == nil {
-		if accepted, err := client.reconcileRemote(remote, embedded, cached, floor, now); err == nil {
+		accepted, err := client.reconcileRemote(remote, embedded, cached, floor, now)
+		if err == nil {
 			return accepted, nil
-		} else if errors.Is(err, ErrSequenceConflict) {
-			return VerifiedBundle{}, err
-		} else {
-			remoteErr = err
 		}
+		if errors.Is(err, ErrSequenceConflict) {
+			return VerifiedBundle{}, err
+		}
+		remoteErr = err
 	}
 	return client.fallback(embedded, cached, floor, now, remoteErr)
 }

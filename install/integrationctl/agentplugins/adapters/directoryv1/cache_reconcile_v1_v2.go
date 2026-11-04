@@ -74,7 +74,7 @@ func (cache Cache) writeVersionedRecord(verified VerifiedBundle, schema int, dir
 	}
 	ok := false
 	defer func() {
-		file.Close()
+		_ = file.Close()
 		if !ok {
 			_ = os.Remove(temporary)
 		}

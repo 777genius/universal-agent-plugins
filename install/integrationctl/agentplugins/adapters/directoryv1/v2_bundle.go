@@ -27,11 +27,11 @@ func SnapshotSignatureMessageV2(snapshot []byte) []byte {
 func ParseV2Envelope(body []byte) (Envelope, error) {
 	var envelope Envelope
 	if err := strictDecode(body, &envelope, MaxEnvelopeBytes); err != nil {
-		return envelope, fmt.Errorf("%w: v2 envelope: %v", ErrStrictJSON, err)
+		return envelope, fmt.Errorf("%w: v2 envelope: %w", ErrStrictJSON, err)
 	}
 	if err := requireRootFields(body, "envelope_schema_version", "snapshot_schema_version",
 		"sequence", "key_id", "algorithm", "signature_domain", "snapshot_digest", "signature"); err != nil {
-		return envelope, fmt.Errorf("%w: v2 envelope: %v", ErrStrictJSON, err)
+		return envelope, fmt.Errorf("%w: v2 envelope: %w", ErrStrictJSON, err)
 	}
 	if envelope.EnvelopeSchemaVersion != 2 || envelope.SnapshotSchemaVersion != 2 || envelope.Sequence < 1 ||
 		envelope.Algorithm != "Ed25519" || envelope.SignatureDomain != SignatureDomainV2 ||
@@ -47,10 +47,10 @@ func ParseV2Envelope(body []byte) (Envelope, error) {
 func ParseV2Snapshot(body []byte) (domain.DirectorySnapshot, error) {
 	var snapshot domain.DirectorySnapshot
 	if err := strictDecode(body, &snapshot, MaxSnapshotBytes); err != nil {
-		return snapshot, fmt.Errorf("%w: v2 snapshot: %v", ErrStrictJSON, err)
+		return snapshot, fmt.Errorf("%w: v2 snapshot: %w", ErrStrictJSON, err)
 	}
 	if err := requireV2SnapshotFields(body); err != nil {
-		return snapshot, fmt.Errorf("%w: v2 snapshot: %v", ErrStrictJSON, err)
+		return snapshot, fmt.Errorf("%w: v2 snapshot: %w", ErrStrictJSON, err)
 	}
 	if err := validateV2Snapshot(snapshot); err != nil {
 		return snapshot, err
@@ -95,6 +95,9 @@ func VerifyV2Bundle(snapshotBytes, envelopeBytes []byte, trust TrustStore) (Veri
 	return VerifiedBundle{
 		SnapshotBytes: append([]byte(nil), snapshotBytes...),
 		EnvelopeBytes: append([]byte(nil), envelopeBytes...),
-		Snapshot: snapshot, Envelope: envelope, Digest: digest, Source: BundleSourceVerified,
+		Snapshot: snapshot,
+		Envelope: envelope,
+		Digest: digest,
+		Source: BundleSourceVerified,
 	}, nil
 }

@@ -10,11 +10,11 @@ import (
 func ParseV2Pointer(body []byte) (Pointer, error) {
 	var pointer Pointer
 	if err := strictDecode(body, &pointer, MaxLatestBytes); err != nil {
-		return pointer, fmt.Errorf("%w: v2 pointer: %v", ErrStrictJSON, err)
+		return pointer, fmt.Errorf("%w: v2 pointer: %w", ErrStrictJSON, err)
 	}
 	if err := requireRootFields(body, "pointer_schema_version", "snapshot_schema_version",
 		"sequence", "snapshot_path", "envelope_path", "fetch_contract"); err != nil {
-		return pointer, fmt.Errorf("%w: v2 pointer: %v", ErrStrictJSON, err)
+		return pointer, fmt.Errorf("%w: v2 pointer: %w", ErrStrictJSON, err)
 	}
 	if pointer.PointerSchemaVersion != 2 || pointer.SnapshotSchemaVersion != 2 {
 		return pointer, strictError("invalid v2 pointer schema")
