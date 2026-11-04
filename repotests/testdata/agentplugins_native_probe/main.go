@@ -32,7 +32,7 @@ type facts struct {
 	Marker       string   `json:"marker,omitempty"`
 	PID          int      `json:"pid"`
 	Session      string   `json:"session"`
-	CanaryDigest string    `json:"canary_digest,omitempty"`
+	CanaryDigest string   `json:"canary_digest,omitempty"`
 }
 
 var session = fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
