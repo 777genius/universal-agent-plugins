@@ -1,4 +1,4 @@
-# BUG-039 — Preserve main's executable mode during PR sync
+# BUG-040 — Preserve main's executable mode during PR sync
 
 ## Reproduced cause
 
