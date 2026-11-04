@@ -60,6 +60,17 @@ jobs:
             runner: macos-15
           - target: windows-amd64
             runner: windows-2025
+        # Current-source qualification must cover Linux as well. Add only
+        # Codex/Claude cells; existing OpenCode lanes remain unchanged.
+        include:
+          - client: codex
+            platform:
+              target: linux-amd64
+              runner: ubuntu-24.04
+          - client: claude
+            platform:
+              target: linux-amd64
+              runner: ubuntu-24.04
     runs-on: ${{ matrix.platform.runner }}
     timeout-minutes: 30
     steps:
