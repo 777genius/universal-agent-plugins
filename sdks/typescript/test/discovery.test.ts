@@ -121,11 +121,14 @@ test('discovery preserves native profile locators while filtering credentials an
 test('deadline reaps only the owned discovery process even when it ignores SIGTERM', async () => {
   const input = await options('hang');
   const started = Date.now();
+  // A 200 ms deadline can kill the cold Windows binary before main writes its
+  // PID marker, so there is no child PID to prove reaping. Retain the exact
+  // timeout + OS process-exit oracle, with a cold-start-safe finite deadline.
   await assert.rejects(
-    discoverTargets({ ...input, timeoutMs: 200 }),
+    discoverTargets({ ...input, timeoutMs: 5_000 }),
     (error: unknown) => error instanceof ManagementError && error.code === 'DISCOVERY_TIMEOUT',
   );
-  assert.ok(Date.now() - started < 3_000);
+  assert.ok(Date.now() - started < 8_000);
   const pid = Number(await readFile(join(directory, 'pid'), 'utf8'));
   assert.throws(
     () => process.kill(pid, 0),
