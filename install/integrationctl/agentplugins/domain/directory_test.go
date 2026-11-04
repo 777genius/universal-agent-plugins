@@ -311,7 +311,7 @@ func TestResolveDirectoryRejectsEveryRecordedImmutableReleaseRebind(t *testing.T
 func TestResolveDirectoryProjectCopilotDoesNotBorrowUserBackend(t *testing.T) {
 	release := testRelease(1, "1.0.0")
 	policy := testPolicy(1, ClientCopilot)
-	policy.Targets[0].Scopes = []InstallScope{ScopeProject}
+	policy.Targets[0].Scope, policy.Targets[0].Scopes = ScopeProject, nil
 	distribution := testDistribution("owner/tool", DistributionCommunity, []DirectoryRelease{release}, []DirectoryReleasePolicy{policy})
 	snapshot := DirectorySnapshot{
 		SnapshotSchemaVersion: 2,
@@ -325,7 +325,7 @@ func TestResolveDirectoryProjectCopilotDoesNotBorrowUserBackend(t *testing.T) {
 		t.Fatalf("project Copilot inherited unrelated user backend grant: %+v %v", got, err)
 	}
 	user := request("tool", ClientCopilot)
-	snapshot.Distributions[0].ReleasePolicies[0].Targets[0].Scopes = []InstallScope{ScopeUser, ScopeProject}
+	snapshot.Distributions[0].ReleasePolicies[0].Targets[0].Scope = ScopeUser
 	if _, err := ResolveDirectory(snapshot, user); !errors.Is(err, ErrDirectoryIneligible) {
 		t.Fatalf("user Copilot no longer requires shared VS Code grant: %v", err)
 	}
@@ -354,6 +354,31 @@ func TestResolveDirectoryV2SequenceOneRejectsLegacyUnsignedEvidence(t *testing.T
 	}
 	if _, err := ResolveDirectory(base, request("owner/tool", ClientCodex)); !errors.Is(err, ErrDirectoryIneligible) {
 		t.Fatalf("v2 upstream release accepted legacy evidence without trust: %v", err)
+	}
+}
+
+func TestResolveDirectoryV2DoesNotPromoteLegacyTargetScopes(t *testing.T) {
+	release := testRelease(1, "1.0.0")
+	policy := testPolicy(1, ClientCodex)
+	policy.Targets[0].Scopes = []InstallScope{ScopeUser, ScopeProject}
+	distribution := testDistribution("owner/tool", DistributionCommunity,
+		[]DirectoryRelease{release}, []DirectoryReleasePolicy{policy})
+	snapshot := DirectorySnapshot{SnapshotSchemaVersion: 2, Sequence: 1,
+		Products: []DirectoryProduct{{ID: "tool", ManifestName: "tool",
+			DefaultDistribution: distribution.ID, Distributions: []string{distribution.ID}}},
+		Distributions: []DirectoryDistribution{distribution}}
+	project := request("tool", ClientCodex)
+	project.Scope = ScopeProject
+	if _, err := ResolveDirectory(snapshot, project); !errors.Is(err, ErrDirectoryIneligible) {
+		t.Fatalf("v2 accepted legacy array as project permission: %v", err)
+	}
+	snapshot.Distributions[0].ReleasePolicies[0].Targets[0].Scope = ScopeProject
+	if _, err := ResolveDirectory(snapshot, project); !errors.Is(err, ErrDirectoryIneligible) {
+		t.Fatalf("v2 accepted mixed explicit/legacy scoped target: %v", err)
+	}
+	snapshot.Distributions[0].ReleasePolicies[0].Targets[0].Scopes = nil
+	if got, err := ResolveDirectory(snapshot, project); err != nil || got.DistributionID != distribution.ID {
+		t.Fatalf("explicit v2 project grant failed: %+v %v", got, err)
 	}
 }
 

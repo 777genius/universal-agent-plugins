@@ -49,7 +49,7 @@ func TestResolveDirectoryLockedRestoreProjectRequiresV2Grant(t *testing.T) {
 	}
 	for i := range snapshot.Distributions[2].ReleasePolicies[0].Targets {
 		target := &snapshot.Distributions[2].ReleasePolicies[0].Targets[i]
-		target.Scopes = []InstallScope{ScopeUser, ScopeProject}
+		target.Scope, target.Scopes = ScopeProject, nil
 	}
 	if _, err := ResolveDirectory(snapshot, request); !errors.Is(err, ErrDirectoryIneligible) {
 		t.Fatalf("project grant incorrectly reused user-only promotion evidence: %v", err)

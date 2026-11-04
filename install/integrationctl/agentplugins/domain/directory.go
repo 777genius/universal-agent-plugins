@@ -181,7 +181,7 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 		return &eligibilityReason{"upstream_materialization_required", "Context7 preparation requires trusted materialization on a declared supported target"}
 	}
 	for _, target := range directoryEligibilityTargets(request.Targets, request.Scope) {
-		entry := targetByClientScope(policy.Targets, target, request.Scope)
+		entry := targetByClientScope(policy.Targets, target, request.Scope, snapshot.SnapshotSchemaVersion)
 		// Only absence of signed ChatGPT support can use the source-only lane.
 		if !(entry == nil && request.Purpose == DirectoryResolveContext7ChatGPTPreparation) {
 			if entry == nil {

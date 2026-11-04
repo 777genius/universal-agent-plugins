@@ -28,7 +28,7 @@ func directoryTrustedEligibilityEvidence(snapshot DirectorySnapshot, evidence Di
 // mistaken for evidence about the caller's local environment.
 func hasPassedUpstreamMaterialization(snapshot DirectorySnapshot, distribution DirectoryDistribution, release DirectoryRelease, policy DirectoryReleasePolicy, client ClientID, scope InstallScope) bool {
 	evidenceIDs := policy.CurrentEvidence
-	if target := targetByClientScope(policy.Targets, client, scope); target != nil {
+	if target := targetByClientScope(policy.Targets, client, scope, snapshot.SnapshotSchemaVersion); target != nil {
 		evidenceIDs = append(append([]string(nil), evidenceIDs...), target.CurrentEvidence...)
 	}
 	for _, evidenceID := range evidenceIDs {
@@ -89,12 +89,20 @@ func distributionByID(snapshot DirectorySnapshot, product DirectoryProduct, id s
 
 // targetByClientScope never borrows a policy for another scope. V1 targets
 // contain a list of scopes; V2 grants carry exactly one explicit scope.
-func targetByClientScope(values []DirectoryTarget, client ClientID, scope InstallScope) *DirectoryTarget {
+func targetByClientScope(values []DirectoryTarget, client ClientID, scope InstallScope, snapshotSchema int) *DirectoryTarget {
 	for i := range values {
 		if values[i].Client != client {
 			continue
 		}
-		if values[i].Scope == scope || values[i].Scope == "" && containsScope(values[i].Scopes, scope) {
+		// A V2 signed policy grants one explicit scope. A legacy V1 scopes
+		// array never promotes that client into a V2 project grant.
+		if snapshotSchema == 2 {
+			if values[i].Scope == scope && len(values[i].Scopes) == 0 {
+				return &values[i]
+			}
+			continue
+		}
+		if values[i].Scope == "" && containsScope(values[i].Scopes, scope) {
 			return &values[i]
 		}
 	}
