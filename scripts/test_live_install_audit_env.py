@@ -608,10 +608,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             config = root / "config.toml"
             key = "agentplugins-" + "a" * 12
             config.write_text(
-                f'[plugins."atlassian@{key}"]\\nenabled = true\\n'
-                f'[marketplaces.{key}]\\nsource_type = "local"\\n'
-                f'source = "{managed}"\\n')
-            config.write_text(config.read_text().replace("\\\\n", "\\n"))
+                f'[plugins."atlassian@{key}"]\nenabled = true\n'
+                f'[marketplaces.{key}]\nsource_type = "local"\n'
+                f'source = "{managed}"\n')
+            config.write_text(config.read_text().replace("\\\n", "\n"))
             changes = list(audit.snapshot([root]).items())
             self.assertEqual(
                 audit.attributable_native_changes([root], changes, "atlassian", "codex"),
