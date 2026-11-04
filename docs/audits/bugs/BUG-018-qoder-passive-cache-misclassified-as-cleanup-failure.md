@@ -26,4 +26,4 @@ The intended claim is *active native removal*, not *deletion of every downloaded
 
 ## Status
 
-Independent source ZIP reviewed, narrowly-scoped change and regression **planned**, not final-head qualified.
+Source ZIP reproduced and narrow cache/log classification fix plus regression are **pushed**. Only regular passive files are excluded from active-residue verification; symlinks/unreadable and live registry/settings remain fail-closed, with retained passive paths in JSON. Old 11 Qoder cleanup-failed labels and 19 canceled/not-run cases are unchanged; final-head E2E and independent review **not yet qualified**.
