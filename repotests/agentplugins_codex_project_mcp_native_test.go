@@ -13,8 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/pelletier/go-toml/v2"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // Trust is an explicit fixture input in the original disposable user profile.
