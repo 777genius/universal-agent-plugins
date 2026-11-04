@@ -132,6 +132,7 @@ jobs:
         with:
           node-version: '24'
       - name: Install real native client binary, no login or model call
+        id: native-install
         env:
           TARGET: ${{ matrix.target }}
         shell: bash
@@ -161,6 +162,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           KIND: ${{ matrix.kind }}
+          AUDIT_VENDOR_OUTCOME: ${{ steps.native-install.outcome }}
         run: |
           python3 scripts/live-install-audit.py --cli "$RUNNER_TEMP/agentplugins-audit" \
             --target "$TARGET" --kind "$KIND" --limit 30 \
