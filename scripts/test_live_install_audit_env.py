@@ -209,6 +209,35 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     workflow,
                 )
 
+    def test_reports_distinct_pr_head_and_checked_merge_sha(self):
+        # BUG-015: pull_request GITHUB_SHA is a merge checkout, not PR head.
+        import json
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            with patch.dict(os.environ, {
+                "GITHUB_SHA": "a" * 40,
+                "AUDIT_PR_HEAD_SHA": "b" * 40,
+                "AUDIT_VENDOR_OUTCOME": "failure",
+            }), patch("sys.argv", [
+                "live-install-audit.py", "--cli", "/unused/agentplugins",
+                "--target", "codex", "--kind", "skill", "--limit", "1",
+                "--report-dir", temporary,
+            ]):
+                self.assertEqual(audit.main(), 2)
+            report = json.loads((Path(temporary) / "codex-skill.json").read_text())
+        self.assertEqual(report["github_sha"], "a" * 40)
+        self.assertEqual(report["pr_head_sha"], "b" * 40)
+        self.assertEqual(report["results"][0]["status"], "client-unavailable")
+
+    def test_both_matrix_workflows_export_pr_source_head(self):
+        for relative_path in (
+            ".github/workflows/live-install-audit.yml",
+            ".github/workflows/live-install-remaining-clients.yml",
+        ):
+            with self.subTest(workflow=relative_path):
+                workflow = (Path(__file__).resolve().parents[1] / relative_path).read_text()
+                self.assertIn("AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}", workflow)
+
     def test_failed_vendor_bootstrap_cannot_inherit_unrelated_host_binary(self):
         audit = load_audit()
         with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "failure"}):
