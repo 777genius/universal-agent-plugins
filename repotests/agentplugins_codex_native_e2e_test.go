@@ -581,7 +581,35 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	if nativeSHA(t, statePath) != unchangedState || nativeTreeDigest(t, active) != unchangedManaged || nativeTreeDigest(t, c.Root) != unchangedCache {
 		t.Fatal("explicit user scope replay mutated the Codex user installation")
 	}
-	stages["explicit_user_scope"] = nativeStage{Status: "passed", Reason: "genuine Codex CLI install idempotence, explicit user/default scope parity and identical state/managed/cache bytes"}
+	// Re-query the real native Codex registry after explicit scope replay;
+	// an unchanged installer response alone does not prove native discovery.
+	listing, listErr := nativeCommand(t, f, client, "list-explicit-user", "plugin", "list", "--json")
+	if listErr != nil {
+		t.Fatalf("native Codex inventory after explicit user replay: %v: %s", listErr, listing)
+	}
+	var explicitInventory struct {
+		Installed []struct {
+			ID        string `json:"pluginId"`
+			Installed bool   `json:"installed"`
+			Enabled   bool   `json:"enabled"`
+			Source    struct {
+				Path string `json:"path"`
+			} `json:"source"`
+		} `json:"installed"`
+	}
+	if err := json.Unmarshal(listing, &explicitInventory); err != nil {
+		t.Fatalf("invalid native Codex inventory after explicit user replay: %v", err)
+	}
+	seenExact := false
+	for _, plugin := range explicitInventory.Installed {
+		if plugin.ID == f.PluginID && plugin.Installed && plugin.Enabled && plugin.Source.Path == active {
+			seenExact = true
+		}
+	}
+	if !seenExact {
+		t.Fatalf("native Codex did not retain the exact enabled user plugin: %s", listing)
+	}
+	stages["explicit_user_scope"] = nativeStage{Status: "passed", Reason: "real Codex plugin list retained exact enabled user plugin; identical persisted state/managed/cache bytes after explicit --scope user", Artifacts: []string{"unchanged-explicit-user-installer.json", "list-explicit-user.log"}}
 
 	// A changed existing directory deliberately loses provable content ownership.
 	// Verify fail-closed protection, then restore only bytes this fixture saved.
