@@ -79,8 +79,10 @@ func TestAgentpluginsCodexNativeForeignSkillCLIRefusal(t *testing.T) {
 	}
 	stages["native_foreign_discovery"] = nativeStage{Status: "passed", Reason: "genuine pinned Codex skills/list saw the exact unmanaged repository Skill"}
 
-	argv := []string{"skills", "add", "777genius/universal-agent-plugins", "--ref", sourceCommit,
-		"--path", sourcePath, "--skill", name, "--target", "codex", "--scope", "project",
+	// The published skills comparison requires the immutable @commit//folder
+	// source form. --ref accepts branch/tag refs, not an arbitrary commit SHA.
+	argv := []string{"skills", "add", "777genius/universal-agent-plugins@" + sourceCommit + "//" + sourcePath,
+		"--skill", name, "--target", "codex", "--scope", "project",
 		"--project-root", f.base.Project, "--no-ui", "--yes", "--format", "json"}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
