@@ -879,7 +879,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # Name and file presence alone are insufficient. A true Skill pass also
     # proves the immutable source in the portable lock AND exact upstream bytes.
     installed = bool(
-        output["exit_code"] == 0 and listed_identity and
+        output["exit_code"] == 0 and listed["exit_code"] == 0 and listed_identity and
         (kind == "plugin" or
          (bool(skill_path) and lock_pinned and skill_bytes_match))
     )
