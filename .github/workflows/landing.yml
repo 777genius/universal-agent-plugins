@@ -3,6 +3,7 @@ name: Landing
 on:
   pull_request:
     paths:
+      - "README.md"
       - "landing/**"
       - "website/**"
       - ".github/workflows/docs-pages.yml"
@@ -12,6 +13,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "README.md"
       - "landing/**"
       - "website/**"
       - ".github/workflows/docs-pages.yml"

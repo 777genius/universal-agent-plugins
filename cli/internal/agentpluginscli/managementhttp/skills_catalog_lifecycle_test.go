@@ -1,8 +1,7 @@
-package management
+package managementhttp
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -19,12 +18,7 @@ func (b *catalogDiscardTestBackend) DiscardSkillsCatalog(_ context.Context, id s
 
 func TestSkillCatalogDiscardTransport(t *testing.T) {
 	backend := &catalogDiscardTestBackend{testBackend: &testBackend{}, calls: make(chan string, 2)}
-	root := t.TempDir()
-	server, err := Start(t.Context(), Options{Backend: backend, StateRoot: root, IntentRoot: filepath.Join(root, "intent"), EnvironmentID: "stable-environment", ContextID: "capture", EngineVersion: "test"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(server.Close)
+	server := newTestServer(t, "", "capture", backend)
 	for range 2 {
 		requestJSON(t, server, "DELETE", "/api/v1/skills/catalog/catalog-one", nil, 204, nil)
 		if id := <-backend.calls; id != "catalog-one" {

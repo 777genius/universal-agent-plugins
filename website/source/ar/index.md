@@ -26,7 +26,17 @@ translationRequired: true
     <h2>بناء الإضافات</h2>
     <p>اكتب حزمة معيارية تضم plugin.json وSkills وإعدادات MCP. تعرّف على أدوات التأليف المبنية من المصدر.</p>
   </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>دمج UAP</h2>
+    <p>Hooks وكشف الوكيل ومثبّت Go وإدارة TypeScript.</p>
+  </a>
 </div>
+
+## قدرات إضافية لـ UAP
+
+- ثبّت لعدة وكلاء، وأضف Skills مستقلة، واستخدم الفهرس الموقّع أو Git/SSH أو الأرشيف. [التثبيت](./use/install).
+- افصل المشروع عن المستخدم عبر `uap.toml` / `uap.lock`؛ ثم حدّث وأصلح وشخّص الحالة. [الإدارة](./use/manage).
+- أنشئ حزم Skills/MCP قابلة للنقل، وادمج SDK بلغة Go وTypeScript. [SDK](./sdk/) · [الإنشاء](./build/).
 
 ## ثبّت إضافتك الأولى {#install-your-first-plugin}
 

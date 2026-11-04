@@ -191,6 +191,7 @@ test('README retains the available installer and canonical client limitations', 
   );
   assert.ok(text.includes('docs/CODEX_TRANSPORT_EVIDENCE.md'));
   assert.match(text, /\[(?:Go SDK integration guide|Go SDK)\]\(sdk\/README\.md\)/);
+  assert.ok(text.includes('[SDK integration guides](https://universal-agent-plugins.com/docs/en/sdk/)'));
   assert.ok(existsSync(fileURLToPath(new URL('sdk/README.md', root))));
   const showcase = read('landing/components/sections/BuiltWithSection.vue');
   assert.ok(showcase.includes('https://github.com/777genius/universal-agent-plugins/blob/main/sdk/README.md'));

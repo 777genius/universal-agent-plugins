@@ -26,7 +26,17 @@ localeDisposition: "current-translation"
     <h2>构建插件</h2>
     <p>使用 plugin.json、技能和 MCP 配置编写标准包，并了解源码构建中的创作工具。</p>
   </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>集成 UAP</h2>
+    <p>Hooks、代理检测、Go 安装器与 TypeScript 管理。</p>
+  </a>
 </div>
+
+## UAP 的更多功能
+
+- 为多个代理安装插件，添加独立 Skills，使用签名目录、Git/SSH 或归档来源。 [安装](./use/install).
+- 通过 `uap.toml` / `uap.lock` 隔离用户和项目；更新、修复和诊断状态。 [管理](./use/manage).
+- 构建可移植的 Skills/MCP 包，并集成 Go 与 TypeScript SDK。 [SDK](./sdk/) · [构建](./build/).
 
 ## 安装第一个插件
 

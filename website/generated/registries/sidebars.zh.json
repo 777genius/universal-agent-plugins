@@ -59,6 +59,31 @@
       ]
     },
     {
+      "text": "SDK",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/sdk/"
+        },
+        {
+          "text": "Go Hooks",
+          "link": "/zh/sdk/go-hooks"
+        },
+        {
+          "text": "主机识别",
+          "link": "/zh/sdk/host-detection"
+        },
+        {
+          "text": "Go Installer",
+          "link": "/zh/sdk/go-installer"
+        },
+        {
+          "text": "TypeScript Management",
+          "link": "/zh/sdk/typescript-management"
+        }
+      ]
+    },
+    {
       "text": "agentplugins author · 0.1.65 版本参考",
       "collapsed": true,
       "items": [
@@ -177,6 +202,31 @@
         {
           "text": "交接",
           "link": "/zh/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "SDK",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/sdk/"
+        },
+        {
+          "text": "Go Hooks",
+          "link": "/zh/sdk/go-hooks"
+        },
+        {
+          "text": "主机识别",
+          "link": "/zh/sdk/host-detection"
+        },
+        {
+          "text": "Go Installer",
+          "link": "/zh/sdk/go-installer"
+        },
+        {
+          "text": "TypeScript Management",
+          "link": "/zh/sdk/typescript-management"
         }
       ]
     },
@@ -303,6 +353,178 @@
       ]
     },
     {
+      "text": "SDK",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/sdk/"
+        },
+        {
+          "text": "Go Hooks",
+          "link": "/zh/sdk/go-hooks"
+        },
+        {
+          "text": "主机识别",
+          "link": "/zh/sdk/host-detection"
+        },
+        {
+          "text": "Go Installer",
+          "link": "/zh/sdk/go-installer"
+        },
+        {
+          "text": "TypeScript Management",
+          "link": "/zh/sdk/typescript-management"
+        }
+      ]
+    },
+    {
+      "text": "agentplugins author · 0.1.65 版本参考",
+      "collapsed": true,
+      "items": [
+        {
+          "text": "agentplugins author (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author"
+        },
+        {
+          "text": "agentplugins author capabilities (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-capabilities"
+        },
+        {
+          "text": "agentplugins author compat (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-compat"
+        },
+        {
+          "text": "agentplugins author doctor (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-doctor"
+        },
+        {
+          "text": "agentplugins author help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-help"
+        },
+        {
+          "text": "agentplugins author init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-init"
+        },
+        {
+          "text": "agentplugins author inspect (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-inspect"
+        },
+        {
+          "text": "agentplugins author skills (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills"
+        },
+        {
+          "text": "agentplugins author skills help (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-help"
+        },
+        {
+          "text": "agentplugins author skills init (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-init"
+        },
+        {
+          "text": "agentplugins author skills validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-skills-validate"
+        },
+        {
+          "text": "agentplugins author test (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-test"
+        },
+        {
+          "text": "agentplugins author validate (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-validate"
+        },
+        {
+          "text": "agentplugins author version (英语)",
+          "link": "/en/api/cli/prepared-authoring-v2-agentplugins-author-version"
+        }
+      ]
+    }
+  ],
+  "/zh/sdk/": [
+    {
+      "text": "使用插件",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/use/"
+        },
+        {
+          "text": "安装",
+          "link": "/zh/use/install"
+        },
+        {
+          "text": "管理",
+          "link": "/zh/use/manage"
+        }
+      ]
+    },
+    {
+      "text": "构建插件",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/build/"
+        },
+        {
+          "text": "单个 Skill",
+          "link": "/zh/build/skill"
+        },
+        {
+          "text": "远程 MCP",
+          "link": "/zh/build/mcp-remote"
+        },
+        {
+          "text": "本地 MCP",
+          "link": "/zh/build/mcp-stdio"
+        },
+        {
+          "text": "混合插件",
+          "link": "/zh/build/hybrid"
+        },
+        {
+          "text": "多个 Skills",
+          "link": "/zh/build/skills"
+        },
+        {
+          "text": "结构",
+          "link": "/zh/build/layout"
+        },
+        {
+          "text": "检查",
+          "link": "/zh/build/checks"
+        },
+        {
+          "text": "交接",
+          "link": "/zh/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "SDK",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/sdk/"
+        },
+        {
+          "text": "Go Hooks",
+          "link": "/zh/sdk/go-hooks"
+        },
+        {
+          "text": "主机识别",
+          "link": "/zh/sdk/host-detection"
+        },
+        {
+          "text": "Go Installer",
+          "link": "/zh/sdk/go-installer"
+        },
+        {
+          "text": "TypeScript Management",
+          "link": "/zh/sdk/typescript-management"
+        }
+      ]
+    },
+    {
       "text": "agentplugins author · 0.1.65 版本参考",
       "collapsed": true,
       "items": [
@@ -425,6 +647,31 @@
       ]
     },
     {
+      "text": "SDK",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/sdk/"
+        },
+        {
+          "text": "Go Hooks",
+          "link": "/zh/sdk/go-hooks"
+        },
+        {
+          "text": "主机识别",
+          "link": "/zh/sdk/host-detection"
+        },
+        {
+          "text": "Go Installer",
+          "link": "/zh/sdk/go-installer"
+        },
+        {
+          "text": "TypeScript Management",
+          "link": "/zh/sdk/typescript-management"
+        }
+      ]
+    },
+    {
       "text": "agentplugins author · 0.1.65 版本参考",
       "collapsed": true,
       "items": [
@@ -500,6 +747,10 @@
           "link": "/zh/build/"
         },
         {
+          "text": "SDK",
+          "link": "/zh/sdk/"
+        },
+        {
           "text": "快速入门",
           "link": "/zh/guide/quickstart"
         }
@@ -562,6 +813,31 @@
         {
           "text": "交接",
           "link": "/zh/build/handoff"
+        }
+      ]
+    },
+    {
+      "text": "SDK",
+      "items": [
+        {
+          "text": "概览",
+          "link": "/zh/sdk/"
+        },
+        {
+          "text": "Go Hooks",
+          "link": "/zh/sdk/go-hooks"
+        },
+        {
+          "text": "主机识别",
+          "link": "/zh/sdk/host-detection"
+        },
+        {
+          "text": "Go Installer",
+          "link": "/zh/sdk/go-installer"
+        },
+        {
+          "text": "TypeScript Management",
+          "link": "/zh/sdk/typescript-management"
         }
       ]
     },
