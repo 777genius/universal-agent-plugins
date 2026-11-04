@@ -1114,7 +1114,7 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 	assertSentinels()
 	requireProfilePlugin(rootB, "B-list-after-remove", false)
 	stages["B_only_remove"] = claudeNativeStage{Status: "passed"}
-	capture("after_B_only_remove")
 	f.ConfigDir, f.StateHome = rootA, stateA
 	requireProfilePlugin(rootA, "A-list-after-B-remove", true)
+	capture("after_B_only_remove")
 }
