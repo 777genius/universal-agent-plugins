@@ -174,7 +174,6 @@ func TestPiProjectNativeSkillsMCPFacadeAAndB(t *testing.T) {
 	}
 }
 
- 
 // The same public facade and component kernel used by the Project A/B test
 // must bind global objects to the original physical Pi profile. The project
 // directories below are canaries: they are never eligible user targets.

@@ -92,7 +92,7 @@ func (adapter *ProjectAdapter) CheckPlanPrecondition(in clients.PlanInput, plan 
 		if in.Client.ClientID != domain.ClientPi ||
 			in.TargetContext.UserConfigRoot != in.Client.ConfigRoot ||
 			plan.NativeRegistryRoot != in.Client.ConfigRoot {
-			return fmt.Errorf("Pi user precondition differs from selected original profile")
+			return fmt.Errorf("pi user precondition differs from selected original profile")
 		}
 		return adapter.Adapter.CheckPlanPrecondition(in, plan)
 	}

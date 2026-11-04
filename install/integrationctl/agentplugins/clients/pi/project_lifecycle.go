@@ -19,7 +19,7 @@ const piUserComponentAction = "Reload resources or restart Pi to discover user S
 // that a project plan kept the originally detected user profile.
 func piSelectedAuthority(client domain.DetectedClient, plan domain.DeliveryPlan) error {
 	if client.ClientID != domain.ClientPi {
-		return fmt.Errorf("Pi selected client identity differs")
+		return fmt.Errorf("pi selected client identity differs")
 	}
 	switch plan.Scope {
 	case domain.ScopeProject:
@@ -27,7 +27,7 @@ func piSelectedAuthority(client domain.DetectedClient, plan domain.DeliveryPlan)
 		return err
 	case domain.ScopeUser:
 		if client.ConfigRoot != plan.TargetAnchor || client.ConfigRoot != plan.NativeRegistryRoot {
-			return fmt.Errorf("Pi user target differs from selected original profile")
+			return fmt.Errorf("pi user target differs from selected original profile")
 		}
 		return validateProfile(client.ConfigRoot)
 	default:
@@ -191,7 +191,7 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 		}
 	case domain.ScopeUser:
 		if request.NativeRegistryRoot != request.Client.ConfigRoot {
-			return out, fmt.Errorf("Pi user profile differs from original authority")
+			return out, fmt.Errorf("pi user profile differs from original authority")
 		}
 		if err := validateProfile(request.NativeRegistryRoot); err != nil {
 			return out, err

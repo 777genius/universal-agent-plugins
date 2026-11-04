@@ -189,7 +189,7 @@ func TestPiScopedAdapterPreconditionPreservesGlobalAndProjectAuthority(t *testin
 		t.Fatal(err)
 	}
 	if err := adapter.CheckPlanPrecondition(clients.PlanInput{
-		Client: domain.DetectedClient{ClientID: domain.ClientPi, ConfigRoot: other},
+		Client:        domain.DetectedClient{ClientID: domain.ClientPi, ConfigRoot: other},
 		TargetContext: target,
 	}, &plan); err == nil {
 		t.Fatal("Pi Global precondition adopted another selected user profile")

@@ -378,7 +378,10 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
                 raise RuntimeError("removed Pi project Skill remains visible")
             if not (project_b/".pi/skills/pi-managed/SKILL.md").exists():
                 raise RuntimeError("project B Skill removed with A")
-            if (user/"mcp.json").read_text()!=foreign: raise RuntimeError("user Pi MCP changed")
+            # Global install/remove may legitimately reserialize the JSON.
+            # Preserve the exact foreign document semantically, not its old whitespace.
+            if json.loads((user/"mcp.json").read_text()) != json.loads(foreign):
+                raise RuntimeError("user Pi MCP foreign content changed after Global lifecycle")
             remaining = json.loads((project_a/".pi/mcp.json").read_text()).get("mcpServers", {})
             if not isinstance(remaining, dict) or "foreign" not in remaining:
                 raise RuntimeError("foreign project MCP was removed")
