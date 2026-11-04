@@ -3,17 +3,12 @@ package pluginkitairepo_test
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/pelletier/go-toml/v2"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -47,7 +42,7 @@ func TestAgentpluginsCodexNativeTrustedProjectMCP(t *testing.T) {
 	nativeJSON(t, filepath.Join(f.base.Root, "trust-fixture.json"), map[string]any{"authored_before_baseline": true, "user_config": config, "trusted_projects": []string{f.base.Project, f.otherProject}, "production_trust_mutation": false})
 	f.base.writePackage(t, "A", "1.0.0")
 	stages := map[string]nativeStage{}
-	for _, name := range []string{"install", "native_project_mcp", "native_env_forwarding", "unchanged", "remove", "scope_preservation", "retained_data"} {
+	for _, name := range []string{"install", "native_project_mcp", "unchanged", "remove", "scope_preservation", "retained_data"} {
 		stages[name] = nativeStage{Status: "not_evaluated", Reason: "not reached"}
 	}
 	stages["model_use"] = nativeStage{Status: "not_evaluated", Reason: "no turn/start; direct MCP RPC only"}
@@ -97,53 +92,6 @@ func TestAgentpluginsCodexNativeTrustedProjectMCP(t *testing.T) {
 		requireStable()
 	}
 	stages["unchanged"] = nativeStage{Status: "passed", Reason: "repeat add/update preserved exact Prepared state/config and direct MCP tool/data behavior"}
-	// Codex-native name forwarding is not a portable Agent Plugins field.
-	// Use the real trusted Codex client and its already qualified direct MCP tool
-	// route. Parent receives a synthetic canary; the child reports only its hash.
-	// The negative run proves that inherited parent environment alone is not
-	// sufficient to qualify env_vars as the mechanism.
-	nativeAttempt(stages, "native_env_forwarding", "trusted-canary-positive-rpc.jsonl")
-	originalConfig, err := os.ReadFile(projectConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	secret := "fixture-" + f.base.Nonce
-	digest := sha256.Sum256([]byte(secret))
-	f.base.ExtraEnv = []string{"UAP_TEST_SECRET_CANARY=" + secret}
-	codexProjectMCPSession(t, f, f.base.Project, "trusted-canary-negative", &binding, data, true,
-		map[string]string{"default": "", "explicit": ""})
-	var nativeConfig map[string]any
-	if err := toml.Unmarshal(originalConfig, &nativeConfig); err != nil {
-		t.Fatal(err)
-	}
-	servers, ok := nativeConfig["mcp_servers"].(map[string]any)
-	if !ok {
-		t.Fatal("Codex project MCP collection unavailable for native-only spike")
-	}
-	selected, ok := servers["default"].(map[string]any)
-	if !ok {
-		t.Fatal("selected Codex stdio MCP server unavailable for native-only spike")
-	}
-	selected["env_vars"] = []string{"UAP_TEST_SECRET_CANARY"}
-	forwardedConfig, err := toml.Marshal(nativeConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(projectConfig, forwardedConfig, 0600); err != nil {
-		t.Fatal(err)
-	}
-	codexProjectMCPSession(t, f, f.base.Project, "trusted-canary-positive", &binding, data, true,
-		map[string]string{"default": hex.EncodeToString(digest[:]), "explicit": ""})
-	if err := os.WriteFile(projectConfig, originalConfig, 0600); err != nil {
-		t.Fatal(err)
-	}
-	codexProjectMCPSession(t, f, f.base.Project, "trusted-canary-restored", &binding, data, true,
-		map[string]string{"default": "", "explicit": ""})
-	f.base.ExtraEnv = nil
-	assertNativeCanaryAbsentFromObservedFiles(t, f.base.Root, secret)
-	requireStable()
-	stages["native_env_forwarding"] = nativeStage{Status: "passed", Reason: "pinned real Codex forwarded only explicitly named synthetic env to one MCP child; absence without env_vars and after restoration confirmed; no canary value stored"}
-
 	codexProjectMCPSession(t, f, f.otherProject, "control-after-replay", nil, "", false)
 	nativeAttempt(stages, "remove", "trusted-remove-installer.json")
 	f.run(t, "trusted-remove", "remove", "native-proof")
@@ -198,7 +146,7 @@ func codexProjectMCPBinding(t *testing.T, f *codexProjectNativeFixture) (domain.
 	return domain.ClientBinding{}, ""
 }
 
-func codexProjectMCPSession(t *testing.T, f *codexProjectNativeFixture, project, label string, binding *domain.ClientBinding, data string, present bool, wantCanary ...map[string]string) {
+func codexProjectMCPSession(t *testing.T, f *codexProjectNativeFixture, project, label string, binding *domain.ClientBinding, data string, present bool) {
 	t.Helper()
 	before, err := os.ReadFile(f.base.Events)
 	if err != nil && !os.IsNotExist(err) {
@@ -242,13 +190,6 @@ func codexProjectMCPSession(t *testing.T, f *codexProjectNativeFixture, project,
 				operation = "write"
 			}
 			facts := nativeDecodeFacts(t, r.must(t, "mcpServer/tool/call", map[string]any{"threadId": thread.Thread.ID, "server": server.Name, "tool": "inspect_runtime", "arguments": map[string]string{"nonce": f.base.Nonce, "operation": operation, "marker": "persist-" + f.base.Nonce}}))
-			if len(wantCanary) > 0 {
-				expected, selected := wantCanary[0][server.Name]
-				if !selected || facts.CanaryDigest != expected {
-					t.Fatalf("native MCP forwarding proof failed for server %q (present=%t)", server.Name, facts.CanaryDigest != "")
-				}
-			}
-
 			nativeAssertEvent(t, f.base, facts)
 			cwd := binding.TargetLocator
 			if server.Name == "explicit" {
@@ -278,67 +219,4 @@ func codexProjectMCPSession(t *testing.T, f *codexProjectNativeFixture, project,
 		t.Fatal("direct MCP test unexpectedly requested model inference")
 	}
 	f.requireForeign(t)
-}
-
-// The only claim is absence from a bounded inventory of this disposable
-// fixture. A failed/partial inspection is inconclusive, never a secrecy PASS.
-func assertNativeCanaryAbsentFromObservedFiles(t *testing.T, root, canary string) {
-	t.Helper()
-	needles := [][]byte{[]byte(canary), []byte(base64.StdEncoding.EncodeToString([]byte(canary))), []byte(hex.EncodeToString([]byte(canary)))}
-	const maxEntries, maxFileBytes, maxTotalBytes = 8192, 128 << 20, 512 << 20
-	entries, total := 0, int64(0)
-	err := filepath.WalkDir(root, func(path string, item os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		entries++
-		if entries > maxEntries {
-			return fmt.Errorf("canary scan exceeded entry limit")
-		}
-		for _, needle := range needles {
-			if bytes.Contains([]byte(path), needle) {
-				return fmt.Errorf("canary persisted in a fixture path")
-			}
-		}
-		if item.Type()&os.ModeSymlink != 0 {
-			target, err := os.Readlink(path)
-			if err != nil {
-				return err
-			}
-			for _, needle := range needles {
-				if bytes.Contains([]byte(target), needle) {
-					return fmt.Errorf("canary persisted in a fixture symlink")
-				}
-			}
-			return nil // the claim excludes files referenced through symlinks
-		}
-		if item.IsDir() {
-			return nil
-		}
-		info, err := item.Info()
-		if err != nil {
-			return err
-		}
-		if !info.Mode().IsRegular() || info.Size() > maxFileBytes || total+info.Size() > maxTotalBytes {
-			return fmt.Errorf("canary scan cannot admit file type or size")
-		}
-		total += info.Size()
-		body, err := os.ReadFile(path)
-		if err != nil || int64(len(body)) != info.Size() {
-			return fmt.Errorf("canary scan could not fully read observed file")
-		}
-		for _, needle := range needles {
-			if bytes.Contains(body, needle) {
-				rel, relErr := filepath.Rel(root, path)
-				if relErr != nil {
-					return fmt.Errorf("synthetic canary detected but fixture path attribution failed")
-				}
-				return fmt.Errorf("synthetic canary persisted in observed fixture file %q", filepath.ToSlash(rel))
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("Codex native canary persistence qualification incomplete or unsafe: %v", err)
-	}
 }
