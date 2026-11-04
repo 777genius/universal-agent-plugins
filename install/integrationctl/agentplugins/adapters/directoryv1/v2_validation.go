@@ -332,7 +332,7 @@ func validateV2GrantBinding(grant domain.DirectoryTarget) error {
 	return nil
 }
 
-func validateV2GrantClosure(grant domain.DirectoryTarget, floor []int) error {
+func validateV2GrantClosure(grant domain.DirectoryTarget, floor []uint64) error {
 	if grant.CanonicalClosure == nil || !grant.CanonicalClosure.Eligible {
 		return nil
 	}
