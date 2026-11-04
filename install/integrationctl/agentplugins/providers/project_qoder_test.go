@@ -106,13 +106,28 @@ func qoderPrepared(t *testing.T, out domain.ActivationOutcome, err error) {
 }
 func TestProjectQoderClosedViewAndNeutralDiscovery(t *testing.T) {
 	f := newQoderProjectFixture(t, true)
+	// This fixture exercises the previously installed prepared-import receipt.
+	// The current planner may now select MCP, but that cannot migrate old
+	// package-only ownership into native project state implicitly.
+	var legacy domain.NativeObjectOwnership
+	for _, object := range f.request.Delivery.NativeObjects {
+		if object.Kind == "managed_package_directory" {
+			legacy = object
+			break
+		}
+	}
+	if legacy.ObjectID == "" {
+		t.Fatal("missing prepared-import package ownership")
+	}
+	f.request.PreviousNativeObjects = []domain.NativeObjectOwnership{legacy}
+	f.request.Delivery.NativeObjects = []domain.NativeObjectOwnership{legacy}
 	plan := f.request.Plan
 	if plan.TargetAnchor != filepath.Join(f.project, ".uap", "managed") || plan.TargetRoot != filepath.Join(plan.TargetAnchor, "clients", "qoder") || plan.NativeRegistryRoot != plan.TargetRoot || plan.NativeRegistryExecutable != "" {
 		t.Fatalf("wrong exact layout %+v", plan)
 	}
 	for _, c := range plan.Components {
-		if c.Kind == domain.ComponentMCPServer && c.Support != domain.SupportUnsupported {
-			t.Fatal("MCP promoted")
+		if c.Kind == domain.ComponentMCPServer && c.Support != domain.SupportNative {
+			t.Fatal("Qoder current project MCP capability was not selected")
 		}
 	}
 	view := filepath.Join(plan.ActivePath, qoderView)
