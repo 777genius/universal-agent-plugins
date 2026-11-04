@@ -28,6 +28,11 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, _ domain.P
 const qoderProjectNativeAction = "Restart Qoder in the selected project and review native Skill/MCP discovery and MCP approval; installed files do not attest to initialized servers, tools, or authentication."
 
 func qoderNativePreflight(env clients.Env, request domain.ActivationRequest) error {
+    // Preflight runs before staging and must not require receipts that do not
+    // exist yet. The activation call below revalidates the exact delivered set.
+    if len(request.Delivery.NativeObjects) == 0 {
+        return qoderHigherPriorityConflicts(request.Plan)
+    }
     if err := validateQoderProjectSelection(request.Plan, qoderNativeOwned(request.Delivery.NativeObjects)); err != nil { return err }
     layout := qoderComponents(request.Plan.TargetContext.ProjectRoot)
     if err := layout.ValidateObjects(qoderNativeOwned(request.PreviousNativeObjects)); err != nil { return err }

@@ -18,8 +18,10 @@ var (
 
 func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.ActivationRequest) bool {
 	if projectRequested(request.Plan) {
-        return len(request.PreviousNativeObjects) == 0 || len(qoderNativeOwned(request.PreviousNativeObjects)) > 0
-    }
+		return !qoderLegacyPrepared(request.PreviousNativeObjects) &&
+			request.Plan.InstallIntent == domain.InstallIntentAutomatic &&
+			(shared.OnlyNativeComponents(request.Plan.Components) || len(qoderNativeOwned(request.PreviousNativeObjects)) > 0)
+	}
 	return shared.HasClientCLI(env, request.BackendExecutable)
 }
 
