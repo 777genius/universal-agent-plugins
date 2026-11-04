@@ -192,8 +192,19 @@ func TestProjectQoderDirectGroupRepairAndDefaultRemovalKeepExactAuthority(t *tes
 	}
 	installed, binding := projectQoderDirectOwned(t, j, projectJourneySkill)
 	beforeB := securityFixtureTree(t, j.b)
-	if len(installed.DataReceipts) != 0 || installed.DataRetained || binding.DataReceiptID != "" {
-		t.Fatal("skills-only install invented a data allocation")
+	// This selected package includes an stdio MCP server with ${PLUGIN_DATA}.
+	// Native Project MCP support therefore requires one exact owned data
+	// receipt; it is not the historical Skills-only prepared-import route.
+	if len(installed.DataReceipts) != 1 || installed.DataRetained || binding.DataReceiptID == "" {
+		t.Fatalf("selected MCP did not allocate one exact data receipt: %+v %+v", installed.DataReceipts, binding)
+	}
+	allocated, ok := installed.DataReceipts[binding.DataReceiptID]
+	if !ok || allocated.DataReceiptID != binding.DataReceiptID ||
+		allocated.Scope != "project" || allocated.State != domain.DataReceiptOwned ||
+		allocated.PhysicalBackend != binding.PhysicalArtifact ||
+		allocated.Locator != filepath.Join(j.a, ".uap", "plugin-data", binding.PhysicalArtifact) ||
+		!strings.HasPrefix(allocated.OwnershipDigest, "sha256:") {
+		t.Fatalf("Qoder selected stdio PLUGIN_DATA ownership is not exact: %+v", allocated)
 	}
 	stateBefore := projectJourneyRead(t, filepath.Join(j.a, ".uap", "state-v2.json"))
 	for _, args := range [][]string{{"add", transport.repo, "--target", "qoder", "--no-save"}, {"update", installed.DeclaredName, "--target", "qoder"}} {
@@ -226,8 +237,14 @@ func TestProjectQoderDirectGroupRepairAndDefaultRemovalKeepExactAuthority(t *tes
 	j.run(t, j.a, "remove", installed.DeclaredName, "--target", "qoder")
 	projectJourneyAbsent(t, current.TargetLocator)
 	state := j.state(t, j.a)
-	if len(state.Installations) != 1 || !state.Installations[0].DataRetained || len(state.Installations[0].Clients) != 0 || len(state.Installations[0].DataReceipts) != 1 {
-		t.Fatal("default skills-only removal did not retain its actual owner allocation")
+	if len(state.Installations) != 1 || !state.Installations[0].DataRetained ||
+		len(state.Installations[0].Clients) != 0 || len(state.Installations[0].DataReceipts) != 1 {
+		t.Fatal("default Qoder MCP removal did not retain its exact owner allocation")
+	}
+	if retained, ok := state.Installations[0].DataReceipts[allocated.DataReceiptID]; !ok ||
+		retained.DataReceiptID != allocated.DataReceiptID || retained.OwnershipDigest != allocated.OwnershipDigest ||
+		retained.Locator != allocated.Locator {
+		t.Fatal("Qoder removal changed retained plugin data authority")
 	}
 	if runner.calls != 0 || !reflect.DeepEqual(beforeUser, securityFixtureTree(t, user)) || !reflect.DeepEqual(beforeB, securityFixtureTree(t, j.b)) {
 		t.Fatal("direct A lifecycle invoked native or changed original user/B authority")
