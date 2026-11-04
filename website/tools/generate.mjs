@@ -148,6 +148,7 @@ export function buildSidebar(locale, entities) {
     items: [
       linkItem(journeyLabels[locale][0], `${prefix}use/`),
       linkItem(journeyLabels[locale][1], `${prefix}build/`),
+      linkItem("SDK", `${prefix}sdk/`),
       linkItem(labels.quickstart, `${prefix}guide/quickstart`)
     ]
   }];
@@ -157,6 +158,7 @@ export function buildSidebar(locale, entities) {
     [prefix]: journeys,
     [`${prefix}use/`]: journeys,
     [`${prefix}build/`]: journeys,
+    [`${prefix}sdk/`]: journeys,
     [`${prefix}api/cli/prepared-authoring-v2`]: journeys,
     [`${prefix}guide/quickstart`]: guideSidebar,
     [`${prefix}reference/client-compatibility`]: journeys

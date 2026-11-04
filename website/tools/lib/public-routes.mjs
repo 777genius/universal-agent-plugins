@@ -1,6 +1,6 @@
 import { docsLocales } from "../config/locales.mjs";
 const localePrefix = `(?:${docsLocales.join("|")})`;
-const currentPage = new RegExp(`^${localePrefix}/(?:index\\.md|use/.+\\.md|build/.+\\.md|guide/quickstart\\.md|reference/client-compatibility\\.md|api/cli/prepared-authoring-v2-agentplugins-author(?:-[^/]*)?\\.md)$`);
+const currentPage = new RegExp(`^${localePrefix}/(?:index\\.md|use/.+\\.md|build/.+\\.md|sdk/.+\\.md|guide/quickstart\\.md|reference/client-compatibility\\.md|api/cli/prepared-authoring-v2-agentplugins-author(?:-[^/]*)?\\.md)$`);
 
 export function isRetiredArchive(relativePath) {
   const pathOnly = relativePath.replace(/\\/g, "/").split(/[?#]/, 1)[0].replace(/^\/+/, "");
