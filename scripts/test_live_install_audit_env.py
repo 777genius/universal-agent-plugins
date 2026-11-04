@@ -1158,9 +1158,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         failed = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
                   "timeout": False, "_json": {"data": {"installations": []}}}
         fixture = {"name": "frontend-design", "source": "unused"}
-        with TemporaryDirectory() as temporary, \\
-             patch.object(audit, "call", return_value=failed), \\
-             patch.object(audit, "initialize_kimi_project_git_root") as initialize:
+        with (TemporaryDirectory() as temporary,
+              patch.object(audit, "call", return_value=failed),
+              patch.object(audit, "initialize_kimi_project_git_root") as initialize):
             root = Path(temporary).resolve()
             audit.do_case("/unused/agentplugins", "kimi", "plugin",
                           "atlassian", 0, root / "kimi-plugin", {})
