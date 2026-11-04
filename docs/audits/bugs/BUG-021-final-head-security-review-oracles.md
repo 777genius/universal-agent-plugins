@@ -31,4 +31,4 @@ Keep source/lock verification and managed native state semantics unchanged. Do n
 
 ## Status
 
-Plan recorded before implementation. Final-head qualification and reviewer clearance pending; no merge authorization.
+Plan recorded before implementation. Narrow harness, pilot/published bootstrap-binding and counterexample regression changes pushed to PR #698. Required and live E2E checks are running on a newer head; independent CodeRabbit/Strix clearance, full source-by-source ZIP review, and merge qualification remain pending.
