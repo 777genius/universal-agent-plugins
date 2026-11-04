@@ -671,15 +671,23 @@ func claudeExpectedMCPInventory() string {
 func claudeWindowsStdioPlan(r map[string]any, names ...string) error {
 	data, _ := r["data"].(map[string]any)
 	targets, _ := data["targets"].([]any)
-	if len(targets) != 1 {
+	var result map[string]any
+	if len(targets) == 1 {
+		target, _ := targets[0].(map[string]any)
+		if target["target"] != "claude" {
+			return fmt.Errorf("unexpected Claude target: %+v", target)
+		}
+		output, _ := target["output"].(map[string]any)
+		result, _ = output["result"].(map[string]any)
+	} else if len(targets) == 0 {
+		// The single-target CLI can return an unchanged operation directly.
+		result, _ = data["result"].(map[string]any)
+	} else {
 		return fmt.Errorf("expected one Claude target: %+v", r)
 	}
-	target, _ := targets[0].(map[string]any)
-	output, _ := target["output"].(map[string]any)
-	result, _ := output["result"].(map[string]any)
 	plan, _ := result["plan"].(map[string]any)
 	components, _ := plan["components"].([]any)
-	if target["target"] != "claude" || plan["client_id"] != "claude" {
+	if plan["client_id"] != "claude" {
 		return fmt.Errorf("wrong client plan: %+v", plan)
 	}
 	for _, name := range names {
@@ -726,6 +734,15 @@ func claudeAssertWindowsStdio(t *testing.T, root, installPath string, names ...s
 }
 
 func TestClaudeWindowsStdioPlan(t *testing.T) {
+	// A repeated user-scope add returns data.result rather than data.targets.
+	const single = `{"data":{"result":{"mutated":false,"no_change":true,"plan":{"client_id":"claude","components":[{"kind":"mcp_server","name":"default","support":"projected"}]}}}}`
+	if err := claudeWindowsStdioPlan(map[string]any{}, "default"); err == nil {
+		t.Fatal("malformed result was accepted")
+	}
+	var direct map[string]any
+	if err := json.Unmarshal([]byte(single), &direct); err != nil || claudeWindowsStdioPlan(direct, "default") != nil {
+		t.Fatalf("legitimate no-change single-target result refused: %v", err)
+	}
 	const fixture = `{"data":{"targets":[{"target":"claude","output":{"result":{"plan":{"client_id":"claude","components":[{"kind":"mcp_server","name":"default","support":"projected"},{"kind":"mcp_server","name":"explicit","support":"projected"}]}}}}]}}`
 	for _, tc := range []struct {
 		name, input string
