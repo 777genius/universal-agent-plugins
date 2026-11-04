@@ -3,6 +3,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +32,7 @@ type facts struct {
 	Marker   string   `json:"marker,omitempty"`
 	PID      int      `json:"pid"`
 	Session  string   `json:"session"`
+	CanaryDigest string `json:"canary_digest,omitempty"`
 }
 
 var session = fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
@@ -112,6 +115,11 @@ func inspect(params json.RawMessage) (any, error) {
 		return nil, err
 	}
 	f := facts{Nonce: p.Arguments.Nonce, Revision: os.Getenv("UAP_TEST_REVISION"), CWD: cwd, Argv: os.Args[1:], Root: os.Getenv("PLUGIN_ROOT"), Data: os.Getenv("PLUGIN_DATA"), Literal: os.Getenv("UAP_TEST_LITERAL"), Once: os.Getenv("UAP_TEST_ONCE"), PID: os.Getpid(), Session: session}
+	if secret := os.Getenv("UAP_TEST_SECRET_CANARY"); secret != "" {
+		h := sha256.Sum256([]byte(secret))
+		f.CanaryDigest = hex.EncodeToString(h[:]) // never persist or return the value
+	}
+
 	if p.Arguments.Operation != "" {
 		if p.Arguments.Operation != "write" && p.Arguments.Operation != "read" {
 			return nil, errors.New("unknown marker operation")
