@@ -69,6 +69,20 @@ func TestPublicCLICrashAfterDurablePhaseRecovery(t *testing.T) {
 		runPublicCLICrashChild(root)
 		return
 	}
+	// Build the genuine public executable before the fixture overrides HOME.
+	// Otherwise Go downloads read-only modules into t.TempDir and Go's
+	// test cleanup can fail on module-cache directory permissions.
+	exe := filepath.Join(t.TempDir(), "agentplugins")
+	if runtime.GOOS == "windows" {
+		exe += ".exe"
+	}
+	build, cancelBuild := context.WithTimeout(t.Context(), 4*time.Minute)
+	defer cancelBuild()
+	cmd := exec.CommandContext(build, "go", "build", "-trimpath", "-o", exe, ".")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build fresh public CLI: %v: %s", err, bytes.TrimSpace(output))
+	}
+
 	// Construct an owned project through the existing real TLS-Git/package
 	// journey. Its inert Gemini detector is setup-only, never used by the
 	// separate recovery binary.
@@ -97,18 +111,6 @@ func TestPublicCLICrashAfterDurablePhaseRecovery(t *testing.T) {
 		t.Fatal("pre-recovery caller-owned staging changed")
 	}
 
-	// Build and run a fresh genuine public executable, not a second test
-	// manager or an in-process reconstituted kernel.
-	exe := filepath.Join(t.TempDir(), "agentplugins")
-	if runtime.GOOS == "windows" {
-		exe += ".exe"
-	}
-	build, cancelBuild := context.WithTimeout(t.Context(), 4*time.Minute)
-	defer cancelBuild()
-	cmd := exec.CommandContext(build, "go", "build", "-trimpath", "-o", exe, ".")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build fresh public CLI: %v: %s", err, bytes.TrimSpace(output))
-	}
 	run := func(args ...string) []byte {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
