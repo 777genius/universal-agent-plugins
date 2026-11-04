@@ -689,19 +689,14 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
                             and locked_skill_is_pinned(project, item, target))
     unsafe_paths = [path for path, digest in changed
                     if digest in ("symlink", "unreadable", "non-regular")]
-    # A delayed writer or remove itself can create a native registration
-    # after the post-add snapshot. Re-enumerate only disposable roots.
-    post_remove_paths = (
-        snapshot(native_roots) if cleanup and cleanup["exit_code"] == 0
-        and kind == "plugin" else {}
-    )
+    # The remove step may create new native registrations after the add snapshot.
+    # Rescan the disposable roots; preserve earlier observed unsafe paths too.
     native_residuals = (
         native_identity_residuals(
             native_roots, identity,
-            sorted(set(post_remove_paths) | set(native_attribution) | set(unsafe_paths)),
+            sorted(set(snapshot(native_roots)) | set(native_attribution) | set(unsafe_paths)),
             target)
-        if post_remove_paths or (cleanup and cleanup["exit_code"] == 0
-                                 and kind == "plugin") else []
+        if cleanup and cleanup["exit_code"] == 0 and kind == "plugin" else []
     )
     # Preserve truthful disk-state evidence without equating passive cached
     # source/log files to an active Qoder/Codex plugin registration.
