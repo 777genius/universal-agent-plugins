@@ -76,9 +76,17 @@ func TestRemoveLegacyAbortsReconcileWhenLegacyStateReappears(t *testing.T) {
 
 func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 	t.Parallel()
-	for _, initiallyPresent := range []bool{true, false} {
-		initiallyPresent := initiallyPresent
-		t.Run(map[bool]string{true: "delegated", false: "reconciled_after_interruption"}[initiallyPresent], func(t *testing.T) {
+	cases := []struct {
+		name             string
+		initiallyPresent bool
+		failSave         bool
+	}{
+		{name: "delegated", initiallyPresent: true},
+		{name: "reconciled_after_interruption"},
+		{name: "v2_save_failure_releases_legacy_lock", failSave: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			store := statev2.Store{Path: filepath.Join(root, "state-v2.json")}
 			installationID := "00000000-0000-4000-8000-000000000001"
@@ -98,10 +106,14 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 			if err := store.Save(state); err != nil {
 				t.Fatal(err)
 			}
-			legacy := &legacyLifecycleStub{exists: initiallyPresent}
+			legacy := &legacyLifecycleStub{exists: tc.initiallyPresent}
 			legacySpy := &inspectedLegacyStateLock{}
+			var stateStore transaction.StateStore = store
+			if tc.failSave {
+				stateStore = refusingLegacyStateSave{StateStore: store}
+			}
 			service := testService(Service{
-				StateStore: observingLegacyStateStore{StateStore: store, lock: legacySpy},
+				StateStore: observingLegacyStateStore{StateStore: stateStore, lock: legacySpy},
 				Legacy: legacy, LegacyLock: legacySpy,
 				Lock:   processlock.Lock{Path: filepath.Join(root, "mutation.lock")},
 				Kernel: transaction.Kernel{StateStore: store, Directory: dirswap.Manager{JournalDir: filepath.Join(root, "operations")}},
@@ -109,14 +121,30 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 			result, err := service.RemoveLegacy(context.Background(), LegacyRemoveInput{
 				Selector: installationID, Confirmed: true, OperationID: "legacy-remove",
 			})
+			if tc.failSave {
+				if err == nil || result.Mutated {
+					t.Fatalf("v2 save failure = (%+v, %v), want no mutation and an error", result, err)
+				}
+				if legacySpy.held {
+					t.Fatal("legacy state lock was retained after v2 save failure")
+				}
+				loaded, loadErr := store.Load()
+				if loadErr != nil {
+					t.Fatal(loadErr)
+				}
+				if onlyBinding(loaded.Installations[0]).Materialization != domain.MaterializationMaterialized {
+					t.Fatal("failed v2 save overwrote the materialized installation")
+				}
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !result.Mutated || result.Reconciled == initiallyPresent {
+			if !result.Mutated || result.Reconciled == tc.initiallyPresent {
 				t.Fatalf("result = %+v", result)
 			}
 			wantCalls := 0
-			if initiallyPresent {
+			if tc.initiallyPresent {
 				wantCalls = 1
 			}
 			if legacy.removeCalls != wantCalls {
@@ -162,4 +190,10 @@ func (store observingLegacyStateStore) Save(state domain.StateFileV2) error {
 		return fmt.Errorf("reconciliation wrote state-v2 without the legacy state lock")
 	}
 	return store.StateStore.Save(state)
+}
+
+type refusingLegacyStateSave struct{ transaction.StateStore }
+
+func (refusingLegacyStateSave) Save(domain.StateFileV2) error {
+	return fmt.Errorf("injected state-v2 save failure")
 }
