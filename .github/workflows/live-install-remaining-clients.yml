@@ -102,7 +102,7 @@ jobs:
               | tee "$RUNNER_TEMP/vendor-proof/verification-blocked.txt"
             exit 3
           fi
-          printf '%s  %s\\n' "$SHA256" "$artifact" | sha256_file -c -
+          printf '%s  %s\n' "$SHA256" "$artifact" | sha256_file -c -
           if [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
             mkdir -p "$RUNNER_TEMP/vendor-root"
             dpkg-deb --extract "$artifact" "$RUNNER_TEMP/vendor-root"
