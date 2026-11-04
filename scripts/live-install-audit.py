@@ -451,6 +451,40 @@ def recorded_signed_release_matches(directory, revision):
     )
 
 
+def signed_release_public_observation(response, identity, target):
+    """Only immutable public provenance fields, never raw list/account content."""
+    if not isinstance(response, dict) or not isinstance(response.get("data"), dict):
+        return []
+    nodes = response["data"].get("installations", [])
+    if not isinstance(nodes, list):
+        return []
+    evidence = []
+    for node in nodes:
+        if not isinstance(node, dict) or node.get("name") != identity:
+            continue
+        directory = node.get("directory")
+        directory = directory if isinstance(directory, dict) else {}
+        clients = node.get("clients")
+        if not isinstance(clients, list):
+            continue
+        for client in clients:
+            if not isinstance(client, dict) or client.get("client_id") != target:
+                continue
+            revision = client.get("package_revision")
+            revision = revision if isinstance(revision, dict) else {}
+            evidence.append({
+                "source": node.get("source") if isinstance(node.get("source"), str) else None,
+                "recorded_distribution": directory.get("recorded_distribution"),
+                "recorded_revision": directory.get("recorded_revision"),
+                "recorded_release_sequence": directory.get("recorded_release_sequence"),
+                "resolved_revision": revision.get("resolved_revision"),
+                "release_sequence": revision.get("release_sequence"),
+                "tree_digest": revision.get("tree_digest"),
+                "manifest_digest": revision.get("manifest_digest"),
+            })
+    return evidence[:3]
+
+
 def matching_installations(response, identity, target, kind, item, signed_release_pins=None):
     """Verify the frozen Registry release, never only live self-consistency."""
     signed_release_pins = signed_release_pins or {}
@@ -744,6 +778,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     listed_json = listed.pop("_json", None) if listed else None
     matching = matching_installations(listed_json, identity, target, kind, item,
                                      signed_release_pins)
+    signed_observation = (
+        signed_release_public_observation(listed_json, identity, target)
+        if kind == "plugin" and isinstance(item, str) and not item.startswith("github:")
+        else [])
     listed_identity = len(matching) == 1
     failed_install_registered = has_target_registration(listed_json, identity, target) if (
         output["exit_code"] != 0) else False
@@ -913,6 +951,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "lock_written": bool(locked), "lock_contains_identity": bool(lock_contains),
             "lock_exact_source_pinned": lock_pinned, "skill_bytes_match": bool(skill_bytes_match),
             "listed_identity": listed_identity, "prepared_binding": prepared_binding,
+            "signed_release_observation": signed_observation,
             "repeat_add": repeat_add, "repeat_list": repeat_list,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,
@@ -1021,8 +1060,12 @@ def main():
             report["results"].append(result)
             report["cases_attempted"] += 1
             save()
-            print(json.dumps({"target": args.target, "kind": args.kind, "index": i,
-                              "status": result["status"]}), flush=True)
+            line = {"target": args.target, "kind": args.kind, "index": i,
+                    "status": result["status"]}
+            if result["status"] == "incomplete-native-proof" and args.kind == "plugin":
+                line["observed_signed_release"] = result.get("signed_release_observation", [])
+                line["expected_signed_release"] = doc["signed_release_pins"].get(item)
+            print(json.dumps(line), flush=True)
     passed = sum(r["status"] == "passed" for r in report["results"])
     report["passed"] = passed
     report["prepared_lifecycle_passed"] = sum(
