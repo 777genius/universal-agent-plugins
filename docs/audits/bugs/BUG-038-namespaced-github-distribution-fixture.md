@@ -19,4 +19,4 @@ Published [Directory snapshot 43](https://github.com/777genius/universal-agent-p
 
 ## Status
 
-Fixture choice and strict source/target regression corrected in PR #698. Still requires exact-new-head full live CI and independent security review before merge. No product adapter, Registry, feature flag or policy change.
+Fixture choice and strict source/target regression corrected in PR #698. In a second source-integrity review, the namespaced selector was found to exempt the directory `product_id` entirely. Tightened the bridge case to require `product_id=github` and added a forged-product regression, while keeping the existing chrome-devtools behavior unchanged. This is a source-identity guard, not evidence of a successful final-head installation. Still requires exact-new-head full live CI and independent security review before merge. No product adapter, Registry, feature flag or policy change.
