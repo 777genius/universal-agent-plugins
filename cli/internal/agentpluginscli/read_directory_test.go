@@ -302,3 +302,46 @@ func readModelBundle() directoryv1.VerifiedBundle {
 		Distributions: []domain.DirectoryDistribution{owner, community}, Evidence: []domain.DirectoryEvidence{evidence, currentEvidence, materializationEvidence},
 		Revocations: []domain.DirectoryRevocation{{DistributionID: "owner/demo", ReleaseSequence: 1}}}, Digest: "sha256:" + strings.Repeat("a", 64)}
 }
+
+func TestPublicDirectoryV2ScopesDoNotBorrowAnotherGrantEvidence(t *testing.T) {
+	const id = "owner/tool"
+	snapshot := domain.DirectorySnapshot{
+		SnapshotSchemaVersion: 2,
+		Distributions: []domain.DirectoryDistribution{{
+			ID: id,
+			Releases: []domain.DirectoryRelease{{Sequence: 7}},
+			ReleasePolicies: []domain.DirectoryReleasePolicy{{
+				ReleaseSequence: 7,
+				CurrentEvidence: []string{"schema-pass"},
+				Targets: []domain.DirectoryTarget{
+					{Client: domain.ClientCodex, Scope: domain.ScopeUser, CurrentEvidence: []string{"user-runtime"}},
+					{Client: domain.ClientCodex, Scope: domain.ScopeProject, CurrentEvidence: []string{"project-runtime"}},
+				},
+			}},
+		}},
+		Evidence: []domain.DirectoryEvidence{
+			{ID: "schema-pass", DistributionID: id, ReleaseSequence: 7, Level: "schema"},
+			{ID: "user-runtime", DistributionID: id, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeUser},
+			{ID: "project-runtime", DistributionID: id, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeProject},
+		},
+	}
+	result := inspectDistribution(snapshot, domain.DirectoryProduct{DefaultDistribution: id}, id, 7)
+	if len(result.Targets) != 2 {
+		t.Fatalf("expected independent v2 grant rows, got %+v", result.Targets)
+	}
+	for i, check := range []struct {
+		scope domain.InstallScope
+		id    string
+	}{{domain.ScopeUser, "user-runtime"}, {domain.ScopeProject, "project-runtime"}} {
+		row := result.Targets[i]
+		if row.Client != domain.ClientCodex || len(row.Scopes) != 1 || row.Scopes[0] != check.scope ||
+			len(row.Evidence) != 2 || row.Evidence[0] != "schema-pass" || row.Evidence[1] != check.id {
+			t.Fatalf("v2 %s grant leaked another scope's evidence: %+v", check.scope, row)
+		}
+	}
+	for _, proof := range result.Evidence {
+		if proof.ID == "project-runtime" && proof.Scope != domain.ScopeProject {
+			t.Fatalf("public evidence omitted its verified scope: %+v", proof)
+		}
+	}
+}

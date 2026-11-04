@@ -27,6 +27,7 @@ type publicEvidence struct {
 	Level                 string                           `json:"level"`
 	Outcome               string                           `json:"outcome"`
 	Client                domain.ClientID                  `json:"client,omitempty"`
+	Scope                 domain.InstallScope              `json:"scope,omitempty"`
 	ClientVersion         string                           `json:"client_version,omitempty"`
 	InstallerVersion      string                           `json:"installer_version,omitempty"`
 	OS                    string                           `json:"os,omitempty"`
@@ -273,8 +274,17 @@ func inspectDistribution(snapshot domain.DirectorySnapshot, product domain.Direc
 		}
 		result.ReleaseStatus = policy.Status
 		for _, target := range policy.Targets {
-			result.Targets = append(result.Targets, publicTargetCompatibility{Client: target.Client, Scopes: append([]domain.InstallScope(nil), target.Scopes...), Delivery: target.Delivery,
-				Evidence: evidenceIDsForClient(snapshot, id, release.Sequence, target.Client)})
+			scopes := append([]domain.InstallScope(nil), target.Scopes...)
+			evidenceIDs := evidenceIDsForClient(snapshot, id, release.Sequence, target.Client)
+			if snapshot.SnapshotSchemaVersion == 2 {
+				// V2 grants are scoped individually; evidence from another
+				// grant for the same client must not appear under this scope.
+				scopes = []domain.InstallScope{target.Scope}
+				evidenceIDs = append(append([]string(nil), policy.CurrentEvidence...), target.CurrentEvidence...)
+			}
+			result.Targets = append(result.Targets, publicTargetCompatibility{
+				Client: target.Client, Scopes: scopes, Delivery: target.Delivery, Evidence: evidenceIDs,
+			})
 		}
 	}
 	result.Evidence = evidenceForRelease(snapshot, id, release.Sequence)
@@ -286,7 +296,7 @@ func evidenceForRelease(snapshot domain.DirectorySnapshot, distribution string, 
 	for _, evidence := range snapshot.Evidence {
 		if evidence.DistributionID == distribution && evidence.ReleaseSequence == sequence {
 			result = append(result, publicEvidence{ID: evidence.ID, DistributionID: evidence.DistributionID, ReleaseSequence: evidence.ReleaseSequence,
-				Level: evidence.Level, Outcome: evidence.Outcome, Client: evidence.Client, ClientVersion: evidence.ClientVersion,
+				Level: evidence.Level, Outcome: evidence.Outcome, Client: evidence.Client, Scope: evidence.Scope, ClientVersion: evidence.ClientVersion,
 				InstallerVersion: evidence.InstallerVersion, OS: evidence.OS, Architecture: evidence.Architecture,
 				DependencyIdentity: evidence.DependencyIdentity, ObservedAt: evidence.ObservedAt,
 				PackageTreeDigest: evidence.PackageTreeDigest, Artifact: evidence.Artifact, Trust: evidence.Trust,
