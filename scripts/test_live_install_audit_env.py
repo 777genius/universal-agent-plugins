@@ -1133,5 +1133,34 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
 
 
+    def test_failed_first_list_cannot_attest_plugin_lifecycle(self):
+        # BUG-029: matching JSON from a failed list is not an attestation.
+        audit = load_audit()
+        rows = [{"installation_id": "owned-id", "name": "atlassian",
+                 "clients": [{"client_id": "claude"}]}]
+        operations = []
+
+        def fake_call(argv, env, cwd, timeout=105):
+            operation = argv[1]
+            operations.append(operation)
+            first_list_failed = operation == "list" and operations.count("list") == 1
+            return {"exit_code": 1 if first_list_failed else 0, "stdout_tail": "",
+                    "stderr_tail": "", "timeout": False,
+                    "_json": {"data": {"installations": rows}}}
+
+        with TemporaryDirectory() as tmp, \
+             patch.object(audit, "call", side_effect=fake_call), \
+             patch.object(audit, "matching_installations", return_value=rows):
+            result = audit.do_case("/unused/agentplugins", "claude", "plugin",
+                                   "atlassian", 0, Path(tmp), {})
+        self.assertEqual(result["install"]["exit_code"], 0)
+        self.assertEqual(result["list"]["exit_code"], 1)
+        self.assertTrue(result["listed_identity"])
+        self.assertIsNone(result["repeat_add"])
+        self.assertIsNone(result["cleanup"])
+        self.assertEqual(operations, ["add", "list"])
+        self.assertEqual(result["status"], "incomplete-native-proof")
+
+
 if __name__ == "__main__":
     unittest.main()
