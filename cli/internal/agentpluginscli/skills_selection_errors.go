@@ -17,9 +17,11 @@ type skillsSelectionError struct {
 	Code       string                   `json:"code"`
 	Message    string                   `json:"message"`
 	Candidates []skillspicker.Candidate `json:"candidates"`
+	cause      error // Retain the typed cause for callers, never serialize it.
 }
 
 func (e skillsSelectionError) Error() string { return e.Message }
+func (e skillsSelectionError) Unwrap() error { return e.cause }
 func skillsMissingSelection(cmd *cobra.Command, opts *options, code, message string, candidates []skillspicker.Candidate) error {
 	return emitSkillsSelectionIssue(cmd, opts, skillsSelectionError{Code: code, Message: message, Candidates: candidates})
 }
