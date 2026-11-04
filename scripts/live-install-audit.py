@@ -142,21 +142,49 @@ def snapshot(root):
                     elif not path.is_file():
                         digest = "non-regular"
                     else:
-                        size = path.stat().st_size
-                        digest = ("too-large" if size > 4 * 1024 * 1024 else
-                                  hashlib.sha256(path.read_bytes()).hexdigest())
+                        # Never reuse a constant digest for a large native artifact:
+                        # repeat-add and remove can rewrite files above 4 MiB.
+                        sha = hashlib.sha256()
+                        with path.open("rb") as stream:
+                            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                                sha.update(chunk)
+                        digest = sha.hexdigest()
                 except OSError:
                     digest = "unreadable"
                 found[f"{target_root.name}/{relative}"] = digest
     return found
 
 
-def attributable_native_changes(native_roots, changes, identity):
-    """A changed unrelated config cannot claim the plugin was projected.
+def exact_native_identity(text, identity):
+    """Recognize an identity token in native data, never a URL substring."""
+    expected = identity.casefold()
 
-    Evidence must come from the managed name in the changed path or content,
-    cross-checked with the exact verified CLI installation record.
-    """
+    def contains(value):
+        if isinstance(value, str):
+            return value.casefold() == expected
+        if isinstance(value, dict):
+            return any(str(key).casefold() == expected or contains(child)
+                       for key, child in value.items())
+        if isinstance(value, list):
+            return any(contains(child) for child in value)
+        return False
+
+    try:
+        return contains(json.loads(text))
+    except ValueError:
+        escaped = re.escape(identity)
+        # TOML/YAML-style native registrations: exact keys or identity fields.
+        # An unrelated URL such as https://github.com cannot qualify "github".
+        return bool(
+            re.search(r"(?mi)^\\s*['\\\"]?" + escaped + r"['\\\"]?\\s*[:=]", text)
+            or re.search(
+                r"(?mi)^\\s*(?:name|id|plugin|plugin_id|identity)\\s*[:=]\\s*"
+                r"['\\\"]?" + escaped + r"['\\\"]?\\s*(?:$|[,#}])", text)
+        )
+
+
+def attributable_native_changes(native_roots, changes, identity, target):
+    """Credit only identity-attributed active native state, not cached downloads."""
     found = []
     for root in native_roots:
         if not root.is_dir() or root.is_symlink():
@@ -165,16 +193,26 @@ def attributable_native_changes(native_roots, changes, identity):
             prefix = root.name + "/"
             if not relpath.startswith(prefix):
                 continue
-            leaf = root / relpath[len(prefix):]
+            relative = relpath[len(prefix):]
+            if passive_native_path(target, relative):
+                continue
+            leaf = root / relative
             if leaf.is_symlink() or not leaf.is_file():
                 continue
             try:
-                if leaf.stat().st_size > 1024 * 1024:
-                    continue
-                owned_name = identity.casefold() in relpath.casefold()
-                owned_content = identity.casefold() in leaf.read_text(
-                    encoding="utf-8", errors="replace").casefold()
-                if owned_name or owned_content:
+                # A complete name component (or file stem) is an attributable
+                # managed native path; arbitrary substring matches are not.
+                owned_path = any(
+                    component.casefold() == identity.casefold()
+                    or Path(component).stem.casefold() == identity.casefold()
+                    for component in Path(relative).parts
+                )
+                # Larger files without an attributable path stay unqualified.
+                owned_content = (not owned_path and leaf.stat().st_size <= 1024 * 1024
+                                 and exact_native_identity(
+                                     leaf.read_text(encoding="utf-8", errors="replace"),
+                                     identity))
+                if owned_path or owned_content:
                     found.append(relpath)
             except OSError:
                 continue
@@ -237,6 +275,23 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
             except OSError:
                 leftover.append(observed + ": unreadable")
     return sorted(set(leftover))
+
+
+def skill_removal_leftovers(project, target, skill_name, installed_path=None):
+    """Reject surviving Skill paths, including symlinks and unreadable entries."""
+    leftovers = []
+    for relative_root in PROJECT_SKILL_ROOTS.get(target, []):
+        base = project / relative_root
+        named = base / skill_name
+        if base.is_symlink():
+            leftovers.append(str(base.relative_to(project)) + ": symlink")
+        elif named.is_symlink() or named.exists():
+            leftovers.append(str(named.relative_to(project)))
+    if installed_path:
+        path = project / installed_path
+        if path.is_symlink() or path.exists():
+            leftovers.append(str(path.relative_to(project)))
+    return sorted(set(leftovers))
 
 
 def skill_file_present(project, target, skill_name):
@@ -498,6 +553,8 @@ def isolated_client_env(home, case_root, data):
             env.pop(key)
     temp = case_root / "tmp"
     temp.mkdir(exist_ok=True)
+    if not temp.resolve().is_relative_to(case_root):
+        raise ValueError("child temp root would escape disposable case")
     roots = {
         "CODEX_HOME": home / ".codex",
         "CLAUDE_CONFIG_DIR": home / ".claude",
@@ -510,7 +567,7 @@ def isolated_client_env(home, case_root, data):
         "CLINE_DATA_DIR": home / ".cline/data",
         "CLINE_MCP_SETTINGS_PATH": home / ".cline/data/settings/cline_mcp_settings.json",
     }
-    if any(not path.is_relative_to(home) for path in roots.values()):
+    if any(not path.resolve().is_relative_to(home) for path in roots.values()):
         raise ValueError("native profile would escape disposable home")
     env.update({
         "HOME": str(home), "USERPROFILE": str(home),
@@ -547,13 +604,21 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     home = case_root / "home"
     project = case_root / "project"
     data = case_root / "uap-data"
+    # A previous untrusted case must not plant a symlink at a later case path.
+    # Fail before writing even a sentinel outside the disposable run root.
+    case_root.mkdir()
     for path in (home, project, data, home / ".config", home / ".cache", home / ".local/share"):
         path.mkdir(parents=True, exist_ok=True)
+    if any(not path.resolve().is_relative_to(case_root.resolve())
+           for path in (home, project, data)):
+        raise ValueError("case directory escapes disposable case")
+    native_roots = [home / v for v in NATIVE_ROOTS[target]]
+    if any(not root.resolve().is_relative_to(case_root.resolve()) for root in native_roots):
+        raise ValueError("native root escapes disposable case")
     sentinel = project / "foreign-untouched.txt"
     sentinel.write_text("foreign content never belongs to UAP\n")
     user_sentinel = home / "foreign-untouched.txt"
     user_sentinel.write_text("foreign profile content never belongs to UAP\n")
-    native_roots = [home / v for v in NATIVE_ROOTS[target]]
     # A foreign file lives adjacent to installed native user artifacts.
     # Its content and position are independent from UAP-managed receipts.
     native_foreign = (native_roots[0] / "foreign-neighbor.txt") if native_roots else None
@@ -586,7 +651,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     output = call([cli, *args], env, project)
     output.pop("_json", None)
     changed = set(snapshot(native_roots).items()) - set(before.items())
-    native_attribution = attributable_native_changes(native_roots, changed, identity)
+    native_attribution = attributable_native_changes(native_roots, changed, identity, target)
     skill_path = skill_file_present(project, target, identity) if kind == "skill" else None
     locked = (project / "uap.toml").is_file() and (project / "uap.lock").is_file()
     lock_contains = locked and identity in (project / "uap.lock").read_text(encoding="utf-8")
@@ -671,6 +736,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
             project_foreign, "---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
     )
     post_removal_skill = skill_file_present(project, target, identity) if kind == "skill" and cleanup else None
+    post_removal_leftovers = (
+        skill_removal_leftovers(project, target, identity, skill_path)
+        if kind == "skill" and cleanup else [])
     post_list = (call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
     post_list_json = post_list.pop("_json", None) if post_list else None
@@ -696,7 +764,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
             native_roots, identity,
             sorted(set(snapshot(native_roots)) | set(native_attribution) | set(unsafe_paths)),
             target)
-        if cleanup and cleanup["exit_code"] == 0 and kind == "plugin" else []
+        if cleanup and cleanup["exit_code"] == 0 else []
     )
     # Preserve truthful disk-state evidence without equating passive cached
     # source/log files to an active Qoder/Codex plugin registration.
@@ -714,8 +782,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
-        and (kind != "plugin" or not native_residuals)
-        and (kind != "skill" or (post_removal_skill is None and not post_lock_pinned))
+        and not native_residuals
+        and (kind != "skill" or (post_removal_skill is None
+                                  and not post_removal_leftovers and not post_lock_pinned))
     )
     diagnostics = (output["stdout_tail"] + "\n" + output["stderr_tail"]).lower()
     install_refused = is_cli_refusal(output)
@@ -766,7 +835,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
             "failed_install_residue": failed_install_residue,
             "matched_installation_ids": sorted(old_ids),
             "native_uninstall": native_uninstall, "cleanup": cleanup, "post_remove_list": post_list,
-            "post_removal_skill": post_removal_skill, "post_lock_pinned": post_lock_pinned,
+            "post_removal_skill": post_removal_skill,
+            "post_removal_leftovers": post_removal_leftovers,
+            "post_lock_pinned": post_lock_pinned,
             "removal_verified": removal_verified, "native_residuals": native_residuals,
             "retained_passive_native_files": sorted(set(passive_retained)),
             "post_list_schema_valid": post_list_schema_valid,
@@ -775,7 +846,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names):
 
 def vendor_bootstrap_attested():
     """A failed vendor bootstrap cannot qualify an unrelated runner binary."""
-    return os.environ.get("AUDIT_VENDOR_OUTCOME", "success") == "success"
+    return os.environ.get("AUDIT_VENDOR_OUTCOME") == "success"
 
 
 def main():
