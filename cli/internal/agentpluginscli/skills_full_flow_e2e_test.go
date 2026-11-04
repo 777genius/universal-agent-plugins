@@ -156,6 +156,7 @@ func TestSkillsCLIUserScopeCodexClaudeInstallAndRemove(t *testing.T) {
 	if len(state.EnvironmentReceipts) != 2 {
 		t.Fatalf("two-target CLI did not record exact user ownership: %+v", state.EnvironmentReceipts)
 	}
+	nativeSnapshots := make(map[string]map[string]savedJourneyFile, 2)
 	for _, client := range []string{"codex", "claude"} {
 		binding := savedJourneyBinding(t, state, client)
 		if binding.Scope != "user" {
@@ -173,6 +174,14 @@ func TestSkillsCLIUserScopeCodexClaudeInstallAndRemove(t *testing.T) {
 		if script, err := os.ReadFile(filepath.Join(skillRoot, "skills", "review", "scripts", "check.sh")); err != nil || !strings.Contains(string(script), "resource only") {
 			t.Fatalf("%s lost raw Skill resources: %v", client, err)
 		}
+		nativeSnapshots[client] = savedJourneyTree(t, binding.TargetLocator)
+	}
+	assertNativeUnchanged := func(target string) {
+		t.Helper()
+		binding := savedJourneyBinding(t, journey.state(t), target)
+		if difference := savedJourneyDifferences(nativeSnapshots[target], savedJourneyTree(t, binding.TargetLocator)); difference != "" {
+			t.Fatalf("%s native artifact changed unexpectedly: %s", target, difference)
+		}
 	}
 	before := savedJourneyTree(t, journey.cli.app.DependenciesRoot)
 	// Same exact CLI request without --scope is the default/global user route.
@@ -180,6 +189,8 @@ func TestSkillsCLIUserScopeCodexClaudeInstallAndRemove(t *testing.T) {
 	if after := savedJourneyTree(t, journey.cli.app.DependenciesRoot); len(savedJourneyDifferences(before, after)) != 0 {
 		t.Fatalf("implicit user replay changed locked state: %s", savedJourneyDifferences(before, after))
 	}
+	assertNativeUnchanged("codex")
+	assertNativeUnchanged("claude")
 	// Invalid user/project combinations must fail before reaching source or
 	// modifying a managed/native path.
 	for _, extra := range [][]string{
@@ -193,6 +204,8 @@ func TestSkillsCLIUserScopeCodexClaudeInstallAndRemove(t *testing.T) {
 		if after := savedJourneyTree(t, journey.cli.app.DependenciesRoot); len(savedJourneyDifferences(before, after)) != 0 {
 			t.Fatalf("invalid scope %v changed user data", extra)
 		}
+		assertNativeUnchanged("codex")
+		assertNativeUnchanged("claude")
 	}
 	claudeBefore := savedJourneyBinding(t, state, "claude")
 	journey.run(t, "remove", "review", "--target", "codex", "--external-uninstalled", "--scope", "user", "--format", "json")
@@ -201,6 +214,7 @@ func TestSkillsCLIUserScopeCodexClaudeInstallAndRemove(t *testing.T) {
 		savedJourneyBinding(t, remaining, "claude").ClientBindingID != claudeBefore.ClientBindingID {
 		t.Fatalf("Codex removal changed retained Claude ownership: %+v", remaining.EnvironmentReceipts)
 	}
+	assertNativeUnchanged("claude")
 	journey.run(t, "remove", "review", "--target", "claude", "--external-uninstalled", "--scope", "user", "--format", "json")
 	if remaining := journey.state(t).EnvironmentReceipts; len(remaining) != 0 {
 		t.Fatalf("last user Skill removal retained receipts: %+v", remaining)
