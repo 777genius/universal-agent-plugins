@@ -458,6 +458,12 @@ def signed_release_public_observation(response, identity, target):
     nodes = response["data"].get("installations", [])
     if not isinstance(nodes, list):
         return []
+    def public_string(value, pattern):
+        return value if isinstance(value, str) and re.fullmatch(pattern, value) else None
+
+    selector = r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?"
+    sha = r"[0-9a-f]{40}"
+    digest = r"sha256:[0-9a-f]{64}"
     evidence = []
     for node in nodes:
         if not isinstance(node, dict) or node.get("name") != identity:
@@ -473,14 +479,17 @@ def signed_release_public_observation(response, identity, target):
             revision = client.get("package_revision")
             revision = revision if isinstance(revision, dict) else {}
             evidence.append({
-                "source": node.get("source") if isinstance(node.get("source"), str) else None,
-                "recorded_distribution": directory.get("recorded_distribution"),
-                "recorded_revision": directory.get("recorded_revision"),
-                "recorded_release_sequence": directory.get("recorded_release_sequence"),
-                "resolved_revision": revision.get("resolved_revision"),
-                "release_sequence": revision.get("release_sequence"),
-                "tree_digest": revision.get("tree_digest"),
-                "manifest_digest": revision.get("manifest_digest"),
+                "source": public_string(node.get("source"), selector),
+                "recorded_distribution": public_string(
+                    directory.get("recorded_distribution"), selector),
+                "recorded_revision": public_string(directory.get("recorded_revision"), sha),
+                "recorded_release_sequence": directory.get("recorded_release_sequence")
+                if type(directory.get("recorded_release_sequence")) is int else None,
+                "resolved_revision": public_string(revision.get("resolved_revision"), sha),
+                "release_sequence": revision.get("release_sequence")
+                if type(revision.get("release_sequence")) is int else None,
+                "tree_digest": public_string(revision.get("tree_digest"), digest),
+                "manifest_digest": public_string(revision.get("manifest_digest"), digest),
             })
     return evidence[:3]
 
