@@ -582,7 +582,7 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 		t.Fatal("explicit user scope replay mutated the Codex user installation")
 	}
 	stages["explicit_user_scope"] = nativeStage{Status: "passed", Reason: "genuine Codex CLI install idempotence, explicit user/default scope parity and identical state/managed/cache bytes"}
- 
+
 	// A changed existing directory deliberately loses provable content ownership.
 	// Verify fail-closed protection, then restore only bytes this fixture saved.
 	nativeAttempt(stages, "owned_artifact_guard", "owned-guard.log")
