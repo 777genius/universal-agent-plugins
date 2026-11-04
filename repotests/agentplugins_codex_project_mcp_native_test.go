@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -138,6 +139,7 @@ func TestAgentpluginsCodexNativeTrustedProjectMCP(t *testing.T) {
 	codexProjectMCPSession(t, f, f.base.Project, "trusted-canary-restored", &binding, data, true,
 		map[string]string{"default": "", "explicit": ""})
 	f.base.ExtraEnv = nil
+	assertNativeCanaryAbsentFromObservedFiles(t, f.base.Root, secret)
 	requireStable()
 	stages["native_env_forwarding"] = nativeStage{Status: "passed", Reason: "pinned real Codex forwarded only explicitly named synthetic env to one MCP child; absence without env_vars and after restoration confirmed; no canary value stored"}
 
@@ -275,4 +277,63 @@ func codexProjectMCPSession(t *testing.T, f *codexProjectNativeFixture, project,
 		t.Fatal("direct MCP test unexpectedly requested model inference")
 	}
 	f.requireForeign(t)
+}
+
+// The only claim is absence from a bounded inventory of this disposable
+// fixture. A failed/partial inspection is inconclusive, never a secrecy PASS.
+func assertNativeCanaryAbsentFromObservedFiles(t *testing.T, root, canary string) {
+	t.Helper()
+	needles := [][]byte{[]byte(canary), []byte(base64.StdEncoding.EncodeToString([]byte(canary))), []byte(hex.EncodeToString([]byte(canary)))}
+	const maxEntries, maxFileBytes, maxTotalBytes = 8192, 128 << 20, 512 << 20
+	entries, total := 0, int64(0)
+	err := filepath.WalkDir(root, func(path string, item os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		entries++
+		if entries > maxEntries {
+			return fmt.Errorf("canary scan exceeded entry limit")
+		}
+		for _, needle := range needles {
+			if bytes.Contains([]byte(path), needle) {
+				return fmt.Errorf("canary persisted in a fixture path")
+			}
+		}
+		if item.Type()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			for _, needle := range needles {
+				if bytes.Contains([]byte(target), needle) {
+					return fmt.Errorf("canary persisted in a fixture symlink")
+				}
+			}
+			return nil // the claim excludes files referenced through symlinks
+		}
+		if item.IsDir() {
+			return nil
+		}
+		info, err := item.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() || info.Size() > maxFileBytes || total+info.Size() > maxTotalBytes {
+			return fmt.Errorf("canary scan cannot admit file type or size")
+		}
+		total += info.Size()
+		body, err := os.ReadFile(path)
+		if err != nil || int64(len(body)) != info.Size() {
+			return fmt.Errorf("canary scan could not fully read observed file")
+		}
+		for _, needle := range needles {
+			if bytes.Contains(body, needle) {
+				return fmt.Errorf("synthetic canary persisted in observed fixture file")
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Codex native canary persistence qualification incomplete or unsafe: %v", err)
+	}
 }
