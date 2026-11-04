@@ -53,7 +53,7 @@ type nativeFacts struct {
 	Marker       string   `json:"marker"`
 	PID          int      `json:"pid"`
 	Session      string   `json:"session"`
-	CanaryDigest string    `json:"canary_digest,omitempty"`
+	CanaryDigest string   `json:"canary_digest,omitempty"`
 }
 
 func nativeWrite(t *testing.T, path string, b []byte, mode os.FileMode) {
