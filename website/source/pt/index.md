@@ -27,7 +27,17 @@ translationRequired: true
     <h2>Criar plugins</h2>
     <p>Escreva um pacote padrão com plugin.json, Skills e configuração MCP. Explore as ferramentas de criação disponíveis em compilações do código-fonte.</p>
   </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>Integrar UAP</h2>
+    <p>Hooks, detecção do agente, instalador Go e gerenciamento TypeScript.</p>
+  </a>
 </div>
+
+## Outros recursos do UAP
+
+- Instale em vários agentes, adicione Skills avulsas, use o catálogo assinado, Git/SSH e arquivos. [Instalar](./use/install).
+- Separe projeto e usuário com `uap.toml` / `uap.lock`; atualize, repare e diagnostique. [Gerenciar](./use/manage).
+- Crie pacotes Skills/MCP portáteis e integre os SDKs Go e TypeScript. [SDK](./sdk/) · [Criar](./build/).
 
 ## Instale seu primeiro plugin {#install-your-first-plugin}
 

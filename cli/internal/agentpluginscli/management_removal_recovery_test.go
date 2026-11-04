@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/managementhttp"
 )
 
 func TestManagementHistoricalUnattestedRemovalRequiresFreshRecovery(t *testing.T) {
@@ -95,17 +96,23 @@ func managementHistoricalRemoval(t *testing.T, backend *ManagementBackend) manag
 	return operation
 }
 
-func managementRemovalServer(t *testing.T, backend *ManagementBackend) *management.Server {
+func managementRemovalServer(t *testing.T, backend *ManagementBackend) *managementhttp.Server {
 	t.Helper()
-	server, err := management.Start(t.Context(), management.Options{Backend: backend, ContextID: backend.ContextID(), EnvironmentID: backend.EnvironmentID(), IntentRoot: backend.config.DependenciesRoot, StateRoot: backend.config.StateRoot, EngineVersion: backend.app.Version})
+	application, err := composeManagementApplication(t.Context(), backend, backend.app.Version)
 	if err != nil {
+		backend.Close()
+		t.Fatal(err)
+	}
+	server, err := managementhttp.Start(t.Context(), application)
+	if err != nil {
+		application.Close()
 		t.Fatal(err)
 	}
 	t.Cleanup(server.Close)
 	return server
 }
 
-func managementRemovalHTTP(t *testing.T, server *management.Server, method, path string, input any, want int, output any) {
+func managementRemovalHTTP(t *testing.T, server *managementhttp.Server, method, path string, input any, want int, output any) {
 	t.Helper()
 	body, err := json.Marshal(input)
 	if err != nil {
@@ -134,7 +141,7 @@ func managementRemovalHTTP(t *testing.T, server *management.Server, method, path
 	}
 }
 
-func managementAwaitRemoval(t *testing.T, server *management.Server, id string) management.Operation {
+func managementAwaitRemoval(t *testing.T, server *managementhttp.Server, id string) management.Operation {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {

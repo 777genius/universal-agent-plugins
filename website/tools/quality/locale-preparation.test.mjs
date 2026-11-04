@@ -113,7 +113,7 @@ test("localized navigation targets produced source pages; both switcher variants
     assert.ok(config.includes(`...journeyNav("${locale}")`));
     for (const key of ["skipToContentLabel", "darkModeSwitchTitle", "lightModeSwitchTitle"])
       assert.match(config, new RegExp(`\\b${key}:\\s*"[^"\\n]+"`), `${locale}: ${key}`);
-    assert.deepEqual(journeyNav(locale).map(x => x.link), [`/${locale}/use/`, `/${locale}/build/`]);
+    assert.deepEqual(journeyNav(locale).map(x => x.link), [`/${locale}/use/`, `/${locale}/build/`, `/${locale}/sdk/`]);
     assert.equal(journeyNav(locale)[0].text, journeyLabels[locale][0]);
     for (const match of config.matchAll(/link: "(\/[^\"]+)"/g)) assert.ok(routes.has(match[1]), match[1]);
   }

@@ -25,7 +25,17 @@ translationRequired: true
     <h2>Build plugins</h2>
     <p>Write a standard package with plugin.json, Skills and MCP configuration. Explore source-build authoring tools.</p>
   </a>
+  <a class="docs-card" href="./sdk/">
+    <h2>Integrate UAP</h2>
+    <p>Hooks, host detection, Go installer and TypeScript management.</p>
+  </a>
 </div>
+
+## Explore more than installation
+
+- Install packages for multiple agents, choose standalone Skills, or use the signed catalog, Git/SSH and archives. [Install](./use/install).
+- Keep user and project dependencies separate with `uap.toml` / `uap.lock`; update, repair and diagnose managed state. [Manage](./use/manage).
+- Build portable Skills/MCP packages and embed Go/TypeScript SDKs. [SDK](./sdk/) · [Build](./build/).
 
 ## Install your first plugin
 

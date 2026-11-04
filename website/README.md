@@ -13,7 +13,7 @@ This workspace builds the VitePress 2 documentation published at
 - `tools/`: extractors, normalizers, assembly and quality checks.
 - `.vitepress/`: site configuration and presentation.
 
-Only the approved home, Use and Build journeys, quickstart, client
+Only the approved home, Use, Build and SDK journeys, quickstart, client
 compatibility reference and authoring API routes are public. Other source
 pages preserve earlier documentation and remain outside the public build.
 The publication model and quality checks define the exact routes; a Markdown

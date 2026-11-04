@@ -49,7 +49,29 @@ for (const locale of publishedLocales) {
         if (locale === 'en' || locale === 'ar') {
           await page.setViewportSize({ width: locale === 'ar' ? 390 : 1440, height: 1000 });
           await restore.scrollIntoViewIfNeeded();
-          expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+          // A resize can briefly catch an in-flight intro animation. The final
+          // layout still must have no document-level horizontal overflow.
+          try {
+            await expect.poll(() => page.evaluate(() =>
+              document.documentElement.scrollWidth <= innerWidth,
+            ), { timeout: 6_000 }).toBe(true);
+          } catch (error) {
+            const layout = await page.evaluate(() => ({
+              viewport: innerWidth,
+              scrollWidth: document.documentElement.scrollWidth,
+              candidates: Array.from(document.body.querySelectorAll('*'))
+                .map((node) => ({ node, bounds: node.getBoundingClientRect() }))
+                .filter(({ bounds }) => bounds.width && (bounds.right > innerWidth + 1 || bounds.left < -1))
+                .slice(0, 20)
+                .map(({ node, bounds }) => ({
+                  tag: node.tagName.toLowerCase(),
+                  className: typeof node.className === 'string' ? node.className.slice(0, 110) : '',
+                  left: Math.round(bounds.left),
+                  right: Math.round(bounds.right),
+                })),
+            }));
+            throw new Error(`Persistent mobile horizontal overflow: ${JSON.stringify(layout)}; ${String(error)}`);
+          }
           await expect(restore).toHaveCSS('direction', locale === 'ar' ? 'rtl' : 'ltr');
           const manifestButton = restore.getByRole('button', { name: /uap\.toml/i });
           await manifestButton.click();
