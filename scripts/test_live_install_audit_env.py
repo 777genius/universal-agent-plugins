@@ -846,6 +846,60 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertNotIn("OPENAI_API_KEY", env)
 
 
+    def test_qoder_native_cli_proves_owned_registration_and_removal(self):
+        # BUG-039: exact native local ID+version only, never cache evidence.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            profile = home / ".qoder"
+            profile.mkdir(parents=True)
+            env = {"QODER_CONFIG_DIR": str(profile)}
+            native = str(Path(temporary) / "trusted-qodercli")
+            def probe(rows, code=0):
+                return {"exit_code": code, "_json": rows}
+            with patch.dict(audit.AGENT_BINARIES, {"qodercli": native}, clear=True):
+                with patch.object(audit, "call", return_value=probe([
+                    {"id": "atlassian@local", "version": "0.1.0"}])) as called:
+                    self.assertEqual(audit.qoder_native_plugin_state(
+                        home, env, home, "atlassian", "0.1.0"), {"status": "registered"})
+                    self.assertEqual(called.call_args.args[0],
+                                     [native, "--config-dir", str(profile), "plugins", "list", "--json"])
+                    self.assertEqual(called.call_args.args[1], env)
+                with patch.object(audit, "call", return_value=probe([])):
+                    self.assertEqual(audit.qoder_native_plugin_state(
+                        home, env, home, "atlassian")["status"], "absent")
+                for rows in [
+                    [{"id": "atlassian@local"}],
+                    [{"id": "atlassian@local", "version": "0.2.0"}],
+                    [{"id": "atlassian@foreign", "version": "0.1.0"}],
+                    [{"id": "atlassian@local", "version": "0.1.0"}] * 2,
+                    [{"id": "atlassian@local", "version": 1}],
+                    [{"id": "atlassian@local@extra", "version": "0.1.0"}],
+                    [{"id": "other@local", "version": "1.0.0"}, "malformed"],
+                ]:
+                    with self.subTest(rows=rows), patch.object(audit, "call", return_value=probe(rows)):
+                        self.assertNotEqual(audit.qoder_native_plugin_state(
+                            home, env, home, "atlassian", "0.1.0")["status"], "registered")
+                with patch.object(audit, "call", return_value=probe([], code=1)):
+                    self.assertNotEqual(audit.qoder_native_plugin_state(
+                        home, env, home, "atlassian")["status"], "absent")
+                with patch.dict(audit.AGENT_BINARIES, {}, clear=True):
+                    self.assertEqual(audit.qoder_native_plugin_state(
+                        home, env, home, "atlassian")["status"], "unqualified-prerequisites")
+                self.assertEqual(audit.qoder_native_plugin_state(
+                    home, {"QODER_CONFIG_DIR": str(home / "foreign")},
+                    home, "atlassian")["status"], "unqualified-prerequisites")
+                foreign = Path(temporary) / "foreign"
+                foreign.mkdir()
+                profile.rmdir()
+                try:
+                    profile.symlink_to(foreign, target_is_directory=True)
+                except (OSError, NotImplementedError):
+                    return
+                self.assertEqual(audit.qoder_native_plugin_state(
+                    home, env, home, "atlassian")["status"], "unqualified-prerequisites")
+
+
     def test_qoder_passive_cache_does_not_hide_active_residue_or_symlinks(self):
         # BUG-018: observed Qoder cache and run manifests outlive native remove.
         audit = load_audit()

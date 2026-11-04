@@ -315,6 +315,45 @@ def qoder_passive_latest_log_link(root, file):
         return False
 
 
+def qoder_native_plugin_state(home, env, cwd, identity, expected_version=None):
+    """Read real Qoder 1.1 native JSON; never qualify from a package cache."""
+    profile = home / ".qoder"
+    executable = next((AGENT_BINARIES[name] for name in EXECUTABLE["qoder"]
+                       if AGENT_BINARIES.get(name)), None)
+    # Both native profile selectors must remain inside the disposable HOME.
+    # The executable was pinned before any untrusted source installation.
+    if (not executable or not Path(executable).is_absolute()
+            or not profile.is_dir() or profile.is_symlink()
+            or not path_inside_case(profile, home)
+            or env.get("QODER_CONFIG_DIR") != str(profile)):
+        return {"status": "unqualified-prerequisites"}
+    observed = call([executable, "--config-dir", str(profile),
+                     "plugins", "list", "--json"], env, cwd, 30)
+    entries = observed.get("_json")
+    if observed.get("exit_code") != 0 or not isinstance(entries, list) or len(entries) > 1024:
+        return {"status": "unqualified-list"}
+    seen = set()
+    claimed = []
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str):
+            return {"status": "unqualified-schema"}
+        native_id = entry["id"]
+        if (native_id.count("@") != 1 or not all(native_id.split("@", 1))
+                or native_id in seen
+                or ("version" in entry and not isinstance(entry["version"], str))):
+            return {"status": "unqualified-schema"}
+        seen.add(native_id)
+        if native_id.split("@", 1)[0] == identity:
+            claimed.append(entry)
+    if not claimed:
+        return {"status": "absent"}
+    if (len(claimed) == 1 and claimed[0]["id"] == identity + "@local"
+            and isinstance(expected_version, str) and expected_version
+            and claimed[0].get("version") == expected_version):
+        return {"status": "registered"}
+    return {"status": "unqualified-identity-or-version"}
+
+
 def native_identity_residuals(native_roots, identity, observed_paths, target):
     """After remove, reject any remaining named native file/config entry.
 
@@ -982,6 +1021,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
             and repeat_native_unchanged and repeat_lock_unchanged
         )
+    # BUG-039: independent native ID+version proof before UAP removes it.
+    qoder_native_before_remove = None
+    if target == "qoder" and kind == "plugin" and installed and repeat_verified:
+        qoder_native_before_remove = qoder_native_plugin_state(
+            home, env, project, identity, matching[0].get("version"))
     cleanup = None
     native_uninstall = None
     if installed:
@@ -996,6 +1040,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         cleanup = call([cli, "remove", identity, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
         cleanup.pop("_json", None)
+    qoder_native_after_remove = None
+    if target == "qoder" and kind == "plugin" and cleanup and cleanup["exit_code"] == 0:
+        qoder_native_after_remove = qoder_native_plugin_state(
+            home, env, project, identity)
     copilot_after_remove = (copilot_settings_sanitized_shape(home, case_root, identity)
                             if copilot_before is not None and cleanup else None)
     sentinels_preserved = (
@@ -1065,6 +1113,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
+        and (target != "qoder" or kind != "plugin"
+             or (qoder_native_after_remove is not None
+                 and qoder_native_after_remove["status"] == "absent"))
         and not post_remove_identity_registered
         and not native_residuals
         and (kind != "skill" or (post_removal_skill is None
@@ -1078,7 +1129,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     elif target == "chatgpt" and kind == "plugin" and installed and removal_verified and sentinels_preserved and repeat_verified:
         status = "manual-setup-prepared"
     elif installed and removal_verified and sentinels_preserved and repeat_verified:
-        status = ("package-installed-native-unqualified" if kind == "plugin" and not native_attribution
+        status = ("package-installed-native-unqualified" if (
+                       kind == "plugin" and not native_attribution
+                       and not (target == "qoder" and qoder_native_before_remove is not None
+                                and qoder_native_before_remove["status"] == "registered"))
                   else "prepared-lifecycle-passed" if prepared_binding else "passed")
     elif installed and cleanup and "external removal requires explicit attestation" in (
             cleanup.get("stderr_tail", "") + cleanup.get("stdout_tail", "")).lower():
@@ -1132,6 +1186,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "removal_verified": removal_verified, "native_residuals": native_residuals,
             "retained_passive_native_files": sorted(set(passive_retained)),
             "qoder_passive_log_link_verified": qoder_passive_log_link_verified,
+            "qoder_native_after_repeat": qoder_native_before_remove,
+            "qoder_native_after_remove": qoder_native_after_remove,
             "post_list_schema_valid": post_list_schema_valid,
             "post_remove_identity_registered": post_remove_identity_registered,
             "sentinels_preserved": sentinels_preserved}
