@@ -252,7 +252,6 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 	return legacy, nil
 }
 
-
 func piNativeRemovalLayout(request domain.DeactivationRequest, totalNative int) (shared.ProjectComponents, []domain.NativeObjectOwnership, error) {
 	var zero shared.ProjectComponents
 	switch request.TargetContext.Scope {
