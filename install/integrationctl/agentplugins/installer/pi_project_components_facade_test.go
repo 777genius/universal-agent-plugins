@@ -32,7 +32,7 @@ func TestPiProjectNativeSkillsMCPFacadeAAndB(t *testing.T) {
 	}
 	manifest := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"uap-pi-project-components","version":"1.0.0"}`
 	sourceMCP := func(url string) {
-		write(filepath.Join(source, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"pi-managed":{"type":"streamable-http","url":"`+url+`"}}}`)
+		write(filepath.Join(source, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"pi-managed":{"type":"streamable-http","url":"` + url + `"}}}`)
 	}
 	skill := func(text string) {
 		write(filepath.Join(source, "skills", "pi-managed", "SKILL.md"), "---\nname: pi-managed\ndescription: Project-native Pi Skills/MCP E2E\n---\n"+text+"\n")
@@ -183,9 +183,9 @@ func TestPiUserNativeSkillsMCPFacadeAndForeignIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, profile := range []string{filepath.Join(root, "home", ".pi", "agent"), filepath.Join(root, "custom-pi-profile")} {
-		t.Run(filepath.Base(filepath.Dir(profile))+"-"+filepath.Base(profile), func(t *testing.T) {
-			source, state := filepath.Join(root, "source-"+filepath.Base(profile)), filepath.Join(root, "state-"+filepath.Base(profile))
-			projectA, projectB := filepath.Join(root, "A-"+filepath.Base(profile)), filepath.Join(root, "B-"+filepath.Base(profile))
+		t.Run(filepath.Base(filepath.Dir(profile)) + "-" + filepath.Base(profile), func(t *testing.T) {
+			source, state := filepath.Join(root, "source-" + filepath.Base(profile)), filepath.Join(root, "state-" + filepath.Base(profile))
+			projectA, projectB := filepath.Join(root, "A-" + filepath.Base(profile)), filepath.Join(root, "B-" + filepath.Base(profile))
 			write := func(path, body string) {
 				t.Helper()
 				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -201,10 +201,10 @@ func TestPiUserNativeSkillsMCPFacadeAndForeignIsolation(t *testing.T) {
 			}
 			write(filepath.Join(source, "skills", "pi-managed", "SKILL.md"), skillBody("first"))
 			servers := func(url string) {
-				write(filepath.Join(source, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"pi-managed":{"type":"streamable-http","url":"`+url+`"}}}`)
+				write(filepath.Join(source, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"pi-managed":{"type":"streamable-http","url":"` + url + `"}}}`)
 			}
 			servers("https://example.invalid/first")
-			foreign := `{"other":"keep","mcpServers":{"foreign":{"url":"https://foreign.invalid/mcp"}}}`+"\n"
+			foreign := `{"other":"keep","mcpServers":{"foreign":{"url":"https://foreign.invalid/mcp"}}}` + "\n"
 			write(filepath.Join(profile, "mcp.json"), foreign)
 			write(filepath.Join(profile, "extensions", "foreign.ts"), "// foreign user extension\n")
 			for _, project := range []string{projectA, projectB} {
@@ -257,7 +257,7 @@ func TestPiUserNativeSkillsMCPFacadeAndForeignIsolation(t *testing.T) {
 					t.Fatal(closeErr)
 				}
 				if applyErr == nil && result.Outcome == OutcomeCompleted {
-					t.Fatal("Pi global adopted foreign "+reason)
+					t.Fatal("Pi global adopted foreign " + reason)
 				}
 			}
 			occupiedSkill := filepath.Join(profile, "skills", "pi-managed", "SKILL.md")
@@ -269,7 +269,7 @@ func TestPiUserNativeSkillsMCPFacadeAndForeignIsolation(t *testing.T) {
 			if err := os.RemoveAll(filepath.Dir(occupiedSkill)); err != nil {
 				t.Fatal(err)
 			}
-			occupiedMCP := `{"other":"keep","mcpServers":{"foreign":{"url":"https://foreign.invalid/mcp"},"pi-managed":{"url":"https://occupied.invalid/mcp"}}}`+"\n"
+			occupiedMCP := `{"other":"keep","mcpServers":{"foreign":{"url":"https://foreign.invalid/mcp"},"pi-managed":{"url":"https://occupied.invalid/mcp"}}}` + "\n"
 			write(filepath.Join(profile, "mcp.json"), occupiedMCP)
 			refuse("MCP")
 			if body, err := os.ReadFile(filepath.Join(profile, "mcp.json")); err != nil || string(body) != occupiedMCP {
