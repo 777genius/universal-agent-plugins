@@ -89,7 +89,7 @@ REQUIRED_TESTS = {
     "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended", "TestAgentpluginsOpenCodeNativeCommandsLifecycle"},
 }
 PROJECT_TESTS = {
-    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP"},
+    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP", "TestAgentpluginsCodexNativeForeignSkillCLIRefusal"},
     "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery", "TestAgentpluginsClaudeNativeTrustedProjectMCPCall", "TestAgentpluginsClaudeNativeSecondaryProfileIsolation"},
     "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
 }
