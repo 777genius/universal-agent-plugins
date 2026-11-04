@@ -33,7 +33,7 @@ def native_skill(layout, base, key, revision):
                 kind="qoder_project_skill_directory", logical_name=NAME,
                 path=layout[key] + "/.qoder/skills/" + NAME,
                 source_relative="skills/" + NAME,
-                managed_digest="sha256:" + sha(b"f\\0SKILL.md\\0-\\0" + source + b"\\0"),
+                managed_digest="sha256:" + sha(bytes((102, 0)) + b"SKILL.md" + bytes((0, 45, 0)) + source + bytes((0,))),
                 protection_class="managed")
 
 
