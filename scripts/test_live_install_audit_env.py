@@ -482,5 +482,42 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertNotIn("OPENAI_API_KEY", env)
 
 
+    def test_qoder_passive_cache_does_not_hide_active_residue_or_symlinks(self):
+        # BUG-018: observed Qoder cache and run manifests outlive native remove.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".qoder"
+            cache = root / "plugins/cache/local/atlassian/0.1.0/plugin.json"
+            log = root / "logs/runs/run-1/manifest.json"
+            active = root / "plugins/installed_plugins_v2.json"
+            settings = root / "settings.json"
+            for path in (cache, log, active, settings):
+                path.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text('{"name":"atlassian"}')
+            log.write_text('{"plugin":"atlassian"}')
+            active.write_text('{"plugin":"atlassian"}')
+            settings.write_text('{"mcpServers":{"atlassian":{}}}')
+            observed = [
+                ".qoder/plugins/cache/local/atlassian/0.1.0/plugin.json",
+                ".qoder/logs/runs/run-1/manifest.json",
+                ".qoder/plugins/installed_plugins_v2.json",
+                ".qoder/settings.json",
+            ]
+            self.assertEqual(
+                audit.native_identity_residuals([root], "atlassian", observed, "qoder"),
+                [".qoder/plugins/installed_plugins_v2.json", ".qoder/settings.json"])
+            active.write_text("{}")
+            settings.write_text("{}")
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "atlassian", observed, "qoder"), [])
+            cache.unlink()
+            cache.symlink_to(settings)
+            self.assertEqual(audit.native_identity_residuals(
+                [root], "atlassian", observed, "qoder"),
+                [".qoder/plugins/cache/local/atlassian/0.1.0/plugin.json: symlink"])
+            self.assertFalse(audit.passive_native_path("cline", "plugins/cache/local/demo"))
+            self.assertFalse(audit.passive_native_path("qoder", "settings.json"))
+
+
 if __name__ == "__main__":
     unittest.main()
