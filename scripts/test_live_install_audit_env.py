@@ -538,6 +538,37 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             foreign.unlink()
             self.assertFalse(audit.preserved_regular_text(foreign, "keep\n", home))
 
+    def test_foreign_sentinel_invalid_utf8_is_tampered_not_harness_error(self):
+        # BUG-026: corrupt bytes must not abort the remaining lifecycle proof.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            foreign = case / "foreign.txt"
+            foreign.write_bytes(b"\\xff\\xfe")
+            self.assertFalse(audit.preserved_regular_text(foreign, "untouched\\n", case))
+
+    def test_copilot_settings_depth_limit_is_reported_as_truncated(self):
+        # BUG-026: a sole depth-limited leaf must not be called fully parsed.
+        import json
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            home = case / "home"
+            settings = home / ".copilot/settings.json"
+            settings.parent.mkdir(parents=True)
+            settings.write_text(json.dumps({"plugins": {"atlassian": "enabled"}}),
+                                encoding="utf-8")
+            shallow = audit.copilot_settings_sanitized_shape(home, case, "atlassian")
+            self.assertEqual(shallow["status"], "parsed")
+            self.assertEqual(shallow["match_counts"]["exact_key"], 1)
+            nested = {"atlassian": "enabled"}
+            for _ in range(32):
+                nested = {"nested": nested}
+            settings.write_text(json.dumps({"plugins": nested}), encoding="utf-8")
+            deep = audit.copilot_settings_sanitized_shape(home, case, "atlassian")
+            self.assertEqual(deep["status"], "truncated")
+            self.assertEqual(deep["match_counts"]["exact_key"], 0)
+
     def test_project_skill_intermediate_symlink_cannot_fake_cleanup(self):
         # BUG-023: project/.claude can be swapped even when SKILL.md is regular.
         audit = load_audit()
