@@ -19,6 +19,47 @@ type V2Client struct {
 	Embedded EmbeddedBundle
 }
 
+// validateConfig keeps read-only inspection on the same signed trust and
+// isolated cache authority as install-time loading.
+func (client V2Client) validateConfig() error {
+	if len(client.Transport.Trust.Keys) == 0 {
+		return ErrNoTrustedKeys
+	}
+	if client.Cache.Path == "" {
+		return fmt.Errorf("%w: v2 cache path is required", ErrUnavailable)
+	}
+	if client.Transport.Cache.Path != "" && client.Cache.Path == client.Transport.Cache.Path {
+		return fmt.Errorf("%w: v1/v2 cache path collision", ErrUnavailable)
+	}
+	return nil
+}
+
+// LoadLocal returns signed v2 provenance for read-only inspection without
+// network access or writes. As for v1, expired data may be displayed but must
+// never authorize installation or locked restore.
+func (client V2Client) LoadLocal(installedFloor uint64) (VerifiedBundle, error) {
+	if err := client.validateConfig(); err != nil {
+		return VerifiedBundle{}, err
+	}
+	embedded, cached, floor, err := client.loadLocal(installedFloor)
+	if err != nil {
+		return VerifiedBundle{}, err
+	}
+	best := VerifiedBundle{}
+	for _, candidate := range []VerifiedBundle{cached, embedded} {
+		if candidate.Snapshot.Sequence >= floor && candidate.Snapshot.Sequence > best.Snapshot.Sequence {
+			best = candidate
+		}
+	}
+	if best.Snapshot.Sequence > 0 {
+		return best, nil
+	}
+	if floor > 0 {
+		return VerifiedBundle{}, fmt.Errorf("%w: local floor %d", ErrRollback, floor)
+	}
+	return VerifiedBundle{}, ErrUnavailable
+}
+
 func (client V2Client) loadLocal(floor uint64) (VerifiedBundle, VerifiedBundle, uint64, error) {
 	trust := client.Transport.Trust
 	var embedded VerifiedBundle
@@ -115,14 +156,8 @@ func (client V2Client) fallback(embedded, cached VerifiedBundle, floor uint64, n
 // Load requires a current v2 signature, independent monotonic sequence and
 // the same expiry/redirect/digest safeguards as v1. No implicit v1 fallback.
 func (client V2Client) Load(ctx context.Context, installedFloor uint64) (VerifiedBundle, error) {
-	if len(client.Transport.Trust.Keys) == 0 {
-		return VerifiedBundle{}, ErrNoTrustedKeys
-	}
-	if client.Cache.Path == "" {
-		return VerifiedBundle{}, fmt.Errorf("%w: v2 cache path is required", ErrUnavailable)
-	}
-	if client.Transport.Cache.Path != "" && client.Cache.Path == client.Transport.Cache.Path {
-		return VerifiedBundle{}, fmt.Errorf("%w: v1/v2 cache path collision", ErrUnavailable)
+	if err := client.validateConfig(); err != nil {
+		return VerifiedBundle{}, err
 	}
 	embedded, cached, floor, err := client.loadLocal(installedFloor)
 	if err != nil {
