@@ -20,8 +20,8 @@ func TestResolveDirectoryV2CanonicalClosureFreshAndLockedRestore(t *testing.T) {
 		t.Fatalf("fresh install ignored ineligible closure: %v", err)
 	}
 	grant.CanonicalClosure = &DirectoryCanonicalClosure{
-		Eligible: true,
-		ClosureDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Eligible:                true,
+		ClosureDigest:           "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		MinimumInstallerVersion: "2.0.0",
 	}
 	if _, err := ResolveDirectory(snapshot, fresh); !errors.Is(err, ErrDirectoryIneligible) ||
