@@ -786,6 +786,16 @@ def copilot_settings_sanitized_shape(home, case_root, identity):
     allowed_sections = {"plugins", "installedPlugins", "enabledPlugins",
                         "marketplaces", "pluginMarketplaces"}
     sections = sorted(set(doc) & allowed_sections) if isinstance(doc, dict) else []
+    # Native enablement evidence is separate from a mere matching key. Export
+    # aggregate booleans only, never a key, provider value or raw settings JSON.
+    enabled_values = {"true": 0, "false": 0, "non_boolean": 0}
+    enabled = doc.get("enabledPlugins") if isinstance(doc, dict) else None
+    if isinstance(enabled, dict):
+        for key, value in enabled.items():
+            if isinstance(key, str) and qualified.fullmatch(key):
+                bucket = ("true" if value is True else
+                          "false" if value is False else "non_boolean")
+                enabled_values[bucket] += 1
     def match(value, role):
         if value.casefold() == identity.casefold():
             counts["exact_" + role] += 1
@@ -811,7 +821,8 @@ def copilot_settings_sanitized_shape(home, case_root, identity):
         elif isinstance(value, str):
             match(value, "value")
     return {"status": "truncated" if stack or depth_truncated else "parsed",
-            "allowed_sections": sections, "match_counts": counts}
+            "allowed_sections": sections, "match_counts": counts,
+            "enabled_plugin_value_counts": enabled_values}
 
 
 def initialize_kimi_project_git_root(project, env, case_root):

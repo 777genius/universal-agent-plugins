@@ -1110,6 +1110,33 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertEqual(clean["status"], "parsed")
             self.assertFalse(any(clean["match_counts"].values()))
 
+    def test_copilot_enabled_plugin_values_are_exact_and_never_exported(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve() / "case"
+            home = case / "home"
+            settings = home / ".copilot/settings.json"
+            settings.parent.mkdir(parents=True)
+            settings.write_text(json.dumps({"enabledPlugins": {
+                "atlassian@agentplugins-aaaaaaaaaaaa": True,
+                "atlassian@agentplugins-bbbbbbbbbbbb": False,
+                "atlassian@agentplugins-cccccccccccc": "private-auth-token",
+                "unrelated@agentplugins-dddddddddddd": True,
+                "atlassian@agentplugins-not-a-hex": "private-user-value",
+            }, "unmanaged": {"API_KEY": "private-secret-value"}}))
+            proof = audit.copilot_settings_sanitized_shape(home, case, "atlassian")
+            self.assertEqual(proof["status"], "parsed")
+            self.assertEqual(proof["enabled_plugin_value_counts"],
+                             {"true": 1, "false": 1, "non_boolean": 1})
+            self.assertEqual(proof["match_counts"]["qualified_key"], 3)
+            self.assertFalse(any(secret in str(proof) for secret in (
+                "private-auth-token", "private-secret-value",
+                "private-user-value", "unrelated@agentplugins")))
+            settings.write_text('{"enabledPlugins":{"other@agentplugins-aaaaaaaaaaaa":true}}')
+            clean = audit.copilot_settings_sanitized_shape(home, case, "atlassian")
+            self.assertEqual(clean["enabled_plugin_value_counts"],
+                             {"true": 0, "false": 0, "non_boolean": 0})
+
     def test_copilot_settings_probe_rejects_unsafe_paths_and_bad_json(self):
         audit = load_audit()
         with TemporaryDirectory() as temporary:
