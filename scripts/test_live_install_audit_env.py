@@ -544,8 +544,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         with TemporaryDirectory() as temporary:
             case = Path(temporary).resolve()
             foreign = case / "foreign.txt"
-            foreign.write_bytes(b"\\xff\\xfe")
-            self.assertFalse(audit.preserved_regular_text(foreign, "untouched\\n", case))
+            foreign.write_bytes(b"\xff\xfe")
+            self.assertFalse(audit.preserved_regular_text(foreign, "untouched\n", case))
 
     def test_copilot_settings_depth_limit_is_reported_as_truncated(self):
         # BUG-026: a sole depth-limited leaf must not be called fully parsed.
