@@ -866,6 +866,16 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 		}
 	}
 	claudeWriteFixturePackage(t, f.PackageRoot, "claude-native-proof", "1.0.0")
+	snapshots := map[string]map[string]string{}
+	capture := func(stage string) {
+		t.Helper()
+		snapshots[stage] = map[string]string{
+			"profile_A": nativeTreeDigest(t, rootA),
+			"profile_B": nativeTreeDigest(t, rootB),
+			"shared_home": nativeTreeDigest(t, f.Home),
+		}
+	}
+	capture("before_any_native_command")
 	stages := map[string]claudeNativeStage{
 		"native_only_probe": {Status: "not_evaluated"},
 		"profile_A_install": {Status: "not_evaluated"},
@@ -879,7 +889,7 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 			"claude_binary_sha256": claudeSHA256(t, client),
 			"source_version": os.Getenv("AGENTPLUGINS_CLAUDE_VERSION"),
 			"shared_disposable_home": true, "distinct_config_and_state_roots": true,
-			"model_execution": "NOT_RUN", "stages": stages,
+			"model_execution": "NOT_RUN", "stages": stages, "snapshots": snapshots,
 		})
 	}()
 	// The first native list may initialize its own profile, so isolate its
@@ -892,13 +902,15 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 		t.Fatalf("B native-only profile unexpectedly has plugins: %d", len(entries))
 	}
 	stages["native_only_probe"] = claudeNativeStage{Status: "passed", Reason: "genuine pinned CLI probed both disposable profiles before UAP effects"}
-	preA, preB := nativeTreeDigest(t, rootA), nativeTreeDigest(t, rootB)
+	capture("after_native_only_initialization")
+	preB := nativeTreeDigest(t, rootB)
 	f.ConfigDir, f.StateHome = rootA, stateA
 	first := claudeRunInstaller(t, f, installer, clientDir, "A-install", "add", f.PackageRoot, "--target", "claude")
 	if first["result"] != "success" {
 		t.Fatalf("A install did not succeed: %+v", first)
 	}
 	stages["profile_A_install"] = claudeNativeStage{Status: "passed"}
+	capture("after_A_install")
 	assertSentinels()
 	if nativeTreeDigest(t, rootB) != preB {
 		t.Fatal("selected profile A changed unselected profile B")
@@ -906,6 +918,7 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 	f.ConfigDir, f.StateHome = rootB, stateB
 	stableA := nativeTreeDigest(t, rootA)
 	second := claudeRunInstaller(t, f, installer, clientDir, "B-install", "add", f.PackageRoot, "--target", "claude")
+	capture("after_B_install_attempt")
 	assertSentinels()
 	if nativeTreeDigest(t, rootA) != stableA {
 		t.Fatal("selected profile B changed unselected profile A")
@@ -922,6 +935,7 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 	}
 	assertSentinels()
 	stages["A_replay"] = claudeNativeStage{Status: "passed"}
+	capture("after_A_replay")
 	f.ConfigDir, f.StateHome = rootB, stateB
 	stableA = nativeTreeDigest(t, rootA)
 	removed := claudeRunInstaller(t, f, installer, clientDir, "B-only-remove", "remove", "claude-native-proof", "--target", "claude")
@@ -930,5 +944,5 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 	}
 	assertSentinels()
 	stages["B_only_remove"] = claudeNativeStage{Status: "passed"}
-	_ = preA // paired pre-native and post-native hashes are retained by the fixture transcript.
+	capture("after_B_only_remove")
 }
