@@ -32,6 +32,29 @@ func TestResolveDirectoryV2CanonicalClosureFreshAndLockedRestore(t *testing.T) {
 	if got, err := ResolveDirectory(snapshot, fresh); err != nil || got.DistributionID != "other/tool" || got.ReleaseSequence != 1 {
 		t.Fatalf("qualified fresh closure rejected: %+v %v", got, err)
 	}
+	// A new target on a recorded immutable release is not an existing-target
+	// repair. It must qualify against the current signed dependency closure.
+	newTarget := fresh
+	newTarget.Operation = DirectoryNewTarget
+	newTarget.Recorded = &RecordedDirectoryRelease{
+		ProductID: "tool", DistributionID: "other/tool", ReleaseSequence: 1,
+		ResolvedRevision: snapshot.Distributions[0].Releases[0].PackageSource.Revision,
+	}
+	grant.CanonicalClosure.Eligible = false
+	if _, err := ResolveDirectory(snapshot, newTarget); !errors.Is(err, ErrDirectoryIneligible) ||
+		!strings.Contains(err.Error(), "required dependency closure is ineligible") {
+		t.Fatalf("new target on recorded release ignored ineligible closure: %v", err)
+	}
+	grant.CanonicalClosure.Eligible = true
+	newTarget.InstallerVersion = "1.2.3"
+	if _, err := ResolveDirectory(snapshot, newTarget); !errors.Is(err, ErrDirectoryIneligible) ||
+		!strings.Contains(err.Error(), "minimum installer version for signed required closure") {
+		t.Fatalf("new target on recorded release ignored closure floor: %v", err)
+	}
+	newTarget.InstallerVersion = "2.1.0"
+	if got, err := ResolveDirectory(snapshot, newTarget); err != nil || got.ReleaseSequence != 1 {
+		t.Fatalf("new target with current eligible closure rejected: %+v %v", got, err)
+	}
 	grant.CanonicalClosure.Eligible = false
 	locked := fresh
 	locked.InstallerVersion = "1.2.3"

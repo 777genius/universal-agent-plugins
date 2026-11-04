@@ -196,7 +196,8 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 			// not invalidate historical exact locks or existing install receipts.
 			if snapshot.SnapshotSchemaVersion == 2 && entry.CanonicalClosure != nil &&
 				request.Purpose != DirectoryResolveLockedRestore &&
-				(request.Recorded == nil || request.Operation == DirectoryUpdate) {
+				(request.Recorded == nil || request.Operation == DirectoryUpdate ||
+					request.Operation == DirectoryNewTarget) {
 				closure := entry.CanonicalClosure
 				if !closure.Eligible {
 					return &eligibilityReason{"ineligible_closure", "signed required dependency closure is ineligible for " + string(target)}
