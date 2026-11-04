@@ -47,7 +47,7 @@ point inward.
 |-------|---------|------------|----------------|
 | Domain | `agentplugins/domain` | stdlib only | yes, `domain-stdlib-only` |
 | Ports | `agentplugins/ports` | stdlib, `domain`, `install/integrationctl/ports` (see below) | yes, `ports-only-domain` |
-| Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract`, `install/integrationctl/ports` for the legacy lock (see below) | yes, `usecase-through-ports` |
+| Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract` | yes, `usecase-through-ports` |
 | Client contract | `agentplugins/clients` (+ `clients/shared`) | stdlib, `domain`, `ports`, `adapters/nativeconfig` (see below) | yes, `clients-no-upward`, `clients-no-concrete-clients` |
 | Client adapters | `agentplugins/clients/<id>` | the client contract, `clients/shared`, `domain`, `ports` | yes, `clients-no-upward`, `clients-no-concrete-clients` |
 | Command format | `agentplugins/commandext` | stdlib, `domain`, `conformance`, `gopkg.in/yaml.v3` | yes, `commandext-pure` |
@@ -155,12 +155,16 @@ exception. Duplicating the two types into `domain` would create a second source 
 truth and force a conversion on every call, which costs more than the formal
 purity is worth.
 
-**`usecase.Service.LegacyLock` is typed `install/integrationctl/ports.LockManager`.** This
-one is not the data-only exception above: `LockManager` is a behavioural
-interface, so the use case does name a package outside its layer. It is the
-remaining edge of the pre-refactor installer that still owns the lock, and it is
-listed here rather than quietly excluded, because the deny list permits it only
-by not mentioning it.
+**Legacy state locking is bridged at the adapter boundary.** The use case
+accepts the existing `ports.MutationLock` interface for both its own mutation
+lock and its *separate* legacy-state reconciliation lock. The
+`adapters/legacylock.StateLock` bridge adapts the older
+`install/integrationctl/ports.LockManager` using the unchanged `"state"`
+namespace. The composition root injects the existing `locks.FileLock` and its
+original path. After legacy removal the use case holds the legacy lock through
+the negative observation **and** the state-v2 save, preventing a legacy writer
+from invalidating reconciliation between them. Depguard and archtest forbid
+reintroducing old lock imports in the new use case.
 
 **`agentplugins/clients` is close to self-contained, but not a leaf.**
 `clients.Env` carries a `nativeconfig.Kernel`, so the contract imports
