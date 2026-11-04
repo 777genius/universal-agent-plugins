@@ -192,6 +192,20 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 					return &eligibilityReason{"installer_too_old", "minimum installer version for " + string(target) + "/" + string(request.Scope) + " is " + entry.MinimumInstallerVersion}
 				}
 			}
+			// Canonical closure summarizes fresh dependency eligibility. It must
+			// not invalidate historical exact locks or existing install receipts.
+			if snapshot.SnapshotSchemaVersion == 2 && entry.CanonicalClosure != nil &&
+				request.Purpose != DirectoryResolveLockedRestore &&
+				(request.Recorded == nil || request.Operation == DirectoryUpdate) {
+				closure := entry.CanonicalClosure
+				if !closure.Eligible {
+					return &eligibilityReason{"ineligible_closure", "signed required dependency closure is ineligible for " + string(target)}
+				}
+				comparison, err := compareSemver(request.InstallerVersion, closure.MinimumInstallerVersion)
+				if err != nil || comparison < 0 {
+					return &eligibilityReason{"installer_too_old", "minimum installer version for signed required closure is " + closure.MinimumInstallerVersion}
+				}
+			}
 			delivery, supported := ExpectedDirectoryDelivery(target)
 			if !supported || entry.Delivery != delivery {
 				return &eligibilityReason{"incompatible_delivery", fmt.Sprintf("release delivery %q is incompatible with %s; expected %q", entry.Delivery, target, delivery)}
