@@ -21,18 +21,18 @@ type request struct {
 	Params json.RawMessage `json:"params"`
 }
 type facts struct {
-	Nonce    string   `json:"nonce"`
-	Revision string   `json:"revision"`
-	CWD      string   `json:"cwd"`
-	Argv     []string `json:"argv"`
-	Root     string   `json:"plugin_root"`
-	Data     string   `json:"plugin_data"`
-	Literal  string   `json:"literal"`
-	Once     string   `json:"once"`
-	Marker   string   `json:"marker,omitempty"`
-	PID      int      `json:"pid"`
-	Session  string   `json:"session"`
-	CanaryDigest string `json:"canary_digest,omitempty"`
+	Nonce        string   `json:"nonce"`
+	Revision     string   `json:"revision"`
+	CWD          string   `json:"cwd"`
+	Argv         []string `json:"argv"`
+	Root         string   `json:"plugin_root"`
+	Data         string   `json:"plugin_data"`
+	Literal      string   `json:"literal"`
+	Once         string   `json:"once"`
+	Marker       string   `json:"marker,omitempty"`
+	PID          int      `json:"pid"`
+	Session      string   `json:"session"`
+	CanaryDigest string    `json:"canary_digest,omitempty"`
 }
 
 var session = fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
