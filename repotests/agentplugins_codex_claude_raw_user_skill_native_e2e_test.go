@@ -22,6 +22,7 @@ const nativeRawUserSkillSource = "777genius/universal-agent-plugins@" + nativeRa
 const nativeRawUserSkillName = "benchmark-note"
 const nativeRawUserSkillSourceKey = "github-skill:777genius/universal-agent-plugins:benchmark-note:tests/fixtures/uap_apm/skills/benchmark-note"
 
+// nativeRawUserInstall Runs the public skills-add CLI against one native user target and requires an exact outcome.
 func nativeRawUserInstall(t *testing.T, root, dir string, env []string, installer, target, label string, explicit bool, repeated bool) {
 	t.Helper()
 	args := []string{"skills", "add", nativeRawUserSkillSource, "--skill", nativeRawUserSkillName, "--target", target, "--no-ui", "--yes"}
@@ -40,6 +41,7 @@ func nativeRawUserInstall(t *testing.T, root, dir string, env []string, installe
 	}
 }
 
+// nativeRawUserState Validates the persisted immutable Skill, ownership receipt and selected user profile.
 func nativeRawUserState(t *testing.T, statePath, target, profile string, requiredVerification domain.VerificationState) (domain.StateFileV2, domain.ClientBinding) {
 	t.Helper()
 	body, err := os.ReadFile(statePath)
@@ -82,6 +84,7 @@ func nativeRawUserState(t *testing.T, statePath, target, profile string, require
 	return state, binding
 }
 
+// nativeRawUserFiles Compares the projected Skill and reference bytes with the pinned Git source.
 func nativeRawUserFiles(t *testing.T, binding domain.ClientBinding, client string) {
 	t.Helper()
 	root := binding.TargetLocator
@@ -98,9 +101,9 @@ func nativeRawUserFiles(t *testing.T, binding domain.ClientBinding, client strin
 	}
 }
 
+// nativeRawUserSavedLifecycleResult Requires a successful single-target saved repair/remove outcome.
 // Saved dependency repair/removal uses the public outcome/results JSON
-// contract, not the single-plugin result/data envelope and not the separate
-// skills-add status/items contract. Require the exact target's real mutation.
+// contract, not the single-plugin result/data or skills-add status/items envelopes.
 func nativeRawUserSavedLifecycleResult(t *testing.T, target, operation string, result map[string]any, runErr error) {
 	t.Helper()
 	entries, ok := result["results"].([]any)
@@ -113,6 +116,7 @@ func nativeRawUserSavedLifecycleResult(t *testing.T, target, operation string, r
 	}
 }
 
+// nativeRawUserRepair Deletes only a disposable owned artifact, then proves the saved repair restores it.
 func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer, target, statePath, profile string, original domain.ClientBinding) {
 	t.Helper()
 	// This test deliberately deletes a managed artifact to reproduce absent
@@ -139,6 +143,7 @@ func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer
 	nativeRawUserFiles(t, restored, target)
 }
 
+// nativeRawUserRemove Requires the selected owned artifact and receipt to disappear after removal.
 func nativeRawUserRemove(t *testing.T, root, dir string, env []string, installer, target, statePath, active string, external bool) {
 	t.Helper()
 	args := []string{"remove", nativeRawUserSkillName, "--target", target, "--scope", "user"}
@@ -170,6 +175,7 @@ func nativeRawUserRemove(t *testing.T, root, dir string, env []string, installer
 	}
 }
 
+// codexNativeRawUserInventory Cross-checks a native Codex plugin listing and app-server skills/list against the target.
 func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginID, declaredName, active, label string, want bool) {
 	t.Helper()
 	listing, err := nativeCommand(t, f, client, label+"-plugins", "plugin", "list", "--json")
@@ -264,6 +270,7 @@ func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginI
 	}
 }
 
+// TestAgentpluginsCodexNativeRawUserSkillLifecycle Proves real pinned Codex user Skill add, repeat, repair, discovery and removal.
 func TestAgentpluginsCodexNativeRawUserSkillLifecycle(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_CODEX_NATIVE_E2E") != "1" {
 		t.Skip("opt-in genuine Codex native user Skill E2E")
@@ -307,6 +314,7 @@ func TestAgentpluginsCodexNativeRawUserSkillLifecycle(t *testing.T) {
 	}
 }
 
+// TestAgentpluginsClaudeNativeRawUserSkillLifecycle Proves real pinned Claude user Skill add, repeat, repair, discovery and removal.
 func TestAgentpluginsClaudeNativeRawUserSkillLifecycle(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_CLAUDE_NATIVE_E2E") != "1" {
 		t.Skip("opt-in genuine Claude Code native user Skill E2E")
