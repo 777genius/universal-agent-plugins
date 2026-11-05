@@ -14,7 +14,7 @@ import (
 // both user targets through the existing public dependency/installer seams
 // without requiring credentials or executing downloaded Skill instructions.
 func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
-	j, _, commit := skillJourney(t)
+	j, repo, commit := skillJourney(t)
 	ctx := t.Context()
 	input := SkillsBatchRequest{
 		Selections: []SkillsSelection{{
@@ -120,8 +120,56 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 		t.Fatal("invalid scope request changed user state")
 	}
 
+
+	// Upgrade one moving Git Skill for both clients in the same saved user
+	// namespace. Lock and physical projections must agree on v2 while
+	// binding IDs and target paths retain their established ownership.
+	originalBindings := make(map[string]domain.ClientBinding, 2)
+	for _, target := range []string{"codex", "claude"} {
+		originalBindings[target] = savedJourneyBinding(t, state, target)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "skills", "pdf", "references", "note.txt"), []byte("updated resource"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	savedJourneyGit(t, repo, "add", ".")
+	savedJourneyGit(t, repo, "commit", "-m", "fixture: advance both user Skills")
+	nextCommit := savedJourneyGit(t, repo, "rev-parse", "HEAD")
+	j.run(t, "update", "pdf", "--scope", "user", "--format", "json")
+	_, updatedLock := j.intent(t)
+	if len(updatedLock.Packages) != 1 || updatedLock.Packages[0].Source.Git == nil ||
+		updatedLock.Packages[0].Source.Git.Commit != nextCommit ||
+		updatedLock.Packages[0].TreeDigest == locked.Packages[0].TreeDigest {
+		t.Fatalf("two-target update did not advance immutable Skill pin: %+v", updatedLock)
+	}
+	updatedState := j.state(t)
+	if len(updatedState.EnvironmentReceipts) != 2 {
+		t.Fatalf("two-target update dropped ownership receipts: %+v", updatedState.EnvironmentReceipts)
+	}
+	for _, target := range []string{"codex", "claude"} {
+		old := originalBindings[target]
+		current := savedJourneyBinding(t, updatedState, target)
+		if current.ClientBindingID != old.ClientBindingID || current.TargetLocator != old.TargetLocator ||
+			current.PackageRevision == nil || current.PackageRevision.ResolvedRevision != nextCommit {
+			t.Fatalf("%s update changed identity or lost pinned revision: before=%+v after=%+v", target, old, current)
+		}
+		skillRoot := current.TargetLocator
+		if target == "claude" {
+			skillRoot = filepath.Join(skillRoot, ".agentplugins-runtime")
+		}
+		body, err := os.ReadFile(filepath.Join(skillRoot, "skills", "pdf", "references", "note.txt"))
+		if err != nil || string(body) != "updated resource" {
+			t.Fatalf("%s did not install updated raw Skill resources: %q %v", target, body, err)
+		}
+	}
+	updatedBytes := savedJourneyTree(t, j.cli.app.DependenciesRoot)
+	j.run(t, "deps", "sync", "--locked", "--yes", "--scope", "user", "--format", "json")
+	if current := savedJourneyTree(t, j.cli.app.DependenciesRoot); !reflect.DeepEqual(updatedBytes, current) {
+		t.Fatalf("locked replay after two-target update rewrote user state: %s", savedJourneyDifferences(updatedBytes, current))
+	}
+
 	// Removing one target may not remove the other one's exact owned bytes.
-	claudeBefore := savedJourneyBinding(t, state, "claude")
+	claudeBefore := savedJourneyBinding(t, updatedState, "claude")
+	managedBefore["claude"] = savedJourneyTree(t, claudeBefore.TargetLocator)
 	j.run(t, "remove", "pdf", "--target", "codex", "--external-uninstalled", "--scope", "user", "--format", "json")
 	afterCodex := j.state(t)
 	if !reflect.DeepEqual(claudeBefore, savedJourneyBinding(t, afterCodex, "claude")) {
