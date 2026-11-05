@@ -372,3 +372,39 @@ func TestPublicDirectoryV2ScopesDoNotBorrowAnotherGrantEvidence(t *testing.T) {
 		t.Fatalf("v1 public contract leaked v2 closure: %s", output.String())
 	}
 }
+
+func TestInstalledV2RevisionEvidenceIsScoped(t *testing.T) {
+	const distribution = "owner/tool"
+	snapshot := domain.DirectorySnapshot{SnapshotSchemaVersion: 2, Evidence: []domain.DirectoryEvidence{
+		{ID: "schema", DistributionID: distribution, ReleaseSequence: 7, Level: "schema"},
+		{ID: "codex-user", DistributionID: distribution, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeUser},
+		{ID: "codex-legacy-user", DistributionID: distribution, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex},
+		{ID: "codex-project", DistributionID: distribution, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeProject},
+		{ID: "cursor-project", DistributionID: distribution, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCursor, Scope: domain.ScopeProject},
+	}}
+	for _, tc := range []struct {
+		name   string
+		client domain.ClientID
+		scope  domain.InstallScope
+		want   string
+	}{
+		{"codex user", domain.ClientCodex, domain.ScopeUser, "codex-legacy-user,codex-user,schema"},
+		{"codex project", domain.ClientCodex, domain.ScopeProject, "codex-project,schema"},
+		{"cursor project", domain.ClientCursor, domain.ScopeProject, "cursor-project,schema"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var ids []string
+			for _, proof := range evidenceForClientRevision(snapshot, distribution, 7, tc.client, tc.scope) {
+				ids = append(ids, proof.ID)
+			}
+			if got := strings.Join(ids, ","); got != tc.want {
+				t.Fatalf("revision borrowed another scope's evidence: got %q want %q", got, tc.want)
+			}
+		})
+	}
+	// Retain the legacy unscoped v1 display contract.
+	snapshot.SnapshotSchemaVersion = 1
+	if got := len(evidenceForClientRevision(snapshot, distribution, 7, domain.ClientCodex, domain.ScopeUser)); got != 4 {
+		t.Fatalf("v1 revision evidence changed: got %d entries, want 4", got)
+	}
+}

@@ -193,11 +193,9 @@ func inspectInstalledProduct(ctx context.Context, app App, state domain.StateFil
 	for index := range result.Clients {
 		revision := result.Clients[index].PackageRevision
 		if revision != nil {
-			for _, evidence := range evidenceForRelease(bundle.Snapshot, revision.DistributionID, revision.ReleaseSequence) {
-				if evidence.Client == "" || evidence.Client == domain.ClientID(result.Clients[index].ClientID) {
-					revision.Evidence = append(revision.Evidence, evidence)
-				}
-			}
+			revision.Evidence = append(revision.Evidence, evidenceForClientRevision(
+				bundle.Snapshot, revision.DistributionID, revision.ReleaseSequence,
+				domain.ClientID(result.Clients[index].ClientID), app.scope())...)
 		}
 	}
 	result.Warnings = installedDirectoryWarnings(bundle.Snapshot, installation)
@@ -308,6 +306,33 @@ func evidenceForRelease(snapshot domain.DirectorySnapshot, distribution string, 
 		}
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result
+}
+
+// Per-client installed revisions must not present another v2 grant's runtime
+// proof as their own. The full release evidence remains visible separately.
+func evidenceForClientRevision(snapshot domain.DirectorySnapshot, distribution string, sequence uint64,
+	client domain.ClientID, scope domain.InstallScope,
+) []publicEvidence {
+	result := []publicEvidence{}
+	for _, evidence := range evidenceForRelease(snapshot, distribution, sequence) {
+		if snapshot.SnapshotSchemaVersion != 2 {
+			if evidence.Client == "" || evidence.Client == client {
+				result = append(result, evidence)
+			}
+			continue
+		}
+		if evidence.Level == "schema" {
+			if evidence.Client == "" && evidence.Scope == "" {
+				result = append(result, evidence)
+			}
+			continue
+		}
+		if evidence.Client == client && (evidence.Scope == scope ||
+			scope == domain.ScopeUser && evidence.Scope == "") {
+			result = append(result, evidence)
+		}
+	}
 	return result
 }
 
