@@ -137,19 +137,30 @@ func TestProjectQoderSavedLifecycleSeparatesUserAndProjects(t *testing.T) {
 
 // Both project paths must hold exactly the selected immutable package, MCP
 // member and Skill directory; no inferred user/global ownership is allowed.
-func projectQoderAssertNativeReceipts(t *testing.T, b domain.ClientBinding, project string) {
+func projectQoderAssertNativeReceipts(t *testing.T, b domain.ClientBinding, project string, includeHTTP bool) {
 	t.Helper()
 	objects := b.NativeObjects
-	if len(objects) != 3 ||
+	wantCount, skillIndex := 3, 2
+	if includeHTTP {
+		wantCount, skillIndex = 4, 3
+	}
+	if len(objects) != wantCount ||
 		objects[0].Kind != "managed_package_directory" || objects[0].Path != b.TargetLocator ||
 		objects[1].ObjectID != "qoder_project_mcp_server:docs" ||
 		objects[1].Kind != "qoder_project_mcp_server" ||
 		objects[1].Path != filepath.Join(project, ".mcp.json") ||
-		objects[2].ObjectID != "qoder_project_skill_directory:docs" ||
-		objects[2].Kind != "qoder_project_skill_directory" ||
-		objects[2].Path != filepath.Join(project, ".qoder", "skills", "docs") ||
-		objects[2].SourceRelative != "skills/docs" {
+		objects[skillIndex].ObjectID != "qoder_project_skill_directory:docs" ||
+		objects[skillIndex].Kind != "qoder_project_skill_directory" ||
+		objects[skillIndex].Path != filepath.Join(project, ".qoder", "skills", "docs") ||
+		objects[skillIndex].SourceRelative != "skills/docs" {
 		t.Fatalf("Qoder project component receipt authority differs: %+v", objects)
+	}
+	if includeHTTP {
+		http := objects[2]
+		if http.ObjectID != "qoder_project_mcp_server:remote" || http.Kind != "qoder_project_mcp_server" ||
+			http.Path != filepath.Join(project, ".mcp.json") {
+			t.Fatalf("Qoder HTTP MCP is missing its exact receipt: %+v", http)
+		}
 	}
 	for _, object := range objects {
 		if !strings.HasPrefix(object.ManagedDigest, "sha256:") || object.ProtectionClass != "managed" {
@@ -164,7 +175,7 @@ func projectQoderOwned(t *testing.T, j projectJourney, project, expected string)
 	if b.ClientID != "qoder" || b.Scope != "project" || b.NativeProfileRoot != filepath.Join(project, ".uap", "managed", "clients", "qoder") || b.Activation != domain.ActivationPrepared || b.Verification != domain.VerificationInstalled {
 		t.Fatalf("Qoder lost exact project native authority %+v", b)
 	}
-	projectQoderAssertNativeReceipts(t, b, project)
+	projectQoderAssertNativeReceipts(t, b, project, false)
 	if projectJourneyRead(t, filepath.Join(project, ".qoder", "skills", "docs", "SKILL.md")) != expected ||
 		projectJourneyRead(t, filepath.Join(b.TargetLocator, ".agentplugins-qoder-native", "skills", "docs", "SKILL.md")) != expected {
 		t.Fatal("native import view differs from selected immutable skill")
@@ -181,7 +192,14 @@ func projectQoderOwned(t *testing.T, j projectJourney, project, expected string)
 // cycle. No Qoder process is permitted; repair and retention use production APIs.
 func TestProjectQoderDirectGroupRepairAndDefaultRemovalKeepExactAuthority(t *testing.T) {
 	transport := newProjectJourneyTransport(t, "git")
+	// Extend the existing real Git fixture with one portable Streamable HTTP
+	// peer; do not create a second Qoder E2E package or native harness.
+	projectJourneyWrite(t, filepath.Join(transport.repo, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"stdio","command":"go","args":["version"],"env":{"DATA":"${PLUGIN_DATA}"}},"remote":{"type":"streamable-http","url":"https://example.test/mcp"}}}`)
+	projectJourneyGit(t, transport.repo, "add", "mcp.json")
+	projectJourneyGit(t, transport.repo, "commit", "-m", "add disposable HTTP peer to Qoder fixture")
+	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
 	j := newProjectJourney(t, transport)
+	projectJourneyWrite(t, filepath.Join(j.a, ".mcp.json"), `{"mcpServers":{"foreign":{"command":"foreign"}},"note":"keep"}`)
 	user := filepath.Join(j.home, ".qoder")
 	projectJourneyWrite(t, filepath.Join(user, "plugins", "installed_plugins_v2.json"), "original registry\n")
 	runner := &projectQoderNoNative{}
@@ -236,6 +254,11 @@ func TestProjectQoderDirectGroupRepairAndDefaultRemovalKeepExactAuthority(t *tes
 	}
 	j.run(t, j.a, "remove", installed.DeclaredName, "--target", "qoder")
 	projectJourneyAbsent(t, current.TargetLocator)
+	mcpAfterRemove := projectJourneyRead(t, filepath.Join(j.a, ".mcp.json"))
+	if strings.Contains(mcpAfterRemove, `"docs"`) || strings.Contains(mcpAfterRemove, `"remote"`) ||
+		!strings.Contains(mcpAfterRemove, `"foreign"`) || !strings.Contains(mcpAfterRemove, `"note":"keep"`) {
+		t.Fatal("Qoder mixed removal retained selected server or lost foreign members", mcpAfterRemove)
+	}
 	state := j.state(t, j.a)
 	if len(state.Installations) != 1 || !state.Installations[0].DataRetained ||
 		len(state.Installations[0].Clients) != 0 || len(state.Installations[0].DataReceipts) != 1 {
@@ -262,7 +285,13 @@ func projectQoderDirectOwned(t *testing.T, j projectJourney, expected string) (d
 		if binding.ClientID != "qoder" || binding.Scope != "project" || binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled || binding.NativeProfileRoot != filepath.Join(j.a, ".uap", "managed", "clients", "qoder") {
 			t.Fatal("direct native Skill receipt ownership differs")
 		}
-		projectQoderAssertNativeReceipts(t, binding, j.a)
+		projectQoderAssertNativeReceipts(t, binding, j.a, true)
+		mcp := projectJourneyRead(t, filepath.Join(j.a, ".mcp.json"))
+		if !strings.Contains(mcp, `"docs"`) || !strings.Contains(mcp, `"remote"`) ||
+			!strings.Contains(mcp, `"type":"http"`) || !strings.Contains(mcp, `"foreign"`) ||
+			!strings.Contains(mcp, `"note":"keep"`) {
+			t.Fatal("mixed Qoder stdio/HTTP native MCP or foreign neighbor differs", mcp)
+		}
 		if projectJourneyRead(t, filepath.Join(j.a, ".qoder", "skills", "docs", "SKILL.md")) != expected ||
 			projectJourneyRead(t, filepath.Join(binding.TargetLocator, ".agentplugins-qoder-native", "skills", "docs", "SKILL.md")) != expected {
 			t.Fatal("direct Qoder native view does not match frozen source")
