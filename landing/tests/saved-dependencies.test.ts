@@ -287,7 +287,11 @@ test('reviewed Directory card offers native-qualified Context7 commands for Code
   ).plugins;
   const context7 = catalog.find((entry) => entry.name === 'context7');
   assert.ok(context7, 'published Directory fixture must contain Context7');
-  assert.equal(resolveDistribution(context7, ['claude', 'codex']).distribution?.id, 'upstash/context7');
+  const selected = resolveDistribution(context7, ['claude', 'codex']).distribution;
+  assert.ok(selected, 'both native agents must share an eligible signed Directory distribution');
+  for (const client of ['claude', 'codex']) {
+    assert.ok(selected.targets.some((target) => target.client === client && target.scopes.includes('user')));
+  }
   const commands = pluginCommands(context7, ['claude', 'codex'], true);
   assert.equal(commands.add, 'npx -y universal-agent-plugins add context7 --target claude,codex');
   assert.equal(commands.saveMode, 'saved');
