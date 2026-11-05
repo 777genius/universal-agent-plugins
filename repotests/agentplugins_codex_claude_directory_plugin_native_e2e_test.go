@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -90,6 +91,15 @@ func directorySiteCodexInventory(t *testing.T, f *nativeFixture, codexBin string
 	if err := json.Unmarshal(result, &listing); err != nil {
 		t.Fatal(err)
 	}
+	marketplace, ok := strings.CutPrefix(pluginID, directorySitePlugin+"@")
+	if !ok || marketplace == "" || listing.Installed == nil {
+		t.Fatalf("Codex Directory native listing is not authoritative: %s", result)
+	}
+	status := codex.PluginStatusFromList(result, directorySitePlugin, marketplace)
+	if status == codex.StatusUnknown ||
+		(present && status != codex.StatusInstalled) || (!present && status != codex.StatusAbsent) {
+		t.Fatalf("Codex Directory native listing status %v, want present=%v: %s", status, present, result)
+	}
 	found := 0
 	for _, entry := range listing.Installed {
 		if entry.ID == pluginID {
@@ -110,6 +120,8 @@ func directorySiteCodexInventory(t *testing.T, f *nativeFixture, codexBin string
 	}
 	var skills struct {
 		Data []struct {
+			CWD    string            `json:"cwd"`
+			Errors []json.RawMessage `json:"errors"`
 			Skills []struct {
 				Name     string `json:"name"`
 				PluginID string `json:"pluginId"`
@@ -117,9 +129,14 @@ func directorySiteCodexInventory(t *testing.T, f *nativeFixture, codexBin string
 				Enabled  bool   `json:"enabled"`
 			} `json:"skills"`
 		} `json:"data"`
+		NextCursor *string `json:"nextCursor"`
 	}
 	if err := json.Unmarshal(r.must(t, "skills/list", map[string]any{"cwds": []string{f.Project}, "forceReload": true}), &skills); err != nil {
 		t.Fatal(err)
+	}
+	if skills.NextCursor != nil || len(skills.Data) != 1 ||
+		!openCodeSamePath(skills.Data[0].CWD, f.Project) || len(skills.Data[0].Errors) != 0 {
+		t.Fatalf("Codex Directory skills/list missing selected cwd or contained errors: %+v", skills)
 	}
 	found = 0
 	for _, group := range skills.Data {
@@ -184,7 +201,7 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	}
 	// This is the Directory card's actual command, with only non-interactive
 	// consent and JSON output added for a disposable CI host.
-	args := []string{"add", directorySitePlugin, "--target", "claude,codex", "--no-ui", "--yes"}
+	args := []string{"add", directorySitePlugin, "--target", "codex,claude", "--no-ui", "--yes"}
 	result, err := commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-add", args...)
 	if err != nil || result["result"] != "success" {
 		t.Fatalf("site Directory command failed: %v %+v", err, result)
