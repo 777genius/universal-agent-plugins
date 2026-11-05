@@ -3,8 +3,6 @@ on:
   push:
     branches:
       - feat/devin-global-components-20261104
-    paths:
-      - .github/workflows/devin-global-d0.yml
 permissions:
   contents: read
 concurrency:
@@ -263,12 +261,9 @@ jobs:
               for project in projects:
                   run_native(executable, ["skills", "list", "--json"], project, env)
                   run_native(executable, ["mcp", "list"], project, env)
-              for project in projects:
-                  run_native(executable, ["-p", "Use the global uap-d0-global skill. Call "
-                                          "mcp__uap_d0_stdio__nonce_echo with nonce STDIO_D0_20261104, "
-                                          "then call mcp__uap_d0_http__nonce_echo with nonce HTTP_D0_20261104. "
-                                          "Report the two exact tool results; do not call any other tool."],
-                             project, env, seconds=35)
+              # Owner-approved install-only gate: native list/readback does
+              # not require or attempt a cloud-authenticated model session.
+              # RPC events remain empty and runtime qualification stays false.
               if trace.exists():
                   for line in trace.read_text().splitlines()[:512]:
                       event = json.loads(line)
