@@ -117,7 +117,7 @@ func validateV2EvidenceDimensions(evidence []domain.DirectoryEvidence) error {
 			item.DistributionID, fmt.Sprint(item.ReleaseSequence),
 			item.PackageTreeDigest, item.Level, string(item.Client), string(item.Scope),
 			item.ClientVersion, item.InstallerVersion, item.DependencyIdentity,
-			item.OS, item.Architecture,
+			item.OS, item.Architecture, item.ClosureDigest,
 		}, "\x00")
 		if tuples[tuple] {
 			return strictError("duplicate v2 current evidence applicability tuple")

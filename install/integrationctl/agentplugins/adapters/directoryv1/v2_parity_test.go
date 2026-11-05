@@ -149,6 +149,44 @@ func TestV2PortableIdentityParityWithV1(t *testing.T) {
 	}
 }
 
+// Multiple signed proofs may retain different exact dependency closures for
+// the same client environment; a second proof of the same closure is still a
+// duplicate applicability claim.
+func TestV2DistinctCurrentClosureReceipts(t *testing.T) {
+	signed, _, _ := v2SignedFixture(t)
+	var snapshot domain.DirectorySnapshot
+	if err := json.Unmarshal(signed, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	first := snapshot.Evidence[0]
+	first.ID, first.Level, first.Outcome = "runtime-closure-a", "runtime", "passed"
+	first.Client, first.Scope = domain.ClientCodex, domain.ScopeUser
+	first.ClientVersion, first.InstallerVersion = "1.0.0", "1.2.3"
+	first.OS, first.Architecture, first.ObservedAt = "linux", "amd64", "2026-08-20T10:30:00Z"
+	first.ClosureDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	second := first
+	second.ID = "runtime-closure-b"
+	second.ClosureDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	snapshot.Evidence = append(snapshot.Evidence, first, second)
+	policy := &snapshot.Distributions[0].ReleasePolicies[0]
+	policy.CurrentEvidence = append(policy.CurrentEvidence, first.ID, second.ID)
+	body, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseV2Snapshot(body); err != nil {
+		t.Fatalf("distinct exact closure receipts rejected: %v", err)
+	}
+	snapshot.Evidence[len(snapshot.Evidence)-1].ClosureDigest = first.ClosureDigest
+	body, err = json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseV2Snapshot(body); !errors.Is(err, ErrStrictJSON) {
+		t.Fatalf("duplicate exact closure applicability accepted: %v", err)
+	}
+}
+
 func TestV2RejectsCrossProductSelectorTakeover(t *testing.T) {
 	var snapshot domain.DirectorySnapshot
 	signed, _, _ := v2SignedFixture(t)
