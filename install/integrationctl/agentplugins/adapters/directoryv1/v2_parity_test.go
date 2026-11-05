@@ -59,6 +59,38 @@ func TestV2PortableIdentityParityWithV1(t *testing.T) {
 		{"missing primary artifact path", func(s *domain.DirectorySnapshot) {
 			s.Evidence[0].Artifact.Path = ""
 		}},
+		{"unsafe primary artifact parent traversal", func(s *domain.DirectorySnapshot) {
+			s.Evidence[0].Artifact.Path = "../outside/report.json"
+		}},
+		{"unsafe primary artifact absolute path", func(s *domain.DirectorySnapshot) {
+			s.Evidence[0].Artifact.Path = "/tmp/report.json"
+		}},
+		{"unsafe primary artifact normalized alias", func(s *domain.DirectorySnapshot) {
+			s.Evidence[0].Artifact.Path = "reports/../report.json"
+		}},
+		{"unsafe primary artifact Windows separator", func(s *domain.DirectorySnapshot) {
+			s.Evidence[0].Artifact.Path = `reports\\report.json`
+		}},
+		{"unsafe trust bundle manifest traversal", func(s *domain.DirectorySnapshot) {
+			artifact := s.Evidence[0].Artifact
+			artifact.Path = "../bundle.json"
+			s.Evidence[0].Trust.BundleManifest = &artifact
+		}},
+		{"unsafe trust launch artifact absolute path", func(s *domain.DirectorySnapshot) {
+			artifact := s.Evidence[0].Artifact
+			artifact.Path = "/tmp/launch.json"
+			s.Evidence[0].Trust.LaunchArtifact = &artifact
+		}},
+		{"unsafe trust observer artifact normalized alias", func(s *domain.DirectorySnapshot) {
+			artifact := s.Evidence[0].Artifact
+			artifact.Path = "reports/../observer.json"
+			s.Evidence[0].Trust.ObserverArtifact = &artifact
+		}},
+		{"unsafe trust evidence index Windows separator", func(s *domain.DirectorySnapshot) {
+			artifact := s.Evidence[0].Artifact
+			artifact.Path = `index\\evidence.json`
+			s.Evidence[0].Trust.EvidenceIndex = &artifact
+		}},
 		{"invalid trust bundle manifest", func(s *domain.DirectorySnapshot) {
 			artifact := s.Evidence[0].Artifact
 			artifact.Path = ""

@@ -425,18 +425,24 @@ func validateV2EvidenceArtifacts(evidence domain.DirectoryEvidence) error {
 		evidence.Trust.BundleManifest, evidence.Trust.LaunchArtifact,
 		evidence.Trust.ObserverArtifact, evidence.Trust.EvidenceIndex,
 	} {
-		if artifact != nil && (!repositoryPattern.MatchString(artifact.Repository) ||
-			!shaPattern.MatchString(artifact.Revision) || artifact.Path == "" ||
-			!digestPattern.MatchString(artifact.Digest)) {
+		if artifact != nil && !validV2EvidenceArtifact(*artifact) {
 			return strictError("invalid v2 evidence trust artifact")
 		}
 	}
-	if !digestPattern.MatchString(evidence.Artifact.Digest) || evidence.Artifact.Path == "" ||
-		!repositoryPattern.MatchString(evidence.Artifact.Repository) ||
-		!shaPattern.MatchString(evidence.Artifact.Revision) {
+	if !validV2EvidenceArtifact(evidence.Artifact) {
 		return strictError("invalid v2 evidence artifact")
 	}
 	return nil
+}
+
+// V2 evidence points to immutable repository files. Reject parent traversal,
+// absolute paths and path aliases before accepting a signed evidence claim.
+// Reuse the strict artifact-path contract without changing V1 parsing.
+func validV2EvidenceArtifact(artifact domain.DirectoryEvidenceArtifact) bool {
+	return repositoryPattern.MatchString(artifact.Repository) &&
+		shaPattern.MatchString(artifact.Revision) &&
+		digestPattern.MatchString(artifact.Digest) &&
+		exactArtifactPath(artifact.Path, artifact.Path) == nil
 }
 
 func validateV2EvidenceSelections(policies map[string]domain.DirectoryReleasePolicy,
