@@ -91,7 +91,7 @@ REQUIRED_TESTS = {
 PROJECT_TESTS = {
     # Expanded current-source matrix: also require genuine user/global raw Skill
     # E2E. Released/draft native qualification keeps its existing test set.
-    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP", "TestAgentpluginsCodexNativeForeignSkillCLIRefusal", "TestAgentpluginsCodexNativeRawUserSkillLifecycle", "TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle"},
+    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP", "TestAgentpluginsCodexNativeForeignSkillCLIRefusal", "TestAgentpluginsCodexNativeRawUserSkillLifecycle", "TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle", "TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle"},
     "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery", "TestAgentpluginsClaudeNativeTrustedProjectMCPCall", "TestAgentpluginsClaudeNativeSecondaryProfileIsolation", "TestAgentpluginsClaudeNativeRawUserSkillLifecycle"},
     "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
 }

@@ -278,3 +278,14 @@ test('saved community Git update uses the currently displayed exact selector and
     'npx -y universal-agent-plugins update gitlab --target codex',
   );
 });
+
+
+test('reviewed Directory card offers native-qualified Context7 commands for Codex and Claude', () => {
+  const context7 = { ...plugin, name: 'context7', install_source: 'context7' };
+  const commands = pluginCommands(context7, ['claude', 'codex'], true);
+  assert.equal(commands.add, 'npx -y universal-agent-plugins add context7 --target claude,codex');
+  assert.equal(commands.saveMode, 'saved');
+  assert.equal(commands.update, 'npx -y universal-agent-plugins update context7');
+  assert.equal(commands.repair, 'npx -y universal-agent-plugins repair context7 --target claude,codex');
+  assert.equal(commands.remove, 'npx -y universal-agent-plugins remove context7');
+});
