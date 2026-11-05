@@ -150,7 +150,6 @@ func TestQoderProjectPriorityAndTransportNegative(t *testing.T) {
 	}
 }
 
-
 func TestQoderProjectSingleKindNativeLifecycle(t *testing.T) {
 	for _, tc := range []struct {
 		name string
