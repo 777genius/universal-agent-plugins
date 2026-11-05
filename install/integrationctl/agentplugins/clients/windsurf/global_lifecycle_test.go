@@ -160,7 +160,7 @@ func TestDevinGlobalOfflineRejectsForeignSkillAndWrongReceipts(t *testing.T) {
 	wrong[0].Kind = WindsurfMCPObjectKind
 	if _, err := New().Deactivate(context.Background(), env, domain.DeactivationRequest{
 		TargetContext: domain.TargetContext{Scope: domain.ScopeUser},
-		Client: client, NativeRegistryRoot: plan.NativeRegistryRoot,
+		Client:        client, NativeRegistryRoot: plan.NativeRegistryRoot,
 		PhysicalArtifactID: plan.PhysicalArtifactID, ManagedArtifactPath: plan.ActivePath,
 		NativeObjects: wrong, Confirmed: true,
 	}); err == nil {

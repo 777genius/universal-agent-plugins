@@ -82,8 +82,8 @@ func (adapter *Adapter) activateDevinGlobal(ctx context.Context, env clients.Env
 			return (shared.ProjectComponentMutation{
 				Layout: layout, ActivePath: request.Delivery.ActivePath,
 				Previous: devinNativeObjects(request.PreviousNativeObjects),
-				Desired: devinNativeObjects(request.Delivery.NativeObjects),
-				Servers: servers, Kernel: env.NativeConfig,
+				Desired:  devinNativeObjects(request.Delivery.NativeObjects),
+				Servers:  servers, Kernel: env.NativeConfig,
 			}).Apply(ctx)
 		},
 	})
