@@ -207,10 +207,16 @@ jobs:
           fi
           hash -r
           command -v "$BIN" | tee "$RUNNER_TEMP/vendor-proof/executable.txt"
-          if [[ "$TARGET" == vscode ]]; then
-            # A runner-installed editor is not the reviewed downloaded artifact.
-            test "$(readlink -f "$(command -v code)")" = "$executable"
-          fi
+          # The reviewed bytes must be the native CLI actually selected by PATH,
+          # not an unrelated binary preinstalled on a runner.
+          python3 - "$BIN" "$executable" <<'PY'
+          from pathlib import Path
+          import shutil
+          import sys
+          selected = shutil.which(sys.argv[1])
+          if not selected or Path(selected).resolve(strict=True) != Path(sys.argv[2]).resolve(strict=True):
+              raise SystemExit(f"unverified native PATH executable: {sys.argv[1]}")
+          PY
           # No ambient CI credentials or native profile overrides reach vendor --version.
           probe_home="$(mktemp -d "$RUNNER_TEMP/vendor-probe.XXXXXX")"
           env -i PATH="$PATH" HOME="$probe_home" USERPROFILE="$probe_home" \

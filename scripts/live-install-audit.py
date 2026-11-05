@@ -1446,6 +1446,9 @@ def main():
                                  doc["signed_release_pins"])
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
+                          "source": item if args.kind == "plugin" else item["source"],
+                          "identity": (doc["plugin_declared_names"].get(item, item)
+                                       if args.kind == "plugin" else item["name"]),
                           "status": "harness-error", "error": repr(e)}
             report["results"].append(result)
             report["cases_attempted"] += 1

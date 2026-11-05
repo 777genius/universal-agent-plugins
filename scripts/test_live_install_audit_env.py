@@ -2,6 +2,9 @@
 import importlib.util
 import json
 import os
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -411,6 +414,30 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     workflow,
                 )
 
+    def test_harness_exception_records_exact_source_slot_without_network(self):
+        # BUG-059: an exception must not erase the source/identity evidence.
+        audit = load_audit()
+        fixtures = json.loads(audit.FIXTURES.read_text())
+        source = fixtures["plugin_aliases"][0]
+        with TemporaryDirectory() as temporary:
+            cli = Path(temporary) / "inert-cli"
+            cli.write_text("no native execution")
+            with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                    patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
+                                       "--target", "chatgpt", "--kind", "plugin",
+                                       "--limit", "1", "--report-dir", temporary]), \
+                    patch.object(audit, "version_evidence", return_value={"status": "reported"}), \
+                    patch.object(audit, "do_case", side_effect=ValueError("injected")):
+                self.assertEqual(audit.main(), 1)
+            report = json.loads((Path(temporary) / "chatgpt-plugin.json").read_text())
+        self.assertEqual(report["cases_attempted"], 1)
+        case = report["results"][0]
+        self.assertEqual(case["status"], "harness-error")
+        self.assertEqual(case["index"], 0)
+        self.assertEqual(case["source"], source)
+        self.assertEqual(case["identity"], fixtures["plugin_declared_names"].get(source, source))
+        self.assertEqual((case["kind"], case["target"]), ("plugin", "chatgpt"))
+
     def test_reports_distinct_pr_head_and_checked_merge_sha(self):
         # BUG-015: pull_request GITHUB_SHA is a merge checkout, not PR head.
         import json
@@ -450,6 +477,33 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertFalse(audit.vendor_bootstrap_attested())
         with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": ""}):
             self.assertFalse(audit.vendor_bootstrap_attested())
+
+    def test_native_launcher_refuses_unreviewed_path_shadow_without_execution(self):
+        # BUG-058: matching the artifact digest does not authenticate an
+        # unrelated executable that wins runner PATH resolution.
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        marker = 'python3 - "$BIN" "$executable" <<\'PY\'\n'
+        self.assertIn(marker, workflow)
+        source = textwrap.dedent(workflow.split(marker, 1)[1].split("\n          PY", 1)[0])
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            untrusted = root / "runner-tools"
+            verified = root / "vendor"
+            untrusted.mkdir()
+            verified.mkdir()
+            for path in (untrusted / "grok", verified / "grok"):
+                path.write_text("#!/bin/sh\nexit 0\n")
+                path.chmod(0o755)
+            for first, allowed in ((untrusted, False), (verified, True)):
+                second = verified if first == untrusted else untrusted
+                env = dict(os.environ, PATH=f"{first}:{second}")
+                result = subprocess.run(
+                    [sys.executable, "-c", source, "grok", str(verified / "grok")],
+                    env=env, capture_output=True, text=True, check=False)
+                self.assertEqual(result.returncode == 0, allowed)
+                if not allowed:
+                    self.assertIn("unverified native PATH executable", result.stderr)
 
     def test_vendor_bootstrap_requires_reviewed_bytes_and_preserves_runner_toolchain(self):
         workflow = (Path(__file__).resolve().parents[1] /
@@ -516,7 +570,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertIn('test -f "$executable" && test -x "$executable" && test ! -L "$executable"', workflow)
         self.assertIn('test "$(readlink -f "$executable")" = "$executable"', workflow)
         self.assertIn('ln -s "$executable" "$HOME/.local/bin/code"', workflow)
-        self.assertIn('test "$(readlink -f "$(command -v code)")" = "$executable"', workflow)
+        self.assertIn('python3 - "$BIN" "$executable" <<\'PY\'', workflow)
+        self.assertIn('Path(selected).resolve(strict=True) != Path(sys.argv[2]).resolve(strict=True)', workflow)
         self.assertLess(workflow.index('sha256_file -c -'),
                         workflow.index('dpkg-deb --extract "$artifact"'))
         self.assertIn('vscode) SHA256="b8fbff92d8d95908990eed0acf004c980f29003725469e794ddbd017ea511a20"', workflow)
