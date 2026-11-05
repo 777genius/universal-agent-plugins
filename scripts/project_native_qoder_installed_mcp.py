@@ -62,6 +62,13 @@ def run(ctx, original_env):
             digest.update(chunk)
     if digest.hexdigest() != PIN:
         raise ValueError("Qoder mixed discovery executable hash is not the reviewed pin")
+    # The detector uses the original CLI name `qoder`, not only the archive\'s
+    # `qodercli` filename. Reuse the existing native runner\'s isolated alias
+    # so that the public source-built UAP can find the genuine pinned client.
+    native_bin = root / "native-bin"
+    native_bin.mkdir(mode=0o700)
+    (native_bin / "qoder").symlink_to(client)
+    env["PATH"] = str(native_bin) + ":" + env["PATH"]
 
     _write(source / "plugin.json", _json({
         "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
