@@ -80,10 +80,12 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 		name             string
 		initiallyPresent bool
 		failSave         bool
+		failLock         bool
 	}{
 		{name: "delegated", initiallyPresent: true},
 		{name: "reconciled_after_interruption"},
 		{name: "v2_save_failure_releases_legacy_lock", failSave: true},
+		{name: "old_lock_unavailable_preserves_v2", initiallyPresent: true, failLock: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -107,7 +109,7 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 				t.Fatal(err)
 			}
 			legacy := &legacyLifecycleStub{exists: tc.initiallyPresent}
-			legacySpy := &inspectedLegacyStateLock{}
+			legacySpy := &inspectedLegacyStateLock{failAcquire: tc.failLock}
 			var stateStore transaction.StateStore = store
 			if tc.failSave {
 				stateStore = refusingLegacyStateSave{StateStore: store}
@@ -121,9 +123,9 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 			result, err := service.RemoveLegacy(context.Background(), LegacyRemoveInput{
 				Selector: installationID, Confirmed: true, OperationID: "legacy-remove",
 			})
-			if tc.failSave {
+			if tc.failSave || tc.failLock {
 				if err == nil || result.Mutated {
-					t.Fatalf("v2 save failure = (%+v, %v), want no mutation and an error", result, err)
+					t.Fatalf("failed reconciliation = (%+v, %v), want no mutation and an error", result, err)
 				}
 				if legacySpy.held {
 					t.Fatal("legacy state lock was retained after v2 save failure")
@@ -165,9 +167,15 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 	}
 }
 
-type inspectedLegacyStateLock struct{ held bool }
+type inspectedLegacyStateLock struct {
+	held        bool
+	failAcquire bool
+}
 
 func (lock *inspectedLegacyStateLock) Acquire(context.Context) (ports.UnlockFunc, error) {
+	if lock.failAcquire {
+		return nil, fmt.Errorf("injected legacy lock acquisition failure")
+	}
 	if lock.held {
 		return nil, fmt.Errorf("legacy state lock reacquired while already held")
 	}

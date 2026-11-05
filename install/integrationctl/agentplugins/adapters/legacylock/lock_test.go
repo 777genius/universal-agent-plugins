@@ -13,12 +13,16 @@ type recordingLockManager struct {
 	key          string
 	releaseCalls int
 	err          error
+	returnNil    bool
 }
 
 func (m *recordingLockManager) Acquire(_ context.Context, key string) (legacyports.UnlockFunc, error) {
 	m.key = key
 	if m.err != nil {
 		return nil, m.err
+	}
+	if m.returnNil {
+		return nil, nil
 	}
 	return func() error {
 		m.releaseCalls++
@@ -51,6 +55,9 @@ func TestStateLockFailsClosedOnErrors(t *testing.T) {
 	manager := &recordingLockManager{err: want}
 	if _, err := (StateLock{Manager: manager}).Acquire(context.Background()); !errors.Is(err, want) {
 		t.Fatalf("lock error = %v, want %v", err, want)
+	}
+	if _, err := (StateLock{Manager: &recordingLockManager{returnNil: true}}).Acquire(context.Background()); err == nil {
+		t.Fatal("nil release from legacy lock manager was accepted")
 	}
 }
 
