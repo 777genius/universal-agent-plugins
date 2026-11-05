@@ -121,3 +121,35 @@ leaf в каждом из двух раундов. Автор отдельно �
 
 После review изменены только этот журнал и статус документа. Review принимает
 план, не объявляет реализацию, native E2E, merge либо release завершёнными.
+
+## Решение владельца и install/discovery E2E — 2026-11-05
+
+Эта секция заменяет прежний DoD, требующий модельные вызовы MCP. Владелец
+подтвердил, что для merge достаточно установки, нативного обнаружения и
+удаления Skills/MCP без авторизации или initialize/tools/list/tools/call.
+Статус runtime_mcp_calls_qualified=false остаётся честным и не блокирует
+install-only DoD. Клиентские trust/permission политики не обходятся.
+
+Минимальный E2E: существующий hosted runner компилирует публичный UAP CLI
+из точного коммита и запускает подлинный hash-pinned Qoder 1.1.78.
+В Project A/B UAP устанавливает смешанный Skill + stdio/HTTP MCP, настоящий
+qodercli mcp list проверяет появление/исчезновение именно UAP-записанных
+серверов до/после add, repeat add, update, intact repair и remove.
+Нативный Skill, receipt, чужой Project MCP, профиль пользователя и независимость
+A/B проверяются существующими фасадными и native тестами. Не писать второй
+installer или новое test framework.
+
+На коммите 9eb67071500f989e15d5de55101667a4e2bc5ba0 genuine
+Qoder native workflow https://github.com/777genius/universal-agent-plugins/actions/runs/42087636475
+завершился SUCCESS. Артефакт #13444482184 содержит
+collection_complete=true, qoder_mcp_install_discovery.passed=true,
+10 проверенных A/B нативных наблюдений и отдельный Skills lifecycle.
+
+Merge-порядок: отдельно проверить exact-final-HEAD Core/Required, coverage,
+native Qoder, применимые платформенные проверки и review; затем SHA-guarded
+squash и postmerge main. #707 уже merged в main как 10791d250ecc.
+Предыдущий Core lint / root на старом synthetic merge f1f99add
+против прежнего main=803f91d2 приписал этому PR рост четырёх Directory
+legacy-файлов из #707; этих файлов нет в diff #708. Новая синхронизация
+должна проходить с актуальным main без ослабления lint-baseline, но PASS
+старого SHA не переносится на новый HEAD.
