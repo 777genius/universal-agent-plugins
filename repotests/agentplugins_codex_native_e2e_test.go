@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
 
@@ -587,6 +588,13 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	if listErr != nil {
 		t.Fatalf("native Codex inventory after explicit user replay: %v: %s", listErr, listing)
 	}
+	// Reject malformed or duplicate entries (including foreign IDs), not
+	// just the presence of one matching entry in an otherwise invalid list.
+	marketplace, ok := strings.CutPrefix(f.PluginID, "native-proof@")
+	if !ok || marketplace == "" ||
+		codex.PluginStatusFromList(listing, "native-proof", marketplace) != codex.StatusInstalled {
+		t.Fatalf("native Codex inventory after explicit user replay is invalid: %s", listing)
+	}
 	var explicitInventory struct {
 		Installed []struct {
 			ID        string `json:"pluginId"`
@@ -600,14 +608,18 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	if err := json.Unmarshal(listing, &explicitInventory); err != nil {
 		t.Fatalf("invalid native Codex inventory after explicit user replay: %v", err)
 	}
-	seenExact := false
+	matched := 0
 	for _, plugin := range explicitInventory.Installed {
-		if plugin.ID == f.PluginID && plugin.Installed && plugin.Enabled && plugin.Source.Path == active {
-			seenExact = true
+		if plugin.ID != f.PluginID {
+			continue
 		}
+		if !plugin.Installed || !plugin.Enabled || plugin.Source.Path != active {
+			t.Fatalf("native Codex replay lost exact enabled source path: %+v", plugin)
+		}
+		matched++
 	}
-	if !seenExact {
-		t.Fatalf("native Codex did not retain the exact enabled user plugin: %s", listing)
+	if matched != 1 {
+		t.Fatalf("native Codex replay matched %d entries, want exactly one: %s", matched, listing)
 	}
 	stages["explicit_user_scope"] = nativeStage{Status: "passed", Reason: "real Codex plugin list retained exact enabled user plugin; identical persisted state/managed/cache bytes after explicit --scope user", Artifacts: []string{"unchanged-explicit-user-installer.json", "list-explicit-user.log"}}
 
