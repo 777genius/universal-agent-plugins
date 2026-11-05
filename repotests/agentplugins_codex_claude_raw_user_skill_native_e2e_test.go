@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -182,9 +183,18 @@ func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginI
 		t.Fatal(err)
 	}
 	// A missing/null "installed" field is an unknown native protocol, not
-	// evidence of absence after remove. Mirror Codex's fail-closed adapter.
-	if inventory.Installed == nil {
-		t.Fatalf("Codex native listing omitted the installed array: %s", listing)
+	// evidence of absence after remove. Require the production adapter's
+	// entire fail-closed contract, including unique identities and valid
+	// schema for unrelated entries, before checking the exact source path.
+	marketplace, ok := strings.CutPrefix(pluginID, declaredName+"@")
+	if !ok || marketplace == "" || inventory.Installed == nil {
+		t.Fatalf("Codex native listing has no valid installed identity: %s", listing)
+	}
+	status := codex.PluginStatusFromList(listing, declaredName, marketplace)
+	if status == codex.StatusUnknown ||
+		(want && status != codex.StatusInstalled) ||
+		(!want && status != codex.StatusAbsent) {
+		t.Fatalf("Codex native listing was invalid or had wrong status %v, want installed=%v: %s", status, want, listing)
 	}
 	present := 0
 	for _, plugin := range *inventory.Installed {
