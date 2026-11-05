@@ -27,8 +27,8 @@ func TestPublicGroupUpdateCodexPiPreservesUnselectedClaude(t *testing.T) {
 	}
 	base := filepath.Dir(s.pkg)
 	manifest := filepath.Join(s.pkg, "plugin.json")
-	initial := \`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.0","extensions":{"com.universal-agent-plugins.pi":{"version":1,"source":"native"}}}\`
-	updated := \`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.1","extensions":{"com.universal-agent-plugins.pi":{"version":1,"source":"native"}}}\`
+	initial := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.0","extensions":{"com.universal-agent-plugins.pi":{"version":1,"source":"native"}}}`
+	updated := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.1","extensions":{"com.universal-agent-plugins.pi":{"version":1,"source":"native"}}}`
 	if err := os.WriteFile(manifest, []byte(initial), 0600); err != nil {
 		t.Fatal(err)
 	}
