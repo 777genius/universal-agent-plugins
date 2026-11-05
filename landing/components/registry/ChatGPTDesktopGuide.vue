@@ -7,7 +7,12 @@ const { t } = useI18n();
   <details class="desktop-guide">
     <summary>{{ t('registryUi.desktopGuide.title') }}</summary>
     <p>{{ t('registryUi.desktopGuide.description') }}</p>
-    <CommandSnippet :command="command" :label="t('registryUi.desktopGuide.command')" kind="add" compact />
+    <CommandSnippet
+      :command="command"
+      :label="t('registryUi.desktopGuide.command')"
+      kind="add"
+      compact
+    />
     <p>{{ t('registryUi.desktopGuide.nextStep') }}</p>
     <a
       href="https://github.com/777genius/universal-agent-plugins/blob/main/docs/CHATGPT_DESKTOP_LOCAL_INSTALL.md"
