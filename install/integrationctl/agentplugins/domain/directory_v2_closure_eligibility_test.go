@@ -74,7 +74,7 @@ func TestResolveDirectoryV2RuntimeFailureOnlyBlocksMatchingClosure(t *testing.T)
 	grant.Scope, grant.Scopes = ScopeUser, nil
 	const closureA = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	const closureB = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	grant.CanonicalClosure = &DirectoryCanonicalClosure{Eligible: true, ClosureDigest: closureA}
+	grant.CanonicalClosure = &DirectoryCanonicalClosure{Eligible: true, ClosureDigest: closureA, MinimumInstallerVersion: "1.2.3"}
 	failure := testTrustedEvidence(DirectoryEvidence{
 		ID: "runtime-other-closure", DistributionID: distribution.ID,
 		ReleaseSequence:   distribution.Releases[0].Sequence,
