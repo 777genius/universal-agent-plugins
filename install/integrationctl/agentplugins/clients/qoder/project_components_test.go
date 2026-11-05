@@ -168,7 +168,7 @@ func TestQoderProjectSingleKindNativeLifecycle(t *testing.T) {
 			qoderWrite(t, filepath.Join(project, ".mcp.json"), `{"mcpServers":{"foreign":{"command":"foreign"}},"note":"keep"}`)
 			switch tc.kind {
 			case domain.ComponentSkill:
-				qoderWrite(t, filepath.Join(active, "skills", "docs", "SKILL.md"), "---\\nname: docs\\ndescription: only skill\\n---\\n")
+				qoderWrite(t, filepath.Join(active, "skills", "docs", "SKILL.md"), "---\nname: docs\ndescription: only skill\n---\n")
 			case domain.ComponentMCPServer:
 				qoderWrite(t, filepath.Join(active, ".mcp.json"), `{"mcpServers":{"docs":{"type":"http","url":"https://example.test/mcp"}}}`)
 			}
