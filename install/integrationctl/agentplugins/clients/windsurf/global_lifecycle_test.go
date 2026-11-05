@@ -209,3 +209,32 @@ func TestDevinGlobalSelectedUserProfileIsNotLegacyOrProject(t *testing.T) {
 		t.Fatal("missing selected host fabricated a global native root")
 	}
 }
+
+func TestDevinGlobalPreflightAllowsUnstagedButActivationRequiresExactDelivery(t *testing.T) {
+	client, plan, _ := globalOfflineFixture(t)
+	env := clients.Env{NativeConfig: nativeconfig.New()}
+	adapter := New()
+	if err := adapter.PreflightActivation(env, domain.ActivationRequest{Client: client, Plan: plan}); err != nil {
+		t.Fatalf("pre-staging Global preflight rejected correct selected root: %v", err)
+	}
+	wrongClient := client
+	wrongClient.ClientID = domain.ClientGemini
+	if err := adapter.PreflightActivation(env, domain.ActivationRequest{Client: wrongClient, Plan: plan}); err == nil {
+		t.Fatal("unstaged preflight accepted a different selected client")
+	}
+	for _, delivery := range []domain.StagedDelivery{
+		{ClientID: domain.ClientQoder, ActivePath: plan.ActivePath},
+		{ClientID: domain.ClientWindsurf, ActivePath: plan.ActivePath + "-other"},
+	} {
+		if err := adapter.PreflightActivation(env, domain.ActivationRequest{
+			Client: client, Plan: plan, Delivery: delivery,
+		}); err == nil {
+			t.Fatalf("preflight accepted mismatched staged identity: %+v", delivery)
+		}
+	}
+	if _, err := adapter.Activate(context.Background(), env, domain.ActivationRequest{
+		Client: client, Plan: plan,
+	}); err == nil {
+		t.Fatal("Global activation accepted missing delivered identity after preflight")
+	}
+}

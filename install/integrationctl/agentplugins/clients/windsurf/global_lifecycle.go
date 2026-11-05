@@ -21,14 +21,21 @@ func preflightDevinGlobal(env clients.Env, request domain.ActivationRequest) err
 	if err := validateDevinGlobalProjectionRoot(request.Plan.ActivePath, request.Plan); err != nil {
 		return err
 	}
-	if err := shared.ActivationIdentityMismatch(request); err != nil {
-		return err
+	if request.Plan.ClientID != request.Client.ClientID {
+		return fmt.Errorf("Devin Global plan client identity mismatch")
+	}
+	// Preflight also runs before staging. Validate delivered identity when
+	// available, then require it unconditionally during activation.
+	if request.Delivery.ClientID != "" {
+		if err := shared.ActivationIdentityMismatch(request); err != nil {
+			return err
+		}
 	}
 	if len(WindsurfObjects(request.PreviousNativeObjects)) != 0 ||
 		len(WindsurfObjects(request.Delivery.NativeObjects)) != 0 {
 		return fmt.Errorf("legacy Cascade receipt cannot be replayed as Devin Global")
 	}
-	if request.Delivery.ActivePath != request.Plan.ActivePath {
+	if request.Delivery.ActivePath != "" && request.Delivery.ActivePath != request.Plan.ActivePath {
 		return fmt.Errorf("Devin Global delivered package differs from selected managed root")
 	}
 	if request.ActivationComplete {
@@ -50,6 +57,12 @@ func preflightDevinGlobal(env clients.Env, request domain.ActivationRequest) err
 func (adapter *Adapter) activateDevinGlobal(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if err := preflightDevinGlobal(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
+	}
+	if err := shared.ActivationIdentityMismatch(request); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if request.Delivery.ActivePath != request.Plan.ActivePath {
+		return domain.ActivationOutcome{}, fmt.Errorf("Devin Global delivered package differs from selected managed root")
 	}
 	layout := devinGlobalComponents(request.Plan.NativeRegistryRoot, request.Plan.ActivePath)
 	outcome, err := shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
