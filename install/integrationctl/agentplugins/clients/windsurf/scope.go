@@ -29,6 +29,9 @@ func (adapter *Adapter) NativeRegistry(in clients.PlanInput) (string, string) {
 	if in.TargetContext.Scope == domain.ScopeProject {
 		return filepath.Join(in.TargetContext.ProjectRoot, ".devin"), ""
 	}
+	if legacyUserBinding(in) {
+		return in.Client.ConfigRoot, in.Client.ExecutablePath
+	}
 	if primaryDevinExecutable(in.Client.ExecutablePath) {
 		return adapter.UserNativeRegistry(in.Client), ""
 	}
@@ -46,9 +49,14 @@ func (*Adapter) ProjectTargetRoot(client domain.DetectedClient, mode domain.Pack
 }
 
 func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
-	if in.TargetContext.Scope == domain.ScopeUser && primaryDevinExecutable(in.Client.ExecutablePath) {
-		_, err := devinGlobalPlanRoot(in.Client, *plan)
-		return err
+	if in.TargetContext.Scope == domain.ScopeUser {
+		if err := validateUserBindingRoute(in); err != nil {
+			return err
+		}
+		if primaryDevinExecutable(in.Client.ExecutablePath) && !legacyUserBinding(in) {
+			_, err := devinGlobalPlanRoot(in.Client, *plan)
+			return err
+		}
 	}
 	if in.TargetContext.Scope != domain.ScopeProject {
 		return nil

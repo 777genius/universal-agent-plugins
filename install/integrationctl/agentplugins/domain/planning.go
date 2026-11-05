@@ -6,8 +6,10 @@ package domain
 // composition root configured.
 type PlanRequest struct {
 	ProjectRoot           string                  `json:"-"`
-	PreviousNativeObjects []NativeObjectOwnership `json:"-"`
-	LocalEntryObservation *LocalEntryObservation  `json:"-"`
+	PreviousNativeObjects     []NativeObjectOwnership `json:"-"`
+	PreviousNativeProfileRoot string                 `json:"-"`
+	PreviousBindingRecorded   bool                   `json:"-"`
+	LocalEntryObservation     *LocalEntryObservation `json:"-"`
 	Envelope              PackageEnvelope
 	Client                DetectedClient
 	Scope                 InstallScope

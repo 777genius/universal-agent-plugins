@@ -104,8 +104,10 @@ type PreparationRefiner interface {
 // PlanInput is everything a refiner is allowed to see.
 type PlanInput struct {
 	TargetContext         domain.TargetContext           `json:"-"`
-	PreviousNativeObjects []domain.NativeObjectOwnership `json:"-"`
-	LocalEntryObservation *domain.LocalEntryObservation  `json:"-"`
+	PreviousNativeObjects     []domain.NativeObjectOwnership `json:"-"`
+	PreviousNativeProfileRoot string                         `json:"-"`
+	PreviousBindingRecorded   bool                           `json:"-"`
+	LocalEntryObservation     *domain.LocalEntryObservation  `json:"-"`
 	Envelope              domain.PackageEnvelope
 	Client                domain.DetectedClient
 	Detected              map[domain.ClientID]domain.DetectedClient

@@ -24,6 +24,10 @@ func preflightDevinGlobal(env clients.Env, request domain.ActivationRequest) err
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return err
 	}
+	if len(WindsurfObjects(request.PreviousNativeObjects)) != 0 ||
+		len(WindsurfObjects(request.Delivery.NativeObjects)) != 0 {
+		return fmt.Errorf("legacy Cascade receipt cannot be replayed as Devin Global")
+	}
 	if request.Delivery.ActivePath != request.Plan.ActivePath {
 		return fmt.Errorf("Devin Global delivered package differs from selected managed root")
 	}

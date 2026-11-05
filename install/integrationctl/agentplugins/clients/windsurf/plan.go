@@ -22,7 +22,7 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 	if in.TargetContext.Scope == domain.ScopeProject || plan.Scope == domain.ScopeProject {
 		return refineProjectPlan(in, plan)
 	}
-	if primaryDevinExecutable(in.Client.ExecutablePath) {
+	if primaryDevinExecutable(in.Client.ExecutablePath) && !legacyUserBinding(in) {
 		root, err := devinGlobalPlanRoot(in.Client, *plan)
 		if err != nil {
 			return err

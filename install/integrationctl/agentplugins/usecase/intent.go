@@ -25,9 +25,11 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 	}
 	var observation *domain.LocalEntryObservation
 	var objects []domain.NativeObjectOwnership
+	var previousNativeRoot string
 	if binding != nil {
 		observation = binding.LocalEntryObservation.Clone()
 		objects = append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...)
+		previousNativeRoot = binding.NativeProfileRoot
 	}
 	if service.ClientPreparation != nil {
 		for _, frozen := range service.PhysicalProfiles {
@@ -46,6 +48,8 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 		ProjectRoot:           service.ProjectRoot,
 		LocalEntryObservation: observation.Clone(),
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), objects...),
+		PreviousNativeProfileRoot: previousNativeRoot,
+		PreviousBindingRecorded: binding != nil,
 		Envelope:              input.Envelope,
 		Client:                input.Client,
 		Scope:                 input.Scope,

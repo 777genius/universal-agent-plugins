@@ -37,7 +37,7 @@ func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request d
 	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject {
 		return adapter.activateDevinProject(ctx, env, request)
 	}
-	if primaryDevinExecutable(request.Client.ExecutablePath) || isDevinGlobalPlan(request.Plan) {
+	if isDevinGlobalPlan(request.Plan) {
 		return adapter.activateDevinGlobal(ctx, env, request)
 	}
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
