@@ -38,12 +38,6 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 	if req.InstallationID == "" {
 		return []usecase.AddInput{target}, nil
 	}
-	// A group request owns all of its explicit targets. The group use case
-	// performs the cross-target reconciliation itself; do not reinterpret it
-	// as a single-target update that needs host facts for the same siblings.
-	if req.ClientID == "" && len(req.Targets) > 0 {
-		return []usecase.AddInput{target}, nil
-	}
 	state, err := e.store.Load()
 	if err != nil {
 		return nil, fmt.Errorf("%w: load owned state: %w", ErrTargetFactsUnavailable, err)
@@ -90,6 +84,36 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 			return nil, err
 		}
 		checks = append(checks, check)
+	}
+	return checks, nil
+}
+
+// groupCompatibilityChecks adds observation-only inputs for unselected live
+// bindings to a group update. Targets remains the exact user's selection.
+// The existing single-client compatibility path verifies every sibling's
+// KnownTargets BindingID against durable state and supplies recorded authority.
+func (e *Engine) groupCompatibilityChecks(req Request, targets []usecase.AddInput) ([]usecase.AddInput, error) {
+	if req.Operation != OpUpdate {
+		return targets, nil
+	}
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("%w: update group has no selected targets", ErrInvalidRequest)
+	}
+	observed, err := e.compatibilityChecks(req, targets[0])
+	if err != nil {
+		return nil, err
+	}
+	selected := make(map[domain.ClientID]bool, len(targets))
+	checks := append([]usecase.AddInput(nil), targets...)
+	for _, target := range targets {
+		selected[target.Client.ClientID] = true
+	}
+	for _, check := range observed {
+		// A missing new installation falls back to the first target; it must
+		// not make a duplicate compatibility-only input for that selection.
+		if !selected[check.Client.ClientID] {
+			checks = append(checks, check)
+		}
 	}
 	return checks, nil
 }
