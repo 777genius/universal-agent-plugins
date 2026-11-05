@@ -1,4 +1,5 @@
 import type { MaybeRefOrGetter } from 'vue';
+import trustDocument from '../features/skillspector/cohort-trusted-keys.json';
 import type { SkillSpectorDisplayReport, SkillSpectorSubject } from '~/types/skillSpector';
 import {
   createSkillSpectorClient,
@@ -14,7 +15,10 @@ export function sharedSkillSpectorClient(
 ) {
   let client = clients.get(app);
   if (!client) {
-    client = createSkillSpectorClient(urls.v2, urls.v1, fetch, urls.v3, urls.cohort);
+    client = createSkillSpectorClient(
+      urls.v2, urls.v1, fetch, urls.v3, urls.cohort,
+      trustDocument.schema_version === 1 ? trustDocument.keys : [],
+    );
     clients.set(app, client);
   }
   return client;

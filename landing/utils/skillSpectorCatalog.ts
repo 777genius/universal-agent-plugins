@@ -8,7 +8,7 @@ import type {
 } from '../types/skillSpector.ts';
 import { decodeSkillSpectorRecords, decodeSkillSpectorReport } from './skillSpector.ts';
 import { decodeSkillSpectorManifestV3, decodeSkillSpectorShardV3 } from './skillSpectorV3.ts';
-import { applyVerifiedSkillSpectorCohort, pinnedCohortKeys, readVerifiedSkillSpectorCohort } from './skillSpectorCohort.ts';
+import { applyVerifiedSkillSpectorCohort, readVerifiedSkillSpectorCohort } from './skillSpectorCohort.ts';
 import type { TrustedCohortKey, VerifiedCohort } from './skillSpectorCohort.ts';
 
 const revision = /^[0-9a-f]{40}$/;
@@ -307,7 +307,7 @@ export function createSkillSpectorClient(
   fetcher: typeof fetch = fetch,
   v3ManifestUrl?: string,
   cohortLatestUrl?: string,
-  cohortKeys: readonly TrustedCohortKey[] = pinnedCohortKeys,
+  cohortKeys: readonly TrustedCohortKey[] = [],
 ) {
   const legacyManifest = () =>
     readBytes(manifestUrl, 4 << 20, fetcher)

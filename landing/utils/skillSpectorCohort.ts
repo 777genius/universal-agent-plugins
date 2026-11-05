@@ -1,5 +1,4 @@
 import type { SkillSpectorDisplayReport, SkillSpectorRecord } from '../types/skillSpector.ts';
-import trustDocument from '../features/skillspector/cohort-trusted-keys.json' with { type: 'json' };
 
 const latestPattern = /^https:\/\/raw\.githubusercontent\.com\/777genius\/universal-agent-plugins-registry\/(?:skillspector-cohort-releases|[0-9a-f]{40})\/reports\/skillspector\/cohort\/v1\/latest\.json$/;
 const root = 'reports/skillspector/cohort/v1/';
@@ -269,9 +268,6 @@ export async function readVerifiedSkillSpectorCohort(
   const release = obj(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body)));
   return validateRecords(release, pointer);
 }
-
-export const pinnedCohortKeys: readonly TrustedCohortKey[] =
-  trustDocument.schema_version === 1 ? trustDocument.keys : [];
 
 /** Replace only byte-identical current old-v3 Partial roots, preserving others. */
 export function applyVerifiedSkillSpectorCohort(
