@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { stripTypeScriptTypes } from 'node:module';
 import { runInNewContext } from 'node:vm';
 import { installCommands, pluginCommands } from '../utils/commands.ts';
+import { resolveDistribution } from '../utils/registry.ts';
 import { applyCliInvocation } from '../utils/cliInvocation.ts';
 import {
   dependencyAddFlag,
@@ -281,7 +282,12 @@ test('saved community Git update uses the currently displayed exact selector and
 
 
 test('reviewed Directory card offers native-qualified Context7 commands for Codex and Claude', () => {
-  const context7 = { ...plugin, name: 'context7', install_source: 'context7' };
+  const catalog: RegistryPlugin[] = JSON.parse(
+    readFileSync(new URL('./fixtures/registry-responses/catalog.json', import.meta.url), 'utf8'),
+  ).plugins;
+  const context7 = catalog.find((entry) => entry.name === 'context7');
+  assert.ok(context7, 'published Directory fixture must contain Context7');
+  assert.equal(resolveDistribution(context7, ['claude', 'codex']).distribution?.id, 'upstash/context7');
   const commands = pluginCommands(context7, ['claude', 'codex'], true);
   assert.equal(commands.add, 'npx -y universal-agent-plugins add context7 --target claude,codex');
   assert.equal(commands.saveMode, 'saved');
