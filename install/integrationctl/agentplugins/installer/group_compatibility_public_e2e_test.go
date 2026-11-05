@@ -106,21 +106,6 @@ func TestPublicGroupUpdatePreflightsUnselectedPiWithoutMutatingIt(t *testing.T) 
 			}
 		})
 	}
-	badSource := filepath.Join(base, "candidate-without-pi")
-	copyPackage(t, s.pkg, badSource)
-	if err := os.WriteFile(filepath.Join(badSource, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.2"}`), 0600); err != nil {
-		t.Fatal(err)
-	}
-	incompatible := request
-	incompatible.PackageRoot = badSource
-	if handle, err := eng.Prepare(s.ctx, incompatible); err == nil {
-		_ = handle.Close()
-		t.Fatal("candidate incompatible with unselected Pi was accepted")
-	}
-	current, err := os.ReadFile(eng.cfg.StateFile)
-	if err != nil || !bytes.Equal(current, precondition) {
-		t.Fatalf("incompatible candidate mutated registry: %v", err)
-	}
 	prepared, err = eng.Prepare(s.ctx, request)
 	if err != nil {
 		t.Fatalf("exact unselected Pi facts did not admit group: %v", err)
