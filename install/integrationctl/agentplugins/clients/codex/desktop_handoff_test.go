@@ -57,7 +57,7 @@ func TestDesktopPluginLinkRejectsUnsafeInputs(t *testing.T) {
 
 func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 	root := filepath.Join(tempRoot(t), "managed")
-	if got := desktopPluginHandoff(root, "stripe", "artifact"); got != "" {
+	if got := desktopPluginHandoff(root, "stripe", "artifact", true); got != "" {
 		t.Fatalf("unprepared marketplace produced link: %q", got)
 	}
 	path := filepath.Join(root, ".agents", "plugins", "marketplace.json")
@@ -67,7 +67,7 @@ func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 	if err := os.WriteFile(path, []byte("{}"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if got := desktopPluginHandoff(root, "stripe", "artifact"); got != "" {
+	if got := desktopPluginHandoff(root, "stripe", "artifact", true); got != "" {
 		t.Fatalf("foreign marketplace produced link: %q", got)
 	}
 	marketplace := shared.ManagedMarketplaceName("artifact")
@@ -75,13 +75,13 @@ func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 	if err := os.WriteFile(path, []byte(payload), 0600); err != nil {
 		t.Fatal(err)
 	}
-	got := desktopPluginHandoff(root, "stripe", "artifact")
+	got := desktopPluginHandoff(root, "stripe", "artifact", true)
 	if !strings.Contains(got, "codex://plugins/stripe?marketplacePath=") ||
 		!strings.Contains(got, "enable in Plugins > Personal") ||
 		!strings.Contains(got, "does not prove ChatGPT runtime use") {
 		t.Fatalf("missing honest desktop guidance: %q", got)
 	}
-	if got := desktopPluginHandoff(root, "other", "artifact"); got != "" {
+	if got := desktopPluginHandoff(root, "other", "artifact", true); got != "" {
 		t.Fatalf("foreign package received link: %q", got)
 	}
 	if err := os.Remove(path); err != nil {
@@ -95,7 +95,7 @@ func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 		if err := os.Symlink(foreign, path); err != nil {
 			t.Fatal(err)
 		}
-		if got := desktopPluginHandoff(root, "stripe", "artifact"); got != "" {
+		if got := desktopPluginHandoff(root, "stripe", "artifact", true); got != "" {
 			t.Fatalf("symlink marketplace received link: %q", got)
 		}
 	}
@@ -180,7 +180,7 @@ func TestDesktopHandoffRejectsOversizedLocalManifest(t *testing.T) {
 	if err := os.WriteFile(path, []byte(strings.Repeat("x", 64<<10+1)), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if action := desktopPluginHandoff(root, "stripe", "artifact"); action != "" {
+	if action := desktopPluginHandoff(root, "stripe", "artifact", true); action != "" {
 		t.Fatalf("oversized local manifest should not produce a link: %q", action)
 	}
 }
