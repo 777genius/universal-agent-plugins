@@ -112,6 +112,9 @@ func TestUserGroupPreparedUpdateCompletesOnlyFiles(t *testing.T) {
 				result.Targets[1].Verification != "installation_verified" {
 				t.Fatalf("prepared Local was promoted or lost: %+v", result.Targets)
 			}
+			if len(result.ManualActions) != 1 || result.ManualActions[0] != "TEST Local reload; activation not attested" {
+				t.Fatalf("prepared Local reload/trust actions lost: %v", result.ManualActions)
+			}
 			if result.Targets[0].ClientID != "codex" || result.Targets[0].Activation != "active" {
 				t.Fatalf("Codex lifecycle was changed: %+v", result.Targets)
 			}
