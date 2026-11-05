@@ -93,6 +93,53 @@ func TestDirectoryV2CompatibilityUsesScopedGrantsWithoutBorrowingUserEvidence(t 
 	}
 }
 
+
+func TestDirectoryV2CanonicalRuntimeEvidenceDoesNotBorrowAnotherClosure(t *testing.T) {
+	bundle := readModelBundle()
+	bundle.Snapshot.SnapshotSchemaVersion, bundle.Snapshot.Sequence = 2, 1
+	distribution := bundle.Snapshot.Distributions[0]
+	policy := distribution.ReleasePolicies[1]
+	grant := policy.Targets[0]
+	grant.Scope, grant.Scopes = domain.ScopeUser, nil
+	grant.CurrentEvidence = []string{"cursor-runtime-current"}
+	policy.CurrentEvidence = nil
+	policy.Targets = []domain.DirectoryTarget{grant}
+	selected := domain.DirectorySelection{DistributionID: distribution.ID,
+		ReleaseSequence: distribution.Releases[1].Sequence, TreeDigest: distribution.Releases[1].TreeDigest}
+	proofDigest := "sha256:" + strings.Repeat("a", 64)
+	bundle.Snapshot.Evidence[1].ClosureDigest = proofDigest
+
+	for _, tc := range []struct {
+		name             string
+		canonical        *domain.DirectoryCanonicalClosure
+		wantVerification string
+		wantApplicable   int
+	}{
+		{name: "matching canonical closure", canonical: &domain.DirectoryCanonicalClosure{
+			Eligible: true, ClosureDigest: proofDigest, MinimumInstallerVersion: "1.0.0",
+		}, wantVerification: "tested", wantApplicable: 1},
+		{name: "another signed closure", canonical: &domain.DirectoryCanonicalClosure{
+			Eligible: true, ClosureDigest: "sha256:" + strings.Repeat("b", 64), MinimumInstallerVersion: "1.0.0",
+		}, wantVerification: "not_tested", wantApplicable: 0},
+		{name: "no canonical summary", wantVerification: "tested", wantApplicable: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			policy.Targets[0].CanonicalClosure = tc.canonical
+			loaded := loadedPackage{}
+			if err := applyDirectoryCompatibility(&loaded, bundle, selected, policy, directoryEvidenceEnvironment{}, domain.ScopeUser); err != nil {
+				t.Fatal(err)
+			}
+			compatibility := loaded.envelope.CatalogEvidence.Compatibility[string(domain.ClientCursor)]
+			if compatibility.Verification != tc.wantVerification || len(compatibility.Evidence) != tc.wantApplicable {
+				t.Fatalf("runtime claim borrowed a different closure: %+v", compatibility)
+			}
+			if len(loaded.envelope.CatalogEvidence.CurrentEvidence) != 1 {
+				t.Fatal("original signed evidence should remain available for inspection")
+			}
+		})
+	}
+}
+
 func TestDirectoryCompatibilityUsesStablePublicPackageModes(t *testing.T) {
 	policy := domain.DirectoryReleasePolicy{Targets: []domain.DirectoryTarget{
 		{Client: domain.ClientCodex, Delivery: "managed", Authentication: domain.AuthenticationRequirementUnknown},

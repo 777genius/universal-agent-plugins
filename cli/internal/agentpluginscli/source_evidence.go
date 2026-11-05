@@ -117,7 +117,9 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 		packageMode, _ := stableCatalogPackageMode(capabilities.PackageMode)
 		applicable := make([]domain.DirectoryEvidence, 0, len(current))
 		for _, evidence := range current {
-			if directoryTrustedReportEvidence(evidence, bundle.Snapshot.Sequence, schema) && directoryEvidenceApplies(evidence, selection, target.Client, environment, scope) {
+			if directoryTrustedReportEvidence(evidence, bundle.Snapshot.Sequence, schema) &&
+				directoryEvidenceApplies(evidence, selection, target.Client, environment, scope) &&
+				directoryEvidenceMatchesCanonicalClosure(schema, target, evidence) {
 				applicable = append(applicable, evidence)
 			}
 		}
@@ -137,6 +139,14 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 		CurrentEvidence: append([]domain.DirectoryEvidence(nil), current...),
 	}
 	return nil
+}
+
+// A runtime call proves the exact signed closure it exercised, not another
+ // current resolution with the same root release. Preserve older receipts in
+ // CatalogEvidence.CurrentEvidence for inspection without claiming "tested".
+func directoryEvidenceMatchesCanonicalClosure(schema int, target domain.DirectoryTarget, evidence domain.DirectoryEvidence) bool {
+	return schema != 2 || target.CanonicalClosure == nil || !target.CanonicalClosure.Eligible ||
+		evidence.Level != "runtime" || evidence.ClosureDigest == target.CanonicalClosure.ClosureDigest
 }
 
 func directoryCatalogAppBinding(envelope domain.PackageEnvelope, target *domain.DirectoryAppBinding) (*domain.CatalogAppBinding, error) {
