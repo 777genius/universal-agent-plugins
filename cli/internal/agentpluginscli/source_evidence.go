@@ -84,42 +84,56 @@ func deterministicDependencyIdentity(envelope domain.PackageEnvelope, targets []
 	return result
 }
 
-func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.VerifiedBundle, selection domain.DirectorySelection, policy domain.DirectoryReleasePolicy, environment directoryEvidenceEnvironment) error {
+func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.VerifiedBundle, selection domain.DirectorySelection, policy domain.DirectoryReleasePolicy, environment directoryEvidenceEnvironment, scopes ...domain.InstallScope) error {
 	if err := validateDirectoryCompatibilityPolicy(policy); err != nil {
 		return err
 	}
+	schema := bundle.Snapshot.SnapshotSchemaVersion
+	if schema == 0 {
+		schema = 1 // Historical lightweight tests omitted the verified snapshot metadata.
+	}
+	if schema != 1 && schema != 2 {
+		return fmt.Errorf("unsupported Directory snapshot schema %d", schema)
+	}
+	scope := domain.ScopeUser
+	if len(scopes) > 0 && scopes[0] != "" {
+		scope = scopes[0]
+	}
+	ids := append([]string(nil), policy.CurrentEvidence...)
+	if schema == 2 {
+		for _, target := range policy.Targets {
+			if target.Scope == scope {
+				ids = append(ids, target.CurrentEvidence...)
+			}
+		}
+	}
 	compatibility := make(map[string]domain.CatalogCompatibility, len(policy.Targets))
-	current := currentDirectoryEvidence(bundle.Snapshot.Sequence, bundle.Snapshot.Evidence, policy.CurrentEvidence)
+	current := currentDirectoryEvidence(bundle.Snapshot.Sequence, bundle.Snapshot.Evidence, ids, schema)
 	for _, target := range policy.Targets {
+		if schema == 2 && target.Scope != scope {
+			continue // Never let another scope overwrite the selected client report.
+		}
 		capabilities, _ := clientplanner.Capabilities(target.Client)
 		packageMode, _ := stableCatalogPackageMode(capabilities.PackageMode)
 		applicable := make([]domain.DirectoryEvidence, 0, len(current))
 		for _, evidence := range current {
-			if evidence.HasTrustedEligibilityProvenanceAtSequence(bundle.Snapshot.Sequence) && directoryEvidenceApplies(evidence, selection, target.Client, environment) {
+			if directoryTrustedReportEvidence(evidence, bundle.Snapshot.Sequence, schema) &&
+				directoryEvidenceApplies(evidence, selection, target.Client, environment, scope) &&
+				directoryEvidenceMatchesCanonicalClosure(schema, target, evidence) {
 				applicable = append(applicable, evidence)
 			}
 		}
 		entry := domain.CatalogCompatibility{Package: packageMode, Verification: directoryVerification(applicable), Authentication: target.Authentication, Evidence: applicable, EvidenceOutcomes: directoryEvidenceOutcomes(applicable)}
-		if target.AppBinding != nil {
-			server, ok := loaded.envelope.MCP.Servers[target.AppBinding.MCPServer]
-			if !ok || !loaded.envelope.MCP.Enabled {
-				return fmt.Errorf("signed Directory ChatGPT app binding references missing MCP server %q", target.AppBinding.MCPServer)
-			}
-			mcpURL, ok := server.Decoded["url"].(string)
-			if !ok {
-				return fmt.Errorf("signed Directory ChatGPT app binding MCP server %q has no remote URL", target.AppBinding.MCPServer)
-			}
-			binding := domain.CatalogAppBinding{AppKey: target.AppBinding.AppKey, ID: target.AppBinding.ID, MCPServer: target.AppBinding.MCPServer, MCPURL: mcpURL}
-			if err := catalog.ValidateAppBindingReference(binding); err != nil {
-				return fmt.Errorf("signed Directory ChatGPT app binding is invalid: %w", err)
-			}
-			entry.AppBinding = &binding
+		appBinding, err := directoryCatalogAppBinding(loaded.envelope, target.AppBinding)
+		if err != nil {
+			return err
 		}
+		entry.AppBinding = appBinding
 		compatibility[string(target.Client)] = entry
 	}
 	loaded.hints.Compatibility = cloneCatalogCompatibility(compatibility)
 	loaded.envelope.CatalogEvidence = &domain.CatalogEvidence{
-		SchemaVersion: 1, CatalogVersion: "directory-snapshot-1", Digest: bundle.Digest,
+		SchemaVersion: 1, CatalogVersion: fmt.Sprintf("directory-snapshot-%d", schema), Digest: bundle.Digest,
 		Revision: bundle.Snapshot.SourceCommit, MinimumCLIVersion: policy.MinimumInstallerVersion,
 		AgentPluginsSchema: loaded.envelope.SchemaURI, Compatibility: cloneCatalogCompatibility(compatibility),
 		CurrentEvidence: append([]domain.DirectoryEvidence(nil), current...),
@@ -127,26 +141,66 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 	return nil
 }
 
-func currentDirectoryEvidence(sequence uint64, history []domain.DirectoryEvidence, ids []string) []domain.DirectoryEvidence {
+// A runtime call proves the exact signed closure it exercised, not another
+// current resolution with the same root release. Preserve older receipts in
+// CatalogEvidence.CurrentEvidence for inspection without claiming "tested".
+func directoryEvidenceMatchesCanonicalClosure(schema int, target domain.DirectoryTarget, evidence domain.DirectoryEvidence) bool {
+	if schema != 2 || evidence.Level != "runtime" {
+		return true
+	}
+	return target.CanonicalClosure != nil && target.CanonicalClosure.Eligible &&
+		evidence.ClosureDigest != "" && evidence.ClosureDigest == target.CanonicalClosure.ClosureDigest
+}
+
+func directoryCatalogAppBinding(envelope domain.PackageEnvelope, target *domain.DirectoryAppBinding) (*domain.CatalogAppBinding, error) {
+	if target == nil {
+		return nil, nil
+	}
+	server, ok := envelope.MCP.Servers[target.MCPServer]
+	if !ok || !envelope.MCP.Enabled {
+		return nil, fmt.Errorf("signed Directory ChatGPT app binding references missing MCP server %q", target.MCPServer)
+	}
+	mcpURL, ok := server.Decoded["url"].(string)
+	if !ok {
+		return nil, fmt.Errorf("signed Directory ChatGPT app binding MCP server %q has no remote URL", target.MCPServer)
+	}
+	binding := domain.CatalogAppBinding{AppKey: target.AppKey, ID: target.ID, MCPServer: target.MCPServer, MCPURL: mcpURL}
+	if err := catalog.ValidateAppBindingReference(binding); err != nil {
+		return nil, fmt.Errorf("signed Directory ChatGPT app binding is invalid: %w", err)
+	}
+	return &binding, nil
+}
+
+func currentDirectoryEvidence(sequence uint64, history []domain.DirectoryEvidence, ids []string, schemas ...int) []domain.DirectoryEvidence {
 	byID := make(map[string]domain.DirectoryEvidence, len(history))
 	for _, evidence := range history {
 		byID[evidence.ID] = evidence
 	}
 	current := make([]domain.DirectoryEvidence, 0, len(ids))
 	for _, id := range ids {
-		if evidence, ok := byID[id]; ok && evidence.HasTrustedProvenanceAtSequence(sequence) {
+		if evidence, ok := byID[id]; ok &&
+			(len(schemas) > 0 && schemas[0] == 2 && evidence.HasTrustedProvenance() ||
+				(len(schemas) == 0 || schemas[0] != 2) && evidence.HasTrustedProvenanceAtSequence(sequence)) {
 			current = append(current, evidence)
 		}
 	}
 	return current
 }
 
-func directoryEvidenceApplies(evidence domain.DirectoryEvidence, selection domain.DirectorySelection, client domain.ClientID, environment directoryEvidenceEnvironment) bool {
+func directoryEvidenceApplies(evidence domain.DirectoryEvidence, selection domain.DirectorySelection, client domain.ClientID, environment directoryEvidenceEnvironment, scopes ...domain.InstallScope) bool {
 	if evidence.DistributionID != selection.DistributionID || evidence.ReleaseSequence != selection.ReleaseSequence || evidence.PackageTreeDigest != selection.TreeDigest {
 		return false
 	}
 	if evidence.Level == "schema" {
 		return evidence.Client == ""
+	}
+	scope := domain.ScopeUser
+	if len(scopes) > 0 && scopes[0] != "" {
+		scope = scopes[0]
+	}
+	if scope == domain.ScopeProject && evidence.Scope != domain.ScopeProject ||
+		scope == domain.ScopeUser && evidence.Scope != "" && evidence.Scope != domain.ScopeUser {
+		return false
 	}
 	if evidence.Client != client || !directoryEvidenceDimensionMatches(evidence.InstallerVersion, environment.InstallerVersion) ||
 		!directoryEvidenceDimensionMatches(evidence.OS, environment.OS) || !directoryEvidenceDimensionMatches(evidence.Architecture, environment.Architecture) {
@@ -163,6 +217,13 @@ func directoryEvidenceApplies(evidence domain.DirectoryEvidence, selection domai
 
 func directoryEvidenceDimensionMatches(recorded, actual string) bool {
 	return recorded == "" || recorded == actual
+}
+
+func directoryTrustedReportEvidence(evidence domain.DirectoryEvidence, sequence uint64, schema int) bool {
+	if schema == 2 {
+		return evidence.HasTrustedEligibilityProvenance()
+	}
+	return evidence.HasTrustedEligibilityProvenanceAtSequence(sequence)
 }
 
 func directoryVerification(evidence []domain.DirectoryEvidence) string {
@@ -236,9 +297,24 @@ func snapshotRevokes(snapshot domain.DirectorySnapshot, selection domain.Directo
 }
 
 func installedDirectoryFloor(state domain.StateFileV2) uint64 {
+	return installedDirectoryFloorForSchema(state, directoryv1.SnapshotSchemaVersion)
+}
+
+// directoryFloorForClient separates v1 and v2 monotonic sequence spaces.
+// Existing v1 test clients retain historical behavior without new interfaces.
+func directoryFloorForClient(state domain.StateFileV2, client DirectoryClient) uint64 {
+	schema := directoryv1.SnapshotSchemaVersion
+	if scoped, ok := client.(interface{ SnapshotSchema() int }); ok {
+		schema = scoped.SnapshotSchema()
+	}
+	return installedDirectoryFloorForSchema(state, schema)
+}
+
+func installedDirectoryFloorForSchema(state domain.StateFileV2, schema int) uint64 {
 	var floor uint64
 	for _, installation := range state.Installations {
-		if installation.Directory != nil && installation.Directory.SnapshotSchema == directoryv1.SnapshotSchemaVersion && installation.Directory.SnapshotSequence > floor {
+		if installation.Directory != nil && installation.Directory.SnapshotSchema == schema &&
+			installation.Directory.SnapshotSequence > floor {
 			floor = installation.Directory.SnapshotSequence
 		}
 	}

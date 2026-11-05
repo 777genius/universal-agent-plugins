@@ -12,14 +12,17 @@ type DirectoryResolvePurpose string
 // Its selection is not signed ChatGPT compatibility or installation authority.
 const DirectoryResolveContext7ChatGPTPreparation DirectoryResolvePurpose = "context7_chatgpt_preparation"
 
-func validateDirectoryResolvePurpose(request DirectoryResolveRequest) error {
+func validateDirectoryResolvePurpose(snapshot DirectorySnapshot, request DirectoryResolveRequest) error {
 	switch request.Purpose {
 	case "":
 		return nil
 	case DirectoryResolveLockedRestore:
-		if request.Scope != ScopeUser || request.DesiredReleaseSequence == 0 || request.Recorded != nil || len(request.Targets) == 0 ||
+		// V1 is user-only. A verified V2 policy may restore exact project pins,
+		// but must still pass all current target and revocation checks.
+		validScope := request.Scope == ScopeUser || (request.Scope == ScopeProject && snapshot.SnapshotSchemaVersion == 2)
+		if !validScope || request.DesiredReleaseSequence == 0 || request.Recorded != nil || len(request.Targets) == 0 ||
 			(request.Operation != "" && request.Operation != DirectoryInstall) {
-			return fmt.Errorf("%w: locked restore requires an exact user-scope new install without recorded state", ErrDirectoryIneligible)
+			return fmt.Errorf("%w: locked restore requires an exact authorized-scope new install without recorded state", ErrDirectoryIneligible)
 		}
 		return nil
 	case DirectoryResolveContext7ChatGPTPreparation:
@@ -47,10 +50,26 @@ func isContext7PreparationSource(distribution DirectoryDistribution, release Dir
 }
 
 func hasContext7PreparationPromotion(snapshot DirectorySnapshot, distribution DirectoryDistribution, release DirectoryRelease, policy DirectoryReleasePolicy) bool {
+	// Source-only preparation is never allowed when a matching ChatGPT-purpose
+	// target is already declared, including one in another installation scope.
+	for _, target := range policy.Targets {
+		if declaresDirectoryPreparation(target.Client, DirectoryResolveContext7ChatGPTPreparation) {
+			return false
+		}
+	}
 	for _, target := range policy.Targets {
 		delivery, supported := ExpectedDirectoryDelivery(target.Client)
-		if supported && target.Delivery == delivery && (containsScope(target.Scopes, ScopeUser) || containsScope(target.Scopes, ScopeProject)) &&
-			hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target.Client) {
+		// Schema-2 grants carry one explicit scope; schema-1 carries the
+		// historical scopes list. Do not infer a grant from the other wire.
+		grants := func(scope InstallScope) bool {
+			if snapshot.SnapshotSchemaVersion == 2 {
+				return target.Scope == scope && len(target.Scopes) == 0
+			}
+			return target.Scope == "" && containsScope(target.Scopes, scope)
+		}
+		passed := grants(ScopeUser) && hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target.Client, ScopeUser) ||
+			grants(ScopeProject) && hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target.Client, ScopeProject)
+		if supported && target.Delivery == delivery && passed {
 			return true
 		}
 	}

@@ -132,7 +132,7 @@ func searchReviewedDirectory(ctx context.Context, app App, query string, options
 		if app.DirectoryClient == nil {
 			return searchResponse{}, fmt.Errorf("signed Directory dependencies are unavailable")
 		}
-		bundle, err := app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
+		bundle, err := app.DirectoryClient.Load(ctx, directoryFloorForClient(state, app.DirectoryClient))
 		if err != nil {
 			return searchResponse{}, fmt.Errorf("load signed Directory: %w", err)
 		}

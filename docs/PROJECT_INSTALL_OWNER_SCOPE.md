@@ -1,5 +1,64 @@
 # Project installation: owner scope clarification
 
+## Six-client first merge and three independent adapters, 2026-11-04
+
+The latest owner instruction prioritizes one main implementation PR (#707) for
+Claude Code, Codex, OpenCode, Cursor, Gemini CLI and Copilot CLI together with the
+shared scoped Directory/dependency work. Qoder, Pi and Windsurf/Devin each get a
+separate draft PR. They remain active work, but their implementation, native proof
+and release do not gate the six-client main merge. Cline, Kimi, Kiro and Grok remain
+deferred; ChatGPT and VS Code remain excluded, preserving existing source/baselines.
+
+Implement the revised Markdown plan after its two review rounds, keep PRs draft
+while developing, push every completed commit immediately, and merge the main
+work as early as its applicable E2E/review/CI gates allow. Prefer targeted additions
+to existing tests and meaningful E2E over duplicate fixtures or coverage volume.
+Use one integrator and the available parallel workers with explicit file ownership;
+workers/reviewers use GPT-6.1-sol xhigh for this work. Do not invent extra slots.
+
+Respect the GitHub Actions queue: coherent locally checked commits, no duplicate
+manual/PR runs, finish documentation before final qualification freeze, and avoid
+starting all leaf final native matrices while main is waiting. Preserve required
+gates, original native authority and truthful evidence. Main code merge is distinct
+from new public compatibility/release qualification. Production CLI constructor/bootstrap and fresh-user routing retain v1 until an
+explicit release-preparation cutover after actual signed v2 bootstrap and before
+freeze N. Site/commands retain the released v1 path until the later qualified
+full-feed cutover. No runtime flag or fallback is introduced. This instruction
+authorizes implementation and merge; the existing public-release authorization rule
+still applies. It supersedes the earlier plan-only request below.
+
+See the [current 6+3 implementation plan](plans/2026-11-04-global-project-skills-mcp.md)
+for main/leaf ownership, lean estimates, gates, deferred TODOs and the review ledger.
+
+
+## Scoped Directory delivery reprioritization, 2026-11-04
+
+The owner narrowed the new Global/Project Skills+MCP program to nine active
+clients: Claude Code, Codex, OpenCode, Cursor, Gemini CLI, GitHub Copilot CLI,
+Qoder, Pi, and a genuinely qualified Windsurf/Devin native profile.
+
+Cline, Kimi Code, Kiro, and Grok Build are deferred with explicit follow-up TODOs.
+ChatGPT and VS Code are excluded from new implementation and qualification in
+this program. Preserve all existing source, supported behavior, legacy user
+policies and useful regression coverage for deferred/excluded clients. These
+planning statuses are not a runtime denylist and do not delete client IDs.
+The VS Code freeze remains in force.
+
+The requested immediate deliverable is a detailed Markdown plan, two rounds of
+independent review and corrections, and a main draft PR with every completed
+commit pushed immediately. This planning request does not authorize release
+publication or claim that implementation is complete.
+
+The current [Global/Project Skills+MCP plan](plans/2026-11-04-global-project-skills-mcp.md)
+records exact scope, the linked Registry deliverable, bounded parallel ownership,
+acceptance gates, estimates, and deferred TODOs. A prepared package containing
+Skills is not native discovery; a Devin-only qualification is not a blanket
+legacy Windsurf compatibility claim. Preserve the existing solver, lock, receipts,
+transaction/ownership kernels, native trust boundaries and legacy implementations.
+
+This decision supersedes older active-target lists below for this scoped Directory
+continuation only; it does not rewrite historical evidence or release status.
+
 ## Owner reprioritization, 2026-10-27
 
 The owner explicitly deferred VS Code: it is not a priority and is skipped in
@@ -51,9 +110,9 @@ MCP operation, authentication, and release evidence require their own observed
 proof. A client without a native project registry must expose its supported
 component or explicit preparation path and state the remaining limitation.
 
-For this program, the owner's current model selection is **GPT-6.1 with high or
-xhigh reasoning** for workers and reviewers. This supersedes older repository
-model instructions for this program only. It does not relax review, evidence,
+For this program, the owner's current model selection is **GPT-6.1-sol with
+xhigh reasoning** for workers and reviewers. This is the latest instruction;
+older high-or-xhigh options are historical and do not expand worker slots. It does not relax review, evidence,
 filesystem authority, or release gates.
 
 Preserve useful legacy implementation and tests under
@@ -68,3 +127,4 @@ provider integration. The concrete deferred work and acceptance criteria are
 recorded in [Registry security providers backlog](REGISTRY_SECURITY_PROVIDERS_BACKLOG.md).
 The current project program does not add provider dependencies, provider CI
 jobs, or third-party scans.
+
