@@ -121,17 +121,36 @@ func TestSkillsFullCLIEndToEnd(t *testing.T) {
 	if err != nil || string(restoredBody) != string(raw) {
 		t.Fatalf("cold CLI restore did not reproduce pinned raw bytes: %v", err)
 	}
-	// Repair and removal must retain the same saved lifecycle and ownership rules
-	// as standard packages, including when a managed projection has drifted.
+	// Drift inside a managed raw Skill belongs to the user, not the repair
+	// operation. Both locked sync and explicit repair must refuse to replace it;
+	// after removing only our injected file, normal removal remains available.
 	binding := savedJourneyBinding(t, fresh.state(t), "codex")
+	cleanTree := savedJourneyTree(t, binding.TargetLocator)
 	drift := filepath.Join(binding.TargetLocator, "fixture-drift.txt")
 	if err := os.WriteFile(drift, []byte("preserve through explicit repair"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	guardedTree := savedJourneyTree(t, binding.TargetLocator)
+	guardedState := savedSkillsDurableTree(t, fresh.cli.app.DependenciesRoot)
 	if _, _, err := fresh.cli.execute(false, "deps", "sync", "--locked", "--yes", "--format", "json"); err == nil {
 		t.Fatal("locked sync silently overwrote user drift")
 	}
-	fresh.run(t, "repair", fresh.state(t).EnvironmentReceipts[0].InstallationID, "--target", "codex", "--format", "json")
+	if _, _, err := fresh.cli.execute(false, "repair", fresh.state(t).EnvironmentReceipts[0].InstallationID,
+		"--target", "codex", "--format", "json"); err == nil || !strings.Contains(err.Error(), "artifact digest mismatch") {
+		t.Fatalf("explicit repair did not refuse user-modified raw Skill: %v", err)
+	}
+	if diff := savedJourneyDifferences(guardedState, savedSkillsDurableTree(t, fresh.cli.app.DependenciesRoot)); diff != "" {
+		t.Fatalf("refused repair modified saved ownership: %s", diff)
+	}
+	if diff := savedJourneyDifferences(guardedTree, savedJourneyTree(t, binding.TargetLocator)); diff != "" {
+		t.Fatalf("refused repair modified managed or user bytes: %s", diff)
+	}
+	if err := os.Remove(drift); err != nil {
+		t.Fatal(err)
+	}
+	if diff := savedJourneyDifferences(cleanTree, savedJourneyTree(t, binding.TargetLocator)); diff != "" {
+		t.Fatalf("removing injected file did not restore original raw Skill: %s", diff)
+	}
 	fresh.run(t, "remove", pin.Alias, "--external-uninstalled", "--format", "json")
 	remaining, _ := fresh.intent(t)
 	if len(remaining.Dependencies) != 0 || len(fresh.state(t).EnvironmentReceipts) != 0 {
