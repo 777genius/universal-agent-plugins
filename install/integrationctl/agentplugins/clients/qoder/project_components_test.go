@@ -148,6 +148,82 @@ func TestQoderProjectPriorityAndTransportNegative(t *testing.T) {
 	}
 }
 
+
+func TestQoderProjectSingleKindNativeLifecycle(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		kind domain.ComponentKind
+	}{
+		{name: "skill-only", kind: domain.ComponentSkill},
+		{name: "mcp-only", kind: domain.ComponentMCPServer},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			project, user := filepath.Join(base, "A"), filepath.Join(base, "home", ".qoder")
+			active := filepath.Join(project, ".uap", "managed", "clients", "qoder", "demo")
+			qoderWrite(t, filepath.Join(user, "keep"), "original user")
+			qoderWrite(t, filepath.Join(project, ".mcp.json"), `{"mcpServers":{"foreign":{"command":"foreign"}},"note":"keep"}`)
+			switch tc.kind {
+			case domain.ComponentSkill:
+				qoderWrite(t, filepath.Join(active, "skills", "docs", "SKILL.md"), "---\\nname: docs\\ndescription: only skill\\n---\\n")
+			case domain.ComponentMCPServer:
+				qoderWrite(t, filepath.Join(active, ".mcp.json"), `{"mcpServers":{"docs":{"type":"http","url":"https://example.test/mcp"}}}`)
+			}
+			plan := domain.DeliveryPlan{TargetContext: domain.TargetContext{ProjectRoot: project, UserConfigRoot: user}, Components: []domain.ComponentDecision{{Kind: tc.kind, Name: "docs", Support: domain.SupportNative}}}
+			objects, err := qoderProjectObjects(active, plan)
+			if err != nil || len(objects) != 1 {
+				t.Fatalf("single-kind ownership: %+v %v", objects, err)
+			}
+			servers, err := qoderDesiredServers(active, objects)
+			if err != nil {
+				t.Fatal(err)
+			}
+			layout := qoderComponents(project)
+			mutation := shared.ProjectComponentMutation{Layout: layout, ActivePath: active, Desired: objects, Servers: servers, Kernel: nativeconfig.New()}
+			if err := mutation.Apply(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if err := layout.Verify(objects, false, mutation.Kernel); err != nil {
+				t.Fatal(err)
+			}
+			skill := filepath.Join(project, ".qoder", "skills", "docs", "SKILL.md")
+			mcp := filepath.Join(project, ".mcp.json")
+			if tc.kind == domain.ComponentSkill {
+				if _, err := os.Stat(skill); err != nil {
+					t.Fatal(err)
+				}
+				if content, err := os.ReadFile(mcp); err != nil || strings.Contains(string(content), `"docs"`) {
+					t.Fatalf("skill-only modified MCP: %s %v", content, err)
+				}
+			} else {
+				if _, err := os.Lstat(skill); !os.IsNotExist(err) {
+					t.Fatalf("MCP-only created Skill: %v", err)
+				}
+				if content, err := os.ReadFile(mcp); err != nil || !strings.Contains(string(content), `"docs"`) {
+					t.Fatalf("MCP-only missing native server: %s %v", content, err)
+				}
+			}
+			mutation.Previous, mutation.Desired, mutation.Servers = objects, nil, nil
+			if err := mutation.Apply(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Lstat(skill); !os.IsNotExist(err) {
+				t.Fatalf("owned single-kind Skill survives removal: %v", err)
+			}
+			content, err := os.ReadFile(mcp)
+			if err != nil || strings.Contains(string(content), `"docs"`) || !strings.Contains(string(content), `"foreign"`) || !strings.Contains(string(content), `"note":"keep"`) {
+				t.Fatalf("single-kind removal changed foreign MCP: %s %v", content, err)
+			}
+			if content, err := os.ReadFile(filepath.Join(user, "keep")); err != nil || string(content) != "original user" {
+				t.Fatalf("single-kind lifecycle changed global Qoder: %s %v", content, err)
+			}
+		})
+	}
+}
+
 func TestQoderOldPackageOnlyReceiptRemainsLegacy(t *testing.T) {
 	old := make([]domain.NativeObjectOwnership, 1, 2)
 	old[0] = domain.NativeObjectOwnership{Kind: "managed_package_directory"}
