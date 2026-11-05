@@ -79,7 +79,7 @@ func (session *repairSession) reactivateRepaired(delivery domain.StagedDelivery,
 	if preparedProjectFileCandidate(session.input, session.plan) {
 		return session.verifyRepairedProjectFiles(delivery)
 	}
-	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
+	if nativeProjectionClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
 		return session.reapplyRepairedNative(delivery)
 	}
 	if session.plan.SelectedDelivery.EffectiveTraitsForScope(session.input.Client.ClientID, session.input.Scope).UsesManagedStdioLauncher {

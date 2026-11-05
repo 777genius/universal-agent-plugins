@@ -3,6 +3,7 @@ package installer
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -219,8 +220,35 @@ func TestPiUserNativeSkillsMCPFacadeAndForeignIsolation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			engine, err := New(Config{StateRoot: state, Registry: registry,
-				HelperExecutable: helper, TrustedLocalPackages: true})
+			// The host must see the durable user binding before it publishes
+			// authority. A Pi user NativeActivationAttempt at this point is
+			// the original Linux/macOS regression, not recoverable host state.
+			var engine *Engine
+			handoffs := 0
+			config := Config{StateRoot: state, Registry: registry,
+				HelperExecutable: helper, TrustedLocalPackages: true}
+			config.OnCommittedBinding = func(_ context.Context, facts BindingFacts) error {
+				if facts.ClientID != "pi" || facts.Scope != string(domain.ScopeUser) {
+					return fmt.Errorf("unexpected Pi user host handoff: %+v", facts)
+				}
+				persisted, err := engine.store.Load()
+				if err != nil {
+					return err
+				}
+				if len(persisted.Installations) != 1 {
+					return fmt.Errorf("Pi host handoff has %d persisted installations", len(persisted.Installations))
+				}
+				for _, installation := range persisted.Installations {
+					for _, binding := range installation.Clients {
+						if binding.ClientID == string(domain.ClientPi) && binding.NativeActivationAttempt != "" {
+							return fmt.Errorf("Pi user native attempt preceded host handoff: %s", binding.NativeActivationAttempt)
+						}
+					}
+				}
+				handoffs++
+				return nil
+			}
+			engine, err = New(config)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -277,6 +305,15 @@ func TestPiUserNativeSkillsMCPFacadeAndForeignIsolation(t *testing.T) {
 			}
 			write(filepath.Join(profile, "mcp.json"), foreign)
 			installed := do(request(OpInstall, "TEST-pi-global"))
+			if handoffs == 0 {
+				t.Fatal("Pi user installation bypassed OnCommittedBinding")
+			}
+			// Reopen the persisted state with the same host handoff contract.
+			// All subsequent update, repair and removal go through a fresh SDK.
+			engine, err = New(config)
+			if err != nil {
+				t.Fatal("reopen Pi user engine:", err)
+			}
 			if installed.Binding.Scope != string(domain.ScopeUser) || filepath.Dir(installed.Binding.TargetPath) != filepath.Join(profile, "extensions") {
 				t.Fatal("global Pi binding is not under the selected physical profile")
 			}

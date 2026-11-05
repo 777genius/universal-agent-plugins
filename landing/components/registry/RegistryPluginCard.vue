@@ -398,6 +398,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               :auto-option="autoOption"
               :label="t('registryUi.card.chooseClients', { name: plugin.display_name })"
               :options="targetOptions"
+              full-width
               @update:auto-selected="updateAutoDetect"
               @update:model-value="updateTargets"
             />

@@ -33,6 +33,9 @@ type ClientTraits struct {
 	ReportsMCPToolNamespaceCollision  bool
 	BindsNativeProfileRoot            bool
 	TracksNativeEffects               bool
+	// RequiresActiveNativeProjection separates native component readback from
+	// journal creation for a prepared user host with a separate commit handoff.
+	RequiresActiveNativeProjection bool
 	// RecordsUserProfileOnCreate records a selected user profile only for a new
 	// binding. It never adopts a legacy or coalesced binding with missing proof.
 	RecordsUserProfileOnCreate bool
