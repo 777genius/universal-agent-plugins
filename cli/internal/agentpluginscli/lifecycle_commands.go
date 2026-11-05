@@ -137,7 +137,6 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 	return command
 }
 
-
 // dispatchSelectedRemoval preserves single-target and legacy-all behavior
 // while keeping the command's input/confirmation policy separate from routing.
 func dispatchSelectedRemoval(cmd *cobra.Command, app App, opts *options, selector string) error {
