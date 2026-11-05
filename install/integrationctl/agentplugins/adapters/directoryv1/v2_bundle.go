@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -46,6 +47,11 @@ func ParseV2Envelope(body []byte) (Envelope, error) {
 
 func ParseV2Snapshot(body []byte) (domain.DirectorySnapshot, error) {
 	var snapshot domain.DirectorySnapshot
+	// encoding/json repairs invalid raw UTF-8 into U+FFFD. Reject it before
+	// signed artifact paths lose their original byte identity.
+	if !utf8.Valid(body) {
+		return snapshot, strictError("v2 snapshot contains invalid UTF-8")
+	}
 	if err := strictDecode(body, &snapshot, MaxSnapshotBytes); err != nil {
 		return snapshot, fmt.Errorf("%w: v2 snapshot: %w", ErrStrictJSON, err)
 	}

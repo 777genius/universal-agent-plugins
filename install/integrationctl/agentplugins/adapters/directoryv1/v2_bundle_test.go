@@ -1,6 +1,7 @@
 package directoryv1
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
@@ -124,5 +125,37 @@ func TestV2RejectsMissingImmutablePackageVersion(t *testing.T) {
 				t.Fatalf("v2 package_version %s validity=%t: %v", tc.name, tc.valid, err)
 			}
 		})
+	}
+}
+
+func TestV2RejectsInvalidRawUTF8InArtifactPath(t *testing.T) {
+	signed, _, _ := v2SignedFixture(t)
+	var original domain.DirectorySnapshot
+	if err := json.Unmarshal(signed, &original); err != nil {
+		t.Fatal(err)
+	}
+	if len(original.Evidence) == 0 || original.Evidence[0].Artifact.Path == "" {
+		t.Fatal("fixture lacks a v2 artifact path")
+	}
+	path, err := json.Marshal(original.Evidence[0].Artifact.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := append([]byte("\"path\":"), path...)
+	position := bytes.Index(signed, marker)
+	if position < 0 {
+		t.Fatal("v2 artifact path not present in signed wire")
+	}
+	invalid := append([]byte(nil), signed...)
+	invalid[position+len("\"path\":\"")] = 0xff
+	if !json.Valid(invalid) {
+		t.Fatal("invalid UTF-8 negative control must remain JSON syntax-valid")
+	}
+	var normalized domain.DirectorySnapshot
+	if err := json.Unmarshal(invalid, &normalized); err != nil {
+		t.Fatal("encoding/json was expected to repair the invalid byte", err)
+	}
+	if _, err := ParseV2Snapshot(invalid); !errors.Is(err, ErrStrictJSON) {
+		t.Fatalf("v2 parser accepted raw invalid UTF-8 in an artifact path: %v", err)
 	}
 }
