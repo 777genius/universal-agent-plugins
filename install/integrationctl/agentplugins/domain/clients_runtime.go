@@ -25,6 +25,9 @@ type DetectedClient struct {
 	// emitted by the public JSON renderer because they can reveal the user home.
 	ExecutablePath string `json:"-"`
 	ConfigRoot     string `json:"-"`
+	// NativeConfigRoot is the observed original native user root for adapters
+	// with independent legacy and current profiles; never emitted publicly.
+	NativeConfigRoot string `json:"-"`
 	// DetectionError is private diagnostic evidence. A failed client must not
 	// contribute paths or become a lifecycle target.
 	DetectionError error `json:"-"`

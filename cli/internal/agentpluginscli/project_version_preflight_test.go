@@ -125,6 +125,7 @@ func TestProjectLifecycleVersionProbeRejectsUnboundResults(t *testing.T) {
 		{"detection error", func(d *projectVersionDetector) { d.probed[0].DetectionError = errors.New("failed detection") }},
 		{"executable changed", func(d *projectVersionDetector) { d.probed[0].ExecutablePath += "-other" }},
 		{"config root changed", func(d *projectVersionDetector) { d.probed[0].ConfigRoot += "-other" }},
+		{"native root changed", func(d *projectVersionDetector) { d.probed[0].NativeConfigRoot += "-other" }},
 		{"profile namespace changed", func(d *projectVersionDetector) { d.probed[0].ProfileNamespace += "-other" }},
 		{"profile authority changed", func(d *projectVersionDetector) { d.probed[0].ProfileAuthority = &domain.ProfileAuthority{} }},
 		{"probe error", func(d *projectVersionDetector) { d.err = errors.New("version command failed") }},

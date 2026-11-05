@@ -110,7 +110,7 @@ func selectedProjectVersion(original domain.DetectedClient, probed []domain.Dete
 	if client.Status != domain.DetectionDetected || client.DetectionError != nil || strings.TrimSpace(client.Version) == "" {
 		return "", fmt.Errorf("target %q version detection did not return a successful version; no target was changed", original.ClientID)
 	}
-	if client.ExecutablePath != original.ExecutablePath || client.ConfigRoot != original.ConfigRoot || client.ProfileNamespace != original.ProfileNamespace || !domain.SameProfileAuthority(client.ProfileAuthority, original.ProfileAuthority) {
+	if client.ExecutablePath != original.ExecutablePath || client.ConfigRoot != original.ConfigRoot || client.NativeConfigRoot != original.NativeConfigRoot || client.ProfileNamespace != original.ProfileNamespace || !domain.SameProfileAuthority(client.ProfileAuthority, original.ProfileAuthority) {
 		return "", fmt.Errorf("target %q identity changed during version detection; no target was changed", original.ClientID)
 	}
 	return client.Version, nil

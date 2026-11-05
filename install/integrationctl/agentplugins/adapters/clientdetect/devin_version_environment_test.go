@@ -65,7 +65,7 @@ func TestDevinVersionEnvironmentPreservesOriginalHostAndLegacyAuthority(t *testi
 		before, after := clientOf(plain, domain.ClientWindsurf), clientOf(observed, domain.ClientWindsurf)
 		want := before
 		want.Version = "3000.11.205"
-		if !reflect.DeepEqual(after, want) || before.ExecutablePath != executable || (!legacy && before.ConfigRoot != "") {
+		if !reflect.DeepEqual(after, want) || before.ExecutablePath != executable || before.NativeConfigRoot != filepath.Join(config, "devin") || (!legacy && before.ConfigRoot != "") {
 			t.Fatalf("Devin version observation changed empty/legacy authority: before=%+v after=%+v", before, after)
 		}
 		if _, err := os.Lstat(config); !os.IsNotExist(err) {

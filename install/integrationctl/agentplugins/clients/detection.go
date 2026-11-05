@@ -21,7 +21,10 @@ type Detection struct {
 	// Err prevents an invalid selected profile from becoming mutation authority.
 	Err            error
 	ConfigRoot     string
-	ExecutablePath string
+	// NativeConfigRoot is a separately observed native authority, never a
+	// replacement for legacy ConfigRoot or evidence of version qualification.
+	NativeConfigRoot string
+	ExecutablePath  string
 	Surfaces       []domain.ClientSurface
 	// SelectionSurfaceIDs narrows the surfaces that decide detection status to
 	// the ones that also make the client safe to act on. An empty list means any

@@ -4,6 +4,7 @@ package windsurf
 
 import (
 	"path/filepath"
+	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -35,7 +36,16 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	legacy := legacyChannelRoots(host)
 	surfaces := channelSurfaces(host, windsurfCLI, devinCLI, legacy)
 	surfaces = append(surfaces, platformSurfaces(host)...)
+	nativeRoot := ""
+	if primaryDevinExecutable(shared.FirstPath(windsurfCLI, devinCLI)) {
+		root, err := originalDevinGlobalRoot(host)
+		if err != nil {
+			return clients.Detection{Err: fmt.Errorf("selected Devin user authority: %w", err)}
+		}
+		nativeRoot = root
+	}
 	return clients.Detection{
+		NativeConfigRoot: nativeRoot,
 		ConfigRoot:     selectedLegacyRoot(surfaces, legacy),
 		ExecutablePath: shared.FirstPath(windsurfCLI, devinCLI),
 		Surfaces:       surfaces,

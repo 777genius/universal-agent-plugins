@@ -1,0 +1,49 @@
+package windsurf
+
+import (
+	"fmt"
+	"path/filepath"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+)
+
+// The original Host supplies the XDG or APPDATA authority. ConfigRoot keeps
+// the unrelated Cascade channel. Neither root is inferred from UAP state.
+func originalDevinGlobalRoot(host clients.Host) (string, error) {
+	var base string
+	switch host.GOOS() {
+	case "linux", "darwin":
+		base = host.Env("XDG_CONFIG_HOME")
+		if base == "" {
+			base = filepath.Join(host.HomeDir(), ".config")
+		}
+	case "windows":
+		base = host.Env("APPDATA")
+	default:
+		return "", fmt.Errorf("unsupported Devin global host OS")
+	}
+	if err := devinVersionDirectory(host, base, false); err != nil {
+		return "", err
+	}
+	root := filepath.Join(base, "devin")
+	physical, err := host.CanonicalDirectory(root)
+	if err != nil || physical != root {
+		return "", fmt.Errorf("selected original Devin global root is not canonical: %w", err)
+	}
+	return root, nil
+}
+
+func requireSelectedDevinGlobal(client domain.DetectedClient) (string, error) {
+	if err := requireCurrentDevin(client); err != nil {
+		return "", err
+	}
+	root := client.NativeConfigRoot
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root || filepath.Base(root) != "devin" {
+		return "", fmt.Errorf("Devin global native root must come from original host authority")
+	}
+	if root == client.ConfigRoot || filepath.Dir(root) == root {
+		return "", fmt.Errorf("Devin global root aliases legacy Cascade authority")
+	}
+	return root, nil
+}
