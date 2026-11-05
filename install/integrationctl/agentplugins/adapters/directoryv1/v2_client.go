@@ -45,9 +45,6 @@ func (client V2Client) validateConfig() error {
 	return nil
 }
 
-// LoadLocal returns signed v2 provenance for read-only inspection without
-// network access or writes. As for v1, expired data may be displayed but must
-// never authorize installation or locked restore.
 // canonicalCachePath resolves existing parent aliases even when the cache file
 // does not exist yet. Keep v1 and v2 from writing the same physical LKG path.
 func canonicalCachePath(path string) (string, error) {
@@ -73,6 +70,9 @@ func canonicalCachePath(path string) (string, error) {
 	}
 }
 
+// LoadLocal returns signed v2 provenance for read-only inspection without
+// network access or writes. As for v1, expired data may be displayed but must
+// never authorize installation or locked restore.
 func (client V2Client) LoadLocal(installedFloor uint64) (VerifiedBundle, error) {
 	if err := client.validateConfig(); err != nil {
 		return VerifiedBundle{}, err
