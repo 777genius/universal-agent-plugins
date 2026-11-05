@@ -45,7 +45,6 @@ const obj = (value: unknown): Json =>
 const exact = (value: Json, names: readonly string[]): void => {
   if (Object.keys(value).length !== names.length || !names.every(k => Object.hasOwn(value, k))) invalid();
 };
-const str = (value: unknown): value is string => typeof value === 'string';
 const int = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) >= 0;
 const array = (value: unknown): unknown[] => Array.isArray(value) ? value : invalid();
 const same = (a: unknown, b: unknown): boolean => canonical(a) === canonical(b);
