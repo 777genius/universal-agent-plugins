@@ -113,6 +113,9 @@ type AddInput struct {
 	BackendExecutable  string
 	ActivationComplete bool
 	AuthComplete       bool
+	// CompatibilityBindingID freezes the observed unselected binding across
+	// the facade preflight and usecase mutation lock. Selected inputs leave it empty.
+	CompatibilityBindingID string `json:"-"`
 	// EnvironmentAuthority is mandatory for managed update/remove/repair and is
 	// copied into the durable receipt before the first managed effect.
 	EnvironmentAuthority *domain.EnvironmentAuthority
