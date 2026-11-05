@@ -76,7 +76,9 @@ export function defaultDistribution(plugin: RegistryPlugin): DistributionView {
 function supportsInstallScope(target: ReleaseTarget | undefined, scope: InstallScope): boolean {
   // A remote app connection has no project filesystem installation. Missing
   // scope facts cannot authorize a project command on older projections.
-  return Boolean(target?.scopes?.includes(scope) && (scope !== 'project' || !target.app_binding));
+  return Boolean(target?.scopes?.includes(scope) &&
+    target.canonical_closure?.eligible !== false &&
+    (scope !== 'project' || !target.app_binding));
 }
 
 function eligibleRelease(
@@ -119,7 +121,7 @@ function eligibleRelease(
         ? [...targets].filter(
             (client) =>
               !supportsInstallScope(
-                release.targets.find((target) => target.client === client),
+                release.targets.find((target) => target.client === client && target.scopes.includes(scope)),
                 scope,
               ),
           )
