@@ -81,11 +81,13 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 		initiallyPresent bool
 		failSave         bool
 		failLock         bool
+		nilRelease       bool
 	}{
 		{name: "delegated", initiallyPresent: true},
 		{name: "reconciled_after_interruption"},
 		{name: "v2_save_failure_releases_legacy_lock", failSave: true},
 		{name: "old_lock_unavailable_preserves_v2", initiallyPresent: true, failLock: true},
+		{name: "missing_release_refuses_reconciliation", initiallyPresent: true, nilRelease: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -109,7 +111,7 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 				t.Fatal(err)
 			}
 			legacy := &legacyLifecycleStub{exists: tc.initiallyPresent}
-			legacySpy := &inspectedLegacyStateLock{failAcquire: tc.failLock}
+			legacySpy := &inspectedLegacyStateLock{failAcquire: tc.failLock, nilRelease: tc.nilRelease}
 			var stateStore transaction.StateStore = store
 			if tc.failSave {
 				stateStore = refusingLegacyStateSave{StateStore: store}
@@ -123,7 +125,7 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 			result, err := service.RemoveLegacy(context.Background(), LegacyRemoveInput{
 				Selector: installationID, Confirmed: true, OperationID: "legacy-remove",
 			})
-			if tc.failSave || tc.failLock {
+			if tc.failSave || tc.failLock || tc.nilRelease {
 				if err == nil || result.Mutated {
 					t.Fatalf("failed reconciliation = (%+v, %v), want no mutation and an error", result, err)
 				}
@@ -170,11 +172,15 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 type inspectedLegacyStateLock struct {
 	held        bool
 	failAcquire bool
+	nilRelease  bool
 }
 
 func (lock *inspectedLegacyStateLock) Acquire(context.Context) (ports.UnlockFunc, error) {
 	if lock.failAcquire {
 		return nil, fmt.Errorf("injected legacy lock acquisition failure")
+	}
+	if lock.nilRelease {
+		return nil, nil
 	}
 	if lock.held {
 		return nil, fmt.Errorf("legacy state lock reacquired while already held")

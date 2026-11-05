@@ -108,6 +108,9 @@ func (service Service) commitLegacyRemoval(ctx context.Context, state domain.Sta
 	if err != nil {
 		return result, fmt.Errorf("acquire legacy state lock for reconciliation: %w", err)
 	}
+	if legacyRelease == nil {
+		return result, fmt.Errorf("legacy state lock returned no release function")
+	}
 	defer func() { _ = legacyRelease() }()
 	if err := service.verifyLegacyAbsentLocked(ctx, installation.DeclaredName); err != nil {
 		return result, err
