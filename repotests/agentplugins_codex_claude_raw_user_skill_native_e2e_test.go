@@ -88,6 +88,9 @@ func nativeRawUserFiles(t *testing.T, binding domain.ClientBinding, client strin
 
 func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer, target, statePath string, original domain.ClientBinding) domain.ClientBinding {
 	t.Helper()
+	// This test deliberately deletes a managed artifact to reproduce absent
+	// repair. Never allow a bad persisted path to escape the disposable host.
+	nativeRequireContained(t, root, original.TargetLocator)
 	if err := os.RemoveAll(original.TargetLocator); err != nil {
 		t.Fatal(err)
 	}
