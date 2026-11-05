@@ -58,7 +58,8 @@ export function releaseTargets(
       if (value.eligible) {
         const digest = requiredString(value, 'closure_digest', `${context} closure`);
         const floor = requiredString(value, 'minimum_installer_version', `${context} closure`);
-        if (!DIGEST.test(digest) || !/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$/.test(floor))
+        const validFloor = /^[0-9]+[.][0-9]+[.][0-9]+(?:-[0-9A-Za-z.-]+)?(?:[+][0-9A-Za-z.-]+)?$/.test(floor);
+        if (!DIGEST.test(digest) || !validFloor)
           throw new Error(`${context}: invalid eligible v2 closure digest or floor`);
         closure = { eligible: true, closure_digest: digest, minimum_installer_version: floor };
       } else {
