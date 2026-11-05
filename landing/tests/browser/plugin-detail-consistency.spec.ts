@@ -39,7 +39,7 @@ for (const width of [1440, 390]) {
     const card = page.locator('[data-install-source="i18n-state-00"]').first();
     await expect(card.locator('.plugin-card__source-label')).toHaveCount(0);
     await card.locator('.plugin-card__install-toggle').click();
-    await expect(card.locator('.command-snippet code')).toHaveText(
+    await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00',
     );
     // Switching from terminal detection selects only one initial agent.
@@ -51,7 +51,7 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.plugin-card__source-label')).toContainText(
       'Agents: 1 automatic setup · 1 need follow-up',
     );
-    await expect(card.locator('.command-snippet code')).toContainText('--target codex,cursor');
+    await expect(card.locator('.plugin-card__install .command-snippet code')).toContainText('--target codex,cursor');
 
     await card.locator('.plugin-card__title-link').click();
     const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
@@ -70,7 +70,7 @@ for (const width of [1440, 390]) {
     await expect(detail.locator('.plugin-detail__client').filter({ hasText: 'Kiro' })).toHaveCount(0);
     await expect(detail.locator('.install-outcome')).toContainText('Cursor');
     await expect(detail.locator('.install-outcome')).toContainText('Codex');
-    await expect(detail.locator('.command-snippet--add code')).toContainText('--target codex,cursor');
+    await expect(detail.locator('.install-command-row .command-snippet--add code')).toContainText('--target codex,cursor');
     expect(errors).toEqual([]);
   });
 }
@@ -122,7 +122,7 @@ for (const width of [1440, 390]) {
     await expect(chatgpt).toBeDisabled();
     await expect(chatgpt).toContainText('No verified ChatGPT app connection in this release');
     await page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ }).click();
-    await expect(card.locator('.command-snippet--add code')).toContainText('--target codex');
+    await expect(card.locator('.plugin-card__install .command-snippet--add code')).toContainText('--target codex');
     await page.keyboard.press('Escape');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);

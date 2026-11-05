@@ -127,13 +127,13 @@ func TestAddRecoveryPropagatesWriterFailure(t *testing.T) {
 // TestVerifiedOtherClientsDoNotExposePrivateLocalActions keeps unrelated client local actions private.
 func TestVerifiedOtherClientsDoNotExposePrivateLocalActions(t *testing.T) {
 	result := usecase.AddResult{
-		Mutated: true,
-		Plan: domain.DeliveryPlan{ClientID: domain.ClientCursor},
+		Mutated:    true,
+		Plan:       domain.DeliveryPlan{ClientID: domain.ClientCursor},
 		Activation: domain.ActivationOutcome{
-			Activation: domain.ActivationActive,
-			Verification: domain.VerificationInstalled,
+			Activation:     domain.ActivationActive,
+			Verification:   domain.VerificationInstalled,
 			Authentication: domain.AuthenticationNotRequired,
-			LocalActions: []string{"private unrelated profile: /private/foreign-config"},
+			LocalActions:   []string{"private unrelated profile: /private/foreign-config"},
 		},
 	}
 	var out bytes.Buffer
@@ -150,14 +150,14 @@ func TestSuccessfulNativeAddPrintsOptionalLocalHandoffWithoutPublicPathLeak(t *t
 	for _, mutated := range []bool{false, true} {
 		t.Run(fmt.Sprint("mutated=", mutated), func(t *testing.T) {
 			result := usecase.AddResult{
-				NoChange: !mutated,
-				Mutated: mutated,
-				Plan: domain.DeliveryPlan{ClientID: domain.ClientCodex},
+				NoChange:   !mutated,
+				Mutated:    mutated,
+				Plan:       domain.DeliveryPlan{ClientID: domain.ClientCodex},
 				Activation: domain.ActivationOutcome{
-					Activation: domain.ActivationActive,
-					Verification: domain.VerificationInstalled,
+					Activation:     domain.ActivationActive,
+					Verification:   domain.VerificationInstalled,
 					Authentication: domain.AuthenticationNotRequired,
-					LocalActions: []string{"start a new Codex session; optional ChatGPT Desktop: codex://plugins/demo?marketplacePath=%2Fprivate%2Fprofile%2Fmarketplace.json"},
+					LocalActions:   []string{"start a new Codex session; optional ChatGPT Desktop: codex://plugins/demo?marketplacePath=%2Fprivate%2Fprofile%2Fmarketplace.json"},
 				},
 			}
 			var human, public bytes.Buffer

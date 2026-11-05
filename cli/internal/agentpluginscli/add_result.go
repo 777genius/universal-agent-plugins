@@ -123,7 +123,7 @@ func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 // renderVerifiedLocalNextAction displays only the verified Codex user's optional local step.
 // It does not change the public JSON contract or turn Desktop activation into a required phase.
 func renderVerifiedLocalNextAction(writer io.Writer, result usecase.AddResult) error {
-	if result.Plan.ClientID != domain.ClientCodex || len(result.Activation.LocalActions) == 0 {
+	if !clientTraits(result.Plan.ClientID).ShowsVerifiedLocalNextAction || len(result.Activation.LocalActions) == 0 {
 		return nil
 	}
 	_, err := fmt.Fprintf(writer, "%s: %s\n",

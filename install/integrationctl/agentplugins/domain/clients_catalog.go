@@ -97,6 +97,7 @@ type ClientDefinition struct {
 var clientDefinitions = []ClientDefinition{
 	withProjectScope(clientDefinition(ClientCodex, "OpenAI Codex", "codex", "managed", "projected", true, PackageProjection, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		QualifiedLocalInstallerFacade: true,
+		ShowsVerifiedLocalNextAction:  true,
 		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:                 LifecycleCLIRegistry,
 		HonorsOpenAIMCPAuthHints:      true,

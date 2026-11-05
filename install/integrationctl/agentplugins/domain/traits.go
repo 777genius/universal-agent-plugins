@@ -24,6 +24,8 @@ type ClientTraits struct {
 	// QualifiedLocalInstallerFacade keeps local-file route qualification
 	// separate from saved-dependency support; broad registration cannot widen it.
 	QualifiedLocalInstallerFacade     bool
+	// ShowsVerifiedLocalNextAction permits one private optional action after verified installation.
+	ShowsVerifiedLocalNextAction      bool
 	InstallIntents                    []InstallIntent
 	LifecycleKind                     LifecycleKind
 	UsesManagedStdioLauncher          bool
