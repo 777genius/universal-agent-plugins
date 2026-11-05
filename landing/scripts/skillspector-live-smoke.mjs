@@ -10,6 +10,9 @@ import { loadI18nMessages } from './load-i18n-messages.ts';
 import { createSkillSpectorClient } from '../utils/skillSpectorCatalog.ts';
 import { hasCurrentPublishedScan } from '../utils/skillSpectorCurrent.ts';
 import {
+  applyVerifiedSkillSpectorCohort, pinnedCohortKeys, readVerifiedSkillSpectorCohort,
+} from '../utils/skillSpectorCohort.ts';
+import {
   decodeSkillSpectorManifestV3,
   decodeSkillSpectorShardV3,
 } from '../utils/skillSpectorV3.ts';
@@ -53,6 +56,8 @@ const sourceFiles = [
   'scripts/skillspector-live-smoke.mjs',
   'utils/skillSpectorCatalog.ts',
   'utils/skillSpectorCurrent.ts',
+  'utils/skillSpectorCohort.ts',
+  'features/skillspector/cohort-trusted-keys.json',
   'utils/skillSpectorV3.ts',
   'utils/skillSpector.ts',
   'utils/skillSpectorDiagnostics.ts',
@@ -273,6 +278,37 @@ try {
     ),
     success: true,
   });
+
+  // A production-signed cohort must be accepted against actual immutable
+  // v3 shards by the SAME browser consumer, never just an isolated unit fixture.
+  // With zero approved independent keys, old Partial behavior stays unchanged.
+  if (pinnedCohortKeys.length) {
+    const cohortUrl = process.env.NUXT_PUBLIC_SKILLSPECTOR_COHORT_LATEST_URL ||
+      'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-cohort-releases/reports/skillspector/cohort/v1/latest.json';
+    const verified = await readVerifiedSkillSpectorCohort(cohortUrl, pinnedCohortKeys);
+    assert.ok(verified, 'A configured cohort key must validate the actual signed release');
+    const overlay = applyVerifiedSkillSpectorCohort(
+      { ...manifest, records }, digest(manifestBytes), verified);
+    const changed = overlay.records.filter((record) => record.signed_cohort_verified);
+    assert.equal(changed.length, 9, 'Exactly nine immutable sources may be promoted');
+    assert.equal(changed.reduce((sum, record) => sum + record.finding_count, 0), 9,
+      'All nine content security findings must remain visible');
+    assert.ok(changed.every((record) => record.scanner?.version === '2.13.3' &&
+      record.coverage?.status === 'complete' && record.execution?.state === 'completed'),
+    'Every cohort member must retain complete static-analysis provenance');
+    assert.ok(overlay.records.every((record, index) =>
+      record.signed_cohort_verified || record === records[index]),
+    'All unrelated historical and genuine Partial sources must be unchanged');
+    Object.assign(evidence.publication, {
+      signed_cohort: {
+        verified: true,
+        records: changed.length,
+        risk_findings: changed.reduce((sum, record) => sum + record.finding_count, 0),
+        expires_at: new Date(verified.expiresAt).toISOString(),
+        source_manifest_sha256: verified.manifestDigest,
+      },
+    });
+  }
 
   if (process.env.UAP_SKILLSPECTOR_PUBLICATION_ONLY !== '1') {
     const projection = await json(new URL('api/registry/plugin/cloudflare', site).href);
