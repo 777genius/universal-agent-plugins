@@ -2044,5 +2044,78 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertEqual(result["status"], "incomplete-native-proof")
 
 
+    def test_grok_prepared_skill_is_source_bound_and_never_native_pass(self):
+        # A real prepared Grok Skill is not a native installation attestation.
+        audit = load_audit()
+        item = {"name": "frontend-design", "repo": "sample/skills",
+                "folder": "frontend-design", "ref": "a" * 40}
+        name = "skill-" + "b" * 56
+        bundle = "skill-" + "b" * 45 + "-" + "c" * 12
+        uid = "c99742fc-59bf-4225-b862-0c21e5fcc992"
+        revision = {"resolved_revision": item["ref"],
+                    "tree_digest": "sha256:" + "d" * 64,
+                    "manifest_digest": "sha256:" + "e" * 64}
+        entry = {"installation_id": uid, "name": name,
+                 "source": "sample/skills/skills/frontend-design",
+                 "clients": [{"client_id": "grok", "scope": "project",
+                              "materialization": "materialized", "verification": "package_validated",
+                              "activation": "prepared", "policy": "allowed",
+                              "package_revision": revision}]}
+        response = {"data": {"installations": [entry]}}
+        with TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            relative = f".grok/plugins/{bundle}/skills/{item['name']}/SKILL.md"
+            skill = project / relative
+            skill.parent.mkdir(parents=True)
+            skill.write_text("---\nname: frontend-design\n---\n")
+            (project / "uap.lock").write_text(json.dumps({"packages": [{
+                "alias": item["name"], "tree_digest": revision["tree_digest"],
+                "manifest_digest": revision["manifest_digest"]}]}))
+            first = {"status": "succeeded", "items": [{
+                "alias": item["name"], "targetId": "grok", "status": "succeeded",
+                "candidateId": "sha256:" + "f" * 64,
+                "destinationPath": str(project / ".grok/plugins" / bundle)}]}
+            output = {"stdout_tail": json.dumps(first)}
+            matched = audit.grok_prepared_skill_installations(response, item, relative, project, output)
+            self.assertEqual([node["installation_id"] for node in matched], [uid])
+            repeat = json.loads(json.dumps(first))
+            repeat["items"][0]["status"] = "unchanged"
+            repeat_output = {"stdout_tail": json.dumps(repeat)}
+            self.assertEqual(len(audit.grok_prepared_skill_installations(
+                response, item, relative, project, repeat_output, repeated=True)), 1)
+            self.assertEqual(audit.grok_prepared_skill_installations(
+                response, item, relative, project, output, repeated=True), [])
+            for field in ("source", "name", "installation_id"):
+                forged = json.loads(json.dumps(response))
+                forged["data"]["installations"][0][field] = "forged"
+                self.assertEqual(audit.grok_prepared_skill_installations(
+                    forged, item, relative, project, output), [])
+            for field in ("activation", "verification", "scope", "policy"):
+                forged = json.loads(json.dumps(response))
+                forged["data"]["installations"][0]["clients"][0][field] = "forged"
+                self.assertEqual(audit.grok_prepared_skill_installations(
+                    forged, item, relative, project, output), [])
+            forged = json.loads(json.dumps(response))
+            forged["data"]["installations"][0]["clients"][0]["package_revision"]["tree_digest"] = "sha256:" + "0" * 64
+            self.assertEqual(audit.grok_prepared_skill_installations(
+                forged, item, relative, project, output), [])
+            self.assertFalse(audit.grok_prepared_source_survives(
+                {"data": {"installations": []}}, item, name, uid))
+            self.assertTrue(audit.grok_prepared_source_survives(
+                {"data": {"installations": [{**entry, "name": "reminted", "installation_id": "new"}]}},
+                item, name, uid))
+            original_bytes = skill.read_bytes()
+            foreign = project / "outside.md"
+            foreign.write_bytes(original_bytes)
+            skill.unlink()
+            skill.symlink_to(foreign)
+            self.assertEqual(audit.grok_prepared_skill_installations(
+                response, item, relative, project, output), [])
+            skill.unlink()
+            skill.write_bytes(original_bytes)
+            self.assertEqual(len(audit.grok_prepared_skill_installations(
+                response, item, relative, project, output)), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

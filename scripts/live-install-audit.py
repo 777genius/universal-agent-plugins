@@ -751,6 +751,110 @@ def matching_installations(response, identity, target, kind, item, signed_releas
     return result
 
 
+
+def _unique_json_object(pairs):
+    """Reject ambiguous duplicate keys in local audit receipts."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON field")
+        result[key] = value
+    return result
+
+
+def grok_prepared_skill_installations(list_json, item, skill_path, project, add_result, *, repeated=False):
+    """Qualify exact Grok project Skill preparation without claiming native activation."""
+    if (not isinstance(list_json, dict) or not isinstance(item, dict)
+            or not isinstance(skill_path, str) or not isinstance(add_result, dict)):
+        return []
+    data = list_json.get("data")
+    entries = data.get("installations") if isinstance(data, dict) else None
+    if (not isinstance(entries, list) or len(entries) != 1
+            or not isinstance(entries[0], dict)):
+        return []
+    node = entries[0]
+    parts = Path(skill_path).parts
+    if (len(parts) != 6 or parts[:2] != (".grok", "plugins")
+            or parts[3:] != ("skills", item.get("name"), "SKILL.md")
+            or re.fullmatch(r"skill-[a-f0-9]{45}-[a-f0-9]{12}", parts[2]) is None):
+        return []
+    root, plugins = project / ".grok", project / ".grok" / "plugins"
+    bundle = plugins / parts[2]
+    skill = bundle / "skills" / item["name"] / "SKILL.md"
+    if (any(p.is_symlink() for p in (project, root, plugins, bundle,
+            bundle / "skills", skill.parent, skill))
+            or not plugins.is_dir() or not bundle.is_dir() or not skill.is_file()
+            or not bundle.resolve().is_relative_to(project.resolve())):
+        return []
+    try:
+        receipt = json.loads(add_result.get("stdout_tail", ""), object_pairs_hook=_unique_json_object)
+        if (not isinstance(receipt, dict) or receipt.get("status") != "succeeded"
+                or not isinstance(receipt.get("items"), list) or len(receipt["items"]) != 1):
+            return []
+        selected = receipt["items"][0]
+        if (not isinstance(selected, dict)
+                or selected.get("alias") != item["name"]
+                or selected.get("targetId") != "grok"
+                or selected.get("status") != ("unchanged" if repeated else "succeeded")
+                or selected.get("destinationPath") != str(bundle)
+                or not isinstance(selected.get("candidateId"), str)
+                or re.fullmatch(r"sha256:[0-9a-f]{64}", selected["candidateId"]) is None):
+            return []
+    except (TypeError, ValueError, KeyError, IndexError):
+        return []
+    name = node.get("name")
+    if (node.get("source") != f'{item["repo"]}/skills/{item["folder"]}'
+            or not isinstance(name, str) or re.fullmatch(r"skill-[a-f0-9]{56}", name) is None
+            or not parts[2].startswith(name[:51] + "-")):
+        return []
+    uid = node.get("installation_id")
+    if (not isinstance(uid, str)
+            or re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", uid) is None):
+        return []
+    clients = node.get("clients")
+    if (not isinstance(clients, list) or len(clients) != 1
+            or not isinstance(clients[0], dict)):
+        return []
+    client = clients[0]
+    if any(client.get(k) != v for k, v in (
+            ("client_id", "grok"), ("scope", "project"),
+            ("materialization", "materialized"), ("verification", "package_validated"),
+            ("activation", "prepared"), ("policy", "allowed"))):
+        return []
+    revision = client.get("package_revision")
+    if not isinstance(revision, dict) or revision.get("resolved_revision") != item.get("ref"):
+        return []
+    lock = project / "uap.lock"
+    if lock.is_symlink() or not lock.is_file():
+        return []
+    try:
+        packages = json.loads(lock.read_text(encoding="utf-8"),
+                              object_pairs_hook=_unique_json_object)["packages"]
+        matches = [p for p in packages if isinstance(p, dict) and p.get("alias") == item["name"]]
+    except (OSError, TypeError, KeyError, ValueError):
+        return []
+    if len(matches) != 1:
+        return []
+    for key in ("tree_digest", "manifest_digest"):
+        value = revision.get(key)
+        if (not isinstance(value, str) or re.fullmatch(r"sha256:[a-f0-9]{64}", value) is None
+                or matches[0].get(key) != value):
+            return []
+    return [node]
+
+
+def grok_prepared_source_survives(response, item, prior_name, prior_uid):
+    """Fail closed on retained or reminted Grok source after removal."""
+    data = response.get("data") if isinstance(response, dict) else None
+    nodes = data.get("installations") if isinstance(data, dict) else None
+    if not isinstance(nodes, list) or not all(isinstance(n, dict) for n in nodes):
+        return True
+    source = f'{item["repo"]}/skills/{item["folder"]}'
+    return any(n.get("source") == source or n.get("installation_id") == prior_uid
+               or n.get("name") == prior_name
+               or (isinstance(n.get("name"), str) and n["name"].startswith(prior_name[:51]))
+               for n in nodes)
+
 def uninstall_native_codex_plugin(identity, home, case_root, env, cwd):
     """Perform the documented *actual* Codex uninstall before attestation.
 
@@ -1105,6 +1209,12 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     listed_json = listed.pop("_json", None) if listed else None
     matching = matching_installations(listed_json, identity, target, kind, item,
                                      signed_release_pins)
+    grok_prepared = (grok_prepared_skill_installations(
+        listed_json, item, skill_path, project, output)
+        if target == "grok" and kind == "skill" and not matching
+        and listed["exit_code"] == 0 else [])
+    if grok_prepared:
+        matching = grok_prepared
     signed_observation = (
         signed_release_public_observation(listed_json, identity, target)
         if kind == "plugin" and isinstance(item, str) and not item.startswith("github:")
@@ -1114,10 +1224,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         output["exit_code"] != 0) else False
     failed_install_residue = bool(output["exit_code"] != 0 and (
         failed_install_registered or native_attribution or skill_path))
-    prepared_binding = bool(listed_identity and kind == "plugin" and any(
-        client.get("client_id") == target and client.get("verification") == "package_validated"
-        and client.get("activation") == "manual_activation_required"
-        for client in matching[0].get("clients", []) if isinstance(client, dict)))
+    prepared_binding = bool(listed_identity and (
+        grok_prepared or (kind == "plugin" and any(
+            client.get("client_id") == target and client.get("verification") == "package_validated"
+            and client.get("activation") == "manual_activation_required"
+            for client in matching[0].get("clients", []) if isinstance(client, dict)))))
     # Name and file presence alone are insufficient. A true Skill pass also
     # proves the immutable source in the portable lock AND exact upstream bytes.
     installed = bool(
@@ -1133,9 +1244,12 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_identity_ids = []
     repeat_native_unchanged = None
     repeat_lock_unchanged = None
+    repeat_project_unchanged = None
     repeat_verified = False
     if installed:
         before_repeat_native = snapshot(native_roots)
+        before_repeat_project = (snapshot([project / root for root in project_skill_roots])
+                                 if grok_prepared else None)
         lock_root = project if kind == "skill" else data
         lock_paths = (lock_root / "uap.toml", lock_root / "uap.lock")
         def lock_state():
@@ -1150,17 +1264,22 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
         repeat_list_json = repeat_list.pop("_json", None)
-        repeat_matches = matching_installations(
-            repeat_list_json, identity, target, kind, item, signed_release_pins)
+        repeat_matches = (grok_prepared_skill_installations(
+            repeat_list_json, item, skill_path, project, repeat_add, repeated=True)
+            if grok_prepared else matching_installations(
+                repeat_list_json, identity, target, kind, item, signed_release_pins))
         repeat_identity_ids = sorted(
             entry["installation_id"] for entry in repeat_matches)
         repeat_native_unchanged = snapshot(native_roots) == before_repeat_native
+        repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
+                                    == before_repeat_project if grok_prepared else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
         repeat_verified = bool(
             repeat_add["exit_code"] == 0 and repeat_list["exit_code"] == 0
             and len(repeat_matches) == 1
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
             and repeat_native_unchanged and repeat_lock_unchanged
+            and (not grok_prepared or repeat_project_unchanged)
         )
     # BUG-039: independent native ID+version proof before UAP removes it.
     qoder_native_before_remove = None
@@ -1185,7 +1304,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             assert_case_unchanged()
         attestation = (["--external-uninstalled"] if
                        native_uninstall and native_uninstall["completed"] else [])
-        cleanup = audited_call([cli, "remove", identity, "--target", target, *scope,
+        # Grok project Skills have generated bundle names; never select by raw alias.
+        selector = matching[0]["installation_id"] if grok_prepared else identity
+        cleanup = audited_call([cli, "remove", selector, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
         cleanup.pop("_json", None)
     qoder_native_after_remove = None
@@ -1233,7 +1354,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     old_ids = {entry["installation_id"] for entry in matching}
     # A successful remove must not re-register this identity under a new ID.
     post_remove_identity_registered = bool(
-        post_list_schema_valid and has_target_registration(post_list_json, identity, target))
+        post_list_schema_valid and (
+            has_target_registration(post_list_json, identity, target)
+            or (grok_prepared and grok_prepared_source_survives(
+                post_list_json, item, matching[0]["name"], matching[0]["installation_id"]))))
     post_lock_pinned = bool(kind == "skill" and (project / "uap.lock").exists()
                             and locked_skill_is_pinned(project, item, target))
     unsafe_paths = [path for path, digest in changed
@@ -1347,6 +1471,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,
             "repeat_lock_unchanged": repeat_lock_unchanged,
+            "repeat_project_unchanged": repeat_project_unchanged,
             "repeat_verified": repeat_verified,
             "failed_install_registered": failed_install_registered,
             "failed_install_residue": failed_install_residue,
