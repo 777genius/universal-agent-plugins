@@ -63,6 +63,13 @@ const { report, status: loadedStatus, recoverable, retry: retryReport } = useSki
 );
 const reportStatus = computed(() => (props.applicable === false ? 'ready' : loadedStatus.value));
 const assessment = computed(() => skillSpectorAssessment(report.value, props.subject));
+const displayedScannerVersions = computed(() => {
+  const versions = [...new Set(assessment.value.records
+    .filter((record) => record.freshness === 'current')
+    .map((record) => record.scanner?.version)
+    .filter((version): version is string => typeof version === 'string'))].sort();
+  return versions.length ? versions.join(' / ') : report.value?.scanner.version ?? '';
+});
 const legacy = computed(() => isLegacySkillSpectorReport(report.value));
 const hasLegacyEvidence = computed(
   () => report.value?.schema_version === 3 &&
@@ -701,7 +708,7 @@ async function copyDiagnostics() {
       </section>
       <details v-if="assessment.records.length" class="skillspector__technical">
         <summary>{{ t('registryUi.skillSpector.provenance') }}</summary>
-        <p>{{ t('registryUi.skillSpector.scanner', { version: report!.scanner.version }) }}</p>
+        <p>{{ t('registryUi.skillSpector.scanner', { version: displayedScannerVersions }) }}</p>
         <div v-for="record in assessment.records" :key="record.id">
           <a :href="skillSpectorSourceUrl(record)" target="_blank" rel="noreferrer"
             >{{ record.source.path || record.skill_name || record.source.repository }} ↗</a
