@@ -108,9 +108,9 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 			t.Fatalf("%s altered foreign user Skill bytes", stage)
 		}
 	}
-	// This is the Directory card's actual command, with only non-interactive
-	// consent and JSON output added for a disposable CI host.
-	args := []string{"add", directorySitePlugin, "--target", "codex,claude", "--yes"}
+	// This is the Directory card's exact add command. The shared runner
+	// requests JSON output to avoid interactive prompts on the CI host.
+	args := []string{"add", directorySitePlugin, "--target", "codex,claude"}
 	result, err := commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-add", args...)
 	if err != nil || result["result"] != "success" {
 		t.Fatalf("site Directory command failed: %v %+v", err, result)
