@@ -61,7 +61,7 @@ export function useSkillSpector(subject: MaybeRefOrGetter<SkillSpectorSubject | 
           .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
         if (expiries.length) {
           cohortExpiryTimer = setTimeout(() => {
-            if (mounted && current === generation) void load(repository, ++generation);
+            if (mounted.value && current === generation) void load(repository, ++generation);
           }, Math.max(0, Math.min(...expiries) - Date.now() + 100));
         }
       }
@@ -98,6 +98,7 @@ export function useSkillSpector(subject: MaybeRefOrGetter<SkillSpectorSubject | 
     { immediate: true },
   );
   onBeforeUnmount(() => {
+    mounted.value = false;
     generation++;
     clearCohortExpiry();
   });
