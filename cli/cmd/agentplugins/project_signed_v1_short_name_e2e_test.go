@@ -135,7 +135,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		}
 		snapshot.Products = append(snapshot.Products, domain.DirectoryProduct{
 			SchemaVersion: 1, ID: item.name, DisplayName: item.name,
-			Description: "Disposable signed fixture "+item.name, ManifestName: item.name,
+			Description: "Disposable signed fixture " + item.name, ManifestName: item.name,
 			Aliases: []string{item.name}, ReservedAliases: []string{item.name},
 			Categories: []string{"agent-plugins"},
 			MinimumCapabilities: domain.DirectoryMinimumCapabilities{Skills: skills, MCP: mcp},
