@@ -92,9 +92,15 @@ const evidence = {
   success: false,
 };
 
-async function bytes(url, maximum) {
-  const response = await fetch(url, { credentials: 'omit', signal: AbortSignal.timeout(60_000) });
-  assert.equal(response.status, 200, url);
+async function readBytesOnce(url, maximum) {
+  const response = await fetch(url, { credentials: 'omit', redirect: 'error',
+    signal: AbortSignal.timeout(60_000) });
+  if (response.status !== 200) {
+    await response.body?.cancel().catch(() => undefined);
+    const error = new Error(`HTTP ${response.status}: ${url}`);
+    error.httpStatus = response.status;
+    throw error;
+  }
   assert.ok(
     Number(response.headers.get('content-length')) <= maximum,
     `Oversized response: ${url}`,
@@ -116,6 +122,24 @@ async function bytes(url, maximum) {
     reader.releaseLock();
   }
   return Buffer.concat(chunks, size);
+}
+async function bytes(url, maximum) {
+  // The real v3 report contains >2,000 immutable shards. Retry only temporary
+  // network/429/5xx interruptions for the individual shard, never bad digests.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await readBytesOnce(url, maximum);
+    } catch (error) {
+      const transient = error instanceof TypeError ||
+        error?.name === 'TimeoutError' ||
+        error?.httpStatus === 429 ||
+        (typeof error?.httpStatus === 'number' && error.httpStatus >= 500);
+      if (!transient || attempt === 2) throw error;
+      console.warn(`Retrying transient SkillSpector evidence read ${attempt + 1}/2: ${url}`);
+      await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 300));
+    }
+  }
+  throw new Error('Unreachable retry limit');
 }
 async function json(url) {
   return parse(await bytes(url, 16 << 20));
