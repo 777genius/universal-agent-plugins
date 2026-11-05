@@ -109,6 +109,9 @@ func TestDependencyShortDirectoryNameProjectPlacementKeepsSignedSource(t *testin
 	if err != nil || canonical.Dependencies["docs"].Registry.Distribution != "owner/rollout" {
 		t.Fatalf("project short-name source: %+v %v", canonical, err)
 	}
+	// Canonicalization mutates the RegistrySource pointer; restore the short
+	// selector so the second call must check the signed Directory again.
+	requirements.Dependencies["docs"].Registry.Distribution = "rollout-demo"
 	requirements.Dependencies["docs"].Registry.Selector.Value = "2"
 	if _, err := fixture.cli.app.canonicalizeDependencyRequirements(context.Background(), requirements); !errors.Is(err, domain.ErrDirectoryIneligible) {
 		t.Fatalf("project admitted superseded signed release: %v", err)
