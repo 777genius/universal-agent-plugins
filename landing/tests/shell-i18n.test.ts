@@ -44,7 +44,7 @@ test('shell English messages compile, interpolate and retain baseline FAQ facts'
       key,
     );
   }
-  assert.equal(t('shell.hero.install', { name: 'context7' }), 'Install context7');
+  assert.equal(t('shell.hero.install', { name: 'Context7' }), 'Install the Context7 plugin');
   assert.equal(
     t('shell.docs.englishLabel', { label: 'Quickstart' }),
     'Quickstart (documentation in English)',

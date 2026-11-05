@@ -7,7 +7,7 @@ test('flat filters retain keyboard selection, category search, and reset', async
   await expect(page.locator('.hero-quick-start__label').filter({ hasText: 'Copy and run' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Other installation methods' })).toHaveAttribute(
     'href',
-    'https://github.com/777genius/universal-agent-plugins#quick-start',
+    'https://github.com/777genius/universal-agent-plugins#install-the-cli',
   );
   await expect(page.getByText('No target flag means auto-detect')).toHaveCount(0);
   const controls = page.getByRole('search', { name: 'Filter plugins' });
@@ -55,7 +55,7 @@ test('numbered benefits remain readable in both themes and responsive layouts', 
   await expect(cards).toHaveCount(4);
   await expect(page.locator('.registry-benefits__signature svg')).toHaveCount(4);
   await expect(page.locator('.registry-benefits__number')).toHaveText(['01', '02', '03', '04']);
-  const headings = ['Standard first', 'Client-aware', 'Full lifecycle', 'Source visible'];
+  const headings = ['Start with plugin.json', 'Fits each agent', 'Manage changes safely', 'Know the source'];
   for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.emulateMedia({ reducedMotion });
     for (const width of [1440, 800, 390, 280]) {
@@ -83,5 +83,62 @@ test('numbered benefits remain readable in both themes and responsive layouts', 
     const nextTheme = reducedMotion === 'no-preference' ? 'light' : 'dark';
     await page.getByRole('button', { name: nextTheme === 'light' ? 'Light' : 'Dark', exact: true }).click();
     await expect(page.locator('.v-application')).toHaveClass(new RegExp(`v-theme--${nextTheme}`));
+  }
+});
+
+test('dependency diagram uses the page surface without an outer card', async ({ page }) => {
+  await page.goto('./');
+  await hydrated(page);
+  const scene = page.locator('.dependency-scene');
+  for (const theme of ['light', 'dark'] as const) {
+    await page.getByRole('button', { name: theme === 'light' ? 'Light' : 'Dark', exact: true }).click();
+    await expect(scene).toHaveCSS('background-image', 'none');
+    await expect(scene).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(scene).toHaveCSS('box-shadow', 'none');
+    await expect(scene).toHaveCSS('border-top-width', '0px');
+    for (const width of [1440, 390, 280]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await scene.scrollIntoViewIfNeeded();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+  }
+});
+
+test('FAQ panels expand smoothly with a keyboard-accessible control', async ({ page }) => {
+  await page.goto('./');
+  await hydrated(page);
+  const items = page.locator('.registry-faq__item');
+  await expect(items).toHaveCount(6);
+  const first = items.first();
+  const firstTrigger = first.getByRole('button');
+  const firstPanel = first.locator('.registry-faq__panel');
+  await expect(firstTrigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(firstPanel).toBeHidden();
+  const duration = await firstPanel.evaluate((node) => getComputedStyle(node).transitionDuration);
+  expect(duration).toContain('0.38s');
+  await firstTrigger.click();
+  await expect(firstTrigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(firstPanel).toBeVisible();
+  await expect.poll(() => firstPanel.evaluate((node) => node.getBoundingClientRect().height)).toBeGreaterThan(30);
+
+  const secondTrigger = items.nth(1).getByRole('button');
+  await secondTrigger.focus();
+  await page.keyboard.press('Enter');
+  await expect(secondTrigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(firstTrigger).toHaveAttribute('aria-expanded', 'true');
+  await firstTrigger.focus();
+  await page.keyboard.press('Space');
+  await expect(firstTrigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(firstPanel).toBeHidden();
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(firstPanel).toHaveCSS('transition-duration', '0s');
+  await firstTrigger.click();
+  await expect(firstPanel).toBeVisible();
+  for (const width of [390, 280]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await firstTrigger.scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
 });

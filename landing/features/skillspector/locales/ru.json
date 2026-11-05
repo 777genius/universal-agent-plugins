@@ -38,6 +38,7 @@
       "unreviewedFindings": "Есть замечания для проверки",
       "confirmedMaterialIssue": "Требует внимания перед установкой",
       "stale": "Проверка устарела",
+      "lastScan": "Последнее сканирование: {result}",
       "unsupported": "Не проверено",
       "fullyChecked": "Скиллов проверено: {checked} из {total}",
       "installAdvice": "Перед установкой",

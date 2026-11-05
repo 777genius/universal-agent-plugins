@@ -414,8 +414,20 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
+  font-size: 0.75rem;
+}
+.plugin-card__assessments :deep(.plugin-card__security) {
+  min-height: 32px;
+  margin: 0;
+  gap: 8px;
+  font-size: inherit;
+  line-height: 1.5;
+}
+.plugin-card__assessments :deep(.skillspector) {
+  margin: 0;
+  font-size: inherit;
 }
 .plugin-card__actions {
   display: flex;
