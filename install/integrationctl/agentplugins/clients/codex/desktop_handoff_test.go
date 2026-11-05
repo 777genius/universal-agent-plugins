@@ -77,7 +77,7 @@ func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 	}
 	got := desktopPluginHandoff(root, "stripe", "artifact")
 	if !strings.Contains(got, "codex://plugins/stripe?marketplacePath=") ||
-		!strings.Contains(got, "finish installation or enablement") ||
+		!strings.Contains(got, "finish in Plugins > Personal") ||
 		!strings.Contains(got, "does not prove ChatGPT runtime use") {
 		t.Fatalf("missing honest desktop guidance: %q", got)
 	}
