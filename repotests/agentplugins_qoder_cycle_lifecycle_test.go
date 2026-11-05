@@ -109,7 +109,8 @@ func (c *qoderSkillsCycle) missingA(t *testing.T) {
 func (c *qoderSkillsCycle) removeOwnedA(t *testing.T) {
 	t.Helper()
 	r := c.recipes["a"]
-	if r.Revision != "a-two" || r.Removed || r.Missing || len(r.Binding.NativeObjects) != 1 || r.Binding.NativeObjects[0].Path != r.Active {
+	if r.Revision != "a-two" || r.Removed || r.Missing || len(r.Binding.NativeObjects) != 2 || r.Binding.NativeObjects[0].Path != r.Active ||
+		!reflect.DeepEqual(r.Binding.NativeObjects[1], qoderCycleExpectedNativeSkill(r)) {
 		t.Fatal("Qoder controlled fault requires exact whole owned frozen A-two package")
 	}
 	before, err := clineAttemptTree(r.Active)

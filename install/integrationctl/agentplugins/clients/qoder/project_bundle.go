@@ -21,7 +21,7 @@ const projectNativeView = ".agentplugins-qoder-native"
 func selectedProjectSkills(plan domain.DeliveryPlan) (map[string]bool, error) {
 	names := map[string]bool{}
 	for _, component := range plan.Components {
-		if component.Support == domain.SupportUnsupported {
+		if component.Support == domain.SupportUnsupported || component.Kind == domain.ComponentMCPServer {
 			continue
 		}
 		if component.Kind != domain.ComponentSkill || (component.Support != domain.SupportNative && (component.Support != domain.SupportProjected || component.Source != domain.ComponentSourceCommand)) {

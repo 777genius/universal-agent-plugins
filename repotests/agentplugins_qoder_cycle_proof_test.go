@@ -4,6 +4,8 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -19,11 +21,12 @@ import (
 var qoderCycleID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 type qoderCycleDelivery struct {
-	Active   string            `json:"active"`
-	View     string            `json:"view"`
-	Files    map[string]string `json:"files"`
-	Manifest *qoderCycleBytes  `json:"manifest"`
-	Skill    *qoderCycleBytes  `json:"skill"`
+	Active      string            `json:"active"`
+	View        string            `json:"view"`
+	Files       map[string]string `json:"files"`
+	Manifest    *qoderCycleBytes  `json:"manifest"`
+	Skill       *qoderCycleBytes  `json:"skill"`
+	NativeSkill *qoderCycleBytes  `json:"native_skill"`
 }
 
 type qoderCycleData struct {
@@ -68,6 +71,24 @@ func qoderCycleExpectedSource(i domain.Installation, r *qoderCycleRecipe) error 
 	return nil
 }
 
+// The native Project Skill carries its own exact ownership receipt. Derive
+// this single-file digest independently from the production project's walker.
+func qoderCycleExpectedNativeSkill(r *qoderCycleRecipe) domain.NativeObjectOwnership {
+	h := sha256.New()
+	_, _ = h.Write([]byte("f\x00SKILL.md\x00-\x00"))
+	_, _ = h.Write(r.Authored["skills/"+qoderCycleName+"/SKILL.md"])
+	_, _ = h.Write([]byte{0})
+	return domain.NativeObjectOwnership{
+		ObjectID:        "qoder_project_skill_directory:" + qoderCycleName,
+		Kind:            "qoder_project_skill_directory",
+		LogicalName:     qoderCycleName,
+		Path:            filepath.Join(r.Project, ".qoder", "skills", qoderCycleName),
+		SourceRelative:  "skills/" + qoderCycleName,
+		ManagedDigest:   "sha256:" + hex.EncodeToString(h.Sum(nil)),
+		ProtectionClass: "managed",
+	}
+}
+
 func (c *qoderSkillsCycle) binding(t *testing.T, r *qoderCycleRecipe, i domain.Installation) {
 	t.Helper()
 	if len(i.Clients) != 1 || i.DataRetained || len(i.DataReceipts) != 0 {
@@ -80,8 +101,9 @@ func (c *qoderSkillsCycle) binding(t *testing.T, r *qoderCycleRecipe, i domain.I
 	b, ok := i.Clients[id]
 	revision := &domain.ClientPackageRevision{Version: "1.0.0", TreeDigest: r.Digest, ManifestDigest: "sha256:" + qoderDeltaHash(string(r.Authored["plugin.json"]))}
 	want := domain.ClientBinding{ClientBindingID: id, ClientID: "qoder", Scope: "project", TargetLocator: active, PhysicalArtifact: physical, NativeProfileRoot: base, Materialization: domain.MaterializationMaterialized, Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, Authentication: domain.AuthenticationNotChecked, Policy: domain.PolicyAllowed, AffectedSurfaces: []string{"qoder"}, PackageRevision: revision, NativeObjects: b.NativeObjects, Receipts: b.Receipts, UpdatedAt: b.UpdatedAt}
-	if !ok || !reflect.DeepEqual(b, want) || !qoderCycleTimes(i.CreatedAt, b.UpdatedAt) || len(b.NativeObjects) != 1 {
-		t.Fatal("Qoder derived Prepared binding differs")
+	if !ok || !reflect.DeepEqual(b, want) || !qoderCycleTimes(i.CreatedAt, b.UpdatedAt) ||
+		len(b.NativeObjects) != 2 || !reflect.DeepEqual(b.NativeObjects[1], qoderCycleExpectedNativeSkill(r)) {
+		t.Fatal("Qoder derived native Project Skill binding differs")
 	}
 	if r.Binding.ClientBindingID != "" && (r.Binding.ClientBindingID != id || r.Binding.PhysicalArtifact != physical || r.Binding.TargetLocator != active) {
 		t.Fatal("Qoder lifecycle changed stable binding/physical authority")
@@ -135,6 +157,19 @@ func qoderCycleNativeManifest() []byte {
 func (c *qoderSkillsCycle) delivery(t *testing.T, r *qoderCycleRecipe) qoderCycleDelivery {
 	t.Helper()
 	out := qoderCycleDelivery{Active: r.Active, View: r.View}
+	native := qoderCycleExpectedNativeSkill(r)
+	if r.Removed {
+		if err := qoderCycleAbsent(native.Path); err != nil {
+			t.Fatal("Qoder project Skill survives exact owned removal", err)
+		}
+	} else {
+		body := mustQoderCycleRead(t, filepath.Join(native.Path, "SKILL.md"))
+		if !bytes.Equal(body, r.Authored["skills/"+qoderCycleName+"/SKILL.md"]) {
+			t.Fatal("Qoder native Project Skill differs from selected package bytes")
+		}
+		value := qoderCycleStream(t, body)
+		out.NativeSkill = &value
+	}
 	if r.Removed || r.Missing {
 		if err := qoderCycleAbsent(r.Active); err != nil {
 			t.Fatal(err)
@@ -169,8 +204,8 @@ func (c *qoderSkillsCycle) delivery(t *testing.T, r *qoderCycleRecipe) qoderCycl
 		t.Fatal(err)
 	}
 	expected := domain.NativeObjectOwnership{ObjectID: "package:qoder:" + r.Binding.PhysicalArtifact, Kind: "managed_package_directory", LogicalName: qoderCycleName, Path: r.Active, ManagedDigest: digest, ProtectionClass: "managed"}
-	if !reflect.DeepEqual(r.Binding.NativeObjects, []domain.NativeObjectOwnership{expected}) {
-		t.Fatal("Qoder sole package receipt does not join exact projected text payload")
+	if !reflect.DeepEqual(r.Binding.NativeObjects, []domain.NativeObjectOwnership{expected, qoderCycleExpectedNativeSkill(r)}) {
+		t.Fatal("Qoder package and project Skill receipts do not join the selected payload")
 	}
 	out.Files = actual
 	manifestStream, skillStream := qoderCycleStream(t, manifest), qoderCycleStream(t, skill)

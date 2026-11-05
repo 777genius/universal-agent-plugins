@@ -163,7 +163,7 @@ func (*Adapter) UsesNativeRegistryExecutable() bool { return true }
 
 func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if projectRequested(plan) {
-		return inspectProjectRegistry(ctx, client, plan, managed)
+		return inspectProjectRegistry(ctx, env, client, plan, managed)
 	}
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
@@ -207,7 +207,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 	return clients.RegistryCollision, nil
 }
 
-func inspectProjectRegistry(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+func inspectProjectRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
 	}
@@ -225,6 +225,16 @@ func inspectProjectRegistry(ctx context.Context, client domain.DetectedClient, p
 			return clients.RegistryIndeterminate, fmt.Errorf("qoder project native inspection received another binding")
 		}
 	}
-	// Local prepared receipts never prove a native Qoder registration.
-	return clients.RegistryClear, nil
+	// Old package-only receipts remain prepared-import; they never prove native registration.
+	if managed != nil && qoderLegacyPrepared(managed.NativeObjects) {
+		return clients.RegistryClear, nil
+	}
+	layout := qoderComponents(plan.TargetContext.ProjectRoot)
+	var previous *domain.ClientBinding
+	if managed != nil {
+		owned := *managed
+		owned.NativeObjects = qoderNativeOwned(managed.NativeObjects)
+		previous = &owned
+	}
+	return layout.Inspect(plan.Components, previous, env.NativeConfig)
 }

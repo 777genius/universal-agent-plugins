@@ -81,7 +81,7 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect(page.locator('.hero-agent-field__hub img')).toHaveAttribute('src', /icon\.svg$/);
   await expect(page.getByRole('heading', { name: /One plugin/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'One plugin All your agents' })).toBeVisible();
-  await expect(page.locator('.hero-quick-start__header h2')).toContainText(/^Install /);
+  await expect(page.getByRole('heading', { name: 'Install the Context7 plugin' })).toBeVisible();
   await expect(page.locator('.command-snippet').first()).toContainText(
     'npx -y universal-agent-plugins add context7',
   );
