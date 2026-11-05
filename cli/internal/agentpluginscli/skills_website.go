@@ -41,7 +41,7 @@ func (selection *skillsAddOptions) runWebsite(cmd *cobra.Command, app App, opts 
 	}
 	prepared, err := app.PrepareSkills(cmd.Context(), request)
 	if err != nil {
-		return err
+		return reportSkillsPreparationRefusal(cmd, opts, &skillsCatalogSession{}, err)
 	}
 	defer prepared.Close()
 	return runSkillsReviewedPlan(cmd, app, opts, prepared, interactive && !selection.yes)

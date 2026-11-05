@@ -1,5 +1,36 @@
 # Agent instructions
 
+## Architecture and contribution guardrails
+
+Before implementation changes, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+for the applicable package boundaries and [CONTRIBUTING.md](CONTRIBUTING.md)
+for actual lint and test commands. Check current `main` and overlapping PRs
+before touching a package. Preserve all owner decisions below.
+
+- **Domain:** business rules and invariants, no external I/O. Reuse the
+  existing Go domain types instead of creating another source of truth.
+- **Ports/use cases:** depend on narrow contracts, not concrete adapters;
+  keep client-specific protocol and filesystem effects behind existing seams.
+- **Clients:** implement capabilities in `clients/<id>` and register them
+  through `clients/all` at a composition root. Do not introduce client-ID
+  branches into generic planners, providers, or use cases.
+- **Composition:** executable entrypoints assemble concrete client registries;
+  libraries receive their dependencies explicitly.
+- **Safety:** preserve source/path containment, foreign-file ownership,
+  immutable package identity, locking, receipts, rollback and recovery, public
+  JSON and exit statuses. Never weaken a refusal just to make tests pass.
+- **Simplicity:** reuse existing parsers, validation and adapters. Introduce an
+  interface only for a real dependency boundary or testable requirement; do
+  not add a second installer, resolver, state engine, or feature flag.
+- **Scope:** do not modify frozen VS Code behavior, hand-edit generated files,
+  widen legacy lint exemptions, or silently change public/release contracts.
+- **Verification:** new Go files are limited to 500 effective lines by `revive`;
+  complexity, duplication and import rules are enforced by `golangci-lint`.
+  Run `make lint` and `make test-core` for relevant Go changes. For lifecycle
+  changes also run the affected native, rollback and cross-platform E2E.
+  Verify actual cases on the final commit: queued, cancelled, skipped or
+  evidence-only workflows are not proof that the product passed.
+
 ## VS Code is frozen (owner decision, 2026-10-16)
 
 Do not change VS Code implementation, adapters, protocols, configuration,

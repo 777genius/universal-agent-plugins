@@ -230,6 +230,9 @@ func (layout ProjectComponents) Inspect(components []domain.ComponentDecision, m
 			return clients.RegistryIndeterminate, err
 		}
 		if present && !owned {
+			if component.Kind == domain.ComponentSkill && layout.Codec == nativeconfig.CodecCodex {
+				return clients.RegistryCollision, layout.foreignSkillDestination(component.Name)
+			}
 			return clients.RegistryCollision, nil
 		}
 		if present {
@@ -262,4 +265,20 @@ func (layout ProjectComponents) inspectComponent(component domain.ComponentDecis
 		return kernel.Inspect(layout.ConfigPaths, layout.Codec, component.Name, receipt)
 	}
 	return false, false, fmt.Errorf("unsupported native project component kind %q", component.Kind)
+}
+
+// Only the checked Codex project layout can publish an occupied Skill path.
+// The name has already passed the same native leaf check used for writes.
+func (layout ProjectComponents) foreignSkillDestination(name string) error {
+	if err := pathpolicy.ValidateLeafID(name); err != nil {
+		return err
+	}
+	if err := layout.validate(); err != nil {
+		return err
+	}
+	relative, err := filepath.Rel(layout.ProjectRoot, filepath.Join(layout.SkillsRoot, name, "SKILL.md"))
+	if err != nil || filepath.IsAbs(relative) || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("invalid project-relative Skill destination")
+	}
+	return &domain.ForeignSkillDestinationError{RelativePath: filepath.ToSlash(relative)}
 }

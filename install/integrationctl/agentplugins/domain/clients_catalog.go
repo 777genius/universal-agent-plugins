@@ -102,6 +102,7 @@ var clientDefinitions = []ClientDefinition{
 		HonorsOpenAIMCPAuthHints:      true,
 		SupportsPreparedRecovery:      true,
 		BindsNativeProfileRoot:        true,
+		ProtectsModifiedUserRawSkill:  true,
 	}), LifecycleNativeConfig),
 	withoutHostPresence(withDirectoryPreparation(
 		clientDefinition(ClientChatGPT, "ChatGPT", "chatgpt", "manual_activation", "projected", false, PackageProjection, SupportProjected, SupportUnsupported, SupportUnsupported, SupportProjected, SupportUnsupported, ClientTraits{
@@ -134,6 +135,7 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:                 LifecycleCLIRegistry,
 		UsesManagedStdioLauncher:      true,
+		ProtectsModifiedUserRawSkill:  true,
 	}), ActivationAutomatic), LifecycleCLIRegistry),
 	withProjectScope(clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:         []InstallIntent{InstallIntentAutomatic},
@@ -169,9 +171,10 @@ var clientDefinitions = []ClientDefinition{
 		DiscoversNativeHooks:     true,
 		HonorsOpenAIMCPAuthHints: true,
 	}), LifecyclePrepared),
-	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
+	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
 		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,
+		TracksNativeEffects: true,
 	})), ActivationAutomatic), LifecyclePrepared), SupportNative, SupportNative),
 }
 

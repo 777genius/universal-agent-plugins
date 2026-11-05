@@ -70,11 +70,33 @@ func repairCombinedSourceInstallations(t *testing.T, fresh savedJourney) {
 		if binding.PackageRevision == nil {
 			t.Fatal("coexisting binding lost recorded revision")
 		}
-		if err := os.WriteFile(filepath.Join(binding.TargetLocator, "combined-drift.txt"), []byte("explicit repair"), 0600); err != nil {
+		drift := filepath.Join(binding.TargetLocator, "combined-drift.txt")
+		if err := os.WriteFile(drift, []byte("explicit repair"), 0600); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.RemoveAll(fresh.cli.app.EnvironmentStoreRoot); err != nil {
 			t.Fatal(err)
+		}
+		if binding.PackageRevision.Skill != nil || binding.PackageRevision.WebSkill != nil {
+			// Raw user Skills are never repaired over unowned data; the
+			// unrelated archive plugin keeps its existing repair policy.
+			guardedState := fresh.state(t)
+			guardedTree := savedJourneyTree(t, binding.TargetLocator)
+			if _, _, err := fresh.cli.execute(false, "repair", installation.InstallationID, "--target", "codex", "--format", "json"); err == nil ||
+				!strings.Contains(err.Error(), "artifact digest mismatch") {
+				t.Fatalf("mixed-source raw Skill accepted destructive repair: %v", err)
+			}
+			if !reflect.DeepEqual(guardedState, fresh.state(t)) ||
+				savedJourneyDifferences(guardedTree, savedJourneyTree(t, binding.TargetLocator)) != "" {
+				t.Fatal("refused mixed-source raw Skill repair changed state or foreign bytes")
+			}
+			if err := os.Remove(drift); err != nil {
+				t.Fatal(err)
+			}
+			savedRawSkillDropOwnedFixture(t, fresh, binding.TargetLocator)
+			if err := os.RemoveAll(fresh.cli.app.EnvironmentStoreRoot); err != nil {
+				t.Fatal(err)
+			}
 		}
 		fresh.run(t, "repair", installation.InstallationID, "--target", "codex", "--format", "json")
 	}

@@ -84,9 +84,20 @@ func projectPiRoot(client domain.DetectedClient, target domain.TargetContext, pl
 	return root, nil
 }
 
-func (*ProjectAdapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
+func (adapter *ProjectAdapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if in.TargetContext.Scope == domain.ScopeUser && plan.Scope == domain.ScopeUser {
+		// This hook runs before ResolveTarget. The planned target/active paths
+		// are still empty, so check the original user authority now and leave
+		// complete layout validation to RefinePlan and activation preflight.
+		if in.Client.ClientID != domain.ClientPi ||
+			in.TargetContext.UserConfigRoot != in.Client.ConfigRoot ||
+			plan.NativeRegistryRoot != in.Client.ConfigRoot {
+			return fmt.Errorf("pi user precondition differs from selected original profile")
+		}
+		return adapter.Adapter.CheckPlanPrecondition(in, plan)
+	}
 	if in.TargetContext.Scope != domain.ScopeProject || plan.Scope != domain.ScopeProject {
-		return fmt.Errorf("pi project adapter requires explicit project scope")
+		return fmt.Errorf("pi project adapter requires matching explicit scope")
 	}
 	root, err := projectPiRoot(in.Client, in.TargetContext, plan.NativeRegistryRoot)
 	if err != nil {

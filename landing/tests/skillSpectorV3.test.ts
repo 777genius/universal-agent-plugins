@@ -381,6 +381,17 @@ describe('SkillSpector v3 exact producer contract', () => {
       disposition: 'partial',
     });
     assert.throws(() => decodeComplete(complete));
+    // A rejected dependency outside the acquired bundle is still uninspected.
+    // Even if a producer wrongly omits its ledger event, never accept Complete.
+    const escaping = structuredClone(
+      Object.values(completeFixture.records)[0] as SkillSpectorRecord,
+    );
+    Object.assign(escaping.coverage!.references![0], {
+      status: 'rejected',
+      target_path: null,
+      disposition: 'partial',
+    });
+    assert.throws(() => decodeComplete(escaping));
     const noTarget = structuredClone(record);
     noTarget.coverage.references[0].target_path = null;
     assert.throws(() => decodeReference(noTarget));

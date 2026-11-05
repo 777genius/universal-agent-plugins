@@ -2,12 +2,14 @@ package shared
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -262,5 +264,61 @@ func TestProjectComponentsSkillNamesStayFilesystemSafe(t *testing.T) {
 	skill.Path = filepath.Join(mutation.Layout.SkillsRoot, skill.LogicalName)
 	if err := mutation.Layout.ValidateObjects([]domain.NativeObjectOwnership{skill}); err == nil {
 		t.Fatal("skill directory accepted a space-bearing filesystem leaf")
+	}
+}
+
+func TestProjectComponentsForeignSkillRefusalPreservesForeignFiles(t *testing.T) {
+	mutation := componentFixture(t)
+	occupied := filepath.Join(mutation.Desired[0].Path, "SKILL.md")
+	neighbor := filepath.Join(mutation.Layout.SkillsRoot, "foreign-neighbor", "SKILL.md")
+	componentWrite(t, occupied, "foreign selected skill\\n")
+	componentWrite(t, neighbor, "foreign neighbor\\n")
+	beforeConfig, err := os.ReadFile(mutation.Layout.ConfigPaths.JSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mutation.Apply(context.Background()); !errors.Is(err, domain.ErrForeignSkillDestination) {
+		t.Fatalf("foreign project Skill refused without typed ownership cause: %v", err)
+	} else {
+		var located *domain.ForeignSkillDestinationError
+		if errors.As(err, &located) {
+			t.Fatalf("non-Codex client acquired Codex-specific occupied path: %+v", located)
+		}
+	}
+	for path, want := range map[string]string{
+		occupied: "foreign selected skill\\n",
+		neighbor: "foreign neighbor\\n",
+	} {
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != want {
+			t.Fatalf("refusal changed foreign Skill %q: %q, %v", path, got, err)
+		}
+	}
+	gotConfig, err := os.ReadFile(mutation.Layout.ConfigPaths.JSON)
+	if err != nil || string(gotConfig) != string(beforeConfig) {
+		t.Fatalf("refusal changed foreign MCP settings: %v", err)
+	}
+}
+
+func TestProjectComponentsPreflightForeignSkillCarriesTypedCause(t *testing.T) {
+	mutation := componentFixture(t)
+	// Codex receives the new typed source-specific UI refusal; generic clients
+	// retain their existing RegistryCollision finding without an error.
+	mutation.Layout.Codec = nativeconfig.CodecCodex
+	path := mutation.Desired[0].Path
+	componentWrite(t, filepath.Join(path, "SKILL.md"), "foreign instructions\n")
+	selected := []domain.ComponentDecision{{
+		Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportProjected,
+	}}
+	finding, err := mutation.Layout.Inspect(selected, nil, nativeconfig.New())
+	if finding != clients.RegistryCollision || !errors.Is(err, domain.ErrForeignSkillDestination) {
+		t.Fatalf("preflight foreign Skill result = %v, %v", finding, err)
+	}
+	var located *domain.ForeignSkillDestinationError
+	if !errors.As(err, &located) || located.RelativePath != ".agents/skills/docs/SKILL.md" {
+		t.Fatalf("foreign destination is not a safe project-relative Skill path: %+v", located)
+	}
+	if got, err := os.ReadFile(filepath.Join(path, "SKILL.md")); err != nil || string(got) != "foreign instructions\n" {
+		t.Fatalf("preflight changed foreign bytes: %q, %v", got, err)
 	}
 }
