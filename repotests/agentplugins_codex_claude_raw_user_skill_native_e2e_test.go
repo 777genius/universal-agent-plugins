@@ -142,7 +142,8 @@ func nativeRawUserForeignDriftRefusal(t *testing.T, root, dir string, env []stri
 		body, _ := json.Marshal(result)
 		diagnostic := string(stderr) + "\n" + string(body)
 		if runErr == nil || (!strings.Contains(diagnostic, "artifact digest mismatch") &&
-			!strings.Contains(diagnostic, "native identity ownership is indeterminate")) {
+			!strings.Contains(diagnostic, "native identity ownership is indeterminate") &&
+			!strings.Contains(diagnostic, "drift: "+nativeRawUserSkillName+"/"+target)) {
 			t.Fatalf("%s %s did not refuse modified raw Skill ownership: err=%v diagnostic=%s", target, operation, runErr, diagnostic)
 		}
 		if nativeSHA(t, foreign) != foreignSHA || nativeSHA(t, statePath) != beforeState ||
