@@ -101,7 +101,18 @@ func (service Service) commitLegacyRemoval(ctx context.Context, state domain.Sta
 			return result, fmt.Errorf("remove through legacy lifecycle: %w", err)
 		}
 	}
-	if err := service.verifyLegacyAbsent(ctx, installation.DeclaredName); err != nil {
+	// Legacy.Remove has completed and released its own old state lock.
+	// Hold a new acquisition across both negative observation and state-v2 save:
+	// releasing immediately after Exists previously allowed a legacy writer to race.
+	legacyRelease, err := service.LegacyLock.Acquire(ctx)
+	if err != nil {
+		return result, fmt.Errorf("acquire legacy state lock for reconciliation: %w", err)
+	}
+	if legacyRelease == nil {
+		return result, fmt.Errorf("legacy state lock returned no release function")
+	}
+	defer func() { _ = legacyRelease() }()
+	if err := service.verifyLegacyAbsentLocked(ctx, installation.DeclaredName); err != nil {
 		return result, err
 	}
 	operationID := strings.TrimSpace(input.OperationID)
@@ -121,12 +132,8 @@ func (service Service) commitLegacyRemoval(ctx context.Context, state domain.Sta
 	return result, nil
 }
 
-func (service Service) verifyLegacyAbsent(ctx context.Context, declaredName string) error {
-	legacyRelease, err := service.LegacyLock.Acquire(ctx, "state")
-	if err != nil {
-		return fmt.Errorf("acquire legacy state lock for reconciliation: %w", err)
-	}
-	defer func() { _ = legacyRelease() }()
+// verifyLegacyAbsentLocked must only run while LegacyLock is held.
+func (service Service) verifyLegacyAbsentLocked(ctx context.Context, declaredName string) error {
 	stillExists, err := service.Legacy.Exists(ctx, declaredName)
 	if err != nil {
 		return fmt.Errorf("verify legacy lifecycle removal: %w", err)

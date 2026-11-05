@@ -153,6 +153,8 @@ linters:
           deny:
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/adapters
               desc: usecase reaches the path policy through ports.PathPolicy, not the adapter
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/ports
+              desc: usecase receives legacy state locking through its own port, not the old module
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters
               desc: usecase depends on ports, not adapters
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner
@@ -370,10 +372,10 @@ linters:
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^cli/internal/agentpluginscli/lifecycle\.go$
         linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
+        text: '^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^cli/internal/agentpluginscli/read\.go$
         linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
+        text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^cli/internal/agentpluginscli/search\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity'
