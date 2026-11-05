@@ -32,7 +32,7 @@ const stable = (value: unknown): string => {
 const canonical = (value: unknown) => encode.encode(stable(value) + '\n');
 const b64 = (v: Uint8Array) => btoa(String.fromCharCode(...v));
 
-async function fixture() {
+async function fixture(options: { rejectedReference?: boolean } = {}) {
   const pair = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
   const trusted = [{ key_id: 'cohort-test', public_key: b64(new Uint8Array(
     await crypto.subtle.exportKey('raw', pair.publicKey))) }];
@@ -53,7 +53,13 @@ async function fixture() {
         status: 'complete', fully_inspected_files: 1,
         partially_inspected_files: 0, entirely_uninspected_files: 0,
         grouping_complete: true, reference_evidence_truncated: false,
-        references: [], references_total: 0, ledger_exceptions: [],
+        references: index === 2 && options.rejectedReference
+          ? [{ status: 'rejected', disposition: 'ignored', source_path: 'SKILL.md',
+               target_path: '../outside.sh', line: 1, column: 1, evidence: '../outside.sh',
+               reference_kind: 'markdown_link' }]
+          : [],
+        references_total: index === 2 && options.rejectedReference ? 1 : 0,
+        ledger_exceptions: [],
         ledger_exceptions_total: 0, reasons: [],
       },
     };
@@ -153,6 +159,13 @@ test('unregistered key never fetches; signature tampering and expiration reject'
     new Date('2026-11-07T00:00:00Z')));
   await assert.rejects(() => readVerifiedSkillSpectorCohort('https://attacker.invalid/latest.json',
     good.trusted, good.fetcher, at));
+});
+
+test('even a valid Ed25519 signature cannot admit rejected or uninspected references', async () => {
+  const signedRejected = await fixture({ rejectedReference: true });
+  await assert.rejects(() => readVerifiedSkillSpectorCohort(
+    latest, signedRejected.trusted, signedRejected.fetcher, at,
+  ));
 });
 
 test('overlay preserves unrelated old Partial and fails closed on digest or selection drift', async () => {
