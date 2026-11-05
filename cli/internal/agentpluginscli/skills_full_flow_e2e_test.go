@@ -186,7 +186,7 @@ func TestSkillsCLIUserScopeCodexClaudeInstallAndRemove(t *testing.T) {
 	before := savedSkillsDurableTree(t, journey.cli.app.DependenciesRoot)
 	// Same exact CLI request without --scope is the default/global user route.
 	journey.run(t, args...)
-	if after := savedSkillsDurableTree(t, journey.cli.app.DependenciesRoot); len(savedJourneyDifferences(before, after)) != 0 {
+	if after := savedSkillsDurableTree(t, journey.cli.app.DependenciesRoot); savedJourneyDifferences(before, after) != "" {
 		t.Fatalf("implicit user replay changed locked state: %s", savedJourneyDifferences(before, after))
 	}
 	assertNativeUnchanged("codex")
@@ -201,7 +201,7 @@ func TestSkillsCLIUserScopeCodexClaudeInstallAndRemove(t *testing.T) {
 		if err == nil {
 			t.Fatalf("invalid scope %v was accepted", extra)
 		}
-		if after := savedSkillsDurableTree(t, journey.cli.app.DependenciesRoot); len(savedJourneyDifferences(before, after)) != 0 {
+		if after := savedSkillsDurableTree(t, journey.cli.app.DependenciesRoot); savedJourneyDifferences(before, after) != "" {
 			t.Fatalf("invalid scope %v changed user data", extra)
 		}
 		assertNativeUnchanged("codex")
