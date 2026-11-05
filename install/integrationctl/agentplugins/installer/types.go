@@ -192,8 +192,6 @@ type Result struct {
 	Outcome              Outcome
 	Binding              BindingFacts
 	ManualActions        []string
-	// LocalActions are transient host-specific guidance, never public installer JSON.
-	LocalActions []string `json:"-"`
 	Reason               string
 	NoChange             bool
 	Mutated              bool
@@ -204,6 +202,8 @@ type Result struct {
 	NextActions          []NextAction
 	// Recovery classifies observed receipts after Recover. Apply leaves it empty.
 	Recovery RecoveryReport
+	// LocalActions are transient host-specific guidance, never public installer JSON.
+	LocalActions []string `json:"-"`
 }
 
 // RecoveryReport is the §5.8 resolved/remaining/unknown receipt view.
