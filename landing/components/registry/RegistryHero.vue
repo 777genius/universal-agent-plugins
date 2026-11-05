@@ -259,6 +259,18 @@ function updateTargets(values: string[]) {
         <p class="hero__lead">
           {{ t('shell.hero.intro') }}
         </p>
+        <div class="hero__standards">
+          <span class="hero__standards-label">{{ t('shell.hero.supportedFormats') }}</span>
+          <div class="hero__standards-links">
+            <a href="https://agent-plugins.org/specification" target="_blank" rel="noreferrer">
+              Agent Plugins 1.0
+            </a>
+            <span aria-hidden="true">·</span>
+            <a href="https://agentskills.io/specification" target="_blank" rel="noreferrer">
+              Agent Skills
+            </a>
+          </div>
+        </div>
         <div class="hero__actions">
           <a class="button button--primary" href="#plugins">
             <i18n-t

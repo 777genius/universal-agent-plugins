@@ -477,11 +477,12 @@
       "terminal": "In your terminal",
       "refreshNotice": "Plugin data is refreshing. Try again shortly.",
       "otherMethods": "Other installation methods",
+      "supportedFormats": "Supported formats",
       "watchDemo": "Watch demo",
       "demoVideoTitle": "Universal Agent Plugins install demo",
       "supportedClients": "Supported clients",
       "clientNote": "The CLI installs or prepares the native format each client supports. Some clients may ask you to finish activation or sign in.",
-      "install": "Install {name}",
+      "install": "Install the {name} plugin",
       "explore": "Explore plugins",
       "exploreCount": "Explore {count} plugins | Explore {count} plugin | Explore {count} plugins",
       "delivery": {

@@ -460,11 +460,12 @@
       "terminal": "en tu terminal",
       "refreshNotice": "Los datos de los plugins se están actualizando. Vuelve a intentarlo en unos instantes.",
       "otherMethods": "Otros métodos de instalación",
+      "supportedFormats": "Formatos compatibles",
       "watchDemo": "Ver demostración",
       "demoVideoTitle": "Demostración de instalación de Universal Agent Plugins",
       "supportedClients": "Clientes compatibles",
       "clientNote": "La CLI instala o prepara el formato nativo que admite cada cliente. Algunos clientes requieren completar la activación o iniciar sesión.",
-      "install": "Instalar {name}",
+      "install": "Instalar el plugin {name}",
       "explore": "Explorar complementos",
       "exploreCount": "Explora {count} plugins | Explora {count} plugin | Explora {count} plugins",
       "delivery": {
