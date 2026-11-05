@@ -117,3 +117,13 @@ func hasUserPreparedGroupTarget(got usecase.GroupResult) bool {
 	}
 	return false
 }
+
+func userPreparedGroupActions(got usecase.GroupResult) []string {
+	var out []string
+	for _, target := range got.Targets {
+		if target.Plan.Scope == domain.ScopeUser && target.Activation.Activation == domain.ActivationPrepared {
+			out = append(out, target.Activation.UserActions...)
+		}
+	}
+	return out
+}
