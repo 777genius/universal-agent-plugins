@@ -327,7 +327,7 @@ async function setup(
     manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
     Object.assign(manifest.plugin_states[0]!, { skills_total: 1, selected_ids: [old.id] });
     manifest.source_states = manifest.source_states.filter((state) =>
-      state.selected_ids.includes(old.id),
+      (state.selected_ids as string[]).includes(old.id),
     );
   }
   if (mode === 'truncated') {
