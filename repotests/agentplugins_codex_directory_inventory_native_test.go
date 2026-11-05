@@ -86,7 +86,8 @@ func directorySiteCodexInventory(t *testing.T, f *nativeFixture, codexBin string
 				continue
 			}
 			if skill.Name != directorySitePlugin+":"+directorySiteSkill || !skill.Enabled ||
-				!strings.HasSuffix(filepath.ToSlash(skill.Path), "/skills/"+directorySiteSkill+"/SKILL.md") {
+				!strings.HasSuffix(filepath.ToSlash(skill.Path), "/skills/"+directorySiteSkill+"/SKILL.md") ||
+				!strings.Contains(filepath.ToSlash(skill.Path), "/plugins/cache/") {
 				t.Fatalf("Codex Directory Skill name/path mismatch: %+v", skill)
 			}
 			nativeRequireContained(t, f.Root, skill.Path)
