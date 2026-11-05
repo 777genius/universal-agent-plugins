@@ -1,0 +1,247 @@
+package pluginkitairepo_test
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+)
+
+const directorySitePlugin = "context7"
+const directorySiteDistribution = "upstash/context7"
+const directorySiteRevision = "769c6cd22c3d95462d1f55d789e9532cabefa5a9"
+const directorySiteSkill = "context7-mcp"
+
+// directorySiteBindings checks actual saved Directory origin and two distinct
+// installed native profile receipts. An arbitrary local bundle is not sufficient.
+func directorySiteBindings(t *testing.T, path, codexHome, claudeHome string) map[string]domain.ClientBinding {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state domain.StateFileV2
+	if err := json.Unmarshal(data, &state); err != nil || len(state.Installations) != 1 || len(state.EnvironmentReceipts) != 2 {
+		t.Fatalf("Directory site install lost saved ownership: %v, %+v", err, state)
+	}
+	install := state.Installations[0]
+	if install.DeclaredName != directorySitePlugin || install.Directory == nil ||
+		install.OriginMode != domain.OriginModeDirectory ||
+		install.Directory.ProductID != directorySitePlugin || install.Directory.DistributionID != directorySiteDistribution ||
+		install.Directory.DesiredReleaseSequence == 0 ||
+		install.Source.ResolvedRevision != directorySiteRevision || len(install.Clients) != 2 {
+		t.Fatalf("site alias did not resolve signed Context7 distribution: %+v", install)
+	}
+	bindings := map[string]domain.ClientBinding{}
+	for _, receipt := range state.EnvironmentReceipts {
+		binding, ok := install.Clients[receipt.ClientBindingID]
+		if !ok || receipt.InstallationID != install.InstallationID ||
+			binding.ClientBindingID != receipt.ClientBindingID || binding.ClientID != receipt.ClientID || binding.Scope != "user" ||
+			binding.Verification != domain.VerificationInstalled || binding.TargetLocator == "" || binding.PhysicalArtifact == "" {
+			t.Fatalf("Directory receipt does not match installed native binding: %+v %+v", receipt, binding)
+		}
+		switch binding.ClientID {
+		case "codex":
+			if binding.NativeProfileRoot != codexHome {
+				t.Fatalf("Codex Directory profile differs from selected HOME: %+v", binding)
+			}
+		case "claude":
+			if filepath.Dir(binding.TargetLocator) != filepath.Join(claudeHome, "skills") ||
+				(binding.NativeProfileRoot != "" && binding.NativeProfileRoot != claudeHome) {
+				t.Fatalf("Claude Directory profile differs from selected HOME: %+v", binding)
+			}
+		default:
+			t.Fatalf("unexpected Directory target %q", binding.ClientID)
+		}
+		if _, duplicate := bindings[binding.ClientID]; duplicate {
+			t.Fatalf("duplicate Directory client binding %q", binding.ClientID)
+		}
+		bindings[binding.ClientID] = binding
+	}
+	if len(bindings) != 2 {
+		t.Fatalf("missing Codex or Claude Directory binding: %+v", bindings)
+	}
+	return bindings
+}
+
+// directorySiteCodexInventory asks the genuine pinned Codex CLI and its
+// app-server, never inferring native discovery from the installer's JSON.
+func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
+	if os.Getenv("AGENTPLUGINS_DUAL_CODEX_CLAUDE_NATIVE_E2E") != "1" {
+		t.Skip("opt-in real pinned Codex and Claude Directory plugin E2E")
+	}
+	nativeRequireDisposable(t)
+	codexBin := nativeBinary(t, "AGENTPLUGINS_CODEX_BIN")
+	claudeBin := claudeNativeBinary(t, "AGENTPLUGINS_CLAUDE_BIN")
+	installer := nativeBinary(t, "AGENTPLUGINS_INSTALLER_BIN")
+	if want := os.Getenv("AGENTPLUGINS_CODEX_SHA256"); len(want) != 64 || nativeSHA(t, codexBin) != want {
+		t.Fatal("Codex binary pin mismatch")
+	}
+	if want := os.Getenv("AGENTPLUGINS_CLAUDE_SHA256"); len(want) != 64 || claudeSHA256(t, claudeBin) != want {
+		t.Fatal("Claude binary pin mismatch")
+	}
+
+	f := newNativeFixture(t, true)
+	f.ClientBinDir = filepath.Dir(codexBin)
+	nativeProvisionScanner(t, f)
+	nativeWrite(t, filepath.Join(f.CodexHome, "config.toml"), []byte("cli_auth_credentials_store = \"file\"\nmcp_oauth_credentials_store = \"file\"\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n"), 0600)
+	claudeHome := filepath.Join(f.Root, "claude-config")
+	if err := os.MkdirAll(claudeHome, 0700); err != nil {
+		t.Fatal(err)
+	}
+	claude := &claudeNativeFixture{Root: f.Root, Home: f.Home, ConfigDir: claudeHome,
+		StateHome: filepath.Join(f.Root, "installer-state"), transcriptSHA256: map[string]string{}}
+	env := append(f.env(filepath.Dir(codexBin)), "CLAUDE_CONFIG_DIR="+claudeHome,
+		"DISABLE_AUTOUPDATER=1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1")
+	statePath := filepath.Join(f.Root, "installer-state", "state-v2.json")
+	foreignCodex := filepath.Join(f.CodexHome, "skills", "foreign-site-plugin", "SKILL.md")
+	foreignClaude := filepath.Join(claudeHome, "skills", "foreign-site-plugin", "SKILL.md")
+	nativeWrite(t, foreignCodex, []byte("---\nname: foreign-site-plugin\ndescription: Foreign Codex user Skill\n---\nMust not change.\n"), 0600)
+	nativeWrite(t, foreignClaude, []byte("---\nname: foreign-site-plugin\ndescription: Foreign Claude user Skill\n---\nMust not change.\n"), 0600)
+	codexForeignSHA, claudeForeignSHA := nativeSHA(t, foreignCodex), nativeSHA(t, foreignClaude)
+	verifyForeign := func(stage string) {
+		t.Helper()
+		if nativeSHA(t, foreignCodex) != codexForeignSHA || nativeSHA(t, foreignClaude) != claudeForeignSHA {
+			t.Fatalf("%s altered foreign user Skill bytes", stage)
+		}
+	}
+	// This is the Directory card's exact add command. The shared runner
+	// requests JSON output to avoid interactive prompts on the CI host.
+	args := []string{"add", directorySitePlugin, "--target", "codex,claude"}
+	result, err := commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-add", args...)
+	if err != nil || result["result"] != "success" {
+		t.Fatalf("site Directory command failed: %v %+v", err, result)
+	}
+	bindings := directorySiteBindings(t, statePath, f.CodexHome, claudeHome)
+	for client, binding := range bindings {
+		nativeRequireContained(t, f.Root, binding.TargetLocator)
+		if _, err := os.Stat(binding.TargetLocator); err != nil {
+			t.Fatalf("%s managed directory absent: %v", client, err)
+		}
+	}
+	codexBinding := bindings["codex"]
+	claudeBinding := bindings["claude"]
+	codexCheck := func(label string, present bool) {
+		directorySiteCodexInventory(t, f, codexBin, codexBinding, present, label)
+	}
+	claudeCheck := func(label string, present bool) {
+		entries := claudePluginList(t, claude, claudeBin, label)
+		if entries == nil {
+			t.Fatal("Claude Directory native plugin list must be a JSON array, not null")
+		}
+		count := 0
+		for _, entry := range entries {
+			if entry.ID != directorySitePlugin+"@skills-dir" {
+				continue
+			}
+			if !entry.Enabled || entry.InstallPath != claudeBinding.TargetLocator || entry.Scope != "user" {
+				t.Fatalf("Claude Directory native entry mismatches actual installed location: %+v", entry)
+			}
+			count++
+		}
+		if (count == 1) != present || count > 1 {
+			t.Fatalf("Claude plugin presence=%d, want=%t", count, present)
+		}
+		if present {
+			details := claudePluginDetails(t, claude, claudeBin, directorySitePlugin+"@skills-dir", label+"-details")
+			if !strings.Contains(details, directorySiteSkill) || !strings.Contains(details, "Skills (1)") ||
+				!strings.Contains(details, "MCP servers (1)") {
+				t.Fatalf("Claude Directory Skill/MCP not discovered: %s", details)
+			}
+		}
+	}
+	codexCheck("site-installed", true)
+	claudeCheck("site-installed", true)
+	verifyForeign("add")
+	beforeState := nativeSHA(t, statePath)
+	beforeCodex, beforeClaude := nativeTreeDigest(t, codexBinding.TargetLocator), nativeTreeDigest(t, claudeBinding.TargetLocator)
+	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-replay", args...)
+	if err != nil || result["result"] != "success" {
+		t.Fatalf("site replay failed: %v %+v", err, result)
+	}
+	if nativeSHA(t, statePath) != beforeState || nativeTreeDigest(t, codexBinding.TargetLocator) != beforeCodex ||
+		nativeTreeDigest(t, claudeBinding.TargetLocator) != beforeClaude {
+		t.Fatal("site command replay changed saved/native content")
+	}
+	verifyForeign("replay")
+
+	// The site exposes unfiltered update/remove of the saved Directory alias.
+	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-update", "update", directorySitePlugin)
+	if err != nil || result["outcome"] != "completed" {
+		t.Fatalf("site update failed: %v %+v", err, result)
+	}
+	// The saved-update CLI returns an outcome and per-binding actions, unlike add.
+	// This immutable signed release should be unchanged on both real targets.
+	actions, ok := result["actions"].([]any)
+	if !ok || len(actions) != 2 {
+		t.Fatalf("site update did not cover two saved bindings: %+v", result)
+	}
+	seen := map[string]bool{}
+	for _, raw := range actions {
+		action, ok := raw.(map[string]any)
+		client, _ := action["client_id"].(string)
+		if !ok || action["action"] != "unchanged" || action["alias"] != directorySitePlugin ||
+			action["revision"] != directorySiteRevision ||
+			(client != "codex" && client != "claude") || seen[client] {
+			t.Fatalf("site update reported unexpected target/action: %+v", raw)
+		}
+		seen[client] = true
+	}
+	codexCheck("site-updated", true)
+	claudeCheck("site-updated", true)
+	verifyForeign("update")
+	currentCodex, currentClaude := nativeTreeDigest(t, codexBinding.TargetLocator), nativeTreeDigest(t, claudeBinding.TargetLocator)
+	// Restore only the test-owned Codex artifact via the actual website command.
+	nativeRequireContained(t, f.Root, codexBinding.TargetLocator)
+	if err := os.RemoveAll(codexBinding.TargetLocator); err != nil {
+		t.Fatal(err)
+	}
+	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-repair",
+		"repair", directorySitePlugin, "--target", "codex,claude")
+	if err != nil || result["outcome"] != "completed" {
+		t.Fatalf("site Directory repair failed: %v %+v", err, result)
+	}
+	if nativeTreeDigest(t, codexBinding.TargetLocator) != currentCodex ||
+		nativeTreeDigest(t, claudeBinding.TargetLocator) != currentClaude {
+		t.Fatal("site repair did not restore Codex or preserved Claude managed bytes")
+	}
+	codexCheck("site-repaired", true)
+	claudeCheck("site-repaired", true)
+	verifyForeign("repair")
+	// User-scope Codex requires an external native uninstall before UAP
+	// can remove the saved binding with explicit --external-uninstalled.
+	// This also exercises the genuine pinned Codex CLI, not a mocked fixture.
+	marketplace := shared.ManagedMarketplaceName(codexBinding.PhysicalArtifact)
+	pluginID := directorySitePlugin + "@" + marketplace
+	if out, err := nativeCommand(t, f, codexBin, "site-codex-external-remove", "plugin", "remove", pluginID, "--json"); err != nil {
+		t.Fatalf("native Codex plugin removal failed: %v %s", err, out)
+	}
+	if out, err := nativeCommand(t, f, codexBin, "site-codex-marketplace-remove", "plugin", "marketplace", "remove", marketplace, "--json"); err != nil {
+		t.Fatalf("native Codex marketplace removal failed: %v %s", err, out)
+	}
+	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-remove",
+		"remove", directorySitePlugin, "--target", "codex,claude", "--external-uninstalled")
+	if err != nil || result["outcome"] != "completed" {
+		t.Fatalf("attested site remove failed: %v %+v", err, result)
+	}
+	codexCheck("site-removed", false)
+	claudeCheck("site-removed", false)
+	for _, binding := range bindings {
+		if _, err := os.Lstat(binding.TargetLocator); !os.IsNotExist(err) {
+			t.Fatalf("removed Directory plugin still has managed artifact: %v", err)
+		}
+	}
+	verifyForeign("remove")
+	stateBytes, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var removed domain.StateFileV2
+	if err := json.Unmarshal(stateBytes, &removed); err != nil || len(removed.EnvironmentReceipts) != 0 {
+		t.Fatalf("Directory remove retained ownership receipts: %+v %v", removed.EnvironmentReceipts, err)
+	}
+}

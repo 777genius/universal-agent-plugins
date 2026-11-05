@@ -354,9 +354,9 @@ export async function checkPagesArtifact({
     if (route.indexable) expectedLocations.push(seo.canonical);
     if (['plugin', 'download'].includes(route.family)) {
       // An exact reviewed Context7 release carries its own evidence. The Hindi
-      // static page measured 455393 B; retain a bounded <461 KB ceiling (~1.2% headroom)
+      // static page measured 455393 B; retain a <458 KB fixed ceiling (~0.66% headroom)
       // while separately rejecting any full registry or unrelated package payload.
-      assert(raw.length < 461000, `HTML payload budget: ${relative} (${raw.length})`);
+      assert(raw.length < 458000, `HTML payload budget: ${relative} (${raw.length})`);
       assert(!html.includes('registryIndex'), `Full registry payload: ${relative}`);
     }
     await checkHtmlReferences({
