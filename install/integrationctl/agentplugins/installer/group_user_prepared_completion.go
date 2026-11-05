@@ -11,16 +11,10 @@ import (
 // client activation. This is a reporting-only exception for an existing
 // prepared-package route, never a native trust or activation attestation.
 func completedUserPreparedUpdate(prepared *PreparedOperation, got usecase.GroupResult, state domain.StateFileV2) bool {
-	if prepared.req.Operation != OpUpdate || (prepared.req.Scope != "" && prepared.req.Scope != domain.ScopeUser) ||
-		prepared.req.ProjectRoot != "" || got.Phase != usecase.GroupPhaseCompleted ||
-		got.InstallationID == "" || got.InstallationID != prepared.req.InstallationID ||
-		got.InstallationID != prepared.plan.InstallationID {
+	if !validUserPreparedGroupShape(prepared, got) {
 		return false
 	}
 	size := len(prepared.plan.Targets)
-	if size != 2 || len(got.Targets) != size || len(prepared.clients) != size || len(prepared.req.Targets) != size {
-		return false
-	}
 	installation, err := completedGroupInstallation(state, got.InstallationID)
 	if err != nil {
 		return false
@@ -47,6 +41,18 @@ func completedUserPreparedUpdate(prepared *PreparedOperation, got usecase.GroupR
 		delete(targets, frozen.ClientID)
 	}
 	return hasPrepared && len(targets) == 0
+}
+
+
+func validUserPreparedGroupShape(prepared *PreparedOperation, got usecase.GroupResult) bool {
+	if prepared.req.Operation != OpUpdate || (prepared.req.Scope != "" && prepared.req.Scope != domain.ScopeUser) ||
+		prepared.req.ProjectRoot != "" || got.Phase != usecase.GroupPhaseCompleted ||
+		got.InstallationID == "" || got.InstallationID != prepared.req.InstallationID ||
+		got.InstallationID != prepared.plan.InstallationID {
+		return false
+	}
+	size := len(prepared.plan.Targets)
+	return size == 2 && len(got.Targets) == size && len(prepared.clients) == size && len(prepared.req.Targets) == size
 }
 
 func completedUserPreparedTarget(prepared *PreparedOperation, frozen PlanTarget, i int, target usecase.AddResult, installation domain.Installation) bool {
