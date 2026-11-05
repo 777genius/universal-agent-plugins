@@ -245,17 +245,17 @@
     },
     "why": {
       "eyebrow": "Por que funciona",
-      "title": "Um padrão",
-      "subtitle": "Entrega nativa",
-      "intro": "O pacote permanece portátil; o instalador cuida do formato e do ciclo de vida de cada cliente.",
-      "standardTitle": "Baseado no padrão",
-      "clientTitle": "Adaptado a cada cliente",
-      "clientDescription": "Codex, Cursor, Claude Code, Gemini CLI, OpenCode e outros clientes recebem o formato compatível.",
-      "lifecycleTitle": "Ciclo de vida completo",
-      "lifecycleDescription": "Adicione, inspecione, atualize, repare, troque a fonte ou remova um plugin pela mesma CLI.",
-      "sourceTitle": "Fonte visível",
-      "sourceDescription": "Pacotes revisados e descobertas da comunidade continuam claramente rotulados, com a fonte disponível antes da instalação.",
-      "standardDescription": "Os pacotes são lidos do Agent Plugins 1.0 {manifest}, sem um segundo manifesto de instalação."
+      "title": "Um só pacote",
+      "subtitle": "Menos configuração entre agentes",
+      "intro": "Escolha um plugin e agentes compatíveis. O UAP prepara os componentes suportados e mostra etapas restantes de login ou ativação.",
+      "standardTitle": "Comece com plugin.json",
+      "clientTitle": "Feito para cada agente",
+      "clientDescription": "Skills, servidores MCP e outros componentes são preparados conforme o suporte de cada agente escolhido.",
+      "lifecycleTitle": "Gerencie mudanças com segurança",
+      "lifecycleDescription": "Pré-visualize, atualize, repare ou remova instalações gerenciadas sem sobrescrever arquivos de terceiros.",
+      "sourceTitle": "Conheça a origem",
+      "sourceDescription": "Veja de onde vem cada pacote e se a listagem do catálogo foi revisada antes de instalar.",
+      "standardDescription": "Use um pacote Agent Plugins 1.0 com {manifest}, sem criar um formato exclusivo para o UAP."
     },
     "builtWith": {
       "title": "Já criado com UAP",

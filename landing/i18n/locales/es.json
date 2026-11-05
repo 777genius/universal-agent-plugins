@@ -382,17 +382,17 @@
     },
     "why": {
       "eyebrow": "Por qué funciona",
-      "title": "Un estándar",
-      "subtitle": "Entrega nativa",
-      "intro": "El paquete sigue siendo portátil; el instalador maneja el formato y el ciclo de vida de cada cliente.",
-      "standardTitle": "Estándar primero",
-      "clientTitle": "Consciente del cliente",
-      "clientDescription": "Codex, Cursor, Claude Code, Gemini CLI, OpenCode y otros clientes reciben el formato que admiten.",
-      "lifecycleTitle": "Ciclo de vida completo",
-      "lifecycleDescription": "Añade, inspecciona, actualiza, repara, cambia de fuente o elimina un plugin con la misma CLI.",
-      "sourceTitle": "Fuente visible",
-      "sourceDescription": "Los paquetes revisados y el descubrimiento de la comunidad permanecen claramente etiquetados y su fuente está disponible antes de la instalación.",
-      "standardDescription": "Los paquetes se leen desde Agent Plugins 1.0 {manifest}, sin un segundo manifiesto de instalación."
+      "title": "Un solo paquete",
+      "subtitle": "Menos configuración entre agentes",
+      "intro": "Elige un plugin y agentes compatibles. UAP prepara los componentes admitidos e indica los pasos pendientes de inicio de sesión o activación.",
+      "standardTitle": "Empieza con plugin.json",
+      "clientTitle": "Adaptado a cada agente",
+      "clientDescription": "Skills, servidores MCP y otros componentes se preparan según lo que admita cada agente elegido.",
+      "lifecycleTitle": "Gestiona cambios con seguridad",
+      "lifecycleDescription": "Revisa el plan, actualiza, repara o elimina instalaciones gestionadas sin sobrescribir archivos ajenos.",
+      "sourceTitle": "Conoce el origen",
+      "sourceDescription": "Consulta de dónde viene cada paquete y si su ficha del catálogo ha sido revisada antes de instalarlo.",
+      "standardDescription": "Usa un paquete Agent Plugins 1.0 con {manifest}, sin crear un formato exclusivo para UAP."
     },
     "builtWith": {
       "title": "Ya creado con UAP",
