@@ -234,3 +234,22 @@ test('reachable target policies span every distribution a no-target add resolves
   community.releases[0].release_status = 'superseded';
   assert.deepEqual(policies(), []);
 });
+
+test('unscoped selection refuses clients with only ineligible scoped v2 grants', () => {
+  const distribution = candidate('default', 'community');
+  distribution.releases[0].selectable = true;
+  distribution.releases[0].targets = [{
+    client: 'codex', authentication: 'not_required', delivery: 'managed',
+    scopes: ['project'], canonical_closure: { eligible: false },
+  }];
+  const view = plugin(distribution);
+  const unscoped = resolveDistribution(view, ['codex']);
+  assert.equal(unscoped.distribution, undefined);
+  assert.match(unscoped.unavailable_reason ?? '', /no eligible scope for codex/);
+  assert.equal(resolveDistribution(view, ['codex'], 'project').distribution, undefined);
+  distribution.releases[0].targets.push({
+    client: 'codex', authentication: 'not_required', delivery: 'managed',
+    scopes: ['user'], canonical_closure: { eligible: true, closure_digest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
+  });
+  assert.equal(resolveDistribution(view, ['codex']).distribution?.id, 'default');
+});

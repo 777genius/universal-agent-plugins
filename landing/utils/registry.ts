@@ -125,23 +125,23 @@ function eligibleRelease(
         params: { sequence: release.release_sequence, targets: missing.join(',') },
       });
     } else {
-      const missingScope = scope
-        ? [...targets].filter(
-            (client) =>
-              !supportsInstallScope(
-                release.targets.find((target) => target.client === client && Array.isArray(target.scopes) && target.scopes.includes(scope)),
-                scope,
-              ),
-          )
-        : [];
-      if (scope && missingScope.length) {
-        reasons.push(
-          `release ${release.release_sequence} does not support ${scope} scope for ${missingScope.sort().join(',')}`,
-        );
-        diagnostics.push({
-          code: 'unsupportedScope',
-          params: { sequence: release.release_sequence, scope, targets: missingScope.join(',') },
-        });
+      // An unscoped selection also needs an eligible grant for each client,
+      // not merely its name in a signed (possibly ineligible) target.
+      const missingScope = [...targets].filter((client) =>
+        !release.targets.some((target) =>
+          target.client === client && (scope
+            ? supportsInstallScope(target, scope)
+            : supportsInstallScope(target, 'user') || supportsInstallScope(target, 'project')),
+        ),
+      );
+      if (missingScope.length) {
+        const missing = missingScope.sort().join(',');
+        reasons.push(scope
+          ? `release ${release.release_sequence} does not support ${scope} scope for ${missing}`
+          : `release ${release.release_sequence} has no eligible scope for ${missing}`);
+        diagnostics.push(scope
+          ? { code: 'unsupportedScope', params: { sequence: release.release_sequence, scope, targets: missing } }
+          : { code: 'unsupportedTargets', params: { sequence: release.release_sequence, targets: missing } });
         continue;
       }
       const failures = [...targets]

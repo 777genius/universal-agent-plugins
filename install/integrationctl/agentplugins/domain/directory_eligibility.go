@@ -67,6 +67,21 @@ func directoryEvidenceApplies(e DirectoryEvidence, distribution DirectoryDistrib
 	return true
 }
 
+// V2 can retain current runtime receipts for distinct dependency graphs.
+// Only a failure of the selected fresh/update closure may block that graph.
+// Exact recorded/locked operations lack the historical closure here; keep
+// their existing conservative refusal behavior instead of guessing.
+func v2RuntimeFailureForOtherClosure(snapshot DirectorySnapshot, evidence DirectoryEvidence, grant *DirectoryTarget, request DirectoryResolveRequest) bool {
+	if snapshot.SnapshotSchemaVersion != 2 || evidence.Level != "runtime" ||
+		evidence.ClosureDigest == "" || grant == nil || grant.CanonicalClosure == nil {
+		return false
+	}
+	if request.Recorded != nil && request.Operation != DirectoryUpdate && request.Operation != DirectoryNewTarget {
+		return false
+	}
+	return evidence.ClosureDigest != grant.CanonicalClosure.ClosureDigest
+}
+
 func evidenceDimensionMatches(recorded, actual string) bool {
 	return recorded == "" || recorded == actual
 }

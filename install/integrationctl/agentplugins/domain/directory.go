@@ -220,7 +220,8 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 			evidenceIDs = append(append([]string(nil), evidenceIDs...), entry.CurrentEvidence...)
 		}
 		for _, evidenceID := range evidenceIDs {
-			if e := evidenceByID(snapshot, evidenceID); e != nil && directoryTrustedEligibilityEvidence(snapshot, *e) && directoryEvidenceApplies(*e, distribution, release, target, request) && (e.Level == "materialization" || e.Level == "discovery" || e.Level == "runtime" || e.Level == "oauth") && e.Outcome == "failed" {
+			if e := evidenceByID(snapshot, evidenceID); e != nil && directoryTrustedEligibilityEvidence(snapshot, *e) && directoryEvidenceApplies(*e, distribution, release, target, request) && (e.Level == "materialization" || e.Level == "discovery" || e.Level == "runtime" || e.Level == "oauth") && e.Outcome == "failed" &&
+				!v2RuntimeFailureForOtherClosure(snapshot, *e, entry, request) {
 				return &eligibilityReason{"blocking_evidence", "current trusted " + e.Level + " evidence failed for " + string(target)}
 			}
 		}

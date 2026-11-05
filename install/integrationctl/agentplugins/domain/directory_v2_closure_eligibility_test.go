@@ -64,3 +64,34 @@ func TestResolveDirectoryV2CanonicalClosureFreshAndLockedRestore(t *testing.T) {
 		t.Fatalf("historical exact lock inherited current closure: %+v %v", got, err)
 	}
 }
+
+func TestResolveDirectoryV2RuntimeFailureOnlyBlocksMatchingClosure(t *testing.T) {
+	snapshot := testDirectory()
+	snapshot.SnapshotSchemaVersion = 2
+	distribution := &snapshot.Distributions[0]
+	policy := &distribution.ReleasePolicies[0]
+	grant := &policy.Targets[0]
+	grant.Scope, grant.Scopes = ScopeUser, nil
+	const closureA = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const closureB = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	grant.CanonicalClosure = &DirectoryCanonicalClosure{Eligible: true, ClosureDigest: closureA}
+	failure := testTrustedEvidence(DirectoryEvidence{
+		ID: "runtime-other-closure", DistributionID: distribution.ID,
+		ReleaseSequence: distribution.Releases[0].Sequence,
+		PackageTreeDigest: distribution.Releases[0].TreeDigest,
+		Level: "runtime", Outcome: "failed", Client: ClientCodex, Scope: ScopeUser,
+		ClosureDigest: closureB, ClientVersion: "test-client", InstallerVersion: "1.2.3",
+		OS: "linux", Architecture: "amd64",
+	})
+	policy.CurrentEvidence = append(policy.CurrentEvidence, failure.ID)
+	snapshot.Evidence = append(snapshot.Evidence, failure)
+	fresh := request("other/tool", ClientCodex)
+	if selected, err := ResolveDirectory(snapshot, fresh); err != nil || selected.DistributionID != distribution.ID {
+		t.Fatalf("unrelated failed closure blocked fresh signed closure: %+v %v", selected, err)
+	}
+	snapshot.Evidence[len(snapshot.Evidence)-1].ClosureDigest = closureA
+	if _, err := ResolveDirectory(snapshot, fresh); !errors.Is(err, ErrDirectoryIneligible) ||
+		!strings.Contains(err.Error(), "current trusted runtime evidence failed") {
+		t.Fatalf("same-closure runtime failure failed to block: %v", err)
+	}
+}
