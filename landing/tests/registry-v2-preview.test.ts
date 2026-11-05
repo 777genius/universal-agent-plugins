@@ -71,8 +71,19 @@ describe('Directory v2 untrusted preview boundary', () => {
     assert.ok(preview.plugins.every((plugin) =>
       plugin.trust_state === undefined && !plugin.installable));
     assert.ok(preview.plugins.every((plugin) =>
-      !plugin.client_support.scopes.codex?.includes('project')),
-    'ineligible Codex project closure must not appear in client_support');
+      Object.keys(plugin.client_support.delivery).length === 0 &&
+      Object.keys(plugin.client_support.scopes).length === 0 &&
+      Object.keys(plugin.client_support.app_bindings).length === 0 &&
+      plugin.authentication === 'unknown' &&
+      plugin.evidence.length === 0 &&
+      plugin.package_evidence.length === 0 &&
+      plugin.distributions.every((distribution) =>
+        distribution.releases.every((release) =>
+          release.evidence.length === 0 &&
+          release.package_evidence.length === 0 &&
+          release.blocking_clients.length === 0 &&
+          release.materialized_clients.length === 0))),
+    'v2 preview must not present unverified per-scope results as client-wide claims');
     // Both exported selection APIs must refuse preview policies, even for
     // community distributions that require no upstream materialization proof.
     for (const plugin of preview.plugins) {

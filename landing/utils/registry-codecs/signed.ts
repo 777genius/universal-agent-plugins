@@ -162,14 +162,20 @@ export function parseSnapshot(
         )
           throw new Error(`distribution ${id}: current_evidence must be an array of evidence IDs`);
         const treeDigest = digestValue(release.tree_digest, `distribution ${id} tree digest`);
-        const evidence = evidenceFromSnapshot(
-          input.evidence ?? input.verification_summaries ?? input.current_verification,
-          id,
-          releaseSequence,
-          treeDigest,
-          policy.current_evidence as string[],
-          mode === 'published_snapshot',
-        );
+        // The v2 review view deliberately keeps individual signed-looking
+        // grants inspectable, but cannot project per-scope evidence through
+        // this legacy client-wide presentation model. Show no preview
+        // qualification badges until the authenticated scoped cutover.
+        const evidence = v2Preview
+          ? { client: [], package: [] }
+          : evidenceFromSnapshot(
+              input.evidence ?? input.verification_summaries ?? input.current_verification,
+              id,
+              releaseSequence,
+              treeDigest,
+              policy.current_evidence as string[],
+              mode === 'published_snapshot',
+            );
         const components = stringArray(
           release.components ?? [],
           'components',
@@ -321,7 +327,7 @@ export function parseSnapshot(
       evidence: selected.evidence,
       package_evidence: selected.package_evidence,
       authentication:
-        selected.targets.length > 0 &&
+        !v2Preview && selected.targets.length > 0 &&
         selected.targets.every((target) => target.authentication === 'not_required')
           ? 'none'
           : 'unknown',
@@ -334,10 +340,12 @@ export function parseSnapshot(
               .flatMap((item) => item.compatible_clients),
           ),
         ],
-        delivery: Object.fromEntries(
+        // Client-only summaries cannot faithfully represent distinct v2
+        // user/project grants. The detailed release targets remain visible.
+        delivery: v2Preview ? {} : Object.fromEntries(
           selected.targets.map((target) => [target.client, target.delivery]),
         ),
-        scopes: Object.fromEntries(
+        scopes: v2Preview ? {} : Object.fromEntries(
           [...new Set(selected.targets.map((target) => target.client))].map((client) => [
             client,
             [...new Set(selected.targets
@@ -345,7 +353,7 @@ export function parseSnapshot(
               .flatMap((target) => target.scopes))],
           ]),
         ),
-        app_bindings: Object.fromEntries(
+        app_bindings: v2Preview ? {} : Object.fromEntries(
           selected.targets
             .filter((target) => target.app_binding)
             .map((target) => [target.client, target.app_binding!]),
