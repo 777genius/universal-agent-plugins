@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
-
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
 // Exercise inferred selection through the production composer and installer,
