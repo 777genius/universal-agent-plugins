@@ -134,6 +134,10 @@ func TestProjectRequiredChildColdRestoreAndScopedRemoval(t *testing.T) {
 	if len(fresh.state(t, fresh.a).EnvironmentReceipts) != 2 || pinned != projectJourneyRead(t, filepath.Join(fresh.a, "uap.lock")) {
 		t.Fatal("cold project restore lost required child receipts or rewrote pins")
 	}
+	freshSettings := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.a), "settings.json"))
+	if !strings.Contains(freshSettings, `"docs"`) || !strings.Contains(freshSettings, `"child"`) {
+		t.Fatalf("cold project restore did not materialize both owned MCP entries: %s", freshSettings)
+	}
 
 	// Remove the entire closure only from A, without touching user or B.
 	projectJourneyWrite(t, filepath.Join(journey.a, "uap.toml"), "schema_version = 1\n[dependencies]\n[targets]\ngemini = []\n")
@@ -148,7 +152,8 @@ func TestProjectRequiredChildColdRestoreAndScopedRemoval(t *testing.T) {
 		!reflect.DeepEqual(bNative, securityFixtureTree(t, journey.nativeRoot(journey.b))) {
 		t.Fatal("project A closure removal mutated user or project B")
 	}
-	if !strings.Contains(projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "settings.json")), "foreign.test") {
-		t.Fatal("project A closure removal discarded foreign MCP settings")
+	aSettings := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "settings.json"))
+	if !strings.Contains(aSettings, "foreign.test") || strings.Contains(aSettings, `"docs"`) || strings.Contains(aSettings, `"child"`) {
+		t.Fatalf("project A closure removal retained an owned MCP entry or discarded foreign settings: %s", aSettings)
 	}
 }
