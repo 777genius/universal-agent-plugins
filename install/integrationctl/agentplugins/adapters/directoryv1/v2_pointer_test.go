@@ -49,6 +49,7 @@ func TestV2PointerValidationAndExactSignedBundle(t *testing.T) {
 }
 
 func TestV2PointerRejectsCredentialAndPathDowngrades(t *testing.T) {
+	snapshot, envelope, trust := v2SignedFixture(t)
 	for _, tc := range []struct {
 		name   string
 		mutate func(*Pointer)
@@ -68,6 +69,11 @@ func TestV2PointerRejectsCredentialAndPathDowngrades(t *testing.T) {
 			}
 			if _, err := ParseV2Pointer(data); !errors.Is(err, ErrStrictJSON) {
 				t.Fatalf("unsafe v2 pointer accepted: %v", err)
+			}
+			// The public signed-bundle verifier must not accept a caller-supplied
+			// pointer that bypassed ParseV2Pointer's path/fetch safeguards.
+			if _, err := VerifyV2PointerBundle(pointer, snapshot, envelope, trust); err == nil {
+				t.Fatal("direct v2 verification accepted an unsafe pointer")
 			}
 		})
 	}

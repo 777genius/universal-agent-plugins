@@ -19,15 +19,19 @@ func ParseV2Pointer(body []byte) (Pointer, error) {
 	if pointer.PointerSchemaVersion != 2 || pointer.SnapshotSchemaVersion != 2 {
 		return pointer, strictError("invalid v2 pointer schema")
 	}
-	// Only version constants differ. For security, keep exactly one reviewed
-	// artifact-path, redirect, credential and size-bounds validator.
-	legacyContract := pointer
-	legacyContract.PointerSchemaVersion = 1
-	legacyContract.SnapshotSchemaVersion = 1
-	if err := validatePointer(legacyContract); err != nil {
+	if err := validateV2PointerContract(pointer); err != nil {
 		return pointer, err
 	}
 	return pointer, nil
+}
+
+// Validate the full path/fetch contract for both decoded pointers and direct
+// bundle verification callers. Only the wire version constants differ from v1.
+func validateV2PointerContract(pointer Pointer) error {
+	legacyContract := pointer
+	legacyContract.PointerSchemaVersion = 1
+	legacyContract.SnapshotSchemaVersion = 1
+	return validatePointer(legacyContract)
 }
 
 // VerifyV2PointerBundle checks both authenticated artifacts and the pointer's
@@ -35,6 +39,9 @@ func ParseV2Pointer(body []byte) (Pointer, error) {
 func VerifyV2PointerBundle(pointer Pointer, snapshot, envelope []byte, trust TrustStore) (VerifiedBundle, error) {
 	if pointer.PointerSchemaVersion != 2 || pointer.SnapshotSchemaVersion != 2 {
 		return VerifiedBundle{}, ErrSequenceMismatch
+	}
+	if err := validateV2PointerContract(pointer); err != nil {
+		return VerifiedBundle{}, err
 	}
 	bundle, err := VerifyV2Bundle(snapshot, envelope, trust)
 	if err != nil {
