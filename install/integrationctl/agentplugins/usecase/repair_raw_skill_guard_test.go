@@ -48,10 +48,10 @@ func TestRepairRawSkillDigestDriftRefusedBeforeStaging(t *testing.T) {
 // safety change. An unconfirmed operation must still reach confirmation.
 func TestRawSkillRepairGuardPreservesOtherScopePolicies(t *testing.T) {
 	for _, tc := range []struct {
-		name string
+		name   string
 		client domain.ClientID
-		scope domain.InstallScope
-		rev domain.ClientPackageRevision
+		scope  domain.InstallScope
+		rev    domain.ClientPackageRevision
 	}{
 		{name: "gemini-project-skill", client: domain.ClientGemini, scope: domain.ScopeProject, rev: domain.ClientPackageRevision{Skill: &domain.SkillSourceFacts{Name: "docs"}}},
 		{name: "codex-project-skill", client: domain.ClientCodex, scope: domain.ScopeProject, rev: domain.ClientPackageRevision{Skill: &domain.SkillSourceFacts{Name: "docs"}}},
@@ -59,8 +59,8 @@ func TestRawSkillRepairGuardPreservesOtherScopePolicies(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			proof := repairSession{
-				input: AddInput{Scope: tc.scope, Client: domain.DetectedClient{ClientID: tc.client}},
-				client: domain.ClientBinding{PackageRevision: &tc.rev},
+				input:     AddInput{Scope: tc.scope, Client: domain.DetectedClient{ClientID: tc.client}},
+				client:    domain.ClientBinding{PackageRevision: &tc.rev},
 				verifyErr: &ports.VerificationError{Kind: ports.VerificationDigestMismatch, ActualDigest: "sha256:edited", Err: errors.New("artifact digest mismatch")},
 			}
 			_, err := proof.repairPackage()
