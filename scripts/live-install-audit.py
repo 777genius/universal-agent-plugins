@@ -1344,6 +1344,17 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "sentinels_preserved": sentinels_preserved}
 
 
+def unexecuted_source_rows(selected, kind, target, status, declared_names):
+    """Record exact fixture slots on a refused bootstrap, never native PASS."""
+    if status not in ("client-unavailable", "documented-unsupported"):
+        raise ValueError("only non-execution status permitted")
+    return [{"target": target, "kind": kind, "index": index,
+             "source": item if kind == "plugin" else item["source"],
+             "identity": declared_names.get(item, item) if kind == "plugin" else item["name"],
+             "status": status}
+            for index, item in enumerate(selected)]
+
+
 def vendor_bootstrap_attested():
     """A failed vendor bootstrap cannot qualify an unrelated runner binary."""
     return os.environ.get("AUDIT_VENDOR_OUTCOME") == "success"
@@ -1386,10 +1397,9 @@ def main():
     eligible_binaries = EXECUTABLE.get(args.target, ())
     if not vendor_bootstrap_attested():
         report["blocker"] = "Vendor bootstrap was not verified; no native-client PASS is permitted"
-        report["results"] = [{"target": args.target, "kind": args.kind,
-                              "status": "client-unavailable",
-                              "identity": v if args.kind == "plugin" else v["name"]}
-                             for v in selected]
+        report["results"] = unexecuted_source_rows(
+            selected, args.kind, args.target, "client-unavailable",
+            doc["plugin_declared_names"])
         save()
         print(report["blocker"], file=sys.stderr)
         return 2
@@ -1397,15 +1407,17 @@ def main():
         report["blocker"] = (
             "Genuine client executable not installed; tried " + ", ".join(eligible_binaries)
         )
-        report["results"] = [{"target": args.target, "kind": args.kind,
-                              "status": "client-unavailable", "identity": v if args.kind == "plugin" else v["name"]}
-                             for v in selected]
+        report["results"] = unexecuted_source_rows(
+            selected, args.kind, args.target, "client-unavailable",
+            doc["plugin_declared_names"])
         save()
         print(report["blocker"], file=sys.stderr)
         return 2
     if args.target == "chatgpt" and args.kind == "skill":
         report["blocker"] = "ChatGPT has no native project skill filesystem adapter"
-        report["results"] = [{"status": "documented-unsupported", "identity": v["name"]} for v in selected]
+        report["results"] = unexecuted_source_rows(
+            selected, args.kind, args.target, "documented-unsupported",
+            doc["plugin_declared_names"])
         save()
         return 2
     cli = str(Path(args.cli).resolve(strict=True))

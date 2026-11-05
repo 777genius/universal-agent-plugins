@@ -17,6 +17,29 @@ def load_audit():
 
 
 class IsolatedClientEnvironmentTest(unittest.TestCase):
+    def test_bootstrap_refusal_preserves_index_source_and_real_identity(self):
+        # BUG-053: the original blocked ZIPs had 30 status placeholders but
+        # omitted their source and index, so fixture slots could not be audited.
+        audit = load_audit()
+        source = "github:sample/agent-plugin@" + ("a" * 40)
+        rows = audit.unexecuted_source_rows(
+            [source, "atlassian"], "plugin", "grok", "client-unavailable",
+            {source: "sample-agent-plugin"})
+        self.assertEqual([v["index"] for v in rows], [0, 1])
+        self.assertEqual([v["source"] for v in rows], [source, "atlassian"])
+        self.assertEqual([v["identity"] for v in rows],
+                         ["sample-agent-plugin", "atlassian"])
+        self.assertTrue(all(v["status"] == "client-unavailable"
+                            and "install" not in v for v in rows))
+        skill = {"name": "pdf", "source": "github:sample/skills@" + ("b" * 40)}
+        blocked = audit.unexecuted_source_rows(
+            [skill], "skill", "chatgpt", "documented-unsupported", {})
+        self.assertEqual(blocked[0]["source"], skill["source"])
+        self.assertEqual(blocked[0]["index"], 0)
+        self.assertEqual(blocked[0]["identity"], "pdf")
+        with self.assertRaisesRegex(ValueError, "non-execution"):
+            audit.unexecuted_source_rows([], "plugin", "grok", "passed", {})
+
     def test_rebinds_all_client_overrides_and_strips_git_injection(self):
         audit = load_audit()
         hostile = {key: "/outside/actual-user-profile" for key in audit.PROFILE_ENV_KEYS}
