@@ -20,6 +20,10 @@ ChatGPT Desktop's local Work/Codex plugin marketplace is distinct from **ChatGPT
 
 Use the same UAP command family and target, not a second Desktop-specific installer:
 
+`npx -y universal-agent-plugins list`
+
+This lists UAP-managed installations; for native Codex registration independently run `codex plugin list --json`. Neither output certifies that the signed-in Desktop app executed the plugin.
+
 `npx -y universal-agent-plugins update <plugin-name> --target codex`
 
 `npx -y universal-agent-plugins repair <plugin-name> --target codex`
