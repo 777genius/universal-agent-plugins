@@ -77,7 +77,7 @@ func nativeRawUserFiles(t *testing.T, binding domain.ClientBinding, client strin
 		root = filepath.Join(root, ".agentplugins-runtime")
 	}
 	for relative, digest := range map[string]string{
-		"skills/benchmark-note/SKILL.md": "53e39c4f1dcaa4c2ed1196654678ede091b71fb837f77a1beb07ba556abc1198",
+		"skills/benchmark-note/SKILL.md":               "53e39c4f1dcaa4c2ed1196654678ede091b71fb837f77a1beb07ba556abc1198",
 		"skills/benchmark-note/references/fixture.txt": "674bbf87f1469969103f15f60ea1389829fe431dfca5439da1fc57da211d1f2f",
 	} {
 		if actual := nativeSHA(t, filepath.Join(root, filepath.FromSlash(relative))); actual != digest {
