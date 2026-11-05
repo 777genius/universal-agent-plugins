@@ -158,7 +158,7 @@ func TestManualDesktopHandoffRemainsVisibleInFirstCodexNextAction(t *testing.T) 
 			PhysicalArtifactID: "artifact", DeclaredName: "demo",
 			NativeRegistryRoot: profile,
 		},
-		Delivery: domain.StagedDelivery{ClientID: domain.ClientCodex, ActivePath: root},
+		Delivery:     domain.StagedDelivery{ClientID: domain.ClientCodex, ActivePath: root},
 		DeclaredName: "demo",
 	})
 	if err != nil || out.Activation != domain.ActivationManual {
