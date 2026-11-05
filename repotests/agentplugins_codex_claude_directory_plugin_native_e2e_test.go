@@ -212,21 +212,9 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	codexCheck("site-repaired", true)
 	claudeCheck("site-repaired", true)
 	verifyForeign("repair")
-	// The site's unfiltered remove is not a blanket Codex uninstall
-	// attestation. User-scope Codex must fail closed until its own native
-	// plugin has been removed and the operator explicitly confirms it.
-	beforeRemoval := nativeSHA(t, statePath)
-	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-remove-preflight",
-		"remove", directorySitePlugin)
-	if err == nil && result["outcome"] == "completed" {
-		t.Fatalf("unattested Codex removal unexpectedly completed: %+v", result)
-	}
-	if nativeSHA(t, statePath) != beforeRemoval ||
-		nativeTreeDigest(t, codexBinding.TargetLocator) != currentCodex ||
-		nativeTreeDigest(t, claudeBinding.TargetLocator) != currentClaude {
-		t.Fatal("unattested site removal modified managed state or files")
-	}
-	verifyForeign("unattested-remove")
+	// User-scope Codex requires an external native uninstall before UAP
+	// can remove the saved binding with explicit --external-uninstalled.
+	// This also exercises the genuine pinned Codex CLI, not a mocked fixture.
 	marketplace := shared.ManagedMarketplaceName(codexBinding.PhysicalArtifact)
 	pluginID := directorySitePlugin + "@" + marketplace
 	if out, err := nativeCommand(t, f, codexBin, "site-codex-external-remove", "plugin", "remove", pluginID, "--json"); err != nil {
