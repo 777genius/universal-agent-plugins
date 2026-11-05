@@ -375,8 +375,27 @@ jobs:
                                 skills["project_skill_in_stdout"] == expected_project and
                                 mcp["project_stdio_in_stdout"] == expected_project and
                                 mcp["project_http_in_stdout"] == expected_project)
+                          # Only fixture-name booleans are recorded; neither account data nor
+                          # native config contents leave the disposable runner.
+                          native_file = global_root / "mcp_config.json"
+                          try:
+                              native_entries = json.loads(native_file.read_text()).get("mcpServers", {})
+                          except (OSError, ValueError, AttributeError):
+                              native_entries = {}
+                          observed = {
+                              "devin_skill": skills["uap_cli_skill_in_stdout"],
+                              "devin_stdio": mcp["uap_cli_stdio_in_stdout"],
+                              "devin_http": mcp["uap_cli_http_in_stdout"],
+                              "file_skill": (global_root / "skills" / "uap-e2e-global" / "SKILL.md").is_file(),
+                              "file_stdio": "uap_e2e_stdio" in native_entries,
+                              "file_http": "uap_e2e_http" in native_entries,
+                              "original_global_skill": skills["global_skill_in_stdout"],
+                              "original_global_stdio": mcp["stdio_name_in_stdout"],
+                              "original_global_http": mcp["http_name_in_stdout"],
+                          }
                           bridge["inventory"].append({"stage": stage, "project": project.name,
-                                                       "expected_installed": want_present, "pass": ok})
+                                                       "expected_installed": want_present, "pass": ok,
+                                                       "observed_fixture_names": observed})
                           if not ok:
                               raise RuntimeError(stage + " genuine Devin A/B source inventory mismatch")
 
