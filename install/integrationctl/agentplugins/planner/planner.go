@@ -580,15 +580,3 @@ func activationFor(mode domain.ActivationMode) domain.ActivationState {
 	}
 }
 
-func hasComponents(decisions []domain.ComponentDecision) bool {
-	return len(decisions) > 0
-}
-
-func hasSupportedComponent(decisions []domain.ComponentDecision) bool {
-	for _, item := range decisions {
-		if item.Support != domain.SupportUnsupported {
-			return true
-		}
-	}
-	return false
-}

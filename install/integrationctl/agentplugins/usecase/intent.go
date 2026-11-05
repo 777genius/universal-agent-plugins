@@ -23,14 +23,7 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 	if err != nil {
 		return domain.DeliveryPlan{}, err
 	}
-	var observation *domain.LocalEntryObservation
-	var objects []domain.NativeObjectOwnership
-	var previousNativeRoot string
-	if binding != nil {
-		observation = binding.LocalEntryObservation.Clone()
-		objects = append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...)
-		previousNativeRoot = binding.NativeProfileRoot
-	}
+	observation, objects, previousNativeRoot := clonePlanningPredecessors(binding)
 	if service.ClientPreparation != nil {
 		for _, frozen := range service.PhysicalProfiles {
 			if frozen.ClientID == input.Client.ClientID {
@@ -72,6 +65,14 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 		return plan, err
 	}
 	return plan, nil
+}
+
+
+func clonePlanningPredecessors(binding *domain.ClientBinding) (*domain.LocalEntryObservation, []domain.NativeObjectOwnership, string) {
+	if binding == nil {
+		return nil, nil, ""
+	}
+	return binding.LocalEntryObservation.Clone(), append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...), binding.NativeProfileRoot
 }
 
 func resolvePersistedIntent(input *AddInput, installation *domain.Installation) error {
