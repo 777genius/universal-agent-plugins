@@ -6,6 +6,7 @@ on:
     paths:
       - 'cli/**'
       - 'install/integrationctl/**'
+      - 'repotests/agentplugins_codex_claude_directory_plugin_native_e2e_test.go'
       - 'sdk/**'
       - 'go.work*'
       - '**/go.mod'
@@ -22,6 +23,7 @@ on:
     paths:
       - 'cli/**'
       - 'install/integrationctl/**'
+      - 'repotests/agentplugins_codex_claude_directory_plugin_native_e2e_test.go'
       - 'sdk/**'
       - 'go.work*'
       - '**/go.mod'
