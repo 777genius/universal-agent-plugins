@@ -160,7 +160,9 @@ def run(ctx, original_env):
     native_skill = project_a / ".qoder" / "skills" / NAME / "SKILL.md"
     if not native_skill.is_file() or native_skill.is_symlink():
         raise ValueError("UAP-installed Qoder native Project Skill missing")
-    native_skill.unlink()
+    # A partial foreign edit of this owned Skill must fail closed; the
+    # existing genuine Qoder Skills cycle separately qualifies missing-package
+    # repair. Here verify intact mixed Skills/MCP repair and native discovery.
     operation("repair-a", "repair", aid, project_a)
     if not native_skill.is_file() or native_skill.is_symlink():
         raise ValueError("Qoder repair did not restore its native Skill")
