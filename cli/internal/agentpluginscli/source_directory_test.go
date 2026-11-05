@@ -93,7 +93,6 @@ func TestDirectoryV2CompatibilityUsesScopedGrantsWithoutBorrowingUserEvidence(t 
 	}
 }
 
-
 func TestDirectoryV2CanonicalRuntimeEvidenceDoesNotBorrowAnotherClosure(t *testing.T) {
 	bundle := readModelBundle()
 	bundle.Snapshot.SnapshotSchemaVersion, bundle.Snapshot.Sequence = 2, 1

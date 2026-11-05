@@ -142,8 +142,8 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 }
 
 // A runtime call proves the exact signed closure it exercised, not another
- // current resolution with the same root release. Preserve older receipts in
- // CatalogEvidence.CurrentEvidence for inspection without claiming "tested".
+// current resolution with the same root release. Preserve older receipts in
+// CatalogEvidence.CurrentEvidence for inspection without claiming "tested".
 func directoryEvidenceMatchesCanonicalClosure(schema int, target domain.DirectoryTarget, evidence domain.DirectoryEvidence) bool {
 	return schema != 2 || target.CanonicalClosure == nil || !target.CanonicalClosure.Eligible ||
 		evidence.Level != "runtime" || evidence.ClosureDigest == target.CanonicalClosure.ClosureDigest
