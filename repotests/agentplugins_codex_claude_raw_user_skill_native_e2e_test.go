@@ -97,6 +97,21 @@ func nativeRawUserFiles(t *testing.T, binding domain.ClientBinding, client strin
 	}
 }
 
+// Saved dependency repair/removal uses the public outcome/results JSON
+// contract, not the single-plugin result/data envelope and not the separate
+// skills-add status/items contract. Require the exact target's real mutation.
+func nativeRawUserSavedLifecycleResult(t *testing.T, target, operation string, result map[string]any, runErr error) {
+	t.Helper()
+	entries, ok := result["results"].([]any)
+	if runErr != nil || result["outcome"] != "completed" || !ok || len(entries) != 1 {
+		t.Fatalf("%s %s did not complete: err=%v result=%+v", target, operation, runErr, result)
+	}
+	entry, ok := entries[0].(map[string]any)
+	if !ok || entry["client_id"] != target || entry["operation"] != operation || entry["outcome"] != "completed" {
+		t.Fatalf("%s %s result is not a completed exact-target mutation: %+v", target, operation, result)
+	}
+}
+
 func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer, target, statePath, profile string, original domain.ClientBinding) domain.ClientBinding {
 	t.Helper()
 	// This test deliberately deletes a managed artifact to reproduce absent
@@ -106,9 +121,7 @@ func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer
 		t.Fatal(err)
 	}
 	result, err := commandsRunInstaller(t, root, dir, env, installer, "raw-user-repair", "repair", nativeRawUserSkillName, "--target", target, "--scope", "user")
-	if err != nil || result["result"] != "success" {
-		t.Fatalf("%s: restoring absent pinned raw Skill failed: %v; %+v", target, err, result)
-	}
+	nativeRawUserSavedLifecycleResult(t, target, "repair", result, err)
 	_, restored := nativeRawUserState(t, statePath, target, profile)
 	if restored.ClientBindingID != original.ClientBindingID || restored.PhysicalArtifact != original.PhysicalArtifact ||
 		restored.TargetLocator != original.TargetLocator {
@@ -125,9 +138,7 @@ func nativeRawUserRemove(t *testing.T, root, dir string, env []string, installer
 		args = append(args, "--external-uninstalled")
 	}
 	result, err := commandsRunInstaller(t, root, dir, env, installer, "raw-user-remove", args...)
-	if err != nil || result["result"] != "success" {
-		t.Fatalf("%s: raw Skill removal did not complete: %v; %+v", target, err, result)
-	}
+	nativeRawUserSavedLifecycleResult(t, target, "remove", result, err)
 	if _, err := os.Lstat(active); !os.IsNotExist(err) {
 		t.Fatalf("%s: managed raw Skill survived removal: %v", target, err)
 	}
