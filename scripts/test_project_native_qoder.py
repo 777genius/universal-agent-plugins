@@ -73,9 +73,9 @@ class QoderAcquisitionContract(unittest.TestCase):
                 ctx.phase = "observe"
                 ctx.projects = {name: Path(temporary) / name for name in ("a", "b")}
                 for project in ctx.projects.values():
-                    project.mkdir()
-                ctx.env = {}
-                ctx.command = lambda label, argv, cwd, env, timeout: ({"exit": 0, "error": None}, b"", b"")
+                    (project / ".git").mkdir(parents=True)
+                # The collector may inspect existing roots but must never
+                # repeat the shared harness's git-init-a/b capture labels.
                 ctx.replace["mcp-list-a"] = ({"exit": 0, "error": None},
                     b"uap_qoder_a_stdio\nuap_qoder_a_http\n", b"")
                 ctx.replace["mcp-list-b"] = ({"exit": 0, "error": None},

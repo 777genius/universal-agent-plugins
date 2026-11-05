@@ -57,14 +57,13 @@ def _probe(ctx, label, arguments):
 def observe_project_mcp_sources(ctx):
     """Record genuine Qoder MCP inventory, without a model or MCP tool call."""
     a, b = (ctx.projects[name] for name in ("a", "b"))
-    for name, project in (("a", a), ("b", b)):
-        if not project.is_dir() or project.is_symlink():
-            raise ValueError("Qoder project root is not an ordinary directory")
-        record, _, _ = ctx.command("git-init-" + name,
-                                   ["/usr/bin/git", "init", "--quiet"],
-                                   project, ctx.env, 10)
-        if record.get("exit") != 0 or record.get("error") is not None:
-            raise ValueError("Qoder project Git root initialization failed")
+    # The common hosted collector has already initialized A/B as Git roots.
+    # Reusing its git-init-a/b labels would fail the unique-capture contract.
+    for project in (a, b):
+        git = project / ".git"
+        if (not project.is_dir() or project.is_symlink()
+                or not git.is_dir() or git.is_symlink()):
+            raise ValueError("Qoder selected project is not an existing ordinary Git root")
     path = a / ".mcp.json"
     if path.exists() or path.is_symlink():
         raise ValueError("Qoder project MCP fixture would replace existing state")
