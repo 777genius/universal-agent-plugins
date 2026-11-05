@@ -77,8 +77,15 @@ jobs:
               ;;
             kiro) URL="https://desktop-release.q.us-east-1.amazonaws.com/3.0.0/kirocli-universal-darwin.zip"; BIN="kiro-cli" ;;
             windsurf)
-              # Homebrew/homebrew-cask Casks/d/devin-cli.rb @ c9adad21951a075e35556930e7396a87818f8980
-              URL="https://static.devin.ai/cli/3000.11.234/devin-3000.11.234-x86_64-unknown-linux.tar.gz"
+              if [[ "$KIND" == skill ]]; then
+                # Project Skills require exactly 3000.11.205 in requireCurrentDevin.
+                # Homebrew/homebrew-cask Casks/d/devin-cli.rb @ b0b0899868cd5816cfc754d2461a50920af612e0
+                URL="https://static.devin.ai/cli/3000.11.205/devin-3000.11.205-x86_64-unknown-linux.tar.gz"
+              else
+                # Preserve the independently reviewed user/plugin version.
+                # Homebrew/homebrew-cask Casks/d/devin-cli.rb @ c9adad21951a075e35556930e7396a87818f8980
+                URL="https://static.devin.ai/cli/3000.11.234/devin-3000.11.234-x86_64-unknown-linux.tar.gz"
+              fi
               BIN="devin"
               ;;
             grok) URL="https://x.ai/cli/install.sh"; BIN="grok" ;;
@@ -106,7 +113,13 @@ jobs:
               ;;
             vscode) SHA256="b8fbff92d8d95908990eed0acf004c980f29003725469e794ddbd017ea511a20" ;; # Microsoft official SHA-256 for Linux .deb x64 1.144.0
             kiro) SHA256="0a8f067c4fe6a23a231aa3a18e3e4332120ef9ed3d2d7b6eea907beb8b4cdd8b" ;; # Homebrew/homebrew-cask Casks/k/kiro-cli.rb @ 7191fc89
-            windsurf) SHA256="201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a" ;; # Independently pinned Homebrew release
+            windsurf)
+              if [[ "$KIND" == skill ]]; then
+                SHA256="2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4" # Cask b0b08998, project 3000.11.205
+              else
+                SHA256="201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a" # Cask c9adad21, user 3000.11.234
+              fi
+              ;;
             grok) SHA256="" ;; # Needs official installer digest review
           esac
           sha256_file() {

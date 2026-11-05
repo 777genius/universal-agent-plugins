@@ -443,6 +443,30 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertNotIn('export PATH="$HOME/.local/bin:$PATH"', workflow)
         self.assertIn(":/usr/bin:/sbin:/bin:", workflow)
 
+    def test_devin_project_skills_use_exact_reviewed_native_version(self):
+        # BUG-054: actual 30/30 project Skills refused with Devin 3000.11.234;
+        # production requireCurrentDevin accepts only 3000.11.205.
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        self.assertEqual(workflow.count("            windsurf)"), 2)
+        vendor_block, sha_block = (
+            block.split("              ;;", 1)[0]
+            for block in workflow.split("            windsurf)")[1:]
+        )
+        self.assertIn('if [[ "$KIND" == skill ]]; then', vendor_block)
+        self.assertIn('if [[ "$KIND" == skill ]]; then', sha_block)
+        self.assertIn("devin-3000.11.205-x86_64-unknown-linux.tar.gz", vendor_block)
+        self.assertIn("devin-3000.11.234-x86_64-unknown-linux.tar.gz", vendor_block)
+        self.assertIn('SHA256="2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4"', sha_block)
+        self.assertIn('SHA256="201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a"', sha_block)
+        self.assertLess(vendor_block.index("3000.11.205"), vendor_block.index("3000.11.234"))
+        self.assertLess(sha_block.index("2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4"),
+                        sha_block.index("201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a"))
+        self.assertLess(workflow.index('sha256_file -c -'),
+                        workflow.index('archive.extractall(path=sys.argv[2], filter="data")'))
+        self.assertIn('test -f "$executable" && test -x "$executable" && test ! -L "$executable"', workflow)
+        self.assertIn('env -i PATH="$PATH" HOME="$probe_home"', workflow)
+
     def test_kiro_native_archive_is_pinned_before_extraction(self):
         # Independently pinned Homebrew Cask 3.0.0, not a mutable install script.
         workflow = (Path(__file__).resolve().parents[1] /
