@@ -137,7 +137,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 			SchemaVersion: 1, ID: item.name, DisplayName: item.name,
 			Description: "Disposable signed fixture " + item.name, ManifestName: item.name,
 			Aliases: []string{item.name}, ReservedAliases: []string{item.name},
-			Categories: []string{"agent-plugins"},
+			Categories:          []string{"agent-plugins"},
 			MinimumCapabilities: domain.DirectoryMinimumCapabilities{Skills: skills, MCP: mcp},
 			DefaultDistribution: item.distribution, Distributions: []string{item.distribution},
 		})
@@ -146,10 +146,10 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 			Kind: domain.DistributionCommunity, Status: domain.DistributionActive, Packager: "fixture",
 			Releases: []domain.DirectoryRelease{{
 				Sequence: 1, PackageVersion: "0.1.0", ManifestName: item.name,
-				AgentPluginsSchema: "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-				PackageSource: domain.DirectorySource{Repository: repository, Revision: commit, Path: item.path},
+				AgentPluginsSchema:  "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+				PackageSource:       domain.DirectorySource{Repository: repository, Revision: commit, Path: item.path},
 				TreeDigestAlgorithm: domain.TreeDigestAlgorithm,
-				TreeDigest: envelope.TreeDigest, ManifestDigest: envelope.ManifestDigest,
+				TreeDigest:          envelope.TreeDigest, ManifestDigest: envelope.ManifestDigest,
 				Components: components, PublishedAt: now.Add(-2 * time.Hour).Format(time.RFC3339),
 			}},
 			ReleasePolicies: []domain.DirectoryReleasePolicy{{
@@ -177,7 +177,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		EnvelopeSchemaVersion: 1, SnapshotSchemaVersion: 1, Sequence: snapshot.Sequence,
 		KeyID: trust.Keys[0].ID, Algorithm: "Ed25519", SignatureDomain: directoryv1.SignatureDomain,
 		SnapshotDigest: "sha256:" + hex.EncodeToString(digest[:]),
-		Signature: base64.StdEncoding.EncodeToString(signed),
+		Signature:      base64.StdEncoding.EncodeToString(signed),
 	}
 	envelopeBytes, err := json.Marshal(signedEnvelope)
 	if err != nil {
