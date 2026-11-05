@@ -118,7 +118,7 @@ func TestRemoveLegacyDelegatesThenReconcilesStateV2(t *testing.T) {
 			}
 			service := testService(Service{
 				StateStore: observingLegacyStateStore{StateStore: stateStore, lock: legacySpy},
-				Legacy: legacy, LegacyLock: legacySpy,
+				Legacy:     legacy, LegacyLock: legacySpy,
 				Lock:   processlock.Lock{Path: filepath.Join(root, "mutation.lock")},
 				Kernel: transaction.Kernel{StateStore: store, Directory: dirswap.Manager{JournalDir: filepath.Join(root, "operations")}},
 			})
