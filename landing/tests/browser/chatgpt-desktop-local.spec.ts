@@ -37,7 +37,7 @@ for (const width of [1440, 390]) {
     await expect(guide.locator('.command-snippet')).toBeHidden();
     await guide.locator('summary').click();
     await expect(guide.locator('.command-snippet code')).toContainText('--target codex');
-    await expect(guide).toContainText('not Desktop runtime proof');
+    await expect(guide).toContainText('does not prove Desktop runtime');
     await expect(guide).toContainText('ChatGPT web connection');
     await guide.locator('.command-snippet button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
