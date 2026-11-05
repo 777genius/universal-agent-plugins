@@ -96,6 +96,11 @@ function eligibleRelease(
   for (const release of [...distribution.releases].sort(
     (a, b) => b.release_sequence - a.release_sequence,
   )) {
+    // Never re-authorize a preview-only or otherwise non-selectable release.
+    if (!release.selectable) {
+      reasons.push(`release ${release.release_sequence} is not selectable`);
+      continue;
+    }
     const supported = new Set(release.targets.map((target) => target.client));
     if (release.release_status !== 'active') {
       reasons.push(`release ${release.release_sequence} is ${release.release_status}`);

@@ -237,8 +237,10 @@ export function evidenceFromSnapshot(
 
 export function eligibleTargetPolicies(
   kind: DistributionKind,
-  release: Pick<DistributionReleaseView, 'targets' | 'blocking_clients' | 'materialized_clients'>,
+  release: Pick<DistributionReleaseView, 'targets' | 'blocking_clients' | 'materialized_clients' | 'selectable'>,
 ): ReleaseTarget[] {
+  // A v2 review preview is not authenticated and must not yield installable targets.
+  if (!release.selectable) return [];
   return release.targets.filter(
     (target) =>
       target.canonical_closure?.eligible !== false &&

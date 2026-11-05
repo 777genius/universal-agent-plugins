@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseDirectoryData } from '../utils/registry.ts';
+import { parseDirectoryData, reachableTargetPolicies, resolveDistribution } from '../utils/registry.ts';
 
 type RawGrant = {
   client: string;
@@ -70,6 +70,26 @@ describe('Directory v2 untrusted preview boundary', () => {
       target.canonical_closure === undefined));
     assert.ok(preview.plugins.every((plugin) =>
       plugin.trust_state === undefined && !plugin.installable));
+    assert.ok(preview.plugins.every((plugin) =>
+      !plugin.client_support.scopes.codex?.includes('project')),
+    'ineligible Codex project closure must not appear in client_support');
+    // Both exported selection APIs must refuse preview policies, even for
+    // community distributions that require no upstream materialization proof.
+    for (const plugin of preview.plugins) {
+      assert.deepEqual(reachableTargetPolicies(plugin.distributions), []);
+      for (const distribution of plugin.distributions) {
+        for (const release of distribution.releases) {
+          for (const target of release.targets) {
+            for (const scope of target.scopes) {
+              if (scope === 'user' || scope === 'project') {
+                assert.equal(resolveDistribution(plugin, [target.client], scope).distribution,
+                  undefined, `${plugin.name} ${target.client}/${scope} preview was selectable`);
+              }
+            }
+          }
+        }
+      }
+    }
     assert.throws(() => parseDirectoryData(fixture, 'published_snapshot'),
       /schema version 1|published snapshot/);
   });
