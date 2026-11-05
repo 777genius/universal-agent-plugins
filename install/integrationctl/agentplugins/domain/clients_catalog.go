@@ -175,7 +175,7 @@ var clientDefinitions = []ClientDefinition{
 	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
 		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,
-		TracksNativeEffects: true,
+		RequiresActiveNativeProjection: true,
 	})), ActivationAutomatic), LifecyclePrepared), SupportNative, SupportNative),
 }
 

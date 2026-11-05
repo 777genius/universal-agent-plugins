@@ -7,6 +7,13 @@ func nativeLifecycleClient(clientID domain.ClientID, selected domain.SelectedDel
 	return traits.TracksNativeEffects || traits.LifecycleKind == domain.LifecycleNativeConfig
 }
 
+// nativeProjectionClient keeps readback/reapply distinct from native-attempt
+// journaling: prepared user hosts may own native components after handoff.
+func nativeProjectionClient(clientID domain.ClientID, selected domain.SelectedDelivery, scopes ...domain.InstallScope) bool {
+	return nativeLifecycleClient(clientID, selected, scopes...) ||
+		selected.EffectiveTraitsForScope(clientID, selectedScope(scopes)).RequiresActiveNativeProjection
+}
+
 func sharesPhysicalBackend(id domain.ClientID, selected domain.SelectedDelivery, scopes ...domain.InstallScope) bool {
 	return selected.SharesBackendForScope(id, selectedScope(scopes))
 }

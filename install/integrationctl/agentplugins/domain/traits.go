@@ -33,6 +33,9 @@ type ClientTraits struct {
 	ReportsMCPToolNamespaceCollision  bool
 	BindsNativeProfileRoot            bool
 	TracksNativeEffects               bool
+	// RequiresActiveNativeProjection separates native component readback from
+	// journal creation for a prepared user host with a separate commit handoff.
+	RequiresActiveNativeProjection bool
 	// LegacyPreparedProjectPackageReceipt preserves exact package-only project
 	// verification for old bindings when this client later gains native components.
 	// It never authorizes adopting or mutating mismatched ownership receipts.

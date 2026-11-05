@@ -721,7 +721,7 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
     if (mode === 'stale') {
       // A source revision mismatch has no verified current inventory denominator.
       // Report prior evidence without implying that the old 13 roots are current.
-      await expect(assessment.locator(':scope > summary')).toContainText('Outdated scan');
+      await expect(assessment.locator(':scope > summary')).toContainText('Needs a new scan');
     }
     await assessment.locator(':scope > summary').click();
     if (mode === 'stale') {

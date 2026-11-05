@@ -188,6 +188,7 @@ const vendorInstall = computed(() =>
             :auto-option="autoOption"
             :label="t('registryUi.install.chooseTargetAgents')"
             :options="targetOptions"
+            full-width
             @update:auto-selected="updateAutoDetect"
             @update:model-value="updateTargets"
           />

@@ -131,3 +131,33 @@ func TestOnlyTheFrozenFamilyWithholdsCommands(t *testing.T) {
 		}
 	}
 }
+
+// Global and project Pi both support native Skills/MCP. Only project Pi
+// tracks native attempts; user Pi publishes through its installed host callback.
+// Tracking user Pi before that callback blocks installed authority publication.
+func TestPiNativeEffectTrackingIsProjectScoped(t *testing.T) {
+	user := (SelectedDelivery{}).EffectiveTraitsForScope(ClientPi, ScopeUser)
+	project := (SelectedDelivery{}).EffectiveTraitsForScope(ClientPi, ScopeProject)
+	if user.TracksNativeEffects || user.LifecycleKind != LifecyclePrepared {
+		t.Fatalf("Pi user lifecycle unexpectedly requires a native attempt: %+v", user)
+	}
+	if !user.RequiresActiveNativeProjection {
+		t.Fatal("Pi user lost read-only native projection for global Skills/MCP after the host's commit handoff")
+	}
+	if !project.TracksNativeEffects || project.LifecycleKind != LifecyclePrepared {
+		t.Fatalf("Pi project lifecycle lost tracked native effects: %+v", project)
+	}
+	pi, ok := ClientDefinitionFor(ClientPi)
+	if !ok {
+		t.Fatal("Pi client definition missing")
+	}
+	userCaps, projectCaps := pi.ScopedCapabilities(ScopeUser), pi.ScopedCapabilities(ScopeProject)
+	if userCaps.SkillSupport != SupportNative || userCaps.MCPTransports["stdio"] != SupportNative ||
+		userCaps.MCPTransports["streamable-http"] != SupportNative {
+		t.Fatalf("Pi global Skills/MCP contract regressed: %+v", userCaps)
+	}
+	if projectCaps.SkillSupport != SupportNative || projectCaps.MCPTransports["stdio"] != SupportNative ||
+		projectCaps.MCPTransports["streamable-http"] != SupportNative {
+		t.Fatalf("Pi project lost its selected components: %+v", projectCaps)
+	}
+}
