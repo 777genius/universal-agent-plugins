@@ -130,12 +130,18 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 	if len(afterCodex.EnvironmentReceipts) != 1 {
 		t.Fatal("removing Codex damaged Claude's receipt")
 	}
+	if _, err := os.Lstat(savedJourneyBinding(t, state, "codex").TargetLocator); !os.IsNotExist(err) {
+		t.Fatalf("Codex managed raw Skill survived selected removal: %v", err)
+	}
 	if after := savedJourneyTree(t, claudeBefore.TargetLocator); !reflect.DeepEqual(managedBefore["claude"], after) {
 		t.Fatalf("removing Codex changed Claude native bytes: %s", savedJourneyDifferences(managedBefore["claude"], after))
 	}
 	j.run(t, "remove", "pdf", "--target", "claude", "--external-uninstalled", "--scope", "user", "--format", "json")
 	if remaining := j.state(t).EnvironmentReceipts; len(remaining) != 0 {
 		t.Fatalf("raw Skill removal left live ownership receipts: %+v", remaining)
+	}
+	if _, err := os.Lstat(claudeBefore.TargetLocator); !os.IsNotExist(err) {
+		t.Fatalf("Claude managed raw Skill survived selected removal: %v", err)
 	}
 	for target, path := range foreignNeighbors {
 		body, err := os.ReadFile(path)

@@ -208,6 +208,7 @@ func TestSkillsCLIUserScopeCodexClaudeInstallAndRemove(t *testing.T) {
 		assertNativeUnchanged("claude")
 	}
 	claudeBefore := savedJourneyBinding(t, state, "claude")
+	codexPath := savedJourneyBinding(t, state, "codex").TargetLocator
 	journey.run(t, "remove", "review", "--target", "codex", "--external-uninstalled", "--scope", "user", "--format", "json")
 	if remaining := journey.state(t); len(remaining.EnvironmentReceipts) != 1 ||
 		remaining.EnvironmentReceipts[0].ClientID != "claude" ||
@@ -215,9 +216,15 @@ func TestSkillsCLIUserScopeCodexClaudeInstallAndRemove(t *testing.T) {
 		t.Fatalf("Codex removal changed retained Claude ownership: %+v", remaining.EnvironmentReceipts)
 	}
 	assertNativeUnchanged("claude")
+	if _, err := os.Lstat(codexPath); !os.IsNotExist(err) {
+		t.Fatalf("Codex managed user Skill survived removal: %v", err)
+	}
 	journey.run(t, "remove", "review", "--target", "claude", "--external-uninstalled", "--scope", "user", "--format", "json")
 	if remaining := journey.state(t).EnvironmentReceipts; len(remaining) != 0 {
 		t.Fatalf("last user Skill removal retained receipts: %+v", remaining)
+	}
+	if _, err := os.Lstat(claudeBefore.TargetLocator); !os.IsNotExist(err) {
+		t.Fatalf("Claude managed user Skill survived removal: %v", err)
 	}
 }
 
