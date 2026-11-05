@@ -63,3 +63,14 @@ The CLI has only one installation lifecycle and one dependency engine. The selec
 ## Explicit non-goals
 
 No v2 launch, paired CAS, new key, key rotation, new closure digest, v2 migrations, scope policy feature flags, new database/index or unrelated adapter refactors. No forced release. Old plans and already published artifacts stay as history with this superseding decision linked.
+
+
+## Implementation follow-up review — 2026-11-05
+
+This is a **self-audit against three critique lenses**, not an independent LLM/human review. A real independent CodeRabbit review was requested on draft PR #725 but returned a rate-limit response; it remains pending and must not be counted as passed.
+
+- **Architecture:** the first code pass keeps `domain.ResolveDirectory` unchanged (v1 still admits user grants only). A small CLI placement helper invokes that resolver using its existing signed User source authority when the operator explicitly selected Project. Reusing that helper for the alias canonicalizer, dependency candidate selection, locked restore and interactive selection matters; merely changing `add` would miss children and cold locks. Fixed alias canonicalization in the same draft branch after discovering the missed path.
+- **Security:** the effective Project installation report must not carry historical User runtime/materialization evidence. The CLI now scopes evidence reporting and requires a valid local project capability entry; actual native admission and all complete-closure revocations must still be proven by CI/E2E. The signed v1 file bytes and trust key remain entirely unchanged.
+- **UX/compatibility:** the website currently suppresses the Marketing Kit Project button and uses some direct-Git Project fallbacks. Do not make that site generate a new short-name command for a released CLI that lacks it. A site cutover is subsequent to the qualifying **CLI release**, not a substitute for a release. Preserve existing default user installation, project root selection, user/project locks and offline removal.
+
+**Current branch scope:** small changes in the CLI's preexisting Directory resolution seams, a read-only source-evidence filter, focused regressions and this plan. **Not yet completed:** exact-head required CI, source-built signed Marketing Kit short-name + all MCP dependencies E2E, native client-driven E2E, independent review, release and postmerge. Do not merge before the necessary checks.
