@@ -37,7 +37,27 @@ func (session *groupSession) preflightCompatibleBindings() error {
 	return nil
 }
 
+// requireObservedCompatibilityBinding fences the exact original sibling ID
+// against the state reloaded under the usecase mutation lock. Client/backend
+// equivalence alone cannot authorize a new unselected binding after preflight.
+func (session *groupSession) requireObservedCompatibilityBinding(check AddInput) error {
+	if check.CompatibilityBindingID == "" {
+		return nil
+	}
+	binding, ok := session.state.Installations[session.installationIndex].Clients[check.CompatibilityBindingID]
+	if !ok || binding.ClientBindingID != check.CompatibilityBindingID ||
+		binding.ClientID != string(check.Client.ClientID) ||
+		binding.Scope != string(check.Scope) ||
+		binding.Materialization == domain.MaterializationAbsent {
+		return fmt.Errorf("unselected compatibility binding changed for %s", check.Client.ClientID)
+	}
+	return nil
+}
+
 func (session *groupSession) preflightOneCompatibleBinding(check AddInput, compatibleBindings map[string]bool) error {
+	if err := session.requireObservedCompatibilityBinding(check); err != nil {
+		return err
+	}
 	check.DryRun = check.DryRun || session.input.DryRun
 	check.OnlinePreview = check.OnlinePreview || session.input.OnlinePreview
 	// A selected binding already has this operation's reviewed host. A second
