@@ -187,7 +187,9 @@ for (const mobile of [false, true]) {
       );
       await navigate(page, '/plugins/', 'ru', '?tab=skills&skillScan=all');
       await expect(page.locator('.skill-card .skillspector > summary')).toContainText(
-        wording('ru')('registryUi.skillSpector.stale'),
+        wording('ru')('registryUi.skillSpector.lastScan', {
+          result: wording('ru')('registryUi.skillSpector.partial'),
+        }),
       );
       expect(requests).toBe(1);
       expect(

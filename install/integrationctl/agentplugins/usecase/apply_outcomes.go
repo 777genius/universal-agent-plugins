@@ -82,7 +82,7 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 			return true, session.result, err
 		}
 	}
-	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
+	if nativeProjectionClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
 		_, complete, _, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.state.Installations[session.installationIndex], current)
 		if err != nil {
 			return true, session.result, err
