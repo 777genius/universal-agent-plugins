@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
 
 const directorySitePlugin = "context7"
@@ -211,9 +212,33 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	codexCheck("site-repaired", true)
 	claudeCheck("site-repaired", true)
 	verifyForeign("repair")
-	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-remove", "remove", directorySitePlugin)
+	// The site's unfiltered remove is not a blanket Codex uninstall
+	// attestation. User-scope Codex must fail closed until its own native
+	// plugin has been removed and the operator explicitly confirms it.
+	beforeRemoval := nativeSHA(t, statePath)
+	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-remove-preflight",
+		"remove", directorySitePlugin)
+	if err == nil && result["outcome"] == "completed" {
+		t.Fatalf("unattested Codex removal unexpectedly completed: %+v", result)
+	}
+	if nativeSHA(t, statePath) != beforeRemoval ||
+		nativeTreeDigest(t, codexBinding.TargetLocator) != currentCodex ||
+		nativeTreeDigest(t, claudeBinding.TargetLocator) != currentClaude {
+		t.Fatal("unattested site removal modified managed state or files")
+	}
+	verifyForeign("unattested-remove")
+	marketplace := shared.ManagedMarketplaceName(codexBinding.PhysicalArtifact)
+	pluginID := directorySitePlugin + "@" + marketplace
+	if out, err := nativeCommand(t, f, codexBin, "site-codex-external-remove", "plugin", "remove", pluginID, "--json"); err != nil {
+		t.Fatalf("native Codex plugin removal failed: %v %s", err, out)
+	}
+	if out, err := nativeCommand(t, f, codexBin, "site-codex-marketplace-remove", "plugin", "marketplace", "remove", marketplace, "--json"); err != nil {
+		t.Fatalf("native Codex marketplace removal failed: %v %s", err, out)
+	}
+	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-remove",
+		"remove", directorySitePlugin, "--target", "codex,claude", "--external-uninstalled")
 	if err != nil || result["outcome"] != "completed" {
-		t.Fatalf("site remove failed: %v %+v", err, result)
+		t.Fatalf("attested site remove failed: %v %+v", err, result)
 	}
 	codexCheck("site-removed", false)
 	claudeCheck("site-removed", false)
