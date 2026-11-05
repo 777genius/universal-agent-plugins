@@ -38,6 +38,7 @@
       "unreviewedFindings": "Constats à examiner",
       "confirmedMaterialIssue": "Problème substantiel confirmé",
       "stale": "Analyse obsolète",
+      "lastScan": "Dernière analyse : {result}",
       "unsupported": "Non vérifié",
       "fullyChecked": "Skills analysées : {checked} sur {total}",
       "installAdvice": "Avant l’installation",

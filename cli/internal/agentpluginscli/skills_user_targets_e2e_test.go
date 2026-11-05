@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -19,6 +20,28 @@ func savedSkillsDurableTree(t *testing.T, root string) map[string]savedJourneyFi
 	files := savedJourneyTree(t, root)
 	delete(files, "environment.lock")
 	return files
+}
+
+// savedRawSkillDropOwnedFixture permits destructive test cleanup only under
+// this run's disposable CLI root. It never uses an arbitrary receipt path.
+func savedRawSkillDropOwnedFixture(t *testing.T, journey savedJourney, target string) {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(journey.cli.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relative, err := filepath.Rel(root, active)
+	if err != nil || relative == "." || relative == ".." ||
+		strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		t.Fatalf("refusing unsafe fixture cleanup of %q: %v", target, err)
+	}
+	if err := os.RemoveAll(target); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // A raw Agent Skill is a different source type from a plugin package. Exercise
@@ -177,9 +200,41 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 		t.Fatalf("locked replay after two-target update rewrote user state: %s", savedJourneyDifferences(updatedBytes, current))
 	}
 
-	// Removing one target may not remove the other one's exact owned bytes.
+	// A changed managed raw Skill must not be removed just because the
+	// saved receipt names its directory. Prove the refusal through the public
+	// CLI while the other installed user target remains byte-identical.
 	claudeBefore := savedJourneyBinding(t, updatedState, "claude")
 	managedBefore["claude"] = savedJourneyTree(t, claudeBefore.TargetLocator)
+	codexBefore := savedJourneyBinding(t, updatedState, "codex")
+	codexTree := savedJourneyTree(t, codexBefore.TargetLocator)
+	foreignInside := filepath.Join(codexBefore.TargetLocator, "foreign-owned.txt")
+	if err := os.WriteFile(foreignInside, []byte("owned by another user"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	guardedTree := savedJourneyTree(t, codexBefore.TargetLocator)
+	guardedState := savedSkillsDurableTree(t, j.cli.app.DependenciesRoot)
+	if _, _, err := j.cli.execute(false, "remove", "pdf", "--target", "codex", "--external-uninstalled", "--scope", "user", "--format", "json"); err == nil ||
+		(!strings.Contains(err.Error(), "artifact digest mismatch") &&
+			!strings.Contains(err.Error(), "native identity ownership is indeterminate") &&
+			!strings.Contains(err.Error(), "drift: pdf/codex")) {
+		t.Fatalf("selected removal failed to refuse foreign raw Skill ownership: %v", err)
+	}
+	if after := savedSkillsDurableTree(t, j.cli.app.DependenciesRoot); !reflect.DeepEqual(guardedState, after) {
+		t.Fatalf("refused Codex removal changed saved user state: %s", savedJourneyDifferences(guardedState, after))
+	}
+	if after := savedJourneyTree(t, codexBefore.TargetLocator); !reflect.DeepEqual(guardedTree, after) {
+		t.Fatalf("refused Codex removal changed foreign/owned bytes: %s", savedJourneyDifferences(guardedTree, after))
+	}
+	if after := savedJourneyTree(t, claudeBefore.TargetLocator); !reflect.DeepEqual(managedBefore["claude"], after) {
+		t.Fatal("refused Codex removal changed Claude user Skill")
+	}
+	if err := os.Remove(foreignInside); err != nil {
+		t.Fatal(err)
+	}
+	if after := savedJourneyTree(t, codexBefore.TargetLocator); !reflect.DeepEqual(codexTree, after) {
+		t.Fatal("removing only the injected fixture did not restore the managed Codex Skill")
+	}
+	// Removing one target may not remove the other one's exact owned bytes.
 	j.run(t, "remove", "pdf", "--target", "codex", "--external-uninstalled", "--scope", "user", "--format", "json")
 	afterCodex := j.state(t)
 	if !reflect.DeepEqual(claudeBefore, savedJourneyBinding(t, afterCodex, "claude")) {

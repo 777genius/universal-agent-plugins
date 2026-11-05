@@ -116,6 +116,50 @@ func nativeRawUserSavedLifecycleResult(t *testing.T, target, operation string, r
 	}
 }
 
+// nativeRawUserForeignDriftRefusal proves that a raw Skill's recorded ownership
+// cannot authorize deleting someone else's files, even inside an owned path.
+// Both attempts run the public CLI with genuine detected native client state.
+func nativeRawUserForeignDriftRefusal(t *testing.T, root, dir string, env []string, installer, target, statePath string, binding domain.ClientBinding) {
+	t.Helper()
+	nativeRequireContained(t, root, binding.TargetLocator)
+	beforeState := nativeSHA(t, statePath)
+	beforeTree := nativeTreeDigest(t, binding.TargetLocator)
+	foreign := filepath.Join(binding.TargetLocator, "foreign-injected.txt")
+	nativeWrite(t, foreign, []byte("foreign user data: do not adopt or delete"), 0600)
+	foreignSHA := nativeSHA(t, foreign)
+	damagedTree := nativeTreeDigest(t, binding.TargetLocator)
+	for _, operation := range []string{"repair", "remove"} {
+		args := []string{operation, nativeRawUserSkillName, "--target", target, "--scope", "user"}
+		if operation == "remove" && target == "codex" {
+			args = append(args, "--external-uninstalled")
+		}
+		label := "raw-user-foreign-" + target + "-" + operation
+		result, runErr := commandsRunInstaller(t, root, dir, env, installer, label, args...)
+		stderr, err := os.ReadFile(filepath.Join(root, label+"-installer-stderr.log"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := json.Marshal(result)
+		diagnostic := string(stderr) + "\n" + string(body)
+		if runErr == nil || (!strings.Contains(diagnostic, "artifact digest mismatch") &&
+			!strings.Contains(diagnostic, "native identity ownership is indeterminate") &&
+			!strings.Contains(diagnostic, "drift: "+nativeRawUserSkillName+"/"+target)) {
+			t.Fatalf("%s %s did not refuse modified raw Skill ownership: err=%v diagnostic=%s", target, operation, runErr, diagnostic)
+		}
+		if nativeSHA(t, foreign) != foreignSHA || nativeSHA(t, statePath) != beforeState ||
+			nativeTreeDigest(t, binding.TargetLocator) != damagedTree {
+			t.Fatalf("%s %s altered foreign bytes, the saved ledger, or the installed raw Skill after refusal", target, operation)
+		}
+	}
+	if err := os.Remove(foreign); err != nil {
+		t.Fatal(err)
+	}
+	if nativeTreeDigest(t, binding.TargetLocator) != beforeTree ||
+		nativeSHA(t, statePath) != beforeState {
+		t.Fatalf("%s failed to restore exact original owned raw Skill after foreign-file refusal", target)
+	}
+}
+
 // nativeRawUserRepair Deletes only a disposable owned artifact, then proves the saved repair restores it.
 func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer, target, statePath, profile string, original domain.ClientBinding) {
 	t.Helper()
@@ -305,6 +349,8 @@ func TestAgentpluginsCodexNativeRawUserSkillLifecycle(t *testing.T) {
 		t.Fatal("Codex implicit user replay changed managed bytes or receipts")
 	}
 	codexNativeRawUserInventory(t, f, client, id, declaredName, binding.TargetLocator, "raw-user-repeated", true)
+	nativeRawUserForeignDriftRefusal(t, f.Root, f.Project, env, installer, "codex", statePath, binding)
+	codexNativeRawUserInventory(t, f, client, id, declaredName, binding.TargetLocator, "raw-user-foreign-refused", true)
 	nativeRawUserRepair(t, f.Root, f.Project, env, installer, "codex", statePath, f.CodexHome, binding)
 	codexNativeRawUserInventory(t, f, client, id, declaredName, binding.TargetLocator, "raw-user-repaired", true)
 	nativeRawUserRemove(t, f.Root, f.Project, env, installer, "codex", statePath, binding.TargetLocator, true)
@@ -375,6 +421,9 @@ func TestAgentpluginsClaudeNativeRawUserSkillLifecycle(t *testing.T) {
 	}
 	verify("raw-user-repeated", true)
 	verifySkill("raw-user-repeated-details")
+	nativeRawUserForeignDriftRefusal(t, f.Root, f.Root, env, installer, "claude", statePath, binding)
+	verify("raw-user-foreign-refused", true)
+	verifySkill("raw-user-foreign-refused-details")
 	nativeRawUserRepair(t, f.Root, f.Root, env, installer, "claude", statePath, f.ConfigDir, binding)
 	verify("raw-user-repaired", true)
 	verifySkill("raw-user-repaired-details")

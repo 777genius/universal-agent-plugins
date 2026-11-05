@@ -38,6 +38,7 @@
       "unreviewedFindings": "Зауваження потребують розгляду",
       "confirmedMaterialIssue": "Підтверджено суттєву проблему",
       "stale": "Перевірка застаріла",
+      "lastScan": "Останнє сканування: {result}",
       "unsupported": "Не перевірено",
       "fullyChecked": "Проскановано скілів: {checked} із {total}",
       "installAdvice": "Перед встановленням",

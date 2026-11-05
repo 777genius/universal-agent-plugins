@@ -46,6 +46,9 @@ type ClientTraits struct {
 	// ProtectsModifiedPackage rejects repair over edited discovery code; missing
 	// exact-owned directories remain repairable through the normal transaction.
 	ProtectsModifiedPackage bool
+	// ProtectsModifiedUserRawSkill refuses repair over modified user-scoped
+	// Git/HTTPS Skills. Project Skills and ordinary packages retain their policy.
+	ProtectsModifiedUserRawSkill bool
 	// EnforcesExplicitSkillInvocation means the client has a verified way to
 	// keep a skill out of the model's automatic choice, so an explicit-only
 	// command can be delivered. The adapter must then implement

@@ -56,6 +56,12 @@ export interface ReleaseTarget {
   delivery: DeliveryMode;
   scopes: string[];
   app_binding?: AppBinding;
+  // Read-only signed v2 per-client/per-scope summary, never a runtime proof.
+  canonical_closure?: {
+    eligible: boolean;
+    closure_digest?: string;
+    minimum_installer_version?: string;
+  };
 }
 
 export interface PluginIcon {

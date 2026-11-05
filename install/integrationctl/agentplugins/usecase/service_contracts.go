@@ -7,7 +7,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 type Service struct {
@@ -37,7 +36,7 @@ type Service struct {
 	Stager             ports.PackageStager
 	Activator          ports.ClientActivator
 	Legacy             ports.LegacyLifecycle
-	LegacyLock         legacyports.LockManager
+	LegacyLock         ports.MutationLock
 	Lock               ports.MutationLock
 	Kernel             transaction.Kernel
 	NativeObserver     NativeIdentityObserver
@@ -113,6 +112,9 @@ type AddInput struct {
 	BackendExecutable  string
 	ActivationComplete bool
 	AuthComplete       bool
+	// CompatibilityBindingID freezes the observed unselected binding across
+	// the facade preflight and usecase mutation lock. Selected inputs leave it empty.
+	CompatibilityBindingID string `json:"-"`
 	// EnvironmentAuthority is mandatory for managed update/remove/repair and is
 	// copied into the durable receipt before the first managed effect.
 	EnvironmentAuthority *domain.EnvironmentAuthority

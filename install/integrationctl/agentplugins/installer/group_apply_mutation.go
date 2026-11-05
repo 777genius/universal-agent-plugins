@@ -44,8 +44,12 @@ func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (
 	if err := e.confirmDeliveries(ctx, prepared); err != nil {
 		return nil, err
 	}
+	checks, err := e.groupCompatibilityChecks(req, inputs)
+	if err != nil {
+		return nil, err
+	}
 	group := usecase.GroupInput{
-		Targets: inputs, CompatibilityChecks: inputs,
+		Targets: inputs, CompatibilityChecks: checks,
 		OperationGroupID: firstNonEmpty(prepared.req.OperationID, "group"),
 		Confirmed:        true, Repair: prepared.req.Operation == OpRepair,
 		Progress: e.reportGroupActivation,

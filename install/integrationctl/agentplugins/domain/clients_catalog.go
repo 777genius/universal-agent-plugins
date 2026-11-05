@@ -102,6 +102,7 @@ var clientDefinitions = []ClientDefinition{
 		HonorsOpenAIMCPAuthHints:      true,
 		SupportsPreparedRecovery:      true,
 		BindsNativeProfileRoot:        true,
+		ProtectsModifiedUserRawSkill:  true,
 	}), LifecycleNativeConfig),
 	withoutHostPresence(withDirectoryPreparation(
 		clientDefinition(ClientChatGPT, "ChatGPT", "chatgpt", "manual_activation", "projected", false, PackageProjection, SupportProjected, SupportUnsupported, SupportUnsupported, SupportProjected, SupportUnsupported, ClientTraits{
@@ -134,6 +135,7 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:                 LifecycleCLIRegistry,
 		UsesManagedStdioLauncher:      true,
+		ProtectsModifiedUserRawSkill:  true,
 	}), ActivationAutomatic), LifecycleCLIRegistry),
 	withProjectScope(clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:         []InstallIntent{InstallIntentAutomatic},

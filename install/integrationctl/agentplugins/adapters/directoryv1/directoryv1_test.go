@@ -55,6 +55,58 @@ func fixtureSnapshot(sequence uint64) domain.DirectorySnapshot {
 	return domain.DirectorySnapshot{SnapshotSchemaVersion: 1, Sequence: sequence, PublicationID: fmt.Sprintf("publication-%d", sequence), SourceCommit: "abcdefabcdefabcdefabcdefabcdefabcdefabcd", GeneratedAt: "2026-08-20T11:00:00Z", ExpiresAt: "2026-09-19T11:00:00Z", Products: []domain.DirectoryProduct{product}, Distributions: []domain.DirectoryDistribution{distribution}, Evidence: []domain.DirectoryEvidence{evidence}, Revocations: []domain.DirectoryRevocation{}}
 }
 
+func TestSchemaOneRejectsV2CanonicalClosure(t *testing.T) {
+	original := fixtureSnapshot(15)
+	body, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var snapshot map[string]any
+	if err := json.Unmarshal(body, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	distributions := snapshot["distributions"].([]any)
+	policy := distributions[0].(map[string]any)["release_policies"].([]any)[0].(map[string]any)
+	grant := policy["targets"].([]any)[0].(map[string]any)
+	grant["canonical_closure"] = map[string]any{"eligible": true, "closure_digest": "sha256:" + strings.Repeat("f", 64), "minimum_installer_version": "2.0.0"}
+	modified, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseSnapshot(modified); !errors.Is(err, ErrStrictJSON) {
+		t.Fatalf("schema-1 accepted v2 canonical closure: %v", err)
+	}
+}
+
+func TestSchemaOneEvidenceRejectsScopedWireFields(t *testing.T) {
+	for _, sequence := range []uint64{13, 15} {
+		for _, rawScope := range []string{`"project"`, "null"} {
+			original := fixtureSnapshot(sequence)
+			body, err := json.Marshal(original)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var snapshot map[string]any
+			if err := json.Unmarshal(body, &snapshot); err != nil {
+				t.Fatal(err)
+			}
+			evidence := snapshot["evidence"].([]any)[0].(map[string]any)
+			var scoped any
+			if err := json.Unmarshal([]byte(rawScope), &scoped); err != nil {
+				t.Fatal(err)
+			}
+			evidence["scope"] = scoped
+			modified, err := json.Marshal(snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ParseSnapshot(modified); !errors.Is(err, ErrStrictJSON) {
+				t.Fatalf("v1 sequence %d accepted evidence scope %s: %v", sequence, rawScope, err)
+			}
+		}
+	}
+}
+
 func TestSnapshotEvidenceCutoverAcceptsBothStrictShapes(t *testing.T) {
 	legacy := fixtureSnapshot(13)
 	legacyBody, err := json.Marshal(legacy)

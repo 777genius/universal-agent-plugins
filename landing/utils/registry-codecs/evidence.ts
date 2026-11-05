@@ -14,15 +14,25 @@ import type {
   TargetAuthentication,
 } from '../../types/registry';
 
-export function releaseTargets(value: unknown, context: string): ReleaseTarget[] {
+export function releaseTargets(
+  value: unknown,
+  context: string,
+  schemaVersion: 1 | 2 = 1,
+): ReleaseTarget[] {
   if (!Array.isArray(value) || !value.length) throw new Error(`${context}: targets are required`);
-  const seen = new Set<ClientID>();
+  const seen = new Set<string>();
   return value.map((raw, index): ReleaseTarget => {
     if (!record(raw)) throw new Error(`${context}: target ${index} must be an object`);
     const client = requiredString(raw, 'client', `${context} target ${index}`) as ClientID;
-    if (!CLIENTS.has(client) || seen.has(client))
-      throw new Error(`${context}: target ${index} has an invalid or duplicate client`);
-    seen.add(client);
+    const scope = schemaVersion === 2
+      ? requiredString(raw, 'scope', `${context} target ${index}`)
+      : undefined;
+    if (schemaVersion === 2 && (raw.scopes !== undefined || (scope !== 'user' && scope !== 'project')))
+      throw new Error(`${context}: v2 grant cannot borrow legacy scopes`);
+    const key = schemaVersion === 2 ? `${client}:${scope}` : client;
+    if (!CLIENTS.has(client) || seen.has(key))
+      throw new Error(`${context}: target ${index} has an invalid or duplicate client/scope`);
+    seen.add(key);
     const delivery = requiredString(raw, 'delivery', `${context} target ${client}`);
     if (!['managed', 'prepared', 'manual_activation'].includes(delivery))
       throw new Error(`${context}: target ${client} has invalid delivery`);
@@ -33,7 +43,29 @@ export function releaseTargets(value: unknown, context: string): ReleaseTarget[]
     ) as TargetAuthentication;
     if (!['not_required', 'required', 'unknown'].includes(authentication))
       throw new Error(`${context}: target ${client} has invalid authentication`);
-    const scopes = stringArray(raw.scopes, 'scopes', `${context} target ${client}`);
+    const scopes = schemaVersion === 2
+      ? [scope!]
+      : stringArray(raw.scopes, 'scopes', `${context} target ${client}`);
+    if (schemaVersion === 2 &&
+      (!Array.isArray(raw.current_evidence) ||
+        raw.current_evidence.some((id) => typeof id !== 'string')))
+      throw new Error(`${context}: v2 grant requires an evidence array`);
+    let closure: ReleaseTarget['canonical_closure'];
+    if (raw.canonical_closure !== undefined) {
+      const value = raw.canonical_closure;
+      if (schemaVersion !== 2 || !record(value) || typeof value.eligible !== 'boolean')
+        throw new Error(`${context}: invalid v2 closure`);
+      if (value.eligible) {
+        const digest = requiredString(value, 'closure_digest', `${context} closure`);
+        const floor = requiredString(value, 'minimum_installer_version', `${context} closure`);
+        const validFloor = /^[0-9]+[.][0-9]+[.][0-9]+(?:-[0-9A-Za-z.-]+)?(?:[+][0-9A-Za-z.-]+)?$/.test(floor);
+        if (!DIGEST.test(digest) || !validFloor)
+          throw new Error(`${context}: invalid eligible v2 closure digest or floor`);
+        closure = { eligible: true, closure_digest: digest, minimum_installer_version: floor };
+      } else {
+        closure = { eligible: false };
+      }
+    }
     let appBinding: ReleaseTarget['app_binding'];
     if (record(raw.app_binding)) {
       appBinding = {
@@ -60,6 +92,7 @@ export function releaseTargets(value: unknown, context: string): ReleaseTarget[]
       delivery: delivery as ReleaseTarget['delivery'],
       scopes,
       ...(appBinding ? { app_binding: appBinding } : {}),
+      ...(closure ? { canonical_closure: closure } : {}),
     };
   });
 }
@@ -204,10 +237,13 @@ export function evidenceFromSnapshot(
 
 export function eligibleTargetPolicies(
   kind: DistributionKind,
-  release: Pick<DistributionReleaseView, 'targets' | 'blocking_clients' | 'materialized_clients'>,
+  release: Pick<DistributionReleaseView, 'targets' | 'blocking_clients' | 'materialized_clients' | 'selectable'>,
 ): ReleaseTarget[] {
+  // A v2 review preview is not authenticated and must not yield installable targets.
+  if (!release.selectable) return [];
   return release.targets.filter(
     (target) =>
+      target.canonical_closure?.eligible !== false &&
       !release.blocking_clients.includes(target.client) &&
       (kind !== 'upstream' || release.materialized_clients.includes(target.client)),
   );

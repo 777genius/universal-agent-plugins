@@ -38,6 +38,7 @@
       "unreviewedFindings": "نتائج تحتاج إلى مراجعة",
       "confirmedMaterialIssue": "مشكلة جوهرية مؤكدة",
       "stale": "فحص قديم",
+      "lastScan": "آخر فحص: {result}",
       "unsupported": "لم يُفحص",
       "fullyChecked": "المهارات المفحوصة: {checked} من {total}",
       "installAdvice": "قبل التثبيت",

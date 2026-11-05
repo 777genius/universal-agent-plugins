@@ -20,7 +20,7 @@ func (b *ManagementBackend) Catalog(ctx context.Context, query string) (manageme
 	if err != nil {
 		return out, err
 	}
-	bundle, loadErr := b.app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
+	bundle, loadErr := b.app.DirectoryClient.Load(ctx, directoryFloorForClient(state, b.app.DirectoryClient))
 	return b.managementCatalogOutcome(bundle, loadErr, query), nil
 }
 
