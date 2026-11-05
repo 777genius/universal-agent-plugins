@@ -147,18 +147,7 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 	seenOperations := map[string]struct{}{}
 	seenPaths := map[string]struct{}{}
 	for index, mutation := range group.Mutations {
-		if mutation.Sequence < 1 || mutation.OperationID == "" {
-			return nil, fmt.Errorf("mutation %d has incomplete identity", index)
-		}
-		if _, duplicate := seenOperations[mutation.OperationID]; duplicate || operationIDExists(before, mutation.OperationID) {
-			return nil, fmt.Errorf("mutation operation id %q was already used", mutation.OperationID)
-		}
-		seenOperations[mutation.OperationID] = struct{}{}
-		if _, duplicate := seenPaths[mutation.ActivePath]; duplicate {
-			return nil, fmt.Errorf("physical backend %q occurs more than once in operation group", mutation.ActivePath)
-		}
-		seenPaths[mutation.ActivePath] = struct{}{}
-		if _, _, err := loadClientFromState(state, mutation.InstallationID, mutation.ClientBindingID); err != nil {
+		if _, _, err := validateDirectoryGroupItem(before, state, mutation, index, seenOperations, seenPaths); err != nil {
 			return nil, err
 		}
 	}
@@ -174,18 +163,7 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 		return rollbackErr
 	}
 	for index, mutation := range group.Mutations {
-		if mutation.Sequence < 1 || mutation.OperationID == "" {
-			return nil, fmt.Errorf("mutation %d has incomplete identity", index)
-		}
-		if _, duplicate := seenOperations[mutation.OperationID]; duplicate || operationIDExists(before, mutation.OperationID) {
-			return nil, fmt.Errorf("mutation operation id %q was already used", mutation.OperationID)
-		}
-		seenOperations[mutation.OperationID] = struct{}{}
-		if _, duplicate := seenPaths[mutation.ActivePath]; duplicate {
-			return nil, fmt.Errorf("physical backend %q occurs more than once in operation group", mutation.ActivePath)
-		}
-		seenPaths[mutation.ActivePath] = struct{}{}
-		installationIndex, client, err := loadClientFromState(state, mutation.InstallationID, mutation.ClientBindingID)
+		installationIndex, client, err := validateDirectoryGroupItem(before, state, mutation, index, seenOperations, seenPaths)
 		if err != nil {
 			return nil, err
 		}
