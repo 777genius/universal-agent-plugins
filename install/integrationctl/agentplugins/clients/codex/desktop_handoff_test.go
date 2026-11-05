@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -9,7 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestDesktopPluginLinkUsesLocalDetailURL(t *testing.T) {
@@ -95,5 +98,42 @@ func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 		if got := desktopPluginHandoff(root, "stripe", "artifact"); got != "" {
 			t.Fatalf("symlink marketplace received link: %q", got)
 		}
+	}
+}
+
+func TestDesktopHandoffDoesNotUpgradeCodexVerification(t *testing.T) {
+	root, profile := filepath.Join(tempRoot(t), "active"), tempRoot(t)
+	marketplace := filepath.Join(root, ".agents", "plugins", "marketplace.json")
+	if err := os.MkdirAll(filepath.Dir(marketplace), 0700); err != nil {
+		t.Fatal(err)
+	}
+	payload := fmt.Sprintf(`{"name":%q,"plugins":[{"name":"demo","source":{"source":"local","path":"./"}}]}`, shared.ManagedMarketplaceName("artifact"))
+	if err := os.WriteFile(marketplace, []byte(payload), 0600); err != nil {
+		t.Fatal(err)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &profileRunner{}
+	client := domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: profile}
+	plan := domain.DeliveryPlan{
+		ClientID: domain.ClientCodex, PhysicalArtifactID: "artifact", DeclaredName: "demo",
+		NativeRegistryRoot: profile, NativeRegistryExecutable: executable,
+	}
+	outcome, err := New().Activate(context.Background(), clients.Env{Runner: runner}, domain.ActivationRequest{
+		Client: client, Plan: plan, Delivery: domain.StagedDelivery{ClientID: domain.ClientCodex, ActivePath: root},
+		DeclaredName: "demo", BackendExecutable: executable,
+	})
+	if err != nil || outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
+		t.Fatalf("Codex lifecycle changed: %+v / %v", outcome, err)
+	}
+	if !strings.Contains(strings.Join(outcome.LocalActions, "\n"), "codex://plugins/demo?marketplacePath=") {
+		t.Fatalf("desktop user guidance missing from verified Codex installation: %+v", outcome)
+	}
+	// The native listing is successful but the optional Desktop step does not
+	// assert that a signed-in ChatGPT runtime has executed the plugin.
+	if !strings.Contains(strings.Join(outcome.LocalActions, "\n"), "does not prove ChatGPT runtime use") {
+		t.Fatal("ChatGPT runtime caveat disappeared")
 	}
 }
