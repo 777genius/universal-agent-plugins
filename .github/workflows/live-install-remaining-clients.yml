@@ -171,6 +171,14 @@ jobs:
             mkdir -p "$RUNNER_TEMP/vendor-root"
             dpkg-deb --extract "$artifact" "$RUNNER_TEMP/vendor-root"
             export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+            if [[ "$TARGET" == vscode ]]; then
+              # A staged .deb may carry /usr/bin/code as an absolute symlink:
+              # bind its verified editor launcher explicitly, not the host CLI.
+              executable="$RUNNER_TEMP/vendor-root/usr/share/code/bin/code"
+              test -f "$executable" && test -x "$executable" && test ! -L "$executable"
+              test "$(readlink -f "$executable")" = "$executable"
+              ln -s "$executable" "$HOME/.local/bin/code"
+            fi
           elif [[ "$TARGET" == kiro ]]; then
             # This archive is verified above against the independently pinned
             # Homebrew Cask release, not a mutable vendor installer script.
@@ -185,6 +193,10 @@ jobs:
           fi
           hash -r
           command -v "$BIN" | tee "$RUNNER_TEMP/vendor-proof/executable.txt"
+          if [[ "$TARGET" == vscode ]]; then
+            # A runner-installed editor is not the reviewed downloaded artifact.
+            test "$(readlink -f "$(command -v code)")" = "$executable"
+          fi
           # No ambient CI credentials or native profile overrides reach vendor --version.
           probe_home="$(mktemp -d "$RUNNER_TEMP/vendor-probe.XXXXXX")"
           env -i PATH="$PATH" HOME="$probe_home" USERPROFILE="$probe_home" \

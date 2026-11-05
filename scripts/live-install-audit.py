@@ -1292,7 +1292,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     elif install_refused and host_containment_refusal(diagnostics):
         status = "host-containment-unavailable"
     elif install_refused and ("not detected" in diagnostics or "not available" in diagnostics
-                             or "target_unavailable" in diagnostics):
+                             or "target_unavailable" in diagnostics
+                             or (target == "windsurf" and kind == "plugin"
+                                 and "clientconfigroot must be an explicit absolute clean path"
+                                 in diagnostics)):
         status = "target-unavailable"
     elif install_refused and ("unsupported" in diagnostics or "not supported" in diagnostics
                               or source_target_incompatibility(diagnostics)):

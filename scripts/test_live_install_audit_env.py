@@ -467,6 +467,45 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertIn('test -f "$executable" && test -x "$executable" && test ! -L "$executable"', workflow)
         self.assertIn('env -i PATH="$PATH" HOME="$probe_home"', workflow)
 
+    def test_vscode_deb_uses_exact_verified_staged_launcher(self):
+        # BUG-055: /usr/bin/code may be an absolute .deb symlink, not a
+        # runnable binary after extraction into an unprivileged temp root.
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        self.assertIn('executable="$RUNNER_TEMP/vendor-root/usr/share/code/bin/code"', workflow)
+        self.assertIn('test -f "$executable" && test -x "$executable" && test ! -L "$executable"', workflow)
+        self.assertIn('test "$(readlink -f "$executable")" = "$executable"', workflow)
+        self.assertIn('ln -s "$executable" "$HOME/.local/bin/code"', workflow)
+        self.assertIn('test "$(readlink -f "$(command -v code)")" = "$executable"', workflow)
+        self.assertLess(workflow.index('sha256_file -c -'),
+                        workflow.index('dpkg-deb --extract "$artifact"'))
+        self.assertIn('vscode) SHA256="b8fbff92d8d95908990eed0acf004c980f29003725469e794ddbd017ea511a20"', workflow)
+
+    def test_devin_user_plugin_without_selected_windsurf_channel_is_nonpass(self):
+        # BUG-055: a real devin CLI does not select a legacy Windsurf user
+        # profile, so fail-closed root selection is not a broken package.
+        audit = load_audit()
+        refused = {"exit_code": 1, "stdout_tail": "",
+                   "stderr_tail": ("preflight atlassian/windsurf: installer request "
+                                   "rejected: ClientConfigRoot must be an explicit "
+                                   "absolute clean path"),
+                   "timeout": False, "_json": None}
+        empty = {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                 "timeout": False, "_json": {"data": {"installations": []}}}
+
+        def fake_call(argv, env, cwd, timeout=105):
+            return refused if argv[1] == "add" else empty
+
+        with TemporaryDirectory() as temporary, patch.object(audit, "call", side_effect=fake_call):
+            evidence = audit.do_case("/unused/uap", "windsurf", "plugin",
+                                     "atlassian", 0, Path(temporary), {})
+        self.assertEqual(evidence["status"], "target-unavailable")
+        self.assertEqual(evidence["install"]["exit_code"], 1)
+        self.assertFalse(evidence["listed_identity"])
+        self.assertFalse(evidence["failed_install_residue"])
+        self.assertTrue(evidence["sentinels_preserved"])
+        self.assertIsNone(evidence["cleanup"])
+
     def test_kiro_native_archive_is_pinned_before_extraction(self):
         # Independently pinned Homebrew Cask 3.0.0, not a mutable install script.
         workflow = (Path(__file__).resolve().parents[1] /
