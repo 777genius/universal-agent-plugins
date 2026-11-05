@@ -149,6 +149,29 @@ test('resolver adds diagnostic codes while retaining exact reasons, selection pr
     assert.equal(format(undefined, '<original>'), 'Source-provided reason: <original>');
 });
 
+test('non-selectable releases retain published refusal reasons without authorizing previews', () => {
+  for (const [kind, change, code] of [
+    ['revoked', (d: DistributionView) => { d.releases[0].release_status = 'revoked'; }, 'releaseStatus'],
+    ['missing components', (d: DistributionView) => { d.releases[0].meets_minimum_capabilities = false; }, 'missingComponents'],
+  ] as const) {
+    const d = candidate('default', 'upstream');
+    d.releases[0].selectable = false;
+    change(d);
+    const unavailable = resolveDistribution(plugin(d), ['codex']);
+    assert.equal(unavailable.distribution, undefined, kind);
+    assert.ok(unavailable.unavailable_reason?.includes(
+      kind === 'revoked' ? 'release 1 is revoked' : 'release 1 misses required components',
+    ), kind);
+    assert.ok(JSON.stringify(unavailable.unavailable_diagnostic).includes(`"code":"${code}"`), kind);
+  }
+  const preview = candidate('default', 'upstream');
+  preview.releases[0].selectable = false;
+  const unavailable = resolveDistribution(plugin(preview), ['codex']);
+  assert.equal(unavailable.distribution, undefined);
+  assert.ok(unavailable.unavailable_reason?.includes('release 1 is not selectable'));
+  assert.ok(JSON.stringify(unavailable.unavailable_diagnostic).includes('"code":"noReleases"'));
+});
+
 test('authentication visibility uses semantic states with preserved legacy precedence', () => {
   const d = candidate('default', 'upstream');
   d.targets = d.releases[0].targets;

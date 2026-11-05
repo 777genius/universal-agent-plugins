@@ -50,6 +50,35 @@ func TestV2PortableIdentityParityWithV1(t *testing.T) {
 			g := &s.Distributions[0].ReleasePolicies[0].Targets[0]
 			g.CurrentEvidence = append(g.CurrentEvidence, g.CurrentEvidence[0])
 		}},
+		{"legacy evidence identity", func(s *domain.DirectorySnapshot) {
+			s.Evidence[0].SourceRepository = "owner/old"
+		}},
+		{"legacy evidence adapter version", func(s *domain.DirectorySnapshot) {
+			s.Evidence[0].AdapterVersion = "0.1.13"
+		}},
+		{"missing primary artifact path", func(s *domain.DirectorySnapshot) {
+			s.Evidence[0].Artifact.Path = ""
+		}},
+		{"invalid trust bundle manifest", func(s *domain.DirectorySnapshot) {
+			artifact := s.Evidence[0].Artifact
+			artifact.Path = ""
+			s.Evidence[0].Trust.BundleManifest = &artifact
+		}},
+		{"invalid trust launch artifact", func(s *domain.DirectorySnapshot) {
+			artifact := s.Evidence[0].Artifact
+			artifact.Repository = "bad/repo/tag"
+			s.Evidence[0].Trust.LaunchArtifact = &artifact
+		}},
+		{"invalid trust observer artifact", func(s *domain.DirectorySnapshot) {
+			artifact := s.Evidence[0].Artifact
+			artifact.Revision = "mutable-tag"
+			s.Evidence[0].Trust.ObserverArtifact = &artifact
+		}},
+		{"invalid trust evidence index", func(s *domain.DirectorySnapshot) {
+			artifact := s.Evidence[0].Artifact
+			artifact.Digest = "invalid"
+			s.Evidence[0].Trust.EvidenceIndex = &artifact
+		}},
 		{"unknown evidence level", func(s *domain.DirectorySnapshot) {
 			s.Evidence[0].Level = "permission"
 		}},
