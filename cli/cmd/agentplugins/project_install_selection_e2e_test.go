@@ -191,4 +191,30 @@ func TestProjectRequiredChildColdRestoreAndScopedRemoval(t *testing.T) {
 			t.Fatalf("project A closure removal retained %s MCP entry: %s", child.alias, aSettings)
 		}
 	}
+
+	// A new moving Git revision that drops one required MCP child must fail
+	// while resolving the graph, before lock publication or any native write.
+	// Existing pinned user/B installations stay independent of that revision.
+	if err := os.RemoveAll(filepath.Join(transport.repo, "playwright")); err != nil {
+		t.Fatal(err)
+	}
+	projectJourneyGit(t, transport.repo, "add", "-A")
+	projectJourneyGit(t, transport.repo, "commit", "-m", "remove required Playwright child")
+	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
+	refused := newProjectJourney(t, transport)
+	projectJourneyWrite(t, filepath.Join(refused.a, "uap.toml"), manifest)
+	refusedNative := securityFixtureTree(t, refused.nativeRoot(refused.a))
+	if _, err := refused.execute(refused.a, "deps", "lock"); err == nil {
+		t.Fatal("missing required child unexpectedly produced a portable lock")
+	}
+	projectJourneyAbsent(t, filepath.Join(refused.a, "uap.lock"))
+	refusedState := refused.state(t, refused.a)
+	if len(refusedState.Installations) != 0 || len(refusedState.EnvironmentReceipts) != 0 ||
+		!reflect.DeepEqual(refusedNative, securityFixtureTree(t, refused.nativeRoot(refused.a))) {
+		t.Fatal("missing required child mutated project installation or native state")
+	}
+	if userState != projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json")) ||
+		bState != projectJourneyRead(t, filepath.Join(journey.namespace(journey.b), "state-v2.json")) {
+		t.Fatal("missing required child changed a different scope")
+	}
 }
