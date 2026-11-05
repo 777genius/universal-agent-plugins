@@ -66,9 +66,16 @@ func nativeRawUserState(t *testing.T, statePath, target, profile string) (domain
 		receipt.ClientID != target || receipt.ClientBindingID != binding.ClientBindingID ||
 		binding.ClientID != target || binding.Scope != "user" ||
 		binding.TargetLocator == "" || binding.PhysicalArtifact == "" ||
-		binding.ClientBindingID == "" || binding.NativeProfileRoot != profile ||
+		binding.ClientBindingID == "" ||
+		(binding.NativeProfileRoot != "" && binding.NativeProfileRoot != profile) ||
 		binding.Verification != domain.VerificationInstalled {
 		t.Fatalf("%s: raw Skill lost immutable user/native identity: %+v; %+v", target, installed, binding)
+	}
+	// Claude's projected delivery binds the selected native profile through
+	// its exact skills-directory path and authoritative CLI inventory; the
+	// optional NativeProfileRoot field need not be populated for this adapter.
+	if target == "claude" && filepath.Dir(binding.TargetLocator) != filepath.Join(profile, "skills") {
+		t.Fatalf("Claude raw Skill escaped selected user profile: %s", binding.TargetLocator)
 	}
 	return state, binding
 }
