@@ -1768,6 +1768,36 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "prerequisite unavailable"):
                 audit.initialize_project_skill_git_root(project, env, case / "outside")
 
+    def test_project_git_init_rejects_existing_symlink_metadata(self):
+        # BUG-065: git init follows .git symlinks and can write outside the case
+        # before a post-execution containment check detects the redirect.
+        audit = load_audit()
+        with TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            case = root / "case"
+            project, home, data = case / "project", case / "home", case / "uap-data"
+            for directory in (project, home, data):
+                directory.mkdir(parents=True, exist_ok=True)
+            outside = root / "outside"
+            outside.mkdir()
+            marker = project / ".git"
+            try:
+                marker.symlink_to(outside, target_is_directory=True)
+            except OSError as err:
+                self.skipTest(f"symlinks unavailable: {err}")
+            env = audit.isolated_client_env(home, case, data)
+            with patch.object(audit, "call") as forbidden:
+                with self.assertRaisesRegex(RuntimeError, "metadata must be initially absent"):
+                    audit.initialize_project_skill_git_root(project, env, case)
+                forbidden.assert_not_called()
+            self.assertEqual(list(outside.iterdir()), [])
+            marker.unlink()
+            marker.mkdir()
+            with patch.object(audit, "call") as forbidden:
+                with self.assertRaisesRegex(RuntimeError, "metadata must be initially absent"):
+                    audit.initialize_project_skill_git_root(project, env, case)
+                forbidden.assert_not_called()
+
     def test_isolated_git_prerequisite_only_for_kimi_and_grok_skills(self):
         audit = load_audit()
         failed = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",

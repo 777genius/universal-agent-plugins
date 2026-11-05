@@ -965,10 +965,14 @@ def initialize_project_skill_git_root(project, env, case_root):
     if (not GIT_EXECUTABLE or not Path(GIT_EXECUTABLE).is_file()
             or not project.is_dir() or project.is_symlink()
             or not project.resolve().is_relative_to(case_root.resolve())):
-        raise RuntimeError("genuine isolated Kimi Git prerequisite unavailable")
+        raise RuntimeError("genuine isolated project Git prerequisite unavailable")
+    # Git init follows pre-existing .git symlinks and writes to their targets.
+    # Refuse an existing marker before invoking any external Git process.
+    marker = project / ".git"
+    if marker.exists() or marker.is_symlink():
+        raise RuntimeError("disposable project Git metadata must be initially absent")
     result = call([GIT_EXECUTABLE, "-c", "core.hooksPath=/dev/null",
                    "init", "--quiet"], env, project, 30)
-    marker = project / ".git"
     if (result["exit_code"] != 0 or not marker.is_dir() or marker.is_symlink()
             or not marker.resolve().is_relative_to(project.resolve())):
         raise RuntimeError("genuine isolated Kimi project git init failed")
