@@ -79,7 +79,8 @@ jobs:
             windsurf) URL="https://cli.devin.ai/install.sh"; BIN="devin" ;;
             grok) URL="https://x.ai/cli/install.sh"; BIN="grok" ;;
             vscode)
-              URL="https://update.code.visualstudio.com/latest/linux-deb-x64/stable"
+              # Official VS Code 1.144.0 Linux x64 .deb, never a mutable "latest".
+              URL="https://update.code.visualstudio.com/1.144.0/linux-deb-x64/stable"
               BIN="code"
               ;;
             chatgpt)
@@ -99,7 +100,7 @@ jobs:
                 SHA256="" # No independent digest for the editor .deb; fail closed.
               fi
               ;;
-            vscode) SHA256="" ;; # Mutable latest URL must first be pinned
+            vscode) SHA256="b8fbff92d8d95908990eed0acf004c980f29003725469e794ddbd017ea511a20" ;; # Microsoft official SHA-256 for Linux .deb x64 1.144.0
             kiro) SHA256="0a8f067c4fe6a23a231aa3a18e3e4332120ef9ed3d2d7b6eea907beb8b4cdd8b" ;; # Homebrew/homebrew-cask Casks/k/kiro-cli.rb @ 7191fc89
             windsurf) SHA256="" ;; # Needs official installer digest review
             grok) SHA256="" ;; # Needs official installer digest review
@@ -159,9 +160,12 @@ jobs:
           fi
           hash -r
           command -v "$BIN" | tee "$RUNNER_TEMP/vendor-proof/executable.txt"
-          # Version probes must never mutate the runner's ambient client profile.
+          # No ambient CI credentials or native profile overrides reach vendor --version.
           probe_home="$(mktemp -d "$RUNNER_TEMP/vendor-probe.XXXXXX")"
-          HOME="$probe_home" USERPROFILE="$probe_home" XDG_CONFIG_HOME="$probe_home/config" \
+          env -i PATH="$PATH" HOME="$probe_home" USERPROFILE="$probe_home" \
+            XDG_CONFIG_HOME="$probe_home/config" XDG_CACHE_HOME="$probe_home/cache" \
+            XDG_DATA_HOME="$probe_home/data" TMPDIR="$probe_home" \
+            LANG="${LANG:-C.UTF-8}" CI=true DO_NOT_TRACK=1 \
             python3 -c 'import subprocess,sys;sys.exit(subprocess.run([sys.argv[1],"--version"], timeout=30).returncode)' "$BIN" \
             | tee "$RUNNER_TEMP/vendor-proof/version.txt"
       - name: Build CLI under test (not the already-published binary)
