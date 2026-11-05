@@ -145,4 +145,17 @@ func TestPiNativeEffectTrackingIsProjectScoped(t *testing.T) {
 	if !project.TracksNativeEffects || project.LifecycleKind != LifecyclePrepared {
 		t.Fatalf("Pi project lifecycle lost tracked native effects: %+v", project)
 	}
+	pi, ok := ClientDefinitionFor(ClientPi)
+	if !ok {
+		t.Fatal("Pi client definition missing")
+	}
+	userCaps, projectCaps := pi.ScopedCapabilities(ScopeUser), pi.ScopedCapabilities(ScopeProject)
+	if userCaps.SkillSupport != SupportUnsupported || userCaps.MCPTransports["stdio"] != SupportUnsupported ||
+		userCaps.MCPTransports["streamable-http"] != SupportUnsupported {
+		t.Fatalf("Pi user gained project-only components: %+v", userCaps)
+	}
+	if projectCaps.SkillSupport != SupportNative || projectCaps.MCPTransports["stdio"] != SupportNative ||
+		projectCaps.MCPTransports["streamable-http"] != SupportNative {
+		t.Fatalf("Pi project lost its selected components: %+v", projectCaps)
+	}
 }
