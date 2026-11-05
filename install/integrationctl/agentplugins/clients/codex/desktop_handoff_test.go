@@ -77,7 +77,7 @@ func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 	}
 	got := desktopPluginHandoff(root, "stripe", "artifact")
 	if !strings.Contains(got, "codex://plugins/stripe?marketplacePath=") ||
-		!strings.Contains(got, "finish in Plugins > Personal") ||
+		!strings.Contains(got, "enable in Plugins > Personal") ||
 		!strings.Contains(got, "does not prove ChatGPT runtime use") {
 		t.Fatalf("missing honest desktop guidance: %q", got)
 	}
@@ -165,7 +165,8 @@ func TestManualDesktopHandoffRemainsVisibleInFirstCodexNextAction(t *testing.T) 
 		t.Fatalf("manual Codex path changed: %+v %v", out, err)
 	}
 	if len(out.LocalActions) != 1 || !strings.HasPrefix(out.LocalActions[0], "in Codex, install") ||
-		!strings.Contains(out.LocalActions[0], "codex://plugins/demo?marketplacePath=") {
+		!strings.Contains(out.LocalActions[0], "codex://plugins/demo?marketplacePath=") ||
+		strings.Contains(out.LocalActions[0], "codex app") {
 		t.Fatalf("optional Desktop link not visible in first local next action: %+v", out.LocalActions)
 	}
 }
@@ -181,5 +182,24 @@ func TestDesktopHandoffRejectsOversizedLocalManifest(t *testing.T) {
 	}
 	if action := desktopPluginHandoff(root, "stripe", "artifact"); action != "" {
 		t.Fatalf("oversized local manifest should not produce a link: %q", action)
+	}
+}
+
+func TestDesktopLinkLongPathFallsBackWithoutBrokenURI(t *testing.T) {
+	root := tempRoot(t)
+	for i := 0; i < 8; i++ {
+		root = filepath.Join(root, strings.Repeat("m", 45))
+	}
+	path := filepath.Join(root, ".agents", "plugins", "marketplace.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	document := fmt.Sprintf(`{"name":%q,"plugins":[{"name":"stripe","source":{"source":"local","path":"./"}}]}`, shared.ManagedMarketplaceName("artifact"))
+	if err := os.WriteFile(path, []byte(document), 0600); err != nil {
+		t.Fatal(err)
+	}
+	action := desktopPluginHandoff(root, "stripe", "artifact", true)
+	if strings.Contains(action, "codex://") || !strings.Contains(action, "deep link omitted") || len([]rune(action)) > 390 {
+		t.Fatalf("unsafe or clipped long-path link: %q", action)
 	}
 }

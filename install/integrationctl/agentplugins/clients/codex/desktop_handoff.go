@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
@@ -28,7 +29,7 @@ func desktopPluginLink(marketplaceRoot, pluginName string) (string, error) {
 
 // desktopPluginHandoff is an optional manual next step. Only an existing
 // manager-owned marketplace may be linked; this never launches the app.
-func desktopPluginHandoff(marketplaceRoot, pluginName, physicalArtifactID string) string {
+func desktopPluginHandoff(marketplaceRoot, pluginName, physicalArtifactID string, cliAvailable bool) string {
 	link, err := desktopPluginLink(marketplaceRoot, pluginName)
 	if err != nil || physicalArtifactID == "" {
 		return ""
@@ -60,5 +61,16 @@ func desktopPluginHandoff(marketplaceRoot, pluginName, physicalArtifactID string
 		document.Plugins[0].Source.Path != "./" {
 		return ""
 	}
-	return "start a new Codex session; optional ChatGPT Desktop (local): " + link + ". Run `codex app` on macOS/Windows; finish in Plugins > Personal and check a new local thread. Codex CLI verification does not prove ChatGPT runtime use."
+	launch := "Open ChatGPT Desktop directly"
+	if cliAvailable {
+		launch = "Run `codex app` on macOS/Windows or open Desktop directly"
+	}
+	constPrefix := "ChatGPT Desktop (optional, local): "
+	action := constPrefix + link + ". " + launch + "; enable in Plugins > Personal and verify in a new local thread. Codex CLI verification does not prove ChatGPT runtime use."
+	// The terminal sanitizes next actions to 512 runes. Refuse to print a
+	// truncated deep link (including percent-encoded long profile paths).
+	if utf8.RuneCountInString(action) > 390 {
+		return constPrefix + "open ChatGPT Desktop manually, enable the plugin in Plugins > Personal and verify in a new local thread (deep link omitted for a long local path). Codex listing does not prove Desktop runtime use."
+	}
+	return action
 }

@@ -36,7 +36,10 @@ for (const width of [1440, 390]) {
     await expect(guide.locator('summary')).toHaveText('ChatGPT Desktop (local)');
     await expect(guide.locator('.command-snippet')).toBeHidden();
     await guide.locator('summary').click();
-    await expect(guide.locator('.command-snippet code')).toContainText('--target codex');
+    await expect(guide.locator('.command-snippet code')).toHaveText(
+      'npx -y universal-agent-plugins add i18n-state-00 --target codex',
+    );
+    expect(await guide.locator('.command-snippet code').textContent()).not.toContain('\n');
     await expect(guide).toContainText('does not prove Desktop runtime');
     await expect(guide).toContainText('ChatGPT web connection');
     await guide.locator('.command-snippet button').click();

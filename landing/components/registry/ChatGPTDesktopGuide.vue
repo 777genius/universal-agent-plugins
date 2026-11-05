@@ -11,7 +11,6 @@ const { t } = useI18n();
       :command="command"
       :label="t('registryUi.desktopGuide.command')"
       kind="add"
-      compact
     />
     <p>{{ t('registryUi.desktopGuide.nextStep') }}</p>
     <a
@@ -54,5 +53,9 @@ const { t } = useI18n();
 }
 .desktop-guide :deep(.command-snippet) {
   min-width: 0;
+}
+.desktop-guide :deep(.command-snippet pre) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 </style>
