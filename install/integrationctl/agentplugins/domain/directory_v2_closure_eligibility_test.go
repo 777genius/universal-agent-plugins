@@ -77,9 +77,9 @@ func TestResolveDirectoryV2RuntimeFailureOnlyBlocksMatchingClosure(t *testing.T)
 	grant.CanonicalClosure = &DirectoryCanonicalClosure{Eligible: true, ClosureDigest: closureA}
 	failure := testTrustedEvidence(DirectoryEvidence{
 		ID: "runtime-other-closure", DistributionID: distribution.ID,
-		ReleaseSequence: distribution.Releases[0].Sequence,
+		ReleaseSequence:   distribution.Releases[0].Sequence,
 		PackageTreeDigest: distribution.Releases[0].TreeDigest,
-		Level: "runtime", Outcome: "failed", Client: ClientCodex, Scope: ScopeUser,
+		Level:             "runtime", Outcome: "failed", Client: ClientCodex, Scope: ScopeUser,
 		ClosureDigest: closureB, ClientVersion: "test-client", InstallerVersion: "1.2.3",
 		OS: "linux", Architecture: "amd64",
 	})
