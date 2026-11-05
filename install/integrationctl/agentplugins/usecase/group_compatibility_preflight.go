@@ -48,7 +48,9 @@ func (session *groupSession) requireObservedCompatibilityBinding(check AddInput)
 	if !ok || binding.ClientBindingID != check.CompatibilityBindingID ||
 		binding.ClientID != string(check.Client.ClientID) ||
 		binding.Scope != string(check.Scope) ||
-		binding.Materialization == domain.MaterializationAbsent {
+		binding.Materialization == domain.MaterializationAbsent ||
+		binding.ProfileNamespace != check.Client.ProfileNamespace ||
+		!domain.SameProfileAuthority(binding.ProfileAuthority, check.Client.ProfileAuthority) {
 		return fmt.Errorf("unselected compatibility binding changed for %s", check.Client.ClientID)
 	}
 	return nil

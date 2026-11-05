@@ -15,6 +15,10 @@ func TestGroupCompatibilityRejectsChangedUnselectedBindingUnderLock(t *testing.T
 	}
 	changed := recorded
 	changed.ClientBindingID = "replacement-binding"
+	changedNamespace := recorded
+	changedNamespace.ProfileNamespace = "TEST-other-namespace"
+	changedAuthority := recorded
+	changedAuthority.ProfileAuthority = &domain.ProfileAuthority{}
 	unselected := AddInput{
 		Client: domain.DetectedClient{ClientID: domain.ClientID("test-client")},
 		Scope:  domain.ScopeUser, CompatibilityBindingID: recorded.ClientBindingID,
@@ -26,6 +30,8 @@ func TestGroupCompatibilityRejectsChangedUnselectedBindingUnderLock(t *testing.T
 	}{
 		{"unchanged", map[string]domain.ClientBinding{recorded.ClientBindingID: recorded}, false},
 		{"replaced-after-observation", map[string]domain.ClientBinding{changed.ClientBindingID: changed}, true},
+		{"different-profile-namespace", map[string]domain.ClientBinding{recorded.ClientBindingID: changedNamespace}, true},
+		{"different-profile-authority", map[string]domain.ClientBinding{recorded.ClientBindingID: changedAuthority}, true},
 		{"missing", map[string]domain.ClientBinding{}, true},
 		{"different-client", map[string]domain.ClientBinding{recorded.ClientBindingID: {
 			ClientBindingID: recorded.ClientBindingID, ClientID: "other-client", Scope: string(domain.ScopeUser),
