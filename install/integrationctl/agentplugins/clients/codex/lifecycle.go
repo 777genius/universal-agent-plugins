@@ -58,10 +58,14 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("in Codex, install %s from %s, then verify it appears in Plugins > Personal", request.DeclaredName, request.Delivery.ActivePath))
 		if handoff := desktopPluginHandoff(request.Delivery.ActivePath, request.DeclaredName, request.Plan.PhysicalArtifactID, false); handoff != "" {
 			// The CLI displays only the first local next action. Never clip a URI.
+			fullAction := outcome.LocalActions[0] + "; " + handoff
 			shortAction := "in Codex, install " + request.DeclaredName + "; " + handoff
-			if len([]rune(shortAction)) <= 500 {
+			switch {
+			case len([]rune(fullAction)) <= 500:
+				outcome.LocalActions[0] = fullAction
+			case len([]rune(shortAction)) <= 500:
 				outcome.LocalActions[0] = shortAction
-			} else {
+			default:
 				outcome.LocalActions[0] = "open Codex Plugins to finish the prepared local package; then open ChatGPT Desktop directly and enable it in Plugins > Personal (local path exceeds terminal display limit)"
 			}
 		}
