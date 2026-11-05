@@ -56,6 +56,9 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		outcome.Activation = domain.ActivationManual
 		outcome.UserActions = append(outcome.UserActions, "install the prepared plugin in Codex Plugins, then verify it appears in Plugins > Personal")
 		outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("in Codex, install %s from %s, then verify it appears in Plugins > Personal", request.DeclaredName, request.Delivery.ActivePath))
+		if handoff := desktopPluginHandoff(request.Delivery.ActivePath, request.DeclaredName, request.Plan.PhysicalArtifactID); handoff != "" {
+			outcome.LocalActions = append(outcome.LocalActions, handoff)
+		}
 		return outcome, nil
 	}
 
@@ -81,6 +84,9 @@ func completeCodexActivation(ctx context.Context, env clients.Env, request domai
 	if err == nil {
 		outcome.Activation = domain.ActivationActive
 		outcome.Verification = domain.VerificationInstalled
+		if handoff := desktopPluginHandoff(request.Delivery.ActivePath, request.DeclaredName, request.Plan.PhysicalArtifactID); handoff != "" {
+			outcome.LocalActions = append(outcome.LocalActions, handoff)
+		}
 		return outcome, nil
 	}
 	if errors.Is(err, ErrListContractUnknown) {
