@@ -1991,14 +1991,11 @@ img {
   outline-offset: 3px;
   border-radius: 5px;
 }
-.plugin-card__security span {
-  width: 16px;
-  height: 16px;
-  display: inline-grid;
-  place-items: center;
-  border: 1px solid currentcolor;
-  border-radius: 50%;
-  font-size: 0.55rem;
+.plugin-card__security .plugin-card__status-icon {
+  display: block;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
 }
 .plugin-card__security--warnings {
   color: #f5c451;

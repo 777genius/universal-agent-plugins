@@ -38,6 +38,7 @@
       "unreviewedFindings": "Findings need review",
       "confirmedMaterialIssue": "Confirmed material issue",
       "stale": "Outdated scan",
+      "lastScan": "Last scan: {result}",
       "unsupported": "Not checked",
       "fullyChecked": "Skills scanned: {checked} of {total}",
       "installAdvice": "Before installing",
