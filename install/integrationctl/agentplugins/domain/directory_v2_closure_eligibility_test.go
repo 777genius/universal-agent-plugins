@@ -89,6 +89,16 @@ func TestResolveDirectoryV2RuntimeFailureOnlyBlocksMatchingClosure(t *testing.T)
 	if selected, err := ResolveDirectory(snapshot, fresh); err != nil || selected.DistributionID != distribution.ID {
 		t.Fatalf("unrelated failed closure blocked fresh signed closure: %+v %v", selected, err)
 	}
+	// A cold restore lacks an authenticated mapping from its exact historical
+	// lock to the current canonical closure. It cannot discard this failure
+	// based on a fresh-selection summary for a potentially different graph.
+	locked := fresh
+	locked.Purpose = DirectoryResolveLockedRestore
+	locked.DesiredReleaseSequence = 1
+	if _, err := ResolveDirectory(snapshot, locked); !errors.Is(err, ErrDirectoryIneligible) ||
+		!strings.Contains(err.Error(), "current trusted runtime evidence failed") {
+		t.Fatalf("cold restore ignored runtime failure for unknown locked closure: %v", err)
+	}
 	snapshot.Evidence[len(snapshot.Evidence)-1].ClosureDigest = closureA
 	if _, err := ResolveDirectory(snapshot, fresh); !errors.Is(err, ErrDirectoryIneligible) ||
 		!strings.Contains(err.Error(), "current trusted runtime evidence failed") {

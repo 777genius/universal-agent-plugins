@@ -76,7 +76,8 @@ func v2RuntimeFailureForOtherClosure(snapshot DirectorySnapshot, evidence Direct
 		evidence.ClosureDigest == "" || grant == nil || grant.CanonicalClosure == nil {
 		return false
 	}
-	if request.Recorded != nil && request.Operation != DirectoryUpdate && request.Operation != DirectoryNewTarget {
+	if request.Purpose == DirectoryResolveLockedRestore ||
+		(request.Recorded != nil && request.Operation != DirectoryUpdate && request.Operation != DirectoryNewTarget) {
 		return false
 	}
 	return evidence.ClosureDigest != grant.CanonicalClosure.ClosureDigest
