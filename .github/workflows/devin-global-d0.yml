@@ -382,7 +382,15 @@ jobs:
 
                   cli_inventory("before_add", False)
                   added = cli_command("add", "add", str(source_dir), "--no-save", "--target", "windsurf")
-                  iid = (added.get("result") or {}).get("installation_id")
+                  targets = added.get("targets")
+                  if (not isinstance(targets, list) or len(targets) != 1
+                          or not isinstance(targets[0], dict)
+                          or targets[0].get("target") != "windsurf"
+                          or targets[0].get("status") != "external_completed"):
+                      raise RuntimeError("production UAP add returned ambiguous target receipt")
+                  output = targets[0].get("output")
+                  result = output.get("result") if isinstance(output, dict) else None
+                  iid = result.get("installation_id") if isinstance(result, dict) else None
                   if not isinstance(iid, str) or len(iid) != 36:
                       raise RuntimeError("production UAP add returned no canonical installation ID")
                   cli_inventory("after_add", True)
