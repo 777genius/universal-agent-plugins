@@ -90,7 +90,10 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		envelope, loadErr := journey.app.PackageLoader.LoadSnapshot(t.Context(), captured)
+		envelope, loadErr := journey.app.PackageLoader.Load(t.Context(), domain.LoadInput{
+			SnapshotRoot: captured.Root, TreeDigest: captured.TreeDigest,
+			ExecutableFiles: captured.ExecutableFiles, Source: captured.Source,
+		})
 		removeErr := packagedigest.Remove(captured)
 		if loadErr != nil || removeErr != nil {
 			t.Fatalf("load or remove signed fixture source %s: %v %v", item.name, loadErr, removeErr)
