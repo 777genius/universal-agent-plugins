@@ -84,6 +84,13 @@ type ProjectVersionRequirement interface {
 	RequiresProjectVersion(client domain.DetectedClient) bool
 }
 
+// UserVersionRequirement is a narrowly selected user-scope version gate.
+// It does not imply that every installation of the same logical client uses
+// that executable or has native user capabilities.
+type UserVersionRequirement interface {
+	RequiresUserVersion(client domain.DetectedClient) bool
+}
+
 // HostVersionProbeEnvironment binds a version child to original host facts
 // when the selected ConfigRoot represents a different native authority. The
 // detector still owns whether to probe, argv, cwd, timeout and output bounds.

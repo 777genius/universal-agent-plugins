@@ -10,7 +10,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
-// Project adapters can require a current version even for a local package.
+// Selected adapters can require an observed version even for a local package.
 // Validate the complete selection before executing the one missing version
 // probe, and retain the original discovery facts for every client.
 func preflightProjectLifecycleTargets(ctx context.Context, app App, opts *options, targets []domain.ClientID, observedClients []domain.DetectedClient, probeVersion bool, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, map[domain.ClientID]domain.DetectedClient, error) {
@@ -28,13 +28,13 @@ func preflightProjectLifecycleTargets(ctx context.Context, app App, opts *option
 }
 
 func ensureSelectedProjectVersions(ctx context.Context, app App, opts *options, targets []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) error {
-	if app.scope() != domain.ScopeProject || opts.dryRun {
+	if (app.scope() != domain.ScopeProject && app.scope() != domain.ScopeUser) || opts.dryRun {
 		return nil
 	}
 	if app.ClientRegistry == nil {
 		return clients.ErrRegistryRequired
 	}
-	requested := missingProjectVersionTargets(app.ClientRegistry, targets, detected)
+	requested := missingProjectVersionTargets(app.ClientRegistry, targets, detected, app.scope())
 	if len(requested) == 0 {
 		return nil
 	}
@@ -64,7 +64,11 @@ func ensureSelectedProjectVersions(ctx context.Context, app App, opts *options, 
 	return nil
 }
 
-func missingProjectVersionTargets(registry *clients.Registry, targets []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) []domain.ClientID {
+func missingProjectVersionTargets(registry *clients.Registry, targets []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient, scopes ...domain.InstallScope) []domain.ClientID {
+	scope := domain.ScopeProject
+	if len(scopes) > 0 {
+		scope = scopes[0]
+	}
 	var requested []domain.ClientID
 	seen := map[domain.ClientID]bool{}
 	for _, id := range targets {
@@ -72,8 +76,17 @@ func missingProjectVersionTargets(registry *clients.Registry, targets []domain.C
 		if seen[id] || !ok || client.Status != domain.DetectionDetected || client.DetectionError != nil || client.ExecutablePath == "" || strings.TrimSpace(client.Version) != "" {
 			continue
 		}
-		requirement, ok := clients.As[clients.ProjectVersionRequirement](registry, id)
-		if !ok || !requirement.RequiresProjectVersion(client) {
+		required := false
+		if scope == domain.ScopeProject {
+			if requirement, ok := clients.As[clients.ProjectVersionRequirement](registry, id); ok {
+				required = requirement.RequiresProjectVersion(client)
+			}
+		} else if scope == domain.ScopeUser {
+			if requirement, ok := clients.As[clients.UserVersionRequirement](registry, id); ok {
+				required = requirement.RequiresUserVersion(client)
+			}
+		}
+		if !required {
 			continue
 		}
 		requested = append(requested, id)
