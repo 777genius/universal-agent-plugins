@@ -38,7 +38,8 @@ jobs:
   project-contracts:
     name: project-contracts (${{ matrix.os }})
     runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.os == 'ubuntu-24.04' && matrix.os || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
-    timeout-minutes: 15
+    # The full combined project and legacy-lock E2E must retain all tests.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -59,7 +60,7 @@ jobs:
           go-version: "1.26.10"
           cache: false
       - name: Verify scoped ownership, project lifecycle and legacy lock safety
-        run: go test -p=2 -count=1 -timeout=8m ./install/integrationctl/agentplugins/domain ./install/integrationctl/agentplugins/adapters/statev2 ./install/integrationctl/agentplugins/adapters/nativeconfig ./install/integrationctl/agentplugins/adapters/legacylock ./install/integrationctl/agentplugins/clients/... ./install/integrationctl/agentplugins/providers ./install/integrationctl/agentplugins/planner ./install/integrationctl/agentplugins/installer ./install/integrationctl/agentplugins/environment ./install/integrationctl/agentplugins/usecase ./cli/internal/agentpluginscli ./cli/cmd/agentplugins -run 'Test(TargetContext|Project|PrepareRejectsCrossEnvironmentContext|StateLockSharesPhysicalLegacyFileLock|RemoveLegacyAbortsReconcileWhenLegacyStateReappears|RemoveLegacyDelegatesThenReconcilesStateV2|LegacyControllerRejectsForeignHomeBeforeLegacyEngine|LegacyControllerAcceptsOriginalUserHome|LegacyRemovalRequiresExplicitAllTargetAndReconcilesV2|MigrateStateIsExplicitPlanFirstAndPathRedacted|MigrateStateExplicitlyMigratesAuthoritativeSchemaTwoThroughFour)'
+        run: go test -p=2 -count=1 -timeout=12m ./install/integrationctl/agentplugins/domain ./install/integrationctl/agentplugins/adapters/statev2 ./install/integrationctl/agentplugins/adapters/nativeconfig ./install/integrationctl/agentplugins/adapters/legacylock ./install/integrationctl/agentplugins/clients/... ./install/integrationctl/agentplugins/providers ./install/integrationctl/agentplugins/planner ./install/integrationctl/agentplugins/installer ./install/integrationctl/agentplugins/environment ./install/integrationctl/agentplugins/usecase ./cli/internal/agentpluginscli ./cli/cmd/agentplugins -run 'Test(TargetContext|Project|PrepareRejectsCrossEnvironmentContext|StateLockSharesPhysicalLegacyFileLock|RemoveLegacyAbortsReconcileWhenLegacyStateReappears|RemoveLegacyDelegatesThenReconcilesStateV2|LegacyControllerRejectsForeignHomeBeforeLegacyEngine|LegacyControllerAcceptsOriginalUserHome|LegacyRemovalRequiresExplicitAllTargetAndReconcilesV2|MigrateStateIsExplicitPlanFirstAndPathRedacted|MigrateStateExplicitlyMigratesAuthoritativeSchemaTwoThroughFour)'
 
   opencode-transition-windows:
     name: opencode-transition-windows
