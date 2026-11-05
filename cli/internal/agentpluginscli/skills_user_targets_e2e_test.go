@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -190,8 +191,10 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 	}
 	guardedTree := savedJourneyTree(t, codexBefore.TargetLocator)
 	guardedState := savedSkillsDurableTree(t, j.cli.app.DependenciesRoot)
-	if _, _, err := j.cli.execute(false, "remove", "pdf", "--target", "codex", "--external-uninstalled", "--scope", "user", "--format", "json"); err == nil {
-		t.Fatal("selected removal adopted a foreign file inside the raw Skill")
+	if _, _, err := j.cli.execute(false, "remove", "pdf", "--target", "codex", "--external-uninstalled", "--scope", "user", "--format", "json"); err == nil ||
+		(!strings.Contains(err.Error(), "artifact digest mismatch") &&
+			!strings.Contains(err.Error(), "native identity ownership is indeterminate")) {
+		t.Fatalf("selected removal failed to refuse foreign raw Skill ownership: %v", err)
 	}
 	if after := savedSkillsDurableTree(t, j.cli.app.DependenciesRoot); !reflect.DeepEqual(guardedState, after) {
 		t.Fatalf("refused Codex removal changed saved user state: %s", savedJourneyDifferences(guardedState, after))
