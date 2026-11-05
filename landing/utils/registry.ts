@@ -130,7 +130,7 @@ function eligibleRelease(
         ? [...targets].filter(
             (client) =>
               !supportsInstallScope(
-                release.targets.find((target) => target.client === client && target.scopes.includes(scope)),
+                release.targets.find((target) => target.client === client && Array.isArray(target.scopes) && target.scopes.includes(scope)),
                 scope,
               ),
           )
