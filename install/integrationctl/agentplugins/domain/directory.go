@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -12,7 +11,7 @@ import (
 // distribution and one release for the complete target set; acquisition
 // failure is intentionally not a fallback input.
 func ResolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveRequest) (DirectorySelection, error) {
-	if err := validateDirectoryResolvePurpose(request); err != nil {
+	if err := validateDirectoryResolvePurpose(snapshot, request); err != nil {
 		return DirectorySelection{}, err
 	}
 	selector := strings.TrimSpace(request.Selector)
@@ -173,30 +172,56 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 		}
 	}
 	for _, evidenceID := range policy.CurrentEvidence {
-		if e := evidenceByID(snapshot, evidenceID); e != nil && e.HasTrustedEligibilityProvenanceAtSequence(snapshot.Sequence) && directoryEvidenceApplies(*e, distribution, release, "", request) && e.Level == "schema" && e.Outcome == "failed" {
+		if e := evidenceByID(snapshot, evidenceID); e != nil && directoryTrustedEligibilityEvidence(snapshot, *e) && directoryEvidenceApplies(*e, distribution, release, "", request) && e.Level == "schema" && e.Outcome == "failed" {
 			return &eligibilityReason{"blocking_evidence", "current trusted schema evidence failed"}
 		}
 	}
 	if request.Purpose == DirectoryResolveContext7ChatGPTPreparation && !hasContext7PreparationPromotion(snapshot, distribution, release, policy) {
 		return &eligibilityReason{"upstream_materialization_required", "Context7 preparation requires trusted materialization on a declared supported target"}
 	}
-	for _, target := range directoryEligibilityTargets(request.Targets) {
-		entry := targetByClient(policy.Targets, target)
+	for _, target := range directoryEligibilityTargets(request.Targets, request.Scope) {
+		entry := targetByClientScope(policy.Targets, target, request.Scope, snapshot.SnapshotSchemaVersion)
 		// Only absence of signed ChatGPT support can use the source-only lane.
 		if !(entry == nil && request.Purpose == DirectoryResolveContext7ChatGPTPreparation) {
-			if entry == nil || !containsScope(entry.Scopes, request.Scope) {
+			if entry == nil {
 				return &eligibilityReason{"incomplete_targets", "release does not support complete target set; missing " + string(target)}
+			}
+			if entry.MinimumInstallerVersion != "" {
+				comparison, err := compareSemver(request.InstallerVersion, entry.MinimumInstallerVersion)
+				if err != nil || comparison < 0 {
+					return &eligibilityReason{"installer_too_old", "minimum installer version for " + string(target) + "/" + string(request.Scope) + " is " + entry.MinimumInstallerVersion}
+				}
+			}
+			// Canonical closure summarizes fresh dependency eligibility. It must
+			// not invalidate historical exact locks or existing install receipts.
+			if snapshot.SnapshotSchemaVersion == 2 && entry.CanonicalClosure != nil &&
+				request.Purpose != DirectoryResolveLockedRestore &&
+				(request.Recorded == nil || request.Operation == DirectoryUpdate ||
+					request.Operation == DirectoryNewTarget) {
+				closure := entry.CanonicalClosure
+				if !closure.Eligible {
+					return &eligibilityReason{"ineligible_closure", "signed required dependency closure is ineligible for " + string(target)}
+				}
+				comparison, err := compareSemver(request.InstallerVersion, closure.MinimumInstallerVersion)
+				if err != nil || comparison < 0 {
+					return &eligibilityReason{"installer_too_old", "minimum installer version for signed required closure is " + closure.MinimumInstallerVersion}
+				}
 			}
 			delivery, supported := ExpectedDirectoryDelivery(target)
 			if !supported || entry.Delivery != delivery {
 				return &eligibilityReason{"incompatible_delivery", fmt.Sprintf("release delivery %q is incompatible with %s; expected %q", entry.Delivery, target, delivery)}
 			}
-			if distribution.Kind == DistributionUpstream && !hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target) {
+			if distribution.Kind == DistributionUpstream && !hasPassedUpstreamMaterialization(snapshot, distribution, release, policy, target, request.Scope) {
 				return &eligibilityReason{"upstream_materialization_required", "upstream release lacks current passed materialization evidence for " + string(target)}
 			}
 		}
-		for _, evidenceID := range policy.CurrentEvidence {
-			if e := evidenceByID(snapshot, evidenceID); e != nil && e.HasTrustedEligibilityProvenanceAtSequence(snapshot.Sequence) && directoryEvidenceApplies(*e, distribution, release, target, request) && (e.Level == "materialization" || e.Level == "discovery" || e.Level == "runtime" || e.Level == "oauth") && e.Outcome == "failed" {
+		evidenceIDs := policy.CurrentEvidence
+		if entry != nil && len(entry.CurrentEvidence) > 0 {
+			evidenceIDs = append(append([]string(nil), evidenceIDs...), entry.CurrentEvidence...)
+		}
+		for _, evidenceID := range evidenceIDs {
+			if e := evidenceByID(snapshot, evidenceID); e != nil && directoryTrustedEligibilityEvidence(snapshot, *e) && directoryEvidenceApplies(*e, distribution, release, target, request) && (e.Level == "materialization" || e.Level == "discovery" || e.Level == "runtime" || e.Level == "oauth") && e.Outcome == "failed" &&
+				!v2RuntimeFailureForOtherClosure(snapshot, *e, entry, request) {
 				return &eligibilityReason{"blocking_evidence", "current trusted " + e.Level + " evidence failed for " + string(target)}
 			}
 		}
@@ -222,38 +247,11 @@ func releaseEligibility(snapshot DirectorySnapshot, product DirectoryProduct, di
 // compareSemver is used only for the installer compatibility floor. Directory
 // release ordering always uses signed release sequence.
 func compareSemver(left, right string) (int, error) {
-	type version struct {
-		core [3]uint64
-		pre  []string
-	}
-	parse := func(value string) (version, error) {
-		var v version
-		value = strings.SplitN(strings.TrimSpace(value), "+", 2)[0]
-		parts := strings.SplitN(value, "-", 2)
-		core := strings.Split(parts[0], ".")
-		if len(core) != 3 {
-			return v, errors.New("not semver")
-		}
-		for i, s := range core {
-			n, e := strconv.ParseUint(s, 10, 64)
-			if e != nil || (len(s) > 1 && s[0] == '0') {
-				return v, errors.New("not semver")
-			}
-			v.core[i] = n
-		}
-		if len(parts) == 2 {
-			if parts[1] == "" {
-				return v, errors.New("not semver")
-			}
-			v.pre = strings.Split(parts[1], ".")
-		}
-		return v, nil
-	}
-	a, e := parse(left)
+	a, e := parseDirectorySemver(left)
 	if e != nil {
 		return 0, e
 	}
-	b, e := parse(right)
+	b, e := parseDirectorySemver(right)
 	if e != nil {
 		return 0, e
 	}

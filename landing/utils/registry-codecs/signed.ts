@@ -19,14 +19,17 @@ export function parseSnapshot(
   mode: 'published_snapshot' | 'review_preview',
 ): RegistryIndex {
   const isSigned = input.snapshot_schema_version === 1;
+  // V2 is readable only as an untrusted review preview until paired signed
+  // v2 publication, current installer floor and site cutover are qualified.
+  const v2Preview = input.snapshot_schema_version === 2 && mode === 'review_preview';
   if (
-    (!isSigned && input.schema_version !== 1) ||
+    (!isSigned && !v2Preview && input.schema_version !== 1) ||
     !Array.isArray(input.products) ||
     !Array.isArray(input.distributions)
   ) {
     throw new Error('Directory data must have schema version 1, products, and distributions');
   }
-  const snapshotSequence = isSigned ? input.sequence : input.snapshot_sequence;
+  const snapshotSequence = isSigned || v2Preview ? input.sequence : input.snapshot_sequence;
   if (
     mode === 'published_snapshot' &&
     (!isSigned || typeof input.generated_at !== 'string' || typeof input.expires_at !== 'string')
@@ -35,7 +38,7 @@ export function parseSnapshot(
       'published snapshot requires one signed sequence, generated_at, and expires_at',
     );
   }
-  if (isSigned) safeSequence(snapshotSequence, 'Directory snapshot sequence');
+  if (isSigned || v2Preview) safeSequence(snapshotSequence, 'Directory snapshot sequence');
   else if (snapshotSequence !== undefined)
     safeSequence(snapshotSequence, 'Directory preview snapshot sequence');
 
@@ -145,6 +148,7 @@ export function parseSnapshot(
         const targets = releaseTargets(
           policy.targets,
           `distribution ${id} release ${String(releaseSequence)}`,
+          v2Preview ? 2 : 1,
         );
         const policyStatus = requiredString(policy, 'status', `distribution ${id} release policy`);
         if (!['active', 'superseded', 'revoked'].includes(policyStatus))
@@ -158,14 +162,20 @@ export function parseSnapshot(
         )
           throw new Error(`distribution ${id}: current_evidence must be an array of evidence IDs`);
         const treeDigest = digestValue(release.tree_digest, `distribution ${id} tree digest`);
-        const evidence = evidenceFromSnapshot(
-          input.evidence ?? input.verification_summaries ?? input.current_verification,
-          id,
-          releaseSequence,
-          treeDigest,
-          policy.current_evidence as string[],
-          mode === 'published_snapshot',
-        );
+        // The v2 review view deliberately keeps individual signed-looking
+        // grants inspectable, but cannot project per-scope evidence through
+        // this legacy client-wide presentation model. Show no preview
+        // qualification badges until the authenticated scoped cutover.
+        const evidence = v2Preview
+          ? { client: [], package: [] }
+          : evidenceFromSnapshot(
+              input.evidence ?? input.verification_summaries ?? input.current_verification,
+              id,
+              releaseSequence,
+              treeDigest,
+              policy.current_evidence as string[],
+              mode === 'published_snapshot',
+            );
         const components = stringArray(
           release.components ?? [],
           'components',
@@ -212,7 +222,7 @@ export function parseSnapshot(
           evidence: evidence.client,
           package_evidence: evidence.package,
           release_status: releaseStatus as DistributionView['release_status'],
-          selectable: status === 'active' && releaseStatus === 'active' && meetsMinimumCapabilities,
+          selectable: !v2Preview && status === 'active' && releaseStatus === 'active' && meetsMinimumCapabilities,
           blocking_clients: blockingClients,
           materialized_clients: materializedClients,
           meets_minimum_capabilities: meetsMinimumCapabilities,
@@ -291,7 +301,7 @@ export function parseSnapshot(
       // Only authenticated published Directory projections authorize the
       // direct pinned-Git project path; unsigned previews remain unreviewed.
       ...(mode === 'published_snapshot' ? { trust_state: 'reviewed' as const } : {}),
-      installable: selected.selectable,
+      installable: !v2Preview && selected.selectable,
       components,
       ...(raw.icon === undefined
         ? {}
@@ -317,7 +327,7 @@ export function parseSnapshot(
       evidence: selected.evidence,
       package_evidence: selected.package_evidence,
       authentication:
-        selected.targets.length > 0 &&
+        !v2Preview && selected.targets.length > 0 &&
         selected.targets.every((target) => target.authentication === 'not_required')
           ? 'none'
           : 'unknown',
@@ -330,13 +340,20 @@ export function parseSnapshot(
               .flatMap((item) => item.compatible_clients),
           ),
         ],
-        delivery: Object.fromEntries(
+        // Client-only summaries cannot faithfully represent distinct v2
+        // user/project grants. The detailed release targets remain visible.
+        delivery: v2Preview ? {} : Object.fromEntries(
           selected.targets.map((target) => [target.client, target.delivery]),
         ),
-        scopes: Object.fromEntries(
-          selected.targets.map((target) => [target.client, target.scopes]),
+        scopes: v2Preview ? {} : Object.fromEntries(
+          [...new Set(selected.targets.map((target) => target.client))].map((client) => [
+            client,
+            [...new Set(selected.targets
+              .filter((target) => target.client === client && target.canonical_closure?.eligible !== false)
+              .flatMap((target) => target.scopes))],
+          ]),
         ),
-        app_bindings: Object.fromEntries(
+        app_bindings: v2Preview ? {} : Object.fromEntries(
           selected.targets
             .filter((target) => target.app_binding)
             .map((target) => [target.client, target.app_binding!]),

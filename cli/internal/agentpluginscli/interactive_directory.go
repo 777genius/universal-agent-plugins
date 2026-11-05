@@ -35,7 +35,7 @@ func (app App) newDirectoryTargetSession(ctx context.Context, selector string, d
 	if err != nil {
 		return nil, err
 	}
-	bundle, err := app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
+	bundle, err := app.DirectoryClient.Load(ctx, directoryFloorForClient(state, app.DirectoryClient))
 	if err != nil {
 		return nil, fmt.Errorf("load signed Directory: %w", err)
 	}

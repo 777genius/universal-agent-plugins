@@ -14,30 +14,6 @@ import (
 
 const supportedPluginSchema = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
 
-func validatePointer(v Pointer) error {
-	if v.PointerSchemaVersion != 1 || v.SnapshotSchemaVersion != 1 || v.Sequence < 1 {
-		return strictError("unsupported pointer schema or sequence")
-	}
-	stem := fmt.Sprintf("%020d", v.Sequence)
-	if err := exactArtifactPath(v.SnapshotPath, "snapshots/"+stem+".json"); err != nil {
-		return err
-	}
-	if err := exactArtifactPath(v.EnvelopePath, "snapshots/"+stem+".envelope.json"); err != nil {
-		return err
-	}
-	c := v.FetchContract
-	if !c.HTTPSRequired || !c.SameOriginRedirectsOnly || c.ForwardCredentialsOnRedirect {
-		return strictError("unsafe fetch contract")
-	}
-	if c.MaxRedirects < 0 || c.MaxRedirects > 2 || c.RetryAttempts < 1 || c.RetryAttempts > 3 {
-		return strictError("fetch retry/redirect bounds")
-	}
-	if c.LatestMaxBytes < 1 || c.LatestMaxBytes > MaxLatestBytes || c.SnapshotMaxBytes < 1 || c.SnapshotMaxBytes > MaxSnapshotBytes || c.EnvelopeMaxBytes < 1 || c.EnvelopeMaxBytes > MaxEnvelopeBytes {
-		return strictError("fetch size bounds")
-	}
-	return nil
-}
-
 func exactArtifactPath(actual, expected string) error {
 	if actual != expected || strings.ContainsAny(actual, `\:`) || strings.HasPrefix(actual, "/") || path.Clean(actual) != actual {
 		return strictError("unsafe artifact path %q", actual)
@@ -352,6 +328,9 @@ func validatePolicy(p domain.DirectoryReleasePolicy) error {
 	clients := map[domain.ClientID]bool{}
 	for _, t := range p.Targets {
 		expectedDelivery, supportedDelivery := domain.ExpectedDirectoryDelivery(t.Client)
+		if t.Scope != "" || t.MinimumInstallerVersion != "" || t.CurrentEvidence != nil || t.CanonicalClosure != nil {
+			return fmt.Errorf("v1 target cannot carry scoped grant fields")
+		}
 		if !validClient(t.Client) || clients[t.Client] || len(t.Scopes) != 1 || t.Scopes[0] != domain.ScopeUser || !supportedDelivery || t.Delivery != expectedDelivery {
 			return fmt.Errorf("invalid target")
 		}
@@ -465,6 +444,11 @@ func requireSnapshotFields(body []byte) error {
 				return err
 			}
 			for _, target := range targets {
+				for _, key := range []string{"scope", "minimum_installer_version", "current_evidence", "canonical_closure"} {
+					if _, present := target[key]; present {
+						return fmt.Errorf("schema-1 target cannot contain %s", key)
+					}
+				}
 				if err := requiredMap(target, "client", "scopes", "delivery", "authentication"); err != nil {
 					return err
 				}
@@ -485,6 +469,13 @@ func requireSnapshotFields(body []byte) error {
 		return err
 	}
 	for _, e := range evidence {
+		// Domain evidence is shared with future protocols; v1 wire evidence
+		// remains strict and never accepts a scoped identity, including null.
+		for _, field := range []string{"scope", "closure_digest"} {
+			if _, present := e[field]; present {
+				return fmt.Errorf("schema-1 evidence cannot contain %s", field)
+			}
+		}
 		required := []string{"schema_version", "id", "distribution_id", "release_sequence", "package_tree_digest", "level", "outcome", "artifact"}
 		if legacyEvidence {
 			if _, present := e["trust"]; present {

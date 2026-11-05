@@ -5,22 +5,37 @@ import (
 	"strings"
 )
 
-func directoryEligibilityTargets(targets []ClientID) []ClientID {
+func directoryEligibilityTargets(targets []ClientID, scope InstallScope) []ClientID {
 	complete := append([]ClientID(nil), targets...)
 	for _, target := range targets {
-		complete = append(complete, BackendSiblings(target)...)
+		complete = append(complete, BackendSiblingsForScope(target, scope)...)
 	}
 	return uniqueClients(complete)
+}
+
+// directoryTrustedEligibilityEvidence keeps v1's historical sequence cutover
+// independent from the new v2 sequence space. A v2 sequence 1 is not v1's
+// historical legacy-evidence lane: it must carry explicit signed provenance.
+func directoryTrustedEligibilityEvidence(snapshot DirectorySnapshot, evidence DirectoryEvidence) bool {
+	if snapshot.SnapshotSchemaVersion == 2 {
+		return evidence.HasTrustedEligibilityProvenance()
+	}
+	return evidence.HasTrustedEligibilityProvenanceAtSequence(snapshot.Sequence)
 }
 
 // hasPassedUpstreamMaterialization is the static promotion/package gate. Its
 // environment dimensions describe the isolated promotion run and must not be
 // mistaken for evidence about the caller's local environment.
-func hasPassedUpstreamMaterialization(snapshot DirectorySnapshot, distribution DirectoryDistribution, release DirectoryRelease, policy DirectoryReleasePolicy, client ClientID) bool {
-	for _, evidenceID := range policy.CurrentEvidence {
+func hasPassedUpstreamMaterialization(snapshot DirectorySnapshot, distribution DirectoryDistribution, release DirectoryRelease, policy DirectoryReleasePolicy, client ClientID, scope InstallScope) bool {
+	evidenceIDs := policy.CurrentEvidence
+	if target := targetByClientScope(policy.Targets, client, scope, snapshot.SnapshotSchemaVersion); target != nil {
+		evidenceIDs = append(append([]string(nil), evidenceIDs...), target.CurrentEvidence...)
+	}
+	for _, evidenceID := range evidenceIDs {
 		evidence := evidenceByID(snapshot, evidenceID)
-		if evidence != nil && evidence.HasTrustedEligibilityProvenanceAtSequence(snapshot.Sequence) && evidence.DistributionID == distribution.ID && evidence.ReleaseSequence == release.Sequence &&
-			evidence.PackageTreeDigest == release.TreeDigest && evidence.Client == client && evidence.Level == "materialization" && evidence.Outcome == "passed" {
+		if evidence != nil && directoryTrustedEligibilityEvidence(snapshot, *evidence) && evidence.DistributionID == distribution.ID && evidence.ReleaseSequence == release.Sequence &&
+			evidence.PackageTreeDigest == release.TreeDigest && evidence.Client == client && evidence.Level == "materialization" && evidence.Outcome == "passed" &&
+			(scope == ScopeProject && evidence.Scope == ScopeProject || scope == ScopeUser && (evidence.Scope == "" || evidence.Scope == ScopeUser)) {
 			return true
 		}
 	}
@@ -34,6 +49,11 @@ func directoryEvidenceApplies(e DirectoryEvidence, distribution DirectoryDistrib
 	if e.Level == "schema" {
 		return e.Client == ""
 	}
+	// Historical V1 evidence is scoped to the user environment only.
+	if request.Scope == ScopeProject && e.Scope != ScopeProject ||
+		request.Scope == ScopeUser && e.Scope != "" && e.Scope != ScopeUser {
+		return false
+	}
 	if e.Client != client || !evidenceDimensionMatches(e.InstallerVersion, request.InstallerVersion) ||
 		!evidenceDimensionMatches(e.OS, request.OS) || !evidenceDimensionMatches(e.Architecture, request.Architecture) {
 		return false
@@ -45,6 +65,22 @@ func directoryEvidenceApplies(e DirectoryEvidence, distribution DirectoryDistrib
 		return false
 	}
 	return true
+}
+
+// V2 can retain current runtime receipts for distinct dependency graphs.
+// Only a failure of the selected fresh/update closure may block that graph.
+// Exact recorded/locked operations lack the historical closure here; keep
+// their existing conservative refusal behavior instead of guessing.
+func v2RuntimeFailureForOtherClosure(snapshot DirectorySnapshot, evidence DirectoryEvidence, grant *DirectoryTarget, request DirectoryResolveRequest) bool {
+	if snapshot.SnapshotSchemaVersion != 2 || evidence.Level != "runtime" ||
+		evidence.ClosureDigest == "" || grant == nil || grant.CanonicalClosure == nil {
+		return false
+	}
+	if request.Purpose == DirectoryResolveLockedRestore ||
+		(request.Recorded != nil && request.Operation != DirectoryUpdate && request.Operation != DirectoryNewTarget) {
+		return false
+	}
+	return evidence.ClosureDigest != grant.CanonicalClosure.ClosureDigest
 }
 
 func evidenceDimensionMatches(recorded, actual string) bool {
@@ -67,9 +103,22 @@ func distributionByID(snapshot DirectorySnapshot, product DirectoryProduct, id s
 	return nil
 }
 
-func targetByClient(values []DirectoryTarget, client ClientID) *DirectoryTarget {
+// targetByClientScope never borrows a policy for another scope. V1 targets
+// contain a list of scopes; V2 grants carry exactly one explicit scope.
+func targetByClientScope(values []DirectoryTarget, client ClientID, scope InstallScope, snapshotSchema int) *DirectoryTarget {
 	for i := range values {
-		if values[i].Client == client {
+		if values[i].Client != client {
+			continue
+		}
+		// A V2 signed policy grants one explicit scope. A legacy V1 scopes
+		// array never promotes that client into a V2 project grant.
+		if snapshotSchema == 2 {
+			if values[i].Scope == scope && len(values[i].Scopes) == 0 {
+				return &values[i]
+			}
+			continue
+		}
+		if values[i].Scope == "" && containsScope(values[i].Scopes, scope) {
 			return &values[i]
 		}
 	}

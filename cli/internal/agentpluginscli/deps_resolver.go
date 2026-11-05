@@ -313,7 +313,7 @@ func (app App) canonicalizeDependencyRequirements(ctx context.Context, requireme
 		if app.DirectoryClient == nil {
 			return environment.Requirements{}, errors.New("signed Directory client is required to canonicalize short registry names")
 		}
-		bundle, err := app.DirectoryClient.Load(ctx, 0)
+		bundle, err := app.loadAuthorizedDirectory(ctx)
 		if err != nil {
 			return environment.Requirements{}, err
 		}
