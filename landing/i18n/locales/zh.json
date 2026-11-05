@@ -516,6 +516,13 @@
     }
   },
   "registryUi": {
+    "desktopGuide": {
+      "title": "ChatGPT Desktop（本地）",
+      "description": "使用 Codex 本地插件目录，而不是 ChatGPT 网页连接。",
+      "command": "为桌面版安装",
+      "nextStep": "打开 ChatGPT Desktop > Plugins > Personal，启用插件；必要时重启。CLI 验证不代表桌面运行成功。",
+      "help": "设置与故障排除"
+    },
     "select": {
       "up": "向上滚动选项",
       "down": "向下滚动选项"

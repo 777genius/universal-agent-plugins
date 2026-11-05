@@ -516,6 +516,13 @@
     }
   },
   "registryUi": {
+    "desktopGuide": {
+      "title": "ChatGPT Desktop (локально)",
+      "description": "Используется локальный каталог Codex, а не подключение ChatGPT Web.",
+      "command": "Установить для Desktop",
+      "nextStep": "Откройте ChatGPT Desktop > Plugins > Personal и включите плагин. При необходимости перезапустите приложение. Проверка CLI не подтверждает работу в Desktop.",
+      "help": "Настройка и устранение проблем"
+    },
     "select": {
       "up": "Прокрутить варианты вверх",
       "down": "Прокрутить варианты вниз"
