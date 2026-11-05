@@ -349,18 +349,27 @@ func TestAgentpluginsClaudeNativeRawUserSkillLifecycle(t *testing.T) {
 		}
 	}
 	verify("raw-user-installed", true)
-	details := claudePluginDetails(t, f, client, pluginID, "raw-user-details")
-	if !strings.Contains(details, nativeRawUserSkillName) || !strings.Contains(details, "Skills (1)") {
-		t.Fatalf("Claude plugin details did not report exactly one installed raw Skill: %s", details)
+	// Listing the native plugin is insufficient evidence that its raw Skill
+	// remains discoverable after replay or repair: query the real CLI details
+	// for every accepted state, including the restored installation.
+	verifySkill := func(label string) {
+		t.Helper()
+		details := claudePluginDetails(t, f, client, pluginID, label)
+		if !strings.Contains(details, nativeRawUserSkillName) || !strings.Contains(details, "Skills (1)") {
+			t.Fatalf("Claude plugin details did not report exactly one installed raw Skill: %s", details)
+		}
 	}
+	verifySkill("raw-user-installed-details")
 	beforeState, beforeTree := claudeSHA256(t, statePath), nativeTreeDigest(t, binding.TargetLocator)
 	nativeRawUserInstall(t, f.Root, f.Root, env, installer, "claude", "raw-user-repeat-default", false, true)
 	if claudeSHA256(t, statePath) != beforeState || nativeTreeDigest(t, binding.TargetLocator) != beforeTree {
 		t.Fatal("Claude implicit user replay changed managed bytes or receipts")
 	}
 	verify("raw-user-repeated", true)
+	verifySkill("raw-user-repeated-details")
 	nativeRawUserRepair(t, f.Root, f.Root, env, installer, "claude", statePath, f.ConfigDir, binding)
 	verify("raw-user-repaired", true)
+	verifySkill("raw-user-repaired-details")
 	nativeRawUserRemove(t, f.Root, f.Root, env, installer, "claude", statePath, binding.TargetLocator, false)
 	verify("raw-user-removed", false)
 	if nativeSHA(t, foreign) != foreignSHA {
