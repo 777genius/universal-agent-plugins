@@ -29,7 +29,7 @@ import (
 // environment overrides; keep its TLS verification and transport hardening.
 type signedV1ProjectGitRunner struct {
 	delegate sourceacquisition.Runner
-	caFile string
+	caFile   string
 }
 
 func (runner signedV1ProjectGitRunner) Run(ctx context.Context, command sourceacquisition.Command) ([]byte, error) {
