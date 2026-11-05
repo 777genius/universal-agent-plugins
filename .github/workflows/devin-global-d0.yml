@@ -14,12 +14,16 @@ jobs:
   native-d0:
     name: Fail closed unless genuine Devin source and stdio/HTTP calls observed
     runs-on: ubuntu-24.04
-    timeout-minutes: 9
+    timeout-minutes: 14
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.10"
+          cache: false
       - name: Download hash-verified Devin and observe real native profile, Skills and MCP
         shell: bash
         run: |
@@ -164,6 +168,9 @@ jobs:
                         "http_name_in_stdout": b"uap_d0_http" in stdout,
                         "project_stdio_in_stdout": b"uap_d0_project_stdio" in stdout,
                         "project_http_in_stdout": b"uap_d0_project_http" in stdout,
+                        "uap_cli_skill_in_stdout": b"uap-e2e-global" in stdout,
+                        "uap_cli_stdio_in_stdout": b"uap_e2e_stdio" in stdout,
+                        "uap_cli_http_in_stdout": b"uap_e2e_http" in stdout,
                         "auth_diagnostic": any(word in (stdout + stderr).lower()
                                                for word in (b"login", b"sign in", b"authentication", b"not authenticated"))}
               if argv == ["skills", "list", "--json"]:
@@ -286,6 +293,116 @@ jobs:
                   checks[transport + "_initialize_list_call"] = {"initialize", "tools/list", "tools/call"} <= methods and any(
                       c.get("name") == "nonce_echo" and c.get("nonce") == nonce for c in calls)
               report["gates"] = checks
+              # This phase connects the real UAP binary and its receipts to
+              # genuine Devin discovery in the SAME original XDG authority.
+              # No model RPC, scanner bypass or substituted Devin client.
+              bridge = {"status": "BLOCKED", "steps": [], "inventory": []}
+              report["uap_cli_bridge"] = bridge
+              checks["uap_cli_add_repair_remove_A_B"] = False
+              try:
+                  workspace = pathlib.Path(os.environ["GITHUB_WORKSPACE"])
+                  cli = ROOT / "agentplugins"
+                  build = subprocess.run(
+                      ["go", "build", "-trimpath", "-o", str(cli), "./cli/cmd/agentplugins"],
+                      cwd=workspace, env=os.environ.copy(), capture_output=True, timeout=150)
+                  bridge["build"] = {"exit": build.returncode,
+                                     "stderr_sha256": hashlib.sha256(build.stderr).hexdigest()}
+                  if build.returncode:
+                      raise RuntimeError("production agentplugins Go build failed")
+                  bridge["uap_binary_sha256"] = sha256_file(cli)
+                  state = ROOT / "separate-uap-state"
+                  scratch = ROOT / "uap-scratch"
+                  state.mkdir(mode=0o700)
+                  scratch.mkdir(mode=0o700)
+                  cli_env = dict(env, PATH=str(ROOT) + os.pathsep + "/usr/local/go/bin:/usr/bin:/bin",
+                                 AGENTPLUGINS_HOME=str(state), TMPDIR=str(scratch))
+                  source_dir = ROOT / "uap-global-package"
+                  skill_file = source_dir / "skills" / "uap-e2e-global" / "SKILL.md"
+                  skill_file.parent.mkdir(parents=True)
+                  skill_file.write_text("---\nname: uap-e2e-global\ndescription: Inert UAP-installed Global Skill\n---\nNo model action required.\n")
+                  (source_dir / "plugin.json").write_text(json.dumps({
+                      "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                      "name": "uap-e2e-global", "version": "1.0.0"}))
+                  (source_dir / "mcp.json").write_text(json.dumps({
+                      "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+                      "mcpServers": {
+                          "uap_e2e_stdio": {"type": "stdio", "command": sys.executable,
+                                            "args": [str(service_path), "stdio"],
+                                            "env": {"UAP_D0_TRACE": str(trace)}},
+                          "uap_e2e_http": {"type": "streamable-http",
+                                           "url": "http://127.0.0.1:" + str(port) + "/mcp"}}}))
+                  cascade = home / ".codeium" / "windsurf" / "mcp_config.json"
+                  cascade.parent.mkdir(parents=True)
+                  cascade.write_text('{"mcpServers":{"cascade_foreign":{"serverUrl":"https://foreign.example/mcp"}},"preserve":true}\n')
+                  cascade_original = cascade.read_bytes()
+                  project_original = (projects[0] / ".devin" / "mcp_config.json").read_bytes()
+                  global_original = json.loads((global_root / "mcp_config.json").read_text())
+
+                  def cli_command(stage, *args):
+                      result = subprocess.run([str(cli), *args, "--scope", "user",
+                                               "--format", "json"],
+                                              cwd=projects[0], env=cli_env,
+                                              capture_output=True, timeout=90)
+                      item = {"stage": stage, "exit": result.returncode,
+                              "stdout_sha256": hashlib.sha256(result.stdout).hexdigest(),
+                              "stderr_sha256": hashlib.sha256(result.stderr).hexdigest()}
+                      bridge["steps"].append(item)
+                      if result.returncode:
+                          raise RuntimeError(stage + " failed with exit " + str(result.returncode))
+                      if len(result.stdout) > 1048576:
+                          raise RuntimeError(stage + " returned oversized JSON")
+                      try:
+                          response = json.loads(result.stdout)
+                      except (ValueError, UnicodeDecodeError):
+                          raise RuntimeError(stage + " returned invalid JSON")
+                      if response.get("command") != stage or response.get("result") != "success":
+                          raise RuntimeError(stage + " returned non-success result")
+                      item["success"] = True
+                      return response["data"]
+
+                  def cli_inventory(stage, want_present):
+                      for project in projects:
+                          skills = run_native(executable, ["skills", "list", "--json"], project, env)
+                          mcp = run_native(executable, ["mcp", "list"], project, env)
+                          expected_project = project == projects[0]
+                          ok = (skills["exit"] == 0 and skills.get("parseable_json") and
+                                mcp["exit"] == 0 and
+                                skills["uap_cli_skill_in_stdout"] == want_present and
+                                mcp["uap_cli_stdio_in_stdout"] == want_present and
+                                mcp["uap_cli_http_in_stdout"] == want_present and
+                                skills["global_skill_in_stdout"] and
+                                mcp["stdio_name_in_stdout"] and mcp["http_name_in_stdout"] and
+                                skills["project_skill_in_stdout"] == expected_project and
+                                mcp["project_stdio_in_stdout"] == expected_project and
+                                mcp["project_http_in_stdout"] == expected_project)
+                          bridge["inventory"].append({"stage": stage, "project": project.name,
+                                                       "expected_installed": want_present, "pass": ok})
+                          if not ok:
+                              raise RuntimeError(stage + " genuine Devin A/B source inventory mismatch")
+
+                  cli_inventory("before_add", False)
+                  added = cli_command("add", "add", str(source_dir), "--no-save", "--target", "windsurf")
+                  iid = (added.get("result") or {}).get("installation_id")
+                  if not isinstance(iid, str) or len(iid) != 36:
+                      raise RuntimeError("production UAP add returned no canonical installation ID")
+                  cli_inventory("after_add", True)
+                  shutil.rmtree(global_root / "skills" / "uap-e2e-global")
+                  cli_command("repair", "repair", iid, "--target", "windsurf")
+                  cli_inventory("after_repair", True)
+                  cli_command("remove", "remove", iid, "--target", "windsurf")
+                  cli_inventory("after_remove", False)
+                  after = json.loads((global_root / "mcp_config.json").read_text())
+                  for key, value in global_original["mcpServers"].items():
+                      if after["mcpServers"].get(key) != value:
+                          raise RuntimeError("UAP changed original foreign/global MCP")
+                  if (cascade.read_bytes() != cascade_original or
+                      (projects[0] / ".devin" / "mcp_config.json").read_bytes() != project_original or
+                      not (global_root / "skills" / "uap-d0-global" / "SKILL.md").is_file()):
+                      raise RuntimeError("UAP changed original Cascade or Project A authority")
+                  checks["uap_cli_add_repair_remove_A_B"] = True
+                  bridge["status"] = "GENUINE_UAP_WRITTEN_SOURCE_DISCOVERED"
+              except Exception as exc:
+                  bridge["failure"] = type(exc).__name__ + ": " + str(exc)[:200]
               if all(checks.values()):
                   report["status"] = "D0_NATIVE_SOURCE_AND_CALL_OBSERVED"
               else:
