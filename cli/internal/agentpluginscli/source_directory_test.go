@@ -107,6 +107,15 @@ func TestDirectoryV2CanonicalRuntimeEvidenceDoesNotBorrowAnotherClosure(t *testi
 		ReleaseSequence: distribution.Releases[1].Sequence, TreeDigest: distribution.Releases[1].TreeDigest}
 	proofDigest := "sha256:" + strings.Repeat("a", 64)
 	bundle.Snapshot.Evidence[1].ClosureDigest = proofDigest
+	observed := bundle.Snapshot.Evidence[1]
+	// Match the recorded native environment so this regression exercises
+	// canonical closure authorization, not the unrelated evidence dimensions.
+	environment := directoryEvidenceEnvironment{
+		InstallerVersion: observed.InstallerVersion, OS: observed.OS,
+		Architecture:       observed.Architecture,
+		ClientVersions:     map[domain.ClientID]string{domain.ClientCursor: observed.ClientVersion},
+		DependencyIdentity: map[domain.ClientID]string{domain.ClientCursor: observed.DependencyIdentity},
+	}
 
 	for _, tc := range []struct {
 		name             string
@@ -125,7 +134,7 @@ func TestDirectoryV2CanonicalRuntimeEvidenceDoesNotBorrowAnotherClosure(t *testi
 		t.Run(tc.name, func(t *testing.T) {
 			policy.Targets[0].CanonicalClosure = tc.canonical
 			loaded := loadedPackage{}
-			if err := applyDirectoryCompatibility(&loaded, bundle, selected, policy, directoryEvidenceEnvironment{}, domain.ScopeUser); err != nil {
+			if err := applyDirectoryCompatibility(&loaded, bundle, selected, policy, environment, domain.ScopeUser); err != nil {
 				t.Fatal(err)
 			}
 			compatibility := loaded.envelope.CatalogEvidence.Compatibility[string(domain.ClientCursor)]
