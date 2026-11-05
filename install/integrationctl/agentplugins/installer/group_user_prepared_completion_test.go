@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/vscodeprofile"
 )
 
 type userPreparedUpdateFixture struct {
@@ -38,38 +40,76 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 			ActivePath: active, PhysicalArtifactID: "artifact-" + string(clientID),
 			NativeRegistryRoot: config,
 		}
+		var observation *domain.LocalEntryObservation
+		var objects []domain.NativeObjectOwnership
+		if clientID == domain.ClientVSCode {
+			enabled := true
+			digest := "sha256:" + strings.Repeat("a", 64)
+			projection := "sha256:" + strings.Repeat("b", 64)
+			facts := domain.LocalDeliveryFacts{
+				ProfileRoot: config, SettingsPath: filepath.Join(config, "settings.json"),
+				ProfileIdentity: config, SettingsIdentity: filepath.Join(config, "settings.json"),
+				Tuple: domain.LocalQualifiedTuple{VSCodeVersion: "TEST-vscode", CopilotVersion: "TEST-copilot",
+					TargetOS: "linux", TargetShell: "bash", QualificationID: "TEST-local"},
+				NativeStop: true, CanonicalDigest: digest, ProjectionDigest: projection,
+				Registration: domain.OwnedProfileEntry{ObjectID: "TEST-owned-entry", Selector: active, DesiredValue: &enabled},
+			}
+			var err error
+			plan.SelectedDelivery, err = domain.NewLocalDelivery(facts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			native, err := vscodeprofile.Plan(vscodeprofile.Request{
+				Settings: []byte("{}"), Action: vscodeprofile.Install,
+				Identity: vscodeprofile.Identity{
+					SettingsPath: facts.SettingsPath, ProfileID: facts.ProfileIdentity,
+					PluginRoot: active, PackageID: facts.Registration.ObjectID,
+					PackageDigest: digest, ProjectionDigest: projection,
+				},
+			})
+			if err != nil || native.Receipt == nil {
+				t.Fatalf("TEST native receipt setup: %v", err)
+			}
+			observation, err = domain.NewLocalEntryObservation(domain.LocalEntryObservationFacts{
+				RevisionBasis: plan.SelectedDelivery,
+				Enabled: native.Receipt.Enabled, ReceiptDigest: native.Receipt.Digest,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			objects = []domain.NativeObjectOwnership{facts.Registration.Ownership(facts.SettingsPath)}
+		}
 		bindingID := domain.ComputeClientBindingID(id, string(clientID), string(domain.ScopeUser), active)
 		receiptID := "receipt-" + string(clientID)
 		installed.DataReceipts[receiptID] = domain.DataReceipt{DataReceiptID: receiptID, Scope: string(domain.ScopeUser),
-			Locator: filepath.Join(root, "plugin-data", string(clientID))}
+			Locator: filepath.Join(root, "plugin-data", string(clientID)), State: domain.DataReceiptOwned}
 		prepared.req.Targets = append(prepared.req.Targets, ClientTarget{ClientID: string(clientID), ClientConfigRoot: config})
 		prepared.clients = append(prepared.clients, client)
 		prepared.plan.Targets = append(prepared.plan.Targets, PlanTarget{
 			ClientID: string(clientID), ConfigRoot: config, TargetPath: active, BindingID: bindingID,
+			SelectedDelivery: plan.SelectedDelivery,
 		})
 		activation := domain.ActivationActive
+		verification := domain.VerificationInstalled
 		actions := []string(nil)
 		if clientID == domain.ClientVSCode {
 			activation = domain.ActivationPrepared
+			verification = domain.VerificationPackageValid
 			actions = []string{"TEST Local reload; activation not attested"}
 		}
 		outcome := domain.ActivationOutcome{
 			Activation: activation, Authentication: domain.AuthenticationNotChecked,
-			Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled,
+			Policy: domain.PolicyAllowed, Verification: verification,
 			NativeEffect: domain.NativeEffectUnchanged, UserActions: actions,
 		}
 		got.Targets = append(got.Targets, usecase.AddResult{
 			InstallationID: id, Plan: plan, Activation: outcome,
 			GroupPhase: usecase.GroupTargetExternalCompleted,
 		})
-		nativeRoot := config
-		if clientID == domain.ClientVSCode {
-			// User Local intentionally does not pin NativeProfileRoot.
-			nativeRoot = ""
-		}
 		installed.Clients[bindingID] = domain.ClientBinding{
 			ClientBindingID: bindingID, DataReceiptID: receiptID, ClientID: string(clientID), Scope: string(domain.ScopeUser),
-			TargetLocator: active, PhysicalArtifact: plan.PhysicalArtifactID, NativeProfileRoot: nativeRoot,
+			TargetLocator: active, PhysicalArtifact: plan.PhysicalArtifactID, NativeProfileRoot: config,
+			SelectedDelivery: plan.SelectedDelivery, NativeObjects: objects, LocalEntryObservation: observation,
 			Materialization: domain.MaterializationMaterialized, Activation: outcome.Activation,
 			Authentication: outcome.Authentication, Policy: outcome.Policy, Verification: outcome.Verification,
 		}
@@ -118,7 +158,7 @@ func TestUserGroupPreparedUpdateCompletesOnlyFiles(t *testing.T) {
 			}
 			if result.Targets[1].ClientID != "vscode" ||
 				result.Targets[1].Activation != "prepared" ||
-				result.Targets[1].Verification != "installation_verified" {
+				result.Targets[1].Verification != "package_validated" {
 				t.Fatalf("prepared Local was promoted or lost: %+v", result.Targets)
 			}
 			if len(result.ManualActions) != 1 || result.ManualActions[0] != "TEST Local reload; activation not attested" {
@@ -178,7 +218,18 @@ func TestUserGroupPreparedUpdateRetainsFailClosedHandoff(t *testing.T) {
 		{"pending native intent", func(f *userPreparedUpdateFixture) {
 			f.changeBinding(domain.ClientVSCode, func(b *domain.ClientBinding) { b.PendingNativeIntent = &domain.PendingNativeIntent{} })
 		}},
-		{"unverified Local", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.Verification = domain.VerificationPackageValid }},
+		{"unverified Local", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.Verification = domain.VerificationNotRun }},
+		{"missing native observation", func(f *userPreparedUpdateFixture) {
+			f.changeBinding(domain.ClientVSCode, func(b *domain.ClientBinding) { b.LocalEntryObservation = nil })
+		}},
+		{"missing native owner", func(f *userPreparedUpdateFixture) {
+			f.changeBinding(domain.ClientVSCode, func(b *domain.ClientBinding) { b.NativeObjects = nil })
+		}},
+		{"missing selected Local delivery", func(f *userPreparedUpdateFixture) {
+			f.got.Targets[1].Plan.SelectedDelivery = domain.SelectedDelivery{}
+			f.prepared.plan.Targets[1].SelectedDelivery = domain.SelectedDelivery{}
+			f.changeBinding(domain.ClientVSCode, func(b *domain.ClientBinding) { b.SelectedDelivery = domain.SelectedDelivery{} })
+		}},,
 		{"blocked policy", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.Policy = domain.PolicyBlocked }},
 		{"unknown effect", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.NativeEffect = domain.NativeEffectUncertain }},
 		{"activation attestation", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.ActivationAttested = true }},

@@ -91,16 +91,18 @@ func completedUserPreparedBinding(frozen PlanTarget, plan domain.DeliveryPlan, o
 		binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil {
 		return false
 	}
-	// User Local deliberately has no persisted NativeProfileRoot, while
-	// Codex and authority-backed clients require an exact saved profile.
+	// The selected Local delivery binds its exact physical profile. Historical
+	// CLI clients derive native scope from declared traits instead.
 	nativeRoot := ""
 	if authority := plan.ProfileAuthority(); authority != nil {
 		nativeRoot = authority.Facts().CanonicalRoot
+	} else if facts, ok := plan.SelectedDelivery.LocalFacts(); ok {
+		nativeRoot = facts.ProfileRoot
 	} else if plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, domain.ScopeUser).BindsNativeProfileRoot {
 		nativeRoot = plan.NativeRegistryRoot
 	}
 	if binding.NativeProfileRoot != nativeRoot ||
-		!completedProjectOutcome(plan, outcome) || !completedProjectLifecycle(binding, outcome) {
+		!completedUserPreparedOutcome(plan, binding, outcome) || !completedProjectLifecycle(binding, outcome) {
 		return false
 	}
 	receipt, foundReceipt := installation.DataReceipts[binding.DataReceiptID]
@@ -118,10 +120,35 @@ func completedUserPreparedBinding(frozen PlanTarget, plan domain.DeliveryPlan, o
 
 func publishedPreparedUserDelivery(plan domain.DeliveryPlan) bool {
 	definition, supported := domain.ClientDefinitionFor(plan.ClientID)
+	facts, selected := plan.SelectedDelivery.LocalFacts()
+	if !supported || !selected || facts.ProjectionDigest == "" ||
+		plan.SelectedDelivery.ValidatePlan(plan, facts.CanonicalDigest) != nil {
+		return false
+	}
 	traits := plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, domain.ScopeUser)
-	return supported && definition.Capabilities.PackageMode == domain.PackagePrepared &&
-		traits.LifecycleKind == domain.LifecycleCLIRegistry &&
-		!traits.TracksNativeEffects && !traits.RequiresActiveNativeProjection
+	return definition.Capabilities.PackageMode == domain.PackagePrepared &&
+		traits.LifecycleKind == domain.LifecycleNativeConfig && traits.TracksNativeEffects &&
+		traits.BindsNativeProfileRoot && !traits.RequiresActiveNativeProjection &&
+		facts.ProfileRoot == plan.NativeRegistryRoot
+}
+
+func completedUserPreparedOutcome(plan domain.DeliveryPlan, binding domain.ClientBinding, outcome domain.ActivationOutcome) bool {
+	if outcome.Activation != domain.ActivationPrepared {
+		return completedProjectOutcome(plan, outcome)
+	}
+	if !publishedPreparedUserDelivery(plan) ||
+		outcome.Verification != domain.VerificationPackageValid ||
+		outcome.Policy != domain.PolicyAllowed ||
+		!completedProjectAuthentication(outcome.Authentication) ||
+		!completedProjectEffect(plan, outcome.NativeEffect) ||
+		outcome.ActivationAttested || outcome.AuthenticationAttested ||
+		len(outcome.UserActions) == 0 || binding.LocalEntryObservation == nil ||
+		binding.ValidateLocalEntryObservation() != nil ||
+		!reflect.DeepEqual(binding.LocalEntryObservation.Facts().RevisionBasis, binding.SelectedDelivery) ||
+		!binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects) {
+		return false
+	}
+	return true
 }
 
 func hasUserPreparedGroupTarget(got usecase.GroupResult) bool {
