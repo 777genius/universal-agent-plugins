@@ -14,8 +14,16 @@ func (session *repairSession) repairPackage() (AddResult, error) {
 	if !ok {
 		return session.result, fmt.Errorf("managed package integrity could not be determined; refusing repair: %w", session.verifyErr)
 	}
-	if verification.Kind == ports.VerificationDigestMismatch && domain.ClientTraitsFor(session.input.Client.ClientID).ProtectsModifiedPackage {
-		return session.result, fmt.Errorf("managed native extension was edited; preserve the changes before repair: %w", session.verifyErr)
+	if verification.Kind == ports.VerificationDigestMismatch {
+		// An installed raw Skill may contain new user files even inside its managed
+		// directory. Refuse destructive repair of that drift, but retain absent
+		// directory recovery and the existing plugin-specific repair policy.
+		if rev := session.client.PackageRevision; rev != nil && (rev.Skill != nil || rev.WebSkill != nil) {
+			return session.result, fmt.Errorf("managed raw Skill contains modified or unowned content; refusing repair: %w", session.verifyErr)
+		}
+		if domain.ClientTraitsFor(session.input.Client.ClientID).ProtectsModifiedPackage {
+			return session.result, fmt.Errorf("managed native extension was edited; preserve the changes before repair: %w", session.verifyErr)
+		}
 	}
 	beforeDigest, err := repairBeforeDigest(verification)
 	if err != nil {
