@@ -113,7 +113,7 @@ func inspectDirectoryProduct(ctx context.Context, app App, state domain.StateFil
 	if err != nil {
 		return publicProductInspection{}, fmt.Errorf("load signed Directory: %w", err)
 	}
-	selection, err := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{Selector: selector, Targets: targets,
+	selection, err := selectDirectorySourceForPlacement(bundle.Snapshot, domain.DirectoryResolveRequest{Selector: selector, Targets: targets,
 		Scope: app.scope(), InstallerVersion: app.Version, SchemaVersion: "1.0.0", Operation: domain.DirectoryInstall})
 	if err != nil {
 		return publicProductInspection{}, err
@@ -181,7 +181,7 @@ func inspectInstalledProduct(ctx context.Context, app App, state domain.StateFil
 		}
 	}
 	targets := installationTargets(installation, string(app.scope()))
-	selection, err := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{Selector: origin.DistributionID,
+	selection, err := selectDirectorySourceForPlacement(bundle.Snapshot, domain.DirectoryResolveRequest{Selector: origin.DistributionID,
 		Targets: targets, Scope: app.scope(), InstallerVersion: app.Version, SchemaVersion: "1.0.0", Operation: domain.DirectoryInstall})
 	if err == nil {
 		view.CurrentDistribution, view.CurrentRevision = selection.DistributionID, selection.Source.Revision
