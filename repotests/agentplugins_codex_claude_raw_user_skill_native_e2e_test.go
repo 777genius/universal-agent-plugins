@@ -19,6 +19,7 @@ import (
 const nativeRawUserSkillCommit = "7155140441b93db3a7b36dcd7e00291cafe608f9"
 const nativeRawUserSkillSource = "777genius/universal-agent-plugins@" + nativeRawUserSkillCommit + "//tests/fixtures/uap_apm/skills/benchmark-note"
 const nativeRawUserSkillName = "benchmark-note"
+const nativeRawUserSkillSourceKey = "github-skill:777genius/universal-agent-plugins:benchmark-note:tests/fixtures/uap_apm/skills/benchmark-note"
 
 func nativeRawUserInstall(t *testing.T, root, dir string, env []string, installer, target, label string, explicit bool, repeated bool) {
 	t.Helper()
@@ -59,7 +60,7 @@ func nativeRawUserState(t *testing.T, statePath, target, profile string) (domain
 	receipt := state.EnvironmentReceipts[0]
 	binding, ok := installed.Clients[receipt.ClientBindingID]
 	if !ok || len(installed.Clients) != 1 ||
-		installed.Source.StableSourceKey == "" ||
+		installed.Source.StableSourceKey != nativeRawUserSkillSourceKey ||
 		installed.DeclaredName != expectedName ||
 		installed.Source.ResolvedRevision != nativeRawUserSkillCommit ||
 		receipt.InstallationID != installed.InstallationID ||
@@ -67,7 +68,7 @@ func nativeRawUserState(t *testing.T, statePath, target, profile string) (domain
 		binding.ClientID != target || binding.Scope != "user" ||
 		binding.TargetLocator == "" || binding.PhysicalArtifact == "" ||
 		binding.ClientBindingID == "" ||
-		(binding.NativeProfileRoot != "" && binding.NativeProfileRoot != profile) ||
+		((target == "codex" || binding.NativeProfileRoot != "") && binding.NativeProfileRoot != profile) ||
 		binding.Verification != domain.VerificationInstalled {
 		t.Fatalf("%s: raw Skill lost immutable user/native identity: %+v; %+v", target, installed, binding)
 	}
