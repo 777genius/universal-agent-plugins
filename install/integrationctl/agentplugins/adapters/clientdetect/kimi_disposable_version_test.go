@@ -182,3 +182,56 @@ func TestKimiVersionProbeRejectsAliasedOriginalBeforeExecution(t *testing.T) {
 		t.Fatalf("aliased original profile was modified: %v %+v", err, entries)
 	}
 }
+
+// TMPDIR may be absolute and safe but include a trailing separator. Rejecting
+// that spelling prevents Kimi's pre-consent --version from being qualified.
+func TestKimiVersionProbeAcceptsTrailingTempRootWithoutProfileWrite(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tempRoot := filepath.Join(base, "scratch")
+	selected := filepath.Join(base, "selected")
+	if err := os.MkdirAll(tempRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(selected, 0700); err != nil {
+		t.Fatal(err)
+	}
+	withSlash := tempRoot + string(os.PathSeparator)
+	for _, key := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(key, withSlash)
+	}
+	if os.TempDir() != withSlash {
+		t.Skip("this platform normalizes the OS temp directory")
+	}
+	adapter := kimi.New()
+	environment, cleanup, err := versionProbeEnvironment(adapter, adapter, selected)
+	if err != nil {
+		t.Fatalf("safe trailing-separator temporary root rejected: %v", err)
+	}
+	defer cleanup()
+	values := map[string]string{}
+	for _, entry := range environment {
+		key, value, ok := strings.Cut(entry, "=")
+		if ok {
+			values[key] = value
+		}
+	}
+	scratch := values["KIMI_CODE_HOME"]
+	if scratch == "" || filepath.Dir(scratch) != tempRoot || values["KIMI_CODE_CACHE_DIR"] != filepath.Join(scratch, "cache") {
+		t.Fatalf("disposable version profile not under safe temp root: home=%q cache=%q", scratch, values["KIMI_CODE_CACHE_DIR"])
+	}
+	if err := os.WriteFile(filepath.Join(scratch, "native-bootstrap"), []byte("scratch-only"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cleanup()
+	if _, err := os.Lstat(scratch); !os.IsNotExist(err) {
+		t.Fatalf("disposable cache survived cleanup: %v", err)
+	}
+	entries, err := os.ReadDir(selected)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("selected profile modified: err=%v entries=%v", err, entries)
+	}
+}
+

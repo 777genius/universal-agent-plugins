@@ -20,7 +20,8 @@ func versionProbeEnvironment(adapter clients.Adapter, profile clients.VersionPro
 	}
 	// The ambient OS temp root must never be inside the selected user profile.
 	// Resolve both roots before creating scratch content to prevent aliases.
-	tempBase, err := clients.CanonicalDirectory(os.TempDir(), os.Lstat, filepath.EvalSymlinks)
+	// Unix os.TempDir preserves a trailing TMPDIR separator; canonical checks require a clean path.
+	tempBase, err := clients.CanonicalDirectory(filepath.Clean(os.TempDir()), os.Lstat, filepath.EvalSymlinks)
 	if err != nil {
 		return nil, noop, err
 	}
