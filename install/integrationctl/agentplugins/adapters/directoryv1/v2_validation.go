@@ -377,25 +377,8 @@ func validateV2EvidenceRecord(evidence domain.DirectoryEvidence,
 	releases map[string]domain.DirectoryRelease, generated time.Time, byID map[string]domain.DirectoryEvidence,
 ) error {
 	release := releases[releaseKey(evidence.DistributionID, evidence.ReleaseSequence)]
-	if evidence.SchemaVersion != 1 || !evidenceIDPattern.MatchString(evidence.ID) ||
-		byID[evidence.ID].ID != "" || release.Sequence == 0 ||
-		release.TreeDigest != evidence.PackageTreeDigest || !evidence.HasTrustedProvenance() {
-		return strictError("invalid v2 evidence identity or trust")
-	}
-	// V2 evidence uses trust-bound provenance, never the pre-cutover V1 source fields.
-	if evidence.ProductID != "" || evidence.ManifestDigest != "" || evidence.SourceRepository != "" ||
-		evidence.SourceRevision != "" || evidence.SourcePath != "" || evidence.AdapterVersion != "" {
-		return strictError("v2 evidence cannot carry legacy source identity fields")
-	}
-	for _, artifact := range []*domain.DirectoryEvidenceArtifact{
-		evidence.Trust.BundleManifest, evidence.Trust.LaunchArtifact,
-		evidence.Trust.ObserverArtifact, evidence.Trust.EvidenceIndex,
-	} {
-		if artifact != nil && (!repositoryPattern.MatchString(artifact.Repository) ||
-			!shaPattern.MatchString(artifact.Revision) || artifact.Path == "" ||
-			!digestPattern.MatchString(artifact.Digest)) {
-			return strictError("invalid v2 evidence trust artifact")
-		}
+	if err := validateV2EvidenceProvenance(evidence, release, byID); err != nil {
+		return err
 	}
 	if !oneOf(evidence.Level, "schema", "materialization", "discovery", "runtime", "oauth") ||
 		!oneOf(evidence.Outcome, "passed", "failed", "inconclusive", "not_tested", "not_applicable") {
@@ -418,6 +401,32 @@ func validateV2EvidenceRecord(evidence domain.DirectoryEvidence,
 		date, err := parseTimestamp(evidence.ObservedAt)
 		if err != nil || date.After(generated) {
 			return strictError("invalid v2 evidence observation time")
+		}
+	}
+	return nil
+}
+
+func validateV2EvidenceProvenance(evidence domain.DirectoryEvidence, release domain.DirectoryRelease,
+	byID map[string]domain.DirectoryEvidence,
+) error {
+	if evidence.SchemaVersion != 1 || !evidenceIDPattern.MatchString(evidence.ID) ||
+		byID[evidence.ID].ID != "" || release.Sequence == 0 ||
+		release.TreeDigest != evidence.PackageTreeDigest || !evidence.HasTrustedProvenance() {
+		return strictError("invalid v2 evidence identity or trust")
+	}
+	// V2 evidence uses trust-bound provenance, never the pre-cutover V1 source fields.
+	if evidence.ProductID != "" || evidence.ManifestDigest != "" || evidence.SourceRepository != "" ||
+		evidence.SourceRevision != "" || evidence.SourcePath != "" || evidence.AdapterVersion != "" {
+		return strictError("v2 evidence cannot carry legacy source identity fields")
+	}
+	for _, artifact := range []*domain.DirectoryEvidenceArtifact{
+		evidence.Trust.BundleManifest, evidence.Trust.LaunchArtifact,
+		evidence.Trust.ObserverArtifact, evidence.Trust.EvidenceIndex,
+	} {
+		if artifact != nil && (!repositoryPattern.MatchString(artifact.Repository) ||
+			!shaPattern.MatchString(artifact.Revision) || artifact.Path == "" ||
+			!digestPattern.MatchString(artifact.Digest)) {
+			return strictError("invalid v2 evidence trust artifact")
 		}
 	}
 	return nil
