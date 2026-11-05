@@ -148,3 +148,61 @@ func TestV2ClientRejectsCacheAliasesBeforeNetworkOrWrites(t *testing.T) {
 		check(t, filepath.Join(realRoot, "future", "shared.json"), filepath.Join(alias, "future", "shared.json"))
 	})
 }
+
+func TestV2ClientRejectsExistingCacheFileAliases(t *testing.T) {
+	_, _, trust := v2SignedFixture(t)
+	root := t.TempDir()
+	original := filepath.Join(root, "v1-cache.json")
+	const marker = "foreign cache must remain untouched"
+	if err := os.WriteFile(original, []byte(marker), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		link func(string, string) error
+	}{
+		{"file symlink", os.Symlink},
+		{"hard link", os.Link},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			alias := filepath.Join(root, strings.ReplaceAll(tc.name, " ", "-")+".json")
+			if err := tc.link(original, alias); err != nil {
+				t.Skipf("file alias unavailable on this host: %v", err)
+			}
+			client := V2Client{
+				Transport: Client{Trust: trust, Cache: Cache{Path: original}},
+				Cache:     Cache{Path: alias},
+			}
+			if _, err := client.Load(context.Background(), 0); !errors.Is(err, ErrUnavailable) ||
+				!strings.Contains(err.Error(), "v1/v2 cache path collision") {
+				t.Fatalf("install-time v2 accepted existing file alias: %v", err)
+			}
+			if _, err := client.LoadLocal(0); !errors.Is(err, ErrUnavailable) ||
+				!strings.Contains(err.Error(), "v1/v2 cache path collision") {
+				t.Fatalf("read-only v2 accepted existing file alias: %v", err)
+			}
+			if content, err := os.ReadFile(original); err != nil || string(content) != marker {
+				t.Fatalf("existing v1 cache mutated: %q, %v", content, err)
+			}
+		})
+	}
+}
+
+func TestV2ClientRejectsDanglingCacheFilenameSymlink(t *testing.T) {
+	_, _, trust := v2SignedFixture(t)
+	root := t.TempDir()
+	dangling := filepath.Join(root, "dangling-v2.json")
+	if err := os.Symlink(filepath.Join(root, "uncreated-target.json"), dangling); err != nil {
+		t.Skipf("file symlinks unavailable on this host: %v", err)
+	}
+	client := V2Client{
+		Transport: Client{Trust: trust, Cache: Cache{Path: filepath.Join(root, "v1.json")}},
+		Cache:     Cache{Path: dangling},
+	}
+	if _, err := client.Load(context.Background(), 0); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("v2 accepted dangling file symlink: %v", err)
+	}
+	if _, err := client.LoadLocal(0); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("read-only v2 accepted dangling file symlink: %v", err)
+	}
+}

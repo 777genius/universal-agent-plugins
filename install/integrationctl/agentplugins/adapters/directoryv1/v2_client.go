@@ -41,6 +41,18 @@ func (client V2Client) validateConfig() error {
 		if v1Path == v2Path {
 			return fmt.Errorf("%w: v1/v2 cache path collision", ErrUnavailable)
 		}
+		// Distinct paths can still name the same cache inode through hard links.
+		v1Info, v1Err := os.Stat(client.Transport.Cache.Path)
+		if v1Err != nil && !errors.Is(v1Err, os.ErrNotExist) {
+			return fmt.Errorf("%w: inspect v1 cache: %w", ErrUnavailable, v1Err)
+		}
+		v2Info, v2Err := os.Stat(client.Cache.Path)
+		if v2Err != nil && !errors.Is(v2Err, os.ErrNotExist) {
+			return fmt.Errorf("%w: inspect v2 cache: %w", ErrUnavailable, v2Err)
+		}
+		if v1Err == nil && v2Err == nil && os.SameFile(v1Info, v2Info) {
+			return fmt.Errorf("%w: v1/v2 cache path collision", ErrUnavailable)
+		}
 	}
 	return nil
 }
@@ -50,6 +62,15 @@ func (client V2Client) validateConfig() error {
 func canonicalCachePath(path string) (string, error) {
 	absolute, err := filepath.Abs(path)
 	if err != nil {
+		return "", err
+	}
+	// A symlink at the cache filename itself must also resolve to its target.
+	// Reject dangling filename symlinks instead of following them on write.
+	if info, err := os.Lstat(absolute); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return filepath.EvalSymlinks(absolute)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
 	parent, suffix := filepath.Dir(absolute), filepath.Base(absolute)
