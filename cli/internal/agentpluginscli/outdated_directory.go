@@ -91,7 +91,7 @@ func resolveDirectoryOutdated(
 	}
 	environment := directoryEnvironment(clientMap)
 	environment.InstallerVersion = installerVersion
-	selection, err := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{
+	selection, err := selectDirectorySourceForPlacement(bundle.Snapshot, domain.DirectoryResolveRequest{
 		Selector: origin.ProductID, Targets: expandAffectedSurfaceTargets(item.Targets, selectedScope(scopes)), Scope: selectedScope(scopes),
 		InstallerVersion: installerVersion, ClientVersions: environment.ClientVersions, OS: environment.OS,
 		Architecture: environment.Architecture, DependencyIdentity: environment.DependencyIdentity,
