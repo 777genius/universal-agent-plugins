@@ -236,3 +236,42 @@ func TestInstallerFacadeKeepsOfflineClientPlanning(t *testing.T) {
 		})
 	}
 }
+
+// TestInstallerFacadeCarriesPrivateCodexHandoffToHumanOnly checks the facade's native result and JSON boundary.
+func TestInstallerFacadeCarriesPrivateCodexHandoffToHumanOnly(t *testing.T) {
+	handoff := "start a new Codex session; ChatGPT Desktop (optional, local): codex://plugins/demo?marketplacePath=%2Fprivate%2Fmarketplace.json"
+	for _, mutated := range []bool{false, true} {
+		t.Run(map[bool]string{true: "first-add", false: "repeat-add"}[mutated], func(t *testing.T) {
+			applied := installer.Result{
+				Mutated: mutated, NoChange: !mutated,
+				LocalActions: []string{handoff},
+				Client: installer.ClientResult{
+					Activation:     string(domain.ActivationActive),
+					Authentication: string(domain.AuthenticationNotRequired),
+					Policy:         string(domain.PolicyAllowed),
+					Verification:   string(domain.VerificationInstalled),
+				},
+			}
+			envelope := domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: "demo"}}
+			result := facadeResultAddResult(installer.Plan{ClientID: "codex"}, applied, envelope)
+			if len(result.Activation.LocalActions) != 1 || result.Activation.LocalActions[0] != handoff {
+				t.Fatalf("installer facade discarded native private guidance: %+v", result.Activation)
+			}
+			var human bytes.Buffer
+			if err := renderHumanAddOutcome(&human, result); err != nil || !strings.Contains(human.String(), handoff) {
+				t.Fatalf("human CLI hid local handoff: %q, error = %v", human.String(), err)
+			}
+			var public bytes.Buffer
+			if err := renderAddResult(&public, "json", envelope, result, false); err != nil {
+				t.Fatal(err)
+			}
+			wire, err := json.Marshal(applied)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(public.String(), "codex://") || strings.Contains(string(wire), "codex://") {
+				t.Fatal("local marketplace URI leaked to public JSON")
+			}
+		})
+	}
+}

@@ -192,6 +192,8 @@ type Result struct {
 	Outcome              Outcome
 	Binding              BindingFacts
 	ManualActions        []string
+	// LocalActions are transient host-specific guidance, never public installer JSON.
+	LocalActions []string `json:"-"`
 	Reason               string
 	NoChange             bool
 	Mutated              bool
