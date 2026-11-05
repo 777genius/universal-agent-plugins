@@ -54,7 +54,7 @@ function canonical(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
   if (value !== null && typeof value === 'object')
     return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonical(obj(value)[k])).join(',') + '}';
-  if (typeof value === 'number' && !Number.isSafeInteger(value)) invalid();
+  if (typeof value === 'number' && !Number.isFinite(value)) invalid();
   const serialized = JSON.stringify(value);
   if (typeof serialized !== 'string') invalid();
   return serialized;
