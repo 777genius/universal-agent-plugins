@@ -30,7 +30,7 @@ func defaultBoundTargets(app App, selector, scope string, degradedOnly bool) ([]
 		if binding.Scope != scope || binding.Materialization == domain.MaterializationAbsent {
 			continue
 		}
-		if degradedOnly && binding.Materialization != domain.MaterializationDegraded && binding.Activation != domain.ActivationFailed && binding.Activation != domain.ActivationManual && binding.Activation != domain.ActivationPrepared && binding.Authentication != domain.AuthenticationFailed && binding.Authentication != domain.AuthenticationPending && binding.Verification != domain.VerificationFailed {
+		if degradedOnly && !bindingNeedsAttention(binding) {
 			continue
 		}
 		targets = append(targets, bindingSurfaceTargets(binding)...)
@@ -43,6 +43,18 @@ func defaultBoundTargets(app App, selector, scope string, degradedOnly bool) ([]
 	}
 	sortTargets(targets)
 	return targets, nil
+}
+
+// bindingNeedsAttention selects exactly the pre-existing degraded or pending
+// lifecycle states used by both default target selectors.
+func bindingNeedsAttention(binding domain.ClientBinding) bool {
+	return binding.Materialization == domain.MaterializationDegraded ||
+		binding.Activation == domain.ActivationFailed ||
+		binding.Activation == domain.ActivationManual ||
+		binding.Activation == domain.ActivationPrepared ||
+		binding.Authentication == domain.AuthenticationFailed ||
+		binding.Authentication == domain.AuthenticationPending ||
+		binding.Verification == domain.VerificationFailed
 }
 
 func defaultInstalledBindingTargets(ctx context.Context, app App, selector, scope string, degradedOnly bool) ([]domain.ClientID, error) {
@@ -59,7 +71,7 @@ func defaultInstalledBindingTargets(ctx context.Context, app App, selector, scop
 		if binding.Scope != scope || binding.Materialization == domain.MaterializationAbsent {
 			continue
 		}
-		if degradedOnly && binding.Materialization != domain.MaterializationDegraded && binding.Activation != domain.ActivationFailed && binding.Activation != domain.ActivationManual && binding.Activation != domain.ActivationPrepared && binding.Authentication != domain.AuthenticationFailed && binding.Authentication != domain.AuthenticationPending && binding.Verification != domain.VerificationFailed {
+		if degradedOnly && !bindingNeedsAttention(binding) {
 			continue
 		}
 		bindingTargets = append(bindingTargets, domain.ClientID(binding.ClientID))
