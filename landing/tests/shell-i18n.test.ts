@@ -44,7 +44,7 @@ test('shell English messages compile, interpolate and retain baseline FAQ facts'
       key,
     );
   }
-  assert.equal(t('shell.hero.install', { name: 'context7' }), 'Install context7');
+  assert.equal(t('shell.hero.install', { name: 'Context7' }), 'Install the Context7 plugin');
   assert.equal(
     t('shell.docs.englishLabel', { label: 'Quickstart' }),
     'Quickstart (documentation in English)',
@@ -389,7 +389,7 @@ test('visible FAQ and schema share the exact same localized page value', () => {
   const page = read('pages/index.vue');
   assert.match(page, /<RegistryFaq :items="registryFaqItems"/);
   assert.match(page, /mainEntity: registryFaqItems.value.map/);
-  assert.match(read('components/registry/RegistryFaq.vue'), /v-for="(?:item|\(item, index\)) in items"/);
+  assert.match(read('components/registry/RegistryFaq.vue'), /v-for="\(item, index\) in items"/);
   const { tm, rt } = createI18n<[typeof messages], 'en', false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
   assert.deepEqual(Object.values(tm('shell.faq.items') as Record<string, { question: string; answer: string }>).map((item) => ({
     question: rt(item.question), answer: rt(item.answer),
