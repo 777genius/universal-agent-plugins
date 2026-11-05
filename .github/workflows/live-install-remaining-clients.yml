@@ -88,7 +88,11 @@ jobs:
               fi
               BIN="devin"
               ;;
-            grok) URL="https://x.ai/cli/install.sh"; BIN="grok" ;;
+            grok)
+              # Homebrew/homebrew-cask Casks/g/grok-build.rb @ b75a8e94456970fa349c75b59ca5e4183dde8e28
+              URL="https://x.ai/cli/grok-1.0.70-linux-x86_64"
+              BIN="grok"
+              ;;
             vscode)
               # Official VS Code 1.144.0 Linux x64 .deb, never a mutable "latest".
               URL="https://update.code.visualstudio.com/1.144.0/linux-deb-x64/stable"
@@ -120,7 +124,7 @@ jobs:
                 SHA256="201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a" # Cask c9adad21, user 3000.11.234
               fi
               ;;
-            grok) SHA256="" ;; # Needs official installer digest review
+            grok) SHA256="22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9" ;; # Homebrew Cask grok-build 1.0.70, Linux x86_64
           esac
           sha256_file() {
             if command -v sha256sum >/dev/null 2>&1; then
@@ -137,8 +141,11 @@ jobs:
             artifact="$RUNNER_TEMP/$TARGET.deb"
           elif [[ "$TARGET" == kiro ]]; then
             artifact="$RUNNER_TEMP/kirocli-universal-darwin.zip"
+          elif [[ "$TARGET" == grok ]]; then
+            artifact="$RUNNER_TEMP/grok-1.0.70-linux-x86_64"
           else
-            artifact="$RUNNER_TEMP/vendor-install.sh"
+            echo "Unsupported vendor artifact format: $TARGET" >&2
+            exit 4
           fi
           curl -fsSL --retry 2 "$URL" -o "$artifact"
           sha256_file "$artifact" > "$RUNNER_TEMP/vendor-proof/observed-untrusted.sha256"
@@ -187,9 +194,16 @@ jobs:
             executable="$RUNNER_TEMP/vendor-root/kirocli/bin/kiro-cli"
             test -f "$executable" && test -x "$executable" && test ! -L "$executable"
             ln -s "$executable" "$HOME/.local/bin/kiro-cli"
+          elif [[ "$TARGET" == grok ]]; then
+            # Independent Homebrew SHA is checked above before any native run.
+            mkdir -p "$RUNNER_TEMP/vendor-root"
+            executable="$RUNNER_TEMP/vendor-root/grok"
+            install -m 0755 "$artifact" "$executable"
+            test -f "$executable" && test -x "$executable" && test ! -L "$executable"
+            ln -s "$executable" "$HOME/.local/bin/grok"
           else
-            bash -n "$artifact"
-            bash "$artifact"
+            echo "Unsupported verified vendor format: $TARGET" >&2
+            exit 4
           fi
           hash -r
           command -v "$BIN" | tee "$RUNNER_TEMP/vendor-proof/executable.txt"

@@ -443,6 +443,25 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertNotIn('export PATH="$HOME/.local/bin:$PATH"', workflow)
         self.assertIn(":/usr/bin:/sbin:/bin:", workflow)
 
+    def test_grok_build_uses_independently_sha_pinned_binary_not_installer(self):
+        # BUG-056: Grok Build's official immutable Homebrew Cask publishes
+        # a Linux x64 ELF digest; a mutable shell installer cannot qualify E2E.
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        self.assertIn('https://x.ai/cli/grok-1.0.70-linux-x86_64', workflow)
+        self.assertIn('SHA256="22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9"', workflow)
+        self.assertIn('Homebrew/homebrew-cask Casks/g/grok-build.rb @ b75a8e94456970fa349c75b59ca5e4183dde8e28', workflow)
+        self.assertNotIn('https://x.ai/cli/install.sh', workflow)
+        self.assertNotIn('bash "$artifact"', workflow)
+        self.assertIn('artifact="$RUNNER_TEMP/grok-1.0.70-linux-x86_64"', workflow)
+        self.assertIn('executable="$RUNNER_TEMP/vendor-root/grok"', workflow)
+        self.assertIn('install -m 0755 "$artifact" "$executable"', workflow)
+        self.assertIn('ln -s "$executable" "$HOME/.local/bin/grok"', workflow)
+        self.assertIn('test -f "$executable" && test -x "$executable" && test ! -L "$executable"', workflow)
+        self.assertLess(workflow.index('sha256_file -c -'),
+                        workflow.index('install -m 0755 "$artifact" "$executable"'))
+        self.assertIn('env -i PATH="$PATH" HOME="$probe_home"', workflow)
+
     def test_devin_project_skills_use_exact_reviewed_native_version(self):
         # BUG-054: actual 30/30 project Skills refused with Devin 3000.11.234;
         # production requireCurrentDevin accepts only 3000.11.205.
