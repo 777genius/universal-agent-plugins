@@ -78,10 +78,19 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 		}
 		pending = false
 	}
+	if pending && loadErr != nil {
+		result.Outcome, result.Reason = OutcomeIncomplete, "committed group state is unknown"
+		return result, loadErr
+	}
 	if pending && e.anyGroupHostHandoffPending(prepared) {
-		result.Outcome = OutcomeIncomplete
-		result.Reason = "committed binding is not activated"
-		return result, fmt.Errorf("%s", result.Reason)
+		if e.cfg.OnCommittedBinding == nil || !completedUserPreparedUpdate(prepared, got, state) {
+			result.Outcome = OutcomeIncomplete
+			result.Reason = "committed binding is not activated"
+			return result, fmt.Errorf("%s", result.Reason)
+		}
+		// The verified file update is complete; Local may still be Prepared.
+		// Never rewrite or promote its saved activation/verification evidence.
+		pending = false
 	}
 	if !result.Mutated && !pending && (prepared.plan.NoChange || (!got.Mutated && groupPreviewUnchanged(got))) {
 		result.Outcome = OutcomeUnchanged
