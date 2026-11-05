@@ -110,7 +110,7 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	}
 	// This is the Directory card's actual command, with only non-interactive
 	// consent and JSON output added for a disposable CI host.
-	args := []string{"add", directorySitePlugin, "--target", "codex,claude", "--no-ui", "--yes"}
+	args := []string{"add", directorySitePlugin, "--target", "codex,claude", "--yes"}
 	result, err := commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-add", args...)
 	if err != nil || result["result"] != "success" {
 		t.Fatalf("site Directory command failed: %v %+v", err, result)
@@ -169,7 +169,7 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	verifyForeign("replay")
 
 	// The site exposes unfiltered update/remove of the saved Directory alias.
-	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-update", "update", directorySitePlugin, "--no-ui", "--yes")
+	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-update", "update", directorySitePlugin)
 	if err != nil || result["result"] != "success" {
 		t.Fatalf("site update failed: %v %+v", err, result)
 	}
@@ -183,7 +183,7 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-repair",
-		"repair", directorySitePlugin, "--target", "codex,claude", "--no-ui", "--yes")
+		"repair", directorySitePlugin, "--target", "codex,claude")
 	if err != nil || result["result"] != "success" {
 		t.Fatalf("site Directory repair failed: %v %+v", err, result)
 	}
@@ -194,7 +194,7 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	codexCheck("site-repaired", true)
 	claudeCheck("site-repaired", true)
 	verifyForeign("repair")
-	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-remove", "remove", directorySitePlugin, "--no-ui", "--yes")
+	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-remove", "remove", directorySitePlugin)
 	if err != nil || result["result"] != "success" {
 		t.Fatalf("site remove failed: %v %+v", err, result)
 	}
