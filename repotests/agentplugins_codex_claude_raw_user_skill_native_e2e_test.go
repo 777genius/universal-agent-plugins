@@ -56,15 +56,18 @@ func nativeRawUserState(t *testing.T, statePath, target, profile string) (domain
 	// by the exact source. It must never equal or shadow a user's Skill name.
 	sum := sha256.Sum256([]byte(installed.Source.StableSourceKey))
 	expectedName := "skill-" + hex.EncodeToString(sum[:])[:56]
-	binding, ok := installed.Clients[target]
-	if !ok || installed.Source.StableSourceKey == "" ||
+	receipt := state.EnvironmentReceipts[0]
+	binding, ok := installed.Clients[receipt.ClientBindingID]
+	if !ok || len(installed.Clients) != 1 ||
+		installed.Source.StableSourceKey == "" ||
 		installed.DeclaredName != expectedName ||
 		installed.Source.ResolvedRevision != nativeRawUserSkillCommit ||
+		receipt.InstallationID != installed.InstallationID ||
+		receipt.ClientID != target || receipt.ClientBindingID != binding.ClientBindingID ||
 		binding.ClientID != target || binding.Scope != "user" ||
 		binding.TargetLocator == "" || binding.PhysicalArtifact == "" ||
 		binding.ClientBindingID == "" || binding.NativeProfileRoot != profile ||
-		binding.Verification != domain.VerificationInstalled ||
-		state.EnvironmentReceipts[0].ClientID != target {
+		binding.Verification != domain.VerificationInstalled {
 		t.Fatalf("%s: raw Skill lost immutable user/native identity: %+v; %+v", target, installed, binding)
 	}
 	return state, binding
@@ -132,8 +135,10 @@ func nativeRawUserRemove(t *testing.T, root, dir string, env []string, installer
 		t.Fatalf("%s: removal left a live environment receipt: %+v", target, state.EnvironmentReceipts)
 	}
 	for _, installation := range state.Installations {
-		if _, ok := installation.Clients[target]; ok {
-			t.Fatalf("%s: removed native binding is still registered", target)
+		for key, binding := range installation.Clients {
+			if binding.ClientID == target {
+				t.Fatalf("%s: removed native binding is still registered under %s", target, key)
+			}
 		}
 	}
 }
