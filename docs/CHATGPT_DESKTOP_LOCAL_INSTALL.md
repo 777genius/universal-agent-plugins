@@ -11,7 +11,7 @@ ChatGPT Desktop's local Work/Codex plugin marketplace is distinct from **ChatGPT
    `npx -y universal-agent-plugins add context7 --target codex`
 
    UAP selects and validates the signed distribution and performs its existing managed Codex marketplace/plugin lifecycle. The command may show authentication or other activation steps. If the Codex CLI is unavailable, UAP prints manual setup rather than claiming an automatic installation.
-4. If the CLI prints a `codex://plugins/...` link, open it **only on your own computer**. This opens the plugin detail in ChatGPT Desktop; it does not install silently. If your OS does not recognize the link, open ChatGPT Desktop manually.
+4. On macOS or Windows, you can run `codex app` to open an installed ChatGPT Desktop app (or start its installer when missing). On Windows it may print a path to open. This is a user action, not performed automatically by UAP. If the CLI prints a `codex://plugins/...` link, open it **only on your own computer**. It opens the local plugin detail in Desktop, not a silent installation. If the URL handler is unavailable, open ChatGPT Desktop manually.
 5. In **Plugins > Personal**, find the plugin from the local marketplace, install or enable it as prompted, and restart ChatGPT Desktop if required. Start a new **local** Work/Codex thread and check that the plugin's Skill or MCP tools function. Complete any provider OAuth inside the client.
 
 **What success means:** `codex plugin list --json` can verify local **Codex** registration and enablement. It does not prove that ChatGPT Desktop loaded the plugin, that the MCP server ran, or that the user's account completed OAuth. Desktop runtime verification requires step 5 on a real installed, signed-in app.
@@ -30,7 +30,7 @@ Follow the CLI's exact manual uninstall/confirmation instructions when requested
 
 ## Troubleshooting
 
-- **No ChatGPT Desktop on this computer?** Codex CLI's verified installation does not prove Desktop activation. Install/open the Desktop app before attempting the Plugins step. The UAP CLI does **not** launch it automatically.
+- **No ChatGPT Desktop on this computer?** On macOS and Windows, `codex app` opens the installed app or starts the installer. Codex CLI verification alone does not prove Desktop activation; UAP does **not** auto-launch the app.
 - **No Codex CLI?** UAP can prepare an eligible package but may require installing the CLI or completing the registration in the app. Do not change files under `~/.codex` or `~/.agents` by hand to bypass ownership checks.
 - **Plugin not visible?** Confirm you are in the **local** Plugins directory, that the selected workspace/profile permits personal marketplaces, and restart the Desktop app. Use the optional generated deep link only if it refers to your own managed package.
 - **ChatGPT cloud remains disabled in the UAP picker?** That is intentional when no verified remote `app_binding` exists. A local Codex marketplace is **not** a cloud ChatGPT app registration.
