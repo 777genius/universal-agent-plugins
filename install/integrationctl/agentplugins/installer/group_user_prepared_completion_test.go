@@ -62,9 +62,14 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 			InstallationID: id, Plan: plan, Activation: outcome,
 			GroupPhase: usecase.GroupTargetExternalCompleted,
 		})
+		nativeRoot := config
+		if clientID == domain.ClientVSCode {
+			// User Local intentionally does not pin NativeProfileRoot.
+			nativeRoot = ""
+		}
 		installed.Clients[bindingID] = domain.ClientBinding{
 			ClientBindingID: bindingID, DataReceiptID: receiptID, ClientID: string(clientID), Scope: string(domain.ScopeUser),
-			TargetLocator: active, PhysicalArtifact: plan.PhysicalArtifactID, NativeProfileRoot: config,
+			TargetLocator: active, PhysicalArtifact: plan.PhysicalArtifactID, NativeProfileRoot: nativeRoot,
 			Materialization: domain.MaterializationMaterialized, Activation: outcome.Activation,
 			Authentication: outcome.Authentication, Policy: outcome.Policy, Verification: outcome.Verification,
 		}
@@ -148,6 +153,9 @@ func TestUserGroupPreparedUpdateRetainsFailClosedHandoff(t *testing.T) {
 		{"wrong artifact", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Plan.PhysicalArtifactID += "-foreign" }},
 		{"wrong saved locator", func(f *userPreparedUpdateFixture) {
 			f.changeBinding(domain.ClientVSCode, func(b *domain.ClientBinding) { b.TargetLocator += "-foreign" })
+		}},
+		{"forged user Local native root", func(f *userPreparedUpdateFixture) {
+			f.changeBinding(domain.ClientVSCode, func(b *domain.ClientBinding) { b.NativeProfileRoot = "foreign" })
 		}},
 		{"missing binding", func(f *userPreparedUpdateFixture) {
 			delete(f.state.Installations[0].Clients, f.prepared.plan.Targets[1].BindingID)

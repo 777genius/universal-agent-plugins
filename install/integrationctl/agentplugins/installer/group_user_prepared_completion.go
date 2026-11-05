@@ -91,9 +91,13 @@ func completedUserPreparedBinding(frozen PlanTarget, plan domain.DeliveryPlan, o
 		binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil {
 		return false
 	}
-	nativeRoot := plan.NativeRegistryRoot
+	// User Local deliberately has no persisted NativeProfileRoot, while
+	// Codex and authority-backed clients require an exact saved profile.
+	nativeRoot := ""
 	if authority := plan.ProfileAuthority(); authority != nil {
 		nativeRoot = authority.Facts().CanonicalRoot
+	} else if plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, domain.ScopeUser).BindsNativeProfileRoot {
+		nativeRoot = plan.NativeRegistryRoot
 	}
 	if binding.NativeProfileRoot != nativeRoot ||
 		!completedProjectOutcome(plan, outcome) || !completedProjectLifecycle(binding, outcome) {
