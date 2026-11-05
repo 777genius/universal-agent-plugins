@@ -235,7 +235,7 @@ test('overlay preserves unrelated old Partial and fails closed on digest or sele
       skills_total: 1, selected_ids: [old.id],
     }],
   } as unknown as SkillSpectorDisplayReport;
-  const improved = applyVerifiedSkillSpectorCohort(report, cohort.manifestDigest, cohort);
+  const improved = applyVerifiedSkillSpectorCohort(report, cohort.manifestDigest, cohort, at);
   assert.equal(improved.records[0]!.status, 'complete');
   assert.equal(improved.records[0]!.signed_cohort_verified, true);
   assert.equal(improved.records[0]!.signed_cohort_expires_at, cohort.expiresAt);
@@ -244,17 +244,17 @@ test('overlay preserves unrelated old Partial and fails closed on digest or sele
   assert.equal(improved.records[1]!.status, 'partial');
   assert.equal(applyVerifiedSkillSpectorCohort(
     report, cohort.manifestDigest, cohort, new Date('2026-11-07T00:00:00Z')), report);
-  assert.equal(applyVerifiedSkillSpectorCohort(report, 'sha256:' + 'f'.repeat(64), cohort), report);
+  assert.equal(applyVerifiedSkillSpectorCohort(report, 'sha256:' + 'f'.repeat(64), cohort, at), report);
   const stale = structuredClone(report);
   stale.source_states[0]!.current = false;
-  assert.equal(applyVerifiedSkillSpectorCohort(stale, cohort.manifestDigest, cohort), stale);
+  assert.equal(applyVerifiedSkillSpectorCohort(stale, cohort.manifestDigest, cohort, at), stale);
   const unresolved = structuredClone(report);
   unresolved.plugin_states[0]!.state = 'unresolved';
-  assert.equal(applyVerifiedSkillSpectorCohort(unresolved, cohort.manifestDigest, cohort), unresolved);
+  assert.equal(applyVerifiedSkillSpectorCohort(unresolved, cohort.manifestDigest, cohort, at), unresolved);
   const omitted = structuredClone(report);
   omitted.plugin_states[0]!.selected_ids = [];
-  assert.equal(applyVerifiedSkillSpectorCohort(omitted, cohort.manifestDigest, cohort), omitted);
+  assert.equal(applyVerifiedSkillSpectorCohort(omitted, cohort.manifestDigest, cohort, at), omitted);
   const changed = structuredClone(report);
   changed.records[0]!.source.content_digest = 'sha256:' + '0'.repeat(64);
-  assert.equal(applyVerifiedSkillSpectorCohort(changed, cohort.manifestDigest, cohort), changed);
+  assert.equal(applyVerifiedSkillSpectorCohort(changed, cohort.manifestDigest, cohort, at), changed);
 });
