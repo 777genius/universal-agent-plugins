@@ -1677,7 +1677,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         # BUG-060: Grok rejects a plugins/ child lacking plugin.json before
         # reviewing any selected source. The unrelated Skill belongs in skills/.
         audit = load_audit()
-        item = {"name": "frontend-design", "source": "unused",
+        item = {"name": "frontend-design", "repo": "example/skills",
+                "folder": "frontend-design", "source": "unused",
                 "skill_md_git_blob_sha1": "0" * 40}
         refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "refused",
                    "timeout": False, "_json": {"data": {"installations": []}}}
