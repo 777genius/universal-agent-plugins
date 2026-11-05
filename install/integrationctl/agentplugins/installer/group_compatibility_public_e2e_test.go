@@ -77,7 +77,7 @@ func TestPublicGroupUpdatePreflightsUnselectedPiWithoutMutatingIt(t *testing.T) 
 	}
 	request := Request{Operation: OpUpdate, PackageRoot: s.pkg, InstallationID: id, OperationID: "selected-group-update",
 		RequiredComponents: []string{"mcp", "skills"}, ClientExecutable: s.probe,
-		Targets:           bothClientTargets(s.codexConfig, s.claudeConfig, s.probe),
+		Targets:      bothClientTargets(s.codexConfig, s.claudeConfig, s.probe),
 		KnownTargets: []TargetFacts{{ClientID: "pi", BindingID: piBefore.BindingID, ConfigRoot: piRoot, Executable: s.probe}},
 	}
 	precondition, err := os.ReadFile(eng.cfg.StateFile)
