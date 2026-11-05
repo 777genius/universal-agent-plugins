@@ -113,6 +113,27 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertTrue(Path(env["CODEX_HOME"]).is_relative_to(home))
         self.assertEqual(env["CI"], "true")
 
+    def test_grok_uses_disposable_default_home_without_custom_override(self):
+        # BUG-057: even a HOME/.grok GROK_HOME value makes the genuine Grok
+        # adapter select grok_custom_home and refuse normal project Skills.
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve() / "case"
+            home, data = case / "home", case / "uap-data"
+            home.mkdir(parents=True)
+            data.mkdir()
+            with patch.dict(os.environ, {
+                "GROK_HOME": "/outside/real-grok-profile",
+                "HOME": "/outside/real-home",
+                "XDG_CONFIG_HOME": "/outside/real-config",
+            }):
+                env = audit.isolated_client_env(home, case, data)
+            self.assertNotIn("GROK_HOME", env)
+            self.assertEqual(env["HOME"], str(home))
+            self.assertEqual(env["XDG_CONFIG_HOME"], str(home / ".config"))
+            self.assertTrue((Path(env["HOME"]) / ".grok").is_relative_to(case))
+            self.assertEqual(list(home.iterdir()), [])
+
     def test_version_evidence_is_short_and_never_claims_failed_probe(self):
         audit = load_audit()
         with patch.object(audit, "call", return_value={

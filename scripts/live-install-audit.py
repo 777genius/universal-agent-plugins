@@ -857,7 +857,8 @@ def isolated_client_env(home, case_root, data):
         "PI_CODING_AGENT_DIR": home / ".pi/agent",
         "KIMI_CODE_HOME": home / ".kimi-code",
         "KIMI_CODE_CACHE_DIR": home / ".cache/kimi-code",
-        "GROK_HOME": home / ".grok",
+        # Grok uses disposable HOME/.grok by default. Setting GROK_HOME
+        # makes a normal profile look custom and disqualifies project Skills.
         "CLINE_DATA_DIR": home / ".cline/data",
         "CLINE_MCP_SETTINGS_PATH": home / ".cline/data/settings/cline_mcp_settings.json",
     }
