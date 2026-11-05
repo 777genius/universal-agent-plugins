@@ -975,7 +975,7 @@ def initialize_project_skill_git_root(project, env, case_root):
                    "init", "--quiet"], env, project, 30)
     if (result["exit_code"] != 0 or not marker.is_dir() or marker.is_symlink()
             or not marker.resolve().is_relative_to(project.resolve())):
-        raise RuntimeError("genuine isolated Kimi project git init failed")
+        raise RuntimeError("genuine isolated project Git init failed")
 
 
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,

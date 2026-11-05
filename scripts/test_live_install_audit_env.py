@@ -1682,12 +1682,20 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 "skill_md_git_blob_sha1": "0" * 40}
         refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "refused",
                    "timeout": False, "_json": {"data": {"installations": []}}}
+        # The Grok project prerequisite uses a real isolated git init.
+        # Mock source installs, not the pinned local Git executable itself.
+        real_call = audit.call
+        def source_refusal(argv, env, cwd, timeout=105):
+            if argv[0] == audit.GIT_EXECUTABLE:
+                return real_call(argv, env, cwd, timeout)
+            return dict(refused)
         with TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
-            with patch.object(audit, "call", side_effect=lambda *a, **kw: dict(refused)):
+            with patch.object(audit, "call", side_effect=source_refusal):
                 evidence = audit.do_case("/unused/agentplugins", "grok", "skill",
                                          item, 0, root, {})
             project = root / "skill-00/project"
+            self.assertTrue((project / ".git").is_dir())
             foreign = project / ".grok/skills/foreign-neighbor/SKILL.md"
             self.assertTrue(foreign.is_file())
             self.assertEqual(foreign.read_text(encoding="utf-8"),
