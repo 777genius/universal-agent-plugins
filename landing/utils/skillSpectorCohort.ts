@@ -136,8 +136,8 @@ function validateRecords(release: Json, pointer: Json): VerifiedCohort {
       records.length !== 9 || pins.length !== 9 || comparisons.length !== 9) invalid();
 
   const mapped = new Map<string, SkillSpectorRecord>();
-  const pinned = new Map(pins.map(pin => [pin.id, pin]));
-  const compared = new Map(comparisons.map(item => [item.id, item]));
+  const pinned = new Map<string, Json>(pins.map(pin => [String(pin.id), pin]));
+  const compared = new Map<string, Json>(comparisons.map(item => [String(item.id), item]));
   if (pinned.size !== 9 || compared.size !== 9) invalid();
   for (const raw of records) {
     const expected = sourcePins.get(String(raw.id));
@@ -176,7 +176,10 @@ function validateRecords(release: Json, pointer: Json): VerifiedCohort {
         coverage.references_total !== array(coverage.references).length ||
         array(coverage.references).some(ref => {
           const r = obj(ref);
-          return r.status !== 'resolved' || r.disposition !== 'analyzed';
+          return !(
+            (r.status === 'resolved' && r.disposition === 'analyzed') ||
+            (r.status === 'rejected' && r.disposition !== 'partial')
+          );
         })) invalid();
     mapped.set(String(raw.id), raw as unknown as SkillSpectorRecord);
   }
