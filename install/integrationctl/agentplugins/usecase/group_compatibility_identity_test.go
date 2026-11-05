@@ -17,11 +17,11 @@ func TestGroupCompatibilityRejectsChangedUnselectedBindingUnderLock(t *testing.T
 	changed.ClientBindingID = "replacement-binding"
 	unselected := AddInput{
 		Client: domain.DetectedClient{ClientID: domain.ClientID("test-client")},
-		Scope: domain.ScopeUser, CompatibilityBindingID: recorded.ClientBindingID,
+		Scope:  domain.ScopeUser, CompatibilityBindingID: recorded.ClientBindingID,
 	}
 	for _, tc := range []struct {
-		name string
-		clients map[string]domain.ClientBinding
+		name      string
+		clients   map[string]domain.ClientBinding
 		wantError bool
 	}{
 		{"unchanged", map[string]domain.ClientBinding{recorded.ClientBindingID: recorded}, false},
