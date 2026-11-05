@@ -36,7 +36,7 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 			return nil, err
 		}
 		if plan.ClientID != domain.ClientWindsurf || root != plan.ActivePath {
-			return nil, fmt.Errorf("Devin Global active package identity differs")
+			return nil, fmt.Errorf("devin Global active package identity differs")
 		}
 		if err := plan.SelectedDelivery.ValidatePlan(plan, envelope.TreeDigest); err != nil {
 			return nil, err

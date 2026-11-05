@@ -77,11 +77,12 @@ func missingProjectVersionTargets(registry *clients.Registry, targets []domain.C
 			continue
 		}
 		required := false
-		if scope == domain.ScopeProject {
+		switch scope {
+		case domain.ScopeProject:
 			if requirement, ok := clients.As[clients.ProjectVersionRequirement](registry, id); ok {
 				required = requirement.RequiresProjectVersion(client)
 			}
-		} else if scope == domain.ScopeUser {
+		case domain.ScopeUser:
 			if requirement, ok := clients.As[clients.UserVersionRequirement](registry, id); ok {
 				required = requirement.RequiresUserVersion(client)
 			}

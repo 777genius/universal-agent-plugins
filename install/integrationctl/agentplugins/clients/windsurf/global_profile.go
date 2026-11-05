@@ -44,10 +44,10 @@ func requireSelectedDevinGlobal(client domain.DetectedClient) (string, error) {
 	}
 	root := client.NativeConfigRoot
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root || filepath.Base(root) != "devin" {
-		return "", fmt.Errorf("Devin global native root must come from original host authority")
+		return "", fmt.Errorf("devin global native root must come from original host authority")
 	}
 	if root == client.ConfigRoot || filepath.Dir(root) == root {
-		return "", fmt.Errorf("Devin global root aliases legacy Cascade authority")
+		return "", fmt.Errorf("devin global root aliases legacy Cascade authority")
 	}
 	return root, nil
 }
@@ -61,11 +61,11 @@ func devinGlobalPlanRoot(client domain.DetectedClient, plan domain.DeliveryPlan)
 		plan.TargetContext.Scope != domain.ScopeUser || plan.TargetContext.ProjectRoot != "" ||
 		plan.TargetContext.UserConfigRoot != client.ConfigRoot || plan.NativeRegistryRoot != root ||
 		plan.NativeRegistryExecutable != "" {
-		return "", fmt.Errorf("Devin Global plan differs from exact selected user profile")
+		return "", fmt.Errorf("devin Global plan differs from exact selected user profile")
 	}
 	if plan.ActivePath != "" && plan.PhysicalArtifactID != "" &&
 		filepath.Base(plan.ActivePath) != plan.PhysicalArtifactID {
-		return "", fmt.Errorf("Devin Global package differs from selected artifact")
+		return "", fmt.Errorf("devin Global package differs from selected artifact")
 	}
 	return root, nil
 }

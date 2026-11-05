@@ -47,9 +47,9 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 			if err := validateDevinGlobalBinding(root, plan.PhysicalArtifactID, plan.ActivePath, *managed); err != nil {
 				return clients.RegistryIndeterminate, err
 			}
-			copy := *managed
-			copy.NativeObjects = devinNativeObjects(managed.NativeObjects)
-			managed = &copy
+			owned := *managed
+			owned.NativeObjects = devinNativeObjects(managed.NativeObjects)
+			managed = &owned
 		}
 		return devinGlobalComponents(root, plan.ActivePath).Inspect(plan.Components, managed, env.NativeConfig)
 	}

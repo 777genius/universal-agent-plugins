@@ -320,8 +320,8 @@ func TestUserDevinSavedDependencyMutationProbesExactSelectedVersion(t *testing.T
 	probed.Version = "3000.11.205"
 	detector := &projectVersionDetector{probed: []domain.DetectedClient{probed}}
 	adapter := &dependencyInstaller{
-		app: App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeUser, Detector: detector},
-		opts: &options{},
+		app:      App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeUser, Detector: detector},
+		opts:     &options{},
 		detected: map[domain.ClientID]domain.DetectedClient{domain.ClientWindsurf: devin},
 	}
 	if err := adapter.preflightProjectVersions(context.Background(), []dependencyAction{{ClientID: "windsurf", Action: environment.ActionInstall}}); err != nil {

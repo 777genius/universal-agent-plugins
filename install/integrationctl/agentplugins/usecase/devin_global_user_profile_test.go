@@ -14,7 +14,7 @@ func TestDevinGlobalNewUserReceiptDoesNotRebindLegacyCascade(t *testing.T) {
 	active := filepath.Join(root, "independent-uap-state", "managed", "clients", "windsurf", "source")
 	input := AddInput{
 		Client: domain.DetectedClient{ClientID: domain.ClientWindsurf, ConfigRoot: cascade, NativeConfigRoot: global},
-		Scope: domain.ScopeUser,
+		Scope:  domain.ScopeUser,
 	}
 	plan := domain.DeliveryPlan{
 		ClientID: domain.ClientWindsurf, Scope: domain.ScopeUser,

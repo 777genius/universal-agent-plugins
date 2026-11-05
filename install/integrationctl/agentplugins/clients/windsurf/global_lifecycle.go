@@ -22,7 +22,7 @@ func preflightDevinGlobal(env clients.Env, request domain.ActivationRequest) err
 		return err
 	}
 	if request.Plan.ClientID != request.Client.ClientID {
-		return fmt.Errorf("Devin Global plan client identity mismatch")
+		return fmt.Errorf("devin Global plan client identity mismatch")
 	}
 	// Preflight also runs before staging. Validate delivered identity when
 	// available, then require it unconditionally during activation.
@@ -36,13 +36,13 @@ func preflightDevinGlobal(env clients.Env, request domain.ActivationRequest) err
 		return fmt.Errorf("legacy Cascade receipt cannot be replayed as Devin Global")
 	}
 	if request.Delivery.ActivePath != "" && request.Delivery.ActivePath != request.Plan.ActivePath {
-		return fmt.Errorf("Devin Global delivered package differs from selected managed root")
+		return fmt.Errorf("devin Global delivered package differs from selected managed root")
 	}
 	if request.ActivationComplete {
-		return fmt.Errorf("Devin Global native discovery cannot be established by activation attestation")
+		return fmt.Errorf("devin Global native discovery cannot be established by activation attestation")
 	}
 	if !shared.OnlyNativeComponents(request.Plan.Components) {
-		return fmt.Errorf("Devin Global supports only selected Skills and MCP components")
+		return fmt.Errorf("devin Global supports only selected Skills and MCP components")
 	}
 	layout := devinGlobalComponents(root, request.Plan.ActivePath)
 	if err := layout.ValidateObjects(devinNativeObjects(request.PreviousNativeObjects)); err != nil {
@@ -62,19 +62,19 @@ func (adapter *Adapter) activateDevinGlobal(ctx context.Context, env clients.Env
 		return domain.ActivationOutcome{}, err
 	}
 	if request.Delivery.ActivePath != request.Plan.ActivePath {
-		return domain.ActivationOutcome{}, fmt.Errorf("Devin Global delivered package differs from selected managed root")
+		return domain.ActivationOutcome{}, fmt.Errorf("devin Global delivered package differs from selected managed root")
 	}
 	layout := devinGlobalComponents(request.Plan.NativeRegistryRoot, request.Plan.ActivePath)
 	outcome, err := shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
-		Automatic: adapter.AutomaticallyActivates(env, request),
+		Automatic:         adapter.AutomaticallyActivates(env, request),
 		UnavailableAction: "select only supported Devin Global Skills and MCP servers",
-		RepairAction: "repair exact owned Devin Global Skills and MCP entries",
-		RetryAction: "retry selected Devin Global native component installation",
-		CompletedAction: DevinGlobalAction,
-		Verify: func() error {
+		RepairAction:      "repair exact owned Devin Global Skills and MCP entries",
+		RetryAction:       "retry selected Devin Global native component installation",
+		CompletedAction:   DevinGlobalAction,
+		Verify:            func() error {
 			return layout.Verify(devinNativeObjects(request.Delivery.NativeObjects), false, env.NativeConfig)
 		},
-		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
+		Activate:          func(ctx context.Context, request domain.ActivationRequest) error {
 			servers, err := devinDesiredServersForKind(request.Delivery.ActivePath, devinNativeObjects(request.Delivery.NativeObjects), DevinGlobalMCPKind)
 			if err != nil {
 				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
@@ -112,7 +112,7 @@ func deactivateDevinGlobal(ctx context.Context, env clients.Env, request domain.
 	layout := devinGlobalComponents(root, request.ManagedArtifactPath)
 	objects := devinNativeObjects(request.NativeObjects)
 	if !hasDevinGlobalObjects(objects) {
-		return outcome, fmt.Errorf("Devin Global removal has no recorded native ownership")
+		return outcome, fmt.Errorf("devin Global removal has no recorded native ownership")
 	}
 	if err := layout.ValidateObjects(objects); err != nil {
 		return outcome, err

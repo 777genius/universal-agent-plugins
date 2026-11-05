@@ -43,7 +43,7 @@ func globalOfflineFixture(t *testing.T) (domain.DetectedClient, domain.DeliveryP
 	}
 	plan := domain.DeliveryPlan{
 		ClientID: domain.ClientWindsurf, Scope: domain.ScopeUser,
-		TargetContext: domain.TargetContext{Scope: domain.ScopeUser, UserConfigRoot: legacy},
+		TargetContext:      domain.TargetContext{Scope: domain.ScopeUser, UserConfigRoot: legacy},
 		NativeRegistryRoot: native, NativeRegistryExecutable: "",
 		TargetRoot: filepath.Dir(active), ActivePath: active, PhysicalArtifactID: "global-artifact",
 		Status: domain.PlanReady, InstallIntent: domain.InstallIntentAutomatic,

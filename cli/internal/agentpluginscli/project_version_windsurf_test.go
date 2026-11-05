@@ -82,7 +82,7 @@ func TestProjectDevinVersionProbeRejectsWrongIDAndUnboundResults(t *testing.T) {
 }
 
 func TestProjectDevinVersionProbeKeepsLegacyPrimaryAndMutationBoundaries(t *testing.T) {
-	for _, kind := range []string{"legacy-primary", "secondary-surface", "relative-executable", "known-version", "user", "dry-run", "unselected"} {
+	for _, kind := range []string{"legacy-primary", "secondary-surface", "relative-executable", "known-version", "user-legacy-primary", "dry-run", "unselected"} {
 		t.Run(kind, func(t *testing.T) {
 			client := projectVersionDevin()
 			opts, scope, target := &options{}, domain.ScopeProject, domain.ClientWindsurf
@@ -97,8 +97,10 @@ func TestProjectDevinVersionProbeKeepsLegacyPrimaryAndMutationBoundaries(t *test
 				client.ExecutablePath = "devin"
 			case "known-version":
 				client.Version = "3000.11.205"
-			case "user":
+			case "user-legacy-primary":
 				scope = domain.ScopeUser
+				client.ExecutablePath = projectVersionFixturePath("bin", "windsurf")
+				client.ConfigRoot = projectVersionFixturePath("user", ".codeium", "windsurf")
 			case "dry-run":
 				opts.dryRun = true
 			case "unselected":

@@ -338,12 +338,12 @@ func TestProjectComponentsExternalExactManagedPackageBoundary(t *testing.T) {
 			}
 			active := filepath.Join(stateRoot, "managed", "clients", "windsurf", "artifact")
 			layout := ProjectComponents{
-				ProjectRoot: filepath.Join(home, ".config"),
-				SkillsRoot: filepath.Join(nativeRoot, "skills"),
+				ProjectRoot:        filepath.Join(home, ".config"),
+				SkillsRoot:         filepath.Join(nativeRoot, "skills"),
 				ManagedPackagePath: active,
-				ConfigPaths: nativeconfig.Paths{JSON: filepath.Join(nativeRoot, "mcp_config.json")},
-				Codec: nativeconfig.CodecDevin,
-				SkillKind: "test_devin_global_skill", MCPKind: "test_devin_global_mcp",
+				ConfigPaths:        nativeconfig.Paths{JSON: filepath.Join(nativeRoot, "mcp_config.json")},
+				Codec:              nativeconfig.CodecDevin,
+				SkillKind:          "test_devin_global_skill", MCPKind: "test_devin_global_mcp",
 			}
 			componentWrite(t, filepath.Join(active, "skills", "docs", "SKILL.md"), "managed source\n")
 			componentWrite(t, layout.ConfigPaths.JSON, `{"mcpServers":{"foreign":{"url":"https://foreign.test/mcp","transport":"http"}},"policy":"keep"}`)
