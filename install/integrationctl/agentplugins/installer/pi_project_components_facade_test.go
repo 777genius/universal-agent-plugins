@@ -240,7 +240,7 @@ func TestPiUserNativeSkillsMCPFacadeAndForeignIsolation(t *testing.T) {
 				}
 				for _, installation := range persisted.Installations {
 					for _, binding := range installation.Clients {
-						if binding.ClientID == domain.ClientPi && binding.NativeActivationAttempt != "" {
+						if binding.ClientID == string(domain.ClientPi) && binding.NativeActivationAttempt != "" {
 							return fmt.Errorf("Pi user native attempt preceded host handoff: %s", binding.NativeActivationAttempt)
 						}
 					}
