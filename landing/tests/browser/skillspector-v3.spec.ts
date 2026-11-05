@@ -50,6 +50,7 @@ async function setup(
     | 'historicalMixed'
     | 'foreignLegacy'
     | 'stale'
+    | 'singleStale'
     | 'unavailable'
     | 'invalid'
     | 'unsupported'
@@ -91,7 +92,7 @@ async function setup(
     path: fixture.plugin_coverage[0]!.plugin_path,
     revision: producerShard.records[0].source.revision,
   });
-  if (mode === 'stale') plugin.source.revision = 'f'.repeat(40);
+  if (mode === 'stale' || mode === 'singleStale') plugin.source.revision = 'f'.repeat(40);
   for (const distribution of plugin.distributions) {
     Object.assign(distribution.source, plugin.source);
     for (const release of distribution.releases) Object.assign(release.source, plugin.source);
@@ -314,6 +315,21 @@ async function setup(
       selected_ids: (manifest.plugin_states[0]!.selected_ids as string[]).slice(0, selected),
     });
   }
+  if (mode === 'singleStale') {
+    const old = shard.records.find((record: { status: string; finding_count: number }) =>
+      record.status === 'complete' && record.finding_count === 0,
+    );
+    if (!old) throw new Error('Expected a completed historical fixture');
+    shard.records = [old];
+    manifest.coverage = {
+      selected: 1, reported: 1, pending: 0, complete: 1, partial: 0, error: 0, stale: 0,
+    };
+    manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
+    Object.assign(manifest.plugin_states[0]!, { skills_total: 1, selected_ids: [old.id] });
+    manifest.source_states = manifest.source_states.filter((state) =>
+      state.selected_ids.includes(old.id),
+    );
+  }
   if (mode === 'truncated') {
     shard.records = shard.records
       .filter((record: { status: string }) => record.status === 'complete')
@@ -440,17 +456,49 @@ async function setup(
     body,
   };
 }
-test('automated review and Skill scan have separate lines on plugin cards', async ({ page }) => {
-  const { assessment } = await setup(page, 'mixed', undefined, true);
-  const group = assessment.locator('xpath=ancestor::*[contains(@class, "plugin-card__assessments")]');
-  const security = group.locator('.plugin-card__security');
-  await expect(security).toBeVisible();
-  await expect(assessment.locator(':scope > summary')).toBeVisible();
-  const reviewBox = await security.boundingBox();
-  const scanBox = await assessment.locator(':scope > summary').boundingBox();
-  expect(reviewBox).not.toBeNull();
-  expect(scanBox).not.toBeNull();
-  expect(scanBox!.y).toBeGreaterThanOrEqual(reviewBox!.y + reviewBox!.height - 1);
+for (const width of [1280, 390]) {
+  test(`automated review and Skill scan align their icons, type, spacing and chevron (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const { assessment, errors } = await setup(page, 'mixed', undefined, true);
+    const group = assessment.locator('xpath=ancestor::*[contains(@class, "plugin-card__assessments")]');
+    const security = group.locator('.plugin-card__security');
+    const summary = assessment.locator(':scope > summary');
+    const [reviewBox, scanBox, reviewIcon, scanIcon] = await Promise.all([
+      security.boundingBox(),
+      summary.boundingBox(),
+      security.locator('svg.plugin-card__status-icon').boundingBox(),
+      summary.locator('svg.skillspector__icon').boundingBox(),
+    ]);
+    expect(reviewBox && scanBox && reviewIcon && scanIcon).toBeTruthy();
+    await expect(security).toHaveCSS('font-size', '12px');
+    await expect(summary).toHaveCSS('font-size', '12px');
+    expect(reviewIcon!.width).toBe(18);
+    expect(scanIcon!.width).toBe(18);
+    expect(Math.abs(reviewIcon!.x - scanIcon!.x)).toBeLessThan(1);
+    expect(Math.abs(reviewIcon!.y + 9 - (reviewBox!.y + reviewBox!.height / 2))).toBeLessThan(1);
+    expect(Math.abs(scanIcon!.y + 9 - (scanBox!.y + scanBox!.height / 2))).toBeLessThan(1);
+    expect(scanBox!.y - reviewBox!.y - reviewBox!.height).toBeGreaterThanOrEqual(3);
+    expect(scanBox!.y - reviewBox!.y - reviewBox!.height).toBeLessThanOrEqual(5);
+    await expect(summary.locator('svg.skillspector__arrow')).toHaveCount(1);
+    await summary.click();
+    await expect(assessment.locator('.skillspector__dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(summary).toBeFocused();
+    expect(errors).toEqual([]);
+  });
+}
+
+test('a previous single Skill scan shows its last verified result, not Outdated scan', async ({ page }) => {
+  const { assessment, errors } = await setup(page, 'singleStale', undefined, true);
+  const summary = assessment.locator(':scope > summary');
+  await expect(assessment).toHaveClass(/skillspector--stale/);
+  await expect(summary).toContainText('Skill scan · Last scan: No static findings');
+  await expect(summary).not.toContainText('Outdated scan');
+  await summary.click();
+  await expect(assessment.locator('.skillspector__advice')).toContainText(
+    'Previous results remain visible as history',
+  );
+  expect(errors).toEqual([]);
 });
 
 for (const width of [1280, 390]) {
