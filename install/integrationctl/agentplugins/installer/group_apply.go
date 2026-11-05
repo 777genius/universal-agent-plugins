@@ -82,7 +82,7 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 		result.Outcome, result.Reason = OutcomeIncomplete, "committed group state is unknown"
 		return result, loadErr
 	}
-	if pending && e.anyGroupHostHandoffPending(prepared) {
+	if pending && (e.anyGroupHostHandoffPending(prepared) || hasUserPreparedGroupTarget(got)) {
 		if e.cfg.OnCommittedBinding == nil || !completedUserPreparedUpdate(prepared, got, state) {
 			result.Outcome = OutcomeIncomplete
 			result.Reason = "committed binding is not activated"
