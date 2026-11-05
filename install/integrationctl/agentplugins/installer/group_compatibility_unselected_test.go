@@ -42,7 +42,7 @@ func TestGroupUpdateUsesUnselectedKnownTargetChecks(t *testing.T) {
 	}
 	req := Request{
 		Operation: OpUpdate, InstallationID: id,
-		Targets:      []ClientTarget{{ClientID: "codex", ClientConfigRoot: s.codexConfig, ClientExecutable: s.probe}, {ClientID: "pi", ClientConfigRoot: piRoot, ClientExecutable: s.probe}},
+		Targets:           []ClientTarget{{ClientID: "codex", ClientConfigRoot: s.codexConfig, ClientExecutable: s.probe}, {ClientID: "pi", ClientConfigRoot: piRoot, ClientExecutable: s.probe}},
 		KnownTargets: []TargetFacts{{ClientID: "claude", BindingID: claudeBinding.BindingID, ConfigRoot: s.claudeConfig, Executable: s.probe}},
 	}
 	original, err := os.ReadFile(s.engine.cfg.StateFile)
