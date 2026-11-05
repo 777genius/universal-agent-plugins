@@ -210,6 +210,14 @@ func TestV2RequiresExactProjectRuntimeEvidence(t *testing.T) {
 	if _, err := ParseV2Snapshot(body); err != nil {
 		t.Fatalf("exact client/project runtime evidence should qualify: %v", err)
 	}
+	// An ineligible signed dependency closure cannot be qualified by a
+	// historical passing runtime receipt from the same client and scope.
+	projectGrant := &original.Distributions[0].ReleasePolicies[0].Targets[2]
+	projectGrant.CanonicalClosure = &domain.DirectoryCanonicalClosure{Eligible: false}
+	body, _ = json.Marshal(original)
+	if _, err := ParseV2Snapshot(body); !errors.Is(err, ErrStrictJSON) {
+		t.Fatalf("ineligible project closure was qualified by stale runtime evidence: %v", err)
+	}
 	digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	original.Distributions[0].ReleasePolicies[0].Targets[2].CanonicalClosure = &domain.DirectoryCanonicalClosure{
 		Eligible: true, ClosureDigest: digest, MinimumInstallerVersion: "1.0.0",

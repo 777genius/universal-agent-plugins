@@ -178,8 +178,8 @@ func validateV2GrantEvidenceTarget(grant domain.DirectoryTarget, evidence map[st
 			return strictError("v2 grant borrows evidence from another client or scope")
 		}
 		if grant.Scope == domain.ScopeProject && item.Level == "runtime" && item.Outcome == "passed" &&
-			(grant.CanonicalClosure == nil || !grant.CanonicalClosure.Eligible ||
-				item.ClosureDigest == grant.CanonicalClosure.ClosureDigest) {
+			(grant.CanonicalClosure == nil || grant.CanonicalClosure.Eligible &&
+				item.ClosureDigest != "" && item.ClosureDigest == grant.CanonicalClosure.ClosureDigest) {
 			runtimePassed = true
 		}
 	}
