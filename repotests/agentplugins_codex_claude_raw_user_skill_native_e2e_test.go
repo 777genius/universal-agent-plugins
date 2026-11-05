@@ -96,7 +96,7 @@ func nativeRawUserFiles(t *testing.T, binding domain.ClientBinding, client strin
 	}
 }
 
-func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer, target, statePath string, original domain.ClientBinding) domain.ClientBinding {
+func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer, target, statePath, profile string, original domain.ClientBinding) domain.ClientBinding {
 	t.Helper()
 	// This test deliberately deletes a managed artifact to reproduce absent
 	// repair. Never allow a bad persisted path to escape the disposable host.
@@ -108,7 +108,7 @@ func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer
 	if err != nil || result["result"] != "success" {
 		t.Fatalf("%s: restoring absent pinned raw Skill failed: %v; %+v", target, err, result)
 	}
-	_, restored := nativeRawUserState(t, statePath, target, original.NativeProfileRoot)
+	_, restored := nativeRawUserState(t, statePath, target, profile)
 	if restored.ClientBindingID != original.ClientBindingID || restored.PhysicalArtifact != original.PhysicalArtifact ||
 		restored.TargetLocator != original.TargetLocator {
 		t.Fatalf("%s: repair replaced immutable Skill identity: before=%+v after=%+v", target, original, restored)
@@ -264,7 +264,7 @@ func TestAgentpluginsCodexNativeRawUserSkillLifecycle(t *testing.T) {
 		t.Fatal("Codex implicit user replay changed managed bytes or receipts")
 	}
 	codexNativeRawUserInventory(t, f, client, id, declaredName, binding.TargetLocator, "raw-user-repeated", true)
-	nativeRawUserRepair(t, f.Root, f.Project, env, installer, "codex", statePath, binding)
+	nativeRawUserRepair(t, f.Root, f.Project, env, installer, "codex", statePath, f.CodexHome, binding)
 	codexNativeRawUserInventory(t, f, client, id, declaredName, binding.TargetLocator, "raw-user-repaired", true)
 	nativeRawUserRemove(t, f.Root, f.Project, env, installer, "codex", statePath, binding.TargetLocator, true)
 	codexNativeRawUserInventory(t, f, client, id, declaredName, binding.TargetLocator, "raw-user-removed", false)
@@ -325,7 +325,7 @@ func TestAgentpluginsClaudeNativeRawUserSkillLifecycle(t *testing.T) {
 		t.Fatal("Claude implicit user replay changed managed bytes or receipts")
 	}
 	verify("raw-user-repeated", true)
-	nativeRawUserRepair(t, f.Root, f.Root, env, installer, "claude", statePath, binding)
+	nativeRawUserRepair(t, f.Root, f.Root, env, installer, "claude", statePath, f.ConfigDir, binding)
 	verify("raw-user-repaired", true)
 	nativeRawUserRemove(t, f.Root, f.Root, env, installer, "claude", statePath, binding.TargetLocator, false)
 	verify("raw-user-removed", false)
