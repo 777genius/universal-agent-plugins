@@ -105,8 +105,8 @@ func TestV2ClientRefusesV1BootstrapAndSharedCachePath(t *testing.T) {
 func TestV2ClientRejectsCacheAliasesBeforeNetworkOrWrites(t *testing.T) {
 	_, _, trust := v2SignedFixture(t)
 	root := t.TempDir()
-	real := filepath.Join(root, "real")
-	if err := os.Mkdir(real, 0700); err != nil {
+	realRoot := filepath.Join(root, "real")
+	if err := os.Mkdir(realRoot, 0700); err != nil {
 		t.Fatal(err)
 	}
 	check := func(t *testing.T, v1Path, v2Path string) {
@@ -129,7 +129,7 @@ func TestV2ClientRejectsCacheAliasesBeforeNetworkOrWrites(t *testing.T) {
 	}
 
 	t.Run("relative and absolute aliases", func(t *testing.T) {
-		absolute := filepath.Join(real, "shared.json")
+		absolute := filepath.Join(realRoot, "shared.json")
 		cwd, err := os.Getwd()
 		if err != nil {
 			t.Fatal(err)
@@ -142,9 +142,9 @@ func TestV2ClientRejectsCacheAliasesBeforeNetworkOrWrites(t *testing.T) {
 	})
 	t.Run("symlink parent of uncreated cache", func(t *testing.T) {
 		alias := filepath.Join(root, "alias")
-		if err := os.Symlink(real, alias); err != nil {
+		if err := os.Symlink(realRoot, alias); err != nil {
 			t.Skipf("directory symlinks unavailable on this host: %v", err)
 		}
-		check(t, filepath.Join(real, "future", "shared.json"), filepath.Join(alias, "future", "shared.json"))
+		check(t, filepath.Join(realRoot, "future", "shared.json"), filepath.Join(alias, "future", "shared.json"))
 	})
 }

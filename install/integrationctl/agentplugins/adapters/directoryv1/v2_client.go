@@ -32,11 +32,11 @@ func (client V2Client) validateConfig() error {
 	if client.Transport.Cache.Path != "" {
 		v1Path, err := canonicalCachePath(client.Transport.Cache.Path)
 		if err != nil {
-			return fmt.Errorf("%w: resolve v1 cache path: %v", ErrUnavailable, err)
+			return fmt.Errorf("%w: resolve v1 cache path: %w", ErrUnavailable, err)
 		}
 		v2Path, err := canonicalCachePath(client.Cache.Path)
 		if err != nil {
-			return fmt.Errorf("%w: resolve v2 cache path: %v", ErrUnavailable, err)
+			return fmt.Errorf("%w: resolve v2 cache path: %w", ErrUnavailable, err)
 		}
 		if v1Path == v2Path {
 			return fmt.Errorf("%w: v1/v2 cache path collision", ErrUnavailable)

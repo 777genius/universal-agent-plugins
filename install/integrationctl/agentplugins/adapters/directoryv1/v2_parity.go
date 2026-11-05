@@ -177,10 +177,7 @@ func validateV2GrantEvidenceTarget(grant domain.DirectoryTarget, evidence map[st
 			grant.Scope == domain.ScopeUser && item.Scope != "" && item.Scope != domain.ScopeUser {
 			return strictError("v2 grant borrows evidence from another client or scope")
 		}
-		if grant.Scope == domain.ScopeProject && item.Level == "runtime" && item.Outcome == "passed" &&
-			(grant.CanonicalClosure == nil && item.ClosureDigest == "" ||
-				grant.CanonicalClosure != nil && grant.CanonicalClosure.Eligible &&
-					item.ClosureDigest != "" && item.ClosureDigest == grant.CanonicalClosure.ClosureDigest) {
+		if v2ProjectRuntimeEvidenceMatches(grant, item) {
 			runtimePassed = true
 		}
 	}
@@ -188,4 +185,17 @@ func validateV2GrantEvidenceTarget(grant domain.DirectoryTarget, evidence map[st
 		return strictError("v2 project grant lacks exact passed runtime evidence")
 	}
 	return nil
+}
+
+// A project runtime receipt can qualify only the exact signed dependency
+// closure; a legacy unbound grant must carry an unbound runtime receipt.
+func v2ProjectRuntimeEvidenceMatches(grant domain.DirectoryTarget, item domain.DirectoryEvidence) bool {
+	if grant.Scope != domain.ScopeProject || item.Level != "runtime" || item.Outcome != "passed" {
+		return false
+	}
+	if grant.CanonicalClosure == nil {
+		return item.ClosureDigest == ""
+	}
+	return grant.CanonicalClosure.Eligible && item.ClosureDigest != "" &&
+		item.ClosureDigest == grant.CanonicalClosure.ClosureDigest
 }
