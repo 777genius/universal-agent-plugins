@@ -189,7 +189,9 @@ func TestDevinGlobalSelectedUserProfileIsNotLegacyOrProject(t *testing.T) {
 		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "3000.11.204" },
 		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.NativeConfigRoot += "-other" },
 		func(_ *domain.DetectedClient, p *domain.DeliveryPlan) { p.NativeRegistryRoot = client.ConfigRoot },
-		func(_ *domain.DetectedClient, p *domain.DeliveryPlan) { p.NativeRegistryExecutable = client.ExecutablePath },
+		func(_ *domain.DetectedClient, p *domain.DeliveryPlan) {
+			p.NativeRegistryExecutable = client.ExecutablePath
+		},
 	} {
 		changed, changedPlan := client, plan
 		mutate(&changed, &changedPlan)
