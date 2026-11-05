@@ -101,4 +101,3 @@ func directorySiteCodexInventory(t *testing.T, f *nativeFixture, codexBin string
 		t.Fatalf("Codex Directory native skills count=%d, want present=%t", found, present)
 	}
 }
-
