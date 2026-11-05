@@ -14,8 +14,19 @@ func (session *repairSession) repairPackage() (AddResult, error) {
 	if !ok {
 		return session.result, fmt.Errorf("managed package integrity could not be determined; refusing repair: %w", session.verifyErr)
 	}
-	if verification.Kind == ports.VerificationDigestMismatch && domain.ClientTraitsFor(session.input.Client.ClientID).ProtectsModifiedPackage {
-		return session.result, fmt.Errorf("managed native extension was edited; preserve the changes before repair: %w", session.verifyErr)
+	if verification.Kind == ports.VerificationDigestMismatch {
+		traits := domain.ClientTraitsFor(session.input.Client.ClientID)
+		// User-scoped native raw Skills must not overwrite foreign content.
+		// Absent directories, project Skills and ordinary packages retain their policy.
+		if rev := session.client.PackageRevision; rev != nil &&
+			session.input.Scope == domain.ScopeUser &&
+			traits.ProtectsModifiedUserRawSkill &&
+			(rev.Skill != nil || rev.WebSkill != nil) {
+			return session.result, fmt.Errorf("managed raw Skill contains modified or unowned content; refusing repair: %w", session.verifyErr)
+		}
+		if traits.ProtectsModifiedPackage {
+			return session.result, fmt.Errorf("managed native extension was edited; preserve the changes before repair: %w", session.verifyErr)
+		}
 	}
 	beforeDigest, err := repairBeforeDigest(verification)
 	if err != nil {

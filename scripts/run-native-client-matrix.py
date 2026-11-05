@@ -89,8 +89,10 @@ REQUIRED_TESTS = {
     "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended", "TestAgentpluginsOpenCodeNativeCommandsLifecycle"},
 }
 PROJECT_TESTS = {
-    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP", "TestAgentpluginsCodexNativeForeignSkillCLIRefusal"},
-    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery", "TestAgentpluginsClaudeNativeTrustedProjectMCPCall", "TestAgentpluginsClaudeNativeSecondaryProfileIsolation"},
+    # Expanded current-source matrix: also require genuine user/global raw Skill
+    # E2E. Released/draft native qualification keeps its existing test set.
+    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP", "TestAgentpluginsCodexNativeForeignSkillCLIRefusal", "TestAgentpluginsCodexNativeRawUserSkillLifecycle", "TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle"},
+    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery", "TestAgentpluginsClaudeNativeTrustedProjectMCPCall", "TestAgentpluginsClaudeNativeSecondaryProfileIsolation", "TestAgentpluginsClaudeNativeRawUserSkillLifecycle"},
     "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
 }
 
@@ -441,6 +443,15 @@ def main():
         binary_dir = scratch / "bin"
         binary_dir.mkdir()
         tools = prepared_tools(args, binary_dir)
+        # The current-source Codex lane also qualifies a single UAP
+        # transaction against two *real* pinned clients. Never widen the
+        # release/draft tool supply or any OpenCode-only lane.
+        dual_peer = None
+        if args.client == "codex" and args.project_components:
+            peer_pin = selected_pin(args, "claude")
+            require_verified_pin(peer_pin[4])
+            dual_peer = provision(peer_pin, binary_dir, "claude")
+            identity["dual_peer_asset"] = dual_peer[1]
         client, client_evidence = tools[args.client]
         scanner, scanner_evidence = tools["lintai"]
         identity["client_asset"] = client_evidence
@@ -541,6 +552,11 @@ def main():
         env[prefix + "_BIN"] = str(client)
         env[prefix + "_SHA256"] = client_evidence["binary_sha256"]
         env[prefix + "_VERSION"] = "2.2.5" if args.client == "opencode" and args.opencode_generation == "v2" else {"codex": "0.153.4", "claude": "2.1.263 (Claude Code)", "opencode": "1.18.34"}[args.client]
+        if dual_peer is not None:
+            env["AGENTPLUGINS_DUAL_CODEX_CLAUDE_NATIVE_E2E"] = "1"
+            env["AGENTPLUGINS_CLAUDE_BIN"] = str(dual_peer[0])
+            env["AGENTPLUGINS_CLAUDE_SHA256"] = dual_peer[1]["binary_sha256"]
+            env["AGENTPLUGINS_CLAUDE_VERSION"] = "2.1.263 (Claude Code)"
         command = [str(tests), "-test.v", "-test.timeout=15m", "-test.run=" + pattern]
         identity["test_command"] = command
         identity["required_tests"] = sorted(required_tests)

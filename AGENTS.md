@@ -94,3 +94,38 @@ tag requirements remain mandatory.
   Other `website/source/en` pages are archived and not published.
 - Pages under `use/` and `build/` are journey pages. They need released status
   and routes in all nine maintained locales (`en`, `ru`, `uk`, `zh`, `es`, `hi`, `ar`, `pt`, `fr`).
+
+## Engineering architecture and agent review rules
+
+The canonical dependency direction, accepted exceptions, and Go size limits live
+in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Follow the actual checks in
+[CONTRIBUTING.md](CONTRIBUTING.md); do not duplicate or relax those contracts.
+Before a change, inspect the current `main`, open overlapping PRs, and the
+existing owners of the affected behavior.
+
+- **Domain:** preserve the stdlib-only rule, immutable identities, state
+  invariants, and typed refusals. **Use cases:** orchestrate through existing
+  ports, not concrete adapters or client-specific branches.
+- **Adapters:** own filesystem, network, process and native-client effects.
+  One client implementation lives under `clients/<id>`; generic code consumes
+  its contract via an explicitly injected registry. Only composition roots
+  assemble `clients/all`. Keep the existing adapter-to-adapter exceptions
+  documented rather than adding a blanket import ban.
+- **Changes:** reuse current domain, parser, security, lock and snapshot
+  authorities. Do not add a second resolver, service locator, state store,
+  framework, or interface without a demonstrated boundary/testing need.
+- **Safety:** never weaken path containment, user/foreign-file ownership,
+  symlink checks, lock ordering, durable receipts, rollback or recovery.
+  Preserve public commands, JSON, exit codes, schema and compatible data unless
+  separately authorized. Fail closed on uncertain ownership.
+- **Scope:** no default feature flags; do not change frozen VS Code code,
+  generated files by hand, or unrelated native clients. Preserve legacy
+  capabilities unless their retirement is explicitly approved.
+- **Quality:** new Go production code has a 500-effective-line file limit,
+  60-line/40-statement function limits, and the existing complexity gates.
+  Existing lint exemptions may only shrink; never add suppressions to pass CI.
+  Prefer cohesive changes to mechanical line-count splits.
+- **Evidence:** use `make lint` and `make test-core` before submitting Go core
+  changes; run affected contract, cross-OS and genuine native E2E for behavioral
+  changes. Verify exact-HEAD checks and independent review findings before
+  merging. A skipped, unrun, blocked or evidence-only test is not a PASS.
