@@ -74,6 +74,18 @@ func TestGroupUpdateUsesUnselectedKnownTargetChecks(t *testing.T) {
 			}
 		})
 	}
+	// Existing two-client updates remain supported without redundant
+	// KnownTargets for clients already selected by this group.
+	bothSelected := []usecase.AddInput{
+		selected[0],
+		{Client: domain.DetectedClient{ClientID: domain.ClientClaude, ConfigRoot: s.claudeConfig, ExecutablePath: s.probe}, BackendExecutable: s.probe},
+	}
+	both := req
+	both.Targets = []ClientTarget{{ClientID: "codex"}, {ClientID: "claude"}}
+	both.KnownTargets = nil
+	if got, err := s.engine.groupCompatibilityChecks(both, bothSelected); err != nil || len(got) != 2 {
+		t.Fatalf("selected siblings wrongly require external KnownTargets: %+v %v", got, err)
+	}
 	for _, op := range []Operation{OpInstall, OpRepair} {
 		unrelated := req
 		unrelated.Operation, unrelated.KnownTargets = op, nil
