@@ -2,6 +2,7 @@
 
 import ast
 import importlib.util
+import tempfile
 from pathlib import Path
 import subprocess
 import unittest
@@ -41,7 +42,7 @@ class QoderAcquisitionContract(unittest.TestCase):
             patch.object(urllib.request, "urlopen", side_effect=AssertionError("network download")) as download,
         ):
             leaf = load_leaf()
-            self.assertEqual(leaf.AVAILABLE_PHASES, ("acquire", "help"))
+            self.assertEqual(leaf.AVAILABLE_PHASES, ("acquire", "help", "observe"))
             self.assertFalse(getattr(leaf, "ACQUISITION_ONLY", False))
             self.assertEqual(leaf.ACQUISITION["entrypoint"], "qodercli")
             leaf.collect(FakeContext(leaf))
@@ -63,6 +64,31 @@ class QoderAcquisitionContract(unittest.TestCase):
                          "reason": "Pinned fixed version/help table observed; no plugin operation, scope or runtime qualification"}])
         self.assertEqual(result["observations"]["client_version_measured"], "1.1.78")
         self.assertTrue(all(value is False for key, value in result["observations"].items() if key.endswith("_qualified")))
+
+    def test_observe_reuses_collector_and_refuses_cross_project_mcp_names(self):
+        leaf = load_leaf()
+        for borrowed in (False, True):
+            with self.subTest(borrowed=borrowed), tempfile.TemporaryDirectory() as temporary:
+                ctx = FakeContext(leaf)
+                ctx.phase = "observe"
+                ctx.projects = {name: Path(temporary) / name for name in ("a", "b")}
+                for project in ctx.projects.values():
+                    project.mkdir()
+                ctx.env = {}
+                ctx.command = lambda label, argv, cwd, env, timeout: ({"exit": 0, "error": None}, b"", b"")
+                ctx.replace["mcp-list-a"] = ({"exit": 0, "error": None},
+                    b"uap_qoder_a_stdio\nuap_qoder_a_http\n", b"")
+                ctx.replace["mcp-list-b"] = ({"exit": 0, "error": None},
+                    b"uap_qoder_a_stdio\n" if borrowed else b"No MCP servers configured\n", b"")
+                if borrowed:
+                    with self.assertRaisesRegex(ValueError, "not isolated"):
+                        leaf.collect(ctx)
+                else:
+                    result = leaf.collect(ctx)
+                    self.assertTrue(result["observations"]["scope_discovery_qualified"])
+                    self.assertEqual([row["id"] for row in result["cases"]],
+                                     ["qoder.help", "qoder.scope-observation"])
+                    self.assertFalse(result["observations"]["mcp_tools_call_qualified"])
 
     def test_process_capture_errors_and_malformed_stream_types_fail_at_first_probe(self):
         for record, stdout, stderr in [

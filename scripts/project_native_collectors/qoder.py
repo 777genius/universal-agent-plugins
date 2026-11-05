@@ -3,11 +3,12 @@
 The genuine acquisition selected qodercli; shared code owns immutable bytes,
 host admission, bounded execution and captures. Never import or list a plugin.
 """
+import json
 import re
 
 CLIENT = "qoder"
 VERSION = "1.1.78"
-AVAILABLE_PHASES = ("acquire", "help")
+AVAILABLE_PHASES = ("acquire", "help", "observe")
 ACQUISITION = {
     "url": "https://qoder-ide.oss-accelerate.aliyuncs.com/qodercli/releases/1.1.78/qodercli-linux-x64.tar.gz",
     "integrity": "sha256:5e3213d2d4256c86c5ad2c8bf73fd392f92ba80d0d38f822806542805a48a8ea",
@@ -53,6 +54,49 @@ def _probe(ctx, label, arguments):
     return stdout
 
 
+def observe_project_mcp_sources(ctx):
+    """Record genuine Qoder MCP inventory, without a model or MCP tool call."""
+    a, b = (ctx.projects[name] for name in ("a", "b"))
+    for name, project in (("a", a), ("b", b)):
+        if not project.is_dir() or project.is_symlink():
+            raise ValueError("Qoder project root is not an ordinary directory")
+        record, _, _ = ctx.command("git-init-" + name,
+                                   ["/usr/bin/git", "init", "--quiet"],
+                                   project, ctx.env, 10)
+        if record.get("exit") != 0 or record.get("error") is not None:
+            raise ValueError("Qoder project Git root initialization failed")
+    path = a / ".mcp.json"
+    if path.exists() or path.is_symlink():
+        raise ValueError("Qoder project MCP fixture would replace existing state")
+    names = ("uap_qoder_a_stdio", "uap_qoder_a_http")
+    body = (json.dumps({"mcpServers": {
+        names[0]: {"command": "/usr/bin/true", "args": []},
+        names[1]: {"type": "http", "url": "http://127.0.0.1:9/mcp"}
+    }}, sort_keys=True) + "\n").encode()
+    with path.open("xb") as stream:
+        stream.write(body)
+    path.chmod(0o600)
+    observations = {}
+    for name in ("a", "b"):
+        record, stdout, stderr = ctx.probe("mcp-list-" + name, ["mcp", "list"],
+                                           project=name, timeout=30)
+        if (type(record.get("exit")) is not int or record["exit"] != 0
+                or record.get("error") is not None
+                or type(stdout) is not bytes or type(stderr) is not bytes):
+            raise ValueError("Qoder native MCP source listing failed for " + name)
+        listing = (stdout + b"\n" + stderr).decode("utf-8", errors="strict")
+        if "\x00" in listing or "\x1b" in listing:
+            raise ValueError("Qoder native MCP listing contains control codes")
+        selected = {key: key in listing for key in names}
+        if any(value != (name == "a") for value in selected.values()):
+            raise ValueError("Qoder project MCP source/priority was not isolated to A")
+        observations[name] = {"selected": selected, "command": ["mcp", "list"],
+                              "source_only": True}
+    if path.is_symlink() or path.read_bytes() != body:
+        raise ValueError("Qoder native MCP source listing changed authored config")
+    return observations
+
+
 def collect(ctx):
     """Only the reviewed five version/help commands; no source selection claim."""
     version = parse_version(_probe(ctx, "version", ("--version",)))
@@ -60,11 +104,19 @@ def collect(ctx):
     for label, arguments, usage in HELP:
         observed = parse_help(_probe(ctx, label, arguments), usage)
         help_rows.append({"label": label, "arguments": list(arguments), "usage": observed})
-    return {"observations": {"client_version_measured": version, "help": help_rows,
-                             "surface": "fixed version and command help only",
-                             "scope_discovery_qualified": False, "uap_lifecycle_qualified": False,
-                             "mcp_initialization_qualified": False, "mcp_tools_list_qualified": False,
-                             "mcp_tools_call_qualified": False, "authentication_qualified": False,
-                             "real_model_qualified": False},
-            "cases": [{"id": "qoder.help", "status": "passed",
-                       "reason": "Pinned fixed version/help table observed; no plugin operation, scope or runtime qualification"}]}
+    result = {"observations": {"client_version_measured": version, "help": help_rows,
+                               "surface": "fixed version and command help only",
+                               "scope_discovery_qualified": False, "uap_lifecycle_qualified": False,
+                               "mcp_initialization_qualified": False, "mcp_tools_list_qualified": False,
+                               "mcp_tools_call_qualified": False, "authentication_qualified": False,
+                               "real_model_qualified": False},
+              "cases": [{"id": "qoder.help", "status": "passed",
+                         "reason": "Pinned fixed version/help table observed; no plugin operation, scope or runtime qualification"}]}
+    if getattr(ctx, "phase", "help") == "observe":
+        result["observations"]["project_mcp_inventory"] = observe_project_mcp_sources(ctx)
+        result["observations"]["scope_discovery_qualified"] = True
+        result["observations"]["surface"] = "genuine pinned Qoder mcp list A/B project source inventory only"
+        result["cases"].append({"id": "qoder.scope-observation", "status": "passed",
+                                "reason": "Genuine Qoder A-only project stdio/HTTP configuration listed; no MCP tools/call"})
+        result["unobserved"] = ["qoder.mcp-initialize", "qoder.mcp-tools-list", "qoder.mcp-tools-call"]
+    return result
