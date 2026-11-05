@@ -141,6 +141,9 @@ func TestPiNativeEffectTrackingIsProjectScoped(t *testing.T) {
 	if user.TracksNativeEffects || user.LifecycleKind != LifecyclePrepared {
 		t.Fatalf("Pi user lifecycle unexpectedly requires a native attempt: %+v", user)
 	}
+	if !user.RequiresActiveNativeProjection {
+		t.Fatal("Pi user lost read-only native projection for global Skills/MCP after the host's commit handoff")
+	}
 	if !project.TracksNativeEffects || project.LifecycleKind != LifecyclePrepared {
 		t.Fatalf("Pi project lifecycle lost tracked native effects: %+v", project)
 	}

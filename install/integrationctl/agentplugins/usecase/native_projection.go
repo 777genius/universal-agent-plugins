@@ -20,7 +20,8 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 	if delivery.ArtifactDigest == "" {
 		return delivery, false, false, fmt.Errorf("managed package receipt is missing")
 	}
-	if !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery, input.Scope) {
+	if !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery, input.Scope) &&
+		!plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope).RequiresActiveNativeProjection {
 		delivery.NativeObjects = append([]domain.NativeObjectOwnership(nil), client.NativeObjects...)
 		complete = service.nonNativeRegistrationComplete(input, plan, client, delivery)
 		settled = complete && service.manualRegistrationSettled(input, plan, client, delivery)
