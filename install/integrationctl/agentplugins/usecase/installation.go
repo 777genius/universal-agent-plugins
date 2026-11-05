@@ -91,6 +91,10 @@ func stagedClientBinding(previous domain.ClientBinding, bindingExists bool, inpu
 	if !bindingExists && input.Scope == domain.ScopeUser && traits.RecordsUserProfileOnCreate {
 		profileRoot = input.Client.ConfigRoot
 	}
+	if !bindingExists && input.Scope == domain.ScopeUser && traits.RecordsSelectedNativeRootOnCreate &&
+		plan.NativeRegistryRoot != "" && plan.NativeRegistryRoot != input.Client.ConfigRoot {
+		profileRoot = plan.NativeRegistryRoot
+	}
 	if token := plan.ProfileAuthority(); token != nil {
 		profileRoot = token.Facts().CanonicalRoot
 	}

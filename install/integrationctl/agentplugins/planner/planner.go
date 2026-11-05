@@ -396,6 +396,11 @@ func (planner Planner) ResolveTarget(
 		return domain.DeliveryTarget{}, fmt.Errorf("unsafe client target path: %w", err)
 	}
 	nativeRoot := client.ConfigRoot
+	if scope == domain.ScopeUser {
+		if layout, ok := clients.As[clients.UserNativeRegistryLayout](planner.Registry, client.ClientID); ok {
+			nativeRoot = layout.UserNativeRegistry(client)
+		}
+	}
 	if scope == domain.ScopeProject {
 		layout, _ := clients.As[clients.NativeRegistryLayout](planner.Registry, client.ClientID)
 		nativeRoot, _ = layout.NativeRegistry(clients.PlanInput{Client: client, TargetContext: targetContext})

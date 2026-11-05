@@ -47,3 +47,21 @@ func requireSelectedDevinGlobal(client domain.DetectedClient) (string, error) {
 	}
 	return root, nil
 }
+
+func devinGlobalPlanRoot(client domain.DetectedClient, plan domain.DeliveryPlan) (string, error) {
+	root, err := requireSelectedDevinGlobal(client)
+	if err != nil {
+		return "", err
+	}
+	if plan.ClientID != domain.ClientWindsurf || plan.Scope != domain.ScopeUser ||
+		plan.TargetContext.Scope != domain.ScopeUser || plan.TargetContext.ProjectRoot != "" ||
+		plan.TargetContext.UserConfigRoot != client.ConfigRoot || plan.NativeRegistryRoot != root ||
+		plan.NativeRegistryExecutable != "" {
+		return "", fmt.Errorf("Devin Global plan differs from exact selected user profile")
+	}
+	if plan.ActivePath != "" && plan.PhysicalArtifactID != "" &&
+		filepath.Base(plan.ActivePath) != plan.PhysicalArtifactID {
+		return "", fmt.Errorf("Devin Global package differs from selected artifact")
+	}
+	return root, nil
+}
