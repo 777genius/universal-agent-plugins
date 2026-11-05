@@ -1727,7 +1727,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             for directory in (home, project, data):
                 directory.mkdir(parents=True)
             env = audit.isolated_client_env(home, case, data)
-            audit.initialize_kimi_project_git_root(project, env, case)
+            audit.initialize_project_skill_git_root(project, env, case)
             self.assertTrue((project / ".git").is_dir())
             self.assertFalse((project / ".git").is_symlink())
             # Real Git must recognize this disposable root; an empty marker is not enough.
@@ -1736,26 +1736,66 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertEqual(checked["exit_code"], 0)
             self.assertEqual(Path(checked["stdout_tail"].strip()).resolve(), project)
             with self.assertRaisesRegex(RuntimeError, "prerequisite unavailable"):
-                audit.initialize_kimi_project_git_root(project, env, case / "outside")
+                audit.initialize_project_skill_git_root(project, env, case / "outside")
 
-    def test_kimi_git_precondition_is_not_applied_to_other_lanes(self):
+    def test_isolated_git_prerequisite_only_for_kimi_and_grok_skills(self):
         audit = load_audit()
         failed = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
                   "timeout": False, "_json": {"data": {"installations": []}}}
         fixture = {"name": "frontend-design", "source": "unused",
+                   "repo": "example/skills", "folder": "frontend-design",
                    "skill_md_git_blob_sha1": "0" * 40}
         with (TemporaryDirectory() as temporary,
               patch.object(audit, "call", return_value=failed),
-              patch.object(audit, "initialize_kimi_project_git_root") as initialize):
+              patch.object(audit, "initialize_project_skill_git_root") as initialize):
             root = Path(temporary).resolve()
-            audit.do_case("/unused/agentplugins", "kimi", "plugin",
-                          "atlassian", 0, root / "kimi-plugin", {})
-            audit.do_case("/unused/agentplugins", "qoder", "skill",
-                          fixture, 0, root / "qoder-skill", {})
+            for target, kind, item in (
+                    ("kimi", "plugin", "atlassian"),
+                    ("grok", "plugin", "atlassian"),
+                    ("qoder", "skill", fixture)):
+                audit.do_case("/unused/agentplugins", target, kind, item, 0,
+                              root / f"{target}-{kind}", {})
             self.assertEqual(initialize.call_count, 0)
-            audit.do_case("/unused/agentplugins", "kimi", "skill",
-                          fixture, 0, root / "kimi-skill", {})
-            self.assertEqual(initialize.call_count, 1)
+            for target in ("kimi", "grok"):
+                audit.do_case("/unused/agentplugins", target, "skill", fixture,
+                              0, root / f"{target}-skill", {})
+            self.assertEqual(initialize.call_count, 2)
+            self.assertEqual(
+                {call.args[0] for call in initialize.call_args_list},
+                {root / "kimi-skill/skill-00/project",
+                 root / "grok-skill/skill-00/project"})
+
+    def test_grok_project_skill_gets_real_git_root_before_install(self):
+        # BUG-063: upstream grok inspect projectRoot is Git-discovered, not cwd.
+        audit = load_audit()
+        self.assertTrue(audit.GIT_EXECUTABLE and Path(audit.GIT_EXECUTABLE).is_file())
+        item = {"name": "frontend-design", "source": "unused",
+                "repo": "example/skills", "folder": "frontend-design",
+                "skill_md_git_blob_sha1": "0" * 40}
+        failed = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
+                  "timeout": False, "_json": {"data": {"installations": []}}}
+        original_call = audit.call
+        def fake_call(argv, env, cwd, timeout=105):
+            if argv[0] == audit.GIT_EXECUTABLE:
+                return original_call(argv, env, cwd, timeout)
+            return dict(failed)
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            with patch.object(audit, "call", side_effect=fake_call):
+                result = audit.do_case("/unused/agentplugins", "grok", "skill",
+                                       item, 0, root, {})
+            project = root / "skill-00/project"
+            self.assertEqual(result["status"], "install-failed")  # mocked add is not PASS
+            self.assertTrue(result["sentinels_preserved"])
+            self.assertTrue((project / ".git").is_dir())
+            self.assertFalse((project / ".git").is_symlink())
+            checked = subprocess.run([audit.GIT_EXECUTABLE, "-C", str(project),
+                                      "rev-parse", "--show-toplevel"],
+                                     capture_output=True, text=True, check=False)
+            self.assertEqual(checked.returncode, 0)
+            self.assertEqual(Path(checked.stdout.strip()).resolve(), project)
+            self.assertTrue((project / ".grok/skills/foreign-neighbor/SKILL.md").is_file())
+            self.assertFalse((project / ".grok/plugins/foreign-neighbor").exists())
 
     def test_qoder_latest_log_link_only_qualifies_closed_run_diagnostics(self):
         audit = load_audit()

@@ -960,8 +960,8 @@ def copilot_settings_sanitized_shape(home, case_root, identity):
             "enabled_plugin_value_counts": enabled_values}
 
 
-def initialize_kimi_project_git_root(project, env, case_root):
-    """Create a real Git worktree for Kimi project Skill discovery, inside one case."""
+def initialize_project_skill_git_root(project, env, case_root):
+    """Create an isolated real Git worktree for native project Skill discovery."""
     if (not GIT_EXECUTABLE or not Path(GIT_EXECUTABLE).is_file()
             or not project.is_dir() or project.is_symlink()
             or not project.resolve().is_relative_to(case_root.resolve())):
@@ -1064,8 +1064,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         assert_case_unchanged()
         return outcome
 
-    if target == "kimi" and kind == "skill":
-        initialize_kimi_project_git_root(project, env, case_root)
+    if kind == "skill" and target in ("kimi", "grok"):
+        # Grok inspect reports projectRoot from Git discovery. Never weaken its
+        # strict native project identity contract to accept a missing root.
+        initialize_project_skill_git_root(project, env, case_root)
     before = snapshot(native_roots)
     if kind == "plugin":
         identity = plugin_declared_names.get(item, item)
