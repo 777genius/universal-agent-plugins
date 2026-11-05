@@ -17,7 +17,7 @@ const expectedProfile = {
   id: 'static-cohort-2.13.3-v1',
   digest: 'sha256:ad4477fa9f9d61952c5fa929fc6810b0792433a1494102308a1e8e183ba6fe74',
 };
-const sourcePins = new Map([
+const sourcePins = new Map<string, readonly string[]>([
   ['plugin:community:3b7213be12f01b1365846d8ba375d59f/sitemap-manager',
     ['indranilbanerjee/digital-marketing-pro', 'cc45ca06eaf48abde3bb60fb79d31c41229c58db', 'skills/sitemap-manager']],
   ['plugin:community:4d73239dc1cf321957d109bdf29c27dd/sitemap-manager',
@@ -47,14 +47,16 @@ const exact = (value: Json, names: readonly string[]): void => {
 const str = (value: unknown): value is string => typeof value === 'string';
 const int = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) >= 0;
 const array = (value: unknown): unknown[] => Array.isArray(value) ? value : invalid();
-const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+const same = (a: unknown, b: unknown): boolean => canonical(a) === canonical(b);
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
   if (value !== null && typeof value === 'object')
     return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonical(obj(value)[k])).join(',') + '}';
   if (typeof value === 'number' && !Number.isSafeInteger(value)) invalid();
-  return JSON.stringify(value);
+  const serialized = JSON.stringify(value);
+  if (typeof serialized !== 'string') invalid();
+  return serialized;
 }
 function canonicalBytes(body: Uint8Array): Json {
   const doc = obj(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body)));
