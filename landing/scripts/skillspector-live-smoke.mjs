@@ -10,7 +10,7 @@ import { loadI18nMessages } from './load-i18n-messages.ts';
 import { createSkillSpectorClient } from '../utils/skillSpectorCatalog.ts';
 import { hasCurrentPublishedScan } from '../utils/skillSpectorCurrent.ts';
 import {
-  applyVerifiedSkillSpectorCohort, pinnedCohortKeys, readVerifiedSkillSpectorCohort,
+  applyVerifiedSkillSpectorCohort, readVerifiedSkillSpectorCohort,
 } from '../utils/skillSpectorCohort.ts';
 import {
   decodeSkillSpectorManifestV3,
@@ -21,6 +21,10 @@ import {
   skillSpectorFindingUrl,
   skillSpectorSourceUrl,
 } from '../utils/skillSpector.ts';
+
+// Load the same reviewed trust store as the Nuxt consumer without importing JSON into its runtime verifier.
+const cohortTrust = JSON.parse(readFileSync(new URL('../features/skillspector/cohort-trusted-keys.json', import.meta.url), 'utf8'));
+const pinnedCohortKeys = cohortTrust.schema_version === 1 && Array.isArray(cohortTrust.keys) ? cohortTrust.keys : [];
 
 // Read-only production acceptance with real requests and no route interception.
 // Node 24; install Chromium with `pnpm exec playwright install --only-shell chromium`.
