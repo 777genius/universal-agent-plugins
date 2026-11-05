@@ -159,8 +159,11 @@ jobs:
                         "stderr_sha256": hashlib.sha256(stderr).hexdigest(),
                         "output_bounded": len(stdout) <= 65536 and len(stderr) <= 65536,
                         "global_skill_in_stdout": b"uap-d0-global" in stdout,
+                        "project_skill_in_stdout": b"uap-d0-project" in stdout,
                         "stdio_name_in_stdout": b"uap_d0_stdio" in stdout,
                         "http_name_in_stdout": b"uap_d0_http" in stdout,
+                        "project_stdio_in_stdout": b"uap_d0_project_stdio" in stdout,
+                        "project_http_in_stdout": b"uap_d0_project_http" in stdout,
                         "auth_diagnostic": any(word in (stdout + stderr).lower()
                                                for word in (b"login", b"sign in", b"authentication", b"not authenticated"))}
               if argv == ["skills", "list", "--json"]:
@@ -237,6 +240,11 @@ jobs:
                                    "env": {"UAP_D0_TRACE": str(trace)}},
                   "uap_d0_http": {"url": "http://127.0.0.1:" + str(port) + "/mcp", "transport": "http"}}}
               (global_root / "mcp_config.json").write_text(json.dumps(entries))
+              # One original global authority, plus independent A-only project servers.
+              project_entries = {"mcpServers": {
+                  "uap_d0_project_stdio": entries["mcpServers"]["uap_d0_stdio"],
+                  "uap_d0_project_http": entries["mcpServers"]["uap_d0_http"]}}
+              (projects[0] / ".devin" / "mcp_config.json").write_text(json.dumps(project_entries))
               report["original_profile"] = {"home": str(home), "xdg_config_home": str(config),
                                             "native_global_root": str(global_root),
                                             "selected_executable": str(executable),
@@ -261,8 +269,17 @@ jobs:
                           report["native_rpc_events"].append(event)
               observed = report["native_rpc_events"]
               source = [c for c in report["commands"] if c["argv"] == ["skills", "list", "--json"]]
+              mcp_sources = [c for c in report["commands"] if c["argv"] == ["mcp", "list"]]
               checks = {"global_source_A_B": len(source) == 2 and all(
-                            c["exit"] == 0 and c.get("parseable_json") and c["global_skill_in_stdout"] for c in source)}
+                            c["exit"] == 0 and c.get("parseable_json") and c["global_skill_in_stdout"] for c in source),
+                        "project_skill_A_only": len(source) == 2 and source[0]["project"] == "a" and source[1]["project"] == "b"
+                            and source[0]["exit"] == 0 and source[0].get("parseable_json") and source[0]["project_skill_in_stdout"]
+                            and source[1]["exit"] == 0 and source[1].get("parseable_json") and not source[1]["project_skill_in_stdout"],
+                        "global_mcp_A_B": len(mcp_sources) == 2 and all(
+                            c["exit"] == 0 and c["stdio_name_in_stdout"] and c["http_name_in_stdout"] for c in mcp_sources),
+                        "project_mcp_A_only": len(mcp_sources) == 2 and mcp_sources[0]["project"] == "a" and mcp_sources[1]["project"] == "b"
+                            and mcp_sources[0]["exit"] == 0 and mcp_sources[0]["project_stdio_in_stdout"] and mcp_sources[0]["project_http_in_stdout"]
+                            and mcp_sources[1]["exit"] == 0 and not mcp_sources[1]["project_stdio_in_stdout"] and not mcp_sources[1]["project_http_in_stdout"]}
               for transport, nonce in (("stdio", "STDIO_D0_20261104"), ("http", "HTTP_D0_20261104")):
                   methods = {e["method"] for e in observed if e["transport"] == transport}
                   calls = [e for e in observed if e["transport"] == transport and e["method"] == "tools/call"]
