@@ -1295,8 +1295,17 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                                 copilot_native_before_remove["status"] != "installed"))
                            or (target not in ("qoder", "copilot") and not native_attribution)))
                   else "prepared-lifecycle-passed" if prepared_binding else "passed")
-    elif installed and cleanup and "external removal requires explicit attestation" in (
-            cleanup.get("stderr_tail", "") + cleanup.get("stdout_tail", "")).lower():
+    elif installed and cleanup and (
+            "external removal requires explicit attestation" in
+            (cleanup.get("stderr_tail", "") + cleanup.get("stdout_tail", "")).lower()
+            or (target == "vscode" and kind == "plugin" and prepared_binding
+                and repeat_verified and cleanup.get("exit_code") not in (None, 0)
+                and "removal requires a manual client step for [vscode]" in
+                cleanup.get("stderr_tail", "").lower()
+                and "--external-uninstalled" in
+                cleanup.get("stderr_tail", "").lower())):
+        # A prepared VS Code package is not an activated native plugin.
+        # Do not counterfeit the external-uninstalled attestation.
         status = "external-native-uninstall-required"
     elif installed:
         status = "cleanup-failed"

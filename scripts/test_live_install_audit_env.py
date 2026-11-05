@@ -1718,6 +1718,36 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     self.assertTrue(evidence["sentinels_preserved"])
                     self.assertEqual(evidence["status"], "install-failed")
 
+    def test_vscode_manual_external_removal_stays_nonpass(self):
+        # BUG-064: prepared, non-activated VS Code is NOT proven removed.
+        audit = load_audit()
+        selected = "github:example/native-demo@" + ("a" * 40)
+        matched = [{"name": "native-demo", "installation_id": "same-install",
+                    "clients": [{"client_id": "vscode", "scope": "user",
+                                 "materialization": "materialized",
+                                 "verification": "package_validated",
+                                 "activation": "manual_activation_required"}]}]
+        def response(exit_code=0, stderr="", installations=None):
+            return {"exit_code": exit_code, "stdout_tail": "", "stderr_tail": stderr,
+                    "timeout": False,
+                    "_json": {"data": {"installations": matched if installations is None
+                                       else installations}}}
+        manual = response(1, "agentplugins: removal requires a manual client step for [vscode]; "
+                          "verify native absence, then rerun --external-uninstalled")
+        with TemporaryDirectory() as temporary:
+            with (patch.object(audit, "call", side_effect=[
+                    response(), response(), response(), response(), manual]),
+                  patch.object(audit, "matching_installations", return_value=matched)):
+                proof = audit.do_case(
+                    "/unused/agentplugins", "vscode", "plugin", selected, 0,
+                    Path(temporary).resolve(), {selected: "native-demo"})
+        self.assertEqual(proof["status"], "external-native-uninstall-required")
+        self.assertTrue(proof["prepared_binding"])
+        self.assertTrue(proof["repeat_verified"])
+        self.assertFalse(proof["removal_verified"])
+        self.assertEqual(proof["cleanup"]["exit_code"], 1)
+        self.assertTrue(proof["sentinels_preserved"])
+
     def test_kimi_skill_uses_real_isolated_git_worktree(self):
         audit = load_audit()
         self.assertTrue(audit.GIT_EXECUTABLE and Path(audit.GIT_EXECUTABLE).is_file())
