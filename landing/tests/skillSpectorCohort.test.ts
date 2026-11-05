@@ -181,6 +181,8 @@ test('overlay preserves unrelated old Partial and fails closed on digest or sele
   assert.equal(improved.records[0]!.retry?.disposition, 'none');
   assert.equal(improved.records[0]!.finding_count, 1);
   assert.equal(improved.records[1]!.status, 'partial');
+  assert.equal(applyVerifiedSkillSpectorCohort(
+    report, cohort.manifestDigest, cohort, new Date('2026-11-07T00:00:00Z')), report);
   assert.equal(applyVerifiedSkillSpectorCohort(report, 'sha256:' + 'f'.repeat(64), cohort), report);
   const stale = structuredClone(report);
   stale.source_states[0]!.current = false;
