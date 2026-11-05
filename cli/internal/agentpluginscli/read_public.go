@@ -148,7 +148,7 @@ func publicImmutableRevision(value string) string {
 		return ""
 	}
 	for _, character := range value {
-		if !((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')) {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
 			return ""
 		}
 	}
@@ -229,7 +229,7 @@ func renderInstallation(writer io.Writer, installation publicInstallation) error
 	_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Source"), installation.Source)
 	for _, client := range installation.Clients {
 		_, _ = fmt.Fprintf(writer, "  %s: materialization=%s activation=%s auth=%s verification=%s\n",
-			terminaltheme.For(writer).Text(terminaltheme.Label, prompt.SafeText(string(client.ClientID))), client.Materialization, client.Activation, client.Authentication, client.Verification)
+			terminaltheme.For(writer).Text(terminaltheme.Label, prompt.SafeText(client.ClientID)), client.Materialization, client.Activation, client.Authentication, client.Verification)
 		if client.ReceiptReconciled != nil && client.NativeDiscoveryReconciled != nil {
 			_, _ = fmt.Fprintf(writer, "    native_identity=%s receipt_reconciled=%t native_discovery_reconciled=%t client_version=%s\n",
 				client.NativeIdentityState, *client.ReceiptReconciled, *client.NativeDiscoveryReconciled, client.ClientVersion)

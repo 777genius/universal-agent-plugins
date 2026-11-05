@@ -129,23 +129,30 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 				opts.target = selection
 				defer func() { opts.target = "" }()
 			}
-			if opts.purgeData {
-				return runRemove(cmd.Context(), cmd, app, opts, args[0])
-			}
-			targets, err := parseTargetOption(opts.target)
-			if err != nil {
-				return err
-			}
-			if len(targets) == 0 {
-				return runRemove(cmd.Context(), cmd, app, opts, args[0])
-			}
-			if len(targets) == 1 && targets[0] == "legacy-all" {
-				return runRemove(cmd.Context(), cmd, app, opts, args[0])
-			}
-			return runRemoveMany(cmd.Context(), cmd, app, opts, args[0], targets)
+			return dispatchSelectedRemoval(cmd, app, opts, args[0])
 		},
 	}
 	command.Flags().BoolVar(&opts.externalUninstalled, "external-uninstalled", false, "confirm the selected client plugin was uninstalled manually or was never activated/imported")
 	command.Flags().BoolVar(&opts.purgeData, "purge-data", false, "permanently delete ownership-verified plugin data after removal")
 	return command
+}
+
+
+// dispatchSelectedRemoval preserves single-target and legacy-all behavior
+// while keeping the command's input/confirmation policy separate from routing.
+func dispatchSelectedRemoval(cmd *cobra.Command, app App, opts *options, selector string) error {
+	if opts.purgeData {
+		return runRemove(cmd.Context(), cmd, app, opts, selector)
+	}
+	targets, err := parseTargetOption(opts.target)
+	if err != nil {
+		return err
+	}
+	if len(targets) == 0 {
+		return runRemove(cmd.Context(), cmd, app, opts, selector)
+	}
+	if len(targets) == 1 && targets[0] == "legacy-all" {
+		return runRemove(cmd.Context(), cmd, app, opts, selector)
+	}
+	return runRemoveMany(cmd.Context(), cmd, app, opts, selector, targets)
 }

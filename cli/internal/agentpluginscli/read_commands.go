@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func newListCommand(app App, opts *options) *cobra.Command {
@@ -55,14 +57,7 @@ func newInfoCommand(app App, opts *options) *cobra.Command {
 				if strings.Contains(err.Error(), "ambiguous") || !isDirectorySelector(strings.TrimSpace(args[0])) {
 					return err
 				}
-				product, inspectErr := inspectDirectoryProduct(cmd.Context(), app, state, args[0], opts.target)
-				if inspectErr != nil {
-					return inspectErr
-				}
-				if opts.format == "json" {
-					return writeJSONOutput(cmd.OutOrStdout(), "info", product)
-				}
-				return renderProductInspection(cmd.OutOrStdout(), product)
+				return renderDirectorySelectorInfo(cmd, app, opts, state, args[0])
 			}
 			public, err := inspectInstalledProduct(cmd.Context(), app, state, installation)
 			if err != nil {
@@ -79,6 +74,19 @@ func newInfoCommand(app App, opts *options) *cobra.Command {
 			return renderInstallation(cmd.OutOrStdout(), public)
 		},
 	}
+}
+
+// renderDirectorySelectorInfo handles a signed Directory lookup when no
+// installed package matches the supplied direct selector.
+func renderDirectorySelectorInfo(cmd *cobra.Command, app App, opts *options, state domain.StateFileV2, selector string) error {
+	product, err := inspectDirectoryProduct(cmd.Context(), app, state, selector, opts.target)
+	if err != nil {
+		return err
+	}
+	if opts.format == "json" {
+		return writeJSONOutput(cmd.OutOrStdout(), "info", product)
+	}
+	return renderProductInspection(cmd.OutOrStdout(), product)
 }
 
 func newDoctorCommand(app App, opts *options) *cobra.Command {

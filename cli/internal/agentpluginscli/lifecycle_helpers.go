@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -99,7 +100,7 @@ func promptBoundTargets(cmd *cobra.Command, app App, selector, scope string) (st
 	}
 	_, _ = fmt.Fprint(cmd.OutOrStdout(), "Choose targets by number, comma-separated [all]: ")
 	line, readErr := readInputLine(cmd.Context(), cmd.InOrStdin())
-	if readErr != nil && readErr != io.EOF {
+	if readErr != nil && !errors.Is(readErr, io.EOF) {
 		return "", readErr
 	}
 	line = strings.TrimSpace(line)

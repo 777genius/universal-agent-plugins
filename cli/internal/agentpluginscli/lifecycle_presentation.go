@@ -35,10 +35,9 @@ func renderRepairResult(writer io.Writer, format string, installation domain.Ins
 		if result.Receipt.OperationID == "" {
 			_, err := fmt.Fprintln(writer, "Managed package digest reverified and recorded lifecycle state corrected; no external client mutation was attempted.")
 			return err
-		} else {
-			_, err := fmt.Fprintln(writer, "Managed package repaired from the exact installed revision and its package digest verified; external client activation and authentication were not reverified.")
-			return err
 		}
+		_, err := fmt.Fprintln(writer, "Managed package repaired from the exact installed revision and its package digest verified; external client activation and authentication were not reverified.")
+		return err
 	}
 	return nil
 }
@@ -122,22 +121,28 @@ func renderUpdateResult(writer io.Writer, format string, envelope domain.Package
 		return nil
 	}
 	if result.Mutated {
-		if result.Activation.Authentication == domain.AuthenticationPending {
-			if result.Activation.Activation == domain.ActivationActive {
-				_, _ = fmt.Fprintln(writer, "Package updated and client activation completed. Authentication is pending.")
-			} else {
-				_, _ = fmt.Fprintln(writer, "Package updated. Authentication and client activation are pending.")
-			}
-		} else if result.Activation.Authentication == domain.AuthenticationNotChecked && result.Activation.Activation == domain.ActivationActive {
-			_, _ = fmt.Fprintln(writer, "Package updated and client activation verified. Authentication requirements have not been checked.")
-		} else {
-			_, _ = fmt.Fprintln(writer, "Package updated. Activation is not complete yet.")
-		}
+		renderIncompleteUpdateState(writer, result.Activation)
 	}
 	if action := nextLocalLifecycleAction(result); action != "" && !fullyInstalled(result.Activation) {
 		_, _ = fmt.Fprintf(writer, "Next: %s\n", action)
 	}
 	return nil
+}
+
+// renderIncompleteUpdateState reports the exact pending/partial activation
+// outcome without mixing these presentation decisions into the command flow.
+func renderIncompleteUpdateState(writer io.Writer, activation domain.ActivationOutcome) {
+	if activation.Authentication == domain.AuthenticationPending {
+		if activation.Activation == domain.ActivationActive {
+			_, _ = fmt.Fprintln(writer, "Package updated and client activation completed. Authentication is pending.")
+		} else {
+			_, _ = fmt.Fprintln(writer, "Package updated. Authentication and client activation are pending.")
+		}
+	} else if activation.Authentication == domain.AuthenticationNotChecked && activation.Activation == domain.ActivationActive {
+		_, _ = fmt.Fprintln(writer, "Package updated and client activation verified. Authentication requirements have not been checked.")
+	} else {
+		_, _ = fmt.Fprintln(writer, "Package updated. Activation is not complete yet.")
+	}
 }
 
 func renderRemoveResult(writer io.Writer, format string, installation domain.Installation, result usecase.RemoveResult, dryRun bool) error {
