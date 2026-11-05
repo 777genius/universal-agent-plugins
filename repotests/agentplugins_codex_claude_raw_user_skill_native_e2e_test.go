@@ -86,6 +86,24 @@ func nativeRawUserFiles(t *testing.T, binding domain.ClientBinding, client strin
 	}
 }
 
+func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer, target, statePath string, original domain.ClientBinding) domain.ClientBinding {
+	t.Helper()
+	if err := os.RemoveAll(original.TargetLocator); err != nil {
+		t.Fatal(err)
+	}
+	result, err := commandsRunInstaller(t, root, dir, env, installer, "raw-user-repair", "repair", nativeRawUserSkillName, "--target", target, "--scope", "user")
+	if err != nil || result["result"] != "success" {
+		t.Fatalf("%s: restoring absent pinned raw Skill failed: %v; %+v", target, err, result)
+	}
+	_, restored := nativeRawUserState(t, statePath, target, original.NativeProfileRoot)
+	if restored.ClientBindingID != original.ClientBindingID || restored.PhysicalArtifact != original.PhysicalArtifact ||
+		restored.TargetLocator != original.TargetLocator {
+		t.Fatalf("%s: repair replaced immutable Skill identity: before=%+v after=%+v", target, original, restored)
+	}
+	nativeRawUserFiles(t, restored, target)
+	return restored
+}
+
 func nativeRawUserRemove(t *testing.T, root, dir string, env []string, installer, target, statePath, active string, external bool) {
 	t.Helper()
 	args := []string{"remove", nativeRawUserSkillName, "--target", target, "--scope", "user"}
@@ -155,6 +173,8 @@ func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginI
 	}
 	var skills struct {
 		Data []struct {
+			CWD string `json:"cwd"`
+			Errors []json.RawMessage `json:"errors"`
 			Skills []struct {
 				Name string `json:"name"`
 				Path string `json:"path"`
@@ -166,6 +186,10 @@ func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginI
 	if err := json.Unmarshal(r.must(t, "skills/list", map[string]any{"cwds": []string{f.Project}, "forceReload": true}), &skills); err != nil {
 		t.Fatal(err)
 	}
+	if len(skills.Data) != 1 || !openCodeSamePath(skills.Data[0].CWD, f.Project) ||
+		len(skills.Data[0].Errors) != 0 {
+		t.Fatalf("Codex user Skills inventory missing exact cwd or contains errors: %+v", skills.Data)
+	}
 	found := 0
 	for _, group := range skills.Data {
 		for _, skill := range group.Skills {
@@ -173,7 +197,8 @@ func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginI
 				continue
 			}
 			if skill.Name != declaredName+":"+nativeRawUserSkillName || !skill.Enabled ||
-				!strings.HasSuffix(filepath.ToSlash(skill.Path), "/skills/benchmark-note/SKILL.md") {
+				!strings.HasSuffix(filepath.ToSlash(skill.Path), "/skills/benchmark-note/SKILL.md") ||
+				!strings.Contains(filepath.ToSlash(skill.Path), "/plugins/cache/") {
 				t.Fatalf("Codex native raw Skill identity mismatch: %+v", skill)
 			}
 			nativeRequireContained(t, f.Root, skill.Path)
@@ -222,6 +247,8 @@ func TestAgentpluginsCodexNativeRawUserSkillLifecycle(t *testing.T) {
 		t.Fatal("Codex implicit user replay changed managed bytes or receipts")
 	}
 	codexNativeRawUserInventory(t, f, client, id, declaredName, binding.TargetLocator, "raw-user-repeated", true)
+	nativeRawUserRepair(t, f.Root, f.Project, env, installer, "codex", statePath, binding)
+	codexNativeRawUserInventory(t, f, client, id, declaredName, binding.TargetLocator, "raw-user-repaired", true)
 	nativeRawUserRemove(t, f.Root, f.Project, env, installer, "codex", statePath, binding.TargetLocator, true)
 	codexNativeRawUserInventory(t, f, client, id, declaredName, binding.TargetLocator, "raw-user-removed", false)
 	if nativeSHA(t, foreign) != foreignSHA {
@@ -281,6 +308,8 @@ func TestAgentpluginsClaudeNativeRawUserSkillLifecycle(t *testing.T) {
 		t.Fatal("Claude implicit user replay changed managed bytes or receipts")
 	}
 	verify("raw-user-repeated", true)
+	nativeRawUserRepair(t, f.Root, f.Root, env, installer, "claude", statePath, binding)
+	verify("raw-user-repaired", true)
 	nativeRawUserRemove(t, f.Root, f.Root, env, installer, "claude", statePath, binding.TargetLocator, false)
 	verify("raw-user-removed", false)
 	if nativeSHA(t, foreign) != foreignSHA {
