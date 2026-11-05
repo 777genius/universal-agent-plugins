@@ -65,7 +65,6 @@ const desktopCodexCommand = computed(() =>
   canUseSource.value &&
   props.plugin.installable &&
   !isFullyRetired(props.plugin) &&
-  targetDistributions.value.has('codex') &&
   Boolean(targetDistributions.value.get('codex'))
     ? pluginCommands(props.plugin, ['codex']).add
     : '',
