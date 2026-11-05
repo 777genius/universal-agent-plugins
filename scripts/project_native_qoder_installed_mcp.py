@@ -117,10 +117,19 @@ def run(ctx, original_env):
             raise ValueError("UAP returned a non-success project operation: " + label)
         if verb != "add":
             return None
-        targets = answer.get("data", {}).get("targets")
-        if not isinstance(targets, list) or len(targets) != 1 or targets[0].get("target") != "qoder":
+        data = answer.get("data")
+        if not isinstance(data, dict):
+            raise ValueError("Qoder add has no operation data")
+        targets = data.get("targets")
+        if isinstance(targets, list) and len(targets) == 1 and targets[0].get("target") == "qoder":
+            receipt = targets[0].get("output")
+        elif data.get("plugin") == NAME and isinstance(data.get("result"), dict):
+            # The public CLI legitimately uses single-target output for an
+            # idempotent repeat-add; it keeps the same installation ID.
+            receipt = data
+        else:
             raise ValueError("Qoder add has no exact selected client receipt")
-        value = targets[0].get("output", {}).get("result", {}).get("installation_id")
+        value = (receipt or {}).get("result", {}).get("installation_id")
         if not isinstance(value, str) or len(value) != 36:
             raise ValueError("Qoder add has no stable installation ID")
         return value
