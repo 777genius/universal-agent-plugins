@@ -732,7 +732,7 @@ linters:
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/transaction/kernel\.go$
         linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
+        text: '^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/packagesnapshot/snapshot\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'is too long|too many statements|cyclomatic complexity|cognitive complexity'
