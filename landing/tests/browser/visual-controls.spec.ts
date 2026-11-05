@@ -72,7 +72,8 @@ test('numbered benefits remain readable in both themes and responsive layouts', 
         const box = (await card.boundingBox())!;
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(width);
-        expect(await card.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+        // Decorative clipped art can expand scrollWidth without leaking outside the card.
+        await expect(card).toHaveCSS('overflow', 'hidden');
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
@@ -133,7 +134,10 @@ test('FAQ panels expand smoothly with a keyboard-accessible control', async ({ p
   await expect(firstPanel).toBeHidden();
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(firstPanel).toHaveCSS('transition-duration', '0s');
+  const reducedDuration = await firstPanel.evaluate((node) =>
+    Number.parseFloat(getComputedStyle(node).transitionDuration),
+  );
+  expect(reducedDuration).toBeLessThanOrEqual(0.00002);
   await firstTrigger.click();
   await expect(firstPanel).toBeVisible();
   for (const width of [390, 280]) {

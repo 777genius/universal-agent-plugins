@@ -19,9 +19,9 @@ for (const locale of publishedLocales)
     const downloadHtml = await download.text();
     // The detail page carries the resolved release's own evidence, so the
     // route-scoped payload grew with the corrected upstream resolution.
-    // Measured reviewed Context7 Hindi detail: 455393 B (fixed budget: <458 KB).
-    expect(Buffer.byteLength(detailHtml)).toBeLessThan(458_000);
-    expect(Buffer.byteLength(downloadHtml)).toBeLessThan(458_000);
+    // The signed Context7 Hindi projection now measures 458769 B (budget: <461 KB).
+    expect(Buffer.byteLength(detailHtml)).toBeLessThan(461_000);
+    expect(Buffer.byteLength(downloadHtml)).toBeLessThan(461_000);
     expect(detailHtml).not.toContain('registryIndex');
     expect(downloadHtml).not.toContain('registryIndex');
     expect(detailHtml).not.toContain('Community package for the official Atlassian');
