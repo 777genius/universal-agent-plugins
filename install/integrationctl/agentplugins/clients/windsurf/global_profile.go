@@ -65,3 +65,21 @@ func devinGlobalPlanRoot(client domain.DetectedClient, plan domain.DeliveryPlan)
 	}
 	return root, nil
 }
+
+func validateDevinGlobalBinding(root, artifact, target string, binding domain.ClientBinding) error {
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root || filepath.Base(root) != "devin" ||
+		binding.ClientID != string(domain.ClientWindsurf) || binding.Scope != string(domain.ScopeUser) ||
+		binding.NativeProfileRoot != root || binding.PhysicalArtifact != artifact ||
+		binding.TargetLocator != target || target == "" || !filepath.IsAbs(target) ||
+		filepath.Clean(target) != target || filepath.Base(target) != artifact {
+		return fmt.Errorf("recorded Devin Global binding does not match exact original native profile and managed package")
+	}
+	if err := pathpolicy.ValidateLeafID(artifact); err != nil {
+		return err
+	}
+	objects := devinNativeObjects(binding.NativeObjects)
+	if !hasDevinGlobalObjects(objects) {
+		return fmt.Errorf("recorded Devin Global binding lacks native objects")
+	}
+	return devinGlobalComponents(root, target).ValidateObjects(objects)
+}

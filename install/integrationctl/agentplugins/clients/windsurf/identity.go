@@ -30,5 +30,21 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 		}
 		return devinComponents(root).Inspect(plan.Components, managed, env.NativeConfig)
 	}
+	if primaryDevinExecutable(client.ExecutablePath) || isDevinGlobalPlan(plan) ||
+		(managed != nil && hasDevinGlobalObjects(managed.NativeObjects)) {
+		root, err := devinGlobalPlanRoot(client, plan)
+		if err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		if managed != nil {
+			if err := validateDevinGlobalBinding(root, plan.PhysicalArtifactID, plan.ActivePath, *managed); err != nil {
+				return clients.RegistryIndeterminate, err
+			}
+			copy := *managed
+			copy.NativeObjects = devinNativeObjects(managed.NativeObjects)
+			managed = &copy
+		}
+		return devinGlobalComponents(root, plan.ActivePath).Inspect(plan.Components, managed, env.NativeConfig)
+	}
 	return InspectWindsurfRegistry(plan, managed, env.NativeConfig)
 }

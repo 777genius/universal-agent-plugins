@@ -14,7 +14,7 @@ import (
 // AutomaticallyActivates reports that Activate will write owned Windsurf MCP
 // entries for this exact request.
 func (*Adapter) AutomaticallyActivates(_ clients.Env, request domain.ActivationRequest) bool {
-	if request.Plan.Scope == domain.ScopeProject {
+	if request.Plan.Scope == domain.ScopeProject || isDevinGlobalPlan(request.Plan) {
 		return request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(request.Plan.Components)
 	}
 	return request.Plan.InstallIntent == domain.InstallIntentAutomatic &&
@@ -36,6 +36,9 @@ func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryP
 func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject {
 		return adapter.activateDevinProject(ctx, env, request)
+	}
+	if primaryDevinExecutable(request.Client.ExecutablePath) || isDevinGlobalPlan(request.Plan) {
+		return adapter.activateDevinGlobal(ctx, env, request)
 	}
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
@@ -84,6 +87,9 @@ func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request d
 func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	if request.TargetContext.Scope == domain.ScopeProject {
 		return deactivateDevinProject(ctx, env, request)
+	}
+	if hasDevinGlobalObjects(request.NativeObjects) {
+		return deactivateDevinGlobal(ctx, env, request)
 	}
 	outcome := shared.StartedDeactivation()
 	if adapter.RequiresExternalUninstalled(env, request) {
