@@ -13,6 +13,7 @@ import (
 
 const directorySitePlugin = "context7"
 const directorySiteDistribution = "upstash/context7"
+const directorySiteRevision = "769c6cd22c3d95462d1f55d789e9532cabefa5a9"
 const directorySiteSkill = "context7-mcp"
 
 // directorySiteBindings checks actual saved Directory origin and two distinct
@@ -30,7 +31,7 @@ func directorySiteBindings(t *testing.T, path, codexHome, claudeHome string) map
 	install := state.Installations[0]
 	if install.DeclaredName != directorySitePlugin || install.Directory == nil ||
 		install.Directory.ProductID != directorySitePlugin || install.Directory.DistributionID != directorySiteDistribution ||
-		len(install.Clients) != 2 {
+		install.Source.ResolvedRevision != directorySiteRevision || len(install.Clients) != 2 {
 		t.Fatalf("site alias did not resolve signed Context7 distribution: %+v", install)
 	}
 	bindings := map[string]domain.ClientBinding{}
@@ -172,6 +173,12 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	nativeWrite(t, foreignCodex, []byte("---\nname: foreign-site-plugin\ndescription: Foreign Codex user Skill\n---\nMust not change.\n"), 0600)
 	nativeWrite(t, foreignClaude, []byte("---\nname: foreign-site-plugin\ndescription: Foreign Claude user Skill\n---\nMust not change.\n"), 0600)
 	codexForeignSHA, claudeForeignSHA := nativeSHA(t, foreignCodex), nativeSHA(t, foreignClaude)
+	verifyForeign := func(stage string) {
+		t.Helper()
+		if nativeSHA(t, foreignCodex) != codexForeignSHA || nativeSHA(t, foreignClaude) != claudeForeignSHA {
+			t.Fatalf("%s altered foreign user Skill bytes", stage)
+		}
+	}
 	// This is the Directory card's actual command, with only non-interactive
 	// consent and JSON output added for a disposable CI host.
 	args := []string{"add", directorySitePlugin, "--target", "claude,codex", "--no-ui", "--yes"}
@@ -216,6 +223,7 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	}
 	codexCheck("site-installed", true)
 	claudeCheck("site-installed", true)
+	verifyForeign("add")
 	beforeState := nativeSHA(t, statePath)
 	beforeCodex, beforeClaude := nativeTreeDigest(t, codexBinding.TargetLocator), nativeTreeDigest(t, claudeBinding.TargetLocator)
 	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-replay", args...)
@@ -226,6 +234,7 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 		nativeTreeDigest(t, claudeBinding.TargetLocator) != beforeClaude {
 		t.Fatal("site command replay changed saved/native content")
 	}
+	verifyForeign("replay")
 
 	// The site exposes unfiltered update/remove of the saved Directory alias.
 	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-update", "update", directorySitePlugin, "--no-ui", "--yes")
@@ -234,6 +243,7 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	}
 	codexCheck("site-updated", true)
 	claudeCheck("site-updated", true)
+	verifyForeign("update")
 	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-remove", "remove", directorySitePlugin, "--no-ui", "--yes")
 	if err != nil || result["result"] != "success" {
 		t.Fatalf("site remove failed: %v %+v", err, result)
@@ -245,7 +255,5 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 			t.Fatalf("removed Directory plugin still has managed artifact: %v", err)
 		}
 	}
-	if nativeSHA(t, foreignCodex) != codexForeignSHA || nativeSHA(t, foreignClaude) != claudeForeignSHA {
-		t.Fatal("site Directory lifecycle altered a foreign user Skill in either native profile")
-	}
+	verifyForeign("remove")
 }
