@@ -72,7 +72,7 @@ Preserve existing installer source trust, signed release resolution, path contai
 4. **Publication critic:** `publicationexec` creates an authoring catalog, while the consumer adapter already creates its own managed release. **Fix:** do not invoke authoring publication from the installer. Share format and tests, not stateful responsibilities.
 5. **UX critic:** Only expose Desktop guidance when the *selected* install distribution actually supports Codex in user scope; avoid turning a disabled cloud ChatGPT checkbox into a selectable unsupported target. Keep existing single source of truth for resolution and CLI commands.
 
-**Decision after review:** implement the existing Codex install lane plus truthfully labeled optional Desktop handoff, one UI guidance component and small docs. No second client, no user-file overwrite, no new persistent state. Full native Desktop E2E is blocked without a signed-in physical desktop; state this explicitly in review and release evidence.
+6. **Codex-first UX critic:** A new Desktop URL must not replace the ordinary Codex CLI's first successful next action. **Fix:** native guidance explicitly starts with 'start a new Codex session'; Desktop is clearly optional and never launched silently. A subprocess integration assertion preserves this ordering.\n\n**Decision after review:** implement the existing Codex install lane plus truthfully labeled optional Desktop handoff, one UI guidance component and small docs. No second client, no user-file overwrite, no new persistent state. Full native Desktop E2E is blocked without a signed-in physical desktop; state this explicitly in review and release evidence.
 
 ### Review resolutions
 

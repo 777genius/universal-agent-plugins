@@ -128,6 +128,9 @@ func TestDesktopHandoffDoesNotUpgradeCodexVerification(t *testing.T) {
 	if err != nil || outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
 		t.Fatalf("Codex lifecycle changed: %+v / %v", outcome, err)
 	}
+	if len(outcome.LocalActions) == 0 || !strings.HasPrefix(outcome.LocalActions[0], "start a new Codex session") {
+		t.Fatalf("Codex's native next step must remain first: %+v", outcome.LocalActions)
+	}
 	if !strings.Contains(strings.Join(outcome.LocalActions, "\n"), "codex://plugins/demo?marketplacePath=") {
 		t.Fatalf("desktop user guidance missing from verified Codex installation: %+v", outcome)
 	}
