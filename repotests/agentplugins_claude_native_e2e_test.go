@@ -543,6 +543,9 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	// state rather than treating a successful command as sufficient evidence.
 	stages["explicit_user_scope"] = claudeNativeStage{Status: "failed", Reason: "real native explicit user replay did not complete"}
 	explicitUser := claudeRunInstaller(t, f, installer, clientDir, "update-explicit-user", "update", "claude-native-proof", "--target", "claude", "--scope", "user")
+	if data, _ := explicitUser["data"].(map[string]any); data == nil || data["status"] != "completed" {
+		t.Fatalf("explicit user scope replay did not complete: %+v", explicitUser)
+	}
 	claudeAssertMutated(t, explicitUser, false)
 	if nativeTreeDigest(t, installPath) != beforeManagedTree || claudeSHA256(t, statePath) != beforeStateDigest {
 		t.Fatal("explicit user scope replay mutated the Claude Code user installation")
