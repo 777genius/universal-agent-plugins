@@ -408,3 +408,37 @@ func TestInstalledV2RevisionEvidenceIsScoped(t *testing.T) {
 		t.Fatalf("v1 revision evidence changed: got %d entries, want 4", got)
 	}
 }
+
+func TestDirectoryV2RuntimeProofRequiresCurrentCanonicalClosure(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	other := "sha256:" + strings.Repeat("b", 64)
+	eligible := &domain.DirectoryCanonicalClosure{Eligible: true, ClosureDigest: digest}
+	ineligible := &domain.DirectoryCanonicalClosure{Eligible: false}
+	for _, tc := range []struct {
+		name        string
+		schema      int
+		level       string
+		closure     *domain.DirectoryCanonicalClosure
+		proofDigest string
+		want        bool
+	}{
+		{name: "legacy v1 runtime without summary", schema: 1, level: "runtime", proofDigest: digest, want: true},
+		{name: "v2 runtime without summary", schema: 2, level: "runtime", proofDigest: digest},
+		{name: "v2 runtime with ineligible summary", schema: 2, level: "runtime", closure: ineligible, proofDigest: digest},
+		{name: "v2 runtime with matching summary", schema: 2, level: "runtime", closure: eligible, proofDigest: digest, want: true},
+		{name: "v2 runtime with different summary", schema: 2, level: "runtime", closure: eligible, proofDigest: other},
+		{name: "v2 runtime without digest", schema: 2, level: "runtime", closure: eligible},
+		{name: "v2 schema proof without summary", schema: 2, level: "schema", want: true},
+		{name: "v2 schema proof with ineligible summary", schema: 2, level: "schema", closure: ineligible, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := directoryEvidenceMatchesCanonicalClosure(tc.schema,
+				domain.DirectoryTarget{CanonicalClosure: tc.closure},
+				domain.DirectoryEvidence{Level: tc.level, ClosureDigest: tc.proofDigest})
+			if got != tc.want {
+				t.Fatalf("schema=%d level=%q proof=%q closure=%+v: got %t, want %t",
+					tc.schema, tc.level, tc.proofDigest, tc.closure, got, tc.want)
+			}
+		})
+	}
+}

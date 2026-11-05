@@ -145,8 +145,11 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 // current resolution with the same root release. Preserve older receipts in
 // CatalogEvidence.CurrentEvidence for inspection without claiming "tested".
 func directoryEvidenceMatchesCanonicalClosure(schema int, target domain.DirectoryTarget, evidence domain.DirectoryEvidence) bool {
-	return schema != 2 || target.CanonicalClosure == nil || !target.CanonicalClosure.Eligible ||
-		evidence.Level != "runtime" || evidence.ClosureDigest == target.CanonicalClosure.ClosureDigest
+	if schema != 2 || evidence.Level != "runtime" {
+		return true
+	}
+	return target.CanonicalClosure != nil && target.CanonicalClosure.Eligible &&
+		evidence.ClosureDigest != "" && evidence.ClosureDigest == target.CanonicalClosure.ClosureDigest
 }
 
 func directoryCatalogAppBinding(envelope domain.PackageEnvelope, target *domain.DirectoryAppBinding) (*domain.CatalogAppBinding, error) {
