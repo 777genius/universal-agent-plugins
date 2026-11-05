@@ -36,6 +36,20 @@ for (const width of [1440, 1024, 390, 320]) {
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
 
+    await expect(page.locator('.hero-quick-start__header h2')).toHaveText('Install the Context7 plugin');
+    const standards = page.locator('.hero__standards');
+    await expect(standards.locator('.hero__standards-label')).toHaveText('Supported formats');
+    await expect(standards.locator('a')).toHaveText(['Agent Plugins 1.0', 'Agent Skills']);
+    await expect(standards.locator('a').nth(0)).toHaveAttribute(
+      'href',
+      'https://agent-plugins.org/specification',
+    );
+    await expect(standards.locator('a').nth(1)).toHaveAttribute(
+      'href',
+      'https://agentskills.io/specification',
+    );
+    await expect(standards.locator('a').nth(1)).toBeVisible();
+
     const items = page.locator('.client-strip > li');
     await expect(items).toHaveCount(clientLandingPages.length);
     // Verify exact deployment-base URLs: suffix matches could hide a broken prefix.

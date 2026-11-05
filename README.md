@@ -21,7 +21,7 @@
 [![Codecov](https://codecov.io/gh/777genius/universal-agent-plugins/graph/badge.svg)](https://codecov.io/gh/777genius/universal-agent-plugins)
 [![npm](https://img.shields.io/npm/v/universal-agent-plugins?label=npm)](https://www.npmjs.com/package/universal-agent-plugins)
 [![Agent Plugins 1.0](https://img.shields.io/badge/Agent%20Plugins-1.0.0-7257FF)](https://agent-plugins.org/specification)
-[![Agent Skills 1.0](https://img.shields.io/badge/Agent%20Skills-1.0.0-7257FF)](https://agentskills.my/specification)
+[![Agent Skills](https://img.shields.io/badge/Agent%20Skills-standard-7257FF)](https://agentskills.io/specification)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 Install and manage plugins and Skills across your AI agents with one CLI.

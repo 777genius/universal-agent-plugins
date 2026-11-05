@@ -38,6 +38,7 @@
       "unreviewedFindings": "निष्कर्षों की समीक्षा आवश्यक",
       "confirmedMaterialIssue": "महत्वपूर्ण समस्या की पुष्टि हुई",
       "stale": "पुराना स्कैन",
+      "lastScan": "पिछला स्कैन: {result}",
       "unsupported": "जाँच नहीं हुई",
       "fullyChecked": "जाँची गई स्किल: {total} में से {checked}",
       "installAdvice": "इंस्टॉल करने से पहले",

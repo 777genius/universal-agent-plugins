@@ -38,6 +38,7 @@
       "unreviewedFindings": "发现项待审核",
       "confirmedMaterialIssue": "已确认实质问题",
       "stale": "扫描结果已过期",
+      "lastScan": "上次扫描：{result}",
       "unsupported": "未检查",
       "fullyChecked": "已扫描技能：{checked} / {total}",
       "installAdvice": "安装前须知",
