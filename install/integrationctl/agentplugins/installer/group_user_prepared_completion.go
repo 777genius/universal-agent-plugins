@@ -108,3 +108,12 @@ func publishedPreparedUserDelivery(plan domain.DeliveryPlan) bool {
 		traits.LifecycleKind == domain.LifecycleCLIRegistry &&
 		!traits.TracksNativeEffects && !traits.RequiresActiveNativeProjection
 }
+
+func hasUserPreparedGroupTarget(got usecase.GroupResult) bool {
+	for _, target := range got.Targets {
+		if target.Plan.Scope == domain.ScopeUser && target.Activation.Activation == domain.ActivationPrepared {
+			return true
+		}
+	}
+	return false
+}
