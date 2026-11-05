@@ -234,7 +234,7 @@ func TestUserGroupPreparedUpdateRetainsFailClosedHandoff(t *testing.T) {
 			f.got.Targets[1].Plan.SelectedDelivery = domain.SelectedDelivery{}
 			f.prepared.plan.Targets[1].SelectedDelivery = domain.SelectedDelivery{}
 			f.changeBinding(domain.ClientVSCode, func(b *domain.ClientBinding) { b.SelectedDelivery = domain.SelectedDelivery{} })
-		}},,
+		}},
 		{"blocked policy", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.Policy = domain.PolicyBlocked }},
 		{"unknown effect", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.NativeEffect = domain.NativeEffectUncertain }},
 		{"activation attestation", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.ActivationAttested = true }},
