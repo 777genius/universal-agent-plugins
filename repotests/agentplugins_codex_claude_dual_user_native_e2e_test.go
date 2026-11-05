@@ -110,6 +110,9 @@ func TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle(t *testing.T) {
 	f := newNativeFixture(t, true)
 	f.ClientBinDir = filepath.Dir(codexBin)
 	nativeProvisionScanner(t, f)
+	// Match the pinned single-client Codex fixture: opt into on-disk auth
+	// stores without introducing ambient credentials or native telemetry.
+	nativeWrite(t, filepath.Join(f.CodexHome, "config.toml"), []byte("cli_auth_credentials_store = \"file\"\\nmcp_oauth_credentials_store = \"file\"\\n[analytics]\\nenabled = false\\n[feedback]\\nenabled = false\\n"), 0600)
 	claudeProfile := filepath.Join(f.Root, "claude-config")
 	if err := os.MkdirAll(claudeProfile, 0700); err != nil {
 		t.Fatal(err)
