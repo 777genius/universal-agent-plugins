@@ -201,7 +201,7 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	}
 	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-repair",
 		"repair", directorySitePlugin, "--target", "codex,claude")
-	if err != nil || result["result"] != "success" {
+	if err != nil || result["outcome"] != "completed" {
 		t.Fatalf("site Directory repair failed: %v %+v", err, result)
 	}
 	if nativeTreeDigest(t, codexBinding.TargetLocator) != currentCodex ||
@@ -212,7 +212,7 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	claudeCheck("site-repaired", true)
 	verifyForeign("repair")
 	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-remove", "remove", directorySitePlugin)
-	if err != nil || result["result"] != "success" {
+	if err != nil || result["outcome"] != "completed" {
 		t.Fatalf("site remove failed: %v %+v", err, result)
 	}
 	codexCheck("site-removed", false)
