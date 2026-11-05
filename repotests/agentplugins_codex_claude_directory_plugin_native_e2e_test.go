@@ -173,6 +173,7 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	codexCheck("site-updated", true)
 	claudeCheck("site-updated", true)
 	verifyForeign("update")
+	currentCodex, currentClaude := nativeTreeDigest(t, codexBinding.TargetLocator), nativeTreeDigest(t, claudeBinding.TargetLocator)
 	// Restore only the test-owned Codex artifact via the actual website command.
 	nativeRequireContained(t, f.Root, codexBinding.TargetLocator)
 	if err := os.RemoveAll(codexBinding.TargetLocator); err != nil {
@@ -183,8 +184,8 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	if err != nil || result["result"] != "success" {
 		t.Fatalf("site Directory repair failed: %v %+v", err, result)
 	}
-	if nativeTreeDigest(t, codexBinding.TargetLocator) != beforeCodex ||
-		nativeTreeDigest(t, claudeBinding.TargetLocator) != beforeClaude {
+	if nativeTreeDigest(t, codexBinding.TargetLocator) != currentCodex ||
+		nativeTreeDigest(t, claudeBinding.TargetLocator) != currentClaude {
 		t.Fatal("site repair did not restore Codex or preserved Claude managed bytes")
 	}
 	codexCheck("site-repaired", true)
