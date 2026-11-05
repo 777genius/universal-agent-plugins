@@ -9,8 +9,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
-// Verify a raw Skill's pinned source type, not a client-specific trait,
-// prevents destructive repair of an edited existing managed directory.
+// Verify the pinned raw Skill provenance and declared client safety policy
+// prevent destructive repair of an edited existing managed directory.
 // Deliberately provide no staging service: any unintended mutation path must
 // fail this test, rather than silently overwrite another user's files.
 func TestRepairRawSkillDigestDriftRefusedBeforeStaging(t *testing.T) {

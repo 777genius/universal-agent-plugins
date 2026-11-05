@@ -15,16 +15,16 @@ func (session *repairSession) repairPackage() (AddResult, error) {
 		return session.result, fmt.Errorf("managed package integrity could not be determined; refusing repair: %w", session.verifyErr)
 	}
 	if verification.Kind == ports.VerificationDigestMismatch {
-		// The user/global native Skill stores of Codex and Claude must not overwrite
-		// another user's content. Keep existing project/other-client repair
-		// contracts unchanged; absent user Skill directories remain repairable.
+		traits := domain.ClientTraitsFor(session.input.Client.ClientID)
+		// User-scoped native raw Skills must not overwrite foreign content.
+		// Absent directories, project Skills and ordinary packages retain their policy.
 		if rev := session.client.PackageRevision; rev != nil &&
 			session.input.Scope == domain.ScopeUser &&
-			(session.input.Client.ClientID == domain.ClientCodex || session.input.Client.ClientID == domain.ClientClaude) &&
+			traits.ProtectsModifiedUserRawSkill &&
 			(rev.Skill != nil || rev.WebSkill != nil) {
 			return session.result, fmt.Errorf("managed raw Skill contains modified or unowned content; refusing repair: %w", session.verifyErr)
 		}
-		if domain.ClientTraitsFor(session.input.Client.ClientID).ProtectsModifiedPackage {
+		if traits.ProtectsModifiedPackage {
 			return session.result, fmt.Errorf("managed native extension was edited; preserve the changes before repair: %w", session.verifyErr)
 		}
 	}
