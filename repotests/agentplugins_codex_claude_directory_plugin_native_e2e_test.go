@@ -167,6 +167,11 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	env := append(f.env(filepath.Dir(codexBin)), "CLAUDE_CONFIG_DIR="+claudeHome,
 		"DISABLE_AUTOUPDATER=1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1")
 	statePath := filepath.Join(f.Root, "installer-state", "state-v2.json")
+	foreignCodex := filepath.Join(f.CodexHome, "skills", "foreign-site-plugin", "SKILL.md")
+	foreignClaude := filepath.Join(claudeHome, "skills", "foreign-site-plugin", "SKILL.md")
+	nativeWrite(t, foreignCodex, []byte("Foreign Codex user Skill -- must not change\n"), 0600)
+	nativeWrite(t, foreignClaude, []byte("Foreign Claude user Skill -- must not change\n"), 0600)
+	codexForeignSHA, claudeForeignSHA := nativeSHA(t, foreignCodex), nativeSHA(t, foreignClaude)
 	// This is the Directory card's actual command, with only non-interactive
 	// consent and JSON output added for a disposable CI host.
 	args := []string{"add", directorySitePlugin, "--target", "claude,codex", "--no-ui", "--yes"}
@@ -204,7 +209,7 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 		if present {
 			details := claudePluginDetails(t, claude, claudeBin, directorySitePlugin+"@skills-dir", label+"-details")
 			if !strings.Contains(details, directorySiteSkill) || !strings.Contains(details, "Skills (1)") ||
-				!strings.Contains(details, "context7") {
+				!strings.Contains(details, "MCP servers (1)") {
 				t.Fatalf("Claude Directory Skill/MCP not discovered: %s", details)
 			}
 		}
@@ -239,5 +244,8 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 		if _, err := os.Lstat(binding.TargetLocator); !os.IsNotExist(err) {
 			t.Fatalf("removed Directory plugin still has managed artifact: %v", err)
 		}
+	}
+	if nativeSHA(t, foreignCodex) != codexForeignSHA || nativeSHA(t, foreignClaude) != claudeForeignSHA {
+		t.Fatal("site Directory lifecycle altered a foreign user Skill in either native profile")
 	}
 }
