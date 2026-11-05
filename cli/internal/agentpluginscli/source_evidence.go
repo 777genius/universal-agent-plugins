@@ -109,7 +109,25 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 	}
 	compatibility := make(map[string]domain.CatalogCompatibility, len(policy.Targets))
 	current := currentDirectoryEvidence(bundle.Snapshot.Sequence, bundle.Snapshot.Evidence, ids, schema)
+
+	if schema == 1 && scope == domain.ScopeProject {
+		// V1 published runtime/materialization claims were observed for User,
+		// not this Project. Retain only package-wide schema verification.
+		scoped := make([]domain.DirectoryEvidence, 0, len(current))
+		for _, evidence := range current {
+			if evidence.Level == "schema" {
+				scoped = append(scoped, evidence)
+			}
+		}
+		current = scoped
+	}
 	for _, target := range policy.Targets {
+		if schema == 1 && scope == domain.ScopeProject {
+			definition, ok := domain.ClientDefinitionFor(target.Client)
+			if !ok || !definition.ProjectPolicy.Valid() {
+				continue // The v1 User grant does not qualify a Project adapter.
+			}
+		}
 		if schema == 2 && target.Scope != scope {
 			continue // Never let another scope overwrite the selected client report.
 		}
