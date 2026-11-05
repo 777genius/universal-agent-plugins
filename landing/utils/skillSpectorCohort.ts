@@ -114,6 +114,16 @@ function validateRecords(release: Json, pointer: Json): VerifiedCohort {
     'expires_at', 'candidate', 'signed_sources']);
   const candidate = obj(release.candidate);
   const signed = obj(release.signed_sources);
+  exact(signed, ['schema_version', 'kind', 'base_report_commit', 'base_manifest_digest',
+    'community', 'directory', 'source_pins_verified_against_fresh_signed_feeds',
+    'provider_listing_verified', 'candidate_scan_verified', 'publication_authorized', 'sources']);
+  for (const name of ['community', 'directory']) {
+    const identity = obj(signed[name]);
+    exact(identity, ['sequence', 'source_commit', 'snapshot_digest']);
+    if (!int(identity.sequence) || identity.sequence < 1 ||
+        !shaPattern.test(String(identity.source_commit)) ||
+        !digestPattern.test(String(identity.snapshot_digest))) invalid();
+  }
   const records = array(candidate.records).map(obj);
   const pins = array(signed.sources).map(obj);
   const comparisons = array(candidate.comparisons).map(obj);
@@ -127,6 +137,7 @@ function validateRecords(release: Json, pointer: Json): VerifiedCohort {
       candidate.profile_policy_digest !== expectedProfile.digest ||
       candidate.base_report_commit !== pointer.report_commit ||
       !digestPattern.test(String(candidate.base_manifest_digest)) ||
+      signed.schema_version !== 1 ||
       signed.kind !== 'skillspector-signed-community-cohort-preflight' ||
       signed.source_pins_verified_against_fresh_signed_feeds !== true ||
       signed.publication_authorized !== false || signed.provider_listing_verified !== false ||
@@ -152,7 +163,10 @@ function validateRecords(release: Json, pointer: Json): VerifiedCohort {
         !same(raw.scanner, expectedScanner) || !same(raw.profile, expectedProfile) ||
         source.repository !== expected[0] || source.revision !== expected[1] ||
         source.path !== expected[2] || !digestPattern.test(String(source.content_digest)) ||
-        pin.id !== raw.id || pin.repository !== source.repository ||
+        pin.id !== raw.id ||
+        !/^community:[0-9a-f]{32}$/.test(String(pin.signed_package_id)) ||
+        !String(raw.id).startsWith('plugin:' + String(pin.signed_package_id) + '/') ||
+        pin.repository !== source.repository ||
         pin.revision !== source.revision || pin.path !== source.path ||
         pin.content_digest !== source.content_digest || pin.plugin_path !== raw.plugin_path ||
         !digestPattern.test(String(pin.signed_package_tree_digest)) ||
@@ -160,6 +174,7 @@ function validateRecords(release: Json, pointer: Json): VerifiedCohort {
         comp.id !== raw.id || comp.source_digest !== source.content_digest ||
         comp.candidate_exit_code !== execution.exit_code ||
         comp.candidate_findings !== raw.finding_count ||
+        !int(comp.old_findings) || typeof comp.findings_changed !== 'boolean' ||
         !int(raw.finding_count) || !int(raw.raw_finding_count) ||
         !int(raw.finding_group_count) || !Array.isArray(raw.findings) ||
         raw.finding_group_count !== raw.findings.length ||
