@@ -74,6 +74,9 @@ async function fixture() {
     source_commit: 'e'.repeat(40), generated_at: '2026-11-05T18:00:00Z',
     expires_at: '2026-11-06T18:00:00Z', candidate,
     signed_sources: {
+      schema_version: 1,
+      community: { sequence: 10, source_commit: 'a'.repeat(40), snapshot_digest: 'sha256:' + 'e'.repeat(64) },
+      directory: { sequence: 15, source_commit: 'b'.repeat(40), snapshot_digest: 'sha256:' + 'f'.repeat(64) },
       kind: 'skillspector-signed-community-cohort-preflight',
       source_pins_verified_against_fresh_signed_feeds: true,
       publication_authorized: false, candidate_scan_verified: false, provider_listing_verified: false,
