@@ -32,6 +32,10 @@ setup on another computer or with your team.
 [Browse plugins](https://universal-agent-plugins.com/plugins/) ·
 [Build a plugin](#build-plugins)
 
+<p align="center">
+<a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
+</p>
+
 ## Contents
 
 - [Use plugins](#use-plugins)
@@ -50,8 +54,6 @@ setup on another computer or with your team.
 - [Build plugins](#build-plugins)
 - [Contributing](#contributing)
 - [License](#license)
-
-<a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
 
 ## Use plugins
 

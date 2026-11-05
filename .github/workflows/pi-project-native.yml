@@ -1,16 +1,18 @@
-name: Pi Project Native Runtime
+name: Pi Global and Project Native Runtime
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - '.github/workflows/pi-project-native.yml'
       - 'scripts/pi_project_native_e2e.py'
       - 'scripts/pi_project_components_native_e2e.py'
       - 'scripts/pi_local_model_fixture.py'
       - 'install/integrationctl/agentplugins/clients/pi/**'
+      - 'install/integrationctl/agentplugins/clients/shared/**'
+      - 'install/integrationctl/agentplugins/adapters/nativeconfig/**'
       - 'install/integrationctl/agentplugins/clients/all/registry.go'
-      - 'install/integrationctl/agentplugins/domain/clients.go'
+      - 'install/integrationctl/agentplugins/domain/clients_catalog.go'
       - 'install/integrationctl/agentplugins/domain/project_policy.go'
       - 'install/integrationctl/agentplugins/installer/pi_project_lifecycle_test.go'
       - 'install/integrationctl/agentplugins/installer/pi_project_components_facade_test.go'
@@ -28,8 +30,8 @@ concurrency:
 
 jobs:
   pi-project-native:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    name: pi v1.4.0 project lifecycle (${{ matrix.target }})
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') }}
+    name: pi v1.4.0 global/project lifecycle (${{ matrix.target }})
     strategy:
       fail-fast: false
       matrix:
@@ -60,7 +62,7 @@ jobs:
           cache: false
       - name: Verify scoped Pi adapter and real UAP facade before native runtime
         working-directory: install/integrationctl/agentplugins
-        run: go test -count=1 -timeout=180s ./clients/pi ./clients/all ./planner ./installer -run 'TestPi(Project|Public|Bootstrap)'
+        run: go test -count=1 -timeout=180s ./clients/pi ./clients/all ./planner ./installer -run 'TestPi(Project|Public|Bootstrap|User|Refine|Scoped)'
       - name: Verify Python runner syntax without writing into source checkout
         shell: bash
         run: |
@@ -90,7 +92,7 @@ jobs:
           path: ${{ runner.temp }}/pi-project-native-evidence/
           retention-days: 14
           if-no-files-found: error
-      - name: Run real Pi project Skills discovery and MCP stdio handshake
+      - name: Run real Pi global/project Skills and stdio/HTTP MCP initialize, list and call
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

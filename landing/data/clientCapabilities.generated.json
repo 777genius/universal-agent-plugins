@@ -213,11 +213,11 @@
     "id": "pi",
     "display_name": "Pi",
     "package_mode": "native",
-    "skill_support": "unsupported",
+    "skill_support": "native",
     "mcp_transports": {
       "sse": "unsupported",
-      "stdio": "unsupported",
-      "streamable-http": "unsupported"
+      "stdio": "native",
+      "streamable-http": "native"
     },
     "app_support": "unsupported",
     "extension_support": "native",
