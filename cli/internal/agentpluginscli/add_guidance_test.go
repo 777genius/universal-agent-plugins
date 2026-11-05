@@ -124,6 +124,26 @@ func TestAddRecoveryPropagatesWriterFailure(t *testing.T) {
 	}
 }
 
+func TestVerifiedOtherClientsDoNotExposePrivateLocalActions(t *testing.T) {
+	result := usecase.AddResult{
+		Mutated: true,
+		Plan: domain.DeliveryPlan{ClientID: domain.ClientCursor},
+		Activation: domain.ActivationOutcome{
+			Activation: domain.ActivationActive,
+			Verification: domain.VerificationInstalled,
+			Authentication: domain.AuthenticationNotRequired,
+			LocalActions: []string{"private unrelated profile: /private/foreign-config"},
+		},
+	}
+	var out bytes.Buffer
+	if err := renderAddResult(&out, "human", domain.PackageEnvelope{}, result, false); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "/private/foreign-config") || strings.Contains(out.String(), "Next (optional)") {
+		t.Fatalf("unrelated native client output changed: %q", out.String())
+	}
+}
+
 func TestSuccessfulNativeAddPrintsOptionalLocalHandoffWithoutPublicPathLeak(t *testing.T) {
 	for _, mutated := range []bool{false, true} {
 		t.Run(fmt.Sprint("mutated=", mutated), func(t *testing.T) {

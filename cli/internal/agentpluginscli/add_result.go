@@ -123,7 +123,7 @@ func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 // as opening a desktop plugin. Keep these outside public JSON and never turn
 // them into a required or unverified installation phase.
 func renderVerifiedLocalNextAction(writer io.Writer, result usecase.AddResult) error {
-	if len(result.Activation.LocalActions) == 0 {
+	if result.Plan.ClientID != domain.ClientCodex || len(result.Activation.LocalActions) == 0 {
 		return nil
 	}
 	_, err := fmt.Fprintf(writer, "%s: %s\n",
