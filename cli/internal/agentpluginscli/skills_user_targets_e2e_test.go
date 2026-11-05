@@ -10,6 +10,17 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
+// Advisory environment.lock records a short-lived concurrency lease. Its
+// timestamps and body may change during an idempotent command, without any
+// change to durable manifests, pins, state or installed native artifacts.
+// Assert the complete persistent tree, excluding only that lease file.
+func savedSkillsDurableTree(t *testing.T, root string) map[string]savedJourneyFile {
+	t.Helper()
+	files := savedJourneyTree(t, root)
+	delete(files, "environment.lock")
+	return files
+}
+
 // A raw Agent Skill is a different source type from a plugin package. Exercise
 // both user targets through the existing public dependency/installer seams
 // without requiring credentials or executing downloaded Skill instructions.
@@ -99,9 +110,9 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 
 	// In the public CLI, global is the default user scope. Replaying with an
 	// explicit --scope user must preserve the same exact physical state.
-	before := savedJourneyTree(t, j.cli.app.DependenciesRoot)
+	before := savedSkillsDurableTree(t, j.cli.app.DependenciesRoot)
 	j.run(t, "deps", "sync", "--locked", "--yes", "--scope", "user", "--format", "json")
-	if after := savedJourneyTree(t, j.cli.app.DependenciesRoot); !reflect.DeepEqual(before, after) {
+	if after := savedSkillsDurableTree(t, j.cli.app.DependenciesRoot); !reflect.DeepEqual(before, after) {
 		t.Fatalf("explicit user replay changed locked environment: %s", savedJourneyDifferences(before, after))
 	}
 	for _, target := range []string{"codex", "claude"} {
@@ -116,7 +127,7 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 	if _, _, err := j.cli.execute(false, "skills", "add", "invalid.example/skills", "--scope", "global", "--skill", "pdf", "--target", "codex", "--yes"); err == nil {
 		t.Fatal("unknown global scope silently mapped to a user install")
 	}
-	if after := savedJourneyTree(t, j.cli.app.DependenciesRoot); !reflect.DeepEqual(before, after) {
+	if after := savedSkillsDurableTree(t, j.cli.app.DependenciesRoot); !reflect.DeepEqual(before, after) {
 		t.Fatal("invalid scope request changed user state")
 	}
 
@@ -161,9 +172,9 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 			t.Fatalf("%s did not install updated raw Skill resources: %q %v", target, body, err)
 		}
 	}
-	updatedBytes := savedJourneyTree(t, j.cli.app.DependenciesRoot)
+	updatedBytes := savedSkillsDurableTree(t, j.cli.app.DependenciesRoot)
 	j.run(t, "deps", "sync", "--locked", "--yes", "--scope", "user", "--format", "json")
-	if current := savedJourneyTree(t, j.cli.app.DependenciesRoot); !reflect.DeepEqual(updatedBytes, current) {
+	if current := savedSkillsDurableTree(t, j.cli.app.DependenciesRoot); !reflect.DeepEqual(updatedBytes, current) {
 		t.Fatalf("locked replay after two-target update rewrote user state: %s", savedJourneyDifferences(updatedBytes, current))
 	}
 

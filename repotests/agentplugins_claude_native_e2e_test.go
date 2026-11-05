@@ -384,18 +384,18 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	// evidence file instead of silently vanishing from an otherwise-complete-
 	// looking JSON document.
 	stages := map[string]claudeNativeStage{
-		"stdio_discovery":         {Status: "not_evaluated", Reason: "not reached"},
-		"install":                 {Status: "not_evaluated", Reason: "not reached"},
-		"skill_discovery":         {Status: "not_evaluated", Reason: "not reached"},
-		"mcp_transport_discovery": {Status: "not_evaluated", Reason: "not reached"},
-		"version_update":          {Status: "not_evaluated", Reason: "not reached"},
-		"same_version_refresh":    {Status: "not_evaluated", Reason: "not reached"},
-		"unchanged":               {Status: "not_evaluated", Reason: "not reached"},
-		"explicit_user_scope":    {Status: "not_evaluated", Reason: "not reached"},
-		"owned_repair":            {Status: "not_evaluated", Reason: "not reached"},
+		"stdio_discovery":                                  {Status: "not_evaluated", Reason: "not reached"},
+		"install":                                          {Status: "not_evaluated", Reason: "not reached"},
+		"skill_discovery":                                  {Status: "not_evaluated", Reason: "not reached"},
+		"mcp_transport_discovery":                          {Status: "not_evaluated", Reason: "not reached"},
+		"version_update":                                   {Status: "not_evaluated", Reason: "not reached"},
+		"same_version_refresh":                             {Status: "not_evaluated", Reason: "not reached"},
+		"unchanged":                                        {Status: "not_evaluated", Reason: "not reached"},
+		"explicit_user_scope":                              {Status: "not_evaluated", Reason: "not reached"},
+		"owned_repair":                                     {Status: "not_evaluated", Reason: "not reached"},
 		"foreign_content_inside_managed_directory_blocked": {Status: "not_evaluated", Reason: "not reached"},
-		"remove":        {Status: "not_evaluated", Reason: "not reached"},
-		"repeat_remove": {Status: "not_evaluated", Reason: "not reached"},
+		"remove":                                           {Status: "not_evaluated", Reason: "not reached"},
+		"repeat_remove":                                    {Status: "not_evaluated", Reason: "not reached"},
 	}
 	var measuredClientVersion string
 	defer func() {
