@@ -72,7 +72,7 @@ func TestProjectRequiredChildColdRestoreAndScopedRemoval(t *testing.T) {
 	dependencies.WriteString("schema_version = 1\n")
 	for _, child := range children {
 		projectJourneyWrite(t, filepath.Join(transport.repo, child.alias, "plugin.json"), fmt.Sprintf(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"project-%s","version":"1.0.0"}`, child.alias))
-		projectJourneyWrite(t, filepath.Join(transport.repo, child.alias, "mcp.json"), fmt.Sprintf(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"%s":%s}}`, child.alias, child.server))
+		projectJourneyWrite(t, filepath.Join(transport.repo, child.alias, "mcp.json"), fmt.Sprintf(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{%q:%s}}`, child.alias, child.server))
 		fmt.Fprintf(&dependencies, "[dependencies.%s]\ngit = %q\nref = \"main\"\npath = %q\n", child.alias, transport.endpoint, child.alias)
 	}
 	projectJourneyWrite(t, filepath.Join(transport.repo, "uap.toml"), dependencies.String())
