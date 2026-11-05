@@ -289,6 +289,7 @@ test('reviewed Directory card offers native-qualified Context7 commands for Code
   assert.ok(context7, 'published Directory fixture must contain Context7');
   const selected = resolveDistribution(context7, ['claude', 'codex']).distribution;
   assert.ok(selected, 'both native agents must share an eligible signed Directory distribution');
+  assert.equal(selected.id, 'upstash/context7', 'site must choose the upstream distribution proven by native E2E');
   for (const client of ['claude', 'codex']) {
     assert.ok(selected.targets.some((target) => target.client === client && target.scopes.includes('user')));
   }

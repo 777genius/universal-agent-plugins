@@ -80,7 +80,7 @@ test('community source labels link to the exact GitHub source', async ({ page })
 });
 
 
-test('reviewed Context7 website command installs the full Agent Plugin into Codex and Claude', async ({ page }) => {
+test('reviewed Context7 picker copies the native-qualified Codex and Claude install command', async ({ page }) => {
   await page.goto('./plugins/');
   await waitForDiscovery(page);
   await page.getByRole('searchbox', { name: 'Search plugins' }).fill('context7');

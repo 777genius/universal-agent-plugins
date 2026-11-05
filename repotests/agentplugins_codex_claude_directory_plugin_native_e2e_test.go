@@ -30,7 +30,9 @@ func directorySiteBindings(t *testing.T, path, codexHome, claudeHome string) map
 	}
 	install := state.Installations[0]
 	if install.DeclaredName != directorySitePlugin || install.Directory == nil ||
+		install.OriginMode != domain.OriginModeDirectory ||
 		install.Directory.ProductID != directorySitePlugin || install.Directory.DistributionID != directorySiteDistribution ||
+		install.Directory.DesiredReleaseSequence == 0 ||
 		install.Source.ResolvedRevision != directorySiteRevision || len(install.Clients) != 2 {
 		t.Fatalf("site alias did not resolve signed Context7 distribution: %+v", install)
 	}
@@ -38,7 +40,7 @@ func directorySiteBindings(t *testing.T, path, codexHome, claudeHome string) map
 	for _, receipt := range state.EnvironmentReceipts {
 		binding, ok := install.Clients[receipt.ClientBindingID]
 		if !ok || receipt.InstallationID != install.InstallationID ||
-			binding.ClientID != receipt.ClientID || binding.Scope != "user" ||
+			binding.ClientBindingID != receipt.ClientBindingID || binding.ClientID != receipt.ClientID || binding.Scope != "user" ||
 			binding.Verification != domain.VerificationInstalled || binding.TargetLocator == "" || binding.PhysicalArtifact == "" {
 			t.Fatalf("Directory receipt does not match installed native binding: %+v %+v", receipt, binding)
 		}
@@ -48,7 +50,8 @@ func directorySiteBindings(t *testing.T, path, codexHome, claudeHome string) map
 				t.Fatalf("Codex Directory profile differs from selected HOME: %+v", binding)
 			}
 		case "claude":
-			if filepath.Dir(binding.TargetLocator) != filepath.Join(claudeHome, "skills") {
+			if filepath.Dir(binding.TargetLocator) != filepath.Join(claudeHome, "skills") ||
+				(binding.NativeProfileRoot != "" && binding.NativeProfileRoot != claudeHome) {
 				t.Fatalf("Claude Directory profile differs from selected HOME: %+v", binding)
 			}
 		default:
