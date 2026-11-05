@@ -234,4 +234,3 @@ func TestKimiVersionProbeAcceptsTrailingTempRootWithoutProfileWrite(t *testing.T
 		t.Fatalf("selected profile modified: err=%v entries=%v", err, entries)
 	}
 }
-
