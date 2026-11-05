@@ -97,6 +97,7 @@ func TestDirectoryV1ProjectPlacementNeverClaimsUserRuntimeAsProjectRuntime(t *te
 		t.Fatal(err)
 	}
 	policy := bundle.Snapshot.Distributions[0].ReleasePolicies[1]
+	policy.Targets[0].Authentication = domain.AuthenticationRequirementNotRequired
 	environment := directoryEvidenceEnvironment{
 		InstallerVersion: request.InstallerVersion, ClientVersions: map[domain.ClientID]string{},
 		DependencyIdentity: map[domain.ClientID]string{},
@@ -110,7 +111,8 @@ func TestDirectoryV1ProjectPlacementNeverClaimsUserRuntimeAsProjectRuntime(t *te
 		t.Fatalf("lost v1 source authority: %+v", catalog)
 	}
 	proof, ok := catalog.Compatibility[string(domain.ClientCursor)]
-	if !ok || proof.Verification == "tested" || len(proof.Evidence) != 0 {
+	if !ok || proof.Verification == "tested" || len(proof.Evidence) != 0 ||
+		proof.Authentication != domain.AuthenticationRequirementUnknown {
 		t.Fatalf("reused User runtime claims for Project: %+v", proof)
 	}
 	for _, proof := range catalog.CurrentEvidence {

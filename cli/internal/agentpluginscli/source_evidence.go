@@ -141,7 +141,13 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 				applicable = append(applicable, evidence)
 			}
 		}
-		entry := domain.CatalogCompatibility{Package: packageMode, Verification: directoryVerification(applicable), Authentication: target.Authentication, Evidence: applicable, EvidenceOutcomes: directoryEvidenceOutcomes(applicable)}
+		authentication := target.Authentication
+		if schema == 1 && scope == domain.ScopeProject {
+			// A v1 User-only policy does not establish the local Project
+			// authentication requirement. Treat it as unknown until verified.
+			authentication = domain.AuthenticationRequirementUnknown
+		}
+		entry := domain.CatalogCompatibility{Package: packageMode, Verification: directoryVerification(applicable), Authentication: authentication, Evidence: applicable, EvidenceOutcomes: directoryEvidenceOutcomes(applicable)}
 		appBinding, err := directoryCatalogAppBinding(loaded.envelope, target.AppBinding)
 		if err != nil {
 			return err
