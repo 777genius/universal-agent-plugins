@@ -462,6 +462,7 @@ def main():
         suffix = ".exe" if os.name == "nt" else ""
         installer, probe, tests = [binary_dir / (p + suffix) for p in ("agentplugins", "native-probe", "repotests")]
         commands = [(["go", "build", "-trimpath", "-o", str(probe), "./repotests/testdata/agentplugins_native_probe"], source), (["go", "test", "-c", "-o", str(tests), "./repotests"], source)]
+        source_directory_version = None
         if args.release_state == "draft":
             identity["helper_sha256"] = draft.helper_hashes(source)
             tarball, frozen_assets, verified, identity["installer_release"] = prepared
@@ -469,7 +470,13 @@ def main():
         elif args.release_tag:
             installer, identity["installer_release"] = prepared if prepared is not None else provision_release(source, binary_dir, args.target, args.release_tag, args.release_commit, args.release_repo)
         else:
-            commands.insert(0, (["go", "build", "-trimpath", "-o", str(installer), "./cmd/agentplugins"], source / "cli"))
+            build = ["go", "build", "-trimpath"]
+            if args.client == "codex" and args.project_components and args.release_state == "public":
+                # Match the existing source-preview version form. Preserve the
+                # signed Directory's minimum-version check, not a test override.
+                source_directory_version = "0.1.95+source." + identity["commit"][:12]
+                build.append("-ldflags=-X=main.version=" + source_directory_version)
+            commands.insert(0, (build + ["-o", str(installer), "./cmd/agentplugins"], source / "cli"))
         project = scratch / "project"
         project.mkdir()
         evidence_root = scratch / "evidence"
@@ -518,6 +525,12 @@ def main():
             installer, identity["packaged_acquisition"] = draft.bootstrap(tarball, frozen_assets, verified, args.target, scratch, env)
             env["AGENTPLUGINS_INSTALLER_BIN"] = str(installer)
         identity["installer_sha256"] = hashlib.sha256(installer.read_bytes()).hexdigest()
+        if source_directory_version is not None:
+            measured = subprocess.check_output([str(installer), "version"], cwd=project, env=env,
+                                               encoding="utf-8", errors="strict", timeout=30).strip()
+            identity["installer_version_measured"] = measured
+            if measured != "agentplugins " + source_directory_version:
+                raise RuntimeError("current-source Directory installer build version mismatch")
         if args.release_tag:
             release = identity["installer_release"]
             env["AGENTPLUGINS_INSTALLER_COMMIT"] = release["commit"]
