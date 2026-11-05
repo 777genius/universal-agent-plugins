@@ -323,10 +323,14 @@ jobs:
                   (source_dir / "plugin.json").write_text(json.dumps({
                       "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
                       "name": "uap-e2e-global", "version": "1.0.0"}))
+                  # The portable MCP loader accepts bare commands or ./plugin-relative
+                  # commands, never sys.executable's absolute host path.
+                  if shutil.which("python3", path=cli_env["PATH"]) is None:
+                      raise RuntimeError("D0 python3 is unavailable on the CLI-selected PATH")
                   (source_dir / "mcp.json").write_text(json.dumps({
                       "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
                       "mcpServers": {
-                          "uap_e2e_stdio": {"type": "stdio", "command": sys.executable,
+                          "uap_e2e_stdio": {"type": "stdio", "command": "python3",
                                             "args": [str(service_path), "stdio"],
                                             "env": {"UAP_D0_TRACE": str(trace)}},
                           "uap_e2e_http": {"type": "streamable-http",
