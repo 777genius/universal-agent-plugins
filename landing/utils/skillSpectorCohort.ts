@@ -141,8 +141,8 @@ function validateRecords(release: Json, pointer: Json): VerifiedCohort {
   if (pinned.size !== 9 || compared.size !== 9) invalid();
   for (const raw of records) {
     const expected = sourcePins.get(String(raw.id));
-    const pin = pinned.get(raw.id);
-    const comp = compared.get(raw.id);
+    const pin = pinned.get(String(raw.id));
+    const comp = compared.get(String(raw.id));
     const source = obj(raw.source);
     const coverage = obj(raw.coverage);
     const execution = obj(raw.execution);
