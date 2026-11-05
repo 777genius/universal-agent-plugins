@@ -82,6 +82,84 @@ func TestWindsurfLifecycleAddUpdateRepairRemoveInIsolatedHome(t *testing.T) {
 	}
 }
 
+// A previously owned Cascade user binding must stay on its original codec/root
+// when a later process happens to select the exact genuine Devin CLI profile.
+// This exercises the public use case, planner, observer and removal lifecycle.
+func TestWindsurfLegacyUserReceiptSurvivesSelectedDevinUpdateRepairRemove(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
+	home := t.TempDir()
+	legacyRoot := filepath.Join(home, ".codeium", "windsurf")
+	legacyConfig := filepath.Join(legacyRoot, "mcp_config.json")
+	globalRoot := filepath.Join(home, ".config", "devin")
+	globalConfig := filepath.Join(globalRoot, "mcp_config.json")
+	for path, body := range map[string]string{
+		legacyConfig: `{"mcpServers":{"foreign":{"url":"https://legacy-foreign.example/mcp"}}}`,
+		globalConfig: `{"mcpServers":{"global-foreign":{"url":"https://global-foreign.example/mcp"}}}`,
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	globalBefore, err := os.ReadFile(globalConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := domain.DetectedClient{
+		ClientID: domain.ClientWindsurf, Status: domain.DetectionDetected, ConfigRoot: legacyRoot,
+	}
+	add := windsurfUsecaseInput(t, legacy, "one")
+	add.Confirmed = true
+	installed, err := service.Add(context.Background(), add)
+	if err != nil || installed.Activation.Verification != domain.VerificationInstalled {
+		t.Fatalf("seed legacy receipt: %+v, %v", installed, err)
+	}
+	selected := legacy
+	selected.ExecutablePath = filepath.Join(home, "bin", "devin")
+	selected.Version = "3000.11.205"
+	selected.NativeConfigRoot = globalRoot
+	update := windsurfUsecaseInput(t, selected, "two")
+	update.Confirmed = true
+	update.OperationID = "legacy-under-selected-devin-update"
+	updated, err := service.Update(context.Background(), update)
+	if err != nil || !updated.Mutated || updated.Activation.Verification != domain.VerificationInstalled {
+		t.Fatalf("selected Devin broke recorded Cascade update: %+v, %v", updated, err)
+	}
+	assertUsecaseWindsurfConfig(t, legacyConfig, "two", true)
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalBinding := onlyBinding(state.Installations[0])
+	if originalBinding.NativeProfileRoot == globalRoot {
+		t.Fatal("legacy Cascade user receipt was silently rebound to Devin")
+	}
+	if err := os.WriteFile(filepath.Join(updated.Plan.ActivePath, "damage"), []byte("repair"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	update.OperationID = "legacy-under-selected-devin-repair"
+	repaired, err := service.Repair(context.Background(), update)
+	if err != nil || !repaired.Mutated || repaired.Activation.Verification != domain.VerificationInstalled {
+		t.Fatalf("selected Devin broke recorded Cascade repair: %+v, %v", repaired, err)
+	}
+	removed, err := service.Remove(context.Background(), RemoveInput{
+		Selector: installed.InstallationID, Client: selected, Scope: domain.ScopeUser,
+		Confirmed: true, OperationID: "legacy-under-selected-devin-remove",
+	})
+	if err != nil || !removed.Mutated {
+		t.Fatalf("selected Devin broke recorded Cascade removal: %+v, %v", removed, err)
+	}
+	assertUsecaseWindsurfConfig(t, legacyConfig, "", true)
+	globalAfter, err := os.ReadFile(globalConfig)
+	if err != nil || string(globalBefore) != string(globalAfter) {
+		t.Fatalf("legacy replay mutated unrelated selected Devin Global config: %v", err)
+	}
+}
+
 func TestWindsurfLifecycleRepairsWipedNativeMCP(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
