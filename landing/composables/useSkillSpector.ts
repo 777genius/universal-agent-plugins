@@ -29,6 +29,11 @@ export function useSkillSpector(subject: MaybeRefOrGetter<SkillSpectorSubject | 
   const recoverable = ref(false);
   const mounted = ref(false);
   let generation = 0;
+  let cohortExpiryTimer: ReturnType<typeof setTimeout> | undefined;
+  const clearCohortExpiry = () => {
+    if (cohortExpiryTimer !== undefined) clearTimeout(cohortExpiryTimer);
+    cohortExpiryTimer = undefined;
+  };
   const getClient = () => sharedSkillSpectorClient(app, {
     v1: String(config.public.skillspectorReportsUrl),
     v2: String(config.public.skillspectorManifestUrl),
@@ -36,6 +41,7 @@ export function useSkillSpector(subject: MaybeRefOrGetter<SkillSpectorSubject | 
     cohort: String(config.public.skillspectorCohortLatestUrl),
   });
   const load = async (repository: string, current: number, retryFailed = false) => {
+    clearCohortExpiry();
     report.value = undefined;
     recoverable.value = false;
     status.value = 'loading';
@@ -47,6 +53,17 @@ export function useSkillSpector(subject: MaybeRefOrGetter<SkillSpectorSubject | 
       if (current === generation) {
         report.value = result;
         status.value = 'ready';
+        // A signed Complete must stop being displayed when its 24-hour
+        // authenticated snapshot expires, even if this tab stays open.
+        const expiries = result.records
+          .filter((record) => record.signed_cohort_verified === true)
+          .map((record) => record.signed_cohort_expires_at)
+          .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+        if (expiries.length) {
+          cohortExpiryTimer = setTimeout(() => {
+            if (mounted && current === generation) void load(repository, ++generation);
+          }, Math.max(0, Math.min(...expiries) - Date.now() + 100));
+        }
       }
     } catch (error) {
       if (current === generation) {
@@ -69,6 +86,7 @@ export function useSkillSpector(subject: MaybeRefOrGetter<SkillSpectorSubject | 
     ([ready, repository]: [boolean, string | undefined]) => {
       if (!ready) return;
       const current = ++generation;
+      clearCohortExpiry();
       if (!repository) {
         report.value = undefined;
         recoverable.value = false;
@@ -81,6 +99,7 @@ export function useSkillSpector(subject: MaybeRefOrGetter<SkillSpectorSubject | 
   );
   onBeforeUnmount(() => {
     generation++;
+    clearCohortExpiry();
   });
   return { report, status, recoverable, retry };
 }

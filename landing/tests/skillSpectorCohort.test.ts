@@ -238,6 +238,7 @@ test('overlay preserves unrelated old Partial and fails closed on digest or sele
   const improved = applyVerifiedSkillSpectorCohort(report, cohort.manifestDigest, cohort);
   assert.equal(improved.records[0]!.status, 'complete');
   assert.equal(improved.records[0]!.signed_cohort_verified, true);
+  assert.equal(improved.records[0]!.signed_cohort_expires_at, cohort.expiresAt);
   assert.equal(improved.records[0]!.retry?.disposition, 'none');
   assert.equal(improved.records[0]!.finding_count, 1);
   assert.equal(improved.records[1]!.status, 'partial');
