@@ -56,6 +56,7 @@ jobs:
         continue-on-error: true
         env:
           TARGET: ${{ matrix.target }}
+          KIND: ${{ matrix.kind }}
         shell: bash
         run: |
           set -euo pipefail
@@ -63,7 +64,17 @@ jobs:
           # Runner toolchain must precede any vendor-controlled executable.
           export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.local/bin"
           case "$TARGET" in
-            cursor) URL="https://downloads.cursor.com/production/25b52e7d03ebf2d5608914158e119f7992432a34/linux/x64/deb/amd64/deb/cursor_3.28.7_amd64.deb"; BIN="cursor" ;;
+            cursor)
+              if [[ "$KIND" == skill ]]; then
+                # Homebrew/homebrew-cask Casks/c/cursor-cli.rb @ 5815fd3716b83066412887902c6dd4bf92e4d7ad
+                URL="https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/x64/agent-cli-package.tar.gz"
+                BIN="cursor-agent"
+              else
+                # User-scope Plugins require the editor; its .deb has no reviewed digest.
+                URL="https://downloads.cursor.com/production/25b52e7d03ebf2d5608914158e119f7992432a34/linux/x64/deb/amd64/deb/cursor_3.28.7_amd64.deb"
+                BIN="cursor"
+              fi
+              ;;
             kiro) URL="https://desktop-release.q.us-east-1.amazonaws.com/3.0.0/kirocli-universal-darwin.zip"; BIN="kiro-cli" ;;
             windsurf) URL="https://cli.devin.ai/install.sh"; BIN="devin" ;;
             grok) URL="https://x.ai/cli/install.sh"; BIN="grok" ;;
@@ -81,7 +92,13 @@ jobs:
           # BUG-012: download, fingerprint, and preserve proposed vendor bytes;
           # never execute without a separately reviewed immutable digest pin.
           case "$TARGET" in
-            cursor) SHA256="" ;; # Needs official release digest review
+            cursor)
+              if [[ "$KIND" == skill ]]; then
+                SHA256="85296944e4600a83c4b764f578d1502bf9c416db200d33a593e8f3ecabfdc294"
+              else
+                SHA256="" # No independent digest for the editor .deb; fail closed.
+              fi
+              ;;
             vscode) SHA256="" ;; # Mutable latest URL must first be pinned
             kiro) SHA256="0a8f067c4fe6a23a231aa3a18e3e4332120ef9ed3d2d7b6eea907beb8b4cdd8b" ;; # Homebrew/homebrew-cask Casks/k/kiro-cli.rb @ 7191fc89
             windsurf) SHA256="" ;; # Needs official installer digest review
@@ -94,7 +111,9 @@ jobs:
               shasum -a 256 "$@" # macOS runner
             fi
           }
-          if [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
+          if [[ "$TARGET" == cursor && "$KIND" == skill ]]; then
+            artifact="$RUNNER_TEMP/cursor-agent.tar.gz"
+          elif [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
             artifact="$RUNNER_TEMP/$TARGET.deb"
           elif [[ "$TARGET" == kiro ]]; then
             artifact="$RUNNER_TEMP/kirocli-universal-darwin.zip"
@@ -109,7 +128,20 @@ jobs:
             exit 3
           fi
           printf '%s  %s\n' "$SHA256" "$artifact" | sha256_file -c -
-          if [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
+          if [[ "$TARGET" == cursor && "$KIND" == skill ]]; then
+            mkdir -p "$RUNNER_TEMP/vendor-root"
+            # Python's data filter rejects archive entries or links escaping this root.
+            # Ubuntu 24.04 has Python 3.12. Never run a downloaded shell installer.
+            python3 - "$artifact" "$RUNNER_TEMP/vendor-root" <<'PY'
+          import sys
+          import tarfile
+          with tarfile.open(sys.argv[1], "r:gz") as archive:
+              archive.extractall(path=sys.argv[2], filter="data")
+          PY
+            executable="$RUNNER_TEMP/vendor-root/dist-package/cursor-agent"
+            test -f "$executable" && test -x "$executable" && test ! -L "$executable"
+            ln -s "$executable" "$HOME/.local/bin/cursor-agent"
+          elif [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
             mkdir -p "$RUNNER_TEMP/vendor-root"
             dpkg-deb --extract "$artifact" "$RUNNER_TEMP/vendor-root"
             export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
@@ -127,7 +159,10 @@ jobs:
           fi
           hash -r
           command -v "$BIN" | tee "$RUNNER_TEMP/vendor-proof/executable.txt"
-          python3 -c 'import subprocess,sys;sys.exit(subprocess.run([sys.argv[1],"--version"], timeout=30).returncode)' "$BIN" \
+          # Version probes must never mutate the runner's ambient client profile.
+          probe_home="$(mktemp -d "$RUNNER_TEMP/vendor-probe.XXXXXX")"
+          HOME="$probe_home" USERPROFILE="$probe_home" XDG_CONFIG_HOME="$probe_home/config" \
+            python3 -c 'import subprocess,sys;sys.exit(subprocess.run([sys.argv[1],"--version"], timeout=30).returncode)' "$BIN" \
             | tee "$RUNNER_TEMP/vendor-proof/version.txt"
       - name: Build CLI under test (not the already-published binary)
         run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
