@@ -26,7 +26,8 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 		plan: Plan{InstallationID: id},
 	}
 	got := usecase.GroupResult{InstallationID: id, Phase: usecase.GroupPhaseCompleted, Mutated: true}
-	installed := domain.Installation{InstallationID: id, Clients: map[string]domain.ClientBinding{}}
+	installed := domain.Installation{InstallationID: id, Clients: map[string]domain.ClientBinding{},
+		DataReceipts: map[string]domain.DataReceipt{}}
 	for _, clientID := range []domain.ClientID{domain.ClientCodex, domain.ClientVSCode} {
 		config := filepath.Join(root, string(clientID), "config")
 		active := filepath.Join(root, "managed", string(clientID))
@@ -38,6 +39,9 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 			NativeRegistryRoot: config,
 		}
 		bindingID := domain.ComputeClientBindingID(id, string(clientID), string(domain.ScopeUser), active)
+		receiptID := "receipt-" + string(clientID)
+		installed.DataReceipts[receiptID] = domain.DataReceipt{DataReceiptID: receiptID, Scope: string(domain.ScopeUser),
+			Locator: filepath.Join(root, "plugin-data", string(clientID))}
 		prepared.req.Targets = append(prepared.req.Targets, ClientTarget{ClientID: string(clientID), ClientConfigRoot: config})
 		prepared.clients = append(prepared.clients, client)
 		prepared.plan.Targets = append(prepared.plan.Targets, PlanTarget{
@@ -59,7 +63,7 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 			GroupPhase: usecase.GroupTargetExternalCompleted,
 		})
 		installed.Clients[bindingID] = domain.ClientBinding{
-			ClientBindingID: bindingID, ClientID: string(clientID), Scope: string(domain.ScopeUser),
+			ClientBindingID: bindingID, DataReceiptID: receiptID, ClientID: string(clientID), Scope: string(domain.ScopeUser),
 			TargetLocator: active, PhysicalArtifact: plan.PhysicalArtifactID, NativeProfileRoot: config,
 			Materialization: domain.MaterializationMaterialized, Activation: outcome.Activation,
 			Authentication: outcome.Authentication, Policy: outcome.Policy, Verification: outcome.Verification,
@@ -147,6 +151,13 @@ func TestUserGroupPreparedUpdateRetainsFailClosedHandoff(t *testing.T) {
 		}},
 		{"missing binding", func(f *userPreparedUpdateFixture) {
 			delete(f.state.Installations[0].Clients, f.prepared.plan.Targets[1].BindingID)
+		}},
+		{"missing data receipt", func(f *userPreparedUpdateFixture) {
+			b := f.state.Installations[0].Clients[f.prepared.plan.Targets[1].BindingID]
+			delete(f.state.Installations[0].DataReceipts, b.DataReceiptID)
+		}},
+		{"stale data receipt", func(f *userPreparedUpdateFixture) {
+			f.changeBinding(domain.ClientVSCode, func(b *domain.ClientBinding) { b.DataReceiptID = "stale" })
 		}},
 		{"duplicate binding", func(f *userPreparedUpdateFixture) {
 			b := f.state.Installations[0].Clients[f.prepared.plan.Targets[1].BindingID]

@@ -99,6 +99,11 @@ func completedUserPreparedBinding(frozen PlanTarget, plan domain.DeliveryPlan, o
 		!completedProjectOutcome(plan, outcome) || !completedProjectLifecycle(binding, outcome) {
 		return false
 	}
+	receipt, foundReceipt := installation.DataReceipts[binding.DataReceiptID]
+	if binding.DataReceiptID == "" || !foundReceipt || receipt.DataReceiptID != binding.DataReceiptID ||
+		receipt.Scope != string(domain.ScopeUser) || receipt.Locator == "" {
+		return false
+	}
 	for key, other := range installation.Clients {
 		if other.ClientID == frozen.ClientID && key != frozen.BindingID {
 			return false
