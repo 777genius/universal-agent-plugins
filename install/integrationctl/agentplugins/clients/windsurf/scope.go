@@ -12,10 +12,10 @@ import (
 )
 
 var (
-	_ clients.ProjectTargetLayout  = (*Adapter)(nil)
-	_ clients.NativeRegistryLayout = (*Adapter)(nil)
+	_ clients.ProjectTargetLayout     = (*Adapter)(nil)
+	_ clients.NativeRegistryLayout    = (*Adapter)(nil)
 	_ clients.UserNativeRegistryLayout = (*Adapter)(nil)
-	_ clients.PlanPrecondition     = (*Adapter)(nil)
+	_ clients.PlanPrecondition        = (*Adapter)(nil)
 )
 
 func (*Adapter) UserNativeRegistry(client domain.DetectedClient) string {

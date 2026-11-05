@@ -167,3 +167,45 @@ func TestDevinGlobalOfflineRejectsForeignSkillAndWrongReceipts(t *testing.T) {
 		t.Fatal("legacy Cascade ownership was accepted as Devin Global ownership")
 	}
 }
+
+func TestDevinGlobalSelectedUserProfileIsNotLegacyOrProject(t *testing.T) {
+	client, plan, _ := globalOfflineFixture(t)
+	adapter := New()
+	if got := adapter.UserNativeRegistry(client); got != client.NativeConfigRoot {
+		t.Fatalf("selected global registry differs from original native root: %q", got)
+	}
+	if root, executable := adapter.NativeRegistry(clients.PlanInput{
+		TargetContext: plan.TargetContext, Client: client,
+	}); root != client.NativeConfigRoot || executable != "" {
+		t.Fatalf("selected user registry fell back to Cascade: %q, %q", root, executable)
+	}
+	if err := adapter.CheckPlanPrecondition(clients.PlanInput{
+		TargetContext: plan.TargetContext, Client: client,
+	}, &plan); err != nil {
+		t.Fatalf("exact genuine selected profile was refused: %v", err)
+	}
+	for _, mutate := range []func(*domain.DetectedClient, *domain.DeliveryPlan){
+		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "" },
+		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.Version = "3000.11.204" },
+		func(c *domain.DetectedClient, _ *domain.DeliveryPlan) { c.NativeConfigRoot += "-other" },
+		func(_ *domain.DetectedClient, p *domain.DeliveryPlan) { p.NativeRegistryRoot = client.ConfigRoot },
+		func(_ *domain.DetectedClient, p *domain.DeliveryPlan) { p.NativeRegistryExecutable = client.ExecutablePath },
+	} {
+		changed, changedPlan := client, plan
+		mutate(&changed, &changedPlan)
+		if err := adapter.CheckPlanPrecondition(clients.PlanInput{TargetContext: changedPlan.TargetContext, Client: changed}, &changedPlan); err == nil {
+			t.Fatalf("unqualified selected Devin Global identity was admitted: %+v", changed)
+		}
+	}
+	legacy := client
+	legacy.ExecutablePath = filepath.Join(filepath.Dir(client.ExecutablePath), "windsurf")
+	if got := adapter.UserNativeRegistry(legacy); got != client.ConfigRoot {
+		t.Fatalf("legacy Cascade root changed: %s", got)
+	}
+	if root, executable := adapter.NativeRegistry(clients.PlanInput{TargetContext: plan.TargetContext, Client: legacy}); root != legacy.ConfigRoot || executable != legacy.ExecutablePath {
+		t.Fatal("legacy user native registry changed")
+	}
+	if got := adapter.UserNativeRegistry(domain.DetectedClient{ClientID: domain.ClientWindsurf}); got != "" {
+		t.Fatal("missing selected host fabricated a global native root")
+	}
+}

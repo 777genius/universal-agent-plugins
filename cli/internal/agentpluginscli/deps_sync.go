@@ -198,7 +198,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 }
 
 func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context, actions []dependencyAction) error {
-	if adapter.app.scope() != domain.ScopeProject || adapter.opts.dryRun {
+	if (adapter.app.scope() != domain.ScopeProject && adapter.app.scope() != domain.ScopeUser) || adapter.opts.dryRun {
 		return nil
 	}
 	var targets []domain.ClientID

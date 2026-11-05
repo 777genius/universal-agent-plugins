@@ -310,3 +310,25 @@ func TestUserDevinVersionProbeRefusesIdentityDrift(t *testing.T) {
 		t.Fatalf("unbound user Devin version was accepted: error=%v", err)
 	}
 }
+
+func TestUserDevinSavedDependencyMutationProbesExactSelectedVersion(t *testing.T) {
+	devin := projectVersionClient()
+	devin.ClientID = domain.ClientWindsurf
+	devin.ExecutablePath = projectVersionFixturePath("bin", "devin")
+	devin.NativeConfigRoot = projectVersionFixturePath("original-xdg", "devin")
+	probed := devin
+	probed.Version = "3000.11.205"
+	detector := &projectVersionDetector{probed: []domain.DetectedClient{probed}}
+	adapter := &dependencyInstaller{
+		app: App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeUser, Detector: detector},
+		opts: &options{},
+		detected: map[domain.ClientID]domain.DetectedClient{domain.ClientWindsurf: devin},
+	}
+	if err := adapter.preflightProjectVersions(context.Background(), []dependencyAction{{ClientID: "windsurf", Action: environment.ActionInstall}}); err != nil {
+		t.Fatal(err)
+	}
+	if adapter.detected[domain.ClientWindsurf].Version != "3000.11.205" ||
+		!reflect.DeepEqual(detector.targets, [][]domain.ClientID{{domain.ClientWindsurf}}) || detector.broadCalls != 0 {
+		t.Fatal("user dependency mutation did not observe exact selected Devin version")
+	}
+}
