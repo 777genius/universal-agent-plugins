@@ -33,12 +33,12 @@ func TestDirectoryV2ProjectClosureRefusesBeforeAcquisition(t *testing.T) {
 
 			release := domain.DirectoryRelease{
 				Sequence: 1, PackageVersion: "1.0.0", ManifestName: "demo",
-				AgentPluginsSchema: domain.PluginSchemaV1,
-				PackageSource: domain.DirectorySource{Repository: "owner/demo", Revision: strings.Repeat("a", 40), Path: "plugin"},
+				AgentPluginsSchema:  domain.PluginSchemaV1,
+				PackageSource:       domain.DirectorySource{Repository: "owner/demo", Revision: strings.Repeat("a", 40), Path: "plugin"},
 				TreeDigestAlgorithm: domain.TreeDigestAlgorithm,
-				TreeDigest: "sha256:" + strings.Repeat("b", 64),
-				ManifestDigest: "sha256:" + strings.Repeat("d", 64),
-				Components: []string{"skills"}, PublishedAt: "2026-10-01T00:00:00Z",
+				TreeDigest:          "sha256:" + strings.Repeat("b", 64),
+				ManifestDigest:      "sha256:" + strings.Repeat("d", 64),
+				Components:          []string{"skills"}, PublishedAt: "2026-10-01T00:00:00Z",
 			}
 			policy := domain.DirectoryReleasePolicy{
 				ReleaseSequence: 1, Status: domain.ReleaseActive, MinimumInstallerVersion: "0.1.0",
@@ -54,7 +54,7 @@ func TestDirectoryV2ProjectClosureRefusesBeforeAcquisition(t *testing.T) {
 				SnapshotSchemaVersion: 2, Sequence: 1,
 				Products: []domain.DirectoryProduct{{
 					SchemaVersion: 1, ID: "demo", ManifestName: "demo", DefaultDistribution: "owner/demo",
-					Distributions: []string{"owner/demo"},
+					Distributions:       []string{"owner/demo"},
 					MinimumCapabilities: domain.DirectoryMinimumCapabilities{Skills: "optional", MCP: "optional"},
 				}},
 				Distributions: []domain.DirectoryDistribution{{
