@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -439,6 +441,16 @@ func validateV2EvidenceArtifacts(evidence domain.DirectoryEvidence) error {
 // absolute paths and path aliases before accepting a signed evidence claim.
 // Reuse the strict artifact-path contract without changing V1 parsing.
 func validV2EvidenceArtifact(artifact domain.DirectoryEvidenceArtifact) bool {
+	// Signed evidence locators cannot name a repository file through
+	// JSON-escaped control characters or invalid Unicode.
+	if !utf8.ValidString(artifact.Path) {
+		return false
+	}
+	for _, character := range artifact.Path {
+		if unicode.IsControl(character) {
+			return false
+		}
+	}
 	return repositoryPattern.MatchString(artifact.Repository) &&
 		shaPattern.MatchString(artifact.Revision) &&
 		digestPattern.MatchString(artifact.Digest) &&

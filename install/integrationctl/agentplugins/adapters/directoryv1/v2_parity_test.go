@@ -71,6 +71,9 @@ func TestV2PortableIdentityParityWithV1(t *testing.T) {
 		{"unsafe primary artifact Windows separator", func(s *domain.DirectorySnapshot) {
 			s.Evidence[0].Artifact.Path = `reports\\report.json`
 		}},
+		{"unsafe primary artifact control byte", func(s *domain.DirectorySnapshot) {
+			s.Evidence[0].Artifact.Path = "reports/\x00proof.json"
+		}},
 		{"unsafe trust bundle manifest traversal", func(s *domain.DirectorySnapshot) {
 			artifact := s.Evidence[0].Artifact
 			artifact.Path = "../bundle.json"
@@ -95,6 +98,11 @@ func TestV2PortableIdentityParityWithV1(t *testing.T) {
 			artifact := s.Evidence[0].Artifact
 			artifact.Path = ""
 			s.Evidence[0].Trust.BundleManifest = &artifact
+		}},
+		{"unsafe trust observer artifact line break", func(s *domain.DirectorySnapshot) {
+			artifact := s.Evidence[0].Artifact
+			artifact.Path = "reports/proof\n.json"
+			s.Evidence[0].Trust.ObserverArtifact = &artifact
 		}},
 		{"invalid trust launch artifact", func(s *domain.DirectorySnapshot) {
 			artifact := s.Evidence[0].Artifact
