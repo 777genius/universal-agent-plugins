@@ -64,6 +64,16 @@ Preserve existing installer source trust, signed release resolution, path contai
 
 **E2E critic:** A synthetic CLI stub cannot prove desktop execution. Decision: test the native transport and UI extensively; separately document a physical macOS/Windows runtime checklist; mark any unrun portion honestly. CI failures and bypassed/queued checks are not PASS.
 
+### Critical review round 2 (2026-11-05): concrete corrections
+
+1. **Native runtime critic:** Codex CLI's `plugin add/list --json` proves Codex registration only. It cannot prove the ChatGPT Desktop app loaded or ran the plugin. **Fix:** display CLI-native status and a separate optional desktop follow-up, never the phrase "ChatGPT installed" without physical evidence. The optional `codex://` link opens the plugin detail, not install completion.
+2. **Ownership critic:** Do not touch `~/.agents/plugins/marketplace.json` directly: an existing user or admin may own it. UAP's current scoped Codex adapter manages its own unique marketplace and rollback. **Fix:** build link from the adapter's already-managed active marketplace root; validate identity and refuse to invent a link if the file is missing.
+3. **Portability critic:** A `codex://` URL cannot guarantee launch on every OS; Windows and Linux filesystem/URI handling may differ. **Fix:** URL generation is a pure helper; automatic launch is explicitly not part of V1. Add portable fallback instructions that work without a custom URI handler.
+4. **Publication critic:** `publicationexec` creates an authoring catalog, while the consumer adapter already creates its own managed release. **Fix:** do not invoke authoring publication from the installer. Share format and tests, not stateful responsibilities.
+5. **UX critic:** Only expose Desktop guidance when the *selected* install distribution actually supports Codex in user scope; avoid turning a disabled cloud ChatGPT checkbox into a selectable unsupported target. Keep existing single source of truth for resolution and CLI commands.
+
+**Decision after review:** implement the existing Codex install lane plus truthfully labeled optional Desktop handoff, one UI guidance component and small docs. No second client, no user-file overwrite, no new persistent state. Full native Desktop E2E is blocked without a signed-in physical desktop; state this explicitly in review and release evidence.
+
 ### Review resolutions
 
 One additive surface on top of existing Codex, pure helper, no new adapter/DB, minimal text and no feature flags. Independent external reviewer feedback, if available, is tracked in the PR and fixed before merge. If later evidence disproves shared local state, stop and revise rather than fake compatibility.
