@@ -67,7 +67,6 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 	return plan, nil
 }
 
-
 func clonePlanningPredecessors(binding *domain.ClientBinding) (*domain.LocalEntryObservation, []domain.NativeObjectOwnership, string) {
 	if binding == nil {
 		return nil, nil, ""

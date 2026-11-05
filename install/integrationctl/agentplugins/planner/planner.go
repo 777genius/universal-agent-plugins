@@ -579,4 +579,3 @@ func activationFor(mode domain.ActivationMode) domain.ActivationState {
 		return domain.ActivationFailed
 	}
 }
-
