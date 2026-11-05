@@ -169,7 +169,7 @@ func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginI
 		t.Fatalf("Codex native plugin list: %v; %s", err, listing)
 	}
 	var inventory struct {
-		Installed []struct {
+		Installed *[]struct {
 			ID        string `json:"pluginId"`
 			Installed bool   `json:"installed"`
 			Enabled   bool   `json:"enabled"`
@@ -181,8 +181,13 @@ func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginI
 	if err := json.Unmarshal(listing, &inventory); err != nil {
 		t.Fatal(err)
 	}
+	// A missing/null "installed" field is an unknown native protocol, not
+	// evidence of absence after remove. Mirror Codex's fail-closed adapter.
+	if inventory.Installed == nil {
+		t.Fatalf("Codex native listing omitted the installed array: %s", listing)
+	}
 	present := 0
-	for _, plugin := range inventory.Installed {
+	for _, plugin := range *inventory.Installed {
 		if plugin.ID == pluginID {
 			if !plugin.Installed || !plugin.Enabled || plugin.Source.Path != active {
 				t.Fatalf("Codex raw Skill native registration is not exact: %+v", plugin)
