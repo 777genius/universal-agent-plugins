@@ -85,6 +85,7 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 			Locator: filepath.Join(root, "plugin-data", string(clientID)), State: domain.DataReceiptOwned}
 		prepared.req.Targets = append(prepared.req.Targets, ClientTarget{ClientID: string(clientID), ClientConfigRoot: config})
 		prepared.clients = append(prepared.clients, client)
+		prepared.deliveries = append(prepared.deliveries, preparedDeliveryPlan{plan: plan})
 		prepared.plan.Targets = append(prepared.plan.Targets, PlanTarget{
 			ClientID: string(clientID), ConfigRoot: config, TargetPath: active, BindingID: bindingID,
 			SelectedDelivery: plan.SelectedDelivery,
@@ -188,6 +189,10 @@ func TestUserGroupPreparedUpdateRetainsFailClosedHandoff(t *testing.T) {
 		{"missing result", func(f *userPreparedUpdateFixture) { f.got.Targets = f.got.Targets[:1] }},
 		{"duplicate result", func(f *userPreparedUpdateFixture) { f.got.Targets[0] = f.got.Targets[1] }},
 		{"wrong target binding", func(f *userPreparedUpdateFixture) { f.prepared.plan.Targets[1].BindingID += "-stale" }},
+		{"missing frozen delivery", func(f *userPreparedUpdateFixture) { f.prepared.deliveries = nil }},
+		{"replaced frozen delivery", func(f *userPreparedUpdateFixture) {
+			f.prepared.deliveries[1].plan.ActivePath += "-foreign"
+		}},
 		{"wrong client context", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Plan.TargetContext.UserConfigRoot += "-foreign" }},
 		{"wrong profile", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Plan.NativeRegistryRoot += "-foreign" }},
 		{"wrong artifact", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Plan.PhysicalArtifactID += "-foreign" }},

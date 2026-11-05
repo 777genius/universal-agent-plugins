@@ -71,7 +71,19 @@ func completedUserPreparedTarget(prepared *PreparedOperation, frozen PlanTarget,
 		!domain.SameProfileAuthority(frozen.ProfileAuthority, plan.ProfileAuthority()) {
 		return false
 	}
-	if !completedUserPreparedBinding(frozen, plan, target.Activation, installation) {
+	// The immutable pre-confirmation delivery must agree with the core's
+	// completed result; a different native target cannot borrow its proof.
+	matched := false
+	for _, delivery := range prepared.deliveries {
+		if string(delivery.plan.ClientID) != frozen.ClientID {
+			continue
+		}
+		if matched || !completedProjectDeliveryIdentity(delivery.plan, plan) {
+			return false
+		}
+		matched = true
+	}
+	if !matched || !completedUserPreparedBinding(frozen, plan, target.Activation, installation) {
 		return false
 	}
 	if target.Activation.Activation == domain.ActivationPrepared {
