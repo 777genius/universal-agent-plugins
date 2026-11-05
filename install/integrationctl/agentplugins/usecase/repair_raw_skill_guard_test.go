@@ -24,12 +24,12 @@ func TestRepairRawSkillDigestDriftRefusedBeforeStaging(t *testing.T) {
 		} {
 			t.Run(string(client)+"/"+source.name, func(t *testing.T) {
 				proof := repairSession{
-					input: AddInput{Client: domain.DetectedClient{ClientID: client}},
+					input:  AddInput{Client: domain.DetectedClient{ClientID: client}},
 					client: domain.ClientBinding{PackageRevision: &source.rev},
 					verifyErr: &ports.VerificationError{
-						Kind: ports.VerificationDigestMismatch,
+						Kind:         ports.VerificationDigestMismatch,
 						ActualDigest: "sha256:foreign-user-modification",
-						Err: errors.New("artifact digest mismatch"),
+						Err:          errors.New("artifact digest mismatch"),
 					},
 				}
 				_, err := proof.repairPackage()
