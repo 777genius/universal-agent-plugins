@@ -23,3 +23,24 @@ func validateDirectoryGroupItem(before, state domain.StateFileV2, mutation Direc
 	paths[mutation.ActivePath] = struct{}{}
 	return loadClientFromState(state, mutation.InstallationID, mutation.ClientBindingID)
 }
+
+// validateDirectoryRemovalGroupItem runs before all effects and then during staging.
+// The preflight loop separately verifies every occupied target.
+func validateDirectoryRemovalGroupItem(before domain.StateFileV2, removal DirectoryRemoval, index int, operations, paths map[string]struct{}) (int, error) {
+	if removal.OperationID == "" || removal.Sequence < 1 {
+		return -1, fmt.Errorf("removal %d has incomplete identity", index)
+	}
+	if _, duplicate := operations[removal.OperationID]; duplicate || operationIDExists(before, removal.OperationID) {
+		return -1, fmt.Errorf("mutation operation id %q was already used", removal.OperationID)
+	}
+	operations[removal.OperationID] = struct{}{}
+	if _, duplicate := paths[removal.ActivePath]; duplicate {
+		return -1, fmt.Errorf("physical backend %q occurs more than once in removal group", removal.ActivePath)
+	}
+	paths[removal.ActivePath] = struct{}{}
+	if removal.Standalone {
+		return -1, nil
+	}
+	installationIndex, _, err := loadClientFromState(before, removal.InstallationID, removal.ClientBindingID)
+	return installationIndex, err
+}

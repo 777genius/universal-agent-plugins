@@ -378,21 +378,8 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 	applied := make([]appliedGroupMutation, 0, len(group.Removals))
 	seenOperations, seenPaths := map[string]struct{}{}, map[string]struct{}{}
 	for index, removal := range group.Removals {
-		if removal.OperationID == "" || removal.Sequence < 1 {
-			return nil, fmt.Errorf("removal %d has incomplete identity", index)
-		}
-		if _, ok := seenOperations[removal.OperationID]; ok || operationIDExists(before, removal.OperationID) {
-			return nil, fmt.Errorf("mutation operation id %q was already used", removal.OperationID)
-		}
-		seenOperations[removal.OperationID] = struct{}{}
-		if _, ok := seenPaths[removal.ActivePath]; ok {
-			return nil, fmt.Errorf("physical backend %q occurs more than once in removal group", removal.ActivePath)
-		}
-		seenPaths[removal.ActivePath] = struct{}{}
-		if !removal.Standalone {
-			if _, _, err := loadClientFromState(before, removal.InstallationID, removal.ClientBindingID); err != nil {
-				return nil, err
-			}
+		if _, err := validateDirectoryRemovalGroupItem(before, removal, index, seenOperations, seenPaths); err != nil {
+			return nil, err
 		}
 		if removal.Verify != nil {
 			if err := removal.Verify(ctx, removal.ActivePath); err != nil {
@@ -411,24 +398,9 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 		return result
 	}
 	for index, removal := range group.Removals {
-		if removal.OperationID == "" || removal.Sequence < 1 {
-			return nil, fmt.Errorf("removal %d has incomplete identity", index)
-		}
-		if _, ok := seenOperations[removal.OperationID]; ok || operationIDExists(before, removal.OperationID) {
-			return nil, fmt.Errorf("mutation operation id %q was already used", removal.OperationID)
-		}
-		seenOperations[removal.OperationID] = struct{}{}
-		if _, ok := seenPaths[removal.ActivePath]; ok {
-			return nil, fmt.Errorf("physical backend %q occurs more than once in removal group", removal.ActivePath)
-		}
-		seenPaths[removal.ActivePath] = struct{}{}
-		installationIndex := -1
-		if !removal.Standalone {
-			var loadErr error
-			installationIndex, _, loadErr = loadClientFromState(before, removal.InstallationID, removal.ClientBindingID)
-			if loadErr != nil {
-				return nil, loadErr
-			}
+		installationIndex, err := validateDirectoryRemovalGroupItem(before, removal, index, seenOperations, seenPaths)
+		if err != nil {
+			return nil, err
 		}
 		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{EnvironmentID: environmentID(removal.EnvironmentAuthority), ProfileOwners: neutralOwners(owners), DataReceiptID: removal.DataReceiptID, OperationID: removal.OperationID, ClientBindingID: dataBindingID(removal, owners),
 			Sequence: removal.Sequence, OwnedBase: removal.OwnedBase, ActivePath: removal.ActivePath, Remove: true, VerifyActive: removal.Verify})
