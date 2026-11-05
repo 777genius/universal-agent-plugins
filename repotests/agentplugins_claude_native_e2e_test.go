@@ -553,7 +553,6 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	}
 	stages["explicit_user_scope"] = claudeNativeStage{Status: "passed", Reason: "genuine Claude CLI plugin list and byte-identical user installation after explicit --scope user"}
 
-
 	// absent-directory repair (mirrors the Codex C3 absent-repair scenario;
 	// unlike Codex's `plugin list`, Claude Code's own list command does not
 	// fail globally when a managed directory is missing, so no analogous

@@ -131,7 +131,6 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 		t.Fatal("invalid scope request changed user state")
 	}
 
-
 	// Upgrade one moving Git Skill for both clients in the same saved user
 	// namespace. Lock and physical projections must agree on v2 while
 	// binding IDs and target paths retain their established ownership.
