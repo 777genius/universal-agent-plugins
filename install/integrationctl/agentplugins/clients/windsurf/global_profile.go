@@ -29,8 +29,11 @@ func originalDevinGlobalRoot(host clients.Host) (string, error) {
 	}
 	root := filepath.Join(base, "devin")
 	physical, err := host.CanonicalDirectory(root)
-	if err != nil || physical != root {
-		return "", fmt.Errorf("selected original Devin global root is not canonical: %w", err)
+	if err != nil {
+		return "", fmt.Errorf("inspect original Devin global root: %w", err)
+	}
+	if physical != root {
+		return "", fmt.Errorf("selected original Devin global root is an alias")
 	}
 	return root, nil
 }

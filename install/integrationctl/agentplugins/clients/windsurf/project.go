@@ -32,6 +32,15 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 		return devinProjectObjects(root, envelope, plan)
 	}
 	if isDevinGlobalPlan(plan) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if plan.ClientID != domain.ClientWindsurf || root != plan.ActivePath {
+			return nil, fmt.Errorf("Devin Global active package identity differs")
+		}
+		if err := plan.SelectedDelivery.ValidatePlan(plan, envelope.TreeDigest); err != nil {
+			return nil, err
+		}
 		if err := validateDevinGlobalProjectionRoot(root, plan); err != nil {
 			return nil, err
 		}

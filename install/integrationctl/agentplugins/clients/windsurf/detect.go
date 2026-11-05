@@ -3,8 +3,8 @@
 package windsurf
 
 import (
-	"path/filepath"
 	"fmt"
+	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -46,9 +46,9 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	}
 	return clients.Detection{
 		NativeConfigRoot: nativeRoot,
-		ConfigRoot:     selectedLegacyRoot(surfaces, legacy),
-		ExecutablePath: shared.FirstPath(windsurfCLI, devinCLI),
-		Surfaces:       surfaces,
+		ConfigRoot:       selectedLegacyRoot(surfaces, legacy),
+		ExecutablePath:   shared.FirstPath(windsurfCLI, devinCLI),
+		Surfaces:         surfaces,
 	}
 }
 
