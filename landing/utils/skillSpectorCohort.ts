@@ -69,14 +69,16 @@ async function digest(body: Uint8Array): Promise<string> {
   return 'sha256:' + [...hash].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 function bytesFromBase64(value: unknown, size: number): Uint8Array {
-  if (!str(value) || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) invalid();
+  if (typeof value !== 'string') return invalid();
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) invalid();
   const data = atob(value);
   const bytes = Uint8Array.from(data, c => c.charCodeAt(0));
   if (bytes.length !== size || btoa(data) !== value) invalid();
   return bytes;
 }
 function asTime(value: unknown): number {
-  if (!str(value) || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(value)) invalid();
+  if (typeof value !== 'string') return invalid();
+  if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(value)) invalid();
   const time = Date.parse(value);
   if (!Number.isFinite(time) || new Date(time).toISOString() !== value.replace('Z', '.000Z')) invalid();
   return time;
@@ -247,9 +249,10 @@ export async function readVerifiedSkillSpectorCohort(
   exact(envelope, ['schema_version', 'kind', 'algorithm', 'signature_domain',
     'snapshot_digest', 'key_id', 'signature']);
   const key = keys.find(k => k.key_id === envelope.key_id);
+  if (!key) return invalid();
   if (envelope.schema_version !== 1 || envelope.kind !== 'skillspector-cohort-release-envelope-v1' ||
       envelope.algorithm !== 'Ed25519' || envelope.signature_domain !== signatureDomain ||
-      envelope.snapshot_digest !== pointer.release_digest || !key ||
+      envelope.snapshot_digest !== pointer.release_digest ||
       !/^[a-z0-9][a-z0-9._-]*$/.test(key.key_id)) invalid();
   const pub = await crypto.subtle.importKey(
     'raw', bytesFromBase64(key.public_key, 32) as BufferSource,

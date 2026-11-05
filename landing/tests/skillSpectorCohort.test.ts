@@ -197,7 +197,7 @@ test('all seven Braids Skills sharing one signed package receive individual exac
         revision: members[0]!.source.revision, state: 'resolved', reason: null,
         skills_total: members.length, selected_ids: members.map(record => record.id) };
     }),
-  } as unknown as SkillSpectorDisplayReport;
+  } as unknown as Extract<SkillSpectorDisplayReport, { schema_version: 3 }>;
   const updated = applyVerifiedSkillSpectorCohort(report, cohort.manifestDigest, cohort, at);
   assert.equal(updated.records.length, 9);
   assert.equal(updated.records.filter(x => x.signed_cohort_verified).length, 9);
@@ -234,7 +234,7 @@ test('overlay preserves unrelated old Partial and fails closed on digest or sele
       revision: old.source.revision, state: 'resolved', reason: null,
       skills_total: 1, selected_ids: [old.id],
     }],
-  } as unknown as SkillSpectorDisplayReport;
+  } as unknown as Extract<SkillSpectorDisplayReport, { schema_version: 3 }>;
   const improved = applyVerifiedSkillSpectorCohort(report, cohort.manifestDigest, cohort, at);
   assert.equal(improved.records[0]!.status, 'complete');
   assert.equal(improved.records[0]!.signed_cohort_verified, true);
