@@ -122,7 +122,7 @@ func inspectDirectoryProduct(ctx context.Context, app App, state domain.StateFil
 	if product == nil {
 		return publicProductInspection{}, fmt.Errorf("selected Directory product is missing")
 	}
-	selected := inspectDistribution(bundle.Snapshot, *product, selection.DistributionID, selection.ReleaseSequence)
+	selected := inspectDistribution(bundle.Snapshot, *product, selection.DistributionID, selection.ReleaseSequence, app.scope())
 	result := publicProductInspection{ProductID: product.ID, DisplayName: product.DisplayName, Description: product.Description,
 		ReviewedDefault: product.DefaultDistribution, SelectedDistribution: selection.DistributionID,
 		SelectedRelease: selected,
@@ -146,7 +146,7 @@ func inspectDirectoryProduct(ctx context.Context, app App, state domain.StateFil
 		if id == selection.DistributionID {
 			continue
 		}
-		result.Alternatives = append(result.Alternatives, inspectDistribution(bundle.Snapshot, *product, id, 0))
+		result.Alternatives = append(result.Alternatives, inspectDistribution(bundle.Snapshot, *product, id, 0, app.scope()))
 	}
 	sort.Slice(result.Alternatives, func(i, j int) bool { return result.Alternatives[i].ID < result.Alternatives[j].ID })
 	return result, nil
@@ -173,7 +173,7 @@ func inspectInstalledProduct(ctx context.Context, app App, state domain.StateFil
 		RecordedSnapshotSequence: origin.SnapshotSequence, CurrentSnapshotSequence: bundle.Snapshot.Sequence}
 	if product := snapshotProduct(bundle.Snapshot, origin.ProductID); product != nil {
 		view.ReviewedDefaultDistribution = product.DefaultDistribution
-		current := inspectDistribution(bundle.Snapshot, *product, origin.DistributionID, 0)
+		current := inspectDistribution(bundle.Snapshot, *product, origin.DistributionID, 0, app.scope())
 		if current.ReleaseSequence > 0 {
 			view.CurrentDistribution, view.CurrentRevision = origin.DistributionID, current.ResolvedRevision
 			view.CurrentRepository, view.CurrentPackagePath = current.Repository, current.PackagePath
@@ -187,7 +187,7 @@ func inspectInstalledProduct(ctx context.Context, app App, state domain.StateFil
 		view.CurrentDistribution, view.CurrentRevision = selection.DistributionID, selection.Source.Revision
 		view.CurrentRepository, view.CurrentPackagePath = selection.Source.Repository, selection.Source.Path
 		view.CurrentReleaseSequence = selection.ReleaseSequence
-		view.CurrentEvidence = evidenceForRelease(bundle.Snapshot, selection.DistributionID, selection.ReleaseSequence)
+		view.CurrentEvidence = evidenceForRelease(bundle.Snapshot, selection.DistributionID, selection.ReleaseSequence, app.scope())
 	}
 	result.Directory = view
 	for index := range result.Clients {
@@ -248,7 +248,8 @@ func snapshotDistribution(snapshot domain.DirectorySnapshot, id string) *domain.
 	return nil
 }
 
-func inspectDistribution(snapshot domain.DirectorySnapshot, product domain.DirectoryProduct, id string, sequence uint64) publicDistribution {
+func inspectDistribution(snapshot domain.DirectorySnapshot, product domain.DirectoryProduct, id string, sequence uint64, scopes ...domain.InstallScope) publicDistribution {
+	scope := selectedScope(scopes)
 	distribution := snapshotDistribution(snapshot, id)
 	if distribution == nil {
 		return publicDistribution{ID: id, ReviewedDefault: id == product.DefaultDistribution}
@@ -274,7 +275,7 @@ func inspectDistribution(snapshot domain.DirectorySnapshot, product domain.Direc
 		result.ReleaseStatus = policy.Status
 		for _, target := range policy.Targets {
 			scopes := append([]domain.InstallScope(nil), target.Scopes...)
-			evidenceIDs := evidenceIDsForClient(snapshot, id, release.Sequence, target.Client)
+			evidenceIDs := evidenceIDsForClient(snapshot, id, release.Sequence, target.Client, scope)
 			var canonical *domain.DirectoryCanonicalClosure
 			if snapshot.SnapshotSchemaVersion == 2 {
 				// Scoped v2 evidence and signed closure belong to this exact
@@ -289,14 +290,18 @@ func inspectDistribution(snapshot domain.DirectorySnapshot, product domain.Direc
 			})
 		}
 	}
-	result.Evidence = evidenceForRelease(snapshot, id, release.Sequence)
+	result.Evidence = evidenceForRelease(snapshot, id, release.Sequence, scope)
 	return result
 }
 
-func evidenceForRelease(snapshot domain.DirectorySnapshot, distribution string, sequence uint64) []publicEvidence {
+func evidenceForRelease(snapshot domain.DirectorySnapshot, distribution string, sequence uint64, scopes ...domain.InstallScope) []publicEvidence {
+	scope := selectedScope(scopes)
 	result := []publicEvidence{}
 	for _, evidence := range snapshot.Evidence {
 		if evidence.DistributionID == distribution && evidence.ReleaseSequence == sequence {
+			if snapshot.SnapshotSchemaVersion == 1 && scope == domain.ScopeProject && evidence.Level != "schema" {
+				continue // Signed v1 client observations qualify User, not Project.
+			}
 			result = append(result, publicEvidence{ID: evidence.ID, DistributionID: evidence.DistributionID, ReleaseSequence: evidence.ReleaseSequence,
 				Level: evidence.Level, Outcome: evidence.Outcome, Client: evidence.Client, Scope: evidence.Scope, ClientVersion: evidence.ClientVersion,
 				InstallerVersion: evidence.InstallerVersion, OS: evidence.OS, Architecture: evidence.Architecture,
@@ -315,7 +320,7 @@ func evidenceForClientRevision(snapshot domain.DirectorySnapshot, distribution s
 	client domain.ClientID, scope domain.InstallScope,
 ) []publicEvidence {
 	result := []publicEvidence{}
-	for _, evidence := range evidenceForRelease(snapshot, distribution, sequence) {
+	for _, evidence := range evidenceForRelease(snapshot, distribution, sequence, scope) {
 		if snapshot.SnapshotSchemaVersion != 2 {
 			if evidence.Client == "" || evidence.Client == client {
 				result = append(result, evidence)
@@ -336,9 +341,9 @@ func evidenceForClientRevision(snapshot domain.DirectorySnapshot, distribution s
 	return result
 }
 
-func evidenceIDsForClient(snapshot domain.DirectorySnapshot, distribution string, sequence uint64, client domain.ClientID) []string {
+func evidenceIDsForClient(snapshot domain.DirectorySnapshot, distribution string, sequence uint64, client domain.ClientID, scopes ...domain.InstallScope) []string {
 	ids := []string{}
-	for _, evidence := range evidenceForRelease(snapshot, distribution, sequence) {
+	for _, evidence := range evidenceForRelease(snapshot, distribution, sequence, scopes...) {
 		if evidence.Client == "" || evidence.Client == client {
 			ids = append(ids, evidence.ID)
 		}

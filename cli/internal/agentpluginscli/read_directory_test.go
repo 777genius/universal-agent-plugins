@@ -442,3 +442,56 @@ func TestDirectoryV2RuntimeProofRequiresCurrentCanonicalClosure(t *testing.T) {
 		})
 	}
 }
+
+
+func TestDirectoryV1ProjectInspectionOmitsUserEvidence(t *testing.T) {
+	bundle := readModelBundle()
+	snapshot := bundle.Snapshot
+	product := snapshot.Products[0]
+	const distribution = "owner/demo"
+	user := inspectDistribution(snapshot, product, distribution, 2, domain.ScopeUser)
+	project := inspectDistribution(snapshot, product, distribution, 2, domain.ScopeProject)
+	if len(user.Evidence) != 2 || len(user.Targets) != 1 || len(user.Targets[0].Evidence) != 2 {
+		t.Fatalf("user proof unexpectedly changed: %+v", user)
+	}
+	if len(project.Evidence) != 0 || len(project.Targets) != 1 || len(project.Targets[0].Evidence) != 0 {
+		t.Fatalf("v1 Project inspection inherited User runtime or materialization evidence: %+v", project)
+	}
+	if observed := evidenceForClientRevision(snapshot, distribution, 2, domain.ClientCursor, domain.ScopeProject); len(observed) != 0 {
+		t.Fatalf("Project revision borrowed User evidence: %+v", observed)
+	}
+	if observed := evidenceForClientRevision(snapshot, distribution, 2, domain.ClientCursor, domain.ScopeUser); len(observed) != 2 {
+		t.Fatalf("User revision lost existing evidence: %+v", observed)
+	}
+	schema := snapshot.Evidence[1]
+	schema.ID, schema.Level, schema.Client = "current-schema-only", "schema", ""
+	snapshot.Evidence = append(snapshot.Evidence, schema)
+	snapshot.Distributions[0].ReleasePolicies[1].CurrentEvidence = append(
+		snapshot.Distributions[0].ReleasePolicies[1].CurrentEvidence, schema.ID)
+	project = inspectDistribution(snapshot, product, distribution, 2, domain.ScopeProject)
+	if len(project.Evidence) != 1 || project.Evidence[0].ID != schema.ID ||
+		len(project.Targets[0].Evidence) != 1 || project.Targets[0].Evidence[0] != schema.ID {
+		t.Fatalf("Project inspection hid package-wide schema evidence: %+v", project)
+	}
+}
+
+// Project scope must not suppress v2 grant-specific evidence or its explicit scope.
+func TestDirectoryV2ProjectInspectionPreservesScopedEvidence(t *testing.T) {
+	const id = "owner/tool"
+	snapshot := domain.DirectorySnapshot{SnapshotSchemaVersion: 2,
+		Distributions: []domain.DirectoryDistribution{{
+			ID: id,
+			Releases: []domain.DirectoryRelease{{Sequence: 1}},
+			ReleasePolicies: []domain.DirectoryReleasePolicy{{ReleaseSequence: 1, Targets: []domain.DirectoryTarget{
+				{Client: domain.ClientCodex, Scope: domain.ScopeProject, CurrentEvidence: []string{"project-runtime"}},
+			}}},
+		}},
+		Evidence: []domain.DirectoryEvidence{{ID: "project-runtime", DistributionID: id,
+			ReleaseSequence: 1, Client: domain.ClientCodex, Scope: domain.ScopeProject, Level: "runtime"}},
+	}
+	got := inspectDistribution(snapshot, domain.DirectoryProduct{DefaultDistribution: id}, id, 1, domain.ScopeProject)
+	if len(got.Evidence) != 1 || len(got.Targets) != 1 ||
+		len(got.Targets[0].Evidence) != 1 || got.Targets[0].Evidence[0] != "project-runtime" {
+		t.Fatalf("v2 project grant evidence changed: %+v", got)
+	}
+}
