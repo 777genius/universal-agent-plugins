@@ -76,7 +76,11 @@ jobs:
               fi
               ;;
             kiro) URL="https://desktop-release.q.us-east-1.amazonaws.com/3.0.0/kirocli-universal-darwin.zip"; BIN="kiro-cli" ;;
-            windsurf) URL="https://cli.devin.ai/install.sh"; BIN="devin" ;;
+            windsurf)
+              # Homebrew/homebrew-cask Casks/d/devin-cli.rb @ c9adad21951a075e35556930e7396a87818f8980
+              URL="https://static.devin.ai/cli/3000.11.234/devin-3000.11.234-x86_64-unknown-linux.tar.gz"
+              BIN="devin"
+              ;;
             grok) URL="https://x.ai/cli/install.sh"; BIN="grok" ;;
             vscode)
               # Official VS Code 1.144.0 Linux x64 .deb, never a mutable "latest".
@@ -102,7 +106,7 @@ jobs:
               ;;
             vscode) SHA256="b8fbff92d8d95908990eed0acf004c980f29003725469e794ddbd017ea511a20" ;; # Microsoft official SHA-256 for Linux .deb x64 1.144.0
             kiro) SHA256="0a8f067c4fe6a23a231aa3a18e3e4332120ef9ed3d2d7b6eea907beb8b4cdd8b" ;; # Homebrew/homebrew-cask Casks/k/kiro-cli.rb @ 7191fc89
-            windsurf) SHA256="" ;; # Needs official installer digest review
+            windsurf) SHA256="201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a" ;; # Independently pinned Homebrew release
             grok) SHA256="" ;; # Needs official installer digest review
           esac
           sha256_file() {
@@ -114,6 +118,8 @@ jobs:
           }
           if [[ "$TARGET" == cursor && "$KIND" == skill ]]; then
             artifact="$RUNNER_TEMP/cursor-agent.tar.gz"
+          elif [[ "$TARGET" == windsurf ]]; then
+            artifact="$RUNNER_TEMP/devin-cli.tar.gz"
           elif [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
             artifact="$RUNNER_TEMP/$TARGET.deb"
           elif [[ "$TARGET" == kiro ]]; then
@@ -129,19 +135,25 @@ jobs:
             exit 3
           fi
           printf '%s  %s\n' "$SHA256" "$artifact" | sha256_file -c -
-          if [[ "$TARGET" == cursor && "$KIND" == skill ]]; then
+          if [[ ( "$TARGET" == cursor && "$KIND" == skill ) || "$TARGET" == windsurf ]]; then
             mkdir -p "$RUNNER_TEMP/vendor-root"
-            # Python's data filter rejects archive entries or links escaping this root.
-            # Ubuntu 24.04 has Python 3.12. Never run a downloaded shell installer.
+            # Both official archives are independently digest-pinned above.
+            # Python 3.12's data filter rejects archive entries escaping this root.
             python3 - "$artifact" "$RUNNER_TEMP/vendor-root" <<'PY'
           import sys
           import tarfile
           with tarfile.open(sys.argv[1], "r:gz") as archive:
               archive.extractall(path=sys.argv[2], filter="data")
           PY
-            executable="$RUNNER_TEMP/vendor-root/dist-package/cursor-agent"
+            if [[ "$TARGET" == windsurf ]]; then
+              executable="$RUNNER_TEMP/vendor-root/bin/devin"
+              target_binary="devin"
+            else
+              executable="$RUNNER_TEMP/vendor-root/dist-package/cursor-agent"
+              target_binary="cursor-agent"
+            fi
             test -f "$executable" && test -x "$executable" && test ! -L "$executable"
-            ln -s "$executable" "$HOME/.local/bin/cursor-agent"
+            ln -s "$executable" "$HOME/.local/bin/$target_binary"
           elif [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
             mkdir -p "$RUNNER_TEMP/vendor-root"
             dpkg-deb --extract "$artifact" "$RUNNER_TEMP/vendor-root"
