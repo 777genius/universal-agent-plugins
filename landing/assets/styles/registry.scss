@@ -1596,6 +1596,39 @@ img {
 .app-multiselect__arrow {
   fill: var(--line-strong);
 }
+
+// The install picker uses a select-sized dropdown, not a detached tile grid.
+.app-multiselect__content--wide {
+  width: min(var(--reka-popover-trigger-width, 340px), calc(100vw - 28px));
+  max-width: calc(100vw - 28px);
+  padding: 6px;
+  border-radius: 12px;
+}
+.app-multiselect__content--wide .app-multiselect__heading {
+  padding: 7px 9px;
+}
+.app-multiselect__content--wide .app-multiselect__options {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+.app-multiselect__content--wide .app-multiselect__item {
+  min-height: 44px;
+  padding: 7px 30px 7px 9px;
+  border-color: transparent;
+  border-radius: 8px;
+  background: transparent;
+}
+.app-multiselect__content--wide .app-multiselect__item:hover {
+  background: var(--surface-raised);
+}
+.app-multiselect__content--wide .app-multiselect__item--selected {
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--line));
+  background: color-mix(in srgb, var(--primary) 9%, var(--surface-raised));
+}
+.app-multiselect__content--wide .app-multiselect__item:disabled {
+  border-color: transparent;
+  background: transparent;
+}
 .app-combobox__anchor {
   width: 100%;
   min-width: 0;
@@ -2289,7 +2322,7 @@ img {
   align-items: start;
 }
 .plugin-card__install .app-multiselect__trigger {
-  width: min(100%, 190px);
+  width: 100%;
   min-height: 42px;
   padding-inline: 10px;
 }
