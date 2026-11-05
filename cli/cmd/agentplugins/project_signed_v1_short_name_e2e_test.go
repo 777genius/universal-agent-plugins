@@ -60,6 +60,10 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 	projectJourneyGit(t, transport.repo, "add", ".")
 	projectJourneyGit(t, transport.repo, "commit", "-m", "signed v1 scoped closure fixture")
 	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
+	// The signed Directory pins a raw commit SHA rather than a branch name.
+	// Match the published Git transport: permit fetching an advertised tip by SHA
+	// from this disposable smart-HTTP bare repository (Git defaults to denying it).
+	projectJourneyGit(t, transport.remote, "config", "uploadpack.allowTipSHA1InWant", "true")
 	gitSHA := exec.CommandContext(t.Context(), "git", "-C", transport.repo, "rev-parse", "HEAD")
 	commitBytes, err := gitSHA.Output()
 	if err != nil {
