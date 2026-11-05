@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -32,7 +33,7 @@ func TestDirectoryV1ProjectPlacementUsesSameSignedRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if project != user || project.ReleaseSequence != 2 || project.Source.Repository != "owner/demo" {
+	if !reflect.DeepEqual(project, user) || project.ReleaseSequence != 2 || project.Source.Repository != "owner/demo" {
 		t.Fatalf("Project source is not the exact signed User publication: project=%+v user=%+v", project, user)
 	}
 }
@@ -79,6 +80,7 @@ func TestDirectoryV1ProjectPlacementRejectsMissingPolicyAndRevokedRelease(t *tes
 		t.Run(test.name, func(t *testing.T) {
 			bundle := readModelBundle()
 			request := v1ProjectSelectionRequest()
+			request.Selector = "owner/demo" // Negative proof cannot fall back to another signed distributor.
 			test.change(&bundle.Snapshot, &request)
 			if _, err := selectDirectorySourceForPlacement(bundle.Snapshot, request); !errors.Is(err, domain.ErrDirectoryIneligible) {
 				t.Fatalf("Project placement bypassed a signed eligibility denial: %v", err)
