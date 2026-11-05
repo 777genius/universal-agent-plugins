@@ -76,7 +76,7 @@ func directorySiteCodexInventory(t *testing.T, f *nativeFixture, codexBin string
 		t.Fatal(err)
 	}
 	if skills.NextCursor != nil || len(skills.Data) != 1 ||
-		!openCodeSamePath(skills.Data[0].CWD, f.Project) || len(skills.Data[0].Errors) != 0 {
+		!openCodeSamePath(skills.Data[0].CWD, f.Project) || len(skills.Data[0].Errors) != 0 || skills.Data[0].Skills == nil {
 		t.Fatalf("Codex Directory skills/list missing selected cwd or contained errors: %+v", skills)
 	}
 	found = 0
