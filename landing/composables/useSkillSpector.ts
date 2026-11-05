@@ -10,11 +10,11 @@ const clients = new WeakMap<object, ReturnType<typeof createSkillSpectorClient>>
 /** One content-digest-validated client per Nuxt app. */
 export function sharedSkillSpectorClient(
   app: object,
-  urls: { v1: string; v2: string; v3: string },
+  urls: { v1: string; v2: string; v3: string; cohort: string },
 ) {
   let client = clients.get(app);
   if (!client) {
-    client = createSkillSpectorClient(urls.v2, urls.v1, fetch, urls.v3);
+    client = createSkillSpectorClient(urls.v2, urls.v1, fetch, urls.v3, urls.cohort);
     clients.set(app, client);
   }
   return client;
@@ -33,6 +33,7 @@ export function useSkillSpector(subject: MaybeRefOrGetter<SkillSpectorSubject | 
     v1: String(config.public.skillspectorReportsUrl),
     v2: String(config.public.skillspectorManifestUrl),
     v3: String(config.public.skillspectorV3ManifestUrl),
+    cohort: String(config.public.skillspectorCohortLatestUrl),
   });
   const load = async (repository: string, current: number, retryFailed = false) => {
     report.value = undefined;
