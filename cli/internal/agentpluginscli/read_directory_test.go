@@ -443,7 +443,6 @@ func TestDirectoryV2RuntimeProofRequiresCurrentCanonicalClosure(t *testing.T) {
 	}
 }
 
-
 func TestDirectoryV1ProjectInspectionOmitsUserEvidence(t *testing.T) {
 	bundle := readModelBundle()
 	snapshot := bundle.Snapshot

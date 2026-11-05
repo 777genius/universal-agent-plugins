@@ -60,7 +60,6 @@ func explicitLocalPath(value string) bool {
 	return ok && server != "" && strings.Trim(share, `\`) != ""
 }
 
-
 // selectDirectorySourceForPlacement separates signed source qualification from
 // explicit local Project placement. A v1 user grant authenticates which package
 // can be selected; it is NOT evidence of project-native runtime execution.
