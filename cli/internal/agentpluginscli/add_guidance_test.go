@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -120,5 +121,37 @@ func TestAddRecoveryPropagatesWriterFailure(t *testing.T) {
 	err := renderAddResult(&recoveryFailWriter{}, "human", domain.PackageEnvelope{}, result, false)
 	if !errors.Is(err, io.ErrClosedPipe) {
 		t.Fatalf("writer error lost: %v", err)
+	}
+}
+
+func TestSuccessfulNativeAddPrintsOptionalLocalHandoffWithoutPublicPathLeak(t *testing.T) {
+	for _, mutated := range []bool{false, true} {
+		t.Run(fmt.Sprint("mutated=", mutated), func(t *testing.T) {
+			result := usecase.AddResult{
+				NoChange: !mutated,
+				Mutated: mutated,
+				Plan: domain.DeliveryPlan{ClientID: domain.ClientCodex},
+				Activation: domain.ActivationOutcome{
+					Activation: domain.ActivationActive,
+					Verification: domain.VerificationInstalled,
+					Authentication: domain.AuthenticationNotRequired,
+					LocalActions: []string{"start a new Codex session; optional ChatGPT Desktop: codex://plugins/demo?marketplacePath=%2Fprivate%2Fprofile%2Fmarketplace.json"},
+				},
+			}
+			var human, public bytes.Buffer
+			if err := renderAddResult(&human, "human", domain.PackageEnvelope{}, result, false); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(human.String(), "Next (optional): start a new Codex session") ||
+				!strings.Contains(human.String(), "codex://plugins/demo?marketplacePath=") {
+				t.Fatalf("local Desktop next step disappeared: %q", human.String())
+			}
+			if err := renderAddResult(&public, "json", domain.PackageEnvelope{}, result, false); err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(public.String(), "codex://plugins/") || strings.Contains(public.String(), "%2Fprivate") {
+				t.Fatalf("private local Desktop path leaked in public JSON: %s", public.String())
+			}
+		})
 	}
 }

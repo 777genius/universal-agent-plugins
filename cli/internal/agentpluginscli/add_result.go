@@ -101,12 +101,14 @@ func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 		return err
 	}
 	if result.NoChange && fullyInstalled(result.Activation) {
-		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed and lifecycle verification is complete. No changes made."))
-		return nil
+		if _, err := fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed and lifecycle verification is complete. No changes made.")); err != nil {
+			return err
+		}
+		return renderVerifiedLocalNextAction(writer, result)
 	}
 	if result.Mutated && fullyInstalled(result.Activation) {
 		renderHumanAddInstalled(writer, result)
-		return nil
+		return renderVerifiedLocalNextAction(writer, result)
 	}
 	if result.Mutated {
 		renderHumanAddPending(writer, result)
@@ -115,6 +117,19 @@ func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 		_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Next"), action)
 	}
 	return nil
+}
+
+// Verified native clients may still have optional user-facing local steps, such
+// as opening a desktop plugin. Keep these outside public JSON and never turn
+// them into a required or unverified installation phase.
+func renderVerifiedLocalNextAction(writer io.Writer, result usecase.AddResult) error {
+	if len(result.Activation.LocalActions) == 0 {
+		return nil
+	}
+	_, err := fmt.Fprintf(writer, "%s: %s\n",
+		terminaltheme.For(writer).Text(terminaltheme.Label, "Next (optional)"),
+		prompt.SafeText(result.Activation.LocalActions[0]))
+	return err
 }
 
 func renderHumanAddInstalled(writer io.Writer, result usecase.AddResult) {
