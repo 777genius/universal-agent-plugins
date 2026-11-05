@@ -95,7 +95,7 @@ func TestWindsurfLegacyUserReceiptSurvivesSelectedDevinUpdateRepairRemove(t *tes
 	globalRoot := filepath.Join(home, ".config", "devin")
 	globalConfig := filepath.Join(globalRoot, "mcp_config.json")
 	for path, body := range map[string]string{
-		legacyConfig: `{"mcpServers":{"foreign":{"url":"https://legacy-foreign.example/mcp"}}}`,
+		legacyConfig: `{"mcpServers":{"foreign":{"url":"https://foreign.test"}}}`,
 		globalConfig: `{"mcpServers":{"global-foreign":{"url":"https://global-foreign.example/mcp"}}}`,
 	} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
