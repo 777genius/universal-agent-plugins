@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -28,7 +29,7 @@ func (client V2Client) validateConfig() error {
 	if client.Cache.Path == "" {
 		return fmt.Errorf("%w: v2 cache path is required", ErrUnavailable)
 	}
-	if client.Transport.Cache.Path != "" && client.Cache.Path == client.Transport.Cache.Path {
+	if client.Transport.Cache.Path != "" && filepath.Clean(client.Cache.Path) == filepath.Clean(client.Transport.Cache.Path) {
 		return fmt.Errorf("%w: v1/v2 cache path collision", ErrUnavailable)
 	}
 	return nil

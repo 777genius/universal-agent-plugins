@@ -85,6 +85,14 @@ func TestV2ClientRefusesV1BootstrapAndSharedCachePath(t *testing.T) {
 	if _, err := client.LoadLocal(0); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("read-only v2 accepted same v1/v2 cache path: %v", err)
 	}
+	// Equivalent lexical paths must not bypass the v1/v2 cache boundary.
+	client.Cache.Path = filepath.Dir(client.Transport.Cache.Path) + "/./" + filepath.Base(client.Transport.Cache.Path)
+	if _, err := client.Load(context.Background(), 0); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("v2 accepted normalized v1 cache alias: %v", err)
+	}
+	if _, err := client.LoadLocal(0); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("read-only v2 accepted normalized v1 cache alias: %v", err)
+	}
 	client.Cache.Path = filepath.Join(t.TempDir(), "schema-2.json")
 	client.Embedded.Envelope = []byte("{}")
 	if _, err := client.Load(context.Background(), 0); !errors.Is(err, ErrBootstrapNotReady) {
