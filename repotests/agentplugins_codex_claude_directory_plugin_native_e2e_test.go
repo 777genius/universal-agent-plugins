@@ -169,8 +169,8 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	statePath := filepath.Join(f.Root, "installer-state", "state-v2.json")
 	foreignCodex := filepath.Join(f.CodexHome, "skills", "foreign-site-plugin", "SKILL.md")
 	foreignClaude := filepath.Join(claudeHome, "skills", "foreign-site-plugin", "SKILL.md")
-	nativeWrite(t, foreignCodex, []byte("Foreign Codex user Skill -- must not change\n"), 0600)
-	nativeWrite(t, foreignClaude, []byte("Foreign Claude user Skill -- must not change\n"), 0600)
+	nativeWrite(t, foreignCodex, []byte("---\nname: foreign-site-plugin\ndescription: Foreign Codex user Skill\n---\nMust not change.\n"), 0600)
+	nativeWrite(t, foreignClaude, []byte("---\nname: foreign-site-plugin\ndescription: Foreign Claude user Skill\n---\nMust not change.\n"), 0600)
 	codexForeignSHA, claudeForeignSHA := nativeSHA(t, foreignCodex), nativeSHA(t, foreignClaude)
 	// This is the Directory card's actual command, with only non-interactive
 	// consent and JSON output added for a disposable CI host.
