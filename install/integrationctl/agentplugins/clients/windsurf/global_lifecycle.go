@@ -21,13 +21,11 @@ func preflightDevinGlobal(env clients.Env, request domain.ActivationRequest) err
 	if err := validateDevinGlobalProjectionRoot(request.Plan.ActivePath, request.Plan); err != nil {
 		return err
 	}
-	if request.Delivery.ActivePath != "" && request.Delivery.ActivePath != request.Plan.ActivePath {
-		return fmt.Errorf("Devin Global delivered package differs from selected managed root")
+	if err := shared.ActivationIdentityMismatch(request); err != nil {
+		return err
 	}
-	if request.Delivery.ClientID != "" {
-		if err := shared.ActivationIdentityMismatch(request); err != nil {
-			return err
-		}
+	if request.Delivery.ActivePath != request.Plan.ActivePath {
+		return fmt.Errorf("Devin Global delivered package differs from selected managed root")
 	}
 	if request.ActivationComplete {
 		return fmt.Errorf("Devin Global native discovery cannot be established by activation attestation")

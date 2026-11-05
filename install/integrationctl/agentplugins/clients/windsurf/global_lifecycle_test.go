@@ -77,7 +77,7 @@ func TestDevinGlobalOfflineNativeLifecycleRelocatedStateAndLegacyParity(t *testi
 	}
 	request := domain.ActivationRequest{
 		Client: client, Plan: plan,
-		Delivery: domain.StagedDelivery{ActivePath: plan.ActivePath, NativeObjects: objects},
+		Delivery: domain.StagedDelivery{ClientID: domain.ClientWindsurf, ActivePath: plan.ActivePath, NativeObjects: objects},
 	}
 	env := clients.Env{NativeConfig: nativeconfig.New()}
 	outcome, err := New().Activate(context.Background(), env, request)
@@ -111,7 +111,7 @@ func TestDevinGlobalOfflineNativeLifecycleRelocatedStateAndLegacyParity(t *testi
 	}
 	remove := domain.DeactivationRequest{
 		TargetContext: domain.TargetContext{Scope: domain.ScopeUser, UserConfigRoot: client.ConfigRoot},
-		Client: client, NativeRegistryRoot: plan.NativeRegistryRoot,
+		Client: domain.DetectedClient{ClientID: domain.ClientWindsurf}, NativeRegistryRoot: plan.NativeRegistryRoot,
 		ManagedArtifactPath: plan.ActivePath, PhysicalArtifactID: plan.PhysicalArtifactID,
 		NativeObjects: objects, Confirmed: true,
 	}
@@ -147,7 +147,7 @@ func TestDevinGlobalOfflineRejectsForeignSkillAndWrongReceipts(t *testing.T) {
 	globalOfflineWrite(t, filepath.Join(plan.NativeRegistryRoot, "skills", "global-marker", "SKILL.md"), "foreign collision")
 	env := clients.Env{NativeConfig: nativeconfig.New()}
 	_, err = New().Activate(context.Background(), env, domain.ActivationRequest{
-		Client: client, Plan: plan, Delivery: domain.StagedDelivery{ActivePath: plan.ActivePath, NativeObjects: objects},
+		Client: client, Plan: plan, Delivery: domain.StagedDelivery{ClientID: domain.ClientWindsurf, ActivePath: plan.ActivePath, NativeObjects: objects},
 	})
 	if err == nil {
 		t.Fatal("unowned Global Skill destination must fail without modification")
