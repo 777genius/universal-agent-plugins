@@ -280,9 +280,12 @@ def attributable_native_changes(native_roots, changes, identity, target):
     return sorted(set(found))
 
 
-def source_target_incompatibility(diagnostic):
-    """A signed package with no eligible adapter target is unsupported, not broken."""
-    return "release does not support complete target set" in diagnostic.lower()
+def source_target_incompatibility(diagnostic, target=None):
+    """Recognize narrowly known client/source-policy refusals, never PASS."""
+    diagnostic = diagnostic.casefold()
+    return ("release does not support complete target set" in diagnostic
+            or (target == "pi" and
+                "pi package manifest overrides selected extension discovery" in diagnostic))
 
 
 def is_cli_refusal(output):
@@ -1018,7 +1021,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     project_foreign = None
     if kind == "skill" and project_skill_roots:
         # Qoder's UAP-managed bundle is not an unmanaged native Skill location.
-        foreign_root = ".qoder/skills" if target == "qoder" else project_skill_roots[0]
+        # Grok's plugins/ children require complete plugin manifests. A
+        # foreign standalone Skill belongs to its separate native skills/ root.
+        foreign_root = (".qoder/skills" if target == "qoder" else
+                        ".grok/skills" if target == "grok" else
+                        project_skill_roots[0])
         project_foreign = project / foreign_root / "foreign-neighbor" / "SKILL.md"
     if project_foreign:
         project_foreign.parent.mkdir(parents=True, exist_ok=True)
@@ -1063,6 +1070,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if kind == "plugin":
         identity = plugin_declared_names.get(item, item)
         args = ["add", item, "--target", target, "--scope", "user", "--format", "json"]
+        # VS Code's unchanged user adapter only accepts an imperative add.
+        if target == "vscode":
+            args.append("--no-save")
         scope = ["--scope", "user"]
     else:
         identity = item["name"]
@@ -1299,7 +1309,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                                  in diagnostics)):
         status = "target-unavailable"
     elif install_refused and ("unsupported" in diagnostics or "not supported" in diagnostics
-                              or source_target_incompatibility(diagnostics)):
+                              or source_target_incompatibility(diagnostics, target)):
         status = "documented-or-source-unsupported"
     elif install_refused and "minimum installer version" in diagnostics:
         status = "test-build-version-policy"

@@ -876,6 +876,18 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
 
 
+    def test_pi_manifest_discovery_override_is_source_unsupported(self):
+        # BUG-062: exact Pi source-layout safety refusal, not arbitrary errors.
+        audit = load_audit()
+        self.assertTrue(audit.source_target_incompatibility(
+            "agentplugins: pi package manifest overrides selected extension discovery", "pi"))
+        self.assertFalse(audit.source_target_incompatibility(
+            "agentplugins: pi package manifest overrides selected extension discovery", "codex"))
+        self.assertFalse(audit.source_target_incompatibility(
+            "agentplugins: pi package manifest is unreadable"))
+        self.assertFalse(audit.source_target_incompatibility(
+            "agentplugins: unexpected Pi native registry configuration failure"))
+
     def test_native_snapshot_keeps_symlinks_and_unreadable_paths(self):
         # BUG-017: untrusted native entries must not disappear from evidence.
         audit = load_audit()
@@ -1660,6 +1672,50 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                              "---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
             self.assertFalse(managed_foreign.exists())
             self.assertTrue(row["sentinels_preserved"])
+
+    def test_grok_foreign_skill_is_not_an_invalid_native_plugin(self):
+        # BUG-060: Grok rejects a plugins/ child lacking plugin.json before
+        # reviewing any selected source. The unrelated Skill belongs in skills/.
+        audit = load_audit()
+        item = {"name": "frontend-design", "source": "unused",
+                "skill_md_git_blob_sha1": "0" * 40}
+        refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "refused",
+                   "timeout": False, "_json": {"data": {"installations": []}}}
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            with patch.object(audit, "call", side_effect=lambda *a, **kw: dict(refused)):
+                evidence = audit.do_case("/unused/agentplugins", "grok", "skill",
+                                         item, 0, root, {})
+            project = root / "skill-00/project"
+            foreign = project / ".grok/skills/foreign-neighbor/SKILL.md"
+            self.assertTrue(foreign.is_file())
+            self.assertEqual(foreign.read_text(encoding="utf-8"),
+                             "---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
+            self.assertFalse((project / ".grok/plugins/foreign-neighbor").exists())
+            self.assertTrue(evidence["sentinels_preserved"])
+            self.assertEqual(evidence["status"], "install-failed")
+
+    def test_vscode_user_plugins_use_only_documented_no_save_route(self):
+        # BUG-061: no new VS Code product capability or saved dependency.
+        audit = load_audit()
+        source = "github:example/native-plugin@" + ("a" * 40)
+        refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "refused",
+                   "timeout": False, "_json": {"data": {"installations": []}}}
+        with TemporaryDirectory() as temporary:
+            for target in ("vscode", "codex"):
+                with self.subTest(target=target):
+                    root = Path(temporary).resolve() / target
+                    with patch.object(audit, "call",
+                                      side_effect=lambda *a, **kw: dict(refused)) as call:
+                        evidence = audit.do_case("/unused/agentplugins", target,
+                                                 "plugin", source, 0, root,
+                                                 {source: "native-plugin"})
+                    first = call.call_args_list[0].args[0]
+                    self.assertEqual(first[1:3], ["add", source])
+                    self.assertEqual(first.count("--no-save"), int(target == "vscode"))
+                    self.assertEqual(first[first.index("--scope") + 1], "user")
+                    self.assertTrue(evidence["sentinels_preserved"])
+                    self.assertEqual(evidence["status"], "install-failed")
 
     def test_kimi_skill_uses_real_isolated_git_worktree(self):
         audit = load_audit()
