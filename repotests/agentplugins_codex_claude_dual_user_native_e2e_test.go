@@ -118,7 +118,7 @@ func TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	claudeFixture := &claudeNativeFixture{Root: f.Root, Home: f.Home, ConfigDir: claudeProfile,
-		StateHome: filepath.Join(f.Root, "installer-state"), transcriptSHA256: map[string]string{}}
+	StateHome: filepath.Join(f.Root, "installer-state"), transcriptSHA256: map[string]string{}}
 	codexVersion, err := nativeCommand(t, f, codexBin, "dual-codex-version", "--version")
 	if err != nil || strings.TrimSpace(string(codexVersion)) != "codex-cli "+os.Getenv("AGENTPLUGINS_CODEX_VERSION") {
 		t.Fatalf("dual native Codex version mismatch: %q %v", codexVersion, err)
