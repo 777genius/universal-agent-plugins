@@ -192,10 +192,7 @@ function validateRecords(release: Json, pointer: Json): VerifiedCohort {
         coverage.references_total !== array(coverage.references).length ||
         array(coverage.references).some(ref => {
           const r = obj(ref);
-          return !(
-            (r.status === 'resolved' && r.disposition === 'analyzed') ||
-            (r.status === 'rejected' && r.disposition !== 'partial')
-          );
+          return r.status !== 'resolved' || r.disposition !== 'analyzed';
         })) invalid();
     mapped.set(String(raw.id), raw as unknown as SkillSpectorRecord);
   }
