@@ -191,6 +191,12 @@ test('all seven Braids Skills sharing one signed package receive individual exac
       state: 'resolved', current: true, reason: null,
       selected_ids: [record.id], candidates: [],
     })),
+    plugin_states: [...new Set(oldRecords.map(record => record.source.repository))].map(repository => {
+      const members = oldRecords.filter(record => record.source.repository === repository);
+      return { id: 'community:' + repository, repository, plugin_path: '',
+        revision: members[0]!.source.revision, state: 'resolved', reason: null,
+        skills_total: members.length, selected_ids: members.map(record => record.id) };
+    }),
   } as unknown as SkillSpectorDisplayReport;
   const updated = applyVerifiedSkillSpectorCohort(report, cohort.manifestDigest, cohort, at);
   assert.equal(updated.records.length, 9);
@@ -223,6 +229,11 @@ test('overlay preserves unrelated old Partial and fails closed on digest or sele
       revision: old.source.revision, path: old.source.path,
       current: true, state: 'resolved', reason: null,
       selected_ids: [old.id], candidates: [] }],
+    plugin_states: [{
+      id: 'community:fixture', repository: old.source.repository, plugin_path: '',
+      revision: old.source.revision, state: 'resolved', reason: null,
+      skills_total: 1, selected_ids: [old.id],
+    }],
   } as unknown as SkillSpectorDisplayReport;
   const improved = applyVerifiedSkillSpectorCohort(report, cohort.manifestDigest, cohort);
   assert.equal(improved.records[0]!.status, 'complete');
@@ -236,6 +247,12 @@ test('overlay preserves unrelated old Partial and fails closed on digest or sele
   const stale = structuredClone(report);
   stale.source_states[0]!.current = false;
   assert.equal(applyVerifiedSkillSpectorCohort(stale, cohort.manifestDigest, cohort), stale);
+  const unresolved = structuredClone(report);
+  unresolved.plugin_states[0]!.state = 'unresolved';
+  assert.equal(applyVerifiedSkillSpectorCohort(unresolved, cohort.manifestDigest, cohort), unresolved);
+  const omitted = structuredClone(report);
+  omitted.plugin_states[0]!.selected_ids = [];
+  assert.equal(applyVerifiedSkillSpectorCohort(omitted, cohort.manifestDigest, cohort), omitted);
   const changed = structuredClone(report);
   changed.records[0]!.source.content_digest = 'sha256:' + '0'.repeat(64);
   assert.equal(applyVerifiedSkillSpectorCohort(changed, cohort.manifestDigest, cohort), changed);
