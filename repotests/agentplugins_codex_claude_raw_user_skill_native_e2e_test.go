@@ -143,10 +143,12 @@ func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginI
 	}
 	var inventory struct {
 		Installed []struct {
-			ID string `json:"pluginId"`
-			Installed bool `json:"installed"`
-			Enabled bool `json:"enabled"`
-			Source struct { Path string `json:"path"` } `json:"source"`
+			ID        string `json:"pluginId"`
+			Installed bool   `json:"installed"`
+			Enabled   bool   `json:"enabled"`
+			Source    struct {
+				Path string `json:"path"`
+			} `json:"source"`
 		} `json:"installed"`
 	}
 	if err := json.Unmarshal(listing, &inventory); err != nil {
@@ -173,13 +175,13 @@ func codexNativeRawUserInventory(t *testing.T, f *nativeFixture, client, pluginI
 	}
 	var skills struct {
 		Data []struct {
-			CWD string `json:"cwd"`
+			CWD    string            `json:"cwd"`
 			Errors []json.RawMessage `json:"errors"`
 			Skills []struct {
-				Name string `json:"name"`
-				Path string `json:"path"`
+				Name     string `json:"name"`
+				Path     string `json:"path"`
 				PluginID string `json:"pluginId"`
-				Enabled bool `json:"enabled"`
+				Enabled  bool   `json:"enabled"`
 			} `json:"skills"`
 		} `json:"data"`
 	}
