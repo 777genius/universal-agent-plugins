@@ -43,9 +43,9 @@ func desktopPluginHandoff(marketplaceRoot, pluginName, physicalArtifactID string
 		return ""
 	}
 	var document struct {
-		Name string `json:"name"`
+		Name    string `json:"name"`
 		Plugins []struct {
-			Name string `json:"name"`
+			Name   string `json:"name"`
 			Source struct {
 				Kind string `json:"source"`
 				Path string `json:"path"`
@@ -60,5 +60,5 @@ func desktopPluginHandoff(marketplaceRoot, pluginName, physicalArtifactID string
 		document.Plugins[0].Source.Path != "./" {
 		return ""
 	}
-	return "ChatGPT Desktop local plugin details: " + link + ". Restart ChatGPT Desktop if the marketplace is not visible; finish installation or enablement in Plugins > Personal, then verify in a new local thread. Codex CLI verification does not prove ChatGPT runtime use."
+	return "ChatGPT Desktop local plugin details: " + link + ". On macOS or Windows, run `codex app` to open Desktop; restart if the marketplace is not visible. Finish installation or enablement in Plugins > Personal, then verify in a new local thread. Codex CLI verification does not prove ChatGPT runtime use."
 }
