@@ -326,11 +326,17 @@ export function createSkillSpectorClient(
   let legacyFallback = false;
   let v3ManifestDigest: string | undefined;
   const cohortCache = new Map<string, CachedRequest<VerifiedCohort | undefined>>();
+  let lastCohortReadAt = 0;
+  let trustedCohortExpiresAt: number | undefined;
   const loadCohort = (): Promise<VerifiedCohort | undefined> =>
     !cohortLatestUrl || !cohortKeys.length
       ? Promise.resolve(undefined)
       : cachedRequest(cohortCache, 'release', () =>
           readVerifiedSkillSpectorCohort(cohortLatestUrl, cohortKeys, fetcher)
+            .then((cohort) => {
+              trustedCohortExpiresAt = cohort?.expiresAt;
+              return cohort;
+            })
             .catch(() => undefined),
         );
   const loadManifest = () =>
@@ -392,6 +398,17 @@ export function createSkillSpectorClient(
     );
   }
   const reportFor = async (repositoryName: string): Promise<SkillSpectorDisplayReport> => {
+      // A trusted cohort can expire or be superseded while the Nuxt app lives.
+      // A new request must not return an indefinitely cached Complete overlay.
+      const clock = Date.now();
+      if (cohortLatestUrl && cohortKeys.length &&
+          (clock - lastCohortReadAt >= 300_000 ||
+           (trustedCohortExpiresAt !== undefined && clock >= trustedCohortExpiresAt))) {
+        cohortCache.clear();
+        repositories.clear();
+        trustedCohortExpiresAt = undefined;
+        lastCohortReadAt = clock;
+      }
       const key = repositoryName.toLowerCase();
       return cachedRequest(repositories, key, async () => {
         const manifest = await loadManifest();
