@@ -154,12 +154,30 @@ def run(ctx, original_env):
     listing("b-installed", project_b, True)
     if operation("repeat-add-a", "add", source, project_a) != aid:
         raise ValueError("Qoder repeated installation changed its receipt identity")
+    # Exercise a real same-version content revision, not a no-op update.
+    # B is already installed from this source and must retain its old bytes.
+    native_skill = project_a / ".qoder" / "skills" / NAME / "SKILL.md"
+    b_skill = project_b / ".qoder" / "skills" / NAME / "SKILL.md"
+    if (not native_skill.is_file() or native_skill.is_symlink()
+            or not b_skill.is_file() or b_skill.is_symlink()):
+        raise ValueError("UAP-installed Qoder native Project Skill missing")
+    before_a_skill = native_skill.read_bytes()
+    before_b_skill = b_skill.read_bytes()
+    before_b_mcp = (project_b / ".mcp.json").read_bytes()
+    new_skill = before_a_skill + b"UAP_QODER_PROJECT_A_REVISED\n"
+    (source / "skills" / NAME / "SKILL.md").write_bytes(new_skill)
+    revised_url = "http://127.0.0.1:10/mcp"
+    source_mcp = json.loads((source / "mcp.json").read_text())
+    source_mcp["mcpServers"][HTTP]["url"] = revised_url
+    (source / "mcp.json").write_bytes(_json(source_mcp))
     operation("update-a", "update", source, project_a)
     listing("a-updated", project_a, True)
-
-    native_skill = project_a / ".qoder" / "skills" / NAME / "SKILL.md"
-    if not native_skill.is_file() or native_skill.is_symlink():
-        raise ValueError("UAP-installed Qoder native Project Skill missing")
+    a_mcp = json.loads((project_a / ".mcp.json").read_text())
+    if (native_skill.read_bytes() != new_skill
+            or a_mcp.get("mcpServers", {}).get(HTTP, {}).get("url") != revised_url
+            or b_skill.read_bytes() != before_b_skill
+            or (project_b / ".mcp.json").read_bytes() != before_b_mcp):
+        raise ValueError("Qoder update did not change only A's owned Skill/MCP contents")
     # A partial foreign edit of this owned Skill must fail closed; the
     # existing genuine Qoder Skills cycle separately qualifies missing-package
     # repair. Here verify intact mixed Skills/MCP repair and native discovery.
