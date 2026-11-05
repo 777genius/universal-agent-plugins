@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
@@ -9,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -22,11 +24,35 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// signedV1ProjectGitRunner trusts only the disposable fixture CA for the
+// disposable Git repository. The production runner deliberately removes Git
+// environment overrides; keep its TLS verification and transport hardening.
+type signedV1ProjectGitRunner struct {
+	delegate sourceacquisition.Runner
+	caFile string
+}
+
+func (runner signedV1ProjectGitRunner) Run(ctx context.Context, command sourceacquisition.Command) ([]byte, error) {
+	if len(command.Args) > 2 && command.Args[0] == "-C" && command.Args[2] == "fetch" {
+		_, err := (sourceacquisition.OSRunner{}).Run(ctx, sourceacquisition.Command{
+			Dir: command.Dir, Args: []string{"-C", command.Args[1], "config", "http.sslCAInfo", runner.caFile},
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return runner.delegate.Run(ctx, command)
+}
+
 // Real v1 Ed25519 reader, signed short names, Git acquisition, Cobra, receipts,
 // native Gemini fixture and project isolation. No model-driven MCP tools/call
 // or production Marketing Kit qualification is implied by this test.
 func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 	transport := newProjectJourneyTransport(t, "git")
+	caFile := os.Getenv("GIT_SSL_CAINFO")
+	if caFile == "" {
+		t.Fatal("disposable signed-v1 Git fixture CA is missing")
+	}
 	const repository = "fixture/marketplace"
 	paths := []struct {
 		name, distribution, path, server string
@@ -178,7 +204,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		}
 		source := func(temp string) agentpluginscli.SourceAcquirer {
 			return sourceacquisition.Acquirer{TempRoot: temp, HTTPClient: transport.server.Client(),
-				Runner: projectGitDiagnosticRunner{recorder: transport.diagnostic, root: temp},
+				Runner: signedV1ProjectGitRunner{delegate: projectGitDiagnosticRunner{recorder: transport.diagnostic, root: temp}, caFile: caFile},
 				URLForRepo: func(repo string) string {
 					if repo == repository {
 						return transport.endpoint
