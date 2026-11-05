@@ -104,7 +104,10 @@ func qoderProjectServer(root, name string) (nativeconfig.Server, error) {
 	if !ok {
 		return nativeconfig.Server{}, fmt.Errorf("qoder projected MCP server %q is absent", name)
 	}
-	kind, _ := entry["type"].(string)
+	kind, validType := entry["type"].(string)
+	if _, present := entry["type"]; present && (!validType || kind == "") {
+		return nativeconfig.Server{}, fmt.Errorf("qoder MCP server %q has an invalid transport type", name)
+	}
 	var allowed map[string]bool
 	switch kind {
 	case "", "stdio":

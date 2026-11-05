@@ -138,6 +138,8 @@ func TestQoderProjectPriorityAndTransportNegative(t *testing.T) {
 	}
 	for _, value := range []string{
 		`{"mcpServers":{"api":{"type":"sse","url":"https://invalid.test"}}}`,
+		`{"mcpServers":{"api":{"type":null,"command":"echo"}}}`,
+		`{"mcpServers":{"api":{"type":"","command":"echo"}}}`,
 		`{"mcpServers":{"api":{"type":"http","url":"https://valid.test","trust":true}}}`,
 		`{"mcpServers":{"api":{"command":"echo","command":"other"}}}`,
 	} {
