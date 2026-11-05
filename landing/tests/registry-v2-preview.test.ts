@@ -92,6 +92,11 @@ describe('Directory v2 untrusted preview boundary', () => {
     }
     assert.throws(() => parseDirectoryData(fixture, 'published_snapshot'),
       /schema version 1|published snapshot/);
+    // Mixed-format preview data must not downgrade through the legacy-index
+    // decoder, whose output is intentionally installable for old fixtures.
+    assert.throws(() => parseDirectoryData({
+      ...fixture, schema_version: 1, plugins: [],
+    }, 'review_preview'), /legacy index cannot contain Directory snapshot fields/);
   });
 
   it('refuses v2 grants that try to borrow legacy arrays or assert unproven closure', () => {

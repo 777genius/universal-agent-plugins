@@ -31,6 +31,10 @@ export function parseDirectoryData(
       throw new Error(
         'published snapshot mode requires signed snapshot products and distributions',
       );
+    // An untrusted v2 review preview must not be reinterpreted as the
+    // installable legacy index merely by supplying a "plugins" property.
+    if ('snapshot_schema_version' in input || 'products' in input || 'distributions' in input)
+      throw new Error('legacy index cannot contain Directory snapshot fields');
     return parseLegacyIndex(input);
   }
   return parseSnapshot(input, mode ?? 'review_preview');
