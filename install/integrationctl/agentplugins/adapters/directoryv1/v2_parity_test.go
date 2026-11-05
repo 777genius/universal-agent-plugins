@@ -210,6 +210,15 @@ func TestV2RequiresExactProjectRuntimeEvidence(t *testing.T) {
 	if _, err := ParseV2Snapshot(body); err != nil {
 		t.Fatalf("exact client/project runtime evidence should qualify: %v", err)
 	}
+	// A runtime receipt claiming another closure must not qualify a grant
+	// that has no signed closure to bind that claim.
+	original.Evidence[len(original.Evidence)-1].ClosureDigest =
+		"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	body, _ = json.Marshal(original)
+	if _, err := ParseV2Snapshot(body); !errors.Is(err, ErrStrictJSON) {
+		t.Fatalf("project runtime borrowed unsignaled closure evidence: %v", err)
+	}
+	original.Evidence[len(original.Evidence)-1].ClosureDigest = ""
 	// An ineligible signed dependency closure cannot be qualified by a
 	// historical passing runtime receipt from the same client and scope.
 	projectGrant := &original.Distributions[0].ReleasePolicies[0].Targets[2]
