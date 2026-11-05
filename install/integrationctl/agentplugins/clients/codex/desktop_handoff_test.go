@@ -186,10 +186,9 @@ func TestDesktopHandoffRejectsOversizedLocalManifest(t *testing.T) {
 }
 
 func TestDesktopLinkLongPathFallsBackWithoutBrokenURI(t *testing.T) {
-	root := tempRoot(t)
-	for i := 0; i < 8; i++ {
-		root = filepath.Join(root, strings.Repeat("m", 45))
-	}
+	// A short Unicode path produces a long percent-encoded URL while remaining
+	// below Windows' common filesystem path limits.
+	root := filepath.Join(tempRoot(t), strings.Repeat("界", 60))
 	path := filepath.Join(root, ".agents", "plugins", "marketplace.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
