@@ -284,7 +284,7 @@ export function applyVerifiedSkillSpectorCohort(
       freshness: old.freshness, target_revision: old.target_revision,
       retry: old.retry ? { ...old.retry, disposition: 'none' as const,
         next_profile: null, next_attempt_at: null, reason: 'complete' } : undefined,
-      signed_cohort: true as const,
+      signed_cohort_verified: true as const,
     };
   });
   return records.every((record, i) => record === report.records[i])
