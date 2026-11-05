@@ -37,7 +37,7 @@ async function fixture() {
   const trusted = [{ key_id: 'cohort-test', public_key: b64(new Uint8Array(
     await crypto.subtle.exportKey('raw', pair.publicKey))) }];
   const records = sources.map(([pack, name, repository, revision], index) => {
-    const findings = index === 2 ? [{ rule: 'E4', severity: 'HIGH', message: 'Risk retained',
+    const findings = index === 2 ? [{ rule: 'E4', severity: 'HIGH', confidence: 0.6, message: 'Risk retained',
       path: 'SKILL.md', occurrences: [{ path: 'SKILL.md', line: 7 }] }] : [];
     return {
       id: 'plugin:community:' + pack + '/' + name, kind: 'plugin_skill',
@@ -47,7 +47,8 @@ async function fixture() {
       scanner, profile, status: 'complete', findings,
       finding_count: findings.length, finding_group_count: findings.length,
       raw_finding_count: findings.length, findings_truncated: false, errors: [],
-      execution: { state: 'completed', exit_code: findings.length ? 1 : 0 },
+      execution: { state: 'completed', exit_code: findings.length ? 1 : 0,
+        acquisition_seconds: 0.266917, analysis_seconds: 2.467785 },
       coverage: {
         status: 'complete', fully_inspected_files: 1,
         partially_inspected_files: 0, entirely_uninspected_files: 0,
@@ -90,7 +91,7 @@ async function fixture() {
       })),
     },
   };
-  const body = encode.encode(JSON.stringify(release) + '\n');
+  const body = canonical(release);
   const domain = encode.encode('UAP-SKILLSPECTOR-COHORT-RELEASE-ED25519-V1\0');
   const signed = new Uint8Array(domain.length + 8 + body.length);
   signed.set(domain);
@@ -132,6 +133,8 @@ test('real Ed25519 verification requires nine pinned sources and preserves risk'
   assert.equal(risk?.execution?.exit_code, 1);
   assert.equal(risk?.finding_count, 1);
   assert.equal(risk?.findings[0]?.severity, 'HIGH');
+  assert.equal(risk?.findings[0]?.confidence, 0.6);
+  assert.equal(risk?.execution?.acquisition_seconds, 0.266917);
 });
 
 test('unregistered key never fetches; signature tampering and expiration reject', async () => {
