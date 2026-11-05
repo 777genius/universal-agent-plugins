@@ -100,7 +100,7 @@ func TestDependencyShortDirectoryNameProjectPlacementKeepsSignedSource(t *testin
 		Dependencies: map[string]environment.Requirement{
 			"docs": {Alias: "docs", Registry: &environment.RegistrySource{
 				Distribution: "rollout-demo",
-				Selector: environment.Selector{Kind: environment.SelectorRelease, Value: "1"},
+				Selector:     environment.Selector{Kind: environment.SelectorRelease, Value: "1"},
 			}},
 		},
 		Targets: map[string][]string{"codex": {"docs"}},
