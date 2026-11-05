@@ -35,7 +35,7 @@ func desktopPluginHandoff(marketplaceRoot, pluginName, physicalArtifactID string
 	}
 	path := filepath.Join(marketplaceRoot, ".agents", "plugins", "marketplace.json")
 	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() {
+	if err != nil || !info.Mode().IsRegular() || info.Size() == 0 || info.Size() > 64<<10 {
 		return ""
 	}
 	body, err := os.ReadFile(path)

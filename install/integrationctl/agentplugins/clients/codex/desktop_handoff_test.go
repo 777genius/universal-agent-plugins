@@ -140,3 +140,46 @@ func TestDesktopHandoffDoesNotUpgradeCodexVerification(t *testing.T) {
 		t.Fatal("ChatGPT runtime caveat disappeared")
 	}
 }
+
+func TestManualDesktopHandoffRemainsVisibleInFirstCodexNextAction(t *testing.T) {
+	root, profile := filepath.Join(tempRoot(t), "active"), tempRoot(t)
+	path := filepath.Join(root, ".agents", "plugins", "marketplace.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	document := fmt.Sprintf(`{"name":%q,"plugins":[{"name":"demo","source":{"source":"local","path":"./"}}]}`, shared.ManagedMarketplaceName("artifact"))
+	if err := os.WriteFile(path, []byte(document), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := New().Activate(context.Background(), clients.Env{}, domain.ActivationRequest{
+		Client: domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: profile},
+		Plan: domain.DeliveryPlan{
+			ClientID: domain.ClientCodex, Scope: domain.ScopeUser,
+			PhysicalArtifactID: "artifact", DeclaredName: "demo",
+			NativeRegistryRoot: profile,
+		},
+		Delivery: domain.StagedDelivery{ClientID: domain.ClientCodex, ActivePath: root},
+		DeclaredName: "demo",
+	})
+	if err != nil || out.Activation != domain.ActivationManual {
+		t.Fatalf("manual Codex path changed: %+v %v", out, err)
+	}
+	if len(out.LocalActions) != 1 || !strings.HasPrefix(out.LocalActions[0], "in Codex, install") ||
+		!strings.Contains(out.LocalActions[0], "codex://plugins/demo?marketplacePath=") {
+		t.Fatalf("optional Desktop link not visible in first local next action: %+v", out.LocalActions)
+	}
+}
+
+func TestDesktopHandoffRejectsOversizedLocalManifest(t *testing.T) {
+	root := filepath.Join(tempRoot(t), "active")
+	path := filepath.Join(root, ".agents", "plugins", "marketplace.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(strings.Repeat("x", 64<<10+1)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if action := desktopPluginHandoff(root, "stripe", "artifact"); action != "" {
+		t.Fatalf("oversized local manifest should not produce a link: %q", action)
+	}
+}

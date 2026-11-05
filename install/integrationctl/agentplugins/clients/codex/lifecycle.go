@@ -57,7 +57,8 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		outcome.UserActions = append(outcome.UserActions, "install the prepared plugin in Codex Plugins, then verify it appears in Plugins > Personal")
 		outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("in Codex, install %s from %s, then verify it appears in Plugins > Personal", request.DeclaredName, request.Delivery.ActivePath))
 		if handoff := desktopPluginHandoff(request.Delivery.ActivePath, request.DeclaredName, request.Plan.PhysicalArtifactID); handoff != "" {
-			outcome.LocalActions = append(outcome.LocalActions, handoff)
+			// The CLI displays the first local action. Keep the native step first.
+			outcome.LocalActions[0] += "; " + handoff
 		}
 		return outcome, nil
 	}
