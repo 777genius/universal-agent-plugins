@@ -2,7 +2,7 @@ name: Qoder scoped native regression
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - '.github/workflows/qoder-scoped-native.yml'
       - 'install/integrationctl/agentplugins/clients/qoder/**'
@@ -15,6 +15,9 @@ on:
       - 'cli/cmd/agentplugins/project_qoder_e2e_test.go'
       - 'repotests/agentplugins_qoder*'
       - 'scripts/project_native_qoder*'
+      - 'scripts/project_native_collectors/qoder.py'
+      - 'scripts/test_project_native_qoder*.py'
+      - 'install/integrationctl/agentplugins/usecase/**'
       - 'scripts/project_native_runtime.py'
   workflow_dispatch:
 
@@ -27,7 +30,7 @@ concurrency:
 
 jobs:
   qoder-native:
-    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') }}
+    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && (github.event.action != 'labeled' || github.event.label.name == 'ci:github-hosted')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 28
     env:
