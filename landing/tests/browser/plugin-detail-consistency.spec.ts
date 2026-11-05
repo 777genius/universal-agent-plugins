@@ -155,10 +155,13 @@ test('plugin detail uses readable theme tokens and aligned mobile breadcrumbs', 
 
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    const back = (await detail.locator('.plugin-detail__back-cta').boundingBox())!;
     const breadcrumbs = detail.locator('.plugin-detail__hero-topbar .breadcrumbs');
-    const crumbBox = (await breadcrumbs.boundingBox())!;
-    expect(Math.abs(back.y + back.height / 2 - (crumbBox.y + crumbBox.height / 2))).toBeLessThan(3);
+    const centerDelta = await detail.locator('.plugin-detail__hero-topbar').evaluate((bar) => {
+      const back = bar.querySelector('.plugin-detail__back-cta')!.getBoundingClientRect();
+      const crumb = bar.querySelector('.breadcrumbs')!.getBoundingClientRect();
+      return Math.abs(back.top + back.height / 2 - (crumb.top + crumb.height / 2));
+    });
+    expect(centerDelta).toBeLessThan(3);
     await expect(breadcrumbs).toHaveCSS('padding-top', '0px');
     await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText('I18n State 00');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
