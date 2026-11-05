@@ -409,13 +409,13 @@ func validateV2EvidenceProvenance(evidence domain.DirectoryEvidence, release dom
 		release.TreeDigest != evidence.PackageTreeDigest || !evidence.HasTrustedProvenance() {
 		return strictError("invalid v2 evidence identity or trust")
 	}
-	if err := validateV2EvidenceProvenance(evidence); err != nil {
+	if err := validateV2EvidenceArtifacts(evidence); err != nil {
 		return err
 	}
 	return nil
 }
 
-func validateV2EvidenceProvenance(evidence domain.DirectoryEvidence) error {
+func validateV2EvidenceArtifacts(evidence domain.DirectoryEvidence) error {
 	// V2 evidence uses trust-bound provenance, never the pre-cutover V1 source fields.
 	if evidence.ProductID != "" || evidence.ManifestDigest != "" || evidence.SourceRepository != "" ||
 		evidence.SourceRevision != "" || evidence.SourcePath != "" || evidence.AdapterVersion != "" {
