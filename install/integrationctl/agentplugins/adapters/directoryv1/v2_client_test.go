@@ -140,7 +140,10 @@ func TestV2ClientRejectsCacheAliasesBeforeNetworkOrWrites(t *testing.T) {
 		}
 		check(t, absolute, relative)
 	})
-	t.Run("symlink parent of uncreated cache", func(t *testing.T) {
+	t.Run("case-folded cache filename aliases", func(t *testing.T) {
+		check(t, filepath.Join(realRoot, "mixed-case-cache.json"), filepath.Join(realRoot, "MIXED-CASE-CACHE.JSON"))
+	})
+	.Run("symlink parent of uncreated cache", func(t *testing.T) {
 		alias := filepath.Join(root, "alias")
 		if err := os.Symlink(realRoot, alias); err != nil {
 			t.Skipf("directory symlinks unavailable on this host: %v", err)

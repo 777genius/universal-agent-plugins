@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -38,7 +39,9 @@ func (client V2Client) validateConfig() error {
 		if err != nil {
 			return fmt.Errorf("%w: resolve v2 cache path: %w", ErrUnavailable, err)
 		}
-		if v1Path == v2Path {
+		// Conservatively reject case-only aliases before either cache exists:
+		// Windows and typical macOS volumes resolve them to the same file.
+		if v1Path == v2Path || strings.EqualFold(v1Path, v2Path) {
 			return fmt.Errorf("%w: v1/v2 cache path collision", ErrUnavailable)
 		}
 		// Distinct paths can still name the same cache inode through hard links.
