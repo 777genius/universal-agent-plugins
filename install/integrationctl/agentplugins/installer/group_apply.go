@@ -89,7 +89,8 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 			return result, fmt.Errorf("%s", result.Reason)
 		}
 		// The verified file update is complete; Local may still be Prepared.
-		// Never rewrite or promote its saved activation/verification evidence.
+		// Preserve the actual reload/trust actions without promoting activation.
+		result.ManualActions = append(result.ManualActions, userPreparedGroupActions(got)...)
 		pending = false
 	}
 	if !result.Mutated && !pending && (prepared.plan.NoChange || (!got.Mutated && groupPreviewUnchanged(got))) {
