@@ -479,7 +479,7 @@ func TestDirectoryV2ProjectInspectionPreservesScopedEvidence(t *testing.T) {
 	const id = "owner/tool"
 	snapshot := domain.DirectorySnapshot{SnapshotSchemaVersion: 2,
 		Distributions: []domain.DirectoryDistribution{{
-			ID: id,
+			ID:       id,
 			Releases: []domain.DirectoryRelease{{Sequence: 1}},
 			ReleasePolicies: []domain.DirectoryReleasePolicy{{ReleaseSequence: 1, Targets: []domain.DirectoryTarget{
 				{Client: domain.ClientCodex, Scope: domain.ScopeProject, CurrentEvidence: []string{"project-runtime"}},

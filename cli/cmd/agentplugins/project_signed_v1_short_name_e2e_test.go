@@ -74,7 +74,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 				"\"fixture/hubspot-crm\" = \"0.1.0\"\n"+
 				"\"fixture/playwright-bridge\" = \"0.1.0\"\n")
 		} else {
-			mcp := ""
+			var mcp string
 			if item.server == "playwright" {
 				mcp = fmt.Sprintf("{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json\",\"mcpServers\":{%q:{\"type\":\"stdio\",\"command\":\"go\",\"args\":[\"version\"]}}}", item.server)
 			} else {
@@ -109,9 +109,9 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 	snapshot := domain.DirectorySnapshot{
 		SnapshotSchemaVersion: 1, Sequence: 44, PublicationID: "project-v1-44",
 		SourceCommit: strings.Repeat("a", 40),
-		GeneratedAt: now.Add(-time.Hour).Format(time.RFC3339),
-		ExpiresAt: now.Add(24 * time.Hour).Format(time.RFC3339),
-		Products: []domain.DirectoryProduct{}, Distributions: []domain.DirectoryDistribution{},
+		GeneratedAt:  now.Add(-time.Hour).Format(time.RFC3339),
+		ExpiresAt:    now.Add(24 * time.Hour).Format(time.RFC3339),
+		Products:     []domain.DirectoryProduct{}, Distributions: []domain.DirectoryDistribution{},
 		Evidence: []domain.DirectoryEvidence{}, Revocations: []domain.DirectoryRevocation{},
 	}
 	for _, item := range paths {
