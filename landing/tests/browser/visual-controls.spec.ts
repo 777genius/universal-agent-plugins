@@ -2,6 +2,9 @@ import { expect, test } from '@playwright/test';
 import { hydrated } from './i18n-state.helpers';
 
 test('flat filters retain keyboard selection, category search, and reset', async ({ page }) => {
+  // The hosted full-registry fixture loads thousands of rows; keep the real
+  // keyboard/filter interactions rather than skipping a late visible control.
+  test.setTimeout(45_000);
   await page.goto('./');
   await hydrated(page);
   await expect(page.locator('.hero-quick-start__label').filter({ hasText: 'Copy and run' })).toBeVisible();
@@ -72,7 +75,20 @@ test('numbered benefits remain readable in both themes and responsive layouts', 
         const box = (await card.boundingBox())!;
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(width);
-        expect(await card.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+        // The card intentionally clips its decorative ::after glow beyond
+        // its edge. Assert visible text containment, not pseudo-element scrollWidth.
+        const textFits = await card.locator('h3, p').evaluateAll((nodes) =>
+          nodes.every((node) => {
+            const cardBounds = node.closest('.registry-benefits__card')!.getBoundingClientRect();
+            const contentBounds = node.getBoundingClientRect();
+            return (
+              contentBounds.left >= cardBounds.left - 1 &&
+              contentBounds.right <= cardBounds.right + 1 &&
+              node.scrollWidth <= node.clientWidth + 1
+            );
+          }),
+        );
+        expect(textFits).toBe(true);
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
@@ -133,7 +149,16 @@ test('FAQ panels expand smoothly with a keyboard-accessible control', async ({ p
   await expect(firstPanel).toBeHidden();
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(firstPanel).toHaveCSS('transition-duration', '0s');
+  // The global reduced-motion contract is 0.01ms (computed as 1e-05s).
+  // Assert an effectively zero duration rather than an exact string "0s".
+  const durations = await firstPanel.evaluate((node) =>
+    getComputedStyle(node).transitionDuration.split(',').map((value) => {
+      const time = value.trim();
+      const seconds = Number.parseFloat(time);
+      return time.endsWith('ms') ? seconds / 1000 : seconds;
+    }),
+  );
+  expect(Math.max(...durations)).toBeLessThan(0.0001);
   await firstTrigger.click();
   await expect(firstPanel).toBeVisible();
   for (const width of [390, 280]) {

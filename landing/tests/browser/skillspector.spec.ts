@@ -186,8 +186,11 @@ for (const mobile of [false, true]) {
         'skills add https://github.com/anthropics/skills --skill frontend-design',
       );
       await navigate(page, '/plugins/', 'ru', '?tab=skills&skillScan=all');
+      const ru = wording('ru');
       await expect(page.locator('.skill-card .skillspector > summary')).toContainText(
-        wording('ru')('registryUi.skillSpector.stale'),
+        ru('registryUi.skillSpector.lastScan', {
+          result: ru('registryUi.skillSpector.incomplete'),
+        }),
       );
       expect(requests).toBe(1);
       expect(
