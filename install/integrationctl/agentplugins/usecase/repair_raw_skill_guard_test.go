@@ -24,7 +24,7 @@ func TestRepairRawSkillDigestDriftRefusedBeforeStaging(t *testing.T) {
 		} {
 			t.Run(string(client)+"/"+source.name, func(t *testing.T) {
 				proof := repairSession{
-					input:  AddInput{Client: domain.DetectedClient{ClientID: client}},
+					input:  AddInput{Scope: domain.ScopeUser, Client: domain.DetectedClient{ClientID: client}},
 					client: domain.ClientBinding{PackageRevision: &source.rev},
 					verifyErr: &ports.VerificationError{
 						Kind:         ports.VerificationDigestMismatch,
@@ -40,5 +40,33 @@ func TestRepairRawSkillDigestDriftRefusedBeforeStaging(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestRawSkillRepairGuardPreservesOtherScopePolicies keeps project Gemini
+// and other native package repair decisions outside the user Codex/Claude
+// safety change. An unconfirmed operation must still reach confirmation.
+func TestRawSkillRepairGuardPreservesOtherScopePolicies(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		client domain.ClientID
+		scope domain.InstallScope
+		rev domain.ClientPackageRevision
+	}{
+		{name: "gemini-project-skill", client: domain.ClientGemini, scope: domain.ScopeProject, rev: domain.ClientPackageRevision{Skill: &domain.SkillSourceFacts{Name: "docs"}}},
+		{name: "codex-project-skill", client: domain.ClientCodex, scope: domain.ScopeProject, rev: domain.ClientPackageRevision{Skill: &domain.SkillSourceFacts{Name: "docs"}}},
+		{name: "codex-user-plugin", client: domain.ClientCodex, scope: domain.ScopeUser, rev: domain.ClientPackageRevision{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			proof := repairSession{
+				input: AddInput{Scope: tc.scope, Client: domain.DetectedClient{ClientID: tc.client}},
+				client: domain.ClientBinding{PackageRevision: &tc.rev},
+				verifyErr: &ports.VerificationError{Kind: ports.VerificationDigestMismatch, ActualDigest: "sha256:edited", Err: errors.New("artifact digest mismatch")},
+			}
+			_, err := proof.repairPackage()
+			if err != nil || !proof.result.RequiresConfirmation {
+				t.Fatalf("%s repair was unexpectedly changed by user raw-Skill guard: %+v %v", tc.name, proof.result, err)
+			}
+		})
 	}
 }

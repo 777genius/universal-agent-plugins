@@ -22,6 +22,28 @@ func savedSkillsDurableTree(t *testing.T, root string) map[string]savedJourneyFi
 	return files
 }
 
+// savedRawSkillDropOwnedFixture permits destructive test cleanup only under
+// this run's disposable CLI root. It never uses an arbitrary receipt path.
+func savedRawSkillDropOwnedFixture(t *testing.T, journey savedJourney, target string) {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(journey.cli.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relative, err := filepath.Rel(root, active)
+	if err != nil || relative == "." || relative == ".." ||
+		strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		t.Fatalf("refusing unsafe fixture cleanup of %q: %v", target, err)
+	}
+	if err := os.RemoveAll(target); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // A raw Agent Skill is a different source type from a plugin package. Exercise
 // both user targets through the existing public dependency/installer seams
 // without requiring credentials or executing downloaded Skill instructions.
@@ -193,7 +215,8 @@ func TestUserRawSkillCodexClaudePinnedLifecycle(t *testing.T) {
 	guardedState := savedSkillsDurableTree(t, j.cli.app.DependenciesRoot)
 	if _, _, err := j.cli.execute(false, "remove", "pdf", "--target", "codex", "--external-uninstalled", "--scope", "user", "--format", "json"); err == nil ||
 		(!strings.Contains(err.Error(), "artifact digest mismatch") &&
-			!strings.Contains(err.Error(), "native identity ownership is indeterminate")) {
+			!strings.Contains(err.Error(), "native identity ownership is indeterminate") &&
+			!strings.Contains(err.Error(), "drift: pdf/codex")) {
 		t.Fatalf("selected removal failed to refuse foreign raw Skill ownership: %v", err)
 	}
 	if after := savedSkillsDurableTree(t, j.cli.app.DependenciesRoot); !reflect.DeepEqual(guardedState, after) {

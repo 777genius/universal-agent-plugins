@@ -15,10 +15,13 @@ func (session *repairSession) repairPackage() (AddResult, error) {
 		return session.result, fmt.Errorf("managed package integrity could not be determined; refusing repair: %w", session.verifyErr)
 	}
 	if verification.Kind == ports.VerificationDigestMismatch {
-		// An installed raw Skill may contain new user files even inside its managed
-		// directory. Refuse destructive repair of that drift, but retain absent
-		// directory recovery and the existing plugin-specific repair policy.
-		if rev := session.client.PackageRevision; rev != nil && (rev.Skill != nil || rev.WebSkill != nil) {
+		// The user/global native Skill stores of Codex and Claude must not overwrite
+		// another user's content. Keep existing project/other-client repair
+		// contracts unchanged; absent user Skill directories remain repairable.
+		if rev := session.client.PackageRevision; rev != nil &&
+			session.input.Scope == domain.ScopeUser &&
+			(session.input.Client.ClientID == domain.ClientCodex || session.input.Client.ClientID == domain.ClientClaude) &&
+			(rev.Skill != nil || rev.WebSkill != nil) {
 			return session.result, fmt.Errorf("managed raw Skill contains modified or unowned content; refusing repair: %w", session.verifyErr)
 		}
 		if domain.ClientTraitsFor(session.input.Client.ClientID).ProtectsModifiedPackage {
