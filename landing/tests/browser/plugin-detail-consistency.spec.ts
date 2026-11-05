@@ -158,7 +158,7 @@ test('plugin detail uses readable theme tokens and aligned mobile breadcrumbs', 
     const crumbBox = (await breadcrumbs.boundingBox())!;
     expect(Math.abs(back.y + back.height / 2 - (crumbBox.y + crumbBox.height / 2))).toBeLessThan(3);
     await expect(breadcrumbs).toHaveCSS('padding-top', '0px');
-    await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText('i18n-state-00');
+    await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText('I18n State 00');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
