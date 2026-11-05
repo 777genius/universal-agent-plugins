@@ -132,10 +132,9 @@ func TestOnlyTheFrozenFamilyWithholdsCommands(t *testing.T) {
 	}
 }
 
-// Project Pi has an explicit native-effect journal, but the pre-existing
-// user-scoped native extension retains its separate installed-publication path.
-// Applying project traits to user Pi creates a pending native attempt before
-// its host callback can publish the installed runtime.
+// Global and project Pi both support native Skills/MCP. Only project Pi
+// tracks native attempts; user Pi publishes through its installed host callback.
+// Tracking user Pi before that callback blocks installed authority publication.
 func TestPiNativeEffectTrackingIsProjectScoped(t *testing.T) {
 	user := (SelectedDelivery{}).EffectiveTraitsForScope(ClientPi, ScopeUser)
 	project := (SelectedDelivery{}).EffectiveTraitsForScope(ClientPi, ScopeProject)
@@ -150,9 +149,9 @@ func TestPiNativeEffectTrackingIsProjectScoped(t *testing.T) {
 		t.Fatal("Pi client definition missing")
 	}
 	userCaps, projectCaps := pi.ScopedCapabilities(ScopeUser), pi.ScopedCapabilities(ScopeProject)
-	if userCaps.SkillSupport != SupportUnsupported || userCaps.MCPTransports["stdio"] != SupportUnsupported ||
-		userCaps.MCPTransports["streamable-http"] != SupportUnsupported {
-		t.Fatalf("Pi user gained project-only components: %+v", userCaps)
+	if userCaps.SkillSupport != SupportNative || userCaps.MCPTransports["stdio"] != SupportNative ||
+		userCaps.MCPTransports["streamable-http"] != SupportNative {
+		t.Fatalf("Pi global Skills/MCP contract regressed: %+v", userCaps)
 	}
 	if projectCaps.SkillSupport != SupportNative || projectCaps.MCPTransports["stdio"] != SupportNative ||
 		projectCaps.MCPTransports["streamable-http"] != SupportNative {
