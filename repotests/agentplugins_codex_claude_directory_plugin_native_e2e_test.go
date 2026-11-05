@@ -129,6 +129,9 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	}
 	claudeCheck := func(label string, present bool) {
 		entries := claudePluginList(t, claude, claudeBin, label)
+		if entries == nil {
+			t.Fatal("Claude Directory native plugin list must be a JSON array, not null")
+		}
 		count := 0
 		for _, entry := range entries {
 			if entry.ID != directorySitePlugin+"@skills-dir" {
