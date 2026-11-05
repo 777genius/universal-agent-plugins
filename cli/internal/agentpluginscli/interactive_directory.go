@@ -98,7 +98,7 @@ func (session *directoryTargetSession) largestCompatibleSubset() []domain.Detect
 func (session *directoryTargetSession) subsetResolves(candidate []domain.DetectedClient) bool {
 	targets := detectedClientIDs(candidate)
 	resolveRequest := session.baseRequest(targets)
-	_, resolveErr := domain.ResolveDirectory(session.snapshot, resolveRequest)
+	_, resolveErr := selectDirectorySourceForPlacement(session.snapshot, resolveRequest)
 	if session.personalPrepareSelected() {
 		if applied, prepErr := session.preparePersonal(resolveRequest, targets); applied {
 			resolveErr = prepErr
@@ -148,7 +148,7 @@ func (session *directoryTargetSession) resolvePersonalPreparation(resolveRequest
 	if _, purpose, ok := directoryPreparationClient([]domain.ClientID{personal}); ok {
 		preparation.Purpose = purpose
 	}
-	selection, prepErr := domain.ResolveDirectory(session.snapshot, preparation)
+	selection, prepErr := selectDirectorySourceForPlacement(session.snapshot, preparation)
 	if prepErr != nil {
 		return prepErr
 	}
@@ -168,7 +168,7 @@ func (session *directoryTargetSession) resolvePreparationPeers(resolveRequest do
 		Repository: selection.Source.Repository, ResolvedRevision: selection.Source.Revision, Path: selection.Source.Path,
 		TreeDigestAlgorithm: selection.TreeDigestAlgorithm, TreeDigest: selection.TreeDigest, ManifestDigest: selection.ManifestDigest,
 	}
-	peer, err := domain.ResolveDirectory(session.snapshot, peerRequest)
+	peer, err := selectDirectorySourceForPlacement(session.snapshot, peerRequest)
 	if err != nil {
 		return err
 	}
