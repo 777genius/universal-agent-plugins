@@ -124,7 +124,8 @@ func TestProjectRequiredChildColdRestoreAndScopedRemoval(t *testing.T) {
 			foundChildren[pkg.Alias] = true
 		}
 		for _, child := range children {
-			if !foundChildren[child.alias] {
+			// Required child pins use their canonical plugin manifest names.
+			if !foundChildren["project-"+child.alias] {
 				t.Fatalf("missing required %s edge from %s lock: %+v", child.alias, scope.pair, lock.Packages)
 			}
 		}
