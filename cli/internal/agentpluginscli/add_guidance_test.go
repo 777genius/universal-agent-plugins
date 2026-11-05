@@ -127,8 +127,8 @@ func TestAddRecoveryPropagatesWriterFailure(t *testing.T) {
 // TestVerifiedOtherClientsDoNotExposePrivateLocalActions keeps unrelated client local actions private.
 func TestVerifiedOtherClientsDoNotExposePrivateLocalActions(t *testing.T) {
 	result := usecase.AddResult{
-		Mutated:    true,
-		Plan:       domain.DeliveryPlan{ClientID: domain.ClientCursor},
+		Mutated: true,
+		Plan:    domain.DeliveryPlan{ClientID: domain.ClientCursor},
 		Activation: domain.ActivationOutcome{
 			Activation:     domain.ActivationActive,
 			Verification:   domain.VerificationInstalled,
@@ -150,9 +150,9 @@ func TestSuccessfulNativeAddPrintsOptionalLocalHandoffWithoutPublicPathLeak(t *t
 	for _, mutated := range []bool{false, true} {
 		t.Run(fmt.Sprint("mutated=", mutated), func(t *testing.T) {
 			result := usecase.AddResult{
-				NoChange:   !mutated,
-				Mutated:    mutated,
-				Plan:       domain.DeliveryPlan{ClientID: domain.ClientCodex},
+				NoChange: !mutated,
+				Mutated:  mutated,
+				Plan:     domain.DeliveryPlan{ClientID: domain.ClientCodex},
 				Activation: domain.ActivationOutcome{
 					Activation:     domain.ActivationActive,
 					Verification:   domain.VerificationInstalled,
