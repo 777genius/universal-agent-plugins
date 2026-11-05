@@ -266,7 +266,7 @@ def proof_framing(stage, value):
         obj(value, "original_sha256 expected_sha256 runs")
     else:
         obj(value, "scope revision removed source_digest state binding delivery data")
-        obj(value["delivery"], "active view files manifest skill")
+        obj(value["delivery"], "active view files manifest skill native_skill")
         obj(value["data"], "allocated path receipt owner files")
 
 

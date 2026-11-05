@@ -36,6 +36,10 @@ type ClientTraits struct {
 	// RequiresActiveNativeProjection separates native component readback from
 	// journal creation for a prepared user host with a separate commit handoff.
 	RequiresActiveNativeProjection bool
+	// LegacyPreparedProjectPackageReceipt preserves exact package-only project
+	// verification for old bindings when this client later gains native components.
+	// It never authorizes adopting or mutating mismatched ownership receipts.
+	LegacyPreparedProjectPackageReceipt bool
 	// RecordsUserProfileOnCreate records a selected user profile only for a new
 	// binding. It never adopts a legacy or coalesced binding with missing proof.
 	RecordsUserProfileOnCreate bool

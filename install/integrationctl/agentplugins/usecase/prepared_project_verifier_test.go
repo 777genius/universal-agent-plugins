@@ -92,6 +92,7 @@ func newPreparedFileFixture(t *testing.T) *preparedFileFixture {
 	f.input = AddInput{Client: domain.DetectedClient{ClientID: domain.ClientQoder, ConfigRoot: filepath.Join(base, "user")}, Scope: domain.ScopeProject, InstallationID: f.id, Confirmed: true}
 	f.plan = domain.DeliveryPlan{ClientID: domain.ClientQoder, Scope: domain.ScopeProject, DeclaredName: "demo", PhysicalArtifactID: "demo-physical", TargetRoot: root, ActivePath: active, NativeRegistryRoot: root, TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: project, UserConfigRoot: f.input.Client.ConfigRoot}}
 	object := domain.NativeObjectOwnership{Kind: "managed_package_directory", ObjectID: "package:qoder:demo-physical", LogicalName: "demo", Path: active, ManagedDigest: "sha256:recorded"}
+	f.plan.PreviousNativeObjects = []domain.NativeObjectOwnership{object}
 	f.binding = domain.ClientBinding{ClientBindingID: domain.ComputeClientBindingID(f.id, "qoder", "project", active), ClientID: "qoder", Scope: "project", PhysicalArtifact: "demo-physical", TargetLocator: active, NativeProfileRoot: root, Materialization: domain.MaterializationMaterialized, Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, Authentication: domain.AuthenticationNotChecked, Policy: domain.PolicyAllowed, NativeObjects: []domain.NativeObjectOwnership{object}}
 	f.delivery = domain.StagedDelivery{ClientID: domain.ClientQoder, OwnedBase: root, ActivePath: active, ArtifactDigest: object.ManagedDigest, NativeObjects: append([]domain.NativeObjectOwnership(nil), f.binding.NativeObjects...)}
 	f.actor = &preparedFileActivator{available: true, observedActivator: observedActivator{outcome: domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, Authentication: domain.AuthenticationNotChecked, Policy: domain.PolicyAllowed, NativeEffect: domain.NativeEffectUnchanged, UserActions: []string{"review the independent native import"}}}}
@@ -278,6 +279,11 @@ func TestPreparedProjectFileVerifierRefusesMalformedAuthorityBeforeCapability(t 
 func TestPreparedProjectFileVerifierUnavailableNeverCallsInheritedGate(t *testing.T) {
 	f := newPreparedFileFixture(t)
 	f.actor.available = false
+	fresh := f.plan
+	fresh.PreviousNativeObjects = nil
+	if preparedProjectFileCandidate(f.input, fresh) {
+		t.Fatal("new Qoder native project incorrectly inherited package-only verifier")
+	}
 	f.input.BackendExecutable = "/inert/qoder-static-auth-hint-must-not-enable"
 	out, err := f.service.verifyClientReadOnly(t.Context(), f.input, AddResult{InstallationID: f.id, Plan: f.plan}, f.binding)
 	if err != nil || out.Activation != "" || len(f.actor.requests) != 0 || f.actor.capabilityCalls != 1 {
