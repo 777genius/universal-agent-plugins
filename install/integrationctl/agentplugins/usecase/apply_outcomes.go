@@ -122,6 +122,11 @@ func (session *applySession) persistReadOnlyObservation(current domain.ClientBin
 		result, err := session.service.persistObservedLifecycle(session.input, session.result, session.installationID, session.clientBindingID, verified)
 		return true, result, err
 	}
+	// Preserve optional local guidance from a successful read-only verification.
+	// Lifecycle state remains unchanged, and local actions stay out of public JSON.
+	if verified.Activation != "" {
+		session.result.Activation.LocalActions = append([]string(nil), verified.LocalActions...)
+	}
 	session.result.NoChange = true
 	return true, session.result, nil
 }
