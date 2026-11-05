@@ -32,6 +32,7 @@ const sourcePins = new Map<string, readonly string[]>([
 type Json = Record<string, unknown>;
 export interface TrustedCohortKey { key_id: string; public_key: string }
 export interface VerifiedCohort {
+  expiresAt: number;
   manifestDigest: string;
   oldReportCommit: string;
   records: ReadonlyMap<string, SkillSpectorRecord>;
@@ -200,6 +201,7 @@ function validateRecords(release: Json, pointer: Json): VerifiedCohort {
   }
   if (mapped.size !== 9) invalid();
   return {
+    expiresAt: asTime(release.expires_at),
     manifestDigest: String(candidate.base_manifest_digest),
     oldReportCommit: String(candidate.base_report_commit),
     records: mapped,
@@ -277,8 +279,10 @@ export function applyVerifiedSkillSpectorCohort(
   report: SkillSpectorDisplayReport,
   manifestDigest: string | undefined,
   cohort: VerifiedCohort | undefined,
+  now: Date = new Date(),
 ): SkillSpectorDisplayReport {
-  if (!cohort || !manifestDigest || manifestDigest !== cohort.manifestDigest ||
+  if (!cohort || cohort.expiresAt <= now.getTime() ||
+      !manifestDigest || manifestDigest !== cohort.manifestDigest ||
       report.schema_version !== 3) return report;
   const records = report.records.map(old => {
     const updated = cohort.records.get(old.id);
