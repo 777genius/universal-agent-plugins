@@ -40,7 +40,7 @@ func nativeRawUserInstall(t *testing.T, root, dir string, env []string, installe
 	}
 }
 
-func nativeRawUserState(t *testing.T, statePath, target, profile string) (domain.StateFileV2, domain.ClientBinding) {
+func nativeRawUserState(t *testing.T, statePath, target, profile string, requiredVerification domain.VerificationState) (domain.StateFileV2, domain.ClientBinding) {
 	t.Helper()
 	body, err := os.ReadFile(statePath)
 	if err != nil {
@@ -70,7 +70,7 @@ func nativeRawUserState(t *testing.T, statePath, target, profile string) (domain
 		binding.TargetLocator == "" || binding.PhysicalArtifact == "" ||
 		binding.ClientBindingID == "" ||
 		((target == "codex" || binding.NativeProfileRoot != "") && binding.NativeProfileRoot != profile) ||
-		binding.Verification != domain.VerificationInstalled {
+		binding.Verification != requiredVerification {
 		t.Fatalf("%s: raw Skill lost immutable user/native identity: %+v; %+v", target, installed, binding)
 	}
 	// Claude's projected delivery binds the selected native profile through
@@ -113,7 +113,7 @@ func nativeRawUserSavedLifecycleResult(t *testing.T, target, operation string, r
 	}
 }
 
-func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer, target, statePath, profile string, original domain.ClientBinding) domain.ClientBinding {
+func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer, target, statePath, profile string, original domain.ClientBinding) {
 	t.Helper()
 	// This test deliberately deletes a managed artifact to reproduce absent
 	// repair. Never allow a bad persisted path to escape the disposable host.
@@ -123,13 +123,20 @@ func nativeRawUserRepair(t *testing.T, root, dir string, env []string, installer
 	}
 	result, err := commandsRunInstaller(t, root, dir, env, installer, "raw-user-repair", "repair", nativeRawUserSkillName, "--target", target, "--scope", "user")
 	nativeRawUserSavedLifecycleResult(t, target, "repair", result, err)
-	_, restored := nativeRawUserState(t, statePath, target, profile)
+	// Saved Codex repair restores the owned package conservatively as
+	// package_validated. The caller independently requires real Codex native
+	// plugin and skills/list discovery before accepting the repaired installation.
+	// Claude repair already records installation_verified.
+	requiredVerification := domain.VerificationInstalled
+	if target == "codex" {
+		requiredVerification = domain.VerificationPackageValid
+	}
+	_, restored := nativeRawUserState(t, statePath, target, profile, requiredVerification)
 	if restored.ClientBindingID != original.ClientBindingID || restored.PhysicalArtifact != original.PhysicalArtifact ||
 		restored.TargetLocator != original.TargetLocator {
 		t.Fatalf("%s: repair replaced immutable Skill identity: before=%+v after=%+v", target, original, restored)
 	}
 	nativeRawUserFiles(t, restored, target)
-	return restored
 }
 
 func nativeRawUserRemove(t *testing.T, root, dir string, env []string, installer, target, statePath, active string, external bool) {
@@ -280,7 +287,7 @@ func TestAgentpluginsCodexNativeRawUserSkillLifecycle(t *testing.T) {
 	env := f.env(filepath.Dir(client))
 	statePath := filepath.Join(f.Root, "installer-state", "state-v2.json")
 	nativeRawUserInstall(t, f.Root, f.Project, env, installer, "codex", "raw-user-add", true, false)
-	state, binding := nativeRawUserState(t, statePath, "codex", f.CodexHome)
+	state, binding := nativeRawUserState(t, statePath, "codex", f.CodexHome, domain.VerificationInstalled)
 	nativeRawUserFiles(t, binding, "codex")
 	declaredName := state.Installations[0].DeclaredName
 	id := declaredName + "@" + shared.ManagedMarketplaceName(binding.PhysicalArtifact)
@@ -321,7 +328,7 @@ func TestAgentpluginsClaudeNativeRawUserSkillLifecycle(t *testing.T) {
 	env := f.env(clientDir)
 	statePath := filepath.Join(f.StateHome, "state-v2.json")
 	nativeRawUserInstall(t, f.Root, f.Root, env, installer, "claude", "raw-user-add", true, false)
-	state, binding := nativeRawUserState(t, statePath, "claude", f.ConfigDir)
+	state, binding := nativeRawUserState(t, statePath, "claude", f.ConfigDir, domain.VerificationInstalled)
 	nativeRawUserFiles(t, binding, "claude")
 	pluginID := state.Installations[0].DeclaredName + "@skills-dir"
 	verify := func(label string, want bool) {
