@@ -326,7 +326,7 @@ function updateTargets(values: string[]) {
                     </p>
                     <a
                       class="hero-quick-start__more-install"
-                      href="https://github.com/777genius/universal-agent-plugins#quick-start"
+                      href="https://github.com/777genius/universal-agent-plugins#install-the-cli"
                       target="_blank"
                       rel="noreferrer"
                       >{{ t('shell.hero.otherMethods') }} <span aria-hidden="true">↗</span></a
