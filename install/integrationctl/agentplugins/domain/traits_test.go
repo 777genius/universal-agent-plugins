@@ -131,3 +131,18 @@ func TestOnlyTheFrozenFamilyWithholdsCommands(t *testing.T) {
 		}
 	}
 }
+
+// Project Pi has an explicit native-effect journal, but the pre-existing
+// user-scoped native extension retains its separate installed-publication path.
+// Applying project traits to user Pi creates a pending native attempt before
+// its host callback can publish the installed runtime.
+func TestPiNativeEffectTrackingIsProjectScoped(t *testing.T) {
+	user := (SelectedDelivery{}).EffectiveTraitsForScope(ClientPi, ScopeUser)
+	project := (SelectedDelivery{}).EffectiveTraitsForScope(ClientPi, ScopeProject)
+	if user.TracksNativeEffects || user.LifecycleKind != LifecyclePrepared {
+		t.Fatalf("Pi user lifecycle unexpectedly requires a native attempt: %+v", user)
+	}
+	if !project.TracksNativeEffects || project.LifecycleKind != LifecyclePrepared {
+		t.Fatalf("Pi project lifecycle lost tracked native effects: %+v", project)
+	}
+}
