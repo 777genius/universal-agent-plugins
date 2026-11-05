@@ -1,4 +1,4 @@
-name: Devin Global D0 genuine source and MCP call probe
+name: Devin Global UAP install and native discovery E2E
 on:
   push:
     branches:
@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   native-d0:
-    name: Fail closed unless genuine Devin source and stdio/HTTP calls observed
+    name: Verify genuine Devin Skills and MCP discovery after UAP install
     runs-on: ubuntu-24.04
     timeout-minutes: 14
     steps:
@@ -42,12 +42,13 @@ jobs:
           import time
           import urllib.request
           
-          # One-off, evidence-only D0 spike on a disposable GitHub-hosted Linux VM.
-          # This deliberately does not mutate UAP product code or claim client E2E.
+          # Genuine pinned Devin and source-built UAP on a disposable hosted VM.
+          # Native listing qualifies installation/discovery, not model MCP RPC.
           ROOT = pathlib.Path(os.environ["RUNNER_TEMP"]) / "devin-global-d0"
           ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
           report = {"status": "BLOCKED", "commit": os.environ.get("GITHUB_SHA"),
                     "platform": "linux-amd64", "qualified_product_e2e": False,
+                    "installation_discovery_e2e": False,
                     "commands": [], "native_rpc_events": []}
           archive_url = "https://static.devin.ai/cli/3000.11.205/devin-3000.11.205-x86_64-unknown-linux.tar.gz"
           archive_sha = "2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4"
@@ -434,10 +435,21 @@ jobs:
                   bridge["status"] = "GENUINE_UAP_WRITTEN_SOURCE_DISCOVERED"
               except Exception as exc:
                   bridge["failure"] = type(exc).__name__ + ": " + str(exc)[:200]
-              if all(checks.values()):
-                  report["status"] = "D0_NATIVE_SOURCE_AND_CALL_OBSERVED"
+              # User-approved install-only E2E: genuine Devin must discover
+              # UAP-written Global Skills plus BOTH MCP transports before and
+              # after repair, and see their absence after removal in A and B.
+              # Model tool calls remain distinct optional evidence, never PASS
+              # merely because a config is visible.
+              required_source = ("global_source_A_B", "project_skill_A_only",
+                                 "global_mcp_A_B", "project_mcp_A_only",
+                                 "uap_cli_add_repair_remove_A_B")
+              report["installation_discovery_e2e"] = all(checks.get(k) is True for k in required_source)
+              report["runtime_mcp_calls_qualified"] = (checks.get("stdio_initialize_list_call") is True and
+                                                       checks.get("http_initialize_list_call") is True)
+              if report["installation_discovery_e2e"]:
+                  report["status"] = "UAP_NATIVE_INSTALL_DISCOVERY_PASS"
               else:
-                  report["blocked_reason"] = "genuine Devin-driven source and both MCP transport calls were not all observed"
+                  report["blocked_reason"] = "genuine UAP-written Devin Skills/MCP discovery or removal was not verified"
           except Exception as exc:
               report["blocked_reason"] = type(exc).__name__ + ": " + str(exc)[:240]
           finally:
@@ -448,7 +460,7 @@ jobs:
               print(json.dumps({"status": report["status"], "gates": report.get("gates"),
                                 "blocked_reason": report.get("blocked_reason"),
                                 "commit": report["commit"]}, sort_keys=True))
-          sys.exit(0 if report["status"] == "D0_NATIVE_SOURCE_AND_CALL_OBSERVED" else 1)
+          sys.exit(0 if report["installation_discovery_e2e"] else 1)
           PYTHON
 
       - name: Retain exact-head negative or positive proof

@@ -130,3 +130,35 @@ leaf в каждом из двух раундов. Автор отдельно �
 
 После review изменены только этот журнал и статус документа. Review принимает
 план, не объявляет реализацию, native E2E, merge либо release завершёнными.
+
+## Owner scope revision — 2026-11-05 (supersedes runtime-call merge requirement)
+
+The owner explicitly accepts genuine **installation and discovery** as the
+mandatory E2E for this leaf. Authenticated model sessions and client-driven
+MCP `initialize` / `tools/list` / `tools/call` are optional **runtime**
+qualification, not an install-only merge gate. No authorization bypass is used.
+
+The required hosted source-built UAP + hash-verified Devin cycle is:
+install the mixed Global Skill + stdio + HTTP package in an isolated original
+profile; have **real `devin skills list --json` and `devin mcp list`**
+confirm all three UAP-written names independently in A and B; remove an owned
+Skill and repair it; confirm native discovery again; remove the installation
+and confirm all three names disappear. Original Global/Project/Cascade and
+foreign configuration must survive byte-identically. Exact owned receipt,
+profile and source identities must be validated by existing paths.
+
+This was directly observed at HEAD `2108d60d22da527ffcbc25a231036d55699fa2ff`,
+GitHub Actions run `42067857378`, artifact `13435429930`: eight A/B
+native inventory checkpoints passed, actual UAP add/repair/remove all exited
+0 and the original components remained. That run was marked red solely because
+the previous workflow incorrectly made model MCP calls required. The revised
+workflow gates only the above genuine installation/discovery cells and
+retains `runtime_mcp_calls_qualified=false` and
+`qualified_product_e2e=false` when vendor auth/model execution is absent.
+Source/configured does not imply connected/tool-executed.
+
+After independent code reviews, applicable exact-final-HEAD CI and the
+native source E2E pass, this narrowly qualified code may be squash-merged.
+New signed/public runtime-capability claims and product release remain
+separate. The earlier D0/runtime-call requirement in this file is historical
+and is not a veto on this owner's narrower installation-only acceptance.
