@@ -121,7 +121,7 @@ func TestRecordedMixedOrRetargetedUserReceiptFailsClosed(t *testing.T) {
 	legacy := domain.NativeObjectOwnership{Kind: WindsurfMCPObjectKind}
 	global := domain.NativeObjectOwnership{Kind: DevinGlobalMCPKind}
 	for _, scenario := range []struct {
-		root string
+		root    string
 		objects []domain.NativeObjectOwnership
 	}{
 		{client.ConfigRoot, []domain.NativeObjectOwnership{legacy, global}},

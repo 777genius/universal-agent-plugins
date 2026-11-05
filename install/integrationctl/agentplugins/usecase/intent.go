@@ -45,17 +45,17 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 		input.Client.OpenCodeHost = host
 	}
 	plan, err := service.Planner.Plan(ctx, domain.PlanRequest{
-		ProjectRoot:           service.ProjectRoot,
-		LocalEntryObservation: observation.Clone(),
-		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), objects...),
+		ProjectRoot:               service.ProjectRoot,
+		LocalEntryObservation:     observation.Clone(),
+		PreviousNativeObjects:     append([]domain.NativeObjectOwnership(nil), objects...),
 		PreviousNativeProfileRoot: previousNativeRoot,
-		PreviousBindingRecorded: binding != nil,
-		Envelope:              input.Envelope,
-		Client:                input.Client,
-		Scope:                 input.Scope,
-		PhysicalArtifactID:    physicalID,
-		InstallIntent:         input.InstallIntent,
-		Detected:              service.Detected,
+		PreviousBindingRecorded:   binding != nil,
+		Envelope:                  input.Envelope,
+		Client:                    input.Client,
+		Scope:                     input.Scope,
+		PhysicalArtifactID:        physicalID,
+		InstallIntent:             input.InstallIntent,
+		Detected:                  service.Detected,
 	})
 	if err != nil {
 		return plan, err

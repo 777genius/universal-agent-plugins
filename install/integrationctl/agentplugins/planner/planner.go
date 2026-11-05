@@ -93,10 +93,10 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 		TargetContext: plan.TargetContext,
 		Envelope:      request.Envelope, Client: request.Client,
 		Detected: request.Detected, Intent: request.InstallIntent,
-		LocalEntryObservation: request.LocalEntryObservation.Clone(),
-		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...),
+		LocalEntryObservation:     request.LocalEntryObservation.Clone(),
+		PreviousNativeObjects:     append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...),
 		PreviousNativeProfileRoot: request.PreviousNativeProfileRoot,
-		PreviousBindingRecorded: request.PreviousBindingRecorded,
+		PreviousBindingRecorded:   request.PreviousBindingRecorded,
 	}
 	planner.setNativeRegistry(&plan, input)
 	if !admissible(definition, request, &plan) {
