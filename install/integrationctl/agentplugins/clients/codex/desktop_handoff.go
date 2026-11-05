@@ -60,5 +60,5 @@ func desktopPluginHandoff(marketplaceRoot, pluginName, physicalArtifactID string
 		document.Plugins[0].Source.Path != "./" {
 		return ""
 	}
-	return "ChatGPT Desktop local plugin details: " + link + ". On macOS or Windows, run `codex app` to open Desktop; restart if the marketplace is not visible. Finish installation or enablement in Plugins > Personal, then verify in a new local thread. Codex CLI verification does not prove ChatGPT runtime use."
+	return "start a new Codex session and verify the plugin; optional ChatGPT Desktop local plugin details: " + link + ". On macOS or Windows, run `codex app` to open Desktop; restart if the marketplace is not visible. Finish installation or enablement in Plugins > Personal, then verify in a new local thread. Codex CLI verification does not prove ChatGPT runtime use."
 }
