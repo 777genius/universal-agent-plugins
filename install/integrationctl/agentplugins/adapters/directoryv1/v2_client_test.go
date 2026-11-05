@@ -6,7 +6,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -98,4 +100,51 @@ func TestV2ClientRefusesV1BootstrapAndSharedCachePath(t *testing.T) {
 	if _, err := client.Load(context.Background(), 0); !errors.Is(err, ErrBootstrapNotReady) {
 		t.Fatalf("v2 accepted invalid embedded signing authority: %v", err)
 	}
+}
+
+func TestV2ClientRejectsCacheAliasesBeforeNetworkOrWrites(t *testing.T) {
+	_, _, trust := v2SignedFixture(t)
+	root := t.TempDir()
+	real := filepath.Join(root, "real")
+	if err := os.Mkdir(real, 0700); err != nil {
+		t.Fatal(err)
+	}
+	check := func(t *testing.T, v1Path, v2Path string) {
+		t.Helper()
+		client := V2Client{
+			Transport: Client{Trust: trust, Cache: Cache{Path: v1Path}},
+			Cache:     Cache{Path: v2Path},
+		}
+		if _, err := client.Load(context.Background(), 0); !errors.Is(err, ErrUnavailable) ||
+			!strings.Contains(err.Error(), "v1/v2 cache path collision") {
+			t.Fatalf("install-time loader accepted cache alias: %v", err)
+		}
+		if _, err := client.LoadLocal(0); !errors.Is(err, ErrUnavailable) ||
+			!strings.Contains(err.Error(), "v1/v2 cache path collision") {
+			t.Fatalf("read-only loader accepted cache alias: %v", err)
+		}
+		if _, err := os.Stat(v1Path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("alias refusal changed v1 cache: %v", err)
+		}
+	}
+
+	t.Run("relative and absolute aliases", func(t *testing.T) {
+		absolute := filepath.Join(real, "shared.json")
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatal(err)
+		}
+		relative, err := filepath.Rel(cwd, absolute)
+		if err != nil {
+			t.Skipf("relative alias cannot span OS volumes: %v", err)
+		}
+		check(t, absolute, relative)
+	})
+	t.Run("symlink parent of uncreated cache", func(t *testing.T) {
+		alias := filepath.Join(root, "alias")
+		if err := os.Symlink(real, alias); err != nil {
+			t.Skipf("directory symlinks unavailable on this host: %v", err)
+		}
+		check(t, filepath.Join(real, "future", "shared.json"), filepath.Join(alias, "future", "shared.json"))
+	})
 }

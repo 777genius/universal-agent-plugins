@@ -29,8 +29,18 @@ func (client V2Client) validateConfig() error {
 	if client.Cache.Path == "" {
 		return fmt.Errorf("%w: v2 cache path is required", ErrUnavailable)
 	}
-	if client.Transport.Cache.Path != "" && filepath.Clean(client.Cache.Path) == filepath.Clean(client.Transport.Cache.Path) {
-		return fmt.Errorf("%w: v1/v2 cache path collision", ErrUnavailable)
+	if client.Transport.Cache.Path != "" {
+		v1Path, err := canonicalCachePath(client.Transport.Cache.Path)
+		if err != nil {
+			return fmt.Errorf("%w: resolve v1 cache path: %v", ErrUnavailable, err)
+		}
+		v2Path, err := canonicalCachePath(client.Cache.Path)
+		if err != nil {
+			return fmt.Errorf("%w: resolve v2 cache path: %v", ErrUnavailable, err)
+		}
+		if v1Path == v2Path {
+			return fmt.Errorf("%w: v1/v2 cache path collision", ErrUnavailable)
+		}
 	}
 	return nil
 }
@@ -38,6 +48,31 @@ func (client V2Client) validateConfig() error {
 // LoadLocal returns signed v2 provenance for read-only inspection without
 // network access or writes. As for v1, expired data may be displayed but must
 // never authorize installation or locked restore.
+// canonicalCachePath resolves existing parent aliases even when the cache file
+// does not exist yet. Keep v1 and v2 from writing the same physical LKG path.
+func canonicalCachePath(path string) (string, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	parent, suffix := filepath.Dir(absolute), filepath.Base(absolute)
+	for {
+		resolved, err := filepath.EvalSymlinks(parent)
+		if err == nil {
+			return filepath.Join(resolved, suffix), nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		ancestor := filepath.Dir(parent)
+		if ancestor == parent {
+			return "", err
+		}
+		suffix = filepath.Join(filepath.Base(parent), suffix)
+		parent = ancestor
+	}
+}
+
 func (client V2Client) LoadLocal(installedFloor uint64) (VerifiedBundle, error) {
 	if err := client.validateConfig(); err != nil {
 		return VerifiedBundle{}, err
