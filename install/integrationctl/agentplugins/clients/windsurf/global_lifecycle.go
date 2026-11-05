@@ -71,10 +71,10 @@ func (adapter *Adapter) activateDevinGlobal(ctx context.Context, env clients.Env
 		RepairAction:      "repair exact owned Devin Global Skills and MCP entries",
 		RetryAction:       "retry selected Devin Global native component installation",
 		CompletedAction:   DevinGlobalAction,
-		Verify:            func() error {
+		Verify: func() error {
 			return layout.Verify(devinNativeObjects(request.Delivery.NativeObjects), false, env.NativeConfig)
 		},
-		Activate:          func(ctx context.Context, request domain.ActivationRequest) error {
+		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
 			servers, err := devinDesiredServersForKind(request.Delivery.ActivePath, devinNativeObjects(request.Delivery.NativeObjects), DevinGlobalMCPKind)
 			if err != nil {
 				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}

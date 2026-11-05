@@ -111,7 +111,7 @@ func TestDevinGlobalOfflineNativeLifecycleRelocatedStateAndLegacyParity(t *testi
 	}
 	remove := domain.DeactivationRequest{
 		TargetContext: domain.TargetContext{Scope: domain.ScopeUser, UserConfigRoot: client.ConfigRoot},
-		Client: domain.DetectedClient{ClientID: domain.ClientWindsurf}, NativeRegistryRoot: plan.NativeRegistryRoot,
+		Client:        domain.DetectedClient{ClientID: domain.ClientWindsurf}, NativeRegistryRoot: plan.NativeRegistryRoot,
 		ManagedArtifactPath: plan.ActivePath, PhysicalArtifactID: plan.PhysicalArtifactID,
 		NativeObjects: objects, Confirmed: true,
 	}
