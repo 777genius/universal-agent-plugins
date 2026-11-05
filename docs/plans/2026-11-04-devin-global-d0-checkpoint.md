@@ -150,3 +150,18 @@ source (Skill, inert stdio MCP and inert Streamable HTTP MCP), capture:
 Only after this first source/call spike should the leaf implement admitted
 Global logic, add focused facade assertions and request independent code
 review. Avoid rerunning overlapping CI waves or initiating a release.
+
+## 2026-11-05 narrow source-boundary preparation (not native qualification)
+
+The owner now permits authorization-independent, narrowly scoped production/test
+preparation while genuine model-session MCP calls remain unavailable. The shared
+component kernel has a new **optional exact managed-package path**, selected by
+the client adapter; an unset value retains Project's original contained-source
+rule. This separates the native output boundary from a managed package in the
+default or independently relocated UAP state root. It is deliberately not a
+HOME-wide allowance or a new Global Devin capability. Focused lifecycle tests
+cover exact-source rejection, Global-shaped native root, foreign MCP preservation,
+owned repair/removal and byte-preserved legacy Cascade plus A/B project files.
+Only the CI results on the resulting commit can confirm the tests. This update
+does **not** change D0's source-only observation, qualified_product_e2e=false
+or the requirement for genuine authorized client-driven MCP calls before merge.
