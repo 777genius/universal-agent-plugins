@@ -392,11 +392,6 @@ func validateV2EvidenceRecord(evidence domain.DirectoryEvidence,
 		!oneOf(string(evidence.Scope), "", "user", "project") {
 		return strictError("invalid v2 evidence client scope")
 	}
-	if !digestPattern.MatchString(evidence.Artifact.Digest) || evidence.Artifact.Path == "" ||
-		!repositoryPattern.MatchString(evidence.Artifact.Repository) ||
-		!shaPattern.MatchString(evidence.Artifact.Revision) {
-		return strictError("invalid v2 evidence artifact")
-	}
 	if evidence.ObservedAt != "" {
 		date, err := parseTimestamp(evidence.ObservedAt)
 		if err != nil || date.After(generated) {
@@ -414,6 +409,13 @@ func validateV2EvidenceProvenance(evidence domain.DirectoryEvidence, release dom
 		release.TreeDigest != evidence.PackageTreeDigest || !evidence.HasTrustedProvenance() {
 		return strictError("invalid v2 evidence identity or trust")
 	}
+	if err := validateV2EvidenceProvenance(evidence); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateV2EvidenceProvenance(evidence domain.DirectoryEvidence) error {
 	// V2 evidence uses trust-bound provenance, never the pre-cutover V1 source fields.
 	if evidence.ProductID != "" || evidence.ManifestDigest != "" || evidence.SourceRepository != "" ||
 		evidence.SourceRevision != "" || evidence.SourcePath != "" || evidence.AdapterVersion != "" {
@@ -428,6 +430,11 @@ func validateV2EvidenceProvenance(evidence domain.DirectoryEvidence, release dom
 			!digestPattern.MatchString(artifact.Digest)) {
 			return strictError("invalid v2 evidence trust artifact")
 		}
+	}
+	if !digestPattern.MatchString(evidence.Artifact.Digest) || evidence.Artifact.Path == "" ||
+		!repositoryPattern.MatchString(evidence.Artifact.Repository) ||
+		!shaPattern.MatchString(evidence.Artifact.Revision) {
+		return strictError("invalid v2 evidence artifact")
 	}
 	return nil
 }
