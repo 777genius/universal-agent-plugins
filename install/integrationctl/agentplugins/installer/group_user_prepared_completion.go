@@ -43,7 +43,7 @@ func completedUserPreparedUpdate(prepared *PreparedOperation, got usecase.GroupR
 	return hasPrepared && len(targets) == 0
 }
 
-
+// validUserPreparedGroupShape bounds the exception to exact user Update groups.
 func validUserPreparedGroupShape(prepared *PreparedOperation, got usecase.GroupResult) bool {
 	if prepared.req.Operation != OpUpdate || (prepared.req.Scope != "" && prepared.req.Scope != domain.ScopeUser) ||
 		prepared.req.ProjectRoot != "" || got.Phase != usecase.GroupPhaseCompleted ||
@@ -55,6 +55,7 @@ func validUserPreparedGroupShape(prepared *PreparedOperation, got usecase.GroupR
 	return size == 2 && len(got.Targets) == size && len(prepared.clients) == size && len(prepared.req.Targets) == size
 }
 
+// completedUserPreparedTarget matches one frozen selected target to core results.
 func completedUserPreparedTarget(prepared *PreparedOperation, frozen PlanTarget, i int, target usecase.AddResult, installation domain.Installation) bool {
 	if frozen.ClientID == "" || frozen.ClientID != prepared.req.Targets[i].ClientID ||
 		frozen.ClientID != string(prepared.clients[i].ClientID) ||
@@ -92,6 +93,7 @@ func completedUserPreparedTarget(prepared *PreparedOperation, frozen PlanTarget,
 	return true
 }
 
+// completedUserPreparedBinding checks the loaded owned binding and data receipt.
 func completedUserPreparedBinding(frozen PlanTarget, plan domain.DeliveryPlan, outcome domain.ActivationOutcome, installation domain.Installation) bool {
 	binding, found := installation.Clients[frozen.BindingID]
 	if !found || binding.ClientBindingID != frozen.BindingID || binding.ClientID != frozen.ClientID ||
@@ -130,6 +132,7 @@ func completedUserPreparedBinding(frozen PlanTarget, plan domain.DeliveryPlan, o
 	return true
 }
 
+// publishedPreparedUserDelivery admits only the qualified selected Local route.
 func publishedPreparedUserDelivery(plan domain.DeliveryPlan) bool {
 	definition, supported := domain.ClientDefinitionFor(plan.ClientID)
 	facts, selected := plan.SelectedDelivery.LocalFacts()
@@ -144,6 +147,7 @@ func publishedPreparedUserDelivery(plan domain.DeliveryPlan) bool {
 		facts.ProfileRoot == plan.NativeRegistryRoot
 }
 
+// completedUserPreparedOutcome keeps Local prepared while proving its recorded selector.
 func completedUserPreparedOutcome(plan domain.DeliveryPlan, binding domain.ClientBinding, outcome domain.ActivationOutcome) bool {
 	if outcome.Activation != domain.ActivationPrepared {
 		return completedProjectOutcome(plan, outcome)
@@ -163,6 +167,7 @@ func completedUserPreparedOutcome(plan domain.DeliveryPlan, binding domain.Clien
 	return true
 }
 
+// hasUserPreparedGroupTarget stops lost bindings from bypassing the pending check.
 func hasUserPreparedGroupTarget(got usecase.GroupResult) bool {
 	for _, target := range got.Targets {
 		if target.Plan.Scope == domain.ScopeUser && target.Activation.Activation == domain.ActivationPrepared {
@@ -172,6 +177,7 @@ func hasUserPreparedGroupTarget(got usecase.GroupResult) bool {
 	return false
 }
 
+// userPreparedGroupActions preserves verified next steps without activation claims.
 func userPreparedGroupActions(got usecase.GroupResult) []string {
 	var out []string
 	for _, target := range got.Targets {
