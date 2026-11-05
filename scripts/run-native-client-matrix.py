@@ -89,8 +89,10 @@ REQUIRED_TESTS = {
     "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended", "TestAgentpluginsOpenCodeNativeCommandsLifecycle"},
 }
 PROJECT_TESTS = {
-    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP", "TestAgentpluginsCodexNativeForeignSkillCLIRefusal"},
-    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery", "TestAgentpluginsClaudeNativeTrustedProjectMCPCall", "TestAgentpluginsClaudeNativeSecondaryProfileIsolation"},
+    # Expanded current-source matrix: also require genuine user/global raw Skill
+    # E2E. Released/draft native qualification keeps its existing test set.
+    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP", "TestAgentpluginsCodexNativeProjectModelForeignMCP", "TestAgentpluginsCodexNativeForeignSkillCLIRefusal", "TestAgentpluginsCodexNativeRawUserSkillLifecycle"},
+    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery", "TestAgentpluginsClaudeNativeTrustedProjectMCPCall", "TestAgentpluginsClaudeNativeSecondaryProfileIsolation", "TestAgentpluginsClaudeNativeRawUserSkillLifecycle"},
     "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
 }
 

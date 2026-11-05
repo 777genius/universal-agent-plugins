@@ -139,6 +139,95 @@ func TestSkillsFullCLIEndToEnd(t *testing.T) {
 	}
 }
 
+// The terminal CLI must install one immutable raw Agent Skill into both user
+// profiles. These are SDK boundary fixtures; separate pinned-hosted native
+// suites prove the actual clients' plugin and Skill discovery.
+func TestSkillsCLIUserScopeCodexClaudeInstallAndRemove(t *testing.T) {
+	journey, _, original := skillsFullFlowFixture(t)
+	args := []string{"skills", "add", "acme/skills", "--path", "engineering/review",
+		"--target", "codex,claude", "--no-ui", "--yes", "--format", "json"}
+	journey.run(t, append(append([]string(nil), args...), "--scope", "user")...)
+	_, locked := journey.intent(t)
+	if len(locked.Packages) != 1 || locked.Packages[0].Source.Git == nil ||
+		locked.Packages[0].Source.Git.Kind != environment.SkillKind {
+		t.Fatalf("two-target CLI accepted an unpinned raw Skill: %+v", locked)
+	}
+	state := journey.state(t)
+	if len(state.EnvironmentReceipts) != 2 {
+		t.Fatalf("two-target CLI did not record exact user ownership: %+v", state.EnvironmentReceipts)
+	}
+	nativeSnapshots := make(map[string]map[string]savedJourneyFile, 2)
+	for _, client := range []string{"codex", "claude"} {
+		binding := savedJourneyBinding(t, state, client)
+		if binding.Scope != "user" {
+			t.Fatalf("%s binding escaped user scope: %+v", client, binding)
+		}
+		skillRoot := binding.TargetLocator
+		if client == "claude" {
+			skillRoot = filepath.Join(skillRoot, ".agentplugins-runtime")
+		}
+		skillPath := filepath.Join(skillRoot, "skills", "review", "SKILL.md")
+		body, err := os.ReadFile(skillPath)
+		if err != nil || string(body) != string(original) {
+			t.Fatalf("%s did not preserve the source Skill at %s: %v", client, skillPath, err)
+		}
+		if script, err := os.ReadFile(filepath.Join(skillRoot, "skills", "review", "scripts", "check.sh")); err != nil || !strings.Contains(string(script), "resource only") {
+			t.Fatalf("%s lost raw Skill resources: %v", client, err)
+		}
+		nativeSnapshots[client] = savedJourneyTree(t, binding.TargetLocator)
+	}
+	assertNativeUnchanged := func(target string) {
+		t.Helper()
+		binding := savedJourneyBinding(t, journey.state(t), target)
+		if difference := savedJourneyDifferences(nativeSnapshots[target], savedJourneyTree(t, binding.TargetLocator)); difference != "" {
+			t.Fatalf("%s native artifact changed unexpectedly: %s", target, difference)
+		}
+	}
+	before := savedSkillsDurableTree(t, journey.cli.app.DependenciesRoot)
+	// Same exact CLI request without --scope is the default/global user route.
+	journey.run(t, args...)
+	if after := savedSkillsDurableTree(t, journey.cli.app.DependenciesRoot); savedJourneyDifferences(before, after) != "" {
+		t.Fatalf("implicit user replay changed locked state: %s", savedJourneyDifferences(before, after))
+	}
+	assertNativeUnchanged("codex")
+	assertNativeUnchanged("claude")
+	// Invalid user/project combinations must fail before reaching source or
+	// modifying a managed/native path.
+	for _, extra := range [][]string{
+		{"--scope", "global"},
+		{"--scope", "user", "--project-root", t.TempDir()},
+	} {
+		_, _, err := journey.cli.execute(false, append(append([]string(nil), args...), extra...)...)
+		if err == nil {
+			t.Fatalf("invalid scope %v was accepted", extra)
+		}
+		if after := savedSkillsDurableTree(t, journey.cli.app.DependenciesRoot); savedJourneyDifferences(before, after) != "" {
+			t.Fatalf("invalid scope %v changed user data", extra)
+		}
+		assertNativeUnchanged("codex")
+		assertNativeUnchanged("claude")
+	}
+	claudeBefore := savedJourneyBinding(t, state, "claude")
+	codexPath := savedJourneyBinding(t, state, "codex").TargetLocator
+	journey.run(t, "remove", "review", "--target", "codex", "--external-uninstalled", "--scope", "user", "--format", "json")
+	if remaining := journey.state(t); len(remaining.EnvironmentReceipts) != 1 ||
+		remaining.EnvironmentReceipts[0].ClientID != "claude" ||
+		savedJourneyBinding(t, remaining, "claude").ClientBindingID != claudeBefore.ClientBindingID {
+		t.Fatalf("Codex removal changed retained Claude ownership: %+v", remaining.EnvironmentReceipts)
+	}
+	assertNativeUnchanged("claude")
+	if _, err := os.Lstat(codexPath); !os.IsNotExist(err) {
+		t.Fatalf("Codex managed user Skill survived removal: %v", err)
+	}
+	journey.run(t, "remove", "review", "--target", "claude", "--external-uninstalled", "--scope", "user", "--format", "json")
+	if remaining := journey.state(t).EnvironmentReceipts; len(remaining) != 0 {
+		t.Fatalf("last user Skill removal retained receipts: %+v", remaining)
+	}
+	if _, err := os.Lstat(claudeBefore.TargetLocator); !os.IsNotExist(err) {
+		t.Fatalf("Claude managed user Skill survived removal: %v", err)
+	}
+}
+
 // Playwright starts this test as an ordinary Go test subprocess. It exercises
 // the production App.StartSkillsPicker and embedded assets with real Git/store/
 // filesystem transactions. Only external native-client commands use the existing
