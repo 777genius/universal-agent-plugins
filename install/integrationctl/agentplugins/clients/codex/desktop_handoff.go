@@ -16,6 +16,7 @@ import (
 // not an installation or proof that the app loaded the plugin.
 var desktopPluginName = regexp.MustCompile("^[a-z][a-z0-9-]*$")
 
+// desktopPluginLink constructs a validated local plugin-detail URI without opening it.
 func desktopPluginLink(marketplaceRoot, pluginName string) (string, error) {
 	if !cleanAbsolute(marketplaceRoot) {
 		return "", fmt.Errorf("ChatGPT Desktop marketplace root must be a clean absolute path")

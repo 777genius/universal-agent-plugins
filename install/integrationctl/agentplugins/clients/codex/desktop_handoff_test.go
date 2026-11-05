@@ -15,6 +15,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// TestDesktopPluginLinkUsesLocalDetailURL checks encoding of a canonical managed-marketplace path.
 func TestDesktopPluginLinkUsesLocalDetailURL(t *testing.T) {
 	root := filepath.Join(tempRoot(t), "managed plugin")
 	link, err := desktopPluginLink(root, "stripe")
@@ -34,6 +35,7 @@ func TestDesktopPluginLinkUsesLocalDetailURL(t *testing.T) {
 	}
 }
 
+// TestDesktopPluginLinkRejectsUnsafeInputs rejects malformed paths and noncanonical names.
 func TestDesktopPluginLinkRejectsUnsafeInputs(t *testing.T) {
 	root := filepath.Join(tempRoot(t), "managed")
 	cases := []struct{ name, path, plugin string }{
@@ -55,6 +57,7 @@ func TestDesktopPluginLinkRejectsUnsafeInputs(t *testing.T) {
 	}
 }
 
+// TestDesktopHandoffRequiresExactManagedMarketplace refuses absent, foreign, or symlinked manifests.
 func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 	root := filepath.Join(tempRoot(t), "managed")
 	if got := desktopPluginHandoff(root, "stripe", "artifact", true); got != "" {
@@ -101,6 +104,7 @@ func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 	}
 }
 
+// TestDesktopHandoffDoesNotUpgradeCodexVerification keeps Desktop use separate from native Codex status.
 func TestDesktopHandoffDoesNotUpgradeCodexVerification(t *testing.T) {
 	root, profile := filepath.Join(tempRoot(t), "active"), tempRoot(t)
 	marketplace := filepath.Join(root, ".agents", "plugins", "marketplace.json")
@@ -141,6 +145,7 @@ func TestDesktopHandoffDoesNotUpgradeCodexVerification(t *testing.T) {
 	}
 }
 
+// TestManualDesktopHandoffRemainsVisibleInFirstCodexNextAction preserves manual activation guidance without a CLI.
 func TestManualDesktopHandoffRemainsVisibleInFirstCodexNextAction(t *testing.T) {
 	root, profile := filepath.Join(tempRoot(t), "active"), tempRoot(t)
 	path := filepath.Join(root, ".agents", "plugins", "marketplace.json")
@@ -171,6 +176,7 @@ func TestManualDesktopHandoffRemainsVisibleInFirstCodexNextAction(t *testing.T) 
 	}
 }
 
+// TestDesktopHandoffRejectsOversizedLocalManifest rejects unbounded local manifest input.
 func TestDesktopHandoffRejectsOversizedLocalManifest(t *testing.T) {
 	root := filepath.Join(tempRoot(t), "active")
 	path := filepath.Join(root, ".agents", "plugins", "marketplace.json")
@@ -185,6 +191,7 @@ func TestDesktopHandoffRejectsOversizedLocalManifest(t *testing.T) {
 	}
 }
 
+// TestDesktopLinkLongPathFallsBackWithoutBrokenURI never exposes a truncated percent-encoded URI.
 func TestDesktopLinkLongPathFallsBackWithoutBrokenURI(t *testing.T) {
 	// A short Unicode path produces a long percent-encoded URL while remaining
 	// below Windows' common filesystem path limits.

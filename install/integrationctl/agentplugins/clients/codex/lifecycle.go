@@ -79,6 +79,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	return completeCodexActivation(ctx, env, request, outcome)
 }
 
+// completeCodexActivation drives native Codex verification and adds only optional Desktop guidance.
 func completeCodexActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
 	var err error
 	if request.VerifyOnly {

@@ -88,6 +88,7 @@ func renderHumanAddFailure(writer io.Writer, envelope domain.PackageEnvelope, re
 	return true, nil
 }
 
+// renderHumanAddOutcome presents an add result without changing its verified lifecycle status.
 func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
 		return err
@@ -119,9 +120,8 @@ func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 	return nil
 }
 
-// Verified native clients may still have optional user-facing local steps, such
-// as opening a desktop plugin. Keep these outside public JSON and never turn
-// them into a required or unverified installation phase.
+// renderVerifiedLocalNextAction displays only the verified Codex user's optional local step.
+// It does not change the public JSON contract or turn Desktop activation into a required phase.
 func renderVerifiedLocalNextAction(writer io.Writer, result usecase.AddResult) error {
 	if result.Plan.ClientID != domain.ClientCodex || len(result.Activation.LocalActions) == 0 {
 		return nil

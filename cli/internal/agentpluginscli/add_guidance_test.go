@@ -124,6 +124,7 @@ func TestAddRecoveryPropagatesWriterFailure(t *testing.T) {
 	}
 }
 
+// TestVerifiedOtherClientsDoNotExposePrivateLocalActions keeps unrelated client local actions private.
 func TestVerifiedOtherClientsDoNotExposePrivateLocalActions(t *testing.T) {
 	result := usecase.AddResult{
 		Mutated: true,
@@ -144,6 +145,7 @@ func TestVerifiedOtherClientsDoNotExposePrivateLocalActions(t *testing.T) {
 	}
 }
 
+// TestSuccessfulNativeAddPrintsOptionalLocalHandoffWithoutPublicPathLeak keeps Desktop paths out of JSON.
 func TestSuccessfulNativeAddPrintsOptionalLocalHandoffWithoutPublicPathLeak(t *testing.T) {
 	for _, mutated := range []bool{false, true} {
 		t.Run(fmt.Sprint("mutated=", mutated), func(t *testing.T) {
