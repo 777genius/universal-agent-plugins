@@ -168,6 +168,39 @@ test('even a valid Ed25519 signature cannot admit rejected or uninspected refere
   ));
 });
 
+test('all seven Braids Skills sharing one signed package receive individual exact source states', async () => {
+  const f = await fixture();
+  const cohort = await readVerifiedSkillSpectorCohort(latest, f.trusted, f.fetcher, at);
+  assert.ok(cohort);
+  const oldRecords = f.records.map((source): SkillSpectorRecord => {
+    const record = structuredClone(source) as unknown as SkillSpectorRecord;
+    record.status = 'partial';
+    record.coverage!.status = 'partial';
+    record.scanner = { id: 'skillspector', version: '2.13.1',
+      revision: 'f3b25697d76256998ca9d42c198d256258d4c035' };
+    record.freshness = 'current';
+    record.target_revision = record.source.revision;
+    return record;
+  });
+  const report = {
+    schema_version: 3,
+    records: oldRecords,
+    source_states: oldRecords.map(record => ({
+      id: record.id, repository: record.source.repository,
+      revision: record.source.revision, path: record.source.path,
+      state: 'resolved', current: true, reason: null,
+      selected_ids: [record.id], candidates: [],
+    })),
+  } as unknown as SkillSpectorDisplayReport;
+  const updated = applyVerifiedSkillSpectorCohort(report, cohort.manifestDigest, cohort, at);
+  assert.equal(updated.records.length, 9);
+  assert.equal(updated.records.filter(x => x.signed_cohort_verified).length, 9);
+  assert.equal(updated.records.filter(x => x.status === 'complete').length, 9);
+  assert.equal(updated.records.filter(x => x.source.repository === 'vyas-devgna/braids').length, 7);
+  assert.equal(updated.records.find(x => x.source.path === 'skills/braids')?.finding_count, 1);
+  assert.ok(oldRecords.every(x => x.status === 'partial'));
+});
+
 test('overlay preserves unrelated old Partial and fails closed on digest or selection drift', async () => {
   const f = await fixture();
   const cohort = await readVerifiedSkillSpectorCohort(latest, f.trusted, f.fetcher, at);
