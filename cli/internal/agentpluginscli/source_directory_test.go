@@ -50,17 +50,22 @@ func TestDirectoryV2CompatibilityUsesScopedGrantsWithoutBorrowingUserEvidence(t 
 	user.Scope, user.Scopes = domain.ScopeUser, nil
 	user.Authentication = domain.AuthenticationRequirementRequired
 	user.CurrentEvidence = []string{"cursor-runtime-current"}
+	user.CanonicalClosure = &domain.DirectoryCanonicalClosure{Eligible: true, ClosureDigest: "sha256:" + strings.Repeat("a", 64)}
 	project := user
 	project.Scope = domain.ScopeProject
 	project.Authentication = domain.AuthenticationRequirementNotRequired
 	project.CurrentEvidence = []string{"project-runtime-current"}
+	project.CanonicalClosure = &domain.DirectoryCanonicalClosure{Eligible: true, ClosureDigest: "sha256:" + strings.Repeat("b", 64)}
 	policy.Targets = []domain.DirectoryTarget{project, user}
 	policy.CurrentEvidence = nil
 	selected := domain.DirectorySelection{DistributionID: distribution.ID,
 		ReleaseSequence: distribution.Releases[1].Sequence,
 		TreeDigest:      distribution.Releases[1].TreeDigest}
+	// A v2 runtime claim needs the exact signed closure for its own grant.
+	bundle.Snapshot.Evidence[1].ClosureDigest = user.CanonicalClosure.ClosureDigest
 	observed := bundle.Snapshot.Evidence[1]
 	observed.ID, observed.Scope = "project-runtime-current", domain.ScopeProject
+	observed.ClosureDigest = project.CanonicalClosure.ClosureDigest
 	bundle.Snapshot.Evidence = append(bundle.Snapshot.Evidence, observed)
 	environment := directoryEvidenceEnvironment{
 		InstallerVersion: observed.InstallerVersion, OS: observed.OS,
@@ -129,7 +134,7 @@ func TestDirectoryV2CanonicalRuntimeEvidenceDoesNotBorrowAnotherClosure(t *testi
 		{name: "another signed closure", canonical: &domain.DirectoryCanonicalClosure{
 			Eligible: true, ClosureDigest: "sha256:" + strings.Repeat("b", 64), MinimumInstallerVersion: "1.0.0",
 		}, wantVerification: "not_tested", wantApplicable: 0},
-		{name: "no canonical summary", wantVerification: "tested", wantApplicable: 1},
+		{name: "no canonical summary", wantVerification: "not_tested", wantApplicable: 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			policy.Targets[0].CanonicalClosure = tc.canonical
