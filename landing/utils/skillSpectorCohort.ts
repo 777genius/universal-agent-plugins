@@ -292,6 +292,16 @@ export function applyVerifiedSkillSpectorCohort(
       Array.isArray(state.selected_ids) && state.selected_ids.length === 1 &&
       state.selected_ids[0] === old.id);
     const state = states[0];
+    const packageStates = report.plugin_states.filter(item =>
+      String(item.repository).toLowerCase() === old.source.repository.toLowerCase() &&
+      item.plugin_path === old.plugin_path);
+    const packageState = packageStates[0];
+    if (packageStates.length !== 1 || !packageState ||
+        packageState.state !== 'resolved' ||
+        packageState.revision !== old.source.revision ||
+        !Array.isArray(packageState.selected_ids) ||
+        packageState.selected_ids.length !== packageState.skills_total ||
+        !packageState.selected_ids.includes(old.id)) return old;
     if (states.length !== 1 || !state || state.current !== true ||
         state.state !== 'resolved' || state.reason !== null ||
         state.revision !== old.source.revision ||
