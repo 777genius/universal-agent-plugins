@@ -170,8 +170,25 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 
 	// The site exposes unfiltered update/remove of the saved Directory alias.
 	result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-update", "update", directorySitePlugin)
-	if err != nil || result["result"] != "success" {
+	if err != nil || result["outcome"] != "completed" {
 		t.Fatalf("site update failed: %v %+v", err, result)
+	}
+	// The saved-update CLI returns an outcome and per-binding actions, unlike add.
+	// This immutable signed release should be unchanged on both real targets.
+	actions, ok := result["actions"].([]any)
+	if !ok || len(actions) != 2 {
+		t.Fatalf("site update did not cover two saved bindings: %+v", result)
+	}
+	seen := map[string]bool{}
+	for _, raw := range actions {
+		action, ok := raw.(map[string]any)
+		client, _ := action["client_id"].(string)
+		if !ok || action["action"] != "unchanged" || action["alias"] != directorySitePlugin ||
+			action["revision"] != directorySiteRevision ||
+			(client != "codex" && client != "claude") || seen[client] {
+			t.Fatalf("site update reported unexpected target/action: %+v", raw)
+		}
+		seen[client] = true
 	}
 	codexCheck("site-updated", true)
 	claudeCheck("site-updated", true)
