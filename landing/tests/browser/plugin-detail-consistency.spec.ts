@@ -92,3 +92,79 @@ test('expired Directory disables both catalog and standalone install promises', 
   await expect(detail.locator('.command-snippet--add')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+for (const width of [1440, 390]) {
+  test('plugin agent picker is a full-width select at ' + width + 'px', async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors = await offline(page);
+    await projections(page, eligibleFixture());
+    await navigate(page, '/', 'en', '?q=i18n-state-00');
+    const card = page.locator('[data-install-source="i18n-state-00"]').first();
+    await card.locator('.plugin-card__install-toggle').click();
+
+    const trigger = card.locator('.app-multiselect__trigger');
+    const row = card.locator('.plugin-card__install');
+    const triggerBox = (await trigger.boundingBox())!;
+    const rowBox = (await row.boundingBox())!;
+    expect(triggerBox.width).toBeGreaterThanOrEqual(rowBox.width - 2);
+
+    await trigger.click();
+    const popup = page.locator('.app-multiselect__content--wide');
+    await expect(popup).toBeVisible();
+    const popupBox = (await popup.boundingBox())!;
+    expect(Math.abs(popupBox.width - triggerBox.width)).toBeLessThanOrEqual(3);
+    expect(
+      await popup.locator('.app-multiselect__options').evaluate(
+        (node) => getComputedStyle(node).gridTemplateColumns.split(' ').length,
+      ),
+    ).toBe(1);
+    await expect(page.getByRole('checkbox', { name: /^ChatGPT(?:\s|$)/ })).toBeDisabled();
+    await page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ }).click();
+    await expect(card.locator('.command-snippet--add code')).toContainText('--target codex');
+    await page.keyboard.press('Escape');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('plugin detail uses readable theme tokens and aligned mobile breadcrumbs', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const errors = await offline(page);
+  await projections(page, eligibleFixture());
+  await navigate(page, '/', 'en', '?q=i18n-state-00');
+  await page.locator('[data-install-source="i18n-state-00"] .plugin-card__title-link').first().click();
+
+  const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
+  await page.getByRole('button', { name: 'Light', exact: true }).click();
+  await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
+  await expect(detail.locator('.plugin-detail__title')).toHaveCSS('color', 'rgb(22, 25, 43)');
+  await expect(detail.locator('.plugin-detail__summary-title').first()).toHaveCSS(
+    'color',
+    'rgb(8, 113, 138)',
+  );
+  await expect(detail.locator('.plugin-detail__client').first()).toHaveCSS(
+    'color',
+    'rgb(22, 25, 43)',
+  );
+  await expect(detail.locator('.plugin-detail__list-item').first()).toHaveCSS(
+    'color',
+    'rgb(83, 93, 117)',
+  );
+
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const back = (await detail.locator('.plugin-detail__back-cta').boundingBox())!;
+    const breadcrumbs = detail.locator('.plugin-detail__hero-topbar .breadcrumbs');
+    const crumbBox = (await breadcrumbs.boundingBox())!;
+    expect(Math.abs(back.y + back.height / 2 - (crumbBox.y + crumbBox.height / 2))).toBeLessThan(3);
+    await expect(breadcrumbs).toHaveCSS('padding-top', '0px');
+    await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText('i18n-state-00');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole('button', { name: 'Dark', exact: true }).click();
+  await expect(detail.locator('.plugin-detail__title')).toHaveCSS('color', 'rgb(224, 230, 255)');
+  expect(errors).toEqual([]);
+});
