@@ -78,6 +78,7 @@ export function useSkillsCatalog(
           v1: String(config.public.skillspectorReportsUrl),
           v2: String(config.public.skillspectorManifestUrl),
           v3: String(config.public.skillspectorV3ManifestUrl),
+          cohort: String(config.public.skillspectorCohortLatestUrl),
         })
       : undefined;
     if (retryEvidence) client?.retryFailedRequests();

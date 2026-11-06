@@ -10,6 +10,9 @@ import { loadI18nMessages } from './load-i18n-messages.ts';
 import { createSkillSpectorClient } from '../utils/skillSpectorCatalog.ts';
 import { hasCurrentPublishedScan } from '../utils/skillSpectorCurrent.ts';
 import {
+  applyVerifiedSkillSpectorCohort, readVerifiedSkillSpectorCohort,
+} from '../utils/skillSpectorCohort.ts';
+import {
   decodeSkillSpectorManifestV3,
   decodeSkillSpectorShardV3,
 } from '../utils/skillSpectorV3.ts';
@@ -18,6 +21,10 @@ import {
   skillSpectorFindingUrl,
   skillSpectorSourceUrl,
 } from '../utils/skillSpector.ts';
+
+// Load the same reviewed trust store as the Nuxt consumer without importing JSON into its runtime verifier.
+const cohortTrust = JSON.parse(readFileSync(new URL('../features/skillspector/cohort-trusted-keys.json', import.meta.url), 'utf8'));
+const pinnedCohortKeys = cohortTrust.schema_version === 1 && Array.isArray(cohortTrust.keys) ? cohortTrust.keys : [];
 
 // Read-only production acceptance with real requests and no route interception.
 // Node 24; install Chromium with `pnpm exec playwright install --only-shell chromium`.
@@ -53,6 +60,8 @@ const sourceFiles = [
   'scripts/skillspector-live-smoke.mjs',
   'utils/skillSpectorCatalog.ts',
   'utils/skillSpectorCurrent.ts',
+  'utils/skillSpectorCohort.ts',
+  'features/skillspector/cohort-trusted-keys.json',
   'utils/skillSpectorV3.ts',
   'utils/skillSpector.ts',
   'utils/skillSpectorDiagnostics.ts',
@@ -87,9 +96,15 @@ const evidence = {
   success: false,
 };
 
-async function bytes(url, maximum) {
-  const response = await fetch(url, { credentials: 'omit', signal: AbortSignal.timeout(60_000) });
-  assert.equal(response.status, 200, url);
+async function readBytesOnce(url, maximum) {
+  const response = await fetch(url, { credentials: 'omit', redirect: 'error',
+    signal: AbortSignal.timeout(60_000) });
+  if (response.status !== 200) {
+    await response.body?.cancel().catch(() => undefined);
+    const error = new Error(`HTTP ${response.status}: ${url}`);
+    error.httpStatus = response.status;
+    throw error;
+  }
   assert.ok(
     Number(response.headers.get('content-length')) <= maximum,
     `Oversized response: ${url}`,
@@ -111,6 +126,24 @@ async function bytes(url, maximum) {
     reader.releaseLock();
   }
   return Buffer.concat(chunks, size);
+}
+async function bytes(url, maximum) {
+  // The real v3 report contains >2,000 immutable shards. Retry only temporary
+  // network/429/5xx interruptions for the individual shard, never bad digests.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await readBytesOnce(url, maximum);
+    } catch (error) {
+      const transient = error instanceof TypeError ||
+        error?.name === 'TimeoutError' ||
+        error?.httpStatus === 429 ||
+        (typeof error?.httpStatus === 'number' && error.httpStatus >= 500);
+      if (!transient || attempt === 2) throw error;
+      console.warn(`Retrying transient SkillSpector evidence read ${attempt + 1}/2: ${url}`);
+      await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 300));
+    }
+  }
+  throw new Error('Unreachable retry limit');
 }
 async function json(url) {
   return parse(await bytes(url, 16 << 20));
@@ -273,6 +306,37 @@ try {
     ),
     success: true,
   });
+
+  // A production-signed cohort must be accepted against actual immutable
+  // v3 shards by the SAME browser consumer, never just an isolated unit fixture.
+  // With zero approved independent keys, old Partial behavior stays unchanged.
+  if (pinnedCohortKeys.length) {
+    const cohortUrl = process.env.NUXT_PUBLIC_SKILLSPECTOR_COHORT_LATEST_URL ||
+      'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-cohort-releases/reports/skillspector/cohort/v1/latest.json';
+    const verified = await readVerifiedSkillSpectorCohort(cohortUrl, pinnedCohortKeys);
+    assert.ok(verified, 'A configured cohort key must validate the actual signed release');
+    const overlay = applyVerifiedSkillSpectorCohort(
+      { ...manifest, records }, digest(manifestBytes), verified);
+    const changed = overlay.records.filter((record) => record.signed_cohort_verified);
+    assert.equal(changed.length, 9, 'Exactly nine immutable sources may be promoted');
+    assert.equal(changed.reduce((sum, record) => sum + record.finding_count, 0), 9,
+      'All nine content security findings must remain visible');
+    assert.ok(changed.every((record) => record.scanner?.version === '2.13.3' &&
+      record.coverage?.status === 'complete' && record.execution?.state === 'completed'),
+    'Every cohort member must retain complete static-analysis provenance');
+    assert.ok(overlay.records.every((record, index) =>
+      record.signed_cohort_verified || record === records[index]),
+    'All unrelated historical and genuine Partial sources must be unchanged');
+    Object.assign(evidence.publication, {
+      signed_cohort: {
+        verified: true,
+        records: changed.length,
+        risk_findings: changed.reduce((sum, record) => sum + record.finding_count, 0),
+        expires_at: new Date(verified.expiresAt).toISOString(),
+        source_manifest_sha256: verified.manifestDigest,
+      },
+    });
+  }
 
   if (process.env.UAP_SKILLSPECTOR_PUBLICATION_ONLY !== '1') {
     const projection = await json(new URL('api/registry/plugin/cloudflare', site).href);
