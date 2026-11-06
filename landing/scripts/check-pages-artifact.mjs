@@ -27,7 +27,7 @@ export function checkPageSchemaUrls(graphs, route, siteUrl, base) {
     assert.equal(software['@id'], `${root}#software`);
     assert.equal(software.url, root);
     assert.equal(software.publisher?.['@id'], `${root}#organization`);
-    assert.equal(software.screenshot, `${root}og-image.png`);
+    assert.equal(software.screenshot, `${root}og-image.png?v=20261106`);
     if (route.family === 'home') assert.equal(node('FAQPage')['@id'], `${canonical}#faq`);
   }
   if (route.family === 'plugin') {
@@ -236,6 +236,11 @@ export async function checkPagesArtifact({
   requireFile('.nojekyll');
   requireFile('404.html');
   requireFile('robots.txt');
+  requireFile('og-image.png');
+  const social = await read('og-image.png');
+  assert(social.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])), 'Social preview must be PNG');
+  assert.equal(social.readUInt32BE(16), 1200, 'Social preview width');
+  assert.equal(social.readUInt32BE(20), 630, 'Social preview height');
   requireFile('llms.txt');
   requireFile('.well-known/ai-catalog.json');
   requireFile('.well-known/ard.json');
