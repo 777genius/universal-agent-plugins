@@ -201,8 +201,29 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 }
 func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchResult) error {
 	if opts.format != "json" {
-		_, err := fmt.Fprintf(cmd.OutOrStdout(), "Skills installation %s\n", result.Status)
-		return err
+		writer := cmd.OutOrStdout()
+		if _, err := fmt.Fprintf(writer, "Skills installation %s\n", prompt.SafeText(result.Status)); err != nil {
+			return err
+		}
+		for _, item := range result.Items {
+			if _, err := fmt.Fprintf(writer, "  %s → %s: %s\n",
+				prompt.SafeText(item.Alias), prompt.SafeText(item.ClientID), prompt.SafeText(item.Status)); err != nil {
+				return err
+			}
+		}
+		if result.Status == "succeeded" {
+			_, err := fmt.Fprintln(writer,
+				"Files: installed or already up to date.",
+				"Agent discovery: not verified by this Skills flow.",
+				"Activation: not verified. Open each agent, complete any trust/sign-in/reload step, and confirm the Skill is visible.")
+			return err
+		}
+		for _, instruction := range result.RepairInstructions {
+			if _, err := fmt.Fprintln(writer, "Next:", prompt.SafeText(instruction)); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	outcome := skillBatchOutcome(result)
 	output := struct {
