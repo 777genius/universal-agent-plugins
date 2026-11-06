@@ -14,6 +14,9 @@ func TestDirectoryRemovalGroupPreflightsAllTargetsBeforePhysicalEffects(t *testi
 		{"invalid sequence", func(r *DirectoryRemoval, _ DirectoryRemoval) { r.Sequence = 0 }},
 		{"duplicate operation", func(r *DirectoryRemoval, first DirectoryRemoval) { r.OperationID = first.OperationID }},
 		{"duplicate path", func(r *DirectoryRemoval, first DirectoryRemoval) { r.ActivePath = first.ActivePath }},
+		{"empty operation id", func(r *DirectoryRemoval, _ DirectoryRemoval) { r.OperationID = "" }},
+		{"unknown installation", func(r *DirectoryRemoval, _ DirectoryRemoval) { r.InstallationID = "not-a-managed-installation" }},
+		{"unknown client binding", func(r *DirectoryRemoval, _ DirectoryRemoval) { r.ClientBindingID = "not-a-managed-binding" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
