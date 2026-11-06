@@ -95,6 +95,13 @@ func TestCIPathPolicy_ReleaseEvidenceStaysUnfiltered(t *testing.T) {
 	}
 }
 
+func TestCIPathPolicy_CoverageMainExcludesOnlyDocumentation(t *testing.T) {
+	settings := triggerSettings(t, RepoRoot(t), "coverage.yml", "push")
+	if _, ok := settings["paths"]; ok || !reflect.DeepEqual(settings["paths-ignore"], documentationOnly) {
+		t.Fatalf("coverage push must skip only documentation; got %v", settings)
+	}
+}
+
 func TestCIPathPolicy_DocumentationFiltersNameOneSurface(t *testing.T) {
 	root := RepoRoot(t)
 	for _, name := range []string{"polyglot-smoke.yml", "terminal-ui.yml", "coverage.yml", "skills-picker.yml", "authoring-milestone-a-e2e.yml"} {

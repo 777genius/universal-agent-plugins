@@ -140,6 +140,7 @@ func (detector Detector) detect(ctx context.Context, probeVersion bool, selected
 			client.Surfaces = nil
 			client.ExecutablePath = ""
 			client.ConfigRoot = ""
+			client.NativeConfigRoot = ""
 			client.DetectionError = fmt.Errorf("detect %s: %w", adapter.ID(), err)
 		}
 		result = append(result, client)
@@ -170,6 +171,7 @@ func (detector Detector) detectClient(ctx context.Context, host clients.Host, ad
 	client.Surfaces = detection.Surfaces
 	client.ExecutablePath = detection.ExecutablePath
 	client.ConfigRoot = detection.ConfigRoot
+	client.NativeConfigRoot = detection.NativeConfigRoot
 	client.Status = detectionStatus(detection)
 	if probeVersion && client.Status == domain.DetectionDetected && client.ExecutablePath != "" && (detector.ProbeVersion != nil || detector.ProbeVersionWithEnvironment != nil) {
 		timeout := detector.VersionTimeout

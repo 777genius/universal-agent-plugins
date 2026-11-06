@@ -125,6 +125,7 @@ func TestProjectLifecycleVersionProbeRejectsUnboundResults(t *testing.T) {
 		{"detection error", func(d *projectVersionDetector) { d.probed[0].DetectionError = errors.New("failed detection") }},
 		{"executable changed", func(d *projectVersionDetector) { d.probed[0].ExecutablePath += "-other" }},
 		{"config root changed", func(d *projectVersionDetector) { d.probed[0].ConfigRoot += "-other" }},
+		{"native root changed", func(d *projectVersionDetector) { d.probed[0].NativeConfigRoot += "-other" }},
 		{"profile namespace changed", func(d *projectVersionDetector) { d.probed[0].ProfileNamespace += "-other" }},
 		{"profile authority changed", func(d *projectVersionDetector) { d.probed[0].ProfileAuthority = &domain.ProfileAuthority{} }},
 		{"probe error", func(d *projectVersionDetector) { d.err = errors.New("version command failed") }},
@@ -265,5 +266,69 @@ func TestProjectDependencyPreviewDoesNotProbeVersions(t *testing.T) {
 	}
 	if len(detector.targets) != 0 || detector.broadCalls != 0 || !reflect.DeepEqual(adapter.detected[domain.ClientKimi], client) {
 		t.Fatal("read-only Skills preview executed a client or replaced discovery facts")
+	}
+}
+
+func TestUserDevinVersionProbeIsExactAndTargeted(t *testing.T) {
+	original := projectVersionClient()
+	original.ClientID = domain.ClientWindsurf
+	original.ExecutablePath = projectVersionFixturePath("bin", "devin")
+	original.Version = ""
+	probed := original
+	probed.Version = "3000.11.205"
+	detector := &projectVersionDetector{probed: []domain.DetectedClient{probed}}
+	detected := map[domain.ClientID]domain.DetectedClient{domain.ClientWindsurf: original}
+	err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeUser, Detector: detector}, &options{}, []domain.ClientID{domain.ClientWindsurf}, detected)
+	if err != nil || detected[domain.ClientWindsurf].Version != "3000.11.205" ||
+		!reflect.DeepEqual(detector.targets, [][]domain.ClientID{{domain.ClientWindsurf}}) || detector.broadCalls != 0 {
+		t.Fatalf("user Devin probe did not retain exact selected identity: err=%v targets=%v detected=%+v", err, detector.targets, detected)
+	}
+
+	for _, name := range []string{"windsurf", "devin-next"} {
+		legacy := original
+		legacy.ExecutablePath = projectVersionFixturePath("bin", name)
+		detector := &projectVersionDetector{err: errors.New("must not probe legacy or unqualified executable")}
+		detected := map[domain.ClientID]domain.DetectedClient{domain.ClientWindsurf: legacy}
+		err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeUser, Detector: detector}, &options{}, []domain.ClientID{domain.ClientWindsurf}, detected)
+		if err != nil || len(detector.targets) != 0 || detected[domain.ClientWindsurf].Version != "" {
+			t.Fatalf("%s unexpectedly requested or adopted a Devin version: %v, %+v", name, err, detected)
+		}
+	}
+}
+
+func TestUserDevinVersionProbeRefusesIdentityDrift(t *testing.T) {
+	original := projectVersionClient()
+	original.ClientID = domain.ClientWindsurf
+	original.ExecutablePath = projectVersionFixturePath("bin", "devin")
+	probed := original
+	probed.Version = "3000.11.205"
+	probed.ConfigRoot += "-different"
+	detector := &projectVersionDetector{probed: []domain.DetectedClient{probed}}
+	detected := map[domain.ClientID]domain.DetectedClient{domain.ClientWindsurf: original}
+	if err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeUser, Detector: detector}, &options{}, []domain.ClientID{domain.ClientWindsurf}, detected); err == nil ||
+		!reflect.DeepEqual(detected[domain.ClientWindsurf], original) {
+		t.Fatalf("unbound user Devin version was accepted: error=%v", err)
+	}
+}
+
+func TestUserDevinSavedDependencyMutationProbesExactSelectedVersion(t *testing.T) {
+	devin := projectVersionClient()
+	devin.ClientID = domain.ClientWindsurf
+	devin.ExecutablePath = projectVersionFixturePath("bin", "devin")
+	devin.NativeConfigRoot = projectVersionFixturePath("original-xdg", "devin")
+	probed := devin
+	probed.Version = "3000.11.205"
+	detector := &projectVersionDetector{probed: []domain.DetectedClient{probed}}
+	adapter := &dependencyInstaller{
+		app:      App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeUser, Detector: detector},
+		opts:     &options{},
+		detected: map[domain.ClientID]domain.DetectedClient{domain.ClientWindsurf: devin},
+	}
+	if err := adapter.preflightProjectVersions(context.Background(), []dependencyAction{{ClientID: "windsurf", Action: environment.ActionInstall}}); err != nil {
+		t.Fatal(err)
+	}
+	if adapter.detected[domain.ClientWindsurf].Version != "3000.11.205" ||
+		!reflect.DeepEqual(detector.targets, [][]domain.ClientID{{domain.ClientWindsurf}}) || detector.broadCalls != 0 {
+		t.Fatal("user dependency mutation did not observe exact selected Devin version")
 	}
 }

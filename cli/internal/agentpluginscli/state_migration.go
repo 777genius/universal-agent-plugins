@@ -124,13 +124,19 @@ func (session *migrateStateSession) migrateExpected() error {
 	if err != nil {
 		return err
 	}
+	if release == nil {
+		return fmt.Errorf("agentplugins mutation lock returned no release function")
+	}
 	defer func() { _ = release() }()
 	if session.app.LegacyStateLock == nil {
 		return fmt.Errorf("legacy state lock is required")
 	}
-	legacyRelease, err := session.app.LegacyStateLock.Acquire(session.ctx, "state")
+	legacyRelease, err := session.app.LegacyStateLock.Acquire(session.ctx)
 	if err != nil {
 		return fmt.Errorf("acquire legacy state lock: %w", err)
+	}
+	if legacyRelease == nil {
+		return fmt.Errorf("legacy state lock returned no release function")
 	}
 	defer func() { _ = legacyRelease() }()
 	if err := session.recoverKernel(); err != nil {

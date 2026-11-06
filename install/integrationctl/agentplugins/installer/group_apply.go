@@ -3,7 +3,6 @@ package installer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -78,10 +77,12 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 		}
 		pending = false
 	}
-	if pending && e.anyGroupHostHandoffPending(prepared) {
-		result.Outcome = OutcomeIncomplete
-		result.Reason = "committed binding is not activated"
-		return result, fmt.Errorf("%s", result.Reason)
+	if pending {
+		var completionErr error
+		pending, completionErr = e.finishUserPreparedHandoff(prepared, &result, got, state, loadErr)
+		if completionErr != nil {
+			return result, completionErr
+		}
 	}
 	if !result.Mutated && !pending && (prepared.plan.NoChange || (!got.Mutated && groupPreviewUnchanged(got))) {
 		result.Outcome = OutcomeUnchanged

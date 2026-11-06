@@ -92,6 +92,15 @@ const command = computed(() =>
       ).add
     : '',
 );
+const desktopCodexCommand = computed(() =>
+  scope.value === 'user' &&
+  !isDiscovered.value &&
+  current.value &&
+  canChooseInstall.value &&
+  Boolean(targetDistributions.value.get('codex'))
+    ? pluginCommands(props.plugin, ['codex']).add
+    : '',
+);
 const vendorInstall = computed(() => vendorInstallSource(props.plugin));
 const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
 const iconURL = computed(() => pluginIcon(props.plugin));
@@ -389,6 +398,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               :auto-option="autoOption"
               :label="t('registryUi.card.chooseClients', { name: plugin.display_name })"
               :options="targetOptions"
+              full-width
               @update:auto-selected="updateAutoDetect"
               @update:model-value="updateTargets"
             />
@@ -403,6 +413,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               {{ t('registryUi.install.scope.selectionUnavailable') }}
             </p>
           </div>
+          <ChatGPTDesktopGuide v-if="desktopCodexCommand" :command="desktopCodexCommand" />
         </div>
       </Transition>
     </div>
@@ -414,8 +425,20 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
+  font-size: 0.75rem;
+}
+.plugin-card__assessments :deep(.plugin-card__security) {
+  min-height: 32px;
+  margin: 0;
+  gap: 8px;
+  font-size: inherit;
+  line-height: 1.5;
+}
+.plugin-card__assessments :deep(.skillspector) {
+  margin: 0;
+  font-size: inherit;
 }
 .plugin-card__actions {
   display: flex;

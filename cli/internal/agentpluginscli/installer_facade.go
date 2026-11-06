@@ -154,6 +154,7 @@ func facadeResultAddResult(plan installer.Plan, result installer.Result, envelop
 		Policy:         domain.PolicyState(result.Client.Policy),
 		Verification:   domain.VerificationState(result.Client.Verification),
 		UserActions:    append([]string(nil), result.ManualActions...),
+		LocalActions:   append([]string(nil), result.LocalActions...),
 	}
 	return out
 }

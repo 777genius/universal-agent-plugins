@@ -245,17 +245,17 @@
     },
     "why": {
       "eyebrow": "Por que funciona",
-      "title": "Um padrão",
-      "subtitle": "Entrega nativa",
-      "intro": "O pacote permanece portátil; o instalador cuida do formato e do ciclo de vida de cada cliente.",
-      "standardTitle": "Baseado no padrão",
-      "clientTitle": "Adaptado a cada cliente",
-      "clientDescription": "Codex, Cursor, Claude Code, Gemini CLI, OpenCode e outros clientes recebem o formato compatível.",
-      "lifecycleTitle": "Ciclo de vida completo",
-      "lifecycleDescription": "Adicione, inspecione, atualize, repare, troque a fonte ou remova um plugin pela mesma CLI.",
-      "sourceTitle": "Fonte visível",
-      "sourceDescription": "Pacotes revisados e descobertas da comunidade continuam claramente rotulados, com a fonte disponível antes da instalação.",
-      "standardDescription": "Os pacotes são lidos do Agent Plugins 1.0 {manifest}, sem um segundo manifesto de instalação."
+      "title": "Um só pacote",
+      "subtitle": "Menos configuração entre agentes",
+      "intro": "Escolha um plugin e agentes compatíveis. O UAP prepara os componentes suportados e mostra etapas restantes de login ou ativação.",
+      "standardTitle": "Comece com plugin.json",
+      "clientTitle": "Feito para cada agente",
+      "clientDescription": "Skills, servidores MCP e outros componentes são preparados conforme o suporte de cada agente escolhido.",
+      "lifecycleTitle": "Gerencie mudanças com segurança",
+      "lifecycleDescription": "Pré-visualize, atualize, repare ou remova instalações gerenciadas sem sobrescrever arquivos de terceiros.",
+      "sourceTitle": "Conheça a origem",
+      "sourceDescription": "Veja de onde vem cada pacote e se a listagem do catálogo foi revisada antes de instalar.",
+      "standardDescription": "Use um pacote Agent Plugins 1.0 com {manifest}, sem criar um formato exclusivo para o UAP."
     },
     "builtWith": {
       "title": "Já criado com UAP",
@@ -323,11 +323,12 @@
       "terminal": "No seu terminal",
       "refreshNotice": "Os dados de plugins estão sendo atualizados. Tente novamente em instantes.",
       "otherMethods": "Outros métodos de instalação",
+      "supportedFormats": "Formatos suportados",
       "watchDemo": "Ver demonstração",
       "demoVideoTitle": "Demonstração de instalação do Universal Agent Plugins",
       "supportedClients": "Clientes compatíveis",
       "clientNote": "A CLI instala ou prepara o formato nativo compatível com cada cliente. Alguns clientes podem pedir que você conclua a ativação ou faça login.",
-      "install": "Instalar {name}",
+      "install": "Instalar o plugin {name}",
       "explore": "Explorar plugins",
       "exploreCount": "Explorar {count} plugins | Explorar {count} plugin | Explorar {count} plugins",
       "delivery": {
@@ -515,6 +516,13 @@
     }
   },
   "registryUi": {
+    "desktopGuide": {
+      "title": "ChatGPT Desktop (no computador)",
+      "description": "Usa o catálogo local do Codex, não a conexão do ChatGPT Web.",
+      "command": "Instalar para Desktop",
+      "nextStep": "No macOS/Windows, execute codex app e ative o plugin em Plugins > Personal. A CLI funcionar não comprova o Desktop.",
+      "help": "Configuração e solução de problemas"
+    },
     "select": {
       "up": "Rolar opções para cima",
       "down": "Rolar opções para baixo"
@@ -647,7 +655,7 @@
       "unavailableAtItsIndexedSource": "Indisponível na fonte indexada",
       "checkedAgainBeforeInstallation": "Verificado novamente antes da instalação",
       "reviewedListing": "Revisado",
-      "notAvailableForChatgpt": "Não disponível para ChatGPT",
+      "notAvailableForChatgpt": "Esta versão não tem conexão verificada com o ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Conexão verificada; conclua a configuração no ChatGPT",
       "allInstalledAgents": "Escolher agentes no terminal",
       "commandsDisabledInPreview": "Comandos desativados na pré-visualização.",
@@ -686,7 +694,7 @@
       "notReadyToInstall": "Ainda não está pronto para instalação",
       "detectedWhenYouRunTheCommand": "O comando permite escolher agentes antes da instalação.",
       "thisPackageIsNoLongerAvailableFromItsSource": "Este pacote não está mais disponível na origem.",
-      "notAvailableForChatgpt": "Não disponível para ChatGPT",
+      "notAvailableForChatgpt": "Esta versão não tem conexão verificada com o ChatGPT",
       "unavailableSignedDirectorySnapshotExpired": "Indisponível: o snapshot assinado do Directory expirou",
       "noActiveReleaseSupportsThisClient": "Nenhuma versão ativa é compatível com este cliente",
       "unavailableReviewDataIsNotInstallationAuthority": "Indisponível: dados de revisão não autorizam instalação",
@@ -715,11 +723,11 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "Dados não resolvidos são apenas para revisão; comandos de produção exigem um snapshot assinado do Directory publicado.",
       "commandsUnavailable": "Comandos indisponíveis.",
       "automaticDetection": "Escolher agentes no terminal",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "A CLI verifica este plugin em relação aos agentes instalados, ignora os incompatíveis e permite confirmar os destinos. O ChatGPT só é incluído quando este plugin fornece uma conexão verificada.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "A CLI detecta agentes compatíveis para confirmação. O ChatGPT exige uma conexão verificada.",
       "oneStepRemainsInChatgpt": "Resta uma etapa no ChatGPT.",
       "noSingleSourceServesThisTargetSet": "Nenhuma fonte única atende a este conjunto de destinos.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "A CLI falhará antes de qualquer alteração e sugerirá combinações compatíveis de destino/fonte; ela nunca mistura distribuições entre clientes.",
-      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "A CLI verifica todos os agentes selecionados antes de alterar arquivos e mostra qualquer etapa de login ou ativação. As credenciais OAuth permanecem com o agente.",
+      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "A CLI verifica agentes antes de alterar arquivos e mostra as etapas de acesso. O OAuth permanece com o agente.",
       "chatgptFinish": "Abra o ChatGPT, selecione {name} em Apps ou Plugins, conecte-o e inicie uma nova conversa. A disponibilidade depende da sua conta e do espaço de trabalho.",
       "expectedFallback": "Origem alternativa esperada: {source}.",
       "dependencySaving": {
@@ -910,7 +918,7 @@
       "breadcrumb": "Trilha de navegação",
       "plugins": "Plugins",
       "agentPlugins10": "Agent Plugins 1.0",
-      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "A listagem e os metadados foram revisados. Quando presente, a avaliação automatizada de segurança se aplica apenas à revisão exata analisada. O comportamento em tempo de execução não é auditado.",
+      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "Listagem e metadados revisados. A análise de segurança, se houver, cobre só a revisão verificada; a execução não foi auditada.",
       "installPlugin": "Instalar plugin",
       "viewSource": "Ver código-fonte",
       "pluginOverview": "Visão geral do plugin",

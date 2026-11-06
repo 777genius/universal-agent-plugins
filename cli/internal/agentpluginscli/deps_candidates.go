@@ -30,7 +30,7 @@ func (resolver dependencyResolver) Candidates(ctx context.Context, requirement e
 	if resolver.app.DirectoryClient == nil {
 		return nil, errors.New("signed Directory client is required")
 	}
-	bundle, err := resolver.app.DirectoryClient.Load(ctx, 0)
+	bundle, err := resolver.app.loadAuthorizedDirectory(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (resolver dependencyResolver) Candidates(ctx context.Context, requirement e
 			if !environment.SelectorMatchesVersion(requirement.Registry.Selector, release.PackageVersion) {
 				continue
 			}
-			_, err := domain.ResolveDirectory(bundle.Snapshot, dependencyDirectoryRequest(resolver.app, distribution.ID, release.Sequence, targets))
+			_, err := selectDirectorySourceForPlacement(bundle.Snapshot, dependencyDirectoryRequest(resolver.app, distribution.ID, release.Sequence, targets))
 			if errors.Is(err, domain.ErrDirectoryIneligible) {
 				continue
 			}

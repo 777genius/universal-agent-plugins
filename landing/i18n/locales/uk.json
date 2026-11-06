@@ -382,17 +382,17 @@
     },
     "why": {
       "eyebrow": "Чому це працює",
-      "title": "Єдиний стандарт",
-      "subtitle": "Нативне розгортання",
-      "intro": "Пакет залишається переносним; інсталятор обробляє формат і життєвий цикл кожного клієнта.",
-      "standardTitle": "Орієнтація на стандарт",
-      "clientTitle": "З урахуванням клієнта",
-      "clientDescription": "Codex, Cursor, Claude Code, Gemini CLI, OpenCode та інші клієнти отримують формат, який вони підтримують.",
-      "lifecycleTitle": "Повний життєвий цикл",
-      "lifecycleDescription": "Додавайте, перевіряйте, оновлюйте, відновлюйте, змінюйте джерело або вилучайте плагін через той самий CLI.",
-      "sourceTitle": "Джерело відкрите",
-      "sourceDescription": "Перевірені пакети й результати пошуку спільноти мають чіткі позначки; їхнє джерело доступне до встановлення.",
-      "standardDescription": "Пакети читаються з Agent Plugins 1.0 {manifest}, без другого маніфесту встановлення."
+      "title": "Один пакет",
+      "subtitle": "Менше ручного налаштування для різних агентів",
+      "intro": "Виберіть плагін і сумісних агентів. UAP підготує підтримувані компоненти та покаже, чи потрібні вхід або активація.",
+      "standardTitle": "Почніть із plugin.json",
+      "clientTitle": "Для кожного агента",
+      "clientDescription": "Навички, MCP-сервери та інші компоненти готуються у форматі, який підтримує вибраний агент.",
+      "lifecycleTitle": "Безпечне керування",
+      "lifecycleDescription": "Переглядайте план, оновлюйте, відновлюйте та видаляйте встановлення UAP, не перезаписуючи сторонні файли.",
+      "sourceTitle": "Зрозуміле джерело",
+      "sourceDescription": "Перед установленням перевірте джерело пакета та позначку перевірки в каталозі.",
+      "standardDescription": "Використовуйте пакет Agent Plugins 1.0 із {manifest} — окремий формат плагінів для UAP не потрібен."
     },
     "builtWith": {
       "title": "Уже створено з UAP",
@@ -460,11 +460,12 @@
       "terminal": "У вашому терміналі",
       "refreshNotice": "Дані плагіна оновлюються. Спробуйте ще раз невдовзі.",
       "otherMethods": "Інші способи встановлення",
+      "supportedFormats": "Підтримувані формати",
       "watchDemo": "Переглянути демо",
       "demoVideoTitle": "Демонстрація встановлення Universal Agent Plugins",
       "supportedClients": "Підтримувані клієнти",
       "clientNote": "CLI встановлює або готує нативний формат, який підтримує кожен клієнт. Деякі клієнти можуть попросити завершити активацію або ввійти.",
-      "install": "Встановити {name}",
+      "install": "Встановити плагін {name}",
       "explore": "Переглянути плагіни",
       "exploreCount": "Переглянути {count} плагін | Переглянути {count} плагіни | Переглянути {count} плагінів",
       "delivery": {
@@ -515,6 +516,13 @@
     }
   },
   "registryUi": {
+    "desktopGuide": {
+      "title": "ChatGPT Desktop (локально)",
+      "description": "Використовується локальний каталог Codex, а не підключення ChatGPT Web.",
+      "command": "Встановити для Desktop",
+      "nextStep": "На macOS/Windows запустіть codex app, потім увімкніть плагін у Plugins > Personal. Успіх CLI не підтверджує роботу в Desktop.",
+      "help": "Налаштування та усунення проблем"
+    },
     "select": {
       "up": "Прокрутити параметри вгору",
       "down": "Прокрутити параметри вниз"
@@ -647,7 +655,7 @@
       "unavailableAtItsIndexedSource": "Недоступно в індексованому джерелі",
       "checkedAgainBeforeInstallation": "Перевіряється повторно перед встановленням",
       "reviewedListing": "Перевірено",
-      "notAvailableForChatgpt": "Недоступно для ChatGPT",
+      "notAvailableForChatgpt": "У цьому релізі немає перевіреного підключення ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Перевірене підключення; завершіть налаштування в ChatGPT",
       "allInstalledAgents": "Вибрати агентів у терміналі",
       "commandsDisabledInPreview": "Команди вимкнено в попередньому перегляді.",
@@ -686,7 +694,7 @@
       "notReadyToInstall": "Не готово до встановлення",
       "detectedWhenYouRunTheCommand": "Команда запропонує вибрати агентів перед встановленням.",
       "thisPackageIsNoLongerAvailableFromItsSource": "Цей пакет більше недоступний у своєму джерелі.",
-      "notAvailableForChatgpt": "Недоступно для ChatGPT",
+      "notAvailableForChatgpt": "У цьому релізі немає перевіреного підключення ChatGPT",
       "unavailableSignedDirectorySnapshotExpired": "Недоступно: термін дії підписаного знімка Directory минув",
       "noActiveReleaseSupportsThisClient": "Жоден активний випуск не підтримує цього клієнта",
       "unavailableReviewDataIsNotInstallationAuthority": "Недоступно: дані перевірки не є підставою для встановлення",
@@ -715,11 +723,11 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "Невирішені дані призначені лише для перевірки; робочі команди потребують опублікованого підписаного знімка Directory.",
       "commandsUnavailable": "Команди недоступні.",
       "automaticDetection": "Вибрати агентів у терміналі",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI перевіряє цей плагін щодо встановлених агентів, пропускає несумісні та дає підтвердити цілі. ChatGPT включено лише коли цей плагін надає перевірене підключення.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI знаходить сумісних агентів і просить підтвердити вибір. ChatGPT потребує перевіреного підключення.",
       "oneStepRemainsInChatgpt": "У ChatGPT залишився один крок.",
       "noSingleSourceServesThisTargetSet": "Жодне джерело не обслуговує цей набір цілей.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI завершить роботу з помилкою до внесення змін і запропонує сумісні поєднання цілей та джерел; він ніколи не змішує дистрибутиви між клієнтами.",
-      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "CLI перевіряє кожного вибраного агента до зміни файлів і показує всі кроки входу чи активації. Облікові дані OAuth залишаються в агента.",
+      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "Перед зміною файлів CLI перевіряє агентів і показує кроки входу. Дані OAuth залишаються в агента.",
       "chatgptFinish": "Відкрийте ChatGPT, виберіть {name} у Застосунках або Плагінах, підключіть його й почніть новий чат. Доступність залежить від вашого облікового запису та робочого простору.",
       "expectedFallback": "Очікуване резервне джерело: {source}.",
       "dependencySaving": {
@@ -910,7 +918,7 @@
       "breadcrumb": "Навігаційний ланцюжок",
       "plugins": "Плагіни",
       "agentPlugins10": "Agent Plugins 1.0",
-      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "Запис і метадані перевірено. Автоматизована оцінка безпеки, якщо вона є, застосовується лише до точної просканованої ревізії. Поведінку під час виконання не перевіряли.",
+      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "Картку й метадані перевірено. Скан безпеки, якщо є, стосується лише перевіреної ревізії; роботу плагіна не перевіряли.",
       "installPlugin": "Встановити плагін",
       "viewSource": "Переглянути джерело",
       "pluginOverview": "Огляд плагіна",

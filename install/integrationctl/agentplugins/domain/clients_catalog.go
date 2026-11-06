@@ -97,11 +97,13 @@ type ClientDefinition struct {
 var clientDefinitions = []ClientDefinition{
 	withProjectScope(clientDefinition(ClientCodex, "OpenAI Codex", "codex", "managed", "projected", true, PackageProjection, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		QualifiedLocalInstallerFacade: true,
+		ShowsVerifiedLocalNextAction:  true,
 		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:                 LifecycleCLIRegistry,
 		HonorsOpenAIMCPAuthHints:      true,
 		SupportsPreparedRecovery:      true,
 		BindsNativeProfileRoot:        true,
+		ProtectsModifiedUserRawSkill:  true,
 	}), LifecycleNativeConfig),
 	withoutHostPresence(withDirectoryPreparation(
 		clientDefinition(ClientChatGPT, "ChatGPT", "chatgpt", "manual_activation", "projected", false, PackageProjection, SupportProjected, SupportUnsupported, SupportUnsupported, SupportProjected, SupportUnsupported, ClientTraits{
@@ -134,6 +136,7 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:                 LifecycleCLIRegistry,
 		UsesManagedStdioLauncher:      true,
+		ProtectsModifiedUserRawSkill:  true,
 	}), ActivationAutomatic), LifecycleCLIRegistry),
 	withProjectScope(clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:         []InstallIntent{InstallIntentAutomatic},
@@ -153,6 +156,7 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:            LifecycleNativeConfig,
 		UsesManagedStdioLauncher: true,
+		RecordsSelectedNativeRootOnCreate: true,
 	}), LifecycleNativeConfig),
 	withProjectScope(clientDefinition(ClientGrok, "Grok Build", "grok", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
@@ -162,16 +166,18 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleNativeConfig,
 	}), LifecycleNativeConfig),
-	withProjectScope(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:            LifecycleCLIRegistry,
-		BindsNativeProfileRoot:   true,
-		DiscoversNativeHooks:     true,
-		HonorsOpenAIMCPAuthHints: true,
-	}), LifecyclePrepared),
-	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
+	withProjectComponents(withProjectScope(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents:                      []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:                       LifecycleCLIRegistry,
+		BindsNativeProfileRoot:              true,
+		DiscoversNativeHooks:                true,
+		HonorsOpenAIMCPAuthHints:            true,
+		LegacyPreparedProjectPackageReceipt: true,
+	}), LifecycleNativeConfig), SupportNative, SupportNative),
+	withProjectComponents(withProjectScope(withActivation(withoutCommands(clientDefinition(ClientPi, "Pi", "pi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic}, LifecycleKind: LifecyclePrepared,
 		BindsNativeProfileRoot: true, RequiresPluginData: true, VerifiesNativeDirectory: true, ProtectsModifiedPackage: true,
+		RequiresActiveNativeProjection: true,
 	})), ActivationAutomatic), LifecyclePrepared), SupportNative, SupportNative),
 }
 

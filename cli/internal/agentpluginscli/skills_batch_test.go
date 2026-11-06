@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/skillsource"
@@ -252,6 +253,28 @@ func TestSkillsPartialRevisionColdRepairAfterLockAdvance(t *testing.T) {
 	if err = os.WriteFile(drift, []byte("explicitly repair this drift"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	guardedTree := savedJourneyTree(t, older.TargetLocator)
+	guardedState, err := os.ReadFile(j.cli.store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = j.cli.execute(false, "repair", original.InstallationID, "--target", oldClient, "--format", "json"); err == nil ||
+		!strings.Contains(err.Error(), "artifact digest mismatch") {
+		t.Fatalf("modified raw Skill repair did not refuse foreign bytes: %v", err)
+	}
+	if after, readErr := os.ReadFile(j.cli.store.Path); readErr != nil || string(after) != string(guardedState) {
+		t.Fatalf("refused repair changed persistent state: %v", readErr)
+	}
+	if diff := savedJourneyDifferences(guardedTree, savedJourneyTree(t, older.TargetLocator)); diff != "" {
+		t.Fatalf("refused raw Skill repair changed managed or foreign bytes: %s", diff)
+	}
+	if err = os.Remove(drift); err != nil {
+		t.Fatal(err)
+	}
+	savedRawSkillDropOwnedFixture(t, j, older.TargetLocator)
+	if err = os.RemoveAll(j.cli.app.EnvironmentStoreRoot); err != nil {
+		t.Fatal(err)
+	}
 	j.run(t, "repair", original.InstallationID, "--target", oldClient, "--format", "json")
 	repaired := j.state(t)
 	repairedOlder := savedJourneyBinding(t, repaired, oldClient)
@@ -266,7 +289,7 @@ func TestSkillsPartialRevisionColdRepairAfterLockAdvance(t *testing.T) {
 		t.Fatal("repair replaced accepted target identity")
 	}
 	if _, err = os.Stat(drift); !os.IsNotExist(err) {
-		t.Fatal("explicit repair did not remove managed drift", err)
+		t.Fatal("raw Skill cold repair recreated removed fixture drift", err)
 	}
 	body, err := os.ReadFile(filepath.Join(repairedOlder.TargetLocator, "skills", "pdf", "references", "note.txt"))
 	if err != nil || string(body) != "original resource" {

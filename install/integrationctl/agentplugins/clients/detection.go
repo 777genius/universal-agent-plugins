@@ -19,10 +19,13 @@ type HostDetector interface {
 // Detection is the raw outcome of probing one client's surfaces.
 type Detection struct {
 	// Err prevents an invalid selected profile from becoming mutation authority.
-	Err            error
-	ConfigRoot     string
-	ExecutablePath string
-	Surfaces       []domain.ClientSurface
+	Err        error
+	ConfigRoot string
+	// NativeConfigRoot is a separately observed native authority, never a
+	// replacement for legacy ConfigRoot or evidence of version qualification.
+	NativeConfigRoot string
+	ExecutablePath   string
+	Surfaces         []domain.ClientSurface
 	// SelectionSurfaceIDs narrows the surfaces that decide detection status to
 	// the ones that also make the client safe to act on. An empty list means any
 	// detected surface counts. Claude is the only client that needs it today: a
@@ -89,6 +92,13 @@ type DisposableVersionProbeProfile interface {
 // the caller retains selection, execution and version-admission authority.
 type ProjectVersionRequirement interface {
 	RequiresProjectVersion(client domain.DetectedClient) bool
+}
+
+// UserVersionRequirement is a narrowly selected user-scope version gate.
+// It does not imply that every installation of the same logical client uses
+// that executable or has native user capabilities.
+type UserVersionRequirement interface {
+	RequiresUserVersion(client domain.DetectedClient) bool
 }
 
 // HostVersionProbeEnvironment binds a version child to original host facts

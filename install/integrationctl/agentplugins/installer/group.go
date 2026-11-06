@@ -49,8 +49,12 @@ func (e *Engine) validateGroupTargets(req Request) error {
 }
 
 func (e *Engine) previewGroup(ctx context.Context, svc usecase.Service, req Request, inputs []usecase.AddInput) (usecase.GroupResult, error) {
+	checks, err := e.groupCompatibilityChecks(req, inputs)
+	if err != nil {
+		return usecase.GroupResult{}, err
+	}
 	group := usecase.GroupInput{
-		Targets: inputs, CompatibilityChecks: inputs, OperationGroupID: firstNonEmpty(req.OperationID, "group"),
+		Targets: inputs, CompatibilityChecks: checks, OperationGroupID: firstNonEmpty(req.OperationID, "group"),
 		DryRun: true, Confirmed: false, Repair: req.Operation == OpRepair,
 	}
 	switch req.Operation {

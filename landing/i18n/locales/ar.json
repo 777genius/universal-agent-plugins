@@ -245,17 +245,17 @@
     },
     "why": {
       "eyebrow": "لماذا يعمل",
-      "title": "معيار واحد",
-      "subtitle": "تسليم أصلي",
-      "intro": "تبقى الحزمة قابلة للنقل؛ ويتولى المُثبّت تنسيق كل عميل ودورة حياته.",
-      "standardTitle": "المعيار أولًا",
-      "clientTitle": "إعداد يناسب كل عميل",
-      "clientDescription": "يتلقى Codex وCursor وClaude Code وGemini CLI وOpenCode والعملاء الآخرون التنسيق الذي يدعمونه.",
-      "lifecycleTitle": "دورة حياة كاملة",
-      "lifecycleDescription": "أضف مكونًا إضافيًا أو افحصه أو حدّثه أو أصلحه أو بدّل مصدره أو أزله عبر CLI نفسه.",
-      "sourceTitle": "المصدر متاح",
-      "sourceDescription": "تبقى الحزم المراجعة والاكتشافات المجتمعية موسومة بوضوح، مع إتاحة مصدرها قبل التثبيت.",
-      "standardDescription": "تُقرأ الحزم من Agent Plugins 1.0 {manifest}، من دون بيان تثبيت ثانٍ."
+      "title": "حزمة واحدة",
+      "subtitle": "إعداد أقل عبر الوكلاء",
+      "intro": "اختر إضافة والوكلاء المتوافقين. يجهّز UAP المكوّنات المدعومة ويوضح خطوات تسجيل الدخول أو التفعيل المتبقية.",
+      "standardTitle": "ابدأ بملف plugin.json",
+      "clientTitle": "ملائم لكل وكيل",
+      "clientDescription": "تُجهّز المهارات وخوادم MCP والمكوّنات الأخرى وفق ما يدعمه كل وكيل محدد.",
+      "lifecycleTitle": "إدارة آمنة للتغييرات",
+      "lifecycleDescription": "راجع الخطة وحدّث التثبيتات المُدارة أو أصلحها أو أزلها دون الكتابة فوق ملفات غير مرتبطة.",
+      "sourceTitle": "اعرف المصدر",
+      "sourceDescription": "اطّلع على مصدر الحزمة وحالة مراجعتها في الدليل قبل تثبيتها.",
+      "standardDescription": "استخدم حزمة Agent Plugins 1.0 بملف {manifest}، دون الحاجة إلى صيغة إضافات خاصة بـ UAP."
     },
     "builtWith": {
       "title": "مشاريع بُنيت بالفعل باستخدام UAP",
@@ -323,11 +323,12 @@
       "terminal": "في الطرفية لديك",
       "refreshNotice": "جارٍ تحديث بيانات المكونات الإضافية. حاول مرة أخرى بعد قليل.",
       "otherMethods": "طرق تثبيت أخرى",
+      "supportedFormats": "التنسيقات المدعومة",
       "watchDemo": "شاهد العرض التوضيحي",
       "demoVideoTitle": "عرض توضيحي لتثبيت Universal Agent Plugins",
       "supportedClients": "العملاء المدعومون",
       "clientNote": "يثبّت CLI أو يحضّر التنسيق الأصلي الذي يدعمه كل عميل. قد يطلب منك بعض العملاء إكمال التفعيل أو تسجيل الدخول.",
-      "install": "تثبيت {name}",
+      "install": "تثبيت إضافة {name}",
       "explore": "استكشاف المكونات الإضافية",
       "exploreCount": "استكشاف {count} مكونات إضافية | استكشاف {count} مكون إضافي | استكشاف {count} مكونات إضافية",
       "delivery": {
@@ -515,6 +516,13 @@
     }
   },
   "registryUi": {
+    "desktopGuide": {
+      "title": "ChatGPT Desktop (محلي)",
+      "description": "يستخدم فهرس إضافات Codex المحلي، وليس اتصال ChatGPT Web.",
+      "command": "التثبيت لسطح المكتب",
+      "nextStep": "على macOS/Windows شغّل codex app، ثم فعّل الإضافة في Plugins > Personal. نجاح CLI لا يثبت تشغيلها في Desktop.",
+      "help": "الإعداد واستكشاف الأخطاء"
+    },
     "select": {
       "up": "مرر الخيارات إلى الأعلى",
       "down": "مرر الخيارات إلى الأسفل"
@@ -647,7 +655,7 @@
       "unavailableAtItsIndexedSource": "غير متاح في مصدره المفهرس",
       "checkedAgainBeforeInstallation": "يُفحص مجددًا قبل التثبيت",
       "reviewedListing": "مُراجَع",
-      "notAvailableForChatgpt": "غير متاح لـ ChatGPT",
+      "notAvailableForChatgpt": "لا يتوفر اتصال ChatGPT موثّق في هذا الإصدار",
       "verifiedConnectionFinishSetupInChatgpt": "اتصال تم التحقق منه؛ أكمل الإعداد في ChatGPT",
       "allInstalledAgents": "اختيار الوكلاء في الطرفية",
       "commandsDisabledInPreview": "الأوامر معطلة في المعاينة.",
@@ -686,7 +694,7 @@
       "notReadyToInstall": "غير جاهز للتثبيت",
       "detectedWhenYouRunTheCommand": "يتيح الأمر اختيار الوكلاء قبل التثبيت.",
       "thisPackageIsNoLongerAvailableFromItsSource": "لم تعد هذه الحزمة متاحة من مصدرها.",
-      "notAvailableForChatgpt": "غير متاح لـ ChatGPT",
+      "notAvailableForChatgpt": "لا يتوفر اتصال ChatGPT موثّق في هذا الإصدار",
       "unavailableSignedDirectorySnapshotExpired": "غير متاح: انتهت صلاحية لقطة Directory الموقعة",
       "noActiveReleaseSupportsThisClient": "لا يوجد إصدار نشط يدعم هذا العميل",
       "unavailableReviewDataIsNotInstallationAuthority": "غير متاح: بيانات المراجعة ليست مرجعًا معتمدًا للتثبيت",
@@ -715,11 +723,11 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "البيانات غير المحسومة مخصصة للمراجعة فقط؛ تتطلب أوامر الإنتاج لقطة Directory موقعة ومنشورة.",
       "commandsUnavailable": "الأوامر غير متاحة.",
       "automaticDetection": "اختيار الوكلاء في الطرفية",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "يتحقق CLI من هذه الإضافة مقابل الوكلاء المثبتين، ويتجاوز غير المتوافق منها، ويتيح لك تأكيد الأهداف. لا يتم تضمين ChatGPT إلا عندما توفر هذه الإضافة اتصالًا تم التحقق منه.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "تكتشف CLI الوكلاء المتوافقين لتأكيدهم. يتطلب ChatGPT اتصالًا موثقًا.",
       "oneStepRemainsInChatgpt": "تبقت خطوة واحدة في ChatGPT.",
       "noSingleSourceServesThisTargetSet": "لا يوجد مصدر واحد يخدم مجموعة الأهداف هذه.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "سيفشل CLI قبل إجراء أي تعديل وسيقترح تركيبات متوافقة من الأهداف والمصادر؛ ولا يخلط أبدًا توزيعات مختلفة بين العملاء.",
-      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "يتحقق CLI من كل وكيل محدد قبل تغيير الملفات ويعرض أي خطوة لتسجيل الدخول أو التفعيل. تبقى بيانات اعتماد OAuth مع الوكيل.",
+      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "تتحقق CLI من الوكلاء قبل تغيير الملفات وتعرض خطوات الإعداد. تبقى بيانات OAuth لدى الوكيل.",
       "chatgptFinish": "افتح ChatGPT، واختر {name} من التطبيقات أو الإضافات، ثم وصله وابدأ محادثة جديدة. يعتمد التوفر على حسابك ومساحة العمل لديك.",
       "expectedFallback": "مصدر الرجوع المتوقع: {source}.",
       "dependencySaving": {
@@ -910,7 +918,7 @@
       "breadcrumb": "مسار التنقل",
       "plugins": "الإضافات",
       "agentPlugins10": "Agent Plugins 1.0",
-      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "تمت مراجعة القائمة والبيانات الوصفية. ينطبق تقييم الأمان الآلي، عند توفره، على المراجعة المحددة التي تم فحصها فقط. ولا يتم تدقيق سلوك وقت التشغيل.",
+      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "تمت مراجعة القائمة والبيانات. فحص الأمان، إن وجد، يخص النسخة المفحوصة فقط؛ لم يُدقَّق التشغيل.",
       "installPlugin": "تثبيت الإضافة",
       "viewSource": "عرض المصدر",
       "pluginOverview": "نظرة عامة على الإضافة",

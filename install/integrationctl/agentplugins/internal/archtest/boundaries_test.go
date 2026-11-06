@@ -56,6 +56,7 @@ func layerBoundaries() []boundary {
 			"gopkg.in/yaml.v3",
 		}},
 		{pkg: agentplugins + "/usecase", deny: []string{
+			legacyPortsPath,
 			modulePath + "/install/integrationctl/adapters",
 			modulePath + "/install/integrationctl/agentplugins/adapters",
 			modulePath + "/install/integrationctl/agentplugins/planner",

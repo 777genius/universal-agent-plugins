@@ -331,3 +331,50 @@ func TestProjectSkillsSavedUnsupportedTargetRefusesBeforeNewSource(t *testing.T)
 	}
 	projectChatGPTAssertNoEffects(t, spy, user, a)
 }
+
+// The existing source/Journey fixture runs the real CLI, resolver, project
+// installer and filesystem. Only native-client detection is fixture-supplied:
+// this test qualifies the public refusal, not a real Codex model invocation.
+type projectSkillsCodexDetector struct{ root string }
+
+func (d projectSkillsCodexDetector) Detect(context.Context) ([]domain.DetectedClient, error) {
+	return []domain.DetectedClient{{
+		ClientID: domain.ClientCodex, ConfigRoot: d.root, Status: domain.DetectionDetected,
+	}}, nil
+}
+
+func projectSkillsSelectCodex(app agentpluginscli.App, detector projectSkillsCodexDetector) agentpluginscli.App {
+	app.Detector = detector
+	base := app.ForScope
+	app.ForScope = func(scope domain.InstallScope, root string) (agentpluginscli.App, error) {
+		selected, err := base(scope, root)
+		if err != nil {
+			return selected, err
+		}
+		return projectSkillsSelectCodex(selected, detector), nil
+	}
+	return app
+}
+
+func TestProjectCodexForeignSkillCollisionReportsTypedCLIRefusal(t *testing.T) {
+	source := newProjectSkillsSource(t, "https")
+	journey := newProjectJourney(t, source.transport)
+	profile := filepath.Join(journey.home, ".codex")
+	if err := os.MkdirAll(profile, 0700); err != nil {
+		t.Fatal(err)
+	}
+	journey.app = projectSkillsSelectCodex(journey.app, projectSkillsCodexDetector{root: profile})
+	occupied := filepath.Join(journey.a, ".agents", "skills", "docs", "SKILL.md")
+	neighbor := filepath.Join(journey.a, ".agents", "skills", "foreign", "SKILL.md")
+	projectJourneyWrite(t, occupied, "human-owned docs Skill\n")
+	projectJourneyWrite(t, neighbor, "unrelated Skill\n")
+	before := securityFixtureTree(t, filepath.Join(journey.a, ".agents", "skills"))
+	output, err := journey.execute(journey.a, "skills", "add", source.input, "--skill", "docs", "--target", "codex", "--no-ui", "--yes")
+	if err == nil || !strings.Contains(output, "FOREIGN_DESTINATION") || strings.Contains(output, "PLAN_REJECTED") {
+		t.Fatalf("Codex project collision did not surface typed public refusal: %v; %s", err, output)
+	}
+	if got := securityFixtureTree(t, filepath.Join(journey.a, ".agents", "skills")); !reflect.DeepEqual(before, got) {
+		t.Fatalf("foreign project Skill or neighbor changed on refusal: before=%v after=%v", before, got)
+	}
+	projectJourneyAbsent(t, filepath.Join(journey.a, "uap.toml"), filepath.Join(journey.a, "uap.lock"))
+}

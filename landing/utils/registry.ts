@@ -31,6 +31,10 @@ export function parseDirectoryData(
       throw new Error(
         'published snapshot mode requires signed snapshot products and distributions',
       );
+    // An untrusted v2 review preview must not be reinterpreted as the
+    // installable legacy index merely by supplying a "plugins" property.
+    if ('snapshot_schema_version' in input || 'products' in input || 'distributions' in input)
+      throw new Error('legacy index cannot contain Directory snapshot fields');
     return parseLegacyIndex(input);
   }
   return parseSnapshot(input, mode ?? 'review_preview');
@@ -76,7 +80,9 @@ export function defaultDistribution(plugin: RegistryPlugin): DistributionView {
 function supportsInstallScope(target: ReleaseTarget | undefined, scope: InstallScope): boolean {
   // A remote app connection has no project filesystem installation. Missing
   // scope facts cannot authorize a project command on older projections.
-  return Boolean(target?.scopes?.includes(scope) && (scope !== 'project' || !target.app_binding));
+  return Boolean(target?.scopes?.includes(scope) &&
+    target.canonical_closure?.eligible !== false &&
+    (scope !== 'project' || !target.app_binding));
 }
 
 function eligibleRelease(
@@ -107,6 +113,10 @@ function eligibleRelease(
         code: 'missingComponents',
         params: { sequence: release.release_sequence },
       });
+    } else if (!release.selectable) {
+      // Preserve the published release's refusal cause above. A preview-only
+      // release must still never authorize an installation.
+      reasons.push(`release ${release.release_sequence} is not selectable`);
     } else if ([...targets].some((target) => !supported.has(target))) {
       const missing = [...targets].filter((target) => !supported.has(target)).sort();
       reasons.push(`release ${release.release_sequence} does not support ${missing.join(',')}`);
@@ -115,23 +125,23 @@ function eligibleRelease(
         params: { sequence: release.release_sequence, targets: missing.join(',') },
       });
     } else {
-      const missingScope = scope
-        ? [...targets].filter(
-            (client) =>
-              !supportsInstallScope(
-                release.targets.find((target) => target.client === client),
-                scope,
-              ),
-          )
-        : [];
-      if (scope && missingScope.length) {
-        reasons.push(
-          `release ${release.release_sequence} does not support ${scope} scope for ${missingScope.sort().join(',')}`,
-        );
-        diagnostics.push({
-          code: 'unsupportedScope',
-          params: { sequence: release.release_sequence, scope, targets: missingScope.join(',') },
-        });
+      // An unscoped selection also needs an eligible grant for each client,
+      // not merely its name in a signed (possibly ineligible) target.
+      const missingScope = [...targets].filter((client) =>
+        !release.targets.some((target) =>
+          target.client === client && (scope
+            ? supportsInstallScope(target, scope)
+            : supportsInstallScope(target, 'user') || supportsInstallScope(target, 'project')),
+        ),
+      );
+      if (missingScope.length) {
+        const missing = missingScope.sort().join(',');
+        reasons.push(scope
+          ? `release ${release.release_sequence} does not support ${scope} scope for ${missing}`
+          : `release ${release.release_sequence} has no eligible scope for ${missing}`);
+        diagnostics.push(scope
+          ? { code: 'unsupportedScope', params: { sequence: release.release_sequence, scope, targets: missing } }
+          : { code: 'unsupportedTargets', params: { sequence: release.release_sequence, targets: missing } });
         continue;
       }
       const failures = [...targets]

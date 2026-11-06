@@ -23,7 +23,9 @@ type ClientTraits struct {
 	SavedDependenciesDeferred bool
 	// QualifiedLocalInstallerFacade keeps local-file route qualification
 	// separate from saved-dependency support; broad registration cannot widen it.
-	QualifiedLocalInstallerFacade     bool
+	QualifiedLocalInstallerFacade bool
+	// ShowsVerifiedLocalNextAction permits one private optional action after verified installation.
+	ShowsVerifiedLocalNextAction      bool
 	InstallIntents                    []InstallIntent
 	LifecycleKind                     LifecycleKind
 	UsesManagedStdioLauncher          bool
@@ -33,9 +35,19 @@ type ClientTraits struct {
 	ReportsMCPToolNamespaceCollision  bool
 	BindsNativeProfileRoot            bool
 	TracksNativeEffects               bool
+	// RequiresActiveNativeProjection separates native component readback from
+	// journal creation for a prepared user host with a separate commit handoff.
+	RequiresActiveNativeProjection bool
+	// LegacyPreparedProjectPackageReceipt preserves exact package-only project
+	// verification for old bindings when this client later gains native components.
+	// It never authorizes adopting or mutating mismatched ownership receipts.
+	LegacyPreparedProjectPackageReceipt bool
 	// RecordsUserProfileOnCreate records a selected user profile only for a new
 	// binding. It never adopts a legacy or coalesced binding with missing proof.
 	RecordsUserProfileOnCreate bool
+	// RecordsSelectedNativeRootOnCreate records a separately selected native
+	// user root only on a new binding. Legacy bindings are never migrated.
+	RecordsSelectedNativeRootOnCreate bool
 	// RequiresPluginData binds native extension runtime locators to an owned data receipt.
 	RequiresPluginData bool
 	// VerifiesNativeDirectory permits read-only verification of a directly discovered package.
@@ -43,6 +55,9 @@ type ClientTraits struct {
 	// ProtectsModifiedPackage rejects repair over edited discovery code; missing
 	// exact-owned directories remain repairable through the normal transaction.
 	ProtectsModifiedPackage bool
+	// ProtectsModifiedUserRawSkill refuses repair over modified user-scoped
+	// Git/HTTPS Skills. Project Skills and ordinary packages retain their policy.
+	ProtectsModifiedUserRawSkill bool
 	// EnforcesExplicitSkillInvocation means the client has a verified way to
 	// keep a skill out of the model's automatic choice, so an explicit-only
 	// command can be delivered. The adapter must then implement

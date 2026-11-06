@@ -2270,6 +2270,8 @@ def run(client, output):
                "build_complete": False, "test_selected": False, "test_passed": False,
                "runtime_artifact_admitted": False, "collection_complete": False}
     ctx, native_output, admitted = None, None, None
+    if client == "qoder":
+        summary["qoder_mcp_install_discovery"] = {"passed": False}
     try:
         with shared.Budget(480) as budget:
             ctx = shared.Context(output, summary, budget)
@@ -2300,6 +2302,11 @@ def run(client, output):
                 record, stdout, _ = ctx.command("runtime-test", [tests, "-test.run=^" + case["test"] + "$", "-test.count=1", "-test.v", "-test.timeout=" + str(case["seconds"]) + "s"], output, env, case["seconds"] + 5)
                 shared.verify_files(ctx.identities, budget)
                 accept_test(record, stdout)
+        if client == "qoder" and summary["test_passed"]:
+            with shared.Budget(180) as budget:
+                ctx.budget = budget
+                from project_native_qoder_installed_mcp import run as verify_qoder_install
+                summary["qoder_mcp_install_discovery"] = verify_qoder_install(ctx, env)
     except Exception as error:
         summary["error"] = type(error).__name__ + ": " + str(error)[:512]
     finally:
@@ -2318,7 +2325,8 @@ def run(client, output):
                     summary["test_passed"] = False
                     if client == "cursor":
                         cursor_admission_refusal(error)
-            summary["collection_complete"] = bool(summary["test_passed"] and summary["runtime_artifact_admitted"])
+            summary["collection_complete"] = bool(summary["test_passed"] and summary["runtime_artifact_admitted"]
+                                                  and (client != "qoder" or summary.get("qoder_mcp_install_discovery", {}).get("passed") is True))
             shared.publish(summary, ctx, output)
             (output / "upload/research.zip").rename(output / "upload/frontend.zip")
             if admitted is not None:

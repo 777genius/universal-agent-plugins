@@ -17,6 +17,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/legacylock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
@@ -200,7 +201,7 @@ func assembleAgentpluginsApp(home, dataRoot, cacheRoot string, v2Store statev2.S
 		StateStore:           v2Store,
 		StateMigrator:        &migrator,
 		LegacyLifecycle:      agentpluginscli.NewLegacyLifecycle(legacyStatePath),
-		LegacyStateLock:      locks.FileLock{BaseDir: filepath.Join(home, ".plugin-kit-ai", "locks")},
+		LegacyStateLock:      legacylock.StateLock{Manager: locks.FileLock{BaseDir: filepath.Join(home, ".plugin-kit-ai", "locks")}},
 		Detector:             detector,
 		ClientRegistry:       clientRegistry,
 		Planner:              planner,

@@ -18,7 +18,9 @@ var (
 
 func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.ActivationRequest) bool {
 	if projectRequested(request.Plan) {
-		return false
+		return !qoderLegacyPrepared(request.PreviousNativeObjects) &&
+			request.Plan.InstallIntent == domain.InstallIntentAutomatic &&
+			(shared.OnlyNativeComponents(request.Plan.Components) || len(qoderNativeOwned(request.PreviousNativeObjects)) > 0)
 	}
 	return shared.HasClientCLI(env, request.BackendExecutable)
 }
@@ -143,7 +145,7 @@ func verifyAbsent(ctx context.Context, env clients.Env, root, executable, name s
 
 func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	if request.TargetContext.Scope == domain.ScopeProject || request.TargetContext.ProjectRoot != "" {
-		return deactivateProject(ctx, request)
+		return deactivateProject(ctx, env, request)
 	}
 	outcome := shared.StartedDeactivation()
 	if request.ExternalUninstalled {

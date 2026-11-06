@@ -6,6 +6,8 @@ on:
     paths:
       - 'cli/**'
       - 'install/integrationctl/**'
+      - 'repotests/agentplugins_codex_claude_directory_plugin_native_e2e_test.go'
+      - 'repotests/agentplugins_codex_directory_inventory_native_test.go'
       - 'sdk/**'
       - 'go.work*'
       - '**/go.mod'
@@ -22,6 +24,8 @@ on:
     paths:
       - 'cli/**'
       - 'install/integrationctl/**'
+      - 'repotests/agentplugins_codex_claude_directory_plugin_native_e2e_test.go'
+      - 'repotests/agentplugins_codex_directory_inventory_native_test.go'
       - 'sdk/**'
       - 'go.work*'
       - '**/go.mod'
@@ -241,46 +245,45 @@ jobs:
               raise SystemExit("Native Git package did not pass")
           print("Native Git bare-repository and noninteractive-credential policies verified")
           '
-      - name: Verify user/project lock isolation with actual public CLI
+      - name: Verify project lock isolation and typed foreign Skill refusal through public CLI
         shell: bash
         run: |
           set -euo pipefail
-          go test -count=1 -timeout=5m -json ./cli/cmd/agentplugins \
-            -run '^TestProjectDependencyLockNeverCrossesUserProjectScopeE2E$' | python -c '
+          go test -count=1 -timeout=8m -json ./cli/cmd/agentplugins \
+            -run '^Test(ProjectDependencyLockNeverCrossesUserProjectScopeE2E|ProjectCodexForeignSkillCollisionReportsTypedCLIRefusal|PublicCLICrashAfterDurablePhaseRecovery)$' | python -c '
           import json, sys
           events = [json.loads(line) for line in sys.stdin if line.strip()]
-          name = "TestProjectDependencyLockNeverCrossesUserProjectScopeE2E"
-          actions = [e.get("Action") for e in events if e.get("Test") == name]
+          names = ("TestProjectDependencyLockNeverCrossesUserProjectScopeE2E", "TestProjectCodexForeignSkillCollisionReportsTypedCLIRefusal", "TestPublicCLICrashAfterDurablePhaseRecovery")
           pkg_pass = any(e.get("Action") == "pass" and not e.get("Test") for e in events)
-          if "run" not in actions or "pass" not in actions or "skip" in actions or "fail" in actions or not pkg_pass:
-              raise SystemExit(f"scope isolation E2E did not run/pass: {actions}, package_pass={pkg_pass}")
-          print("Three separate user/project environments preserved unrelated lock bytes and metadata")
+          for name in names:
+              actions = [e.get("Action") for e in events if e.get("Test") == name]
+              if "run" not in actions or "pass" not in actions or "skip" in actions or "fail" in actions or not pkg_pass:
+                  for e in events:
+                      if e.get("Action") == "output":
+                          sys.stderr.write(e.get("Output", ""))
+                  raise SystemExit(f"public CLI E2E did not run/pass: {name}: {actions}, package_pass={pkg_pass}")
+          print("Scope isolation, foreign Codex refusal and cold CLI crash recovery ran and passed")
           '
       - name: Verify actual process crash and durable transaction recovery
         working-directory: install/integrationctl/agentplugins
         shell: bash
         run: |
           set -euo pipefail
-          go test -json -count=1 -timeout=5m ./transaction -run TestDirectoryProcessCrashAfterActivationRecovers | python -c '
+          go test -json -count=1 -timeout=5m ./transaction -run '^TestDirectoryProcessCrashAfter(Activation|StateCommit)Recovers$' | python -c '
           import json, sys
           events = [json.loads(line) for line in sys.stdin if line.strip()]
           pkg = "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
-          name = "TestDirectoryProcessCrashAfterActivationRecovers"
-          matches = lambda action: any(
-              e.get("Package") == pkg and e.get("Test") == name and e.get("Action") == action
-              for e in events
-          )
-          package_pass = any(
-              e.get("Package") == pkg and e.get("Action") == "pass" and "Test" not in e
-              for e in events
-          )
-          if not (matches("run") and matches("pass") and package_pass) or matches("fail") or matches("skip"):
-              for e in events:
-                  if e.get("Action") == "output" and e.get("Package") == pkg:
-                      sys.stderr.write(e.get("Output", ""))
-              print("Exact post-write OS crash/recovery oracle did not run and pass.", file=sys.stderr)
-              sys.exit(1)
-          print("Confirmed actual crash/recovery run+pass events, package pass, no skip: " + name)
+          names = ("TestDirectoryProcessCrashAfterActivationRecovers", "TestDirectoryProcessCrashAfterStateCommitRecovers")
+          def matches(name, action):
+              return any(e.get("Package") == pkg and e.get("Test") == name and e.get("Action") == action for e in events)
+          package_pass = any(e.get("Package") == pkg and e.get("Action") == "pass" and not e.get("Test") for e in events)
+          for name in names:
+              if not package_pass or not matches(name, "run") or not matches(name, "pass") or matches(name, "fail") or matches(name, "skip"):
+                  for e in events:
+                      if e.get("Action") == "output" and e.get("Package") == pkg:
+                          sys.stderr.write(e.get("Output", ""))
+                  raise SystemExit("Exact OS process crash/recovery did not run and pass: " + name)
+          print("Both real OS crash/recovery tests ran and passed; no skips or failures")
           '
       - name: Verify immutable Git EOL bytes across platforms
         working-directory: install/integrationctl/agentplugins

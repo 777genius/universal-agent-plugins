@@ -21,7 +21,7 @@
 [![Codecov](https://codecov.io/gh/777genius/universal-agent-plugins/graph/badge.svg)](https://codecov.io/gh/777genius/universal-agent-plugins)
 [![npm](https://img.shields.io/npm/v/universal-agent-plugins?label=npm)](https://www.npmjs.com/package/universal-agent-plugins)
 [![Agent Plugins 1.0](https://img.shields.io/badge/Agent%20Plugins-1.0.0-7257FF)](https://agent-plugins.org/specification)
-[![Agent Skills 1.0](https://img.shields.io/badge/Agent%20Skills-1.0.0-7257FF)](https://agentskills.my/specification)
+[![Agent Skills](https://img.shields.io/badge/Agent%20Skills-standard-7257FF)](https://agentskills.io/specification)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 Install and manage plugins and Skills across your AI agents with one CLI.
@@ -31,6 +31,10 @@ setup on another computer or with your team.
 [Documentation](https://universal-agent-plugins.com/docs/) ·
 [Browse plugins](https://universal-agent-plugins.com/plugins/) ·
 [Build a plugin](#build-plugins)
+
+<p align="center">
+<a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
+</p>
 
 ## Contents
 
@@ -50,8 +54,6 @@ setup on another computer or with your team.
 - [Build plugins](#build-plugins)
 - [Contributing](#contributing)
 - [License](#license)
-
-<a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
 
 ## Use plugins
 

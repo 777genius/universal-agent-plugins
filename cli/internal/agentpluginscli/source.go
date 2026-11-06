@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/catalog"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
@@ -159,7 +158,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	if err != nil {
 		return loadedPackage{}, err
 	}
-	bundle, err := app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
+	bundle, err := app.DirectoryClient.Load(ctx, directoryFloorForClient(state, app.DirectoryClient))
 	if err != nil {
 		return loadedPackage{}, fmt.Errorf("load signed Directory: %w", err)
 	}
@@ -202,7 +201,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 		}
 		retainedMapping = installation.LocalChatGPTMapping
 	}
-	selection, err := domain.ResolveDirectory(bundle.Snapshot, resolveRequest)
+	selection, err := selectDirectorySourceForPlacement(bundle.Snapshot, resolveRequest)
 	if err != nil {
 		return loadedPackage{}, err
 	}
@@ -221,10 +220,10 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	if request.RequestedSelector != "" {
 		snapshot.Source.RequestedSource = request.RequestedSelector
 	}
-	snapshot.Source.SourceBindingHint = "directory-v1"
+	snapshot.Source.SourceBindingHint = fmt.Sprintf("directory-v%d", bundle.Snapshot.SnapshotSchemaVersion)
 	origin := &domain.DirectoryOrigin{
 		ProductID: selection.ProductID, DistributionID: selection.DistributionID, DistributionKind: selection.DistributionKind,
-		DesiredReleaseSequence: selection.ReleaseSequence, SnapshotSchema: directoryv1.SnapshotSchemaVersion,
+		DesiredReleaseSequence: selection.ReleaseSequence, SnapshotSchema: bundle.Snapshot.SnapshotSchemaVersion,
 		SnapshotSequence: selection.SnapshotSequence, SnapshotDigest: bundle.Digest,
 	}
 	load := app.loadSnapshot
@@ -254,7 +253,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 		TreeDigestAlgorithm: selection.TreeDigestAlgorithm, TreeDigest: selection.TreeDigest, ManifestDigest: selection.ManifestDigest,
 	}
 	exactRequest.DependencyIdentity = environment.DependencyIdentity
-	checked, err := domain.ResolveDirectory(bundle.Snapshot, exactRequest)
+	checked, err := selectDirectorySourceForPlacement(bundle.Snapshot, exactRequest)
 	if err != nil || checked.DistributionID != selection.DistributionID || checked.ReleaseSequence != selection.ReleaseSequence {
 		if err != nil {
 			err = fmt.Errorf("acquired exact Directory release failed compatibility recheck: %w", err)
@@ -280,7 +279,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 			peerRequest := exactRequest
 			peerRequest.Purpose = ""
 			peerRequest.Targets = peers
-			peer, peerErr := domain.ResolveDirectory(bundle.Snapshot, peerRequest)
+			peer, peerErr := selectDirectorySourceForPlacement(bundle.Snapshot, peerRequest)
 			if peerErr != nil || peer.DistributionID != selection.DistributionID || peer.ReleaseSequence != selection.ReleaseSequence || peer.TreeDigest != selection.TreeDigest {
 				_ = loaded.cleanup()
 				return loadedPackage{}, fmt.Errorf("mixed preparation peers must qualify the same immutable Context7 release: %v", peerErr)
@@ -318,7 +317,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	}
 	loaded.distributionSuspended = distribution.Status == domain.DistributionSuspended
 	loaded.releaseRevoked = policy.Status == domain.ReleaseRevoked || snapshotRevokes(bundle.Snapshot, selection)
-	if err := applyDirectoryCompatibility(&loaded, bundle, selection, *policy, environment); err != nil {
+	if err := applyDirectoryCompatibility(&loaded, bundle, selection, *policy, environment, app.scope()); err != nil {
 		_ = loaded.cleanup()
 		return loadedPackage{}, err
 	}

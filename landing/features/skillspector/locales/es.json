@@ -38,6 +38,7 @@
       "unreviewedFindings": "Hallazgos pendientes de revisión",
       "confirmedMaterialIssue": "Problema sustancial confirmado",
       "stale": "Análisis desactualizado",
+      "lastScan": "Último análisis: {result}",
       "unsupported": "Sin comprobar",
       "fullyChecked": "Skills analizadas: {checked} de {total}",
       "installAdvice": "Antes de instalar",

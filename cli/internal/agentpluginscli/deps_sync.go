@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/environmentstore"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -198,7 +197,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 }
 
 func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context, actions []dependencyAction) error {
-	if adapter.app.scope() != domain.ScopeProject || adapter.opts.dryRun {
+	if (adapter.app.scope() != domain.ScopeProject && adapter.app.scope() != domain.ScopeUser) || adapter.opts.dryRun {
 		return nil
 	}
 	var targets []domain.ClientID
@@ -320,7 +319,7 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	if app.DirectoryClient == nil {
 		return loadedPackage{}, errors.New("signed Directory is unavailable")
 	}
-	bundle, err := app.DirectoryClient.Load(ctx, 0)
+	bundle, err := app.loadAuthorizedDirectory(ctx)
 	if err != nil {
 		return loadedPackage{}, err
 	}
@@ -345,7 +344,7 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 			request.Operation = operation[0]
 		}
 	}
-	selection, err := domain.ResolveDirectory(bundle.Snapshot, request)
+	selection, err := selectDirectorySourceForPlacement(bundle.Snapshot, request)
 	if err != nil {
 		return loadedPackage{}, err
 	}
@@ -359,9 +358,9 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	if err := validateDirectoryCompatibilityPolicy(*policy); err != nil {
 		return loadedPackage{}, err
 	}
-	loaded.directory = &domain.DirectoryOrigin{ProductID: selection.ProductID, DistributionID: selection.DistributionID, DistributionKind: selection.DistributionKind, DesiredReleaseSequence: selection.ReleaseSequence, SnapshotSchema: directoryv1.SnapshotSchemaVersion, SnapshotSequence: selection.SnapshotSequence, SnapshotDigest: bundle.Digest}
+	loaded.directory = &domain.DirectoryOrigin{ProductID: selection.ProductID, DistributionID: selection.DistributionID, DistributionKind: selection.DistributionKind, DesiredReleaseSequence: selection.ReleaseSequence, SnapshotSchema: bundle.Snapshot.SnapshotSchemaVersion, SnapshotSequence: selection.SnapshotSequence, SnapshotDigest: bundle.Digest}
 	loaded.directorySelection = &selection
-	if err := applyDirectoryCompatibility(&loaded, bundle, selection, *policy, evidenceEnv); err != nil {
+	if err := applyDirectoryCompatibility(&loaded, bundle, selection, *policy, evidenceEnv, app.scope()); err != nil {
 		return loadedPackage{}, err
 	}
 	return loaded, nil

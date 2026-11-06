@@ -91,7 +91,26 @@ func TestWebsiteSkillsSavedLifecycleAndColdRefusal(t *testing.T) {
 	if got := dependencyRead(t, resource); got != "resource version 1" {
 		t.Fatal("cold projection lost supporting resource", got)
 	}
-	dependencyWrite(t, filepath.Join(binding.TargetLocator, "drift.txt"), "local drift")
+	drift := filepath.Join(binding.TargetLocator, "drift.txt")
+	dependencyWrite(t, drift, "local drift")
+	beforeDriftTree := savedJourneyTree(t, binding.TargetLocator)
+	beforeDriftState := dependencyRead(t, cold.cli.store.Path)
+	if err := os.RemoveAll(cold.cli.app.EnvironmentStoreRoot); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := cold.cli.execute(false, "repair", coldState.Installations[0].InstallationID, "--target", "codex", "--format", "json"); err == nil ||
+		!strings.Contains(err.Error(), "artifact digest mismatch") {
+		t.Fatalf("HTTPS raw Skill repair did not refuse foreign content: %v", err)
+	}
+	if dependencyRead(t, cold.cli.store.Path) != beforeDriftState ||
+		savedJourneyDifferences(beforeDriftTree, savedJourneyTree(t, binding.TargetLocator)) != "" ||
+		dependencyRead(t, drift) != "local drift" {
+		t.Fatal("refused HTTPS raw Skill repair changed state or foreign bytes")
+	}
+	if err := os.Remove(drift); err != nil {
+		t.Fatal(err)
+	}
+	savedRawSkillDropOwnedFixture(t, cold, binding.TargetLocator)
 	if err := os.RemoveAll(cold.cli.app.EnvironmentStoreRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -99,8 +118,8 @@ func TestWebsiteSkillsSavedLifecycleAndColdRefusal(t *testing.T) {
 	if got := dependencyRead(t, resource); got != "resource version 1" {
 		t.Fatal("cold repair changed pinned resource", got)
 	}
-	if _, err := os.Stat(filepath.Join(binding.TargetLocator, "drift.txt")); !os.IsNotExist(err) {
-		t.Fatal("repair did not replace drift", err)
+	if _, err := os.Stat(drift); !os.IsNotExist(err) {
+		t.Fatal("cold repair recreated removed foreign drift", err)
 	}
 	// Explicit update follows the publisher, while the old per-client repair and
 	// exported agreement continue to require their original content hashes.
