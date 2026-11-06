@@ -26,9 +26,12 @@ Current source builds also accept `--yes` on `add` and `install <source>`:
 agentplugins add context7 --target codex --scope user --yes --format json
 ```
 
-The flag accepts the preflighted install plan. Legacy `add --target` and JSON
-calls remain accepted for compatibility. This **does not** override a security
-finding, foreign ownership, a client's approval UI or authentication.
+The flag accepts the preflighted install plan. The same explicit `--yes` is
+accepted by `update`, `repair` and `remove`; removal requires an explicit
+`--target` in this headless route and retains plugin data unless `--purge-data`
+is separately specified. Legacy `add --target` and JSON calls remain accepted
+for compatibility. None of these confirmations override a security finding,
+foreign ownership, a client's approval UI or authentication.
 `--dry-run` never applies the installation, even together with `--yes`.
 
 ## Raw Skills: discover then install into one project
