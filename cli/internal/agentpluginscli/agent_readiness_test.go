@@ -98,7 +98,7 @@ func TestExplicitScopeReasonIsStable(t *testing.T) {
 	if got := scopeSelectionReason(root, &options{scope: "user"}); got != "default_user" {
 		t.Fatal(got)
 	}
-	if got := scopeSelectionReason(root, &options{scope: "project"}); got != "argumentless_project_manifest" {
+	if got := scopeSelectionReason(root, &options{scope: "project", scopeInferred: true}); got != "argumentless_project_manifest" {
 		t.Fatal(got)
 	}
 	if got := scopeSelectionReason(root, &options{scope: "project", projectRoot: "/project"}); got != "explicit" {
