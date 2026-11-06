@@ -9,6 +9,8 @@ const webRoot = process.env.UAP_E2E_WEB_ROOT || '.output/public';
 export default defineConfig({
   testDir: './tests/browser',
   timeout: 30_000,
+  // Four CI workers share one build; avoid duplicating runner setup for shards.
+  workers: process.env.CI ? 4 : undefined,
   use: {
     baseURL: `http://127.0.0.1:4173/${repositoryBase ? `${repositoryBase}/` : ''}`,
     // Real Mux HLS playback needs H.264 codecs; Playwright's headless shell
