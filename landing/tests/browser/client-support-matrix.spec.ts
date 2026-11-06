@@ -38,6 +38,32 @@ test('home lists the complete scope matrix immediately before FAQ', async ({ pag
   await expect(section).not.toContainText('E2E');
 });
 
+
+test('dark icon filter leaves the app and fixed hero unfiltered at desktop and mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('./');
+
+  const app = page.locator('.v-application').first();
+  const icon = page.locator('.registry-client-support__icon--contrast').first();
+  const hero = page.locator('.hero-agent-field--fixed');
+
+  for (const theme of ['dark', 'light'] as const) {
+    await page.evaluate((value) => localStorage.setItem('theme', value), theme);
+    await page.reload();
+    await expect(app).toHaveClass(new RegExp(`v-theme--${theme}`));
+    await expect(app).toHaveCSS('filter', 'none');
+    await expect(icon).toHaveCSS('filter', theme === 'dark' ? 'brightness(0) invert(1)' : 'none');
+    await expect(hero).toHaveCSS('position', 'fixed');
+
+    for (const width of [1440, 1100, 800, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect.poll(
+        () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      ).toBe(true);
+    }
+  }
+});
+
 test('scope matrix scrolls within its own region on narrow screens', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto('./');
