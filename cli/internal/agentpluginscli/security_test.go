@@ -25,6 +25,7 @@ func TestYesNeverAcceptsBlockingSecurityRiskOrPrompts(t *testing.T) {
 	output := &bytes.Buffer{}
 	loaded := loadedPackage{security: testSecurityAssessment(1, 0)}
 	command := securityTestCommand(output, strings.NewReader(""))
+	command.SetErr(&bytes.Buffer{}) // Even hidden stderr cannot turn --yes into a prompt.
 	err := authorizeSecurityAssessment(command, App{Terminal: true}, &options{format: "human", yes: true}, &loaded)
 	if err == nil || !strings.Contains(err.Error(), "--accept-security-risk") || loaded.securityAuthorized {
 		t.Fatalf("--yes bypassed blocking security review: %v, authorized=%t", err, loaded.securityAuthorized)
