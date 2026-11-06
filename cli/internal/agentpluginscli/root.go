@@ -1,7 +1,6 @@
 package agentpluginscli
 
 import (
-	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/spf13/cobra"
@@ -57,13 +56,13 @@ func NewRoot(app App) *cobra.Command {
 
 func validateCommonOptions(opts *options) error {
 	if opts.format != "human" && opts.format != "json" {
-		return fmt.Errorf("--format must be human or json")
+		return CLIUsageError{Code: "INVALID_FORMAT", Message: "--format must be human or json"}
 	}
 	if opts.scope != "user" && opts.scope != "project" {
-		return fmt.Errorf("--scope must be user or project")
+		return CLIUsageError{Code: "INVALID_SCOPE", Message: "--scope must be user or project"}
 	}
 	if opts.scope != "project" && opts.projectRoot != "" {
-		return fmt.Errorf("--project-root requires --scope project")
+		return CLIUsageError{Code: "INVALID_SCOPE", Message: "--project-root requires --scope project"}
 	}
 	if _, err := parseTargetOption(opts.target); err != nil {
 		return err
