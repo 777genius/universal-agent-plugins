@@ -282,9 +282,6 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 	if got := len(journey.state(t, journey.a).EnvironmentReceipts); got != 0 {
 		t.Fatalf("Project A still owns signed root/children after removal: %d", got)
 	}
-	if got := len(journey.state(t, "").EnvironmentReceipts); got != len(userBefore.EnvironmentReceipts) {
-		t.Fatal("Project A removal changed user installation")
-	}
 	if got := projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json")); got != userStateBefore {
 		t.Fatal("Project A removal changed user state bytes")
 	}
