@@ -117,7 +117,9 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 			NativeEffect: domain.NativeEffectUnchanged, UserActions: actions,
 		}
 		got.Targets = append(got.Targets, usecase.AddResult{
-			InstallationID: id, Plan: plan, Activation: outcome,
+			// Core returns the original planned view; the store below keeps
+			// the separately sealed/native-acknowledged selected revision.
+			InstallationID: id, Plan: previewPlan, Activation: outcome,
 			GroupPhase: usecase.GroupTargetExternalCompleted,
 		})
 		installed.Clients[bindingID] = domain.ClientBinding{
@@ -161,6 +163,11 @@ func TestUserGroupPreparedUpdateCompletesOnlyFiles(t *testing.T) {
 			f := newUserPreparedUpdateFixture(t)
 			f.got.Mutated = changed
 			f.prepared.plan.NoChange = true // A stale preview cannot override an observed write.
+			localID := f.prepared.plan.Targets[1].BindingID
+			if f.got.Targets[1].Plan.SelectedDelivery.ProjectionDigest() != "" ||
+				f.state.Installations[0].Clients[localID].SelectedDelivery.ProjectionDigest() == "" {
+				t.Fatal("fixture did not separate pre-staging core plan from committed projection")
+			}
 			result, err := f.finish(nil, nil)
 			expected := OutcomeUnchanged
 			if changed {

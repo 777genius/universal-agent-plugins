@@ -73,13 +73,7 @@ func completedUserPreparedTarget(prepared *PreparedOperation, frozen PlanTarget,
 		}
 		matched = true
 	}
-	if !matched || !completedUserPreparedBinding(frozen, plan, target.Activation, installation) {
-		return false
-	}
-	if target.Activation.Activation == domain.ActivationPrepared {
-		return publishedPreparedUserDelivery(plan)
-	}
-	return true
+	return matched && completedUserPreparedBinding(frozen, plan, target.Activation, installation)
 }
 
 // validUserPreparedTargetIdentity compares frozen user target and core plan.
@@ -127,8 +121,12 @@ func completedUserPreparedBinding(frozen PlanTarget, plan domain.DeliveryPlan, o
 	if !found || !validUserPreparedBindingRecord(frozen, plan, binding) {
 		return false
 	}
-	if binding.NativeProfileRoot != expectedUserNativeRoot(plan) ||
-		!completedUserPreparedOutcome(plan, binding, outcome) || !completedProjectLifecycle(binding, outcome) ||
+	// The returned core Plan is the pre-staging snapshot. Only persisted
+	// SelectedDelivery can carry the exact digest sealed by the stager.
+	sealed := plan
+	sealed.SelectedDelivery = binding.SelectedDelivery
+	if binding.NativeProfileRoot != expectedUserNativeRoot(sealed) ||
+		!completedUserPreparedOutcome(sealed, binding, outcome) || !completedProjectLifecycle(binding, outcome) ||
 		!ownedUserPreparedDataReceipt(binding, installation) {
 		return false
 	}
@@ -147,7 +145,7 @@ func validUserPreparedBindingRecord(frozen PlanTarget, plan domain.DeliveryPlan,
 		binding.PhysicalArtifact == plan.PhysicalArtifactID &&
 		binding.ProfileNamespace == plan.ProfileNamespace() &&
 		domain.SameProfileAuthority(binding.ProfileAuthority, plan.ProfileAuthority()) &&
-		reflect.DeepEqual(binding.SelectedDelivery, plan.SelectedDelivery) &&
+		completedUserStagedSelection(plan.SelectedDelivery, binding.SelectedDelivery) &&
 		binding.NativeActivationAttempt == "" && binding.PendingNativeIntent == nil
 }
 
