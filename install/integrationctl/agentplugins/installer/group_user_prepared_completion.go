@@ -69,7 +69,9 @@ func completedUserPreparedTarget(prepared *PreparedOperation, frozen PlanTarget,
 		if string(delivery.plan.ClientID) != frozen.ClientID {
 			continue
 		}
-		if matched || !completedUserPreparedDeliveryIdentity(delivery.plan, plan) {
+		// Group preflight may observe the same client more than once. Every
+		// frozen snapshot must match; a conflicting duplicate still fails closed.
+		if !completedUserPreparedDeliveryIdentity(delivery.plan, plan) {
 			return false
 		}
 		matched = true
