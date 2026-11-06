@@ -1,5 +1,4 @@
 import type { SkillsCatalogPage, SkillsView, SkillListing } from '~/types/skillsCatalog';
-import { skillInstallCommand } from '~/utils/skillsCatalog';
 import type { SkillsFilters } from '~/utils/skillsCatalog';
 import {
   hasCurrentPublishedScan,
@@ -114,7 +113,7 @@ export function useSkillsCatalog(
         requireCurrentScan && (reportUnavailable || !overview || rejected.length > 0);
     }
     try {
-      // This index skips impossible candidates. Only verified shards establish eligibility.
+      // Catalog visibility is independent of scan evidence and install authority.
       const currentSourceIds = client
         ? await client.currentSourceStateIds().catch(() => {
             reportUnavailable = true;
@@ -168,9 +167,13 @@ export function useSkillsCatalog(
           if (
             !item ||
             typeof item !== 'object' ||
-            typeof item.id !== 'string' ||
-            seen.has(item.id) ||
-            !skillInstallCommand(item)
+            typeof item.id !== 'string' || !item.id ||
+            typeof item.title !== 'string' || !item.title ||
+            typeof item.skillNameHint !== 'string' ||
+            !item.source || !['github', 'external'].includes(item.source.kind) ||
+            !item.metrics || !Number.isFinite(item.metrics.installs) ||
+            !['all-time', '24h', '1h'].includes(item.metrics.window) ||
+            seen.has(item.id)
           )
             continue;
           seen.add(item.id);

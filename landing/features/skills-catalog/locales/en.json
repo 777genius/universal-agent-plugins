@@ -72,12 +72,12 @@
       "scanFilterLabel": "Scan coverage",
       "scanModes": {
         "scanned": "With a current scan",
-        "all": "All installable Skills"
+        "all": "All Skills"
       },
-      "scanNotice": "Only Skills with an executed scan of their currently published source are shown. Partial coverage is labeled; scanning does not guarantee safety or installation.",
+      "scanNotice": "All Skills are displayed, including unscanned entries. Static checks do not guarantee safety or installation.",
       "scanNone": "No Skills with a current scan were found in this bounded selection.",
-      "scanHelp": "Switch to All installable Skills to browse without scan evidence.",
-      "scanClear": "Browse all installable Skills",
+      "scanHelp": "Switch to All Skills to browse without a scan.",
+      "scanClear": "Browse all Skills",
       "scanReportUnavailable": "Some scan reports could not be verified. Those Skills were excluded.",
       "scanSnapshot": "Published {date}: {complete} complete, {partial} partial, {error} failed, {pending} awaiting a current check ({stale} have older reports), out of {selected} selected scan targets.",
       "scanSnapshotHelp": "This is the latest published static-scan snapshot, not live service uptime or a guarantee of safety.",
@@ -95,7 +95,7 @@
         "moreCandidates": "More Skills can be checked",
         "moreCandidatesHelp": "No matches in this window. Show more to check the remaining candidates.",
         "noMatches": "No Skills match these filters",
-        "noMatchesHelp": "Try another search or reset the filters to browse all installable Skills."
+        "noMatchesHelp": "Try another search or reset filters to browse all Skills."
       }
     },
     "directoryPage": {
