@@ -299,7 +299,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		t.Fatalf("signed Project removal damaged foreign native settings: %s", removedNative)
 	}
 	for _, server := range []string{"notion", "hubspot", "playwright"} {
-		if strings.Contains(removedNative, "\"" + server + "\"") {
+		if strings.Contains(removedNative, "\""+server+"\"") {
 			t.Fatalf("signed Project removal left owned MCP server %s: %s", server, removedNative)
 		}
 	}
