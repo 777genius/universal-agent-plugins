@@ -380,6 +380,9 @@ func TestUserGroupPreparedUpdateManualCodexCannotBorrowUnprovenFileCompletion(t 
 		{"manual activation attested", func(f *userPreparedUpdateFixture) {
 			f.got.Targets[0].Activation.ActivationAttested = true
 		}},
+		{"manual authentication attested", func(f *userPreparedUpdateFixture) {
+			f.got.Targets[0].Activation.AuthenticationAttested = true
+		}},
 		{"unknown native effect", func(f *userPreparedUpdateFixture) {
 			f.got.Targets[0].Activation.NativeEffect = domain.NativeEffectUncertain
 		}},
