@@ -10,8 +10,8 @@ const webRoot = process.env.UAP_E2E_WEB_ROOT || '.output/public';
 export default defineConfig({
   testDir: './tests/browser',
   timeout: 30_000,
-  // Never oversubscribe a two-core CI runner; scale up to four only when CPUs permit.
-  workers: process.env.CI ? Math.min(4, availableParallelism()) : undefined,
+  // Leave one core free for the static server and hydration during heavy browser E2E.
+  workers: process.env.CI ? Math.min(3, availableParallelism()) : undefined,
   use: {
     baseURL: `http://127.0.0.1:4173/${repositoryBase ? `${repositoryBase}/` : ''}`,
     // Real Mux HLS playback needs H.264 codecs; Playwright's headless shell
