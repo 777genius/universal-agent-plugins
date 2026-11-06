@@ -43,7 +43,7 @@ func newSkillsListCommand(app App, opts *options) *cobra.Command {
 				return err
 			}
 			if opts.target != "" {
-				return errors.New("skills list does not install anything; omit --target")
+				return CLIUsageError{Code: "TARGET_NOT_ALLOWED", Message: "skills list does not install anything; omit --target"}
 			}
 			scoped, err := app.forOptions(opts)
 			if err != nil {
