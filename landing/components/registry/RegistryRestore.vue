@@ -95,7 +95,7 @@ async function copyCommand(which: 1 | 2 | 3) {
         </button>
       </div>
       <p v-if="mode === 'project'" class="registry-restore__qualification" role="status">
-        {{ tGlobal('registryUi.command.scope.marketingKitProjectUnavailable') }}
+        {{ tGlobal('registryUi.install.scope.marketingKitProjectUnavailable') }}
       </p>
 
       <div v-else class="registry-restore__flow">
