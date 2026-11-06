@@ -97,7 +97,19 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return agentpluginscli.NewRoot(app).ExecuteContext(ctx)
+	out := &agentpluginsOutputCounter{destination: os.Stdout}
+	app.Output = out
+	root := agentpluginscli.NewRoot(app)
+	err = root.ExecuteContext(ctx)
+	if err != nil && out.written == 0 {
+		format, _ := root.PersistentFlags().GetString("format")
+		if format == "json" {
+			if writeErr := agentpluginscli.WriteAgentFailure(out, err); writeErr != nil {
+				return fmt.Errorf("render CLI JSON failure: %w", writeErr)
+			}
+		}
+	}
+	return err
 }
 
 func resolveAgentpluginsRoots() (string, string, error) {
