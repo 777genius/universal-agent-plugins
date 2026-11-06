@@ -239,6 +239,7 @@ test('header keeps primary links at laptop width and GitHub icon follows theme',
   await links.nth(2).click();
   await expect(page).toHaveURL(/#agent-support$/);
   await expect(page.locator('#agent-support')).toBeInViewport();
+  expect(await page.locator('#agent-support').evaluate((node) => node.getBoundingClientRect().top)).toBeGreaterThanOrEqual(64);
   await links.nth(3).click();
   await expect(page).toHaveURL(/#faq$/);
   await expect(page.locator('#faq')).toBeInViewport();
