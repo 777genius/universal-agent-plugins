@@ -67,8 +67,9 @@ const onChange = async (value: unknown) => {
     return;
   }
   retryLocale.value = value;
-  await switchLocale(value);
+  // Close before navigation; the URL may update before switchLocale settles.
   menuOpen.value = false;
+  await switchLocale(value);
   returnFocus();
 };
 </script>

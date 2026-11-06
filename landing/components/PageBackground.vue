@@ -19,6 +19,8 @@
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
+  /* Blur-filtered moving orbs must not enlarge the document scroll area. */
+  contain: paint;
 }
 
 /* Grid overlay */
