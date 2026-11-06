@@ -138,7 +138,8 @@ func (c *windProjectCycle) command(t *testing.T, label string) {
 		}
 	} else if windCyclePublic(label) {
 		if err := windPublicProfileClosure(before, after, command.Scope, start, end); err != nil {
-			t.Fatal(err)
+			// Failure-only hashes from the same held before/after frames; never accept the mutation.
+			t.Fatal("Windsurf public profile closure: ", err, " ", windFrozenTreeRefusal("original-profile", before, after))
 		}
 		c.publicProof(t, label, w.recipes[command.Scope], result, start, end)
 	} else {
