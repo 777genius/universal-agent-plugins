@@ -101,7 +101,7 @@ func run() error {
 	app.Output = out
 	root := agentpluginscli.NewRoot(app)
 	err = root.ExecuteContext(ctx)
-	if err != nil && out.written == 0 {
+	if err != nil && out.written == 0 && agentpluginscli.ShouldWriteAgentFailure(err) {
 		format, _ := root.PersistentFlags().GetString("format")
 		if format == "json" {
 			if writeErr := agentpluginscli.WriteAgentFailure(out, err); writeErr != nil {
