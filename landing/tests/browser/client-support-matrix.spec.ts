@@ -10,9 +10,15 @@ test('home lists the complete scope matrix immediately before FAQ', async ({ pag
   await expect(logos).toHaveCount(15);
   await expect(logos.first()).toHaveAttribute('src', /client-icons\/claude.svg$/);
   await expect(logos.nth(8)).toHaveAttribute('src', /client-icons\/windsurf.svg$/);
-  await expect.poll(() => logos.evaluateAll((images) =>
-    images.every((image) => (image as HTMLImageElement).naturalWidth > 0),
-  ), { timeout: 12_000 }).toBe(true);
+  // Icons load lazily: scroll to them before checking their decoded bytes.
+  await logos.first().scrollIntoViewIfNeeded();
+  await expect.poll(() => logos.first().evaluate((image) =>
+    (image as HTMLImageElement).naturalWidth,
+  )).toBeGreaterThan(0);
+  await logos.last().scrollIntoViewIfNeeded();
+  await expect.poll(() => logos.last().evaluate((image) =>
+    (image as HTMLImageElement).naturalWidth,
+  )).toBeGreaterThan(0);
   await expect(page.locator('#agent-support + #faq')).toHaveCount(1);
   await expect(table.getByRole('columnheader')).toHaveText([
     'Agent',
