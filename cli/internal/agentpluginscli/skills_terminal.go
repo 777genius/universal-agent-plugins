@@ -215,7 +215,9 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 			_, err := fmt.Fprint(writer,
 				"Files: installed or already up to date.\n"+
 					"Agent discovery: not verified by this Skills flow.\n"+
-					"Activation: not verified. Open each agent, complete any trust/sign-in/reload step, and confirm the Skill is visible.\n")
+					"Activation: not verified.\n"+
+					"Next: open each agent, complete any trust/sign-in steps,\n"+
+					"      reload if prompted, and confirm the Skill is visible.\n")
 			return err
 		}
 		for _, instruction := range result.RepairInstructions {

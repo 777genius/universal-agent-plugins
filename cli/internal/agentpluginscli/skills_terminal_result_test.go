@@ -29,6 +29,8 @@ func TestSkillsHumanResultSeparatesFilesDiscoveryAndActivation(t *testing.T) {
 		"Files: installed or already up to date.",
 		"Agent discovery: not verified",
 		"Activation: not verified",
+		"Next: open each agent, complete any trust/sign-in steps,",
+		"      reload if prompted, and confirm the Skill is visible.",
 	} {
 		if !strings.Contains(output.String(), expected) {
 			t.Fatalf("missing %q in %q", expected, output.String())
@@ -71,6 +73,7 @@ func TestSkillsHumanCLIEndToEndReportsReadiness(t *testing.T) {
 		"Files: installed or already up to date.",
 		"Agent discovery: not verified by this Skills flow.",
 		"Activation: not verified.",
+		"Next: open each agent, complete any trust/sign-in steps,",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("real CLI human output is missing %q: %q", expected, out)
