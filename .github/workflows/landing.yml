@@ -120,6 +120,8 @@ jobs:
               if [[ -n "$paths" && "$paths" != *$'\001'* ]]; then
                 mode=smoke
                 while IFS= read -r path; do
+                  # Git allows control bytes in filenames; treat all of them as unsafe.
+                  if [[ "$path" =~ [[:cntrl:]] ]]; then mode=full; break; fi
                   case "$path" in
                     README.md|website/README.md|website/source/*.md) ;;
                     *) mode=full; break ;;
