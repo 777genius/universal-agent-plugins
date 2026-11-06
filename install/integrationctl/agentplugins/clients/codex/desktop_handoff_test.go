@@ -205,7 +205,8 @@ func TestDesktopLinkLongPathFallsBackWithoutBrokenURI(t *testing.T) {
 		t.Fatal(err)
 	}
 	action := desktopPluginHandoff(root, "stripe", "artifact", true, filepath.Join(t.TempDir(), "profile"))
-	if strings.Contains(action, "codex://") || !strings.Contains(action, "deep link omitted") || len([]rune(action)) > 390 {
+	if strings.Contains(action, "codex://") || !strings.Contains(action, "deep link omitted") ||
+		!strings.Contains(action, "non-default Codex profile") || len([]rune(action)) > 390 {
 		t.Fatalf("unsafe or clipped long-path link: %q", action)
 	}
 }
