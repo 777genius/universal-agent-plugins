@@ -61,16 +61,16 @@ func renderDependencyResults(cmd *cobra.Command, opts *options, actions []depend
 		outcome = "partial"
 	}
 	if opts.format == "json" {
-		data := map[string]any{"outcome": outcome, "actions": dependencyActionOutput(actions, opts.dependencyComponents), "results": out, "scope": opts.scope, "scope_selection_reason": scopeSelectionReason(cmd, opts)}
+		status := outputResultSuccess
+		if applyErr != nil {
+			status = outputResultFailure
+		}
+		data := map[string]any{"schema_version": outputSchemaVersion, "command": cmd.CommandPath(), "result": status, "outcome": outcome, "actions": dependencyActionOutput(actions, opts.dependencyComponents), "results": out, "scope": opts.scope, "scope_selection_reason": scopeSelectionReason(cmd, opts)}
 		if opts.installSelection != nil {
 			data["selection"] = opts.installSelection
 		}
 		if opts.environmentOutput != nil {
 			data["environment"] = opts.environmentOutput
-			status := "success"
-			if applyErr != nil {
-				status = "failure"
-			}
 			return writeJSONResult(cmd.OutOrStdout(), "add", status, data)
 		}
 		return renderJSON(cmd.OutOrStdout(), data)
