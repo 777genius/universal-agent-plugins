@@ -149,7 +149,7 @@ func TestGroupRecheckProcessCrashRecovery(t *testing.T) {
 			}
 			restarted := Kernel{
 				StateStore: statev2.Store{Path: store.Path},
-				Directory: dirswap.Manager{JournalDir: filepath.Join(root, "operations-v2")},
+				Directory:  dirswap.Manager{JournalDir: filepath.Join(root, "operations-v2")},
 			}
 			if err := restarted.Recover(t.Context()); err != nil {
 				t.Fatalf("fresh-kernel group recovery: %v", err)
