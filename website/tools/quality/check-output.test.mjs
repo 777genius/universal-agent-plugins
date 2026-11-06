@@ -11,11 +11,24 @@ const sourceBoundary = "The current npm and native installer release does not in
 const setupLink = '<a href="../build/#build-from-source">source-build setup</a>';
 const currentRelease = "https://github.com/777genius/universal-agent-plugins/releases/latest";
 const latestLink = `<a href="${currentRelease}">CLI</a>`;
+const releaseMarkdownLink = /\]\(https:\/\/github\.com\/777genius\/universal-agent-plugins\/releases\/latest\)/u;
 const page = (code) => `<main>${quickstartClaims.map((claim) => `<p>${claim}</p>`).join("")}<p>${sourceBoundary}</p>${setupLink}${latestLink}${code}</main>`;
 
 test("plain and highlighted installer commands satisfy the quickstart contract", () => {
   assert.deepEqual(quickstartErrors(page(`<pre><code>${command}</code></pre>`)), []);
   assert.deepEqual(quickstartErrors(page(highlight(command))), []);
+});
+
+test("release href must be exact, never a substring of another URL", () => {
+  const valid = page(highlight(command));
+  for (const forged of [
+    `${currentRelease}.attacker.invalid`,
+    `https://attacker.invalid/${currentRelease}`,
+    `${currentRelease}?redirect=attacker.invalid`,
+  ]) {
+    const invalid = valid.replace(currentRelease, forged);
+    assert.ok(quickstartErrors(invalid).some((error) => error.includes("latest stable installer release")), forged);
+  }
 });
 
 test("parsed document text preserves entities and highlighted code without treating attributes as content", () => {
@@ -112,7 +125,7 @@ test("all nine current documentation locales link to the stable release without 
   for (const locale of locales) {
     for (const relative of pages) {
       const source = await fs.readFile(new URL(`source/${locale}/${relative}`, website), "utf8");
-      assert.ok(source.includes(currentRelease), `${locale}/${relative} needs an evergreen release link`);
+      assert.ok(releaseMarkdownLink.test(source), `${locale}/${relative} needs an evergreen release link`);
       assert.ok(!source.includes("releases/tag/agentplugins-v0.1.95"),
         `${locale}/${relative} must not advertise the old tag as current`);
     }

@@ -120,7 +120,7 @@ export function homeErrors(html) {
   for (const claim of ["Use plugins", "Build plugins", "Agent Plugins", "plugin.json", "CLI", "explicit project scope", "locked restoration"]) {
     if (!text.includes(claim)) errors.push(`EN home page is missing its current installer guidance: ${claim}`);
   }
-  if (!links.includes("https://github.com/777genius/universal-agent-plugins/releases/latest")) {
+  if (!links.some((href) => href === "https://github.com/777genius/universal-agent-plugins/releases/latest")) {
     errors.push("EN home page must link the latest stable installer release");
   }
   if (!/current installer does not include agentplugins author/i.test(text)) {
@@ -144,7 +144,7 @@ export function quickstartErrors(html) {
   for (const claim of quickstartClaims) {
     if (!text.includes(claim)) errors.push(`Quickstart page is missing its current installer/source guidance: ${claim}`);
   }
-  if (!links.includes("https://github.com/777genius/universal-agent-plugins/releases/latest")) {
+  if (!links.some((href) => href === "https://github.com/777genius/universal-agent-plugins/releases/latest")) {
     errors.push("Quickstart must link the latest stable installer release");
   }
   if (!/current npm and native installer release does not include agentplugins author/i.test(text)) {
