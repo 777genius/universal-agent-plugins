@@ -61,6 +61,9 @@ body,
 .registry-surface {
   color: var(--text);
   line-height: 1.6;
+  // Clip decorative background overflow without trapping vertical scroll or sticky content.
+  overflow-x: clip;
+  position: relative;
 }
 button,
 input,
