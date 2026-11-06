@@ -1081,6 +1081,11 @@ img {
   }
 }
 
+/* Widen only the catalogs so five cards remain readable. */
+.catalog-wrap.container,
+.directory-page > .container {
+  --max-width: 1480px;
+}
 .catalog-wrap {
   padding-block: 90px;
 }
@@ -1928,7 +1933,7 @@ img {
 }
 .plugin-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: start;
   gap: 12px;
 }
@@ -3063,6 +3068,12 @@ img {
 }
 .error-page .button {
   margin-top: 20px;
+}
+
+@media (max-width: 1279px) {
+  .plugin-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 980px) {
