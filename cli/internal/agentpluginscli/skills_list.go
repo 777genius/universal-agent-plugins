@@ -101,7 +101,7 @@ func listHTTPSPublisherSkills(cmd *cobra.Command, app App, opts *options, input 
 		return CLIUsageError{Code: "INVALID_SOURCE", Message: "HTTPS Skills source must be a credential-free HTTPS URL without query or fragment"}
 	}
 	if err := app.checkSkillsContext(nil); err != nil {
-		return httpsSkillsListFailure(err)
+		return httpsSkillsContextFailure(err)
 	}
 	lister, ok := app.SourceAcquirer.(interface {
 		ListHTTPSkills(context.Context, string) (sourceacquisition.HTTPSkillCatalog, error)
@@ -127,6 +127,19 @@ func listHTTPSPublisherSkills(cmd *cobra.Command, app App, opts *options, input 
 		})
 	}
 	return renderSkillsList(cmd, opts, report)
+}
+
+// httpsSkillsContextFailure does not mislabel local project failures as
+// publisher outages. Keep the already typed local errors and hide all others.
+func httpsSkillsContextFailure(err error) CLIUsageError {
+	var usage CLIUsageError
+	if errors.As(err, &usage) {
+		return usage
+	}
+	return CLIUsageError{
+		Code: "COMMAND_FAILED",
+		Message: "Local Skills context cannot be validated; inspect --scope and --project-root before trying the publisher",
+	}
 }
 
 // httpsSkillsListFailure discards untrusted transport diagnostics while keeping

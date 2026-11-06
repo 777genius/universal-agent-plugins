@@ -15,7 +15,7 @@ import (
 
 func TestSkillsListIsDeterministicAndReadOnly(t *testing.T) {
 	journey, _, _ := skillsFullFlowFixture(t)
-	before := savedJourneyTree(t, journey.cli.app.DependenciesRoot)
+	before := savedJourneyTree(t, journey.cli.root)
 	var first string
 	for i := range 2 {
 		out, _, err := journey.cli.execute(false, "skills", "list", "acme/skills", "--format", "json")
@@ -52,7 +52,7 @@ func TestSkillsListIsDeterministicAndReadOnly(t *testing.T) {
 			t.Fatalf("machine listing contains a transient session identifier:\n%s\n%s", first, out)
 		}
 	}
-	if !reflect.DeepEqual(before, savedJourneyTree(t, journey.cli.app.DependenciesRoot)) {
+	if !reflect.DeepEqual(before, savedJourneyTree(t, journey.cli.root)) {
 		t.Fatal("read-only listing changed saved environment")
 	}
 	if journey.runner.calls != 0 {
@@ -212,5 +212,39 @@ func TestSkillsListHTTPSPublisherRejectsInvalidSelectorsAndUnavailableAdapter(t 
 	var usage CLIUsageError
 	if !errors.As(err, &usage) || usage.Code != "SOURCE_UNAVAILABLE" {
 		t.Fatalf("missing HTTPS source adapter returned %v", err)
+	}
+}
+
+func TestHTTPSListingLocalContextFailureDoesNotBlamePublisher(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err error
+		want string
+	}{
+		{name: "untyped project policy", err: errors.New("private-token-canary: project scope is invalid"), want: "COMMAND_FAILED"},
+		{name: "typed project scope", err: CLIUsageError{Code: "INVALID_SCOPE", Message: "choose a project root"}, want: "INVALID_SCOPE"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := httpsSkillsContextFailure(tc.err)
+			if got.Code != tc.want || !ShouldWriteAgentFailure(got) {
+				t.Fatalf("local context failure was classified as %v", got)
+			}
+			var output bytes.Buffer
+			if err := WriteAgentFailure(&output, got); err != nil {
+				t.Fatal(err)
+			}
+			var document struct {
+				Data struct {
+					Error AgentFailure `json:"error"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(output.Bytes(), &document); err != nil {
+				t.Fatal(err)
+			}
+			if document.Data.Error.Code != tc.want || strings.Contains(output.String(), "private-token-canary") ||
+				strings.Contains(output.String(), "SOURCE_UNAVAILABLE") {
+				t.Fatalf("untrusted local error was misclassified or leaked: %s", output.String())
+			}
+		})
 	}
 }
