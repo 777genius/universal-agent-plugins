@@ -268,7 +268,7 @@ test('Marketing Kit does not advertise unsupported signed project scope or force
   await expect(computer).toHaveAttribute('aria-pressed', 'true');
   await expect(project).toBeDisabled();
   await expect(card.locator('.marketing-kit-project')).toHaveCount(0);
-  await expect(card).toContainText('Marketing Kit Project short-name installation requires a CLI release newer than 0.1.95.');
+  await expect(card).toContainText('Marketing Kit is not yet available for Project: it needs a CLI release newer than 0.1.95, and its required Notion, HubSpot and Playwright dependencies must each qualify for Project installation.');
   await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
     'npx -y universal-agent-plugins add marketing-kit',
   );
@@ -277,7 +277,7 @@ test('Marketing Kit does not advertise unsupported signed project scope or force
   await card.locator('.plugin-card__title-link').click();
   const panel = page.locator('.install-panel');
   await expect(panel.getByRole('button', { name: 'This project', exact: true })).toBeDisabled();
-  await expect(panel).toContainText('requires a CLI release newer than 0.1.95');
+  await expect(panel).toContainText('Notion, HubSpot and Playwright');
   await expect(panel.locator('.marketing-kit-project')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

@@ -744,7 +744,7 @@
         "project": "هذا المشروع",
         "projectHint": "شغّل هذه الأوامر من مجلد مشروعك. قد يطلب منك الوكيل الوثوق بالمشروع أو تفعيله.",
         "projectUnavailable": "التثبيت داخل مشروع غير متاح لهذه الحزمة.",
-        "marketingKitProjectUnavailable": "يتطلب تثبيت Marketing Kit بالاسم المختصر في Project إصدار CLI أحدث من 0.1.95.",
+        "marketingKitProjectUnavailable": "حزمة Marketing Kit غير متاحة حاليًا لنطاق Project: يلزم إصدار CLI أحدث من 0.1.95، ويجب تأهيل كل اعتماد إلزامي من Notion وHubSpot وPlaywright للتثبيت في Project بصورة مستقلة.",
         "pinnedGitFallbackInfo": "يستخدم إصدار CLI 0.1.95 المنشور مصدر Git المثبّت هذا. تعمل أسماء Directory الموقّعة المختصرة لنطاق Project في الشيفرة الحالية، لكنها لم تُنشر بعد.",
         "selectionUnavailable": "هذه المجموعة من الوكلاء وموقع التثبيت غير متاحة. اختر وكيلاً أو موقعًا آخر."
       },
