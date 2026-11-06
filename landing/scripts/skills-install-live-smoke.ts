@@ -113,10 +113,27 @@ try {
     .toBeVisible({ timeout: 15000 });
   // Unmocked production acceptance of both independent filter states against
   // *immutable, signed-by-content* v3 shard evidence, never badge text alone.
-  const publicationRef = await fetch(
-    'https://api.github.com/repos/777genius/universal-agent-plugins-registry/git/ref/heads/skillspector-reports',
-    { signal: AbortSignal.timeout(15000) },
-  );
+  const publicationRefUrl =
+    'https://api.github.com/repos/777genius/universal-agent-plugins-registry/git/ref/heads/skillspector-reports';
+  // Retry only transient GitHub availability failures; never accept a bad ref or stale fixture.
+  async function readPublicationRef(): Promise<Response> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const response = await fetch(publicationRefUrl, { signal: AbortSignal.timeout(15000) });
+        if (response.status === 200 || (response.status !== 429 && response.status < 500) ||
+            attempt === 2) return response;
+        await response.body?.cancel();
+      } catch (error) {
+        if (attempt === 2 ||
+            !(error instanceof TypeError || (error instanceof Error && error.name === 'TimeoutError'))) {
+          throw error;
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 300));
+    }
+    throw new Error('Unreachable publication ref retry limit');
+  }
+  const publicationRef = await readPublicationRef();
   assert.equal(publicationRef.status, 200, 'Published report branch must be readable');
   const publicationSha = (await publicationRef.json() as { object?: { sha?: string } }).object?.sha;
   assert.match(publicationSha || '', /^[0-9a-f]{40}$/, 'Immutable publication SHA');
