@@ -26,7 +26,9 @@ Current source builds also accept `--yes` on `add` and `install <source>`:
 agentplugins add context7 --target codex --scope user --yes --format json
 ```
 
-The flag accepts the preflighted install plan. The same explicit `--yes` is
+The flag accepts the preflighted install plan without invoking post-install
+interactive lifecycle prompts. Pending activation/authentication remains
+visible as a separate follow-up. The same explicit `--yes` is
 accepted by `update`, `repair` and `remove`; removal requires an explicit
 `--target` in this headless route and retains plugin data unless `--purge-data`
 is separately specified. Legacy `add --target` and JSON calls remain accepted
