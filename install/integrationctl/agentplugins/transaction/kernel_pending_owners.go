@@ -87,6 +87,9 @@ func checkJournalStateAgreement(state domain.StateFileV2, journal dirswap.Receip
 func physicalJournalOwners(journal dirswap.Receipt) ([]domain.PhysicalProfileOwner, error) {
 	var owners []domain.PhysicalProfileOwner
 	for _, owner := range journal.ProfileOwners {
+		if owner.Authority == nil {
+			return nil, fmt.Errorf("invalid exact physical profile scope")
+		}
 		token, err := profileauthority.FromNeutral(*owner.Authority)
 		if err != nil {
 			return nil, err
