@@ -314,8 +314,25 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		}
 	}
 	seedForeign(journey)
-	for _, root := range []string{"", journey.a, journey.b} {
+	// An install or replay must not modify any other scope's native settings.
+	runIsolatedInstall := func(root string) {
+		siblings := make(map[string]string)
+		for _, sibling := range []string{"", journey.a, journey.b} {
+			if sibling == root {
+				continue
+			}
+			path := filepath.Join(journey.nativeRoot(sibling), "settings.json")
+			siblings[path] = projectJourneyRead(t, path)
+		}
 		journey.run(t, root, "install", "marketing-kit", "--target", "gemini")
+		for path, before := range siblings {
+			if got := projectJourneyRead(t, path); got != before {
+				t.Fatalf("install/replay in %q changed sibling native settings %q", root, path)
+			}
+		}
+	}
+	for _, root := range []string{"", journey.a, journey.b} {
+		runIsolatedInstall(root)
 		state := journey.state(t, root)
 		if len(state.Installations) != 4 || len(state.EnvironmentReceipts) != 4 {
 			t.Fatalf("signed short-name install in %q omitted mandatory MCP children: %+v", root, state)
@@ -330,7 +347,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
 			t.Fatalf("%q native Marketing Kit Skill differs from the signed source: %q", root, got)
 		}
-		journey.run(t, root, "install", "marketing-kit", "--target", "gemini")
+		runIsolatedInstall(root)
 		if len(journey.state(t, root).EnvironmentReceipts) != 4 {
 			t.Fatal("replay duplicated signed Directory installation")
 		}
