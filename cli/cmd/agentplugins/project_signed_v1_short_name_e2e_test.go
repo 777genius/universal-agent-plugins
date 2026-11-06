@@ -48,7 +48,7 @@ func (runner signedV1ProjectGitRunner) Run(ctx context.Context, command sourceac
 
 // Validate the exact native MCP keyset rather than merely finding server names
 // in URLs, comments or unrelated settings. Gemini allows JSONC comments.
-func assertSignedV1NativeMCPServers(t *testing.T, settings string, expected ...string) {
+func assertSignedV1NativeMCPServers(t *testing.T, settings, foreignSentinel string, expected ...string) {
 	t.Helper()
 	standard, err := hujson.Standardize([]byte(settings))
 	if err != nil {
@@ -78,7 +78,7 @@ func assertSignedV1NativeMCPServers(t *testing.T, settings string, expected ...s
 		case "foreign":
 			// Retain the foreign-owned legacy URL field, not UAP's httpUrl field.
 			if server.URL != "https://foreign.test/mcp" || server.HTTPURL != "" || server.Command != "" || len(server.Args) != 0 ||
-				len(server.Headers) != 1 || server.Headers["X-Foreign-Sentinel"] != "keep" {
+				len(server.Headers) != 1 || server.Headers["X-Foreign-Sentinel"] != foreignSentinel {
 				t.Fatalf("foreign native MCP server changed: %s", settings)
 			}
 		case "notion", "hubspot":
@@ -287,12 +287,26 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 	journey = configure(journey)
 	// Verify that UAP never drops unrelated foreign MCP headers while merging.
 	const foreignBefore = `"foreign":{"url":"https://foreign.test/mcp"}`
-	const foreignAfter = `"foreign":{"url":"https://foreign.test/mcp","headers":{"X-Foreign-Sentinel":"keep"}}`
+	foreignSentinel := func(j projectJourney, root string) string {
+		switch root {
+		case "":
+			return "scope-user"
+		case j.a:
+			return "scope-project-a"
+		case j.b:
+			return "scope-project-b"
+		default:
+			t.Fatalf("unexpected native root %q", root)
+			return ""
+		}
+	}
 	seedForeign := func(j projectJourney) {
 		for _, root := range []string{"", j.a, j.b} {
 			path := filepath.Join(j.nativeRoot(root), "settings.json")
 			before := projectJourneyRead(t, path)
-			after := strings.Replace(before, foreignBefore, foreignAfter, 1)
+			after := strings.Replace(before, foreignBefore,
+				fmt.Sprintf(`"foreign":{"url":"https://foreign.test/mcp","headers":{"X-Foreign-Sentinel":%q}}`,
+					foreignSentinel(j, root)), 1)
 			if after == before {
 				t.Fatalf("foreign MCP sentinel missing in %q", root)
 			}
@@ -312,7 +326,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 			}
 		}
 		native := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "settings.json"))
-		assertSignedV1NativeMCPServers(t, native, "foreign", "notion", "hubspot", "playwright")
+		assertSignedV1NativeMCPServers(t, native, foreignSentinel(journey, root), "foreign", "notion", "hubspot", "playwright")
 		if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
 			t.Fatalf("%q native Marketing Kit Skill differs from the signed source: %q", root, got)
 		}
@@ -321,7 +335,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 			t.Fatal("replay duplicated signed Directory installation")
 		}
 		replayedNative := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "settings.json"))
-		assertSignedV1NativeMCPServers(t, replayedNative, "foreign", "notion", "hubspot", "playwright")
+		assertSignedV1NativeMCPServers(t, replayedNative, foreignSentinel(journey, root), "foreign", "notion", "hubspot", "playwright")
 	}
 	fresh := configure(newProjectJourney(t, transport))
 	seedForeign(fresh)
@@ -338,7 +352,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		t.Fatal("cold locked restore rewrote the exact signed dependency lock")
 	}
 	coldNative := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.a), "settings.json"))
-	assertSignedV1NativeMCPServers(t, coldNative, "foreign", "notion", "hubspot", "playwright")
+	assertSignedV1NativeMCPServers(t, coldNative, foreignSentinel(fresh, fresh.a), "foreign", "notion", "hubspot", "playwright")
 	if got := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.a), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
 		t.Fatalf("cold signed v1 restore omitted or changed native Marketing Kit Skill: %q", got)
 	}
@@ -376,7 +390,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 	if !strings.Contains(removedNative, "retained foreign settings") {
 		t.Fatalf("signed Project removal damaged foreign native settings: %s", removedNative)
 	}
-	assertSignedV1NativeMCPServers(t, removedNative, "foreign")
+	assertSignedV1NativeMCPServers(t, removedNative, foreignSentinel(journey, journey.a), "foreign")
 	removedStandard, err := hujson.Standardize([]byte(removedNative))
 	if err != nil {
 		t.Fatal(err)
