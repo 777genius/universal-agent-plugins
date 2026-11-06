@@ -61,6 +61,9 @@ body,
 .registry-surface {
   color: var(--text);
   line-height: 1.6;
+  // Decorative orbs and scrollable compatibility tables must not widen the page.
+  // Keep inner scroll regions usable and avoid creating a sticky-position container.
+  overflow-x: clip;
 }
 button,
 input,
