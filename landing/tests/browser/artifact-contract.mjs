@@ -52,6 +52,8 @@ test('final artifact gate rejects missing, altered, draft and mis-scoped output 
     ]) {
       await fs.rm(root, { recursive: true, force: true });
       await fs.cp(mirror, root, { recursive: true });
+      // Fixture uses the committed PNG; production regenerates it from the SVG.
+      await fs.copyFile(new URL('../../public/og-image.png', import.meta.url), path.join(root, 'og-image.png'));
       await fs.cp(docsDist, path.join(root, 'docs'), { recursive: true });
       await put(path.join(root, '.nojekyll'), '');
       await put(path.join(root, '404.html'), '<meta name="robots" content="noindex, follow">');
@@ -157,6 +159,8 @@ test('final artifact gate rejects missing, altered, draft and mis-scoped output 
         }
       };
       await mutation('llms.txt', null, /Missing final artifact/);
+      await mutation('og-image.png', null, /Missing final artifact/);
+      await mutation('og-image.png', Buffer.alloc(24), /Social preview must be PNG/);
       await mutation('.well-known/ai-catalog.json', null, /Missing final artifact/);
       await mutation('.well-known/ard.json', null, /Missing final artifact/);
       await mutation('download/index.html', null, /Missing final artifact/);
