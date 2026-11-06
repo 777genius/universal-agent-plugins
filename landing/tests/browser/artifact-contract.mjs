@@ -85,7 +85,7 @@ test('final artifact gate rejects missing, altered, draft and mis-scoped output 
             '@id': `${siteUrl}#software`,
             url: siteUrl,
             publisher: { '@id': `${siteUrl}#organization` },
-            screenshot: `${siteUrl}og-image.png`,
+            screenshot: `${siteUrl}og-image.png?v=20261106`,
           });
           if (route.family === 'home')
             graph.push({ '@type': 'FAQPage', '@id': `${canonical}#faq` });
