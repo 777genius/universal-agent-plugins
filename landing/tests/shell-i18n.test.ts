@@ -405,7 +405,7 @@ test('active shared controls have English reference labels', () => {
   const header = read('components/layout/AppHeader.vue');
   assert.match(header, /const navItems = computed/);
   assert.match(header, /publishedLocales.length > 1/);
-  for (const key of ['demo', 'plugins', 'open', 'close', 'title', 'description', 'appearance']) {
+  for (const key of ['demo', 'plugins', 'agents', 'faq', 'open', 'close', 'title', 'description', 'appearance']) {
     assert.ok(header.includes(`shell.navigation.${key}`), key);
     assert.notEqual(t(`shell.navigation.${key}`), `shell.navigation.${key}`);
   }

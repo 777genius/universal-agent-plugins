@@ -150,11 +150,9 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustContain(t, yamlJob(t, releaseWorkflow, "dispatch-promotion"), "inputs.auto_publish == true")
 	mustContain(t, releaseWorkflow, "release workflow source does not match the exact tagged commit")
 	mustContain(t, releaseWorkflow, "commits/${COMMIT}/pulls")
-	// Release qualification accepts an exact successful commit without an associated merged PR.
-	// PR-head evidence is an optional fallback, never a substitute for absent checks.
 	mustContain(t, releaseWorkflow, `pr_checks="[]"`)
-	mustContain(t, releaseWorkflow, `if [[ -n "${pr_head}" ]]; then`)
 	mustContain(t, releaseWorkflow, `.merged_at != null and .base.ref == "main"`)
+	mustContain(t, releaseWorkflow, `if [[ -n "${pr_head}" ]]; then`)
 	mustContain(t, releaseWorkflow, `if ! has_check "${commit_checks}" "${name}" && ! has_check "${pr_checks}" "${name}"; then`)
 	mustContain(t, releaseWorkflow, "check-runs?filter=latest&per_page=100")
 	for _, name := range []string{
