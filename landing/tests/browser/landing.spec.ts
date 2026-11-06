@@ -300,7 +300,7 @@ test('homepage publishes canonical social metadata and complete product schema',
 }) => {
   const response = await page.goto('./');
   expect(response?.status()).toBe(200);
-  await expect(page).toHaveTitle('Universal Agent Plugins CLI | Install Agent Plugins 1.0');
+  await expect(page).toHaveTitle('AI Agent Plugins & Skills | Universal Agent Plugins');
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
     'href',
     'https://777genius.github.io/universal-agent-plugins/',
@@ -310,8 +310,25 @@ test('homepage publishes canonical social metadata and complete product schema',
   );
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
     'content',
-    'https://777genius.github.io/universal-agent-plugins/og-image.png',
+    'https://777genius.github.io/universal-agent-plugins/og-image.png?v=20261106',
   );
+  await expect(page.locator('meta[property="og:image:secure_url"]')).toHaveAttribute(
+    'content',
+    'https://777genius.github.io/universal-agent-plugins/og-image.png?v=20261106',
+  );
+  await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute('content', '1200');
+  await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute('content', '630');
+  const card = await page.request.get('og-image.png?v=20261106');
+  expect(card.status()).toBe(200);
+  const bytes = await card.body();
+  expect(bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))).toBe(true);
+  expect(bytes.readUInt32BE(16)).toBe(1200);
+  expect(bytes.readUInt32BE(20)).toBe(630);
+  const source = await page.request.get('og-image.svg');
+  expect(source.status()).toBe(200);
+  const art = await source.text();
+  expect(art).toContain('Claude Code');
+  expect(art).toContain('Copilot CLI');
   await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
     'content',
     'summary_large_image',
