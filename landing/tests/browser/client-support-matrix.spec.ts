@@ -54,9 +54,10 @@ test('scope matrix scrolls within its own region on narrow screens', async ({ pa
 });
 
 test('dark agent icon contrast never filters the app or breaks the fixed orbit', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('theme', 'dark'));
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('./');
+  await page.evaluate(() => localStorage.setItem('theme', 'dark'));
+  await page.reload();
 
   const app = page.locator('.v-application').first();
   const monochromeIcon = page.locator('.registry-client-support__icon--contrast').first();
