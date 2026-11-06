@@ -45,9 +45,9 @@ type dependencyExcludedTarget struct {
 type dependencyStatus struct {
 	Diagnostics      []dependencyCheckResult    `json:"diagnostics,omitempty"`
 	ExcludedTargets  []dependencyExcludedTarget `json:"excluded_targets"`
-	Scope            string                     `json:"scope"`
-	ScopeSelectionReason string                `json:"scope_selection_reason"`
-	ManifestPath     string                     `json:"manifest_path"`
+	Scope                string                     `json:"scope"`
+	ScopeSelectionReason string                     `json:"scope_selection_reason"`
+	ManifestPath         string                     `json:"manifest_path"`
 	LockPath         string                     `json:"lock_path"`
 	SupportedTargets []string                   `json:"supported_targets"`
 	ManifestDigest   string                     `json:"manifest_digest,omitempty"`
