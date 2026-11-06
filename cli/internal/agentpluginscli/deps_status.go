@@ -298,8 +298,18 @@ func runDependencyRecover(cmd *cobra.Command, app App, opts *options, yes bool) 
 
 func renderDependencyStatus(cmd *cobra.Command, opts *options, status dependencyStatus) error {
 	for i := range status.Facts {
-		status.Facts[i].Readiness = deriveDependencyReadiness(status.Facts[i].Facts)
-		status.Facts[i].AgentActions = dependencyAgentActions(status.Facts[i].NextActions)
+		fact := &status.Facts[i]
+		fact.Readiness = deriveDependencyReadiness(fact.Facts)
+		fact.AgentActions = dependencyAgentActions(fact.NextActions)
+		if status.PendingRecovery {
+			if fact.Readiness == "ready" {
+				fact.Readiness = "needs_action"
+			}
+			fact.AgentActions = append([]AgentAction{{
+				Code: "inspect_recovery", Actor: "agent",
+				Message: "Inspect the pending recovery with agentplugins deps recover --dry-run in the selected scope before changing anything.",
+			}}, fact.AgentActions...)
+		}
 	}
 	sort.SliceStable(status.Facts, func(i, j int) bool {
 		if status.Facts[i].Alias != status.Facts[j].Alias {
