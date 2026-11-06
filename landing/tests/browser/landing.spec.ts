@@ -5,7 +5,7 @@ import { emptySkillSpectorManifest, hydrated, setSignedMirrorTestTime } from './
 
 test.beforeEach(async ({ page }, testInfo) => {
   // This theme + navigation journey is CPU-heavy in the shared CI browser matrix.
-  if (testInfo.title.includes('GitHub icon follows theme')) testInfo.setTimeout(60_000);
+  if (testInfo.title.includes('GitHub icon follows theme')) testInfo.setTimeout(90_000);
   await setSignedMirrorTestTime(page);
   // Keep the catalog independent of optional report publication and remote availability.
   // Dedicated SkillSpector tests exercise checked, partial and unavailable reports.

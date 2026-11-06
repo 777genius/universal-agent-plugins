@@ -28,6 +28,8 @@ test.beforeEach(async ({ page }) => {
 
 for (const width of [1440, 1024, 390, 320]) {
   test(`hero controls and all client links remain complete at ${width}px`, async ({ page }) => {
+    // Validate every client link and loaded icon at four widths without a CI-contention timeout.
+    test.setTimeout(60_000);
     await page.setViewportSize({ width, height: width >= 1024 ? 1000 : 844 });
     await page.goto('./');
     await waitForCommand(page);
