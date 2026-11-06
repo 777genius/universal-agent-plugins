@@ -256,46 +256,7 @@ test('plugin grid defaults to five columns on desktop and stays responsive', asy
       getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length,
     );
     expect(count).toBe(expected);
-    const diagnostics = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      elements: [...document.querySelectorAll<HTMLElement>('body *')]
-        .map((element) => {
-          const bounds = element.getBoundingClientRect();
-          return {
-            tag: element.tagName.toLowerCase(),
-            className: typeof element.className === 'string' ? element.className.slice(0, 100) : '',
-            right: Math.round(bounds.right),
-            left: Math.round(bounds.left),
-            width: Math.round(bounds.width),
-            position: getComputedStyle(element).position,
-          };
-        })
-        .filter((element) => element.width > 0 && element.right > innerWidth + 2)
-        .sort((a, b) => b.right - a.right)
-        .slice(0, 16),
-    }));
-    if (diagnostics.scrollWidth > width) {
-      const probes = await page.evaluate(() => {
-        const selectors = [
-          '.page-bg',
-          '.hero-agent-field--fixed',
-          '.hero-shell',
-          '.registry-client-support__scroll',
-          '.unified-catalog',
-          '.app-header',
-        ];
-        return selectors.map((selector) => {
-          const nodes = [...document.querySelectorAll<HTMLElement>(selector)];
-          const originalDisplay = nodes.map((node) => node.style.display);
-          nodes.forEach((node) => { node.style.display = 'none'; });
-          const remainingScrollWidth = document.documentElement.scrollWidth;
-          nodes.forEach((node, index) => { node.style.display = originalDisplay[index]!; });
-          return { selector, count: nodes.length, remainingScrollWidth };
-        });
-      });
-      console.log('HORIZONTAL_OVERFLOW_DIAGNOSTICS', width, JSON.stringify({ ...diagnostics, probes }));
-    }
-    expect(diagnostics.scrollWidth).toBeLessThanOrEqual(width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('./plugins/');
