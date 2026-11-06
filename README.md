@@ -131,6 +131,8 @@ Code in `main` may not be released yet.
 
 ## More capabilities
 
+For AI-agent / headless installation, see the [agent-first CLI guide](docs/AGENT_CLI.md): explicit targets and scope, read-only Skills discovery, JSON results, and lifecycle verification. New source-only commands are labelled separately from released CLI behavior.
+
 | Need | How UAP helps |
 | --- | --- |
 | Multiple agents | `add --target codex,claude` with separate outcomes and any remaining activation steps. |
