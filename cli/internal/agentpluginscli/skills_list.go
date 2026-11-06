@@ -18,6 +18,7 @@ type listedSkill struct {
 	Description     string   `json:"description,omitempty"`
 	Path            string   `json:"path"`
 	Status          string   `json:"status"`
+	Reason          string   `json:"reason,omitempty"`
 	DiagnosticCodes []string `json:"diagnostic_codes,omitempty"`
 }
 
@@ -118,7 +119,7 @@ func listHTTPSPublisherSkills(cmd *cobra.Command, app App, opts *options, input 
 			status = "available"
 		}
 		report.Candidates = append(report.Candidates, listedSkill{
-			Name: c.Name, Description: c.Description, Path: c.Name, Status: status,
+			Name: c.Name, Description: c.Description, Path: c.Name, Status: status, Reason: c.Reason,
 		})
 	}
 	return renderSkillsList(cmd, opts, report)
