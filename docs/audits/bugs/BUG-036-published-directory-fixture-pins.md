@@ -1,0 +1,25 @@
+# BUG-036 — 30-plugin E2E expected unpublished Directory releases instead of the published immutable snapshot
+
+## Reproduced failure
+
+In exact [30-plugin source artifacts from run 41830588372](https://github.com/777genius/universal-agent-plugins/actions/runs/41830588372) on branch source `bb574a1eb04bf58feaa54eaeff51d078fc02c967`, signed Registry installs sometimes completed yet were reported `incomplete-native-proof` because the frozen fixture `tests/live-install/fixtures.json` expected a release absent from the **published** Directory or carried `revision:null`. A genuine CLI `list` self-report is insufficient to qualify immutable provenance, so the harness **correctly refused** PASS given the incorrect fixture.
+
+Investigated Registry repository `777genius/universal-agent-plugins-registry`: `registry/directory.json` on `main` is the **review/source model**, and `revision:null` is *intentional before signing*: `scripts/prepare_directory_publication.py` binds post-merge immutable revision and `scripts/directory_publication.py` rejects null revision in signed snapshots. This is **not** a defect in Registry signing or the product's native installer. The fixture was pinned to unbound review data instead of the immutable published release.
+
+Publication reference: [Directory ledger snapshot 43](https://github.com/777genius/universal-agent-plugins-registry/blob/directory-publication-ledger/registry/schemas/1/snapshots/00000000000000000043.json) and [its Ed25519 envelope](https://github.com/777genius/universal-agent-plugins-registry/blob/directory-publication-ledger/registry/schemas/1/snapshots/00000000000000000043.envelope.json), `sequence=43`, `generated_at=2026-10-25T20:31:20Z`, `expires_at=2026-11-24T20:31:20Z`, `source_commit=c5bcedd4ecf12585a8a50401852e57a44891ebec`, envelope digest `sha256:7ffb6078ac08e7ed00575dbf9a871b0dba53c755591d8983dd9399bfdc4edaf6`, key ID `uap-directory-2026-01`. Snapshot 43 is the latest published ledger pointer at time of inspection, **not** the newest reviewed `main` state. Its Ed25519 signature was observed; this investigation did not separately recompute the signature.
+
+An exhaustive field-by-field check of all **21** signed fixture pins against snapshot 43 found **exactly six discrepancies**: `777genius/chrome-devtools-bridge` sequence 3, `cloudflare` sequence 1, `firecrawl` sequence 1, `marketing-kit` sequence 1 were missing frozen SHA only. `firebase` expected sequence 7 and `playwright` expected sequence 2, neither published; snapshot 43 selects released sequence 6 and 1, respectively. The other **15** fixture pins already match published repository, path, revision, sequence, tree and manifest digests exactly.
+
+## Minimal implementation plan — confined to E2E fixture, validator and regression
+
+1. Replace **only these six pinned entries** using exact `repository`, `path`, `revision`, `sequence`, `tree_digest`, `manifest_digest` copied from the immutable published snapshot 43. Preserve all 30 distinct plugin source aliases and 30 distinct Skills; do not edit product release policy, Registry, installer or synthetic identities.
+2. Make `validate_fixtures` reject a null/malformed signed release revision for the *positive acceptance* fixture and update its existing fail-closed regression to inject a deliberate null in a copy. Keep `matching_installations` strict: arbitrary self-reported revision, wrong sequence, owner, digest or native client remains non-PASS.
+3. Run focused no-network Python tests plus real exact-head 30x30 CI, inspect original per-case JSON for improved `incomplete-native-proof` cases. Reject any source whose real signed receipt does not exactly equal the frozen ledger. An unpublished sequence 7/2 **must not** be accepted just because it is in `main`.
+4. If the published ledger advances after the frozen 43 snapshot, record the new sequence and revise fixture in a separate reviewed commit; do not silently switch to `latest` during execution.
+
+## Two independent critical challenges (author's review, not external approval)
+
+- **Supply-chain critic:** `registry/directory.json` is a *pre-publication* model with unresolved source commits. It cannot be used as runtime authority. The fix must source the *published* ledger with a recorded signature envelope, not copy `recorded_revision` from an untrusted native list or infer latest from git HEAD. This report doesn't claim independent Ed25519 cryptographic verification.
+- **False-positive critic:** A complete SHA pin alone never proves successful installation, active MCP, valid authentication or clean removal. Both `matching_installations` checks and real add/repeat/list/remove/foreign-neighbor oracles stay unchanged. Preserve every incompatible/blocked case as non-PASS; do not move test count into SUCCESS without the new archived ZIP evidence.
+
+**Status:** root cause verified against current published immutable snapshot; code update, focused tests and final-head live confirmation pending. No merge authorization until all gates.

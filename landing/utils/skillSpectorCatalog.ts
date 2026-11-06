@@ -8,6 +8,8 @@ import type {
 } from '../types/skillSpector.ts';
 import { decodeSkillSpectorRecords, decodeSkillSpectorReport } from './skillSpector.ts';
 import { decodeSkillSpectorManifestV3, decodeSkillSpectorShardV3 } from './skillSpectorV3.ts';
+import { applyVerifiedSkillSpectorCohort, readVerifiedSkillSpectorCohort } from './skillSpectorCohort.ts';
+import type { TrustedCohortKey, VerifiedCohort } from './skillSpectorCohort.ts';
 
 const revision = /^[0-9a-f]{40}$/;
 const digest = /^sha256:[0-9a-f]{64}$/;
@@ -304,6 +306,8 @@ export function createSkillSpectorClient(
   legacyUrl: string,
   fetcher: typeof fetch = fetch,
   v3ManifestUrl?: string,
+  cohortLatestUrl?: string,
+  cohortKeys: readonly TrustedCohortKey[] = [],
 ) {
   const legacyManifest = () =>
     readBytes(manifestUrl, 4 << 20, fetcher)
@@ -320,11 +324,31 @@ export function createSkillSpectorClient(
     CachedRequest<SkillSpectorReport | SkillSpectorManifest | SkillSpectorManifestV3>
   >();
   let legacyFallback = false;
+  let v3ManifestDigest: string | undefined;
+  const cohortCache = new Map<string, CachedRequest<VerifiedCohort | undefined>>();
+  let lastCohortReadAt = 0;
+  let trustedCohortExpiresAt: number | undefined;
+  const loadCohort = (): Promise<VerifiedCohort | undefined> =>
+    !cohortLatestUrl || !cohortKeys.length
+      ? Promise.resolve(undefined)
+      : cachedRequest(cohortCache, 'release', () =>
+          readVerifiedSkillSpectorCohort(cohortLatestUrl, cohortKeys, fetcher)
+            .then((cohort) => {
+              trustedCohortExpiresAt = cohort?.expiresAt;
+              return cohort;
+            })
+            .catch(() => undefined),
+        );
   const loadManifest = () =>
     cachedRequest(manifests, 'manifest', () =>
       v3ManifestUrl
         ? readBytes(v3ManifestUrl, 16 << 20, fetcher)
-            .then((bytes) => decodeSkillSpectorManifestV3(parse(bytes)))
+            .then(async (bytes) => {
+              const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as BufferSource));
+              v3ManifestDigest = 'sha256:' + [...hash]
+                .map((byte) => byte.toString(16).padStart(2, '0')).join('');
+              return decodeSkillSpectorManifestV3(parse(bytes));
+            })
             .catch((error) => {
               if (error instanceof HttpError && error.status === 404) return legacyManifest();
               throw error;
@@ -374,6 +398,17 @@ export function createSkillSpectorClient(
     );
   }
   const reportFor = async (repositoryName: string): Promise<SkillSpectorDisplayReport> => {
+      // A trusted cohort can expire or be superseded while the Nuxt app lives.
+      // A new request must not return an indefinitely cached Complete overlay.
+      const clock = Date.now();
+      if (cohortLatestUrl && cohortKeys.length &&
+          (clock - lastCohortReadAt >= 300_000 ||
+           (trustedCohortExpiresAt !== undefined && clock >= trustedCohortExpiresAt))) {
+        cohortCache.clear();
+        repositories.clear();
+        trustedCohortExpiresAt = undefined;
+        lastCohortReadAt = clock;
+      }
       const key = repositoryName.toLowerCase();
       return cachedRequest(repositories, key, async () => {
         const manifest = await loadManifest();
@@ -418,7 +453,10 @@ export function createSkillSpectorClient(
           pluginCounts.delete(plugin.plugin_path);
         }
         if (pluginCounts.size) invalid();
-        return { ...manifest, records };
+        const report = { ...manifest, records };
+        if (manifest.schema_version !== 3) return report;
+        const cohort = await loadCohort();
+        return applyVerifiedSkillSpectorCohort(report, v3ManifestDigest, cohort);
       });
   };
   return {
