@@ -431,15 +431,15 @@
       }
     },
     "seo": {
-      "indexTitle": "Universal Agent Plugins CLI {'|'} Agent Plugins 1.0 स्थापित करें",
-      "indexDescription": "एक CLI के साथ समर्थित एआई एजेंटों में Agent Plugins 1.0 को स्थापित करें, अपडेट करें, मरम्मत करें और हटाएँ।",
+      "indexTitle": "AI एजेंट प्लगइन्स और Skills {'|'} Universal Agent Plugins",
+      "indexDescription": "एक CLI से Codex, Claude Code, Cursor, Gemini CLI और अन्य के लिए Agent Plugins 1.0, Agent Skills और MCP टूल इंस्टॉल करें। ग्लोबल या प्रोजेक्ट स्तर पर प्रबंधित करें।",
       "downloadTitle": "Universal Agent Plugins CLI डाउनलोड करें",
       "downloadDescription": "macOS, Linux, या Windows पर Universal Agent Plugins CLI इंस्टॉल करें और एक कमांड से Agent Plugins 1.0 प्रबंधित करें।",
       "applicationSubCategory": "एजेंट प्लगइन प्रबंधक",
       "softwareRequirements": "macOS, Linux और Windows के लिए मूल CLI; या npx के लिए Node.js 22+",
-      "featureList": "Agent Plugins 1.0 को स्थापित करें, निरीक्षण करें, अद्यतन करें, मरम्मत करें, स्रोत स्विच करें और हटाएँ",
-      "imageAlt": "Universal Agent Plugins - एक CLI के साथ एआई एजेंटों में प्लगइन्स इंस्टॉल करें",
-      "organizationDescription": "Agent Plugins 1.0 के लिए ओपन-सोर्स मल्टी-एजेंट इंस्टॉलर और जीवनचक्र प्रबंधक।"
+      "featureList": "Agent Plugins 1.0 और Agent Skills को ग्लोबल या प्रोजेक्ट स्तर पर इंस्टॉल, जाँच, अपडेट, रिपेयर और रिमूव करें।",
+      "imageAlt": "Universal Agent Plugins — कई AI एजेंटों के प्लगइन्स, Skills और MCP टूल के लिए एक CLI।",
+      "organizationDescription": "अनेक AI एजेंटों में Agent Plugins 1.0, Agent Skills और MCP टूल को इंस्टॉल व प्रबंधित करने वाला ओपन-सोर्स CLI।"
     },
     "hero": {
       "autoLabel": "टर्मिनल में एजेंट चुनें",
