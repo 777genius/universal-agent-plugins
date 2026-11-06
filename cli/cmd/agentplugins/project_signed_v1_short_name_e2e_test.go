@@ -56,6 +56,7 @@ func assertSignedV1NativeMCPServers(t *testing.T, settings string, expected ...s
 	}
 	var native struct {
 		MCPServers map[string]struct {
+			URL     string   `json:"url"`
 			HTTPURL string   `json:"httpUrl"`
 			Command string   `json:"command"`
 			Args    []string `json:"args"`
@@ -73,16 +74,18 @@ func assertSignedV1NativeMCPServers(t *testing.T, settings string, expected ...s
 			t.Fatalf("native MCP server %q missing: %s", name, settings)
 		}
 		switch name {
-		case "foreign", "notion", "hubspot":
-			url := "https://" + name + ".example.test/mcp"
-			if name == "foreign" {
-				url = "https://foreign.test/mcp"
+		case "foreign":
+			// Retain the foreign-owned legacy URL field, not UAP's httpUrl field.
+			if server.URL != "https://foreign.test/mcp" || server.HTTPURL != "" || server.Command != "" || len(server.Args) != 0 {
+				t.Fatalf("foreign native MCP server changed: %s", settings)
 			}
-			if server.HTTPURL != url || server.Command != "" || len(server.Args) != 0 {
+		case "notion", "hubspot":
+			url := "https://" + name + ".example.test/mcp"
+			if server.HTTPURL != url || server.URL != "" || server.Command != "" || len(server.Args) != 0 {
 				t.Fatalf("native Streamable HTTP server %q has wrong transport: %s", name, settings)
 			}
 		case "playwright":
-			if server.HTTPURL != "" || server.Command != "go" || len(server.Args) != 1 || server.Args[0] != "version" {
+			if server.URL != "" || server.HTTPURL != "" || server.Command != "go" || len(server.Args) != 1 || server.Args[0] != "version" {
 				t.Fatalf("native stdio server %q has wrong transport: %s", name, settings)
 			}
 		default:
