@@ -354,6 +354,51 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		replayedNative := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "settings.json"))
 		assertSignedV1NativeMCPServers(t, replayedNative, foreignSentinel(journey, root), "foreign", "notion", "hubspot", "playwright")
 	}
+	// Repair a missing owned Skill through the public CLI using the original
+	// signed root pin. It must leave the required MCP children, exact lock and
+	// both unrelated scopes intact, not re-resolve a moving unsigned source.
+	rootID := ""
+	for _, installation := range journey.state(t, journey.a).Installations {
+		if installation.Directory != nil && installation.Directory.ProductID == "marketing-kit" {
+			if rootID != "" {
+				t.Fatal("multiple signed Marketing Kit roots in Project A")
+			}
+			rootID = installation.InstallationID
+		}
+	}
+	if rootID == "" {
+		t.Fatal("signed Marketing Kit root missing from Project A")
+	}
+	protected := make(map[string]string)
+	for _, path := range []string{
+		filepath.Join(journey.nativeRoot(""), "settings.json"),
+		filepath.Join(journey.nativeRoot(journey.b), "settings.json"),
+		filepath.Join(journey.cache, "state-v2.json"),
+		filepath.Join(journey.namespace(journey.b), "state-v2.json"),
+		filepath.Join(journey.a, "uap.lock"),
+	} {
+		protected[path] = projectJourneyRead(t, path)
+	}
+	skillPath := filepath.Join(journey.nativeRoot(journey.a), "skills", "campaign-planning", "SKILL.md")
+	if err := os.Remove(skillPath); err != nil {
+		t.Fatal(err)
+	}
+	journey.run(t, journey.a, "repair", rootID, "--target", "gemini")
+	if got := projectJourneyRead(t, skillPath); got != campaignSkill {
+		t.Fatalf("signed root repair did not restore its exact Skill: %q", got)
+	}
+	for path, before := range protected {
+		if got := projectJourneyRead(t, path); got != before {
+			t.Fatalf("signed root repair changed unrelated state or lock at %q", path)
+		}
+	}
+	if got := len(journey.state(t, journey.a).EnvironmentReceipts); got != 4 {
+		t.Fatalf("signed root repair lost required dependency receipts: %d", got)
+	}
+	assertSignedV1NativeMCPServers(t,
+		projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "settings.json")),
+		foreignSentinel(journey, journey.a), "foreign", "notion", "hubspot", "playwright")
+
 	fresh := configure(newProjectJourney(t, transport))
 	seedForeign(fresh)
 	for _, name := range []string{"uap.toml", "uap.lock"} {
