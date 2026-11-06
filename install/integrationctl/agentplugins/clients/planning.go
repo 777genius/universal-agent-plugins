@@ -42,6 +42,13 @@ type ProjectTargetLayout interface {
 	ProjectTargetRoot(client domain.DetectedClient, mode domain.PackageMode, managedRoot string, target domain.TargetContext) (anchor, root string, err error)
 }
 
+// UserNativeRegistryLayout is an opt-in user-profile selection. It allows a
+// current native CLI and a legacy editor under one logical client to retain
+// separate authorities without changing legacy ConfigRoot for other clients.
+type UserNativeRegistryLayout interface {
+	UserNativeRegistry(client domain.DetectedClient) string
+}
+
 // NativeRegistryLayout overrides which native client registry a delivery is
 // recorded against. VS Code is installed through the Copilot CLI it shares a
 // backend with, so its plan points at the sibling's locators rather than its
@@ -96,13 +103,15 @@ type PreparationRefiner interface {
 
 // PlanInput is everything a refiner is allowed to see.
 type PlanInput struct {
-	TargetContext         domain.TargetContext           `json:"-"`
-	PreviousNativeObjects []domain.NativeObjectOwnership `json:"-"`
-	LocalEntryObservation *domain.LocalEntryObservation  `json:"-"`
-	Envelope              domain.PackageEnvelope
-	Client                domain.DetectedClient
-	Detected              map[domain.ClientID]domain.DetectedClient
-	Intent                domain.InstallIntent
+	TargetContext             domain.TargetContext           `json:"-"`
+	PreviousNativeObjects     []domain.NativeObjectOwnership `json:"-"`
+	PreviousNativeProfileRoot string                         `json:"-"`
+	PreviousBindingRecorded   bool                           `json:"-"`
+	LocalEntryObservation     *domain.LocalEntryObservation  `json:"-"`
+	Envelope                  domain.PackageEnvelope
+	Client                    domain.DetectedClient
+	Detected                  map[domain.ClientID]domain.DetectedClient
+	Intent                    domain.InstallIntent
 }
 
 // BackendSibling returns the entry of the other client sharing this client's

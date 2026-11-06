@@ -18,9 +18,14 @@ import (
 // It supplies ownership mechanics, not client discovery or settings policy.
 type ProjectComponents struct {
 	ProjectRoot, SkillsRoot string
-	ConfigPaths             nativeconfig.Paths
-	Codec                   nativeconfig.Codec
-	SkillKind, MCPKind      string
+	// ManagedPackagePath is the exact, adapter-validated source package path.
+	// It permits a user native root and a separately managed UAP state root
+	// without allowing an arbitrary ancestor such as HOME to own both.
+	// Empty preserves the existing project-contained source contract.
+	ManagedPackagePath string
+	ConfigPaths        nativeconfig.Paths
+	Codec              nativeconfig.Codec
+	SkillKind, MCPKind string
 }
 
 func (layout ProjectComponents) validate() error {
@@ -135,7 +140,14 @@ func (layout ProjectComponents) packagePath(root string) error {
 	if !cleanComponentPath(root) {
 		return fmt.Errorf("project package root must be clean and absolute")
 	}
-	if err := pathpolicy.RequireContainedChild(layout.ProjectRoot, root); err != nil {
+	if layout.ManagedPackagePath != "" {
+		if !cleanComponentPath(layout.ManagedPackagePath) {
+			return fmt.Errorf("selected managed package path must be clean and absolute")
+		}
+		if err := pathpolicy.RequireExactPath(layout.ManagedPackagePath, root); err != nil {
+			return err
+		}
+	} else if err := pathpolicy.RequireContainedChild(layout.ProjectRoot, root); err != nil {
 		return err
 	}
 	info, err := os.Lstat(root)

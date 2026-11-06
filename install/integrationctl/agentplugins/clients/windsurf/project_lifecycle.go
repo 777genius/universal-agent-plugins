@@ -12,6 +12,9 @@ import (
 var _ clients.ActivationPreflighter = (*Adapter)(nil)
 
 func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRequest) error {
+	if isDevinGlobalPlan(request.Plan) {
+		return preflightDevinGlobal(env, request)
+	}
 	if request.Plan.Scope != domain.ScopeProject && request.Plan.TargetContext.Scope != domain.ScopeProject {
 		return nil
 	}

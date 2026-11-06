@@ -2,6 +2,7 @@ package windsurf
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -29,6 +30,28 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 			managed = &selected
 		}
 		return devinComponents(root).Inspect(plan.Components, managed, env.NativeConfig)
+	}
+	if legacyManagedBinding(managed, client) {
+		if plan.NativeRegistryRoot != client.ConfigRoot {
+			return clients.RegistryIndeterminate, fmt.Errorf("recorded legacy Windsurf binding differs from selected Cascade authority")
+		}
+		return InspectWindsurfRegistry(plan, managed, env.NativeConfig)
+	}
+	if primaryDevinExecutable(client.ExecutablePath) || isDevinGlobalPlan(plan) ||
+		(managed != nil && hasDevinGlobalObjects(managed.NativeObjects)) {
+		root, err := devinGlobalPlanRoot(client, plan)
+		if err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		if managed != nil {
+			if err := validateDevinGlobalBinding(root, plan.PhysicalArtifactID, plan.ActivePath, *managed); err != nil {
+				return clients.RegistryIndeterminate, err
+			}
+			owned := *managed
+			owned.NativeObjects = devinNativeObjects(managed.NativeObjects)
+			managed = &owned
+		}
+		return devinGlobalComponents(root, plan.ActivePath).Inspect(plan.Components, managed, env.NativeConfig)
 	}
 	return InspectWindsurfRegistry(plan, managed, env.NativeConfig)
 }

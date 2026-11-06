@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -20,6 +21,21 @@ var (
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
 	if in.TargetContext.Scope == domain.ScopeProject || plan.Scope == domain.ScopeProject {
 		return refineProjectPlan(in, plan)
+	}
+	if primaryDevinExecutable(in.Client.ExecutablePath) && !legacyUserBinding(in) {
+		root, err := devinGlobalPlanRoot(in.Client, *plan)
+		if err != nil {
+			return err
+		}
+		if err := checkDevinProjectPolicy(root, plan.Components, nativeconfig.New()); err != nil {
+			return err
+		}
+		if plan.Status != domain.PlanUnsupported && shared.OnlyNativeComponents(plan.Components) {
+			shared.PromoteNativeReady(plan, root, true)
+			plan.UserActions = shared.AppendUnique(plan.UserActions, DevinGlobalAction)
+			plan.Warnings = shared.AppendUnique(plan.Warnings, "devin_global_native_calls_unobserved")
+		}
+		return nil
 	}
 	hasMCP := shared.ComponentKindPresent(plan.Components, domain.ComponentMCPServer)
 	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, hasMCP)

@@ -93,8 +93,10 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 		TargetContext: plan.TargetContext,
 		Envelope:      request.Envelope, Client: request.Client,
 		Detected: request.Detected, Intent: request.InstallIntent,
-		LocalEntryObservation: request.LocalEntryObservation.Clone(),
-		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...),
+		LocalEntryObservation:     request.LocalEntryObservation.Clone(),
+		PreviousNativeObjects:     append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...),
+		PreviousNativeProfileRoot: request.PreviousNativeProfileRoot,
+		PreviousBindingRecorded:   request.PreviousBindingRecorded,
 	}
 	planner.setNativeRegistry(&plan, input)
 	if !admissible(definition, request, &plan) {
@@ -396,6 +398,11 @@ func (planner Planner) ResolveTarget(
 		return domain.DeliveryTarget{}, fmt.Errorf("unsafe client target path: %w", err)
 	}
 	nativeRoot := client.ConfigRoot
+	if scope == domain.ScopeUser {
+		if layout, ok := clients.As[clients.UserNativeRegistryLayout](planner.Registry, client.ClientID); ok {
+			nativeRoot = layout.UserNativeRegistry(client)
+		}
+	}
 	if scope == domain.ScopeProject {
 		layout, _ := clients.As[clients.NativeRegistryLayout](planner.Registry, client.ClientID)
 		nativeRoot, _ = layout.NativeRegistry(clients.PlanInput{Client: client, TargetContext: targetContext})
@@ -571,17 +578,4 @@ func activationFor(mode domain.ActivationMode) domain.ActivationState {
 	default:
 		return domain.ActivationFailed
 	}
-}
-
-func hasComponents(decisions []domain.ComponentDecision) bool {
-	return len(decisions) > 0
-}
-
-func hasSupportedComponent(decisions []domain.ComponentDecision) bool {
-	for _, item := range decisions {
-		if item.Support != domain.SupportUnsupported {
-			return true
-		}
-	}
-	return false
 }

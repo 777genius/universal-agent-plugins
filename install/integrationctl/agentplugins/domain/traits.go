@@ -45,6 +45,9 @@ type ClientTraits struct {
 	// RecordsUserProfileOnCreate records a selected user profile only for a new
 	// binding. It never adopts a legacy or coalesced binding with missing proof.
 	RecordsUserProfileOnCreate bool
+	// RecordsSelectedNativeRootOnCreate records a separately selected native
+	// user root only on a new binding. Legacy bindings are never migrated.
+	RecordsSelectedNativeRootOnCreate bool
 	// RequiresPluginData binds native extension runtime locators to an owned data receipt.
 	RequiresPluginData bool
 	// VerifiesNativeDirectory permits read-only verification of a directly discovered package.

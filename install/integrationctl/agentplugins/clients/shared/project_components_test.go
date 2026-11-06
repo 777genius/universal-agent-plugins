@@ -322,3 +322,97 @@ func TestProjectComponentsPreflightForeignSkillCarriesTypedCause(t *testing.T) {
 		t.Fatalf("preflight changed foreign bytes: %q, %v", got, err)
 	}
 }
+
+func TestProjectComponentsExternalExactManagedPackageBoundary(t *testing.T) {
+	for _, location := range []string{"default-state", "relocated-state"} {
+		t.Run(location, func(t *testing.T) {
+			base, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			home := filepath.Join(base, "home")
+			nativeRoot := filepath.Join(home, ".config", "devin")
+			stateRoot := filepath.Join(home, ".local", "state", "uap")
+			if location == "relocated-state" {
+				stateRoot = filepath.Join(base, "independent", "uap-state")
+			}
+			active := filepath.Join(stateRoot, "managed", "clients", "windsurf", "artifact")
+			layout := ProjectComponents{
+				ProjectRoot:        filepath.Join(home, ".config"),
+				SkillsRoot:         filepath.Join(nativeRoot, "skills"),
+				ManagedPackagePath: active,
+				ConfigPaths:        nativeconfig.Paths{JSON: filepath.Join(nativeRoot, "mcp_config.json")},
+				Codec:              nativeconfig.CodecDevin,
+				SkillKind:          "test_devin_global_skill", MCPKind: "test_devin_global_mcp",
+			}
+			componentWrite(t, filepath.Join(active, "skills", "docs", "SKILL.md"), "managed source\n")
+			componentWrite(t, layout.ConfigPaths.JSON, `{"mcpServers":{"foreign":{"url":"https://foreign.test/mcp","transport":"http"}},"policy":"keep"}`)
+			legacy := filepath.Join(home, ".codeium", "windsurf", "mcp_config.json")
+			componentWrite(t, legacy, "legacy-cascade-unchanged\n")
+			projectA := filepath.Join(base, "project-A", ".devin", "mcp_config.json")
+			projectB := filepath.Join(base, "project-B", ".devin", "mcp_config.json")
+			componentWrite(t, projectA, "project-A-unchanged\n")
+			componentWrite(t, projectB, "project-B-unchanged\n")
+			skill, err := layout.SkillObject("docs", "skills/docs", active)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := nativeconfig.Server{Type: "remote", URL: "https://managed.test/mcp", RemoteTransport: "streamable-http"}
+			mcp, err := layout.MCPObject("docs", server, layout.ConfigPaths.JSON)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutation := ProjectComponentMutation{Layout: layout, ActivePath: active,
+				Desired: []domain.NativeObjectOwnership{skill, mcp},
+				Servers: map[string]nativeconfig.Server{"docs": server}, Kernel: nativeconfig.New()}
+			wrong := filepath.Join(stateRoot, "managed", "clients", "windsurf", "other")
+			componentWrite(t, filepath.Join(wrong, "skills", "docs", "SKILL.md"), "foreign source\n")
+			if _, err := layout.SkillObject("docs", "skills/docs", wrong); err == nil {
+				t.Fatal("independent managed package alias admitted")
+			}
+			altered := mutation
+			altered.ActivePath = wrong
+			if err := altered.Apply(context.Background()); err == nil {
+				t.Fatal("foreign package supplied to mutation")
+			}
+			outside := layout
+			outside.SkillsRoot = filepath.Join(base, "unrelated", "skills")
+			if err := outside.ValidateObjects(nil); err == nil {
+				t.Fatal("native output outside selected config authority admitted")
+			}
+			if err := mutation.Apply(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if err := mutation.Layout.Verify(mutation.Desired, false, mutation.Kernel); err != nil {
+				t.Fatal(err)
+			}
+			mutation.Previous = append([]domain.NativeObjectOwnership(nil), mutation.Desired...)
+			if err := os.RemoveAll(skill.Path); err != nil {
+				t.Fatal(err)
+			}
+			if err := mutation.Apply(context.Background()); err != nil {
+				t.Fatalf("exact owned repair: %v", err)
+			}
+			mutation.Desired, mutation.Servers = nil, nil
+			if err := mutation.Apply(context.Background()); err != nil {
+				t.Fatalf("exact owned removal: %v", err)
+			}
+			if _, err := os.Lstat(skill.Path); !os.IsNotExist(err) {
+				t.Fatalf("managed skill survived removal: %v", err)
+			}
+			config, err := os.ReadFile(layout.ConfigPaths.JSON)
+			if err != nil || !strings.Contains(string(config), "foreign.test") ||
+				!strings.Contains(string(config), `"policy":"keep"`) || strings.Contains(string(config), "managed.test") {
+				t.Fatalf("foreign native members were modified: %s, %v", config, err)
+			}
+			for path, want := range map[string]string{
+				legacy: "legacy-cascade-unchanged\n", projectA: "project-A-unchanged\n", projectB: "project-B-unchanged\n",
+			} {
+				body, err := os.ReadFile(path)
+				if err != nil || string(body) != want {
+					t.Fatalf("other native profile changed at %q: %q, %v", path, body, err)
+				}
+			}
+		})
+	}
+}
