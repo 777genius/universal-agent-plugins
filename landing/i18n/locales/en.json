@@ -522,13 +522,14 @@
       "appearance": "Appearance"
     },
     "navigation": {
+      "demo": "Demo",
       "plugins": "Plugins",
       "why": "Why it works",
       "faq": "FAQ",
       "open": "Open navigation menu",
       "close": "Close navigation menu",
       "title": "Navigation menu",
-      "description": "Jump to plugins, product details, frequently asked questions, or GitHub.",
+      "description": "Open the demo, browse plugins, documentation or GitHub.",
       "appearance": "Appearance"
     }
   },

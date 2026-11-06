@@ -505,13 +505,14 @@
       "appearance": "Apparence"
     },
     "navigation": {
+      "demo": "Démo",
       "plugins": "Plugins",
       "why": "Pourquoi ça marche",
       "faq": "FAQ",
       "open": "Ouvrir le menu de navigation",
       "close": "Fermer le menu de navigation",
       "title": "Menu de navigation",
-      "description": "Accédez aux plugins, aux détails du produit, aux questions fréquemment posées ou à GitHub.",
+      "description": "Ouvrez la démo, les plugins, la documentation ou GitHub.",
       "appearance": "Apparence"
     }
   },

@@ -174,7 +174,19 @@ test('header exposes the documentation entrypoint on desktop and mobile', async 
   );
   const desktopGitHub = page.locator('.app-header__github-btn');
   await expect(desktopGitHub).toBeVisible();
-  await expect(desktopGitHub).toHaveText('GitHub');
+  await expect(desktopGitHub).toHaveText('');
+  await expect(desktopGitHub).toHaveAccessibleName('Open GitHub');
+  await expect(desktopGitHub.locator('.v-icon')).toBeVisible();
+  const language = page.locator('.app-header__desktop-actions').getByRole('button', {
+    name: 'Language: English',
+  });
+  await expect(language).toBeVisible();
+  await expect(language.locator('.language-switcher__name')).toHaveCount(0);
+  await expect(language.locator('.language-switcher__flag-icon')).toBeVisible();
+  const nav = page.locator('.app-header__nav a');
+  await expect(nav).toHaveText(['Demo', 'Plugins']);
+  await expect(nav.first()).toHaveAttribute('href', /#demo$/);
+  await expect(nav.last()).toHaveAttribute('href', /\/plugins\/$/);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Open navigation menu' }).click();
@@ -186,6 +198,35 @@ test('header exposes the documentation entrypoint on desktop and mobile', async 
     'href',
     'https://777genius.github.io/universal-agent-plugins/docs/en/',
   );
+  const mobileMenu = page.getByRole('dialog', { name: 'Navigation menu' });
+  await expect(mobileMenu.getByRole('link', { name: 'Demo', exact: true })).toHaveAttribute('href', /#demo$/);
+  await expect(mobileMenu.getByRole('link', { name: 'Plugins', exact: true })).toHaveAttribute('href', /\/plugins\/$/);
+  await expect(mobileMenu.locator('.language-switcher__name')).toHaveCount(0);
+});
+
+
+test('header shows Demo and Plugins at laptop width and GitHub icon follows theme', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 850 });
+  await page.goto('./');
+  await expect(page.locator('.app-header__nav')).toBeVisible();
+  await expect(page.locator('.app-header__mobile-actions')).toBeHidden();
+  const links = page.locator('.app-header__nav a');
+  await expect(links).toHaveCount(2);
+  const github = page.locator('.app-header__github-btn');
+  const colors: string[] = [];
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => localStorage.setItem('theme', value), theme);
+    await page.reload();
+    await expect(page.locator('.v-theme--' + theme).first()).toBeVisible();
+    colors.push(await github.evaluate((element) => getComputedStyle(element).color));
+  }
+  expect(colors[0]).not.toBe(colors[1]);
+  await links.first().click();
+  await expect(page).toHaveURL(/#demo$/);
+  await expect(page.locator('#demo')).toBeInViewport();
+  await links.last().click();
+  await expect(page).toHaveURL(/\/plugins\/?$/);
+  await expect(page.locator('.unified-catalog')).toBeVisible();
 });
 
 test('homepage omits the counter when discovery cannot load', async ({ page }) => {

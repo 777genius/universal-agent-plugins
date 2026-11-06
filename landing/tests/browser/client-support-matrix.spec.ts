@@ -6,6 +6,19 @@ test('home lists the complete scope matrix immediately before FAQ', async ({ pag
   const section = page.locator('#agent-support');
   const table = section.getByRole('table');
   await expect(table.locator('tbody tr')).toHaveCount(15);
+  const logos = table.locator('tbody th img');
+  await expect(logos).toHaveCount(15);
+  await expect(logos.first()).toHaveAttribute('src', /client-icons\/claude.svg$/);
+  await expect(logos.nth(8)).toHaveAttribute('src', /client-icons\/windsurf.svg$/);
+  // Icons load lazily: scroll to them before checking their decoded bytes.
+  await logos.first().scrollIntoViewIfNeeded();
+  await expect.poll(() => logos.first().evaluate((image) =>
+    (image as HTMLImageElement).naturalWidth,
+  )).toBeGreaterThan(0);
+  await logos.last().scrollIntoViewIfNeeded();
+  await expect.poll(() => logos.last().evaluate((image) =>
+    (image as HTMLImageElement).naturalWidth,
+  )).toBeGreaterThan(0);
   await expect(page.locator('#agent-support + #faq')).toHaveCount(1);
   await expect(table.getByRole('columnheader')).toHaveText([
     'Agent',
@@ -19,6 +32,8 @@ test('home lists the complete scope matrix immediately before FAQ', async ({ pag
   await expect(table.getByRole('row', { name: /^Pi / })).toContainText(
     'Extensions, Skills, MCP',
   );
+  await expect(section).toContainText('User installs into your agent profile');
+  await expect(section).toContainText('Prepared = files are ready but need activation');
   await expect(section).not.toContainText('end-to-end');
   await expect(section).not.toContainText('E2E');
 });
