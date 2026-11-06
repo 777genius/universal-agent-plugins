@@ -73,3 +73,10 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
     <RegistryFaq :items="registryFaqItems" />
   </div>
 </template>
+
+<style scoped>
+.unified-home {
+  // Keep decorative orbs and wide nested content from expanding the document.
+  overflow-x: clip;
+}
+</style>
