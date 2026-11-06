@@ -226,6 +226,7 @@ test('header shows Demo and Plugins at laptop width and GitHub icon follows them
   await expect(page.locator('#demo')).toBeInViewport();
   await links.last().click();
   await expect(page).toHaveURL(/\/plugins\/?$/);
+  await expect(page.locator('.unified-catalog')).toBeVisible();
 });
 
 test('homepage omits the counter when discovery cannot load', async ({ page }) => {

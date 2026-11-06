@@ -32,7 +32,7 @@ const homeHref = computed(() => router.resolve(homePath.value).href);
 // Two primary destinations stay directly visible on desktop.
 const navItems = computed(() => [
   { id: 'demo', label: t('shell.navigation.demo'), href: sectionHref('demo') },
-  { id: 'plugins', label: t('shell.navigation.plugins'), href: localePath('/plugins/') },
+  { id: 'plugins', label: t('shell.navigation.plugins'), href: router.resolve(localePath('/plugins/')).href },
 ]);
 
 const normalizePath = (value: string) => (value !== '/' ? value.replace(/\/+$/, '') : '/');
