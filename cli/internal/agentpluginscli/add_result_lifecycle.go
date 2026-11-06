@@ -19,6 +19,8 @@ type addResultData struct {
 	ManifestDigest string                     `json:"manifest_digest"`
 	Security       *domain.SecurityAssessment `json:"security,omitempty"`
 	NextAction     string                     `json:"next_action,omitempty"`
+	Readiness      string                     `json:"readiness,omitempty"`
+	NextActions    []AgentAction              `json:"next_actions,omitempty"`
 	DryRun         bool                       `json:"dry_run"`
 	Result         usecase.AddResult          `json:"result"`
 	envelopeResult string
@@ -61,12 +63,13 @@ func addFailureStatus(result usecase.AddResult, commandErr error) string {
 }
 
 func newAddResultData(envelope domain.PackageEnvelope, result usecase.AddResult, dryRun bool) addResultData {
+	readiness, nextActions := deriveAddReadiness(result, dryRun)
 	return addResultData{
 		OperationID: result.Receipt.OperationID, Plugin: envelope.Manifest.Name,
 		Version: envelope.Manifest.Version, Source: publicPackageSource(envelope.Source),
 		Revision: envelope.Source.ResolvedRevision, TreeDigest: envelope.TreeDigest,
 		ManifestDigest: envelope.ManifestDigest, NextAction: nextLifecycleAction(result),
-		DryRun: dryRun, Result: result, envelopeResult: addEnvelopeResult(result, nil),
+		DryRun: dryRun, Readiness: readiness, NextActions: nextActions, Result: result, envelopeResult: addEnvelopeResult(result, nil),
 	}
 }
 
