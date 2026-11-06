@@ -256,7 +256,20 @@ test('plugin grid defaults to five columns on desktop and stays responsive', asy
       getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length,
     );
     expect(count).toBe(expected);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    const layout = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      viewport: innerWidth,
+      overflowing: Array.from(document.querySelectorAll<HTMLElement>('*'))
+        .map((element) => ({
+          selector: [element.tagName.toLowerCase(), element.id && `#${element.id}`, ...Array.from(element.classList).slice(0, 3).map((name) => `.${name}`)].filter(Boolean).join(''),
+          right: Math.round(element.getBoundingClientRect().right),
+          width: Math.round(element.getBoundingClientRect().width),
+        }))
+        .filter((item) => item.right > innerWidth + 1 && item.width > 0)
+        .sort((a, b) => b.right - a.right)
+        .slice(0, 12),
+    }));
+    expect(layout.scrollWidth, JSON.stringify(layout, null, 2)).toBeLessThanOrEqual(width);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('./plugins/');
