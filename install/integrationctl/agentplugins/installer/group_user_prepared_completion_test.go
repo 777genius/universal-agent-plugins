@@ -82,7 +82,8 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 		bindingID := domain.ComputeClientBindingID(id, string(clientID), string(domain.ScopeUser), active)
 		receiptID := "receipt-" + string(clientID)
 		installed.DataReceipts[receiptID] = domain.DataReceipt{DataReceiptID: receiptID, Scope: string(domain.ScopeUser),
-			Locator: filepath.Join(root, "plugin-data", string(clientID)), State: domain.DataReceiptOwned}
+			Locator: filepath.Join(root, "plugin-data", string(clientID)), State: domain.DataReceiptOwned,
+			OwnershipDigest: "sha256:" + strings.Repeat("c", 64)}
 		prepared.req.Targets = append(prepared.req.Targets, ClientTarget{ClientID: string(clientID), ClientConfigRoot: config})
 		prepared.clients = append(prepared.clients, client)
 		prepared.deliveries = append(prepared.deliveries, preparedDeliveryPlan{plan: plan})
@@ -211,6 +212,18 @@ func TestUserGroupPreparedUpdateRetainsFailClosedHandoff(t *testing.T) {
 		}},
 		{"stale data receipt", func(f *userPreparedUpdateFixture) {
 			f.changeBinding(domain.ClientVSCode, func(b *domain.ClientBinding) { b.DataReceiptID = "stale" })
+		}},
+		{"indeterminate receipt ownership", func(f *userPreparedUpdateFixture) {
+			b := f.state.Installations[0].Clients[f.prepared.plan.Targets[1].BindingID]
+			receipt := f.state.Installations[0].DataReceipts[b.DataReceiptID]
+			receipt.State = domain.DataReceiptUnknown
+			f.state.Installations[0].DataReceipts[b.DataReceiptID] = receipt
+		}},
+		{"missing receipt ownership digest", func(f *userPreparedUpdateFixture) {
+			b := f.state.Installations[0].Clients[f.prepared.plan.Targets[1].BindingID]
+			receipt := f.state.Installations[0].DataReceipts[b.DataReceiptID]
+			receipt.OwnershipDigest = ""
+			f.state.Installations[0].DataReceipts[b.DataReceiptID] = receipt
 		}},
 		{"duplicate binding", func(f *userPreparedUpdateFixture) {
 			b := f.state.Installations[0].Clients[f.prepared.plan.Targets[1].BindingID]

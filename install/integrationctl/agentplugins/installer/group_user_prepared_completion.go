@@ -121,7 +121,8 @@ func completedUserPreparedBinding(frozen PlanTarget, plan domain.DeliveryPlan, o
 	}
 	receipt, foundReceipt := installation.DataReceipts[binding.DataReceiptID]
 	if binding.DataReceiptID == "" || !foundReceipt || receipt.DataReceiptID != binding.DataReceiptID ||
-		receipt.Scope != string(domain.ScopeUser) || receipt.Locator == "" {
+		receipt.Scope != string(domain.ScopeUser) || receipt.Locator == "" ||
+		receipt.State != domain.DataReceiptOwned || receipt.OwnershipDigest == "" {
 		return false
 	}
 	for key, other := range installation.Clients {
