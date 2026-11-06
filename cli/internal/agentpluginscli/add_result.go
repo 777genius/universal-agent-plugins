@@ -88,6 +88,7 @@ func renderHumanAddFailure(writer io.Writer, envelope domain.PackageEnvelope, re
 	return true, nil
 }
 
+// renderHumanAddOutcome presents an add result without changing its verified lifecycle status.
 func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
 		return err
@@ -101,12 +102,14 @@ func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 		return err
 	}
 	if result.NoChange && fullyInstalled(result.Activation) {
-		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed and lifecycle verification is complete. No changes made."))
-		return nil
+		if _, err := fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed and lifecycle verification is complete. No changes made.")); err != nil {
+			return err
+		}
+		return renderVerifiedLocalNextAction(writer, result)
 	}
 	if result.Mutated && fullyInstalled(result.Activation) {
 		renderHumanAddInstalled(writer, result)
-		return nil
+		return renderVerifiedLocalNextAction(writer, result)
 	}
 	if result.Mutated {
 		renderHumanAddPending(writer, result)
@@ -115,6 +118,18 @@ func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 		_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Next"), action)
 	}
 	return nil
+}
+
+// renderVerifiedLocalNextAction displays only the verified Codex user's optional local step.
+// It does not change the public JSON contract or turn Desktop activation into a required phase.
+func renderVerifiedLocalNextAction(writer io.Writer, result usecase.AddResult) error {
+	if !clientTraits(result.Plan.ClientID).ShowsVerifiedLocalNextAction || len(result.Activation.LocalActions) == 0 {
+		return nil
+	}
+	_, err := fmt.Fprintf(writer, "%s: %s\n",
+		terminaltheme.For(writer).Text(terminaltheme.Label, "Next (optional)"),
+		prompt.SafeText(result.Activation.LocalActions[0]))
+	return err
 }
 
 func renderHumanAddInstalled(writer io.Writer, result usecase.AddResult) {

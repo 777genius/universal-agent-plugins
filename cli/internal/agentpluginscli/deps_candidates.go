@@ -43,7 +43,7 @@ func (resolver dependencyResolver) Candidates(ctx context.Context, requirement e
 			if !environment.SelectorMatchesVersion(requirement.Registry.Selector, release.PackageVersion) {
 				continue
 			}
-			_, err := domain.ResolveDirectory(bundle.Snapshot, dependencyDirectoryRequest(resolver.app, distribution.ID, release.Sequence, targets))
+			_, err := selectDirectorySourceForPlacement(bundle.Snapshot, dependencyDirectoryRequest(resolver.app, distribution.ID, release.Sequence, targets))
 			if errors.Is(err, domain.ErrDirectoryIneligible) {
 				continue
 			}

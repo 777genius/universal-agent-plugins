@@ -172,7 +172,11 @@ export async function automatic(page: Page, scope: Locator, locale: PublishedLoc
 
 export async function exactCommands(page: Page, scope: Locator, name: string, target = '') {
   for (const verb of ['add', 'update', 'repair', 'remove']) {
-    const snippet = scope.locator(`.command-snippet--${verb}`);
+    const snippet = scope.locator(
+      verb === 'add'
+        ? '.install-command-row .command-snippet--add'
+        : `.command-stack > .command-snippet--${verb}`,
+    );
     const targetFlag = target && (verb === 'add' || verb === 'repair') ? ` --target ${target}` : '';
     const expected = `npx -y universal-agent-plugins ${verb} ${name}${targetFlag}`;
     await expect(snippet.locator('code')).toHaveText(expected);

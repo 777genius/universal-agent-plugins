@@ -59,6 +59,16 @@ const targetOptions = computed(() =>
     })(),
   })),
 );
+const desktopCodexCommand = computed(() =>
+  scope.value === 'user' &&
+  !isDiscovered.value &&
+  canUseSource.value &&
+  props.plugin.installable &&
+  !isFullyRetired(props.plugin) &&
+  Boolean(targetDistributions.value.get('codex'))
+    ? pluginCommands(props.plugin, ['codex']).add
+    : '',
+);
 const commands = computed(() =>
   !marketingProjectBlocked.value &&
   (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
@@ -200,6 +210,7 @@ const vendorInstall = computed(() =>
           :command="commands.add"
         />
       </div>
+      <ChatGPTDesktopGuide v-if="desktopCodexCommand" :command="desktopCodexCommand" />
       <InstallOutcome
         v-if="commands && !autoDetect && expectedSource"
         :distribution="expectedSource"

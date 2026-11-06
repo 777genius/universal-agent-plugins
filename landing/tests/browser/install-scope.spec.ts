@@ -55,7 +55,7 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.app-multiselect__trigger')).toContainText('Cursor');
     await card.getByRole('button', { name: 'This project', exact: true }).click();
     await expect(card.locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
-    await expect(card.locator('.command-snippet--add code')).toHaveText(
+    await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00 --scope project',
     );
     expect(errors).toEqual([]);
@@ -70,13 +70,13 @@ for (const width of [1440, 390]) {
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
     await card.locator('.plugin-card__install-toggle').click();
-    await expect(card.locator('.command-snippet code')).toHaveText(
+    await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00',
     );
     await card.getByRole('button', { name: 'This project', exact: true }).click();
     const autoAdd = 'npx -y universal-agent-plugins add i18n-state-00 --scope project';
     await expect(card.locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
-    await expect(card.locator('.command-snippet code')).toHaveText(autoAdd);
+    await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(autoAdd);
     await card.locator('.app-multiselect__trigger').click();
     await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('checkbox', { name: /^Cursor(?:\s|$)/ })).toBeDisabled();
@@ -86,14 +86,14 @@ for (const width of [1440, 390]) {
     await targets(page, card, ['Codex']);
     const expectedAdd =
       'npx -y universal-agent-plugins add i18n-state-00 --target codex --scope project';
-    await expect(card.locator('.command-snippet code')).toHaveText(expectedAdd);
+    await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(expectedAdd);
     await expect(card.locator('.install-outcome')).toContainText('Skills');
     await expect(card.locator('.install-outcome')).not.toContainText('MCP tools');
     await expect(card.locator('.install-outcome')).toContainText('Sign-in or credentials');
     await expect(card.locator('.plugin-card__source-label')).toContainText(
       'Agents: 0 automatic setup · 1 need follow-up',
     );
-    await card.locator('.command-snippet button').click();
+    await card.locator('.plugin-card__install .command-snippet button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expectedAdd);
 
     await card.locator('.plugin-card__title-link').click();
@@ -106,7 +106,11 @@ for (const width of [1440, 390]) {
     await expect(panel).toContainText('deps status --scope project');
     await expect(panel).not.toContainText('Saved for your user account');
     for (const action of ['add', 'update', 'repair', 'remove']) {
-      const snippet = panel.locator(`.command-snippet--${action}`);
+      const snippet = panel.locator(
+        action === 'add'
+          ? '.install-command-row .command-snippet--add'
+          : `.command-stack > .command-snippet--${action}`,
+      );
       const target = action === 'add' || action === 'repair' ? ' --target codex' : '';
       const command = `npx -y universal-agent-plugins ${action} i18n-state-00${target} --scope project`;
       await expect(snippet.locator('code')).toHaveText(command);
@@ -119,7 +123,7 @@ for (const width of [1440, 390]) {
     await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
     await page.keyboard.press('Escape');
     await expect(panel.locator('.app-multiselect__trigger')).toContainText(detailAutoSummary);
-    await expect(panel.locator('.command-snippet--add code')).toHaveText(autoAdd);
+    await expect(panel.locator('.install-command-row .command-snippet--add code')).toHaveText(autoAdd);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
@@ -129,7 +133,7 @@ for (const width of [1440, 390]) {
     });
     await page.goBack();
     await expect(card.locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
-    await expect(card.locator('.command-snippet code')).toHaveText(autoAdd);
+    await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(autoAdd);
     await card.scrollIntoViewIfNeeded();
     // Back navigation remounts the existing catalog scroll-reveal observer.
     // Wait for its real visible state before accepting visual evidence.
@@ -145,7 +149,7 @@ for (const width of [1440, 390]) {
         exact: true,
       }),
     ).toHaveAttribute('aria-pressed', 'true');
-    await expect(card.locator('.command-snippet code')).toHaveText(autoAdd);
+    await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(autoAdd);
     expect(errors).toEqual([]);
   });
 
@@ -161,7 +165,7 @@ for (const width of [1440, 390]) {
     await card.locator('.plugin-card__install-toggle').click();
     await targets(page, card, ['Codex']);
     await card.getByRole('button', { name: 'This project', exact: true }).click();
-    await expect(card.locator('.command-snippet code')).toContainText('--scope project');
+    await expect(card.locator('.plugin-card__install .command-snippet code')).toContainText('--scope project');
     // The first detail projection now represents a newer feed that withdrew
     // project support. Preferences must not fall back to automatic user scope.
     index.plugins[0]!.distributions[1]!.releases[0]!.targets[0]!.scopes = ['user'];
@@ -176,7 +180,7 @@ for (const width of [1440, 390]) {
     // The removed project policy must not produce a user-scope fallback command,
     // even though this choice remains visible to let the user recover.
     await panel.getByRole('button', { name: 'This computer', exact: true }).click();
-    await expect(panel.locator('.command-snippet--add code')).toHaveText(
+    await expect(panel.locator('.install-command-row .command-snippet--add code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00',
     );
     // No project-capable release remains; the unavailable selector is not shown.
@@ -199,22 +203,22 @@ test('reviewed user-only v1 catalog generates exact pinned project Git commands'
   const source = index.plugins[0]!.distributions[0]!.releases[0]!.source;
   const exact = `github:${source.repository}@${source.revision}//${source.path}`;
   await expect(card.locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
-  await expect(card.locator('.command-snippet code')).toHaveText(
+  await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(
     `npx -y universal-agent-plugins add ${exact} --scope project`,
   );
   await targets(page, card, ['Codex']);
   const expected = `npx -y universal-agent-plugins add ${exact} --target codex --scope project`;
-  await expect(card.locator('.command-snippet code')).toHaveText(expected);
-  await card.locator('.command-snippet button').click();
+  await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(expected);
+  await card.locator('.plugin-card__install .command-snippet button').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expected);
   await card.locator('.plugin-card__title-link').click();
   const panel = page.locator('.install-panel');
-  await expect(panel.locator('.command-snippet--add code')).toHaveText(expected);
+  await expect(panel.locator('.install-command-row .command-snippet--add code')).toHaveText(expected);
   await expect(panel.locator('.command-snippet--update code')).toHaveText(expected);
   await expect(panel.locator('.command-snippet--remove code'))
     .toHaveText('npx -y universal-agent-plugins remove i18n-state-00 --scope project');
   await panel.getByRole('button', { name: 'This computer', exact: true }).click();
-  await expect(panel.locator('.command-snippet--add code'))
+  await expect(panel.locator('.install-command-row .command-snippet--add code'))
     .toHaveText('npx -y universal-agent-plugins add i18n-state-00 --target codex');
   expect(errors).toEqual([]);
 });
@@ -230,7 +234,7 @@ test('unqualified project scope is hidden while auto agent delivery stays non-nu
   await expect(card.locator('.plugin-card__source-label')).toHaveCount(0);
   await card.locator('.plugin-card__install-toggle').click();
   await expect(card.locator('.install-scope')).toHaveCount(0);
-  await expect(card.locator('.command-snippet code')).toHaveText(
+  await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(
     'npx -y universal-agent-plugins add i18n-state-00',
   );
   await card.locator('.plugin-card__title-link').click();
@@ -264,10 +268,10 @@ test('Marketing Kit does not advertise unsupported signed project scope or force
   await expect(project).toBeDisabled();
   await expect(card.locator('.marketing-kit-project')).toHaveCount(0);
   await expect(card).toContainText('Marketing Kit requires Notion, HubSpot and Playwright, which are not project-qualified yet.');
-  await expect(card.locator('.command-snippet--add code')).toHaveText(
+  await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
     'npx -y universal-agent-plugins add marketing-kit',
   );
-  await expect(card.locator('.command-snippet--add code')).not.toContainText('--target cursor');
+  await expect(card.locator('.plugin-card__install .command-snippet--add code')).not.toContainText('--target cursor');
   await expect(card).not.toContainText('Cursor: Files are prepared.');
   await card.locator('.plugin-card__title-link').click();
   const panel = page.locator('.install-panel');
@@ -300,11 +304,11 @@ test('Marketing Kit project becomes automatic only with a new signed project rel
   await card.locator('.plugin-card__install-toggle').click();
   await card.getByRole('button', { name: 'This project', exact: true }).click();
   await expect(card.locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
-  await expect(card.locator('.command-snippet--add code')).toHaveText(
+  await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
     'npx -y universal-agent-plugins add marketing-kit --scope project',
   );
   await targets(page, card, ['Codex']);
-  await expect(card.locator('.command-snippet--add code')).toHaveText(
+  await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
     'npx -y universal-agent-plugins add marketing-kit --target codex --scope project',
   );
   expect(errors).toEqual([]);

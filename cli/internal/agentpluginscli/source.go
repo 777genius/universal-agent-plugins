@@ -201,7 +201,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 		}
 		retainedMapping = installation.LocalChatGPTMapping
 	}
-	selection, err := domain.ResolveDirectory(bundle.Snapshot, resolveRequest)
+	selection, err := selectDirectorySourceForPlacement(bundle.Snapshot, resolveRequest)
 	if err != nil {
 		return loadedPackage{}, err
 	}
@@ -253,7 +253,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 		TreeDigestAlgorithm: selection.TreeDigestAlgorithm, TreeDigest: selection.TreeDigest, ManifestDigest: selection.ManifestDigest,
 	}
 	exactRequest.DependencyIdentity = environment.DependencyIdentity
-	checked, err := domain.ResolveDirectory(bundle.Snapshot, exactRequest)
+	checked, err := selectDirectorySourceForPlacement(bundle.Snapshot, exactRequest)
 	if err != nil || checked.DistributionID != selection.DistributionID || checked.ReleaseSequence != selection.ReleaseSequence {
 		if err != nil {
 			err = fmt.Errorf("acquired exact Directory release failed compatibility recheck: %w", err)
@@ -279,7 +279,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 			peerRequest := exactRequest
 			peerRequest.Purpose = ""
 			peerRequest.Targets = peers
-			peer, peerErr := domain.ResolveDirectory(bundle.Snapshot, peerRequest)
+			peer, peerErr := selectDirectorySourceForPlacement(bundle.Snapshot, peerRequest)
 			if peerErr != nil || peer.DistributionID != selection.DistributionID || peer.ReleaseSequence != selection.ReleaseSequence || peer.TreeDigest != selection.TreeDigest {
 				_ = loaded.cleanup()
 				return loadedPackage{}, fmt.Errorf("mixed preparation peers must qualify the same immutable Context7 release: %v", peerErr)

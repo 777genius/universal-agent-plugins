@@ -54,6 +54,7 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 	if added.Activation.UserActions != nil {
 		result.ManualActions = append([]string(nil), added.Activation.UserActions...)
 	}
+	result.LocalActions = append([]string(nil), added.Activation.LocalActions...)
 	result, committed, loadErr := e.readCommittedPackage(prepared, added, result, err)
 	if added.GroupPhase != "" {
 		if result.Client.ClientID == "" {

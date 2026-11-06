@@ -1,6 +1,8 @@
 package agentpluginscli
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -56,4 +58,26 @@ func explicitLocalPath(value string) bool {
 	unc := strings.TrimPrefix(value, `\\`)
 	server, share, ok := strings.Cut(unc, `\`)
 	return ok && server != "" && strings.Trim(share, `\`) != ""
+}
+
+// selectDirectorySourceForPlacement separates signed source qualification from
+// explicit local Project placement. A v1 user grant authenticates which package
+// can be selected; it is NOT evidence of project-native runtime execution.
+// Domain.ResolveDirectory deliberately keeps its strict publisher grant rules.
+func selectDirectorySourceForPlacement(snapshot domain.DirectorySnapshot, request domain.DirectoryResolveRequest) (domain.DirectorySelection, error) {
+	if snapshot.SnapshotSchemaVersion != 1 || request.Scope != domain.ScopeProject {
+		return domain.ResolveDirectory(snapshot, request)
+	}
+	for _, client := range request.Targets {
+		definition, ok := domain.ClientDefinitionFor(client)
+		if !ok || !definition.ProjectPolicy.Valid() || !slices.Contains(definition.Capabilities.Scopes, domain.ScopeProject) {
+			return domain.DirectorySelection{}, fmt.Errorf("%w: %s has no qualified project installation policy", domain.ErrDirectoryIneligible, client)
+		}
+	}
+	// The signed v1 representation has no project grants. The existing
+	// resolver still verifies its exact release, user publication policy,
+	// minimum version, current revocations and trusted source evidence.
+	// The scoped installer independently admits native Project components.
+	request.Scope = domain.ScopeUser
+	return domain.ResolveDirectory(snapshot, request)
 }
