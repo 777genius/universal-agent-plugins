@@ -54,7 +54,7 @@ func authorizeSecurityAssessment(cmd *cobra.Command, app App, opts *options, loa
 		loaded.securityAuthorized = true
 		return nil
 	}
-	if opts.format != "human" || !app.Terminal {
+	if opts.format != "human" || !app.Terminal || opts.yes {
 		if opts.format == "json" {
 			if err := writeJSONResult(cmd.OutOrStdout(), cmd.Name(), outputResultFailure, map[string]any{
 				"status": "blocked_by_security_review", "security": assessment,
