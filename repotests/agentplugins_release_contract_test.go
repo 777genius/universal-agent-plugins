@@ -341,7 +341,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"all six native platform proofs, its verified",
 		"Every dispatch still requires the exact frozen tag/workflow-source gate",
 		"This runbook does not establish that any new draft has already qualified",
-		"requires a merged pull request into",
+		"merged PR is not required when the exact commit has every required check",
 		"Repository settings are not treated as the release proof",
 		"short-lived bootstrap",
 		"disallow bypass-2FA tokens",
