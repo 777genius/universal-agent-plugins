@@ -248,7 +248,6 @@ func TestInspectPythonBrokenVenvBlocksManagerProbe(t *testing.T) {
 	}
 }
 
-
 func TestResolvePythonEnvironmentBrokenVenvWithoutInterpreter(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, ".venv"), 0o755); err != nil {
