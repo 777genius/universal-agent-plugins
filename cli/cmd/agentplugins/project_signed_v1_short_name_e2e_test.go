@@ -383,6 +383,11 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 	if err := os.Remove(skillPath); err != nil {
 		t.Fatal(err)
 	}
+	// Repair permits an absent owned Skill directory, not a partially edited one.
+	// Refuse to remove any unexpected sibling file or foreign content.
+	if err := os.Remove(filepath.Dir(skillPath)); err != nil {
+		t.Fatal(err)
+	}
 	journey.run(t, journey.a, "repair", rootID, "--target", "gemini")
 	if got := projectJourneyRead(t, skillPath); got != campaignSkill {
 		t.Fatalf("signed root repair did not restore its exact Skill: %q", got)
