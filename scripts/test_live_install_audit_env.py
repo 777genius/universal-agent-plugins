@@ -215,6 +215,39 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             "exit_code": 0, "stderr_tail": darwin, "stdout_tail": "",
             "timeout": False}))
 
+    def test_chatgpt_identity_ownership_refusal_requires_nonzero_exit_and_no_mutation(self):
+        audit = load_audit()
+        ownership_error = (
+            "agentplugins: group apply preflight failed; no target was changed "
+            "(selected targets: [chatgpt]): target chatgpt identity preflight: "
+            "native identity ownership is indeterminate; refusing mutation")
+        empty = {"exit_code": 0,
+                 "stdout_tail": '{"schema_version":1,"command":"list",'
+                                '"result":"success","data":{"installations":[]}}',
+                 "stderr_tail": "", "timeout": False,
+                 "_json": {"data": {"installations": []}}}
+        cases = [
+            ("chatgpt", 1, ownership_error, "", "native-ownership-unverified"),
+            ("codex", 1, ownership_error, "", "install-failed"),
+            ("chatgpt", 0, ownership_error, "", "incomplete-native-proof"),
+            ("chatgpt", 1, "generic failure", ownership_error, "install-failed"),
+        ]
+        for target, exit_code, stderr, stdout, expected in cases:
+            with self.subTest(target=target, exit_code=exit_code, expected=expected):
+                refused = {"exit_code": exit_code, "stdout_tail": stdout,
+                           "stderr_tail": stderr, "timeout": False, "_json": None}
+                def source_call(argv, *_args, **_kwargs):
+                    return dict(empty if len(argv) > 1 and argv[1] == "list" else refused)
+                with TemporaryDirectory() as temporary:
+                    with patch.object(audit, "call", side_effect=source_call):
+                        result = audit.do_case(
+                            "/unused/audit-cli", target, "plugin", "atlassian",
+                            0, Path(temporary).resolve(), {})
+                self.assertEqual(result["status"], expected)
+                self.assertFalse(result["failed_install_registered"])
+                self.assertFalse(result["failed_install_residue"])
+                self.assertTrue(result["sentinels_preserved"])
+
     def test_every_native_plugin_client_preserves_foreign_profile_file(self):
         audit = load_audit()
         refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
