@@ -30,7 +30,7 @@ class WindsurfCycleContracts(unittest.TestCase):
 
     def test_actual_four_member_zip_crosses_dispatch_and_all_proofs(self):
         self.assertEqual(self.admit(),self.result)
-        self.assertEqual(len(self.commands),47)
+        self.assertEqual(len(self.commands),len(cycle.STAGES))
         self.assertTrue(all(len(raw)<=1<<20 for raw in self.bodies().values()))
 
     def test_typed_a2_proof_schema_source_policy_phase_hash_refusals(self):
@@ -158,9 +158,9 @@ class WindsurfCycleContracts(unittest.TestCase):
         self.assertTrue(cycle.aggregate_private(cycle.compact(row)+b"\n"))
 
     def test_native_cache_delta_is_failure_only_bounded_and_typed(self):
-        self.commands = self.commands[:22]  # Real b-mcp failure prefix
-        self.proofs = self.proofs[:6]
-        self.probes = self.probes[:21]
+        self.commands = self.commands[:cycle.STAGES.index("b-mcp")+1]  # Real b-mcp failure prefix
+        self.proofs = self.proofs[:4]
+        self.probes = self.probes[:cycle.STAGES.index("b-mcp")]
         stage = self.commands[-1]["stage"]
         self.assertEqual(stage, "b-mcp")
         cmd = self.commands[-1]["value"]
@@ -208,8 +208,8 @@ class WindsurfCycleContracts(unittest.TestCase):
             self.admit()
 
     def test_failed_prefix_stays_all_false_and_cross_mode_refuses(self):
-        self.commands=self.commands[:9];self.proofs=[];self.probes=self.probes[:9]
-        self.result.update(runtime_attempt_complete=False,cycle_observed_complete=False,test_failed=True,attempt_stage="add-user",cycle_command_stages=[r["stage"] for r in self.commands],cycle_proof_stages=[],qualification={flag:False for flag in cycle.FLAGS})
+        self.commands=self.commands[:cycle.STAGES.index("add-a")+1];self.proofs=[];self.probes=self.probes[:cycle.STAGES.index("add-a")]
+        self.result.update(runtime_attempt_complete=False,cycle_observed_complete=False,test_failed=True,attempt_stage="add-a",cycle_command_stages=[r["stage"] for r in self.commands],cycle_proof_stages=[],qualification={flag:False for flag in cycle.FLAGS})
         self.assertEqual(self.admit(),self.result)
         self.result["qualification"]["project-lifecycle"]=True
         with self.assertRaises(ValueError):self.admit()

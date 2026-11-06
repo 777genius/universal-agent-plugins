@@ -13,7 +13,21 @@ import (
 const windCycleMode = "windsurf-complete-project-skills-cycle"
 
 var windCycleMembers = []string{"windsurf-cycle-commands.jsonl", "windsurf-cycle-proofs.jsonl", "windsurf-cycle-probe.jsonl"}
-var windCycleLabels = append(append([]string{}, windComponentLabels...), "repeat-add-a", "unchanged-update-a", "intact-repair-a", "stable-a-skills", "stable-b-skills", "update-a", "updated-a-skills", "updated-a-get", "updated-b-skills", "damaged-a-skills", "missing-repair-a", "repaired-a-skills", "repaired-a-get", "remove-a", "removed-a-skills", "removed-a-mcp", "remaining-b-skills", "remaining-b-mcp", "repeat-remove-a", "remove-b", "final-a-skills", "final-a-mcp", "final-b-skills", "final-b-mcp")
+// Project E2E keeps the immutable, foreign user profile but leaves Global installation
+// to the separate pinned Devin Global lifecycle (#710).
+func windProjectComponentLabels() []string {
+	labels := make([]string, 0, len(windComponentLabels)-4)
+	for _, label := range windComponentLabels {
+		switch label {
+		case "add-user", "user-skills", "user-mcp", "user-get":
+			continue
+		}
+		labels = append(labels, label)
+	}
+	return labels
+}
+
+var windCycleLabels = append(windProjectComponentLabels(), "repeat-add-a", "unchanged-update-a", "intact-repair-a", "stable-a-skills", "stable-b-skills", "update-a", "updated-a-skills", "updated-a-get", "updated-b-skills", "damaged-a-skills", "missing-repair-a", "repaired-a-skills", "repaired-a-get", "remove-a", "removed-a-skills", "removed-a-mcp", "remaining-b-skills", "remaining-b-mcp", "repeat-remove-a", "remove-b", "final-a-skills", "final-a-mcp", "final-b-skills", "final-b-mcp")
 
 type windProjectCycle struct {
 	w                 *windComponentFixture
@@ -82,7 +96,7 @@ func (c *windProjectCycle) finish(t *testing.T) {
 	if record, err := windCycleProbeRecord(c); err != nil || record != c.probeRecord {
 		t.Error("Windsurf final held empty probe changed")
 	}
-	complete := c.complete && !t.Failed() && f.ctx.Err() == nil && reflect.DeepEqual(c.completed, windCycleLabels) && c.removed["a"] && c.removed["b"] && len(c.cacheKeys) == 4
+	complete := c.complete && !t.Failed() && f.ctx.Err() == nil && reflect.DeepEqual(c.completed, windCycleLabels) && c.removed["a"] && c.removed["b"] && len(c.cacheKeys) == 3
 	f.evidence["cycle_command_stages"], f.evidence["cycle_proof_stages"] = c.completed, c.proofs
 	f.evidence["cycle_observed_complete"], f.evidence["runtime_attempt_complete"] = complete, complete
 	f.evidence["attempt_stage"] = c.w.stage

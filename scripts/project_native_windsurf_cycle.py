@@ -9,11 +9,11 @@ from project_native_windsurf_components import LABELS as FIRST, NAME, _layout
 
 MODE = "windsurf-complete-project-skills-cycle"
 MEMBERS = ("windsurf-cycle-commands.jsonl", "windsurf-cycle-proofs.jsonl", "windsurf-cycle-probe.jsonl")
-STAGES = FIRST + tuple("repeat-add-a unchanged-update-a intact-repair-a stable-a-skills stable-b-skills update-a updated-a-skills updated-a-get updated-b-skills damaged-a-skills missing-repair-a repaired-a-skills repaired-a-get remove-a removed-a-skills removed-a-mcp remaining-b-skills remaining-b-mcp repeat-remove-a remove-b final-a-skills final-a-mcp final-b-skills final-b-mcp".split())
-PUBLIC = tuple("add-user add-a add-b repeat-add-a unchanged-update-a intact-repair-a update-a missing-repair-a remove-a repeat-remove-a remove-b".split())
-COLD = frozenset(("add-user", "add-a", "add-b", "update-a"))
+STAGES = tuple(stage for stage in FIRST if stage not in {"add-user", "user-skills", "user-mcp", "user-get"}) + tuple("repeat-add-a unchanged-update-a intact-repair-a stable-a-skills stable-b-skills update-a updated-a-skills updated-a-get updated-b-skills damaged-a-skills missing-repair-a repaired-a-skills repaired-a-get remove-a removed-a-skills removed-a-mcp remaining-b-skills remaining-b-mcp repeat-remove-a remove-b final-a-skills final-a-mcp final-b-skills final-b-mcp".split())
+PUBLIC = tuple("add-a add-b repeat-add-a unchanged-update-a intact-repair-a update-a missing-repair-a remove-a repeat-remove-a remove-b".split())
+COLD = frozenset(("add-a", "add-b", "update-a"))
 NOOPS = frozenset(("repeat-add-a", "unchanged-update-a", "repeat-remove-a"))
-PROOFS = tuple("caller-marker-user add-user caller-marker-a add-a caller-marker-b add-b repeat-add-a unchanged-update-a intact-repair-a source-a-two update-a missing-owned-a-skill missing-repair-a remove-a repeat-remove-a remove-b".split())
+PROOFS = tuple("caller-marker-a add-a caller-marker-b add-b repeat-add-a unchanged-update-a intact-repair-a source-a-two update-a missing-owned-a-skill missing-repair-a remove-a repeat-remove-a remove-b".split())
 FLAGS = tuple("project-lifecycle native-restart-removal mcp-initialize mcp-tools-list mcp-tools-call".split())
 CLEANUP = "full descendant supervision; forced cleanup fails"
 SCOPE = "Project skills metadata lifecycle and restart/removal; MCP configuration visibility only, no MCP initialize/list/call, authentication or model"
@@ -444,16 +444,36 @@ def cross_frames(paths,current,previous,global_before,cmd,stage):
         for prefix,tree in ((".uap",frames[root]),(".devin",frames[profile(paths,selected)])):
             for key,row in tree.items():require(same(project[prefix+("" if key=="." else "/"+key)],row))
         global_now=frames[state_root(paths,"user")]
-        require(global_before is not None)
-        for name,old in global_before.items():
-            now=global_now.get(name)
-            if same(old,now):continue
-            if stage in COLD and name=="security/assessments":continue
-            if name=="." and "remove" not in stage:
-                require(now is not None and authority(old,now) and old["Size"]==now["Size"] and old["SHA256"]==now["SHA256"]=="" and times(now,start,end));continue
-            require(False)
-        new=set(global_now)-set(global_before)
-        require(new==({"security/assessments/"+current["cache"]["key"]+".json"} if stage in COLD else set()))
+        if global_before is None:
+            # First project installation: reconstruct the exact preexisting global
+            # fixture inventory, never treat the first observed frame as a baseline.
+            require(stage == "add-a")
+            expected = {".", "security", "security/assessments", "plugin-data",
+                        "plugin-data/caller-owned", "plugin-data/caller-owned/keep.txt",
+                        "security/assessments/" + current["cache"]["key"] + ".json"}
+            require(set(global_now) == expected)
+            root_record = global_now["."]
+            for name in ("security", "security/assessments", "plugin-data", "plugin-data/caller-owned"):
+                row = global_now[name]
+                require(row["Kind"] == "directory" and row["Mode"] == 0o40700
+                        and row["UID"] == root_record["UID"] and row["GID"] == root_record["GID"]
+                        and row["Device"] == root_record["Device"])
+            marker = global_now["plugin-data/caller-owned/keep.txt"]
+            require(marker["Kind"] == "file" and marker["Mode"] == 0o100600
+                    and marker["Links"] == 1 and marker["Size"] == len(b"CALLER_user\n")
+                    and marker["SHA256"] == sha(b"CALLER_user\n")
+                    and marker["UID"] == root_record["UID"] and marker["GID"] == root_record["GID"]
+                    and marker["Device"] == root_record["Device"])
+        else:
+            for name,old in global_before.items():
+                now=global_now.get(name)
+                if same(old,now):continue
+                if stage in COLD and name=="security/assessments":continue
+                if name=="." and "remove" not in stage:
+                    require(now is not None and authority(old,now) and old["Size"]==now["Size"] and old["SHA256"]==now["SHA256"]=="" and times(now,start,end));continue
+                require(False)
+            new=set(global_now)-set(global_before)
+            require(new==({"security/assessments/"+current["cache"]["key"]+".json"} if stage in COLD else set()))
     if previous is None:return
     old_frames=previous["frames"]
     old_profile=old_frames[profile(paths,selected)];new_profile=frames[profile(paths,selected)]
@@ -573,11 +593,11 @@ def complete(commands,proof_rows,probes,result):
                 fault=proof_map["missing-owned-a-skill"];obj(fault,"scope path skill_sha256 started_at ended_at")
                 require(previous_end is not None and previous_end<=stamp(fault["started_at"])<=stamp(fault["ended_at"])<=start)
                 require(fault["scope"]=="a" and fault["path"]==profile(paths,"a")+"/skills/"+NAME and fault["skill_sha256"]==sha(authored(paths,"a","1.1.0")[1]))
-        for value in marker_ends.values():require(value<=start if stage not in ("add-user","add-a","add-b") else True)
+        for value in marker_ends.values():require(value<=start if stage not in ("add-a","add-b") else True)
         obj(probe["value"],"events");require(probe["stage"]==stage and stream(probe["value"]["events"])==b"")
-    require(previous-first<150*10**9 and previous-first<(result["elapsed_ms"]+1)*10**6 and total<=result["elapsed_ms"] and len(known)==4 and held["a"]["removed"] is True and held["b"]["removed"] is True and held["user"]["removed"] is False)
+    require(previous-first<150*10**9 and previous-first<(result["elapsed_ms"]+1)*10**6 and total<=result["elapsed_ms"] and len(known)==3 and held["a"]["removed"] is True and held["b"]["removed"] is True and "user" not in held)
     identities=[(v["installation"]["installation_id"],v["binding_id"],v["binding"]["physical_artifact_id"],v["data"]["data_receipt_id"]) for v in held.values()]
-    require(all(len({row[i] for row in identities})==3 for i in range(4)))
+    require(all(len({row[i] for row in identities})==2 for i in range(4)))
 
 
 
@@ -642,7 +662,7 @@ def admit(bodies,source_identity):
     for row in probes:obj(row["value"],"events");require(stream(row["value"]["events"])==b"")
     if not done:
         require(r["test_failed"] is True and r["cycle_observed_complete"] is False);return r
-    require(r["test_failed"] is False and r["cycle_observed_complete"] is True and r["elapsed_ms"]<150000 and len(commands)==len(probes)==47 and len(proofs)==len(PROOFS))
+    require(r["test_failed"] is False and r["cycle_observed_complete"] is True and r["elapsed_ms"]<150000 and len(commands)==len(probes)==len(STAGES) and len(proofs)==len(PROOFS))
     complete(commands,proofs,probes,r)
     return r
 
