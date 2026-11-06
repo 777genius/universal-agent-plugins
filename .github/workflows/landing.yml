@@ -121,7 +121,7 @@ jobs:
                 mode=smoke
                 while IFS= read -r path; do
                   case "$path" in
-                    README.md|website/*) ;;
+                    README.md|website/README.md|website/source/*.md) ;;
                     *) mode=full; break ;;
                   esac
                 done <<< "$paths"
