@@ -353,6 +353,11 @@ func TestUserGroupPreparedUpdateManualCodexFileCompletion(t *testing.T) {
 		len(result.Targets) != 2 {
 		t.Fatalf("proved user file Update was not completed: %+v %v", result, err)
 	}
+	if len(result.ManualActions) != 2 ||
+		result.ManualActions[0] != "install the prepared plugin in Codex Plugins" ||
+		result.ManualActions[1] != "TEST Local reload; activation not attested" {
+		t.Fatalf("manual Codex or Local next actions lost: %v", result.ManualActions)
+	}
 	if result.Targets[0].Activation != string(domain.ActivationManual) ||
 		result.Targets[0].Verification != string(domain.VerificationPackageValid) ||
 		result.Targets[1].Activation != string(domain.ActivationPrepared) ||

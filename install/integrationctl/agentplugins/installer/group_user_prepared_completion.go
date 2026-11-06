@@ -231,7 +231,8 @@ func hasUserPreparedGroupTarget(got usecase.GroupResult) bool {
 func userPreparedGroupActions(got usecase.GroupResult) []string {
 	var out []string
 	for _, target := range got.Targets {
-		if target.Plan.Scope == domain.ScopeUser && target.Activation.Activation == domain.ActivationPrepared {
+		if target.Plan.Scope == domain.ScopeUser &&
+			(target.Activation.Activation == domain.ActivationPrepared || target.Activation.Activation == domain.ActivationManual) {
 			out = append(out, target.Activation.UserActions...)
 		}
 	}
