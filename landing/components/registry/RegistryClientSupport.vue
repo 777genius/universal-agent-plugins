@@ -230,7 +230,7 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
   }
 }
 
-:global(.v-theme--dark) .registry-client-support__icon--contrast {
+:global(.v-theme--dark .registry-client-support__icon--contrast) {
   filter: brightness(0) invert(1);
 }
 

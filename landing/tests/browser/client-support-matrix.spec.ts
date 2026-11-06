@@ -38,6 +38,14 @@ test('home lists the complete scope matrix immediately before FAQ', async ({ pag
   await expect(section).not.toContainText('E2E');
 });
 
+test('dark theme filters only monochrome client icons, not the entire app', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'));
+  await page.goto('./');
+  await expect(page.locator('.v-application.v-theme--dark')).toHaveCSS('filter', 'none');
+  await expect(page.locator('.registry-client-support__icon--contrast').first())
+    .toHaveCSS('filter', 'brightness(0) invert(1)');
+});
+
 test('scope matrix scrolls within its own region on narrow screens', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto('./');

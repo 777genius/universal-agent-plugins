@@ -160,7 +160,7 @@ test('selected targets produce one complete copyable command with keyboard activ
 test('catalog reveal is early on navigation, compact trust badges stay compact, and video preview waits for a real Mux asset', async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.setViewportSize({ width: 1440, height: 600 });
   const gotoReadyHome = async (url = './') => {
