@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	groupRecheckCrashRootEnv = "UAP_TEST_GROUP_RECHECK_CRASH_ROOT_20261106"
-	groupRecheckCrashModeEnv = "UAP_TEST_GROUP_RECHECK_CRASH_MODE_20261106"
+	groupRecheckCrashRootEnv  = "UAP_TEST_GROUP_RECHECK_CRASH_ROOT_20261106"
+	groupRecheckCrashModeEnv  = "UAP_TEST_GROUP_RECHECK_CRASH_MODE_20261106"
 	groupRecheckCrashExitCode = 85
 )
 
