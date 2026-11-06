@@ -260,11 +260,24 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		projectJourneyWrite(t, filepath.Join(fresh.a, name),
 			projectJourneyRead(t, filepath.Join(journey.a, name)))
 	}
+	lockBefore := projectJourneyRead(t, filepath.Join(fresh.a, "uap.lock"))
 	fresh.run(t, fresh.a, "deps", "sync", "--locked", "--yes")
 	if got := len(fresh.state(t, fresh.a).EnvironmentReceipts); got != 4 {
 		t.Fatalf("cold signed v1 Project lock restore omitted children: %d", got)
 	}
-	userBefore, bBefore := journey.state(t, ""), journey.state(t, journey.b)
+	if got := projectJourneyRead(t, filepath.Join(fresh.a, "uap.lock")); got != lockBefore {
+		t.Fatal("cold locked restore rewrote the exact signed dependency lock")
+	}
+	coldNative := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.a), "settings.json"))
+	for _, server := range []string{"notion", "hubspot", "playwright", "foreign.test"} {
+		if !strings.Contains(coldNative, server) {
+			t.Fatalf("cold signed v1 restore omitted native MCP server %s: %s", server, coldNative)
+		}
+	}
+	userStateBefore := projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json"))
+	bStateBefore := projectJourneyRead(t, filepath.Join(journey.namespace(journey.b), "state-v2.json"))
+	userNativeBefore := projectJourneyRead(t, filepath.Join(journey.nativeRoot(""), "settings.json"))
+	bNativeBefore := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.b), "settings.json"))
 	journey.run(t, journey.a, "remove", "marketing-kit", "--target", "gemini")
 	if got := len(journey.state(t, journey.a).EnvironmentReceipts); got != 0 {
 		t.Fatalf("Project A still owns signed root/children after removal: %d", got)
@@ -272,7 +285,28 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 	if got := len(journey.state(t, "").EnvironmentReceipts); got != len(userBefore.EnvironmentReceipts) {
 		t.Fatal("Project A removal changed user installation")
 	}
-	if got := len(journey.state(t, journey.b).EnvironmentReceipts); got != len(bBefore.EnvironmentReceipts) {
-		t.Fatal("Project A removal changed Project B")
+	if got := projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json")); got != userStateBefore {
+		t.Fatal("Project A removal changed user state bytes")
+	}
+	if got := projectJourneyRead(t, filepath.Join(journey.namespace(journey.b), "state-v2.json")); got != bStateBefore {
+		t.Fatal("Project A removal changed Project B state bytes")
+	}
+	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(""), "settings.json")); got != userNativeBefore {
+		t.Fatal("Project A removal changed user native settings")
+	}
+	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.b), "settings.json")); got != bNativeBefore {
+		t.Fatal("Project A removal changed Project B native settings")
+	}
+	removedNative := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "settings.json"))
+	if !strings.Contains(removedNative, "foreign.test") || !strings.Contains(removedNative, "retained foreign settings") {
+		t.Fatalf("signed Project removal damaged foreign native settings: %s", removedNative)
+	}
+	for _, server := range []string{"notion", "hubspot", "playwright"} {
+		if strings.Contains(removedNative, "\"" + server + "\"") {
+			t.Fatalf("signed Project removal left owned MCP server %s: %s", server, removedNative)
+		}
+	}
+	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "skills", "foreign", "SKILL.md")); got != "foreign skill\n" {
+		t.Fatal("signed Project removal changed a foreign native Skill")
 	}
 }
