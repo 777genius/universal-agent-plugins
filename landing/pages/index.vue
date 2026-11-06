@@ -76,7 +76,8 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
 
 <style scoped>
 .unified-home {
-  /* Keep decorative orbs and wide nested content from expanding the document. */
+  /* Contain the absolutely positioned background within the clipped home surface. */
+  position: relative;
   overflow-x: clip;
 }
 </style>
