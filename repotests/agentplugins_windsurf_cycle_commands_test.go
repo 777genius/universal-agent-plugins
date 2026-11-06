@@ -156,4 +156,9 @@ func (c *windProjectCycle) command(t *testing.T, label string) {
 	}
 	c.append(t, windCycleMembers[2], label, map[string]any{"events": windCycleStream(probe)})
 	w.check(t)
+	// The bounded audit is failure-only evidence. Keep it on any refusal above,
+	// but never publish it after the complete native frame passed its checks.
+	if command.Native {
+		delete(f.evidence, "native_cache_delta")
+	}
 }
