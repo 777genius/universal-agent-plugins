@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, writeFile, rm, realpath } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rename, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -78,7 +78,9 @@ test('production Go bridge installs two raw Skills and recovers a lost apply res
     await page.screenshot({ path: testInfo.outputPath('live-picker-complete.png'), fullPage: true });
     verified = true;
   } finally {
-    await writeFile(`${ready}.done`, verified ? 'verify' : 'abort', { mode: 0o600 });
+    // Publish the completion marker atomically so Go never reads an empty, half-written file.
+    await writeFile(`${ready}.done.tmp`, verified ? 'verify' : 'abort', { mode: 0o600 });
+    await rename(`${ready}.done.tmp`, `${ready}.done`);
     const killer = setTimeout(() => child.kill('SIGTERM'), 30_000);
     const code = await completion;
     clearTimeout(killer);
