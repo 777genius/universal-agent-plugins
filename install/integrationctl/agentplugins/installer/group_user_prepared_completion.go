@@ -190,14 +190,7 @@ func publishedPreparedUserDelivery(plan domain.DeliveryPlan) bool {
 // completedUserPreparedOutcome keeps Local prepared while proving its recorded selector.
 func completedUserPreparedOutcome(plan domain.DeliveryPlan, binding domain.ClientBinding, outcome domain.ActivationOutcome) bool {
 	if outcome.Activation == domain.ActivationManual {
-		// A user CLI registry may have finished writing its owned files while
-		// native registration still requires a real manual step. Do not attest
-		// activation, and do not extend this to project or native-config routes.
-		traits := plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, domain.ScopeUser)
-		return plan.Scope == domain.ScopeUser && traits.LifecycleKind == domain.LifecycleCLIRegistry &&
-			outcome.Verification == domain.VerificationPackageValid && outcome.Policy == domain.PolicyAllowed &&
-			completedProjectAuthentication(outcome.Authentication) && completedProjectEffect(plan, outcome.NativeEffect) &&
-			!outcome.ActivationAttested && !outcome.AuthenticationAttested && len(outcome.UserActions) != 0
+		return completedUserManualFileOutcome(plan, outcome)
 	}
 	if outcome.Activation != domain.ActivationPrepared {
 		return completedProjectOutcome(plan, outcome)
@@ -215,6 +208,20 @@ func completedUserPreparedOutcome(plan domain.DeliveryPlan, binding domain.Clien
 		return false
 	}
 	return true
+}
+
+
+// completedUserManualFileOutcome permits verified CLI file completion while
+// preserving the pending manual activation state and next actions.
+func completedUserManualFileOutcome(plan domain.DeliveryPlan, outcome domain.ActivationOutcome) bool {
+	// A user CLI registry may have finished writing its owned files while
+	// native registration still requires a real manual step. Do not attest
+	// activation, and do not extend this to project or native-config routes.
+	traits := plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, domain.ScopeUser)
+	return plan.Scope == domain.ScopeUser && traits.LifecycleKind == domain.LifecycleCLIRegistry &&
+		outcome.Verification == domain.VerificationPackageValid && outcome.Policy == domain.PolicyAllowed &&
+		completedProjectAuthentication(outcome.Authentication) && completedProjectEffect(plan, outcome.NativeEffect) &&
+		!outcome.ActivationAttested && !outcome.AuthenticationAttested && len(outcome.UserActions) != 0
 }
 
 // hasUserPreparedGroupTarget stops lost bindings from bypassing the pending check.
