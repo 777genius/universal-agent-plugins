@@ -116,8 +116,8 @@ jobs:
           set -euo pipefail
           mode=full
           if [[ "$PR_CHANGED_FILES" =~ ^[0-9]+$ ]] && (( PR_CHANGED_FILES < 3000 )); then
-            if paths="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" --jq '.[] | (.filename, (.previous_filename // empty)) | gsub("\\n"; "\\u0001")')"; then
-              if [[ -n "$paths" && "$paths" != *$'\\001'* ]]; then
+            if paths="$(gh api --paginate "repos/\${GITHUB_REPOSITORY}/pulls/\${PR_NUMBER}/files?per_page=100" --jq '.[] | (.filename, (.previous_filename // empty)) | gsub("\n"; "\u0001")')"; then
+              if [[ -n "$paths" && "$paths" != *$'\001'* ]]; then
                 mode=smoke
                 while IFS= read -r path; do
                   case "$path" in
@@ -128,7 +128,7 @@ jobs:
               fi
             fi
           fi
-          printf 'mode=%s\\n' "$mode" >> "$GITHUB_OUTPUT"
+          printf 'mode=%s\n' "$mode" >> "$GITHUB_OUTPUT"
           echo "Playwright coverage: $mode"
 
       - name: Run browser E2E
