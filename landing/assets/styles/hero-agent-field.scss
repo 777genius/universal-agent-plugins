@@ -10,14 +10,6 @@
 .unified-home > .page-bg {
   z-index: -2;
 }
-// Keep the fixed animated decoration inside the viewport without affecting page scroll.
-.hero-agent-field-viewport {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: clip;
-  pointer-events: none;
-}
 .hero-agent-field {
   --orbit-duration: 36s;
   position: absolute;
@@ -27,8 +19,7 @@
   opacity: 0.55;
 }
 .hero-agent-field--fixed {
-  // Anchor coordinates remain viewport-relative inside the fixed clipping layer.
-  position: absolute;
+  position: fixed;
   inset: auto;
   z-index: -1;
   translate: var(--scroll-x, 0px) var(--scroll-y, 0px);
