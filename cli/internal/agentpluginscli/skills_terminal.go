@@ -206,6 +206,9 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 	}
 	outcome := skillBatchOutcome(result)
 	output := struct {
+		SchemaVersion        int                          `json:"schema_version"`
+		Command              string                       `json:"command"`
+		Result               string                       `json:"result"`
 		Status               string                       `json:"status"`
 		Items                []skillspicker.OperationItem `json:"items"`
 		RepairInstructions   []string                     `json:"repairInstructions"`
@@ -213,8 +216,11 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 		NextActions          []AgentAction                `json:"next_actions,omitempty"`
 		Scope                string                       `json:"scope"`
 		ScopeSelectionReason string                       `json:"scope_selection_reason"`
-	}{Status: result.Status, Items: outcome.Items, RepairInstructions: outcome.Result.RepairInstructions}
+	}{SchemaVersion: outputSchemaVersion, Command: "skills add", Result: outputResultSuccess, Status: result.Status, Items: outcome.Items, RepairInstructions: outcome.Result.RepairInstructions}
 	output.Readiness, output.NextActions = deriveSkillsReadiness(result.Status)
+	if output.Readiness == "failed" {
+		output.Result = outputResultFailure
+	}
 	output.Scope, output.ScopeSelectionReason = opts.scope, scopeSelectionReason(cmd, opts)
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(output)
 }
