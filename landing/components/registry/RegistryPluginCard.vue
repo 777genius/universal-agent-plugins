@@ -92,6 +92,15 @@ const command = computed(() =>
       ).add
     : '',
 );
+const desktopCodexCommand = computed(() =>
+  scope.value === 'user' &&
+  !isDiscovered.value &&
+  current.value &&
+  canChooseInstall.value &&
+  Boolean(targetDistributions.value.get('codex'))
+    ? pluginCommands(props.plugin, ['codex']).add
+    : '',
+);
 const vendorInstall = computed(() => vendorInstallSource(props.plugin));
 const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
 const iconURL = computed(() => pluginIcon(props.plugin));
@@ -404,6 +413,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               {{ t('registryUi.install.scope.selectionUnavailable') }}
             </p>
           </div>
+          <ChatGPTDesktopGuide v-if="desktopCodexCommand" :command="desktopCodexCommand" />
         </div>
       </Transition>
     </div>
