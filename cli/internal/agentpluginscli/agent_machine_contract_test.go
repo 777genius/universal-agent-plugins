@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -66,8 +67,33 @@ func TestAgentYesIsScopedToMutatingCommands(t *testing.T) {
 	if err != nil || install.Flags().Lookup("yes") == nil {
 		t.Fatalf("install does not accept explicit --yes: %v", err)
 	}
+	for _, name := range []string{"update", "repair", "remove"} {
+		command, _, err := root.Find([]string{name})
+		if err != nil || command.Flags().Lookup("yes") == nil {
+			t.Fatalf("%s does not accept explicit --yes: %v", name, err)
+		}
+	}
 	list, _, err := root.Find([]string{"list"})
 	if err != nil || list.Flags().Lookup("yes") != nil {
 		t.Fatalf("read-only list must not accept --yes: %v", err)
+	}
+}
+
+func TestAgentExplicitYesNeverStartsAmbiguousTargetSelection(t *testing.T) {
+	for _, argv := range [][]string{
+		{"add", "context7", "--yes"},
+		{"remove", "demo", "--yes"},
+	} {
+		var output bytes.Buffer
+		cmd := NewRoot(App{Terminal: true, Output: &output, ErrorOutput: &output})
+		cmd.SetArgs(argv)
+		err := cmd.Execute()
+		var usage CLIUsageError
+		if !errors.As(err, &usage) || usage.Code != "TARGET_REQUIRED" {
+			t.Fatalf("%v: expected fail-closed target selection before acquisition, got %v; output %q", argv, err, output.String())
+		}
+		if output.Len() != 0 {
+			t.Fatalf("%v: selection unexpectedly displayed a prompt: %s", argv, output.String())
+		}
 	}
 }
