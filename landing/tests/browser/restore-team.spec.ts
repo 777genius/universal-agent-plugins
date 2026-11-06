@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { hydrated, navigate, offline, projections, registryFixture } from './i18n-state.helpers';
 
+// Each case has an isolated browser context and no cross-test mutable state.
+test.describe.configure({ mode: 'parallel' });
+
 const commands = {
   project: ['npx -y universal-agent-plugins install marketing-kit --scope project', 'npx -y universal-agent-plugins install'],
   global: ['npx -y universal-agent-plugins install marketing-kit', 'npx -y universal-agent-plugins deps import --install'],

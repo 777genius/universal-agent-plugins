@@ -5,6 +5,9 @@ import { hydrated } from './i18n-state.helpers';
 import { publishedLocales, localeMetadata, type KnownLocale } from '../../data/i18n';
 import { localizedPath } from '../../utils/localizedRoutes';
 
+// Each case has an isolated browser context and no cross-test mutable state.
+test.describe.configure({ mode: 'parallel' });
+
 // This suite runs against the assembled artifact on a plain static server at both bases.
 for (const locale of publishedLocales) {
   for (const family of ['/', '/plugins/', '/plugins/context7/', '/agents/github-copilot-cli/', '/download/', '/create-plugin/', '/plugins/community/']) {
