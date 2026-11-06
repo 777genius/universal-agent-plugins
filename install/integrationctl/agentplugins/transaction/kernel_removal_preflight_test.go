@@ -35,8 +35,8 @@ func TestDirectoryRemovalGroupPreflightsAllTargetsBeforePhysicalEffects(t *testi
 			kernel.Directory.Fault = func(string) error { physicalEffects++; return nil }
 			_, err := kernel.RemoveDirectoryGroup(context.Background(), DirectoryRemovalGroup{
 				OperationGroupID: "removal-preflight-group",
-				DesiredState: mutation.DesiredState,
-				Removals: []DirectoryRemoval{first, second},
+				DesiredState:     mutation.DesiredState,
+				Removals:         []DirectoryRemoval{first, second},
 			})
 			if err == nil {
 				t.Fatal("invalid removal member was accepted")
