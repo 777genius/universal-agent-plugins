@@ -34,7 +34,7 @@ type AgentFailure struct {
 func classifyAgentFailure(err error) AgentFailure {
 	var usage CLIUsageError
 	if errors.As(err, &usage) {
-		return AgentFailure{Code: usage.Code, Message: usage.Message}
+		return AgentFailure{Code: usage.Code, Message: usage.Message, Retryable: usage.Code == "TIMEOUT"}
 	}
 	var issue skillsSelectionError
 	if errors.As(err, &issue) {

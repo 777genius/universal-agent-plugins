@@ -11,6 +11,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 type listedSkill struct {
@@ -61,7 +62,7 @@ func newSkillsListCommand(app App, opts *options) *cobra.Command {
 func runSkillsList(cmd *cobra.Command, app App, opts *options, input, ref, folder string, pathSet bool) error {
 	if isWebsiteSkillInput(input) {
 		if ref != "" || pathSet {
-			return errors.New("HTTPS publisher listings do not accept --ref or --path")
+			return CLIUsageError{Code: "INVALID_SELECTION", Message: "HTTPS publisher listings do not accept --ref or --path"}
 		}
 		return listHTTPSPublisherSkills(cmd, app, opts, input)
 	}
@@ -96,18 +97,21 @@ func runSkillsList(cmd *cobra.Command, app App, opts *options, input, ref, folde
 }
 
 func listHTTPSPublisherSkills(cmd *cobra.Command, app App, opts *options, input string) error {
+	if _, err := domain.NormalizeWebSkillURL(input); err != nil {
+		return CLIUsageError{Code: "INVALID_SOURCE", Message: "HTTPS Skills source must be a credential-free HTTPS URL without query or fragment"}
+	}
 	if err := app.checkSkillsContext(nil); err != nil {
-		return err
+		return httpsSkillsListFailure(err)
 	}
 	lister, ok := app.SourceAcquirer.(interface {
 		ListHTTPSkills(context.Context, string) (sourceacquisition.HTTPSkillCatalog, error)
 	})
 	if !ok {
-		return errors.New("HTTPS publisher catalog is unavailable")
+		return CLIUsageError{Code: "SOURCE_UNAVAILABLE", Message: "HTTPS publisher catalog is unavailable"}
 	}
 	index, err := lister.ListHTTPSkills(cmd.Context(), input)
 	if err != nil {
-		return err
+		return httpsSkillsListFailure(err)
 	}
 	report := skillsListReport{
 		Scope: string(app.scope()), Source: index.URL, Revision: "sha256:" + index.IndexSHA256,
@@ -123,6 +127,23 @@ func listHTTPSPublisherSkills(cmd *cobra.Command, app App, opts *options, input 
 		})
 	}
 	return renderSkillsList(cmd, opts, report)
+}
+
+// httpsSkillsListFailure discards untrusted transport diagnostics while keeping
+// cancellation and deadline failures machine-readable.
+func httpsSkillsListFailure(err error) CLIUsageError {
+	var usage CLIUsageError
+	if errors.As(err, &usage) {
+		return usage
+	}
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return CLIUsageError{Code: "TIMEOUT", Message: "HTTPS publisher discovery timed out; check publisher availability before retrying"}
+	case errors.Is(err, context.Canceled):
+		return CLIUsageError{Code: "CANCELED", Message: "HTTPS publisher discovery was canceled"}
+	default:
+		return CLIUsageError{Code: "SOURCE_UNAVAILABLE", Message: "HTTPS publisher catalog could not be read or validated"}
+	}
 }
 
 func renderSkillsList(cmd *cobra.Command, opts *options, report skillsListReport) error {
