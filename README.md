@@ -150,10 +150,24 @@ separate checkpoints. Check each target's result after a multi-agent operation.
 Use `--scope project` (CLI 0.1.93+) to install in one repository without changing
 your user setup.
 
-**Add a plugin**
+**Signed Directory short names (current `main` source)**
 
-Copy a compatible package's pinned Git source from the
-[catalog](https://universal-agent-plugins.com/plugins/). Replace the placeholders:
+Merged installer PR #725 supports explicit Project placement for an eligible
+signed package and its required dependencies, using each selected client's
+real Project capabilities. Historical User runtime evidence is not Project
+activation evidence. In a CLI built from current `main`:
+
+```sh
+cd /path/to/project
+agentplugins add context7 --target codex --scope project --dry-run
+```
+
+Review the plan before omitting `--dry-run`. Unsupported clients or mandatory
+components fail closed; there is no implicit User fallback.
+
+**Published CLI 0.1.95** predates PR #725. Until the new command is released,
+copy a compatible exact Git source from the [catalog](https://universal-agent-plugins.com/plugins/)
+and replace the placeholders:
 
 ```sh
 cd /path/to/project
@@ -161,9 +175,9 @@ agentplugins add github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH \
   --scope project --target codex
 ```
 
-Use a full 40-character commit hash; omit `//PACKAGE_PATH` for a root package.
-Replace `codex` with your supported agent. Short catalog names such as `context7`
-are user-only: they do not work with `--scope project`.
+Use a full 40-character commit SHA; omit `//PACKAGE_PATH` for a root package.
+Direct Git is a released-CLI fallback, not a signed Directory alias. Neither
+route bypasses native client trust or complete dependency authorization.
 
 **Share and restore**
 

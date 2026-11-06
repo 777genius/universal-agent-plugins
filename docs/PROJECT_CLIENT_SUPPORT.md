@@ -1,5 +1,11 @@
 # Project installation support
 
+**Source vs release:** PR #725 in `main` supports signed Directory short names
+in explicit Project scope when the selected native adapters and mandatory
+components are eligible. This is not yet in the public CLI 0.1.95. The
+published v1 User source policy is not Project runtime evidence; the released
+CLI must still use its compatible direct-source Project flow.
+
 **Released in CLI 0.1.93:** explicit project scope prepares the client components
 listed below. Select `--scope project` and an existing project directory; the
 add and maintenance commands default to `user`. Argumentless install in CLI
