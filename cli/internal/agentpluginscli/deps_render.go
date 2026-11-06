@@ -61,7 +61,7 @@ func renderDependencyResults(cmd *cobra.Command, opts *options, actions []depend
 		outcome = "partial"
 	}
 	if opts.format == "json" {
-		data := map[string]any{"outcome": outcome, "actions": dependencyActionOutput(actions, opts.dependencyComponents), "results": out}
+		data := map[string]any{"outcome": outcome, "actions": dependencyActionOutput(actions, opts.dependencyComponents), "results": out, "scope": opts.scope, "scope_selection_reason": scopeSelectionReason(cmd, opts)}
 		if opts.installSelection != nil {
 			data["selection"] = opts.installSelection
 		}
