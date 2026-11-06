@@ -9,6 +9,13 @@
 </template>
 
 <style scoped>
+/* PageBackground is absolutely positioned against Vuetify's positioned wrap,
+   outside the main content's clipping boundary. Clip at its containing block
+   so blurred orbs cannot enlarge the document, without creating a scroll container. */
+.app-layout :deep(.v-application__wrap) {
+  overflow-x: clip;
+}
+
 .app-layout__main {
   flex: 1;
   min-width: 0;
