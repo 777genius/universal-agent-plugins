@@ -2,9 +2,12 @@ package transaction
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 )
 
 // A preflight can pass and a later recheck can fail after a prior physical
@@ -108,5 +111,64 @@ func TestDirectoryRemovalGroupRecheckFailureRollsBackAppliedRemoval(t *testing.T
 	}
 	if len(onlyClient(state.Installations[0]).Receipts) != 0 {
 		t.Fatal("failed removal persisted receipts")
+	}
+}
+
+// A failed rollback after a post-effect recheck is unknown, not a proven
+// rollback. The journal must survive so a later recovery can restore old bytes.
+func TestDirectoryGroupRecheckRollbackFailureRemainsRecoverable(t *testing.T) {
+	kernel, first, store := transactionFixture(t, "recheck-unknown-one")
+	second := first
+	second.OperationID = "recheck-unknown-two"
+	second.Sequence = 2
+	second.ActivePath = filepath.Join(first.OwnedBase, "second")
+	second.StagingPath = filepath.Join(first.OwnedBase, "second.staging")
+	group := DirectoryGroup{
+		OperationGroupID: "recheck-unknown-group",
+		DesiredState:     first.DesiredState,
+		Mutations:        []DirectoryMutation{first, second},
+	}
+	verifyFirst := group.Mutations[0].Verify
+	group.Mutations[0].Verify = func(ctx context.Context, active string) error {
+		if err := verifyFirst(ctx, active); err != nil {
+			return err
+		}
+		group.Mutations[1].Sequence = 0
+		return nil
+	}
+	interrupted := errors.New("rollback interrupted")
+	kernel.Directory.Fault = func(phase string) error {
+		if phase == dirswap.PhaseRollbackPending {
+			return interrupted
+		}
+		return nil
+	}
+	receipts, err := kernel.ApplyDirectoryGroup(context.Background(), group)
+	if len(receipts) != 0 || !errors.Is(err, interrupted) || FailurePhase(err) != GroupFailureUnknown {
+		t.Fatalf("interrupted rollback = receipts=%+v phase=%q err=%v", receipts, FailurePhase(err), err)
+	}
+	assertTransactionBody(t, first.ActivePath, "new")
+	open, err := kernel.Directory.ListOpen()
+	if err != nil || len(open) != 1 || open[0].Phase != dirswap.PhaseRollbackPending {
+		t.Fatalf("interrupted rollback lost recovery journal: %+v, %v", open, err)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(onlyClient(state.Installations[0]).Receipts) != 0 {
+		t.Fatal("ambiguous rollback persisted a receipt")
+	}
+
+	// Model a restart without reusing the faulty in-process directory adapter.
+	restarted := kernel
+	restarted.Directory.Fault = nil
+	if err := restarted.Recover(context.Background()); err != nil {
+		t.Fatalf("restart recovery: %v", err)
+	}
+	assertTransactionBody(t, first.ActivePath, "old")
+	open, err = restarted.Directory.ListOpen()
+	if err != nil || len(open) != 0 {
+		t.Fatalf("restart left directory journals: %+v, %v", open, err)
 	}
 }
