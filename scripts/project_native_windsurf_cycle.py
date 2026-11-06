@@ -9,11 +9,11 @@ from project_native_windsurf_components import LABELS as FIRST, NAME, _layout
 
 MODE = "windsurf-complete-project-skills-cycle"
 MEMBERS = ("windsurf-cycle-commands.jsonl", "windsurf-cycle-proofs.jsonl", "windsurf-cycle-probe.jsonl")
-STAGES = FIRST + tuple("repeat-add-a unchanged-update-a intact-repair-a stable-a-skills stable-b-skills update-a updated-a-skills updated-a-get updated-b-skills damaged-a-skills missing-repair-a repaired-a-skills repaired-a-get remove-a removed-a-skills removed-a-mcp remaining-b-skills remaining-b-mcp repeat-remove-a remove-b final-a-skills final-a-mcp final-b-skills final-b-mcp".split())
-PUBLIC = tuple("add-user add-a add-b repeat-add-a unchanged-update-a intact-repair-a update-a missing-repair-a remove-a repeat-remove-a remove-b".split())
-COLD = frozenset(("add-user", "add-a", "add-b", "update-a"))
+STAGES = tuple(stage for stage in FIRST if stage not in {"add-user", "user-skills", "user-mcp", "user-get"}) + tuple("repeat-add-a unchanged-update-a intact-repair-a stable-a-skills stable-b-skills update-a updated-a-skills updated-a-get updated-b-skills damaged-a-skills missing-repair-a repaired-a-skills repaired-a-get remove-a removed-a-skills removed-a-mcp remaining-b-skills remaining-b-mcp repeat-remove-a remove-b final-a-skills final-a-mcp final-b-skills final-b-mcp".split())
+PUBLIC = tuple("add-a add-b repeat-add-a unchanged-update-a intact-repair-a update-a missing-repair-a remove-a repeat-remove-a remove-b".split())
+COLD = frozenset(("add-a", "add-b", "update-a"))
 NOOPS = frozenset(("repeat-add-a", "unchanged-update-a", "repeat-remove-a"))
-PROOFS = tuple("caller-marker-user add-user caller-marker-a add-a caller-marker-b add-b repeat-add-a unchanged-update-a intact-repair-a source-a-two update-a missing-owned-a-skill missing-repair-a remove-a repeat-remove-a remove-b".split())
+PROOFS = tuple("caller-marker-a add-a caller-marker-b add-b repeat-add-a unchanged-update-a intact-repair-a source-a-two update-a missing-owned-a-skill missing-repair-a remove-a repeat-remove-a remove-b".split())
 FLAGS = tuple("project-lifecycle native-restart-removal mcp-initialize mcp-tools-list mcp-tools-call".split())
 CLEANUP = "full descendant supervision; forced cleanup fails"
 SCOPE = "Project skills metadata lifecycle and restart/removal; MCP configuration visibility only, no MCP initialize/list/call, authentication or model"
@@ -444,16 +444,60 @@ def cross_frames(paths,current,previous,global_before,cmd,stage):
         for prefix,tree in ((".uap",frames[root]),(".devin",frames[profile(paths,selected)])):
             for key,row in tree.items():require(same(project[prefix+("" if key=="." else "/"+key)],row))
         global_now=frames[state_root(paths,"user")]
-        require(global_before is not None)
-        for name,old in global_before.items():
-            now=global_now.get(name)
-            if same(old,now):continue
-            if stage in COLD and name=="security/assessments":continue
-            if name=="." and "remove" not in stage:
-                require(now is not None and authority(old,now) and old["Size"]==now["Size"] and old["SHA256"]==now["SHA256"]=="" and times(now,start,end));continue
-            require(False)
-        new=set(global_now)-set(global_before)
-        require(new==({"security/assessments/"+current["cache"]["key"]+".json"} if stage in COLD else set()))
+        if global_before is None:
+            # First project installation: reconstruct the exact preexisting global
+            # fixture inventory, never treat the first observed frame as a baseline.
+            require(stage == "add-a")
+            # The pinned scanner is preprovisioned by nativeProvisionScanner
+            # *before* the user state is frozen. Admit its exact immutable
+            # original tree, never an arbitrary new global entry.
+            scanner_base = "security/lintai/0.1.3/linux-amd64"
+            scanner_dirs = ("security/lintai", "security/lintai/0.1.3", scanner_base)
+            scanner_file = scanner_base + "/lintai"
+            expected = {".", "security", "security/assessments", "plugin-data",
+                        "plugin-data/caller-owned", "plugin-data/caller-owned/keep.txt",
+                        "security/assessments/" + current["cache"]["key"] + ".json",
+                        *scanner_dirs, scanner_file}
+            require(set(global_now) == expected)
+            root_record = global_now["."]
+            require(root_record["Kind"] == "directory" and root_record["Mode"] == 0o40700
+                    and root_record["Inode"] > 0)
+            def preexisting(row):
+                return all(row[key][0]*10**9 + row[key][1] < start
+                           for key in ("Modified", "Changed"))
+            for name in ("security", "security/assessments", "plugin-data",
+                         "plugin-data/caller-owned", *scanner_dirs):
+                row = global_now[name]
+                require(row["Kind"] == "directory" and row["Mode"] == 0o40700
+                        and row["Inode"] > 0
+                        and row["UID"] == root_record["UID"] and row["GID"] == root_record["GID"]
+                        and row["Device"] == root_record["Device"])
+                if name != "security/assessments":
+                    require(preexisting(row))
+            scanner = global_now[scanner_file]
+            require(scanner["Kind"] == "file" and scanner["Mode"] == 0o100700
+                    and scanner["Inode"] > 0 and scanner["Links"] == 1
+                    and 0 < scanner["Size"] <= 128<<20
+                    and scanner["SHA256"] == "b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba"
+                    and scanner["UID"] == root_record["UID"] and scanner["GID"] == root_record["GID"]
+                    and scanner["Device"] == root_record["Device"] and preexisting(scanner))
+            marker = global_now["plugin-data/caller-owned/keep.txt"]
+            require(marker["Kind"] == "file" and marker["Mode"] == 0o100600
+                    and marker["Links"] == 1 and marker["Size"] == len(b"CALLER_user\n")
+                    and marker["SHA256"] == sha(b"CALLER_user\n")
+                    and marker["UID"] == root_record["UID"] and marker["GID"] == root_record["GID"]
+                    and marker["Device"] == root_record["Device"] and marker["Inode"] > 0
+                    and preexisting(marker))
+        else:
+            for name,old in global_before.items():
+                now=global_now.get(name)
+                if same(old,now):continue
+                if stage in COLD and name=="security/assessments":continue
+                if name=="." and "remove" not in stage:
+                    require(now is not None and authority(old,now) and old["Size"]==now["Size"] and old["SHA256"]==now["SHA256"]=="" and times(now,start,end));continue
+                require(False)
+            new=set(global_now)-set(global_before)
+            require(new==({"security/assessments/"+current["cache"]["key"]+".json"} if stage in COLD else set()))
     if previous is None:return
     old_frames=previous["frames"]
     old_profile=old_frames[profile(paths,selected)];new_profile=frames[profile(paths,selected)]
@@ -573,12 +617,51 @@ def complete(commands,proof_rows,probes,result):
                 fault=proof_map["missing-owned-a-skill"];obj(fault,"scope path skill_sha256 started_at ended_at")
                 require(previous_end is not None and previous_end<=stamp(fault["started_at"])<=stamp(fault["ended_at"])<=start)
                 require(fault["scope"]=="a" and fault["path"]==profile(paths,"a")+"/skills/"+NAME and fault["skill_sha256"]==sha(authored(paths,"a","1.1.0")[1]))
-        for value in marker_ends.values():require(value<=start if stage not in ("add-user","add-a","add-b") else True)
+        for value in marker_ends.values():require(value<=start if stage not in ("add-a","add-b") else True)
         obj(probe["value"],"events");require(probe["stage"]==stage and stream(probe["value"]["events"])==b"")
-    require(previous-first<150*10**9 and previous-first<(result["elapsed_ms"]+1)*10**6 and total<=result["elapsed_ms"] and len(known)==4 and held["a"]["removed"] is True and held["b"]["removed"] is True and held["user"]["removed"] is False)
+    require(previous-first<150*10**9 and previous-first<(result["elapsed_ms"]+1)*10**6 and total<=result["elapsed_ms"] and len(known)==3 and held["a"]["removed"] is True and held["b"]["removed"] is True and "user" not in held)
     identities=[(v["installation"]["installation_id"],v["binding_id"],v["binding"]["physical_artifact_id"],v["data"]["data_receipt_id"]) for v in held.values()]
-    require(all(len({row[i] for row in identities})==3 for i in range(4)))
+    require(all(len({row[i] for row in identities})==2 for i in range(4)))
 
+
+
+def cache_diagnostic(value, summary, commands):
+    """Admit only typed, nonauthorizing failure evidence; never a native PASS."""
+    obj(value, "diagnostic_only accepted stage root_sha256 native_binary_sha256 started_at ended_at changed_records", "records bounded_out")
+    require(value["diagnostic_only"] is True and value["accepted"] is False
+            and summary["test_failed"] is True and summary["runtime_attempt_complete"] is False
+            and len(commands) > 0)
+    last = commands[-1]
+    stage, cmd = last["stage"], last["value"]
+    paths = _layout(summary["component_layout"])
+    require(stage == summary["attempt_stage"] == value["stage"]
+            and stage not in PUBLIC and stage != "version" and not stage.startswith("git-")
+            and value["root_sha256"] == sha((paths["root"] + "/xdg-cache/devin").encode())
+            and value["native_binary_sha256"] == "642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4"
+            and value["started_at"] == cmd["started_at"] and value["ended_at"] == cmd["ended_at"])
+    count = value["changed_records"]
+    require(type(count) is int and 1 <= count <= 4096)
+    if "bounded_out" in value:
+        require(value["bounded_out"] is True and count > 16 and "records" not in value)
+        return
+    rows = value.get("records")
+    require(count <= 16 and type(rows) is list and len(rows) == count)
+    start, end = stamp(cmd["started_at"]), stamp(cmd["ended_at"])
+    observed = set()
+    for row in rows:
+        obj(row, "key_sha256 parent_sha256 operation before after previous current within_command")
+        require(all(type(row[key]) is str and re.fullmatch(r"[0-9a-f]{64}", row[key])
+                    for key in ("key_sha256", "parent_sha256")))
+        require(row["key_sha256"] not in observed)
+        observed.add(row["key_sha256"])
+        before, after = row["before"], row["after"]
+        require(type(before) is bool and type(after) is bool and (before or after)
+                and row["operation"] == ("added" if not before else "missing" if not after else "changed"))
+        old = record(row["previous"], empty=not before)
+        now = record(row["current"], empty=not after)
+        require((not before or not after or not same(old, now))
+                and type(row["within_command"]) is bool
+                and row["within_command"] is (after and times(now, start, end)))
 
 def members(bodies,source_identity):
     try:return admit(bodies,source_identity)
@@ -589,19 +672,21 @@ def members(bodies,source_identity):
 def admit(bodies,source_identity):
     require(set(bodies)=={"runtime-attempt.json",*MEMBERS} and all(type(raw) is bytes and len(raw)<=1<<20 and not (aggregate_private(raw) if name in MEMBERS else private(raw)) for name,raw in bodies.items()) and sum(map(len,bodies.values()))<=16<<20)
     r=load(bodies["runtime-attempt.json"])
-    obj(r,"acquisition activation attempt_stage capture_mode capture_review_required client component_layout elapsed_ms fixture_authored_updater_config qualification real_model_qualified runtime_attempt_complete scanner source_identity test_failed vendor_authentication_qualified version qualification_scope cycle_command_stages cycle_proof_stages cycle_observed_complete cycle_nonce cycle_tool_pins")
+    obj(r,"acquisition activation attempt_stage capture_mode capture_review_required client component_layout elapsed_ms fixture_authored_updater_config qualification real_model_qualified runtime_attempt_complete scanner source_identity test_failed vendor_authentication_qualified version qualification_scope cycle_command_stages cycle_proof_stages cycle_observed_complete cycle_nonce cycle_tool_pins","native_cache_delta")
     require(r["client"]=="windsurf" and r["version"]=="3000.11.205" and r["capture_mode"]==MODE and r["capture_review_required"] is False and r["activation"]=="prepared" and r["vendor_authentication_qualified"] is False and r["real_model_qualified"] is False and r["qualification_scope"]==SCOPE)
     require(same(r["source_identity"],{"installer_base_commit":source_identity["source_commit"],"installer_tree":source_identity["source_tree"],"installer_source_state":"committed","installer_patch_sha256":[]}))
     done=r["runtime_attempt_complete"]
     require(type(done) is bool and type(r["test_failed"]) is bool and type(r["cycle_observed_complete"]) is bool and type(r["elapsed_ms"]) is int and 0<=r["elapsed_ms"]<=180000 and same(r["qualification"],{key:done and key in FLAGS[:2] for key in FLAGS}))
     commands,proofs,probes=[records(bodies[name],order) for name,order in zip(MEMBERS,(STAGES,PROOFS,STAGES))]
     require(r["cycle_command_stages"]==[row["stage"] for row in commands] and r["cycle_proof_stages"]==[row["stage"] for row in proofs] and len(probes)<=len(commands))
+    if "native_cache_delta" in r:
+        cache_diagnostic(r["native_cache_delta"], r, commands)
     for row in proofs:proof_wire(row["stage"],row["value"])
     for row in commands:command(row["value"])
     for row in probes:obj(row["value"],"events");require(stream(row["value"]["events"])==b"")
     if not done:
         require(r["test_failed"] is True and r["cycle_observed_complete"] is False);return r
-    require(r["test_failed"] is False and r["cycle_observed_complete"] is True and r["elapsed_ms"]<150000 and len(commands)==len(probes)==47 and len(proofs)==len(PROOFS))
+    require(r["test_failed"] is False and r["cycle_observed_complete"] is True and r["elapsed_ms"]<150000 and len(commands)==len(probes)==len(STAGES) and len(proofs)==len(PROOFS))
     complete(commands,proofs,probes,r)
     return r
 
