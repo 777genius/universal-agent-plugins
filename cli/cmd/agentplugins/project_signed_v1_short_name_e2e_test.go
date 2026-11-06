@@ -56,10 +56,11 @@ func assertSignedV1NativeMCPServers(t *testing.T, settings string, expected ...s
 	}
 	var native struct {
 		MCPServers map[string]struct {
-			URL     string   `json:"url"`
-			HTTPURL string   `json:"httpUrl"`
-			Command string   `json:"command"`
-			Args    []string `json:"args"`
+			URL     string            `json:"url"`
+			HTTPURL string            `json:"httpUrl"`
+			Command string            `json:"command"`
+			Args    []string          `json:"args"`
+			Headers map[string]string `json:"headers"`
 		} `json:"mcpServers"`
 	}
 	if err := json.Unmarshal(standard, &native); err != nil {
@@ -76,7 +77,8 @@ func assertSignedV1NativeMCPServers(t *testing.T, settings string, expected ...s
 		switch name {
 		case "foreign":
 			// Retain the foreign-owned legacy URL field, not UAP's httpUrl field.
-			if server.URL != "https://foreign.test/mcp" || server.HTTPURL != "" || server.Command != "" || len(server.Args) != 0 {
+			if server.URL != "https://foreign.test/mcp" || server.HTTPURL != "" || server.Command != "" || len(server.Args) != 0 ||
+				len(server.Headers) != 1 || server.Headers["X-Foreign-Sentinel"] != "keep" {
 				t.Fatalf("foreign native MCP server changed: %s", settings)
 			}
 		case "notion", "hubspot":
@@ -283,6 +285,21 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		return j
 	}
 	journey = configure(journey)
+	// Verify that UAP never drops unrelated foreign MCP headers while merging.
+	const foreignBefore = `"foreign":{"url":"https://foreign.test/mcp"}`
+	const foreignAfter = `"foreign":{"url":"https://foreign.test/mcp","headers":{"X-Foreign-Sentinel":"keep"}}`
+	seedForeign := func(j projectJourney) {
+		for _, root := range []string{"", j.a, j.b} {
+			path := filepath.Join(j.nativeRoot(root), "settings.json")
+			before := projectJourneyRead(t, path)
+			after := strings.Replace(before, foreignBefore, foreignAfter, 1)
+			if after == before {
+				t.Fatalf("foreign MCP sentinel missing in %q", root)
+			}
+			projectJourneyWrite(t, path, after)
+		}
+	}
+	seedForeign(journey)
 	for _, root := range []string{"", journey.a, journey.b} {
 		journey.run(t, root, "install", "marketing-kit", "--target", "gemini")
 		state := journey.state(t, root)
@@ -305,6 +322,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		}
 	}
 	fresh := configure(newProjectJourney(t, transport))
+	seedForeign(fresh)
 	for _, name := range []string{"uap.toml", "uap.lock"} {
 		projectJourneyWrite(t, filepath.Join(fresh.a, name),
 			projectJourneyRead(t, filepath.Join(journey.a, name)))
