@@ -54,11 +54,8 @@ func resolvePythonEnvironment(root string, shape PythonShape) PythonShape {
 			shape.VersionOutput = version
 			return shape
 		}
-		shape.BrokenReason = "found .venv but no runnable interpreter; recreate .venv or repair the virtualenv"
-		shape.ReadySource = PythonEnvSourceBroken
-		return shape
 	}
-	if shape.HasVenv {
+	if shape.HasVenv || shape.VenvPath != "" {
 		shape.BrokenReason = "found .venv but no runnable interpreter; recreate .venv or repair the virtualenv"
 		shape.ReadySource = PythonEnvSourceBroken
 		return shape
