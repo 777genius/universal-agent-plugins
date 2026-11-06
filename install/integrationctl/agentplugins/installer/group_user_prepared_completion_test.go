@@ -331,7 +331,6 @@ func TestUserGroupPreparedUpdateCannotHideFailureOrUnknownState(t *testing.T) {
 	}
 }
 
-
 // A real user Codex CLI without a usable listing executable reports manual
 // activation with package-only verification. That does not undo a proven file
 // Update or manufacture native Codex activation.
