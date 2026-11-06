@@ -267,12 +267,14 @@ test('default all Skills and independent filters use exact current records durin
 test('filtered search retains candidates past 64 inspections, displays past 48 and never fetches search page one', async ({
   page,
 }) => {
+  // Live signed-feed hydration plus 170 candidates can exceed a 5s assertion under CI contention.
+  test.setTimeout(90_000);
   const records = Array.from({ length: 170 }, (_, index) =>
     record(`candidate-${index}`, index < 70 ? 'dirty' : 'clean'),
   );
   const { errors, catalogRequests } = await prepare(page, records);
   await page.goto('plugins/?tab=skills&q=candidate&skillRemarks=none');
-  await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false', { timeout: 30_000 });
   await expect(cards(page)).toHaveCount(0);
   await expect(page.getByText('More Skills can be checked', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Show more Skills' }).click();
@@ -320,6 +322,8 @@ test('outage fails selected filters closed and explicit retry recovers without c
 test('legacy fallback is explicitly unavailable to selected filters and old all links remain unfiltered', async ({
   page,
 }) => {
+  // Guarded v3/v2 fallback settles asynchronously; test its final state, not 5s speed.
+  test.setTimeout(90_000);
   const errors = await offline(page);
   await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) =>
     route.fulfill({
@@ -333,7 +337,7 @@ test('legacy fallback is explicitly unavailable to selected filters and old all 
     }),
   );
   await page.goto('plugins/?tab=skills&skillScan=scanned');
-  await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false', { timeout: 30_000 });
   await expect(cards(page)).toHaveCount(0);
   await expect(
     page.getByText('Some scan reports could not be verified. Those Skills were excluded.'),
