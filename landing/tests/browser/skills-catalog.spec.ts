@@ -104,6 +104,41 @@ test('Skills search reveals install choices, copies the exact command and surviv
   ).toBeVisible();
 });
 
+
+test('Skills catalog and detail reuse the plugin scope choice and copy the project command', async ({ page, context }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', route => {
+    if (new URL(route.request().url()).pathname.endsWith('/document')) {
+      return route.fulfill({ json: { status: 'resolved', source: 'anthropics/skills',
+        markdown: '---\\nname: frontend-design\\ndescription: Design\\n---\\n# Design' } });
+    }
+    return route.fulfill({ json: { items: [skill()], page: 0, total: 1, hasMore: false,
+      view: 'popular', cache: { status: 'fresh', fetchedAt: '2026-11-06T10:00:00Z' } } });
+  });
+  await page.goto('plugins/?tab=skills&skillScan=all');
+  const card = page.locator('.skills-catalog .skill-card').first();
+  await card.getByRole('button', { name: 'Install frontend-design' }).click();
+  const scope = card.locator('.install-scope');
+  await expect(scope.getByRole('button', { name: 'This computer' })).toHaveAttribute('aria-pressed', 'true');
+  await scope.getByRole('button', { name: 'This project' }).click();
+  await expect(scope.getByRole('button', { name: 'This project' })).toHaveAttribute('aria-pressed', 'true');
+  const scopedCommand = 'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project';
+  await expect(card.locator('.command-snippet code')).toHaveText(scopedCommand);
+  await card.getByRole('button', { name: 'Copy command' }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(scopedCommand);
+  await card.getByRole('link', { name: 'frontend-design' }).click();
+  const detail = page.locator('#skill-install');
+  await expect(detail.locator('.install-scope').getByRole('button', { name: 'This project' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(detail.locator('.command-snippet code')).toHaveText(scopedCommand);
+  await detail.getByRole('tab', { name: 'Prompt' }).click();
+  await expect(detail.locator('.command-snippet code')).toContainText('--scope project');
+  await detail.locator('.install-scope').getByRole('button', { name: 'This computer' }).click();
+  await detail.getByRole('tab', { name: 'Command' }).click();
+  await expect(detail.locator('.command-snippet code')).toHaveText(scopedCommand.replace(' --scope project', ''));
+  await page.screenshot({ path: testInfo.outputPath('skills-install-scope-mobile.png'), fullPage: true });
+});
+
 test('Skills renders in 48-item increments and requests the next upstream page only after loaded items', async ({
   page,
 }) => {

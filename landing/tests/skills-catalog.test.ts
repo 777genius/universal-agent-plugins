@@ -61,6 +61,17 @@ test('Skill command preserves repository identity and exact selector without inv
   }
 });
 
+
+test('Skills user/project choice uses the same explicit CLI scope as plugins', () => {
+  assert.equal(skillInstallCommand(skill, undefined, 'user'), skillInstallCommand(skill));
+  assert.equal(skillInstallCommand(skill, undefined, 'project'),
+    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project');
+  assert.equal(skillInstallCommand(skill, ['codex', 'claude'], 'project'),
+    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --target "codex,claude" --scope project');
+  assert.equal(skillInstallCommand(skill, ['chatgpt'], 'project'), undefined);
+  assert.equal(skillInstallCommand(skill, ['codex; echo unsafe'], 'project'), undefined);
+});
+
 test(
   'portable quoting preserves Unicode names and target CSV in POSIX argv',
   { skip: process.platform === 'win32' },
