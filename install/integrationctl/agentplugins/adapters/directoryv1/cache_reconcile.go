@@ -13,8 +13,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 )
 
-// v1 and v2 use the same atomic cache reconciliation with distinct
-// authenticated verifiers, schemas and caller-selected storage paths.
+// Reconcile authenticated schema-1 bundles under a process-shared OS lock.
+// Keep a single last-known-good cache and never weaken same-sequence conflicts.
 func (cache Cache) reconcileVersion(verified VerifiedBundle, trust TrustStore, verifier cacheVerifier, schema int, persist bool) (VerifiedBundle, error) {
 	if cache.Path == "" {
 		return VerifiedBundle{}, errors.New("directory cache path is empty")
@@ -35,11 +35,6 @@ func (cache Cache) reconcileVersion(verified VerifiedBundle, trust TrustStore, v
 	}
 	defer unlock()
 	current, loadErr := cache.loadVerified(trust, verifier, schema)
-	// V2 must never overwrite a schema-1 cache accidentally reused at the
-	// same path (or replace corrupted signed authority with a fresh snapshot).
-	if schema == 2 && loadErr != nil && !errors.Is(loadErr, os.ErrNotExist) {
-		return VerifiedBundle{}, fmt.Errorf("refuse replacement of unreadable v2 cache: %w", loadErr)
-	}
 	if loadErr == nil && current.Snapshot.Sequence >= verified.Snapshot.Sequence {
 		if current.Snapshot.Sequence > verified.Snapshot.Sequence {
 			return current, nil

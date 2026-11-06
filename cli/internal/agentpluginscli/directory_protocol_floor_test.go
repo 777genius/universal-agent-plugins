@@ -16,8 +16,8 @@ func TestScopedDirectoryHighWaterMarksNeverBorrowAnotherProtocol(t *testing.T) {
 	if floor := installedDirectoryFloor(state); floor != 43 {
 		t.Fatalf("v1 floor was changed: %d", floor)
 	}
-	if floor := directoryFloorForClient(state, &directoryv1.V2Client{}); floor != 3 {
-		t.Fatalf("v2 inherited v1 floor or ignored its own receipt: %d", floor)
+	if floor := directoryFloorForClient(state, &directoryv1.Client{}); floor != 43 {
+		t.Fatalf("schema-1 client changed the v1 floor: %d", floor)
 	}
 	if floor := directoryFloorForClient(state, nil); floor != 43 {
 		t.Fatalf("default v1 client changed: %d", floor)
