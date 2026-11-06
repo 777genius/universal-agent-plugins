@@ -69,6 +69,7 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
     <RegistryDirectory :registry="registry" />
     <RegistryWhy />
     <BuiltWithSection v-if="showcaseAvailable" />
+    <RegistryClientSupport />
     <RegistryFaq :items="registryFaqItems" />
   </div>
 </template>
