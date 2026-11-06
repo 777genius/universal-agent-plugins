@@ -268,9 +268,9 @@ jobs:
   # Branch protection sees one stable gate, not two independently green partial suites.
   test:
     name: landing-test
-    if: always()
+    if: ${{ always() && !cancelled() }}
     needs: [prepare-browser, browser-shard]
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 10
     permissions:
       contents: read
