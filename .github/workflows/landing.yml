@@ -40,7 +40,7 @@ jobs:
       contents: read
       pull-requests: read
     runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-latest' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -205,6 +205,7 @@ jobs:
     permissions:
       contents: read
     strategy:
+      fail-fast: false
       matrix:
         base: ["/", "/universal-agent-plugins/"]
     env:
