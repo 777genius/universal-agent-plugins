@@ -114,6 +114,11 @@ func (c *windProjectCycle) command(t *testing.T, label string) {
 		t.Fatal("Windsurf lifecycle child failed")
 	}
 	after := w.profile(t)
+	if command.Native && label != "version" {
+		if err := c.auditNativeCache(label, start, end); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if command.Native {
 		valid := reflect.DeepEqual(before, after)
 		if label != "version" {
