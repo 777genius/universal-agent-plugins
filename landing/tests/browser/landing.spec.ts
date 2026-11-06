@@ -210,13 +210,17 @@ test('header exposes the documentation entrypoint on desktop and mobile', async 
 });
 
 
-test('header shows Demo and Plugins at laptop width and GitHub icon follows theme', async ({ page }) => {
+test('header keeps primary links at laptop width and GitHub icon follows theme', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 850 });
   await page.goto('./');
   await expect(page.locator('.app-header__nav')).toBeVisible();
   await expect(page.locator('.app-header__mobile-actions')).toBeHidden();
   const links = page.locator('.app-header__nav a');
-  await expect(links).toHaveCount(2);
+  await expect(links).toHaveCount(4);
+  await expect(links.nth(0)).toBeVisible();
+  await expect(links.nth(1)).toBeVisible();
+  await expect(links.nth(2)).toBeHidden();
+  await expect(links.nth(3)).toBeHidden();
   const github = page.locator('.app-header__github-btn');
   const colors: string[] = [];
   for (const theme of ['light', 'dark']) {
@@ -229,9 +233,17 @@ test('header shows Demo and Plugins at laptop width and GitHub icon follows them
   await links.first().click();
   await expect(page).toHaveURL(/#demo$/);
   await expect(page.locator('#demo')).toBeInViewport();
-  await links.last().click();
+  await links.nth(1).click();
   await expect(page).toHaveURL(/\/plugins\/?$/);
   await expect(page.locator('.unified-catalog')).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 850 });
+  await links.nth(2).click();
+  await expect(page).toHaveURL(/#agent-support$/);
+  await expect(page.locator('#agent-support')).toBeInViewport();
+  expect(await page.locator('#agent-support').evaluate((node) => node.getBoundingClientRect().top)).toBeGreaterThanOrEqual(64);
+  await links.nth(3).click();
+  await expect(page).toHaveURL(/#faq$/);
+  await expect(page.locator('#faq')).toBeInViewport();
 });
 
 test('homepage omits the counter when discovery cannot load', async ({ page }) => {
