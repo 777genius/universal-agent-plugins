@@ -19,6 +19,8 @@
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
+  /* Prevent blurred decorative orbs from contributing to page-wide scrolling. */
+  contain: paint;
 }
 
 /* Grid overlay */
