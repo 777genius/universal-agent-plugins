@@ -1213,19 +1213,26 @@ func TestCommaSeparatedTargetsFailCompletePreflightBeforeMutation(t *testing.T) 
 	}
 }
 
-func TestYesFlagIsNotPartOfThePublicCLI(t *testing.T) {
+func TestYesExplicitlyConfirmsOnlyTheSelectedInstallation(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
 	plugin := writeCLIPlugin(t)
-	if _, _, err := fixture.execute(true, "add", plugin, "--target", "cursor", "--yes"); err == nil || !strings.Contains(err.Error(), "unknown flag") {
-		t.Fatalf("--yes error = %v", err)
+	if _, _, err := fixture.execute(true, "add", plugin, "--target", "cursor", "--yes", "--dry-run"); err != nil {
+		t.Fatalf("explicit --yes dry run: %v", err)
 	}
 	state, err := fixture.store.Load()
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || len(state.Installations) != 0 {
+		t.Fatalf("--yes --dry-run modified state: %+v %v", state, err)
 	}
-	if len(state.Installations) != 0 {
-		t.Fatalf("rejected --yes mutated state: %+v", state)
+	if _, _, err := fixture.execute(true, "add", plugin, "--target", "cursor", "--yes"); err != nil {
+		t.Fatalf("explicit --yes must accept the preflighted target: %v", err)
+	}
+	state, err = fixture.store.Load()
+	if err != nil || len(state.Installations) != 1 {
+		t.Fatalf("explicit --yes did not install selected target: %+v %v", state, err)
+	}
+	if len(state.Installations[0].Clients) != 1 || state.Installations[0].Clients[0].ClientID != "cursor" {
+		t.Fatalf("--yes changed unselected targets: %+v", state.Installations[0].Clients)
 	}
 }
 
