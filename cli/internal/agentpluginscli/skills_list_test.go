@@ -179,15 +179,16 @@ func TestSkillsListHTTPSPublisherFailureEnvelopeAndNoLeaks(t *testing.T) {
 				t.Fatal(err)
 			}
 			var envelope struct {
-				SchemaVersion int          "json:\"schema_version\""
-				Result        string       "json:\"result\""
-				Error         AgentFailure "json:\"error\""
+				SchemaVersion int                     "json:\"schema_version\""
+				Result        string                  "json:\"result\""
+				Data          map[string]AgentFailure "json:\"data\""
 			}
 			if err := json.Unmarshal(output.Bytes(), &envelope); err != nil {
 				t.Fatal(err)
 			}
+			failure := envelope.Data["error"]
 			if envelope.SchemaVersion != 1 || envelope.Result != "failure" ||
-				envelope.Error.Code != tt.code || envelope.Error.Retryable != tt.retryable ||
+				failure.Code != tt.code || failure.Retryable != tt.retryable ||
 				strings.Contains(output.String(), "private-token-canary") {
 				t.Fatalf("unsafe HTTPS machine failure: %s", output.String())
 			}
