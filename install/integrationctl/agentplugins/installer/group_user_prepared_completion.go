@@ -57,19 +57,8 @@ func validUserPreparedGroupShape(prepared *PreparedOperation, got usecase.GroupR
 
 // completedUserPreparedTarget matches one frozen selected target to core results.
 func completedUserPreparedTarget(prepared *PreparedOperation, frozen PlanTarget, i int, target usecase.AddResult, installation domain.Installation) bool {
-	if frozen.ClientID == "" || frozen.ClientID != prepared.req.Targets[i].ClientID ||
-		frozen.ClientID != string(prepared.clients[i].ClientID) ||
-		frozen.ConfigRoot != prepared.clients[i].ConfigRoot {
-		return false
-	}
 	plan := target.Plan
-	context, err := domain.NewTargetContext(domain.ScopeUser, "", frozen.ConfigRoot)
-	if err != nil || plan.Scope != domain.ScopeUser || plan.TargetContext != context ||
-		plan.ActivePath == "" || plan.ActivePath != frozen.TargetPath || plan.PhysicalArtifactID == "" ||
-		frozen.BindingID == "" ||
-		frozen.BindingID != domain.ComputeClientBindingID(prepared.plan.InstallationID, frozen.ClientID, string(domain.ScopeUser), plan.ActivePath) ||
-		!reflect.DeepEqual(frozen.SelectedDelivery, plan.SelectedDelivery) ||
-		!domain.SameProfileAuthority(frozen.ProfileAuthority, plan.ProfileAuthority()) {
+	if !validUserPreparedTargetIdentity(prepared, frozen, i, plan) {
 		return false
 	}
 	// The immutable pre-confirmation delivery must agree with the core's
@@ -93,36 +82,31 @@ func completedUserPreparedTarget(prepared *PreparedOperation, frozen PlanTarget,
 	return true
 }
 
+// validUserPreparedTargetIdentity compares frozen user target and core plan.
+func validUserPreparedTargetIdentity(prepared *PreparedOperation, frozen PlanTarget, i int, plan domain.DeliveryPlan) bool {
+	if frozen.ClientID == "" || frozen.ClientID != prepared.req.Targets[i].ClientID ||
+		frozen.ClientID != string(prepared.clients[i].ClientID) ||
+		frozen.ConfigRoot != prepared.clients[i].ConfigRoot {
+		return false
+	}
+	context, err := domain.NewTargetContext(domain.ScopeUser, "", frozen.ConfigRoot)
+	return err == nil && plan.Scope == domain.ScopeUser && plan.TargetContext == context &&
+		plan.ActivePath != "" && plan.ActivePath == frozen.TargetPath && plan.PhysicalArtifactID != "" &&
+		frozen.BindingID != "" &&
+		frozen.BindingID == domain.ComputeClientBindingID(prepared.plan.InstallationID, frozen.ClientID, string(domain.ScopeUser), plan.ActivePath) &&
+		reflect.DeepEqual(frozen.SelectedDelivery, plan.SelectedDelivery) &&
+		domain.SameProfileAuthority(frozen.ProfileAuthority, plan.ProfileAuthority())
+}
+
 // completedUserPreparedBinding checks the loaded owned binding and data receipt.
 func completedUserPreparedBinding(frozen PlanTarget, plan domain.DeliveryPlan, outcome domain.ActivationOutcome, installation domain.Installation) bool {
 	binding, found := installation.Clients[frozen.BindingID]
-	if !found || binding.ClientBindingID != frozen.BindingID || binding.ClientID != frozen.ClientID ||
-		binding.Scope != string(domain.ScopeUser) || binding.TargetLocator != plan.ActivePath ||
-		binding.PhysicalArtifact != plan.PhysicalArtifactID ||
-		binding.ProfileNamespace != plan.ProfileNamespace() ||
-		!domain.SameProfileAuthority(binding.ProfileAuthority, plan.ProfileAuthority()) ||
-		!reflect.DeepEqual(binding.SelectedDelivery, plan.SelectedDelivery) ||
-		binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil {
+	if !found || !validUserPreparedBindingRecord(frozen, plan, binding) {
 		return false
 	}
-	// The selected Local delivery binds its exact physical profile. Historical
-	// CLI clients derive native scope from declared traits instead.
-	nativeRoot := ""
-	if authority := plan.ProfileAuthority(); authority != nil {
-		nativeRoot = authority.Facts().CanonicalRoot
-	} else if facts, ok := plan.SelectedDelivery.LocalFacts(); ok {
-		nativeRoot = facts.ProfileRoot
-	} else if plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, domain.ScopeUser).BindsNativeProfileRoot {
-		nativeRoot = plan.NativeRegistryRoot
-	}
-	if binding.NativeProfileRoot != nativeRoot ||
-		!completedUserPreparedOutcome(plan, binding, outcome) || !completedProjectLifecycle(binding, outcome) {
-		return false
-	}
-	receipt, foundReceipt := installation.DataReceipts[binding.DataReceiptID]
-	if binding.DataReceiptID == "" || !foundReceipt || receipt.DataReceiptID != binding.DataReceiptID ||
-		receipt.Scope != string(domain.ScopeUser) || receipt.Locator == "" ||
-		receipt.State != domain.DataReceiptOwned || receipt.OwnershipDigest == "" {
+	if binding.NativeProfileRoot != expectedUserNativeRoot(plan) ||
+		!completedUserPreparedOutcome(plan, binding, outcome) || !completedProjectLifecycle(binding, outcome) ||
+		!ownedUserPreparedDataReceipt(binding, installation) {
 		return false
 	}
 	for key, other := range installation.Clients {
@@ -131,6 +115,39 @@ func completedUserPreparedBinding(frozen PlanTarget, plan domain.DeliveryPlan, o
 		}
 	}
 	return true
+}
+
+// validUserPreparedBindingRecord refuses mismatched or pending saved authority.
+func validUserPreparedBindingRecord(frozen PlanTarget, plan domain.DeliveryPlan, binding domain.ClientBinding) bool {
+	return binding.ClientBindingID == frozen.BindingID && binding.ClientID == frozen.ClientID &&
+		binding.Scope == string(domain.ScopeUser) && binding.TargetLocator == plan.ActivePath &&
+		binding.PhysicalArtifact == plan.PhysicalArtifactID &&
+		binding.ProfileNamespace == plan.ProfileNamespace() &&
+		domain.SameProfileAuthority(binding.ProfileAuthority, plan.ProfileAuthority()) &&
+		reflect.DeepEqual(binding.SelectedDelivery, plan.SelectedDelivery) &&
+		binding.NativeActivationAttempt == "" && binding.PendingNativeIntent == nil
+}
+
+// expectedUserNativeRoot preserves the selected Local physical profile token.
+func expectedUserNativeRoot(plan domain.DeliveryPlan) string {
+	if authority := plan.ProfileAuthority(); authority != nil {
+		return authority.Facts().CanonicalRoot
+	}
+	if facts, ok := plan.SelectedDelivery.LocalFacts(); ok {
+		return facts.ProfileRoot
+	}
+	if plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, domain.ScopeUser).BindsNativeProfileRoot {
+		return plan.NativeRegistryRoot
+	}
+	return ""
+}
+
+// ownedUserPreparedDataReceipt rejects missing, stale or indeterminate data.
+func ownedUserPreparedDataReceipt(binding domain.ClientBinding, installation domain.Installation) bool {
+	receipt, found := installation.DataReceipts[binding.DataReceiptID]
+	return binding.DataReceiptID != "" && found && receipt.DataReceiptID == binding.DataReceiptID &&
+		receipt.Scope == string(domain.ScopeUser) && receipt.Locator != "" &&
+		receipt.State == domain.DataReceiptOwned && receipt.OwnershipDigest != ""
 }
 
 // publishedPreparedUserDelivery admits only the qualified selected Local route.
