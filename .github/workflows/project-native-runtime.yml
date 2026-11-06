@@ -9,6 +9,8 @@ on:
       - 'scripts/project_native_service.py'
       - 'scripts/project_native_collectors/**'
       - 'scripts/test_project_native_runtime.py'
+      - 'scripts/project_native_windsurf_cycle.py'
+      - 'scripts/test_project_native_windsurf_cycle.py'
       - 'repotests/agentplugins_*project_native_*test.go'
       - 'repotests/agentplugins_windsurf_cycle_*test.go'
       - 'repotests/agentplugins_windsurf_component_runtime*test.go'

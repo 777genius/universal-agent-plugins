@@ -580,6 +580,45 @@ def complete(commands,proof_rows,probes,result):
     require(all(len({row[i] for row in identities})==3 for i in range(4)))
 
 
+
+def cache_diagnostic(value, summary, commands):
+    """Admit only typed, nonauthorizing failure evidence; never a native PASS."""
+    obj(value, "diagnostic_only accepted stage root_sha256 native_binary_sha256 started_at ended_at changed_records", "records bounded_out")
+    require(value["diagnostic_only"] is True and value["accepted"] is False
+            and summary["test_failed"] is True and summary["runtime_attempt_complete"] is False
+            and len(commands) > 0)
+    last = commands[-1]
+    stage, cmd = last["stage"], last["value"]
+    paths = _layout(summary["component_layout"])
+    require(stage == summary["attempt_stage"] == value["stage"]
+            and stage not in PUBLIC and stage != "version" and not stage.startswith("git-")
+            and value["root_sha256"] == sha((paths["root"] + "/xdg-cache/devin").encode())
+            and value["native_binary_sha256"] == "642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4"
+            and value["started_at"] == cmd["started_at"] and value["ended_at"] == cmd["ended_at"])
+    count = value["changed_records"]
+    require(type(count) is int and 1 <= count <= 4096)
+    if "bounded_out" in value:
+        require(value["bounded_out"] is True and count > 16 and "records" not in value)
+        return
+    rows = value.get("records")
+    require(count <= 16 and type(rows) is list and len(rows) == count)
+    start, end = stamp(cmd["started_at"]), stamp(cmd["ended_at"])
+    observed = set()
+    for row in rows:
+        obj(row, "key_sha256 parent_sha256 operation before after previous current within_command")
+        require(all(type(row[key]) is str and re.fullmatch(r"[0-9a-f]{64}", row[key])
+                    for key in ("key_sha256", "parent_sha256")))
+        require(row["key_sha256"] not in observed)
+        observed.add(row["key_sha256"])
+        before, after = row["before"], row["after"]
+        require(type(before) is bool and type(after) is bool and (before or after)
+                and row["operation"] == ("added" if not before else "missing" if not after else "changed"))
+        old = record(row["previous"], empty=not before)
+        now = record(row["current"], empty=not after)
+        require((not before or not after or not same(old, now))
+                and type(row["within_command"]) is bool
+                and row["within_command"] is (after and times(now, start, end)))
+
 def members(bodies,source_identity):
     try:return admit(bodies,source_identity)
     except (KeyError,TypeError,AttributeError,IndexError,RecursionError,OverflowError,UnicodeError) as error:
@@ -589,13 +628,15 @@ def members(bodies,source_identity):
 def admit(bodies,source_identity):
     require(set(bodies)=={"runtime-attempt.json",*MEMBERS} and all(type(raw) is bytes and len(raw)<=1<<20 and not (aggregate_private(raw) if name in MEMBERS else private(raw)) for name,raw in bodies.items()) and sum(map(len,bodies.values()))<=16<<20)
     r=load(bodies["runtime-attempt.json"])
-    obj(r,"acquisition activation attempt_stage capture_mode capture_review_required client component_layout elapsed_ms fixture_authored_updater_config qualification real_model_qualified runtime_attempt_complete scanner source_identity test_failed vendor_authentication_qualified version qualification_scope cycle_command_stages cycle_proof_stages cycle_observed_complete cycle_nonce cycle_tool_pins")
+    obj(r,"acquisition activation attempt_stage capture_mode capture_review_required client component_layout elapsed_ms fixture_authored_updater_config qualification real_model_qualified runtime_attempt_complete scanner source_identity test_failed vendor_authentication_qualified version qualification_scope cycle_command_stages cycle_proof_stages cycle_observed_complete cycle_nonce cycle_tool_pins","native_cache_delta")
     require(r["client"]=="windsurf" and r["version"]=="3000.11.205" and r["capture_mode"]==MODE and r["capture_review_required"] is False and r["activation"]=="prepared" and r["vendor_authentication_qualified"] is False and r["real_model_qualified"] is False and r["qualification_scope"]==SCOPE)
     require(same(r["source_identity"],{"installer_base_commit":source_identity["source_commit"],"installer_tree":source_identity["source_tree"],"installer_source_state":"committed","installer_patch_sha256":[]}))
     done=r["runtime_attempt_complete"]
     require(type(done) is bool and type(r["test_failed"]) is bool and type(r["cycle_observed_complete"]) is bool and type(r["elapsed_ms"]) is int and 0<=r["elapsed_ms"]<=180000 and same(r["qualification"],{key:done and key in FLAGS[:2] for key in FLAGS}))
     commands,proofs,probes=[records(bodies[name],order) for name,order in zip(MEMBERS,(STAGES,PROOFS,STAGES))]
     require(r["cycle_command_stages"]==[row["stage"] for row in commands] and r["cycle_proof_stages"]==[row["stage"] for row in proofs] and len(probes)<=len(commands))
+    if "native_cache_delta" in r:
+        cache_diagnostic(r["native_cache_delta"], r, commands)
     for row in proofs:proof_wire(row["stage"],row["value"])
     for row in commands:command(row["value"])
     for row in probes:obj(row["value"],"events");require(stream(row["value"]["events"])==b"")
