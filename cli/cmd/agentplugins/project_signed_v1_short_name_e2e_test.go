@@ -320,6 +320,8 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		if len(journey.state(t, root).EnvironmentReceipts) != 4 {
 			t.Fatal("replay duplicated signed Directory installation")
 		}
+		replayedNative := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "settings.json"))
+		assertSignedV1NativeMCPServers(t, replayedNative, "foreign", "notion", "hubspot", "playwright")
 	}
 	fresh := configure(newProjectJourney(t, transport))
 	seedForeign(fresh)
