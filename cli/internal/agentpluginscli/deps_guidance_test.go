@@ -61,7 +61,7 @@ func TestDependencyStatusPendingRecoveryNeverSuggestsOtherMutations(t *testing.T
 	expectedFields := map[string]bool{
 		"excluded_targets": true, "scope": true, "manifest_path": true,
 		"lock_path": true, "supported_targets": true, "pending_recovery": true,
-		"facts": true,
+		"facts": true, "scope_selection_reason": true,
 	}
 	if len(decoded) != len(expectedFields) {
 		t.Fatalf("public JSON shape changed: %+v", decoded)
@@ -75,8 +75,19 @@ func TestDependencyStatusPendingRecoveryNeverSuggestsOtherMutations(t *testing.T
 	if err := json.Unmarshal([]byte(body), &restored); err != nil {
 		t.Fatal(err)
 	}
-	if restored.Scope != status.Scope || !restored.PendingRecovery || !reflect.DeepEqual(restored.Facts, status.Facts) {
+	if restored.Scope != status.Scope || !restored.PendingRecovery || len(restored.Facts) != len(status.Facts) {
 		t.Fatalf("status JSON lost original facts: %+v", restored)
+	}
+	for i := range status.Facts {
+		if !reflect.DeepEqual(restored.Facts[i].Facts, status.Facts[i].Facts) {
+			t.Fatalf("status JSON changed recorded facts: %+v", restored.Facts[i])
+		}
+		if restored.Facts[i].Readiness == "" {
+			t.Fatalf("status JSON omitted derived readiness: %+v", restored.Facts[i])
+		}
+	}
+	if restored.Facts[0].Readiness != "needs_action" || restored.Facts[1].Readiness != "needs_action" {
+		t.Fatalf("recovery guidance must not claim readiness: %+v", restored.Facts)
 	}
 }
 
