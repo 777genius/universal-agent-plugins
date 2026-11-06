@@ -81,7 +81,10 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   expect(bounds.x).toBeGreaterThan(copy.x + copy.width);
   expect(bounds.y).toBeCloseTo(installation.y, 1);
   expect(bounds.height).toBeCloseTo(installation.height, 1);
-  expect(await field.evaluate((node) => getComputedStyle(node).position)).toBe('fixed');
+  const viewportClip = page.locator('.hero-agent-field-viewport');
+  await expect(viewportClip).toHaveCSS('position', 'fixed');
+  await expect(viewportClip).toHaveCSS('overflow-x', 'clip');
+  expect(await field.evaluate((node) => getComputedStyle(node).position)).toBe('absolute');
   const sceneAnimations = await field.evaluate((node) => node.getAnimations({ subtree: true })
     .map((animation) => (animation as CSSAnimation).animationName));
   expect(sceneAnimations).toContain('agent-orbit-breathe');
