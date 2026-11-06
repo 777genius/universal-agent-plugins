@@ -520,7 +520,7 @@
       "title": "ChatGPT Desktop (محلي)",
       "description": "يستخدم فهرس إضافات Codex المحلي، وليس اتصال ChatGPT Web.",
       "command": "التثبيت لسطح المكتب",
-      "nextStep": "على macOS/Windows شغّل codex app، ثم فعّل الإضافة في Plugins > Personal. نجاح CLI لا يثبت تشغيلها في Desktop.",
+      "nextStep": "يثبّت Codex CLI الإضافة المحلية ويفعّلها تلقائياً. افتح Desktop (باستخدام codex app إن توفر)، وأعد تشغيله عند الحاجة واختبر محادثة محلية جديدة. نجاح CLI لا يثبت تشغيلها في Desktop.",
       "help": "الإعداد واستكشاف الأخطاء"
     },
     "select": {

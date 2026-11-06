@@ -28,9 +28,9 @@ func desktopPluginLink(marketplaceRoot, pluginName string) (string, error) {
 	return "codex://plugins/" + url.PathEscape(pluginName) + "?marketplacePath=" + url.QueryEscape(path), nil
 }
 
-// desktopPluginHandoff is an optional manual next step. Only an existing
-// manager-owned marketplace may be linked; this never launches the app.
-func desktopPluginHandoff(marketplaceRoot, pluginName, physicalArtifactID string, cliAvailable bool) string {
+// desktopPluginHandoff reports native CLI installation separately from Desktop use.
+// The selected Codex profile is never silently replaced with the Desktop default.
+func desktopPluginHandoff(marketplaceRoot, pluginName, physicalArtifactID string, cliInstalled bool, profileRoot string) string {
 	link, err := desktopPluginLink(marketplaceRoot, pluginName)
 	if err != nil || physicalArtifactID == "" {
 		return ""
@@ -62,16 +62,29 @@ func desktopPluginHandoff(marketplaceRoot, pluginName, physicalArtifactID string
 		document.Plugins[0].Source.Path != "./" {
 		return ""
 	}
-	launch := "Open ChatGPT Desktop directly"
-	if cliAvailable {
-		launch = "Run `codex app` on macOS/Windows or open Desktop directly"
+	launch := "Open ChatGPT Desktop directly; enable in Plugins > Personal and test a new local thread."
+	if cliInstalled {
+		launch = "Codex CLI installed and enabled the plugin; open Desktop and test a new local thread."
+		if !desktopUsesCodexProfile(profileRoot) {
+			launch = "Installed in a non-default Codex profile; Desktop may use another profile; verify before use."
+		}
 	}
 	constPrefix := "ChatGPT Desktop (optional, local): "
-	action := constPrefix + link + ". " + launch + "; enable in Plugins > Personal and verify in a new local thread. Codex CLI verification does not prove ChatGPT runtime use."
+	action := constPrefix + link + ". " + launch + " Codex CLI verification does not prove ChatGPT runtime use."
 	// The terminal sanitizes next actions to 512 runes. Refuse to print a
 	// truncated deep link (including percent-encoded long profile paths).
 	if utf8.RuneCountInString(action) > 390 {
+		if cliInstalled {
+			return constPrefix + "plugin installed via Codex CLI in the selected profile; open Desktop and verify in a new local thread (deep link omitted for a long local path). Codex CLI verification does not prove ChatGPT runtime use."
+		}
 		return constPrefix + "open ChatGPT Desktop manually, enable the plugin in Plugins > Personal and verify in a new local thread (deep link omitted for a long local path). Codex listing does not prove Desktop runtime use."
 	}
 	return action
+}
+
+// Only the ordinary user Codex profile can be treated as the Desktop candidate.
+// A custom CODEX_HOME is a valid Codex install but does not attest Desktop use.
+func desktopUsesCodexProfile(root string) bool {
+	home, err := os.UserHomeDir()
+	return err == nil && cleanAbsolute(root) && root == filepath.Join(home, ".codex")
 }

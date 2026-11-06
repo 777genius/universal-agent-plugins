@@ -12,9 +12,9 @@ ChatGPT Desktop's local Work/Codex plugin marketplace is distinct from **ChatGPT
 
    UAP selects and validates the signed distribution and performs its existing managed Codex marketplace/plugin lifecycle. The command may show authentication or other activation steps. If the Codex CLI is unavailable, UAP prints manual setup rather than claiming an automatic installation.
 4. On macOS or Windows, you can run `codex app` to open an installed ChatGPT Desktop app (or start its installer when missing). On Windows it may print a path to open. This is a user action, not performed automatically by UAP. If the CLI prints a `codex://plugins/...` link, open it **only on your own computer**. It opens the local plugin detail in Desktop, not a silent installation. If the URL handler is unavailable, open ChatGPT Desktop manually.
-5. In **Plugins > Personal**, find the plugin from the local marketplace, install or enable it as prompted, and restart ChatGPT Desktop if required. Start a new **local** Work/Codex thread and check that the plugin's Skill or MCP tools function. Complete any provider OAuth inside the client.
+5. **If the CLI verified the plugin as installed and enabled, do not install it again in Desktop.** Restart or refresh ChatGPT Desktop if needed, find the plugin in **Plugins > Personal**, and start a new **local** Work/Codex thread to test its Skill or MCP tools. If the native CLI was unavailable or its listing was inconclusive, finish installation in Desktop instead. Complete any provider OAuth inside the client.
 
-**What success means:** `codex plugin list --json` can verify local **Codex** registration and enablement. It does not prove that ChatGPT Desktop loaded the plugin, that the MCP server ran, or that the user's account completed OAuth. Desktop runtime verification requires step 5 on a real installed, signed-in app.
+**What success means:** With a supported CLI, UAP already performs the native marketplace registration, plugin installation and `codex plugin list --json` verification automatically. The installed local copy persists across CLI processes in the selected Codex profile. This is not the same as proving ChatGPT Desktop loaded the plugin, that the MCP server ran, or that OAuth completed. A custom `CODEX_HOME` may point to a profile Desktop does not use; UAP never silently rewrites another profile. Desktop runtime verification requires step 5 on a real installed, signed-in app.
 
 ## Maintain or remove
 
@@ -36,7 +36,7 @@ Follow the CLI's exact manual uninstall/confirmation instructions when requested
 
 - **No ChatGPT Desktop on this computer?** On macOS and Windows, `codex app` opens the installed app or starts the installer. Codex CLI verification alone does not prove Desktop activation; UAP does **not** auto-launch the app.
 - **No Codex CLI?** UAP can prepare an eligible package but may require installing the CLI or completing the registration in the app. Do not change files under `~/.codex` or `~/.agents` by hand to bypass ownership checks.
-- **Plugin not visible?** Confirm you are in the **local** Plugins directory, that the selected workspace/profile permits personal marketplaces, and restart the Desktop app. Use the optional generated deep link only if it refers to your own managed package.
+- **Plugin not visible?** Confirm you are in the **local** Plugins directory and that the selected workspace/profile permits personal marketplaces. Check `echo "${CODEX_HOME:-$HOME/.codex}"` and `codex plugin list --json`; a custom `CODEX_HOME` may install into a different profile. Restart Desktop if needed. Do not copy or overwrite app-owned configuration by hand. Use the optional generated deep link only if it refers to your own managed package.
 - **ChatGPT cloud remains disabled in the UAP picker?** That is intentional when no verified remote `app_binding` exists. A local Codex marketplace is **not** a cloud ChatGPT app registration.
 - **Need a project installation?** Check the plugin's separate native Codex project compatibility first. This guide covers **This computer** only. ChatGPT cloud project installs remain unsupported.
 

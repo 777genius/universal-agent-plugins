@@ -60,7 +60,7 @@ func TestDesktopPluginLinkRejectsUnsafeInputs(t *testing.T) {
 // TestDesktopHandoffRequiresExactManagedMarketplace refuses absent, foreign, or symlinked manifests.
 func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 	root := filepath.Join(tempRoot(t), "managed")
-	if got := desktopPluginHandoff(root, "stripe", "artifact", true); got != "" {
+	if got := desktopPluginHandoff(root, "stripe", "artifact", true, filepath.Join(t.TempDir(), "profile")); got != "" {
 		t.Fatalf("unprepared marketplace produced link: %q", got)
 	}
 	path := filepath.Join(root, ".agents", "plugins", "marketplace.json")
@@ -70,7 +70,7 @@ func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 	if err := os.WriteFile(path, []byte("{}"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if got := desktopPluginHandoff(root, "stripe", "artifact", true); got != "" {
+	if got := desktopPluginHandoff(root, "stripe", "artifact", true, filepath.Join(t.TempDir(), "profile")); got != "" {
 		t.Fatalf("foreign marketplace produced link: %q", got)
 	}
 	marketplace := shared.ManagedMarketplaceName("artifact")
@@ -78,13 +78,13 @@ func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 	if err := os.WriteFile(path, []byte(payload), 0600); err != nil {
 		t.Fatal(err)
 	}
-	got := desktopPluginHandoff(root, "stripe", "artifact", true)
+	got := desktopPluginHandoff(root, "stripe", "artifact", true, filepath.Join(t.TempDir(), "profile"))
 	if !strings.Contains(got, "codex://plugins/stripe?marketplacePath=") ||
-		!strings.Contains(got, "enable in Plugins > Personal") ||
+		!strings.Contains(got, "non-default Codex profile") ||
 		!strings.Contains(got, "does not prove ChatGPT runtime use") {
 		t.Fatalf("missing honest desktop guidance: %q", got)
 	}
-	if got := desktopPluginHandoff(root, "other", "artifact", true); got != "" {
+	if got := desktopPluginHandoff(root, "other", "artifact", true, filepath.Join(t.TempDir(), "profile")); got != "" {
 		t.Fatalf("foreign package received link: %q", got)
 	}
 	if err := os.Remove(path); err != nil {
@@ -98,7 +98,7 @@ func TestDesktopHandoffRequiresExactManagedMarketplace(t *testing.T) {
 		if err := os.Symlink(foreign, path); err != nil {
 			t.Fatal(err)
 		}
-		if got := desktopPluginHandoff(root, "stripe", "artifact", true); got != "" {
+		if got := desktopPluginHandoff(root, "stripe", "artifact", true, filepath.Join(t.TempDir(), "profile")); got != "" {
 			t.Fatalf("symlink marketplace received link: %q", got)
 		}
 	}
@@ -186,7 +186,7 @@ func TestDesktopHandoffRejectsOversizedLocalManifest(t *testing.T) {
 	if err := os.WriteFile(path, []byte(strings.Repeat("x", 64<<10+1)), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if action := desktopPluginHandoff(root, "stripe", "artifact", true); action != "" {
+	if action := desktopPluginHandoff(root, "stripe", "artifact", true, filepath.Join(t.TempDir(), "profile")); action != "" {
 		t.Fatalf("oversized local manifest should not produce a link: %q", action)
 	}
 }
@@ -204,8 +204,48 @@ func TestDesktopLinkLongPathFallsBackWithoutBrokenURI(t *testing.T) {
 	if err := os.WriteFile(path, []byte(document), 0600); err != nil {
 		t.Fatal(err)
 	}
-	action := desktopPluginHandoff(root, "stripe", "artifact", true)
+	action := desktopPluginHandoff(root, "stripe", "artifact", true, filepath.Join(t.TempDir(), "profile"))
 	if strings.Contains(action, "codex://") || !strings.Contains(action, "deep link omitted") || len([]rune(action)) > 390 {
 		t.Fatalf("unsafe or clipped long-path link: %q", action)
+	}
+}
+
+func TestDesktopProfileDistinguishesDefaultAndCustomCodexHome(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaultRoot := filepath.Join(home, ".codex")
+	if !desktopUsesCodexProfile(defaultRoot) {
+		t.Fatal("default local Codex profile must qualify for Desktop handoff")
+	}
+	if desktopUsesCodexProfile(filepath.Join(t.TempDir(), "other-codex")) {
+		t.Fatal("custom Codex profile must not be certified as Desktop profile")
+	}
+	if desktopUsesCodexProfile("") || desktopUsesCodexProfile("relative") {
+		t.Fatal("unsafe profile must not be certified as Desktop profile")
+	}
+}
+
+func TestDesktopDefaultProfileUsesCompletedInstallWording(t *testing.T) {
+	root := filepath.Join(tempRoot(t), "managed")
+	path := filepath.Join(root, ".agents", "plugins", "marketplace.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	payload := fmt.Sprintf(`{"name":%q,"plugins":[{"name":"demo","source":{"source":"local","path":"./"}}]}`, shared.ManagedMarketplaceName("artifact"))
+	if err := os.WriteFile(path, []byte(payload), 0600); err != nil {
+		t.Fatal(err)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	action := desktopPluginHandoff(root, "demo", "artifact", true, filepath.Join(home, ".codex"))
+	if !strings.Contains(action, "installed and enabled") || strings.Contains(action, "enable in Plugins > Personal") {
+		t.Fatalf("automatic Codex install must not require second install: %q", action)
+	}
+	if !strings.Contains(action, "does not prove ChatGPT runtime use") {
+		t.Fatalf("Desktop runtime boundary lost: %q", action)
 	}
 }

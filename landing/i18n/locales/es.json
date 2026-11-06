@@ -520,7 +520,7 @@
       "title": "ChatGPT Desktop (en tu equipo)",
       "description": "Usa el catálogo local de Codex, no la conexión de ChatGPT Web.",
       "command": "Instalar para Desktop",
-      "nextStep": "En macOS/Windows, ejecuta codex app y activa el plugin en Plugins > Personal. Que la CLI funcione no verifica Desktop.",
+      "nextStep": "Codex CLI instala y activa automáticamente el plugin local. Abre Desktop (codex app si está disponible), reinícialo si hace falta y prueba un chat local nuevo. El éxito de CLI no verifica la ejecución en Desktop.",
       "help": "Configuración y solución de problemas"
     },
     "select": {
