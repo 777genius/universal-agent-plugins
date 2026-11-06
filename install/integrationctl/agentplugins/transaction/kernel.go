@@ -164,6 +164,12 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 	for index, mutation := range group.Mutations {
 		installationIndex, client, err := validateDirectoryGroupItem(before, state, mutation, index, seenOperations, seenPaths)
 		if err != nil {
+			if len(applied) > 0 {
+				if rollbackErr := rollback(); rollbackErr != nil {
+					return nil, groupError(GroupFailureUnknown, fmt.Errorf("recheck grouped directory mutation: %w; rollback failed: %w", err, rollbackErr))
+				}
+				return nil, groupError(GroupFailureRolledBack, err)
+			}
 			return nil, err
 		}
 		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{EnvironmentID: environmentID(mutation.EnvironmentAuthority), ProfileOwners: neutralOwners(owners),
@@ -400,6 +406,12 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 	for index, removal := range group.Removals {
 		installationIndex, err := validateDirectoryRemovalGroupItem(before, removal, index, seenOperations, seenPaths)
 		if err != nil {
+			if len(applied) > 0 {
+				if rollbackErr := rollback(); rollbackErr != nil {
+					return nil, groupError(GroupFailureUnknown, fmt.Errorf("recheck grouped removal: %w; rollback failed: %w", err, rollbackErr))
+				}
+				return nil, groupError(GroupFailureRolledBack, err)
+			}
 			return nil, err
 		}
 		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{EnvironmentID: environmentID(removal.EnvironmentAuthority), ProfileOwners: neutralOwners(owners), DataReceiptID: removal.DataReceiptID, OperationID: removal.OperationID, ClientBindingID: dataBindingID(removal, owners),
