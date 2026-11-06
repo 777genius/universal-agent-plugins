@@ -54,8 +54,8 @@ para macOS, Linux ou Windows; o gerenciador nativo em si não exige Node.js.
 
 ## O que está disponível {#what-is-available}
 
-A [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
-é a versão atual do instalador nativo, publicada em 29 de outubro de 2026.
+A [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
+é a versão atual do instalador nativo.
 Ela adiciona uma API local de gerenciamento e extensões nativas do Pi no escopo
 de usuário. Consulte [gerenciamento local](./use/manage#local-management-api) e
 [compatibilidade com o Pi](./reference/client-compatibility#pi-native-extensions).

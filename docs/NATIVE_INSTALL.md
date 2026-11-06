@@ -1,8 +1,8 @@
 # Native CLI installation
 
 `agentplugins` is a Go binary. The native installation path does not require
-Node.js, Python, npm, or pip. The current verified native release is
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95).
+Node.js, Python, npm, or pip. The [latest published stable native release](https://github.com/777genius/universal-agent-plugins/releases/latest)
+is resolved automatically by the installer.
 Homebrew and npm versions may lag; check `agentplugins version` after installation.
 
 ## Homebrew on macOS and Linux
@@ -26,14 +26,14 @@ curl -fsSL https://raw.githubusercontent.com/777genius/universal-agent-plugins/m
 ```
 
 The default destination is `$HOME/.local/bin/agentplugins`. Set an explicit
-destination or version by downloading the installer first. Environment
+destination or optionally pin a version by downloading the installer first. Environment
 assignments before a pipeline are not portable to every shell, so this form is
 deliberately explicit:
 
 ```bash
 curl -fsSLo /tmp/agentplugins-install.sh \
   https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.sh
-AGENTPLUGINS_VERSION=0.1.95 AGENTPLUGINS_BIN_DIR="$HOME/bin" \
+AGENTPLUGINS_BIN_DIR="$HOME/bin" \
   sh /tmp/agentplugins-install.sh
 ```
 
@@ -44,14 +44,14 @@ irm https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/ins
 & "$HOME\.local\bin\agentplugins.exe" add context7
 ```
 
-Use the script directly for an explicit version or destination:
+Use the script directly for an explicit destination (or pass `-Version X.Y.Z`
+only when reproducing a published release):
 
 ```powershell
 Invoke-WebRequest `
   https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/install.ps1 `
   -OutFile "$env:TEMP\agentplugins-install.ps1"
 & "$env:TEMP\agentplugins-install.ps1" `
-  -Version 0.1.95 `
   -BinDir "$HOME\bin"
 ```
 
@@ -73,11 +73,17 @@ plus a standard SHA-256 utility on Unix, or PowerShell on Windows.
 
 ## Pinning and automation
 
-Use `AGENTPLUGINS_VERSION` to avoid resolving `latest`:
+Only for reproducible builds or audits, pin a **published** stable version
+from [release history](https://github.com/777genius/universal-agent-plugins/releases).
+Replace `X.Y.Z` with the verified version before running:
 
 ```bash
-AGENTPLUGINS_VERSION=0.1.95 sh ./install.sh
+VERSION="X.Y.Z"  # replace with a published release version
+AGENTPLUGINS_VERSION="$VERSION" sh ./install.sh
 ```
+
+For ordinary installation, omit `AGENTPLUGINS_VERSION` to select the latest
+published stable release.
 
 Automation can set `AGENTPLUGINS_OUTPUT_FILE`. The installer appends the exact
 version, tag, path, asset name, and verified SHA-256 as `key=value` records.

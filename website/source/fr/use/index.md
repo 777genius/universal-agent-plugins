@@ -44,7 +44,7 @@ Le [guide d’installation native](https://github.com/777genius/universal-agent-
 4. [Maintenez l’état installé](./manage) : liste, mise à jour, réparation et suppression.
 5. Au besoin, restaurez des dépendances partagées depuis `uap.toml` et `uap.lock`.
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) est l’installateur natif actuel. Il ajoute une API de gestion locale et des extensions natives Pi en portée utilisateur. Consultez [la gestion locale](./manage#local-management-api) et [la compatibilité Pi](../reference/client-compatibility#pi-native-extensions). Les versions peuvent varier selon le canal ; vérifiez `agentplugins version` et utilisez l’installateur natif pour obtenir la version vérifiée.
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) est l’installateur natif actuel. Il ajoute une API de gestion locale et des extensions natives Pi en portée utilisateur. Consultez [la gestion locale](./manage#local-management-api) et [la compatibilité Pi](../reference/client-compatibility#pi-native-extensions). Les versions peuvent varier selon le canal ; vérifiez `agentplugins version` et utilisez l’installateur natif pour obtenir la version vérifiée.
 
 La portée projet explicite est disponible depuis 0.1.93. La plupart des commandes utilisent par défaut la portée utilisateur. Depuis 0.1.94, `install` sans argument de source ni portée explicite sélectionne le projet uniquement si le dossier courant exact contient un fichier `uap.toml` ordinaire ; il ne recherche pas dans les parents. Une portée explicite reste prioritaire. Sélectionnez `--scope project` pour la maintenance d’un projet. La prise en charge des composants et l’activation dépendent du client.
 

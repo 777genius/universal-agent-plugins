@@ -51,7 +51,7 @@ brew install 777genius/agentplugins/agentplugins
 4. [Обслуживайте установленное состояние](./manage): просмотр, обновление, восстановление и удаление.
 5. При необходимости восстановите набор зависимостей по `uap.toml` и `uap.lock`.
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 — текущий нативный установщик. Он добавляет локальный API управления и нативные
 расширения Pi в пользовательской области. Подробнее:
 [локальное управление](./manage#local-management-api) и

@@ -12,12 +12,12 @@ verified once, then prepared for every agent you selected.
 
 You need Node.js 22 or newer.
 
-The verified native baseline is CLI 0.1.95. npm and Homebrew can lag behind the
-native release; check `npx universal-agent-plugins version` or
-`agentplugins version` for the channel you installed. Automatic current-directory
+The [latest stable native installer](https://github.com/777genius/universal-agent-plugins/releases/latest)
+is published independently of npm and Homebrew, which can lag. Check
+`npx universal-agent-plugins version` or `agentplugins version` for the installed channel. Automatic current-directory
 project selection requires 0.1.94. On 0.1.93, use explicit project scope instead.
-For a newer feature, install a suitable exact native version using the
-[native installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md#pinning-and-automation);
+For the latest stable native release, use the
+[native installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md);
 switching to another package manager does not by itself ensure a newer version.
 
 To use the same native Go CLI without Node.js, install it with Homebrew or the
@@ -64,8 +64,8 @@ Supported clients include Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code,
 Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code,
 and Qoder. Compatibility depends on the package, selected scope and client.
 The CLI distinguishes installed components, prepared configuration and remaining
-activation or sign-in steps. CLI 0.1.95 adds user-scope native Pi extensions;
-portable Skills and MCP projection are outside that provider's scope. Check the
+activation or sign-in steps. Native Pi extensions support user scope and
+eligible project scope; Skills and MCP have separate client-specific contracts. Check the
 installed channel version and the version-bound native evidence before use.
 
 See the [client compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
@@ -185,12 +185,12 @@ project installation. See [project installation](https://github.com/777genius/un
 ## Build plugins
 
 Create a root `plugin.json` with optional `skills/` and `mcp.json`, then validate
-and install the package. The verified 0.1.95 installer does not expose
+and install the package. The published stable installer does not expose
 `agentplugins author`. Some examples in the
 [Build guide](https://universal-agent-plugins.com/docs/en/build/) require a
 qualified authoring build or a source build. The TypeScript Management SDK is
 the separate npm package `universal-agent-plugins-management-sdk`; it drives
-the `manage` commands of CLI 0.1.95 and newer. Its
+the compatible CLI's `manage` commands. Its
 [SDK README](https://github.com/777genius/universal-agent-plugins/blob/main/sdks/typescript/README.md)
 covers engine compatibility and package checks. Pin the SDK and engine
 independently.

@@ -47,7 +47,7 @@ brew install 777genius/agentplugins/agentplugins
 4. 使用 list、update、repair 和 remove [维护安装状态](./manage)。
 5. 需要时从 `uap.toml` 和 `uap.lock` 恢复共享依赖集合。
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)是当前原生安装器，新增本地管理 API 和用户范围的 Pi 原生扩展。请参阅[本地管理](./manage#local-management-api)和[Pi 兼容性](../reference/client-compatibility#pi-native-extensions)。各分发渠道的版本可能不同，请先用 `agentplugins version` 确认；要获取已验证版本，可使用原生安装器。
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)是当前原生安装器，新增本地管理 API 和用户范围的 Pi 原生扩展。请参阅[本地管理](./manage#local-management-api)和[Pi 兼容性](../reference/client-compatibility#pi-native-extensions)。各分发渠道的版本可能不同，请先用 `agentplugins version` 确认；要获取已验证版本，可使用原生安装器。
 
 显式项目范围从 0.1.93 起可用。多数命令默认使用用户范围。自 0.1.94 起，未指定来源参数或显式范围的 `install` 仅在当前目录存在普通 `uap.toml` 文件时选择项目，不搜索父目录。显式范围优先。针对项目的维护命令应明确指定 `--scope project`。已有锁文件会在安装或修复前严格验证；只有缺少锁文件时才允许首次解析并创建。各客户端的项目组件和激活要求不同。
 

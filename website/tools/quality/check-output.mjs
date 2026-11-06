@@ -19,7 +19,7 @@ const blockTags = new Set([
 ]);
 
 export const quickstartClaims = [
-  "Use plugins", "Build plugins", "CLI 0.1.95", "explicit project scope",
+  "Use plugins", "Build plugins", "CLI", "explicit project scope",
   "source-build setup", "universal-agent-plugins", "plugin.json", "agentplugins author"
 ];
 
@@ -117,8 +117,11 @@ function staleAvailabilityErrors(text, label) {
 export function homeErrors(html) {
   const { text, commands, links, parseErrors } = documentContent(html);
   const errors = parseErrors.map((error) => `EN home page has invalid HTML: ${error}`);
-  for (const claim of ["Use plugins", "Build plugins", "Agent Plugins", "plugin.json", "CLI 0.1.95", "explicit project scope", "locked restoration"]) {
+  for (const claim of ["Use plugins", "Build plugins", "Agent Plugins", "plugin.json", "CLI", "explicit project scope", "locked restoration"]) {
     if (!text.includes(claim)) errors.push(`EN home page is missing its current installer guidance: ${claim}`);
+  }
+  if (!links.includes("https://github.com/777genius/universal-agent-plugins/releases/latest")) {
+    errors.push("EN home page must link the latest stable installer release");
   }
   if (!/current installer does not include agentplugins author/i.test(text)) {
     errors.push("EN home page must state that the current installer excludes agentplugins author");
@@ -140,6 +143,9 @@ export function quickstartErrors(html) {
   const errors = parseErrors.map((error) => `Quickstart page has invalid HTML: ${error}`);
   for (const claim of quickstartClaims) {
     if (!text.includes(claim)) errors.push(`Quickstart page is missing its current installer/source guidance: ${claim}`);
+  }
+  if (!links.includes("https://github.com/777genius/universal-agent-plugins/releases/latest")) {
+    errors.push("Quickstart must link the latest stable installer release");
   }
   if (!/current npm and native installer release does not include agentplugins author/i.test(text)) {
     errors.push("Quickstart must state that the current npm/native installer excludes agentplugins author");

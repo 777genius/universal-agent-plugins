@@ -60,8 +60,9 @@ can have separate installations in User, Project A and Project B. A denied
 Project request must not silently install into User. See the
 [client matrix](PROJECT_CLIENT_SUPPORT.md) for supported components.
 
-**Release boundary:** Published CLI 0.1.95 predates this capability.
-For that released installer, use a reviewed full-SHA direct Git source:
+**Alternative: exact Git pin.** The published stable CLI supports signed
+Directory short names in eligible Project scope. For a reproducible direct Git
+source, use the reviewed full commit SHA:
 
 ```sh
 agentplugins add github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH \

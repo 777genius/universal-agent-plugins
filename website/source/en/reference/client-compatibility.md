@@ -12,10 +12,9 @@ translationRequired: false
 
 ## Current release and scope
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95),
-the native release published on 29 October 2026, adds an owned local management
-API, read-only client/profile discovery and a user-scope native Pi extension
-provider. See [local management](../use/manage#local-management-api).
+The [currently published native CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
+provides an owned local management API, read-only client/profile discovery
+and supported native Pi extensions. See [local management](../use/manage#local-management-api).
 Package-manager channels may lag; check `agentplugins version`.
 
 Since CLI 0.1.94, an `install` without a source argument automatically selects
@@ -44,22 +43,19 @@ See [project support by client](https://github.com/777genius/universal-agent-plu
 and the [project evidence index](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
 The records below preserve exact historical releases, client versions, platform
-identities and observed limitations. They do not automatically apply to 0.1.95,
+identities and observed limitations. They do not automatically apply to the current release,
 a later client version, another scope or an untested package. UAP is independent
 community tooling; these are bounded maintainer observations, not vendor
 certification or a claim of universal production readiness.
 
 ## Pi native extensions {#pi-native-extensions}
 
-CLI 0.1.95 accepts `--target pi` for packages declaring a
+The current CLI accepts `--target pi` for packages declaring a
 [native Pi extension](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md).
-The published 0.1.95 CLI supports **user-scope** native Pi extensions. A
-[later main-source change (#631)](https://github.com/777genius/universal-agent-plugins/pull/631)
-also adds **project-scoped extension installation** under the selected
-`.pi/extensions/<artifact>`; this newer capability must not be attributed to
-0.1.95 until a later release includes it. Use an explicit project selection
-(`--scope project --project-root /path/to/workspace`) with a Pi extension
-package, then review Pi's project trust prompt and reload or restart. UAP never
+Native Pi extensions support user scope and eligible **project-scoped** installation
+under `.pi/extensions/<artifact>` (see [project E2E #631](https://github.com/777genius/universal-agent-plugins/pull/631)).
+For a project, select `--scope project --project-root /path/to/workspace`,
+then review Pi's project trust prompt and reload or restart. UAP never
 grants project trust automatically or reports a prepared extension as loaded.
 
 The [project E2E matrix](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
@@ -67,17 +63,17 @@ records real Pi v1.4.0 Linux, macOS and Windows project A/B loading, update
 and removal qualification, separate from the
 [historical user-scope Linux evidence](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md).
 
-A later source-only [Pi Skills/MCP integration (#640)](https://github.com/777genius/universal-agent-plugins/pull/640)
+The separately qualified [Pi Skills/MCP integration (#640)](https://github.com/777genius/universal-agent-plugins/pull/640)
 also manages exact owned project Skills in `.pi/skills` and individual stdio or
 Streamable HTTP server entries in `.pi/mcp.json`; user-profile and other-project
 configuration stays separate. Its pinned real Pi project E2E observes trusted
 Skill discovery and native stdio MCP `initialize`/`tools/list`. A subsequent
-[source-only native Pi `tools/call` E2E (#656)](https://github.com/777genius/universal-agent-plugins/pull/656)
+[native Pi `tools/call` E2E (#656)](https://github.com/777genius/universal-agent-plugins/pull/656)
 also proved exactly one real Pi-driven tool execution and its result on Linux,
 macOS and Windows using a local scripted model. **Neither this nor the earlier
 handshake establishes vendor-model authorization or automatic project trust.**
 UAP retains the Prepared state until a separate native observation establishes
-activation. Neither this nor #631 is included in release 0.1.95.
+activation.
 
 OpenCode has separate [V1/V2 native project lifecycle evidence (#626)](https://github.com/777genius/universal-agent-plugins/pull/626)
 and source-bound [V2 MCP handshake qualification (#638)](https://github.com/777genius/universal-agent-plugins/pull/638).

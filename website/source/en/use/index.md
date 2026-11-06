@@ -49,7 +49,7 @@ can run the same installer commands.
 4. [Maintain the installed state](./manage) with list, update, repair and removal.
 5. Restore a shared dependency set from `uap.toml` and `uap.lock` when needed.
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 is the current native installer. It adds a local management API and user-scope
 native Pi extensions. See [local management](./manage#local-management-api)
 and [Pi compatibility](../reference/client-compatibility#pi-native-extensions).
