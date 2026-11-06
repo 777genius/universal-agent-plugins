@@ -73,3 +73,13 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
     <RegistryFaq :items="registryFaqItems" />
   </div>
 </template>
+
+<style scoped>
+/* Keep decorative background orbs out of document-level scrolling while
+   preserving the client support table's own horizontal scroll region. */
+.unified-home {
+  position: relative;
+  max-width: 100%;
+  overflow-x: clip;
+}
+</style>
