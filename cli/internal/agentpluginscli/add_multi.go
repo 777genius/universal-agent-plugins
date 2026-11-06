@@ -339,7 +339,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if combined.Failed > 0 {
 		return batchActivationAggregateError(combined)
 	}
-	if app.Terminal && opts.format == "human" && len(applied.Targets) == 1 && !deferredChatGPT {
+	if app.Terminal && opts.format == "human" && !opts.yes && len(applied.Targets) == 1 && !deferredChatGPT {
 		input := inputs[0]
 		input.DryRun = false
 		input.InstallationID = applied.Targets[0].InstallationID
