@@ -1439,14 +1439,6 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         status = "cleanup-failed"
     elif failed_install_residue:
         status = "failed-install-residue"
-    elif (install_refused and target == "chatgpt" and kind == "plugin"
-          and listed["exit_code"] == 0 and not failed_install_registered
-          and "group apply preflight failed; no target was changed" in output["stderr_tail"].lower()
-          and "native identity ownership is indeterminate; refusing mutation"
-          in output["stderr_tail"].lower()):
-        # A remote ChatGPT ownership preflight refused without mutating anything.
-        # This is evidence of a safe refusal, never a native installation PASS.
-        status = "native-ownership-unverified"
     elif install_refused and host_containment_refusal(diagnostics):
         status = "host-containment-unavailable"
     elif install_refused and ("not detected" in diagnostics or "not available" in diagnostics
@@ -1462,6 +1454,15 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         status = "test-build-version-policy"
     elif install_refused and "distribution is suspended" in diagnostics:
         status = "expected-suspended-policy"
+    elif (install_refused and target == "chatgpt" and kind == "plugin"
+          and listed["exit_code"] == 0 and not failed_install_registered
+          and not changed and sentinels_preserved
+          and "group apply preflight failed; no target was changed" in output["stderr_tail"].lower()
+          and "native identity ownership is indeterminate; refusing mutation"
+          in output["stderr_tail"].lower()):
+        # The native ownership preflight refused before mutating the disposable
+        # profile. Never promote this or a source-unsupported case to native PASS.
+        status = "native-ownership-unverified"
     elif output["exit_code"] == 0:
         status = "incomplete-native-proof"
     else:

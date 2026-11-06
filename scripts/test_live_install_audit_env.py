@@ -231,6 +231,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             ("codex", 1, ownership_error, "", "install-failed"),
             ("chatgpt", 0, ownership_error, "", "incomplete-native-proof"),
             ("chatgpt", 1, "generic failure", ownership_error, "install-failed"),
+            ("chatgpt", 1, ownership_error,
+             '{"components":[{"support":"unsupported"}]}',
+             "documented-or-source-unsupported"),
         ]
         for target, exit_code, stderr, stdout, expected in cases:
             with self.subTest(target=target, exit_code=exit_code, expected=expected):
