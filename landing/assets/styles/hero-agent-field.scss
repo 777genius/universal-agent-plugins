@@ -18,6 +18,17 @@
   pointer-events: none;
   opacity: 0.55;
 }
+// The teleported fixed orbit must not expand document scrollWidth.
+// A full-width fixed clip preserves the orbit and its viewport-following drift.
+.hero-agent-field-viewport {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: clip;
+  pointer-events: none;
+  // Establish the containing block for the inner fixed-position orbit.
+  transform: translateZ(0);
+}
 .hero-agent-field--fixed {
   position: fixed;
   inset: auto;
