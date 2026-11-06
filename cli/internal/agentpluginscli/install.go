@@ -185,7 +185,7 @@ func selectInstallScope(cmd *cobra.Command, opts *options) error {
 	if err != nil {
 		return err
 	}
-	opts.scope, opts.projectRoot = "project", root
+	opts.scope, opts.projectRoot, opts.scopeInferred = "project", root, true
 	return nil
 }
 
