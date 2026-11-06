@@ -58,9 +58,17 @@ body,
 #__nuxt {
   min-height: 100%;
 }
+// Clip page-level decoration without creating a vertical scroll container.
+// Component scrollers (including the support matrix) keep their own overflow-x.
+.app-layout {
+  overflow-x: clip;
+}
 .registry-surface {
   color: var(--text);
   line-height: 1.6;
+  // Clip decorative background overflow without trapping vertical scroll or sticky content.
+  overflow-x: clip;
+  position: relative;
 }
 button,
 input,
