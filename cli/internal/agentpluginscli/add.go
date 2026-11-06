@@ -73,6 +73,9 @@ func executeAddCommand(cmd *cobra.Command, app App, opts *options, source string
 		app.chatGPTAppID = opts.chatGPTAppID
 	}
 	targetProvided := cmd.Flags().Changed("target") && strings.TrimSpace(opts.target) != ""
+	if opts.yes && !targetProvided {
+		return CLIUsageError{Code: "TARGET_REQUIRED", Message: "add --yes requires explicit --target to avoid interactive selection"}
+	}
 	if !targetProvided && app.Terminal && opts.format == "human" {
 		return executePromptedAdd(cmd, app, opts, source, activationComplete, authComplete)
 	}
