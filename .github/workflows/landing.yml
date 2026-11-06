@@ -277,6 +277,10 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/docs-tools-root/bin"
           GOBIN="${RUNNER_TEMP}/docs-tools-root/bin" go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@v1.1.0
 
+      - name: Install browser
+        working-directory: landing
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+
       - name: Prepare and validate landing
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -324,10 +328,6 @@ jobs:
       - name: Assemble and validate exact final Pages artifact
         working-directory: landing
         run: pnpm run build:pages
-
-      - name: Install browser
-        working-directory: landing
-        run: pnpm exec playwright install --with-deps --only-shell chromium
 
       - name: Serve assembled artifact at deployment base
         run: |
