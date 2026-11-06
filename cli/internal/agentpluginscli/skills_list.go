@@ -22,14 +22,14 @@ type listedSkill struct {
 }
 
 type skillsListReport struct {
-	Scope       string                    `json:"scope"`
-	ScopeSelectionReason string          `json:"scope_selection_reason"`
-	Source      string                    `json:"source"`
-	Revision    string                    `json:"revision"`
-	SourcePath  string                    `json:"source_path,omitempty"`
-	Complete    bool                      `json:"complete"`
-	Candidates  []listedSkill             `json:"candidates"`
-	Diagnostics []skillspicker.Diagnostic `json:"diagnostics"`
+	Scope                string                    `json:"scope"`
+	ScopeSelectionReason string                    `json:"scope_selection_reason"`
+	Source               string                    `json:"source"`
+	Revision             string                    `json:"revision"`
+	SourcePath           string                    `json:"source_path,omitempty"`
+	Complete             bool                      `json:"complete"`
+	Candidates           []listedSkill             `json:"candidates"`
+	Diagnostics          []skillspicker.Diagnostic `json:"diagnostics"`
 }
 
 func newSkillsListCommand(app App, opts *options) *cobra.Command {
