@@ -157,6 +157,17 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Preserve Skills scope visual QA evidence
+        if: always() && steps.browser-e2e.outcome == 'success' && steps.browser-scope.outputs.mode != 'smoke'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: skills-scope-visual-evidence
+          path: |
+            landing/test-results/**/skills-card-project-mobile.png
+            landing/test-results/**/skills-detail-project-mobile.png
+          if-no-files-found: error
+          retention-days: 7
+
       # Opt-in real public Skills API payloads exercised by the staged Pages
       # UI. The localhost-only CORS bridge passes through actual response bytes.
       - name: Verify real Skills API against staged install UI
