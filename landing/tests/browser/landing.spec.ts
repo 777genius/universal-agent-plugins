@@ -258,9 +258,13 @@ test('plugin grid defaults to three columns and five rows on desktop and stays r
   expect(rowCount).toBe(5);
   const firstCard = cards.first();
   await firstCard.scrollIntoViewIfNeeded();
-  const initialBorderColor = await firstCard.evaluate((element) => getComputedStyle(element).borderTopColor);
+  const initialBorderColor = await firstCard.evaluate(
+    (element) => getComputedStyle(element).borderTopColor,
+  );
   await firstCard.hover();
-  await expect.poll(() => firstCard.evaluate((element) => getComputedStyle(element).borderTopColor)).not.toBe(initialBorderColor);
+  await expect
+    .poll(() => firstCard.evaluate((element) => getComputedStyle(element).borderTopColor))
+    .not.toBe(initialBorderColor);
   expect(await firstCard.evaluate((element) => getComputedStyle(element).transform)).toBe('none');
   for (const [width, expected] of [[1440, 3], [1100, 3], [800, 2], [390, 1]]) {
     await page.setViewportSize({ width, height: 900 });
@@ -277,7 +281,9 @@ test('plugin grid defaults to three columns and five rows on desktop and stays r
     getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length,
   );
   expect(directoryColumns).toBe(3);
-  await expect(page.locator('.plugin-grid--plugins').first().locator(':scope > .plugin-card')).toHaveCount(15);
+  await expect(
+    page.locator('.plugin-grid--plugins').first().locator(':scope > .plugin-card'),
+  ).toHaveCount(15);
 });
 
 test('homepage omits the counter when discovery cannot load', async ({ page }) => {
