@@ -361,7 +361,15 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 			projectJourneyRead(t, filepath.Join(journey.a, name)))
 	}
 	lockBefore := projectJourneyRead(t, filepath.Join(fresh.a, "uap.lock"))
+	coldUserBefore := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(""), "settings.json"))
+	coldBBefore := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.b), "settings.json"))
 	fresh.run(t, fresh.a, "deps", "sync", "--locked", "--yes")
+	if got := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(""), "settings.json")); got != coldUserBefore {
+		t.Fatal("cold locked Project A restore changed user native settings")
+	}
+	if got := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.b), "settings.json")); got != coldBBefore {
+		t.Fatal("cold locked Project A restore changed Project B native settings")
+	}
 	if got := len(fresh.state(t, fresh.a).EnvironmentReceipts); got != 4 {
 		t.Fatalf("cold signed v1 Project lock restore omitted children: %d", got)
 	}
