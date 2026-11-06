@@ -342,6 +342,16 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.b), "settings.json")); got != bNativeBefore {
 		t.Fatal("Project A removal changed Project B native settings")
 	}
+	// Native settings and receipts are not a proxy for Skill-file isolation.
+	// Removing Project A must leave both sibling scopes' owned and foreign Skills.
+	for _, sibling := range []string{"", journey.b} {
+		if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(sibling), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
+			t.Fatalf("Project A removal changed %q Marketing Kit Skill: %q", sibling, got)
+		}
+		if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(sibling), "skills", "foreign", "SKILL.md")); got != "foreign skill\n" {
+			t.Fatalf("Project A removal changed %q foreign Skill: %q", sibling, got)
+		}
+	}
 	removedNative := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "settings.json"))
 	if !strings.Contains(removedNative, "retained foreign settings") {
 		t.Fatalf("signed Project removal damaged foreign native settings: %s", removedNative)
