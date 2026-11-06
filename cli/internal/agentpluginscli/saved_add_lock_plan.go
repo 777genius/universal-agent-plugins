@@ -155,6 +155,6 @@ func runSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targ
 	for _, target := range targets {
 		selectedTargets = append(selectedTargets, string(target))
 	}
-	opts.environmentOutput = map[string]any{"selected_targets": selectedTargets, "saved": true, "alias": alias, "manifest_path": snapshot.ManifestPath, "lock_path": snapshot.LockPath, "intent_change": !reflect.DeepEqual(snapshot.Requirements, requirements)}
+	opts.environmentOutput = map[string]any{"selected_targets": selectedTargets, "saved": true, "scope": string(app.scope()), "scope_selection_reason": scopeSelectionReason(cmd, opts), "alias": alias, "manifest_path": snapshot.ManifestPath, "lock_path": snapshot.LockPath, "intent_change": !reflect.DeepEqual(snapshot.Requirements, requirements)}
 	return runSavedEnvironment(cmd, app, opts, snapshot, requirements, locked, manifest, []string{dependencyNodeAlias(requirements, locked, alias)}, attest, selectedTargets)
 }
