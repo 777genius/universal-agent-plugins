@@ -74,7 +74,7 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 		}
 	}
 	freshInstall := planned.Activation.Activation == ""
-	if !freshInstall && opts.format == "human" && app.Terminal && !activationComplete && !authComplete {
+	if !freshInstall && opts.format == "human" && app.Terminal && !opts.yes && !activationComplete && !authComplete {
 		if err := renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false); err != nil {
 			return err
 		}
@@ -101,7 +101,7 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 	if renderErr := renderAddResultErrorWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, result, false, err); renderErr != nil && err == nil {
 		err = renderErr
 	}
-	if err == nil && freshInstall && opts.format == "human" && app.Terminal {
+	if err == nil && freshInstall && opts.format == "human" && app.Terminal && !opts.yes {
 		return resumeInteractiveLifecycle(ctx, cmd, service, input, loaded.envelope, result)
 	}
 	return err
