@@ -12,6 +12,8 @@ test.describe.configure({ mode: 'parallel' });
 for (const locale of publishedLocales) {
   for (const family of ['/', '/plugins/', '/plugins/context7/', '/agents/github-copilot-cli/', '/download/', '/create-plugin/', '/plugins/community/']) {
     test(`${locale} direct static ${family}`, async ({ page, request }) => {
+      // Root includes the full restore UI and reload; loaded CI can exceed 30 seconds.
+      if (family === '/') test.setTimeout(60_000);
       const url = `.${localizedPath(family, locale)}`;
       const response = await request.get(url);
       expect(response.status()).toBe(200);
