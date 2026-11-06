@@ -1231,7 +1231,7 @@ func TestYesExplicitlyConfirmsOnlyTheSelectedInstallation(t *testing.T) {
 	if err != nil || len(state.Installations) != 1 {
 		t.Fatalf("explicit --yes did not install selected target: %+v %v", state, err)
 	}
-	if len(state.Installations[0].Clients) != 1 || state.Installations[0].Clients[0].ClientID != "cursor" {
+	if len(state.Installations[0].Clients) != 1 || state.Installations[0].Clients["cursor"].ClientID != "cursor" {
 		t.Fatalf("--yes changed unselected targets: %+v", state.Installations[0].Clients)
 	}
 }
