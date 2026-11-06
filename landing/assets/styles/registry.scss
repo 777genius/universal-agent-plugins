@@ -58,11 +58,6 @@ body,
 #__nuxt {
   min-height: 100%;
 }
-/* Decorative background effects must not expand the page's scroll width. */
-html,
-body {
-  overflow-x: clip;
-}
 .registry-surface {
   color: var(--text);
   line-height: 1.6;
