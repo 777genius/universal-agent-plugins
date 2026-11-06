@@ -230,7 +230,10 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
   }
 }
 
-:global(.v-theme--dark) .registry-client-support__icon--contrast {
+// Keep the dark-theme contrast filter on the icon, not the application.
+// A partially global selector here filters the app and changes the containing
+// block for the fixed hero background, creating document-level overflow.
+:global(.v-theme--dark .registry-client-support__icon--contrast) {
   filter: brightness(0) invert(1);
 }
 
