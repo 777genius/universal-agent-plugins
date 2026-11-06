@@ -17,12 +17,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tailscale/hujson"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/tailscale/hujson"
 )
 
 // signedV1ProjectGitRunner trusts only the disposable fixture CA for the
