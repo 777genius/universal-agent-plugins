@@ -12,6 +12,7 @@ import (
 type addResultData struct {
 	OperationID    string                     `json:"operation_id,omitempty"`
 	Plugin         string                     `json:"plugin"`
+	Scope          string                     `json:"scope,omitempty"`
 	Version        string                     `json:"version,omitempty"`
 	Source         string                     `json:"source"`
 	Revision       string                     `json:"revision,omitempty"`
@@ -65,7 +66,7 @@ func addFailureStatus(result usecase.AddResult, commandErr error) string {
 func newAddResultData(envelope domain.PackageEnvelope, result usecase.AddResult, dryRun bool) addResultData {
 	readiness, nextActions := deriveAddReadiness(result, dryRun)
 	return addResultData{
-		OperationID: result.Receipt.OperationID, Plugin: envelope.Manifest.Name,
+		OperationID: result.Receipt.OperationID, Plugin: envelope.Manifest.Name, Scope: string(result.Plan.Scope),
 		Version: envelope.Manifest.Version, Source: publicPackageSource(envelope.Source),
 		Revision: envelope.Source.ResolvedRevision, TreeDigest: envelope.TreeDigest,
 		ManifestDigest: envelope.ManifestDigest, NextAction: nextLifecycleAction(result),
