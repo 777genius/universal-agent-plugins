@@ -1081,7 +1081,7 @@ img {
   }
 }
 
-/* Widen only the catalogs so five cards remain readable. */
+/* Keep catalog card widths comfortable without widening the rest of the site. */
 .catalog-wrap.container,
 .directory-page > .container {
   --max-width: 1480px;
