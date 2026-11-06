@@ -240,7 +240,7 @@ func requireNonInteractiveMutation(app App, opts *options, action string) error 
 	if !automatedMutation(app, opts) || strings.TrimSpace(opts.target) != "" {
 		return nil
 	}
-	return fmt.Errorf("automated %s requires --target", action)
+	return CLIUsageError{Code: "TARGET_REQUIRED", Message: fmt.Sprintf("automated %s requires --target", action)}
 }
 
 // automatedMutation identifies invocations where prompting is unavailable or
