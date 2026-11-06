@@ -149,10 +149,16 @@ for confirmation and recovery behavior.
 
 ## Install for one project
 
-Explicit project scope ships in CLI 0.1.93. Signed Directory v1 aliases such
-as `context7` are **user-only**; use an eligible reviewed catalog entry's exact
-commit-pinned Git source or another verified complete package source for project
-scope. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA`, `PACKAGE_PATH` and
+Explicit project scope ships in CLI 0.1.93. The published stable CLI
+accepts signed Directory v1 short names such as `context7` for eligible project
+clients and all mandatory dependencies. Preview the plan before applying:
+
+```bash
+npx universal-agent-plugins add context7 --target codex --scope project --project-root /path/to/project --dry-run
+```
+
+For reproducibility, an alternative is a reviewed exact commit-pinned Git
+source. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA`, `PACKAGE_PATH` and
 `/path/to/project` with real values (omit `//PACKAGE_PATH` for a root package),
 select only compatible installed clients, then restore the recorded lock.
 The command below demonstrates an existing historical GitLab commit, **not a
