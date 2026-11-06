@@ -36,7 +36,7 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 
 [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) में स्पष्ट प्रोजेक्ट स्कोप और 0.1.94 में आया स्वचालित `install` चयन उपलब्ध रहता है। इसमें [लोकल मैनेजमेंट API](../use/manage#local-management-api) और [Pi के नेटिव एक्सटेंशन](../reference/client-compatibility#pi-native-extensions) भी जोड़े गए हैं। प्रोजेक्ट में पैकेज जोड़ने का पूर्वावलोकन देखें:
 
-संगत और समीक्षा की गई कैटलॉग प्रविष्टि के लिए पूरा commit SHA वाला Git स्रोत और उपयुक्त एजेंट चुनें। Directory v1 के `context7` जैसे उपनाम केवल user scope में मान्य हैं। `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` और `PACKAGE_PATH` बदलें; पैकेज रिपॉज़िटरी की जड़ में हो तो `//PACKAGE_PATH` हटाएँ।
+संगत और समीक्षा की गई कैटलॉग प्रविष्टि के लिए पूरा commit SHA वाला Git स्रोत और उपयुक्त एजेंट चुनें। प्रकाशित CLI 0.1.95 में Project के लिए अभी यह पिन किया हुआ Git स्रोत आवश्यक है। वर्तमान `main` से बनी CLI योग्य क्लाइंट और सभी आवश्यक निर्भरताओं के लिए हस्ताक्षरित Directory के छोटे नामों के साथ `--scope project` समर्थित करती है (जैसे `agentplugins add context7 --target codex --scope project --dry-run`), लेकिन यह सुविधा अभी सार्वजनिक CLI रिलीज़ में नहीं है। `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` और `PACKAGE_PATH` बदलें; पैकेज रिपॉज़िटरी की जड़ में हो तो `//PACKAGE_PATH` हटाएँ।
 
 टेम्पलेट: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`। नीचे दिया कमांड GitLab के वास्तविक ऐतिहासिक कमिट का उदाहरण है; इसका अर्थ यह नहीं कि वह संस्करण अभी कैटलॉग में समीक्षित है। नई स्थापना के लिए कैटलॉग से मौजूदा समीक्षित स्रोत लें।
 
