@@ -76,4 +76,9 @@ test('dark agent icon contrast never filters the app or breaks the fixed orbit',
   await expect(app).toHaveClass(/v-theme--light/);
   await expect(app).toHaveCSS('filter', 'none');
   await expect(monochromeIcon).toHaveCSS('filter', 'none');
+  // Both themes must leave the page horizontally contained on phones.
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
 });
