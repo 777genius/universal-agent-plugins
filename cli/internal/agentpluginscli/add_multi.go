@@ -212,7 +212,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		}
 		return renderAddMultiResult(cmd, opts, combined, loaded.envelope)
 	}
-	if needsInstallConfirmation {
+	if needsInstallConfirmation && !opts.yes {
 		accepted, err := confirmInstall(ctx, cmd, app, loaded, humanAddGroupPlans(combined.Targets))
 		if err != nil {
 			return err
