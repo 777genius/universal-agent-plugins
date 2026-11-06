@@ -32,7 +32,7 @@ test('all authoring messages compile and distinguish installer, source tools and
     }
     assert.ok(rendered.versions.includes('universal-agent-plugins'), locale);
     assert.ok(rendered.versions.includes('agentplugins-v*'), locale);
-    for (const fact of ['0.1.95', 'agentplugins author', '0.1.65'])
+    for (const fact of ['GitHub Releases', 'agentplugins author', '0.1.65'])
       assert.ok(rendered.releaseScope.includes(fact), `${locale}:${fact}`);
     assert.doesNotMatch(rendered.releaseScope, /E2E|production-ready/i, locale);
     assert.doesNotMatch(rendered.releaseScope, /plugin-kit-ai|PyPI|pipx/i, locale);
@@ -58,7 +58,8 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
     assert.ok(copy.standard.includes('plugin.json'));
     assert.doesNotMatch(copy.releaseScope, /plugin-kit-ai|PyPI|pipx|1\.2\.4/i);
     assert.ok(copy.versions.includes('agentplugins-v*'));
-    assert.ok(copy.versions.includes('0.1.95'));
+    assert.ok(copy.versions.includes('GitHub Releases'));
+    assert.doesNotMatch(copy.versions, /CLI 0\.1\.95/);
     assert.ok(copy.releaseScope.includes('0.1.65'));
     assert.ok(copy.releaseScope.includes('agentplugins author'));
     assert.equal(Object.hasOwn(copy, 'history'), false);
@@ -100,7 +101,7 @@ test('quickstarts use released installer commands and link source authoring sepa
     assert.ok(text.includes('canonicalId: "page:guide:quickstart"'));
     assert.match(publishedText, /^description: .*Agent Plugins 1\.0.*$/m);
     assert.doesNotMatch(publishedText, /^description: .*plugin-kit-ai.*$/m);
-    for (const fact of ['universal-agent-plugins', 'agentplugins-v0.1.95', '0.1.94', 'agentplugins author'])
+    for (const fact of ['universal-agent-plugins', 'releases/latest', '0.1.94', 'agentplugins author'])
       assert.ok(publishedText.includes(fact), `${locale}:${fact}`);
     assert.ok(publishedText.includes('../build/#build-from-source'), locale);
     assert.doesNotMatch(publishedText, /plugin-kit-ai|PyPI|pipx|historical-v1/i);
@@ -127,7 +128,7 @@ test('quickstarts use released installer commands and link source authoring sepa
   }
 });
 
-test('project examples keep public CLI pins and clearly label source-only Directory aliases', () => {
+test('project examples preserve full-SHA reproducibility and released signed Directory alternatives', () => {
   const paths = [
     'README.md',
     'npm/agentplugins/README.md',
@@ -143,27 +144,24 @@ test('project examples keep public CLI pins and clearly label source-only Direct
       (chunk.startsWith('sh\n') || chunk.startsWith('bash\n')) && chunk.includes('--scope project'));
     assert.ok(projectBlocks.length, path + ': missing project command');
     if (path === 'README.md') {
-      // Only the source-built current-main example may use a short Project selector.
-      // The public 0.1.95 binary still needs a reviewed, immutable Git source.
-      assert.match(source, /exact Git source from the\s*\[catalog\]/,
-        'README template must require a reviewed catalog source');
+      assert.ok(source.includes('**Alternative: exact Git source.**'),
+        'README must distinguish the reviewed immutable Git alternative');
       assert.ok(source.includes('full 40-character commit SHA'),
         'README template must require an immutable commit');
-      assert.match(source, /In a CLI built from current `main`:/,
-        'README must identify unreleased source behavior');
-      assert.match(source, /\*\*Published CLI 0\.1\.95\*\* predates PR #725/,
-        'README must identify the public CLI release boundary');
+      assert.ok(source.includes('In the published stable CLI:'),
+        'README must identify released signed Project short-name capability');
+      assert.doesNotMatch(source, /Published CLI 0\.1\.95|predates PR #725/);
       assert.ok(projectBlocks.some((chunk) =>
         chunk.includes('github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH')),
         'README must show the released full-SHA fallback');
       assert.equal(projectBlocks.filter((chunk) => chunk.includes('add context7')).length, 1,
-        'README may show exactly one explicitly source-built Project alias');
+        'README must show exactly one supported Project alias example');
     } else {
       assert.ok(projectBlocks.some((chunk) =>
         chunk.includes('github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab')),
         path + ': missing released pinned project source');
-      assert.ok(projectBlocks.every((chunk) => !chunk.includes('add context7')),
-        path + ': unreleased Project alias offered in published CLI examples');
+      assert.ok(source.includes('agentplugins add context7 --target codex --scope project --dry-run'),
+        path + ': missing released signed Directory Project example');
     }
   }
 });
