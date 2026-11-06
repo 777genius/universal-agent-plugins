@@ -162,4 +162,3 @@ func renderSkillsList(cmd *cobra.Command, opts *options, report skillsListReport
 	}
 	return nil
 }
-

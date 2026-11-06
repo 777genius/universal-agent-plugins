@@ -32,9 +32,9 @@ func TestAgentMachineFailuresAreSanitizedAndTyped(t *testing.T) {
 				t.Fatal(err)
 			}
 			var response struct {
-				SchemaVersion int `json:"schema_version"`
-				Result string `json:"result"`
-				Data struct {
+				SchemaVersion int    `json:"schema_version"`
+				Result        string `json:"result"`
+				Data          struct {
 					Error AgentFailure `json:"error"`
 				} `json:"data"`
 			}

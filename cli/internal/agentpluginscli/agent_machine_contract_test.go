@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 )
 

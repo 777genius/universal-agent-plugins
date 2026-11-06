@@ -17,7 +17,7 @@ type AgentAction struct {
 
 // CLIUsageError carries a fixed safe diagnostic without re-parsing stderr.
 type CLIUsageError struct {
-	Code string
+	Code    string
 	Message string
 }
 

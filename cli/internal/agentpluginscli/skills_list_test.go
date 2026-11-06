@@ -11,7 +11,7 @@ func TestSkillsListIsDeterministicAndReadOnly(t *testing.T) {
 	journey, _, _ := skillsFullFlowFixture(t)
 	before := savedJourneyTree(t, journey.cli.app.DependenciesRoot)
 	var first string
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		out, _, err := journey.cli.execute(false, "skills", "list", "acme/skills", "--format", "json")
 		if err != nil {
 			t.Fatalf("source listing: %v", err)
@@ -61,7 +61,9 @@ func TestSkillsListExactFolderAndInvalidSelectors(t *testing.T) {
 	if err != nil || !strings.Contains(out, `"path":"engineering/review"`) {
 		t.Fatalf("exact listing: %v %s", err, out)
 	}
-	var response struct{ Data skillsListReport `json:"data"` }
+	var response struct {
+		Data skillsListReport `json:"data"`
+	}
 	if err := json.Unmarshal([]byte(out), &response); err != nil || len(response.Data.Candidates) != 1 {
 		t.Fatalf("exact folder listing: %v %s", err, out)
 	}
