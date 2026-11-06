@@ -28,7 +28,7 @@ func authorizeSecurityAssessment(cmd *cobra.Command, app App, opts *options, loa
 	assessment := *loaded.security
 	if opts.format == "human" {
 		writer := cmd.OutOrStdout()
-		if app.Terminal && assessment.Counts.Blocking > 0 && !opts.dryRun && !opts.acceptSecurityRisk {
+		if app.Terminal && assessment.Counts.Blocking > 0 && !opts.dryRun && !opts.acceptSecurityRisk && !opts.yes {
 			var err error
 			writer, err = promptio.VisibleOutput(writer, cmd.ErrOrStderr())
 			if err != nil {
