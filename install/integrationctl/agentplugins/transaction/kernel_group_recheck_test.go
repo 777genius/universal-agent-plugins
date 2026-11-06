@@ -172,3 +172,69 @@ func TestDirectoryGroupRecheckRollbackFailureRemainsRecoverable(t *testing.T) {
 		t.Fatalf("restart left directory journals: %+v, %v", open, err)
 	}
 }
+// A failed rollback after a removal recheck leaves an unresolved physical
+// journal. A fresh recovery must restore the removed directory from backup.
+func TestDirectoryRemovalGroupRecheckRollbackFailureRemainsRecoverable(t *testing.T) {
+	kernel, mutation, store := transactionFixture(t, "recheck-remove-unknown-one")
+	first := DirectoryRemoval{
+		OperationID: mutation.OperationID, InstallationID: mutation.InstallationID,
+		ClientBindingID: mutation.ClientBindingID, Sequence: 1,
+		OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath,
+		Verify: verifyTransactionBody("old"),
+	}
+	second := first
+	second.OperationID = "recheck-remove-unknown-two"
+	second.Sequence = 2
+	second.ActivePath = filepath.Join(mutation.OwnedBase, "second-remove")
+	second.Verify = nil
+	group := DirectoryRemovalGroup{
+		OperationGroupID: "recheck-remove-unknown-group",
+		DesiredState:     mutation.DesiredState,
+		Removals:         []DirectoryRemoval{first, second},
+	}
+	verifyFirst := group.Removals[0].Verify
+	verifyCalls := 0
+	group.Removals[0].Verify = func(ctx context.Context, active string) error {
+		verifyCalls++
+		if err := verifyFirst(ctx, active); err != nil {
+			return err
+		}
+		if verifyCalls == 2 {
+			group.Removals[1].Sequence = 0
+		}
+		return nil
+	}
+	interrupted := errors.New("removal rollback interrupted")
+	kernel.Directory.Fault = func(phase string) error {
+		if phase == dirswap.PhaseRollbackPending {
+			return interrupted
+		}
+		return nil
+	}
+	receipts, err := kernel.RemoveDirectoryGroup(context.Background(), group)
+	if verifyCalls < 2 || len(receipts) != 0 || !errors.Is(err, interrupted) || FailurePhase(err) != GroupFailureUnknown {
+		t.Fatalf("interrupted removal rollback = calls=%d receipts=%+v phase=%q err=%v", verifyCalls, receipts, FailurePhase(err), err)
+	}
+	open, err := kernel.Directory.ListOpen()
+	if err != nil || len(open) != 1 || open[0].Phase != dirswap.PhaseRollbackPending {
+		t.Fatalf("interrupted removal rollback lost recovery journal: %+v, %v", open, err)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(onlyClient(state.Installations[0]).Receipts) != 0 {
+		t.Fatal("ambiguous removal rollback persisted a receipt")
+	}
+
+	restarted := kernel
+	restarted.Directory.Fault = nil
+	if err := restarted.Recover(context.Background()); err != nil {
+		t.Fatalf("restart recovery after removal: %v", err)
+	}
+	assertTransactionBody(t, mutation.ActivePath, "old")
+	open, err = restarted.Directory.ListOpen()
+	if err != nil || len(open) != 0 {
+		t.Fatalf("restart left removal journals: %+v, %v", open, err)
+	}
+}
