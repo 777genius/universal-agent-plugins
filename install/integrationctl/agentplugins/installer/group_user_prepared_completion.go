@@ -210,7 +210,6 @@ func completedUserPreparedOutcome(plan domain.DeliveryPlan, binding domain.Clien
 	return true
 }
 
-
 // completedUserManualFileOutcome permits verified CLI file completion while
 // preserving the pending manual activation state and next actions.
 func completedUserManualFileOutcome(plan domain.DeliveryPlan, outcome domain.ActivationOutcome) bool {
