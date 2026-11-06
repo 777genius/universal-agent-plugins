@@ -253,7 +253,11 @@ export function useSkillsCatalog(
     scanOverview,
     searchTooShort,
     showMore,
-    // A newly published report must be evaluated from page zero, not an exhausted queue.
-    retry: () => load(false, true),
+    // Evidence filters must re-evaluate page zero after publication changes.
+    // Unfiltered pagination retries keep previously displayed results.
+    retry: () => load(
+      !requiresReport.value && Boolean(metadata.value || items.value.length),
+      true,
+    ),
   };
 }
