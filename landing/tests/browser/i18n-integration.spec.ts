@@ -15,7 +15,8 @@ for (const locale of publishedLocales) {
       // Root includes the full restore UI and reload; loaded CI can exceed 30 seconds.
       if (family === '/') test.setTimeout(60_000);
       const url = `.${localizedPath(family, locale)}`;
-      const response = await request.get(url);
+      // Retry one transient localhost connection reset without relaxing the HTTP/content assertions.
+      const response = await request.get(url, { maxRetries: 1 });
       expect(response.status()).toBe(200);
       expect(response.headers()['content-type']).toContain('text/html');
       expect(await response.text()).toContain(`lang="${locale}"`);
