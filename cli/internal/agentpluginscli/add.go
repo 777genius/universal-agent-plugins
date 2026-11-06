@@ -81,7 +81,7 @@ func executeAddCommand(cmd *cobra.Command, app App, opts *options, source string
 		return err
 	}
 	if len(targets) == 0 {
-		return fmt.Errorf("automated installation requires --target")
+		return CLIUsageError{Code: "TARGET_REQUIRED", Message: "automated installation requires --target"}
 	}
 	return runAddManyWithClients(cmd.Context(), cmd, app, opts, source, targets, activationComplete, authComplete, nil)
 }
