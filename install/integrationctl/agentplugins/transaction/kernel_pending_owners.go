@@ -99,26 +99,35 @@ func physicalJournalOwners(journal dirswap.Receipt) ([]domain.PhysicalProfileOwn
 func (kernel Kernel) collectPendingBindingOwners(ctx context.Context, state domain.StateFileV2, open []dirswap.Receipt, add func([]domain.PhysicalProfileOwner) error) error {
 	for _, installation := range state.Installations {
 		for key, binding := range installation.Clients {
-			for _, receipt := range binding.Receipts {
-				if receipt.Phase != ReceiptPhaseStateCommitted {
-					continue
-				}
-				if err := kernel.checkPendingBindingReceipt(ctx, installation.InstallationID, key, binding, receipt, add); err != nil {
-					return err
-				}
+			if err := kernel.collectPendingBindingOwner(ctx, installation.InstallationID, key, binding, open, add); err != nil {
+				return err
 			}
-			for _, journal := range open {
-				if journal.ClientBindingID == key {
-					if err := kernel.checkPendingBindingJournal(ctx, installation.InstallationID, key, binding, journal); err != nil {
-						return err
-					}
-				}
+		}
+	}
+	return nil
+}
+
+// Check each binding's durable receipts before its journals and native intent.
+// Keep this order: the first inconsistent owner must stop recovery.
+func (kernel Kernel) collectPendingBindingOwner(ctx context.Context, installationID, key string, binding domain.ClientBinding, open []dirswap.Receipt, add func([]domain.PhysicalProfileOwner) error) error {
+	for _, receipt := range binding.Receipts {
+		if receipt.Phase != ReceiptPhaseStateCommitted {
+			continue
+		}
+		if err := kernel.checkPendingBindingReceipt(ctx, installationID, key, binding, receipt, add); err != nil {
+			return err
+		}
+	}
+	for _, journal := range open {
+		if journal.ClientBindingID == key {
+			if err := kernel.checkPendingBindingJournal(ctx, installationID, key, binding, journal); err != nil {
+				return err
 			}
-			if binding.PendingNativeIntent != nil || binding.NativeActivationAttempt != "" {
-				if err := kernel.checkPendingNativeBinding(ctx, installation.InstallationID, key, binding, add); err != nil {
-					return err
-				}
-			}
+		}
+	}
+	if binding.PendingNativeIntent != nil || binding.NativeActivationAttempt != "" {
+		if err := kernel.checkPendingNativeBinding(ctx, installationID, key, binding, add); err != nil {
+			return err
 		}
 	}
 	return nil
