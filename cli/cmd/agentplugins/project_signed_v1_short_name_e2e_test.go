@@ -22,6 +22,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/tailscale/hujson"
 )
 
 // signedV1ProjectGitRunner trusts only the disposable fixture CA for the
@@ -42,6 +43,30 @@ func (runner signedV1ProjectGitRunner) Run(ctx context.Context, command sourceac
 		}
 	}
 	return runner.delegate.Run(ctx, command)
+}
+
+// Validate the exact native MCP keyset rather than merely finding server names
+// in URLs, comments or unrelated settings. Gemini allows JSONC comments.
+func assertSignedV1NativeMCPServers(t *testing.T, settings string, expected ...string) {
+	t.Helper()
+	standard, err := hujson.Standardize([]byte(settings))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var native struct {
+		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(standard, &native); err != nil {
+		t.Fatal(err)
+	}
+	if len(native.MCPServers) != len(expected) {
+		t.Fatalf("native MCP server keys do not match %v: %s", expected, settings)
+	}
+	for _, name := range expected {
+		if _, ok := native.MCPServers[name]; !ok {
+			t.Fatalf("native MCP server %q missing: %s", name, settings)
+		}
+	}
 }
 
 // Real v1 Ed25519 reader, signed short names, Git acquisition, Cobra, receipts,
@@ -245,11 +270,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 			}
 		}
 		native := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "settings.json"))
-		for _, server := range []string{"notion", "hubspot", "playwright", "foreign.test"} {
-			if !strings.Contains(native, server) {
-				t.Fatalf("%q native settings lost %s: %s", root, server, native)
-			}
-		}
+		assertSignedV1NativeMCPServers(t, native, "foreign", "notion", "hubspot", "playwright")
 		if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
 			t.Fatalf("%q native Marketing Kit Skill differs from the signed source: %q", root, got)
 		}
@@ -272,11 +293,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		t.Fatal("cold locked restore rewrote the exact signed dependency lock")
 	}
 	coldNative := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.a), "settings.json"))
-	for _, server := range []string{"notion", "hubspot", "playwright", "foreign.test"} {
-		if !strings.Contains(coldNative, server) {
-			t.Fatalf("cold signed v1 restore omitted native MCP server %s: %s", server, coldNative)
-		}
-	}
+	assertSignedV1NativeMCPServers(t, coldNative, "foreign", "notion", "hubspot", "playwright")
 	if got := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.a), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
 		t.Fatalf("cold signed v1 restore omitted or changed native Marketing Kit Skill: %q", got)
 	}
@@ -304,11 +321,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 	if !strings.Contains(removedNative, "foreign.test") || !strings.Contains(removedNative, "retained foreign settings") {
 		t.Fatalf("signed Project removal damaged foreign native settings: %s", removedNative)
 	}
-	for _, server := range []string{"notion", "hubspot", "playwright"} {
-		if strings.Contains(removedNative, "\""+server+"\"") {
-			t.Fatalf("signed Project removal left owned MCP server %s: %s", server, removedNative)
-		}
-	}
+	assertSignedV1NativeMCPServers(t, removedNative, "foreign")
 	projectJourneyAbsent(t, filepath.Join(journey.nativeRoot(journey.a), "skills", "campaign-planning"))
 	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "skills", "foreign", "SKILL.md")); got != "foreign skill\n" {
 		t.Fatal("signed Project removal changed a foreign native Skill")
