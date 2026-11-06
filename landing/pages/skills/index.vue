@@ -124,7 +124,8 @@ function saveChoice() {
   }, allowedTargets);
 }
 function updateTargets(values: string[]) {
-  const next = values.filter((value) => allowedTargets.includes(value));
+  const supported = new Set<string>(allowedTargets);
+  const next = values.filter((value) => supported.has(value));
   if (next.length) {
     targets.value = next;
     saveChoice();
