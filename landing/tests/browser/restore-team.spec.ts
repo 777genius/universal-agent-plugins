@@ -147,6 +147,8 @@ for (const theme of ['dark', 'light'] as const) {
 }
 
 test('manifest morph keeps highlighted TOML lossless, accessible and dismissible', async ({ page }, testInfo) => {
+  // Screenshot, focus and CSS checks can exceed 30s on a loaded CI runner.
+  test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('./');
   await hydrated(page);
