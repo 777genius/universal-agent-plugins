@@ -520,7 +520,7 @@
       "title": "ChatGPT Desktop (локально)",
       "description": "Використовується локальний каталог Codex, а не підключення ChatGPT Web.",
       "command": "Встановити для Desktop",
-      "nextStep": "На macOS/Windows запустіть codex app, потім увімкніть плагін у Plugins > Personal. Успіх CLI не підтверджує роботу в Desktop.",
+      "nextStep": "Codex CLI автоматично встановлює та вмикає локальний плагін. Відкрийте Desktop (за наявності — через codex app), за потреби перезапустіть і перевірте новий локальний чат. Успіх CLI не підтверджує роботу Desktop.",
       "help": "Налаштування та усунення проблем"
     },
     "select": {

@@ -520,7 +520,7 @@
       "title": "ChatGPT Desktop (लोकल)",
       "description": "Codex का लोकल प्लगइन कैटलॉग इस्तेमाल होता है, ChatGPT Web कनेक्शन नहीं।",
       "command": "Desktop के लिए इंस्टॉल करें",
-      "nextStep": "macOS/Windows पर codex app चलाएँ, फिर Plugins > Personal में प्लगइन चालू करें। CLI की सफलता Desktop रनटाइम का प्रमाण नहीं है।",
+      "nextStep": "Codex CLI लोकल प्लगइन को अपने आप इंस्टॉल और चालू करता है। Desktop खोलें (उपलब्ध हो तो codex app), ज़रूरत पड़ने पर रीस्टार्ट करें और नई लोकल चैट जाँचें। CLI की सफलता Desktop रनटाइम का प्रमाण नहीं है।",
       "help": "सेटअप और समस्या समाधान"
     },
     "select": {
