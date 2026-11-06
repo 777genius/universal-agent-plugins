@@ -344,7 +344,7 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 			request.Operation = operation[0]
 		}
 	}
-	selection, err := domain.ResolveDirectory(bundle.Snapshot, request)
+	selection, err := selectDirectorySourceForPlacement(bundle.Snapshot, request)
 	if err != nil {
 		return loadedPackage{}, err
 	}

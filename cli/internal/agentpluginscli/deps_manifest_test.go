@@ -90,6 +90,34 @@ func TestDependencyShortDirectoryNameUsesExactReleaseAndOnlyAssignedTargets(t *t
 	}
 }
 
+// Signed v1 root and child aliases share the same project placement rule.
+// A superseded release is still refused for a fresh project install.
+func TestDependencyShortDirectoryNameProjectPlacementKeepsSignedSource(t *testing.T) {
+	fixture := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCodex}, nil)
+	fixture.cli.app.Scope = domain.ScopeProject
+	requirements := environment.Requirements{
+		SchemaVersion: 1,
+		Dependencies: map[string]environment.Requirement{
+			"docs": {Alias: "docs", Registry: &environment.RegistrySource{
+				Distribution: "rollout-demo",
+				Selector:     environment.Selector{Kind: environment.SelectorRelease, Value: "1"},
+			}},
+		},
+		Targets: map[string][]string{"codex": {"docs"}},
+	}
+	canonical, err := fixture.cli.app.canonicalizeDependencyRequirements(context.Background(), requirements)
+	if err != nil || canonical.Dependencies["docs"].Registry.Distribution != "owner/rollout" {
+		t.Fatalf("project short-name source: %+v %v", canonical, err)
+	}
+	// Canonicalization mutates the RegistrySource pointer; restore the short
+	// selector so the second call must check the signed Directory again.
+	requirements.Dependencies["docs"].Registry.Distribution = "rollout-demo"
+	requirements.Dependencies["docs"].Registry.Selector.Value = "2"
+	if _, err := fixture.cli.app.canonicalizeDependencyRequirements(context.Background(), requirements); !errors.Is(err, domain.ErrDirectoryIneligible) {
+		t.Fatalf("project admitted superseded signed release: %v", err)
+	}
+}
+
 func TestDependencyDirectoryRepairUsesInstalledReceiptNotLockEligibility(t *testing.T) {
 	fixture := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCodex}, []domain.ClientID{domain.ClientCodex})
 	loaded, err := fixture.cli.app.acquireLocal(context.Background(), fixture.v1.root)

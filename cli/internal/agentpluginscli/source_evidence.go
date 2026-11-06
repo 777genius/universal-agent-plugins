@@ -99,37 +99,16 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 	if len(scopes) > 0 && scopes[0] != "" {
 		scope = scopes[0]
 	}
-	ids := append([]string(nil), policy.CurrentEvidence...)
-	if schema == 2 {
-		for _, target := range policy.Targets {
-			if target.Scope == scope {
-				ids = append(ids, target.CurrentEvidence...)
-			}
-		}
-	}
+	current := directoryCurrentEvidenceForScope(bundle, policy, schema, scope)
 	compatibility := make(map[string]domain.CatalogCompatibility, len(policy.Targets))
-	current := currentDirectoryEvidence(bundle.Snapshot.Sequence, bundle.Snapshot.Evidence, ids, schema)
 	for _, target := range policy.Targets {
-		if schema == 2 && target.Scope != scope {
-			continue // Never let another scope overwrite the selected client report.
-		}
-		capabilities, _ := clientplanner.Capabilities(target.Client)
-		packageMode, _ := stableCatalogPackageMode(capabilities.PackageMode)
-		applicable := make([]domain.DirectoryEvidence, 0, len(current))
-		for _, evidence := range current {
-			if directoryTrustedReportEvidence(evidence, bundle.Snapshot.Sequence, schema) &&
-				directoryEvidenceApplies(evidence, selection, target.Client, environment, scope) &&
-				directoryEvidenceMatchesCanonicalClosure(schema, target, evidence) {
-				applicable = append(applicable, evidence)
-			}
-		}
-		entry := domain.CatalogCompatibility{Package: packageMode, Verification: directoryVerification(applicable), Authentication: target.Authentication, Evidence: applicable, EvidenceOutcomes: directoryEvidenceOutcomes(applicable)}
-		appBinding, err := directoryCatalogAppBinding(loaded.envelope, target.AppBinding)
+		entry, err := directoryCompatibilityForTarget(loaded.envelope, bundle, selection, target, environment, current, schema, scope)
 		if err != nil {
 			return err
 		}
-		entry.AppBinding = appBinding
-		compatibility[string(target.Client)] = entry
+		if entry != nil {
+			compatibility[string(target.Client)] = *entry
+		}
 	}
 	loaded.hints.Compatibility = cloneCatalogCompatibility(compatibility)
 	loaded.envelope.CatalogEvidence = &domain.CatalogEvidence{
@@ -139,6 +118,65 @@ func applyDirectoryCompatibility(loaded *loadedPackage, bundle directoryv1.Verif
 		CurrentEvidence: append([]domain.DirectoryEvidence(nil), current...),
 	}
 	return nil
+}
+
+// directoryCurrentEvidenceForScope keeps the verified source evidence but
+// never promotes schema-1 User runtime observations into a Project report.
+func directoryCurrentEvidenceForScope(bundle directoryv1.VerifiedBundle, policy domain.DirectoryReleasePolicy, schema int, scope domain.InstallScope) []domain.DirectoryEvidence {
+	ids := append([]string(nil), policy.CurrentEvidence...)
+	if schema == 2 {
+		for _, target := range policy.Targets {
+			if target.Scope == scope {
+				ids = append(ids, target.CurrentEvidence...)
+			}
+		}
+	}
+	current := currentDirectoryEvidence(bundle.Snapshot.Sequence, bundle.Snapshot.Evidence, ids, schema)
+	if schema != 1 || scope != domain.ScopeProject {
+		return current
+	}
+	scoped := make([]domain.DirectoryEvidence, 0, len(current))
+	for _, evidence := range current {
+		if evidence.Level == "schema" {
+			scoped = append(scoped, evidence)
+		}
+	}
+	return scoped
+}
+
+// directoryCompatibilityForTarget creates one scoped report from already
+// authenticated evidence; a User grant never qualifies Project execution.
+func directoryCompatibilityForTarget(envelope domain.PackageEnvelope, bundle directoryv1.VerifiedBundle, selection domain.DirectorySelection, target domain.DirectoryTarget, environment directoryEvidenceEnvironment, current []domain.DirectoryEvidence, schema int, scope domain.InstallScope) (*domain.CatalogCompatibility, error) {
+	if schema == 1 && scope == domain.ScopeProject {
+		definition, ok := domain.ClientDefinitionFor(target.Client)
+		if !ok || !definition.ProjectPolicy.Valid() {
+			return nil, nil
+		}
+	}
+	if schema == 2 && target.Scope != scope {
+		return nil, nil
+	}
+	capabilities, _ := clientplanner.Capabilities(target.Client)
+	packageMode, _ := stableCatalogPackageMode(capabilities.PackageMode)
+	applicable := make([]domain.DirectoryEvidence, 0, len(current))
+	for _, evidence := range current {
+		if directoryTrustedReportEvidence(evidence, bundle.Snapshot.Sequence, schema) &&
+			directoryEvidenceApplies(evidence, selection, target.Client, environment, scope) &&
+			directoryEvidenceMatchesCanonicalClosure(schema, target, evidence) {
+			applicable = append(applicable, evidence)
+		}
+	}
+	authentication := target.Authentication
+	if schema == 1 && scope == domain.ScopeProject {
+		authentication = domain.AuthenticationRequirementUnknown
+	}
+	entry := domain.CatalogCompatibility{Package: packageMode, Verification: directoryVerification(applicable), Authentication: authentication, Evidence: applicable, EvidenceOutcomes: directoryEvidenceOutcomes(applicable)}
+	appBinding, err := directoryCatalogAppBinding(envelope, target.AppBinding)
+	if err != nil {
+		return nil, err
+	}
+	entry.AppBinding = appBinding
+	return &entry, nil
 }
 
 // A runtime call proves the exact signed closure it exercised, not another
