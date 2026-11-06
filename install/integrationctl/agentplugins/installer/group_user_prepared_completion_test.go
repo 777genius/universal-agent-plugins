@@ -412,6 +412,7 @@ func TestUserGroupPreparedUpdateManualCodexCannotBorrowUnprovenFileCompletion(t 
 	}
 }
 
+// TestUserGroupPreparedUpdateRepeatedIdenticalFrozenDeliveries proves identical repeated snapshots complete only verified files.
 func TestUserGroupPreparedUpdateRepeatedIdenticalFrozenDeliveries(t *testing.T) {
 	f := newUserPreparedUpdateFixture(t)
 	setUserGroupManualCodex(&f)
@@ -429,6 +430,7 @@ func TestUserGroupPreparedUpdateRepeatedIdenticalFrozenDeliveries(t *testing.T) 
 	}
 }
 
+// TestUserGroupPreparedUpdateConflictingRepeatedFrozenDeliveryFailsClosed refuses conflicting repeats for either client.
 func TestUserGroupPreparedUpdateConflictingRepeatedFrozenDeliveryFailsClosed(t *testing.T) {
 	for _, clientID := range []domain.ClientID{domain.ClientCodex, domain.ClientVSCode} {
 		t.Run(string(clientID), func(t *testing.T) {
