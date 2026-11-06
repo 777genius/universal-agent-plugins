@@ -95,10 +95,13 @@ available in released CLI 0.1.93+.
 - `deps status` continues to report exact manifest/lock paths, ownership,
   receipts, `facts` and excluded clients. A stored receipt is not proof that
   a native model can use a freshly started MCP tool.
-- Errors originating before a command has emitted a JSON response are
-  sanitized into a single failure envelope in real CLI execution. Existing
-  command-specific structured failures keep their original fields. Raw
-  provider output is never a machine-readable authorization decision.
+- New typed CLI usage/selection errors originating before a command has
+  emitted JSON use a sanitized failure envelope. **Legacy native/runtime
+  refusal paths** (including repeated removal of an absent installation)
+  deliberately retain their existing nonzero exit code, empty stdout and exact
+  stderr for backwards compatibility. Existing command-specific structured
+  failures keep their original fields. Raw provider output is never machine
+  authorization.
 
 ## Scope is a safety input
 
