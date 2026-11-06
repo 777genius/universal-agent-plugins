@@ -248,6 +248,31 @@ func TestInspectPythonBrokenVenvBlocksManagerProbe(t *testing.T) {
 	}
 }
 
+func TestResolvePythonEnvironmentBrokenVenvWithoutInterpreter(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".venv"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	original := RunCommand
+	RunCommand = func(dir, name string, args ...string) (string, error) {
+		t.Fatalf("unexpected manager probe: %s %v", name, args)
+		return "", exec.ErrNotFound
+	}
+	t.Cleanup(func() { RunCommand = original })
+
+	shape := resolvePythonEnvironment(root, PythonShape{
+		Manager:          PythonManagerPoetry,
+		ManagerAvailable: true,
+	})
+	if !shape.HasVenv || shape.VenvPath != "" || shape.ReadySource != PythonEnvSourceBroken {
+		t.Fatalf("broken virtualenv was not preserved: %+v", shape)
+	}
+	if shape.ProbeAttempted || shape.BrokenReason == "" {
+		t.Fatalf("broken virtualenv must block manager probing: %+v", shape)
+	}
+}
+
 func TestInspectNodeTypeScriptOutDirDetection(t *testing.T) {
 	root := t.TempDir()
 	writeRuntimeCheckFile(t, root, filepath.Join("plugin", "plugin.yaml"), minimalManifest("demo"))
