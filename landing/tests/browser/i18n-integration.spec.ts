@@ -104,6 +104,8 @@ for (const target of ['ru', 'uk'] as const)
   for (const width of [390, 1440]) {
     test(`${target} navigation preserves query/hash and browser history at ${width}px`, async ({ page, baseURL }) => {
       test.skip(!(publishedLocales as readonly KnownLocale[]).includes(target), 'Production publishes EN only; full transition gate activates with reviewed locales');
+      // Full keyboard, focus and back/forward navigation can exceed the default timeout on CI.
+      test.setTimeout(60_000);
       await page.setViewportSize({ width, height: 900 });
       const suffix = '?q=context7&tag=one&tag=two&extra=kept#catalog';
       const initialUrl = new URL(`./plugins/${suffix}`, baseURL!).href;
