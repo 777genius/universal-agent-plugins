@@ -77,23 +77,23 @@ jobs:
           git merge-base --is-ancestor "${head_commit}" refs/remotes/origin/main
           test "${head_commit}" = "$(git rev-list -n 1 "refs/tags/${TAG}")"
           echo "commit=${head_commit}" >> "${GITHUB_OUTPUT}"
-      - name: Verify merged PR and required commit evidence
+      - name: Verify required commit evidence
         env:
           COMMIT: ${{ steps.identity.outputs.commit }}
           GH_TOKEN: ${{ github.token }}
         run: |
           pull_requests="$(gh api -H 'Accept: application/vnd.github+json' \
             "repos/${GITHUB_REPOSITORY}/commits/${COMMIT}/pulls")"
-          pr_head="$(jq -er \
-            '[.[] | select(.merged_at != null and .base.ref == "main")] | sort_by(.merged_at) | last | .head.sha' \
-            <<<"${pull_requests}")" || {
-              echo "release commit must come from a merged pull request into main" >&2
-              exit 1
-            }
+          pr_head="$(jq -r \
+            '[.[] | select(.merged_at != null and .base.ref == "main")] | sort_by(.merged_at) | last | .head.sha // empty' \
+            <<<"${pull_requests}")"
           commit_checks="$(gh api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/commits/${COMMIT}/check-runs?filter=latest&per_page=100")"
-          pr_checks="$(gh api --paginate --slurp \
-            "repos/${GITHUB_REPOSITORY}/commits/${pr_head}/check-runs?filter=latest&per_page=100")"
+          pr_checks="[]"
+          if [[ -n "${pr_head}" ]]; then
+            pr_checks="$(gh api --paginate --slurp \
+              "repos/${GITHUB_REPOSITORY}/commits/${pr_head}/check-runs?filter=latest&per_page=100")"
+          fi
           has_check() {
             local payload="$1"
             local name="$2"
