@@ -96,6 +96,7 @@ func TestDependencyAndRawSkillReadinessDoNotAssumeNativeUse(t *testing.T) {
 		{nil, "ready"},
 		{[]string{"activation_prepared"}, "needs_action"},
 		{[]string{"auth_pending"}, "needs_action"},
+		{[]string{"pending_recovery"}, "needs_action"},
 		{[]string{"auth_failed"}, "failed"},
 		{[]string{"store_mismatch"}, "failed"},
 		{[]string{"manifest_missing"}, "unknown"},
