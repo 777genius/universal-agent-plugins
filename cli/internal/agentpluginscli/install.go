@@ -204,9 +204,9 @@ func installLockedOnly(lockPath string, explicit bool) (bool, error) {
 }
 
 type installSelection struct {
-	Scope        string `json:"scope"`
+	Scope                string `json:"scope"`
 	ScopeSelectionReason string `json:"scope_selection_reason"`
-	ProjectRoot  string `json:"project_root,omitempty"`
-	ManifestPath string `json:"manifest_path"`
-	LockPath     string `json:"lock_path"`
+	ProjectRoot          string `json:"project_root,omitempty"`
+	ManifestPath         string `json:"manifest_path"`
+	LockPath             string `json:"lock_path"`
 }
