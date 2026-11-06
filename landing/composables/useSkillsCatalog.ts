@@ -253,10 +253,7 @@ export function useSkillsCatalog(
     scanOverview,
     searchTooShort,
     showMore,
-    retry: () => load(
-      Boolean(metadata.value || items.value.length) &&
-        (!requiresReport.value || Boolean(scanOverview.value)),
-      true,
-    ),
+    // A newly published report must be evaluated from page zero, not an exhausted queue.
+    retry: () => load(false, true),
   };
 }
