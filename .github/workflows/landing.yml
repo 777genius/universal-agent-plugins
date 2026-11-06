@@ -98,6 +98,15 @@ jobs:
           pnpm run check:i18n
           pnpm run generate
 
+      - name: Preserve social preview for visual review
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0 # v7.0.0
+        with:
+          name: social-preview-1200x630
+          path: landing/public/og-image.png
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Stage the GitHub Pages base path
         working-directory: landing
         run: |
