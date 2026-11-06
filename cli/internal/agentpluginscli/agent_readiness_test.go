@@ -51,6 +51,25 @@ func TestAgentMachineFailuresAreSanitizedAndTyped(t *testing.T) {
 	}
 }
 
+// Native command contracts intentionally keep empty stdout on repeated
+// removal and other pre-existing runtime refusals; typed usage is new.
+func TestMachineFailureOutputIsOptInForNewTypedErrors(t *testing.T) {
+	for _, test := range []struct {
+		err  error
+		want bool
+	}{
+		{CLIUsageError{Code: "TARGET_REQUIRED", Message: "select --target"}, true},
+		{skillsSelectionError{Code: "SKILL_NOT_FOUND", Message: "choose an exact Skill"}, true},
+		{errors.New("installation \"native-proof\" was not found"), false},
+		{errors.New("plugin is not installed for target \"codex\" in user scope; no target was changed"), false},
+		{installer.ErrRecoveryRequired, false},
+	} {
+		if got := ShouldWriteAgentFailure(test.err); got != test.want {
+			t.Fatalf("%v: eligibility %v, want %v", test.err, got, test.want)
+		}
+	}
+}
+
 func TestDerivedAgentReadinessDoesNotPromoteAttestations(t *testing.T) {
 	ready := usecase.AddResult{Mutated: true, Activation: domain.ActivationOutcome{
 		Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired,
