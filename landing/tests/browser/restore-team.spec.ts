@@ -50,7 +50,7 @@ for (const theme of ['dark', 'light'] as const) {
           await expect(section.locator('.registry-restore__subtitle')).toContainText(locale === 'en' ? 'Global-only' : '');
           await expect(section.locator('.registry-restore__qualification')).toBeVisible();
           if (locale === 'en') {
-            await expect(section.locator('.registry-restore__qualification')).toContainText('0.1.95');
+            await expect(section.locator('.registry-restore__qualification')).toContainText('not yet available for Project');
             for (const dependency of ['Notion', 'HubSpot', 'Playwright']) {
               await expect(section.locator('.registry-restore__qualification')).toContainText(dependency);
             }
