@@ -330,3 +330,84 @@ func TestUserGroupPreparedUpdateCannotHideFailureOrUnknownState(t *testing.T) {
 		}
 	}
 }
+
+// A real user Codex CLI without a usable listing executable reports manual
+// activation with package-only verification. That does not undo a proven file
+// Update or manufacture native Codex activation.
+func setUserGroupManualCodex(f *userPreparedUpdateFixture) {
+	outcome := &f.got.Targets[0].Activation
+	outcome.Activation = domain.ActivationManual
+	outcome.Verification = domain.VerificationPackageValid
+	outcome.UserActions = []string{"install the prepared plugin in Codex Plugins"}
+	f.changeBinding(domain.ClientCodex, func(b *domain.ClientBinding) {
+		b.Activation = outcome.Activation
+		b.Verification = outcome.Verification
+	})
+}
+
+func TestUserGroupPreparedUpdateManualCodexFileCompletion(t *testing.T) {
+	f := newUserPreparedUpdateFixture(t)
+	setUserGroupManualCodex(&f)
+	result, err := f.finish(nil, nil)
+	if err != nil || result.Outcome != OutcomeCompleted || !result.Mutated || result.NoChange ||
+		len(result.Targets) != 2 {
+		t.Fatalf("proved user file Update was not completed: %+v %v", result, err)
+	}
+	if len(result.ManualActions) != 2 ||
+		result.ManualActions[0] != "install the prepared plugin in Codex Plugins" ||
+		result.ManualActions[1] != "TEST Local reload; activation not attested" {
+		t.Fatalf("manual Codex or Local next actions lost: %v", result.ManualActions)
+	}
+	if result.Targets[0].Activation != string(domain.ActivationManual) ||
+		result.Targets[0].Verification != string(domain.VerificationPackageValid) ||
+		result.Targets[1].Activation != string(domain.ActivationPrepared) ||
+		result.Targets[1].Verification != string(domain.VerificationPackageValid) {
+		t.Fatalf("manual Codex or prepared Local was falsely activated: %+v", result.Targets)
+	}
+}
+
+func TestUserGroupPreparedUpdateManualCodexCannotBorrowUnprovenFileCompletion(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(*userPreparedUpdateFixture)
+	}{
+		{"missing manual action", func(f *userPreparedUpdateFixture) {
+			f.got.Targets[0].Activation.UserActions = nil
+		}},
+		{"package verification missing", func(f *userPreparedUpdateFixture) {
+			f.got.Targets[0].Activation.Verification = domain.VerificationNotRun
+		}},
+		{"manual activation attested", func(f *userPreparedUpdateFixture) {
+			f.got.Targets[0].Activation.ActivationAttested = true
+		}},
+		{"manual authentication attested", func(f *userPreparedUpdateFixture) {
+			f.got.Targets[0].Activation.AuthenticationAttested = true
+		}},
+		{"unknown native effect", func(f *userPreparedUpdateFixture) {
+			f.got.Targets[0].Activation.NativeEffect = domain.NativeEffectUncertain
+		}},
+		{"blocked policy", func(f *userPreparedUpdateFixture) {
+			f.got.Targets[0].Activation.Policy = domain.PolicyBlocked
+		}},
+		{"saved Codex not manual", func(f *userPreparedUpdateFixture) {
+			f.changeBinding(domain.ClientCodex, func(b *domain.ClientBinding) {
+				b.Activation = domain.ActivationActive
+			})
+		}},
+		{"unresolved native attempt", func(f *userPreparedUpdateFixture) {
+			f.changeBinding(domain.ClientCodex, func(b *domain.ClientBinding) {
+				b.NativeActivationAttempt = "unreconciled"
+			})
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newUserPreparedUpdateFixture(t)
+			setUserGroupManualCodex(&f)
+			tc.change(&f)
+			result, err := f.finish(nil, nil)
+			if err == nil || result.Outcome != OutcomeIncomplete || !result.Mutated || result.NoChange {
+				t.Fatalf("unproven manual Codex file completion accepted: %+v %v", result, err)
+			}
+		})
+	}
+}
