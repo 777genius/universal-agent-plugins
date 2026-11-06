@@ -226,7 +226,7 @@ test('F1 actual page composable emits based default OG and preserves absolute cu
     );
     assert.equal(
       meta.ogImage.value,
-      image?.url || 'https://example.test/universal-agent-plugins/og-image.png',
+      image?.url || 'https://example.test/universal-agent-plugins/og-image.png?v=20261106',
     );
     assert.equal(meta.twitterImage.value, meta.ogImage.value);
   }
