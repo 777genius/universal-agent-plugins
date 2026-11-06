@@ -108,8 +108,8 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 }
 
 func confirmPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, planned usecase.AddResult, freshInstall, needsInstallConfirmation bool) (bool, error) {
-	confirmed := mutationConfirmed(app, opts) && !needsInstallConfirmation
-	if needsInstallConfirmation {
+	confirmed := mutationConfirmed(app, opts) && (!needsInstallConfirmation || opts.yes)
+	if needsInstallConfirmation && !opts.yes {
 		return confirmInstall(ctx, cmd, app, loaded, []usecase.AddResult{planned})
 	}
 	if confirmed || opts.format != "human" || !app.Terminal {
