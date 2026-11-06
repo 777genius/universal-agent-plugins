@@ -552,7 +552,9 @@ try {
           evidence.page_errors.push({ locale, width, message: message.text() });
       });
       page.on('response', (response) => {
-        if (!response.url().includes('/reports/skillspector/')) return;
+        // The separately signed cohort uses /cohort/v1/, not the immutable v3 shard namespace.
+        // Its Ed25519/digest/expiry checks run above; do not misclassify it as v3.
+        if (!response.url().includes('/reports/skillspector/v3/')) return;
         const check = (async () => {
           assert.equal(response.status(), 200, response.url());
           const part = response.url().split('/reports/skillspector/v3/')[1];
