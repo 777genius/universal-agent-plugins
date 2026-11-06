@@ -137,7 +137,7 @@ func httpsSkillsContextFailure(err error) CLIUsageError {
 		return usage
 	}
 	return CLIUsageError{
-		Code: "COMMAND_FAILED",
+		Code:    "COMMAND_FAILED",
 		Message: "Local Skills context cannot be validated; inspect --scope and --project-root before trying the publisher",
 	}
 }

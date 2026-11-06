@@ -218,7 +218,7 @@ func TestSkillsListHTTPSPublisherRejectsInvalidSelectorsAndUnavailableAdapter(t 
 func TestHTTPSListingLocalContextFailureDoesNotBlamePublisher(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		err error
+		err  error
 		want string
 	}{
 		{name: "untyped project policy", err: errors.New("private-token-canary: project scope is invalid"), want: "COMMAND_FAILED"},
