@@ -208,7 +208,7 @@ func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context
 		id := domain.ClientID(action.ClientID)
 		client, ok := adapter.detected[id]
 		if !ok || (action.Action != environment.ActionRemove && (client.Status != domain.DetectionDetected || client.DetectionError != nil)) {
-			return fmt.Errorf("target %s is not detected; nothing was changed", action.ClientID)
+			return fmt.Errorf("target %s is not detected; nothing was changed: %w", action.ClientID, installer.ErrTargetFactsUnavailable)
 		}
 		if action.Action == environment.ActionInstall || action.Action == environment.ActionUpdate || action.Action == "repair" {
 			targets = append(targets, id)
