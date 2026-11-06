@@ -31,8 +31,8 @@ func TestDirectoryGroupPreflightsEveryItemBeforePhysicalEffects(t *testing.T) {
 			kernel.Directory.Fault = func(string) error { physicalEffects++; return nil }
 			_, err := kernel.ApplyDirectoryGroup(context.Background(), DirectoryGroup{
 				OperationGroupID: "preflight-group",
-				DesiredState: first.DesiredState,
-				Mutations: []DirectoryMutation{first, second},
+				DesiredState:     first.DesiredState,
+				Mutations:        []DirectoryMutation{first, second},
 			})
 			if err == nil {
 				t.Fatal("invalid member was accepted")
