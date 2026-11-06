@@ -23,6 +23,7 @@ type listedSkill struct {
 
 type skillsListReport struct {
 	Scope       string                    `json:"scope"`
+	ScopeSelectionReason string          `json:"scope_selection_reason"`
 	Source      string                    `json:"source"`
 	Revision    string                    `json:"revision"`
 	SourcePath  string                    `json:"source_path,omitempty"`
@@ -124,6 +125,7 @@ func listHTTPSPublisherSkills(cmd *cobra.Command, app App, opts *options, input 
 }
 
 func renderSkillsList(cmd *cobra.Command, opts *options, report skillsListReport) error {
+	report.ScopeSelectionReason = scopeSelectionReason(cmd, opts)
 	sort.Slice(report.Candidates, func(i, j int) bool {
 		if report.Candidates[i].Path == report.Candidates[j].Path {
 			return report.Candidates[i].Name < report.Candidates[j].Name
