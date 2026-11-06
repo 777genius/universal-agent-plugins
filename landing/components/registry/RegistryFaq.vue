@@ -11,7 +11,7 @@ function toggle(index: number) {
 </script>
 
 <template>
-  <section id="faq" class="registry-faq container" aria-labelledby="faq-title" data-scroll-reveal>
+  <section id="faq" class="registry-faq container anchor-offset" aria-labelledby="faq-title" data-scroll-reveal>
     <div class="section-heading section-heading--center">
       <p class="eyebrow">{{ t('shell.faq.eyebrow') }}</p>
       <h2 id="faq-title">{{ t('shell.faq.title') }}</h2>

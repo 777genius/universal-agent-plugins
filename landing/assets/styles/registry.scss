@@ -58,6 +58,11 @@ body,
 #__nuxt {
   min-height: 100%;
 }
+:root:has(.unified-home) {
+  /* Prevent decoration and the wide Skills support table from scrolling the page.
+     The support table keeps its own keyboard-accessible horizontal scroll. */
+  overflow-x: clip;
+}
 .registry-surface {
   color: var(--text);
   line-height: 1.6;
@@ -1081,6 +1086,11 @@ img {
   }
 }
 
+/* Widen only the catalogs so five cards remain readable. */
+.catalog-wrap.container,
+.directory-page > .container {
+  --max-width: 1480px;
+}
 .catalog-wrap {
   padding-block: 90px;
 }
@@ -1931,6 +1941,9 @@ img {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
   gap: 12px;
+}
+.plugin-grid--plugins {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 .plugin-card {
   position: relative;
@@ -3063,6 +3076,12 @@ img {
 }
 .error-page .button {
   margin-top: 20px;
+}
+
+@media (max-width: 1279px) {
+  .plugin-grid--plugins {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 980px) {

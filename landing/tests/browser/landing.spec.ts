@@ -184,9 +184,11 @@ test('header exposes the documentation entrypoint on desktop and mobile', async 
   await expect(language.locator('.language-switcher__name')).toHaveCount(0);
   await expect(language.locator('.language-switcher__flag-icon')).toBeVisible();
   const nav = page.locator('.app-header__nav a');
-  await expect(nav).toHaveText(['Demo', 'Plugins']);
-  await expect(nav.first()).toHaveAttribute('href', /#demo$/);
-  await expect(nav.last()).toHaveAttribute('href', /\/plugins\/$/);
+  await expect(nav).toHaveText(['VIDEO', 'Plugins', 'Supported agents', 'FAQ']);
+  await expect(nav.nth(0)).toHaveAttribute('href', /#demo$/);
+  await expect(nav.nth(1)).toHaveAttribute('href', /\/plugins\/$/);
+  await expect(nav.nth(2)).toHaveAttribute('href', /#agent-support$/);
+  await expect(nav.nth(3)).toHaveAttribute('href', /#faq$/);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Open navigation menu' }).click();
@@ -199,19 +201,25 @@ test('header exposes the documentation entrypoint on desktop and mobile', async 
     'https://777genius.github.io/universal-agent-plugins/docs/en/',
   );
   const mobileMenu = page.getByRole('dialog', { name: 'Navigation menu' });
-  await expect(mobileMenu.getByRole('link', { name: 'Demo', exact: true })).toHaveAttribute('href', /#demo$/);
+  await expect(mobileMenu.getByRole('link', { name: 'VIDEO', exact: true })).toHaveAttribute('href', /#demo$/);
   await expect(mobileMenu.getByRole('link', { name: 'Plugins', exact: true })).toHaveAttribute('href', /\/plugins\/$/);
+  await expect(mobileMenu.getByRole('link', { name: 'Supported agents', exact: true })).toHaveAttribute('href', /#agent-support$/);
+  await expect(mobileMenu.getByRole('link', { name: 'FAQ', exact: true })).toHaveAttribute('href', /#faq$/);
   await expect(mobileMenu.locator('.language-switcher__name')).toHaveCount(0);
 });
 
 
-test('header shows Demo and Plugins at laptop width and GitHub icon follows theme', async ({ page }) => {
+test('header keeps primary links at laptop width and GitHub icon follows theme', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 850 });
   await page.goto('./');
   await expect(page.locator('.app-header__nav')).toBeVisible();
   await expect(page.locator('.app-header__mobile-actions')).toBeHidden();
   const links = page.locator('.app-header__nav a');
-  await expect(links).toHaveCount(2);
+  await expect(links).toHaveCount(4);
+  await expect(links.nth(0)).toBeVisible();
+  await expect(links.nth(1)).toBeVisible();
+  await expect(links.nth(2)).toBeHidden();
+  await expect(links.nth(3)).toBeHidden();
   const github = page.locator('.app-header__github-btn');
   const colors: string[] = [];
   for (const theme of ['light', 'dark']) {
@@ -224,9 +232,39 @@ test('header shows Demo and Plugins at laptop width and GitHub icon follows them
   await links.first().click();
   await expect(page).toHaveURL(/#demo$/);
   await expect(page.locator('#demo')).toBeInViewport();
-  await links.last().click();
+  await links.nth(1).click();
   await expect(page).toHaveURL(/\/plugins\/?$/);
   await expect(page.locator('.unified-catalog')).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 850 });
+  await links.nth(2).click();
+  await expect(page).toHaveURL(/#agent-support$/);
+  await expect(page.locator('#agent-support')).toBeInViewport();
+  expect(await page.locator('#agent-support').evaluate((node) => node.getBoundingClientRect().top)).toBeGreaterThanOrEqual(64);
+  await links.nth(3).click();
+  await expect(page).toHaveURL(/#faq$/);
+  await expect(page.locator('#faq')).toBeInViewport();
+});
+
+test('plugin grid defaults to five columns on desktop and stays responsive', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('./');
+  const grid = page.locator('.plugin-grid--plugins').first();
+  await expect(grid).toBeVisible();
+  for (const [width, expected] of [[1440, 5], [1100, 3], [800, 2], [390, 1]]) {
+    await page.setViewportSize({ width, height: 900 });
+    const count = await grid.evaluate((element) =>
+      getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length,
+    );
+    expect(count).toBe(expected);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('./plugins/');
+  await expect(page.locator('.plugin-grid--plugins').first()).toBeVisible();
+  const directoryColumns = await page.locator('.plugin-grid--plugins').first().evaluate((element) =>
+    getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length,
+  );
+  expect(directoryColumns).toBe(5);
 });
 
 test('homepage omits the counter when discovery cannot load', async ({ page }) => {

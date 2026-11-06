@@ -19,6 +19,7 @@
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
+  contain: paint;
 }
 
 /* Grid overlay */
