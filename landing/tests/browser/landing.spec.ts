@@ -34,6 +34,16 @@ async function waitForFullDirectory(page: import('@playwright/test').Page) {
     .toBe(true);
 }
 
+// Smaller batches can place a reviewed or community plugin on the next page.
+async function revealCatalogCard(page: import('@playwright/test').Page, selector: string) {
+  const card = page.locator(selector).first();
+  for (let batch = 0; batch < 3 && (await card.count()) === 0; batch++) {
+    await page.locator('.catalog-more button').click();
+  }
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  return card;
+}
+
 const optionalManifest = (url: string) => url.endsWith('/reports/skillspector/v3/index.json');
 
 const parseJsonLd = async (page: import('@playwright/test').Page) => {
@@ -90,8 +100,8 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect(page.locator('.client-strip li')).toHaveCount(clientLandingPages.length);
   await expect(page.getByRole('contentinfo')).toHaveCount(1);
   await expect(page.locator('.plugin-card').first()).toBeVisible();
-  const securityBadge = page.locator('.plugin-card__security').first();
-  await expect(securityBadge).toBeVisible({ timeout: 15_000 });
+  await hydrated(page);
+  const securityBadge = await revealCatalogCard(page, '.plugin-card__security');
   await expect(securityBadge).toContainText(
     /Automated review: (?:no blocking findings|\d+ notes?|\d+ blocking findings?)/,
   );
@@ -514,8 +524,8 @@ test('community plugin titles open an installable plugin page instead of GitHub'
   page,
 }) => {
   await page.goto('./');
-  const communityCard = page.locator('.plugin-card[data-trust="community"]').first();
-  await expect(communityCard).toBeVisible({ timeout: 15_000 });
+  await hydrated(page);
+  const communityCard = await revealCatalogCard(page, '.plugin-card[data-trust="community"]');
   const title = communityCard.locator('.plugin-card__title-link');
   const pluginName = (await title.textContent())?.trim();
   await expect(title).toHaveAttribute('href', /\/plugins\/community\/\?source=/);
@@ -535,8 +545,7 @@ test('security badges explain the exact checked revision and open full findings'
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
     timeout: 15_000,
   });
-  const badge = page.locator('.plugin-card__security--warnings').first();
-  await expect(badge).toBeVisible({ timeout: 15_000 });
+  const badge = await revealCatalogCard(page, '.plugin-card__security--warnings');
   await expect(badge).not.toHaveAttribute('title');
   await badge.scrollIntoViewIfNeeded();
   // Smooth scrolling can dismiss a focused tooltip. Wait for the badge's actual
