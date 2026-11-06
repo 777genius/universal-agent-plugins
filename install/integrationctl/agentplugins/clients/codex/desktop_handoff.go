@@ -75,7 +75,10 @@ func desktopPluginHandoff(marketplaceRoot, pluginName, physicalArtifactID string
 	// truncated deep link (including percent-encoded long profile paths).
 	if utf8.RuneCountInString(action) > 390 {
 		if cliInstalled {
-			return constPrefix + "plugin installed via Codex CLI in the selected profile; open Desktop and verify in a new local thread (deep link omitted for a long local path). Codex CLI verification does not prove ChatGPT runtime use."
+			if !desktopUsesCodexProfile(profileRoot) {
+				return constPrefix + "installed and enabled in a non-default Codex profile; verify Desktop uses that profile (deep link omitted for a long local path). Codex CLI verification does not prove ChatGPT runtime use."
+			}
+			return constPrefix + "installed and enabled via Codex CLI; open Desktop and verify in a new local thread (deep link omitted for a long local path). Codex CLI verification does not prove ChatGPT runtime use."
 		}
 		return constPrefix + "open ChatGPT Desktop manually, enable the plugin in Plugins > Personal and verify in a new local thread (deep link omitted for a long local path). Codex listing does not prove Desktop runtime use."
 	}
