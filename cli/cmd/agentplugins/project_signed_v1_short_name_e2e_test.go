@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tailscale/hujson"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
@@ -44,6 +46,54 @@ func (runner signedV1ProjectGitRunner) Run(ctx context.Context, command sourceac
 	return runner.delegate.Run(ctx, command)
 }
 
+// Validate the exact native MCP keyset rather than merely finding server names
+// in URLs, comments or unrelated settings. Gemini allows JSONC comments.
+func assertSignedV1NativeMCPServers(t *testing.T, settings string, expected ...string) {
+	t.Helper()
+	standard, err := hujson.Standardize([]byte(settings))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var native struct {
+		MCPServers map[string]struct {
+			URL     string   `json:"url"`
+			HTTPURL string   `json:"httpUrl"`
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(standard, &native); err != nil {
+		t.Fatal(err)
+	}
+	if len(native.MCPServers) != len(expected) {
+		t.Fatalf("native MCP server keys do not match %v: %s", expected, settings)
+	}
+	for _, name := range expected {
+		server, ok := native.MCPServers[name]
+		if !ok {
+			t.Fatalf("native MCP server %q missing: %s", name, settings)
+		}
+		switch name {
+		case "foreign":
+			// Retain the foreign-owned legacy URL field, not UAP's httpUrl field.
+			if server.URL != "https://foreign.test/mcp" || server.HTTPURL != "" || server.Command != "" || len(server.Args) != 0 {
+				t.Fatalf("foreign native MCP server changed: %s", settings)
+			}
+		case "notion", "hubspot":
+			url := "https://" + name + ".example.test/mcp"
+			if server.HTTPURL != url || server.URL != "" || server.Command != "" || len(server.Args) != 0 {
+				t.Fatalf("native Streamable HTTP server %q has wrong transport: %s", name, settings)
+			}
+		case "playwright":
+			if server.URL != "" || server.HTTPURL != "" || server.Command != "go" || len(server.Args) != 1 || server.Args[0] != "version" {
+				t.Fatalf("native stdio server %q has wrong transport: %s", name, settings)
+			}
+		default:
+			t.Fatalf("unexpected signed v1 fixture server %q", name)
+		}
+	}
+}
+
 // Real v1 Ed25519 reader, signed short names, Git acquisition, Cobra, receipts,
 // native Gemini fixture and project isolation. No model-driven MCP tools/call
 // or production Marketing Kit qualification is implied by this test.
@@ -54,6 +104,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		t.Fatal("disposable signed-v1 Git fixture CA is missing")
 	}
 	const repository = "fixture/marketplace"
+	const campaignSkill = "---\nname: campaign-planning\ndescription: Test-only campaign plan\n---\nLocal test fixture\n"
 	paths := []struct {
 		name, distribution, path, server string
 	}{
@@ -67,8 +118,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		projectJourneyWrite(t, filepath.Join(root, "plugin.json"), fmt.Sprintf(
 			"{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\",\"name\":%q,\"version\":\"0.1.0\"}", item.name))
 		if item.server == "" {
-			projectJourneyWrite(t, filepath.Join(root, "skills", "campaign-planning", "SKILL.md"),
-				"---\nname: campaign-planning\ndescription: Test-only campaign plan\n---\nLocal test fixture\n")
+			projectJourneyWrite(t, filepath.Join(root, "skills", "campaign-planning", "SKILL.md"), campaignSkill)
 			projectJourneyWrite(t, filepath.Join(root, "uap.toml"), "schema_version = 1\n[dependencies]\n"+
 				"\"fixture/notion\" = \"0.1.0\"\n"+
 				"\"fixture/hubspot-crm\" = \"0.1.0\"\n"+
@@ -245,10 +295,9 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 			}
 		}
 		native := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "settings.json"))
-		for _, server := range []string{"notion", "hubspot", "playwright", "foreign.test"} {
-			if !strings.Contains(native, server) {
-				t.Fatalf("%q native settings lost %s: %s", root, server, native)
-			}
+		assertSignedV1NativeMCPServers(t, native, "foreign", "notion", "hubspot", "playwright")
+		if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
+			t.Fatalf("%q native Marketing Kit Skill differs from the signed source: %q", root, got)
 		}
 		journey.run(t, root, "install", "marketing-kit", "--target", "gemini")
 		if len(journey.state(t, root).EnvironmentReceipts) != 4 {
@@ -260,19 +309,59 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		projectJourneyWrite(t, filepath.Join(fresh.a, name),
 			projectJourneyRead(t, filepath.Join(journey.a, name)))
 	}
+	lockBefore := projectJourneyRead(t, filepath.Join(fresh.a, "uap.lock"))
 	fresh.run(t, fresh.a, "deps", "sync", "--locked", "--yes")
 	if got := len(fresh.state(t, fresh.a).EnvironmentReceipts); got != 4 {
 		t.Fatalf("cold signed v1 Project lock restore omitted children: %d", got)
 	}
-	userBefore, bBefore := journey.state(t, ""), journey.state(t, journey.b)
+	if got := projectJourneyRead(t, filepath.Join(fresh.a, "uap.lock")); got != lockBefore {
+		t.Fatal("cold locked restore rewrote the exact signed dependency lock")
+	}
+	coldNative := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.a), "settings.json"))
+	assertSignedV1NativeMCPServers(t, coldNative, "foreign", "notion", "hubspot", "playwright")
+	if got := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.a), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
+		t.Fatalf("cold signed v1 restore omitted or changed native Marketing Kit Skill: %q", got)
+	}
+	userStateBefore := projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json"))
+	bStateBefore := projectJourneyRead(t, filepath.Join(journey.namespace(journey.b), "state-v2.json"))
+	userNativeBefore := projectJourneyRead(t, filepath.Join(journey.nativeRoot(""), "settings.json"))
+	bNativeBefore := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.b), "settings.json"))
 	journey.run(t, journey.a, "remove", "marketing-kit", "--target", "gemini")
 	if got := len(journey.state(t, journey.a).EnvironmentReceipts); got != 0 {
 		t.Fatalf("Project A still owns signed root/children after removal: %d", got)
 	}
-	if got := len(journey.state(t, "").EnvironmentReceipts); got != len(userBefore.EnvironmentReceipts) {
-		t.Fatal("Project A removal changed user installation")
+	if got := projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json")); got != userStateBefore {
+		t.Fatal("Project A removal changed user state bytes")
 	}
-	if got := len(journey.state(t, journey.b).EnvironmentReceipts); got != len(bBefore.EnvironmentReceipts) {
-		t.Fatal("Project A removal changed Project B")
+	if got := projectJourneyRead(t, filepath.Join(journey.namespace(journey.b), "state-v2.json")); got != bStateBefore {
+		t.Fatal("Project A removal changed Project B state bytes")
+	}
+	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(""), "settings.json")); got != userNativeBefore {
+		t.Fatal("Project A removal changed user native settings")
+	}
+	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.b), "settings.json")); got != bNativeBefore {
+		t.Fatal("Project A removal changed Project B native settings")
+	}
+	removedNative := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "settings.json"))
+	if !strings.Contains(removedNative, "retained foreign settings") {
+		t.Fatalf("signed Project removal damaged foreign native settings: %s", removedNative)
+	}
+	assertSignedV1NativeMCPServers(t, removedNative, "foreign")
+	removedStandard, err := hujson.Standardize([]byte(removedNative))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var removedSettings struct {
+		Theme string `json:"theme"`
+	}
+	if err := json.Unmarshal(removedStandard, &removedSettings); err != nil {
+		t.Fatal(err)
+	}
+	if removedSettings.Theme != "foreign" {
+		t.Fatalf("signed Project removal changed foreign theme: %s", removedNative)
+	}
+	projectJourneyAbsent(t, filepath.Join(journey.nativeRoot(journey.a), "skills", "campaign-planning"))
+	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "skills", "foreign", "SKILL.md")); got != "foreign skill\n" {
+		t.Fatal("signed Project removal changed a foreign native Skill")
 	}
 }
