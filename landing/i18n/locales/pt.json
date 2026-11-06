@@ -368,14 +368,15 @@
       "appearance": "Aparência"
     },
     "navigation": {
-      "demo": "Ver demo",
+      "video": "Vídeo",
       "plugins": "Plugins",
+      "agents": "Agentes compatíveis",
       "why": "Por que funciona",
       "faq": "Perguntas frequentes",
       "open": "Abrir menu de navegação",
       "close": "Fechar menu de navegação",
       "title": "Menu de navegação",
-      "description": "Abra a demonstração, os plugins, a documentação ou GitHub.",
+      "description": "Acesse o vídeo, os plugins, os agentes compatíveis, as perguntas frequentes, a documentação ou GitHub.",
       "appearance": "Aparência"
     }
   },

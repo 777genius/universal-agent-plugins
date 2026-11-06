@@ -505,14 +505,15 @@
       "appearance": "外观"
     },
     "navigation": {
-      "demo": "演示",
+      "video": "视频",
       "plugins": "插件",
+      "agents": "支持的代理",
       "why": "为什么它有效",
       "faq": "常见问题解答",
       "open": "打开导航菜单",
       "close": "关闭导航菜单",
       "title": "导航菜单",
-      "description": "打开演示、插件目录、文档或 GitHub。",
+      "description": "查看视频、插件、支持的代理、常见问题解答、文档或 GitHub。",
       "appearance": "外观"
     }
   },

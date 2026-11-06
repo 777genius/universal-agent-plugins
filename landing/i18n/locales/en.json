@@ -522,14 +522,15 @@
       "appearance": "Appearance"
     },
     "navigation": {
-      "demo": "Demo",
+      "video": "Video",
       "plugins": "Plugins",
+      "agents": "Supported agents",
       "why": "Why it works",
       "faq": "FAQ",
       "open": "Open navigation menu",
       "close": "Close navigation menu",
       "title": "Navigation menu",
-      "description": "Open the demo, browse plugins, documentation or GitHub.",
+      "description": "Watch the video, browse plugins, supported agents, FAQ, documentation or GitHub.",
       "appearance": "Appearance"
     }
   },

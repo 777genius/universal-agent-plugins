@@ -505,14 +505,15 @@
       "appearance": "Apparence"
     },
     "navigation": {
-      "demo": "Démo",
+      "video": "Vidéo",
       "plugins": "Plugins",
+      "agents": "Agents pris en charge",
       "why": "Pourquoi ça marche",
       "faq": "FAQ",
       "open": "Ouvrir le menu de navigation",
       "close": "Fermer le menu de navigation",
       "title": "Menu de navigation",
-      "description": "Ouvrez la démo, les plugins, la documentation ou GitHub.",
+      "description": "Accédez à la vidéo, aux plugins, aux agents pris en charge, à la FAQ, à la documentation ou à GitHub.",
       "appearance": "Apparence"
     }
   },

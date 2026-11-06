@@ -29,10 +29,12 @@ const { docsUrl, docsLabel } = useDocsLinks();
 const homePath = computed(() => localePath('/'));
 const homeHref = computed(() => router.resolve(homePath.value).href);
 
-// Two primary destinations stay directly visible on desktop.
+// Share the same destinations between the desktop header and mobile menu.
 const navItems = computed(() => [
-  { id: 'demo', label: t('shell.navigation.demo'), href: sectionHref('demo') },
+  { id: 'video', label: t('shell.navigation.video'), href: sectionHref('demo') },
   { id: 'plugins', label: t('shell.navigation.plugins'), href: router.resolve(localePath('/plugins/')).href },
+  { id: 'agents', label: t('shell.navigation.agents'), href: sectionHref('agent-support') },
+  { id: 'faq', label: t('shell.navigation.faq'), href: sectionHref('faq') },
 ]);
 
 const normalizePath = (value: string) => (value !== '/' ? value.replace(/\/+$/, '') : '/');
@@ -191,6 +193,7 @@ onMounted(() => {
 
 .app-header__nav :deep(.v-btn) {
   height: 100% !important;
+  padding-inline: 10px;
   border-radius: 0;
 }
 
@@ -245,7 +248,7 @@ onMounted(() => {
   display: none;
 }
 
-@media (max-width: 959px) {
+@media (max-width: 1199px) {
   .app-header__nav {
     display: none;
   }
