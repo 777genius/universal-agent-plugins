@@ -90,6 +90,24 @@ async function files(root, prefix = '') {
   ).flat();
 }
 
+// Build a fresh index for each artifact validation. Never cache across mutated fixtures.
+function buildReferenceIndex(routes, fileSet) {
+  return {
+    routePaths: new Set(routes.map((route) => route.path)),
+    namespaces: new Set([
+      'docs',
+      'og-image.png',
+      '_nuxt',
+      'api',
+      'registry',
+      'discovery',
+      'security',
+      ...routes.map((route) => route.path.split('/').filter(Boolean)[0]).filter(Boolean),
+      ...[...fileSet].filter((file) => !file.endsWith('.html')).map((file) => file.split('/')[0]),
+    ]),
+  };
+}
+
 /** Validate references using manifest families and assembled asset/docs namespaces.
  * Sibling sites are path-scoped exceptions, never an origin-wide bypass.
  */
@@ -102,23 +120,14 @@ export async function checkHtmlReferences({
   base,
   siteUrl,
   allowedSiblingSites = [],
+  referenceIndex,
 }) {
   const appBase = normalizeAppBase(base);
   const site = new URL(siteUrl);
   for (const value of allowedSiblingSites) {
     assert(new URL(value).pathname !== '/', `Invalid sibling scope: ${value}`);
   }
-  const namespaces = new Set([
-    'docs',
-    'og-image.png',
-    '_nuxt',
-    'api',
-    'registry',
-    'discovery',
-    'security',
-    ...routes.map((route) => route.path.split('/').filter(Boolean)[0]).filter(Boolean),
-    ...[...fileSet].filter((file) => !file.endsWith('.html')).map((file) => file.split('/')[0]),
-  ]);
+  const { routePaths, namespaces } = referenceIndex ?? buildReferenceIndex(routes, fileSet);
   const owned = (local) =>
     !local ||
     namespaces.has(local.split('/')[0]) ||
@@ -182,7 +191,7 @@ export async function checkHtmlReferences({
       continue;
     }
     let local = pathname.slice(appBase.length);
-    const landingRoute = routes.some((route) => route.path === `/${local.replace(/\/+$/, '')}/`);
+    const landingRoute = routePaths.has(`/${local.replace(/\/+$/, '')}/`);
     if (!asset && landingRoute) assert(pathname.endsWith('/'), `Missing trailing slash in landing reference: ${href}`);
     if (sibling && !owned(local)) continue;
     if (appBase === '/' && !owned(local) && !asset) continue;
@@ -231,6 +240,9 @@ export async function checkPagesArtifact({
   const expanded = expandLocalizedRoutes(routes, locales);
   const artifactFiles = await files(root);
   const fileSet = new Set(artifactFiles);
+  const referenceIndex = buildReferenceIndex(expanded, fileSet);
+  const descriptionOwners = new Map(registry.plugins.map((plugin) => [plugin.description, plugin.name]));
+  const seoByCanonical = new Map();
   const requireFile = (relative) =>
     assert(fileSet.has(relative), `Missing final artifact file: ${relative}`);
   requireFile('.nojekyll');
@@ -304,17 +316,18 @@ export async function checkPagesArtifact({
       projectRegistry(registry, projection).plugins.map((plugin) => plugin.description),
     );
     const strings = new Set(payload.filter((value) => typeof value === 'string'));
-    for (const plugin of registry.plugins) {
-      if (!allowedDescriptions.has(plugin.description))
-        assert(
-          !strings.has(plugin.description),
-          `Unrelated registry description in ${payloadPath}: ${plugin.name}`,
-        );
+    for (const description of strings) {
+      if (descriptionOwners.has(description) && !allowedDescriptions.has(description))
+        assert.fail(`Unrelated registry description in ${payloadPath}: ${descriptionOwners.get(description)}`);
     }
     if (route.family === 'download')
       assert(!payloadText.includes('registry-page:'), 'Download must not initialize registry');
     assert.equal(tags(html, 'html')[0]?.lang, route.locale, `HTML lang: ${relative}`);
     const seo = pageRouteSeo(route.path, routes, siteUrl, base, locales);
+    if (seo.canonical) {
+      assert(!seoByCanonical.has(seo.canonical), `Duplicate canonical: ${seo.canonical}`);
+      seoByCanonical.set(seo.canonical, seo);
+    }
     const links = tags(html, 'link');
     assert.deepEqual(
       links.filter((link) => link.rel === 'canonical').map((link) => link.href),
@@ -373,6 +386,7 @@ export async function checkPagesArtifact({
       base,
       siteUrl,
       allowedSiblingSites,
+      referenceIndex,
     });
   }
 
@@ -383,10 +397,9 @@ export async function checkPagesArtifact({
   );
   for (const entry of [...sitemap.matchAll(/<url>([\s\S]*?)<\/url>/g)]) {
     const loc = decode(entry[1].match(/<loc>([^<]+)<\/loc>/)[1]);
-    const route = expanded.find(
-      (route) => pageRouteSeo(route.path, routes, siteUrl, base, locales).canonical === loc,
-    );
-    const expected = pageRouteSeo(route.path, routes, siteUrl, base, locales).alternates;
+    const seo = seoByCanonical.get(loc);
+    assert(seo, `Unknown sitemap canonical: ${loc}`);
+    const expected = seo.alternates;
     assert.deepEqual(
       tags(entry[1], 'xhtml:link').map(({ hreflang, href }) => ({ hreflang, href })),
       expected,
