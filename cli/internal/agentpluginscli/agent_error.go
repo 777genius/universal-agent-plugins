@@ -62,13 +62,11 @@ func classifyAgentFailure(err error) AgentFailure {
 	}
 }
 
-// ShouldWriteAgentFailure avoids changing established runtime refusal protocols:
-// repeated removal and several native cycles require empty stdout and one exact
-// stderr line. Only newly typed CLI usage/selection errors are opted in.
+// ShouldWriteAgentFailure opts in only early usage errors. Source selection
+// errors already emit their own JSON; old native refusals require empty stdout.
 func ShouldWriteAgentFailure(err error) bool {
 	var usage CLIUsageError
-	var selection skillsSelectionError
-	return errors.As(err, &usage) || errors.As(err, &selection)
+	return errors.As(err, &usage)
 }
 
 // WriteAgentFailure is called only when the command has not already emitted a

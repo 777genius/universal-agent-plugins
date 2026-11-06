@@ -97,14 +97,14 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	out := &agentpluginsOutputCounter{destination: os.Stdout}
-	app.Output = out
+	// Preserve the real os.Stdout *os.File for native TTY detection. An
+	// io.Writer counter here silently downgrades rich prompts to plain input.
 	root := agentpluginscli.NewRoot(app)
 	err = root.ExecuteContext(ctx)
-	if err != nil && out.written == 0 && agentpluginscli.ShouldWriteAgentFailure(err) {
+	if err != nil && agentpluginscli.ShouldWriteAgentFailure(err) {
 		format, _ := root.PersistentFlags().GetString("format")
 		if format == "json" {
-			if writeErr := agentpluginscli.WriteAgentFailure(out, err); writeErr != nil {
+			if writeErr := agentpluginscli.WriteAgentFailure(os.Stdout, err); writeErr != nil {
 				return fmt.Errorf("render CLI JSON failure: %w", writeErr)
 			}
 		}

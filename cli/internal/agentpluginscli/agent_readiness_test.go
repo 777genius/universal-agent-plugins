@@ -59,7 +59,7 @@ func TestMachineFailureOutputIsOptInForNewTypedErrors(t *testing.T) {
 		want bool
 	}{
 		{CLIUsageError{Code: "TARGET_REQUIRED", Message: "select --target"}, true},
-		{skillsSelectionError{Code: "SKILL_NOT_FOUND", Message: "choose an exact Skill"}, true},
+		{skillsSelectionError{Code: "SKILL_NOT_FOUND", Message: "choose an exact Skill"}, false},
 		{errors.New("installation \"native-proof\" was not found"), false},
 		{errors.New("plugin is not installed for target \"codex\" in user scope; no target was changed"), false},
 		{installer.ErrRecoveryRequired, false},

@@ -97,9 +97,9 @@ available in released CLI 0.1.93+.
 - `deps status` continues to report exact manifest/lock paths, ownership,
   receipts, `facts` and excluded clients. A stored receipt is not proof that
   a native model can use a freshly started MCP tool.
-- New typed CLI usage/selection errors originating before a command has
-  emitted JSON use a sanitized failure envelope. **Legacy native/runtime
-  refusal paths** (including repeated removal of an absent installation)
+- New typed CLI usage errors originating before a command has emitted output
+  use a sanitized failure envelope. Existing Skills selection errors keep
+  their own one-document JSON. **Legacy native/runtime refusal paths** (including repeated removal of an absent installation)
   deliberately retain their existing nonzero exit code, empty stdout and exact
   stderr for backwards compatibility. Existing command-specific structured
   failures keep their original fields. Raw provider output is never machine
