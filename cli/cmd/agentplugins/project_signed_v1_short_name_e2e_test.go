@@ -54,6 +54,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		t.Fatal("disposable signed-v1 Git fixture CA is missing")
 	}
 	const repository = "fixture/marketplace"
+	const campaignSkill = "---\nname: campaign-planning\ndescription: Test-only campaign plan\n---\nLocal test fixture\n"
 	paths := []struct {
 		name, distribution, path, server string
 	}{
@@ -67,8 +68,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		projectJourneyWrite(t, filepath.Join(root, "plugin.json"), fmt.Sprintf(
 			"{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\",\"name\":%q,\"version\":\"0.1.0\"}", item.name))
 		if item.server == "" {
-			projectJourneyWrite(t, filepath.Join(root, "skills", "campaign-planning", "SKILL.md"),
-				"---\nname: campaign-planning\ndescription: Test-only campaign plan\n---\nLocal test fixture\n")
+			projectJourneyWrite(t, filepath.Join(root, "skills", "campaign-planning", "SKILL.md"), campaignSkill)
 			projectJourneyWrite(t, filepath.Join(root, "uap.toml"), "schema_version = 1\n[dependencies]\n"+
 				"\"fixture/notion\" = \"0.1.0\"\n"+
 				"\"fixture/hubspot-crm\" = \"0.1.0\"\n"+
@@ -250,6 +250,9 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 				t.Fatalf("%q native settings lost %s: %s", root, server, native)
 			}
 		}
+		if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
+			t.Fatalf("%q native Marketing Kit Skill differs from the signed source: %q", root, got)
+		}
 		journey.run(t, root, "install", "marketing-kit", "--target", "gemini")
 		if len(journey.state(t, root).EnvironmentReceipts) != 4 {
 			t.Fatal("replay duplicated signed Directory installation")
@@ -273,6 +276,9 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		if !strings.Contains(coldNative, server) {
 			t.Fatalf("cold signed v1 restore omitted native MCP server %s: %s", server, coldNative)
 		}
+	}
+	if got := projectJourneyRead(t, filepath.Join(fresh.nativeRoot(fresh.a), "skills", "campaign-planning", "SKILL.md")); got != campaignSkill {
+		t.Fatalf("cold signed v1 restore omitted or changed native Marketing Kit Skill: %q", got)
 	}
 	userStateBefore := projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json"))
 	bStateBefore := projectJourneyRead(t, filepath.Join(journey.namespace(journey.b), "state-v2.json"))
@@ -303,6 +309,7 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 			t.Fatalf("signed Project removal left owned MCP server %s: %s", server, removedNative)
 		}
 	}
+	projectJourneyAbsent(t, filepath.Join(journey.nativeRoot(journey.a), "skills", "campaign-planning"))
 	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "skills", "foreign", "SKILL.md")); got != "foreign skill\n" {
 		t.Fatal("signed Project removal changed a foreign native Skill")
 	}
