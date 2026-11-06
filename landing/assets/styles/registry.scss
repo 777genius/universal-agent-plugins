@@ -62,6 +62,12 @@ body,
   color: var(--text);
   line-height: 1.6;
 }
+/* Keep the decorative absolute-positioned backdrop inside the home page,
+   without suppressing the agent matrix's own horizontal scroll region. */
+.unified-home {
+  position: relative;
+  overflow-x: clip;
+}
 button,
 input,
 select {
