@@ -60,3 +60,23 @@ func TestSkillsHumanPartialResultPrintsRecoveryWithoutSuccessClaim(t *testing.T)
 		t.Fatal("partial installation claimed success")
 	}
 }
+
+func TestSkillsHumanCLIEndToEndReportsReadiness(t *testing.T) {
+	journey, _, _ := skillsFullFlowFixture(t)
+	out := journey.run(t, "skills", "add", "acme/skills", "--path", "engineering/review",
+		"--target", "codex", "--no-ui", "--yes")
+	for _, expected := range []string{
+		"Skills installation succeeded",
+		"review → codex:",
+		"Files: installed or already up to date.",
+		"Agent discovery: not verified by this Skills flow.",
+		"Activation: not verified.",
+	} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("real CLI human output is missing %q: %q", expected, out)
+		}
+	}
+	if got := len(journey.state(t).EnvironmentReceipts); got != 1 {
+		t.Fatalf("human CLI report had no actual persisted installation: %d receipts", got)
+	}
+}
