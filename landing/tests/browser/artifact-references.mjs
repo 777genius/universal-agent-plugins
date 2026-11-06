@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { checkHtmlReferences } from '../../scripts/check-pages-artifact.mjs';
-import { productRootUrl, productImageUrl, pageRouteSeo } from '../../utils/seo.ts';
+import { productRootUrl, productImageUrl, pageRouteSeo, SOCIAL_PREVIEW_PATH } from '../../utils/seo.ts';
 import { productRoutes } from '../../data/routes.ts';
 
 const routes = productRoutes(['example.plugin'], ['codex']);
@@ -196,6 +196,7 @@ test('F1 actual page composable emits based default OG and preserves absolute cu
       'pageRouteSeo',
       'productRootUrl',
       'productImageUrl',
+      'SOCIAL_PREVIEW_PATH',
       'useI18n',
       'useRoute',
       'useRuntimeConfig',
@@ -208,6 +209,7 @@ test('F1 actual page composable emits based default OG and preserves absolute cu
       pageRouteSeo,
       productRootUrl,
       productImageUrl,
+      SOCIAL_PREVIEW_PATH,
       () => ({ t: (value) => value, locale: { value: 'en' } }),
       () => ({ path: '/plugins/example.plugin/' }),
       () => ({
