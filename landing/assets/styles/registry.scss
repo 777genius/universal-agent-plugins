@@ -1957,6 +1957,7 @@ img {
     border-color 0.22s ease,
     box-shadow 0.22s ease;
 }
+/* Keep plugin cards stationary; border and shadow already provide hover feedback. */
 .plugin-card:hover {
   z-index: 1;
   border-color: color-mix(in srgb, var(--primary) 48%, var(--line));
