@@ -251,5 +251,5 @@ func automatedMutation(app App, opts *options) bool {
 }
 
 func mutationConfirmed(app App, opts *options) bool {
-	return automatedMutation(app, opts) || strings.TrimSpace(opts.target) != ""
+	return opts.yes || automatedMutation(app, opts) || strings.TrimSpace(opts.target) != ""
 }
