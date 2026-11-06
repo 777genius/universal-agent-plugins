@@ -106,6 +106,7 @@ type options struct {
 	scope                string
 	dryRun               bool
 	yes                  bool
+	scopeInferred        bool
 	format               string
 	plain                bool
 	externalUninstalled  bool
