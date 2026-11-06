@@ -47,7 +47,7 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			opts.installSelection = &installSelection{Scope: string(app.scope()), ProjectRoot: app.ProjectRoot, ManifestPath: manifestPath, LockPath: lockPath}
+			opts.installSelection = &installSelection{Scope: string(app.scope()), ProjectRoot: app.ProjectRoot, ManifestPath: manifestPath, LockPath: lockPath, ScopeSelectionReason: scopeSelectionReason(cmd, opts)}
 			app.Lifecycle.PrepareHostsForPreview = true
 			return runDependencySyncConverge(cmd, app, opts, lockedOnly, yes, func(convergeApp App) (bool, error) {
 				return repairDeclaredEnvironmentDrift(cmd, convergeApp, opts, yes)
@@ -205,6 +205,7 @@ func installLockedOnly(lockPath string, explicit bool) (bool, error) {
 
 type installSelection struct {
 	Scope        string `json:"scope"`
+	ScopeSelectionReason string `json:"scope_selection_reason"`
 	ProjectRoot  string `json:"project_root,omitempty"`
 	ManifestPath string `json:"manifest_path"`
 	LockPath     string `json:"lock_path"`
