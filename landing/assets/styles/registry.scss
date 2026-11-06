@@ -59,6 +59,9 @@ body,
   min-height: 100%;
 }
 .registry-surface {
+  // Anchor PageBackground's absolute orbs inside this clipped surface rather
+  // than allowing them to escape to the application containing block.
+  position: relative;
   color: var(--text);
   line-height: 1.6;
   // Decorative orbs and scrollable compatibility tables must not widen the page.
