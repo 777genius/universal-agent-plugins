@@ -522,7 +522,7 @@
       "appearance": "Appearance"
     },
     "navigation": {
-      "demo": "Demo",
+      "demo": "VIDEO",
       "plugins": "Plugins",
       "why": "Why it works",
       "faq": "FAQ",
@@ -530,7 +530,8 @@
       "close": "Close navigation menu",
       "title": "Navigation menu",
       "description": "Open the demo, browse plugins, documentation or GitHub.",
-      "appearance": "Appearance"
+      "appearance": "Appearance",
+      "agents": "Supported agents"
     }
   },
   "registryUi": {

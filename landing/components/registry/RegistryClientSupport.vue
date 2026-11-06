@@ -16,7 +16,7 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
 <template>
   <section
     id="agent-support"
-    class="registry-client-support container"
+    class="registry-client-support container anchor-offset"
     aria-labelledby="agent-support-title"
     lang="en"
     dir="ltr"
