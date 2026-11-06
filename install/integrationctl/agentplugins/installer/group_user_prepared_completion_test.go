@@ -202,7 +202,9 @@ func TestUserGroupPreparedUpdateRetainsFailClosedHandoff(t *testing.T) {
 		{"project scope", func(f *userPreparedUpdateFixture) { f.prepared.req.Scope = domain.ScopeProject }},
 		{"group not completed", func(f *userPreparedUpdateFixture) { f.got.Phase = usecase.GroupPhaseManagedCommitted }},
 		{"wrong installation", func(f *userPreparedUpdateFixture) { f.got.InstallationID = "another" }},
-		{"target incomplete", func(f *userPreparedUpdateFixture) { f.got.Targets[1].GroupPhase = usecase.GroupTargetExternalNotAttempted }},
+		{"target incomplete", func(f *userPreparedUpdateFixture) {
+			f.got.Targets[1].GroupPhase = usecase.GroupTargetExternalNotAttempted
+		}},
 		{"target failed", func(f *userPreparedUpdateFixture) {
 			f.got.Targets[1].Failure = &usecase.GroupTargetFailure{Stage: "verification"}
 		}},
@@ -275,7 +277,9 @@ func TestUserGroupPreparedUpdateRetainsFailClosedHandoff(t *testing.T) {
 		{"pending native intent", func(f *userPreparedUpdateFixture) {
 			f.changeBinding(domain.ClientVSCode, func(b *domain.ClientBinding) { b.PendingNativeIntent = &domain.PendingNativeIntent{} })
 		}},
-		{"unverified Local", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.Verification = domain.VerificationNotRun }},
+		{"unverified Local", func(f *userPreparedUpdateFixture) {
+			f.got.Targets[1].Activation.Verification = domain.VerificationNotRun
+		}},
 		{"missing native observation", func(f *userPreparedUpdateFixture) {
 			f.changeBinding(domain.ClientVSCode, func(b *domain.ClientBinding) { b.LocalEntryObservation = nil })
 		}},
@@ -288,7 +292,9 @@ func TestUserGroupPreparedUpdateRetainsFailClosedHandoff(t *testing.T) {
 			f.changeBinding(domain.ClientVSCode, func(b *domain.ClientBinding) { b.SelectedDelivery = domain.SelectedDelivery{} })
 		}},
 		{"blocked policy", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.Policy = domain.PolicyBlocked }},
-		{"unknown effect", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.NativeEffect = domain.NativeEffectUncertain }},
+		{"unknown effect", func(f *userPreparedUpdateFixture) {
+			f.got.Targets[1].Activation.NativeEffect = domain.NativeEffectUncertain
+		}},
 		{"activation attestation", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.ActivationAttested = true }},
 		{"missing prepared guidance", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Activation.UserActions = nil }},
 		{"incorrect saved status", func(f *userPreparedUpdateFixture) {
