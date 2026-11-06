@@ -343,10 +343,23 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		t.Fatal("Project A removal changed Project B native settings")
 	}
 	removedNative := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "settings.json"))
-	if !strings.Contains(removedNative, "foreign.test") || !strings.Contains(removedNative, "retained foreign settings") {
+	if !strings.Contains(removedNative, "retained foreign settings") {
 		t.Fatalf("signed Project removal damaged foreign native settings: %s", removedNative)
 	}
 	assertSignedV1NativeMCPServers(t, removedNative, "foreign")
+	removedStandard, err := hujson.Standardize([]byte(removedNative))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var removedSettings struct {
+		Theme string `json:"theme"`
+	}
+	if err := json.Unmarshal(removedStandard, &removedSettings); err != nil {
+		t.Fatal(err)
+	}
+	if removedSettings.Theme != "foreign" {
+		t.Fatalf("signed Project removal changed foreign theme: %s", removedNative)
+	}
 	projectJourneyAbsent(t, filepath.Join(journey.nativeRoot(journey.a), "skills", "campaign-planning"))
 	if got := projectJourneyRead(t, filepath.Join(journey.nativeRoot(journey.a), "skills", "foreign", "SKILL.md")); got != "foreign skill\n" {
 		t.Fatal("signed Project removal changed a foreign native Skill")
