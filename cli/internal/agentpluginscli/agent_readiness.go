@@ -70,7 +70,7 @@ func deriveDependencyReadiness(facts []string) string {
 	}
 	for _, fact := range facts {
 		switch fact {
-		case "activation_manual", "activation_prepared", "auth_unverified", "auth_pending", "partial", "not_synced":
+		case "activation_manual", "activation_prepared", "auth_unverified", "auth_pending", "partial", "not_synced", "pending_recovery":
 			return "needs_action"
 		}
 		if strings.HasPrefix(fact, "projection_") {
