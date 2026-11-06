@@ -20,9 +20,9 @@ Existing immutable producer identity checks retain that historical slug.
   on `main`. Descendant commits on `main` do not invalidate that candidate.
   Moving its tag or removing its ancestry from `main` still refuses promotion.
 - Required CI, CodeQL, dependency review, and vulnerability checks are green.
-- The release workflow independently requires a merged pull request into
-  `main`. For each required check, including dependency review, it accepts a
-  success on the tagged merge commit or the associated merged PR head. This
+- For each required check, including dependency review, the release workflow
+  accepts success on the tagged commit or an associated merged PR head. A
+  merged PR is not required when the exact commit has every required check. This
   fallback is the executable workflow behavior; owner release review still
   requires final exact-commit evidence for checks runnable on the merge commit
   and the PR-head dependency review.
