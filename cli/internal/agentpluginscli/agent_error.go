@@ -15,6 +15,14 @@ type AgentAction struct {
 	Message string `json:"message"`
 }
 
+// CLIUsageError carries a fixed safe diagnostic without re-parsing stderr.
+type CLIUsageError struct {
+	Code string
+	Message string
+}
+
+func (e CLIUsageError) Error() string { return e.Message }
+
 // AgentFailure deliberately never serializes raw native/transport errors.
 type AgentFailure struct {
 	Code        string        `json:"code"`
@@ -24,6 +32,10 @@ type AgentFailure struct {
 }
 
 func classifyAgentFailure(err error) AgentFailure {
+	var usage CLIUsageError
+	if errors.As(err, &usage) {
+		return AgentFailure{Code: usage.Code, Message: usage.Message}
+	}
 	var issue skillsSelectionError
 	if errors.As(err, &issue) {
 		return AgentFailure{Code: issue.Code, Message: issue.Message}
