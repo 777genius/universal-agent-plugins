@@ -247,7 +247,7 @@ test('header keeps primary links at laptop width and GitHub icon follows theme',
 test('plugin grid defaults to five columns on desktop and stays responsive', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('./');
-  const grid = page.locator('.plugin-grid').first();
+  const grid = page.locator('.plugin-grid--plugins').first();
   await expect(grid).toBeVisible();
   for (const [width, expected] of [[1440, 5], [1100, 3], [800, 2], [390, 1]]) {
     await page.setViewportSize({ width, height: 900 });
@@ -259,8 +259,8 @@ test('plugin grid defaults to five columns on desktop and stays responsive', asy
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('./plugins/');
-  await expect(page.locator('.plugin-grid').first()).toBeVisible();
-  const directoryColumns = await page.locator('.plugin-grid').first().evaluate((element) =>
+  await expect(page.locator('.plugin-grid--plugins').first()).toBeVisible();
+  const directoryColumns = await page.locator('.plugin-grid--plugins').first().evaluate((element) =>
     getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length,
   );
   expect(directoryColumns).toBe(5);

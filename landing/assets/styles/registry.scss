@@ -1933,9 +1933,12 @@ img {
 }
 .plugin-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
   gap: 12px;
+}
+.plugin-grid--plugins {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 .plugin-card {
   position: relative;
@@ -3071,7 +3074,7 @@ img {
 }
 
 @media (max-width: 1279px) {
-  .plugin-grid {
+  .plugin-grid--plugins {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
