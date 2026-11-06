@@ -58,10 +58,10 @@ body,
 #__nuxt {
   min-height: 100%;
 }
-:root:has(.unified-home),
-body:has(.unified-home) {
-  /* Prevent decoration and the wide Skills support table from scrolling the page.
-     The support table keeps its own keyboard-accessible horizontal scroll. */
+:root,
+body {
+  /* Clip document overflow on all catalog routes while preserving horizontal
+     scrolling inside the agent-support table and other local scroll regions. */
   overflow-x: clip;
 }
 .registry-surface {

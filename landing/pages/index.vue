@@ -75,11 +75,10 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
 </template>
 
 <style scoped>
-/* Keep decorative background orbs out of document-level scrolling while
-   preserving the client support table's own horizontal scroll region. */
+/* Anchor the decorative background without clipping the homepage's
+   fixed-position orbit and fullscreen demo. Root overflow is handled globally. */
 .unified-home {
   position: relative;
   max-width: 100%;
-  overflow-x: clip;
 }
 </style>
