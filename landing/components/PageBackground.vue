@@ -49,6 +49,8 @@
 
 .page-bg__orb {
   position: absolute;
+  /* Avoid increasing document scrollWidth during orbital animation. */
+  max-width: calc(100% - 32px);
   border-radius: 50%;
   filter: blur(140px);
   opacity: 0.08;
@@ -59,7 +61,7 @@
   height: 900px;
   background: #00f0ff;
   top: -200px;
-  right: -150px;
+  right: 0;
   animation: orbDrift1 20s ease-in-out infinite;
 }
 
@@ -68,7 +70,7 @@
   height: 700px;
   background: #ff00ff;
   top: 300px;
-  left: -200px;
+  left: 0;
   animation: orbDrift2 25s ease-in-out infinite;
 }
 
@@ -77,7 +79,7 @@
   height: 800px;
   background: #39ff14;
   top: 1200px;
-  right: -100px;
+  right: 0;
   opacity: 0.05;
   animation: orbDrift1 22s ease-in-out infinite;
 }
@@ -87,7 +89,7 @@
   height: 700px;
   background: #00f0ff;
   top: 2100px;
-  left: -150px;
+  left: 0;
   opacity: 0.06;
   animation: orbDrift2 18s ease-in-out infinite;
 }
@@ -97,7 +99,7 @@
   height: 750px;
   background: #ff00ff;
   top: 2900px;
-  right: -120px;
+  right: 0;
   opacity: 0.05;
   animation: orbDrift1 24s ease-in-out infinite;
 }
@@ -107,7 +109,7 @@
   height: 700px;
   background: #ffd700;
   top: 3600px;
-  left: -100px;
+  left: 0;
   opacity: 0.04;
   animation: orbDrift2 20s ease-in-out infinite;
 }
@@ -117,7 +119,7 @@
   height: 650px;
   background: #00f0ff;
   top: 4300px;
-  right: -80px;
+  right: 0;
   opacity: 0.05;
   animation: orbDrift1 17s ease-in-out infinite;
 }

@@ -85,11 +85,7 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 		return err
 	}
 	if !confirmed {
-		if opts.format == "json" {
-			return renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false)
-		}
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
-		return nil
+		return renderDeclinedPlannedAdd(cmd, opts, loaded, planned)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -105,6 +101,15 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 		return resumeInteractiveLifecycle(ctx, cmd, service, input, loaded.envelope, result)
 	}
 	return err
+}
+
+// renderDeclinedPlannedAdd reports an unconfirmed plan without mutating anything.
+func renderDeclinedPlannedAdd(cmd *cobra.Command, opts *options, loaded loadedPackage, planned usecase.AddResult) error {
+	if opts.format == "json" {
+		return renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false)
+	}
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
+	return nil
 }
 
 func confirmPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, planned usecase.AddResult, freshInstall, needsInstallConfirmation bool) (bool, error) {
