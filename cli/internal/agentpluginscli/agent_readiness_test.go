@@ -92,7 +92,10 @@ func TestDerivedAgentReadinessDoesNotPromoteAttestations(t *testing.T) {
 }
 
 func TestDependencyAndRawSkillReadinessDoNotAssumeNativeUse(t *testing.T) {
-	for _, test := range []struct{ facts []string; want string }{
+	for _, test := range []struct {
+		facts []string
+		want  string
+	}{
 		{nil, "ready"},
 		{[]string{"activation_prepared"}, "needs_action"},
 		{[]string{"auth_pending"}, "needs_action"},
