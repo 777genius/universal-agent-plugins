@@ -172,6 +172,7 @@ func TestDirectoryGroupRecheckRollbackFailureRemainsRecoverable(t *testing.T) {
 		t.Fatalf("restart left directory journals: %+v, %v", open, err)
 	}
 }
+
 // A failed rollback after a removal recheck leaves an unresolved physical
 // journal. A fresh recovery must restore the removed directory from backup.
 func TestDirectoryRemovalGroupRecheckRollbackFailureRemainsRecoverable(t *testing.T) {
