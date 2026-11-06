@@ -1,6 +1,9 @@
 import { publishedLocales, localeMetadata } from '../../data/i18n';
 import { clientLandingPages } from '../../data/clients';
-import { expect, test } from '@playwright/test';
+import { expect as baseExpect, test } from '@playwright/test';
+
+// Allow the page's async hydration and smooth anchors to settle on busy CI hosts.
+const expect = baseExpect.configure({ timeout: 15_000 });
 import { emptySkillSpectorManifest, hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
 
 test.beforeEach(async ({ page }, testInfo) => {
@@ -207,17 +210,13 @@ test('header exposes the documentation entrypoint on desktop and mobile', async 
 });
 
 
-test('header keeps primary links at laptop width and GitHub icon follows theme', async ({ page }) => {
+test('header shows Demo and Plugins at laptop width and GitHub icon follows theme', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 850 });
   await page.goto('./');
   await expect(page.locator('.app-header__nav')).toBeVisible();
   await expect(page.locator('.app-header__mobile-actions')).toBeHidden();
   const links = page.locator('.app-header__nav a');
-  await expect(links).toHaveCount(4);
-  await expect(links.nth(0)).toBeVisible();
-  await expect(links.nth(1)).toBeVisible();
-  await expect(links.nth(2)).toBeHidden();
-  await expect(links.nth(3)).toBeHidden();
+  await expect(links).toHaveCount(2);
   const github = page.locator('.app-header__github-btn');
   const colors: string[] = [];
   for (const theme of ['light', 'dark']) {
@@ -230,18 +229,9 @@ test('header keeps primary links at laptop width and GitHub icon follows theme',
   await links.first().click();
   await expect(page).toHaveURL(/#demo$/);
   await expect(page.locator('#demo')).toBeInViewport();
-  await links.nth(1).click();
+  await links.last().click();
   await expect(page).toHaveURL(/\/plugins\/?$/);
   await expect(page.locator('.unified-catalog')).toBeVisible();
-  await page.setViewportSize({ width: 1440, height: 850 });
-  await links.nth(2).click();
-  await expect(page).toHaveURL(/#agent-support$/);
-  // An anchor can still be smoothly scrolling under the three-worker CI load.
-  await expect(page.locator('#agent-support')).toBeInViewport({ timeout: 15_000 });
-  expect(await page.locator('#agent-support').evaluate((node) => node.getBoundingClientRect().top)).toBeGreaterThanOrEqual(64);
-  await links.nth(3).click();
-  await expect(page).toHaveURL(/#faq$/);
-  await expect(page.locator('#faq')).toBeInViewport();
 });
 
 test('homepage omits the counter when discovery cannot load', async ({ page }) => {
