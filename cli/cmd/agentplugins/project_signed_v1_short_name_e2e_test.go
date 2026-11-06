@@ -55,7 +55,11 @@ func assertSignedV1NativeMCPServers(t *testing.T, settings string, expected ...s
 		t.Fatal(err)
 	}
 	var native struct {
-		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+		MCPServers map[string]struct {
+			HTTPURL string   `json:"httpUrl"`
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
 	}
 	if err := json.Unmarshal(standard, &native); err != nil {
 		t.Fatal(err)
@@ -64,8 +68,25 @@ func assertSignedV1NativeMCPServers(t *testing.T, settings string, expected ...s
 		t.Fatalf("native MCP server keys do not match %v: %s", expected, settings)
 	}
 	for _, name := range expected {
-		if _, ok := native.MCPServers[name]; !ok {
+		server, ok := native.MCPServers[name]
+		if !ok {
 			t.Fatalf("native MCP server %q missing: %s", name, settings)
+		}
+		switch name {
+		case "foreign", "notion", "hubspot":
+			url := "https://" + name + ".example.test/mcp"
+			if name == "foreign" {
+				url = "https://foreign.test/mcp"
+			}
+			if server.HTTPURL != url || server.Command != "" || len(server.Args) != 0 {
+				t.Fatalf("native Streamable HTTP server %q has wrong transport: %s", name, settings)
+			}
+		case "playwright":
+			if server.HTTPURL != "" || server.Command != "go" || len(server.Args) != 1 || server.Args[0] != "version" {
+				t.Fatalf("native stdio server %q has wrong transport: %s", name, settings)
+			}
+		default:
+			t.Fatalf("unexpected signed v1 fixture server %q", name)
 		}
 	}
 }
