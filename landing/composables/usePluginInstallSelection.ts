@@ -33,6 +33,12 @@ export function usePluginInstallSelection(
   // This must not broaden any signed release scope or assume local client state.
   const projectAutomatic = computed(() => projectCatalogAutomaticSelection(plugin()));
   const projectAvailable = computed(() => Boolean(projectAutomatic.value?.resolution.distribution));
+  // The published CLI still needs the exact Git fallback for user-only signed
+  // entries. The source-built CLI's short-name Project path is not released.
+  const projectSourceFallback = computed(() => scope.value === 'project' && Boolean(
+    (autoDetect.value ? projectAutomatic.value : projectCatalogSelection(plugin(), targets.value))
+      ?.directSource,
+  ));
   const resolution = computed(() => select(targets.value));
   let choicePending = false;
   function saveChoice() {
@@ -147,6 +153,7 @@ export function usePluginInstallSelection(
     targetDistributions,
     projectAvailable,
     projectAutomatic,
+    projectSourceFallback,
     resolution,
     saveChoice,
     updateTargets,

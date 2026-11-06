@@ -32,12 +32,6 @@ func (cache Cache) Load(trust TrustStore) (VerifiedBundle, error) {
 	return cache.loadVerified(trust, VerifyBundle, SnapshotSchemaVersion)
 }
 
-// LoadV2 reads an independent cache record using only the schema-2 signature
-// domain. Callers must pass a separate cache path and enforce its own floor.
-func (cache Cache) LoadV2(trust TrustStore) (VerifiedBundle, error) {
-	return cache.loadVerified(trust, VerifyV2Bundle, 2)
-}
-
 func (cache Cache) loadVerified(trust TrustStore, verifier cacheVerifier, schema int) (VerifiedBundle, error) {
 	if cache.Path == "" {
 		return VerifiedBundle{}, os.ErrNotExist
@@ -107,37 +101,6 @@ func (cache Cache) Store(candidate VerifiedBundle, trust TrustStore) error {
 		return ErrCacheRollback
 	}
 	return err
-}
-
-// StoreV2 re-verifies a separately signed v2 candidate before an atomic
-// cache update. It does not alter schema-1 cache semantics or file paths.
-func (cache Cache) StoreV2(candidate VerifiedBundle, trust TrustStore) error {
-	verified, err := VerifyV2Bundle(candidate.SnapshotBytes, candidate.EnvelopeBytes, trust)
-	if err != nil {
-		return err
-	}
-	authoritative, err := cache.reconcileVersion(verified, trust, VerifyV2Bundle, 2, true)
-	if err == nil && authoritative.Snapshot.Sequence > verified.Snapshot.Sequence {
-		return ErrCacheRollback
-	}
-	return err
-}
-
-func (cache Cache) ReconcileV2(candidate VerifiedBundle, trust TrustStore) (VerifiedBundle, error) {
-	verified, err := VerifyV2Bundle(candidate.SnapshotBytes, candidate.EnvelopeBytes, trust)
-	if err != nil {
-		return VerifiedBundle{}, err
-	}
-	return cache.reconcileVersion(verified, trust, VerifyV2Bundle, 2, true)
-}
-
-func (cache Cache) ObserveV2(candidate VerifiedBundle, trust TrustStore) (VerifiedBundle, error) {
-	verified, err := VerifyV2Bundle(candidate.SnapshotBytes, candidate.EnvelopeBytes, trust)
-	if err != nil {
-		return VerifiedBundle{}, err
-	}
-	verified.Source = candidate.Source
-	return cache.reconcileVersion(verified, trust, VerifyV2Bundle, 2, false)
 }
 
 // Reconcile linearizes a verified candidate with the process-shared cache and
