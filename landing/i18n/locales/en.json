@@ -761,7 +761,8 @@
         "project": "This project",
         "projectHint": "Run these commands from your project folder. Your agent may ask you to trust or activate the project.",
         "projectUnavailable": "Project installation is not available for this package.",
-        "marketingKitProjectUnavailable": "Marketing Kit requires Notion, HubSpot and Playwright, which are not project-qualified yet.",
+        "marketingKitProjectUnavailable": "Marketing Kit Project short-name installation requires a CLI release newer than 0.1.95.",
+        "pinnedGitFallbackInfo": "Published CLI 0.1.95 uses this pinned Git source. Project short names from the signed Directory work in current source but are not yet in that release.",
         "selectionUnavailable": "This combination of agents and install location is unavailable. Choose another agent or location."
       },
       "outcome": {

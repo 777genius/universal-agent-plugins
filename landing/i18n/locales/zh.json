@@ -744,7 +744,8 @@
         "project": "此项目",
         "projectHint": "请在项目文件夹中运行这些命令。代理可能会要求您信任或激活该项目。",
         "projectUnavailable": "此软件包不支持项目安装。",
-        "marketingKitProjectUnavailable": "Marketing Kit 依赖 Notion、HubSpot 和 Playwright，目前尚未验证其项目安装。",
+        "marketingKitProjectUnavailable": "Marketing Kit 使用短名称安装到项目需要高于 0.1.95 的 CLI 正式版本。",
+        "pinnedGitFallbackInfo": "已发布的 CLI 0.1.95 使用这个固定的 Git 来源。当前源码支持在项目中使用签名 Directory 短名称，但该功能尚未发布。",
         "selectionUnavailable": "所选代理与安装位置的组合不可用。请选择其他代理或位置。"
       },
       "outcome": {

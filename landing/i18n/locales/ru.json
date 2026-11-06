@@ -744,7 +744,8 @@
         "project": "Этого проекта",
         "projectHint": "Запускайте эти команды из папки проекта. Агент может запросить доверие к проекту или его активацию.",
         "projectUnavailable": "Для этого пакета установка в проект недоступна.",
-        "marketingKitProjectUnavailable": "Marketing Kit требует Notion, HubSpot и Playwright: их установка в проект ещё не проверена.",
+        "marketingKitProjectUnavailable": "Установка Marketing Kit по короткому имени в Project требует релиза CLI новее 0.1.95.",
+        "pinnedGitFallbackInfo": "В опубликованном CLI 0.1.95 используется этот закреплённый Git-источник. Короткие имена подписанного Directory для Project работают в текущем коде, но ещё не вошли в релиз.",
         "selectionUnavailable": "Эта комбинация агентов и места установки недоступна. Выберите другого агента или место установки."
       },
       "outcome": {

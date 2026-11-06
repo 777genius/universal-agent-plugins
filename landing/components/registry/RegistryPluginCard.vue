@@ -30,6 +30,7 @@ const {
   targetDistributions,
   projectAvailable,
   projectAutomatic,
+  projectSourceFallback,
   updateTargets,
   updateAutoDetect,
   updateScope,
@@ -385,6 +386,9 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
             :unavailable-reason="isReviewedMarketingKit(plugin) && !projectAvailable ? t('registryUi.install.scope.marketingKitProjectUnavailable') : undefined"
             @update:model-value="updateScope"
           />
+          <p v-if="projectSourceFallback" class="plugin-card__auth">
+            {{ t('registryUi.install.scope.pinnedGitFallbackInfo') }}
+          </p>
           <InstallOutcome
             v-if="!autoDetect && selectedDistribution"
             :distribution="selectedDistribution"

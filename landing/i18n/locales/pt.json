@@ -744,7 +744,8 @@
         "project": "Este projeto",
         "projectHint": "Execute estes comandos na pasta do projeto. Seu agente pode pedir que você confie no projeto ou o ative.",
         "projectUnavailable": "A instalação em um projeto não está disponível para este pacote.",
-        "marketingKitProjectUnavailable": "O Marketing Kit depende de Notion, HubSpot e Playwright, ainda não qualificados para projetos.",
+        "marketingKitProjectUnavailable": "Instalar Marketing Kit pelo nome curto em Project requer uma versão da CLI posterior à 0.1.95.",
+        "pinnedGitFallbackInfo": "A CLI publicada 0.1.95 usa esta origem Git fixada. Os nomes curtos do Directory assinado para Project funcionam no código atual, mas ainda não foram publicados.",
         "selectionUnavailable": "Esta combinação de agentes e local não está disponível. Escolha outro agente ou local."
       },
       "outcome": {

@@ -21,6 +21,7 @@ const {
   targetDistributions,
   projectAvailable,
   projectAutomatic,
+  projectSourceFallback,
   updateTargets,
   updateAutoDetect,
   updateScope,
@@ -188,6 +189,9 @@ const vendorInstall = computed(() =>
         :unavailable-reason="isReviewedMarketingKit(plugin) && !projectAvailable ? t('registryUi.install.scope.marketingKitProjectUnavailable') : undefined"
         @update:model-value="updateScope"
       />
+      <p v-if="projectSourceFallback" class="install-panel__notice">
+        {{ t('registryUi.install.scope.pinnedGitFallbackInfo') }}
+      </p>
       <div v-if="!marketingProjectBlocked" class="install-command-row">
         <div class="target-select">
           <span>{{ t('registryUi.install.agents') }}</span
