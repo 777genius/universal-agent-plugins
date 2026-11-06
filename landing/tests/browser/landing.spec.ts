@@ -245,12 +245,24 @@ test('header keeps primary links at laptop width and GitHub icon follows theme',
   await expect(page.locator('#faq')).toBeInViewport();
 });
 
-test('plugin grid defaults to five columns on desktop and stays responsive', async ({ page }) => {
+test('plugin grid defaults to three columns and five rows on desktop and stays responsive', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('./');
   const grid = page.locator('.plugin-grid--plugins').first();
   await expect(grid).toBeVisible();
-  for (const [width, expected] of [[1440, 5], [1100, 3], [800, 2], [390, 1]]) {
+  const cards = grid.locator(':scope > .plugin-card');
+  await expect(cards).toHaveCount(15);
+  const rowCount = await cards.evaluateAll((elements) =>
+    new Set(elements.map((element) => Math.round(element.getBoundingClientRect().top))).size,
+  );
+  expect(rowCount).toBe(5);
+  const firstCard = cards.first();
+  await firstCard.scrollIntoViewIfNeeded();
+  const initialBorderColor = await firstCard.evaluate((element) => getComputedStyle(element).borderTopColor);
+  await firstCard.hover();
+  await expect.poll(() => firstCard.evaluate((element) => getComputedStyle(element).borderTopColor)).not.toBe(initialBorderColor);
+  expect(await firstCard.evaluate((element) => getComputedStyle(element).transform)).toBe('none');
+  for (const [width, expected] of [[1440, 3], [1100, 3], [800, 2], [390, 1]]) {
     await page.setViewportSize({ width, height: 900 });
     const count = await grid.evaluate((element) =>
       getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length,
@@ -264,7 +276,8 @@ test('plugin grid defaults to five columns on desktop and stays responsive', asy
   const directoryColumns = await page.locator('.plugin-grid--plugins').first().evaluate((element) =>
     getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length,
   );
-  expect(directoryColumns).toBe(5);
+  expect(directoryColumns).toBe(3);
+  await expect(page.locator('.plugin-grid--plugins').first().locator(':scope > .plugin-card')).toHaveCount(15);
 });
 
 test('homepage omits the counter when discovery cannot load', async ({ page }) => {
