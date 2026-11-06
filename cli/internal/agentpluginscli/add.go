@@ -23,6 +23,7 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 			return executeAddCommand(cmd, app, opts, args[0], activationComplete, authComplete)
 		},
 	}
+	command.Flags().BoolVar(&opts.yes, "yes", false, "accept the preflighted installation plan without a confirmation prompt")
 	command.Flags().BoolVar(&opts.noSave, "no-save", false, "install without saving portable dependency intent")
 	command.Flags().StringVar(&opts.alias, "alias", "", "saved dependency alias")
 	command.Flags().StringVar(&opts.chatGPTAppID, "chatgpt-app-id", "", "personal Context7 registration ID copied from ChatGPT Developer Mode")
