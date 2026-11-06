@@ -209,6 +209,12 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 		Status             string                       `json:"status"`
 		Items              []skillspicker.OperationItem `json:"items"`
 		RepairInstructions []string                     `json:"repairInstructions"`
+		Readiness          string                       `json:"readiness"`
+		NextActions        []AgentAction                `json:"next_actions,omitempty"`
+		Scope              string                       `json:"scope"`
+		ScopeSelectionReason string                     `json:"scope_selection_reason"`
 	}{Status: result.Status, Items: outcome.Items, RepairInstructions: outcome.Result.RepairInstructions}
+	output.Readiness, output.NextActions = deriveSkillsReadiness(result.Status)
+	output.Scope, output.ScopeSelectionReason = opts.scope, scopeSelectionReason(cmd, opts)
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(output)
 }
