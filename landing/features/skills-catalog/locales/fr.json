@@ -68,6 +68,34 @@
         "viewPublisher": "Voir la source de l’éditeur",
         "revision": "Révision de la source",
         "rawDocument": "Afficher le contenu source complet de SKILL.md"
+      },
+      "scanFilterLabel": "Couverture de l'analyse",
+      "scanModes": {
+        "scanned": "Avec analyse actuelle",
+        "all": "Toutes les Skills installables"
+      },
+      "scanNotice": "Seules les Skills dont la version publiée a été analysée sont affichées. Les analyses partielles sont signalées ; l'analyse ne garantit ni sécurité ni installation.",
+      "scanNone": "Aucune Skill avec analyse actuelle trouvée dans cette sélection limitée.",
+      "scanHelp": "Choisissez toutes les Skills installables pour afficher celles sans analyse actuelle.",
+      "scanClear": "Voir toutes les Skills installables",
+      "scanReportUnavailable": "Certains rapports n'ont pas pu être vérifiés. Les Skills concernées ont été exclues.",
+      "scanSnapshot": "Publié le {date} : {complete} analyses complètes, {partial} partielles, {error} en échec et {pending} sans analyse actuelle (dont {stale} avec un ancien rapport), sur {selected} cibles sélectionnées.",
+      "scanSnapshotHelp": "Il s’agit du dernier bilan publié de l’analyse statique, pas d’un indicateur de disponibilité en direct ni d’une garantie de sécurité.",
+      "filters": {
+        "button": "Filtres",
+        "active": "{count} filtres actifs",
+        "title": "Filtrer les Skills",
+        "close": "Fermer",
+        "description": "Les modifications sont immédiates. Les deux filtres peuvent être combinés.",
+        "scanned": "Analysé par SkillSpector",
+        "scannedHelp": "Le code actuel a été inspecté. Les analyses partielles sont incluses et signalées.",
+        "noRemarks": "Sans remarques",
+        "noRemarksHelp": "Analyse statique actuelle complète sans constat sur le contenu. Les vérifications incomplètes ou indisponibles sont exclues. Cela ne garantit pas la sécurité.",
+        "reset": "Réinitialiser les filtres",
+        "moreCandidates": "D’autres Skills peuvent être vérifiées",
+        "moreCandidatesHelp": "Aucun résultat dans ce groupe. Affichez la suite pour vérifier les candidats restants.",
+        "noMatches": "Aucune Skill ne correspond aux filtres",
+        "noMatchesHelp": "Essayez une autre recherche ou réinitialisez les filtres pour voir toutes les Skills installables."
       }
     },
     "directoryPage": {

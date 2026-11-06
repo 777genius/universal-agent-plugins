@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { projectCatalogCommands, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
+import { projectCatalogAutomaticSelection, projectCatalogCommands, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
 
 function reviewed(): RegistryPlugin {
@@ -33,6 +33,37 @@ test('reviewed user-only v1 release can prepare a project from the exact pinned 
   assert.equal(commands.remove, 'npx -y universal-agent-plugins remove gitlab --scope project');
 });
 
+test('interactive project install automatically offers compatible agents without forcing Cursor', () => {
+  const plugin = reviewed();
+  const source = plugin.distributions[0]!.releases[0]!.source;
+  const exact = `github:${source.repository}@${source.revision}//${source.path}`;
+  const chosen = projectCatalogAutomaticSelection(plugin);
+  assert.equal(chosen?.directSource, exact);
+  const commands = projectCatalogCommands(plugin);
+  assert.equal(commands.add, `npx -y universal-agent-plugins add ${exact} --scope project`);
+  assert.equal(commands.update, commands.add);
+  assert.doesNotMatch(commands.add, /--target cursor/);
+  assert.doesNotMatch(commands.add, /--no-save/);
+});
+
+test('Marketing Kit pinned parent cannot bypass user-only Registry dependencies in project', () => {
+  const plugin = reviewed();
+  plugin.name = 'marketing-kit';
+  plugin.install_source = 'marketing-kit';
+  plugin.installable = true;
+  // Keep required source-digest fixture fields while testing the user-only policy gate.
+  Object.assign(plugin.distributions[0]!.releases[0]!.source, {
+    repository: '777genius/universal-agent-plugins-registry',
+    revision: 'c5bcedd4ecf12585a8a50401852e57a44891ebec',
+    path: 'plugins/marketing-kit',
+  });
+  const manual = projectCatalogSelection(plugin, ['codex']);
+  assert.equal(manual.resolution.distribution, undefined);
+  assert.equal(projectCatalogAutomaticSelection(plugin), undefined);
+  assert.throws(() => projectCatalogCommands(plugin), /No eligible project installation source/);
+  assert.throws(() => projectCatalogCommands(plugin, ['codex']), /No eligible project installation source/);
+});
+
 test('a signed project policy takes precedence over direct source fallback', () => {
   const plugin = reviewed();
   plugin.distributions[0]!.releases[0]!.targets.find(x => x.client === 'codex')!.scopes = ['user', 'project'];
@@ -40,6 +71,8 @@ test('a signed project policy takes precedence over direct source fallback', () 
   assert.equal(selection.directSource, undefined);
   assert.equal(projectCatalogCommands(plugin, ['codex']).add,
     'npx -y universal-agent-plugins add gitlab --target codex --scope project');
+  assert.equal(projectCatalogCommands(plugin).add,
+    'npx -y universal-agent-plugins add gitlab --scope project');
 });
 
 test('direct project eligibility is fail-closed for unreviewed, unpinned and unsupported input', () => {
@@ -61,7 +94,9 @@ test('direct project eligibility is fail-closed for unreviewed, unpinned and uns
   variants.push(unsafePath);
   for (const candidate of variants) {
     assert.equal(projectCatalogSelection(candidate, ['codex']).resolution.distribution, undefined);
+    assert.equal(projectCatalogAutomaticSelection(candidate), undefined);
     assert.throws(() => projectCatalogCommands(candidate, ['codex']), /No eligible/);
+    assert.throws(() => projectCatalogCommands(candidate), /No eligible/);
   }
   for (const unsupported of ['kiro', 'vscode', 'chatgpt', 'pi'] as const) {
     assert.equal(projectCatalogSelection(reviewed(), [unsupported]).resolution.distribution, undefined);

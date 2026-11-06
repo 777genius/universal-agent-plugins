@@ -30,7 +30,7 @@ class WindsurfCycleContracts(unittest.TestCase):
 
     def test_actual_four_member_zip_crosses_dispatch_and_all_proofs(self):
         self.assertEqual(self.admit(),self.result)
-        self.assertEqual(len(self.commands),47)
+        self.assertEqual(len(self.commands),len(cycle.STAGES))
         self.assertTrue(all(len(raw)<=1<<20 for raw in self.bodies().values()))
 
     def test_typed_a2_proof_schema_source_policy_phase_hash_refusals(self):
@@ -54,6 +54,29 @@ class WindsurfCycleContracts(unittest.TestCase):
             self.assertFalse(cycle.selected_parent_times(old,bad,start,end))
         bad=copy.deepcopy(now);bad["Modified"]=[start//10**9-1,0]
         self.assertFalse(cycle.selected_parent_times(old,bad,start,end))
+
+    def test_preprovisioned_scanner_is_exact_and_foreign_changes_refuse(self):
+        baseline=copy.deepcopy(self.proofs)
+        global_root=self.result["component_layout"]["root"]+"/installer-state"
+        scanner="security/lintai/0.1.3/linux-amd64/lintai"
+        def modify(field,value):
+            row=next(r["value"] for r in self.proofs if r["stage"]=="add-a")
+            row["frames"][global_root][scanner][field]=value
+        for field,value in (("SHA256","0"*64),("Mode",0o100600),("Links",2),("Size",0)):
+            self.proofs=copy.deepcopy(baseline)
+            modify(field,value)
+            with self.subTest(field=field),self.assertRaises(ValueError):
+                self.admit()
+        self.proofs=copy.deepcopy(baseline)
+        row=next(r["value"] for r in self.proofs if r["stage"]=="add-a")
+        row["frames"][global_root]["security/lintai/unknown"]=copy.deepcopy(
+            row["frames"][global_root][scanner])
+        with self.assertRaises(ValueError):self.admit()
+        self.proofs=copy.deepcopy(baseline)
+        row=next(r["value"] for r in self.proofs if r["stage"]=="add-a")
+        row["frames"][global_root].pop(scanner)
+        with self.assertRaises(ValueError):self.admit()
+        self.proofs=baseline
 
     def test_a2_parent_replacement_cannot_renew_accepted_global_authority(self):
         active=False
@@ -157,9 +180,59 @@ class WindsurfCycleContracts(unittest.TestCase):
         row={"value":list(range(20000))}
         self.assertTrue(cycle.aggregate_private(cycle.compact(row)+b"\n"))
 
+    def test_native_cache_delta_is_failure_only_bounded_and_typed(self):
+        self.commands = self.commands[:cycle.STAGES.index("b-mcp")+1]  # Real b-mcp failure prefix
+        self.proofs = self.proofs[:4]
+        self.probes = self.probes[:cycle.STAGES.index("b-mcp")]
+        stage = self.commands[-1]["stage"]
+        self.assertEqual(stage, "b-mcp")
+        cmd = self.commands[-1]["value"]
+        self.result.update(runtime_attempt_complete=False, cycle_observed_complete=False,
+                           test_failed=True, attempt_stage=stage,
+                           cycle_command_stages=[r["stage"] for r in self.commands],
+                           cycle_proof_stages=[r["stage"] for r in self.proofs],
+                           qualification={key: False for key in cycle.FLAGS})
+        t = cycle.stamp(cmd["started_at"])
+        stamp = [t // 10**9, t % 10**9]
+        empty = dict(Kind="", Mode=0, Device=0, Inode=0, UID=0, GID=0,
+                     Links=0, Size=0, Modified=[0, 0], Changed=[0, 0], SHA256="")
+        file = dict(Kind="file", Mode=0o100644, Device=1, Inode=2,
+                    UID=0, GID=0, Links=1, Size=1,
+                    Modified=stamp, Changed=stamp, SHA256="a"*64)
+        diagnostic = {
+            "diagnostic_only": True, "accepted": False, "stage": stage,
+            "root_sha256": cycle.sha((self.result["component_layout"]["root"] + "/xdg-cache/devin").encode()),
+            "native_binary_sha256": "642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4",
+            "started_at": cmd["started_at"], "ended_at": cmd["ended_at"],
+            "changed_records": 1,
+            "records": [{"key_sha256": cycle.sha(b"cli/private"), "parent_sha256": cycle.sha(b"cli"),
+                         "operation": "added", "before": False, "after": True,
+                         "previous": empty, "current": file, "within_command": True}]}
+        self.result["native_cache_delta"] = diagnostic
+        self.assertEqual(self.admit(), self.result)
+        for field, invalid in (("accepted", True), ("root_sha256", "0"*64),
+                               ("native_binary_sha256", "0"*64),
+                               ("changed_records", 2), ("stage", "a-mcp")):
+            original = diagnostic[field]
+            diagnostic[field] = invalid
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.admit()
+            diagnostic[field] = original
+        row = diagnostic["records"][0]
+        for field, invalid in (("operation", "changed"), ("within_command", False),
+                               ("key_sha256", "secret/private"), ("before", True)):
+            original = row[field]
+            row[field] = invalid
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.admit()
+            row[field] = original
+        self.result["runtime_attempt_complete"] = True
+        with self.assertRaises(ValueError):
+            self.admit()
+
     def test_failed_prefix_stays_all_false_and_cross_mode_refuses(self):
-        self.commands=self.commands[:9];self.proofs=[];self.probes=self.probes[:9]
-        self.result.update(runtime_attempt_complete=False,cycle_observed_complete=False,test_failed=True,attempt_stage="add-user",cycle_command_stages=[r["stage"] for r in self.commands],cycle_proof_stages=[],qualification={flag:False for flag in cycle.FLAGS})
+        self.commands=self.commands[:cycle.STAGES.index("add-a")+1];self.proofs=[];self.probes=self.probes[:cycle.STAGES.index("add-a")]
+        self.result.update(runtime_attempt_complete=False,cycle_observed_complete=False,test_failed=True,attempt_stage="add-a",cycle_command_stages=[r["stage"] for r in self.commands],cycle_proof_stages=[],qualification={flag:False for flag in cycle.FLAGS})
         self.assertEqual(self.admit(),self.result)
         self.result["qualification"]["project-lifecycle"]=True
         with self.assertRaises(ValueError):self.admit()

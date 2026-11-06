@@ -361,12 +361,10 @@
       "guide": "指南",
       "from": "我的电脑",
       "to": "队友的电脑",
-      "transfer": "导出 {manifest} 和 {lockfile}，将两个文件交给队友并导入，即可恢复相同版本。",
-      "requirements": "当前发布的 Marketing Kit 仅支持用户环境，尚未验证项目范围安装。恢复时需要可用的固定来源和兼容代理。",
-      "excludes": "不会传输登录状态、机密信息、设置或插件数据。",
-      "subtitle": "安装前先在用户的 uap.toml 中声明 Marketing Kit 0.1.0，再导出锁文件，让队友恢复相同的版本。",
-      "commit": "导出精确版本",
-      "manifestPreview": "预览用户环境的 uap.toml",
+      "transfer": "将 {manifest} 和 {lockfile} 交给队友。安装前，队友需把这两个文件导入用户环境。",
+      "handoff": "提交并共享两个文件。导入前会预览并确认是否替换队友现有的用户清单与锁文件。",
+      "subtitle": "Marketing Kit v0.1.0 示例：安装后共享锁定的版本。",
+      "manifestPreview": "预览 uap.toml 示例",
       "closePreview": "关闭文件预览"
     },
     "docs": {
@@ -384,17 +382,17 @@
     },
     "why": {
       "eyebrow": "为什么它有效",
-      "title": "一个标准",
-      "subtitle": "原生交付",
-      "intro": "软件包保持可移植，安装程序负责各客户端的格式转换和生命周期管理。",
-      "standardTitle": "标准第一",
-      "clientTitle": "适配各客户端",
-      "clientDescription": "Codex、Cursor、Claude Code、Gemini CLI、OpenCode 和其他客户端接收它们支持的格式。",
-      "lifecycleTitle": "全生命周期",
-      "lifecycleDescription": "通过同一 CLI 添加、检查、更新、修复、切换源或删除插件。",
-      "sourceTitle": "来源可见",
-      "sourceDescription": "已审查的软件包和社区发现仍然有清晰的标签，并且在安装之前可以获取其来源。",
-      "standardDescription": "从符合 Agent Plugins 1.0 的 {manifest} 读取软件包，无需额外的安装清单。"
+      "title": "一个插件包",
+      "subtitle": "适配多种智能体，减少手动配置",
+      "intro": "选择插件和兼容的智能体。UAP 准备受支持的组件，并提示仍需登录或激活的步骤。",
+      "standardTitle": "从 plugin.json 开始",
+      "clientTitle": "适配不同智能体",
+      "clientDescription": "Skills、MCP 服务器及其他组件会按所选智能体支持的方式准备。",
+      "lifecycleTitle": "安全管理变更",
+      "lifecycleDescription": "预览、更新、修复或移除 UAP 管理的安装，不覆盖无关文件。",
+      "sourceTitle": "了解插件来源",
+      "sourceDescription": "安装前可查看插件包来源，以及目录条目是否经过审核。",
+      "standardDescription": "使用包含 {manifest} 的 Agent Plugins 1.0 插件包，无需另建 UAP 专用插件格式。"
     },
     "builtWith": {
       "title": "已使用 UAP 构建",
@@ -462,11 +460,12 @@
       "terminal": "在您的终端中",
       "refreshNotice": "插件数据正在更新，请稍后重试。",
       "otherMethods": "其他安装方式",
+      "supportedFormats": "支持的格式",
       "watchDemo": "观看演示",
       "demoVideoTitle": "Universal Agent Plugins 安装演示",
       "supportedClients": "支持的客户端",
       "clientNote": "CLI 会安装或准备各客户端支持的原生格式。部分客户端仍需手动完成激活或登录。",
-      "install": "安装 {name}",
+      "install": "安装 {name} 插件",
       "explore": "浏览插件",
       "exploreCount": "浏览 {count} 个插件 | 浏览 {count} 个插件 | 浏览 {count} 个插件",
       "delivery": {
@@ -506,17 +505,26 @@
       "appearance": "外观"
     },
     "navigation": {
+      "demo": "视频",
       "plugins": "插件",
       "why": "为什么它有效",
       "faq": "常见问题解答",
       "open": "打开导航菜单",
       "close": "关闭导航菜单",
       "title": "导航菜单",
-      "description": "跳转至插件、产品详细信息、常见问题或 GitHub。",
-      "appearance": "外观"
+      "description": "打开演示、插件目录、文档或 GitHub。",
+      "appearance": "外观",
+      "agents": "支持的智能体"
     }
   },
   "registryUi": {
+    "desktopGuide": {
+      "title": "ChatGPT Desktop（本地）",
+      "description": "使用 Codex 本地插件目录，而不是 ChatGPT 网页连接。",
+      "command": "为桌面版安装",
+      "nextStep": "Codex CLI 会自动安装并启用本地插件。打开桌面版（可用时运行 codex app），必要时重新启动，并在新的本地会话中验证。CLI 成功不代表桌面运行已验证。",
+      "help": "设置与故障排除"
+    },
     "select": {
       "up": "向上滚动选项",
       "down": "向下滚动选项"
@@ -649,7 +657,7 @@
       "unavailableAtItsIndexedSource": "在其索引源中不可用",
       "checkedAgainBeforeInstallation": "安装前再次检查",
       "reviewedListing": "已审核",
-      "notAvailableForChatgpt": "不适用于 ChatGPT",
+      "notAvailableForChatgpt": "此版本没有经过验证的 ChatGPT 应用连接",
       "verifiedConnectionFinishSetupInChatgpt": "已验证连接；在 ChatGPT 中完成设置",
       "allInstalledAgents": "在终端中选择代理",
       "commandsDisabledInPreview": "预览期间不提供安装命令。",
@@ -688,7 +696,7 @@
       "notReadyToInstall": "尚未准备好安装",
       "detectedWhenYouRunTheCommand": "命令会在安装前让你选择代理。",
       "thisPackageIsNoLongerAvailableFromItsSource": "该软件包的来源不再可用。",
-      "notAvailableForChatgpt": "不适用于 ChatGPT",
+      "notAvailableForChatgpt": "此版本没有经过验证的 ChatGPT 应用连接",
       "unavailableSignedDirectorySnapshotExpired": "不可用：签名的目录快照已过期",
       "noActiveReleaseSupportsThisClient": "没有活动版本支持此客户端",
       "unavailableReviewDataIsNotInstallationAuthority": "不可用：审核数据不能作为安装授权依据",
@@ -717,11 +725,11 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "未解决的数据仅供审核；生产命令需要已发布的签名目录快照。",
       "commandsUnavailable": "命令不可用。",
       "automaticDetection": "在终端中选择代理",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI 根据已安装的代理检查此插件，跳过不兼容的代理，并让您确认目标。仅当此插件提供经过验证的连接时，才会包含 ChatGPT。",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI 检测兼容的代理供您确认。ChatGPT 需要经过验证的连接。",
       "oneStepRemainsInChatgpt": "ChatGPT 还剩下一步。",
       "noSingleSourceServesThisTargetSet": "没有任何一个来源支持全部选定的客户端。",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI 会在修改文件前停止，并建议兼容的客户端与来源组合；不会为不同客户端混用多个分发包。",
-      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "CLI 在更改文件之前检查每个选定的代理并显示任何登录或激活步骤。 OAuth 凭据由代理保留。",
+      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "CLI 在修改文件前检查代理并提示设置步骤。OAuth 凭据保留在代理端。",
       "chatgptFinish": "打开 ChatGPT，在 Apps 或 Plugins 中选择 {name}，完成连接后开始新聊天。可用性取决于你的账户和工作区。",
       "expectedFallback": "预期的源回退：{source}。",
       "dependencySaving": {
@@ -738,6 +746,8 @@
         "project": "此项目",
         "projectHint": "请在项目文件夹中运行这些命令。代理可能会要求您信任或激活该项目。",
         "projectUnavailable": "此软件包不支持项目安装。",
+        "marketingKitProjectUnavailable": "Marketing Kit 暂不能安装到项目：需要高于 0.1.95 的 CLI 正式版本，且必需的 Notion、HubSpot 和 Playwright 依赖必须分别满足项目安装条件。",
+        "pinnedGitFallbackInfo": "已发布的 CLI 0.1.95 使用这个固定的 Git 来源。当前源码支持在项目中使用签名 Directory 短名称，但该功能尚未发布。",
         "selectionUnavailable": "所选代理与安装位置的组合不可用。请选择其他代理或位置。"
       },
       "outcome": {
@@ -911,7 +921,7 @@
       "breadcrumb": "导航路径",
       "plugins": "插件",
       "agentPlugins10": "Agent Plugins 1.0",
-      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "条目信息和元数据已审核。自动安全评估（若有）只适用于所扫描的确切版本，不代表已审核运行时行为。",
+      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "条目及元数据已审核。安全扫描（若有）仅覆盖已扫描版本，不代表运行行为已获审计。",
       "installPlugin": "安装插件",
       "viewSource": "查看源码",
       "pluginOverview": "插件概述",

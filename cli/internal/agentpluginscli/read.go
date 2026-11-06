@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
@@ -18,73 +16,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/spf13/cobra"
 )
-
-type publicClient struct {
-	InstallIntent             domain.InstallIntent           `json:"install_intent,omitempty"`
-	BindingID                 string                         `json:"-"`
-	ClientID                  string                         `json:"client_id"`
-	Scope                     string                         `json:"scope"`
-	Materialization           domain.MaterializationState    `json:"materialization"`
-	Activation                domain.ActivationState         `json:"activation"`
-	Authentication            domain.AuthenticationState     `json:"authentication"`
-	Policy                    domain.PolicyState             `json:"policy"`
-	Verification              domain.VerificationState       `json:"verification"`
-	PackageRevision           *publicClientRevision          `json:"package_revision,omitempty"`
-	AffectedSurfaces          []string                       `json:"affected_surfaces,omitempty"`
-	ReceiptReconciled         *bool                          `json:"receipt_reconciled,omitempty"`
-	NativeDiscoveryReconciled *bool                          `json:"native_discovery_reconciled,omitempty"`
-	NativeIdentityState       domain.NativeIdentityState     `json:"native_identity_state,omitempty"`
-	ClientVersion             string                         `json:"client_version,omitempty"`
-	NativeDiscoveryEvidence   *publicNativeDiscoveryEvidence `json:"native_discovery_evidence,omitempty"`
-}
-
-type publicNativeDiscoveryEvidence struct {
-	Basis              string                   `json:"basis"`
-	VersionOperation   publicVersionOperation   `json:"version_operation"`
-	DiscoveryOperation publicDiscoveryOperation `json:"discovery_operation"`
-}
-
-type publicVersionOperation struct {
-	Argv                  []string `json:"argv"`
-	ObservedClientVersion string   `json:"observed_client_version,omitempty"`
-}
-
-type publicDiscoveryOperation struct {
-	Argv       []string `json:"argv"`
-	Discovered bool     `json:"discovered"`
-	ProductID  string   `json:"product_id"`
-}
-
-type publicClientRevision struct {
-	Version          string           `json:"version,omitempty"`
-	ResolvedRevision string           `json:"resolved_revision,omitempty"`
-	DistributionID   string           `json:"distribution_id,omitempty"`
-	ReleaseSequence  uint64           `json:"release_sequence,omitempty"`
-	TreeDigest       string           `json:"tree_digest"`
-	ManifestDigest   string           `json:"manifest_digest"`
-	Evidence         []publicEvidence `json:"evidence,omitempty"`
-}
-
-type publicDetectedClient struct {
-	ClientID    domain.ClientID        `json:"client_id"`
-	DisplayName string                 `json:"display_name"`
-	Status      domain.DetectionStatus `json:"status"`
-	Version     string                 `json:"version,omitempty"`
-	Surfaces    []domain.ClientSurface `json:"surfaces,omitempty"`
-}
-
-type publicInstallation struct {
-	InstallationID    string                    `json:"installation_id"`
-	Name              string                    `json:"name"`
-	Version           string                    `json:"version,omitempty"`
-	Source            string                    `json:"source"`
-	NeedsRebind       bool                      `json:"needs_rebind,omitempty"`
-	Clients           []publicClient            `json:"clients"`
-	Directory         *publicInstalledDirectory `json:"directory,omitempty"`
-	Warnings          []publicSafetyWarning     `json:"warnings,omitempty"`
-	MixedVersion      bool                      `json:"mixed_version"`
-	ConvergenceAction string                    `json:"convergence_action,omitempty"`
-}
 
 type doctorFinding struct {
 	Status           string `json:"status"`
@@ -100,98 +31,6 @@ type doctorFinding struct {
 type supportedClient struct {
 	ClientID    domain.ClientID    `json:"client_id"`
 	PackageMode domain.PackageMode `json:"package_mode"`
-}
-
-func newListCommand(app App, opts *options) *cobra.Command {
-	return &cobra.Command{
-		Use:   "list",
-		Short: "List tracked Agent Plugins installations",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateCommonOptions(opts); err != nil {
-				return err
-			}
-			state, err := app.StateStore.Load()
-			if err != nil {
-				return err
-			}
-			installations := publicInstallations(state, false)
-			if opts.format == "json" {
-				return writeJSONOutput(cmd.OutOrStdout(), "list", map[string]any{"installations": installations})
-			}
-			return renderInstallationList(cmd.OutOrStdout(), installations)
-		},
-	}
-}
-
-func newInfoCommand(app App, opts *options) *cobra.Command {
-	return &cobra.Command{
-		Use:   "info <name-or-installation-id>",
-		Short: "Show lifecycle state without exposing local paths",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateCommonOptions(opts); err != nil {
-				return err
-			}
-			state, err := app.StateStore.Load()
-			if err != nil {
-				return err
-			}
-			installation, err := selectInstallation(state, args[0])
-			if err != nil {
-				if strings.Contains(err.Error(), "ambiguous") || !isDirectorySelector(strings.TrimSpace(args[0])) {
-					return err
-				}
-				product, inspectErr := inspectDirectoryProduct(cmd.Context(), app, state, args[0], opts.target)
-				if inspectErr != nil {
-					return inspectErr
-				}
-				if opts.format == "json" {
-					return writeJSONOutput(cmd.OutOrStdout(), "info", product)
-				}
-				return renderProductInspection(cmd.OutOrStdout(), product)
-			}
-			public, err := inspectInstalledProduct(cmd.Context(), app, state, installation)
-			if err != nil {
-				return fmt.Errorf("inspect signed Directory: %w", err)
-			}
-			if strings.TrimSpace(opts.target) != "" {
-				if err := reconcileInstalledInfo(cmd.Context(), app, installation, opts.target, &public); err != nil {
-					return err
-				}
-			}
-			if opts.format == "json" {
-				return writeJSONOutput(cmd.OutOrStdout(), "info", public)
-			}
-			return renderInstallation(cmd.OutOrStdout(), public)
-		},
-	}
-}
-
-func newDoctorCommand(app App, opts *options) *cobra.Command {
-	return &cobra.Command{
-		Use:   "doctor [name-or-installation-id]",
-		Short: "Read-only health check for clients, state, and open operations",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateCommonOptions(opts); err != nil {
-				return err
-			}
-			return runDoctor(cmd.Context(), cmd, app, opts, args)
-		},
-	}
 }
 
 func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, args []string) error {
@@ -215,14 +54,15 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		})
 	}
 	report := struct {
-		ReadOnly           bool                   `json:"read_only"`
-		ToolVersion        string                 `json:"tool_version"`
-		SupportedClients   []supportedClient      `json:"supported_clients"`
-		Clients            []publicDetectedClient `json:"clients"`
-		InstallationCount  int                    `json:"installation_count"`
-		OpenOperationCount int                    `json:"open_operation_count"`
-		Installation       *publicInstallation    `json:"installation,omitempty"`
-		Findings           []doctorFinding        `json:"findings"`
+		ReadOnly           bool                     `json:"read_only"`
+		ToolVersion        string                   `json:"tool_version"`
+		SupportedClients   []supportedClient        `json:"supported_clients"`
+		Clients            []publicDetectedClient   `json:"clients"`
+		InstallationCount  int                      `json:"installation_count"`
+		OpenOperationCount int                      `json:"open_operation_count"`
+		Installation       *publicInstallation      `json:"installation,omitempty"`
+		ProjectReadiness   []projectReadinessRecord `json:"project_readiness"`
+		Findings           []doctorFinding          `json:"findings"`
 	}{ReadOnly: true, ToolVersion: normalizedToolVersion(app.Version), SupportedClients: doctorSupportedClients(), Clients: publicClients,
 		InstallationCount: len(publicInstallations(state, false)), OpenOperationCount: len(open)}
 	selected := (*domain.Installation)(nil)
@@ -238,20 +78,16 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		report.Installation = &value
 		selected = &installation
 	}
+	report.ProjectReadiness = projectReadinessRecords(state, selected)
 	report.Findings = doctorFindings(ctx, app, clients, state, open, selected)
+	report.Findings = append(report.Findings, doctorCodexNativeFindings(state, selected)...)
 	safety, err := doctorDirectorySafetyFindings(ctx, app, state, selected, report.Installation)
 	if err != nil {
 		return fmt.Errorf("inspect signed Directory: %w", err)
 	}
-	if len(safety) > 0 {
-		filtered := report.Findings[:0]
-		for _, finding := range report.Findings {
-			if finding.Code != "no_degradation_detected" {
-				filtered = append(filtered, finding)
-			}
-		}
-		report.Findings = append(filtered, safety...)
-	}
+	report.Findings = append(report.Findings, safety...)
+	report.Findings = dropDoctorHealthySentinel(report.Findings)
+	sortDoctorFindings(report.Findings)
 	if opts.format == "json" {
 		return writeJSONOutput(cmd.OutOrStdout(), "doctor", report)
 	}
@@ -262,6 +98,7 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %d\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Tracked installations"), report.InstallationCount)
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %d\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Open recovery operations"), report.OpenOperationCount)
+	renderProjectReadiness(cmd.OutOrStdout(), report.ProjectReadiness)
 	for _, finding := range report.Findings {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  [%s] %s: %s\n", finding.Status, finding.Code, finding.Message)
 		if finding.InstallationID != "" {
@@ -278,6 +115,39 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return renderInstallation(cmd.OutOrStdout(), *report.Installation)
 	}
 	return nil
+}
+
+// renderProjectReadiness is the only human-output boundary for project records.
+// State-derived identifiers and guidance must never inject terminal control
+// sequences; JSON output retains its usual escaping and structured values.
+func renderProjectReadiness(out io.Writer, records []projectReadinessRecord) {
+	if len(records) == 0 {
+		return
+	}
+	_, _ = fmt.Fprintln(out, "Project readiness (recorded facts, not live client execution):")
+	for _, item := range records {
+		_, _ = fmt.Fprintf(out, "  %s/%s: %s (native: %s)\n",
+			prompt.SafeText(item.InstallationID), prompt.SafeText(item.ClientID),
+			prompt.SafeText(item.Status), prompt.SafeText(item.NativeEvidence))
+		for _, action := range item.NextActions {
+			_, _ = fmt.Fprintln(out, "    Next:", prompt.SafeText(action))
+		}
+	}
+}
+
+// A generic "healthy" sentinel is valid only when no more-specific observer
+// found any issue, including native project drift or Directory safety findings.
+func dropDoctorHealthySentinel(findings []doctorFinding) []doctorFinding {
+	if len(findings) <= 1 {
+		return findings
+	}
+	kept := findings[:0]
+	for _, finding := range findings {
+		if finding.Code != "no_degradation_detected" {
+			kept = append(kept, finding)
+		}
+	}
+	return kept
 }
 
 func normalizedToolVersion(version string) string {
@@ -346,8 +216,22 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 			if visible && client.Status == domain.DetectionDetected && bindingClient == nativeCLIRegistryOwner(bindingClient, domain.InstallScope(binding.Scope)) && sharesPhysicalBackend(bindingClient, domain.InstallScope(binding.Scope)) && strings.TrimSpace(client.ExecutablePath) == "" {
 				findings = append(findings, scopedFinding("degraded", "copilot_cli_missing", installation, binding.ClientID, "GitHub Copilot CLI is unavailable for automatic Copilot activation", "install GitHub Copilot CLI, ensure copilot is on PATH, and rerun doctor"))
 			}
+			if binding.Scope == string(domain.ScopeProject) {
+				switch binding.Policy {
+				case domain.PolicyBlocked:
+					findings = append(findings, scopedFinding("degraded", "project_policy_blocked", installation, binding.ClientID, "native policy blocks this project binding", projectReadinessActions(binding.ClientID, "policy_blocked")[0]))
+				case domain.PolicyApprovalRequired:
+					findings = append(findings, scopedFinding("unknown", "project_policy_approval_required", installation, binding.ClientID, "native policy requires explicit approval", projectReadinessActions(binding.ClientID, "policy_approval_required")[0]))
+				}
+			}
 			switch binding.Activation {
-			case domain.ActivationManual, domain.ActivationPrepared:
+			case domain.ActivationPrepared:
+				if binding.Scope == string(domain.ScopeProject) {
+					findings = append(findings, projectPreparedFinding(installation, binding))
+				} else {
+					findings = append(findings, scopedFinding("degraded", "activation_pending", installation, binding.ClientID, "client activation is not complete", fmt.Sprintf("complete the displayed external activation step, then rerun the same `agentplugins add ... --target %s%s` command", binding.ClientID, doctorScopeFlag(binding))))
+				}
+			case domain.ActivationManual:
 				findings = append(findings, scopedFinding("degraded", "activation_pending", installation, binding.ClientID, "client activation is not complete", fmt.Sprintf("complete the displayed external activation step, then rerun the same `agentplugins add ... --target %s%s` command", binding.ClientID, doctorScopeFlag(binding))))
 			case domain.ActivationFailed:
 				findings = append(findings, scopedFinding("degraded", "activation_failed", installation, binding.ClientID, "client activation failed", fmt.Sprintf("resolve the client-reported activation error, then rerun the same `agentplugins add ... --target %s%s` command", binding.ClientID, doctorScopeFlag(binding))))
@@ -485,210 +369,11 @@ func repairAction(installation domain.Installation, binding domain.ClientBinding
 
 func doctorScopeFlag(binding domain.ClientBinding) string {
 	if binding.Scope == string(domain.ScopeProject) {
-		return " --scope project"
+		return " --scope project --project-root \"<PROJECT_ROOT>\""
 	}
 	return ""
 }
 
 func degradedFinding(code, subject, message, action string) doctorFinding {
 	return doctorFinding{Status: "degraded", Code: code, Subject: subject, Message: message, RecoveryAction: action}
-}
-
-func newVersionCommand(app App, opts *options) *cobra.Command {
-	return &cobra.Command{
-		Use:   "version",
-		Short: "Print the agentplugins binary version",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateCommonOptions(opts); err != nil {
-				return err
-			}
-			version := strings.TrimSpace(app.Version)
-			if version == "" {
-				version = "development"
-			}
-			if opts.format == "json" {
-				return writeJSONOutput(cmd.OutOrStdout(), "version", map[string]string{"version": version})
-			}
-			_, err := fmt.Fprintf(cmd.OutOrStdout(), "agentplugins %s\n", version)
-			return err
-		},
-	}
-}
-
-func publicInstallations(state domain.StateFileV2, includeAbsent bool) []publicInstallation {
-	values := make([]publicInstallation, 0, len(state.Installations))
-	for _, installation := range state.Installations {
-		value := publicInstallationView(installation, includeAbsent)
-		if len(value.Clients) == 0 && !includeAbsent {
-			continue
-		}
-		values = append(values, value)
-	}
-	sort.Slice(values, func(i, j int) bool {
-		if values[i].Name == values[j].Name {
-			return values[i].InstallationID < values[j].InstallationID
-		}
-		return values[i].Name < values[j].Name
-	})
-	return values
-}
-
-func publicInstallationView(installation domain.Installation, includeAbsent bool) publicInstallation {
-	value := publicInstallation{
-		InstallationID: installation.InstallationID,
-		Name:           installation.DeclaredName, Version: installation.Package.Version,
-		Source: publicSource(installation.Source), NeedsRebind: installation.NeedsRebind,
-	}
-	if installation.Directory != nil {
-		origin := installation.Directory
-		value.Directory = &publicInstalledDirectory{ProductID: origin.ProductID,
-			RecordedDistribution: origin.DistributionID, CurrentDistribution: origin.DistributionID,
-			RecordedRevision: installation.Source.ResolvedRevision, CurrentRevision: installation.Source.ResolvedRevision,
-			RecordedReleaseSequence: origin.DesiredReleaseSequence, CurrentReleaseSequence: origin.DesiredReleaseSequence,
-			RecordedSnapshotSequence: origin.SnapshotSequence}
-	}
-	for _, client := range installation.Clients {
-		if client.Materialization == domain.MaterializationAbsent && !includeAbsent {
-			continue
-		}
-		affectedSurfaces := append([]string(nil), client.AffectedSurfaces...)
-		sort.Strings(affectedSurfaces)
-		value.Clients = append(value.Clients, publicClient{
-			InstallIntent: client.InstallIntent,
-			BindingID:     client.ClientBindingID,
-			ClientID:      client.ClientID, Scope: client.Scope, Materialization: client.Materialization,
-			Activation: client.Activation, Authentication: client.Authentication,
-			Policy: client.Policy, Verification: client.Verification,
-			PackageRevision:  publicPackageRevision(client.PackageRevision),
-			AffectedSurfaces: affectedSurfaces,
-		})
-	}
-	sort.Slice(value.Clients, func(i, j int) bool { return value.Clients[i].ClientID < value.Clients[j].ClientID })
-	value.MixedVersion, value.ConvergenceAction = convergenceState(installation)
-	return value
-}
-
-func publicPackageRevision(revision *domain.ClientPackageRevision) *publicClientRevision {
-	if revision == nil {
-		return nil
-	}
-	return &publicClientRevision{Version: revision.Version, ResolvedRevision: publicImmutableRevision(revision.ResolvedRevision),
-		DistributionID: revision.DistributionID, ReleaseSequence: revision.ReleaseSequence,
-		TreeDigest: revision.TreeDigest, ManifestDigest: revision.ManifestDigest}
-}
-
-func publicImmutableRevision(value string) string {
-	value = strings.TrimSpace(value)
-	if len(value) != 40 {
-		return ""
-	}
-	for _, character := range value {
-		if !((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')) {
-			return ""
-		}
-	}
-	return value
-}
-
-func publicSource(source domain.SourceBinding) string {
-	if source.Repository != "" {
-		return publicRepositoryPath(source.Repository, source.PackageSubpath)
-	}
-	canonical := strings.TrimSpace(source.CanonicalSource)
-	if source.SourceKind != "" {
-		canonical = source.SourceURL
-		if source.SourceKind == "git" && !strings.Contains(canonical, "://") {
-			return canonical
-		}
-	}
-	if canonical == "" || filepath.IsAbs(canonical) {
-		return "local"
-	}
-	parsed, err := url.Parse(canonical)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return "local"
-	}
-	parsed.User = nil
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return parsed.String()
-}
-
-// publicRepositoryPath is presentation-only. The direct-source selector uses
-// owner/repo@revision//subpath, but exposing that parser delimiter as a doubled
-// slash makes a normal GitHub path look malformed in plans, JSON, and doctor.
-func publicRepositoryPath(repository, packageSubpath string) string {
-	repository = strings.Trim(repository, "/")
-	packageSubpath = strings.Trim(packageSubpath, "/")
-	if packageSubpath == "" {
-		return repository
-	}
-	return repository + "/" + packageSubpath
-}
-
-func selectInstallation(state domain.StateFileV2, selector string) (domain.Installation, error) {
-	selector = strings.TrimSpace(selector)
-	var matches []domain.Installation
-	for _, installation := range state.Installations {
-		if installation.InstallationID == selector {
-			return installation, nil
-		}
-		if installationMatchesSelector(installation, selector) {
-			matches = append(matches, installation)
-		}
-	}
-	if len(matches) == 0 {
-		return domain.Installation{}, fmt.Errorf("installation %q was not found", selector)
-	}
-	if len(matches) > 1 {
-		return domain.Installation{}, fmt.Errorf("installation name %q is ambiguous; use installation_id", selector)
-	}
-	return matches[0], nil
-}
-
-func renderInstallationList(writer io.Writer, installations []publicInstallation) error {
-	if len(installations) == 0 {
-		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "No Agent Plugins installations are tracked."))
-		return nil
-	}
-	for _, installation := range installations {
-		if err := renderInstallation(writer, installation); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func renderInstallation(writer io.Writer, installation publicInstallation) error {
-	_, _ = fmt.Fprintf(writer, "%s %s (%s)\n", installation.Name, installation.Version, installation.InstallationID)
-	_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Source"), installation.Source)
-	for _, client := range installation.Clients {
-		_, _ = fmt.Fprintf(writer, "  %s: materialization=%s activation=%s auth=%s verification=%s\n",
-			terminaltheme.For(writer).Text(terminaltheme.Label, prompt.SafeText(string(client.ClientID))), client.Materialization, client.Activation, client.Authentication, client.Verification)
-		if client.ReceiptReconciled != nil && client.NativeDiscoveryReconciled != nil {
-			_, _ = fmt.Fprintf(writer, "    native_identity=%s receipt_reconciled=%t native_discovery_reconciled=%t client_version=%s\n",
-				client.NativeIdentityState, *client.ReceiptReconciled, *client.NativeDiscoveryReconciled, client.ClientVersion)
-		}
-	}
-	if installation.Directory != nil {
-		value := installation.Directory
-		_, _ = fmt.Fprintf(writer, "  %s: recorded=%s@%s release=%d current=%s@%s release=%d\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Directory"),
-			value.RecordedDistribution, value.RecordedRevision, value.RecordedReleaseSequence,
-			value.CurrentDistribution, value.CurrentRevision, value.CurrentReleaseSequence)
-	}
-	if installation.MixedVersion {
-		_, _ = fmt.Fprintf(writer, "  Mixed version: true\n  Convergence: %s\n", installation.ConvergenceAction)
-	}
-	for _, warning := range installation.Warnings {
-		_, _ = fmt.Fprintf(writer, "  %s [%s]: %s\n", terminaltheme.For(writer).Text(terminaltheme.Warning, "WARNING"), warning.Code, warning.Message)
-		if warning.Action != "" {
-			_, _ = fmt.Fprintf(writer, "    %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Action"), warning.Action)
-		}
-	}
-	return nil
 }

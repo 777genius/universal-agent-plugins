@@ -258,3 +258,31 @@ func TestResolveDirectoryContext7PreparationUpdateAndQualifiedIdentity(t *testin
 		t.Fatal("changed recorded revision accepted")
 	}
 }
+
+func TestResolveDirectoryContext7PreparationV2ScopedPromotion(t *testing.T) {
+	snapshot, request := context7PreparationFixture()
+	snapshot.SnapshotSchemaVersion = 2
+	policy := &snapshot.Distributions[0].ReleasePolicies[0]
+	for i := range policy.Targets {
+		policy.Targets[i].Scope = ScopeUser
+		policy.Targets[i].Scopes = nil
+		policy.Targets[i].MinimumInstallerVersion = policy.MinimumInstallerVersion
+		policy.Targets[i].CurrentEvidence = []string{}
+	}
+	snapshot.Evidence[0].Scope = ScopeUser
+	if _, err := ResolveDirectory(snapshot, request); err != nil {
+		t.Fatalf("v2 user promotion rejected: %v", err)
+	}
+	policy.Targets[0].Scope = ScopeProject
+	if _, err := ResolveDirectory(snapshot, request); err == nil {
+		t.Fatal("v2 project grant borrowed user materialization evidence")
+	}
+	snapshot.Evidence[0].Scope = ScopeProject
+	if _, err := ResolveDirectory(snapshot, request); err != nil {
+		t.Fatalf("v2 exact project promotion rejected: %v", err)
+	}
+	policy.Targets[0].Scope = ""
+	if _, err := ResolveDirectory(snapshot, request); err == nil {
+		t.Fatal("v2 grant accepted a missing explicit scope")
+	}
+}

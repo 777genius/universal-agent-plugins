@@ -53,10 +53,7 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
       mainEntity: registryFaqItems.value.map((item) => ({
         '@type': 'Question',
         name: item.question,
-        acceptedAnswer: {
-          '@type': 'Answer',
-          text: item.answer,
-        },
+        acceptedAnswer: { '@type': 'Answer', text: item.answer },
       })),
     },
   ],
@@ -72,6 +69,7 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
     <RegistryDirectory :registry="registry" />
     <RegistryWhy />
     <BuiltWithSection v-if="showcaseAvailable" />
+    <RegistryClientSupport />
     <RegistryFaq :items="registryFaqItems" />
   </div>
 </template>

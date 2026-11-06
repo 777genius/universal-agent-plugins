@@ -2231,10 +2231,15 @@ def cline_service(ctx, tests, env, output):
     return result
 
 
-def cursor_admission_refusal(error):
+def cursor_admission_refusal(error, client="cursor"):
     """Emit only a bounded owned-source callsite; never format error data."""
-    owned = {str(SOURCE / "scripts" / name): name for name in (
-        "project_native_cursor_cycle.py", "project_native_cursor_cycle_proof.py", "project_native_runtime.py")}
+    if client not in ("cursor", "windsurf"):
+        raise ValueError("unregistered native admission diagnostic")
+    owned_paths = (
+        ("project_native_cursor_cycle.py", "project_native_cursor_cycle_proof.py", "project_native_runtime.py")
+        if client == "cursor" else
+        ("project_native_windsurf_cycle.py", "project_native_windsurf_components.py", "project_native_runtime.py"))
+    owned = {str(SOURCE / "scripts" / name): name for name in owned_paths}
     location = "unavailable"
     for candidate in (error.__cause__, error):
         if not isinstance(candidate, BaseException):
@@ -2251,7 +2256,7 @@ def cursor_admission_refusal(error):
         if trace is None and selected is not None:
             location = selected
             break
-    print("Cursor native admission refused at " + location, file=sys.stderr, flush=True)
+    print(client.title() + " native admission refused at " + location, file=sys.stderr, flush=True)
 
 
 def run(client, output):
@@ -2270,6 +2275,8 @@ def run(client, output):
                "build_complete": False, "test_selected": False, "test_passed": False,
                "runtime_artifact_admitted": False, "collection_complete": False}
     ctx, native_output, admitted = None, None, None
+    if client == "qoder":
+        summary["qoder_mcp_install_discovery"] = {"passed": False}
     try:
         with shared.Budget(480) as budget:
             ctx = shared.Context(output, summary, budget)
@@ -2300,6 +2307,11 @@ def run(client, output):
                 record, stdout, _ = ctx.command("runtime-test", [tests, "-test.run=^" + case["test"] + "$", "-test.count=1", "-test.v", "-test.timeout=" + str(case["seconds"]) + "s"], output, env, case["seconds"] + 5)
                 shared.verify_files(ctx.identities, budget)
                 accept_test(record, stdout)
+        if client == "qoder" and summary["test_passed"]:
+            with shared.Budget(180) as budget:
+                ctx.budget = budget
+                from project_native_qoder_installed_mcp import run as verify_qoder_install
+                summary["qoder_mcp_install_discovery"] = verify_qoder_install(ctx, env)
     except Exception as error:
         summary["error"] = type(error).__name__ + ": " + str(error)[:512]
     finally:
@@ -2316,9 +2328,10 @@ def run(client, output):
                 except Exception as error:
                     summary["runtime_admission_error"] = type(error).__name__
                     summary["test_passed"] = False
-                    if client == "cursor":
-                        cursor_admission_refusal(error)
-            summary["collection_complete"] = bool(summary["test_passed"] and summary["runtime_artifact_admitted"])
+                    if client in ("cursor", "windsurf"):
+                        cursor_admission_refusal(error, client)
+            summary["collection_complete"] = bool(summary["test_passed"] and summary["runtime_artifact_admitted"]
+                                                  and (client != "qoder" or summary.get("qoder_mcp_install_discovery", {}).get("passed") is True))
             shared.publish(summary, ctx, output)
             (output / "upload/research.zip").rename(output / "upload/frontend.zip")
             if admitted is not None:

@@ -14,7 +14,7 @@ def wire(raw):
 
 def build():
     p={"root":"/owned","home":"/owned/home","a":"/owned/project","b":"/owned/project-b","outside":"/owned/outside","client":"/pinned/client/bin/devin","installer":"/held/agentplugins","git":"/usr/bin/git","nonce":"1"*32,"tool_pins":{"installer":cycle.sha(b"installer"),"probe":cycle.sha(b"probe")}}
-    order="git-a git-b version empty-user-skills empty-user-mcp empty-a-skills empty-a-mcp empty-b-skills empty-b-mcp add-user user-skills user-mcp user-get add-a a-skills a-mcp a-get b-before-skills b-before-mcp add-b b-skills b-mcp b-get repeat-add-a unchanged-update-a intact-repair-a stable-a-skills stable-b-skills update-a updated-a-skills updated-a-get updated-b-skills damaged-a-skills missing-repair-a repaired-a-skills repaired-a-get remove-a removed-a-skills removed-a-mcp remaining-b-skills remaining-b-mcp repeat-remove-a remove-b final-a-skills final-a-mcp final-b-skills final-b-mcp".split()
+    order=list(cycle.STAGES)
     commands,proofs,probes=[],[],[]
     held,trees,profiles,cache={}, {}, {}, {}
     epoch=int(datetime(2026,10,30,14,tzinfo=timezone.utc).timestamp())
@@ -25,7 +25,16 @@ def build():
         return {"Kind":"directory" if directory else "file","Mode":mode or (0o40700 if directory else 0o100600),"Device":1,"Inode":int(cycle.sha((path+salt).encode())[:10],16)+1,"UID":1000,"GID":1000,"Links":2 if directory else 1,"Size":4096 if directory else len(body),"Modified":[epoch+index,fraction],"Changed":[epoch+index,fraction],"SHA256":"" if directory else cycle.sha(body)}
     def empty():return {"Kind":"","Mode":0,"Device":0,"Inode":0,"UID":0,"GID":0,"Links":0,"Size":0,"Modified":[0,0],"Changed":[0,0],"SHA256":""}
     global_root=cycle.state_root(p,"user")
-    global_tree={".":rec(global_root),"security":rec(global_root+"/security"),"security/assessments":rec(global_root+"/security/assessments")}
+    global_tree={".":rec(global_root),"security":rec(global_root+"/security"),"security/assessments":rec(global_root+"/security/assessments"),
+                 "plugin-data":rec(global_root+"/plugin-data"),"plugin-data/caller-owned":rec(global_root+"/plugin-data/caller-owned"),
+                 "plugin-data/caller-owned/keep.txt":rec(global_root+"/plugin-data/caller-owned/keep.txt",b"CALLER_user\n")}
+    # Native provisioner writes this exact pinned scanner subtree before freeze.
+    scanner_base="security/lintai/0.1.3/linux-amd64"
+    for name in ("security/lintai","security/lintai/0.1.3",scanner_base):
+        global_tree[name]=rec(global_root+"/"+name)
+    executable=scanner_base+"/lintai"
+    global_tree[executable]=rec(global_root+"/"+executable,b"pinned-scanner",mode=0o100700)
+    global_tree[executable]["SHA256"]="b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba"
     def addproof(stage,value):proofs.append({"stage":stage,"value":copy.deepcopy(value)})
     for index,stage in enumerate(order):
         selected=cycle.scope(stage);root=cycle.state_root(p,selected);prof=cycle.profile(p,selected)
@@ -33,7 +42,7 @@ def build():
         argv,cwd=cycle.argv(stage,p,held)
         out,err=b"",b""
         if stage in cycle.PUBLIC:
-            old=held.get(selected);version="1.1.0" if selected=="a" and index>=28 else "1.0.0"
+            old=held.get(selected);version="1.1.0" if selected=="a" and index>=order.index("update-a") else "1.0.0"
             revision="a-two" if version=="1.1.0" else selected+"-one"
             n=cycle.nonce(p,selected,version);manifest,skill=cycle.authored(p,selected,version)
             digest="sha256:"+cycle.sha((selected+version).encode())
@@ -176,7 +185,7 @@ def build():
             out=native_body(p,held,stage)
         commands.append({"stage":stage,"value":{"argv":argv,"cwd":cwd,"exit":1 if stage=="repeat-remove-a" else 0,"error":False,"deadline":False,"elapsed_ms":800,"started_at":start,"ended_at":end,"cleanup":cycle.CLEANUP,"stdout":wire(out),"stderr":wire(err)}})
         probes.append({"stage":stage,"value":{"events":wire(b"")}})
-    result={"acquisition":{},"activation":"prepared","attempt_stage":"final-b-mcp","capture_mode":cycle.MODE,"capture_review_required":False,"client":"windsurf","component_layout":{k:v for k,v in p.items() if k not in ("nonce","tool_pins")},"elapsed_ms":48000,"fixture_authored_updater_config":False,"qualification":{key:key in cycle.FLAGS[:2] for key in cycle.FLAGS},"real_model_qualified":False,"runtime_attempt_complete":True,"scanner":{},"source_identity":{"installer_base_commit":"a"*40,"installer_tree":"b"*40,"installer_source_state":"committed","installer_patch_sha256":[]},"test_failed":False,"vendor_authentication_qualified":False,"version":"3000.11.205","qualification_scope":cycle.SCOPE,"cycle_command_stages":order,"cycle_proof_stages":[v["stage"] for v in proofs],"cycle_observed_complete":True,"cycle_nonce":p["nonce"],"cycle_tool_pins":p["tool_pins"]}
+    result={"acquisition":{},"activation":"prepared","attempt_stage":"final-b-mcp","capture_mode":cycle.MODE,"capture_review_required":False,"client":"windsurf","component_layout":{k:v for k,v in p.items() if k not in ("nonce","tool_pins")},"elapsed_ms":44000,"fixture_authored_updater_config":False,"qualification":{key:key in cycle.FLAGS[:2] for key in cycle.FLAGS},"real_model_qualified":False,"runtime_attempt_complete":True,"scanner":{},"source_identity":{"installer_base_commit":"a"*40,"installer_tree":"b"*40,"installer_source_state":"committed","installer_patch_sha256":[]},"test_failed":False,"vendor_authentication_qualified":False,"version":"3000.11.205","qualification_scope":cycle.SCOPE,"cycle_command_stages":order,"cycle_proof_stages":[v["stage"] for v in proofs],"cycle_observed_complete":True,"cycle_nonce":p["nonce"],"cycle_tool_pins":p["tool_pins"]}
     return commands,proofs,probes,result
 
 

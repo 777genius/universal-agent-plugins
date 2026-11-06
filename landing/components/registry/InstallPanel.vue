@@ -20,26 +20,27 @@ const {
   scope,
   targetDistributions,
   projectAvailable,
+  projectAutomatic,
+  projectSourceFallback,
   updateTargets,
   updateAutoDetect,
   updateScope,
 } = selection;
-const autoOption = computed(() =>
-  scope.value === 'project'
-    ? undefined
-    : {
-        label: t('registryUi.install.allInstalledAgentsRecommended'),
-        summary: t('registryUi.install.allInstalledAgents'),
-        description: t('registryUi.install.detectedWhenYouRunTheCommand'),
-      },
-);
+const autoOption = computed(() => ({
+  label: t('registryUi.install.allInstalledAgentsRecommended'),
+  summary: t('registryUi.install.allInstalledAgents'),
+  description: t('registryUi.install.detectedWhenYouRunTheCommand'),
+}));
 const marketingProjectBlocked = computed(() => isReviewedMarketingKit(props.plugin) && scope.value === 'project' && !projectAvailable.value);
 const targetOptions = computed(() =>
   clients.map((client) => ({
     value: client.id,
     label: client.name,
     icon: asset(`client-icons/${client.icon}`),
-    disabled: !targetDistributions.value.get(client.id) && !targets.value.includes(client.id),
+    // Keep invalid explicitly saved selections visible for recovery, but an
+    // auto-detected project must never make a stale Cursor placeholder selectable.
+    disabled: !targetDistributions.value.get(client.id) &&
+      (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
       if (isDiscovered.value)
         return props.plugin.discovery?.availability === 'available'
@@ -59,15 +60,25 @@ const targetOptions = computed(() =>
     })(),
   })),
 );
+const desktopCodexCommand = computed(() =>
+  scope.value === 'user' &&
+  !isDiscovered.value &&
+  canUseSource.value &&
+  props.plugin.installable &&
+  !isFullyRetired(props.plugin) &&
+  Boolean(targetDistributions.value.get('codex'))
+    ? pluginCommands(props.plugin, ['codex']).add
+    : '',
+);
 const commands = computed(() =>
   !marketingProjectBlocked.value &&
-  (scope.value !== 'project' || !autoDetect.value) &&
+  (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
   props.plugin.installable &&
   props.plugin.discovery?.availability !== 'unavailable' &&
   canUseSource.value &&
   (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
     ? (scope.value === 'project'
-        ? projectCatalogCommands(props.plugin, targets.value)
+        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : targets.value)
         : pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
       )
     : undefined,
@@ -174,9 +185,13 @@ const vendorInstall = computed(() =>
       <InstallScopeSelect
         :model-value="scope"
         :project-available="projectAvailable"
-            :always-show="isReviewedMarketingKit(plugin)"
+        :always-show="isReviewedMarketingKit(plugin)"
+        :unavailable-reason="isReviewedMarketingKit(plugin) && !projectAvailable ? t('registryUi.install.scope.marketingKitProjectUnavailable') : undefined"
         @update:model-value="updateScope"
       />
+      <p v-if="projectSourceFallback" class="install-panel__notice">
+        {{ t('registryUi.install.scope.pinnedGitFallbackInfo') }}
+      </p>
       <div v-if="!marketingProjectBlocked" class="install-command-row">
         <div class="target-select">
           <span>{{ t('registryUi.install.agents') }}</span
@@ -187,6 +202,7 @@ const vendorInstall = computed(() =>
             :auto-option="autoOption"
             :label="t('registryUi.install.chooseTargetAgents')"
             :options="targetOptions"
+            full-width
             @update:auto-selected="updateAutoDetect"
             @update:model-value="updateTargets"
           />
@@ -198,6 +214,7 @@ const vendorInstall = computed(() =>
           :command="commands.add"
         />
       </div>
+      <ChatGPTDesktopGuide v-if="desktopCodexCommand" :command="desktopCodexCommand" />
       <InstallOutcome
         v-if="commands && !autoDetect && expectedSource"
         :distribution="expectedSource"

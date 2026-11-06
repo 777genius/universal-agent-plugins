@@ -361,12 +361,10 @@
       "guide": "Инструкция",
       "from": "Мой компьютер",
       "to": "Компьютер коллеги",
-      "transfer": "Экспортируйте {manifest} и {lockfile}, передайте оба файла коллеге и импортируйте их для восстановления тех же версий.",
-      "requirements": "Опубликованный Marketing Kit поддерживает пользовательское окружение; установка в проект пока не подтверждена. Для восстановления нужны доступные источники и совместимые агенты.",
-      "excludes": "Входы в аккаунты, секреты, настройки и данные плагинов не переносятся.",
-      "subtitle": "Перед установкой добавьте Marketing Kit 0.1.0 в пользовательский uap.toml. Экспортируйте lockfile, чтобы коллега восстановил те же версии.",
-      "commit": "Экспорт точных версий",
-      "manifestPreview": "Просмотр пользовательского uap.toml",
+      "transfer": "Передайте коллеге {manifest} и {lockfile}. Перед установкой он импортирует оба файла в пользовательское окружение.",
+      "handoff": "Закоммитьте и передайте оба файла. Импорт покажет замену пользовательских uap.toml и uap.lock коллеги и запросит подтверждение.",
+      "subtitle": "Пример с Marketing Kit v0.1.0: установите пакет и передайте коллеге зафиксированные версии.",
+      "manifestPreview": "Просмотр примера uap.toml",
       "closePreview": "Закрыть предпросмотр файла"
     },
     "docs": {
@@ -384,17 +382,17 @@
     },
     "why": {
       "eyebrow": "Почему это работает",
-      "title": "Единый стандарт",
-      "subtitle": "Нативная поставка",
-      "intro": "Пакет остаётся переносимым; установщик обрабатывает формат и жизненный цикл каждого клиента.",
-      "standardTitle": "Ориентация прежде всего на стандарт",
-      "clientTitle": "С учётом клиента",
-      "clientDescription": "Codex, Cursor, Claude Code, Gemini CLI, OpenCode и другие клиенты получают поддерживаемый ими формат.",
-      "lifecycleTitle": "Полный жизненный цикл",
-      "lifecycleDescription": "Добавляйте, проверяйте, обновляйте, исправляйте, меняйте источник и удаляйте плагин через тот же CLI.",
-      "sourceTitle": "Исходник доступен",
-      "sourceDescription": "Проверенные пакеты и найденные сообществом пакеты имеют чёткие метки; их исходник доступен до установки.",
-      "standardDescription": "Пакеты считываются из {manifest} Agent Plugins 1.0 без второго манифеста установки."
+      "title": "Один пакет",
+      "subtitle": "Меньше ручной настройки для разных агентов",
+      "intro": "Выберите плагин и совместимых агентов. UAP подготовит поддерживаемые компоненты и покажет оставшиеся шаги входа или активации.",
+      "standardTitle": "Начните с plugin.json",
+      "clientTitle": "Под каждого агента",
+      "clientDescription": "Навыки, MCP-серверы и другие компоненты подготавливаются так, как поддерживает выбранный агент.",
+      "lifecycleTitle": "Безопасное управление",
+      "lifecycleDescription": "Проверяйте план, обновляйте, восстанавливайте и удаляйте установки UAP, не перезаписывая посторонние файлы.",
+      "sourceTitle": "Понятный источник",
+      "sourceDescription": "Перед установкой проверьте источник пакета и отметку о проверке в каталоге.",
+      "standardDescription": "Используйте пакет Agent Plugins 1.0 с {manifest} — отдельный формат плагинов для UAP не нужен."
     },
     "builtWith": {
       "title": "Уже создано с UAP",
@@ -462,11 +460,12 @@
       "terminal": "В терминале",
       "refreshNotice": "Данные плагина обновляются. Повторите попытку чуть позже.",
       "otherMethods": "Другие способы установки",
+      "supportedFormats": "Поддерживаемые форматы",
       "watchDemo": "Смотреть демо",
       "demoVideoTitle": "Демонстрация установки Universal Agent Plugins",
       "supportedClients": "Поддерживаемые клиенты",
       "clientNote": "CLI устанавливает или подготавливает нативный формат, поддерживаемый каждым клиентом. Некоторые клиенты могут попросить завершить активацию или вход.",
-      "install": "Установить {name}",
+      "install": "Установить плагин {name}",
       "explore": "Обзор плагинов",
       "exploreCount": "Посмотреть {count} плагин | Посмотреть {count} плагина | Посмотреть {count} плагинов",
       "delivery": {
@@ -506,17 +505,26 @@
       "appearance": "Внешний вид"
     },
     "navigation": {
+      "demo": "ВИДЕО",
       "plugins": "Плагины",
       "why": "Почему это работает",
       "faq": "Вопросы и ответы",
       "open": "Открыть меню навигации",
       "close": "Закрыть меню навигации",
       "title": "Меню навигации",
-      "description": "Перейти к плагинам, информации о продукте, часто задаваемым вопросам или GitHub.",
-      "appearance": "Внешний вид"
+      "description": "Откройте демо, каталог плагинов, документацию или GitHub.",
+      "appearance": "Внешний вид",
+      "agents": "Поддерживаемые агенты"
     }
   },
   "registryUi": {
+    "desktopGuide": {
+      "title": "ChatGPT Desktop (локально)",
+      "description": "Используется локальный каталог Codex, а не подключение ChatGPT Web.",
+      "command": "Установить для Desktop",
+      "nextStep": "Codex CLI автоматически устанавливает и включает локальный плагин. Откройте Desktop (при наличии — через codex app), при необходимости перезапустите и проверьте новый локальный диалог. Успех CLI не подтверждает работу Desktop.",
+      "help": "Настройка и устранение проблем"
+    },
     "select": {
       "up": "Прокрутить варианты вверх",
       "down": "Прокрутить варианты вниз"
@@ -649,7 +657,7 @@
       "unavailableAtItsIndexedSource": "Недоступно в проиндексированном источнике",
       "checkedAgainBeforeInstallation": "Проверяется снова перед установкой",
       "reviewedListing": "Проверено",
-      "notAvailableForChatgpt": "Недоступно для ChatGPT",
+      "notAvailableForChatgpt": "В этом релизе нет проверенного подключения ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Проверенное подключение; завершите настройку в ChatGPT",
       "allInstalledAgents": "Выбрать агентов в терминале",
       "commandsDisabledInPreview": "Команды отключены в предварительном просмотре.",
@@ -688,7 +696,7 @@
       "notReadyToInstall": "Не готов к установке",
       "detectedWhenYouRunTheCommand": "Команда предложит выбрать агентов перед установкой.",
       "thisPackageIsNoLongerAvailableFromItsSource": "Этот пакет больше недоступен в своём источнике.",
-      "notAvailableForChatgpt": "Недоступно для ChatGPT",
+      "notAvailableForChatgpt": "В этом релизе нет проверенного подключения ChatGPT",
       "unavailableSignedDirectorySnapshotExpired": "Недоступно: срок действия подписанного снимка Directory истёк",
       "noActiveReleaseSupportsThisClient": "Ни один активный выпуск не поддерживает этого клиента",
       "unavailableReviewDataIsNotInstallationAuthority": "Недоступно: данные проверки не являются основанием для установки",
@@ -717,11 +725,11 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "Неразрешённые данные предназначены только для проверки; рабочим командам требуется опубликованный подписанный снимок Directory.",
       "commandsUnavailable": "Команды недоступны.",
       "automaticDetection": "Выбрать агентов в терминале",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI проверяет этот плагин для установленных агентов, пропускает несовместимые и позволяет подтвердить цели. ChatGPT включается только когда плагин предоставляет проверенное подключение.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI находит совместимых агентов и просит подтвердить выбор. ChatGPT требует проверенного подключения.",
       "oneStepRemainsInChatgpt": "В ChatGPT остаётся один шаг.",
       "noSingleSourceServesThisTargetSet": "Ни один источник не обслуживает этот набор целей.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI завершится ошибкой до изменения данных и предложит совместимые комбинации целей и источников; он никогда не смешивает дистрибутивы разных клиентов.",
-      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "CLI проверяет каждого выбранного агента до изменения файлов и показывает любой шаг входа или активации. Учётные данные OAuth остаются у агента.",
+      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "Перед изменением файлов CLI проверяет агентов и подсказывает шаги входа. Данные OAuth остаются у агента.",
       "chatgptFinish": "Откройте ChatGPT, выберите {name} в Apps или Plugins, подключите его и начните новый чат. Доступность зависит от вашей учётной записи и рабочей области.",
       "expectedFallback": "Ожидаемый резервный источник: {source}.",
       "dependencySaving": {
@@ -738,6 +746,8 @@
         "project": "Этого проекта",
         "projectHint": "Запускайте эти команды из папки проекта. Агент может запросить доверие к проекту или его активацию.",
         "projectUnavailable": "Для этого пакета установка в проект недоступна.",
+        "marketingKitProjectUnavailable": "Marketing Kit пока недоступен для проекта: нужен релиз CLI новее 0.1.95, а обязательные зависимости Notion, HubSpot и Playwright должны отдельно пройти проверку поддержки установки в Project.",
+        "pinnedGitFallbackInfo": "В опубликованном CLI 0.1.95 используется этот закреплённый Git-источник. Короткие имена подписанного Directory для Project работают в текущем коде, но ещё не вошли в релиз.",
         "selectionUnavailable": "Эта комбинация агентов и места установки недоступна. Выберите другого агента или место установки."
       },
       "outcome": {
@@ -911,7 +921,7 @@
       "breadcrumb": "Навигационная цепочка",
       "plugins": "Плагины",
       "agentPlugins10": "Agent Plugins 1.0",
-      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "Карточка и метаданные проверены. Автоматическая оценка безопасности, если она есть, относится только к точно просканированной ревизии. Поведение при фактическом выполнении не проверялось.",
+      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "Карточка и метаданные проверены. Скан безопасности, если есть, относится только к проверенной ревизии; работу плагина не проверяли.",
       "installPlugin": "Установить плагин",
       "viewSource": "Открыть исходник",
       "pluginOverview": "Обзор плагина",

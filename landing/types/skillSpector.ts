@@ -132,6 +132,9 @@ export interface SkillSpectorRecord {
     latest_status?: 'complete' | 'partial' | 'error';
   };
   attempt_history?: Record<string, unknown>[];
+  /** Added only after the independently pinned cohort Ed25519 signature verifies. */
+  signed_cohort_verified?: true;
+  signed_cohort_expires_at?: number;
   legacy_format?: 1 | 2;
 }
 

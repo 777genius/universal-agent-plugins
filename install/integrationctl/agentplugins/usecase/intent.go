@@ -23,12 +23,7 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 	if err != nil {
 		return domain.DeliveryPlan{}, err
 	}
-	var observation *domain.LocalEntryObservation
-	var objects []domain.NativeObjectOwnership
-	if binding != nil {
-		observation = binding.LocalEntryObservation.Clone()
-		objects = append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...)
-	}
+	observation, objects, previousNativeRoot := clonePlanningPredecessors(binding)
 	if service.ClientPreparation != nil {
 		for _, frozen := range service.PhysicalProfiles {
 			if frozen.ClientID == input.Client.ClientID {
@@ -43,15 +38,17 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 		input.Client.OpenCodeHost = host
 	}
 	plan, err := service.Planner.Plan(ctx, domain.PlanRequest{
-		ProjectRoot:           service.ProjectRoot,
-		LocalEntryObservation: observation.Clone(),
-		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), objects...),
-		Envelope:              input.Envelope,
-		Client:                input.Client,
-		Scope:                 input.Scope,
-		PhysicalArtifactID:    physicalID,
-		InstallIntent:         input.InstallIntent,
-		Detected:              service.Detected,
+		ProjectRoot:               service.ProjectRoot,
+		LocalEntryObservation:     observation.Clone(),
+		PreviousNativeObjects:     append([]domain.NativeObjectOwnership(nil), objects...),
+		PreviousNativeProfileRoot: previousNativeRoot,
+		PreviousBindingRecorded:   binding != nil,
+		Envelope:                  input.Envelope,
+		Client:                    input.Client,
+		Scope:                     input.Scope,
+		PhysicalArtifactID:        physicalID,
+		InstallIntent:             input.InstallIntent,
+		Detected:                  service.Detected,
 	})
 	if err != nil {
 		return plan, err
@@ -68,6 +65,13 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 		return plan, err
 	}
 	return plan, nil
+}
+
+func clonePlanningPredecessors(binding *domain.ClientBinding) (*domain.LocalEntryObservation, []domain.NativeObjectOwnership, string) {
+	if binding == nil {
+		return nil, nil, ""
+	}
+	return binding.LocalEntryObservation.Clone(), append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...), binding.NativeProfileRoot
 }
 
 func resolvePersistedIntent(input *AddInput, installation *domain.Installation) error {

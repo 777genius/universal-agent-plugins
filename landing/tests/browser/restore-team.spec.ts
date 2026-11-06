@@ -1,8 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { hydrated } from './i18n-state.helpers';
+import { hydrated, navigate, offline, projections, registryFixture } from './i18n-state.helpers';
 
-const addCommand = 'npx -y universal-agent-plugins install --scope user';
-const restoreCommand = 'npx -y universal-agent-plugins deps import --install';
+// Each case has an isolated browser context and no cross-test mutable state.
+test.describe.configure({ mode: 'parallel' });
+
+const commands = {
+  project: ['npx -y universal-agent-plugins install marketing-kit --scope project', 'npx -y universal-agent-plugins install'],
+  global: ['npx -y universal-agent-plugins install marketing-kit', 'npx -y universal-agent-plugins deps import --install'],
+} as const;
+const exportCommand = 'npx -y universal-agent-plugins deps export';
 const manifest = `schema_version = 1
 
 [dependencies]
@@ -12,12 +18,10 @@ const manifest = `schema_version = 1
 claude = ["777genius/marketing-kit"]
 codex = ["777genius/marketing-kit"]
 gemini = ["777genius/marketing-kit"]`;
-
 const cases = [
   ['en', 1440], ['en', 1110], ['en', 1100], ['en', 1024],
   ['en', 768], ['en', 540], ['en', 390], ['en', 320], ['en', 280],
-  ['fr', 390], ['fr', 320], ['ru', 390], ['ru', 320],
-  ['ar', 390], ['ar', 320],
+  ['fr', 390], ['fr', 320], ['ru', 390], ['ru', 320], ['ar', 390], ['ar', 320],
 ] as const;
 
 for (const theme of ['dark', 'light'] as const) {
@@ -25,123 +29,132 @@ for (const theme of ['dark', 'light'] as const) {
     test(`marketing-kit restore ${locale} ${theme} at ${width}px`, async ({ page, context }, testInfo) => {
       await page.setViewportSize({ width, height: 1000 });
       await page.emulateMedia({ reducedMotion: 'reduce' });
-      await context.addInitScript((value) => localStorage.setItem('theme', value), theme);
+      await context.addInitScript((value) => {
+        if (window === window.top) localStorage.setItem('theme', value);
+      }, theme);
       await page.goto(locale === 'en' ? './' : `./${locale}/`);
       await hydrated(page);
       await expect(page.locator('.v-application')).toHaveClass(new RegExp(`v-theme--${theme}`));
       await page.evaluate(() => document.fonts.ready.then(() => undefined));
-
       const section = page.locator('#restore-environment');
       await section.scrollIntoViewIfNeeded();
-      await expect(section.locator('.registry-restore__monitor')).toHaveCount(2);
-      await expect(section.locator('.registry-restore__wallpaper')).toHaveCount(1);
-      await expect(section.locator('.registry-restore__wallpaper')).toHaveAttribute(
-        'src', /\/showcase\/restore-teammate-wallpaper\.svg$/,
-      );
-      if (locale === 'en') await expect(section.locator('.registry-restore__subtitle')).toContainText('before installing');
-      await expect(section.locator('.registry-restore__package strong')).toHaveText(['v0.1.0', 'v0.1.0']);
-      await expect(section.locator('.registry-restore__package span')).toHaveText(['marketing-kit', 'marketing-kit']);
-      await expect(section.locator('.registry-restore__locked-version')).toHaveText('v0.1.0');
-      await expect(section.locator('.registry-restore__terminal')).toHaveCount(2);
-      await expect(section.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', addCommand);
-      await expect(section.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', restoreCommand);
-      const typed = section.locator('.typed-command');
-      await expect(typed).toHaveCount(3);
-      await expect(section.locator('.registry-restore__export')).toHaveAttribute(
-        'data-command', 'npx -y universal-agent-plugins deps export',
-      );
-      await expect(typed.first()).toHaveAttribute('data-complete', 'true');
-      await expect(typed.last()).toHaveAttribute('data-complete', 'true');
-      await expect(typed.locator('.typed-command__visible')).toHaveText([
-        addCommand, 'npx -y universal-agent-plugins deps export', restoreCommand,
-      ]);
-      // A visually wrapped command must still be one executable CLI command.
-      for (const element of await typed.all()) {
-        await expect(element.locator('.typed-command__visible > .typed-command__line')).toHaveCount(0);
-      }
-      const copyButtons = section.locator('.registry-restore__copy');
-      await expect(copyButtons).toHaveCount(2);
-      if (locale === 'en') {
-        await expect(copyButtons.first()).toHaveAccessibleName(/Copy command: My computer/);
-        await expect(copyButtons.last()).toHaveAccessibleName(/Copy command: Teammate.s computer/);
-      }
-      // Both tiny-monitor controls remain usable by touch, even at 280px.
-      expect(await copyButtons.evaluateAll((buttons) => buttons.every((button) => {
-        const { width: hitWidth, height: hitHeight } = button.getBoundingClientRect();
-        return hitWidth >= 24 && hitHeight >= 24;
-      }))).toBe(true);
-      if (width <= 340) {
-        const overlaps = await section.locator('.registry-restore__screen').evaluateAll((screens) =>
-          screens.flatMap((screen, index) => {
-            const copy = screen.querySelector('.registry-restore__copy')!.getBoundingClientRect();
-            return [...screen.querySelectorAll('.registry-restore__package > *')]
-              .filter((node) => {
+      await expect(section).toHaveAttribute('data-mode', 'project');
+      await expect(section.locator('.registry-restore__monitor')).toHaveCount(1);
+      await expect(section.locator('.registry-restore__laptop')).toHaveCount(1);
+      await expect(section.locator('.registry-restore__wallpaper')).toHaveCount(0);
+      await expect(section.locator('.registry-restore__laptop')).toHaveAttribute('src', /\/showcase\/restore-teammate-laptop\.svg$/);
+      for (const mode of ['project', 'global'] as const) {
+        await section.locator(`[data-mode-option="${mode}"]`).click();
+        await expect(section).toHaveAttribute('data-mode', mode);
+        await expect(section.locator(`[data-mode-option="${mode}"]`)).toHaveAttribute('aria-pressed', 'true');
+        if (locale === 'en') {
+          await expect(section.locator('.registry-restore__subtitle')).toHaveText(mode === 'project'
+            ? 'Marketing Kit example — keep the same plugin versions in your project.'
+            : 'Marketing Kit example — move your global plugin setup to another computer.');
+          await expect(section.locator('.registry-restore__handoff-note')).toHaveText(mode === 'project'
+            ? 'Commit uap.toml and uap.lock. Your teammate runs install in the project.'
+            : 'Export and share both files. Import replaces the global setup after confirmation.');
+        }
+        await expect(section.locator('.registry-restore__locked-version')).toHaveCount(0);
+        await expect(section.locator('.registry-restore__handoff')).not.toContainText('v0.1.0');
+        await expect(section.locator('.registry-restore__package strong')).toHaveText(['v0.1.0', 'v0.1.0']);
+        await expect(section.locator('.registry-restore__package span')).toHaveText(['marketing-kit', 'marketing-kit']);
+        await expect(section.locator('.registry-restore__terminal')).toHaveCount(2);
+        const typed = section.locator('.typed-command');
+        await expect(typed).toHaveCount(2);
+        for (let index = 0; index < 2; index++) {
+          await expect(section.locator('.registry-restore__terminal').nth(index)).toHaveAttribute('data-command', commands[mode][index]!);
+          await expect(typed.nth(index)).toHaveAttribute('data-complete', 'true');
+          await expect(typed.nth(index).locator('.typed-command__visible')).toHaveText(commands[mode][index]!);
+          await expect(typed.nth(index).locator('.typed-command__visible > .typed-command__line')).toHaveCount(0);
+          const screen = section.locator('.registry-restore__screen').nth(index);
+          const commandBox = (await screen.locator('.registry-restore__terminal').boundingBox())!;
+          const outputBox = (await screen.locator('.registry-restore__package').boundingBox())!;
+          expect(outputBox.y - commandBox.y - commandBox.height).toBeGreaterThanOrEqual(4);
+          await expect(screen.locator('.registry-restore__package')).toHaveCSS('visibility', 'visible');
+          const fonts = await screen.evaluate((element) => ({
+            command: parseFloat(getComputedStyle(element.querySelector('.registry-restore__terminal')!).fontSize),
+            output: parseFloat(getComputedStyle(element.querySelector('.registry-restore__package')!).fontSize),
+          }));
+          expect(fonts.output).toBeLessThan(fonts.command);
+          for (const part of await screen.locator('.registry-restore__package > *').all()) {
+            await expect(part).toHaveCSS('color', 'rgb(164, 166, 173)');
+            await expect(part).toHaveCSS('font-weight', '400');
+          }
+        }
+        await expect(section.locator('.registry-restore__export')).toHaveCount(mode === 'global' ? 1 : 0);
+        if (mode === 'global') await expect(section.locator('.registry-restore__export code')).toHaveText(exportCommand);
+        const copyButtons = section.locator('.registry-restore__screen .registry-restore__copy');
+        await expect(copyButtons).toHaveCount(2);
+        if (locale === 'en') {
+          await expect(copyButtons.first()).toHaveAccessibleName(/Copy command: My computer/);
+          await expect(copyButtons.last()).toHaveAccessibleName(/Copy command: Teammate.s computer/);
+        }
+        await expect(copyButtons.first()).toBeEnabled();
+        await expect(copyButtons.last()).toBeEnabled();
+        await expect(section.locator('.registry-restore__qualification')).toHaveCount(0);
+        expect(await copyButtons.evaluateAll((buttons) => buttons.every((button) => {
+          const { width: hitWidth, height: hitHeight } = button.getBoundingClientRect();
+          return hitWidth >= 24 && hitHeight >= 24;
+        }))).toBe(true);
+        if (width <= 340) {
+          expect(await section.locator('.registry-restore__screen').evaluateAll((screens) =>
+            screens.flatMap((screen, index) => {
+              const copy = screen.querySelector('.registry-restore__copy')!.getBoundingClientRect();
+              return [...screen.querySelectorAll('.registry-restore__package > *')].filter((node) => {
                 const badge = node.getBoundingClientRect();
-                return copy.left < badge.right && copy.right > badge.left &&
-                  copy.top < badge.bottom && copy.bottom > badge.top;
-              })
-              .map((node) => `screen ${index + 1}: copy overlaps ${node.textContent}`);
+                return copy.left < badge.right && copy.right > badge.left && copy.top < badge.bottom && copy.bottom > badge.top;
+              }).map((node) => `screen ${index + 1}: copy overlaps ${node.textContent}`);
+            }),
+          )).toEqual([]);
+        }
+        expect(await section.locator('.registry-restore__screen').evaluateAll((screens) =>
+          screens.flatMap((screen, index) => {
+            const bounds = screen.getBoundingClientRect();
+            return [...screen.querySelectorAll('.registry-restore__stepbar, .registry-restore__package, .registry-restore__terminal')]
+              .filter((node) => {
+                if (getComputedStyle(node).display === 'none') return false;
+                const b = node.getBoundingClientRect();
+                return b.left < bounds.left - 2 || b.right > bounds.right + 2 || b.top < bounds.top - 2 || b.bottom > bounds.bottom + 2 || node.scrollWidth > node.clientWidth + 2;
+              }).map((node) => `${index}: ${node.className}`);
           }),
-        );
-        expect(overlaps).toEqual([]);
-      }
-
-      // Only visibly laid out elements contribute; no text is clipped or shifted
-      // outside the picture's reserved screen area at any breakpoint.
-      expect(await section.locator('.registry-restore__screen').evaluateAll((screens) =>
-        screens.flatMap((screen, index) => {
-          const bounds = screen.getBoundingClientRect();
-          return [...screen.querySelectorAll(
-            '.registry-restore__stepbar, .registry-restore__package, .registry-restore__terminal, .registry-restore__commit',
-          )].filter((node) => {
-            if (getComputedStyle(node).display === 'none') return false;
-            const b = node.getBoundingClientRect();
-            return b.left < bounds.left - 2 || b.right > bounds.right + 2 ||
-              b.top < bounds.top - 2 || b.bottom > bounds.bottom + 2 ||
-              node.scrollWidth > node.clientWidth + 2;
-          }).map((node) => `${index}: ${node.className}`);
-        }),
-      )).toEqual([]);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      if (theme === 'dark' && ((locale === 'en' && [1440, 390, 280].includes(width)) ||
-        (locale === 'ar' && width === 390))) {
-        await section.screenshot({
-          path: testInfo.outputPath(`marketing-kit-restore-${locale}-${width}.png`),
-          animations: 'disabled',
-        });
-      }
-      const machines = await section.locator('.registry-restore__machine').evaluateAll(
-        (nodes) => nodes.map((node) => node.getBoundingClientRect().toJSON()),
-      );
-      if (width > 1100) expect(machines[0]!.top).toBeCloseTo(machines[1]!.top, 0);
-      else {
-        expect(machines[1]!.top).toBeGreaterThan(machines[0]!.bottom);
-        if (width > 480) machines.forEach((machine) => expect(machine.width).toBeLessThanOrEqual(501));
+        )).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        if ((locale === 'en' && [1440, 390, 280].includes(width)) || (locale === 'ar' && width === 390)) {
+          await section.screenshot({ path: testInfo.outputPath(`marketing-kit-${mode}-${theme}-${locale}-${width}.png`), animations: 'disabled' });
+        }
+        const machines = await section.locator('.registry-restore__machine').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().toJSON()));
+        if (width > 1100) expect(machines[0]!.top).toBeCloseTo(machines[1]!.top, 0);
+        else {
+          expect(machines[1]!.top).toBeGreaterThan(machines[0]!.bottom);
+          if (width > 480) machines.forEach((machine) => expect(machine.width).toBeLessThanOrEqual(501));
+        }
       }
     });
   }
 }
 
-test('manifest morph opens by focus and tap, closes with Escape, and preserves valid TOML', async ({ page }, testInfo) => {
+test('manifest morph keeps highlighted TOML lossless, accessible and dismissible', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('./');
   await hydrated(page);
   const handoff = page.locator('#restore-environment .registry-restore__handoff');
   await handoff.scrollIntoViewIfNeeded();
   const file = handoff.getByRole('button', { name: /uap.toml/i });
-  await expect(file).toHaveAccessibleName(/user environment uap\.toml/i);
+  await expect(file).toHaveAccessibleName(/preview uap\.toml/i);
   await expect(file).toHaveAttribute('aria-expanded', 'false');
   await file.focus();
   await file.press('Enter');
   await expect(file).toHaveAttribute('aria-expanded', 'true');
   const preview = handoff.getByRole('region');
-  await expect(preview).toContainText(manifest);
-  await handoff.screenshot({
-    path: testInfo.outputPath('marketing-kit-manifest-expanded.png'),
-    animations: 'disabled',
-  });
+  expect(await preview.locator('pre code').textContent()).toBe(manifest);
+  await expect(preview.locator('.marketing-manifest__heading strong')).toHaveText('Preview uap.toml example');
+  const colors = await Promise.all(['key', 'section', 'string', 'number'].map((kind) =>
+    preview.locator(`.toml-token--${kind}`).first().evaluate((element) => getComputedStyle(element).color),
+  ));
+  expect(new Set(colors).size).toBe(4);
+  await handoff.screenshot({ path: testInfo.outputPath('marketing-kit-manifest-expanded.png'), animations: 'disabled' });
   await file.press('Escape');
-  await expect(file).toHaveAccessibleName(/user environment uap\.toml/i);
   await expect(file).toHaveAttribute('aria-expanded', 'false');
   await file.click();
   await expect(preview).toBeVisible();
@@ -152,8 +165,7 @@ test('manifest morph opens by focus and tap, closes with Escape, and preserves v
   await expect(file).toHaveAttribute('aria-expanded', 'false');
   await file.click();
   await expect(preview).toBeVisible();
-  await handoff.locator('.registry-restore__locked-version').click();
-  await expect(file).toHaveAccessibleName(/user environment uap\.toml/i);
+  await handoff.locator('.registry-restore__handoff-note').click();
   await expect(file).toHaveAttribute('aria-expanded', 'false');
 });
 
@@ -170,60 +182,94 @@ test('manifest unfolds on first view, folds into icon and reopens on hover', asy
   await file.hover();
   await expect(file).toHaveAttribute('aria-expanded', 'true');
   await page.mouse.move(0, 0);
-  await expect(file).toHaveAccessibleName(/user environment uap\.toml/i);
+  await expect(file).toHaveAccessibleName(/preview uap\.toml/i);
   await expect(file).toHaveAttribute('aria-expanded', 'false');
 });
 
-test('typing is sequential and always copies complete commands', async ({ page, context }) => {
+test('both modes copy complete commands during typing and reset feedback on mode changes', async ({ page, context }) => {
+  // The three mode transitions and clipboard operations can exceed the default 30s under CI load.
+  test.setTimeout(60_000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('./');
   await hydrated(page);
   const section = page.locator('#restore-environment');
   await section.scrollIntoViewIfNeeded();
-  const buttons = section.locator('.registry-restore__copy');
-  const expected = [addCommand, restoreCommand];
-  for (let i = 0; i < expected.length; i++) {
-    await buttons.nth(i).focus();
-    await buttons.nth(i).press('Enter');
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expected[i]);
-    // The persistent live region announces copy success, with step-specific button names.
-    await expect(section.locator('.registry-restore__copy-status')).toContainText('Copied:');
+  const buttons = section.locator('.registry-restore__screen .registry-restore__copy');
+  for (const mode of ['project', 'global', 'project'] as const) {
+    await section.locator(`[data-mode-option="${mode}"]`).click();
+    await expect(section.locator('.registry-restore__copy-status')).toBeEmpty();
+    for (let i = 0; i < 2; i++) {
+      await buttons.nth(i).focus();
+      await buttons.nth(i).press('Enter');
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(commands[mode][i]);
+      await expect(section.locator('.registry-restore__copy-status')).toContainText('Copied:');
+    }
+    if (mode === 'global') {
+      await section.locator('.registry-restore__export button').click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(exportCommand);
+    }
   }
-  await expect(section.locator('.typed-command').first()).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });
-  await expect(section.locator('.typed-command').last()).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });
-  await expect(section.locator('.typed-command__visible')).toHaveText([
-    addCommand, 'npx -y universal-agent-plugins deps export', restoreCommand,
-  ]);
+  for (let i = 0; i < 2; i++) await expect(section.locator('.typed-command').nth(i)).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });
+  await expect(section.locator('.typed-command__visible')).toHaveText([...commands.project]);
+  await expect(section.locator('.registry-restore__package').first()).toHaveCSS('visibility', 'visible');
 });
 
-test('clipboard denial announces failure and restores copy-button focus', async ({ page }) => {
-  await page.goto('./');
-  await hydrated(page);
-  const section = page.locator('#restore-environment');
-  await section.scrollIntoViewIfNeeded();
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText: async () => { throw new Error('Permission denied'); } },
+for (const mode of ['project', 'global'] as const) {
+  test(`${mode} clipboard denial announces failure and restores copy-button focus`, async ({ page }) => {
+    await page.goto('./');
+    await hydrated(page);
+    const section = page.locator('#restore-environment');
+    await section.locator(`[data-mode-option="${mode}"]`).click();
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Permission denied'); } } });
+      Object.defineProperty(document, 'execCommand', { configurable: true, value: () => false });
     });
-    Object.defineProperty(document, 'execCommand', {
-      configurable: true,
-      value: () => false,
-    });
+    const copy = section.locator('.registry-restore__screen .registry-restore__copy').first();
+    await copy.focus();
+    await copy.press('Enter');
+    await expect(copy).toBeFocused();
+    await expect(copy).toHaveText('Copy failed');
+    await expect(section.locator('.registry-restore__copy-status')).toContainText('Copy failed: My computer');
+    await expect(copy).toHaveAccessibleName('Copy failed: My computer');
   });
-  const copy = section.locator('.registry-restore__copy').first();
-  await copy.focus();
-  await copy.press('Enter');
-  await expect(copy).toBeFocused();
-  await expect(copy).toHaveText('Copy failed');
-  await expect(section.locator('.registry-restore__copy-status')).toContainText('Copy failed: My computer');
-  await expect(copy).toHaveAccessibleName('Copy failed: My computer');
-});
+}
 
-test('teammate wallpaper is served from the same deployment base', async ({ request }) => {
-  const response = await request.get('./showcase/restore-teammate-wallpaper.svg');
+for (const qualified of [false, true]) {
+  test(`copying the Project example is independent of catalog qualification: ${qualified}`, async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    const errors = await offline(page);
+    const index = registryFixture();
+    const plugin = index.plugins[0]!;
+    index.plugins = [plugin];
+    plugin.name = 'marketing-kit';
+    plugin.install_source = 'marketing-kit';
+    plugin.trust_state = 'reviewed';
+    plugin.installable = true;
+    for (const distribution of plugin.distributions) {
+      for (const release of distribution.releases) {
+        for (const target of release.targets) target.scopes = qualified ? ['user', 'project'] : ['user'];
+      }
+    }
+    await projections(page, index);
+    await navigate(page, '/', 'en');
+    const section = page.locator('#restore-environment');
+    const copy = section.locator('.registry-restore__screen .registry-restore__copy');
+    for (let i = 0; i < 2; i++) {
+      await expect(copy.nth(i)).toBeEnabled();
+      await copy.nth(i).click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(commands.project[i]);
+    }
+    await expect(section.locator('.registry-restore__qualification')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('teammate laptop is served from the same deployment base without wallpaper', async ({ request }) => {
+  const response = await request.get('./showcase/restore-teammate-laptop.svg');
   expect(response.ok()).toBe(true);
   expect(response.headers()['content-type']).toMatch(/image\/svg\+xml/);
-  expect(await response.text()).toContain('Purple twilight mountains');
+  const source = await response.text();
+  expect(source).toContain('UAP laptop chassis');
+  expect(source).not.toContain('Purple twilight mountains');
 });

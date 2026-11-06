@@ -64,6 +64,13 @@ func windComponentStageActual(t *testing.T, w *windComponentFixture, scope strin
 		t.Fatal(err)
 	}
 	client := domain.DetectedClient{ClientID: domain.ClientWindsurf, ConfigRoot: w.recipes["user"].Profile, ExecutablePath: w.f.client, Version: "3000.11.205", Status: domain.DetectionDetected}
+	// This fixture's user case qualifies the existing Cascade config channel,
+	// not the newly selected Devin Global profile. A legacy desktop channel
+	// can have a valid ConfigRoot without a selected Devin CLI executable.
+	// Keep the real pinned Devin executable for the Project A/B cases.
+	if scope == "user" {
+		client.ExecutablePath, client.Version = "", ""
+	}
 	project := ""
 	if scope != "user" {
 		project = r.Project

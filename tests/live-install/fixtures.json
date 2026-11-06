@@ -1,0 +1,506 @@
+{
+  "schema_version": 1,
+  "provenance": "21 active signed Directory packages + 9 independent upstream Agent Plugins 1.0 packages at full 40-hex Git commits; five independent packages that blocked on upstream symlinks/LintAI runtime errors were retained in historical failure evidence and replaced in the current positive acceptance set with five no-symlink candidates; all direct package manifests were inspected but current installability remains unqualified until live E2E.",
+  "registry_repository": "777genius/universal-agent-plugins-registry",
+  "registry_inventory_commit": "0627020e5546354d111926c18d768bacae989890",
+  "plugin_aliases": [
+    "atlassian",
+    "context7",
+    "777genius/chrome-devtools-bridge",
+    "cloudflare",
+    "docker-hub",
+    "figma",
+    "firebase",
+    "firecrawl",
+    "777genius/github-bridge",
+    "gitlab",
+    "greptile",
+    "heroku",
+    "linear",
+    "marketing-kit",
+    "neon",
+    "notion",
+    "playwright",
+    "sentry",
+    "stripe",
+    "supabase",
+    "vercel",
+    "github:sanity-io/agent-toolkit@3ed3a143f8d3413faa7790ac0b2274fd3a8a6320",
+    "github:gemini-cli-extensions/sre@4130b149c0b069ef2028e42b3b9f3f84cce935e6",
+    "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d",
+    "github:GoogleCloudPlatform/google-cloud-storage-plugin@b346e39698fcdfdc711ca3ee35e41c8dbaa1aa2b",
+    "github:K-Dense-AI/claude-scientific-writer@529b9f73ab4b48925027145800d7b49e96ccfd3c",
+    "github:obra/the-elements-of-style@05fc4f0d2b97b7c042dd9949ad658568e4a1324e",
+    "github:cometchat/cometchat-skills@8652f1ea41d12e5058123db1e4e6babef9c918f1",
+    "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e",
+    "github:workato-devs/recipe-skills@afa1e729a013061c7b328271fadcdf240091cf3c"
+  ],
+  "skills": [
+    {
+      "repo": "anthropics/skills",
+      "ref": "ca45fc496a3436251f191354091d557da31c15b5",
+      "folder": "frontend-design",
+      "name": "frontend-design",
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/frontend-design",
+      "skill_md_git_blob_sha1": "a5333457c414d20d625f307df945842c0952ecc3"
+    },
+    {
+      "repo": "anthropics/skills",
+      "ref": "ca45fc496a3436251f191354091d557da31c15b5",
+      "folder": "pdf",
+      "name": "pdf",
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/pdf",
+      "skill_md_git_blob_sha1": "d3e046a5ae107a6cb23cfb16c219837094ab35d3"
+    },
+    {
+      "repo": "anthropics/skills",
+      "ref": "ca45fc496a3436251f191354091d557da31c15b5",
+      "folder": "docx",
+      "name": "docx",
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/docx",
+      "skill_md_git_blob_sha1": "fb954a460a1ea2294e9595e87fecce8df043eeba"
+    },
+    {
+      "repo": "anthropics/skills",
+      "ref": "ca45fc496a3436251f191354091d557da31c15b5",
+      "folder": "pptx",
+      "name": "pptx",
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/pptx",
+      "skill_md_git_blob_sha1": "41cd2306977f269bb1d8169a9643b35053aa66bd"
+    },
+    {
+      "repo": "anthropics/skills",
+      "ref": "ca45fc496a3436251f191354091d557da31c15b5",
+      "folder": "xlsx",
+      "name": "xlsx",
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/xlsx",
+      "skill_md_git_blob_sha1": "9da54804cc8c938586f89363c8da3b3a6e2a563d"
+    },
+    {
+      "repo": "anthropics/skills",
+      "ref": "ca45fc496a3436251f191354091d557da31c15b5",
+      "folder": "skill-creator",
+      "name": "skill-creator",
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/skill-creator",
+      "skill_md_git_blob_sha1": "65b3a402dbd09b8e83f9d637c6b553875189085c"
+    },
+    {
+      "repo": "anthropics/skills",
+      "ref": "ca45fc496a3436251f191354091d557da31c15b5",
+      "folder": "mcp-builder",
+      "name": "mcp-builder",
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/mcp-builder",
+      "skill_md_git_blob_sha1": "d61a9056202a0f8b2d064c896e62f415c45b1bf1"
+    },
+    {
+      "repo": "anthropics/skills",
+      "ref": "ca45fc496a3436251f191354091d557da31c15b5",
+      "folder": "webapp-testing",
+      "name": "webapp-testing",
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/webapp-testing",
+      "skill_md_git_blob_sha1": "4726215301db64a0cc4d41fc3219c61f37a30f4a"
+    },
+    {
+      "repo": "anthropics/skills",
+      "ref": "ca45fc496a3436251f191354091d557da31c15b5",
+      "folder": "algorithmic-art",
+      "name": "algorithmic-art",
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/algorithmic-art",
+      "skill_md_git_blob_sha1": "634f6fa42e4e697fa6afd293acd7fb8246574876"
+    },
+    {
+      "repo": "anthropics/skills",
+      "ref": "ca45fc496a3436251f191354091d557da31c15b5",
+      "folder": "brand-guidelines",
+      "name": "brand-guidelines",
+      "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/brand-guidelines",
+      "skill_md_git_blob_sha1": "47c72c607bdb5dd81bdea5de2b5e4f3992a5fd59"
+    },
+    {
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "agents-sdk",
+      "name": "agents-sdk",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/agents-sdk",
+      "skill_md_git_blob_sha1": "46dc611f3f7666461dbd14f5f809e82629b3bfa4"
+    },
+    {
+      "repo": "vercel-labs/agent-skills",
+      "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
+      "folder": "deploy-to-vercel",
+      "name": "deploy-to-vercel",
+      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/deploy-to-vercel",
+      "skill_md_git_blob_sha1": "f3bb68ba31294f0edf81fdb326ddc2666a24e0e0"
+    },
+    {
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "cf-cli",
+      "name": "cf-cli",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/cf-cli",
+      "skill_md_git_blob_sha1": "80eb0c47454f5bfde7b27ce158d9ff18b58124bd"
+    },
+    {
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "gateway-workers",
+      "name": "gateway-workers",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/gateway-workers",
+      "skill_md_git_blob_sha1": "186698948bf711f3ca12c516e4fec6715ad14c77"
+    },
+    {
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "wrangler",
+      "name": "wrangler",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/wrangler",
+      "skill_md_git_blob_sha1": "d5cef1c15fd2434202c33f071cf502b5d69b141d"
+    },
+    {
+      "repo": "vercel-labs/agent-skills",
+      "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
+      "folder": "vercel-optimize",
+      "name": "vercel-optimize",
+      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/vercel-optimize",
+      "skill_md_git_blob_sha1": "c8a6d6d7075b2cc3f7921da89de86e6926f78985"
+    },
+    {
+      "repo": "vercel-labs/agent-skills",
+      "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
+      "folder": "web-design-guidelines",
+      "name": "web-design-guidelines",
+      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/web-design-guidelines",
+      "skill_md_git_blob_sha1": "ceae92ab319216a68274168fba9b63b998b65997"
+    },
+    {
+      "repo": "vercel-labs/agent-skills",
+      "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
+      "folder": "writing-guidelines",
+      "name": "writing-guidelines",
+      "source": "https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/writing-guidelines",
+      "skill_md_git_blob_sha1": "63facf310252a990d154bed12b3dcdd295ba771a"
+    },
+    {
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "cloudflare",
+      "name": "cloudflare",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/cloudflare",
+      "skill_md_git_blob_sha1": "695d8d6db7553e5fc151393ea891e00e44fd9477"
+    },
+    {
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "workers-best-practices",
+      "name": "workers-best-practices",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/workers-best-practices",
+      "skill_md_git_blob_sha1": "d150906f403b130b68e7e47b958c4e46fbd053f3"
+    },
+    {
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "durable-objects",
+      "name": "durable-objects",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/durable-objects",
+      "skill_md_git_blob_sha1": "80fb75785e42c023cd3cdcbf5b9a9ac6909ecc25"
+    },
+    {
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "nextjs-on-cloudflare",
+      "name": "nextjs-on-cloudflare",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/nextjs-on-cloudflare",
+      "skill_md_git_blob_sha1": "765fd91d545f537ae99fdfac3326ecc566ec3c5f"
+    },
+    {
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "web-perf",
+      "name": "web-perf",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/web-perf",
+      "skill_md_git_blob_sha1": "9c70b7079aef1fbac9af3669bd38d5dfb712f4b7"
+    },
+    {
+      "repo": "cloudflare/skills",
+      "ref": "1f2cd0a19588e2c6197c91dd7c71729df1fb6156",
+      "folder": "workers-profiling",
+      "name": "workers-profiling",
+      "source": "https://github.com/cloudflare/skills/tree/1f2cd0a19588e2c6197c91dd7c71729df1fb6156/skills/workers-profiling",
+      "skill_md_git_blob_sha1": "792be905e836a3a892200f2c9f5a3ecbdc710314"
+    },
+    {
+      "repo": "remotion-dev/skills",
+      "ref": "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271",
+      "folder": "remotion-best-practices",
+      "name": "remotion-best-practices",
+      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-best-practices",
+      "skill_md_git_blob_sha1": "9adb9f6b0029586d2590a6bbae024693b16ec921"
+    },
+    {
+      "repo": "remotion-dev/skills",
+      "ref": "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271",
+      "folder": "remotion-captions",
+      "name": "remotion-captions",
+      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-captions",
+      "skill_md_git_blob_sha1": "e3603180e50a5c11898bec266ccc3dd3b93ca2b7"
+    },
+    {
+      "repo": "remotion-dev/skills",
+      "ref": "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271",
+      "folder": "remotion-interactivity",
+      "name": "remotion-interactivity",
+      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-interactivity",
+      "skill_md_git_blob_sha1": "6f2f4547149bda5f6f2e5369cdbe1b7e6b61a8e4"
+    },
+    {
+      "repo": "remotion-dev/skills",
+      "ref": "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271",
+      "folder": "remotion-maps",
+      "name": "remotion-maps",
+      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-maps",
+      "skill_md_git_blob_sha1": "10b9269e6e0ec81bd0110dd795099b5ff8998c94"
+    },
+    {
+      "repo": "remotion-dev/skills",
+      "ref": "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271",
+      "folder": "remotion-render",
+      "name": "remotion-render",
+      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-render",
+      "skill_md_git_blob_sha1": "67700b89473c0bd92b5ae588e6484946c8224085"
+    },
+    {
+      "repo": "remotion-dev/skills",
+      "ref": "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271",
+      "folder": "remotion-upgrade",
+      "name": "remotion-upgrade",
+      "source": "https://github.com/remotion-dev/skills/tree/c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271/skills/remotion-upgrade",
+      "skill_md_git_blob_sha1": "3f06e753b757863ec3abae805ea7bdc53725c5c9"
+    }
+  ],
+  "targets": [
+    "codex",
+    "chatgpt",
+    "cursor",
+    "copilot",
+    "vscode",
+    "kiro",
+    "claude",
+    "gemini",
+    "opencode",
+    "cline",
+    "windsurf",
+    "grok",
+    "kimi",
+    "qoder",
+    "pi"
+  ],
+  "plugin_provenance_notes": {
+    "atlassian": "active reviewed distribution; eligible release must satisfy CLI minimum",
+    "777genius/chrome-devtools-bridge": "explicit active reviewed distribution selected because product default is suspended",
+    "github:sanity-io/agent-toolkit@3ed3a143f8d3413faa7790ac0b2274fd3a8a6320": "independent Sanity Agent Plugins 1.0 package at verified exact main SHA, manifest name sanity; unreviewed direct source must pass CLI security checks"
+  },
+  "plugin_declared_names": {
+    "github:GoogleCloudPlatform/google-cloud-storage-plugin@b346e39698fcdfdc711ca3ee35e41c8dbaa1aa2b": "google-cloud-storage",
+    "github:K-Dense-AI/claude-scientific-writer@529b9f73ab4b48925027145800d7b49e96ccfd3c": "claude-scientific-writer",
+    "github:obra/the-elements-of-style@05fc4f0d2b97b7c042dd9949ad658568e4a1324e": "elements-of-style",
+    "github:sanity-io/agent-toolkit@3ed3a143f8d3413faa7790ac0b2274fd3a8a6320": "sanity",
+    "777genius/chrome-devtools-bridge": "chrome-devtools",
+    "github:gemini-cli-extensions/sre@4130b149c0b069ef2028e42b3b9f3f84cce935e6": "sre-extension",
+    "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d": "itential-builder",
+    "github:cometchat/cometchat-skills@8652f1ea41d12e5058123db1e4e6babef9c918f1": "cometchat-skills",
+    "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e": "uizze-ui-slop",
+    "github:workato-devs/recipe-skills@afa1e729a013061c7b328271fadcdf240091cf3c": "recipe-skills",
+    "777genius/github-bridge": "github"
+  },
+  "signed_release_pins": {
+    "atlassian": {
+      "distribution": "777genius/atlassian",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/atlassian",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:61e9343e636c6197067504b59b1a77c5466bad2ca97b59aacd5455d4c5301d7a",
+      "manifest_digest": "sha256:e83ade754f1251554622e4b48d596ebf72510bd7292b19a7793df4de8e546d04"
+    },
+    "context7": {
+      "distribution": "upstash/context7",
+      "repository": "upstash/context7",
+      "path": "plugins/agent-plugins/context7",
+      "revision": "769c6cd22c3d95462d1f55d789e9532cabefa5a9",
+      "sequence": 1,
+      "tree_digest": "sha256:08eed3b67f2e71a11b68baa594380c2f69ec1bc97584d701deaf7942ac34c0d8",
+      "manifest_digest": "sha256:d01781acd899aefa9445a290cf43a481230321934d62f9c8a2aab06a89718236"
+    },
+    "777genius/chrome-devtools-bridge": {
+      "distribution": "777genius/chrome-devtools-bridge",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/chrome-devtools",
+      "revision": "ae72693705e9567d43dca63351fcf63147884f4a",
+      "sequence": 3,
+      "tree_digest": "sha256:b1ff05c14b80f38f2c71961f60540f6e55072cd09c2c828cdeb2df445b5a1bcc",
+      "manifest_digest": "sha256:d14e6529884e7f57d1a2ac6280baef1f3bd052aa3080f9c62ea8458c89b70a90"
+    },
+    "cloudflare": {
+      "distribution": "777genius/cloudflare-bridge",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/cloudflare",
+      "revision": "4d7d8e075e1b0d899965496bacf2811be5d94091",
+      "sequence": 1,
+      "tree_digest": "sha256:29e6dee60be2acf06370ed182de228f101eb5d643809b87019d84e1b27f3408b",
+      "manifest_digest": "sha256:ed0c1776a5ff085de37447f8f0c28ed04148dce47c7dffabb550b08989e97465"
+    },
+    "docker-hub": {
+      "distribution": "777genius/docker-hub",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/docker-hub",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:5388e4d24222d40c57337f2d4a65559c70e34ecfd803cfe7fd41268ef722e3ba",
+      "manifest_digest": "sha256:413347fe45d0dbcbd5b4d5cf88eb7e0ec5c0cd080486ea4cb8c3f61f0bd7a95d"
+    },
+    "figma": {
+      "distribution": "777genius/figma",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/figma",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:3c8672413b34e3570c16bc3a31d8ca77da25d5e7ef302608c9c11da3d8c8a1a8",
+      "manifest_digest": "sha256:67fbfd8062a7f3d965ee63cc68f392a6afb1e8861e3bcc5fe1f70e7e9fadabba"
+    },
+    "firebase": {
+      "distribution": "777genius/firebase",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/firebase",
+      "revision": "70813b60f87d0022457189efae5365d7c17cd3a1",
+      "sequence": 6,
+      "tree_digest": "sha256:685949b123f14739cefee527a3db4723f7444407c4b718023513f25af03d7523",
+      "manifest_digest": "sha256:ddf8c3ef2689d58aa8f6b78fd36af1d8733d2a56a9bad8ee19b1a78c10ec01b4"
+    },
+    "firecrawl": {
+      "distribution": "777genius/firecrawl-bridge",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/firecrawl",
+      "revision": "ae6c26c07d844f01ff085b7f25f511dc9f53a6b8",
+      "sequence": 1,
+      "tree_digest": "sha256:a99ca95c810a29494ab55e6a1b827d88b89f27a3572f10e7918098914d1570ad",
+      "manifest_digest": "sha256:5dd4a55467b3149a3cd253b465796b1f021d66eab9244b8faed627b0209f4bf6"
+    },
+    "gitlab": {
+      "distribution": "777genius/gitlab",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/gitlab",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:ed37827bf8a1c65a36d6f2983ad9e8f7712f25669bd869970b221dbea3b862c2",
+      "manifest_digest": "sha256:1a181fab20d9520f5f006f4237e88d67cf58d29b9994dbc45ee4c80d2474e080"
+    },
+    "greptile": {
+      "distribution": "777genius/greptile",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/greptile",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:91f27a0beb56a229d213f88dc343d4b7a53a54d189b568f0e98aa119884a620e",
+      "manifest_digest": "sha256:05b29500564aede5274a6d21c0cf5bb4727e995045b04de170913b7ef2ae07bb"
+    },
+    "heroku": {
+      "distribution": "777genius/heroku",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/heroku",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:b8bf38abe09ad00b1368772a680f60586903113bd13535d643151487c67abb8e",
+      "manifest_digest": "sha256:5b7c088e290ed04b0eafe0275dc806e7c2153dd7cbe6b74d1c5f1d2961e9355a"
+    },
+    "linear": {
+      "distribution": "777genius/linear",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/linear",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:6d74545875e84110fc490981e72527e05e891ed0a67033a716184fb507001978",
+      "manifest_digest": "sha256:0b8ed223c21d206d802130ace7219b5c78af1903675640cc77f5195e4f86ef70"
+    },
+    "marketing-kit": {
+      "distribution": "777genius/marketing-kit",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/marketing-kit",
+      "revision": "c5bcedd4ecf12585a8a50401852e57a44891ebec",
+      "sequence": 1,
+      "tree_digest": "sha256:8918c0f0222bd735fd0eef3cacf90b5a9351fb213483d1558a65b9911624e68a",
+      "manifest_digest": "sha256:40b18a6b33c6392134aff7beafb9a91eaeecf46ce765e0e888cdc743dd284ea2"
+    },
+    "neon": {
+      "distribution": "777genius/neon",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/neon",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:eda9ec7ba831b2c6bd689ed57d0862bfe31903fcfbf82410bf8f2c6a3fa2e81a",
+      "manifest_digest": "sha256:6787894c7d3e033db05deee5e36358caf387493a98a78716d6db4b343e9c0698"
+    },
+    "notion": {
+      "distribution": "777genius/notion",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/notion",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:860fa6dd1830d0da2b8fed38195fa6ad6307082ac12d708118e5eb1c5d10f9b7",
+      "manifest_digest": "sha256:bbab30a4f062218d7a5fce2f6c818680d3c7adfaebdbaa3e523e15942a2f57e5"
+    },
+    "playwright": {
+      "distribution": "777genius/playwright-bridge",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/playwright",
+      "revision": "128b01ff2b4f7242ad061ad823d5e4018af6b2e4",
+      "sequence": 1,
+      "tree_digest": "sha256:8f0c8ac610974293c4f91f1ecb782fbe9d740f79f84cafe40fdfed1db234d103",
+      "manifest_digest": "sha256:8419b5c9e67894c2312048c4fe30e3ea920d00101d02641230183dd7ab4d3b31"
+    },
+    "sentry": {
+      "distribution": "777genius/sentry",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/sentry",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:cf7816d17894eb8f42db2587eef1ce2a31a145188879545414f840eaa477c5da",
+      "manifest_digest": "sha256:7606b1f8af700ea76590f0ae586ff8586f4dc370f536ceedbeab8d934494e42e"
+    },
+    "stripe": {
+      "distribution": "777genius/stripe",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/stripe",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:37867106f65c2acb5f5c64bebe4e5ce61f7e73dbb05f7d94d2f398dc913833fe",
+      "manifest_digest": "sha256:e70885fda5a4ce50c302891229e204bbf22904ec3f227670e5916d69f9b8b80d"
+    },
+    "supabase": {
+      "distribution": "777genius/supabase",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/supabase",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:4605084fd9f2f773c8eafa3741b31f639f5f5a8771320d8a7a91f5a5e1db1034",
+      "manifest_digest": "sha256:bb0672e8cd411b1c8e0872a5f7f0abc95f9c68f008802d42a2cd16a689deeb11"
+    },
+    "vercel": {
+      "distribution": "777genius/vercel",
+      "repository": "777genius/universal-agent-plugins",
+      "path": "plugins/vercel",
+      "revision": "2ddbb99dd190c1792b79904f9875e6322bccd243",
+      "sequence": 1,
+      "tree_digest": "sha256:d5089e23eccc6fe58e82be33512e25d0ee523d61f21fa42ff1e0f5bc4bad6c9c",
+      "manifest_digest": "sha256:23f7cd28573c4ab10943178db05a47f2af3639518a334449c23d89b19562ef74"
+    },
+    "777genius/github-bridge": {
+      "distribution": "777genius/github-bridge",
+      "repository": "777genius/universal-agent-plugins-registry",
+      "path": "plugins/github",
+      "revision": "ae72693705e9567d43dca63351fcf63147884f4a",
+      "sequence": 2,
+      "tree_digest": "sha256:2ce143ac1068f56e8674b1160c6c82515d0387529d5dbf13f03b2e080a3953d0",
+      "manifest_digest": "sha256:ea444f4814659dde61a78073d55377abd04d34fe9c09af7c9bbb41c93097523e"
+    }
+  }
+}

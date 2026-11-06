@@ -5,12 +5,15 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 )
 
+// TestDirectoryVerificationFailurePreservesForeignBytesAndOriginalError verifies that
+// failed publication reports quoted recovery paths without losing user bytes or committing state.
 func TestDirectoryVerificationFailurePreservesForeignBytesAndOriginalError(t *testing.T) {
 	kernel, mutation, store := transactionFixture(t, "foreign-rollback")
 	original := errors.New("original publication verification failed")
@@ -29,7 +32,7 @@ func TestDirectoryVerificationFailurePreservesForeignBytesAndOriginalError(t *te
 		t.Fatal(loadErr)
 	}
 	for _, path := range []string{r.ActivePath, r.BackupPath, r.QuarantinePath, filepath.Join(kernel.Directory.JournalDir, mutation.OperationID+".json")} {
-		if !strings.Contains(err.Error(), path) {
+		if !strings.Contains(err.Error(), strconv.Quote(path)) {
 			t.Fatalf("recovery path missing: %s in %v", path, err)
 		}
 	}
@@ -89,6 +92,8 @@ func TestDirectoryRejectsBackupDriftBeforeStateCommit(t *testing.T) {
 	}
 }
 
+// TestRemovalApplyFailureReportsRollbackFailureAndPreservesBackup verifies that
+// failed removal preserves the backup, original error and quoted recovery location.
 func TestRemovalApplyFailureReportsRollbackFailureAndPreservesBackup(t *testing.T) {
 	kernel, mutation, store := transactionFixture(t, "remove-backup-drift")
 	original := errors.New("original removal failed")
@@ -116,8 +121,8 @@ func TestRemovalApplyFailureReportsRollbackFailureAndPreservesBackup(t *testing.
 	if loadErr != nil {
 		t.Fatal(loadErr)
 	}
-	if !strings.Contains(err.Error(), r.BackupPath) {
-		t.Fatal("backup path missing")
+	if !strings.Contains(err.Error(), strconv.Quote(r.BackupPath)) {
+		t.Fatalf("backup path %q missing from recovery error: %v", r.BackupPath, err)
 	}
 	assertTransactionBody(t, r.BackupPath, "old")
 	body, readErr := os.ReadFile(filepath.Join(r.BackupPath, "foreign"))

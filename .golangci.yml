@@ -153,6 +153,8 @@ linters:
           deny:
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/adapters
               desc: usecase reaches the path policy through ports.PathPolicy, not the adapter
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/ports
+              desc: usecase receives legacy state locking through its own port, not the old module
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters
               desc: usecase depends on ports, not adapters
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner
@@ -256,6 +258,60 @@ linters:
               desc: CLI reaches marketplace identity through clients/shared, not providers
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy
               desc: CLI receives an injected planner instead of constructing pathpolicy.Policy
+        management-application:
+          files: ["**/cli/internal/agentpluginscli/management/**", "!$test"]
+          allow: ["$gostd"]
+          deny:
+            - pkg: net
+              desc: Management application operations are independent of transport
+            - pkg: os
+              desc: Management application reaches persistence and locks through ports
+            - pkg: syscall
+              desc: Management application has no direct system effects
+            - pkg: unsafe
+              desc: Management application retains authority through typed contracts
+            - pkg: plugin
+              desc: Management application does not load executable code
+            - pkg: io/ioutil
+              desc: Management application has no direct filesystem I/O
+        management-http-adapter:
+          files: ["**/cli/internal/agentpluginscli/managementhttp/**", "!$test"]
+          allow:
+            - "$gostd"
+            - "github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management$"
+            - "github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management/"
+            - "github.com/777genius/plugin-kit-ai/cli/internal/loopbackapi$"
+            - "github.com/777genius/plugin-kit-ai/cli/internal/loopbackapi/"
+          deny:
+            - pkg: os
+              desc: HTTP delegates state and effects to the application
+            - pkg: syscall
+              desc: HTTP does not own system effects
+            - pkg: unsafe
+              desc: HTTP adapts typed application operations
+            - pkg: plugin
+              desc: HTTP does not load executable code
+            - pkg: io/ioutil
+              desc: HTTP does not own filesystem state
+        management-state-adapter:
+          files: ["**/cli/internal/agentpluginscli/managementstate/**", "!$test"]
+          allow:
+            - "$gostd"
+            - "github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management$"
+            - "github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management/"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile$"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock$"
+          deny:
+            - pkg: net
+              desc: Management observation persistence is local and transport independent
+            - pkg: os/exec
+              desc: Management observations are not executable jobs
+            - pkg: syscall
+              desc: Management uses the existing process lock adapter
+            - pkg: unsafe
+              desc: Management state uses typed observation records
+            - pkg: plugin
+              desc: Management observations never load executable code
   exclusions:
     generated: lax
     paths:
@@ -316,10 +372,10 @@ linters:
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^cli/internal/agentpluginscli/lifecycle\.go$
         linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
+        text: '^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^cli/internal/agentpluginscli/read\.go$
         linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
+        text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^cli/internal/agentpluginscli/search\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity'
@@ -676,7 +732,7 @@ linters:
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/agentplugins/transaction/kernel\.go$
         linters: [revive, funlen, gocyclo, gocognit]
-        text: 'file length is|^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
+        text: '^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
       - path: ^install/integrationctl/packagesnapshot/snapshot\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'is too long|too many statements|cyclomatic complexity|cognitive complexity'

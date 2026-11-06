@@ -23,6 +23,28 @@ export function restoreSkillsQuery(query: Record<string, unknown>) {
     view: (view === 'trending' || view === 'hot' ? view : 'popular') as SkillsView,
   };
 }
+export interface SkillsFilters {
+  scannedOnly: boolean;
+  noRemarksOnly: boolean;
+}
+/** Only explicit single values enable evidence filters; old all links stay unfiltered. */
+export function restoreSkillsFilters(query: Record<string, unknown>): SkillsFilters {
+  return {
+    scannedOnly: query.skillScan === 'scanned',
+    noRemarksOnly: query.skillRemarks === 'none',
+  };
+}
+export function skillsFiltersQuery(
+  existing: Record<string, string | string[] | null | undefined>,
+  filters: SkillsFilters,
+) {
+  const next = { ...existing };
+  if (filters.scannedOnly) next.skillScan = 'scanned';
+  else delete next.skillScan;
+  if (filters.noRemarksOnly) next.skillRemarks = 'none';
+  else delete next.skillRemarks;
+  return next;
+}
 export function skillsCatalogQuery(
   query: string,
   view: SkillsView,

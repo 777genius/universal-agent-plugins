@@ -44,10 +44,9 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 			return err
 		}
 		if plan.Status != domain.PlanUnsupported {
-			plan.Status, plan.Activation = domain.PlanReady, domain.ActivationPrepared
-			for _, action := range projectActions(*plan) {
-				plan.UserActions = shared.AppendUnique(plan.UserActions, action)
-			}
+			shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, shared.OnlyNativeComponents(plan.Components))
+			plan.Activation = domain.ActivationPrepared
+			plan.UserActions = shared.AppendUnique(plan.UserActions, qoderProjectNativeAction)
 		}
 		return nil
 	}

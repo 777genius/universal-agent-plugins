@@ -105,7 +105,7 @@ agentplugins skills add owner/repository --skill review --skill pdf \
 
 يتوفر نطاق المشروع الصريح في [CLI 0.1.93 وأحدث](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93). اختر مجلدًا موجودًا وحدّد النطاق في كل أمر:
 
-لإدخال تمت مراجعته ومتوافق في الفهرس، انسخ مصدر Git المثبّت بمعرّف commit كامل والعميل المتوافق. تظل أسماء Directory v1 المختصرة مثل `context7` مخصّصة لنطاق المستخدم فقط. استبدل `OWNER/REPOSITORY` و`FULL_COMMIT_SHA` و`PACKAGE_PATH`؛ وإذا كانت الحزمة في جذر المستودع فاحذف `//PACKAGE_PATH`.
+لإدخال تمت مراجعته ومتوافق في الفهرس، انسخ مصدر Git المثبّت بمعرّف commit كامل والعميل المتوافق. لا يزال إصدار CLI 0.1.95 المنشور يتطلب مصدر Git المثبّت هذا لنطاق المشروع. أما إصدار CLI المبني من `main` فيدعم الأسماء المختصرة من Directory الموقّع مع `--scope project` للعملاء المؤهلين وجميع الاعتمادات المطلوبة (مثل `agentplugins add context7 --target codex --scope project --dry-run`)، لكن هذه الميزة لم تصدر بعد ضمن إصدار CLI عام. استبدل `OWNER/REPOSITORY` و`FULL_COMMIT_SHA` و`PACKAGE_PATH`؛ وإذا كانت الحزمة في جذر المستودع فاحذف `//PACKAGE_PATH`.
 
 القالب: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. يستخدم الأمر أدناه commit تاريخيًا حقيقيًا لحزمة GitLab، لكنه لا يثبت أن هذا الإصدار ما زال معتمدًا في الفهرس. للتثبيت الجديد، انسخ المصدر المثبّت والمراجع حاليًا من الفهرس.
 

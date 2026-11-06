@@ -361,12 +361,10 @@
       "guide": "Інструкція",
       "from": "Мій комп’ютер",
       "to": "Комп’ютер колеги",
-      "transfer": "Експортуйте {manifest} і {lockfile}, передайте обидва файли колезі та імпортуйте для відновлення тих самих версій.",
-      "requirements": "Опублікований Marketing Kit підтримує середовище користувача; встановлення в проєкт ще не підтверджено. Для відновлення потрібні доступні джерела й сумісні агенти.",
-      "excludes": "Входи в облікові записи, секрети, налаштування та дані плагінів не переносяться.",
-      "subtitle": "Перед встановленням додайте Marketing Kit 0.1.0 до користувацького uap.toml. Експортуйте lockfile, щоб колега відновив ті самі версії.",
-      "commit": "Експорт точних версій",
-      "manifestPreview": "Перегляд користувацького uap.toml",
+      "transfer": "Передайте колезі {manifest} і {lockfile}. Перед встановленням він імпортує обидва файли в користувацьке середовище.",
+      "handoff": "Закомітьте й передайте обидва файли. Імпорт покаже заміну користувацьких uap.toml і uap.lock колеги та попросить підтвердження.",
+      "subtitle": "Приклад із Marketing Kit v0.1.0: встановіть пакет і передайте колезі зафіксовані версії.",
+      "manifestPreview": "Перегляд прикладу uap.toml",
       "closePreview": "Закрити попередній перегляд"
     },
     "docs": {
@@ -384,17 +382,17 @@
     },
     "why": {
       "eyebrow": "Чому це працює",
-      "title": "Єдиний стандарт",
-      "subtitle": "Нативне розгортання",
-      "intro": "Пакет залишається переносним; інсталятор обробляє формат і життєвий цикл кожного клієнта.",
-      "standardTitle": "Орієнтація на стандарт",
-      "clientTitle": "З урахуванням клієнта",
-      "clientDescription": "Codex, Cursor, Claude Code, Gemini CLI, OpenCode та інші клієнти отримують формат, який вони підтримують.",
-      "lifecycleTitle": "Повний життєвий цикл",
-      "lifecycleDescription": "Додавайте, перевіряйте, оновлюйте, відновлюйте, змінюйте джерело або вилучайте плагін через той самий CLI.",
-      "sourceTitle": "Джерело відкрите",
-      "sourceDescription": "Перевірені пакети й результати пошуку спільноти мають чіткі позначки; їхнє джерело доступне до встановлення.",
-      "standardDescription": "Пакети читаються з Agent Plugins 1.0 {manifest}, без другого маніфесту встановлення."
+      "title": "Один пакет",
+      "subtitle": "Менше ручного налаштування для різних агентів",
+      "intro": "Виберіть плагін і сумісних агентів. UAP підготує підтримувані компоненти та покаже, чи потрібні вхід або активація.",
+      "standardTitle": "Почніть із plugin.json",
+      "clientTitle": "Для кожного агента",
+      "clientDescription": "Навички, MCP-сервери та інші компоненти готуються у форматі, який підтримує вибраний агент.",
+      "lifecycleTitle": "Безпечне керування",
+      "lifecycleDescription": "Переглядайте план, оновлюйте, відновлюйте та видаляйте встановлення UAP, не перезаписуючи сторонні файли.",
+      "sourceTitle": "Зрозуміле джерело",
+      "sourceDescription": "Перед установленням перевірте джерело пакета та позначку перевірки в каталозі.",
+      "standardDescription": "Використовуйте пакет Agent Plugins 1.0 із {manifest} — окремий формат плагінів для UAP не потрібен."
     },
     "builtWith": {
       "title": "Уже створено з UAP",
@@ -462,11 +460,12 @@
       "terminal": "У вашому терміналі",
       "refreshNotice": "Дані плагіна оновлюються. Спробуйте ще раз невдовзі.",
       "otherMethods": "Інші способи встановлення",
+      "supportedFormats": "Підтримувані формати",
       "watchDemo": "Переглянути демо",
       "demoVideoTitle": "Демонстрація встановлення Universal Agent Plugins",
       "supportedClients": "Підтримувані клієнти",
       "clientNote": "CLI встановлює або готує нативний формат, який підтримує кожен клієнт. Деякі клієнти можуть попросити завершити активацію або ввійти.",
-      "install": "Встановити {name}",
+      "install": "Встановити плагін {name}",
       "explore": "Переглянути плагіни",
       "exploreCount": "Переглянути {count} плагін | Переглянути {count} плагіни | Переглянути {count} плагінів",
       "delivery": {
@@ -506,17 +505,26 @@
       "appearance": "Вигляд"
     },
     "navigation": {
+      "demo": "ВІДЕО",
       "plugins": "Плагіни",
       "why": "Чому це працює",
       "faq": "Запитання й відповіді",
       "open": "Відкрити меню навігації",
       "close": "Закрити меню навігації",
       "title": "Меню навігації",
-      "description": "Перейти до плагінів, відомостей про продукт, поширених запитань або GitHub.",
-      "appearance": "Вигляд"
+      "description": "Відкрийте демо, каталог плагінів, документацію або GitHub.",
+      "appearance": "Вигляд",
+      "agents": "Підтримувані агенти"
     }
   },
   "registryUi": {
+    "desktopGuide": {
+      "title": "ChatGPT Desktop (локально)",
+      "description": "Використовується локальний каталог Codex, а не підключення ChatGPT Web.",
+      "command": "Встановити для Desktop",
+      "nextStep": "Codex CLI автоматично встановлює та вмикає локальний плагін. Відкрийте Desktop (за наявності — через codex app), за потреби перезапустіть і перевірте новий локальний чат. Успіх CLI не підтверджує роботу Desktop.",
+      "help": "Налаштування та усунення проблем"
+    },
     "select": {
       "up": "Прокрутити параметри вгору",
       "down": "Прокрутити параметри вниз"
@@ -649,7 +657,7 @@
       "unavailableAtItsIndexedSource": "Недоступно в індексованому джерелі",
       "checkedAgainBeforeInstallation": "Перевіряється повторно перед встановленням",
       "reviewedListing": "Перевірено",
-      "notAvailableForChatgpt": "Недоступно для ChatGPT",
+      "notAvailableForChatgpt": "У цьому релізі немає перевіреного підключення ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Перевірене підключення; завершіть налаштування в ChatGPT",
       "allInstalledAgents": "Вибрати агентів у терміналі",
       "commandsDisabledInPreview": "Команди вимкнено в попередньому перегляді.",
@@ -688,7 +696,7 @@
       "notReadyToInstall": "Не готово до встановлення",
       "detectedWhenYouRunTheCommand": "Команда запропонує вибрати агентів перед встановленням.",
       "thisPackageIsNoLongerAvailableFromItsSource": "Цей пакет більше недоступний у своєму джерелі.",
-      "notAvailableForChatgpt": "Недоступно для ChatGPT",
+      "notAvailableForChatgpt": "У цьому релізі немає перевіреного підключення ChatGPT",
       "unavailableSignedDirectorySnapshotExpired": "Недоступно: термін дії підписаного знімка Directory минув",
       "noActiveReleaseSupportsThisClient": "Жоден активний випуск не підтримує цього клієнта",
       "unavailableReviewDataIsNotInstallationAuthority": "Недоступно: дані перевірки не є підставою для встановлення",
@@ -717,11 +725,11 @@
       "unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot": "Невирішені дані призначені лише для перевірки; робочі команди потребують опублікованого підписаного знімка Directory.",
       "commandsUnavailable": "Команди недоступні.",
       "automaticDetection": "Вибрати агентів у терміналі",
-      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI перевіряє цей плагін щодо встановлених агентів, пропускає несумісні та дає підтвердити цілі. ChatGPT включено лише коли цей плагін надає перевірене підключення.",
+      "theCliChecksThisPluginAgainstInstalledAgentsSkipsIncompatibleOnesAndLetsYouConfirmTheTargetsChatgptIsIncludedOnlyWhenThisPluginProvidesAVerifiedConnection": "CLI знаходить сумісних агентів і просить підтвердити вибір. ChatGPT потребує перевіреного підключення.",
       "oneStepRemainsInChatgpt": "У ChatGPT залишився один крок.",
       "noSingleSourceServesThisTargetSet": "Жодне джерело не обслуговує цей набір цілей.",
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI завершить роботу з помилкою до внесення змін і запропонує сумісні поєднання цілей та джерел; він ніколи не змішує дистрибутиви між клієнтами.",
-      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "CLI перевіряє кожного вибраного агента до зміни файлів і показує всі кроки входу чи активації. Облікові дані OAuth залишаються в агента.",
+      "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "Перед зміною файлів CLI перевіряє агентів і показує кроки входу. Дані OAuth залишаються в агента.",
       "chatgptFinish": "Відкрийте ChatGPT, виберіть {name} у Застосунках або Плагінах, підключіть його й почніть новий чат. Доступність залежить від вашого облікового запису та робочого простору.",
       "expectedFallback": "Очікуване резервне джерело: {source}.",
       "dependencySaving": {
@@ -738,6 +746,8 @@
         "project": "Цього проєкту",
         "projectHint": "Запускайте ці команди з папки проєкту. Агент може запитати довіру до проєкту або його активацію.",
         "projectUnavailable": "Для цього пакета встановлення в проєкт недоступне.",
+        "marketingKitProjectUnavailable": "Marketing Kit поки недоступний для проєкту: потрібен випуск CLI новіший за 0.1.95, а обов’язкові залежності Notion, HubSpot і Playwright мають окремо пройти перевірку підтримки встановлення в Project.",
+        "pinnedGitFallbackInfo": "В опублікованому CLI 0.1.95 використовується це закріплене Git-джерело. Короткі імена підписаного Directory для Project працюють у поточному коді, але ще не ввійшли до релізу.",
         "selectionUnavailable": "Ця комбінація агентів і місця встановлення недоступна. Виберіть іншого агента або місце."
       },
       "outcome": {
@@ -911,7 +921,7 @@
       "breadcrumb": "Навігаційний ланцюжок",
       "plugins": "Плагіни",
       "agentPlugins10": "Agent Plugins 1.0",
-      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "Запис і метадані перевірено. Автоматизована оцінка безпеки, якщо вона є, застосовується лише до точної просканованої ревізії. Поведінку під час виконання не перевіряли.",
+      "theListingAndMetadataWereReviewedAnAutomatedSecurityAssessmentWhenPresentAppliesOnlyToTheExactScannedRevisionRuntimeBehaviorIsNotAudited": "Картку й метадані перевірено. Скан безпеки, якщо є, стосується лише перевіреної ревізії; роботу плагіна не перевіряли.",
       "installPlugin": "Встановити плагін",
       "viewSource": "Переглянути джерело",
       "pluginOverview": "Огляд плагіна",

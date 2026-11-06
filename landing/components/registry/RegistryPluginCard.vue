@@ -29,6 +29,8 @@ const {
   installExpanded,
   targetDistributions,
   projectAvailable,
+  projectAutomatic,
+  projectSourceFallback,
   updateTargets,
   updateAutoDetect,
   updateScope,
@@ -75,7 +77,7 @@ const canChooseInstall = computed(
 const canInstall = computed(
   () =>
     !marketingProjectBlocked.value &&
-    (scope.value !== 'project' || !autoDetect.value) &&
+    (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
     (isDiscovered.value
       ? props.plugin.installable &&
         props.plugin.discovery?.availability !== 'unavailable' &&
@@ -86,29 +88,37 @@ const canInstall = computed(
 const command = computed(() =>
   canInstall.value
     ? (scope.value === 'project'
-        ? projectCatalogCommands(props.plugin, targets.value)
+        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : targets.value)
         : pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
       ).add
+    : '',
+);
+const desktopCodexCommand = computed(() =>
+  scope.value === 'user' &&
+  !isDiscovered.value &&
+  current.value &&
+  canChooseInstall.value &&
+  Boolean(targetDistributions.value.get('codex'))
+    ? pluginCommands(props.plugin, ['codex']).add
     : '',
 );
 const vendorInstall = computed(() => vendorInstallSource(props.plugin));
 const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
 const iconURL = computed(() => pluginIcon(props.plugin));
-const autoOption = computed(() =>
-  scope.value === 'project'
-    ? undefined
-    : {
-        label: t('registryUi.card.allInstalledAgentsRecommended'),
-        summary: t('registryUi.card.allInstalledAgents'),
-        description: t('registryUi.card.detectedWhenYouRunTheCommand'),
-      },
-);
+const autoOption = computed(() => ({
+  label: t('registryUi.card.allInstalledAgentsRecommended'),
+  summary: t('registryUi.card.allInstalledAgents'),
+  description: t('registryUi.card.detectedWhenYouRunTheCommand'),
+}));
 const targetOptions = computed(() =>
   clients.map((client) => ({
     value: client.id,
     label: client.name,
     icon: asset(`client-icons/${client.icon}`),
-    disabled: !targetDistributions.value.get(client.id) && !targets.value.includes(client.id),
+    // Keep invalid explicitly saved selections visible for recovery, but an
+    // auto-detected project must never make a stale Cursor placeholder selectable.
+    disabled: !targetDistributions.value.get(client.id) &&
+      (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
       if (isDiscovered.value)
         return props.plugin.discovery?.availability === 'available'
@@ -373,8 +383,12 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
             :model-value="scope"
             :project-available="projectAvailable"
             :always-show="isReviewedMarketingKit(plugin)"
+            :unavailable-reason="isReviewedMarketingKit(plugin) && !projectAvailable ? t('registryUi.install.scope.marketingKitProjectUnavailable') : undefined"
             @update:model-value="updateScope"
           />
+          <p v-if="projectSourceFallback" class="plugin-card__auth">
+            {{ t('registryUi.install.scope.pinnedGitFallbackInfo') }}
+          </p>
           <InstallOutcome
             v-if="!autoDetect && selectedDistribution"
             :distribution="selectedDistribution"
@@ -388,6 +402,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               :auto-option="autoOption"
               :label="t('registryUi.card.chooseClients', { name: plugin.display_name })"
               :options="targetOptions"
+              full-width
               @update:auto-selected="updateAutoDetect"
               @update:model-value="updateTargets"
             />
@@ -402,6 +417,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               {{ t('registryUi.install.scope.selectionUnavailable') }}
             </p>
           </div>
+          <ChatGPTDesktopGuide v-if="desktopCodexCommand" :command="desktopCodexCommand" />
         </div>
       </Transition>
     </div>
@@ -411,13 +427,22 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
 <style scoped lang="scss">
 .plugin-card__assessments {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: flex-start;
-  gap: 0 12px;
+  gap: 4px;
   min-width: 0;
+  font-size: 0.75rem;
 }
-.plugin-card__assessments :deep(.skillspector[open]) {
-  flex-basis: 100%;
+.plugin-card__assessments :deep(.plugin-card__security) {
+  min-height: 32px;
+  margin: 0;
+  gap: 8px;
+  font-size: inherit;
+  line-height: 1.5;
+}
+.plugin-card__assessments :deep(.skillspector) {
+  margin: 0;
+  font-size: inherit;
 }
 .plugin-card__actions {
   display: flex;

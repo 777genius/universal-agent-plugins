@@ -150,7 +150,7 @@ agentplugins skills add owner/repository --skill review --skill pdf \
 [CLI 0.1.93 и новее](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
 Выберите существующую папку и указывайте область в каждой команде:
 
-Для проекта возьмите из проверенной карточки каталога точный Git-источник с полным SHA коммита и совместимый агент. Псевдонимы Directory v1 (например, `context7`) предназначены только для пользовательской области. Замените `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` и `PACKAGE_PATH`; для пакета в корне репозитория уберите `//PACKAGE_PATH`.
+Для проекта возьмите из проверенной карточки каталога точный Git-источник с полным SHA коммита и совместимый агент. Опубликованному CLI 0.1.95 для Project ещё нужен этот закреплённый Git-источник. Текущая сборка из `main` поддерживает короткие имена подписанного Directory с `--scope project` для совместимых клиентов и всех обязательных зависимостей (например, `agentplugins add context7 --target codex --scope project --dry-run`), но в публичном релизе этой функции пока нет. Замените `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` и `PACKAGE_PATH`; для пакета в корне репозитория уберите `//PACKAGE_PATH`.
 
 Шаблон: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. Команда ниже использует реальный исторический коммит GitLab, а не подтверждение текущей проверки в каталоге. Для новой установки скопируйте актуальный проверенный источник из каталога.
 

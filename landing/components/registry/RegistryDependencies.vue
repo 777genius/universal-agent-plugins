@@ -184,14 +184,7 @@ onBeforeUnmount(() => observer?.disconnect());
 
 .dependency-scene {
   margin: 0;
-  padding: clamp(14.4px, 2.8vw, 32px);
-  border: 0.8px solid var(--line-strong);
-  border-radius: 16px;
-  background:
-    radial-gradient(ellipse at 8% 20%, #a98bfa0d, transparent 50%),
-    radial-gradient(ellipse at 55% 60%, #81dfef09, transparent 45%), #0b101c;
-  color: #e1e8f6;
-  box-shadow: 0 16px 48px #00000012;
+  color: var(--text);
 
   &__graph {
     position: relative;
@@ -208,18 +201,19 @@ onBeforeUnmount(() => observer?.disconnect());
     display: none;
   }
   &__marketing-edges {
-    stroke: #ad92ef;
-    stroke-opacity: 0.6;
+    stroke: color-mix(in srgb, var(--primary-bright) 80%, var(--text));
+    stroke-opacity: 0.8;
   }
   &__design-edges {
-    stroke: #81dfef;
-    stroke-opacity: 0.6;
+    stroke: color-mix(in srgb, var(--cyan) 80%, var(--text));
+    stroke-opacity: 0.8;
   }
   &__package,
   &__dependency {
     position: absolute;
     border: 0.8px solid #c6d6ff2c;
     background: #101624;
+    color: #e1e8f6;
   }
   &__package {
     left: 0;
@@ -343,10 +337,8 @@ onBeforeUnmount(() => observer?.disconnect());
     font-weight: 700;
   }
   figcaption {
-    margin-top: 18.4px;
-    padding-top: 14.4px;
-    border-top: 0.8px solid #c6d6ff1a;
-    color: #92a0b9;
+    margin-top: 20px;
+    color: var(--muted);
     font-size: 0.608rem;
     line-height: 1.6;
     text-align: center;
@@ -358,7 +350,6 @@ onBeforeUnmount(() => observer?.disconnect());
     width: calc(100% - 28px);
   }
   .dependency-scene {
-    padding: 16px 11.2px;
     &__graph {
       height: 544px;
     }

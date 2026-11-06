@@ -306,6 +306,127 @@ func TestResolveDirectoryRejectsEveryRecordedImmutableReleaseRebind(t *testing.T
 	}
 }
 
+// Copilot's project registry is independent of the user's shared Copilot/VS Code
+// backend. Project grants must not require VS Code; user grants still must.
+func TestResolveDirectoryProjectCopilotDoesNotBorrowUserBackend(t *testing.T) {
+	release := testRelease(1, "1.0.0")
+	policy := testPolicy(1, ClientCopilot)
+	policy.Targets[0].Scope, policy.Targets[0].Scopes = ScopeProject, nil
+	distribution := testDistribution("owner/tool", DistributionCommunity, []DirectoryRelease{release}, []DirectoryReleasePolicy{policy})
+	snapshot := DirectorySnapshot{
+		SnapshotSchemaVersion: 2,
+		Sequence:              1,
+		Products:              []DirectoryProduct{{ID: "tool", ManifestName: "tool", DefaultDistribution: distribution.ID, Distributions: []string{distribution.ID}}},
+		Distributions:         []DirectoryDistribution{distribution},
+	}
+	project := request("tool", ClientCopilot)
+	project.Scope = ScopeProject
+	if got, err := ResolveDirectory(snapshot, project); err != nil || got.DistributionID != distribution.ID {
+		t.Fatalf("project Copilot inherited unrelated user backend grant: %+v %v", got, err)
+	}
+	user := request("tool", ClientCopilot)
+	snapshot.Distributions[0].ReleasePolicies[0].Targets[0].Scope = ScopeUser
+	if _, err := ResolveDirectory(snapshot, user); !errors.Is(err, ErrDirectoryIneligible) {
+		t.Fatalf("user Copilot no longer requires shared VS Code grant: %v", err)
+	}
+}
+
+func TestResolveDirectoryV2SequenceOneRejectsLegacyUnsignedEvidence(t *testing.T) {
+	// Sequence 1 is deliberately valid in v2, but no longer authorizes
+	// schema-1 legacy evidence without an explicit trust object.
+	base := testDirectory()
+	base.SnapshotSchemaVersion = 2
+	base.Sequence = 1
+	for i := range base.Distributions[2].ReleasePolicies {
+		base.Distributions[2].ReleasePolicies[i].Targets[0].Scope = ScopeUser
+		base.Distributions[2].ReleasePolicies[i].Targets[0].Scopes = nil
+	}
+	for i := range base.Evidence {
+		base.Evidence[i].Trust = nil
+		base.Evidence[i].ProductID = base.Distributions[2].ProductID
+		base.Evidence[i].ManifestDigest = base.Distributions[2].Releases[i].ManifestDigest
+		base.Evidence[i].SourceRepository = base.Distributions[2].Releases[i].PackageSource.Repository
+		base.Evidence[i].SourceRevision = base.Distributions[2].Releases[i].PackageSource.Revision
+		base.Evidence[i].SourcePath = base.Distributions[2].Releases[i].PackageSource.Path
+	}
+	if directoryTrustedEligibilityEvidence(base, base.Evidence[0]) {
+		t.Fatal("v2 sequence 1 was treated as historical untrusted v1 evidence")
+	}
+	if _, err := ResolveDirectory(base, request("owner/tool", ClientCodex)); !errors.Is(err, ErrDirectoryIneligible) {
+		t.Fatalf("v2 upstream release accepted legacy evidence without trust: %v", err)
+	}
+}
+
+func TestResolveDirectoryV2DoesNotPromoteLegacyTargetScopes(t *testing.T) {
+	release := testRelease(1, "1.0.0")
+	policy := testPolicy(1, ClientCodex)
+	policy.Targets[0].Scopes = []InstallScope{ScopeUser, ScopeProject}
+	distribution := testDistribution("owner/tool", DistributionCommunity,
+		[]DirectoryRelease{release}, []DirectoryReleasePolicy{policy})
+	snapshot := DirectorySnapshot{SnapshotSchemaVersion: 2, Sequence: 1,
+		Products: []DirectoryProduct{{ID: "tool", ManifestName: "tool",
+			DefaultDistribution: distribution.ID, Distributions: []string{distribution.ID}}},
+		Distributions: []DirectoryDistribution{distribution}}
+	project := request("tool", ClientCodex)
+	project.Scope = ScopeProject
+	if _, err := ResolveDirectory(snapshot, project); !errors.Is(err, ErrDirectoryIneligible) {
+		t.Fatalf("v2 accepted legacy array as project permission: %v", err)
+	}
+	snapshot.Distributions[0].ReleasePolicies[0].Targets[0].Scope = ScopeProject
+	if _, err := ResolveDirectory(snapshot, project); !errors.Is(err, ErrDirectoryIneligible) {
+		t.Fatalf("v2 accepted mixed explicit/legacy scoped target: %v", err)
+	}
+	snapshot.Distributions[0].ReleasePolicies[0].Targets[0].Scopes = nil
+	if got, err := ResolveDirectory(snapshot, project); err != nil || got.DistributionID != distribution.ID {
+		t.Fatalf("explicit v2 project grant failed: %+v %v", got, err)
+	}
+}
+
+func TestResolveDirectoryScopeSpecificGrantsFloorAndEvidence(t *testing.T) {
+	release := testRelease(1, "1.0.0")
+	policy := testPolicy(1, ClientCodex)
+	user := policy.Targets[0]
+	user.Scope, user.Scopes = ScopeUser, nil
+	user.MinimumInstallerVersion = "1.0.0"
+	project := user
+	project.Scope = ScopeProject
+	project.MinimumInstallerVersion = "2.0.0"
+	project.CurrentEvidence = []string{"project-failed"}
+	policy.Targets = []DirectoryTarget{project, user} // Project deliberately comes first.
+	distribution := testDistribution("owner/tool", DistributionCommunity,
+		[]DirectoryRelease{release}, []DirectoryReleasePolicy{policy})
+	snapshot := DirectorySnapshot{SnapshotSchemaVersion: 2, Sequence: 18,
+		Products: []DirectoryProduct{{ID: "tool", ManifestName: "tool",
+			DefaultDistribution: distribution.ID, Distributions: []string{distribution.ID}}},
+		Distributions: []DirectoryDistribution{distribution},
+		Evidence: []DirectoryEvidence{testTrustedEvidence(DirectoryEvidence{
+			SchemaVersion: 1, ID: "project-failed", DistributionID: distribution.ID,
+			ReleaseSequence: 1, PackageTreeDigest: release.TreeDigest,
+			Client: ClientCodex, Scope: ScopeProject, ClientVersion: "test-client",
+			InstallerVersion: "2.1.0", OS: "linux", Architecture: "amd64",
+			Level: "runtime", Outcome: "failed",
+		})}}
+	userRequest := request("tool", ClientCodex)
+	if result, err := ResolveDirectory(snapshot, userRequest); err != nil || result.DistributionID != distribution.ID {
+		t.Fatalf("project policy changed independent user grant: %+v %v", result, err)
+	}
+	projectRequest := userRequest
+	projectRequest.Scope = ScopeProject
+	if _, err := ResolveDirectory(snapshot, projectRequest); !errors.Is(err, ErrDirectoryIneligible) ||
+		!strings.Contains(err.Error(), "minimum installer version") {
+		t.Fatalf("project floor was bypassed: %v", err)
+	}
+	projectRequest.InstallerVersion = "2.1.0"
+	if _, err := ResolveDirectory(snapshot, projectRequest); !errors.Is(err, ErrDirectoryIneligible) ||
+		!strings.Contains(err.Error(), "runtime evidence failed") {
+		t.Fatalf("project failed evidence was bypassed: %v", err)
+	}
+	snapshot.Evidence[0].Outcome = "passed"
+	if result, err := ResolveDirectory(snapshot, projectRequest); err != nil || result.DistributionID != distribution.ID {
+		t.Fatalf("qualified project grant rejected: %+v %v", result, err)
+	}
+}
+
 func TestResolveDirectoryRequiresCompleteSharedSurfaceEligibility(t *testing.T) {
 	for _, selected := range []ClientID{ClientCopilot, ClientVSCode} {
 		t.Run(string(selected), func(t *testing.T) {

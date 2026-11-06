@@ -156,7 +156,8 @@ function referenceContext(value: unknown, status: string, legacy: boolean) {
     if (reference.status === 'uninspected' && reference.disposition !== 'partial') fail();
     if (
       (['missing', 'ambiguous', 'uninspected'].includes(reference.status) ||
-        (reference.status === 'resolved' && reference.disposition !== 'analyzed')) &&
+        (reference.status === 'resolved' && reference.disposition !== 'analyzed') ||
+        (reference.status === 'rejected' && reference.disposition === 'partial')) &&
       (status === 'complete' || c.status === 'complete')
     )
       fail();
@@ -364,23 +365,32 @@ export function decodeSkillSpectorManifestV3(
       current = aliases.get(current)!;
     }
   }
+  const sourceIds = new Set<string>();
   for (const state of m.source_states) {
     const s = obj(state);
     if (
       !text(s.id, 1025) ||
+      sourceIds.has(s.id) ||
       typeof s.repository !== 'string' ||
       s.repository.length > 1000 ||
       !['resolved', 'historical', 'unresolved', 'unavailable', 'unsupported'].includes(s.state) ||
       typeof s.current !== 'boolean' ||
-      !(s.reason === null || text(s.reason, 200)) ||
+      s.current !== (s.state === 'resolved') ||
+      !(s.current ? s.reason === null : text(s.reason, 200)) ||
       !(s.revision === null || revision.test(s.revision)) ||
       !(s.path === null || safePath(s.path, true)) ||
       !Array.isArray(s.selected_ids) ||
       !s.selected_ids.every((id: unknown) => text(id, 200)) ||
+      new Set(s.selected_ids).size !== s.selected_ids.length ||
+      Boolean(s.selected_ids.length) !== ['resolved', 'historical'].includes(s.state) ||
+      (s.current && (s.revision === null || s.path === null)) ||
       !Array.isArray(s.candidates) ||
-      !s.candidates.every((path: unknown) => safePath(path, true))
+      s.candidates.length > 64 ||
+      !s.candidates.every((path: unknown) => safePath(path, true)) ||
+      new Set(s.candidates).size !== s.candidates.length
     )
       fail();
+    sourceIds.add(s.id);
   }
   for (const state of m.plugin_states) {
     const s = obj(state);

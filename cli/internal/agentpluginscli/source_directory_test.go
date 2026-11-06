@@ -41,6 +41,118 @@ type localBackedSourceAcquirer struct {
 	verifiedCalls  int
 }
 
+func TestDirectoryV2CompatibilityUsesScopedGrantsWithoutBorrowingUserEvidence(t *testing.T) {
+	bundle := readModelBundle()
+	bundle.Snapshot.SnapshotSchemaVersion, bundle.Snapshot.Sequence = 2, 1
+	distribution := bundle.Snapshot.Distributions[0]
+	policy := distribution.ReleasePolicies[1]
+	user := policy.Targets[0]
+	user.Scope, user.Scopes = domain.ScopeUser, nil
+	user.Authentication = domain.AuthenticationRequirementRequired
+	user.CurrentEvidence = []string{"cursor-runtime-current"}
+	user.CanonicalClosure = &domain.DirectoryCanonicalClosure{Eligible: true, ClosureDigest: "sha256:" + strings.Repeat("a", 64)}
+	project := user
+	project.Scope = domain.ScopeProject
+	project.Authentication = domain.AuthenticationRequirementNotRequired
+	project.CurrentEvidence = []string{"project-runtime-current"}
+	project.CanonicalClosure = &domain.DirectoryCanonicalClosure{Eligible: true, ClosureDigest: "sha256:" + strings.Repeat("b", 64)}
+	policy.Targets = []domain.DirectoryTarget{project, user}
+	policy.CurrentEvidence = nil
+	selected := domain.DirectorySelection{DistributionID: distribution.ID,
+		ReleaseSequence: distribution.Releases[1].Sequence,
+		TreeDigest:      distribution.Releases[1].TreeDigest}
+	// A v2 runtime claim needs the exact signed closure for its own grant.
+	bundle.Snapshot.Evidence[1].ClosureDigest = user.CanonicalClosure.ClosureDigest
+	observed := bundle.Snapshot.Evidence[1]
+	observed.ID, observed.Scope = "project-runtime-current", domain.ScopeProject
+	observed.ClosureDigest = project.CanonicalClosure.ClosureDigest
+	bundle.Snapshot.Evidence = append(bundle.Snapshot.Evidence, observed)
+	environment := directoryEvidenceEnvironment{
+		InstallerVersion: observed.InstallerVersion, OS: observed.OS,
+		Architecture:       observed.Architecture,
+		ClientVersions:     map[domain.ClientID]string{domain.ClientCursor: observed.ClientVersion},
+		DependencyIdentity: map[domain.ClientID]string{domain.ClientCursor: observed.DependencyIdentity},
+	}
+	for _, tc := range []struct {
+		name  string
+		scope domain.InstallScope
+		auth  domain.AuthenticationRequirement
+	}{
+		{"project", domain.ScopeProject, domain.AuthenticationRequirementNotRequired},
+		{"user", domain.ScopeUser, domain.AuthenticationRequirementRequired},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			loaded := loadedPackage{}
+			if err := applyDirectoryCompatibility(&loaded, bundle, selected, policy, environment, tc.scope); err != nil {
+				t.Fatal(err)
+			}
+			evidence := loaded.envelope.CatalogEvidence
+			compatibility := evidence.Compatibility["cursor"]
+			if evidence.CatalogVersion != "directory-snapshot-2" || compatibility.Authentication != tc.auth ||
+				len(compatibility.Evidence) != 1 ||
+				(tc.scope == domain.ScopeProject && compatibility.Evidence[0].Scope != domain.ScopeProject ||
+					tc.scope == domain.ScopeUser && compatibility.Evidence[0].Scope != "" && compatibility.Evidence[0].Scope != domain.ScopeUser) {
+				t.Fatalf("%s inherited another scope's policy/evidence: %+v", tc.scope, compatibility)
+			}
+		})
+	}
+}
+
+func TestDirectoryV2CanonicalRuntimeEvidenceDoesNotBorrowAnotherClosure(t *testing.T) {
+	bundle := readModelBundle()
+	bundle.Snapshot.SnapshotSchemaVersion, bundle.Snapshot.Sequence = 2, 1
+	distribution := bundle.Snapshot.Distributions[0]
+	policy := distribution.ReleasePolicies[1]
+	grant := policy.Targets[0]
+	grant.Scope, grant.Scopes = domain.ScopeUser, nil
+	grant.CurrentEvidence = []string{"cursor-runtime-current"}
+	policy.CurrentEvidence = nil
+	policy.Targets = []domain.DirectoryTarget{grant}
+	selected := domain.DirectorySelection{DistributionID: distribution.ID,
+		ReleaseSequence: distribution.Releases[1].Sequence, TreeDigest: distribution.Releases[1].TreeDigest}
+	proofDigest := "sha256:" + strings.Repeat("a", 64)
+	bundle.Snapshot.Evidence[1].ClosureDigest = proofDigest
+	observed := bundle.Snapshot.Evidence[1]
+	// Match the recorded native environment so this regression exercises
+	// canonical closure authorization, not the unrelated evidence dimensions.
+	environment := directoryEvidenceEnvironment{
+		InstallerVersion: observed.InstallerVersion, OS: observed.OS,
+		Architecture:       observed.Architecture,
+		ClientVersions:     map[domain.ClientID]string{domain.ClientCursor: observed.ClientVersion},
+		DependencyIdentity: map[domain.ClientID]string{domain.ClientCursor: observed.DependencyIdentity},
+	}
+
+	for _, tc := range []struct {
+		name             string
+		canonical        *domain.DirectoryCanonicalClosure
+		wantVerification string
+		wantApplicable   int
+	}{
+		{name: "matching canonical closure", canonical: &domain.DirectoryCanonicalClosure{
+			Eligible: true, ClosureDigest: proofDigest, MinimumInstallerVersion: "1.0.0",
+		}, wantVerification: "tested", wantApplicable: 1},
+		{name: "another signed closure", canonical: &domain.DirectoryCanonicalClosure{
+			Eligible: true, ClosureDigest: "sha256:" + strings.Repeat("b", 64), MinimumInstallerVersion: "1.0.0",
+		}, wantVerification: "not_tested", wantApplicable: 0},
+		{name: "no canonical summary", wantVerification: "not_tested", wantApplicable: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			policy.Targets[0].CanonicalClosure = tc.canonical
+			loaded := loadedPackage{}
+			if err := applyDirectoryCompatibility(&loaded, bundle, selected, policy, environment, domain.ScopeUser); err != nil {
+				t.Fatal(err)
+			}
+			compatibility := loaded.envelope.CatalogEvidence.Compatibility[string(domain.ClientCursor)]
+			if compatibility.Verification != tc.wantVerification || len(compatibility.Evidence) != tc.wantApplicable {
+				t.Fatalf("runtime claim borrowed a different closure: %+v", compatibility)
+			}
+			if len(loaded.envelope.CatalogEvidence.CurrentEvidence) != 1 {
+				t.Fatal("original signed evidence should remain available for inspection")
+			}
+		})
+	}
+}
+
 func TestDirectoryCompatibilityUsesStablePublicPackageModes(t *testing.T) {
 	policy := domain.DirectoryReleasePolicy{Targets: []domain.DirectoryTarget{
 		{Client: domain.ClientCodex, Delivery: "managed", Authentication: domain.AuthenticationRequirementUnknown},

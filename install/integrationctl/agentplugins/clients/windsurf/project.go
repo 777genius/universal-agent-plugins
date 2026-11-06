@@ -31,6 +31,24 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 		}
 		return devinProjectObjects(root, envelope, plan)
 	}
+	if isDevinGlobalPlan(plan) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if plan.ClientID != domain.ClientWindsurf || root != plan.ActivePath {
+			return nil, fmt.Errorf("devin Global active package identity differs")
+		}
+		if err := plan.SelectedDelivery.ValidatePlan(plan, envelope.TreeDigest); err != nil {
+			return nil, err
+		}
+		if err := validateDevinGlobalProjectionRoot(root, plan); err != nil {
+			return nil, err
+		}
+		if err := validateDevinProjectStdio(root, envelope, plan, dataPath); err != nil {
+			return nil, err
+		}
+		return devinGlobalObjects(root, envelope, plan)
+	}
 	return BuildWindsurfNativeObjects(root, plan)
 }
 
@@ -48,6 +66,14 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 			return nil, err
 		}
 	}
+	if isDevinGlobalPlan(in.Plan) {
+		if err := validateDevinGlobalProjectionRoot(in.StagingPath, in.Plan); err != nil {
+			return nil, err
+		}
+		if err := in.Plan.SelectedDelivery.ValidatePlan(in.Plan, in.Envelope.TreeDigest); err != nil {
+			return nil, err
+		}
+	}
 	if err := shared.DeliverManagedStdio(in.DeliverLauncher(), in.StagingPath, in.Envelope, in.Plan); err != nil {
 		return nil, err
 	}
@@ -56,6 +82,9 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 	}
 	if in.Plan.Scope == domain.ScopeProject {
 		return devinProjectObjects(in.StagingPath, in.Envelope, in.Plan)
+	}
+	if isDevinGlobalPlan(in.Plan) {
+		return devinGlobalObjects(in.StagingPath, in.Envelope, in.Plan)
 	}
 	return BuildWindsurfNativeObjects(in.StagingPath, in.Plan)
 }

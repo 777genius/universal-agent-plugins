@@ -94,6 +94,8 @@ export async function offline(page: Page) {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith('/reports/skillspector/v3/index.json')) return route.fulfill({ status: 404 });
     if (url.pathname.endsWith('/reports/skillspector/v2/index.json')) return route.fulfill({ json: emptySkillSpectorManifest() });
+    // A no-network fixture cannot rely on the optional signed cohort endpoint.
+    if (url.pathname.endsWith('/reports/skillspector/cohort/v1/latest.json')) return route.fulfill({ status: 404 });
     if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') return route.fallback();
     if (url.hostname === 'api.github.com' && url.pathname.endsWith('/releases/latest'))
       return route.fulfill({ json: { tag_name: 'agentplugins-v1.2.3', published_at: '2026-09-01T00:00:00Z', assets: [] } });
@@ -172,7 +174,11 @@ export async function automatic(page: Page, scope: Locator, locale: PublishedLoc
 
 export async function exactCommands(page: Page, scope: Locator, name: string, target = '') {
   for (const verb of ['add', 'update', 'repair', 'remove']) {
-    const snippet = scope.locator(`.command-snippet--${verb}`);
+    const snippet = scope.locator(
+      verb === 'add'
+        ? '.install-command-row .command-snippet--add'
+        : `.command-stack > .command-snippet--${verb}`,
+    );
     const targetFlag = target && (verb === 'add' || verb === 'repair') ? ` --target ${target}` : '';
     const expected = `npx -y universal-agent-plugins ${verb} ${name}${targetFlag}`;
     await expect(snippet.locator('code')).toHaveText(expected);

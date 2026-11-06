@@ -1,9 +1,9 @@
-import { isReviewedMarketingKit, marketingKitTargetIDs } from '../data/marketingKitDemo.ts';
+import { isReviewedMarketingKit } from '../data/marketingKitDemo.ts';
 import { computed, ref, watch, type Ref } from 'vue';
 import { clients } from '../data/clients.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { reachableTargetPolicies, resolveDistribution } from '../utils/registry.ts';
-import { projectCatalogSelection } from '../utils/projectCatalogSource.ts';
+import { projectCatalogAutomaticSelection, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { ClientID, InstallScope, RegistryPlugin } from '../types/registry';
 
 /** Card and detail share one selection/persistence policy; no machine detection occurs here. */
@@ -29,16 +29,16 @@ export function usePluginInstallSelection(
         clients.map((client) => [client.id, select([client.id]).distribution]),
       ),
   );
-  const projectAvailable = computed(() =>
-    isReviewedMarketingKit(plugin())
-      // This package and its transitives have signed user-only policies.
-      // Never present the direct-source project bridge as qualified Directory
-      // dependency resolution for the three-agent manifest.
-      ? Boolean(resolveDistribution(plugin(), [...marketingKitTargetIDs], 'project').distribution)
-      : availableClients.value.some((client) =>
-          Boolean(projectCatalogSelection(plugin(), [client.id]).resolution.distribution),
-        ),
-  );
+  // One authorized project source is enough to offer CLI-side target discovery.
+  // This must not broaden any signed release scope or assume local client state.
+  const projectAutomatic = computed(() => projectCatalogAutomaticSelection(plugin()));
+  const projectAvailable = computed(() => Boolean(projectAutomatic.value?.resolution.distribution));
+  // The published CLI still needs the exact Git fallback for user-only signed
+  // entries. The source-built CLI's short-name Project path is not released.
+  const projectSourceFallback = computed(() => scope.value === 'project' && Boolean(
+    (autoDetect.value ? projectAutomatic.value : projectCatalogSelection(plugin(), targets.value))
+      ?.directSource,
+  ));
   const resolution = computed(() => select(targets.value));
   let choicePending = false;
   function saveChoice() {
@@ -116,7 +116,6 @@ export function usePluginInstallSelection(
     saveUnboundChoice();
   }
   function updateAutoDetect(value: boolean) {
-    if (scope.value === 'project' && value) return;
     choicePending = true;
     autoDetect.value = value;
     saveUnboundChoice();
@@ -126,7 +125,10 @@ export function usePluginInstallSelection(
     const previousScope = scope.value;
     choicePending = true;
     scope.value = value;
-    if (value === 'project') autoDetect.value = false;
+    // Entering project starts with CLI-side detection, even if the user
+    // manually selected Cursor in their *user* environment. An explicit
+    // project choice remains persistent across detail/navigation remounts.
+    if (previousScope !== 'project' && value === 'project') autoDetect.value = true;
     // Previously saved project intent may have pinned a single target (Cursor).
     // When the user explicitly switches a user-only Marketing Kit back to
     // This computer, return to CLI-side installed-agent detection.
@@ -150,6 +152,8 @@ export function usePluginInstallSelection(
     availableClients,
     targetDistributions,
     projectAvailable,
+    projectAutomatic,
+    projectSourceFallback,
     resolution,
     saveChoice,
     updateTargets,

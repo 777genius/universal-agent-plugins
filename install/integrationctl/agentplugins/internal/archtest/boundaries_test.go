@@ -27,6 +27,9 @@ type boundary struct {
 	// imports. Otherwise deny lists forbidden import prefixes.
 	allow []string
 	deny  []string
+	// denyStdlib closes transport/I/O edges even when other standard library
+	// packages are permitted. Most existing layers need no such restriction.
+	denyStdlib []string
 	// clientImports applies the namespace policy shared by generic dispatchers
 	// and client peers, without enumerating supported client identities.
 	clientImports bool
@@ -53,6 +56,7 @@ func layerBoundaries() []boundary {
 			"gopkg.in/yaml.v3",
 		}},
 		{pkg: agentplugins + "/usecase", deny: []string{
+			legacyPortsPath,
 			modulePath + "/install/integrationctl/adapters",
 			modulePath + "/install/integrationctl/agentplugins/adapters",
 			modulePath + "/install/integrationctl/agentplugins/planner",
@@ -83,6 +87,18 @@ func layerBoundaries() []boundary {
 			modulePath + "/install/integrationctl/agentplugins/providers",
 			modulePath + "/install/integrationctl/adapters/pathpolicy",
 		}},
+		{pkg: "cli/internal/agentpluginscli/management", denyStdlib: []string{
+			"net", "os", "syscall", "unsafe", "plugin", "io/ioutil",
+		}},
+		{pkg: "cli/internal/agentpluginscli/managementhttp", allow: []string{
+			modulePath + "/cli/internal/agentpluginscli/management",
+			modulePath + "/cli/internal/loopbackapi",
+		}, denyStdlib: []string{"os", "syscall", "unsafe", "plugin", "io/ioutil"}},
+		{pkg: "cli/internal/agentpluginscli/managementstate", allow: []string{
+			modulePath + "/cli/internal/agentpluginscli/management",
+			modulePath + "/install/integrationctl/adapters/atomicfile",
+			modulePath + "/install/integrationctl/agentplugins/adapters/processlock",
+		}, denyStdlib: []string{"net", "os/exec", "syscall", "unsafe", "plugin"}},
 	}
 }
 
@@ -121,6 +137,11 @@ func boundaryViolations(t *testing.T, root string, rule boundary) []string {
 }
 
 func importForbidden(rule boundary, file, imported string) bool {
+	for _, denied := range rule.denyStdlib {
+		if imported == denied || strings.HasPrefix(imported, denied+"/") {
+			return true
+		}
+	}
 	if standardLibrary(imported) {
 		return false
 	}

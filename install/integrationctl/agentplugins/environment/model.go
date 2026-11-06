@@ -310,6 +310,7 @@ func (requirements Requirements) Validate() error {
 		}
 		sources[key] = alias
 	}
+	assigned := map[string]bool{}
 	for target, aliases := range requirements.Targets {
 		if strings.TrimSpace(target) == "" {
 			return errors.New("target ID must not be empty")
@@ -323,25 +324,15 @@ func (requirements Requirements) Validate() error {
 				return fmt.Errorf("target %q repeats alias %q", target, alias)
 			}
 			seen[alias] = true
+			assigned[alias] = true
 		}
 	}
 	for alias := range requirements.Dependencies {
-		if !requirements.assigned(alias) {
+		if !assigned[alias] {
 			return fmt.Errorf("alias %q has no target assignment", alias)
 		}
 	}
 	return nil
-}
-
-func (requirements Requirements) assigned(alias string) bool {
-	for _, aliases := range requirements.Targets {
-		for _, item := range aliases {
-			if item == alias {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func (requirement Requirement) SourceKey() (string, error) {
@@ -420,6 +411,9 @@ func ManifestDigest(requirements Requirements) (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
+// ErrManifestDigestMismatch distinguishes stale intent from malformed lock data.
+var ErrManifestDigestMismatch = errors.New("lock manifest digest does not match current intent")
+
 func (lock Lock) Validate(requirements Requirements) error {
 	if lock.LockVersion != LockVersion {
 		return fmt.Errorf("unsupported lock_version %d", lock.LockVersion)
@@ -429,7 +423,7 @@ func (lock Lock) Validate(requirements Requirements) error {
 		return err
 	}
 	if lock.ManifestDigest != digest {
-		return errors.New("lock manifest digest does not match current intent")
+		return ErrManifestDigestMismatch
 	}
 	return validateGraph(lock, requirements)
 }

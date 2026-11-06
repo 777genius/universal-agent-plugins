@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -41,7 +42,9 @@ func (app App) loadStandardEnvelope(ctx context.Context, input domain.LoadInput)
 
 func (app App) loadSnapshotMode(ctx context.Context, snapshot domain.PackageSnapshot, origin domain.OriginMode, directory *domain.DirectoryOrigin, selection *domain.DirectorySelection, standardOnly bool) (loadedPackage, error) {
 	fail := func(err error) (loadedPackage, error) {
-		_ = packagedigest.Remove(snapshot)
+		if cleanupErr := packagedigest.Remove(snapshot); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("%w: %w", errDependencySnapshotCleanup, cleanupErr))
+		}
 		return loadedPackage{}, err
 	}
 	load := app.loadAcquiredSnapshot

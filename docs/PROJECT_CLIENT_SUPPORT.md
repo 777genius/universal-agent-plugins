@@ -1,5 +1,11 @@
 # Project installation support
 
+**Source vs release:** PR #725 in `main` supports signed Directory short names
+in explicit Project scope when the selected native adapters and mandatory
+components are eligible. This is not yet in the public CLI 0.1.95. The
+published v1 User source policy is not Project runtime evidence; the released
+CLI must still use its compatible direct-source Project flow.
+
 **Released in CLI 0.1.93:** explicit project scope prepares the client components
 listed below. Select `--scope project` and an existing project directory; the
 add and maintenance commands default to `user`. Argumentless install in CLI
@@ -47,9 +53,9 @@ the actual client executable, not a live vendor model or general-purpose access.
 
 | Client | Project delivery | Native project lifecycle / restart / removal | MCP observed through native client | Evidence and limit |
 | --- | --- | --- | --- | --- |
-| Claude Code | Yes | Pinned genuine native Prepared lifecycle and trusted project discovery/removal qualified | Project MCP initialize/list/call not qualified | [Native Client Runtime](https://github.com/777genius/universal-agent-plugins/actions/runs/40209659575), [guide](CLAUDE_PROJECT_INSTALLATION.md); trust and shadowing matter |
+| Claude Code | Yes | Pinned genuine native Prepared lifecycle and trusted project discovery/removal qualified | Pinned Claude Code 2.1.263 called an **already-existing foreign** trusted project MCP tool through a scripted local model on macOS/Windows; **UAP-managed** project MCP `tools/call` is not qualified | [Native Client Runtime](https://github.com/777genius/universal-agent-plugins/actions/runs/40209659575), [real selected-foreign call #664](https://github.com/777genius/universal-agent-plugins/pull/664), [guide](CLAUDE_PROJECT_INSTALLATION.md); trust, precedence and vendor authentication remain separate |
 | Codex | Yes | Pinned native project skills lifecycle and trusted MCP restart/removal qualified | Pinned native trusted project MCP initialize and direct tool-call fixture; no vendor model authentication | [Native Client Runtime](https://github.com/777genius/universal-agent-plugins/actions/runs/40209659575), [#499](https://github.com/777genius/universal-agent-plugins/pull/499) |
-| OpenCode | Yes; V1 preserved, V2 priority | Pinned native V1 and genuine V2 v2.2.5 A/B lifecycle and Skills/config discovery on Linux/macOS/Windows | V2 real client+controlled stdio server **initialize and tools/list** qualified; `tools/call`, provider login and real models still unqualified | [Native V2 #626](https://github.com/777genius/universal-agent-plugins/pull/626), [V2 MCP #638](https://github.com/777genius/universal-agent-plugins/pull/638), [V1 baseline](https://github.com/777genius/universal-agent-plugins/actions/runs/40209659575) |
+| OpenCode | Yes; V1 preserved, V2 priority | Pinned native V1 and genuine V2 v2.2.5 A/B lifecycle and Skills/config discovery on Linux/macOS/Windows | V2 real client + controlled stdio server **initialize, tools/list and tools/call** qualified through a local scripted model on Linux/macOS/Windows; vendor login and real provider models remain unqualified | [Native V2 #626](https://github.com/777genius/universal-agent-plugins/pull/626), [V2 MCP #638](https://github.com/777genius/universal-agent-plugins/pull/638), [real call #655](https://github.com/777genius/universal-agent-plugins/pull/655), [V1 baseline](https://github.com/777genius/universal-agent-plugins/actions/runs/40209659575) |
 | Cursor | Yes | Qualified for isolated A/B lifecycle, restart and removal | Initialize and tools/list qualified; tools/call **not** qualified | [#521](https://github.com/777genius/universal-agent-plugins/pull/521) |
 | Gemini CLI | Yes | Qualified A/B lifecycle, restart and removal | Initialize, tools/list, tools/call qualified with controlled probe | [#526](https://github.com/777genius/universal-agent-plugins/pull/526) |
 | GitHub Copilot CLI | Yes | Qualified A/B lifecycle, restart and removal | Initialize, tools/list, tools/call qualified with scripted loopback provider | [#527](https://github.com/777genius/universal-agent-plugins/pull/527) |
@@ -70,7 +76,7 @@ proof of a third-party remote service. A *Prepared* delivery is not automaticall
 *Active*. Project UI/reload/trust, configuration precedence and per-client
 restrictions remain as listed above.
 
-Pi project MCP `tools/call` is qualified in current source by [merged #656](https://github.com/777genius/universal-agent-plugins/pull/656), closing [#623](https://github.com/777genius/universal-agent-plugins/issues/623). Remaining native project gaps are tracked under [OpenCode / Claude / Codex #624](https://github.com/777genius/universal-agent-plugins/issues/624). A configured MCP entry or successful `tools/list` alone never establishes tool execution; the Pi proof observes an actual call from the pinned client, but not vendor-model authentication.
+Pi project MCP `tools/call` is qualified in current source by [merged #656](https://github.com/777genius/universal-agent-plugins/pull/656), closing [#623](https://github.com/777genius/universal-agent-plugins/issues/623). Remaining native project gaps are tracked under [OpenCode / Claude / Codex #624](https://github.com/777genius/universal-agent-plugins/issues/624). The merged [OpenCode V2 #655](https://github.com/777genius/universal-agent-plugins/pull/655) proves a real selected project MCP call, whereas [Claude #664](https://github.com/777genius/universal-agent-plugins/pull/664) proves a real call only for an already-existing foreign trusted project MCP server, **not** a UAP-managed server. A configured MCP entry or successful `tools/list` alone never establishes tool execution; scripted-model calls are not vendor-model authentication.
 
 For releases, explicit project scope first shipped in CLI 0.1.93 and automatic
 project selection for argumentless `install` in 0.1.94. The #520 integration

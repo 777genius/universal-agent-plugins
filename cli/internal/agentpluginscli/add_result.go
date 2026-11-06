@@ -3,12 +3,10 @@ package agentpluginscli
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
@@ -90,6 +88,7 @@ func renderHumanAddFailure(writer io.Writer, envelope domain.PackageEnvelope, re
 	return true, nil
 }
 
+// renderHumanAddOutcome presents an add result without changing its verified lifecycle status.
 func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 	if err := renderOpenCodeRuntimeNotice(writer, result); err != nil {
 		return err
@@ -103,12 +102,14 @@ func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 		return err
 	}
 	if result.NoChange && fullyInstalled(result.Activation) {
-		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed and lifecycle verification is complete. No changes made."))
-		return nil
+		if _, err := fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed and lifecycle verification is complete. No changes made.")); err != nil {
+			return err
+		}
+		return renderVerifiedLocalNextAction(writer, result)
 	}
 	if result.Mutated && fullyInstalled(result.Activation) {
 		renderHumanAddInstalled(writer, result)
-		return nil
+		return renderVerifiedLocalNextAction(writer, result)
 	}
 	if result.Mutated {
 		renderHumanAddPending(writer, result)
@@ -117,6 +118,18 @@ func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 		_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Next"), action)
 	}
 	return nil
+}
+
+// renderVerifiedLocalNextAction displays only the verified Codex user's optional local step.
+// It does not change the public JSON contract or turn Desktop activation into a required phase.
+func renderVerifiedLocalNextAction(writer io.Writer, result usecase.AddResult) error {
+	if !clientTraits(result.Plan.ClientID).ShowsVerifiedLocalNextAction || len(result.Activation.LocalActions) == 0 {
+		return nil
+	}
+	_, err := fmt.Fprintf(writer, "%s: %s\n",
+		terminaltheme.For(writer).Text(terminaltheme.Label, "Next (optional)"),
+		prompt.SafeText(result.Activation.LocalActions[0]))
+	return err
 }
 
 func renderHumanAddInstalled(writer io.Writer, result usecase.AddResult) {
@@ -142,149 +155,4 @@ func renderHumanAddPending(writer io.Writer, result usecase.AddResult) {
 	default:
 		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Warning, "Package prepared. Activation is not complete yet."))
 	}
-}
-
-type addResultData struct {
-	OperationID    string                     `json:"operation_id,omitempty"`
-	Plugin         string                     `json:"plugin"`
-	Version        string                     `json:"version,omitempty"`
-	Source         string                     `json:"source"`
-	Revision       string                     `json:"revision,omitempty"`
-	TreeDigest     string                     `json:"tree_digest"`
-	ManifestDigest string                     `json:"manifest_digest"`
-	Security       *domain.SecurityAssessment `json:"security,omitempty"`
-	NextAction     string                     `json:"next_action,omitempty"`
-	DryRun         bool                       `json:"dry_run"`
-	Result         usecase.AddResult          `json:"result"`
-	envelopeResult string
-}
-
-func (data addResultData) outputResult() string {
-	return data.envelopeResult
-}
-
-func addEnvelopeResult(result usecase.AddResult, commandErr error) string {
-	if addFailureStatus(result, commandErr) != "" {
-		return outputResultFailure
-	}
-	return outputResultSuccess
-}
-
-func addFailureStatus(result usecase.AddResult, commandErr error) string {
-	if result.GroupPhase == usecase.GroupTargetManagedRolledBack ||
-		result.GroupPhase == usecase.GroupTargetManagedUnknown ||
-		result.GroupPhase == usecase.GroupTargetExternalFailed ||
-		result.GroupPhase == usecase.GroupTargetExternalPartial {
-		return string(result.GroupPhase)
-	}
-	if result.Plan.Status == domain.PlanUnsupported {
-		return string(domain.PlanUnsupported)
-	}
-	if result.Activation.Activation == domain.ActivationFailed {
-		return "activation_failed"
-	}
-	if result.Activation.Authentication == domain.AuthenticationFailed {
-		return "authentication_failed"
-	}
-	if result.Activation.Verification == domain.VerificationFailed {
-		return "verification_failed"
-	}
-	if commandErr != nil {
-		return "failed"
-	}
-	return ""
-}
-
-func newAddResultData(envelope domain.PackageEnvelope, result usecase.AddResult, dryRun bool) addResultData {
-	return addResultData{
-		OperationID: result.Receipt.OperationID, Plugin: envelope.Manifest.Name,
-		Version: envelope.Manifest.Version, Source: publicPackageSource(envelope.Source),
-		Revision: envelope.Source.ResolvedRevision, TreeDigest: envelope.TreeDigest,
-		ManifestDigest: envelope.ManifestDigest, NextAction: nextLifecycleAction(result),
-		DryRun: dryRun, Result: result, envelopeResult: addEnvelopeResult(result, nil),
-	}
-}
-
-func nextLifecycleAction(result usecase.AddResult) string {
-	return lifecycleAction(result, false)
-}
-
-// nextLocalLifecycleAction is private terminal guidance. Provider LocalActions
-// may contain host paths, so public JSON must use nextLifecycleAction instead.
-func nextLocalLifecycleAction(result usecase.AddResult) string {
-	return lifecycleAction(result, true)
-}
-
-func lifecycleAction(result usecase.AddResult, includePrivate bool) string {
-	if result.Plan.InstallIntent == domain.InstallIntentPrepare {
-		return prepareLifecycleAction(result, includePrivate)
-	}
-	action := firstLifecycleAction(result, includePrivate)
-	return decorateLifecycleAction(result, action)
-}
-
-func prepareLifecycleAction(result usecase.AddResult, includePrivate bool) string {
-	if !requiresPersonalMapping(result.Plan.ClientID) {
-		return clientplanner.KiroPrepareAction
-	}
-	if includePrivate && result.Activation.Activation == domain.ActivationPrepared {
-		if len(result.Activation.LocalActions) > 0 {
-			return result.Activation.LocalActions[0]
-		}
-		if result.Plan.ActivePath != "" {
-			return domain.ChatGPTPreparedAction(result.Plan.ActivePath, result.Plan.DeclaredName)
-		}
-	}
-	return domain.ChatGPTMappedPreparationAction
-}
-
-func firstLifecycleAction(result usecase.AddResult, includePrivate bool) string {
-	if includePrivate && len(result.Activation.LocalActions) > 0 {
-		return result.Activation.LocalActions[0]
-	}
-	if len(result.Activation.UserActions) > 0 {
-		return result.Activation.UserActions[0]
-	}
-	if includePrivate && len(result.Plan.LocalActions) > 0 {
-		return result.Plan.LocalActions[0]
-	}
-	if len(result.Plan.UserActions) > 0 {
-		return result.Plan.UserActions[0]
-	}
-	return ""
-}
-
-func decorateLifecycleAction(result usecase.AddResult, action string) string {
-	if result.Activation.Authentication == domain.AuthenticationPending {
-		if action != "" {
-			return fmt.Sprintf("%s; complete authentication, then rerun add to verify activation and authentication", action)
-		}
-		return "complete authentication for the prepared plugin in the selected client, then rerun add to verify activation and authentication"
-	}
-	if result.Activation.Authentication == domain.AuthenticationNotChecked {
-		if action != "" {
-			if strings.Contains(strings.ToLower(action), "verify this plugin's authentication requirements") {
-				return action
-			}
-			return action + "; verify this plugin's authentication requirements before using it"
-		}
-		return "verify this plugin's authentication requirements before using it"
-	}
-	if action != "" {
-		return action
-	}
-	return "start a new client session and verify the plugin is available"
-}
-
-func fullyInstalled(outcome domain.ActivationOutcome) bool {
-	authComplete := outcome.Authentication == domain.AuthenticationNotRequired || outcome.Authentication == domain.AuthenticationComplete
-	return outcome.Activation == domain.ActivationActive && outcome.Verification == domain.VerificationInstalled && authComplete
-}
-
-// Preserve group preflight guidance unless a prepared personal marketplace exists.
-func localTargetLifecycleAction(result usecase.AddResult, publicAction string) string {
-	if requiresPersonalMapping(result.Plan.ClientID) && result.Plan.InstallIntent == domain.InstallIntentPrepare && result.Activation.Activation == domain.ActivationPrepared {
-		return nextLocalLifecycleAction(result)
-	}
-	return publicAction
 }

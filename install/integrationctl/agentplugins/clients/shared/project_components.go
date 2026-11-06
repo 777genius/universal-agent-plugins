@@ -18,9 +18,14 @@ import (
 // It supplies ownership mechanics, not client discovery or settings policy.
 type ProjectComponents struct {
 	ProjectRoot, SkillsRoot string
-	ConfigPaths             nativeconfig.Paths
-	Codec                   nativeconfig.Codec
-	SkillKind, MCPKind      string
+	// ManagedPackagePath is the exact, adapter-validated source package path.
+	// It permits a user native root and a separately managed UAP state root
+	// without allowing an arbitrary ancestor such as HOME to own both.
+	// Empty preserves the existing project-contained source contract.
+	ManagedPackagePath string
+	ConfigPaths        nativeconfig.Paths
+	Codec              nativeconfig.Codec
+	SkillKind, MCPKind string
 }
 
 func (layout ProjectComponents) validate() error {
@@ -135,7 +140,14 @@ func (layout ProjectComponents) packagePath(root string) error {
 	if !cleanComponentPath(root) {
 		return fmt.Errorf("project package root must be clean and absolute")
 	}
-	if err := pathpolicy.RequireContainedChild(layout.ProjectRoot, root); err != nil {
+	if layout.ManagedPackagePath != "" {
+		if !cleanComponentPath(layout.ManagedPackagePath) {
+			return fmt.Errorf("selected managed package path must be clean and absolute")
+		}
+		if err := pathpolicy.RequireExactPath(layout.ManagedPackagePath, root); err != nil {
+			return err
+		}
+	} else if err := pathpolicy.RequireContainedChild(layout.ProjectRoot, root); err != nil {
 		return err
 	}
 	info, err := os.Lstat(root)
@@ -230,6 +242,9 @@ func (layout ProjectComponents) Inspect(components []domain.ComponentDecision, m
 			return clients.RegistryIndeterminate, err
 		}
 		if present && !owned {
+			if component.Kind == domain.ComponentSkill && layout.Codec == nativeconfig.CodecCodex {
+				return clients.RegistryCollision, layout.foreignSkillDestination(component.Name)
+			}
 			return clients.RegistryCollision, nil
 		}
 		if present {
@@ -262,4 +277,20 @@ func (layout ProjectComponents) inspectComponent(component domain.ComponentDecis
 		return kernel.Inspect(layout.ConfigPaths, layout.Codec, component.Name, receipt)
 	}
 	return false, false, fmt.Errorf("unsupported native project component kind %q", component.Kind)
+}
+
+// Only the checked Codex project layout can publish an occupied Skill path.
+// The name has already passed the same native leaf check used for writes.
+func (layout ProjectComponents) foreignSkillDestination(name string) error {
+	if err := pathpolicy.ValidateLeafID(name); err != nil {
+		return err
+	}
+	if err := layout.validate(); err != nil {
+		return err
+	}
+	relative, err := filepath.Rel(layout.ProjectRoot, filepath.Join(layout.SkillsRoot, name, "SKILL.md"))
+	if err != nil || filepath.IsAbs(relative) || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("invalid project-relative Skill destination")
+	}
+	return &domain.ForeignSkillDestinationError{RelativePath: filepath.ToSlash(relative)}
 }

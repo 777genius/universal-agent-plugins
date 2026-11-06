@@ -4,10 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+)
+
+var (
+	errDependencyPackageContent  = errors.New("verified package is missing required content")
+	errDependencySnapshotCleanup = errors.New("dependency snapshot cleanup failed")
 )
 
 func dependencyDirectoryRequest(app App, distribution string, sequence uint64, targets []string) domain.DirectoryResolveRequest {
@@ -23,7 +30,7 @@ func (resolver dependencyResolver) Candidates(ctx context.Context, requirement e
 	if resolver.app.DirectoryClient == nil {
 		return nil, errors.New("signed Directory client is required")
 	}
-	bundle, err := resolver.app.DirectoryClient.Load(ctx, 0)
+	bundle, err := resolver.app.loadAuthorizedDirectory(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +43,7 @@ func (resolver dependencyResolver) Candidates(ctx context.Context, requirement e
 			if !environment.SelectorMatchesVersion(requirement.Registry.Selector, release.PackageVersion) {
 				continue
 			}
-			_, err := domain.ResolveDirectory(bundle.Snapshot, dependencyDirectoryRequest(resolver.app, distribution.ID, release.Sequence, targets))
+			_, err := selectDirectorySourceForPlacement(bundle.Snapshot, dependencyDirectoryRequest(resolver.app, distribution.ID, release.Sequence, targets))
 			if errors.Is(err, domain.ErrDirectoryIneligible) {
 				continue
 			}
@@ -49,7 +56,7 @@ func (resolver dependencyResolver) Candidates(ctx context.Context, requirement e
 	return candidates, nil
 }
 
-func (resolver dependencyResolver) Eligible(ctx context.Context, pkg environment.LockedPackage, targets []string) (bool, error) {
+func (resolver dependencyResolver) Eligible(ctx context.Context, pkg environment.LockedPackage, targets []string) (eligible bool, resultErr error) {
 	if pkg.Source.Registry == nil {
 		return true, nil
 	}
@@ -58,9 +65,14 @@ func (resolver dependencyResolver) Eligible(ctx context.Context, pkg environment
 	pkg.Targets = append([]string{}, targets...)
 	loaded, err := materializeLockedPackage(ctx, resolver.app, pkg, false, nil)
 	if loaded.cleanup != nil {
-		defer func() { _ = loaded.cleanup() }()
+		defer func() {
+			if cleanupErr := loaded.cleanup(); cleanupErr != nil {
+				eligible = false
+				resultErr = errors.Join(resultErr, fmt.Errorf("%w: %w", errDependencySnapshotCleanup, cleanupErr))
+			}
+		}()
 	}
-	if errors.Is(err, domain.ErrDirectoryIneligible) {
+	if dependencyPolicyRefusal(err) {
 		return false, nil
 	}
 	return err == nil, err
@@ -73,7 +85,7 @@ func (resolver dependencyResolver) AcquireCandidate(ctx context.Context, require
 	}
 	loaded, err := resolver.app.acquireDirectory(ctx, requirement.Registry.Distribution, request)
 	if err != nil {
-		if errors.Is(err, domain.ErrDirectoryIneligible) {
+		if dependencyPolicyRefusal(err) {
 			// Immutable MCP metadata can establish ineligibility only after fetch.
 			return environment.ResolvedPackage{}, fmt.Errorf("%w: %w", environment.ErrCandidateIneligible, err)
 		}
@@ -98,6 +110,14 @@ func (resolver dependencyResolver) AcquireCandidate(ctx context.Context, require
 	return result, resolver.finishLoaded(ctx, loaded, pkg)
 }
 
+// A policy refusal permits another candidate; cleanup and cancellation do not.
+// Shared snapshot loading can preserve both identities in one joined error.
+func dependencyPolicyRefusal(err error) bool {
+	return errors.Is(err, domain.ErrDirectoryIneligible) &&
+		!errors.Is(err, errDependencySnapshotCleanup) &&
+		!errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
+}
+
 func dependencyManifestAlias(name string) string {
 	alias := strings.ReplaceAll(strings.ToLower(name), ".", "-")
 	if alias == "" || alias[0] < 'a' || alias[0] > 'z' {
@@ -114,25 +134,34 @@ func (resolver dependencyResolver) DescribePinned(ctx context.Context, pin envir
 }
 
 // Read pinned source facts locally, without checking eligibility for a new install.
-func describePinnedDependency(ctx context.Context, app App, pin environment.LockedPackage) (environment.ResolvedPackage, error) {
-	pkg, err := app.dependencyStore().Get(ctx, pin.DigestAlgorithm, pin.TreeDigest)
+func describePinnedDependency(ctx context.Context, app App, pin environment.LockedPackage) (resolved environment.ResolvedPackage, resultErr error) {
+	snapshot, err := app.dependencyStore().Snapshot(ctx, pin.DigestAlgorithm, pin.TreeDigest)
 	if err != nil {
 		return environment.ResolvedPackage{}, err
 	}
-	input := domain.LoadInput{SnapshotRoot: pkg.Root, TreeDigest: pkg.Metadata.TreeDigest, ExecutableFiles: append([]string{}, pkg.Metadata.ExecutableFiles...), Source: identityFromLocked(pin)}
+	defer func() {
+		if cleanupErr := packagedigest.Remove(snapshot); cleanupErr != nil {
+			resolved = environment.ResolvedPackage{}
+			resultErr = errors.Join(resultErr, fmt.Errorf("%w: %w", errDependencySnapshotCleanup, cleanupErr))
+		}
+	}()
+	input := domain.LoadInput{SnapshotRoot: snapshot.Root, TreeDigest: snapshot.TreeDigest, ExecutableFiles: append([]string{}, snapshot.ExecutableFiles...), Source: identityFromLocked(pin)}
 	envelope, err := app.loadStandardEnvelope(ctx, input)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			err = fmt.Errorf("%w: %w", errDependencyPackageContent, err)
+		}
 		return environment.ResolvedPackage{}, err
 	}
-	if envelope.LoaderKind != domain.LoaderKindAgentPlugins || envelope.TreeDigest != pin.TreeDigest || envelope.ManifestDigest != pin.ManifestDigest {
-		return environment.ResolvedPackage{}, errors.New("stored dependency failed strict standard-loader identity checks")
-	}
-	if pin.Version != "" && pin.Version != envelope.Manifest.Version {
-		return environment.ResolvedPackage{}, errors.New("stored dependency version differs from uap.lock")
+	if err := validateDependencyPinEnvelope(pin, envelope); err != nil {
+		return environment.ResolvedPackage{}, err
 	}
 	pin.Version = envelope.Manifest.Version
 	facts, err := packageDependencyFacts(envelope)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			err = fmt.Errorf("%w: %w", errDependencyPackageContent, err)
+		}
 		return environment.ResolvedPackage{}, err
 	}
 	return environment.ResolvedPackage{Package: pin, Dependencies: facts}, nil

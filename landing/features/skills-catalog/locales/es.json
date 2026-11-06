@@ -68,6 +68,34 @@
         "viewPublisher": "Ver fuente del editor",
         "revision": "Revisión de origen",
         "rawDocument": "Ver el archivo SKILL.md completo"
+      },
+      "scanFilterLabel": "Cobertura del análisis",
+      "scanModes": {
+        "scanned": "Con análisis actual",
+        "all": "Todas las Skills instalables"
+      },
+      "scanNotice": "Solo se muestran Skills con un análisis ejecutado de la versión publicada. La cobertura parcial se indica; el análisis no garantiza seguridad ni instalación.",
+      "scanNone": "No se encontraron Skills con análisis actual en esta selección limitada.",
+      "scanHelp": "Elige todas las Skills instalables para ver entradas sin análisis actual.",
+      "scanClear": "Ver todas las Skills instalables",
+      "scanReportUnavailable": "No se pudieron verificar algunos informes. Se excluyeron esas Skills.",
+      "scanSnapshot": "Publicado {date}: {complete} completos, {partial} parciales, {error} fallidos y {pending} sin análisis actual ({stale} con informes anteriores), de {selected} objetivos seleccionados.",
+      "scanSnapshotHelp": "Es una instantánea publicada del análisis estático, no un indicador de disponibilidad en vivo ni una garantía de seguridad.",
+      "filters": {
+        "button": "Filtros",
+        "active": "{count} filtros activos",
+        "title": "Filtrar Skills",
+        "close": "Cerrar",
+        "description": "Los cambios se aplican al instante. Puedes usar ambos filtros.",
+        "scanned": "Analizado por SkillSpector",
+        "scannedHelp": "Se inspeccionó el código actual. Se incluyen y señalan los análisis parciales.",
+        "noRemarks": "Sin observaciones",
+        "noRemarksHelp": "Análisis estático actual completo y sin hallazgos de contenido. Se excluyen las revisiones incompletas o no disponibles. Esto no garantiza la seguridad.",
+        "reset": "Restablecer filtros",
+        "moreCandidates": "Se pueden revisar más Skills",
+        "moreCandidatesHelp": "No hay coincidencias en este grupo. Muestra más para revisar los candidatos restantes.",
+        "noMatches": "Ninguna Skill coincide con estos filtros",
+        "noMatchesHelp": "Prueba otra búsqueda o restablece los filtros para ver todas las Skills instalables."
       }
     },
     "directoryPage": {

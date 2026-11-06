@@ -5,7 +5,7 @@ import {
   decodeSkillSpectorManifestV3,
   decodeSkillSpectorShardV3,
 } from '../utils/skillSpectorV3.ts';
-import { createSkillSpectorClient } from '../utils/skillSpectorCatalog.ts';
+import { createSkillSpectorClient, skillSpectorV2ProfileDigest } from '../utils/skillSpectorCatalog.ts';
 import { skillSpectorAssessment, isLegacySkillSpectorReport } from '../utils/skillSpector.ts';
 import type { SkillSpectorManifestV3, SkillSpectorRecord } from '../types/skillSpector.ts';
 const root = new URL('./fixtures/skillspector-v3/', import.meta.url);
@@ -58,6 +58,59 @@ function decodeReference(record = referenceRecord()) {
   )[0]!;
 }
 describe('SkillSpector v3 exact producer contract', () => {
+  it('explicit retry refreshes a fulfilled legacy fallback and preserves a verified v3 snapshot', async () => {
+    const requests: string[] = [];
+    let available = false;
+    const legacy = {
+      schema_version: 2, generated_at: manifest.generated_at, source_commit: manifest.source_commit,
+      scanner: manifest.scanner, profile: { id: 'static-only-v2', digest: skillSpectorV2ProfileDigest },
+      scope: 'selected_sources', selection_digest: manifest.selection_digest,
+      coverage: { selected: 0, reported: 0, pending: 0 }, shards: [], plugin_coverage: [],
+    };
+    const client = createSkillSpectorClient('https://fixture/v2.json', 'https://fixture/v1.json',
+      (async (url: string) => {
+        requests.push(url);
+        if (url.endsWith('/v3.json')) return available ? Response.json(manifest) : new Response('', { status: 404 });
+        return Response.json(legacy);
+      }) as typeof fetch, 'https://fixture/v3.json');
+    assert.equal(await client.coverageSummary(), undefined);
+    available = true;
+    client.retryFailedRequests();
+    assert.equal((await client.coverageSummary())?.generatedAt, manifest.generated_at);
+    assert.deepEqual(requests, ['https://fixture/v3.json', 'https://fixture/v2.json', 'https://fixture/v3.json']);
+    client.retryFailedRequests();
+    await client.coverageSummary();
+    assert.equal(requests.length, 3);
+  });
+  it('rejects duplicate source IDs even when their resolution states disagree', () => {
+    for (const contradictory of [false, true]) {
+      const forged = structuredClone(manifest);
+      const duplicate = structuredClone(forged.source_states[0]!);
+      if (contradictory) Object.assign(duplicate, {
+        current: false, state: 'unresolved', reason: 'ambiguous_name',
+        selected_ids: [], candidates: ['skills/one', 'skills/two'],
+      });
+      forged.source_states.push(duplicate);
+      assert.throws(() => decodeSkillSpectorManifestV3(forged), /invalid/);
+    }
+  });
+  it('rejects source resolution status and identity contradictions using the producer contract', () => {
+    const variants: Array<(state: Record<string, unknown>) => void> = [
+      state => { state.reason = 'ambiguous_name'; },
+      state => { state.current = false; },
+      state => { state.selected_ids = []; },
+      state => { state.selected_ids = [...state.selected_ids as string[], ...state.selected_ids as string[]]; },
+      state => { state.revision = null; },
+      state => { state.path = null; },
+      state => { state.candidates = ['skills/one', 'skills/one']; },
+      state => { state.candidates = Array.from({ length: 65 }, (_, i) => 'skills/candidate-' + i); },
+    ];
+    for (const mutate of variants) {
+      const forged = structuredClone(manifest);
+      mutate(forged.source_states[0]!);
+      assert.throws(() => decodeSkillSpectorManifestV3(forged), /invalid/);
+    }
+  });
   it('accepts a 17,715-root inventory without changing published evidence or per-plugin coverage', () => {
     const published = JSON.parse(
       readFileSync(
@@ -328,6 +381,17 @@ describe('SkillSpector v3 exact producer contract', () => {
       disposition: 'partial',
     });
     assert.throws(() => decodeComplete(complete));
+    // A rejected dependency outside the acquired bundle is still uninspected.
+    // Even if a producer wrongly omits its ledger event, never accept Complete.
+    const escaping = structuredClone(
+      Object.values(completeFixture.records)[0] as SkillSpectorRecord,
+    );
+    Object.assign(escaping.coverage!.references![0], {
+      status: 'rejected',
+      target_path: null,
+      disposition: 'partial',
+    });
+    assert.throws(() => decodeComplete(escaping));
     const noTarget = structuredClone(record);
     noTarget.coverage.references[0].target_path = null;
     assert.throws(() => decodeReference(noTarget));

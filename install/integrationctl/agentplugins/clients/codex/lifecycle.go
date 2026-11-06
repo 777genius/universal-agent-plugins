@@ -56,6 +56,19 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		outcome.Activation = domain.ActivationManual
 		outcome.UserActions = append(outcome.UserActions, "install the prepared plugin in Codex Plugins, then verify it appears in Plugins > Personal")
 		outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("in Codex, install %s from %s, then verify it appears in Plugins > Personal", request.DeclaredName, request.Delivery.ActivePath))
+		if handoff := desktopPluginHandoff(request.Delivery.ActivePath, request.DeclaredName, request.Plan.PhysicalArtifactID, false, profileRoot); handoff != "" {
+			// The CLI displays only the first local next action. Never clip a URI.
+			fullAction := outcome.LocalActions[0] + "; " + handoff
+			shortAction := "in Codex, install " + request.DeclaredName + "; " + handoff
+			switch {
+			case len([]rune(fullAction)) <= 500:
+				outcome.LocalActions[0] = fullAction
+			case len([]rune(shortAction)) <= 500:
+				outcome.LocalActions[0] = shortAction
+			default:
+				outcome.LocalActions[0] = "open Codex Plugins to finish the prepared local package; then open ChatGPT Desktop directly and enable it in Plugins > Personal (local path exceeds terminal display limit)"
+			}
+		}
 		return outcome, nil
 	}
 
@@ -71,6 +84,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	return completeCodexActivation(ctx, env, request, outcome)
 }
 
+// completeCodexActivation drives native Codex verification and adds only optional Desktop guidance.
 func completeCodexActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
 	var err error
 	if request.VerifyOnly {
@@ -81,6 +95,9 @@ func completeCodexActivation(ctx context.Context, env clients.Env, request domai
 	if err == nil {
 		outcome.Activation = domain.ActivationActive
 		outcome.Verification = domain.VerificationInstalled
+		if handoff := desktopPluginHandoff(request.Delivery.ActivePath, request.DeclaredName, request.Plan.PhysicalArtifactID, true, request.Client.ConfigRoot); handoff != "" {
+			outcome.LocalActions = append(outcome.LocalActions, "start a new Codex session; "+handoff)
+		}
 		return outcome, nil
 	}
 	if errors.Is(err, ErrListContractUnknown) {

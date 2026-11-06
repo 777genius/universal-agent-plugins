@@ -62,9 +62,10 @@ per-PR opt-in covers their ordinary Linux amd64 execution.
 Pull requests skip lanes whose inputs did not change, so documentation and
 landing work no longer queues Govulncheck, Polyglot Smoke, Terminal UI,
 Coverage, Skills picker, lint, the Management SDK matrix or the authoring
-native, packed and Milestone A lanes. Pushes to `main`, schedules and manual
-dispatches keep their unfiltered triggers, so every merge commit still
-produces the push-triggered checks the release workflow requires. Terminal UI
+native, packed and Milestone A lanes. Release-required workflows keep unfiltered `main` push triggers, so every
+merge commit still produces their release evidence. `Coverage` is not a release
+gate and skips documentation/web-only `main` pushes (matching its PR filter).
+Schedules and manual dispatches retain their existing triggers. Terminal UI
 and both authoring workflows have no push trigger; Milestone A release
 evidence comes from a manual dispatch. `repotests/ci_path_policy_test.go`
 guards these rules.

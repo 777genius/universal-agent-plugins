@@ -5,15 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"os"
 	"sync"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/skillsource"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
 // SkillsPickerRequest selects one public source; PathSet distinguishes an exact
@@ -60,6 +57,7 @@ func (app App) skillSourceAcquirer(scratch string) (skillsource.Acquirer, error)
 	a.TempRoot = scratch
 	return skillsource.Acquirer{Acquirer: a}, nil
 }
+
 func (app App) openSkillsCatalog(ctx context.Context, input SkillsPickerRequest) (*skillsCatalogSession, error) {
 	if err := app.checkSkillsContext(nil); err != nil {
 		return nil, err
@@ -123,9 +121,11 @@ func (app App) StartSkillsPicker(ctx context.Context, input SkillsPickerRequest)
 	}
 	return server, nil
 }
+
 func (s *skillsCatalogSession) callbacks() skillspicker.Callbacks {
 	return skillspicker.Callbacks{Scan: s.scan, Preview: s.preview, Targets: s.app.skillsTargets, Prepare: s.prepare, Progress: s.scanProgress}
 }
+
 func (s *skillsCatalogSession) scan(ctx context.Context, scope string) (skillspicker.Catalog, error) {
 	s.mu.Lock()
 	first := !s.scanned
@@ -175,178 +175,11 @@ func (s *skillsCatalogSession) scan(ctx context.Context, scope string) (skillspi
 	s.mu.Unlock()
 	return catalog, nil
 }
+
 func newSkillCatalogID() string {
 	id, err := newOperationGroupID()
 	if err != nil {
 		panic(err)
 	}
 	return id
-}
-func (s *skillsCatalogSession) preview(ctx context.Context, id string) (skillspicker.Preview, error) {
-	s.mu.Lock()
-	candidate, ok := s.candidates[id]
-	catalogID := s.catalog.CatalogId
-	s.mu.Unlock()
-	if !ok {
-		return skillspicker.Preview{}, errors.New("unknown catalog candidate")
-	}
-	result, err := s.session.Preview(ctx, candidate.Path)
-	if err != nil {
-		return skillspicker.Preview{}, err
-	}
-	preview := skillspicker.Preview{CatalogId: catalogID, CandidateId: id, Path: result.Path, Content: result.Markdown, RawContent: &result.RawContent, Format: skillspicker.Markdown, Resources: []skillspicker.Resource{}, Diagnostics: []skillspicker.Diagnostic{}}
-	for _, resource := range result.Resources {
-		preview.Resources = append(preview.Resources, wireSkillResource(resource))
-	}
-	return preview, nil
-}
-func (app App) skillsTargets(ctx context.Context) ([]skillspicker.Target, error) {
-	if err := app.checkSkillsContext(nil); err != nil {
-		return nil, err
-	}
-	if app.Detector == nil {
-		return nil, errors.New("client detector unavailable")
-	}
-	detected, err := app.Detector.Detect(ctx)
-	if err != nil {
-		return nil, err
-	}
-	byID := map[domain.ClientID]domain.DetectedClient{}
-	for _, client := range detected {
-		byID[client.ClientID] = client
-	}
-	targets := []skillspicker.Target{}
-	for _, id := range domain.SupportedClientIDs() {
-		supported := supportsDependencyTarget(app, string(id))
-		if !supported && app.scope() != domain.ScopeProject {
-			continue
-		}
-		definition, _ := domain.ClientDefinitionFor(id)
-		client, ok := byID[id]
-		available := supported && ok && client.DetectionError == nil && client.Status == domain.DetectionDetected
-		target := skillspicker.Target{Id: string(id), Label: definition.DisplayName, Scope: string(app.scope()), Available: available}
-		if app.scope() == domain.ScopeUser {
-			target.DisplayPath = client.ConfigRoot
-		}
-		if !supported {
-			reason := "This client does not support project installation"
-			target.Reason = &reason
-		} else if !available {
-			reason := "This client is not detected; install or configure it before selecting it"
-			if client.DetectionError != nil {
-				reason = "Client configuration could not be inspected safely"
-			}
-			target.Reason = &reason
-		} else {
-			path, err := app.skillsTargetPath(client)
-			if err != nil {
-				reason := "Client project configuration could not be inspected safely"
-				target.Available, target.Reason = false, &reason
-			} else {
-				target.DisplayPath = path
-			}
-		}
-		targets = append(targets, target)
-	}
-	return targets, nil
-}
-func (s *skillsCatalogSession) prepare(ctx context.Context, input skillspicker.PlanRequest) (skillspicker.Prepared, error) {
-	s.mu.Lock()
-	if input.CatalogId != s.catalog.CatalogId || input.CatalogDigest != s.catalog.CatalogDigest {
-		s.mu.Unlock()
-		return nil, errors.New("catalog changed")
-	}
-	selections := []SkillsSelection{}
-	for _, id := range input.SelectedIds {
-		candidate, ok := s.candidates[id]
-		if !ok || candidate.Status != "available" {
-			s.mu.Unlock()
-			return nil, errors.New("invalid selected candidate")
-		}
-		selections = append(selections, s.selection(candidate))
-	}
-	s.mu.Unlock()
-	prepared, err := s.app.PrepareSkills(ctx, SkillsBatchRequest{Selections: selections, TargetIDs: input.TargetIds})
-	if err != nil {
-		return nil, s.reviewRefusal(err)
-	}
-	return skillsPickerPrepared{prepared}, nil
-}
-func (s *skillsCatalogSession) selection(candidate skillsource.Candidate) SkillsSelection {
-	selector := environment.Selector{Kind: environment.SelectorRef, Value: s.source.RequestedSelector}
-	switch s.source.RequestedSelector {
-	case "default":
-		selector = environment.Selector{Kind: environment.SelectorDefault, Value: ""}
-	case s.source.Commit:
-		selector = environment.Selector{Kind: environment.SelectorCommit, Value: s.source.Commit}
-	}
-	return SkillsSelection{Repository: s.source.Repository, Commit: s.source.Commit, Path: candidate.Path, Name: candidate.Name, CandidateID: candidate.ID, Selector: selector}
-}
-
-type skillsPickerPrepared struct{ *PreparedSkillsBatch }
-
-func (p skillsPickerPrepared) Review() skillspicker.Plan {
-	review := skillspicker.Plan{Actions: []skillspicker.Action{}, Conflicts: []skillspicker.Diagnostic{}, Warnings: []skillspicker.Diagnostic{}, Confirmable: true}
-	for _, a := range p.Actions() {
-		action := skillspicker.Action{CandidateId: a.CandidateID, TargetId: a.ClientID, Alias: a.Alias, Action: skillspicker.ActionAction(a.Action), DestinationPath: a.TargetPath, ReasonCodes: []string{}}
-		if a.FromPath != "" || a.ToPath != "" {
-			action.SourceMoved = &skillspicker.SourceMoved{From: a.FromPath, To: a.ToPath}
-		}
-		review.Actions = append(review.Actions, action)
-	}
-	for _, warning := range p.Warnings() {
-		review.Warnings = append(review.Warnings, skillspicker.Diagnostic{Code: "INSTALLER_WARNING", Severity: skillspicker.Warning, Message: warning})
-	}
-	return review
-}
-func (p skillsPickerPrepared) Check(ctx context.Context) error {
-	err := p.PreparedSkillsBatch.Check(ctx)
-	if errors.Is(err, ErrSkillsPlanStale) {
-		return skillspicker.ErrPlanStale
-	}
-	return err
-}
-func (p skillsPickerPrepared) Apply(ctx context.Context) (skillspicker.Outcome, error) {
-	result, err := p.PreparedSkillsBatch.Apply(ctx)
-	if errors.Is(err, ErrSkillsPlanStale) {
-		err = skillspicker.ErrPlanStale
-	}
-	return skillBatchOutcome(result), err
-}
-func skillBatchOutcome(result SkillsBatchResult) skillspicker.Outcome {
-	outcome := skillspicker.Outcome{State: skillspicker.OperationState(result.Status), Items: []skillspicker.OperationItem{}, Diagnostics: []skillspicker.Diagnostic{}, Result: skillspicker.OperationResult{Message: fmt.Sprintf("Skills installation %s", result.Status), RepairInstructions: append([]string{}, result.RepairInstructions...)}}
-	for _, item := range result.Items {
-		alias, path := item.Alias, item.TargetPath
-		message := skillOperationMessage(skillOperationItemStatus(item.Status), item.Reason)
-		outcome.Items = append(outcome.Items, skillspicker.OperationItem{CandidateId: item.CandidateID, TargetId: item.ClientID, Alias: &alias, DestinationPath: &path, Message: &message, Status: skillOperationItemStatus(item.Status)})
-	}
-	return outcome
-}
-
-func skillOperationItemStatus(status string) skillspicker.OperationItemStatus {
-	switch status {
-	case "completed", "succeeded":
-		return skillspicker.OperationItemStatusSucceeded
-	case "unchanged":
-		return skillspicker.OperationItemStatusUnchanged
-	case "not_attempted", "skipped":
-		return skillspicker.OperationItemStatusSkipped
-	default:
-		return skillspicker.OperationItemStatusFailed
-	}
-}
-
-func (s *skillsCatalogSession) scanProgress() skillspicker.ScanProgress {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.progress
-}
-
-func wireSkillResource(resource skillsource.Resource) skillspicker.Resource {
-	wire := skillspicker.Resource{Path: resource.Path, Executable: resource.Executable}
-	if resource.Size != nil {
-		size := int(*resource.Size)
-		wire.Size = &size
-	}
-	return wire
 }

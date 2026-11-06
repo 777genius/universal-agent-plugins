@@ -68,8 +68,8 @@ export function installCommands(
     .map((target) => target.trim())
     .filter((target, index, all) => target && all.indexOf(target) === index);
   if (targets !== undefined && !values.length) throw new Error('At least one target is required');
-  if (scope === 'project' && !values.length)
-    throw new Error('Project installation requires explicit targets');
+  // In an interactive terminal, a targetless project add prompts for the
+  // compatible installed agents. Non-interactive CLI calls require --target.
   const targetFlag = values.length ? ` --target ${values.join(',')}` : '';
   const scopeFlag = scope === 'project' ? ' --scope project' : '';
   const mode = dependencySaveMode(source, values);

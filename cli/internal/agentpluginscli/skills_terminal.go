@@ -43,15 +43,7 @@ func runSkillsTerminal(cmd *cobra.Command, app App, opts *options, s *skillsCata
 	}
 	prepared, err := app.PrepareSkills(cmd.Context(), request)
 	if err != nil {
-		if cmd.Context().Err() != nil {
-			return cmd.Context().Err()
-		}
-		refusal := s.reviewRefusal(err)
-		var issue *skillspicker.ReviewRefusal
-		if errors.As(refusal, &issue) {
-			return skillsMissingSelection(cmd, opts, issue.Code, issue.Message, []skillspicker.Candidate{})
-		}
-		return err
+		return reportSkillsPreparationRefusal(cmd, opts, s, err)
 	}
 	defer prepared.Close()
 	return runSkillsReviewedPlan(cmd, app, opts, prepared, interactive && !yes)

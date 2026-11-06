@@ -38,7 +38,7 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 
 [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)保留显式项目范围和 0.1.94 引入的自动安装选择，并新增[本地管理 API](../use/manage#local-management-api)和[Pi 原生扩展](../reference/client-compatibility#pi-native-extensions)。预览将包添加到项目：
 
-对于符合条件的已审核目录条目，请复制其固定到完整 Git 提交 SHA 的来源和兼容客户端。Directory v1 的别名（如 `context7`）仅适用于用户范围。请替换 `OWNER/REPOSITORY`、`FULL_COMMIT_SHA` 和 `PACKAGE_PATH`；如果包位于仓库根目录，请省略 `//PACKAGE_PATH`。
+对于符合条件的已审核目录条目，请复制其固定到完整 Git 提交 SHA 的来源和兼容客户端。已发布的 CLI 0.1.95 在项目范围内仍需使用这个固定的 Git 来源。当前从 `main` 构建的 CLI 已支持对符合条件的客户端及全部必需依赖使用签名 Directory 短名称和 `--scope project`（例如 `agentplugins add context7 --target codex --scope project --dry-run`），但该功能尚未进入公开 CLI 版本。请替换 `OWNER/REPOSITORY`、`FULL_COMMIT_SHA` 和 `PACKAGE_PATH`；如果包位于仓库根目录，请省略 `//PACKAGE_PATH`。
 
 语法模板：`github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`。下面的命令使用一个真实的 GitLab 历史提交，并不代表该版本目前仍通过目录审核。实际安装时请从目录复制当前已审核的固定来源。
 

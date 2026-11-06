@@ -22,6 +22,9 @@ func requireCurrentDevin(client domain.DetectedClient) error {
 }
 
 func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding) error {
+	if binding.Scope == string(domain.ScopeUser) && hasDevinGlobalObjects(binding.NativeObjects) {
+		return validateDevinGlobalBinding(root, binding.PhysicalArtifact, binding.TargetLocator, binding)
+	}
 	if binding.Scope != string(domain.ScopeProject) {
 		return nil
 	}

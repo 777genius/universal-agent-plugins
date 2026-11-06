@@ -302,3 +302,195 @@ func readModelBundle() directoryv1.VerifiedBundle {
 		Distributions: []domain.DirectoryDistribution{owner, community}, Evidence: []domain.DirectoryEvidence{evidence, currentEvidence, materializationEvidence},
 		Revocations: []domain.DirectoryRevocation{{DistributionID: "owner/demo", ReleaseSequence: 1}}}, Digest: "sha256:" + strings.Repeat("a", 64)}
 }
+
+func TestPublicDirectoryV2ScopesDoNotBorrowAnotherGrantEvidence(t *testing.T) {
+	const id = "owner/tool"
+	snapshot := domain.DirectorySnapshot{
+		SnapshotSchemaVersion: 2,
+		Distributions: []domain.DirectoryDistribution{{
+			ID:       id,
+			Releases: []domain.DirectoryRelease{{Sequence: 7}},
+			ReleasePolicies: []domain.DirectoryReleasePolicy{{
+				ReleaseSequence: 7,
+				CurrentEvidence: []string{"schema-pass", "cursor-policy-runtime", "project-policy-materialization"},
+				Targets: []domain.DirectoryTarget{
+					{Client: domain.ClientCodex, Scope: domain.ScopeUser, CurrentEvidence: []string{"user-runtime"}},
+					{Client: domain.ClientCodex, Scope: domain.ScopeProject, CurrentEvidence: []string{"project-runtime"},
+						CanonicalClosure: &domain.DirectoryCanonicalClosure{Eligible: false}},
+				},
+			}},
+		}},
+		Evidence: []domain.DirectoryEvidence{
+			{ID: "schema-pass", DistributionID: id, ReleaseSequence: 7, Level: "schema"},
+			{ID: "cursor-policy-runtime", DistributionID: id, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCursor, Scope: domain.ScopeUser},
+			{ID: "project-policy-materialization", DistributionID: id, ReleaseSequence: 7, Level: "materialization", Client: domain.ClientCodex, Scope: domain.ScopeProject},
+			{ID: "user-runtime", DistributionID: id, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeUser},
+			{ID: "project-runtime", DistributionID: id, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeProject},
+		},
+	}
+	result := inspectDistribution(snapshot, domain.DirectoryProduct{DefaultDistribution: id}, id, 7)
+	if len(result.Targets) != 2 {
+		t.Fatalf("expected independent v2 grant rows, got %+v", result.Targets)
+	}
+	for i, check := range []struct {
+		scope        domain.InstallScope
+		wantEvidence string
+	}{{domain.ScopeUser, "schema-pass,user-runtime"}, {domain.ScopeProject, "schema-pass,project-policy-materialization,project-runtime"}} {
+		row := result.Targets[i]
+		if row.Client != domain.ClientCodex || len(row.Scopes) != 1 || row.Scopes[0] != check.scope ||
+			strings.Join(row.Evidence, ",") != check.wantEvidence {
+			t.Fatalf("v2 %s grant leaked another scope's evidence: %+v", check.scope, row)
+		}
+	}
+	for _, proof := range result.Evidence {
+		if proof.ID == "project-runtime" && proof.Scope != domain.ScopeProject {
+			t.Fatalf("public evidence omitted its verified scope: %+v", proof)
+		}
+	}
+	if result.Targets[0].CanonicalClosure != nil ||
+		result.Targets[1].CanonicalClosure == nil || result.Targets[1].CanonicalClosure.Eligible {
+		t.Fatalf("v2 signed ineligible project closure was hidden or borrowed: %+v", result.Targets)
+	}
+	var output bytes.Buffer
+	if err := writeJSONOutput(&output, "directory-v2-test", result); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(output.String(), `"canonical_closure":{"eligible":false}`) != 1 {
+		t.Fatalf("v2 public output lost exact ineligible project closure: %s", output.String())
+	}
+	legacy := snapshot
+	legacy.SnapshotSchemaVersion = 1
+	legacyResult := inspectDistribution(legacy, domain.DirectoryProduct{DefaultDistribution: id}, id, 7)
+	if legacyResult.Targets[0].CanonicalClosure != nil || legacyResult.Targets[1].CanonicalClosure != nil {
+		t.Fatal("v1 output unexpectedly adopted v2 closure authority")
+	}
+	output.Reset()
+	if err := writeJSONOutput(&output, "directory-v1-test", legacyResult); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(output.String(), "canonical_closure") {
+		t.Fatalf("v1 public contract leaked v2 closure: %s", output.String())
+	}
+}
+
+func TestInstalledV2RevisionEvidenceIsScoped(t *testing.T) {
+	const distribution = "owner/tool"
+	snapshot := domain.DirectorySnapshot{SnapshotSchemaVersion: 2, Evidence: []domain.DirectoryEvidence{
+		{ID: "schema", DistributionID: distribution, ReleaseSequence: 7, Level: "schema"},
+		{ID: "codex-user", DistributionID: distribution, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeUser},
+		{ID: "codex-legacy-user", DistributionID: distribution, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex},
+		{ID: "codex-project", DistributionID: distribution, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCodex, Scope: domain.ScopeProject},
+		{ID: "cursor-project", DistributionID: distribution, ReleaseSequence: 7, Level: "runtime", Client: domain.ClientCursor, Scope: domain.ScopeProject},
+	}}
+	for _, tc := range []struct {
+		name   string
+		client domain.ClientID
+		scope  domain.InstallScope
+		want   string
+	}{
+		{"codex user", domain.ClientCodex, domain.ScopeUser, "codex-legacy-user,codex-user,schema"},
+		{"codex project", domain.ClientCodex, domain.ScopeProject, "codex-project,schema"},
+		{"cursor project", domain.ClientCursor, domain.ScopeProject, "cursor-project,schema"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var ids []string
+			for _, proof := range evidenceForClientRevision(snapshot, distribution, 7, tc.client, tc.scope) {
+				ids = append(ids, proof.ID)
+			}
+			if got := strings.Join(ids, ","); got != tc.want {
+				t.Fatalf("revision borrowed another scope's evidence: got %q want %q", got, tc.want)
+			}
+		})
+	}
+	// Retain the legacy unscoped v1 display contract.
+	snapshot.SnapshotSchemaVersion = 1
+	if got := len(evidenceForClientRevision(snapshot, distribution, 7, domain.ClientCodex, domain.ScopeUser)); got != 4 {
+		t.Fatalf("v1 revision evidence changed: got %d entries, want 4", got)
+	}
+}
+
+func TestDirectoryV2RuntimeProofRequiresCurrentCanonicalClosure(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	other := "sha256:" + strings.Repeat("b", 64)
+	eligible := &domain.DirectoryCanonicalClosure{Eligible: true, ClosureDigest: digest}
+	ineligible := &domain.DirectoryCanonicalClosure{Eligible: false}
+	for _, tc := range []struct {
+		name        string
+		schema      int
+		level       string
+		closure     *domain.DirectoryCanonicalClosure
+		proofDigest string
+		want        bool
+	}{
+		{name: "legacy v1 runtime without summary", schema: 1, level: "runtime", proofDigest: digest, want: true},
+		{name: "v2 runtime without summary", schema: 2, level: "runtime", proofDigest: digest},
+		{name: "v2 runtime with ineligible summary", schema: 2, level: "runtime", closure: ineligible, proofDigest: digest},
+		{name: "v2 runtime with matching summary", schema: 2, level: "runtime", closure: eligible, proofDigest: digest, want: true},
+		{name: "v2 runtime with different summary", schema: 2, level: "runtime", closure: eligible, proofDigest: other},
+		{name: "v2 runtime without digest", schema: 2, level: "runtime", closure: eligible},
+		{name: "v2 schema proof without summary", schema: 2, level: "schema", want: true},
+		{name: "v2 schema proof with ineligible summary", schema: 2, level: "schema", closure: ineligible, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := directoryEvidenceMatchesCanonicalClosure(tc.schema,
+				domain.DirectoryTarget{CanonicalClosure: tc.closure},
+				domain.DirectoryEvidence{Level: tc.level, ClosureDigest: tc.proofDigest})
+			if got != tc.want {
+				t.Fatalf("schema=%d level=%q proof=%q closure=%+v: got %t, want %t",
+					tc.schema, tc.level, tc.proofDigest, tc.closure, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDirectoryV1ProjectInspectionOmitsUserEvidence(t *testing.T) {
+	bundle := readModelBundle()
+	snapshot := bundle.Snapshot
+	product := snapshot.Products[0]
+	const distribution = "owner/demo"
+	user := inspectDistribution(snapshot, product, distribution, 2, domain.ScopeUser)
+	project := inspectDistribution(snapshot, product, distribution, 2, domain.ScopeProject)
+	if len(user.Evidence) != 2 || len(user.Targets) != 1 || len(user.Targets[0].Evidence) != 2 {
+		t.Fatalf("user proof unexpectedly changed: %+v", user)
+	}
+	if len(project.Evidence) != 0 || len(project.Targets) != 1 || len(project.Targets[0].Evidence) != 0 {
+		t.Fatalf("v1 Project inspection inherited User runtime or materialization evidence: %+v", project)
+	}
+	if observed := evidenceForClientRevision(snapshot, distribution, 2, domain.ClientCursor, domain.ScopeProject); len(observed) != 0 {
+		t.Fatalf("Project revision borrowed User evidence: %+v", observed)
+	}
+	if observed := evidenceForClientRevision(snapshot, distribution, 2, domain.ClientCursor, domain.ScopeUser); len(observed) != 2 {
+		t.Fatalf("User revision lost existing evidence: %+v", observed)
+	}
+	schema := snapshot.Evidence[1]
+	schema.ID, schema.Level, schema.Client = "current-schema-only", "schema", ""
+	snapshot.Evidence = append(snapshot.Evidence, schema)
+	snapshot.Distributions[0].ReleasePolicies[1].CurrentEvidence = append(
+		snapshot.Distributions[0].ReleasePolicies[1].CurrentEvidence, schema.ID)
+	project = inspectDistribution(snapshot, product, distribution, 2, domain.ScopeProject)
+	if len(project.Evidence) != 1 || project.Evidence[0].ID != schema.ID ||
+		len(project.Targets[0].Evidence) != 1 || project.Targets[0].Evidence[0] != schema.ID {
+		t.Fatalf("Project inspection hid package-wide schema evidence: %+v", project)
+	}
+}
+
+// Project scope must not suppress v2 grant-specific evidence or its explicit scope.
+func TestDirectoryV2ProjectInspectionPreservesScopedEvidence(t *testing.T) {
+	const id = "owner/tool"
+	snapshot := domain.DirectorySnapshot{SnapshotSchemaVersion: 2,
+		Distributions: []domain.DirectoryDistribution{{
+			ID:       id,
+			Releases: []domain.DirectoryRelease{{Sequence: 1}},
+			ReleasePolicies: []domain.DirectoryReleasePolicy{{ReleaseSequence: 1, Targets: []domain.DirectoryTarget{
+				{Client: domain.ClientCodex, Scope: domain.ScopeProject, CurrentEvidence: []string{"project-runtime"}},
+			}}},
+		}},
+		Evidence: []domain.DirectoryEvidence{{ID: "project-runtime", DistributionID: id,
+			ReleaseSequence: 1, Client: domain.ClientCodex, Scope: domain.ScopeProject, Level: "runtime"}},
+	}
+	got := inspectDistribution(snapshot, domain.DirectoryProduct{DefaultDistribution: id}, id, 1, domain.ScopeProject)
+	if len(got.Evidence) != 1 || len(got.Targets) != 1 ||
+		len(got.Targets[0].Evidence) != 1 || got.Targets[0].Evidence[0] != "project-runtime" {
+		t.Fatalf("v2 project grant evidence changed: %+v", got)
+	}
+}

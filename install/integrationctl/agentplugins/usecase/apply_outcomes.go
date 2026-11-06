@@ -82,7 +82,7 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 			return true, session.result, err
 		}
 	}
-	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
+	if nativeProjectionClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
 		_, complete, _, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.state.Installations[session.installationIndex], current)
 		if err != nil {
 			return true, session.result, err
@@ -121,6 +121,11 @@ func (session *applySession) persistReadOnlyObservation(current domain.ClientBin
 	if verified.Activation != "" && !sameLifecycleOutcome(verified, lifecycleOutcome(current)) {
 		result, err := session.service.persistObservedLifecycle(session.input, session.result, session.installationID, session.clientBindingID, verified)
 		return true, result, err
+	}
+	// Preserve optional local guidance from a successful read-only verification.
+	// Lifecycle state remains unchanged, and local actions stay out of public JSON.
+	if verified.Activation != "" {
+		session.result.Activation.LocalActions = append([]string(nil), verified.LocalActions...)
 	}
 	session.result.NoChange = true
 	return true, session.result, nil

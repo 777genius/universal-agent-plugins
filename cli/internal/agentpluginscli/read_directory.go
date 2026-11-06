@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 
@@ -28,6 +27,7 @@ type publicEvidence struct {
 	Level                 string                           `json:"level"`
 	Outcome               string                           `json:"outcome"`
 	Client                domain.ClientID                  `json:"client,omitempty"`
+	Scope                 domain.InstallScope              `json:"scope,omitempty"`
 	ClientVersion         string                           `json:"client_version,omitempty"`
 	InstallerVersion      string                           `json:"installer_version,omitempty"`
 	OS                    string                           `json:"os,omitempty"`
@@ -41,10 +41,11 @@ type publicEvidence struct {
 }
 
 type publicTargetCompatibility struct {
-	Client   domain.ClientID       `json:"client"`
-	Scopes   []domain.InstallScope `json:"scopes"`
-	Delivery string                `json:"delivery"`
-	Evidence []string              `json:"evidence,omitempty"`
+	Client           domain.ClientID                   `json:"client"`
+	Scopes           []domain.InstallScope             `json:"scopes"`
+	Delivery         string                            `json:"delivery"`
+	Evidence         []string                          `json:"evidence,omitempty"`
+	CanonicalClosure *domain.DirectoryCanonicalClosure `json:"canonical_closure,omitempty"`
 }
 
 type publicDistribution struct {
@@ -108,11 +109,11 @@ func inspectDirectoryProduct(ctx context.Context, app App, state domain.StateFil
 	if err != nil {
 		return publicProductInspection{}, err
 	}
-	bundle, err := app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
+	bundle, err := app.DirectoryClient.Load(ctx, directoryFloorForClient(state, app.DirectoryClient))
 	if err != nil {
 		return publicProductInspection{}, fmt.Errorf("load signed Directory: %w", err)
 	}
-	selection, err := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{Selector: selector, Targets: targets,
+	selection, err := selectDirectorySourceForPlacement(bundle.Snapshot, domain.DirectoryResolveRequest{Selector: selector, Targets: targets,
 		Scope: app.scope(), InstallerVersion: app.Version, SchemaVersion: "1.0.0", Operation: domain.DirectoryInstall})
 	if err != nil {
 		return publicProductInspection{}, err
@@ -121,7 +122,7 @@ func inspectDirectoryProduct(ctx context.Context, app App, state domain.StateFil
 	if product == nil {
 		return publicProductInspection{}, fmt.Errorf("selected Directory product is missing")
 	}
-	selected := inspectDistribution(bundle.Snapshot, *product, selection.DistributionID, selection.ReleaseSequence)
+	selected := inspectDistribution(bundle.Snapshot, *product, selection.DistributionID, selection.ReleaseSequence, app.scope())
 	result := publicProductInspection{ProductID: product.ID, DisplayName: product.DisplayName, Description: product.Description,
 		ReviewedDefault: product.DefaultDistribution, SelectedDistribution: selection.DistributionID,
 		SelectedRelease: selected,
@@ -145,7 +146,7 @@ func inspectDirectoryProduct(ctx context.Context, app App, state domain.StateFil
 		if id == selection.DistributionID {
 			continue
 		}
-		result.Alternatives = append(result.Alternatives, inspectDistribution(bundle.Snapshot, *product, id, 0))
+		result.Alternatives = append(result.Alternatives, inspectDistribution(bundle.Snapshot, *product, id, 0, app.scope()))
 	}
 	sort.Slice(result.Alternatives, func(i, j int) bool { return result.Alternatives[i].ID < result.Alternatives[j].ID })
 	return result, nil
@@ -172,7 +173,7 @@ func inspectInstalledProduct(ctx context.Context, app App, state domain.StateFil
 		RecordedSnapshotSequence: origin.SnapshotSequence, CurrentSnapshotSequence: bundle.Snapshot.Sequence}
 	if product := snapshotProduct(bundle.Snapshot, origin.ProductID); product != nil {
 		view.ReviewedDefaultDistribution = product.DefaultDistribution
-		current := inspectDistribution(bundle.Snapshot, *product, origin.DistributionID, 0)
+		current := inspectDistribution(bundle.Snapshot, *product, origin.DistributionID, 0, app.scope())
 		if current.ReleaseSequence > 0 {
 			view.CurrentDistribution, view.CurrentRevision = origin.DistributionID, current.ResolvedRevision
 			view.CurrentRepository, view.CurrentPackagePath = current.Repository, current.PackagePath
@@ -180,23 +181,21 @@ func inspectInstalledProduct(ctx context.Context, app App, state domain.StateFil
 		}
 	}
 	targets := installationTargets(installation, string(app.scope()))
-	selection, err := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{Selector: origin.DistributionID,
+	selection, err := selectDirectorySourceForPlacement(bundle.Snapshot, domain.DirectoryResolveRequest{Selector: origin.DistributionID,
 		Targets: targets, Scope: app.scope(), InstallerVersion: app.Version, SchemaVersion: "1.0.0", Operation: domain.DirectoryInstall})
 	if err == nil {
 		view.CurrentDistribution, view.CurrentRevision = selection.DistributionID, selection.Source.Revision
 		view.CurrentRepository, view.CurrentPackagePath = selection.Source.Repository, selection.Source.Path
 		view.CurrentReleaseSequence = selection.ReleaseSequence
-		view.CurrentEvidence = evidenceForRelease(bundle.Snapshot, selection.DistributionID, selection.ReleaseSequence)
+		view.CurrentEvidence = evidenceForRelease(bundle.Snapshot, selection.DistributionID, selection.ReleaseSequence, app.scope())
 	}
 	result.Directory = view
 	for index := range result.Clients {
 		revision := result.Clients[index].PackageRevision
 		if revision != nil {
-			for _, evidence := range evidenceForRelease(bundle.Snapshot, revision.DistributionID, revision.ReleaseSequence) {
-				if evidence.Client == "" || evidence.Client == domain.ClientID(result.Clients[index].ClientID) {
-					revision.Evidence = append(revision.Evidence, evidence)
-				}
-			}
+			revision.Evidence = append(revision.Evidence, evidenceForClientRevision(
+				bundle.Snapshot, revision.DistributionID, revision.ReleaseSequence,
+				domain.ClientID(result.Clients[index].ClientID), app.scope())...)
 		}
 	}
 	result.Warnings = installedDirectoryWarnings(bundle.Snapshot, installation)
@@ -205,7 +204,7 @@ func inspectInstalledProduct(ctx context.Context, app App, state domain.StateFil
 }
 
 func directoryBundleForRead(ctx context.Context, app App, state domain.StateFileV2, allowNetwork bool) (directoryv1.VerifiedBundle, bool, error) {
-	floor := installedDirectoryFloor(state)
+	floor := directoryFloorForClient(state, app.DirectoryClient)
 	if allowNetwork && app.DirectoryClient != nil {
 		bundle, err := app.DirectoryClient.Load(ctx, floor)
 		if err == nil {
@@ -249,7 +248,8 @@ func snapshotDistribution(snapshot domain.DirectorySnapshot, id string) *domain.
 	return nil
 }
 
-func inspectDistribution(snapshot domain.DirectorySnapshot, product domain.DirectoryProduct, id string, sequence uint64) publicDistribution {
+func inspectDistribution(snapshot domain.DirectorySnapshot, product domain.DirectoryProduct, id string, sequence uint64, scopes ...domain.InstallScope) publicDistribution {
+	scope := selectedScope(scopes)
 	distribution := snapshotDistribution(snapshot, id)
 	if distribution == nil {
 		return publicDistribution{ID: id, ReviewedDefault: id == product.DefaultDistribution}
@@ -274,20 +274,36 @@ func inspectDistribution(snapshot domain.DirectorySnapshot, product domain.Direc
 		}
 		result.ReleaseStatus = policy.Status
 		for _, target := range policy.Targets {
-			result.Targets = append(result.Targets, publicTargetCompatibility{Client: target.Client, Scopes: append([]domain.InstallScope(nil), target.Scopes...), Delivery: target.Delivery,
-				Evidence: evidenceIDsForClient(snapshot, id, release.Sequence, target.Client)})
+			scopes := append([]domain.InstallScope(nil), target.Scopes...)
+			evidenceIDs := evidenceIDsForClient(snapshot, id, release.Sequence, target.Client, scope)
+			var canonical *domain.DirectoryCanonicalClosure
+			if snapshot.SnapshotSchemaVersion == 2 {
+				// Scoped v2 evidence and signed closure belong to this exact
+				// grant; never infer either from another client or legacy v1.
+				scopes = []domain.InstallScope{target.Scope}
+				evidenceIDs = evidenceIDsForV2Grant(snapshot, policy, target)
+				canonical = target.CanonicalClosure
+			}
+			result.Targets = append(result.Targets, publicTargetCompatibility{
+				Client: target.Client, Scopes: scopes, Delivery: target.Delivery, Evidence: evidenceIDs,
+				CanonicalClosure: canonical,
+			})
 		}
 	}
-	result.Evidence = evidenceForRelease(snapshot, id, release.Sequence)
+	result.Evidence = evidenceForRelease(snapshot, id, release.Sequence, scope)
 	return result
 }
 
-func evidenceForRelease(snapshot domain.DirectorySnapshot, distribution string, sequence uint64) []publicEvidence {
+func evidenceForRelease(snapshot domain.DirectorySnapshot, distribution string, sequence uint64, scopes ...domain.InstallScope) []publicEvidence {
+	scope := selectedScope(scopes)
 	result := []publicEvidence{}
 	for _, evidence := range snapshot.Evidence {
 		if evidence.DistributionID == distribution && evidence.ReleaseSequence == sequence {
+			if snapshot.SnapshotSchemaVersion == 1 && scope == domain.ScopeProject && evidence.Level != "schema" {
+				continue // Signed v1 client observations qualify User, not Project.
+			}
 			result = append(result, publicEvidence{ID: evidence.ID, DistributionID: evidence.DistributionID, ReleaseSequence: evidence.ReleaseSequence,
-				Level: evidence.Level, Outcome: evidence.Outcome, Client: evidence.Client, ClientVersion: evidence.ClientVersion,
+				Level: evidence.Level, Outcome: evidence.Outcome, Client: evidence.Client, Scope: evidence.Scope, ClientVersion: evidence.ClientVersion,
 				InstallerVersion: evidence.InstallerVersion, OS: evidence.OS, Architecture: evidence.Architecture,
 				DependencyIdentity: evidence.DependencyIdentity, ObservedAt: evidence.ObservedAt,
 				PackageTreeDigest: evidence.PackageTreeDigest, Artifact: evidence.Artifact, Trust: evidence.Trust,
@@ -298,9 +314,36 @@ func evidenceForRelease(snapshot domain.DirectorySnapshot, distribution string, 
 	return result
 }
 
-func evidenceIDsForClient(snapshot domain.DirectorySnapshot, distribution string, sequence uint64, client domain.ClientID) []string {
+// Per-client installed revisions must not present another v2 grant's runtime
+// proof as their own. The full release evidence remains visible separately.
+func evidenceForClientRevision(snapshot domain.DirectorySnapshot, distribution string, sequence uint64,
+	client domain.ClientID, scope domain.InstallScope,
+) []publicEvidence {
+	result := []publicEvidence{}
+	for _, evidence := range evidenceForRelease(snapshot, distribution, sequence, scope) {
+		if snapshot.SnapshotSchemaVersion != 2 {
+			if evidence.Client == "" || evidence.Client == client {
+				result = append(result, evidence)
+			}
+			continue
+		}
+		if evidence.Level == "schema" {
+			if evidence.Client == "" && evidence.Scope == "" {
+				result = append(result, evidence)
+			}
+			continue
+		}
+		if evidence.Client == client && (evidence.Scope == scope ||
+			scope == domain.ScopeUser && evidence.Scope == "") {
+			result = append(result, evidence)
+		}
+	}
+	return result
+}
+
+func evidenceIDsForClient(snapshot domain.DirectorySnapshot, distribution string, sequence uint64, client domain.ClientID, scopes ...domain.InstallScope) []string {
 	ids := []string{}
-	for _, evidence := range evidenceForRelease(snapshot, distribution, sequence) {
+	for _, evidence := range evidenceForRelease(snapshot, distribution, sequence, scopes...) {
 		if evidence.Client == "" || evidence.Client == client {
 			ids = append(ids, evidence.ID)
 		}
@@ -308,172 +351,24 @@ func evidenceIDsForClient(snapshot domain.DirectorySnapshot, distribution string
 	return ids
 }
 
-func installedDirectoryWarnings(snapshot domain.DirectorySnapshot, installation domain.Installation) []publicSafetyWarning {
-	if installation.Directory == nil {
-		return nil
-	}
-	origin := installation.Directory
-	warnings := installationDigestWarnings(snapshot, installation)
-	if distribution := snapshotDistribution(snapshot, origin.DistributionID); distribution != nil && distribution.Status == domain.DistributionSuspended {
-		warnings = append(warnings, publicSafetyWarning{Code: "directory_distribution_suspended", DistributionID: origin.DistributionID,
-			Message: "the signed Directory has suspended the installed distribution", Action: "review an explicit qualified switch or remove the installation"})
-	}
-	return warnings
-}
-
-func installationDigestWarnings(snapshot domain.DirectorySnapshot, installation domain.Installation) []publicSafetyWarning {
-	warnings := exactDigestWarnings(snapshot, installation.Source.TreeDigest, installation.InstallationID)
-	byIdentity := map[string]int{}
-	for index, warning := range warnings {
-		byIdentity[warning.Code+"\x00"+warning.DistributionID+fmt.Sprint("\x00", warning.ReleaseSequence)] = index
-	}
-	for _, binding := range installation.Clients {
-		if binding.PackageRevision == nil {
-			continue
-		}
-		for _, warning := range exactDigestWarnings(snapshot, binding.PackageRevision.TreeDigest, installation.InstallationID) {
-			key := warning.Code + "\x00" + warning.DistributionID + fmt.Sprint("\x00", warning.ReleaseSequence)
-			index, exists := byIdentity[key]
-			if !exists {
-				index = len(warnings)
-				byIdentity[key] = index
-				warnings = append(warnings, warning)
-			}
-			warnings[index].Clients = appendUniqueString(warnings[index].Clients, binding.ClientID)
-		}
-	}
-	for index := range warnings {
-		sort.Strings(warnings[index].Clients)
-		if installation.OriginMode == domain.OriginModeDirect {
-			warnings[index].Action = "choose a different reviewed local/full-SHA source, or remove the installation"
-		}
-	}
-	return warnings
-}
-
-func appendUniqueString(values []string, value string) []string {
-	for _, existing := range values {
-		if existing == value {
-			return values
-		}
-	}
-	return append(values, value)
-}
-
-func exactDigestWarnings(snapshot domain.DirectorySnapshot, treeDigest, installationID string) []publicSafetyWarning {
-	if strings.TrimSpace(treeDigest) == "" {
-		return nil
-	}
-	warnings := []publicSafetyWarning{}
-	for _, distribution := range snapshot.Distributions {
-		for _, release := range distribution.Releases {
-			if release.TreeDigest != treeDigest || !releaseRevokedInSnapshot(snapshot, distribution, release.Sequence) {
+// V2 compatibility rows must not claim policy-level evidence belonging to
+// another client or scope. Full release evidence remains visible separately.
+func evidenceIDsForV2Grant(snapshot domain.DirectorySnapshot, policy domain.DirectoryReleasePolicy, target domain.DirectoryTarget) []string {
+	ids := append(append([]string(nil), policy.CurrentEvidence...), target.CurrentEvidence...)
+	filtered := make([]string, 0, len(ids))
+	for _, id := range ids {
+		for _, evidence := range snapshot.Evidence {
+			if evidence.ID != id {
 				continue
 			}
-			subject := "installed package bytes"
-			if installationID == "the direct source" {
-				subject = "direct package bytes"
+			if evidence.Level == "schema" && evidence.Client == "" && evidence.Scope == "" {
+				filtered = append(filtered, id)
+			} else if evidence.Client == target.Client &&
+				(evidence.Scope == target.Scope || target.Scope == domain.ScopeUser && evidence.Scope == "") {
+				filtered = append(filtered, id)
 			}
-			warnings = append(warnings, publicSafetyWarning{Code: "directory_release_revoked", DistributionID: distribution.ID, ReleaseSequence: release.Sequence,
-				Message: fmt.Sprintf("the signed Directory identifies the %s as revoked (%s release %d)", subject, distribution.ID, release.Sequence),
-				Action:  "run `agentplugins update " + installationID + "` for a safe release, explicitly switch distributions, or remove the installation"})
+			break
 		}
 	}
-	return warnings
-}
-
-func releaseRevokedInSnapshot(snapshot domain.DirectorySnapshot, distribution domain.DirectoryDistribution, sequence uint64) bool {
-	for _, policy := range distribution.ReleasePolicies {
-		if policy.ReleaseSequence == sequence && policy.Status == domain.ReleaseRevoked {
-			return true
-		}
-	}
-	for _, revocation := range snapshot.Revocations {
-		if revocation.DistributionID == distribution.ID && revocation.ReleaseSequence == sequence {
-			return true
-		}
-	}
-	return false
-}
-
-func convergenceState(installation domain.Installation) (bool, string) {
-	pending := []string{}
-	for _, binding := range installation.Clients {
-		if binding.Materialization == domain.MaterializationAbsent || binding.PackageRevision == nil {
-			continue
-		}
-		revision := binding.PackageRevision
-		mixed := revision.TreeDigest != installation.Source.TreeDigest || revision.ManifestDigest != installation.Package.ManifestDigest
-		if installation.Directory != nil && revision.ReleaseSequence != installation.Directory.DesiredReleaseSequence {
-			mixed = true
-		}
-		if mixed {
-			pending = appendUniqueString(pending, binding.ClientID)
-		}
-	}
-	if len(pending) == 0 {
-		return false, ""
-	}
-	sort.Strings(pending)
-	return true, fmt.Sprintf("run `agentplugins update %s --target %s` to converge the remaining clients", installation.InstallationID, strings.Join(pending, ","))
-}
-
-func doctorDirectorySafetyFindings(ctx context.Context, app App, state domain.StateFileV2, selected *domain.Installation, selectedView *publicInstallation) ([]doctorFinding, error) {
-	type item struct {
-		installation domain.Installation
-		warnings     []publicSafetyWarning
-	}
-	items := []item{}
-	if selected != nil && selectedView != nil {
-		items = append(items, item{installation: *selected, warnings: selectedView.Warnings})
-	} else {
-		for _, installation := range state.Installations {
-			view, err := inspectInstalledProduct(ctx, app, state, installation)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, item{installation: installation, warnings: view.Warnings})
-		}
-	}
-	findings := []doctorFinding{}
-	for _, entry := range items {
-		for _, warning := range entry.warnings {
-			clientID := ""
-			if len(warning.Clients) == 1 {
-				clientID = warning.Clients[0]
-			}
-			findings = append(findings, doctorFinding{Status: "degraded", Code: warning.Code, ClientID: clientID,
-				InstallationName: entry.installation.DeclaredName, InstallationID: entry.installation.InstallationID,
-				Message: warning.Message, RecoveryAction: warning.Action})
-		}
-	}
-	return findings, nil
-}
-
-func renderProductInspection(writer io.Writer, product publicProductInspection) error {
-	_, _ = fmt.Fprintf(writer, "%s (%s)\n", product.DisplayName, product.ProductID)
-	_, _ = fmt.Fprintf(writer, "  Reviewed default: %s\n", product.ReviewedDefault)
-	_, _ = fmt.Fprintf(writer, "  Selected: %s (%s)\n", product.SelectedDistribution, product.SelectionReason)
-	_, _ = fmt.Fprintf(writer, "  Release: sequence=%d source=%s@%s//%s tree=%s manifest=%s\n", product.SelectedRelease.ReleaseSequence,
-		product.SelectedRelease.Repository, product.SelectedRelease.ResolvedRevision, product.SelectedRelease.PackagePath,
-		product.SelectedRelease.TreeDigest, product.SelectedRelease.ManifestDigest)
-	for _, target := range product.TargetCompatibility {
-		_, _ = fmt.Fprintf(writer, "  %s: delivery=%s evidence=%s\n", target.Client, target.Delivery, strings.Join(target.Evidence, ","))
-	}
-	for _, alternative := range product.Alternatives {
-		_, _ = fmt.Fprintf(writer, "  Alternative: %s kind=%s status=%s release=%d\n", alternative.ID, alternative.Kind, alternative.Status, alternative.ReleaseSequence)
-	}
-	for _, evidence := range product.ImmutableEvidence {
-		_, _ = fmt.Fprintf(writer, "  Evidence: %s %s=%s trust=%s %s@%s//%s digest=%s\n", evidence.ID, evidence.Level, evidence.Outcome, evidenceTrustLabel(evidence),
-			evidence.Artifact.Repository, evidence.Artifact.Revision, evidence.Artifact.Path, evidence.Artifact.Digest)
-	}
-	return nil
-}
-
-func evidenceTrustLabel(evidence publicEvidence) string {
-	record := domain.DirectoryEvidence{Artifact: evidence.Artifact, Trust: evidence.Trust}
-	if record.HasTrustedProvenance() {
-		return "trusted"
-	}
-	return "self-reported/informational"
+	return filtered
 }

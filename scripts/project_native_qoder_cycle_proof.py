@@ -27,6 +27,16 @@ def projected(base, key, revision):
     return files
 
 
+def native_skill(layout, base, key, revision):
+    source = authored(base, key, revision)["skills/" + NAME + "/SKILL.md"]
+    return dict(object_id="qoder_project_skill_directory:" + NAME,
+                kind="qoder_project_skill_directory", logical_name=NAME,
+                path=layout[key] + "/.qoder/skills/" + NAME,
+                source_relative="skills/" + NAME,
+                managed_digest="sha256:" + sha(bytes((102, 0)) + b"SKILL.md" + bytes((0, 45, 0)) + source + bytes((0,))),
+                protection_class="managed")
+
+
 def tree(files, mode="600", dirs="700"):
     result = {".": DIR + dirs}
     for path, body in files.items():
@@ -164,7 +174,7 @@ def state(row, stage, key, revision, layout, base, prior):
     instant(b["updated_at"])
     payload = projected(base, key, revision)
     installed_digest = tree_digest(payload)
-    require(same(b["native_objects"], [dict(object_id="package:qoder:" + physical, kind="managed_package_directory", logical_name=NAME, path=active, managed_digest=installed_digest, protection_class="managed")]))
+    require(same(b["native_objects"], [dict(object_id="package:qoder:" + physical, kind="managed_package_directory", logical_name=NAME, path=active, managed_digest=installed_digest, protection_class="managed"), native_skill(layout, base, key, revision)]))
     require(same(ins["clients"], {} if removed else {bid: b}) and ins.get("data_retained", False) is removed)
     count = 1 if key == "b" else 2 if stage in ("intact-repair-a", "before-source-revision-a") else 3 if stage in ("update-a", "before-missing-a") else 4 if stage in ("missing-repair-a", "remove-a", "repeat-remove-a") else 1
     require(type(b["receipts"]) is list and len(b["receipts"]) == count)
@@ -183,13 +193,17 @@ def state(row, stage, key, revision, layout, base, prior):
         require(transactions[0]["operation_group_id"] == ins["operation_group_id"] and transactions[0]["operation_id"] not in seen)
     else:
         require(ins["operation_group_id"] == b["receipts"][-1]["operation_group_id"])
-    delivery = obj(row["delivery"], "active view files manifest skill")
+    delivery = obj(row["delivery"], "active view files manifest skill native_skill")
     require(delivery["active"] == active and delivery["view"] == view)
     if removed:
-        require(all(delivery[field] is None for field in ("files", "manifest", "skill")))
+        require(all(delivery[field] is None for field in ("files", "manifest", "skill", "native_skill")))
     else:
-        require(same(delivery["files"], tree(payload, "644", "755")) and stream(delivery["manifest"]) == payload[".agentplugins-qoder-native/.qoder-plugin/plugin.json"]
-                and stream(delivery["skill"]) == source_files["skills/" + NAME + "/SKILL.md"])
+        require(stream(delivery["native_skill"]) == source_files["skills/" + NAME + "/SKILL.md"])
+        if stage == "missing-a":
+            require(all(delivery[field] is None for field in ("files", "manifest", "skill")))
+        else:
+            require(same(delivery["files"], tree(payload, "644", "755")) and stream(delivery["manifest"]) == payload[".agentplugins-qoder-native/.qoder-plugin/plugin.json"]
+                    and stream(delivery["skill"]) == source_files["skills/" + NAME + "/SKILL.md"])
     data(row["data"], ins, b, removed, layout[key], physical)
     return {**row, "installation": ins, "active": active, "view": view, "physical": physical}
 

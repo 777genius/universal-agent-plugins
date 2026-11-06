@@ -18,11 +18,7 @@ func TestManagementPreparationRefusalReturnsJSONWithoutTypedNilPanic(t *testing.
 	if err == nil || retained != nil {
 		t.Fatalf("error returned executable-looking typed nil: %T, %v", retained, err)
 	}
-	server, err := management.Start(t.Context(), management.Options{Backend: backend, ContextID: backend.ContextID(), EnvironmentID: backend.EnvironmentID(), IntentRoot: backend.config.DependenciesRoot, StateRoot: backend.config.StateRoot, EngineVersion: backend.app.Version})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(server.Close)
+	server := managementRemovalServer(t, backend)
 	bootstrap := server.Bootstrap()
 	body, err := json.Marshal(request)
 	if err != nil {

@@ -8,6 +8,8 @@ import type {
 } from '../types/skillSpector.ts';
 import { decodeSkillSpectorRecords, decodeSkillSpectorReport } from './skillSpector.ts';
 import { decodeSkillSpectorManifestV3, decodeSkillSpectorShardV3 } from './skillSpectorV3.ts';
+import { applyVerifiedSkillSpectorCohort, readVerifiedSkillSpectorCohort } from './skillSpectorCohort.ts';
+import type { TrustedCohortKey, VerifiedCohort } from './skillSpectorCohort.ts';
 
 const revision = /^[0-9a-f]{40}$/;
 const digest = /^sha256:[0-9a-f]{64}$/;
@@ -294,11 +296,18 @@ function dropTransientFailures<T>(cache: Map<string, CachedRequest<T>>): void {
 }
 
 /** Shared session cache; transient failures recover on explicit retry or later demand. */
+export interface SkillSpectorCoverageSummary {
+  generatedAt: string;
+  coverage: SkillSpectorManifestV3['coverage'];
+}
+
 export function createSkillSpectorClient(
   manifestUrl: string,
   legacyUrl: string,
   fetcher: typeof fetch = fetch,
   v3ManifestUrl?: string,
+  cohortLatestUrl?: string,
+  cohortKeys: readonly TrustedCohortKey[] = [],
 ) {
   const legacyManifest = () =>
     readBytes(manifestUrl, 4 << 20, fetcher)
@@ -314,17 +323,41 @@ export function createSkillSpectorClient(
     string,
     CachedRequest<SkillSpectorReport | SkillSpectorManifest | SkillSpectorManifestV3>
   >();
+  let legacyFallback = false;
+  let v3ManifestDigest: string | undefined;
+  const cohortCache = new Map<string, CachedRequest<VerifiedCohort | undefined>>();
+  let lastCohortReadAt = 0;
+  let trustedCohortExpiresAt: number | undefined;
+  const loadCohort = (): Promise<VerifiedCohort | undefined> =>
+    !cohortLatestUrl || !cohortKeys.length
+      ? Promise.resolve(undefined)
+      : cachedRequest(cohortCache, 'release', () =>
+          readVerifiedSkillSpectorCohort(cohortLatestUrl, cohortKeys, fetcher)
+            .then((cohort) => {
+              trustedCohortExpiresAt = cohort?.expiresAt;
+              return cohort;
+            })
+            .catch(() => undefined),
+        );
   const loadManifest = () =>
     cachedRequest(manifests, 'manifest', () =>
       v3ManifestUrl
         ? readBytes(v3ManifestUrl, 16 << 20, fetcher)
-            .then((bytes) => decodeSkillSpectorManifestV3(parse(bytes)))
+            .then(async (bytes) => {
+              const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as BufferSource));
+              v3ManifestDigest = 'sha256:' + [...hash]
+                .map((byte) => byte.toString(16).padStart(2, '0')).join('');
+              return decodeSkillSpectorManifestV3(parse(bytes));
+            })
             .catch((error) => {
               if (error instanceof HttpError && error.status === 404) return legacyManifest();
               throw error;
             })
         : legacyManifest(),
-    );
+    ).then((manifest) => {
+      legacyFallback = Boolean(v3ManifestUrl && manifest.schema_version !== 3);
+      return manifest;
+    });
   const repositories = new Map<string, CachedRequest<SkillSpectorDisplayReport>>();
   const shards = new Map<string, CachedRequest<SkillSpectorRecord[]>>();
   let active = 0;
@@ -365,6 +398,17 @@ export function createSkillSpectorClient(
     );
   }
   const reportFor = async (repositoryName: string): Promise<SkillSpectorDisplayReport> => {
+      // A trusted cohort can expire or be superseded while the Nuxt app lives.
+      // A new request must not return an indefinitely cached Complete overlay.
+      const clock = Date.now();
+      if (cohortLatestUrl && cohortKeys.length &&
+          (clock - lastCohortReadAt >= 300_000 ||
+           (trustedCohortExpiresAt !== undefined && clock >= trustedCohortExpiresAt))) {
+        cohortCache.clear();
+        repositories.clear();
+        trustedCohortExpiresAt = undefined;
+        lastCohortReadAt = clock;
+      }
       const key = repositoryName.toLowerCase();
       return cachedRequest(repositories, key, async () => {
         const manifest = await loadManifest();
@@ -409,11 +453,43 @@ export function createSkillSpectorClient(
           pluginCounts.delete(plugin.plugin_path);
         }
         if (pluginCounts.size) invalid();
-        return { ...manifest, records };
+        const report = { ...manifest, records };
+        if (manifest.schema_version !== 3) return report;
+        const cohort = await loadCohort();
+        return applyVerifiedSkillSpectorCohort(report, v3ManifestDigest, cohort);
       });
   };
   return {
     reportFor,
+    retryFailedRequests() {
+      // A missing v3 publication may have appeared since this successful legacy fallback.
+      // Preserve validated v3 snapshots; only explicit filter retry revisits fallback.
+      if (legacyFallback) {
+        manifests.clear();
+        repositories.clear();
+        legacyFallback = false;
+      }
+      dropTransientFailures(manifests);
+      dropTransientFailures(shards);
+      dropTransientFailures(repositories);
+    },
+    async currentSourceStateIds(): Promise<ReadonlySet<string>> {
+      const manifest = await loadManifest();
+      if (manifest.schema_version !== 3) return new Set();
+      const ids: string[] = [];
+      for (const state of manifest.source_states) {
+        if (state.current === true && state.state === 'resolved' &&
+            typeof state.id === 'string' && Array.isArray(state.selected_ids) &&
+            state.selected_ids.length === 1) ids.push(state.id);
+      }
+      return new Set(ids);
+    },
+    async coverageSummary(): Promise<SkillSpectorCoverageSummary | undefined> {
+      const manifest = await loadManifest();
+      return manifest.schema_version === 3
+        ? { generatedAt: manifest.generated_at, coverage: manifest.coverage }
+        : undefined;
+    },
     retryReportFor(repositoryName: string): Promise<SkillSpectorDisplayReport> {
       // Preserve validated successful results and requests still in flight.
       // Only previously failed transport requests are eligible for re-fetch.

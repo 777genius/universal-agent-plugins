@@ -30,7 +30,7 @@ func buildDependencyRepairs(ctx context.Context, app App, state domain.StateFile
 		if rev == nil {
 			return nil, errors.New("recorded package revision is missing")
 		}
-		pkg := environment.LockedPackage{Alias: authority.Alias, SourceKey: authority.SourceKey, DigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: rev.TreeDigest, ManifestDigest: rev.ManifestDigest, Targets: []string{string(target)}}
+		pkg := environment.LockedPackage{Alias: authority.Alias, SourceKey: authority.SourceKey, Version: rev.Version, DigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: rev.TreeDigest, ManifestDigest: rev.ManifestDigest, Targets: []string{string(target)}}
 		if err := setRepairSkillSource(&pkg, installation, rev); err != nil {
 			return nil, err
 		}
@@ -45,9 +45,6 @@ func buildDependencyRepairs(ctx context.Context, app App, state domain.StateFile
 		if installation.Directory != nil {
 			pkg.Source.Git = nil
 			pkg.Source.Registry = &environment.LockedRegistrySource{Distribution: installation.Directory.DistributionID, DistributionID: installation.Directory.DistributionID, ProductID: installation.Directory.ProductID, ReleaseSequence: rev.ReleaseSequence, Repository: installation.Source.Repository, Path: installation.Source.PackageSubpath, Commit: rev.ResolvedRevision}
-		}
-		if stored, e := app.dependencyStore().Get(ctx, pkg.DigestAlgorithm, pkg.TreeDigest); e == nil {
-			pkg.ExecutableFiles = append([]string{}, stored.Metadata.ExecutableFiles...)
 		}
 		actions = append(actions, dependencyAction{Alias: authority.Alias, ClientID: string(target), InstallationID: installation.InstallationID, BindingID: binding.ClientBindingID, Action: "repair", Package: &pkg, Authority: authority})
 	}

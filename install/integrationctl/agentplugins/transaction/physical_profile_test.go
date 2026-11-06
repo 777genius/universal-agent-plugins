@@ -256,7 +256,11 @@ func TestPhysicalProfileRemovalAfterBindingDeletion(t *testing.T) {
 // without its verifier must refuse before the actual manager creates a journal.
 func TestPhysicalProfileMissingVerifierBeforeIntent(t *testing.T) {
 	k, m, store := transactionFixture(t, "TEST-missing-verifier")
-	token, err := domain.NewProfileAuthority(domain.ProfileAuthorityFacts{Version: 1, CanonicalRoot: "/TEST-profile", Ancestry: []domain.ProfileAuthorityEntry{{CanonicalPath: "/", Scheme: "linux-fsuuid-inode-v1", VolumeID: "01", ObjectID: "1"}, {CanonicalPath: "/TEST-profile", Scheme: "linux-fsuuid-inode-v1", VolumeID: "01", ObjectID: "2"}}})
+	profileRoot := filepath.Join(physicalTempDir(t), "TEST-profile")
+	if err := os.Mkdir(profileRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	token, err := profileauthority.Capture(t.Context(), profileRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +312,11 @@ func TestPhysicalProfileSharedDataMissingVerifierBeforeIntent(t *testing.T) {
 	first.DataReceiptID = data.DataReceiptID
 	state.Installations[0].DataReceipts = map[string]domain.DataReceipt{data.DataReceiptID: data}
 	state.Installations[0].Clients[m.ClientBindingID] = first
-	token, err := domain.NewProfileAuthority(domain.ProfileAuthorityFacts{Version: 1, CanonicalRoot: "/TEST-profile", Ancestry: []domain.ProfileAuthorityEntry{{CanonicalPath: "/", Scheme: "linux-fsuuid-inode-v1", VolumeID: "01", ObjectID: "1"}, {CanonicalPath: "/TEST-profile", Scheme: "linux-fsuuid-inode-v1", VolumeID: "01", ObjectID: "2"}}})
+	profileRoot := filepath.Join(physicalTempDir(t), "TEST-profile")
+	if err := os.Mkdir(profileRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	token, err := profileauthority.Capture(t.Context(), profileRoot)
 	if err != nil {
 		t.Fatal(err)
 	}

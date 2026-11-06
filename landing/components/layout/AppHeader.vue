@@ -29,10 +29,12 @@ const { docsUrl, docsLabel } = useDocsLinks();
 const homePath = computed(() => localePath('/'));
 const homeHref = computed(() => router.resolve(homePath.value).href);
 
+// The two primary destinations remain visible on narrower laptops.
 const navItems = computed(() => [
-  { id: 'plugins', label: t('shell.navigation.plugins') },
-  { id: 'why', label: t('shell.navigation.why') },
-  { id: 'faq', label: t('shell.navigation.faq') },
+  { id: 'demo', label: t('shell.navigation.demo'), href: sectionHref('demo') },
+  { id: 'plugins', label: t('shell.navigation.plugins'), href: router.resolve(localePath('/plugins/')).href },
+  { id: 'agents', label: t('shell.navigation.agents'), href: sectionHref('agent-support') },
+  { id: 'faq', label: t('shell.navigation.faq'), href: sectionHref('faq') },
 ]);
 
 const normalizePath = (value: string) => (value !== '/' ? value.replace(/\/+$/, '') : '/');
@@ -52,7 +54,13 @@ onMounted(() => {
     <v-container class="app-header__inner">
       <AppLogo />
       <nav class="app-header__nav">
-        <v-btn v-for="item in navItems" :key="item.id" variant="text" :href="sectionHref(item.id)">
+        <v-btn
+          v-for="item in navItems"
+          :key="item.id"
+          variant="text"
+          :href="item.href"
+          :class="{ 'app-header__nav-secondary': item.id === 'agents' || item.id === 'faq' }"
+        >
           {{ item.label }}
         </v-btn>
       </nav>
@@ -69,19 +77,17 @@ onMounted(() => {
           {{ docsLabel(t('shell.docs.navLabel')) }}
         </v-btn>
         <v-btn
-          variant="outlined"
+          :icon="mdiGithub"
+          variant="text"
           size="small"
           :href="githubUrl"
           target="_blank"
           rel="noopener noreferrer"
           :aria-label="t('nav.viewOnGithub')"
           class="app-header__github-btn"
-          :prepend-icon="mdiGithub"
-        >
-          GitHub
-        </v-btn>
+        />
         <template v-if="interactiveReady">
-          <LanguageSwitcher v-if="publishedLocales.length > 1" compact />
+          <LanguageSwitcher v-if="publishedLocales.length > 1" compact icon-only />
           <ThemeToggle />
         </template>
         <div v-else class="app-header__control-fallback" aria-hidden="true" />
@@ -112,7 +118,7 @@ onMounted(() => {
                 <a
                   v-for="item in navItems"
                   :key="item.id"
-                  :href="sectionHref(item.id)"
+                  :href="item.href"
                   class="mobile-menu__link"
                   @click="menuOpen = false"
                 >
@@ -139,7 +145,7 @@ onMounted(() => {
               <div class="mobile-menu__actions">
                 <span>{{ t('shell.navigation.appearance') }}</span>
                 <template v-if="interactiveReady">
-                  <LanguageSwitcher v-if="publishedLocales.length > 1" compact contain-menu @menu-open="languageMenuOpen = $event" />
+                  <LanguageSwitcher v-if="publishedLocales.length > 1" compact icon-only contain-menu @menu-open="languageMenuOpen = $event" />
                   <ThemeToggle />
                 </template>
                 <template v-else>
@@ -188,7 +194,7 @@ onMounted(() => {
   display: flex;
   align-self: stretch;
   align-items: stretch;
-  margin-left: 48px;
+  margin-left: clamp(16px, 3vw, 40px);
 }
 
 .app-header__nav :deep(.v-btn) {
@@ -220,11 +226,11 @@ onMounted(() => {
 }
 
 .app-header__github-btn {
-  border-color: rgba(0, 240, 255, 0.25) !important;
-  color: #00f0ff !important;
-  font-weight: 600 !important;
-  font-size: 12px !important;
-  letter-spacing: 0.02em !important;
+  /* In Vuetify, on-surface follows the current light/dark color scheme. */
+  color: rgb(var(--v-theme-on-surface)) !important;
+  min-width: 36px !important;
+  width: 36px !important;
+  height: 36px !important;
 }
 
 .app-header__docs-btn {
@@ -240,21 +246,16 @@ onMounted(() => {
 }
 
 .app-header__github-btn:hover {
-  border-color: rgba(0, 240, 255, 0.5) !important;
-  background: rgba(0, 240, 255, 0.06) !important;
+  background: rgba(var(--v-theme-on-surface), 0.08) !important;
 }
 
 .app-header__mobile-actions {
   display: none;
 }
 
-@media (min-width: 960px) and (max-width: 1439px) {
-  .app-header__nav {
+@media (min-width: 960px) and (max-width: 1279px) {
+  .app-header__nav :deep(.app-header__nav-secondary) {
     display: none;
-  }
-
-  .app-header__mobile-actions {
-    display: flex;
   }
 }
 

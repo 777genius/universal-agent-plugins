@@ -3,11 +3,12 @@ import { readFileSync } from 'node:fs';
 type GlobalMessages = typeof import('../i18n/locales/en.json');
 type CatalogMessages = typeof import('../features/skills-catalog/locales/en.json');
 type SkillSpectorMessages = typeof import('../features/skillspector/locales/en.json');
+type RestoreMessages = typeof import('../features/restore/locales/en.json');
 
 /** Release tooling validates every owned feature without adding it to global app messages. */
 export function loadI18nMessages(
   locale: string,
-): GlobalMessages & CatalogMessages & SkillSpectorMessages {
+): GlobalMessages & CatalogMessages & SkillSpectorMessages & RestoreMessages {
   const read = <Messages>(folder: string): Messages =>
     JSON.parse(
       readFileSync(new URL(`../${folder}/${locale}.json`, import.meta.url), 'utf8'),
@@ -15,8 +16,10 @@ export function loadI18nMessages(
   const base = read<GlobalMessages>('i18n/locales');
   const catalog = read<CatalogMessages>('features/skills-catalog/locales');
   const skillSpector = read<SkillSpectorMessages>('features/skillspector/locales');
+  const restore = read<RestoreMessages>('features/restore/locales');
   return {
     ...base,
+    shell: { ...base.shell, ...restore.shell },
     registryUi: {
       ...base.registryUi,
       ...catalog.registryUi,

@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import { isRetiredArchive } from '../lib/public-routes.mjs';
+import { journeyNav } from '../lib/journeys.mjs';
 import { documentContent } from './check-output.mjs';
 
 const root = new URL('../../../', import.meta.url);
@@ -19,7 +20,7 @@ const md = await createMarkdownRenderer(fileURLToPath(new URL('website/', root))
 
 test('current journeys stay searchable while retired product pages are archived', () => {
   for (const locale of docsLocales) {
-    for (const page of ['index.md', 'use/index.md', 'use/install.md', 'build/index.md', 'build/skill.md', 'guide/quickstart.md'])
+    for (const page of ['index.md', 'use/index.md', 'use/install.md', 'build/index.md', 'build/skill.md', 'sdk/index.md', 'sdk/go-hooks.md', 'sdk/host-detection.md', 'sdk/go-installer.md', 'sdk/typescript-management.md', 'guide/quickstart.md'])
       assert.equal(isRetiredArchive(`${locale}/${page}`), false, `${locale}/${page}`);
   }
   for (const page of ['en/guide/installation.md', 'en/concepts/why-plugin-kit-ai.md',
@@ -27,7 +28,24 @@ test('current journeys stay searchable while retired product pages are archived'
     assert.equal(isRetiredArchive(page), true, page);
   assert.equal(isRetiredArchive('en/index.html'), false);
   assert.equal(isRetiredArchive('en/build/index.html'), false);
+  assert.equal(isRetiredArchive('en/sdk/index.html'), false);
+  assert.equal(isRetiredArchive('en/sdk/go-hooks.html'), false);
   assert.equal(isRetiredArchive('en/legacy/v1/index.html'), true);
+});
+
+
+test('all SDK guides are localized, linked from navigation and use a stable source contract', () => {
+  for (const locale of docsLocales) {
+    assert.ok(journeyNav(locale).some((item) => item.link === `/${locale}/sdk/`), `${locale}: SDK navigation`);
+    for (const page of ['index', 'go-hooks', 'host-detection', 'go-installer', 'typescript-management']) {
+      const body = read(`website/source/${locale}/sdk/${page}.md`);
+      assert.match(body, new RegExp(`canonicalId: "page:sdk:${page}"`));
+      assert.match(body, new RegExp(`locale: "${locale}"`));
+      if (locale !== 'en') assert.match(body, /localeDisposition: "current-translation"/);
+      assert.doesNotMatch(body, /@@[A-Z_]+@@|§/);
+      assert.equal((body.match(/\`\`\`/g) || []).length % 2, 0, `${locale}/sdk/${page}: paired code fences`);
+    }
+  }
 });
 
 test('published source never claims it is on a non-deploying branch', () => {
@@ -118,5 +136,8 @@ test('README promotes the canonical quickstart and current build section', () =>
   }
   assert.match(source, /^### Quick start$/m);
   assert.match(source, /^## Build plugins$/m);
-  assert.match(source, /\[Build plugins\]\(#build-plugins\)/);
+  assert.ok(links.some(([, label, target]) => target === '#build-plugins' && label.trim()),
+    'README links to the current build section');
+  assert.ok(links.some(([, label, target]) => target === '#sdks-and-integrations' && label.trim()),
+    'README links to the current SDK integration section');
 });
