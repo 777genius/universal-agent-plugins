@@ -125,6 +125,7 @@ test('Skills catalog and detail reuse the plugin scope choice and copy the proje
   await expect(scope.getByRole('button', { name: 'This project' })).toHaveAttribute('aria-pressed', 'true');
   const scopedCommand = 'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project';
   await expect(card.locator('.command-snippet code')).toHaveText(scopedCommand);
+  await card.screenshot({ path: testInfo.outputPath('skills-card-project-mobile.png'), animations: 'disabled' });
   await card.getByRole('button', { name: 'Copy command' }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(scopedCommand);
   await card.getByRole('link', { name: 'frontend-design' }).click();
@@ -133,6 +134,9 @@ test('Skills catalog and detail reuse the plugin scope choice and copy the proje
   await expect(detail.locator('.command-snippet code')).toHaveText(scopedCommand);
   await detail.getByRole('tab', { name: 'Prompt' }).click();
   await expect(detail.locator('.command-snippet code')).toContainText('--scope project');
+  await detail.getByRole('tab', { name: 'Command' }).click();
+  await page.screenshot({ path: testInfo.outputPath('skills-detail-project-mobile.png'), fullPage: true, animations: 'disabled' });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await detail.locator('.install-scope').getByRole('button', { name: 'This computer' }).click();
   await detail.getByRole('tab', { name: 'Command' }).click();
   await expect(detail.locator('.command-snippet code')).toHaveText(scopedCommand.replace(' --scope project', ''));
