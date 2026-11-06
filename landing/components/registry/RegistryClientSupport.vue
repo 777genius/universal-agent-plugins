@@ -104,6 +104,8 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
 <style scoped lang="scss">
 .registry-client-support {
   padding-block: 64px 72px;
+  // Keep the wide table's scrollable overflow inside its own region, not the page.
+  overflow-x: clip;
 
   .section-heading {
     max-width: 760px;
