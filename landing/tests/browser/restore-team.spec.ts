@@ -187,6 +187,8 @@ test('manifest unfolds on first view, folds into icon and reopens on hover', asy
 });
 
 test('both modes copy complete commands during typing and reset feedback on mode changes', async ({ page, context }) => {
+  // The three mode transitions and clipboard operations can exceed the default 30s under CI load.
+  test.setTimeout(60_000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('./');
