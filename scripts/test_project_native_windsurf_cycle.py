@@ -55,6 +55,29 @@ class WindsurfCycleContracts(unittest.TestCase):
         bad=copy.deepcopy(now);bad["Modified"]=[start//10**9-1,0]
         self.assertFalse(cycle.selected_parent_times(old,bad,start,end))
 
+    def test_preprovisioned_scanner_is_exact_and_foreign_changes_refuse(self):
+        baseline=copy.deepcopy(self.proofs)
+        global_root=self.result["component_layout"]["root"]+"/installer-state"
+        scanner="security/lintai/0.1.3/linux-amd64/lintai"
+        def modify(field,value):
+            row=next(r["value"] for r in self.proofs if r["stage"]=="add-a")
+            row["frames"][global_root][scanner][field]=value
+        for field,value in (("SHA256","0"*64),("Mode",0o100600),("Links",2),("Size",0)):
+            self.proofs=copy.deepcopy(baseline)
+            modify(field,value)
+            with self.subTest(field=field),self.assertRaises(ValueError):
+                self.admit()
+        self.proofs=copy.deepcopy(baseline)
+        row=next(r["value"] for r in self.proofs if r["stage"]=="add-a")
+        row["frames"][global_root]["security/lintai/unknown"]=copy.deepcopy(
+            row["frames"][global_root][scanner])
+        with self.assertRaises(ValueError):self.admit()
+        self.proofs=copy.deepcopy(baseline)
+        row=next(r["value"] for r in self.proofs if r["stage"]=="add-a")
+        row["frames"][global_root].pop(scanner)
+        with self.assertRaises(ValueError):self.admit()
+        self.proofs=baseline
+
     def test_a2_parent_replacement_cannot_renew_accepted_global_authority(self):
         active=False
         root=self.result["component_layout"]["root"]+"/installer-state"

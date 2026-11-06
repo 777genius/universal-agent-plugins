@@ -448,22 +448,46 @@ def cross_frames(paths,current,previous,global_before,cmd,stage):
             # First project installation: reconstruct the exact preexisting global
             # fixture inventory, never treat the first observed frame as a baseline.
             require(stage == "add-a")
+            # The pinned scanner is preprovisioned by nativeProvisionScanner
+            # *before* the user state is frozen. Admit its exact immutable
+            # original tree, never an arbitrary new global entry.
+            scanner_base = "security/lintai/0.1.3/linux-amd64"
+            scanner_dirs = ("security/lintai", "security/lintai/0.1.3", scanner_base)
+            scanner_file = scanner_base + "/lintai"
             expected = {".", "security", "security/assessments", "plugin-data",
                         "plugin-data/caller-owned", "plugin-data/caller-owned/keep.txt",
-                        "security/assessments/" + current["cache"]["key"] + ".json"}
+                        "security/assessments/" + current["cache"]["key"] + ".json",
+                        *scanner_dirs, scanner_file}
             require(set(global_now) == expected)
             root_record = global_now["."]
-            for name in ("security", "security/assessments", "plugin-data", "plugin-data/caller-owned"):
+            require(root_record["Kind"] == "directory" and root_record["Mode"] == 0o40700
+                    and root_record["Inode"] > 0)
+            def preexisting(row):
+                return all(row[key][0]*10**9 + row[key][1] < start
+                           for key in ("Modified", "Changed"))
+            for name in ("security", "security/assessments", "plugin-data",
+                         "plugin-data/caller-owned", *scanner_dirs):
                 row = global_now[name]
                 require(row["Kind"] == "directory" and row["Mode"] == 0o40700
+                        and row["Inode"] > 0
                         and row["UID"] == root_record["UID"] and row["GID"] == root_record["GID"]
                         and row["Device"] == root_record["Device"])
+                if name != "security/assessments":
+                    require(preexisting(row))
+            scanner = global_now[scanner_file]
+            require(scanner["Kind"] == "file" and scanner["Mode"] == 0o100700
+                    and scanner["Inode"] > 0 and scanner["Links"] == 1
+                    and 0 < scanner["Size"] <= 128<<20
+                    and scanner["SHA256"] == "b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba"
+                    and scanner["UID"] == root_record["UID"] and scanner["GID"] == root_record["GID"]
+                    and scanner["Device"] == root_record["Device"] and preexisting(scanner))
             marker = global_now["plugin-data/caller-owned/keep.txt"]
             require(marker["Kind"] == "file" and marker["Mode"] == 0o100600
                     and marker["Links"] == 1 and marker["Size"] == len(b"CALLER_user\n")
                     and marker["SHA256"] == sha(b"CALLER_user\n")
                     and marker["UID"] == root_record["UID"] and marker["GID"] == root_record["GID"]
-                    and marker["Device"] == root_record["Device"])
+                    and marker["Device"] == root_record["Device"] and marker["Inode"] > 0
+                    and preexisting(marker))
         else:
             for name,old in global_before.items():
                 now=global_now.get(name)

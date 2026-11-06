@@ -28,6 +28,13 @@ def build():
     global_tree={".":rec(global_root),"security":rec(global_root+"/security"),"security/assessments":rec(global_root+"/security/assessments"),
                  "plugin-data":rec(global_root+"/plugin-data"),"plugin-data/caller-owned":rec(global_root+"/plugin-data/caller-owned"),
                  "plugin-data/caller-owned/keep.txt":rec(global_root+"/plugin-data/caller-owned/keep.txt",b"CALLER_user\n")}
+    # Native provisioner writes this exact pinned scanner subtree before freeze.
+    scanner_base="security/lintai/0.1.3/linux-amd64"
+    for name in ("security/lintai","security/lintai/0.1.3",scanner_base):
+        global_tree[name]=rec(global_root+"/"+name)
+    executable=scanner_base+"/lintai"
+    global_tree[executable]=rec(global_root+"/"+executable,b"pinned-scanner",mode=0o100700)
+    global_tree[executable]["SHA256"]="b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba"
     def addproof(stage,value):proofs.append({"stage":stage,"value":copy.deepcopy(value)})
     for index,stage in enumerate(order):
         selected=cycle.scope(stage);root=cycle.state_root(p,selected);prof=cycle.profile(p,selected)
