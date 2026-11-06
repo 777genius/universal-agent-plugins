@@ -44,8 +44,8 @@ func TestSkillsHumanPartialResultPrintsRecoveryWithoutSuccessClaim(t *testing.T)
 	cmd := &cobra.Command{}
 	cmd.SetOut(&output)
 	result := SkillsBatchResult{
-		Status: "partial",
-		Items: []SkillsBatchItem{{Alias: "review", ClientID: "codex", Status: "failed"}},
+		Status:             "partial",
+		Items:              []SkillsBatchItem{{Alias: "review", ClientID: "codex", Status: "failed"}},
 		RepairInstructions: []string{"Inspect agentplugins deps status and follow recovery steps."},
 	}
 	if err := renderSkillsResult(cmd, &options{format: "human"}, result); err != nil {
