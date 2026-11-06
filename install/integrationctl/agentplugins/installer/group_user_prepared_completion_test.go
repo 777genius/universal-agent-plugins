@@ -24,7 +24,7 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 	root := t.TempDir()
 	id := "user-group-prepared-proof"
 	prepared := &PreparedOperation{
-		req: Request{Operation: OpUpdate, Scope: domain.ScopeUser, InstallationID: id},
+		req:  Request{Operation: OpUpdate, Scope: domain.ScopeUser, InstallationID: id},
 		plan: Plan{InstallationID: id},
 	}
 	got := usecase.GroupResult{InstallationID: id, Phase: usecase.GroupPhaseCompleted, Mutated: true}
@@ -37,7 +37,7 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 		plan := domain.DeliveryPlan{
 			ClientID: clientID, Scope: domain.ScopeUser,
 			TargetContext: domain.TargetContext{Scope: domain.ScopeUser, UserConfigRoot: config},
-			ActivePath: active, PhysicalArtifactID: "artifact-" + string(clientID),
+			ActivePath:    active, PhysicalArtifactID: "artifact-" + string(clientID),
 			NativeRegistryRoot: config,
 		}
 		var observation *domain.LocalEntryObservation
@@ -72,7 +72,7 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 			}
 			observation, err = domain.NewLocalEntryObservation(domain.LocalEntryObservationFacts{
 				RevisionBasis: plan.SelectedDelivery,
-				Enabled: native.Receipt.Enabled, ReceiptDigest: native.Receipt.Digest,
+				Enabled:       native.Receipt.Enabled, ReceiptDigest: native.Receipt.Digest,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -132,7 +132,7 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 	}
 	return userPreparedUpdateFixture{
 		prepared: prepared, got: got,
-		state: domain.StateFileV2{Installations: []domain.Installation{installed}},
+		state:    domain.StateFileV2{Installations: []domain.Installation{installed}},
 		callback: true,
 	}
 }
