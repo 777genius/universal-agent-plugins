@@ -63,7 +63,7 @@ func runGroupRecheckCrashChild(root, mode string) {
 		second.StagingPath = filepath.Join(base, "second.staging")
 		group := DirectoryGroup{
 			OperationGroupID: "process-recheck-apply-group",
-			DesiredState: state, Mutations: []DirectoryMutation{first, second},
+			DesiredState:     state, Mutations: []DirectoryMutation{first, second},
 		}
 		group.Mutations[0].Verify = func(ctx context.Context, path string) error {
 			if err := verifyTransactionBody("new")(ctx, path); err != nil {
@@ -85,7 +85,7 @@ func runGroupRecheckCrashChild(root, mode string) {
 		second.ActivePath = secondActive
 		group := DirectoryRemovalGroup{
 			OperationGroupID: "process-recheck-remove-group",
-			DesiredState: state, Removals: []DirectoryRemoval{first, second},
+			DesiredState:     state, Removals: []DirectoryRemoval{first, second},
 		}
 		verifyCalls := 0
 		group.Removals[0].Verify = func(ctx context.Context, path string) error {
