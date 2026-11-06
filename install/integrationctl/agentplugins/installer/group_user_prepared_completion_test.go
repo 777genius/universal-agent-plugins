@@ -411,3 +411,42 @@ func TestUserGroupPreparedUpdateManualCodexCannotBorrowUnprovenFileCompletion(t 
 		})
 	}
 }
+
+// TestUserGroupPreparedUpdateRepeatedIdenticalFrozenDeliveries proves identical repeated snapshots complete only verified files.
+func TestUserGroupPreparedUpdateRepeatedIdenticalFrozenDeliveries(t *testing.T) {
+	f := newUserPreparedUpdateFixture(t)
+	setUserGroupManualCodex(&f)
+	// The real host group preview can capture multiple identical plans per
+	// selected client. Repeating proof must not manufacture activation.
+	f.prepared.deliveries = append(f.prepared.deliveries, f.prepared.deliveries[0], f.prepared.deliveries[1])
+	result, err := f.finish(nil, nil)
+	if err != nil || result.Outcome != OutcomeCompleted || !result.Mutated || result.NoChange ||
+		len(result.Targets) != 2 || len(result.ManualActions) != 2 {
+		t.Fatalf("identical frozen deliveries rejected: %+v %v", result, err)
+	}
+	if result.Targets[0].Activation != string(domain.ActivationManual) ||
+		result.Targets[1].Activation != string(domain.ActivationPrepared) {
+		t.Fatalf("file completion incorrectly attested native activation: %+v", result.Targets)
+	}
+}
+
+// TestUserGroupPreparedUpdateConflictingRepeatedFrozenDeliveryFailsClosed refuses conflicting repeats for either client.
+func TestUserGroupPreparedUpdateConflictingRepeatedFrozenDeliveryFailsClosed(t *testing.T) {
+	for _, clientID := range []domain.ClientID{domain.ClientCodex, domain.ClientVSCode} {
+		t.Run(string(clientID), func(t *testing.T) {
+			f := newUserPreparedUpdateFixture(t)
+			setUserGroupManualCodex(&f)
+			i := 0
+			if clientID == domain.ClientVSCode {
+				i = 1
+			}
+			conflicting := f.prepared.deliveries[i]
+			conflicting.plan.NativeRegistryRoot += "-foreign"
+			f.prepared.deliveries = append(f.prepared.deliveries, conflicting)
+			result, err := f.finish(nil, nil)
+			if err == nil || result.Outcome != OutcomeIncomplete || !result.Mutated || result.NoChange {
+				t.Fatalf("conflicting frozen delivery accepted: %+v %v", result, err)
+			}
+		})
+	}
+}
