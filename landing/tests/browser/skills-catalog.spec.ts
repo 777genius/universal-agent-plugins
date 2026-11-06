@@ -255,7 +255,7 @@ test('known non-installable Feishu sources stay visible with Install disabled', 
   const cards = page.locator('.skills-catalog .skill-card');
   await expect(cards).toHaveCount(2);
   await expect(cards.getByRole('button', { name: /Install/ })).toHaveCount(0);
-  await expect(cards.first()).toContainText('No verified install source');
+  await expect(cards.first().locator('.plugin-card__unavailable')).toContainText('An exact Skill name is needed');
 });
 
 test('malformed publisher deep link degrades without crashing document rendering', async ({ page }) => {
