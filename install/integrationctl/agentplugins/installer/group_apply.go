@@ -3,7 +3,6 @@ package installer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -78,20 +77,12 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 		}
 		pending = false
 	}
-	if pending && loadErr != nil {
-		result.Outcome, result.Reason = OutcomeIncomplete, "committed group state is unknown"
-		return result, loadErr
-	}
-	if pending && (e.anyGroupHostHandoffPending(prepared) || hasUserPreparedGroupTarget(got)) {
-		if e.cfg.OnCommittedBinding == nil || !completedUserPreparedUpdate(prepared, got, state) {
-			result.Outcome = OutcomeIncomplete
-			result.Reason = "committed binding is not activated"
-			return result, fmt.Errorf("%s", result.Reason)
+	if pending {
+		var completionErr error
+		pending, completionErr = e.finishUserPreparedHandoff(prepared, &result, got, state, loadErr)
+		if completionErr != nil {
+			return result, completionErr
 		}
-		// The verified file update is complete; Local may still be Prepared.
-		// Preserve the actual reload/trust actions without promoting activation.
-		result.ManualActions = append(result.ManualActions, userPreparedGroupActions(got)...)
-		pending = false
 	}
 	if !result.Mutated && !pending && (prepared.plan.NoChange || (!got.Mutated && groupPreviewUnchanged(got))) {
 		result.Outcome = OutcomeUnchanged

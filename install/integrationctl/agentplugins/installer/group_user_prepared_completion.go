@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -225,4 +226,24 @@ func userPreparedGroupActions(got usecase.GroupResult) []string {
 		}
 	}
 	return out
+}
+
+// finishUserPreparedHandoff reports verified file completion separately from
+// native activation. A pending handoff stays pending on every unproven route.
+func (e *Engine) finishUserPreparedHandoff(prepared *PreparedOperation, result *Result, got usecase.GroupResult, state domain.StateFileV2, loadErr error) (bool, error) {
+	if loadErr != nil {
+		result.Outcome, result.Reason = OutcomeIncomplete, "committed group state is unknown"
+		return true, loadErr
+	}
+	if !e.anyGroupHostHandoffPending(prepared) && !hasUserPreparedGroupTarget(got) {
+		return true, nil
+	}
+	if e.cfg.OnCommittedBinding == nil || !completedUserPreparedUpdate(prepared, got, state) {
+		result.Outcome = OutcomeIncomplete
+		result.Reason = "committed binding is not activated"
+		return true, fmt.Errorf("%s", result.Reason)
+	}
+	// Local stays Prepared; only the fully verified file update is complete.
+	result.ManualActions = append(result.ManualActions, userPreparedGroupActions(got)...)
+	return false, nil
 }
