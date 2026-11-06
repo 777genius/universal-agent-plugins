@@ -68,7 +68,7 @@ func completedUserPreparedTarget(prepared *PreparedOperation, frozen PlanTarget,
 		if string(delivery.plan.ClientID) != frozen.ClientID {
 			continue
 		}
-		if matched || !completedProjectDeliveryIdentity(delivery.plan, plan) {
+		if matched || !completedUserPreparedDeliveryIdentity(delivery.plan, plan) {
 			return false
 		}
 		matched = true
@@ -94,8 +94,31 @@ func validUserPreparedTargetIdentity(prepared *PreparedOperation, frozen PlanTar
 		plan.ActivePath != "" && plan.ActivePath == frozen.TargetPath && plan.PhysicalArtifactID != "" &&
 		frozen.BindingID != "" &&
 		frozen.BindingID == domain.ComputeClientBindingID(prepared.plan.InstallationID, frozen.ClientID, string(domain.ScopeUser), plan.ActivePath) &&
-		reflect.DeepEqual(frozen.SelectedDelivery, plan.SelectedDelivery) &&
+		completedUserStagedSelection(frozen.SelectedDelivery, plan.SelectedDelivery) &&
 		domain.SameProfileAuthority(frozen.ProfileAuthority, plan.ProfileAuthority())
+}
+
+// completedUserStagedSelection permits only the digest added by the actual
+// stager. All pre-staging selected Local authority must remain byte-identical.
+func completedUserStagedSelection(frozen, current domain.SelectedDelivery) bool {
+	if reflect.DeepEqual(frozen, current) {
+		return true
+	}
+	if frozen.IsZero() || current.IsZero() || frozen.ProjectionDigest() != "" || current.ProjectionDigest() == "" {
+		return false
+	}
+	sealed, err := frozen.WithProjectionDigest(current.ProjectionDigest())
+	return err == nil && reflect.DeepEqual(sealed, current)
+}
+
+// completedUserPreparedDeliveryIdentity retains every frozen plan field while
+// allowing the SDK's single staged-projection digest seal.
+func completedUserPreparedDeliveryIdentity(frozen, current domain.DeliveryPlan) bool {
+	if !completedUserStagedSelection(frozen.SelectedDelivery, current.SelectedDelivery) {
+		return false
+	}
+	frozen.SelectedDelivery = current.SelectedDelivery
+	return completedProjectDeliveryIdentity(frozen, current)
 }
 
 // completedUserPreparedBinding checks the loaded owned binding and data receipt.

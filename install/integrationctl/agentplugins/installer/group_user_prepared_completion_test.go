@@ -84,12 +84,24 @@ func newUserPreparedUpdateFixture(t *testing.T) userPreparedUpdateFixture {
 		installed.DataReceipts[receiptID] = domain.DataReceipt{DataReceiptID: receiptID, Scope: string(domain.ScopeUser),
 			Locator: filepath.Join(root, "plugin-data", string(clientID)), State: domain.DataReceiptOwned,
 			OwnershipDigest: "sha256:" + strings.Repeat("c", 64)}
+		// Preview carries the selected authority before real staging seals
+		// its projection digest. The final core Plan below carries that seal.
+		previewPlan := plan
+		if clientID == domain.ClientVSCode {
+			facts, _ := plan.SelectedDelivery.LocalFacts()
+			facts.ProjectionDigest = ""
+			var err error
+			previewPlan.SelectedDelivery, err = domain.NewLocalDelivery(facts)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 		prepared.req.Targets = append(prepared.req.Targets, ClientTarget{ClientID: string(clientID), ClientConfigRoot: config})
 		prepared.clients = append(prepared.clients, client)
-		prepared.deliveries = append(prepared.deliveries, preparedDeliveryPlan{plan: plan})
+		prepared.deliveries = append(prepared.deliveries, preparedDeliveryPlan{plan: previewPlan})
 		prepared.plan.Targets = append(prepared.plan.Targets, PlanTarget{
 			ClientID: string(clientID), ConfigRoot: config, TargetPath: active, BindingID: bindingID,
-			SelectedDelivery: plan.SelectedDelivery,
+			SelectedDelivery: previewPlan.SelectedDelivery,
 		})
 		activation := domain.ActivationActive
 		verification := domain.VerificationInstalled
@@ -193,6 +205,26 @@ func TestUserGroupPreparedUpdateRetainsFailClosedHandoff(t *testing.T) {
 		{"missing frozen delivery", func(f *userPreparedUpdateFixture) { f.prepared.deliveries = nil }},
 		{"replaced frozen delivery", func(f *userPreparedUpdateFixture) {
 			f.prepared.deliveries[1].plan.ActivePath += "-foreign"
+		}},
+		{"replaced frozen selection", func(f *userPreparedUpdateFixture) {
+			facts, _ := f.prepared.deliveries[1].plan.SelectedDelivery.LocalFacts()
+			facts.CanonicalDigest = "sha256:" + strings.Repeat("c", 64)
+			replaced, err := domain.NewLocalDelivery(facts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.prepared.deliveries[1].plan.SelectedDelivery = replaced
+			f.prepared.plan.Targets[1].SelectedDelivery = replaced
+		}},
+		{"replaced staged digest", func(f *userPreparedUpdateFixture) {
+			facts, _ := f.prepared.deliveries[1].plan.SelectedDelivery.LocalFacts()
+			facts.ProjectionDigest = "sha256:" + strings.Repeat("c", 64)
+			replaced, err := domain.NewLocalDelivery(facts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.prepared.deliveries[1].plan.SelectedDelivery = replaced
+			f.prepared.plan.Targets[1].SelectedDelivery = replaced
 		}},
 		{"wrong client context", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Plan.TargetContext.UserConfigRoot += "-foreign" }},
 		{"wrong profile", func(f *userPreparedUpdateFixture) { f.got.Targets[1].Plan.NativeRegistryRoot += "-foreign" }},
