@@ -89,6 +89,11 @@ func TestDependencyStatusPendingRecoveryNeverSuggestsOtherMutations(t *testing.T
 	if restored.Facts[0].Readiness != "needs_action" || restored.Facts[1].Readiness != "needs_action" {
 		t.Fatalf("recovery guidance must not claim readiness: %+v", restored.Facts)
 	}
+	for _, fact := range restored.Facts {
+		if len(fact.AgentActions) == 0 || fact.AgentActions[0].Code != "inspect_recovery" {
+			t.Fatalf("pending recovery must be the first bounded machine action: %+v", fact)
+		}
+	}
 }
 
 func TestDependencyStatusMissingManifestDoesNotClaimNoInstallations(t *testing.T) {
