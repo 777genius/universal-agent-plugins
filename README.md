@@ -257,29 +257,41 @@ Publisher installs need an exact `--skill` name; see the
 
 ## Supported clients
 
-These are installations for your user account. For one repository, see
-[project support](docs/PROJECT_CLIENT_SUPPORT.md).
+<!-- SYNC: This README.md matrix MUST mirror landing/data/clientSupport.ts,
+rendered by landing/components/registry/RegistryClientSupport.vue before FAQ
+in landing/pages/index.vue. Icons come from landing/data/clients.ts and
+landing/public/client-icons/. Update BOTH surfaces when support, logos, or
+activation instructions change. landing/tests/client-support-readme.test.ts
+checks all rows, order, logo paths and setup requirements. -->
+<!-- AGENT_SUPPORT_MATRIX_START -->
 
-**Prepared** means files or configuration are ready, not that the plugin is
-running. Complete any remaining approval, sign-in, or reload steps.
+**User** installs into your agent profile; **Project** installs into one selected
+workspace. Agents may still ask you to trust the project, sign in, or restart.
 
-| Client | What UAP sets up |
-| --- | --- |
-| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> Codex | plugin package prepared for Codex |
-| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> ChatGPT | app setup; Context7 includes guided personal setup (Developer Mode and custom apps required) |
-| <img src="landing/public/client-icons/cursor.svg" width="24" height="24" alt="" align="middle"> Cursor | native plugin with skills and MCP servers |
-| <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> GitHub Copilot CLI | native plugin installed through a managed marketplace |
-| <img src="landing/public/client-icons/vscode.svg" width="24" height="24" alt="" align="middle"> VS Code | plugin package prepared for Copilot |
-| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> Kiro | skills and MCP setup; OAuth/restart may be required |
-| <img src="landing/public/client-icons/claude.svg" width="24" height="24" alt="" align="middle"> Claude Code | native Claude Code plugin installation |
-| <img src="landing/public/client-icons/gemini.svg" width="24" height="24" alt="" align="middle"> Gemini CLI | skills and MCP configuration |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> OpenCode | skills and MCP configuration |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> Cline | skills and MCP configuration |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="24" height="24" alt="" align="middle"></picture> Windsurf | MCP configured; skills prepared for manual use |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> Grok Build | native skills/MCP plugin; Grok CLI install and verification when available |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/kimi-dark.svg"><img src="landing/public/client-icons/kimi.svg" width="24" height="24" alt="" align="middle"></picture> Kimi Code | native skills/MCP plugin and managed user registry; reload required |
-| <img src="landing/public/client-icons/qoder.svg" width="24" height="24" alt="" align="middle"> Qoder | native skills/MCP plugin; Qoder CLI install and verification when available |
-| <img src="landing/public/client-icons/pi.svg" width="24" height="24" alt="" align="middle"> Pi | native extensions (CLI 0.1.95); project support requires a source build |
+| Agent | User scope | Project scope | Setup | What you do after installing |
+| --- | --- | --- | --- | --- |
+| <img src="landing/public/client-icons/claude.svg" width="24" height="24" alt="" align="middle"> **Claude Code** | Plugins, Skills, MCP | Skills, MCP | Automatic | Trust the workspace and reload Claude Code if prompted. |
+| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **Codex** | Skills, MCP | Skills, MCP | Automatic | Open a new session; approve project MCP access if prompted. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> **OpenCode** | Skills, MCP | Skills, MCP | Automatic | Start a new session and review effective project settings. |
+| <img src="landing/public/client-icons/cursor.svg" width="24" height="24" alt="" align="middle"> **Cursor** | Plugins, Skills, MCP | Skills, MCP | Automatic | Reload Cursor; enable plugins or MCP servers if requested. |
+| <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> **GitHub Copilot CLI** | Plugins, Skills, MCP | Skills, MCP | Automatic | Restart Copilot CLI if requested. |
+| <img src="landing/public/client-icons/gemini.svg" width="24" height="24" alt="" align="middle"> **Gemini CLI** | Skills, MCP | Skills, MCP | Automatic | Reload Gemini CLI and approve tool access if prompted. |
+| <img src="landing/public/client-icons/qoder.svg" width="24" height="24" alt="" align="middle"> **Qoder** | Plugins, Skills, MCP, hooks | Skills, MCP | Automatic | Restart Qoder and review MCP permissions. |
+| <img src="landing/public/client-icons/pi.svg" width="24" height="24" alt="" align="middle"> **Pi** | Extensions, Skills, MCP | Extensions, Skills, MCP | Automatic | Trust the project and reload Pi resources. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="24" height="24" alt="" align="middle"></picture> **Windsurf / Devin** | Skills, MCP | Skills, MCP | Guided | Open or restart Devin in the selected project; review access. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/kimi-dark.svg"><img src="landing/public/client-icons/kimi.svg" width="24" height="24" alt="" align="middle"></picture> **Kimi Code** | Skills, MCP | Skills, MCP | Automatic | Run /reload or /new and review MCP permissions. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> **Cline** | Skills, MCP | Skills, MCP | Guided | Select the project MCP settings path and reload Cline. |
+| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> **Kiro** | Skills, MCP | Skills, MCP | Guided | Sign in, approve access, and restart Kiro if prompted. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> **Grok Build** | Skills, MCP | Skills only | Guided | Reload Grok; review project Skills and any CLI setup hint. |
+| <img src="landing/public/client-icons/vscode.svg" width="24" height="24" alt="" align="middle"> **VS Code** | Copilot-backed package | Skills, MCP (prepared) | Prepared | Open and trust the folder; review and enable MCP servers. |
+| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **ChatGPT** | Personal app setup | Not supported | Manual | Enable Developer Mode, connect the app, and select it in a new chat. |
+
+<!-- AGENT_SUPPORT_MATRIX_END -->
+
+**Setup terms:** Automatic = UAP installs supported components; Guided = follow
+client prompts; Prepared = files are ready but need activation; Manual = complete
+setup in the app. UAP never signs you in or grants workspace trust. This matrix
+describes **current main-source** capabilities; the published CLI may be older.
 
 See the [compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
 for tested versions, platforms, and setup steps.
