@@ -48,7 +48,7 @@ func deriveSkillsReadiness(status string) (string, []AgentAction) {
 	switch status {
 	case "failed", "partial", "interrupted":
 		return "failed", nil
-	case "completed", "unchanged":
+	case "completed", "succeeded", "unchanged":
 		return "needs_action", []AgentAction{{
 			Code: "verify_native", Actor: "native_client",
 			Message: "Start a fresh selected client session and verify that the installed Skill is discovered.",
