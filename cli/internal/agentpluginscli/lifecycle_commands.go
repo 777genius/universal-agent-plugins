@@ -113,6 +113,9 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			if opts.yes && strings.TrimSpace(opts.target) == "" && !opts.purgeData {
+				return CLIUsageError{Code: "TARGET_REQUIRED", Message: "remove --yes requires explicit --target"}
+			}
 			if handled, err := runSavedLifecycle(cmd, app, opts, args[0], "remove"); handled || err != nil {
 				return err
 			}
