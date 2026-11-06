@@ -138,7 +138,7 @@ test('project examples keep public CLI pins and clearly label source-only Direct
   ];
   for (const path of paths) {
     const source = read(path).split('<!-- locale-historical-source:start')[0];
-    const chunks = source.split('``');
+    const chunks = source.split('```');
     const projectBlocks = chunks.filter((chunk) =>
       (chunk.startsWith('sh\n') || chunk.startsWith('bash\n')) && chunk.includes('--scope project'));
     assert.ok(projectBlocks.length, path + ': missing project command');
