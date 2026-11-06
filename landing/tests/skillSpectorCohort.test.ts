@@ -244,7 +244,20 @@ test('overlay preserves unrelated old Partial and fails closed on digest or sele
   assert.equal(improved.records[1]!.status, 'partial');
   assert.equal(applyVerifiedSkillSpectorCohort(
     report, cohort.manifestDigest, cohort, new Date('2026-11-07T00:00:00Z')), report);
-  assert.equal(applyVerifiedSkillSpectorCohort(report, 'sha256:' + 'f'.repeat(64), cohort, at), report);
+  // A later v3 publication changes its whole-manifest digest even when the
+  // signed source revisions, content digests and selected roots have not moved.
+  // This is the real post-publication drift observed in production on Nov 6.
+  const newerManifestDigest =
+    'sha256:b5232cdc9dbbb66aec7d138964e2d9a354751b6ce9322b36aca9d3337a50a949';
+  const rebased = applyVerifiedSkillSpectorCohort(report, newerManifestDigest, cohort, at);
+  assert.equal(rebased.records[0]!.status, 'complete');
+  assert.equal(rebased.records[0]!.signed_cohort_verified, true);
+  assert.equal(rebased.records[0]!.finding_count, 1);
+  assert.equal(rebased.records[1]!.status, 'partial');
+  // A missing or malformed current-manifest hash is still not sufficient proof
+  // to attach the signed overlay to a purported v3 snapshot.
+  assert.equal(applyVerifiedSkillSpectorCohort(report, undefined, cohort, at), report);
+  assert.equal(applyVerifiedSkillSpectorCohort(report, 'unverified', cohort, at), report);
   const stale = structuredClone(report);
   stale.source_states[0]!.current = false;
   assert.equal(applyVerifiedSkillSpectorCohort(stale, cohort.manifestDigest, cohort, at), stale);

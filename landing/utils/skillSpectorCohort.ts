@@ -276,8 +276,11 @@ export function applyVerifiedSkillSpectorCohort(
   cohort: VerifiedCohort | undefined,
   now: Date = new Date(),
 ): SkillSpectorDisplayReport {
+  // The signature authenticates exact source digests, not unrelated catalog
+  // entries. A newer verified v3 manifest may differ while all nine source
+  // identities remain unchanged; the per-root checks below must still pass.
   if (!cohort || cohort.expiresAt <= now.getTime() ||
-      !manifestDigest || manifestDigest !== cohort.manifestDigest ||
+      !manifestDigest || !digestPattern.test(manifestDigest) ||
       report.schema_version !== 3) return report;
   const records = report.records.map(old => {
     const updated = cohort.records.get(old.id);
