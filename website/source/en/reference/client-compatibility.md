@@ -14,7 +14,7 @@ translationRequired: false
 
 The [currently published native CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 provides an owned local management API, read-only client/profile discovery
-and supported native Pi extensions. See [local management](../use/manage#local-management-api).
+and native Pi extensions in user and eligible project scope. See [local management](../use/manage#local-management-api).
 Package-manager channels may lag; check `agentplugins version`.
 
 Since CLI 0.1.94, an `install` without a source argument automatically selects

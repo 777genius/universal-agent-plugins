@@ -50,7 +50,7 @@ El CLI pregunta qué agentes compatibles quieres usar. Revisa el plan y completa
 
 ## Qué está disponible
 
-[CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest)  es la versión actual del instalador nativo. Añade una API local de gestión y extensiones nativas de Pi en el ámbito de usuario. Consulta [la gestión local](./use/manage#local-management-api) y [la compatibilidad con Pi](./reference/client-compatibility#pi-native-extensions).
+[CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest) es la versión actual del instalador nativo. Añade una API local de gestión y extensiones nativas de Pi en los ámbitos de usuario y de proyecto elegible. Consulta [la gestión local](./use/manage#local-management-api) y [la compatibilidad con Pi](./reference/client-compatibility#pi-native-extensions).
 
 El instalador ofrece selección explícita del ámbito de proyecto y restauración con archivo de bloqueo. La mayoría de los comandos usa por defecto el entorno de usuario. `agentplugins install` sin argumento de origen selecciona el proyecto si existe un `uap.toml` regular en el directorio actual exacto; un ámbito explícito tiene prioridad. Para las operaciones de mantenimiento, selecciona el ámbito de proyecto explícitamente. Comprueba `agentplugins version`: la selección automática requiere 0.1.94. Los canales de los gestores de paquetes pueden actualizarse más tarde; el instalador nativo ofrece la versión actual verificada. Los parámetros explícitos de proyecto están disponibles desde 0.1.93. Consulta [instalación](./use/install) y [mantenimiento](./use/manage).
 

@@ -33,7 +33,7 @@ translationRequired: false
 
 ## امتدادات Pi الأصلية {#pi-native-extensions}
 
-يقبل CLI الحالي الخيار `--target pi` للحزم التي تعلن [امتداد Pi أصليًا](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md). يدعم هذا الموفّر الامتدادات الأصلية ضمن نطاق المستخدم والمشروعات المؤهلة؛ ولا يشمل نطاقه الحالي Skills القابلة للنقل أو إسقاط إعدادات MCP. أعد تحميل الموارد أو أعد تشغيل Pi بعد التثبيت.
+يقبل CLI الحالي الخيار `--target pi` للحزم التي تعلن [امتداد Pi أصليًا](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md). يدعم هذا الموفّر الامتدادات الأصلية ضمن نطاق المستخدم والمشروعات المؤهلة؛ ولمهارات Skills وخوادم MCP الخاصة بالمشروعات قواعد منفصلة للتثبيت والثقة والتحقق من التفعيل (راجع [توافق المشروعات](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)). أعد تحميل الموارد أو أعد تشغيل Pi بعد التثبيت.
 
 تغطي [الأدلة الأصلية المسجلة](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md) إصدار Pi 1.4.0 على Linux، بما في ذلك الاكتشاف الأصلي وتنفيذ امتدادات مختارة والتحديث وإصلاح الحزم المفقودة والإزالة والحفاظ على الامتدادات الخارجية. ولا تثبت التشغيل على macOS أو Windows، أو إشعارات سطح المكتب، أو الصوت، أو تركيز الطرفية. لا يثبت نجاح التثبيت وحده أن جلسة Pi قيد التشغيل قد حمّلت الامتداد.
 

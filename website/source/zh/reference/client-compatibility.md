@@ -35,7 +35,7 @@ UAP 是独立社区工具；这些是维护者进行的有限观察，不是厂�
 
 ## Pi 原生扩展 {#pi-native-extensions}
 
-当前 CLI 支持为声明了[Pi 原生扩展](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md)的包指定 `--target pi`。此提供程序支持用户范围及符合条件的项目范围的原生扩展，当前范围不包括可移植技能和 MCP 配置投射。安装后请重新加载资源或重启 Pi。
+当前 CLI 支持为声明了[Pi 原生扩展](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md)的包指定 `--target pi`。此提供程序支持用户范围及符合条件的项目范围的原生扩展，项目 Skills 和 MCP 有独立的安装、信任和激活验证要求（参见[项目兼容性](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)）。安装后请重新加载资源或重启 Pi。
 
 [已记录的原生证据](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md)覆盖 Linux 上的 Pi 1.4.0，包括原生发现、选定的扩展执行、更新、缺失包修复、移除和保留外部扩展。它不能证明 macOS/Windows 执行、桌面通知、音频或终端焦点行为。仅安装成功不能证明正在运行的 Pi 会话已加载扩展。
 

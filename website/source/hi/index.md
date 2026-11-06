@@ -50,7 +50,7 @@ CLI पूछता है कि किन संगत एजेंटों �
 
 ## अभी क्या उपलब्ध है {#what-is-available}
 
-[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) वर्तमान नेटिव इंस्टॉलर रिलीज़ है। इसमें लोकल मैनेजमेंट API और उपयोगकर्ता स्कोप में Pi के नेटिव एक्सटेंशन जोड़े गए हैं। [लोकल मैनेजमेंट](./use/manage#local-management-api) और [Pi की संगतता](./reference/client-compatibility#pi-native-extensions) देखें।
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) वर्तमान नेटिव इंस्टॉलर रिलीज़ है। इसमें लोकल मैनेजमेंट API और उपयोगकर्ता और योग्य प्रोजेक्ट स्कोप में Pi के नेटिव एक्सटेंशन जोड़े गए हैं। [लोकल मैनेजमेंट](./use/manage#local-management-api) और [Pi की संगतता](./reference/client-compatibility#pi-native-extensions) देखें।
 
 इसमें स्पष्ट प्रोजेक्ट स्कोप और लॉक के अनुसार बहाली उपलब्ध रहती है। अधिकांश कमांड डिफ़ॉल्ट रूप से उपयोगकर्ता परिवेश पर काम करती हैं। 0.1.94 से, स्रोत आर्ग्युमेंट के बिना `install` वर्तमान प्रोजेक्ट तभी चुनता है जब ठीक उसी फ़ोल्डर में नियमित `uap.toml` फ़ाइल हो; स्पष्ट स्कोप प्राथमिक होता है। प्रोजेक्ट के लिए add और रखरखाव कमांड में `--scope project` दें। [इंस्टॉलेशन](./use/install) और [रखरखाव](./use/manage) देखें।
 

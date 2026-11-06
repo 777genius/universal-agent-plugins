@@ -56,7 +56,7 @@ CLI предложит совместимые агенты. Проверьте �
 
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 — текущий нативный выпуск установщика. Он добавляет
-локальный API управления и нативные расширения Pi в пользовательской области.
+локальный API управления и нативные расширения Pi в пользовательской и совместимой проектной областях.
 Подробнее: [локальное управление](./use/manage#local-management-api) и
 [совместимость с Pi](./reference/client-compatibility#pi-native-extensions).
 

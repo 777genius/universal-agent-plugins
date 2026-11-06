@@ -50,7 +50,7 @@ Le CLI vous demande quels agents compatibles utiliser. Examinez le plan et suive
 
 ## Ce qui est disponible
 
-[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)  est la version actuelle de l’installateur natif. Il ajoute une API de gestion locale et des extensions natives Pi en portée utilisateur. Consultez [la gestion locale](./use/manage#local-management-api) et [la compatibilité Pi](./reference/client-compatibility#pi-native-extensions).
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) est la version actuelle de l’installateur natif. Il ajoute une API de gestion locale et des extensions natives Pi en portée utilisateur et en portée projet admissible. Consultez [la gestion locale](./use/manage#local-management-api) et [la compatibilité Pi](./reference/client-compatibility#pi-native-extensions).
 
 Il conserve la portée projet explicite et la restauration avec verrouillage. La plupart des commandes utilisent par défaut l’environnement utilisateur. Depuis 0.1.94, `install` sans argument de source sélectionne le projet si le dossier courant exact contient un fichier `uap.toml` ordinaire ; une portée explicite reste prioritaire. Pour `add` et la maintenance d’un projet, sélectionnez `--scope project`. Consultez [l’installation](./use/install) et [la maintenance](./use/manage).
 

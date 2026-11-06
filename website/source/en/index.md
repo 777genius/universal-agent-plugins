@@ -54,7 +54,7 @@ for macOS, Linux or Windows; the native manager itself does not require Node.js.
 
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 is the current native installer release. It adds a local management API and
-user-scope native Pi extensions. See [local management](./use/manage#local-management-api)
+native Pi extensions in user and eligible project scope. See [local management](./use/manage#local-management-api)
 and [Pi compatibility](./reference/client-compatibility#pi-native-extensions).
 It retains explicit project scope and locked restoration. Most commands default
 to your user environment. An `install` without

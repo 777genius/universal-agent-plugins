@@ -59,8 +59,7 @@ nem uma afirmação de prontidão universal para produção.
 
 A CLI atual aceita `--target pi` para pacotes que declaram uma
 [extensão nativa do Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md).
-Esse provedor oferece extensões nativas nos escopos de usuário e de projeto elegível; Skills portáteis
-e projeção MCP estão fora do escopo atual. Recarregue os recursos ou reinicie
+Esse provedor oferece extensões nativas nos escopos de usuário e de projeto elegível; Skills e MCP de projeto têm regras específicas de instalação, confiança e verificação de ativação (consulte a [compatibilidade de projetos](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)). Recarregue os recursos ou reinicie
 o Pi após a instalação.
 
 As [evidências nativas registradas](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md)

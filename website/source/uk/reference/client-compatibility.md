@@ -58,8 +58,7 @@ npm/нативний інсталятор не містить `agentplugins auth
 
 Актуальний CLI приймає `--target pi` для пакетів, що оголошують
 [нативне розширення Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md).
-Підтримуються нативні розширення в області користувача та сумісного проєкту; переносимі Skills
-та проєкція MCP наразі не входять до підтримуваних можливостей. Після
+Підтримуються нативні розширення в області користувача та сумісного проєкту; проєктні Skills та MCP мають окремі правила встановлення, довіри й перевірки активації (див. [сумісність проєктів](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)). Після
 встановлення перезавантажте ресурси або перезапустіть Pi.
 
 [Зафіксовані докази нативного виконання](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md)

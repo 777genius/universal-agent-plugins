@@ -13,7 +13,7 @@ localeDisposition: "current-translation"
 
 ## Versión actual y alcance
 
-[CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest)  añade una API local de gestión con un proceso controlado por la aplicación, detección de clientes y perfiles sin cambios y un proveedor de extensiones nativas de Pi en el ámbito de usuario. Consulta [la gestión local](../use/manage#local-management-api). Los canales de los gestores de paquetes pueden actualizarse más tarde: comprueba `agentplugins version`.
+[CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest) añade una API local de gestión con un proceso controlado por la aplicación, detección de clientes y perfiles sin cambios y un proveedor de extensiones nativas de Pi en el ámbito de usuario. Consulta [la gestión local](../use/manage#local-management-api). Los canales de los gestores de paquetes pueden actualizarse más tarde: comprueba `agentplugins version`.
 
 Desde CLI 0.1.94, `install` sin argumento de origen selecciona automáticamente el proyecto si existe un `uap.toml` regular en el directorio actual exacto. Un ámbito explícito tiene prioridad; no se buscan directorios superiores. Los archivos de bloqueo existentes se validan de forma estricta incluso sin `--locked`. La instalación de proyecto explícita se introdujo en 0.1.93. Las pruebas de publicación del instalador no acreditan la ejecución de todos los clientes nativos ni el ejecutable estándar de creación. El instalador actual npm o nativo no incluye `agentplugins author`; consulta [Crear plugins](../build/) para las herramientas del código fuente.
 
@@ -31,7 +31,7 @@ La entrega de proyecto suele quedar **Prepared** mientras falten confianza, reca
 
 ## Extensiones nativas de Pi {#pi-native-extensions}
 
-La CLI actual acepta `--target pi` para paquetes que declaran una [extensión nativa de Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md). Este proveedor admite extensiones nativas en los ámbitos de usuario y de proyecto elegible; los Skills portables y la proyección MCP quedan fuera de su alcance actual. Recarga los recursos o reinicia Pi después de instalar.
+La CLI actual acepta `--target pi` para paquetes que declaran una [extensión nativa de Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md). Este proveedor admite extensiones nativas en los ámbitos de usuario y de proyecto elegible; los Skills y MCP de proyecto tienen contratos de instalación, confianza y activación independientes (consulta la [compatibilidad de proyectos](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)). Recarga los recursos o reinicia Pi después de instalar.
 
 Las [pruebas nativas registradas](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md) cubren Pi 1.4.0 en Linux: detección nativa y ejecución de la extensión seleccionada, actualización, reparación de un paquete ausente, eliminación y conservación de extensiones ajenas. No demuestran ejecución en macOS o Windows, notificaciones de escritorio, audio ni foco del terminal. Una instalación correcta, por sí sola, no prueba que una sesión de Pi en ejecución haya cargado la extensión.
 

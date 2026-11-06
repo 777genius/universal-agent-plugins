@@ -56,8 +56,7 @@ VS Code подготавливает файлы одной локальной п
 
 Актуальный CLI принимает `--target pi` для пакетов, объявляющих
 [нативное расширение Pi](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_CONTRACT.md).
-Поддерживаются нативные расширения в пользовательской и совместимой проектной областях; переносимые
-Skills и проекция MCP находятся за пределами текущей поддержки. После установки
+Поддерживаются нативные расширения в пользовательской и совместимой проектной областях; проектные Skills и MCP имеют отдельные правила установки, доверия и проверки активации (см. [проектную совместимость](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)). После установки
 перезагрузите ресурсы или перезапустите Pi.
 
 [Зафиксированные результаты нативных тестов](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PI_NATIVE_EXTENSION_EVIDENCE.md)
