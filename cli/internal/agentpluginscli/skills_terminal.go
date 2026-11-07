@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -201,8 +202,34 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 }
 func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchResult) error {
 	if opts.format != "json" {
-		_, err := fmt.Fprintf(cmd.OutOrStdout(), "Skills installation %s\n", result.Status)
-		return err
+		writer := cmd.OutOrStdout()
+		if _, err := fmt.Fprintf(writer, "Skills installation %s\n", prompt.SafeText(result.Status)); err != nil {
+			return err
+		}
+		for _, item := range result.Items {
+			if _, err := fmt.Fprintf(writer, "  %s → %s: %s\n",
+				prompt.SafeText(item.Alias), prompt.SafeText(item.ClientID), prompt.SafeText(item.Status)); err != nil {
+				return err
+			}
+		}
+		if result.Status == "succeeded" {
+			_, err := fmt.Fprint(writer,
+				"Files: installed or already up to date.\n"+
+					"Agent discovery: not verified by this Skills flow.\n"+
+					"Activation: not verified.\n"+
+					"Next: open each agent, complete any trust/sign-in steps,\n"+
+					"      reload if prompted, and confirm the Skill is visible.\n")
+			return err
+		}
+		if err := renderPartialSkillsReadiness(writer, result); err != nil {
+			return err
+		}
+		for _, instruction := range result.RepairInstructions {
+			if _, err := fmt.Fprintln(writer, "Next:", prompt.SafeText(instruction)); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	outcome := skillBatchOutcome(result)
 	output := struct {
@@ -223,4 +250,25 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 	}
 	output.Scope, output.ScopeSelectionReason = opts.scope, scopeSelectionReason(cmd, opts)
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(output)
+}
+
+// A partial batch can still deliver some Skills; files do not prove native readiness.
+func renderPartialSkillsReadiness(writer io.Writer, result SkillsBatchResult) error {
+	if result.Status != "partial" {
+		return nil
+	}
+	applied := 0
+	for _, item := range result.Items {
+		if item.Status == "completed" || item.Status == "unchanged" {
+			applied++
+		}
+	}
+	if applied == 0 {
+		return nil
+	}
+	_, err := fmt.Fprintf(writer,
+		"Files: %d of %d target results installed or already up to date; other targets need attention.\n"+
+			"Agent discovery: not verified by this Skills flow.\n"+
+			"Activation: not verified.\n", applied, len(result.Items))
+	return err
 }
