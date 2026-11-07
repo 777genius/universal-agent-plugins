@@ -2153,6 +2153,26 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 response, item, relative, project, output)), 1)
 
 
+    def test_codex_marketplace_containment_follows_physical_directory_identity(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            case = root / "case"
+            source = case / "home/.codex/plugins/marketplaces/owned"
+            foreign = root / "case-replacement/owned"
+            source.mkdir(parents=True)
+            foreign.mkdir(parents=True)
+            self.assertTrue(audit.codex_marketplace_source_in_case(source, case))
+            self.assertFalse(audit.codex_marketplace_source_in_case(foreign, case))
+            self.assertFalse(audit.codex_marketplace_source_in_case(
+                case / "home/.codex/plugins/missing", case))
+            self.assertFalse(audit.codex_marketplace_source_in_case(Path("relative"), case))
+            if os.name == "nt":
+                # Same on-disk directory; Go may use the Windows extended prefix.
+                extended = Path("\\\\?\\" + str(source))
+                self.assertTrue(audit.codex_marketplace_source_in_case(extended, case))
+
+
     def test_genuine_project_git_init_uses_empty_hooks_inside_case(self):
         # Windows has no POSIX /dev/null; never use ambient hooks or config.
         audit = load_audit()
