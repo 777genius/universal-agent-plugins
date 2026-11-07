@@ -2299,6 +2299,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             "native_identity_files": ["opencode/opencode.json"],
             "listed_identity": True, "repeat_verified": True,
             "removal_verified": True, "native_residuals": [],
+            "post_remove_identity_registered": False,
             "sentinels_preserved": True, "failed_install_residue": False,
             "install": {"exit_code": 0}, "cleanup": {"exit_code": 0},
         }
@@ -2309,7 +2310,8 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                 ("target", "qoder"),
                 ("prepared_components_only", False),
                 ("native_component_candidates", ["atlassian"]),
-                ("native_identity_files", ["opencode/arbitrary-active.json"]),
+                ("native_identity_files", ["outside/active.json"]),
+                ("post_remove_identity_registered", True),
                 ("listed_identity", False),
                 ("repeat_verified", False),
                 ("removal_verified", False),
@@ -2322,6 +2324,14 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                 self.assertFalse(audit.expected_negative_coverage({**row, key: bad}))
         self.assertTrue(audit.expected_negative_coverage(
             {**row, "source": "docker-hub", "native_identity_files": []}))
+        self.assertTrue(audit.expected_negative_coverage({
+            **row, "source": "cloudflare",
+            "native_identity_files": [
+                "opencode/opencode.json",
+                "opencode/skills/cloudflare/SKILL.md",
+                "opencode/skills/cloudflare/references/api.md"]}))
+        self.assertFalse(audit.expected_negative_coverage({
+            **row, "native_identity_files": ["opencode/../other.json"]}))
 
     def test_kimi_windows_skill_downloads_exact_pinned_native_binary(self):
         # Kimi's actual 2.3.2 Windows .exe is accepted by the released adapter;
