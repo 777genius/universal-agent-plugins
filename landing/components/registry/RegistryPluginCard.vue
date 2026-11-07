@@ -4,6 +4,11 @@
 -->
 <script setup lang="ts">
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
+import {
+  installTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+} from '~/data/installTargets';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { githubSourceUrl, reachableTargetPolicies, vendorInstallSource } from '~/utils/registry';
 import { authenticationIndicator } from '~/utils/authentication';
@@ -36,14 +41,15 @@ const {
 } = selection;
 const deliverySummary = computed(() => {
   if (autoDetect.value) return '';
+  const canonical = canonicalInstallTargets(targets.value);
   const delivery = selection.resolution.value.distribution?.targets
-    .filter((target) => targets.value.includes(target.client))
+    .filter((target) => canonical.includes(target.client))
     .map((target) => target.delivery) ?? [];
   const managed = delivery.filter((mode) => mode === 'managed').length;
   const prepared = delivery.filter(
     (mode) => mode === 'prepared' || mode === 'manual_activation',
   ).length;
-  if (managed + prepared !== targets.value.length || !delivery.length) return '';
+  if (managed + prepared !== canonical.length || !delivery.length) return '';
   return t('registryUi.card.deliverySummary', { managed: n(managed), prepared: n(prepared) });
 });
 const installPanelId = `plugin-install-${props.plugin.install_source.replace(/[^a-z0-9_-]+/gi, '-')}`;
@@ -89,14 +95,12 @@ const command = computed(() =>
       ).add
     : '',
 );
-const desktopCodexCommand = computed(() =>
+const showDesktopGuide = computed(() =>
   scope.value === 'user' &&
-  !isDiscovered.value &&
-  current.value &&
+  !autoDetect.value &&
+  targets.value.includes('chatgpt-desktop') &&
   canChooseInstall.value &&
-  Boolean(targetDistributions.value.get('codex'))
-    ? pluginCommands(props.plugin, ['codex']).add
-    : '',
+  Boolean(targetDistributions.value.get('chatgpt-desktop')),
 );
 const vendorInstall = computed(() => vendorInstallSource(props.plugin));
 const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
@@ -107,7 +111,7 @@ const autoOption = computed(() => ({
   description: t('registryUi.card.detectedWhenYouRunTheCommand'),
 }));
 const targetOptions = computed(() =>
-  clients.map((client) => ({
+  installTargets.map((client) => ({
     value: client.id,
     label: client.name,
     icon: asset(`client-icons/${client.icon}`),
@@ -124,7 +128,13 @@ const targetOptions = computed(() =>
         return t('registryUi.card.unavailableReviewDataIsNotInstallationAuthority');
       if (expired.value) return t('registryUi.card.unavailableSignedDirectorySnapshotExpired');
       const source = targetDistributions.value.get(client.id);
-      const target = source?.targets.find((item) => item.client === client.id);
+      const target = source?.targets.find(
+        (item) => item.client === canonicalInstallTarget(client.id),
+      );
+      if (client.id === 'chatgpt-desktop')
+        return target
+          ? t('registryUi.desktopGuide.description')
+          : t('registryUi.card.notInstallableFromAnActiveRelease');
       if (client.id === 'chatgpt')
         return target?.app_binding
           ? t('registryUi.card.verifiedConnectionFinishSetupInChatgpt')
@@ -143,7 +153,7 @@ const authentication = computed(() =>
           targets: reachableTargetPolicies(props.plugin.distributions, 'user'),
         }
       : selectedDistribution.value,
-    targets.value,
+    canonicalInstallTargets(targets.value),
     autoDetect.value,
     t,
   ),
@@ -408,7 +418,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               {{ t('registryUi.install.scope.selectionUnavailable') }}
             </p>
           </div>
-          <ChatGPTDesktopGuide v-if="desktopCodexCommand" :command="desktopCodexCommand" />
+          <ChatGPTDesktopGuide v-if="showDesktopGuide" />
         </div>
       </Transition>
     </div>
