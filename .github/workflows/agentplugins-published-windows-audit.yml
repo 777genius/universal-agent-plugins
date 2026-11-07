@@ -7,6 +7,9 @@ on:
       - '.github/workflows/agentplugins-published-windows-audit.yml'
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/test_live_install_audit_components.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'tests/live-install/fixtures.json'
   workflow_dispatch:
 
 permissions:
@@ -64,7 +67,7 @@ jobs:
       - name: Require portable disposable Git project and isolated environment
         shell: pwsh
         run: |
-          python -m unittest scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_genuine_project_git_init_uses_empty_hooks_inside_case -v
+          python -m unittest scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_genuine_project_git_init_uses_empty_hooks_inside_case scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_codex_marketplace_containment_follows_physical_directory_identity -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

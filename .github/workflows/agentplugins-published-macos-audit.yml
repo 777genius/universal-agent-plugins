@@ -9,6 +9,7 @@ on:
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/test_live_install_audit_components.py'
       - 'scripts/run-native-client-matrix.py'
+      - 'tests/live-install/fixtures.json'
   workflow_dispatch:
 
 permissions:
