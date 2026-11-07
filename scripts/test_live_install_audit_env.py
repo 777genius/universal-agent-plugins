@@ -20,6 +20,28 @@ def load_audit():
 
 
 class IsolatedClientEnvironmentTest(unittest.TestCase):
+    def test_published_windows_runner_scratch_is_real_absolute_and_ci_only(self):
+        audit = load_audit()
+        with TemporaryDirectory() as scratch:
+            with patch.object(audit.sys, "platform", "win32"):
+                with patch.dict(audit.os.environ, {
+                        "GITHUB_ACTIONS": "true", "RUNNER_TEMP": scratch}):
+                    self.assertEqual(audit.published_audit_temp_parent(), scratch)
+                    with patch.object(audit.Path, "is_symlink", return_value=True):
+                        with self.assertRaisesRegex(RuntimeError, "redirected"):
+                            audit.published_audit_temp_parent()
+                with patch.dict(audit.os.environ, {
+                        "GITHUB_ACTIONS": "false", "RUNNER_TEMP": scratch}):
+                    self.assertIsNone(audit.published_audit_temp_parent())
+                with patch.dict(audit.os.environ, {
+                        "GITHUB_ACTIONS": "true", "RUNNER_TEMP": "relative/scratch"}):
+                    with self.assertRaisesRegex(RuntimeError, "redirected"):
+                        audit.published_audit_temp_parent()
+            with patch.object(audit.sys, "platform", "darwin"):
+                with patch.dict(audit.os.environ, {
+                        "GITHUB_ACTIONS": "true", "RUNNER_TEMP": scratch}):
+                    self.assertIsNone(audit.published_audit_temp_parent())
+
     def test_bootstrap_refusal_preserves_index_source_and_real_identity(self):
         # BUG-053: the original blocked ZIPs had 30 status placeholders but
         # omitted their source and index, so fixture slots could not be audited.

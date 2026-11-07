@@ -1711,6 +1711,21 @@ def vendor_bootstrap_attested():
     return os.environ.get("AUDIT_VENDOR_OUTCOME") == "success"
 
 
+def published_audit_temp_parent():
+    """Keep GitHub Windows deep fixtures inside the real short runner scratch.
+
+    The published 0.1.101 CLI has a separately documented long-path bug.
+    This qualifies an ordinary bounded Windows project, not MAX_PATH support.
+    """
+    if sys.platform != "win32" or os.environ.get("GITHUB_ACTIONS") != "true":
+        return None
+    candidate = os.environ.get("RUNNER_TEMP", "")
+    parent = Path(candidate)
+    if not candidate or not parent.is_absolute() or parent.is_symlink() or not parent.is_dir():
+        raise RuntimeError("Windows GitHub runner scratch is unavailable or redirected")
+    return str(parent)
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--cli", required=True)
@@ -1772,7 +1787,12 @@ def main():
         save()
         return 2
     cli = str(Path(args.cli).resolve(strict=True))
-    with tempfile.TemporaryDirectory(prefix="uap-live-30x30-") as temp:
+    # Real Windows runner scratch avoids accidental >260-character internal
+    # preview paths for deep immutable Skills (tracked separately in PR #780).
+    # This does not convert a refused installation into native PASS.
+    temp_parent = published_audit_temp_parent()
+    report["temp_parent_kind"] = ("github-windows-runner" if temp_parent else "python-default")
+    with tempfile.TemporaryDirectory(prefix="uap-live-30x30-", dir=temp_parent) as temp:
         runroot = Path(temp)
         probe_case = runroot / "version-probe"
         probe_home, probe_data = probe_case / "home", probe_case / "uap-data"
