@@ -751,6 +751,9 @@
         "selectionUnavailable": "Cette combinaison d’agents et d’emplacement est indisponible. Choisissez un autre agent ou emplacement."
       },
       "outcome": {
+        "projectPreview": "Aperçu du projet : la CLI vérifie la source, les transports MCP et les dépendances requises. L’activation de l’agent reste distincte.",
+        "projectSupported": "Installation potentiellement possible",
+        "projectUnsupported": "Non pris en charge dans ce projet",
         "includes": "Contenu :",
         "label": "Installation et étapes suivantes",
         "managed": "La CLI gère les fichiers installés.",

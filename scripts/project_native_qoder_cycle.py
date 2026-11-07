@@ -169,14 +169,27 @@ def public_result(raw, stage, verb, proof):
     single = stage == "repeat-add-a"
     data = row["data"]
     if single:
-        output = obj(data, "plugin version source tree_digest manifest_digest dry_run result", "security next_action")
+        output = obj(data, "plugin version source tree_digest manifest_digest dry_run result", "security next_action scope readiness next_actions")
     else:
         obj(data, "batch status succeeded failed plugin dry_run targets", "operation_id action_required version source revision tree_digest manifest_digest security environment plugin_data_preserved data_retained retained_data retained_data_action")
         expected = dict(batch=True, status="data_retained" if verb == "remove" else "completed", succeeded=1, failed=0, plugin=NAME, dry_run=False)
         require(all(same(data[field], value) for field, value in expected.items()) and type(data["targets"]) is list and len(data["targets"]) == 1)
         target = obj(data["targets"][0], "target status output" + (" selected" if verb == "update" else ""), "next_action")
         require(target["target"] == "qoder" and target["status"] == "external_completed" and (verb != "update" or target["selected"] is True))
-        output = obj(target["output"], "plugin version source tree_digest manifest_digest dry_run result", "operation_id revision security next_action")
+        output = obj(target["output"], "plugin version source tree_digest manifest_digest dry_run result", "operation_id revision security next_action scope readiness next_actions")
+    # Project guidance is additive to CLI output, not a native activation claim.
+    # Reject unknown output fields and malformed/unscoped guidance in both
+    # initial/batch responses and the unchanged singleton repeat-add response.
+    if "scope" in output:
+        require(output["scope"] == "project")
+    if "readiness" in output:
+        require(output["readiness"] in ("ready", "needs_action", "unknown"))
+    if "next_actions" in output:
+        actions = output["next_actions"]
+        require(type(actions) is list and len(actions) <= 16)
+        for action in actions:
+            obj(action, "code actor message")
+            require(all(type(value) is str and 0 < len(value) <= 4096 for value in action.values()))
     ins, bound = proof["installation"], proof["binding"]
     expected = dict(plugin=NAME, version="1.0.0", source="local" if verb in ("repair", "remove") else "direct local source", tree_digest=proof["source_digest"], manifest_digest=ins["package"]["manifest_digest"], dry_run=False)
     require(all(same(output[field], value) for field, value in expected.items()))

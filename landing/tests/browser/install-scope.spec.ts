@@ -327,3 +327,70 @@ for (const locale of ['en', 'ar'] as const) {
     expect(errors).toEqual([]);
   });
 }
+
+function partialComponentsFixture(components: Array<'skills' | 'mcp' | 'extensions'>, clients: Array<'codex' | 'grok' | 'qoder' | 'pi'> = ['codex', 'grok']) {
+  const index = scopedFixture();
+  const plugin = index.plugins[0]!;
+  plugin.trust_state = 'reviewed';
+  plugin.components = components;
+  plugin.distributions = [plugin.distributions[0]!];
+  const release = plugin.distributions[0]!.releases[0]!;
+  release.components = components;
+  release.targets = clients.map(client => ({
+    client, scopes: ['user'], delivery: 'managed' as const, authentication: 'not_required' as const,
+  }));
+  return index;
+}
+
+for (const width of [1440, 390]) {
+  test(`mixed package Project preview keeps supported Skills and reports withheld Grok MCP at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 920 });
+    const errors = await offline(page);
+    await projections(page, partialComponentsFixture(['skills', 'mcp']));
+    await navigate(page, '/', 'en', '?q=i18n-state-00');
+    const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
+    await card.locator('.plugin-card__install-toggle').click();
+    await card.getByRole('button', { name: 'This project', exact: true }).click();
+    await targets(page, card, ['Grok Build']);
+    await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(
+      'npx -y universal-agent-plugins add i18n-state-00 --target grok --scope project',
+    );
+    await expect(card.locator('.install-outcome [data-component="skills"]')).toHaveAttribute('data-support', 'supported');
+    await expect(card.locator('.install-outcome [data-component="mcp"]')).toHaveAttribute('data-support', 'unsupported');
+    await expect(card.locator('.install-outcome')).toContainText(wording('en')('registryUi.install.outcome.projectUnsupported'));
+    await card.locator('.plugin-card__title-link').click();
+    const detail = page.locator('.install-panel');
+    await expect(detail.locator('.install-outcome [data-component="skills"]')).toHaveAttribute('data-support', 'supported');
+    await expect(detail.locator('.install-outcome [data-component="mcp"]')).toHaveAttribute('data-support', 'unsupported');
+    await expect(detail.locator('.install-command-row .command-snippet--add code')).toContainText('--scope project');
+    await detail.getByRole('button', { name: 'This computer', exact: true }).click();
+    await expect(detail.locator('.install-command-row .command-snippet--add code')).not.toContainText('--scope project');
+    await expect(detail.locator('.install-outcome [data-support]')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('unsupported-only Project does not show a misleading scope switch, but the User command remains', async ({ page }) => {
+  const errors = await offline(page);
+  await projections(page, partialComponentsFixture(['mcp'], ['grok']));
+  await navigate(page, '/', 'en', '?q=i18n-state-00');
+  const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
+  await card.locator('.plugin-card__install-toggle').click();
+  await expect(card.locator('.install-scope')).toHaveCount(0);
+  await expect(card.locator('.plugin-card__install .command-snippet code'))
+    .toHaveText('npx -y universal-agent-plugins add i18n-state-00');
+  expect(errors).toEqual([]);
+});
+
+test('Project MCP-only is allowed for Qoder', async ({ page }) => {
+  const errors = await offline(page);
+  await projections(page, partialComponentsFixture(['mcp'], ['qoder']));
+  await navigate(page, '/', 'en', '?q=i18n-state-00');
+  const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
+  await card.locator('.plugin-card__install-toggle').click();
+  await card.getByRole('button', { name: 'This project', exact: true }).click();
+  await targets(page, card, ['Qoder']);
+  await expect(card.locator('.install-outcome [data-component="mcp"]')).toHaveAttribute('data-support', 'supported');
+  await expect(card.locator('.plugin-card__install .command-snippet code')).toContainText('--scope project');
+  expect(errors).toEqual([]);
+});
