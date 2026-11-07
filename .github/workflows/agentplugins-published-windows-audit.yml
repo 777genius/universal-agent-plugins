@@ -74,7 +74,33 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $observed -ne 'agentplugins 0.1.101') {
             throw "Wrong published installer: $observed"
           }
-          $native = (Get-Command "$env:NATIVE_TARGET.cmd" -CommandType Application -ErrorAction Stop).Source
+          if ($env:NATIVE_TARGET -eq 'opencode') {
+            # The verified OpenCode host probe intentionally rejects Windows
+            # npm .cmd shims. Use the real 1.18.34 .exe from the already
+            # SHA-512-pinned upstream tarball (shared native matrix pin).
+            $nativeBin = Join-Path "$env:RUNNER_TEMP" 'verified-opencode'
+            New-Item -ItemType Directory -Force -Path $nativeBin | Out-Null
+            $program = @'
+import importlib.util
+from pathlib import Path
+import sys
+source = Path("scripts/run-native-client-matrix.py").resolve()
+spec = importlib.util.spec_from_file_location("native_matrix_pins", source)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+target = Path(sys.argv[1])
+binary, evidence = module.provision(module.PINS["windows-amd64"]["opencode"], target, "opencode")
+if binary != target / "opencode.exe" or evidence["version"] != "1.18.34":
+    raise RuntimeError("verified native OpenCode provenance mismatch")
+print("Verified native OpenCode 1.18.34, sha512 pinned")
+'@
+            $program | python - "$nativeBin"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $native = Join-Path $nativeBin 'opencode.exe'
+            "$nativeBin" | Out-File -FilePath "$env:GITHUB_PATH" -Encoding utf8 -Append
+          } else {
+            $native = (Get-Command "$env:NATIVE_TARGET.cmd" -CommandType Application -ErrorAction Stop).Source
+          }
           & $native --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
