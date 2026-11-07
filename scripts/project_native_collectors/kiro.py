@@ -110,7 +110,8 @@ def _probe(ctx, owned, label, arguments, project="a"):
         if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != len(body)
                 or stat.S_IMODE(info.st_mode) != 0o600 or path.read_bytes() != body):
             raise ValueError("Kiro changed authored fixture bytes/mode")
-    if (label == "a-workspace-raw-list" and isinstance(record, dict)
+    if (label in ("a-agent-raw-list", "a-workspace-raw-list")
+            and isinstance(record, dict)
             and type(record.get("exit")) is int and record["exit"] == 1
             and "error" in record and record["error"] is None
             and isinstance(stdout, bytes) and stdout == b""
@@ -152,11 +153,18 @@ def collect(ctx):
             raise ValueError("unrecognized pinned Kiro help: " + label)
         help_text[label] = value
     agent_text = _probe(ctx, owned, "a-agent-raw-list", ("agent", "list"))
-    agent_observation = {
-        "probe": "a-agent-raw-list", "cwd_selection": "a",
-        "sha256_normalized_text": hashlib.sha256(agent_text.encode()).hexdigest(),
-        "interpretation": "opaque available-agent listing; no skill/MCP selection or runtime qualification",
-    }
+    if agent_text is None:
+        agent_observation = {
+            "probe": "a-agent-raw-list", "cwd_selection": "a",
+            "kind": "authentication-required", "exit": 1,
+            "interpretation": "exact unauthenticated native refusal; no agent inventory or discovery proof",
+        }
+    else:
+        agent_observation = {
+            "probe": "a-agent-raw-list", "cwd_selection": "a",
+            "sha256_normalized_text": hashlib.sha256(agent_text.encode()).hexdigest(),
+            "interpretation": "opaque available-agent listing; no skill/MCP selection or runtime qualification",
+        }
     for scope in ("a", "b", "user"):
         native = (home if scope == "user" else projects[scope]) / ".kiro/settings/mcp.json"
         _parents(native)

@@ -1,13 +1,27 @@
-name: Published npm 0.1.101 catalog installation audit
+name: Published npm stable catalog installation audit
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/agentplugins-published-catalog-audit.yml'
+      - '.github/workflows/agentplugins-published-version.yml'
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_components.py'
+  # Qualify the newest published npm release after trusted npm publication,
+  # and retain a full source-backed weekly regression audit.
+  workflow_run:
+    workflows: ['Agentplugins NPM Publish']
+    types: [completed]
+  schedule:
+    - cron: '17 3 * * 6'
   workflow_dispatch:
+    inputs:
+      version:
+        description: Exact public stable version (empty = latest)
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -17,8 +31,15 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  resolve-release:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/agentplugins-published-version.yml
+    with:
+      version: ${{ inputs.version }}
+
   published-install-lifecycle:
-    name: npm 0.1.101 / ${{ matrix.client }} / ${{ matrix.kind }} (${{ matrix.limit }} sources)
+    needs: resolve-release
+    name: npm stable / ${{ matrix.client }} / ${{ matrix.kind }} (${{ matrix.limit }} sources)
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     strategy:
@@ -51,12 +72,12 @@ jobs:
       - name: Install public npm CLI and real client
         id: bootstrap
         env:
+          UAP_VERSION: ${{ needs.resolve-release.outputs.version }}
           NATIVE_PACKAGE: ${{ matrix.native_package }}
         run: |
           set -euo pipefail
-          npm install --global universal-agent-plugins@0.1.101 "$NATIVE_PACKAGE"
-          agentplugins version
-          agentplugins version | grep -F '0.1.101'
+          npm install --global "universal-agent-plugins@$UAP_VERSION" "$NATIVE_PACKAGE"
+          test "$(agentplugins version)" = "agentplugins $UAP_VERSION"
           case "${{ matrix.client }}" in
             codex) codex --version ;;
             claude) claude --version ;;
@@ -89,7 +110,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: published-0.1.101-${{ matrix.client }}-${{ matrix.kind }}
+          name: published-${{ needs.resolve-release.outputs.version }}-${{ matrix.client }}-${{ matrix.kind }}
           path: ${{ runner.temp }}/released-catalog-proof/
           if-no-files-found: warn
           retention-days: 14

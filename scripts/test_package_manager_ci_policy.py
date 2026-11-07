@@ -24,8 +24,52 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertRegex(self.body, r"(?m)^  push:\n    branches: \[main\]")
         self.assertRegex(self.body, r"(?m)^  workflow_dispatch:\s*$")
         self.assertIn("github.event_name != 'pull_request' || github.event.pull_request.draft == false", self.body)
-        self.assertIn("matrix:\n        os: [ubuntu-24.04, windows-2025, macos-15, macos-15-intel]", self.body)
+        # Ordinary PRs stay on the four already-qualified source-build OSs.
+        # Weekly/manual deep E2E expands to both genuine ARM64 hosted runners.
+        self.assertIn("os: ${{ fromJSON(", self.body)
+        self.assertIn('["ubuntu-24.04","windows-2025","macos-15","macos-15-intel"]', self.body)
+        self.assertIn('["ubuntu-24.04","ubuntu-24.04-arm","windows-2025","windows-11-arm","macos-15","macos-15-intel"]', self.body)
+        self.assertIn("schedule:", self.body)
         self.assertIn("fail-fast: false", self.body)
+
+    def test_release_qualification_reuses_workflows_and_fail_closed_profiles(self):
+        root = WORKFLOW.parent
+        version = (root / "agentplugins-published-version.yml").read_text(encoding="utf-8")
+        installer = (root / "agentplugins-native-install.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_call:", version)
+        self.assertIn("releases/latest", version)
+        self.assertIn("npm view universal-agent-plugins dist-tags.latest", version)
+        self.assertIn("npm view \"universal-agent-plugins@$version\" version", version)
+        for target in ("darwin-amd64", "darwin-arm64", "linux-amd64",
+                       "linux-arm64", "windows-amd64", "windows-arm64"):
+            self.assertIn("target: " + target, installer)
+        self.assertIn("needs: release-version", installer)
+        self.assertIn("schedule:", installer)
+        for workflow in ("agentplugins-published-windows-audit.yml",
+                         "agentplugins-published-macos-audit.yml"):
+            body = (root / workflow).read_text(encoding="utf-8")
+            with self.subTest(workflow=workflow):
+                self.assertIn("uses: ./.github/workflows/agentplugins-published-version.yml", body)
+                self.assertIn("Agentplugins NPM Publish", body)
+                self.assertIn("schedule:", body)
+                self.assertIn("AUDIT_LIMIT:", body)
+                self.assertIn('["codex","claude","opencode","gemini","copilot"]', body)
+                self.assertIn('["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]', body)
+                self.assertIn("kind: plugin", body)
+                self.assertIn("kind: [plugin, skill]", body)
+                self.assertIn("scripts/live-install-audit.py", body)
+                self.assertIn("AUDIT_VENDOR_OUTCOME:", body)
+                self.assertIn("if: always()", body)
+                self.assertNotIn("continue-on-error: true", body)
+        for workflow in ("agentplugins-published-catalog-audit.yml",
+                         "agentplugins-published-other-clients-audit.yml"):
+            body = (root / workflow).read_text(encoding="utf-8")
+            with self.subTest(workflow=workflow):
+                self.assertIn("uses: ./.github/workflows/agentplugins-published-version.yml", body)
+                self.assertIn("Agentplugins NPM Publish", body)
+                self.assertIn("schedule:", body)
+                self.assertIn("scripts/live-install-audit.py", body)
+                self.assertNotIn("universal-agent-plugins@0.1.101", body)
 
     def test_draft_only_runs_disposable_harness_preflight(self):
         self.assertIn("github.event_name == 'pull_request' && github.event.pull_request.draft", self.body)
