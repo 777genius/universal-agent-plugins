@@ -54,7 +54,15 @@ export function projectCatalogSelection(
   const signedProject = resolveDistribution(plugin, targets, 'project');
   // Honor explicit project-scoped policy if present. Signed v1 User grants
   // also authenticate sources for the owner's explicit Project request.
-  const selected = signedProject.distribution ? signedProject : resolveDistribution(plugin, targets, 'user');
+  // A signed-v2 scoped closure must never be downgraded into v1's
+  // user-grant-as-source behavior. Its explicit Project policy is authoritative.
+  const hasCanonicalClosure = plugin.distributions.some((distribution) =>
+    distribution.releases.some((release) =>
+      release.targets.some((target) =>
+        targets.includes(target.client) && target.canonical_closure !== undefined)));
+  const selected = signedProject.distribution || hasCanonicalClosure
+    ? signedProject
+    : resolveDistribution(plugin, targets, 'user');
   if (!projectCompatible(plugin, targets, selected, Boolean(signedProject.distribution))) {
     return { resolution: { ...signedProject, distribution: undefined } };
   }
