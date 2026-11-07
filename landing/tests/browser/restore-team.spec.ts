@@ -220,7 +220,8 @@ test('both modes copy complete commands during typing and reset feedback on mode
     }
   }
   for (let i = 0; i < 2; i++) await expect(section.locator('.typed-command').nth(i)).toHaveAttribute('data-complete', 'true', { timeout: 15_000 });
-  await expect(section.locator('.typed-command__visible')).toHaveText([...commands.global]);
+  // The last selected mode is Project; never compare it against Global text.
+  await expect(section.locator('.typed-command__visible')).toHaveText([...commands.project]);
   await expect(section.locator('.registry-restore__package').first()).toHaveCSS('visibility', 'visible');
 });
 

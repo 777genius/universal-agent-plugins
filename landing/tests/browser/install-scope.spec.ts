@@ -189,7 +189,7 @@ for (const width of [1440, 390]) {
   });
 }
 
-test('reviewed user-only v1 catalog generates exact pinned project Git commands', async ({ page }) => {
+test('reviewed signed-v1 source uses released short-name Project commands', async ({ page }) => {
   const errors = await offline(page);
   const index = registryFixture();
   index.plugins[0]!.trust_state = 'reviewed';
@@ -200,22 +200,21 @@ test('reviewed user-only v1 catalog generates exact pinned project Git commands'
   const project = card.getByRole('button', { name: 'This project', exact: true });
   await expect(project).toBeEnabled();
   await project.click();
-  const source = index.plugins[0]!.distributions[0]!.releases[0]!.source;
-  const exact = `github:${source.repository}@${source.revision}//${source.path}`;
   await expect(card.locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
   await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(
-    `npx -y universal-agent-plugins add ${exact} --scope project`,
+    'npx -y universal-agent-plugins add i18n-state-00 --scope project',
   );
-  await expect(card).toContainText('This reviewed exact-commit Git source is a reproducible alternative.');
+  await expect(card).not.toContainText('This reviewed exact-commit Git source is a reproducible alternative.');
   await targets(page, card, ['Codex']);
-  const expected = `npx -y universal-agent-plugins add ${exact} --target codex --scope project`;
+  const expected = 'npx -y universal-agent-plugins add i18n-state-00 --target codex --scope project';
   await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(expected);
   await card.locator('.plugin-card__install .command-snippet button').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expected);
   await card.locator('.plugin-card__title-link').click();
   const panel = page.locator('.install-panel');
   await expect(panel.locator('.install-command-row .command-snippet--add code')).toHaveText(expected);
-  await expect(panel.locator('.command-snippet--update code')).toHaveText(expected);
+  await expect(panel.locator('.command-snippet--update code'))
+    .toHaveText('npx -y universal-agent-plugins update i18n-state-00 --scope project');
   await expect(panel.locator('.command-snippet--remove code'))
     .toHaveText('npx -y universal-agent-plugins remove i18n-state-00 --scope project');
   await panel.getByRole('button', { name: 'This computer', exact: true }).click();
@@ -292,9 +291,11 @@ test('Marketing Kit Project still rejects unsupported required components', asyn
   await navigate(page, '/', 'en', '?q=marketing-kit');
   const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
   await card.locator('.plugin-card__install-toggle').click();
-  await expect(card.getByRole('button', { name: 'This project', exact: true })).toBeDisabled();
-  await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
-    'npx -y universal-agent-plugins add marketing-kit');
+  // Unsupported components suppress the Project scope switch rather than
+  // showing a disabled option. Global remains independently available.
+  await expect(card.locator('.install-scope')).toHaveCount(0);
+  await expect(card.locator('.plugin-card__install .command-snippet--add code'))
+    .toHaveText('npx -y universal-agent-plugins add marketing-kit');
   expect(errors).toEqual([]);
 });
 

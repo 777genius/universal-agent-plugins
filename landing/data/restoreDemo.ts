@@ -2,8 +2,8 @@ export type RestoreDemoMode = 'project' | 'global';
 
 /** CLI examples, not an alternative to signed distribution/scope eligibility. */
 export const restoreDemoCommands = {
-  // Illustrative workflow only. The signed Marketing Kit dependency closure
-  // is still user-only; the Project tab must not expose copy actions.
+  // Released CLI 0.1.101 authenticates the signed v1 source and independently
+  // checks project placement for every required child before installation.
   project: {
     install: 'npx -y universal-agent-plugins install marketing-kit --scope project',
     restore: 'npx -y universal-agent-plugins install --scope project',

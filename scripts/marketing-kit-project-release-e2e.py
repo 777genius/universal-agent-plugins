@@ -144,11 +144,13 @@ def main():
             if (project_b / "uap.lock").read_bytes() != (project_a / "uap.lock").read_bytes():
                 raise AssertionError("cold restore modified pinned lock")
             run(env_b, project_b, "remove B", "remove", "marketing-kit", *scoped_b)
-            if "777genius/marketing-kit" in identities(inventory(options.cli, env_b, project_b, options.target), options.target):
-                raise AssertionError("Project B retains root after remove")
+            if identities(inventory(options.cli, env_b, project_b, options.target), options.target):
+                raise AssertionError("Project B retains root or mandatory children after remove")
+            if set(identities(inventory(options.cli, env, project_a, options.target), options.target)) != EXPECTED:
+                raise AssertionError("Project B removal changed Project A's complete closure")
             run(env, project_a, "remove A", "remove", "marketing-kit", *scoped)
-            if "777genius/marketing-kit" in identities(inventory(options.cli, env, project_a, options.target), options.target):
-                raise AssertionError("Project A retains root after remove")
+            if identities(inventory(options.cli, env, project_a, options.target), options.target):
+                raise AssertionError("Project A retains root or mandatory children after remove")
             for path, content in ((foreign_a, "unmanaged user data\n"),
                                   (foreign_b, "unmanaged user data\n"),
                                   (project_foreign_a, "unmanaged project data\n"),
