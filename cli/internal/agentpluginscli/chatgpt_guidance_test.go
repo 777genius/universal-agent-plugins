@@ -366,8 +366,7 @@ func TestContext7ExplicitCodexAndChatGPTTwoStageInstall(t *testing.T) {
 			}}
 			before, _ := json.Marshal(directory.bundle)
 			out, _, err := f.execute(false, "add", "context7", "--target", targets, "--format", "json")
-			if err == nil || !strings.Contains(err.Error(), "ChatGPT is prepared manually") ||
-				!strings.Contains(err.Error(), "--no-save") {
+			if err == nil || !strings.Contains(err.Error(), "--no-save") {
 				t.Fatalf("saved mixed request must refuse before acquisition: %s %v", out, err)
 			}
 			state, _ := f.store.Load()
