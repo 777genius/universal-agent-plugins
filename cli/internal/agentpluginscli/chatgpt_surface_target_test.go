@@ -88,7 +88,9 @@ func TestChatGPTDesktopAliasUsesCodexLifecycleWithoutSecondBinding(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(state.Installations) != 0 {
-		t.Fatalf("Desktop alias left an independent installation: %+v", state.Installations)
+	if len(state.Installations) != 1 ||
+		len(state.Installations[0].Clients) != 0 ||
+		!state.Installations[0].DataRetained {
+		t.Fatalf("Desktop alias removal must retain data but no native client binding: %+v", state.Installations)
 	}
 }
