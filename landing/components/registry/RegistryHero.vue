@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import type { ClientID, RegistryIndex } from '~/types/registry';
-import { installTargets, canonicalInstallTarget, canonicalInstallTargets, cliInstallTargets, type InstallTargetID } from '~/data/installTargets';
+import { installTargets, canonicalInstallTarget, canonicalInstallTargets, cliInstallTargets, reconcileLocalChatGPTTargets, type InstallTargetID } from '~/data/installTargets';
 import { pluginCommands } from '~/utils/commands';
 import { countAtElapsed, PLUGIN_COUNT_ANIMATION_MS } from '~/utils/countAnimation';
 import { catalogVisiblePlugins, groupCatalogPlugins } from '~/utils/filter';
@@ -249,16 +249,9 @@ function updateTargets(values: string[]) {
   const allowed = new Set(compatibleClients.value.map((client) => client.id));
   const next = values.filter((value): value is InstallTargetID => allowed.has(value as InstallTargetID));
   if (!next.length) return;
-  if (next.includes('codex') && next.includes('chatgpt')) {
-    const added = next.find((id) =>
-      (id === 'codex' || id === 'chatgpt') && !selectedTargets.value.includes(id),
-    );
-    const keep = added ?? (selectedTargets.value.includes('chatgpt') ? 'chatgpt' : 'codex');
-    next.splice(next.indexOf(keep === 'codex' ? 'chatgpt' : 'codex'), 1);
-  }
   preferences.selectPackage(
     selectionIdentity.value,
-    { ...choice.value, targetIds: next },
+    { ...choice.value, targetIds: reconcileLocalChatGPTTargets(next, selectedTargets.value) },
     availableTargets.value,
   );
 }

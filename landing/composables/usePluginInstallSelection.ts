@@ -1,6 +1,7 @@
 import { computed, ref, watch, type Ref } from 'vue';
 import {
   installTargets,
+  reconcileLocalChatGPTTargets,
   canonicalInstallTarget,
   canonicalInstallTargets,
   type InstallTargetID,
@@ -143,16 +144,7 @@ export function usePluginInstallSelection(
     if (!next.length) return;
     choicePending = true;
     const selected = [...new Set(next)];
-    // Codex CLI and Desktop are two product surfaces backed by one local install.
-    // Avoid generating a duplicate target request from a multi-select choice.
-    if (selected.includes('codex') && selected.includes('chatgpt')) {
-      const added = selected.find((id) =>
-        (id === 'codex' || id === 'chatgpt') && !targets.value.includes(id),
-      );
-      const keep = added ?? (targets.value.includes('chatgpt') ? 'chatgpt' : 'codex');
-      selected.splice(selected.indexOf(keep === 'codex' ? 'chatgpt' : 'codex'), 1);
-    }
-    targets.value = selected;
+    targets.value = reconcileLocalChatGPTTargets(selected, targets.value);
     saveUnboundChoice();
   }
   function updateAutoDetect(value: boolean) {

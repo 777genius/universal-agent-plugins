@@ -6,6 +6,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { usePluginInstallSelection } from '../composables/usePluginInstallSelection.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { pluginCommands } from '../utils/commands.ts';
+import { reconcileLocalChatGPTTargets } from '../data/installTargets.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
 
 const fixture: RegistryPlugin = JSON.parse(
@@ -39,6 +40,13 @@ function mount(plugin: RegistryPlugin) {
   return { ...selection, stop: () => lifetime.stop() };
 }
 
+
+test('Codex and Desktop picker choices reconcile to one native backend', () => {
+  assert.deepEqual(reconcileLocalChatGPTTargets(['codex', 'chatgpt', 'chatgptweb'], ['codex']), ['chatgpt', 'chatgptweb']);
+  assert.deepEqual(reconcileLocalChatGPTTargets(['codex', 'chatgpt', 'chatgptweb'], ['chatgpt']), ['codex', 'chatgptweb']);
+  assert.deepEqual(reconcileLocalChatGPTTargets(['codex', 'chatgpt'], ['cursor']), ['codex']);
+  assert.deepEqual(reconcileLocalChatGPTTargets(['chatgpt', 'chatgptweb'], ['chatgpt']), ['chatgpt', 'chatgptweb']);
+});
 
 test('mixed ChatGPT Web and Codex/Desktop commands use the imperative no-save path', () => {
   const plugin = data();
