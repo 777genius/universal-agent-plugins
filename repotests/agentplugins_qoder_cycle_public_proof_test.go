@@ -46,8 +46,20 @@ func qoderCyclePublicProof(raw []byte, stage, verb string, changed bool, r *qode
 		return "", fmt.Errorf("Qoder public selected target differs")
 	}
 	output, ok := target["output"].(map[string]any)
-	if !ok || projectNativeRuntimeKeys(output, "plugin version source tree_digest manifest_digest dry_run result", "operation_id revision security next_action") != nil {
+	if !ok || projectNativeRuntimeKeys(output, "plugin version source tree_digest manifest_digest dry_run result", "operation_id revision security next_action scope readiness next_actions") != nil {
 		return "", fmt.Errorf("Qoder public target output fields differ")
+	}
+	// Additive CLI guidance fields must retain their schema and explicit scope.
+	if scope, present := output["scope"]; present && scope != "project" {
+		return "", fmt.Errorf("Qoder public output escaped Project scope")
+	}
+	if readiness, present := output["readiness"]; present && readiness != "ready" && readiness != "needs_action" && readiness != "unknown" {
+		return "", fmt.Errorf("Qoder public readiness differs from CLI contract")
+	}
+	if actions, present := output["next_actions"]; present {
+		if _, valid := actions.([]any); !valid {
+			return "", fmt.Errorf("Qoder public next actions are not a list")
+		}
 	}
 	i := r.Installation
 	source := "direct local source"
