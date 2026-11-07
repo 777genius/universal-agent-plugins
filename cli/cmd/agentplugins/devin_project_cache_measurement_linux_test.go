@@ -107,13 +107,17 @@ func windDirectCacheApp(t *testing.T, app agentpluginscli.App, home string, scan
 	return app
 }
 
+func windDirectCacheNlink[T ~uint32 | ~uint64](value T) uint64 {
+	return uint64(value)
+}
+
 func windDirectCacheInfo(t *testing.T, info os.FileInfo) windDirectCacheFact {
 	t.Helper()
 	s, ok := info.Sys().(*syscall.Stat_t)
 	if !ok || s.Uid != uint32(os.Getuid()) || s.Gid != uint32(os.Getgid()) || s.Ino == 0 || (!info.IsDir() && (!info.Mode().IsRegular() || s.Nlink != 1)) {
 		t.Fatal("ordinary owned cache authority required")
 	}
-	return windDirectCacheFact{Device: s.Dev, Inode: s.Ino, Links: uint64(s.Nlink), UID: s.Uid, GID: s.Gid, Mode: s.Mode, Size: s.Size, Modified: s.Mtim, Changed: s.Ctim}
+	return windDirectCacheFact{Device: s.Dev, Inode: s.Ino, Links: windDirectCacheNlink(s.Nlink), UID: s.Uid, GID: s.Gid, Mode: s.Mode, Size: s.Size, Modified: s.Mtim, Changed: s.Ctim}
 }
 
 func windDirectCacheFrame(t *testing.T, root string) map[string]windDirectCacheFact {
