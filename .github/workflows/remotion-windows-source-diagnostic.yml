@@ -147,12 +147,49 @@ jobs:
                                         '--target', 'codex', '--scope', 'project', '--project-root',
                                         str(original_project), '--no-ui', '--yes', '--format', 'json'],
                                        original_project, 180)
+          # Isolate project projection from acquisition/staging temp-path length.
+          # Both variants use fresh disposable profiles and the same immutable
+          # public source; never change digest validation or native conditions.
+          cross_results = {}
+          for label in ('long-project-only', 'long-temp-only'):
+              short_case = root / ('cross-' + label)
+              long_case = Path(tempfile.mkdtemp(prefix='uap-live-30x30-')) / 'skill-24'
+              short_home, short_data = short_case / 'home', short_case / 'uap-data'
+              short_project, short_temp = short_case / 'project', short_case / 'tmp'
+              long_project, long_temp = long_case / 'project', long_case / 'tmp'
+              for p in (short_home, short_data, short_project, short_temp, long_project, long_temp):
+                  p.mkdir(parents=True, exist_ok=True)
+              git_config = short_case / 'empty.gitconfig'
+              git_config.write_bytes(b'')
+              selected_project = (long_project if label == 'long-project-only' else short_project)
+              selected_temp = (long_temp if label == 'long-temp-only' else short_temp)
+              env.update(HOME=str(short_home), USERPROFILE=str(short_home),
+                         XDG_CONFIG_HOME=str(short_home / '.config'),
+                         XDG_CACHE_HOME=str(short_home / '.cache'),
+                         XDG_DATA_HOME=str(short_home / '.local/share'),
+                         XDG_STATE_HOME=str(short_home / '.local/state'),
+                         APPDATA=str(short_home / 'AppData/Roaming'),
+                         LOCALAPPDATA=str(short_home / 'AppData/Local'),
+                         CODEX_HOME=str(short_home / '.codex'),
+                         AGENTPLUGINS_HOME=str(short_data),
+                         GIT_CONFIG_GLOBAL=str(git_config),
+                         TEMP=str(selected_temp), TMP=str(selected_temp),
+                         TMPDIR=str(selected_temp))
+              success = run('cross:' + label,
+                            [cli, 'skills', 'add', item['source'], '--skill', item['name'],
+                             '--target', 'codex', '--scope', 'project', '--project-root',
+                             str(selected_project), '--no-ui', '--yes', '--format', 'json'],
+                            selected_project, 180)
+              cross_results[label] = {
+                  'installed': success, 'project_root_chars': len(str(selected_project)),
+                  'temp_root_chars': len(str(selected_temp))}
           report.write_text(json.dumps({'sha': sha, 'source': item['source'],
                                         'windows_only_diagnostic': True, 'published_cli': '0.1.101',
                                         'short_temp_installed': installed,
                                         'default_temp_installed': installed_default_temp,
                                         'short_case_root_chars': len(str(profile)),
                                         'default_case_root_chars': len(str(original_case)),
+                                        'cross_results': cross_results,
                                         'steps': outcomes}, indent=2, ensure_ascii=True) + '\n',
                             encoding='utf-8')
           if not installed or not installed_default_temp:
