@@ -83,15 +83,7 @@ func selectExplicitClient(target domain.ClientID, rawTarget string, detectedMap 
 	return client, nil
 }
 
-// ChatGPT surfaces are CLI presentation aliases, not new signed Directory
-// clients or separate native installation stores.
 func normalizeTarget(value string) domain.ClientID {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "chatgpt-desktop":
-		return domain.ClientCodex
-	case "chatgpt-web":
-		return domain.ClientChatGPT
-	}
 	id, _ := domain.ParseClientID(value)
 	return id
 }
