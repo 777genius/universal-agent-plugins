@@ -62,6 +62,10 @@ jobs:
             claude) claude --version ;;
             opencode) opencode --version ;;
           esac
+          # Preserve actual transitive versions; global npm installs do not have a shared lockfile.
+          mkdir -p "$RUNNER_TEMP/released-catalog-proof"
+          npm ls --global --all --json > "$RUNNER_TEMP/released-catalog-proof/npm-global-dependencies.json" \
+            2> "$RUNNER_TEMP/released-catalog-proof/npm-global-dependencies-stderr.txt" || true
 
       - name: Attempt real install, repeat, remove, and native cleanup
         if: ${{ !cancelled() }}

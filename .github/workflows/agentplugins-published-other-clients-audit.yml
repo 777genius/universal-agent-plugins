@@ -73,6 +73,10 @@ jobs:
           if [[ "$TARGET" == qoder ]]; then native="qodercli"; fi
           command -v "$native"
           timeout 25s "$native" --version
+          # Preserve actual transitive versions; global npm installs do not have a shared lockfile.
+          mkdir -p "$RUNNER_TEMP/published-additional-proof"
+          npm ls --global --all --json > "$RUNNER_TEMP/published-additional-proof/npm-global-dependencies.json" \
+            2> "$RUNNER_TEMP/published-additional-proof/npm-global-dependencies-stderr.txt" || true
 
       - name: Audit install, repeat, identity, locks and safe removal
         if: ${{ !cancelled() }}

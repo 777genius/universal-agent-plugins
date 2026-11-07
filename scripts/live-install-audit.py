@@ -1721,8 +1721,10 @@ def main():
     report["verified_negative_coverage"] = len(accepted_negatives)
     report["full_coverage"] = args.limit == 30 and report["cases_attempted"] == 30
     save()
-    print(f'{args.target} {args.kind}: {passed}/{args.limit} passed; attempted={report["cases_attempted"]}')
-    return 0 if passed + len(accepted_negatives) == args.limit else 1
+    print(f'{args.target} {args.kind}: {passed}/{args.limit} native PASS; '
+          f'verified_negative={len(accepted_negatives)}; attempted={report["cases_attempted"]}')
+    return 0 if (report["cases_attempted"] == args.limit
+                 and passed + len(accepted_negatives) == args.limit) else 1
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ class PublishedCatalogNativeProofTest(unittest.TestCase):
             root = Path(tmp) / ".gemini"
             skill = root / "skills/gcp-playbooks/SKILL.md"
             skill.parent.mkdir(parents=True)
-            skill.write_text("---\\nname: gcp-playbooks\\n---\\n")
+            skill.write_text("---\nname: gcp-playbooks\n---\n")
             other = root / "foreign-neighbor.txt"
             other.write_text("unrelated content")
             changes = {
