@@ -43,16 +43,20 @@ def identities(items, target):
         if not isinstance(row, dict):
             raise AssertionError("invalid installation record")
         directory = row.get("directory") or {}
-        dist = directory.get("distribution_id")
+        dist = directory.get("recorded_distribution")
         if not dist:
-            # Do not mistake a standalone or untrusted source for a signed child.
-            raise AssertionError(f"installation lacks signed Directory identity: {row.get('name')}")
+            # Recorded signed-v1 identity uses recorded_distribution, not distribution_id.
+            raise AssertionError(f"installation lacks signed Directory identity: {row.get('name')}; fields={sorted(directory)}")
         bindings = row.get("clients") or []
         if isinstance(bindings, dict):
             bindings = list(bindings.values())
         if not any(isinstance(b, dict) and b.get("client_id") == target and
                    b.get("scope") == "project" for b in bindings):
             raise AssertionError(f"{dist}: missing project binding for {target}")
+        if not any(isinstance(b, dict) and audit["recorded_signed_release_matches"](
+                   directory, b.get("package_revision")) for b in bindings
+                   if b.get("client_id") == target):
+            raise AssertionError(f"{dist}: exact signed release provenance does not match the native binding")
         if dist in result:
             raise AssertionError(f"duplicate distribution: {dist}")
         result[dist] = row.get("installation_id")

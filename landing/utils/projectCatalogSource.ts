@@ -24,9 +24,13 @@ const PROJECT_COMPONENTS: Partial<Record<ClientID, ReadonlySet<string>>> = {
 const GIT_REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const FULL_REVISION = /^[0-9a-f]{40}$/;
 
-function projectCompatible(plugin: RegistryPlugin, targets: readonly ClientID[], resolved: DistributionResolution) {
+function projectCompatible(
+  plugin: RegistryPlugin, targets: readonly ClientID[],
+  resolved: DistributionResolution, hasExplicitProjectGrant: boolean,
+) {
   const dist = resolved.distribution;
-  if (!plugin.installable || plugin.trust_state !== 'reviewed' || !targets.length ||
+  if (!plugin.installable || plugin.trust_state === 'conformant_unreviewed' ||
+      (!hasExplicitProjectGrant && plugin.trust_state !== 'reviewed') || !targets.length ||
       !dist || !dist.components.length) return false;
   // Reject malformed metadata in test projections too; signed feed validation
   // and exact source verification remain authoritative in the released CLI.
@@ -51,7 +55,7 @@ export function projectCatalogSelection(
   // Honor explicit project-scoped policy if present. Signed v1 User grants
   // also authenticate sources for the owner's explicit Project request.
   const selected = signedProject.distribution ? signedProject : resolveDistribution(plugin, targets, 'user');
-  if (!projectCompatible(plugin, targets, selected)) {
+  if (!projectCompatible(plugin, targets, selected, Boolean(signedProject.distribution))) {
     return { resolution: { ...signedProject, distribution: undefined } };
   }
   return {
