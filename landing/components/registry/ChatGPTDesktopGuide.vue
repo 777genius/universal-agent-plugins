@@ -1,5 +1,4 @@
 <script setup lang="ts">
-defineProps<{ command: string }>();
 const { t } = useI18n();
 </script>
 
@@ -7,11 +6,7 @@ const { t } = useI18n();
   <details class="desktop-guide">
     <summary>{{ t('registryUi.desktopGuide.title') }}</summary>
     <p>{{ t('registryUi.desktopGuide.description') }}</p>
-    <CommandSnippet
-      :command="command"
-      :label="t('registryUi.desktopGuide.command')"
-      kind="add"
-    />
+    <!-- The install picker above already contains the single copyable command. -->
     <p>{{ t('registryUi.desktopGuide.nextStep') }}</p>
     <a
       href="https://github.com/777genius/universal-agent-plugins/blob/main/docs/CHATGPT_DESKTOP_LOCAL_INSTALL.md"
