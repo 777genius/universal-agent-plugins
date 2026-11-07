@@ -8,7 +8,7 @@ composer.missingWarn = false;
 composer.fallbackWarn = false;
 const { t } = composer;
 const { asset } = useSite();
-const { userRestoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
+const { restoreGuideUrl, userRestoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
 const mode = ref<RestoreDemoMode>('project');
 const commands = computed(() => restoreDemoCommands[mode.value]);
 const copied = ref<1 | 2 | 3 | null>(null);
@@ -81,7 +81,7 @@ async function copyCommand(which: 1 | 2 | 3) {
     <div class="registry-restore__panel">
       <header class="registry-restore__header">
         <h2 id="restore-title">{{ t('shell.restore.title') }}</h2>
-        <a class="registry-restore__guide" :href="userRestoreGuideUrl" target="_blank" rel="noreferrer">
+        <a class="registry-restore__guide" :href="mode === 'project' ? restoreGuideUrl : userRestoreGuideUrl" target="_blank" rel="noreferrer">
           {{ docsLabel(t('shell.restore.guide'), restoreGuideEnglishFallback) }} <span aria-hidden="true">↗</span>
         </a>
       </header>

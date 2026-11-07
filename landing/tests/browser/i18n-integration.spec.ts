@@ -40,6 +40,7 @@ for (const locale of publishedLocales) {
         await expect(restore.locator('.registry-restore__locked-version')).toHaveCount(0);
         await expect(restore.locator('.registry-restore__terminal')).toHaveCount(2);
         await expect(restore).toHaveAttribute('data-mode', 'project');
+        await expect(restore.locator('.registry-restore__guide')).toHaveAttribute('href', /#restore-project-dependencies$/);
         await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install marketing-kit --scope project');
         await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install --scope project');
         await expect(restore.locator('.registry-restore__subtitle')).toHaveText(showcase.projectSubtitle);
@@ -47,6 +48,7 @@ for (const locale of publishedLocales) {
         await expect(restore.locator('.registry-restore__copy')).toHaveCount(2);
         await expect(restore.locator('.registry-restore__qualification')).toHaveCount(0);
         await restore.getByRole('button', { name: showcase.globalLabel, exact: true }).click();
+        await expect(restore.locator('.registry-restore__guide')).toHaveAttribute('href', /#restore-on-another-machine$/);
         await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install marketing-kit');
         await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins deps import --install');
         await expect(restore.locator('.registry-restore__subtitle')).toHaveText(showcase.globalSubtitle);
@@ -55,7 +57,66 @@ for (const locale of publishedLocales) {
         await restore.getByRole('button', { name: showcase.projectLabel, exact: true }).click();
         const docsLocale = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
         const guideLabel = docsLocale === locale ? copy.guide! : messages.docs.englishLabel.replace('{label}', copy.guide!);
-        await expect(restore.getByRole('link', { name: guideLabel })).toHaveAttribute('href', new RegExp(`/docs/${docsLocale}/use/manage\\.html#restore-on-another-machine$`));
+        await expect(restore.getByRole('link', { name: guideLabel })).toHaveAttribute('href', new RegExp(`/docs/${docsLocale}/use/manage\\.html#restore-project-dependenciesimport { mkdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { expect, test } from '@playwright/test';
+import { hydrated } from './i18n-state.helpers';
+import { publishedLocales, localeMetadata, type KnownLocale } from '../../data/i18n';
+import { localizedPath } from '../../utils/localizedRoutes';
+
+// Each case has an isolated browser context and no cross-test mutable state.
+test.describe.configure({ mode: 'parallel' });
+
+// This suite runs against the assembled artifact on a plain static server at both bases.
+for (const locale of publishedLocales) {
+  for (const family of ['/', '/plugins/', '/plugins/context7/', '/agents/github-copilot-cli/', '/download/', '/create-plugin/', '/plugins/community/']) {
+    test(`${locale} direct static ${family}`, async ({ page, request }) => {
+      // Homepage hydration and restoration interactions need extra time under CI load.
+      if (family === '/') test.setTimeout(60_000);
+      const url = `.${localizedPath(family, locale)}`;
+      // Retry one transient localhost connection reset without weakening content checks.
+      const response = await request.get(url, { maxRetries: 1 });
+      expect(response.status()).toBe(200);
+      expect(response.headers()['content-type']).toContain('text/html');
+      expect(await response.text()).toContain(`lang="${locale}"`);
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      page.on('console', (message) => {
+        if (/hydration.*(mismatch|failed)/i.test(message.text())) errors.push(message.text());
+      });
+      await page.goto(url);
+      await expect(page.locator('html')).toHaveAttribute('lang', locale);
+      await expect(page.locator('h1')).toBeVisible();
+      if (family === '/') {
+        await hydrated(page);
+        const messages = JSON.parse(readFileSync(new URL(`../../i18n/locales/${locale}.json`, import.meta.url), 'utf8')).shell;
+        const copy = messages.restore as Record<string, string>;
+        const showcase = JSON.parse(readFileSync(new URL(`../../features/restore/locales/${locale}.json`, import.meta.url), 'utf8')).shell.restoreDemo;
+        const restore = page.locator('#restore-environment');
+        await expect(restore.getByRole('heading', { level: 2 })).toHaveText(copy.title!);
+        await expect(restore.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(1);
+        await expect(restore.locator('.registry-restore__package strong')).toHaveText(['v0.1.0', 'v0.1.0']);
+        await expect(restore.locator('.registry-restore__locked-version')).toHaveCount(0);
+        await expect(restore.locator('.registry-restore__terminal')).toHaveCount(2);
+        await expect(restore).toHaveAttribute('data-mode', 'project');
+        await expect(restore.locator('.registry-restore__guide')).toHaveAttribute('href', /#restore-project-dependencies$/);
+        await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install marketing-kit --scope project');
+        await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install --scope project');
+        await expect(restore.locator('.registry-restore__subtitle')).toHaveText(showcase.projectSubtitle);
+        await expect(restore.locator('.registry-restore__handoff-note')).toHaveText(showcase.projectHandoff);
+        await expect(restore.locator('.registry-restore__copy')).toHaveCount(2);
+        await expect(restore.locator('.registry-restore__qualification')).toHaveCount(0);
+        await restore.getByRole('button', { name: showcase.globalLabel, exact: true }).click();
+        await expect(restore.locator('.registry-restore__guide')).toHaveAttribute('href', /#restore-on-another-machine$/);
+        await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install marketing-kit');
+        await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins deps import --install');
+        await expect(restore.locator('.registry-restore__subtitle')).toHaveText(showcase.globalSubtitle);
+        await expect(restore.locator('.registry-restore__handoff-note')).toHaveText(showcase.globalHandoff);
+        await expect(restore.locator('.registry-restore__export code')).toHaveText('npx -y universal-agent-plugins deps export');
+        await restore.getByRole('button', { name: showcase.projectLabel, exact: true }).click();
+        const docsLocale = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
+        const guideLabel = docsLocale === locale ? copy.guide! : messages.docs.englishLabel.replace('{label}', copy.guide!);
+        ));
         if (locale === 'en' || locale === 'ar') {
           await page.setViewportSize({ width: locale === 'ar' ? 390 : 1440, height: 1000 });
           await restore.scrollIntoViewIfNeeded();
