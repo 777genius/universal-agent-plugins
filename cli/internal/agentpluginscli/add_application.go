@@ -25,7 +25,7 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	}
 	applyLoadedGuidedIntents(opts, loaded, targets)
 	if opts.chatGPTAppID != "" && !loaded.chatGPTPreparation {
-		return fmt.Errorf("--chatgpt-app-id requires the signed Context7 Directory source and --target chatgpt")
+		return fmt.Errorf("--chatgpt-app-id requires the signed Context7 Directory source and --target chatgptweb")
 	}
 	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
 		return err

@@ -128,7 +128,7 @@ func validateSavedAddTargets(app App, opts *options, source string, targets []do
 	}
 	for _, target := range targets {
 		if domain.ClientTraitsFor(target).RequiresPersonalMappingForPrepare && len(targets) > 1 {
-			return nil, errors.New("ChatGPT is prepared manually; run agentplugins add <source> --target chatgpt separately, or use --no-save for the mixed imperative workflow")
+			return nil, errors.New("ChatGPT is prepared manually; run agentplugins add <source> --target chatgptweb separately, or use --no-save for the mixed imperative workflow")
 		}
 		if !supportsDependencyTarget(app, string(target)) {
 			return nil, fmt.Errorf("target %s cannot be saved; retry agentplugins add %s --target %s --no-save", target, source, opts.target)
