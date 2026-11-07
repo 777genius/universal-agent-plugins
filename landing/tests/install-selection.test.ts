@@ -49,6 +49,27 @@ test('mixed ChatGPT Web and Codex/Desktop commands use the imperative no-save pa
   assert.doesNotMatch(pluginCommands(plugin, ['codex']).add, /--no-save/);
 });
 
+test('unreviewed community app metadata cannot authorize a ChatGPT Web connection', () => {
+  setActivePinia(createPinia());
+  const plugin = data();
+  plugin.trust_state = 'conformant_unreviewed';
+  plugin.distributions[0]!.releases[0]!.targets.push({
+    client: 'chatgpt',
+    scopes: ['user'],
+    delivery: 'manual_activation',
+    authentication: 'unknown',
+    app_binding: { app_key: 'spoofed', id: 'untrusted_app', mcp_server: 'untrusted' },
+  });
+  const state = mount(plugin);
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgpt-desktop'));
+  assert.equal(state.availableClients.value.some((client) => client.id === 'chatgpt'), false);
+  // Exercise an invalid persisted choice as well as the ordinary picker.
+  state.targets.value = ['chatgpt'];
+  assert.equal(state.resolution.value.distribution, undefined);
+  assert.match(state.resolution.value.unavailable_reason ?? '', /reviewed signed Directory/);
+  state.stop();
+});
+
 test('ChatGPT Web needs signed app binding; Desktop shares Codex without project fallback', () => {
   setActivePinia(createPinia());
   const plugin = data();
