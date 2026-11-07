@@ -60,12 +60,12 @@ func TestNormalizeTargetContract(t *testing.T) {
 	}
 
 	folding := map[string]domain.ClientID{
-		"  cursor  ":      domain.ClientCursor,
-		"CURSOR":          domain.ClientCursor,
-		"Claude-Code":     domain.ClientClaude,
-		" GitHub-Copilot": domain.ClientCopilot,
+		"  cursor  ":        domain.ClientCursor,
+		"CURSOR":            domain.ClientCursor,
+		"Claude-Code":       domain.ClientClaude,
+		" GitHub-Copilot":   domain.ClientCopilot,
 		" ChatGPT-DESKTOP ": domain.ClientCodex,
-		" ChatGPT-WEB ": domain.ClientChatGPT,
+		" ChatGPT-WEB ":     domain.ClientChatGPT,
 	}
 	for input, want := range folding {
 		if got := normalizeTarget(input); got != want {
