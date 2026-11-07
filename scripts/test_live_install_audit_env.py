@@ -2192,5 +2192,80 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertTrue((project / ".git").is_dir())
 
 
+
+class CrossPlatformPublishedProofRegressions(unittest.TestCase):
+    """Keep raw published client proofs honest on ARM and Windows runners."""
+
+    def test_windows_qoder_cache_and_log_paths_are_passive_but_settings_are_not(self):
+        audit = load_audit()
+        for relative in (
+                "plugins\\\\cache\\\\local\\\\atlassian\\\\0.1.0\\\\plugin.json",
+                "logs\\\\runs\\\\session-1\\\\manifest.json",
+                "plugins/cache/local/atlassian/0.1.0/plugin.json"):
+            self.assertTrue(audit.passive_native_path("qoder", relative), relative)
+        self.assertTrue(audit.passive_native_path("codex", "plugins\\\\cache\\\\example.json"))
+        for relative in ("settings.json", "plugins\\\\installed_plugins_v2.json",
+                         "plugins/installed_plugins_v2.json"):
+            self.assertFalse(audit.passive_native_path("qoder", relative), relative)
+
+    def test_qoder_profile_requires_same_canonical_disposable_root(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            home = root / "home"
+            profile = home / ".qoder"
+            profile.mkdir(parents=True)
+            trusted_binary = str(root / "trusted-qodercli")
+            env = {"QODER_CONFIG_DIR": str(profile.resolve(strict=True))}
+            rows = [{"id": "atlassian@local", "version": "0.1.0"}]
+            with patch.dict(audit.AGENT_BINARIES, {"qodercli": trusted_binary}, clear=True), \\
+                 patch.object(audit, "call", return_value={"exit_code": 0, "_json": rows}) as probe:
+                self.assertEqual(audit.qoder_native_plugin_state(
+                    home, env, root, "atlassian", "0.1.0"), {"status": "registered"})
+                self.assertEqual(probe.call_args.args[0][2], str(profile))
+                self.assertEqual(audit.qoder_native_plugin_state(
+                    home, {"QODER_CONFIG_DIR": str(root / "other")},
+                    root, "atlassian", "0.1.0")["status"], "unqualified-prerequisites")
+
+    def test_prepared_only_opencode_config_is_not_native_pass(self):
+        # Real published 0.1.101 can write opencode.json while all components
+        # are reported as prepared, never native. Disk attribution is not activation.
+        audit = load_audit()
+        matched = [{"name": "atlassian", "installation_id": "frozen",
+                    "clients": [{"client_id": "opencode", "verification": "installation_verified"}]}]
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            config = root / "plugin-00/home/.config/opencode/opencode.json"
+            state = {"installed": False}
+
+            def fake_call(argv, _env, _cwd, timeout=105):
+                operation = argv[1]
+                if operation == "add":
+                    if not state["installed"]:
+                        config.parent.mkdir(parents=True, exist_ok=True)
+                        config.write_text('{"mcp":{"atlassian":{"type":"local"}}}')
+                    state["installed"] = True
+                elif operation == "remove":
+                    config.unlink()
+                    state["installed"] = False
+                return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                        "timeout": False,
+                        "_json": ({"data": {"actions": [
+                            {"component_support": [{"name": "atlassian", "support": "prepared"}]}
+                        ]}} if operation == "add" else
+                                  {"data": {"installations": matched if state["installed"] else []}})}
+
+            with patch.object(audit, "call", side_effect=fake_call), \\
+                 patch.object(audit, "matching_installations", return_value=matched):
+                row = audit.do_case("/unused/agentplugins", "opencode", "plugin",
+                                    "atlassian", 0, root, {})
+            self.assertTrue(row["prepared_components_only"])
+            self.assertTrue(row["native_identity_files"])
+            self.assertTrue(row["repeat_verified"])
+            self.assertTrue(row["removal_verified"])
+            self.assertEqual(row["status"], "prepared-lifecycle-passed")
+            self.assertNotEqual(row["status"], "passed")
+
+
 if __name__ == "__main__":
     unittest.main()
