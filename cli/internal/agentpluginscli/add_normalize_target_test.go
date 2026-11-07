@@ -52,6 +52,7 @@ func TestNormalizeTargetContract(t *testing.T) {
 		"qoder-desktop":   domain.ClientQoder,
 		"chatgpt-desktop": domain.ClientCodex,
 		"chatgpt-web":     domain.ClientChatGPT,
+		"chatgptweb":      domain.ClientChatGPT,
 	}
 	for input, want := range aliases {
 		if got := normalizeTarget(input); got != want {
