@@ -37,6 +37,10 @@
     {
       "digest": "sha256:255c72648dd6a6e6b93ea75f5ad51553826692c60dd8222c7fb55613cf5766ba",
       "id": "static-extended-v3"
+    },
+    {
+      "digest": "sha256:3a6bac66327c0285edb6012e58fad74604c9d4bd6d3c6dfb0b25d7dcc8f59faf",
+      "id": "static-standard-v3"
     }
   ]
 }
