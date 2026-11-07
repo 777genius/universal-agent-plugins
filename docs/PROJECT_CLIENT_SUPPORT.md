@@ -1,10 +1,9 @@
 # Project installation support
 
-**Source vs release:** PR #725 in `main` supports signed Directory short names
-in explicit Project scope when the selected native adapters and mandatory
-components are eligible. This is not yet in the public CLI 0.1.95. The
-published v1 User source policy is not Project runtime evidence; the released
-CLI must still use its compatible direct-source Project flow.
+**Current published CLI:** Signed Directory short names work in explicit Project
+scope for eligible clients and all mandatory components (merged in [#725](https://github.com/777genius/universal-agent-plugins/pull/725)).
+Signed Directory v1 User scope evidence alone is **not** native Project runtime
+proof. A full-SHA direct Git source remains an alternative for reproducible installs.
 
 **Released in CLI 0.1.93:** explicit project scope prepares the client components
 listed below. Select `--scope project` and an existing project directory; the
@@ -79,9 +78,9 @@ restrictions remain as listed above.
 Pi project MCP `tools/call` is qualified in current source by [merged #656](https://github.com/777genius/universal-agent-plugins/pull/656), closing [#623](https://github.com/777genius/universal-agent-plugins/issues/623). Remaining native project gaps are tracked under [OpenCode / Claude / Codex #624](https://github.com/777genius/universal-agent-plugins/issues/624). The merged [OpenCode V2 #655](https://github.com/777genius/universal-agent-plugins/pull/655) proves a real selected project MCP call, whereas [Claude #664](https://github.com/777genius/universal-agent-plugins/pull/664) proves a real call only for an already-existing foreign trusted project MCP server, **not** a UAP-managed server. A configured MCP entry or successful `tools/list` alone never establishes tool execution; scripted-model calls are not vendor-model authentication.
 
 For releases, explicit project scope first shipped in CLI 0.1.93 and automatic
-project selection for argumentless `install` in 0.1.94. The #520 integration
-postdates the published 0.1.95 tag, so use its exact Git source/CI evidence
-until a subsequent release explicitly includes it.
+project selection for argumentless `install` in 0.1.94. For client-specific project integration such as #520, consult its exact
+Git source and CI evidence rather than treating an installer release as blanket
+native activation or MCP runtime proof.
 
 ## What the verification establishes
 

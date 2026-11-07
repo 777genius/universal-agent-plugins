@@ -9,11 +9,26 @@ const highlight = (command) => `<pre><code><span class="line">${command.split(/(
 const command = "npx universal-agent-plugins add context7";
 const sourceBoundary = "The current npm and native installer release does not include <code>agentplugins author</code>. Current source implements scaffolding and explicit MCP runtime checks.";
 const setupLink = '<a href="../build/#build-from-source">source-build setup</a>';
-const page = (code) => `<main>${quickstartClaims.map((claim) => `<p>${claim}</p>`).join("")}<p>${sourceBoundary}</p>${setupLink}${code}</main>`;
+const currentRelease = "https://github.com/777genius/universal-agent-plugins/releases/latest";
+const latestLink = `<a href="${currentRelease}">CLI</a>`;
+const releaseMarkdownLink = /\]\(https:\/\/github\.com\/777genius\/universal-agent-plugins\/releases\/latest\)/u;
+const page = (code) => `<main>${quickstartClaims.map((claim) => `<p>${claim}</p>`).join("")}<p>${sourceBoundary}</p>${setupLink}${latestLink}${code}</main>`;
 
 test("plain and highlighted installer commands satisfy the quickstart contract", () => {
   assert.deepEqual(quickstartErrors(page(`<pre><code>${command}</code></pre>`)), []);
   assert.deepEqual(quickstartErrors(page(highlight(command))), []);
+});
+
+test("release href must be exact, never a substring of another URL", () => {
+  const valid = page(highlight(command));
+  for (const forged of [
+    `${currentRelease}.attacker.invalid`,
+    `https://attacker.invalid/${currentRelease}`,
+    `${currentRelease}?redirect=attacker.invalid`,
+  ]) {
+    const invalid = valid.replace(currentRelease, forged);
+    assert.ok(quickstartErrors(invalid).some((error) => error.includes("latest stable installer release")), forged);
+  }
 });
 
 test("parsed document text preserves entities and highlighted code without treating attributes as content", () => {
@@ -78,12 +93,12 @@ test("actual rendered home and quickstart preserve the released installer and so
   const quickstart = await render("guide/quickstart.md");
   assert.deepEqual(homeErrors(home), []);
   assert.deepEqual(quickstartErrors(quickstart), []);
-  // The 0.1.94 project-selection minimum remains valid, but cannot satisfy
-  // the separate current-release assertion after the installer advances.
-  assert.ok(homeErrors(home.replaceAll("CLI 0.1.95", "CLI 0.1.94"))
-    .some((error) => error.includes("current installer guidance: CLI 0.1.95")));
-  assert.ok(quickstartErrors(quickstart.replaceAll("CLI 0.1.95", "CLI 0.1.94"))
-    .some((error) => error.includes("current installer/source guidance: CLI 0.1.95")));
+  // Current release guidance must never be frozen to the previous tag.
+  const staleUrl = "https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95";
+  assert.ok(homeErrors(home.replaceAll(currentRelease, staleUrl))
+    .some((error) => error.includes("latest stable installer release")));
+  assert.ok(quickstartErrors(quickstart.replaceAll(currentRelease, staleUrl))
+    .some((error) => error.includes("latest stable installer release")));
   assert.ok(homeErrors(home.replace("does not include", "includes")).some((error) => error.includes("excludes agentplugins author")));
   assert.ok(homeErrors(home.replace("npx", "not-a-command")).some((error) => error.includes("released installer command")));
 });
@@ -99,4 +114,20 @@ test("embedded historical locale snapshots are excluded from current-source scan
   assert.deepEqual(currentSourceErrors("plugin-kit-ai generate .", "ru/guide/quickstart.md"), [
     "Current public source contains retired authoring copy: ru/guide/quickstart.md"
   ]);
+});
+
+
+test("all nine current documentation locales link to the stable release without a frozen current version", async () => {
+  const website = new URL("../../", import.meta.url);
+  const locales = ["en", "ru", "uk", "zh", "es", "hi", "ar", "pt", "fr"];
+  const pages = ["index.md", "use/index.md", "build/index.md",
+    "guide/quickstart.md", "reference/client-compatibility.md", "use/manage.md"];
+  for (const locale of locales) {
+    for (const relative of pages) {
+      const source = await fs.readFile(new URL(`source/${locale}/${relative}`, website), "utf8");
+      assert.ok(releaseMarkdownLink.test(source), `${locale}/${relative} needs an evergreen release link`);
+      assert.ok(!source.includes("releases/tag/agentplugins-v0.1.95"),
+        `${locale}/${relative} must not advertise the old tag as current`);
+    }
+  }
 });

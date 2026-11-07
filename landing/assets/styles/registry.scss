@@ -59,6 +59,9 @@ body,
   min-height: 100%;
 }
 .registry-surface {
+  /* Clip decorative and animated overflow without hiding horizontal table scrollers. */
+  position: relative;
+  overflow-x: clip;
   color: var(--text);
   line-height: 1.6;
 }

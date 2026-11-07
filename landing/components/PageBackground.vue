@@ -19,7 +19,7 @@
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
-  /* Blur-filtered moving orbs must not enlarge the document scroll area. */
+  /* Keep blurred animated orbs out of the document's scrollable overflow. */
   contain: paint;
 }
 
