@@ -93,6 +93,20 @@ jobs:
             scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_codex_marketplace_containment_follows_physical_directory_identity -v
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
 
+      # Docker Hub's published MCP manifest has an explicit Docker CLI
+      # prerequisite. Real full-source Codex/Claude tests must install that
+      # dependency, not turn a missing executable into a native PASS.
+      # This is only the CLI, not a Docker daemon or a qualified MCP invocation.
+      - name: Install real Docker CLI for published Docker Hub source
+        if: ${{ github.event_name != 'pull_request' && matrix.kind == 'plugin' && (matrix.target == 'codex' || matrix.target == 'claude') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          brew install docker
+          command -v docker
+          docker --version
+
       # Actual exact public stable npm bytes and real client CLIs, never a Go-source
       # installer substituted for the release. No model login or vendor token.
       - name: Bootstrap published installer and pinned native client
