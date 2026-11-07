@@ -313,7 +313,7 @@ See [portable commands](docs/UAP_COMMANDS.md) for command delivery and limits.
 For guided Context7 setup in ChatGPT and Kiro:
 
 ```bash
-npx universal-agent-plugins add context7 --target chatgpt,kiro --no-save
+npx universal-agent-plugins add context7 --target chatgptweb,kiro --no-save
 ```
 
 ChatGPT requires Developer Mode and custom apps. You must install the prepared

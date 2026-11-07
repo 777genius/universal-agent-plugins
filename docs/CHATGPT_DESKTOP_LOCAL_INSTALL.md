@@ -1,6 +1,6 @@
 # Install UAP plugins in ChatGPT Desktop (local)
 
-ChatGPT Desktop's local Work/Codex plugin marketplace is distinct from **ChatGPT Web** and from the remote ChatGPT Apps / MCP connections. Universal Agent Plugins (UAP) exposes **`--target chatgpt-desktop`**, a user-facing alias routed through the **existing Codex CLI target** for local Desktop plugins. This does not create a second native installation. It does not register a ChatGPT cloud app or grant workspace permissions.
+ChatGPT Desktop's local Work/Codex plugin marketplace is distinct from **ChatGPT Web** and from the remote ChatGPT Apps / MCP connections. Universal Agent Plugins (UAP) exposes **`--target chatgpt`**, a user-facing alias routed through the **existing Codex CLI target** for local Desktop plugins. This does not create a second native installation. It does not register a ChatGPT cloud app or grant workspace permissions.
 
 ## Install a compatible plugin
 
@@ -8,7 +8,7 @@ ChatGPT Desktop's local Work/Codex plugin marketplace is distinct from **ChatGPT
 2. In the [UAP plugin directory](https://universal-agent-plugins.com/plugins/), open an eligible plugin and choose **ChatGPT Desktop** in the agent selector. The optional Desktop guidance then appears below the command. This option is enabled only for a current, installable **Codex user-scope** release; the separately listed **ChatGPT Web** option requires a verified remote app binding.
 3. Copy the exact command from that plugin's card. For example, an eligible Context7 release may use:
 
-   `npx -y universal-agent-plugins add context7 --target chatgpt-desktop`
+   `npx -y universal-agent-plugins add context7 --target chatgpt`
 
    UAP selects and validates the signed distribution and performs its existing managed Codex marketplace/plugin lifecycle. The command may show authentication or other activation steps. If the Codex CLI is unavailable, UAP prints manual setup rather than claiming an automatic installation.
 4. On macOS or Windows, you can run `codex app` to open an installed ChatGPT Desktop app (or start its installer when missing). On Windows it may print a path to open. This is a user action, not performed automatically by UAP. If the CLI prints a `codex://plugins/...` link, open it **only on your own computer**. It opens the local plugin detail in Desktop, not a silent installation. If the URL handler is unavailable, open ChatGPT Desktop manually.
@@ -24,13 +24,13 @@ Use the same UAP command family and target, not a second Desktop-specific instal
 
 This lists UAP-managed installations; for native Codex registration independently run `codex plugin list --json`. Neither output certifies that the signed-in Desktop app executed the plugin.
 
-`npx -y universal-agent-plugins update <plugin-name> --target chatgpt-desktop`
+`npx -y universal-agent-plugins update <plugin-name> --target chatgpt`
 
-`npx -y universal-agent-plugins repair <plugin-name> --target chatgpt-desktop`
+`npx -y universal-agent-plugins repair <plugin-name> --target chatgpt`
 
-`npx -y universal-agent-plugins remove <plugin-name> --target chatgpt-desktop`
+`npx -y universal-agent-plugins remove <plugin-name> --target chatgpt`
 
-The older `--target codex` spelling remains valid and uses the same native plugin installation; do not run both variants to install twice. The `chatgpt-desktop` alias is available **only after the CLI release containing this change**. Before that release, use `--target codex` and verify the installed plugin in Desktop. Follow the CLI's exact manual uninstall/confirmation instructions when requested. UAP only removes its own managed marketplace entries and files; it must never overwrite another user's or organization's marketplace configuration.
+`--target codex` still selects Codex CLI, while `--target chatgpt` selects ChatGPT Desktop. Both use the same native plugin installation; do not run both variants to install twice. `--target chatgptweb` separately prepares a remote ChatGPT Web connection. The new `chatgpt` Desktop spelling is available **only after the CLI release containing this change**. Before that release, use `--target codex` and verify the installed plugin in Desktop. Follow the CLI's exact manual uninstall/confirmation instructions when requested. UAP only removes its own managed marketplace entries and files; it must never overwrite another user's or organization's marketplace configuration.
 
 ## Troubleshooting
 

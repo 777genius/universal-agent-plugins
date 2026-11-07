@@ -23,7 +23,7 @@ function desktopFixture(withCodex: boolean) {
   return index;
 }
 
-const desktopCommand = 'npx -y universal-agent-plugins add i18n-state-00 --target chatgpt-desktop';
+const desktopCommand = 'npx -y universal-agent-plugins add i18n-state-00 --target chatgpt';
 
 for (const width of [1440, 390]) {
   test('ChatGPT Desktop is a distinct selectable target with one copyable command at ' + width + 'px', async ({ page }) => {
@@ -124,10 +124,10 @@ for (const width of [1440, 390]) {
     await page.keyboard.press('Escape');
     const snippet = card.locator('.plugin-card__install .command-snippet');
     const code = snippet.locator('code');
-    await expect(code).toHaveText(/--target (chatgpt-desktop,chatgpt-web|chatgpt-web,chatgpt-desktop) --no-save$/);
+    await expect(code).toHaveText(/--target (chatgpt,chatgptweb|chatgptweb,chatgpt) --no-save$/);
     const command = (await code.textContent())?.trim() ?? '';
-    expect(command.match(/chatgpt-desktop/g)).toHaveLength(1);
-    expect(command.match(/chatgpt-web/g)).toHaveLength(1);
+    expect(command.match(/\bchatgpt\b/g)).toHaveLength(1);
+    expect(command.match(/chatgptweb/g)).toHaveLength(1);
     expect(command).not.toMatch(/--target .*\bcodex\b/);
     await snippet.locator('button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);

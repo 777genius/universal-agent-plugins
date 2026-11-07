@@ -61,7 +61,7 @@ test('unreviewed community app metadata cannot authorize a ChatGPT Web connectio
     app_binding: { app_key: 'spoofed', id: 'untrusted_app', mcp_server: 'untrusted' },
   });
   const state = mount(plugin);
-  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgptweb'));
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgpt'));
   assert.equal(state.availableClients.value.some((client) => client.id === 'chatgptweb'), false);
   // Exercise an invalid persisted choice as well as the ordinary picker.
   state.targets.value = ['chatgptweb'];
@@ -81,7 +81,7 @@ test('ChatGPT Web needs signed app binding; Desktop shares Codex without project
     authentication: 'unknown',
   });
   const state = mount(plugin);
-  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgptweb'));
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgpt'));
   assert.equal(state.availableClients.value.some((client) => client.id === 'chatgptweb'), false);
   assert.equal(state.targetDistributions.value.get('chatgptweb'), undefined);
   assert.ok(state.targetDistributions.value.get('chatgpt'));
