@@ -366,6 +366,7 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	// disposable subtest below must prove that the *UAP-installed plugin*,
 	// not a pre-existing project .mcp.json, actually serves the native call.
 	t.Run("uap-managed-project-mcp", claudeProjectManagedMCPCall)
+	t.Run("uap-managed-user-mcp", claudeUserManagedMCPCall)
 }
 
 func claudeProjectManagedMCPCall(t *testing.T) {
@@ -521,4 +522,199 @@ func claudeProjectManagedMCPCall(t *testing.T) {
 		t.Fatal("removed UAP-managed MCP child was restarted or invoked")
 	}
 	stages["managed_remove"] = nativeStage{Status: "passed", Reason: "UAP scoped remove deleted only owned plugin and fresh A session could not call removed tool"}
+}
+
+func claudeUserManagedMCPCall(t *testing.T) {
+	t.Helper()
+	f := newClaudeProjectNativeFixture(t)
+	stages := map[string]nativeStage{
+		"user_install": {Status: "not_evaluated", Reason: "not reached"},
+		"project_A_call": {Status: "not_evaluated", Reason: "not reached"},
+		"project_B_call": {Status: "not_evaluated", Reason: "not reached"},
+		"user_remove": {Status: "not_evaluated", Reason: "not reached"},
+	}
+	evidence := claudeProjectNativeIdentity(t, f)
+	evidence["project_contract"] = "managed_user_stdio_visible_in_two_projects_v1"
+	evidence["native_surface"] = "real pinned Claude Code process calls UAP-owned User-scope stdio tool from both isolated projects; no vendor auth"
+	defer f.writeEvidence(t, evidence, stages)
+
+	trust, err := json.Marshal(map[string]any{"projects": map[string]any{
+		filepath.ToSlash(f.project): map[string]any{"hasTrustDialogAccepted": true},
+		filepath.ToSlash(f.otherProject): map[string]any{"hasTrustDialogAccepted": true},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeWrite(t, filepath.Join(f.base.ConfigDir, ".claude.json"), trust, 0600)
+	claudeTrustedInitializeProfile(t, f, trust)
+	// The user installation may change its own enabledPlugins settings. Every
+	// separate project file, foreign Skill and foreign cache file remains pinned.
+	delete(f.foreign, filepath.Join(f.base.ConfigDir, "settings.json"))
+
+	copyTree(t, commandsFixtureSource(t), f.base.PackageRoot)
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundled := filepath.Join(f.base.PackageRoot, "bin", filepath.Base(executable))
+	if err := os.MkdirAll(filepath.Dir(bundled), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := linkOrCopyFile(executable, bundled); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(bundled, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	events := filepath.Join(f.base.Root, "managed-user-claude-mcp-methods.log")
+	nativeJSON(t, filepath.Join(f.base.PackageRoot, "mcp.json"), map[string]any{
+		"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+		"mcpServers": map[string]any{"uap_project_fixture": map[string]any{
+			"type": "stdio", "command": "./" + filepath.ToSlash(filepath.Join("bin", filepath.Base(executable))),
+			"args": []string{"-test.run=^TestOpenCodeV2MCPStdioResponder$"},
+			"env": map[string]string{
+				"UAP_OPENCODE_V2_MCP_HELPER": "1",
+				"UAP_OPENCODE_V2_MCP_EVENTS": events,
+			},
+		}},
+	})
+	c := commandsNativeClient{target: "claude", pkg: f.base.PackageRoot,
+		run: func(t *testing.T, label string, args ...string) (map[string]any, error) {
+			t.Helper()
+			if len(args) > 0 && args[0] == "add" {
+				args = append(args, "--no-save")
+			}
+			args = append(args, "--scope", "user")
+			return commandsRunInstaller(t, f.base.Root, f.project, f.base.env(filepath.Dir(f.client)), f.installer, label, args...)
+		},
+	}
+	added := c.succeed(t, "managed-user-mcp-add", "add", c.pkg)
+	outcome, err := commandsTargetOutcome(added)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, _ := outcome["plan"].(map[string]any)
+	if plan["client_id"] != "claude" || plan["scope"] != "user" {
+		t.Fatalf("UAP user installation changed client/scope identity: %v", plan)
+	}
+	var installed string
+	for _, entry := range claudePluginList(t, f.base, f.client, "user-mcp-native-list-after-add") {
+		if entry.ID != claudeCommandsPluginID {
+			continue
+		}
+		if installed != "" || !entry.Enabled || entry.Scope != "user" {
+			t.Fatalf("native user plugin is not uniquely active: %+v", entry)
+		}
+		installed = entry.InstallPath
+	}
+	if installed == "" {
+		t.Fatal("native Claude does not list the UAP-managed user plugin")
+	}
+	nativeRequireContained(t, f.base.Root, installed)
+	manifestBody, err := os.ReadFile(filepath.Join(installed, ".claude-plugin", "plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest map[string]any
+	if json.Unmarshal(manifestBody, &manifest) != nil || manifest["mcpServers"] != "./.mcp.json" {
+		t.Fatal("native User plugin has no owned MCP manifest")
+	}
+	mcpBody, err := os.ReadFile(filepath.Join(installed, ".mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mcp map[string]map[string]any
+	if json.Unmarshal(mcpBody, &mcp) != nil || len(mcp) != 1 {
+		t.Fatal("native User plugin MCP definition is not exact")
+	}
+	server, ok := mcp["uap_project_fixture"]
+	if !ok {
+		t.Fatal("User plugin lacks selected MCP server")
+	}
+	command, _ := server["command"].(string)
+	if !filepath.IsAbs(command) {
+		t.Fatal("User MCP child command is not absolute")
+	}
+	nativeRequireContained(t, installed, command)
+	for _, project := range []string{f.project, f.otherProject} {
+		if _, err := os.Lstat(filepath.Join(project, ".mcp.json")); !os.IsNotExist(err) {
+			t.Fatal("User installation wrote foreign project MCP config")
+		}
+	}
+	f.requireForeign(t)
+	stages["user_install"] = nativeStage{Status: "passed", Reason: "public CLI selected user; native Claude lists exact active owned User plugin and its contained MCP launcher"}
+
+	claudeProjectRunScriptedForTool(t, f, f.project, claudeManagedProjectTool, true)
+	first, err := os.ReadFile(events)
+	if err != nil || len(first) > 2048 {
+		t.Fatal("user-managed subprocess event record absent or unbounded", err)
+	}
+	counts := map[string]int{}
+	for _, method := range strings.Fields(string(first)) {
+		counts[method]++
+	}
+	if counts["initialize"] == 0 || counts["tools/list"] == 0 || counts["tools/call"] != 1 {
+		t.Fatalf("real User MCP call from A missing: %v", counts)
+	}
+	stages["project_A_call"] = nativeStage{Status: "passed", Reason: "real pinned Claude session in A called User MCP and returned uap-pong to local model"}
+
+	claudeProjectRunScriptedForTool(t, f, f.otherProject, claudeManagedProjectTool, true)
+	both, err := os.ReadFile(events)
+	if err != nil || len(both) > 4096 {
+		t.Fatal("second User MCP event record absent or unbounded", err)
+	}
+	calls := 0
+	for _, method := range strings.Fields(string(both)) {
+		if method == "tools/call" {
+			calls++
+		}
+	}
+	if calls != 2 {
+		t.Fatalf("User-scope MCP not available to exactly two distinct projects: calls=%d", calls)
+	}
+	stages["project_B_call"] = nativeStage{Status: "passed", Reason: "independent B process used same User MCP without project-local installation"}
+
+	profilePath := filepath.Join(f.base.ConfigDir, ".claude.json")
+	profile, err := readClaudeTrustedProfile(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parsed map[string]any
+	if json.Unmarshal(profile, &parsed) != nil {
+		t.Fatal("native profile is not JSON")
+	}
+	projects, _ := parsed["projects"].(map[string]any)
+	for _, project := range []string{f.project, f.otherProject} {
+		entry, _ := projects[filepath.ToSlash(project)].(map[string]any)
+		if entry["hasTrustDialogAccepted"] != true {
+			t.Fatal("native session changed explicit project trust")
+		}
+	}
+	f.foreign[profilePath] = nativeSHA(t, profilePath)
+	c.succeed(t, "managed-user-mcp-remove", "remove", commandsPluginName)
+	f.requireForeign(t)
+	for _, entry := range claudePluginList(t, f.base, f.client, "user-mcp-native-list-after-remove") {
+		if entry.ID == claudeCommandsPluginID {
+			t.Fatalf("removed User plugin remains registered: %+v", entry)
+		}
+	}
+	settings, err := os.ReadFile(filepath.Join(f.base.ConfigDir, "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var userSettings map[string]any
+	if json.Unmarshal(settings, &userSettings) != nil {
+		t.Fatal("native User settings became invalid")
+	}
+	enabled, _ := userSettings["enabledPlugins"].(map[string]any)
+	if enabled["foreign-project-fixture@skills-dir"] != false {
+		t.Fatal("foreign user disabled-plugin setting was not preserved")
+	}
+	claudeProjectRunScriptedForTool(t, f, f.project, claudeManagedProjectTool, false)
+	claudeProjectRunScriptedForTool(t, f, f.otherProject, claudeManagedProjectTool, false)
+	afterRemove, err := os.ReadFile(events)
+	if err != nil || !bytes.Equal(afterRemove, both) {
+		t.Fatal("removed User MCP child was re-invoked by a fresh client session")
+	}
+	stages["user_remove"] = nativeStage{Status: "passed", Reason: "UAP remove withdrew User MCP from A/B, while preserving foreign files, disabled settings and trust"}
 }
