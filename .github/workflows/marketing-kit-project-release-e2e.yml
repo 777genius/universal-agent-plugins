@@ -32,6 +32,8 @@ jobs:
           - { target: claude, package: '@anthropic-ai/claude-code@2.1.263' }
           - { target: gemini, package: '@google/gemini-cli@0.66.0' }
           - { target: opencode, package: 'opencode-ai@1.18.34' }
+          # Use the identical fixed Copilot CLI pin from the published-client audit.
+          - { target: copilot, package: '@github/copilot@1.0.105' }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
