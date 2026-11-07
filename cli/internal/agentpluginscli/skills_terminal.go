@@ -252,7 +252,6 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(output)
 }
 
-
 // A partial batch can still deliver some Skills; files do not prove native readiness.
 func renderPartialSkillsReadiness(writer io.Writer, result SkillsBatchResult) error {
 	if result.Status != "partial" {
