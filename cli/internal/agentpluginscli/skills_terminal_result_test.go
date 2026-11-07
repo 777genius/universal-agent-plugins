@@ -63,6 +63,35 @@ func TestSkillsHumanPartialResultPrintsRecoveryWithoutSuccessClaim(t *testing.T)
 	}
 }
 
+func TestSkillsHumanPartialWithAppliedItemsStillReportsUnverifiedNativeReadiness(t *testing.T) {
+	var output bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&output)
+	result := SkillsBatchResult{
+		Status: "partial",
+		Items: []SkillsBatchItem{
+			{Alias: "review", ClientID: "codex", Status: "completed"},
+			{Alias: "docs", ClientID: "claude", Status: "unchanged"},
+			{Alias: "other", ClientID: "opencode", Status: "failed"},
+		},
+		RepairInstructions: []string{"Repair the failed target."},
+	}
+	if err := renderSkillsResult(cmd, &options{format: "human"}, result); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"Skills installation partial",
+		"Files: 2 of 3 target results installed or already up to date; other targets need attention.",
+		"Agent discovery: not verified by this Skills flow.",
+		"Activation: not verified.",
+		"Next: Repair the failed target.",
+	} {
+		if !strings.Contains(output.String(), expected) {
+			t.Fatalf("missing %q in %q", expected, output.String())
+		}
+	}
+}
+
 func TestSkillsHumanCLIEndToEndReportsReadiness(t *testing.T) {
 	journey, _, _ := skillsFullFlowFixture(t)
 	out := journey.run(t, "skills", "add", "acme/skills", "--path", "engineering/review",
