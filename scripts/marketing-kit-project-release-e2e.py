@@ -118,14 +118,18 @@ def main():
             env, project_a, foreign_a, project_foreign_a = run_case(options.cli, options.target, root, "A")
             foreign_a_files = ((foreign_a, "unmanaged user data\n"),
                                (project_foreign_a, "unmanaged project data\n"))
+            foreign_files = list(foreign_a_files)
             version = invoke([options.cli, "version"], env, project_a, 25)
             if version["exit_code"] != 0 or "0.1.101" not in version["stdout_tail"]:
                 raise AssertionError(f"not published 0.1.101: {version}")
             def run(e, p, label, *args):
-                report["steps"].append(execute(options.cli, e, p, label, *args))
+                try:
+                    report["steps"].append(execute(options.cli, e, p, label, *args))
+                finally:
+                    # Also protect foreign state when a lifecycle command refuses/fails.
+                    check_foreign(foreign_files)
             scoped = ("--scope", "project", "--project-root", str(project_a))
             run(env, project_a, "add", "add", "marketing-kit", "--target", options.target, *scoped)
-            check_foreign(foreign_a_files)
             first = identities(inventory(options.cli, env, project_a, options.target), options.target)
             if set(first) != EXPECTED:
                 raise AssertionError(f"mandatory Marketing Kit closure incomplete: {sorted(first)}")
@@ -137,7 +141,6 @@ def main():
                 raise AssertionError(f"wrong locked signed source set: {sorted(lock_ids(project_a))}")
             portable_lock = (project_a / "uap.lock").read_bytes()
             run(env, project_a, "repeat add", "add", "marketing-kit", "--target", options.target, *scoped)
-            check_foreign(foreign_a_files)
             if identities(inventory(options.cli, env, project_a, options.target), options.target) != first:
                 raise AssertionError("repeat add changed installation identities")
             if (project_a / "uap.lock").read_bytes() != portable_lock:
@@ -145,27 +148,24 @@ def main():
             # Real update command, not a mocked planner; unchanged upstream pins
             # are still an observable no-update lifecycle.
             run(env, project_a, "update", "update", "marketing-kit", *scoped)
-            check_foreign(foreign_a_files)
             if set(identities(inventory(options.cli, env, project_a, options.target), options.target)) != EXPECTED:
                 raise AssertionError("update lost a mandatory dependency")
             env_b, project_b, foreign_b, project_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
             foreign_b_files = ((foreign_b, "unmanaged user data\n"),
                                (project_foreign_b, "unmanaged project data\n"))
+            foreign_files.extend(foreign_b_files)
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
             run(env_b, project_b, "cold locked restore", "install", "--locked", "--yes", *scoped_b)
-            check_foreign(foreign_a_files + foreign_b_files)
             if set(identities(inventory(options.cli, env_b, project_b, options.target), options.target)) != EXPECTED:
                 raise AssertionError("cold restore lost required closure")
             if (project_b / "uap.lock").read_bytes() != (project_a / "uap.lock").read_bytes():
                 raise AssertionError("cold restore modified pinned lock")
             run(env_b, project_b, "remove B", "remove", "marketing-kit", *scoped_b)
-            check_foreign(foreign_a_files + foreign_b_files)
             if identities(inventory(options.cli, env_b, project_b, options.target), options.target):
                 raise AssertionError("Project B retains root or mandatory children after remove")
             if set(identities(inventory(options.cli, env, project_a, options.target), options.target)) != EXPECTED:
                 raise AssertionError("Project B removal changed Project A's complete closure")
             run(env, project_a, "remove A", "remove", "marketing-kit", *scoped)
-            check_foreign(foreign_a_files + foreign_b_files)
             if identities(inventory(options.cli, env, project_a, options.target), options.target):
                 raise AssertionError("Project A retains root or mandatory children after remove")
             for e in (env, env_b):
