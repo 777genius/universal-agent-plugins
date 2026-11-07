@@ -553,35 +553,37 @@ test('legacy source variants produce CLI commands without using directory pages 
   }
 });
 
-test('installable filtering skips unsupported records and bounds upstream pagination', async () => {
+test('catalog shows non-installable entries without inventing install commands or extra requests', async () => {
   const catalog = catalogHarness();
-  const first = catalog.respond(0, 200, 0, 200, 175);
-  await first;
-  assert.equal(catalog.requests.length, 2);
-  assert.equal(catalog.requests[1]!.url.searchParams.get('page'), '1');
-  await catalog.respond(1, 200, 1, 200, 0);
-  assert.equal(catalog.state.items.value.length, 225);
+  await catalog.respond(0, 200, 0, 200, 175);
+  assert.equal(catalog.requests.length, 1);
+  assert.equal(catalog.state.items.value.length, 200);
   assert.equal(catalog.state.displayed.value.length, 48);
-  assert.ok(catalog.state.displayed.value.every((item: SkillListing) => skillInstallCommand(item)));
-  catalog.stop();
-});
-
-test('empty unsupported pages stop at a bounded hop limit until the next user action', async () => {
-  const catalog = catalogHarness();
-  for (let page = 0; page < 5; page++) {
-    await catalog.respond(page, 200, page, 200, 200, true);
+  assert.ok(catalog.state.displayed.value.every((item: SkillListing) => !skillInstallCommand(item)));
+  for (const count of [96, 144, 192, 200]) {
+    catalog.state.showMore();
+    assert.equal(catalog.state.displayed.value.length, count);
+    assert.equal(catalog.requests.length, 1);
   }
-  assert.equal(catalog.requests.length, 5);
-  assert.equal(catalog.state.displayed.value.length, 0);
-  assert.equal(catalog.state.hasMore.value, true);
   catalog.state.showMore();
-  assert.equal(catalog.requests.length, 6);
-  await catalog.respond(5, 200, 5, 200, 0);
-  assert.equal(catalog.state.displayed.value.length, 48);
-  assert.equal(catalog.requests.length, 6);
+  assert.equal(catalog.requests.length, 2);
+  await catalog.respond(1, 200, 1, 200, 0, false);
+  assert.equal(catalog.state.items.value.length, 400);
+  assert.equal(catalog.state.displayed.value.length, 248);
+  assert.ok(catalog.state.items.value.some((item: SkillListing) => skillInstallCommand(item)));
   catalog.stop();
 });
 
+test('empty upstream page stops rather than looping on unsupported or missing data', async () => {
+  const catalog = catalogHarness();
+  await catalog.respond(0, 0, 0, 200, 0, true);
+  assert.equal(catalog.requests.length, 1);
+  assert.equal(catalog.state.displayed.value.length, 0);
+  assert.equal(catalog.state.hasMore.value, false);
+  catalog.state.showMore();
+  assert.equal(catalog.requests.length, 1);
+  catalog.stop();
+});
 
 test('Skill search honors API page-zero-only contract even if response advertises more', async () => {
   const catalog = catalogHarness();
@@ -592,8 +594,12 @@ test('Skill search honors API page-zero-only contract even if response advertise
   assert.equal(catalog.requests[1]!.url.searchParams.get('q'), 'frontend');
   await catalog.respond(1, 200, 0, 200, 200, true);
   assert.equal(catalog.requests.length, 2);
-  assert.equal(catalog.state.displayed.value.length, 0);
-  assert.equal(catalog.state.hasMore.value, false);
+  assert.equal(catalog.state.displayed.value.length, 48);
+  assert.ok(catalog.state.displayed.value.every((item: SkillListing) => !skillInstallCommand(item)));
+  assert.equal(catalog.state.hasMore.value, true); // Remaining page-zero candidates, not a second search page.
+  catalog.state.showMore();
+  assert.equal(catalog.requests.length, 2);
+  assert.equal(catalog.state.displayed.value.length, 96);
   catalog.stop();
 });
 

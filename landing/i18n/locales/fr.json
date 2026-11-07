@@ -339,9 +339,9 @@
     "specLink": "Spécification Agent Plugins 1.0",
     "compatibilityLink": "Compatibilité des clients (en anglais)",
     "limitations": "La compatibilité dépend du paquet. La validation du schéma ne prouve ni l’exécution, ni OAuth, ni l’activation. Codex ne prend pas en charge MCP SSE déclaré ; stdio et Streamable HTTP conservent leur prise en charge par les adaptateurs existants.",
-    "versions": "Installateur natif vérifié : CLI 0.1.95 ; nom du paquet npm : universal-agent-plugins ; étiquettes GitHub : agentplugins-v*.",
+    "versions": "Dernier installateur natif stable : GitHub Releases ; paquet npm : universal-agent-plugins ; étiquettes GitHub : agentplugins-v*.",
     "availability": "Paquets manuels et outils compilés depuis les sources",
-    "releaseScope": "GitHub Releases fournit CLI 0.1.95, qui ajoute une API de gestion locale et des extensions natives Pi en portée utilisateur, sans inclure agentplugins author. Homebrew et npm peuvent proposer une version antérieure ; vérifiez avec agentplugins version. Les commandes de création du guide nécessitent une compilation des sources où la création est activée. La référence API générée conserve sa provenance historique de 0.1.65 ; elle ne décrit pas l’installateur actuel.",
+    "releaseScope": "GitHub Releases fournit la dernière CLI stable, avec une API de gestion locale et les extensions natives Pi prises en charge ; elle n’inclut pas agentplugins author. Les versions npm et Homebrew peuvent être en retard : vérifiez agentplugins version. Les commandes author du guide nécessitent une compilation du code source avec cette fonction activée. La référence API générée conserve sa provenance historique de 0.1.65 et ne décrit pas l’installateur actuel.",
     "buildGuideLink": "Ouvrir le guide de création"
   },
   "shell": {
@@ -505,7 +505,7 @@
       "appearance": "Apparence"
     },
     "navigation": {
-      "demo": "Démo",
+      "demo": "VIDÉO",
       "plugins": "Plugins",
       "why": "Pourquoi ça marche",
       "faq": "FAQ",
@@ -513,7 +513,8 @@
       "close": "Fermer le menu de navigation",
       "title": "Menu de navigation",
       "description": "Ouvrez la démo, les plugins, la documentation ou GitHub.",
-      "appearance": "Apparence"
+      "appearance": "Apparence",
+      "agents": "Agents compatibles"
     }
   },
   "registryUi": {
@@ -745,8 +746,8 @@
         "project": "Ce projet",
         "projectHint": "Exécutez ces commandes depuis le dossier du projet. Votre agent peut vous demander de faire confiance au projet ou de l’activer.",
         "projectUnavailable": "L’installation dans un projet n’est pas disponible pour ce paquet.",
-        "marketingKitProjectUnavailable": "Marketing Kit n’est pas encore disponible pour Project : il nécessite une version CLI ultérieure à 0.1.95, et chacune de ses dépendances obligatoires Notion, HubSpot et Playwright doit être admissible à l’installation dans Project.",
-        "pinnedGitFallbackInfo": "La CLI publiée 0.1.95 utilise cette source Git épinglée. Les noms courts du Directory signé pour Project fonctionnent dans le code actuel, mais ne sont pas encore publiés.",
+        "marketingKitProjectUnavailable": "Marketing Kit n’est pas encore disponible pour Project : chacune de ses dépendances obligatoires Notion, HubSpot et Playwright doit prendre en charge l’installation en Project.",
+        "pinnedGitFallbackInfo": "Cette source Git vérifiée et épinglée à un commit précis est une alternative reproductible. La CLI publiée accepte aussi les noms courts du Directory signé en portée Project lorsque le client et tous les composants obligatoires sont admissibles.",
         "selectionUnavailable": "Cette combinaison d’agents et d’emplacement est indisponible. Choisissez un autre agent ou emplacement."
       },
       "outcome": {
@@ -1028,7 +1029,7 @@
     "title": "Utiliser des plugins / Créer des plugins",
     "subtitle": "Installez et gérez des paquets standard, ou écrivez votre propre paquet plugin.json et vérifiez-le avec les outils adaptés.",
     "use": {
-      "badge": "CLI 0.1.95",
+      "badge": "CLI stable",
       "title": "Utiliser des plugins",
       "description": "Recherchez, prévisualisez, installez et gérez des paquets avec l’installateur publié.",
       "cta": "Ouvrir le guide Utiliser"

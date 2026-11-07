@@ -339,9 +339,9 @@
     "specLink": "Agent Plugins 1.0 规范",
     "compatibilityLink": "客户端兼容性（英文）",
     "limitations": "兼容性取决于包。通过模式验证并不证明运行、OAuth 或激活成功。Codex 不支持声明的 MCP SSE；stdio 和 Streamable HTTP 保留现有适配器支持。",
-    "versions": "已验证原生安装器：CLI 0.1.95；npm 包名为 universal-agent-plugins；GitHub 发布标签为 agentplugins-v*。",
+    "versions": "最新稳定版原生安装器：GitHub Releases；npm 包名：universal-agent-plugins；GitHub 发行标签：agentplugins-v*。",
     "availability": "手动编写包，或使用源码创作工具",
-    "releaseScope": "GitHub Releases 提供 CLI 0.1.95，新增本地管理 API 和用户范围的 Pi 原生扩展，其中不包含 agentplugins author。Homebrew 和 npm 的版本可能滞后；请用 agentplugins version 确认。构建指南中的创作命令需要启用创作功能的源码构建。生成的 API 参考保留其历史 0.1.65 来源，不能用于说明当前安装器包含哪些功能。",
+    "releaseScope": "GitHub Releases 提供最新稳定版 CLI，包含本地管理 API 和受支持的 Pi 原生扩展，但不包含 agentplugins author。npm 与 Homebrew 的版本可能滞后；请用 agentplugins version 确认。构建指南中的 author 命令需要支持创作功能的源码构建。生成的 API 参考保留历史 0.1.65 来源，不代表当前安装器的功能。",
     "buildGuideLink": "打开构建指南"
   },
   "shell": {
@@ -505,7 +505,7 @@
       "appearance": "外观"
     },
     "navigation": {
-      "demo": "演示",
+      "demo": "视频",
       "plugins": "插件",
       "why": "为什么它有效",
       "faq": "常见问题解答",
@@ -513,7 +513,8 @@
       "close": "关闭导航菜单",
       "title": "导航菜单",
       "description": "打开演示、插件目录、文档或 GitHub。",
-      "appearance": "外观"
+      "appearance": "外观",
+      "agents": "支持的智能体"
     }
   },
   "registryUi": {
@@ -745,8 +746,8 @@
         "project": "此项目",
         "projectHint": "请在项目文件夹中运行这些命令。代理可能会要求您信任或激活该项目。",
         "projectUnavailable": "此软件包不支持项目安装。",
-        "marketingKitProjectUnavailable": "Marketing Kit 暂不能安装到项目：需要高于 0.1.95 的 CLI 正式版本，且必需的 Notion、HubSpot 和 Playwright 依赖必须分别满足项目安装条件。",
-        "pinnedGitFallbackInfo": "已发布的 CLI 0.1.95 使用这个固定的 Git 来源。当前源码支持在项目中使用签名 Directory 短名称，但该功能尚未发布。",
+        "marketingKitProjectUnavailable": "Marketing Kit 暂不能安装到项目：必需的 Notion、HubSpot 和 Playwright 依赖需要分别支持 Project 范围安装。",
+        "pinnedGitFallbackInfo": "此经过审核并固定到准确提交的 Git 来源是可复现安装的备选方案。已发布的 CLI 也支持在客户端及全部必需组件符合条件时，在 Project 范围使用签名 Directory 短名称。",
         "selectionUnavailable": "所选代理与安装位置的组合不可用。请选择其他代理或位置。"
       },
       "outcome": {
@@ -1028,7 +1029,7 @@
     "title": "使用插件 / 构建插件",
     "subtitle": "安装和管理标准包，或编写自己的 plugin.json 包并使用相应工具检查。",
     "use": {
-      "badge": "CLI 0.1.95",
+      "badge": "稳定版 CLI",
       "title": "使用插件",
       "description": "通过已发布安装器查找、预览、安装和维护包。",
       "cta": "打开使用指南"

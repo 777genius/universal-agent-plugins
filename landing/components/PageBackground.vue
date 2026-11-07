@@ -19,7 +19,7 @@
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
-  /* Prevent blurred decorative orbs from contributing to page-wide scrolling. */
+  /* Keep blurred animated orbs out of the document's scrollable overflow. */
   contain: paint;
 }
 

@@ -105,7 +105,7 @@ Los hallazgos automáticos de seguridad pueden bloquear la instalación. `--secu
 
 El ámbito de proyecto explícito está disponible desde [CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93). Elige un directorio existente e indica el ámbito en cada comando:
 
-Para una entrada revisada y compatible del catálogo, copia su origen Git fijado a un SHA completo y el cliente adecuado. La CLI publicada 0.1.95 todavía necesita esta fuente Git fijada para Project. La versión compilada desde `main` admite nombres cortos del Directory firmado con `--scope project` para clientes compatibles y todas las dependencias obligatorias (por ejemplo, `agentplugins add context7 --target codex --scope project --dry-run`), pero esta función aún no está en una versión pública de la CLI. Sustituye `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` y `PACKAGE_PATH`; si el paquete está en la raíz del repositorio, omite `//PACKAGE_PATH`.
+Para una entrada revisada y compatible del catálogo, la CLI publicada acepta el nombre corto del Directory firmado con ámbito de proyecto explícito cuando el cliente admite todos los componentes obligatorios (por ejemplo, `agentplugins add context7 --target codex --scope project --dry-run`). También puedes usar un origen Git revisado y fijado a un SHA completo. Sustituye `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` y `PACKAGE_PATH`; si el paquete está en la raíz del repositorio, omite `//PACKAGE_PATH`.
 
 Plantilla: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. El comando siguiente usa un commit histórico real de GitLab; no demuestra que esa revisión siga aprobada en el catálogo. Para una instalación nueva, copia la fuente revisada actual del catálogo.
 

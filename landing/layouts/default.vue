@@ -9,19 +9,12 @@
 </template>
 
 <style scoped>
-/* PageBackground is absolutely positioned against Vuetify's positioned wrap,
-   outside the main content's clipping boundary. Clip at its containing block
-   so blurred orbs cannot enlarge the document, without creating a scroll container. */
-.app-layout :deep(.v-application__wrap) {
-  overflow-x: clip;
-}
-
 .app-layout__main {
   flex: 1;
+  /* This is a flex item: wide tables must scroll inside their own region,
+     not increase the width of the entire application and its background. */
   min-width: 0;
+  width: 100%;
   padding-top: 64px;
-  /* Prevent RTL content, wide tables and decorative orbs from widening the
-     document; inner tables retain independent horizontal scrolling. */
-  overflow-x: clip;
 }
 </style>
