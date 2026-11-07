@@ -75,6 +75,9 @@ jobs:
           cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
           echo "UAP_VERIFIED_MIRROR=${RUNNER_TEMP}/uap-registry-mirror" >> "$GITHUB_ENV"
 
+      - name: Verify generated Project and User agent capabilities
+        run: go test -count=1 ./cli/cmd/genclientcapabilities
+
       - name: Install landing dependencies
         working-directory: landing
         run: pnpm install --frozen-lockfile
