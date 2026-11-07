@@ -26,6 +26,9 @@ jobs:
       matrix:
         include:
           - { target: codex, package: '@openai/codex@0.153.4' }
+          # Marketing Kit signed v1 also supports Cursor. Use the independently
+          # SHA-pinned official Cursor Agent package (not mutable install scripts).
+          - { target: cursor, package: '' }
           - { target: claude, package: '@anthropic-ai/claude-code@2.1.263' }
           - { target: gemini, package: '@google/gemini-cli@0.66.0' }
           - { target: opencode, package: 'opencode-ai@1.18.34' }
@@ -40,9 +43,32 @@ jobs:
       - name: Install real released UAP and native client
         env:
           NATIVE_PACKAGE: ${{ matrix.package }}
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          npm install --global universal-agent-plugins@0.1.101 "$NATIVE_PACKAGE"
+          npm install --global universal-agent-plugins@0.1.101
+          if [[ "$TARGET" == cursor ]]; then
+            curl --fail --show-error --silent --location --retry 2 \
+              'https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/x64/agent-cli-package.tar.gz' \
+              --output "$RUNNER_TEMP/cursor-agent.tar.gz"
+            # Reviewed official Homebrew Cask pin, reused from the repository's
+            # existing live-install-remaining-clients.yml (Cursor skill lane).
+            echo "85296944e4600a83c4b764f578d1502bf9c416db200d33a593e8f3ecabfdc294  $RUNNER_TEMP/cursor-agent.tar.gz" | sha256sum --check -
+            mkdir -p "$RUNNER_TEMP/cursor-agent-package" "$RUNNER_TEMP/cursor-bin"
+            python3 - "$RUNNER_TEMP/cursor-agent.tar.gz" "$RUNNER_TEMP/cursor-agent-package" <<'PY'
+          import sys
+          import tarfile
+          with tarfile.open(sys.argv[1], 'r:gz') as archive:
+              archive.extractall(path=sys.argv[2], filter='data')
+          PY
+            executable="$RUNNER_TEMP/cursor-agent-package/dist-package/cursor-agent"
+            test -f "$executable" && test -x "$executable" && test ! -L "$executable"
+            ln -s "$executable" "$RUNNER_TEMP/cursor-bin/cursor-agent"
+            echo "$RUNNER_TEMP/cursor-bin" >> "$GITHUB_PATH"
+            "$executable" --version
+          else
+            npm install --global "$NATIVE_PACKAGE"
+          fi
           test "$(agentplugins version)" = 'agentplugins 0.1.101'
       - name: Exercise actual signed Marketing Kit and three mandatory dependencies
         env:
