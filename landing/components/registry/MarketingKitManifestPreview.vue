@@ -37,6 +37,10 @@ function onEscape(event: KeyboardEvent) {
 function outside(event: PointerEvent) {
   if (root.value && !root.value.contains(event.target as Node)) collapse();
 }
+// Mouse exit must not dismiss a preview while keyboard focus is inside it.
+function onMouseLeave() {
+  if (props.autoCollapse && !root.value?.contains(document.activeElement)) collapse();
+}
 function onFocusOut(event: FocusEvent) {
   if (!root.value?.contains(event.relatedTarget as Node | null)) collapse();
 }
@@ -76,7 +80,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="root" class="marketing-manifest" :class="{ 'marketing-manifest--open': open }"
-    @mouseenter="show" @mouseleave="autoCollapse && collapse()" @focusout="onFocusOut" @keydown.esc="onEscape"
+    @mouseenter="show" @mouseleave="onMouseLeave" @focusout="onFocusOut" @keydown.esc="onEscape"
   >
     <button ref="trigger" type="button" class="marketing-manifest__file" :aria-expanded="open"
       aria-controls="marketing-kit-manifest-preview" @click="toggle">
