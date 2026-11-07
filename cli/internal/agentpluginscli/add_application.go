@@ -158,7 +158,7 @@ func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.Detected
 			}
 		}
 		if len(detected) == 0 {
-			return nil, nil, fmt.Errorf("no eligible detected client; nothing was installed. Install/detect a supported client or address the skipped reasons. --target chatgpt checks package eligibility for ChatGPT; it does not register remote MCP or install the full plugin in ChatGPT Plugins")
+			return nil, nil, fmt.Errorf("no eligible detected client; nothing was installed. Install/detect a supported client or address the skipped reasons. --target chatgptweb checks package eligibility for ChatGPT Web; it does not register remote MCP or install the full plugin in ChatGPT Plugins")
 		}
 		return request.DefaultIDs, allClients, cmd.Context().Err()
 	}
