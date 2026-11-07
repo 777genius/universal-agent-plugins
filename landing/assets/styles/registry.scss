@@ -58,9 +58,24 @@ body,
 #__nuxt {
   min-height: 100%;
 }
+:root,
+body {
+  /* Clip document overflow on all catalog routes while preserving horizontal
+     scrolling inside the agent-support table and other local scroll regions. */
+  overflow-x: clip;
+}
 .registry-surface {
+  /* Clip decorative and animated overflow without hiding horizontal table scrollers. */
+  position: relative;
+  overflow-x: clip;
   color: var(--text);
   line-height: 1.6;
+}
+/* Keep the decorative absolute-positioned backdrop inside the home page,
+   without suppressing the agent matrix's own horizontal scroll region. */
+.unified-home {
+  position: relative;
+  overflow-x: clip;
 }
 button,
 input,

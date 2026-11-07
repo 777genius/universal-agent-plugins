@@ -57,6 +57,9 @@ func renderAddResultErrorWithSecurity(writer io.Writer, format string, envelope 
 	data := newAddResultData(envelope, result, dryRun)
 	data.Security = security
 	data.envelopeResult = addEnvelopeResult(result, commandErr)
+	if commandErr != nil {
+		data.Readiness, data.NextActions = "failed", nil
+	}
 	if format == "json" {
 		return writeJSONOutput(writer, "add", data)
 	}

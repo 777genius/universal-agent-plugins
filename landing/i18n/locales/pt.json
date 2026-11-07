@@ -202,9 +202,9 @@
     "specLink": "Ler a especificação Agent Plugins 1.0",
     "compatibilityLink": "Compatibilidade de clientes (em inglês)",
     "limitations": "A compatibilidade é específica de cada pacote. A validação de esquema não comprova execução, OAuth nem ativação. O Codex não oferece suporte a MCP SSE declarado; stdio e Streamable HTTP mantêm o suporte existente por adaptador.",
-    "versions": "Instalador nativo verificado: CLI 0.1.95; nome do pacote npm: universal-agent-plugins; tags do GitHub: agentplugins-v*.",
+    "versions": "Último instalador nativo estável: GitHub Releases; pacote npm: universal-agent-plugins; tags do GitHub: agentplugins-v*.",
     "availability": "Pacotes manuais e ferramentas compiladas do código-fonte",
-    "releaseScope": "O GitHub Releases fornece o instalador CLI 0.1.95 verificado, com uma API local de gerenciamento e extensões nativas do Pi; ele não inclui agentplugins author. npm e Homebrew são canais de instalação cujas versões podem demorar para receber a atualização; confira a versão da CLI antes de depender do comportamento de uma versão específica. Use uma compilação do código-fonte com criação habilitada para os comandos author do guia Criar. A referência API gerada mantém sua origem histórica de 0.1.65; ela não descreve o instalador atual.",
+    "releaseScope": "O GitHub Releases oferece a CLI estável mais recente, com API local de gerenciamento e extensões nativas do Pi compatíveis; não inclui agentplugins author. As versões no npm e Homebrew podem atrasar; confira agentplugins version. Os comandos author do guia exigem uma compilação de código-fonte com criação habilitada. A referência API gerada preserva sua origem histórica de 0.1.65 e não descreve o instalador atual.",
     "buildGuideLink": "Abrir o guia de criação"
   },
   "shell": {
@@ -294,15 +294,15 @@
       }
     },
     "seo": {
-      "indexTitle": "CLI Universal Agent Plugins {'|'} Instalar Agent Plugins 1.0",
-      "indexDescription": "Instale, atualize, repare e remova Agent Plugins 1.0 entre agentes de IA compatíveis com uma CLI.",
+      "indexTitle": "Plugins e Skills para agentes IA {'|'} Universal Agent Plugins",
+      "indexDescription": "Instale Agent Plugins 1.0, Agent Skills e ferramentas MCP para Codex, Claude Code, Cursor, Gemini CLI e outros. Gerencie globalmente ou por projeto com uma CLI.",
       "downloadTitle": "Baixar a CLI Universal Agent Plugins",
       "downloadDescription": "Instale a CLI Universal Agent Plugins no macOS, Linux ou Windows e gerencie Agent Plugins 1.0 a partir de um comando.",
       "applicationSubCategory": "Gerenciador de plugins de agente",
       "softwareRequirements": "CLI nativa para macOS, Linux e Windows; ou Node.js 22+ para npx",
-      "featureList": "Instalar, inspecionar, atualizar, reparar, trocar fonte e remover Agent Plugins 1.0",
-      "imageAlt": "Universal Agent Plugins - instale plugins entre agentes de IA com uma CLI",
-      "organizationDescription": "Instalador multiagente de código aberto e gerenciador de ciclo de vida para Agent Plugins 1.0."
+      "featureList": "Instalar, inspecionar, atualizar, reparar e remover Agent Plugins 1.0 e Agent Skills globalmente ou por projeto.",
+      "imageAlt": "Universal Agent Plugins: uma CLI para plugins, Skills e ferramentas MCP em vários agentes de IA.",
+      "organizationDescription": "CLI multiagente de código aberto para instalar e gerenciar Agent Plugins 1.0, Agent Skills e ferramentas MCP."
     },
     "hero": {
       "autoLabel": "Escolher agentes no terminal",
@@ -746,8 +746,8 @@
         "project": "Este projeto",
         "projectHint": "Execute estes comandos na pasta do projeto. Seu agente pode pedir que você confie no projeto ou o ative.",
         "projectUnavailable": "A instalação em um projeto não está disponível para este pacote.",
-        "marketingKitProjectUnavailable": "O Marketing Kit ainda não está disponível para Project: exige uma versão da CLI posterior à 0.1.95, e cada dependência obrigatória, Notion, HubSpot e Playwright, deve estar habilitada para instalação em Project.",
-        "pinnedGitFallbackInfo": "A CLI publicada 0.1.95 usa esta origem Git fixada. Os nomes curtos do Directory assinado para Project funcionam no código atual, mas ainda não foram publicados.",
+        "marketingKitProjectUnavailable": "O Marketing Kit ainda não está disponível para Project: cada dependência obrigatória, Notion, HubSpot e Playwright, precisa ser compatível com a instalação em Project.",
+        "pinnedGitFallbackInfo": "Esta origem Git revisada e fixada em um commit exato é uma alternativa reprodutível. A CLI publicada também aceita nomes curtos do Directory assinado em Project quando o cliente e todos os componentes obrigatórios são elegíveis.",
         "selectionUnavailable": "Esta combinação de agentes e local não está disponível. Escolha outro agente ou local."
       },
       "outcome": {
@@ -1029,7 +1029,7 @@
     "title": "Usar plugins / Criar plugins",
     "subtitle": "Instale e gerencie pacotes padrão ou escreva seu próprio pacote plugin.json e verifique com as ferramentas adequadas.",
     "use": {
-      "badge": "CLI 0.1.95",
+      "badge": "CLI estável",
       "title": "Usar plugins",
       "description": "Encontre, visualize, instale e mantenha pacotes com o instalador publicado.",
       "cta": "Abrir o guia de uso"

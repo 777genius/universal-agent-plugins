@@ -79,6 +79,10 @@ jobs:
         working-directory: landing
         run: pnpm install --frozen-lockfile
 
+      - name: Install Chromium for static social preview
+        working-directory: landing
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+
       - name: Prepare Nuxt tooling
         working-directory: landing
         run: |
@@ -96,6 +100,15 @@ jobs:
           pnpm run lint
           pnpm run check:i18n
           pnpm run generate
+
+      - name: Preserve social preview for visual review
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: social-preview-1200x630
+          path: landing/public/og-image.png
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Stage the GitHub Pages base path
         working-directory: landing
@@ -349,6 +362,7 @@ jobs:
     permissions:
       contents: read
     strategy:
+      fail-fast: false
       matrix:
         base: ["/", "/universal-agent-plugins/"]
     env:
@@ -421,6 +435,10 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/docs-tools-root/bin"
           GOBIN="${RUNNER_TEMP}/docs-tools-root/bin" go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@v1.1.0
 
+      - name: Install browser
+        working-directory: landing
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+
       - name: Prepare and validate landing
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -468,10 +486,6 @@ jobs:
       - name: Assemble and validate exact final Pages artifact
         working-directory: landing
         run: pnpm run build:pages
-
-      - name: Install browser
-        working-directory: landing
-        run: pnpm exec playwright install --with-deps --only-shell chromium
 
       - name: Serve assembled artifact at deployment base
         run: |

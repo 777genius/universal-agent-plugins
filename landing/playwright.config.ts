@@ -10,8 +10,7 @@ const webRoot = process.env.UAP_E2E_WEB_ROOT || '.output/public';
 export default defineConfig({
   testDir: './tests/browser',
   timeout: 30_000,
-  // Heavy Nuxt/Chromium E2E overloaded four concurrent browser contexts on CI.
-  // Keep two isolated workers; assertions and coverage stay unchanged.
+  // Bound CI browser contention to two workers while keeping all assertions.
   workers: process.env.CI ? Math.min(2, availableParallelism()) : undefined,
   use: {
     baseURL: `http://127.0.0.1:4173/${repositoryBase ? `${repositoryBase}/` : ''}`,

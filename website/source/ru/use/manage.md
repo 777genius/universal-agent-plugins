@@ -35,9 +35,9 @@ agentplugins outdated --all
 | Клиенту нужны доверие, активация или вход | Выполнить указанные клиентом действия. |
 | Локальный пакет не проходит проверку | Передать автору отчёт и [руководство по проверкам](../build/checks). |
 
-## Локальный API управления (CLI 0.1.95) {#local-management-api}
+## Локальный API управления  {#local-management-api}
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 добавляет `agentplugins manage serve` для приложений, встраивающих установщик,
 и `agentplugins manage discover` для локального обнаружения клиентов и профилей
 без изменений. Обнаружение не запускает клиенты, не проверяет их версии,

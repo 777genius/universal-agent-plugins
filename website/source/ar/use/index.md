@@ -44,7 +44,7 @@ brew install 777genius/agentplugins/agentplugins
 4. [حافظ على الحالة المثبّتة](./manage) باستخدام أوامر العرض والتحديث والإصلاح والإزالة.
 5. استعد مجموعة اعتماديات مشتركة من `uap.toml` و`uap.lock` عند الحاجة.
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) هو المثبّت الأصلي الحالي. يضيف واجهة API للإدارة المحلية وامتدادات Pi الأصلية ضمن نطاق المستخدم. راجع [الإدارة المحلية](./manage#local-management-api) و[توافق Pi](../reference/client-compatibility#pi-native-extensions). قد تختلف الإصدارات بين قنوات التوزيع؛ تحقّق من `agentplugins version` واستخدم المثبّت الأصلي للحصول على الإصدار المتحقق منه.
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) هو المثبّت الأصلي الحالي. يضيف واجهة API للإدارة المحلية وامتدادات Pi الأصلية ضمن نطاق المستخدم والمشروعات المؤهلة. راجع [الإدارة المحلية](./manage#local-management-api) و[توافق Pi](../reference/client-compatibility#pi-native-extensions). قد تختلف الإصدارات بين قنوات التوزيع؛ تحقّق من `agentplugins version` واستخدم المثبّت الأصلي للحصول على الإصدار المتحقق منه.
 
 يتوفر نطاق المشروع الصريح منذ 0.1.93. تعمل معظم الأوامر افتراضيًا ضمن نطاق المستخدم. منذ 0.1.94، يختار `install` دون وسيطة مصدر أو نطاق صريح مشروعًا فقط إذا وُجد ملف عادي باسم `uap.toml` في المجلد الحالي نفسه؛ ولا يبحث في المجلدات الأب. تكون الأولوية للنطاق الصريح. حدّد `--scope project` في أوامر صيانة المشروع. يختلف دعم المشروع وتفعيل العميل بحسب الهدف.
 

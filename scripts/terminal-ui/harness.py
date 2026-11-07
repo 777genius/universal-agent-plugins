@@ -618,7 +618,14 @@ def run_case(name, binary, root, args):
                     check(not re.search(args.selection, clean(session.raw)), 'TTY JSON prompted')
                     check(b'\x1b' not in session.raw, 'TTY JSON emitted terminal controls')
                 elif name == 'json':
-                    check((evidence / 'stdout.raw').read_bytes() == b'', 'argument error contaminated stdout')
+                    body = (evidence / 'stdout.raw').read_bytes()
+                    parsed = json.loads(body)  # Exactly one full JSON document, no trailing prose.
+                    check(parsed.get('schema_version') == 1 and parsed.get('command') == 'agentplugins'
+                          and parsed.get('result') == 'failure', 'missing versioned argument refusal')
+                    error = parsed.get('data', {}).get('error', {})
+                    check(error.get('code') == 'TARGET_REQUIRED'
+                          and error.get('retryable') is False, 'wrong typed missing-target refusal')
+                    check(b'\x1b' not in body, 'ANSI contaminated argument refusal')
                     check('automated installation requires --target' in clean(session.raw), 'missing target diagnostic absent')
                     check(not re.search(args.selection, clean(session.raw)), 'JSON prompted')
                 elif name.startswith('json'):

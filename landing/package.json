@@ -8,8 +8,8 @@
   "packageManager": "pnpm@12.3.4",
   "scripts": {
     "dev": "nuxt dev",
-    "build": "nuxt build",
-    "generate": "nuxt generate",
+    "build": "node ./scripts/render-social-image.mjs && nuxt build",
+    "generate": "node ./scripts/render-social-image.mjs && nuxt generate",
     "build:pages": "node ./scripts/build-pages-artifact.mjs",
     "check:i18n": "node --experimental-strip-types ./scripts/check-i18n.mjs",
     "test:artifact": "node --experimental-strip-types --test ./tests/browser/artifact-*.mjs",

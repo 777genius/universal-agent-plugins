@@ -4,11 +4,8 @@ import { restoreDemoCommands } from '../data/restoreDemo.ts';
 import { tomlExampleTokens } from '../utils/tomlExampleTokens.ts';
 import { marketingKitUserManifest } from '../data/marketingKitDemo.ts';
 
-test('Project and Global keep distinct real CLI verbs and explicit project creation', () => {
-  assert.equal(restoreDemoCommands.project.install,
-    'npx -y universal-agent-plugins install marketing-kit --scope project');
-  assert.equal(restoreDemoCommands.project.restore, 'npx -y universal-agent-plugins install');
-  assert.equal(restoreDemoCommands.project.export, '');
+test('unqualified Marketing Kit Project commands cannot be copied; Global remains released', () => {
+  assert.deepEqual(restoreDemoCommands.project, { install: '', restore: '', export: '' });
   assert.equal(restoreDemoCommands.global.install, 'npx -y universal-agent-plugins install marketing-kit');
   assert.equal(restoreDemoCommands.global.export, 'npx -y universal-agent-plugins deps export');
   assert.equal(restoreDemoCommands.global.restore, 'npx -y universal-agent-plugins deps import --install');
