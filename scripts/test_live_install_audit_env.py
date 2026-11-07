@@ -2431,6 +2431,16 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             self.assertIsNone(actual["exit_code"])
             self.assertIsNone(actual["_json"])
             self.assertEqual(actual["stderr_tail"], "bounded native output capture exceeded")
+            for payload in (b"invalid json", b'{"result":"failed"}'):
+                def invalid(*_args, **kwargs):
+                    kwargs["stdout"].write(payload)
+                    return subprocess.CompletedProcess(["agentplugins"], 0)
+                with patch.object(audit.subprocess, "run", side_effect=invalid):
+                    actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
+                                        capture_files=True)
+                self.assertIsNone(actual["exit_code"])
+                self.assertIsNone(actual["_json"])
+                self.assertEqual(actual["stderr_tail"], "native add success JSON unavailable")
         with patch.object(audit.subprocess, "run",
                           return_value=subprocess.CompletedProcess(
                               ["agentplugins"], 0, stdout='{"result":"success"}',
