@@ -546,10 +546,28 @@ func claudeUserManagedMCPCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	nativeWrite(t, filepath.Join(f.base.ConfigDir, ".claude.json"), trust, 0600)
+	settingsPath := filepath.Join(f.base.ConfigDir, "settings.json")
+	f.keep(t, settingsPath, `{"enabledPlugins":{"foreign-project-fixture@skills-dir":false},"env":{"UAP_FOREIGN_USER_SENTINEL":"preserve-me"}}`)
 	claudeTrustedInitializeProfile(t, f, trust)
-	// The user installation may change its own enabledPlugins settings. Every
-	// separate project file, foreign Skill and foreign cache file remains pinned.
-	delete(f.foreign, filepath.Join(f.base.ConfigDir, "settings.json"))
+	// User installation may change its own enabledPlugins setting. Preserve
+	// unrelated user values while tracking separate foreign files byte-exactly.
+	delete(f.foreign, settingsPath)
+	checkForeignUserSettings := func(stage string) {
+		t.Helper()
+		body, err := os.ReadFile(settingsPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var settings map[string]any
+		if json.Unmarshal(body, &settings) != nil {
+			t.Fatalf("%s: invalid Claude user settings", stage)
+		}
+		enabled, _ := settings["enabledPlugins"].(map[string]any)
+		env, _ := settings["env"].(map[string]any)
+		if enabled["foreign-project-fixture@skills-dir"] != false || env["UAP_FOREIGN_USER_SENTINEL"] != "preserve-me" {
+			t.Fatalf("%s: UAP changed unrelated user settings", stage)
+		}
+	}
 
 	copyTree(t, commandsFixtureSource(t), f.base.PackageRoot)
 	executable, err := os.Executable()
@@ -642,6 +660,7 @@ func claudeUserManagedMCPCall(t *testing.T) {
 		}
 	}
 	f.requireForeign(t)
+	checkForeignUserSettings("after install")
 	stages["user_install"] = nativeStage{Status: "passed", Reason: "public CLI selected user; native Claude lists exact active owned User plugin and its contained MCP launcher"}
 
 	claudeProjectRunScriptedForTool(t, f, f.project, claudeManagedProjectTool, true)
@@ -693,22 +712,11 @@ func claudeUserManagedMCPCall(t *testing.T) {
 	f.foreign[profilePath] = nativeSHA(t, profilePath)
 	c.succeed(t, "managed-user-mcp-remove", "remove", commandsPluginName)
 	f.requireForeign(t)
+	checkForeignUserSettings("after remove")
 	for _, entry := range claudePluginList(t, f.base, f.client, "user-mcp-native-list-after-remove") {
 		if entry.ID == claudeCommandsPluginID {
 			t.Fatalf("removed User plugin remains registered: %+v", entry)
 		}
-	}
-	settings, err := os.ReadFile(filepath.Join(f.base.ConfigDir, "settings.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var userSettings map[string]any
-	if json.Unmarshal(settings, &userSettings) != nil {
-		t.Fatal("native User settings became invalid")
-	}
-	enabled, _ := userSettings["enabledPlugins"].(map[string]any)
-	if enabled["foreign-project-fixture@skills-dir"] != false {
-		t.Fatal("foreign user disabled-plugin setting was not preserved")
 	}
 	claudeProjectRunScriptedForTool(t, f, f.project, claudeManagedProjectTool, false)
 	claudeProjectRunScriptedForTool(t, f, f.otherProject, claudeManagedProjectTool, false)
