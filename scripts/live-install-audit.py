@@ -1641,7 +1641,7 @@ def expected_negative_coverage(row, cli_version=None):
         if (row.get("status") == "prepared-lifecycle-passed"
                 and row.get("prepared_components_only") is True):
             return True
-        # Only these immutable sources in this frozen published 0.1.101
+        # Only these immutable sources in the verified 0.1.95 / 0.1.101
         # catalog have a clean lifecycle but no attributable native component.
         # An unknown or newly unqualified source must still fail this audit.
         non_native_direct_sources = {
@@ -1651,7 +1651,7 @@ def expected_negative_coverage(row, cli_version=None):
             "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e",
         }
         if (row.get("status") == "package-installed-native-unqualified"
-                and cli_version == "agentplugins 0.1.101"
+                and cli_version in ("agentplugins 0.1.95", "agentplugins 0.1.101")
                 and row.get("prepared_components_only") is False
                 and native_files == []
                 and row.get("source") in non_native_direct_sources):
