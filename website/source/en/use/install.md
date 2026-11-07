@@ -150,7 +150,7 @@ Explicit project scope is available in
 [CLI 0.1.93 and later](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
 Choose an existing directory and select scope on each command:
 
-For a compatible reviewed catalog entry, copy its exact commit-pinned Git source and supported target. Published CLI 0.1.95 still needs this pinned Git source for Project. The current source build supports signed Directory short names with `--scope project` for qualifying clients and all required dependencies (for example, `agentplugins add context7 --target codex --scope project --dry-run`); that capability is not yet in a public CLI release. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA`, and `PACKAGE_PATH`; omit `//PACKAGE_PATH` for a repository-root package.
+For an eligible reviewed catalog entry, the published CLI accepts its signed Directory short name with explicit Project scope when the client supports all required components (for example, `agentplugins add context7 --target codex --scope project --dry-run`). Alternatively, use the reviewed exact commit-pinned Git source and compatible target. Replace `OWNER/REPOSITORY`, `FULL_COMMIT_SHA`, and `PACKAGE_PATH`; omit `//PACKAGE_PATH` for a repository-root package.
 
 Template: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. The command below uses a real historical GitLab commit, not a currently reviewed catalog revision. For a new installation, copy the current reviewed source from the catalog.
 

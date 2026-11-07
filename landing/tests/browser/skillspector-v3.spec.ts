@@ -954,7 +954,7 @@ test('unsupported standalone sources retain their explanation and do not imply a
   expect(errors).toEqual([]);
 });
 
-test('unsupported standalone sources do not render cards or fetch reports', async ({
+test('unsupported standalone sources stay visible without Install or report requests', async ({
   page,
 }) => {
   const errors = await offline(page);
@@ -977,11 +977,14 @@ test('unsupported standalone sources do not render cards or fetch reports', asyn
     }),
   );
   await projections(page, registryFixture());
-  // The explicit all-Skills mode must not fetch scanner evidence for an
-  // unsupported, non-installable source.
+  // Listing visibility is separate from install authority and scan coverage.
   await navigate(page, '/plugins/', 'en', '?tab=skills&skillScan=all');
   await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false');
-  await expect(page.locator('.skill-card')).toHaveCount(0);
+  const card = page.locator('.skill-card');
+  await expect(card).toHaveCount(1);
+  await expect(card.locator('.plugin-card__unavailable')).toBeVisible();
+  await expect(card.locator('.skillspector')).toContainText('Not checked');
+  await expect(card.getByRole('button', { name: /Install/ })).toHaveCount(0);
   expect(requests).toEqual([]);
 
   // The explicit scanned filter consults the global publication index.

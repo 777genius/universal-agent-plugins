@@ -777,7 +777,7 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
     'npx -y universal-agent-plugins add context7',
   );
   await expect(page.locator('#build-plugins')).toContainText(
-    'verified CLI 0.1.95 installer',
+    'latest stable CLI',
   );
   await expect(page.locator('#build-plugins')).toContainText(
     'it does not include agentplugins author',

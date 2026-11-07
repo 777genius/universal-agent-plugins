@@ -72,12 +72,12 @@
       "scanFilterLabel": "Cobertura del análisis",
       "scanModes": {
         "scanned": "Con análisis actual",
-        "all": "Todas las Skills instalables"
+        "all": "Todas las Skills"
       },
-      "scanNotice": "Solo se muestran Skills con un análisis ejecutado de la versión publicada. La cobertura parcial se indica; el análisis no garantiza seguridad ni instalación.",
+      "scanNotice": "Se muestran todas las Skills, incluso sin análisis. El análisis no garantiza seguridad ni instalación.",
       "scanNone": "No se encontraron Skills con análisis actual en esta selección limitada.",
-      "scanHelp": "Elige todas las Skills instalables para ver entradas sin análisis actual.",
-      "scanClear": "Ver todas las Skills instalables",
+      "scanHelp": "Selecciona Todas las Skills para ver las que no tienen análisis.",
+      "scanClear": "Ver todas las Skills",
       "scanReportUnavailable": "No se pudieron verificar algunos informes. Se excluyeron esas Skills.",
       "scanSnapshot": "Publicado {date}: {complete} completos, {partial} parciales, {error} fallidos y {pending} sin análisis actual ({stale} con informes anteriores), de {selected} objetivos seleccionados.",
       "scanSnapshotHelp": "Es una instantánea publicada del análisis estático, no un indicador de disponibilidad en vivo ni una garantía de seguridad.",
@@ -95,7 +95,7 @@
         "moreCandidates": "Se pueden revisar más Skills",
         "moreCandidatesHelp": "No hay coincidencias en este grupo. Muestra más para revisar los candidatos restantes.",
         "noMatches": "Ninguna Skill coincide con estos filtros",
-        "noMatchesHelp": "Prueba otra búsqueda o restablece los filtros para ver todas las Skills instalables."
+        "noMatchesHelp": "Modifica la búsqueda o restablece los filtros para ver todas las Skills."
       }
     },
     "directoryPage": {
