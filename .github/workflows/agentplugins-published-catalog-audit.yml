@@ -61,12 +61,15 @@ jobs:
       - name: Attempt real install, repeat, remove, and native cleanup
         if: ${{ !cancelled() }}
         env:
+          # Pull request checkout is a synthetic merge commit; attest the exact PR tip.
+          AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
           AUDIT_KIND: ${{ matrix.kind }}
           AUDIT_TARGET: ${{ matrix.client }}
           AUDIT_LIMIT: ${{ matrix.limit }}
         run: |
           set -euo pipefail
+          [[ "$AUDIT_PR_HEAD_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'PR head attestation missing'; exit 2; }
           python3 scripts/live-install-audit.py \
             --cli "$(command -v agentplugins)" \
             --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" \
