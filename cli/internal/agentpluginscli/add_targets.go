@@ -39,7 +39,7 @@ func selectClient(
 		return client, detectedMap, err
 	}
 	if len(detected) == 0 {
-		return domain.DetectedClient{}, detectedMap, fmt.Errorf("no supported local AI client was detected; use --target chatgpt for ChatGPT, or install/detect another client")
+		return domain.DetectedClient{}, detectedMap, fmt.Errorf("no supported local AI client was detected; use --target chatgptweb for ChatGPT Web, or install/detect another client")
 	}
 	if len(detected) == 1 {
 		return detected[0], detectedMap, nil
@@ -66,7 +66,7 @@ func selectClient(
 
 func selectExplicitClient(target domain.ClientID, rawTarget string, detectedMap map[domain.ClientID]domain.DetectedClient) (domain.DetectedClient, error) {
 	if strings.EqualFold(strings.TrimSpace(rawTarget), "openai") {
-		return domain.DetectedClient{}, fmt.Errorf("target %q is ambiguous; use --target codex or --target chatgpt", rawTarget)
+		return domain.DetectedClient{}, fmt.Errorf("target %q is ambiguous; use --target codex, chatgpt (Desktop), or chatgptweb (Web)", rawTarget)
 	}
 	client, ok := detectedMap[target]
 	if err := selectedDetectionError(target, detectedMap); err != nil {
