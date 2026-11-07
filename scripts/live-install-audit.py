@@ -906,6 +906,27 @@ def grok_prepared_source_survives(response, item, prior_name, prior_uid):
                or (isinstance(n.get("name"), str) and n["name"].startswith(prior_name[:51]))
                for n in nodes)
 
+def codex_marketplace_source_in_case(source, case_root):
+    """Prove physical containment, including Windows extended-length path aliases.
+
+    Compare real directory identity; never permit a lexical prefix or an
+    unresolved source to authorize native plugin removal.
+    """
+    if not source.is_absolute():
+        return False
+    try:
+        root = case_root.resolve(strict=True)
+        selected = source.resolve(strict=True)
+        if selected.is_relative_to(root):
+            return True
+        # Go/Codex may write \\?\-prefixed Windows paths into TOML while
+        # Python's temporary root is spelled as a normal drive path.
+        return any(os.path.samefile(parent, root)
+                   for parent in (selected, *selected.parents))
+    except (OSError, ValueError, RuntimeError):
+        return False
+
+
 def uninstall_native_codex_plugin(identity, home, case_root, env, cwd):
     """Perform the documented *actual* Codex uninstall before attestation.
 
@@ -931,7 +952,7 @@ def uninstall_native_codex_plugin(identity, home, case_root, env, cwd):
         if not isinstance(entry, dict) or entry.get("source_type", "local") != "local":
             return {"completed": False, "reason": "managed local marketplace cannot be verified"}
         source = Path(entry.get("source", ""))
-        if not source.is_absolute() or not source.resolve().is_relative_to(case_root.resolve()):
+        if not codex_marketplace_source_in_case(source, case_root):
             return {"completed": False, "reason": "marketplace source outside disposable case"}
     except (OSError, TypeError, ValueError):
         return {"completed": False, "reason": "cannot parse owned Codex config"}
@@ -1126,7 +1147,16 @@ def initialize_project_skill_git_root(project, env, case_root):
     marker = project / ".git"
     if marker.exists() or marker.is_symlink():
         raise RuntimeError("disposable project Git metadata must be initially absent")
-    result = call([GIT_EXECUTABLE, "-c", "core.hooksPath=/dev/null",
+    # Git for Windows has no POSIX /dev/null. Disable hooks with an empty,
+    # case-owned directory on every OS, never through host Git config.
+    disabled_hooks = case_root / "empty-git-hooks"
+    if disabled_hooks.is_symlink():
+        raise RuntimeError("disposable Git hooks directory is redirected")
+    disabled_hooks.mkdir(exist_ok=True)
+    if (not disabled_hooks.is_dir() or disabled_hooks.is_symlink()
+            or not disabled_hooks.resolve().is_relative_to(case_root.resolve())):
+        raise RuntimeError("disposable Git hooks directory escaped its case")
+    result = call([GIT_EXECUTABLE, "-c", f"core.hooksPath={disabled_hooks.resolve()}",
                    "init", "--quiet"], env, project, 30)
     if (result["exit_code"] != 0 or not marker.is_dir() or marker.is_symlink()
             or not marker.resolve().is_relative_to(project.resolve())):
