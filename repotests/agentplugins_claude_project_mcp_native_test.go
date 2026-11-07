@@ -372,10 +372,10 @@ func claudeProjectManagedMCPCall(t *testing.T) {
 	t.Helper()
 	f := newClaudeProjectNativeFixture(t)
 	stages := map[string]nativeStage{
-		"managed_install": {Status: "not_evaluated", Reason: "not reached"},
+		"managed_install":     {Status: "not_evaluated", Reason: "not reached"},
 		"managed_native_call": {Status: "not_evaluated", Reason: "not reached"},
-		"project_B_no_leak": {Status: "not_evaluated", Reason: "not reached"},
-		"managed_remove": {Status: "not_evaluated", Reason: "not reached"},
+		"project_B_no_leak":   {Status: "not_evaluated", Reason: "not reached"},
+		"managed_remove":      {Status: "not_evaluated", Reason: "not reached"},
 	}
 	evidence := claudeProjectNativeIdentity(t, f)
 	evidence["project_contract"] = "trusted_uap_managed_project_mcp_call_v1"
