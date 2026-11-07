@@ -54,40 +54,42 @@ try {
   assert.equal(data.page, 0);
   assert.equal(data.view, 'popular');
   const cards = page.locator('.skills-catalog .skill-card');
-  // The catalog deliberately hides unusable sources. Compare the deployed UI
-  // with the actual API entries eligible for an install command, not its raw
-  // total. Syntax alone does not prove an installation (native CI does that).
+  // All well-formed API listings remain visible. Install actions require safe
+  // commands; rendering a listing never authorizes an installation.
   const eligible = data.items.filter(item => Boolean(skillInstallCommand(item)));
   const unavailable = data.items.filter(item => !skillInstallCommand(item));
   assert.ok(eligible.length > 0, 'No command-eligible Skills in public catalog');
-  const initial = Math.min(48, eligible.length);
+  const initial = Math.min(48, data.items.length);
   await expect(cards).toHaveCount(initial, { timeout: 30000 });
-  for (let shown = initial; shown < eligible.length; shown = Math.min(shown + 48, eligible.length)) {
+  for (let shown = initial; shown < data.items.length; shown = Math.min(shown + 48, data.items.length)) {
     await page.getByRole('button', { name: /Show more Skills/ }).last().click();
-    await expect(cards).toHaveCount(Math.min(shown + 48, eligible.length));
+    await expect(cards).toHaveCount(Math.min(shown + 48, data.items.length));
   }
 
   const renderedIds = await cards.evaluateAll(nodes =>
     nodes.map(node => node.getAttribute('data-skill-id')));
-  expect(renderedIds).toEqual(eligible.map(item => item.id));
-  for (const item of unavailable) {
-    expect(renderedIds, `Unusable source must be hidden: ${item.id}`).not.toContain(item.id);
-  }
+  expect(renderedIds).toEqual(data.items.map(item => item.id));
 
   report.checked = data.items.length;
   report.installable = eligible.length;
   report.unsupported = unavailable.length;
-  for (const [index, item] of eligible.entries()) {
-    report.legacy_recovered += Number(item.availability === 'unsupported-source');
-    await expect(cards.nth(index).getByRole('button', {
-      name: `Install ${item.title}`, exact: true,
-    }), `Missing installation action: ${item.id}`).toHaveCount(1);
+  for (const [index, item] of data.items.entries()) {
+    const command = skillInstallCommand(item);
+    const install = cards.nth(index).getByRole('button', { name: `Install ${item.title}`, exact: true });
+    if (!command) {
+      await expect(install, `Unsafe Install for ${item.id}`).toHaveCount(0);
+      await expect(cards.nth(index).locator('.plugin-card__unavailable')).toBeVisible();
+    } else {
+      report.legacy_recovered += Number(item.availability === 'unsupported-source');
+      await expect(install, `Missing installation action: ${item.id}`).toHaveCount(1);
+    }
   }
-  const selected = eligible[0]!;
-  await cards.first().getByRole('button', {
+  const firstInstall = data.items.findIndex(item => Boolean(skillInstallCommand(item)));
+  const selected = data.items[firstInstall]!;
+  await cards.nth(firstInstall).getByRole('button', {
     name: `Install ${selected.title}`, exact: true,
   }).click();
-  await expect(cards.first().locator('.command-snippet code')).toHaveText(
+  await expect(cards.nth(firstInstall).locator('.command-snippet code')).toHaveText(
     skillInstallCommand(selected)!,
   );
   // Verify default all-Skills discovery, then opt into current inspected evidence.
@@ -98,7 +100,7 @@ try {
   await expect(defaultCatalog).toHaveAttribute('aria-busy', 'false', { timeout: 90000 });
   await expect(defaultCatalog.getByRole('button', { name: 'Filters', exact: true })).toBeVisible();
   report.default_all_shown = await defaultCatalog.locator('.skill-card').count();
-  assert.ok(report.default_all_shown > 0, 'Default catalog must show installable Skills');
+  assert.ok(report.default_all_shown > 0, 'Default catalog must show all Skills');
   await page.goto('https://universal-agent-plugins.com/plugins/?tab=skills&skillScan=scanned',
     { waitUntil: 'domcontentloaded', timeout: 35000 });
   await expect(defaultCatalog).toHaveAttribute('aria-busy', 'false', { timeout: 90000 });
@@ -190,7 +192,7 @@ try {
     for (const id of visible) {
       assert.ok(id, 'Filtered Skill card must have an exact upstream ID');
       const skill = await actualListing(id!);
-      assert.ok(skill && skillInstallCommand(skill), `Unknown or non-installable Skill: ${id}`);
+      assert.ok(skill, `Unknown Skill from published catalog: ${id}`);
       const subject = publishedScanSubject(skill);
       assert.ok(subject, `Ambiguous published Skill identity: ${id}`);
       const evidence = await client.reportFor(subject.repository);

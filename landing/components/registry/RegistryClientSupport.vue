@@ -230,7 +230,10 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
   }
 }
 
-:global(.v-theme--dark) .registry-client-support__icon--contrast {
+// Scope contrast to monochrome agent icons only. A partial :global selector
+// compiles to ".v-theme--dark { filter: ... }" and filters the entire app,
+// creating a containing block that breaks the fixed orbit and viewport width.
+:global(.v-theme--dark .registry-client-support__icon--contrast) {
   filter: brightness(0) invert(1);
 }
 
