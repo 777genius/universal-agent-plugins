@@ -463,12 +463,24 @@ for (const width of [1280, 390]) {
     const group = assessment.locator('xpath=ancestor::*[contains(@class, "plugin-card__assessments")]');
     const security = group.locator('.plugin-card__security');
     const summary = assessment.locator(':scope > summary');
-    const [reviewBox, scanBox, reviewIcon, scanIcon] = await Promise.all([
-      security.boundingBox(),
-      summary.boundingBox(),
-      security.locator('svg.plugin-card__status-icon').boundingBox(),
-      summary.locator('svg.skillspector__icon').boundingBox(),
-    ]);
+    // Compare four rectangles from a single layout: mobile font loading can reflow
+    // a label between separate asynchronous boundingBox() calls.
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    const { reviewBox, scanBox, reviewIcon, scanIcon } = await group.evaluate((root) => {
+      const security = root.querySelector('.plugin-card__security');
+      const summary = root.querySelector('.skillspector > summary');
+      const bounds = (node: Element | null | undefined) => {
+        if (!node) return null;
+        const { x, y, width, height } = node.getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      return {
+        reviewBox: bounds(security),
+        scanBox: bounds(summary),
+        reviewIcon: bounds(security?.querySelector('svg.plugin-card__status-icon')),
+        scanIcon: bounds(summary?.querySelector('svg.skillspector__icon')),
+      };
+    });
     expect(reviewBox && scanBox && reviewIcon && scanIcon).toBeTruthy();
     await expect(security).toHaveCSS('font-size', '12px');
     await expect(summary).toHaveCSS('font-size', '12px');

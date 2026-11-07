@@ -66,3 +66,11 @@ jobs:
         run: |
           go test -race -count=1 -timeout=3m ./internal/agentpluginscli/skillspicker
           go test -count=1 -timeout=3m ./internal/agentpluginscli -run '^TestSkills(FullCLIEndToEnd|Batch)'
+      - name: Preserve real Go-bridge Skills readiness screenshot
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: skills-picker-readiness-visual-evidence
+          path: ui/skills-picker/test-results/**/live-picker-complete.png
+          if-no-files-found: warn
+          retention-days: 7

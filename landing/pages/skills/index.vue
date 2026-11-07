@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { SkillListing, SkillsView } from '~/types/skillsCatalog';
+import type { InstallScope } from '~/types/registry';
+import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import { skillClients } from '~/data/skillClients';
 import {
   skillDetailIdAvailable,
@@ -85,11 +87,21 @@ const sourceName = computed(() =>
   t('registryUi.skills.externalSource'),
 );
 const isBusy = computed(() => !skill.value && (catalogLoading.value || documentLoading.value));
+const preferences = useInstallPreferencesStore();
+const allowedTargets = skillClients.map((client) => client.id);
 const chooseInTerminal = ref(true);
 const targets = ref<string[]>(['codex']);
+const scope = ref<InstallScope>('user');
+watch(() => skill.value?.id, (id) => {
+  if (!id) return;
+  const saved = preferences.readPackage(`skill:${id}`, allowedTargets);
+  chooseInTerminal.value = saved.autoDetect;
+  targets.value = saved.targetIds.length ? saved.targetIds : ['codex'];
+  scope.value = saved.scope;
+}, { immediate: true });
 const activeTab = ref<'command' | 'prompt'>('command');
 const command = computed(() =>
-  skill.value ? skillInstallCommand(skill.value, chooseInTerminal.value ? undefined : targets.value) : undefined,
+  skill.value ? skillInstallCommand(skill.value, chooseInTerminal.value ? undefined : targets.value, scope.value) : undefined,
 );
 const prompt = computed(() => t('registryUi.skills.detail.promptText', { command: command.value ?? '' }));
 const options = computed(() =>
@@ -105,10 +117,27 @@ const terminalOption = computed(() => ({
   summary: t('registryUi.skills.chooseInTerminal'),
   description: t('registryUi.skills.chooseInTerminalHelp'),
 }));
+function saveChoice() {
+  if (!skill.value) return;
+  preferences.selectPackage(`skill:${skill.value.id}`, {
+    targetIds: targets.value, autoDetect: chooseInTerminal.value, expanded: true, scope: scope.value,
+  }, allowedTargets);
+}
 function updateTargets(values: string[]) {
-  const supported = new Set<string>(skillClients.map((client) => client.id));
+  const supported = new Set<string>(allowedTargets);
   const next = values.filter((value) => supported.has(value));
-  if (next.length) targets.value = next;
+  if (next.length) {
+    targets.value = next;
+    saveChoice();
+  }
+}
+function updateTerminal(value: boolean) {
+  chooseInTerminal.value = value;
+  saveChoice();
+}
+function updateScope(value: InstallScope) {
+  scope.value = value;
+  saveChoice();
 }
 function selectTab(tab: 'command' | 'prompt', focus = false) {
   activeTab.value = tab;
@@ -207,6 +236,11 @@ usePageSeo(
                 :aria-labelledby="'skills-' + activeTab + '-tab'"
                 class="skills-detail__install-body"
               >
+                <InstallScopeSelect
+                  :model-value="scope"
+                  :project-available="true"
+                  @update:model-value="updateScope"
+                />
                 <AppMultiSelect
                   :model-value="targets"
                   :auto-selected="chooseInTerminal"
@@ -215,7 +249,7 @@ usePageSeo(
                   :options="options"
                   :automatic-help="t('registryUi.skills.chooseInTerminalHelp')"
                   @update:model-value="updateTargets"
-                  @update:auto-selected="chooseInTerminal = $event"
+                  @update:auto-selected="updateTerminal"
                 />
                 <CommandSnippet
                   :command="activeTab === 'command' ? command : prompt"

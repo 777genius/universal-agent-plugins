@@ -231,12 +231,15 @@ jobs:
           fi
 
       # Preserve evidence before opt-in live suites, which clear test-results/.
-      - name: Preserve Marketing Kit screenshots from this shard
+      - name: Preserve Marketing Kit and Skills scope screenshots from this shard
         if: always() && steps.browser-e2e.outcome == 'success' && needs.prepare-browser.outputs.scope != 'smoke'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: landing-visual-${{ matrix.index }}
-          path: landing/test-results/**/marketing-kit-*.png
+          path: |
+            landing/test-results/**/marketing-kit-*.png
+            landing/test-results/**/skills-card-project-mobile.png
+            landing/test-results/**/skills-detail-project-mobile.png
           if-no-files-found: ignore
           retention-days: 7
 
@@ -342,6 +345,24 @@ jobs:
         with:
           name: marketing-kit-visual-evidence
           path: landing/marketing-kit-visual-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+      # Preserve the two existing mobile Skills screenshots from the complete suite.
+      - name: Require full-suite Skills scope visual evidence
+        if: needs.prepare-browser.outputs.scope != 'smoke'
+        run: |
+          test "$(find landing/marketing-kit-visual-evidence -type f -name 'skills-card-project-mobile.png' | wc -l)" -gt 0
+          test "$(find landing/marketing-kit-visual-evidence -type f -name 'skills-detail-project-mobile.png' | wc -l)" -gt 0
+
+      - name: Preserve consolidated Skills scope visual QA evidence
+        if: needs.prepare-browser.outputs.scope != 'smoke'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: skills-scope-visual-evidence
+          path: |
+            landing/marketing-kit-visual-evidence/**/skills-card-project-mobile.png
+            landing/marketing-kit-visual-evidence/**/skills-detail-project-mobile.png
           if-no-files-found: error
           retention-days: 7
 
