@@ -12,7 +12,8 @@ export type DependencySaveMode = 'saved' | 'noSave' | 'local' | 'discovery' | 'c
 export function dependencySaveMode(source: string, targets: readonly string[]): DependencySaveMode {
   if (/^(?:\.{1,2}[\\/]|[\\/]|~[\\/]|[A-Za-z]:[\\/])/.test(source)) return 'local';
   if (source.startsWith('discovery:')) return 'discovery';
-  if (targets.length === 1 && targets[0] === 'chatgpt') return 'chatgpt';
+  if (targets.length === 1 && (targets[0] === 'chatgpt' || targets[0] === 'chatgpt-web'))
+    return 'chatgpt';
   // Community selectors are already validated and may be shell-quoted paths.
   const github = isPinnedGitSource(source);
   const directory = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(source) && !source.startsWith('.');
