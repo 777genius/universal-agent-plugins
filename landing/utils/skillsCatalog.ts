@@ -1,4 +1,5 @@
 import type { SkillsView, SkillListing } from '../types/skillsCatalog.ts';
+import type { InstallScope } from '../types/registry.ts';
 import { skillClients } from '../data/skillClients.ts';
 
 const skillTargetIds = new Set<string>(skillClients.map((client) => client.id));
@@ -322,7 +323,9 @@ function unavailablePublisherSkill(source: string, name: string): boolean {
 export function skillInstallCommand(
   skill: SkillListing,
   targets?: readonly string[],
+  scope: InstallScope = 'user',
 ): string | undefined {
+  if (scope !== 'user' && scope !== 'project') return undefined;
   if (!skill || typeof skill !== 'object' || !skill.source ||
       typeof skill.id !== 'string' || typeof skill.source.kind !== 'string')
     return undefined;
@@ -342,6 +345,7 @@ export function skillInstallCommand(
     if (!ids.length || ids.some((id) => !skillTargetIds.has(id))) return undefined;
     tokens.push('--target', ids.join(','));
   }
+  if (scope === 'project') tokens.push('--scope', 'project');
   // Every dynamic token is a validated repository, normative name or known
   // target ID. Unverified names open the CLI picker instead of being guessed.
   // Double quotes preserve Unicode in CMD and CSV in PowerShell; these

@@ -180,7 +180,7 @@ test('manifest morph keeps highlighted TOML lossless, accessible and dismissible
   await page.mouse.move(0, 0);
   await expect(dismiss).toBeFocused();
   await expect(file).toHaveAttribute('aria-expanded', 'true');
-  // Exercise the real keyboard event without re-resolving a possibly detached button.
+  // The Escape handler removes the preview button; press on the page to avoid a detached locator retry.
   await page.keyboard.press('Escape');
   await expect(file).toBeFocused();
   await expect(file).toHaveAttribute('aria-expanded', 'false');

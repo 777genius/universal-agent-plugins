@@ -22,12 +22,38 @@ test('cross-folder selection, safe preview, explicit review and completed result
   await expect(page.getByRole('dialog')).toContainText('Review installation');
   await expect(page.getByRole('dialog').locator('.plan-action')).toHaveCount(2);
   await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Installation complete' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Installation applied' })).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Skills readiness' })).toContainText('Activation: Not verified');
   expect(fixture.counts()).toMatchObject({ applyCount: 1, planCount: 1, scanCount: 0 });
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Installation complete' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Installation applied' })).toBeVisible();
   await page.getByRole('checkbox', { name: 'Select engineering/review', exact: true }).check();
   await expect(page.getByRole('region', { name: 'Installation progress' })).toContainText('Previous installation result');
+});
+
+test('partial result limits file readiness to successful and unchanged targets', async ({ page }) => {
+  const state = await serveFixtures(page);
+  const operation = await fixture<Operation>('operation');
+  await page.route('**/api/v1/operations/*', (route) => route.fulfill({ json: {
+    ...operation, state: 'partial', total: 3, completed: 3,
+    items: [
+      { ...operation.items[0], status: 'succeeded' },
+      { ...operation.items[1], status: 'unchanged' },
+      { ...operation.items[1], targetId: 'failed-target', status: 'failed', message: 'Write refused' },
+    ],
+    result: { message: '2 of 3 targets applied', repairInstructions: ['Repair the failed target.'] },
+  } }));
+  await page.goto('/#capability=test-capability');
+  await page.getByRole('checkbox', { name: 'Select docs/review', exact: true }).check();
+  await page.getByRole('checkbox', { name: `Target ${state.targets.targets[0].label}` }).check();
+  await page.locator('.bottom-bar').getByRole('button', { name: 'Review installation' }).click();
+  await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Installation needs attention' })).toBeVisible();
+  const readiness = page.getByRole('status', { name: 'Skills readiness' });
+  await expect(readiness).toContainText('Files: 2 of 3 targets installed or already up to date; others need attention.');
+  await expect(readiness).toContainText('Agent discovery: Not verified');
+  await expect(readiness).toContainText('Activation: Not verified');
+  await expect(page.getByRole('region', { name: 'Installation progress' })).toContainText('Write refused');
 });
 
 test('lost apply response recovers the fast terminal operation without another apply', async ({ page }) => {
@@ -37,7 +63,7 @@ test('lost apply response recovers the fast terminal operation without another a
   await page.getByRole('checkbox', { name: `Target ${fixture.targets.targets[0].label}` }).check();
   await page.locator('.bottom-bar').getByRole('button', { name: 'Review installation' }).click();
   await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Installation complete' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Installation applied' })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(fixture.counts().applyCount).toBe(1);
 });
@@ -68,7 +94,7 @@ test('stale apply refuses confirmation and preserves basket', async ({ page }) =
   await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Plan is stale');
   await expect(page.getByLabel('Selection basket')).toContainText('docs/review');
-  await expect(page.getByRole('heading', { name: 'Installation complete' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Installation applied' })).toHaveCount(0);
 });
 
 test('1000 candidates stay virtualized and local search does not rescan', async ({ page }) => {
