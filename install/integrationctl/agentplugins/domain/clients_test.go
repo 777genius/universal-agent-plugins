@@ -46,7 +46,10 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 }
 
 func TestPublicTargetFlagNamesKeepCanonicalWebIdentity(t *testing.T) {
-	for _, tc := range []struct{ id ClientID; want string }{
+	for _, tc := range []struct {
+		id   ClientID
+		want string
+	}{
 		{ClientCodex, "codex"},
 		{ClientChatGPT, "chatgptweb"},
 		{ClientCursor, "cursor"},
