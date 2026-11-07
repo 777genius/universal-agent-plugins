@@ -28,6 +28,8 @@ test.beforeEach(async ({ page }) => {
 
 for (const width of [1440, 1024, 390, 320]) {
   test(`hero controls and all client links remain complete at ${width}px`, async ({ page }) => {
+    // Validate every client link and loaded icon at four widths without a CI-contention timeout.
+    test.setTimeout(60_000);
     await page.setViewportSize({ width, height: width >= 1024 ? 1000 : 844 });
     await page.goto('./');
     await waitForCommand(page);
@@ -160,7 +162,7 @@ test('selected targets produce one complete copyable command with keyboard activ
 test('catalog reveal is early on navigation, compact trust badges stay compact, and video preview waits for a real Mux asset', async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.setViewportSize({ width: 1440, height: 600 });
   const gotoReadyHome = async (url = './') => {

@@ -39,16 +39,16 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 менеджеру Node.js не нужен; отдельным плагинам могут требоваться свои среды.
 Для npm проверьте `npx universal-agent-plugins version`: пакетный канал может
 ещё поставлять предыдущий CLI. Автоматический выбор ниже требует 0.1.94;
-для проверенного выпуска используйте нативный установщик. Явные проектные
-команды этого руководства также работают в 0.1.93.
+для проверенного выпуска используйте нативный установщик. Пример Project с Git-источником, закреплённым полным SHA, работает и в 0.1.93;
+короткие имена подписанного Directory в Project требуют актуальную стабильную CLI.
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 сохраняет явную область проекта и автоматический выбор для `install`, добавленный
 в 0.1.94. Также доступны [локальный API управления](../use/manage#local-management-api)
 и [нативные расширения Pi](../reference/client-compatibility#pi-native-extensions).
 План добавления пакета в проект:
 
-Для проекта возьмите из проверенной карточки каталога точный Git-источник с полным SHA коммита и совместимый агент. Опубликованному CLI 0.1.95 для Project ещё нужен этот закреплённый Git-источник. Текущая сборка из `main` поддерживает короткие имена подписанного Directory с `--scope project` для совместимых клиентов и всех обязательных зависимостей (например, `agentplugins add context7 --target codex --scope project --dry-run`), но в публичном релизе этой функции пока нет. Замените `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` и `PACKAGE_PATH`; для пакета в корне репозитория уберите `//PACKAGE_PATH`.
+Для совместимого проверенного пакета используйте короткое имя из подписанного Directory с явной областью Project, если выбранный агент поддерживает все обязательные компоненты (например, `agentplugins add context7 --target codex --scope project --dry-run`). Для воспроизводимой установки можно вместо этого указать Git-источник с полным SHA коммита. Замените `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` и `PACKAGE_PATH`; для пакета в корне репозитория уберите `//PACKAGE_PATH`.
 
 Шаблон: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`. Команда ниже использует реальный исторический коммит GitLab, а не подтверждение текущей проверки в каталоге. Для новой установки скопируйте актуальный проверенный источник из каталога.
 

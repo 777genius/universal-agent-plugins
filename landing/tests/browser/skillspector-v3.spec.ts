@@ -463,12 +463,24 @@ for (const width of [1280, 390]) {
     const group = assessment.locator('xpath=ancestor::*[contains(@class, "plugin-card__assessments")]');
     const security = group.locator('.plugin-card__security');
     const summary = assessment.locator(':scope > summary');
-    const [reviewBox, scanBox, reviewIcon, scanIcon] = await Promise.all([
-      security.boundingBox(),
-      summary.boundingBox(),
-      security.locator('svg.plugin-card__status-icon').boundingBox(),
-      summary.locator('svg.skillspector__icon').boundingBox(),
-    ]);
+    // Compare four rectangles from a single layout: mobile font loading can reflow
+    // a label between separate asynchronous boundingBox() calls.
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    const { reviewBox, scanBox, reviewIcon, scanIcon } = await group.evaluate((root) => {
+      const security = root.querySelector('.plugin-card__security');
+      const summary = root.querySelector('.skillspector > summary');
+      const bounds = (node: Element | null | undefined) => {
+        if (!node) return null;
+        const { x, y, width, height } = node.getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      return {
+        reviewBox: bounds(security),
+        scanBox: bounds(summary),
+        reviewIcon: bounds(security?.querySelector('svg.plugin-card__status-icon')),
+        scanIcon: bounds(summary?.querySelector('svg.skillspector__icon')),
+      };
+    });
     expect(reviewBox && scanBox && reviewIcon && scanIcon).toBeTruthy();
     await expect(security).toHaveCSS('font-size', '12px');
     await expect(summary).toHaveCSS('font-size', '12px');
@@ -476,7 +488,15 @@ for (const width of [1280, 390]) {
     expect(scanIcon!.width).toBe(18);
     expect(Math.abs(reviewIcon!.x - scanIcon!.x)).toBeLessThan(1);
     expect(Math.abs(reviewIcon!.y + 9 - (reviewBox!.y + reviewBox!.height / 2))).toBeLessThan(1);
-    expect(Math.abs(scanIcon!.y + 9 - (scanBox!.y + scanBox!.height / 2))).toBeLessThan(1);
+    // SkillSpector data may resolve while the label is wrapping on mobile.
+    // Read both rectangles in the same browser frame, then assert alignment.
+    await expect.poll(() => summary.evaluate((element) => {
+      const icon = element.querySelector('svg.skillspector__icon');
+      if (!icon) return Infinity;
+      const box = element.getBoundingClientRect();
+      const iconBox = icon.getBoundingClientRect();
+      return Math.abs(iconBox.y + iconBox.height / 2 - (box.y + box.height / 2));
+    })).toBeLessThan(1);
     expect(scanBox!.y - reviewBox!.y - reviewBox!.height).toBeGreaterThanOrEqual(3);
     expect(scanBox!.y - reviewBox!.y - reviewBox!.height).toBeLessThanOrEqual(5);
     await expect(summary.locator('svg.skillspector__arrow')).toHaveCount(1);

@@ -105,7 +105,7 @@ agentplugins skills add owner/repository --skill review --skill pdf \
 
 स्पष्ट प्रोजेक्ट स्कोप [CLI 0.1.93 और उसके बाद](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93) उपलब्ध है। मौजूदा डायरेक्टरी चुनें और हर कमांड में स्कोप दें:
 
-संगत और समीक्षा की गई कैटलॉग प्रविष्टि के लिए पूरा commit SHA वाला Git स्रोत और उपयुक्त एजेंट चुनें। प्रकाशित CLI 0.1.95 में Project के लिए अभी यह पिन किया हुआ Git स्रोत आवश्यक है। वर्तमान `main` से बनी CLI योग्य क्लाइंट और सभी आवश्यक निर्भरताओं के लिए हस्ताक्षरित Directory के छोटे नामों के साथ `--scope project` समर्थित करती है (जैसे `agentplugins add context7 --target codex --scope project --dry-run`), लेकिन यह सुविधा अभी सार्वजनिक CLI रिलीज़ में नहीं है। `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` और `PACKAGE_PATH` बदलें; पैकेज रिपॉज़िटरी की जड़ में हो तो `//PACKAGE_PATH` हटाएँ।
+संगत और समीक्षा किए गए कैटलॉग पैकेज के लिए प्रकाशित CLI हस्ताक्षरित Directory का छोटा नाम स्पष्ट Project स्कोप में स्वीकार करती है, बशर्ते चुना गया क्लाइंट सभी आवश्यक घटकों का समर्थन करे (उदाहरण: `agentplugins add context7 --target codex --scope project --dry-run`)। वैकल्पिक रूप से समीक्षा किए गए Git स्रोत का पूरा commit SHA और उपयुक्त क्लाइंट चुनें। `OWNER/REPOSITORY`, `FULL_COMMIT_SHA` और `PACKAGE_PATH` बदलें; पैकेज रिपॉज़िटरी की जड़ में हो तो `//PACKAGE_PATH` हटाएँ।
 
 टेम्पलेट: `github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH`। नीचे दिया कमांड GitLab के वास्तविक ऐतिहासिक कमिट का उदाहरण है; इसका अर्थ यह नहीं कि वह संस्करण अभी कैटलॉग में समीक्षित है। नई स्थापना के लिए कैटलॉग से मौजूदा समीक्षित स्रोत लें।
 

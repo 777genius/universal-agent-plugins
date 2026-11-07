@@ -217,6 +217,7 @@ test('contradictory duplicate source states fail both filters closed at the veri
   await page.route('**/reports/skillspector/v3/index.json', route => route.fulfill({ json: forged }));
   for (const query of ['skillScan=scanned', 'skillRemarks=none']) {
     await page.goto(`plugins/?tab=skills&${query}`);
+    // CI can hydrate verified shard data after the default 5s assertion window.
     await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false', { timeout: 30_000 });
     await expect(cards(page)).toHaveCount(0);
     await expect(page.getByText('Some scan reports could not be verified. Those Skills were excluded.')).toBeVisible();

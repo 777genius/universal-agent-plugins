@@ -3,8 +3,8 @@ export type RestoreDemoMode = 'project' | 'global';
 /** CLI examples, not an alternative to signed distribution/scope eligibility. */
 export const restoreDemoCommands = {
   project: {
-    install: 'npx -y universal-agent-plugins install marketing-kit --scope project',
-    restore: 'npx -y universal-agent-plugins install',
+    install: '',
+    restore: '',
     export: '',
   },
   global: {

@@ -25,7 +25,8 @@ function readJson<T>(fileName: string, fallback: T): T {
 
 export { docsBasePath, docsHostname };
 const docsBaseUrl = new URL(docsBasePath, docsHostname).toString();
-const socialImageUrl = new URL("og-docs.svg", docsBaseUrl).toString();
+// Share the crawler-compatible social PNG from the product root at either Pages base.
+const socialImageUrl = new URL("../og-image.png?v=20261106", docsBaseUrl).toString();
 const entities = readJson<RegistryEntity[]>("entities.json", []);
 requirePublicationBoundary(entities);
 const entityByCanonicalId = new Map(
@@ -94,10 +95,16 @@ export const sharedConfig = defineConfig({
       ["meta", { property: "og:title", content: pageTitle }],
       ["meta", { property: "og:description", content: pageDescription }],
       ["meta", { property: "og:image", content: socialImageUrl }],
-      ["meta", { name: "twitter:card", content: "summary" }],
+      ["meta", { property: "og:image:secure_url", content: socialImageUrl }],
+      ["meta", { property: "og:image:type", content: "image/png" }],
+      ["meta", { property: "og:image:width", content: "1200" }],
+      ["meta", { property: "og:image:height", content: "630" }],
+      ["meta", { property: "og:image:alt", content: "Universal Agent Plugins for AI agents, Skills, and MCP tools" }],
+      ["meta", { name: "twitter:card", content: "summary_large_image" }],
       ["meta", { name: "twitter:title", content: pageTitle }],
       ["meta", { name: "twitter:description", content: pageDescription }],
-      ["meta", { name: "twitter:image", content: socialImageUrl }]
+      ["meta", { name: "twitter:image", content: socialImageUrl }],
+      ["meta", { name: "twitter:image:alt", content: "Universal Agent Plugins for AI agents, Skills, and MCP tools" }]
     ] as [string, Record<string, string>][];
 
     if (isRetiredArchive(relativePath)) {

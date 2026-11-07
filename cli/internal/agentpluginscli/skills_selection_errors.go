@@ -30,7 +30,16 @@ func emitSkillsSelectionIssue(cmd *cobra.Command, opts *options, issue skillsSel
 		issue.Candidates = []skillspicker.Candidate{}
 	}
 	if opts.format == "json" {
-		if err := json.NewEncoder(cmd.OutOrStdout()).Encode(issue); err != nil {
+		data := struct {
+			Code          string                   `json:"code"`
+			Message       string                   `json:"message"`
+			Candidates    []skillspicker.Candidate `json:"candidates"`
+			SchemaVersion int                      `json:"schema_version"`
+			Command       string                   `json:"command"`
+			Result        string                   `json:"result"`
+			Error         AgentFailure             `json:"error"`
+		}{issue.Code, issue.Message, issue.Candidates, outputSchemaVersion, "skills add", outputResultFailure, classifyAgentFailure(issue)}
+		if err := json.NewEncoder(cmd.OutOrStdout()).Encode(data); err != nil {
 			return errors.Join(issue, err)
 		}
 		return issue

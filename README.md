@@ -118,7 +118,7 @@ The native scripts verify the download's checksum and version, then install to
 `$HOME/.local/bin`. Add that directory to `PATH` to use `agentplugins` by name.
 Plugins may need additional runtimes; see [installation help](docs/NATIVE_INSTALL.md).
 
-Version-specific guidance uses [CLI **0.1.95**](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95).
+For the latest stable native installer, see [GitHub Releases](https://github.com/777genius/universal-agent-plugins/releases/latest).
 Check `agentplugins version`: npm and Homebrew can lag behind native releases.
 Code in `main` may not be released yet.
 
@@ -130,6 +130,8 @@ Code in `main` may not be released yet.
 - Reports any remaining approval, sign-in, or reload steps.
 
 ## More capabilities
+
+For AI-agent / headless installation, see the [agent-first CLI guide](docs/AGENT_CLI.md): explicit targets and scope, read-only Skills discovery, JSON results, and lifecycle verification. New source-only commands are labelled separately from released CLI behavior.
 
 | Need | How UAP helps |
 | --- | --- |
@@ -150,12 +152,12 @@ separate checkpoints. Check each target's result after a multi-agent operation.
 Use `--scope project` (CLI 0.1.93+) to install in one repository without changing
 your user setup.
 
-**Signed Directory short names (current `main` source)**
+**Signed Directory short names**
 
 Merged installer PR #725 supports explicit Project placement for an eligible
 signed package and its required dependencies, using each selected client's
 real Project capabilities. Historical User runtime evidence is not Project
-activation evidence. In a CLI built from current `main`:
+activation evidence. In the published stable CLI:
 
 ```sh
 cd /path/to/project
@@ -165,8 +167,8 @@ agentplugins add context7 --target codex --scope project --dry-run
 Review the plan before omitting `--dry-run`. Unsupported clients or mandatory
 components fail closed; there is no implicit User fallback.
 
-**Published CLI 0.1.95** predates PR #725. Until the new command is released,
-copy a compatible exact Git source from the [catalog](https://universal-agent-plugins.com/plugins/)
+**Alternative: exact Git source.** For reproducibility, copy a compatible,
+commit-pinned Git source from the [catalog](https://universal-agent-plugins.com/plugins/)
 and replace the placeholders:
 
 ```sh
@@ -176,7 +178,7 @@ agentplugins add github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH \
 ```
 
 Use a full 40-character commit SHA; omit `//PACKAGE_PATH` for a root package.
-Direct Git is a released-CLI fallback, not a signed Directory alias. Neither
+Direct Git is an alternative to a signed Directory alias. Neither
 route bypasses native client trust or complete dependency authorization.
 
 **Share and restore**
@@ -299,9 +301,10 @@ for tested versions, platforms, and setup steps.
 <details>
 <summary>Client-specific setup and limits</summary>
 
-CLI 0.1.95 supports [native Pi extensions](docs/PI_NATIVE_EXTENSION_CONTRACT.md)
-for your user account. Pi project Extensions, Skills, and MCP support require
-newer source builds; they are not included in that release.
+The stable CLI supports [native Pi extensions](docs/PI_NATIVE_EXTENSION_CONTRACT.md)
+for user scope and eligible project scope. Pi Skills and MCP have separate
+client-specific evidence and activation requirements; check the
+[project compatibility matrix](docs/PROJECT_CLIENT_SUPPORT.md).
 
 Grok Build, Kimi Code, and Qoder support stdio and Streamable HTTP MCP in user
 scope. Qoder also preserves native hooks, commands, and bundled binaries.
@@ -405,7 +408,7 @@ Use the [Go SDK](sdk/README.md) for typed agent hooks and
 to embed plugin management in your app.
 
 The [TypeScript SDK](sdks/typescript/README.md),
-`universal-agent-plugins-management-sdk`, calls the CLI's local API (0.1.95+).
+`universal-agent-plugins-management-sdk`, calls the CLI's local management API.
 Pin compatible SDK and CLI versions separately; see the
 [management guide](https://universal-agent-plugins.com/docs/en/use/manage.html#local-management-api).
 
