@@ -39,6 +39,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # Windows Git may transparently rewrite text files to CRLF.
+        # Keep the signed fixture's raw bytes equal to the pinned Git revision.
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
         with:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -48,6 +54,12 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+
+      - name: Prove immutable fixture bytes were not rewritten by checkout
+        shell: pwsh
+        run: |
+          python -c "import pathlib,subprocess; f='tests/live-install/fixtures.json'; expected=subprocess.check_output(['git','show','HEAD:'+f]); actual=pathlib.Path(f).read_bytes(); assert expected==actual, 'checkout rewrote frozen fixture bytes'"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Require portable disposable Git project and isolated environment
         shell: pwsh
