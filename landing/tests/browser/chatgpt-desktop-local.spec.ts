@@ -89,3 +89,50 @@ test('detail page uses the same Desktop target in both themes', async ({ page })
   await expect(guide).toHaveCSS('color', 'rgb(224, 230, 255)');
   expect(errors).toEqual([]);
 });
+
+function signedMixedSurfaceFixture() {
+  const index = desktopFixture(true);
+  const distribution = index.plugins[0]!.distributions[0]!;
+  const release = distribution.releases[0]!;
+  release.targets.push({
+    client: 'chatgpt',
+    scopes: ['user'],
+    delivery: 'manual_activation',
+    authentication: 'unknown',
+    app_binding: { app_key: 'context7', id: 'asdk_app_verified_test', mcp_server: 'context7' },
+  });
+  distribution.targets = release.targets;
+  distribution.compatible_clients = ['codex', 'chatgpt'];
+  return index;
+}
+
+for (const width of [1440, 390]) {
+  test('signed Desktop and Web selection keeps one CLI command and explicit setup at ' + width + 'px', async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors = await offline(page);
+    await projections(page, signedMixedSurfaceFixture());
+    await navigate(page, '/', 'en', '?q=i18n-state-00');
+    const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
+    await card.locator('.plugin-card__install-toggle').click();
+    await card.locator('.app-multiselect__trigger').click();
+    const desktop = page.getByRole('checkbox', { name: /^ChatGPT Desktop/ });
+    const web = page.getByRole('checkbox', { name: /^ChatGPT Web/ });
+    await expect(desktop).toBeEnabled();
+    await expect(web).toBeEnabled();
+    await desktop.click();
+    await web.click();
+    await page.keyboard.press('Escape');
+    const snippet = card.locator('.plugin-card__install .command-snippet');
+    const code = snippet.locator('code');
+    await expect(code).toHaveText(/--target (chatgpt-desktop,chatgpt-web|chatgpt-web,chatgpt-desktop) --no-save$/);
+    const command = (await code.textContent())?.trim() ?? '';
+    expect(command.match(/chatgpt-desktop/g)).toHaveLength(1);
+    expect(command.match(/chatgpt-web/g)).toHaveLength(1);
+    expect(command).not.toMatch(/--target .*\bcodex\b/);
+    await snippet.locator('button').click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
+    await expect(card.locator('.desktop-guide')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}
