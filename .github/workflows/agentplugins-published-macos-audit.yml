@@ -12,6 +12,10 @@ on:
       - 'scripts/run-native-client-matrix.py'
       - 'tests/live-install/fixtures.json'
   # Deep real-client catalog is weekly; two-source smoke stays on PRs.
+  # Newly published npm releases are requalified after the publisher completes.
+  workflow_run:
+    workflows: ['Agentplugins NPM Publish']
+    types: [completed]
   schedule:
     - cron: '19 4 * * 5'
   workflow_dispatch:
@@ -36,6 +40,7 @@ concurrency:
 
 jobs:
   resolve-release:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
       version: ${{ inputs.version }}
