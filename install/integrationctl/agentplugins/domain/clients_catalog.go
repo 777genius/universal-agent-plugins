@@ -267,8 +267,10 @@ var clientAliases = map[string]ClientID{
 	"devin":          ClientWindsurf,
 	"grok-build":     ClientGrok,
 	"kimi-code":      ClientKimi,
-	"qoder-cli":      ClientQoder,
-	"qoder-desktop":  ClientQoder,
+	"qoder-cli":       ClientQoder,
+	"qoder-desktop":   ClientQoder,
+	"chatgpt-desktop": ClientCodex,
+	"chatgpt-web":     ClientChatGPT,
 }
 
 // ParseClientID folds case and whitespace, maps known aliases onto canonical
