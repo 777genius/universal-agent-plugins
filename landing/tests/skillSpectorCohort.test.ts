@@ -32,7 +32,7 @@ const stable = (value: unknown): string => {
 const canonical = (value: unknown) => encode.encode(stable(value) + '\n');
 const b64 = (v: Uint8Array) => btoa(String.fromCharCode(...v));
 
-async function fixture(options: { rejectedReference?: boolean; sitemapRevision?: string } = {}) {
+async function fixture(options: { rejectedReference?: boolean; sitemapRevision?: string | string[] } = {}) {
   const pair = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
   const trusted = [{ key_id: 'cohort-test', public_key: b64(new Uint8Array(
     await crypto.subtle.exportKey('raw', pair.publicKey))) }];
@@ -154,10 +154,12 @@ test('reviewed sitemap revision rotation preserves signed evidence and rejects u
     assert.equal(cohort?.records.get(f.records[0]!.id)?.source.revision, revision);
     assert.equal(cohort?.records.get(f.records[2]!.id)?.finding_count, 1);
   }
-  const unreviewed = await fixture({ sitemapRevision: '0'.repeat(40) });
-  await assert.rejects(() => readVerifiedSkillSpectorCohort(
-    latest, unreviewed.trusted, unreviewed.fetcher, at,
-  ));
+  for (const unreviewedRevision of ['0'.repeat(40), ['be4142b25bba6d424962a7788432dd813e6b768c']]) {
+    const unreviewed = await fixture({ sitemapRevision: unreviewedRevision });
+    await assert.rejects(() => readVerifiedSkillSpectorCohort(
+      latest, unreviewed.trusted, unreviewed.fetcher, at,
+    ));
+  }
 });
 
 test('unregistered key never fetches; signature tampering and expiration reject', async () => {
