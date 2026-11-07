@@ -379,7 +379,7 @@ func TestContext7ExplicitCodexAndChatGPTTwoStageInstall(t *testing.T) {
 			}
 			var response struct {
 				Data struct {
-					Status string `json:"status"`
+					Status  string            `json:"status"`
 					Targets []addTargetResult `json:"targets"`
 				} `json:"data"`
 			}
