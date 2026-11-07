@@ -24,7 +24,7 @@ test('portable Project Skills and MCP use signed names for eligible agents', () 
   const plugin = packageWith(['skills', 'mcp']);
   const qualified: ClientID[] = [
     'claude', 'codex', 'opencode', 'cursor', 'gemini', 'copilot',
-    'kimi', 'cline', 'qoder', 'kiro', 'vscode', 'pi',
+    'kimi', 'cline', 'kiro', 'vscode', 'pi',
   ];
   for (const client of qualified) {
     const selected = projectCatalogSelection(plugin, [client]);
@@ -36,7 +36,7 @@ test('portable Project Skills and MCP use signed names for eligible agents', () 
   }
   assert.equal(projectCatalogCommands(plugin).add,
     'npx -y universal-agent-plugins add gitlab --scope project');
-  for (const client of ['grok', 'windsurf'] as const) {
+  for (const client of ['grok', 'qoder', 'windsurf'] as const) {
     assert.equal(projectCatalogSelection(plugin, [client]).resolution.distribution, undefined,
       client + ' cannot advertise Project MCP without qualification');
     assert.ok(projectCatalogSelection(packageWith(['skills']), [client]).resolution.distribution);
