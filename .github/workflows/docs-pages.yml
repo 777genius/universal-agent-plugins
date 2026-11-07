@@ -193,7 +193,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ${{ (github.event_name == 'push' || inputs.github_hosted) && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     needs: build
     steps:
       - name: Confirm requested deployment commit
@@ -206,5 +206,9 @@ jobs:
             exit 1
           fi
 
+      # Pages can remain in backend file-sync after a successful 115 MB artifact build.
+      # Leave a bounded completion window longer than deploy-pages' 10 minute default.
       - id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          timeout: 1200000
