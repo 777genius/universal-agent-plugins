@@ -5,7 +5,7 @@ ChatGPT Desktop's local Work/Codex plugin marketplace is distinct from **ChatGPT
 ## Install a compatible plugin
 
 1. Install ChatGPT Desktop with local Work/Codex support and, for automatic native registration, the supported Codex CLI. You need to sign in to the desktop app yourself.
-2. In the [UAP plugin directory](https://universal-agent-plugins.com/plugins/), open an eligible plugin and expand **ChatGPT Desktop (local)**. This option only appears for a current, installable **Codex user-scope** release; the separately listed **ChatGPT Web** option requires a verified remote app binding.
+2. In the [UAP plugin directory](https://universal-agent-plugins.com/plugins/), open an eligible plugin and choose **ChatGPT Desktop** in the agent selector. The optional Desktop guidance then appears below the command. This option is enabled only for a current, installable **Codex user-scope** release; the separately listed **ChatGPT Web** option requires a verified remote app binding.
 3. Copy the exact command from that plugin's card. For example, an eligible Context7 release may use:
 
    `npx -y universal-agent-plugins add context7 --target chatgpt-desktop`
