@@ -7,6 +7,7 @@ on:
       - install.sh
       - install.ps1
       - repotests/agentplugins_native_install_integration_test.go
+      - .github/workflows/agentplugins-published-version.yml
       - .github/workflows/agentplugins-native-install.yml
   pull_request:
     branches: [main]
@@ -14,6 +15,7 @@ on:
       - install.sh
       - install.ps1
       - repotests/agentplugins_native_install_integration_test.go
+      - .github/workflows/agentplugins-published-version.yml
       - .github/workflows/agentplugins-native-install.yml
   # Weekly six-platform smoke, without a new PR for each release.
   schedule:
@@ -36,45 +38,9 @@ concurrency:
 
 jobs:
   release-version:
-    name: Verify exact public release matches npm
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    outputs:
-      version: ${{ steps.resolve.outputs.version }}
-    steps:
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24'
-          package-manager-cache: false
-      - name: Resolve public stable and immutable npm version
-        id: resolve
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REQUESTED_VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          requested="${REQUESTED_VERSION:-}"
-          if [[ -n "$requested" && ! "$requested" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Only an exact stable version is allowed" >&2
-            exit 1
-          fi
-          if [[ -z "$requested" ]]; then
-            tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
-          else
-            tag="agentplugins-v$requested"
-          fi
-          [[ "$tag" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 2
-          visibility="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq 'if .draft == false and .prerelease == false then "public" else "private" end')"
-          [[ "$visibility" == "public" ]] || { echo "::error::Release is not public stable"; exit 2; }
-          version="${tag#agentplugins-v}"
-          published="$(npm view "universal-agent-plugins@$version" version)"
-          [[ "$published" == "$version" ]] || { echo "::error::Exact npm release missing"; exit 2; }
-          if [[ -z "$requested" ]]; then
-            current="$(npm view universal-agent-plugins dist-tags.latest)"
-            [[ "$current" == "$version" ]] || { echo "::error::Npm latest $current differs from public $version"; exit 2; }
-          fi
-          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+    uses: ./.github/workflows/agentplugins-published-version.yml
+    with:
+      version: ${{ inputs.version }}
 
   unix:
     needs: release-version
