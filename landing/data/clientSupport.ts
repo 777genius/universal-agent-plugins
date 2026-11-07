@@ -25,7 +25,7 @@ export const clientSupportRows: ClientSupport[] = [
   },
   {
     id: 'codex',
-    name: 'Codex',
+    name: 'Codex CLI',
     user: 'Skills, MCP',
     project: 'Skills, MCP',
     setup: 'Automatic',

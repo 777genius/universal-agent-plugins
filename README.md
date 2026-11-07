@@ -273,7 +273,7 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 | Agent | User scope | Project scope | Setup | What you do after installing |
 | --- | --- | --- | --- | --- |
 | <img src="landing/public/client-icons/claude.svg" width="24" height="24" alt="" align="middle"> **Claude Code** | Plugins, Skills, MCP | Skills, MCP | Automatic | Trust the workspace and reload Claude Code if prompted. |
-| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **Codex** | Skills, MCP | Skills, MCP | Automatic | Open a new session; approve project MCP access if prompted. |
+| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **Codex CLI** | Skills, MCP | Skills, MCP | Automatic | Open a new session; approve project MCP access if prompted. |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> **OpenCode** | Skills, MCP | Skills, MCP | Automatic | Start a new session and review effective project settings. |
 | <img src="landing/public/client-icons/cursor.svg" width="24" height="24" alt="" align="middle"> **Cursor** | Plugins, Skills, MCP | Skills, MCP | Automatic | Reload Cursor; enable plugins or MCP servers if requested. |
 | <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> **GitHub Copilot CLI** | Plugins, Skills, MCP | Skills, MCP | Automatic | Restart Copilot CLI if requested. |

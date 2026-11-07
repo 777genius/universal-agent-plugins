@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import type { ClientID, RegistryIndex } from '~/types/registry';
+import { installTargets, canonicalInstallTarget, canonicalInstallTargets, cliInstallTargets, type InstallTargetID } from '~/data/installTargets';
 import { pluginCommands } from '~/utils/commands';
 import { countAtElapsed, PLUGIN_COUNT_ANIMATION_MS } from '~/utils/countAnimation';
 import { catalogVisiblePlugins, groupCatalogPlugins } from '~/utils/filter';
@@ -114,11 +115,17 @@ function context7Preparation(peers: ClientID[] = []) {
 }
 const guidedChatgptSetup = computed(() => context7Preparation());
 const compatibleClients = computed(() =>
-  clients.filter(
-    (client) =>
-      demoPlugin.value.client_support.clients.includes(client.id) ||
-      (client.id === 'chatgpt' && guidedChatgptSetup.value),
-  ),
+  installTargets.filter((client) => {
+    const id = canonicalInstallTarget(client.id);
+    if (client.id === 'chatgptweb') {
+      const target = expectedDistribution(demoPlugin.value, [id])?.targets.find(
+        (entry) => entry.client === id && Boolean(entry.app_binding),
+      );
+      return (demoPlugin.value.trust_state !== 'conformant_unreviewed' && Boolean(target)) ||
+        guidedChatgptSetup.value;
+    }
+    return demoPlugin.value.client_support.clients.includes(id);
+  }),
 );
 const preferences = useInstallPreferencesStore();
 const availableTargets = computed(() => compatibleClients.value.map((client) => client.id));
@@ -126,9 +133,9 @@ const selectionIdentity = computed(() => `hero:${demoPlugin.value.install_source
 const choice = computed(() =>
   preferences.readPackage(selectionIdentity.value, availableTargets.value),
 );
-const selectedTargets = computed<ClientID[]>(() =>
+const selectedTargets = computed<InstallTargetID[]>(() =>
   choice.value.targetIds.length
-    ? (choice.value.targetIds as ClientID[])
+    ? (choice.value.targetIds as InstallTargetID[])
     : [
         compatibleClients.value.find((client) => client.id === 'cursor')?.id ??
           availableTargets.value[0]!,
@@ -150,7 +157,7 @@ const autoOption = computed(() => ({
 }));
 
 const targetOptions = computed(() =>
-  clients.map((client) => ({
+  installTargets.map((client) => ({
     value: client.id,
     label: client.id === 'copilot' ? 'Copilot' : client.name,
     icon: asset(`client-icons/${client.icon}`),
@@ -158,10 +165,10 @@ const targetOptions = computed(() =>
     description: (() => {
       if (!published.value) return t('shell.hero.unavailable');
       if (expired.value) return t('shell.hero.refreshing');
-      const target = expectedDistribution(demoPlugin.value, [client.id])?.targets.find(
-        (item) => item.client === client.id,
+      const target = expectedDistribution(demoPlugin.value, [canonicalInstallTarget(client.id)])?.targets.find(
+        (item) => item.client === canonicalInstallTarget(client.id),
       );
-      if (client.id === 'chatgpt')
+      if (client.id === 'chatgptweb')
         return target?.app_binding || guidedChatgptSetup.value
           ? t('shell.hero.chatgptSetup')
           : t('shell.hero.notAvailableForPlugin');
@@ -178,7 +185,7 @@ const selectedClients = computed(() =>
 const resolution = computed(() =>
   resolveDistribution(
     demoPlugin.value,
-    selectedClients.value.map((client) => client.id),
+    canonicalInstallTargets(selectedClients.value.map((client) => client.id)),
   ),
 );
 // Additive descriptors are supplied by the registry lane. Older/unknown diagnostics
@@ -227,25 +234,32 @@ const fallbackReason = computed(() => {
 defineExpose({ fallbackReason });
 const command = computed(() => {
   const guidedSelection =
-    selectedTargets.value.includes('chatgpt') &&
-    context7Preparation(selectedTargets.value.filter((client) => client !== 'chatgpt'));
+    selectedTargets.value.includes('chatgptweb') &&
+    context7Preparation(canonicalInstallTargets(selectedTargets.value.filter((client) => client !== 'chatgptweb')));
   if (!current.value || (!autoDetect.value && !resolution.value.distribution && !guidedSelection))
     return '';
   return pluginCommands(
     demoPlugin.value,
-    autoDetect.value ? undefined : selectedClients.value.map((client) => client.id),
+    autoDetect.value ? undefined : cliInstallTargets(selectedClients.value.map((client) => client.id)),
   ).add;
 });
 
 function updateTargets(values: string[]) {
   const allowed = new Set(compatibleClients.value.map((client) => client.id));
-  const next = values.filter((value): value is ClientID => allowed.has(value as ClientID));
-  if (next.length)
-    preferences.selectPackage(
-      selectionIdentity.value,
-      { ...choice.value, targetIds: next },
-      availableTargets.value,
+  const next = values.filter((value): value is InstallTargetID => allowed.has(value as InstallTargetID));
+  if (!next.length) return;
+  if (next.includes('codex') && next.includes('chatgpt')) {
+    const added = next.find((id) =>
+      (id === 'codex' || id === 'chatgpt') && !selectedTargets.value.includes(id),
     );
+    const keep = added ?? (selectedTargets.value.includes('chatgpt') ? 'chatgpt' : 'codex');
+    next.splice(next.indexOf(keep === 'codex' ? 'chatgpt' : 'codex'), 1);
+  }
+  preferences.selectPackage(
+    selectionIdentity.value,
+    { ...choice.value, targetIds: next },
+    availableTargets.value,
+  );
 }
 </script>
 
