@@ -87,7 +87,7 @@ func supportedTargetHelp() string {
 	for index, id := range ids {
 		values[index] = string(id)
 	}
-	return strings.Join(values, ", ")
+	return strings.Join(values, ", ") + " (aliases: chatgpt-desktop, chatgpt-web)"
 }
 
 func joinTargets(targets []domain.ClientID) string {
