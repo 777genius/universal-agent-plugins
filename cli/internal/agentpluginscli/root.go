@@ -68,12 +68,13 @@ func validateCommonOptions(opts *options) error {
 	if _, err := parseTargetOption(opts.target); err != nil {
 		return err
 	}
-	// Desktop's local Work/Codex marketplace is a user-profile installation.
-	// Do not silently reinterpret a Desktop request as a Codex project install.
+	// The public Desktop name is rewritten to canonical "codex" at the flag
+	// boundary. Check the original flag input instead: otherwise --target
+	// chatgpt --scope project silently installs into a Codex project.
 	if opts.scope == "project" {
-		for _, target := range strings.Split(opts.target, ",") {
-			if strings.EqualFold(strings.TrimSpace(target), "chatgpt-desktop") ||
-				(opts.targetInput != "" && strings.EqualFold(strings.TrimSpace(target), "chatgpt")) {
+		for _, target := range strings.Split(opts.targetInput, ",") {
+			switch strings.ToLower(strings.TrimSpace(target)) {
+			case "chatgpt", "chatgpt-desktop":
 				return CLIUsageError{
 					Code:    "INVALID_SCOPE",
 					Message: "chatgpt (Desktop) supports only --scope user; use --target codex for project installation",
