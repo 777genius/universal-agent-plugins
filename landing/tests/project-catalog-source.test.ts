@@ -64,7 +64,8 @@ test('revoked, unsigned, malformed and unsupported sources still refuse Project'
   const unsigned = reviewed(); delete unsigned.trust_state; variants.push(unsigned);
   const untrusted = reviewed(); untrusted.installable = false; variants.push(untrusted);
   const badCommit = reviewed(); badCommit.distributions[0]!.releases[0]!.source.revision = 'wrong'; variants.push(badCommit);
-  const extension = reviewed(); extension.distributions[0]!.releases[0]!.components.push('extensions'); variants.push(extension);
+  // Project admits partial components; only an entirely unsupported package is refused.
+  const extension = reviewed(); extension.distributions[0]!.releases[0]!.components = ['extensions']; variants.push(extension);
   const revoked = reviewed(); revoked.distributions[0]!.releases[0]!.release_status = 'revoked'; variants.push(revoked);
   const unsafe = reviewed(); unsafe.distributions[0]!.releases[0]!.source.path = '../escape'; variants.push(unsafe);
   for (const item of variants) {
@@ -74,6 +75,15 @@ test('revoked, unsigned, malformed and unsupported sources still refuse Project'
   }
   assert.equal(projectCatalogSelection(reviewed(), ['chatgpt']).resolution.distribution, undefined);
   assert.equal(projectCatalogSelection(reviewed(), []).resolution.distribution, undefined);
+});
+
+test('extra unsupported sibling does not revoke signed-v1 Project selection', () => {
+  const plugin = reviewed();
+  plugin.distributions[0]!.releases[0]!.components = ['skills', 'extensions'];
+  const chosen = projectCatalogSelection(plugin, ['codex']);
+  assert.ok(chosen.resolution.distribution);
+  assert.equal(projectCatalogCommands(plugin, ['codex']).add,
+    'npx -y universal-agent-plugins add gitlab --target codex --scope project');
 });
 
 test('signed user source and original target scope are unchanged by selection', () => {
