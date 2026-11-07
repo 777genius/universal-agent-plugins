@@ -398,6 +398,18 @@ test('guided ChatGPT preparation remains available for an eligible deterministic
   await expect(page.locator('.hero__demo .command-snippet')).toContainText(
     'add context7 --target chatgptweb',
   );
+  // Community metadata cannot grant remote setup authority by imitating the
+  // exact Context7 source/selector used by the signed Directory.
+  plugin.trust_state = 'conformant_unreviewed';
+  await projections(page, index);
+  await navigate(page, '/');
+  await page
+    .getByRole('button', { name: 'Choose target agents: Choose agents in terminal', exact: true })
+    .click();
+  await expect(page.getByRole('checkbox', { name: /^ChatGPT Web / })).toBeDisabled();
+  await expect(page.locator('.hero__demo .command-snippet')).not.toContainText(
+    '--target chatgptweb',
+  );
 });
 
 test('orbit follows scrolling with a small upward and leftward drift, then returns', async ({ page }) => {

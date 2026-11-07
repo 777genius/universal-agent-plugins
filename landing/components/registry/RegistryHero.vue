@@ -83,6 +83,7 @@ const demoPlugin = computed(() => {
 function context7Preparation(peers: ClientID[] = []) {
   const plugin = demoPlugin.value;
   if (
+    plugin.trust_state === 'conformant_unreviewed' ||
     plugin.name !== 'context7' ||
     plugin.install_source !== 'context7' ||
     plugin.client_support.resolution !== 'directory'
