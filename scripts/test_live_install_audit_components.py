@@ -91,16 +91,29 @@ class PublishedCatalogNativeProofTest(unittest.TestCase):
                            ("status", "passed")):
             self.assertFalse(audit.expected_negative_coverage({**row, key: value}))
 
-    def test_prepared_negative_requires_exact_source_and_verified_lifecycle(self):
+    def test_prepared_negative_requires_full_lifecycle_and_never_native_pass(self):
         audit = load_audit()
         case = {"status": "prepared-lifecycle-passed", "kind": "plugin",
                 "target": "opencode", "source": "docker-hub",
-                "prepared_components_only": True, "native_identity_files": [],
-                "repeat_verified": True, "removal_verified": True,
-                "sentinels_preserved": True, "failed_install_residue": False}
+                "prepared_components_only": True, "native_component_candidates": [],
+                "native_identity_files": [], "native_residuals": [],
+                "listed_identity": True, "repeat_verified": True,
+                "removal_verified": True, "sentinels_preserved": True,
+                "failed_install_residue": False,
+                "install": {"exit_code": 0}, "cleanup": {"exit_code": 0}}
         self.assertTrue(audit.expected_negative_coverage(case))
-        for key, value in (("source", "atlassian"), ("target", "claude"),
+        # A fully verified prepared lifecycle is a valid *non-native* result
+        # regardless of source, including a harmless OpenCode config write.
+        self.assertTrue(audit.expected_negative_coverage({
+            **case, "source": "atlassian",
+            "native_identity_files": ["opencode/opencode.json"]}))
+        for key, value in (("status", "passed"), ("target", "claude"),
                            ("native_identity_files", ["native.json"]),
+                           ("native_component_candidates", ["dockerhub"]),
+                           ("listed_identity", False),
+                           ("native_residuals", ["opencode/active.json"]),
+                           ("install", {"exit_code": 1}),
+                           ("cleanup", {"exit_code": 1}),
                            ("repeat_verified", False), ("removal_verified", False),
                            ("prepared_components_only", False)):
             self.assertFalse(audit.expected_negative_coverage({**case, key: value}))

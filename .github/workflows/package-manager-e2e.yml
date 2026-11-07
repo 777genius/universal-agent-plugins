@@ -37,6 +37,10 @@ on:
       - '.github/workflows/agentplugins-native-clients.yml'
       - '.github/workflows/package-manager-resilience.yml'
       - '.github/workflows/package-manager-e2e.yml'
+  # Full real package-manager Project/User, update, repair and cold-restore
+  # qualification on six OSs, without adding ARM runners to every ordinary PR.
+  schedule:
+    - cron: '41 5 * * 4'
   workflow_dispatch:
 
 permissions:
@@ -71,11 +75,13 @@ jobs:
     # Real Git containment requires a conventional procfs on Linux. This focused
     # qualification uses disposable hosted runners, including both Mac architectures.
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-2025, macos-15, macos-15-intel]
+        # The full source-built graph/repair catalog already covers 4 OSs
+        # on relevant PRs. Weekly/manual add both ARM64 hosted runners.
+        os: ${{ fromJSON((github.event_name != 'pull_request') && '["ubuntu-24.04","ubuntu-24.04-arm","windows-2025","windows-11-arm","macos-15","macos-15-intel"]' || '["ubuntu-24.04","windows-2025","macos-15","macos-15-intel"]') }}
     env:
       GOMAXPROCS: '3'
     steps:
