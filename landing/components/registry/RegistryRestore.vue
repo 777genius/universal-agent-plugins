@@ -7,10 +7,9 @@ const composer = useI18n({ useScope: 'local' });
 composer.missingWarn = false;
 composer.fallbackWarn = false;
 const { t } = composer;
-const { t: tGlobal } = useI18n({ useScope: 'global' });
 const { asset } = useSite();
 const { userRestoreGuideUrl, restoreGuideEnglishFallback, docsLabel } = useDocsLinks();
-const mode = ref<RestoreDemoMode>('global');
+const mode = ref<RestoreDemoMode>('project');
 const commands = computed(() => restoreDemoCommands[mode.value]);
 const copied = ref<1 | 2 | 3 | null>(null);
 const copyFailed = ref<1 | 2 | 3 | null>(null);
@@ -41,7 +40,7 @@ async function copyCommand(which: 1 | 2 | 3) {
   // Copy the displayed example, not an installation authorization. Actual
   // catalog/CLI scope and dependency checks remain at their own boundaries.
   const command = which === 1 ? commands.value.install : which === 2 ? commands.value.restore : commands.value.export;
-  if (mode.value === 'project' || !command) return;
+  if (!command) return;
   // An earlier feedback timer must not invalidate a new pending clipboard write.
   resetCopy();
   const request = copyRequest;
@@ -94,18 +93,14 @@ async function copyCommand(which: 1 | 2 | 3) {
           {{ t(`shell.restoreDemo.${value}Label`) }}
         </button>
       </div>
-      <p v-if="mode === 'project'" class="registry-restore__qualification" role="status">
-        {{ tGlobal('registryUi.install.scope.marketingKitProjectUnavailable') }}
-      </p>
-
-      <div class="registry-restore__flow" :data-preview-only="mode === 'project' ? 'true' : undefined">
+      <div class="registry-restore__flow">
         <div class="registry-restore__machine">
           <img class="registry-restore__monitor" :src="monitorImage" width="1577" height="997"
             alt="" loading="lazy" decoding="async" aria-hidden="true" />
           <div class="registry-restore__screen">
             <div class="registry-restore__stepbar">
               <p class="registry-restore__stage-label"><span class="registry-restore__step" aria-hidden="true">01</span>{{ t('shell.restore.from') }}</p>
-              <button v-if="mode === 'global'" type="button" class="registry-restore__copy" :aria-label="copyLabel(1)"
+              <button type="button" class="registry-restore__copy" :aria-label="copyLabel(1)"
                 @click="copyCommand(1)">{{ copyText(1) }}</button>
             </div>
             <div class="registry-restore__terminal" dir="ltr" :data-command="commands.install">
@@ -147,7 +142,7 @@ async function copyCommand(which: 1 | 2 | 3) {
           <div class="registry-restore__screen">
             <div class="registry-restore__stepbar">
               <p class="registry-restore__stage-label"><span class="registry-restore__step" aria-hidden="true">02</span>{{ t('shell.restore.to') }}</p>
-              <button v-if="mode === 'global'" type="button" class="registry-restore__copy" :aria-label="copyLabel(2)"
+              <button type="button" class="registry-restore__copy" :aria-label="copyLabel(2)"
                 @click="copyCommand(2)">{{ copyText(2) }}</button>
             </div>
             <div class="registry-restore__terminal" dir="ltr" :data-command="commands.restore">
