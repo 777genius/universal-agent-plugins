@@ -23,61 +23,66 @@ function desktopFixture(withCodex: boolean) {
   return index;
 }
 
+const desktopCommand = 'npx -y universal-agent-plugins add i18n-state-00 --target chatgpt-desktop';
+
 for (const width of [1440, 390]) {
-  test('ChatGPT Desktop guide copies the Codex local command at ' + width + 'px', async ({ page }) => {
+  test('ChatGPT Desktop is a distinct selectable target with one copyable command at ' + width + 'px', async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     const errors = await offline(page);
     await projections(page, desktopFixture(true));
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
+    await expect(card.locator('.desktop-guide')).toHaveCount(0);
+    await card.locator('.app-multiselect__trigger').click();
+    await expect(page.getByRole('checkbox', { name: /^ChatGPT Web/ })).toBeDisabled();
+    await page.getByRole('checkbox', { name: /^ChatGPT Desktop/ }).click();
+    await page.keyboard.press('Escape');
+    await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(desktopCommand);
     const guide = card.locator('.desktop-guide');
     await expect(guide).toBeVisible();
-    await expect(guide.locator('summary')).toHaveText('ChatGPT Desktop (local)');
-    await expect(guide.locator('.command-snippet')).toBeHidden();
     await guide.locator('summary').click();
-    await expect(guide.locator('.command-snippet code')).toHaveText(
-      'npx -y universal-agent-plugins add i18n-state-00 --target codex',
-    );
-    expect(await guide.locator('.command-snippet code').textContent()).not.toContain('\n');
     await expect(guide).toContainText('does not prove Desktop runtime');
     await expect(guide).toContainText('ChatGPT web connection');
-    await guide.locator('.command-snippet button').click();
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
-      'npx -y universal-agent-plugins add i18n-state-00 --target codex',
-    );
+    await expect(guide.locator('.command-snippet')).toHaveCount(0);
+
+    await card.locator('.plugin-card__install .command-snippet button').click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(desktopCommand);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
   });
 }
 
-test('ChatGPT Desktop help is absent without active Codex delivery, while web ChatGPT stays gated', async ({ page }) => {
+test('Desktop and Web are both disabled when neither signed target is compatible', async ({ page }) => {
   const errors = await offline(page);
   await projections(page, desktopFixture(false));
   await navigate(page, '/', 'en', '?q=i18n-state-00');
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
   await card.locator('.plugin-card__install-toggle').click();
-  await expect(card.locator('.desktop-guide')).toHaveCount(0);
   await card.locator('.app-multiselect__trigger').click();
-  await expect(page.getByRole('checkbox', { name: /^ChatGPT(?:\s|$)/ })).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: /^ChatGPT Desktop/ })).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: /^ChatGPT Web/ })).toBeDisabled();
   await page.keyboard.press('Escape');
+  await expect(card.locator('.desktop-guide')).toHaveCount(0);
 
   await card.locator('.plugin-card__title-link').click();
   await expect(page.locator('.install-panel .desktop-guide')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
-test('standalone detail offers the same local Desktop command in both themes', async ({ page }) => {
+test('detail page uses the same Desktop target in both themes', async ({ page }) => {
   const errors = await offline(page);
   await projections(page, desktopFixture(true));
   await navigate(page, '/', 'en', '?q=i18n-state-00');
   await page.locator('.plugin-card[data-install-source="i18n-state-00"] .plugin-card__title-link').first().click();
-  const guide = page.locator('.install-panel .desktop-guide');
+  const panel = page.locator('.install-panel');
+  await expect(panel.locator('.desktop-guide')).toHaveCount(0);
+  await panel.locator('.app-multiselect__trigger').click();
+  await page.getByRole('checkbox', { name: /^ChatGPT Desktop/ }).click();
+  await page.keyboard.press('Escape');
+  const guide = panel.locator('.desktop-guide');
   await expect(guide).toBeVisible();
-  await guide.locator('summary').click();
-  await expect(guide.locator('.command-snippet code')).toHaveText(
-    'npx -y universal-agent-plugins add i18n-state-00 --target codex',
-  );
+  await expect(panel.locator('.command-snippet code')).toHaveText(desktopCommand);
   await page.getByRole('button', { name: 'Light', exact: true }).click();
   await expect(guide).toHaveCSS('color', 'rgb(22, 25, 43)');
   await page.getByRole('button', { name: 'Dark', exact: true }).click();
