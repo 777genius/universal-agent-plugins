@@ -1510,7 +1510,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                            or (target == "copilot" and
                                (copilot_native_before_remove is None or
                                 copilot_native_before_remove["status"] != "installed"))
-                           or (target not in ("qoder", "copilot") and not native_attribution)))
+                           or (target == "codex" and not (
+                               native_uninstall and native_uninstall.get("completed")))
+                           or (target not in ("codex", "qoder", "copilot")
+                               and not native_attribution)))
                   else "prepared-lifecycle-passed" if prepared_binding else "passed")
     elif installed and cleanup and (
             "external removal requires explicit attestation" in
