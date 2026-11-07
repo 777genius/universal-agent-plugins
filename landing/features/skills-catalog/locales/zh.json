@@ -72,12 +72,12 @@
       "scanFilterLabel": "扫描覆盖情况",
       "scanModes": {
         "scanned": "已有当前扫描",
-        "all": "所有可安装技能"
+        "all": "所有技能"
       },
-      "scanNotice": "仅显示已对当前发布版本实际执行扫描的技能。部分覆盖会明确标注；扫描不保证安全或安装成功。",
+      "scanNotice": "显示所有技能，包括未扫描的技能。扫描不保证安全性或可安装性。",
       "scanNone": "在本次有限范围内未找到具有当前扫描结果的技能。",
-      "scanHelp": "切换到所有可安装技能以查看没有当前扫描证据的条目。",
-      "scanClear": "查看所有可安装技能",
+      "scanHelp": "选择所有技能以查看未扫描的项目。",
+      "scanClear": "浏览所有技能",
       "scanReportUnavailable": "部分扫描报告无法验证，因此已排除相应技能。",
       "scanSnapshot": "发布于 {date}：在 {selected} 个扫描目标中，{complete} 个完整、{partial} 个部分完成、{error} 个失败、{pending} 个没有当前扫描（其中 {stale} 个仅有旧报告）。",
       "scanSnapshotHelp": "这是最新发布的静态扫描快照，不代表服务实时可用性，也不保证安全。",
@@ -95,7 +95,7 @@
         "moreCandidates": "还可检查更多技能",
         "moreCandidatesHelp": "此批次没有匹配项。显示更多以检查剩余候选项。",
         "noMatches": "没有符合筛选条件的技能",
-        "noMatchesHelp": "尝试其他搜索或重置筛选，浏览所有可安装的技能。"
+        "noMatchesHelp": "调整搜索或重置筛选条件以查看所有技能。"
       }
     },
     "directoryPage": {
