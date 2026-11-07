@@ -82,7 +82,7 @@ test('detail page uses the same Desktop target in both themes', async ({ page })
   await page.keyboard.press('Escape');
   const guide = panel.locator('.desktop-guide');
   await expect(guide).toBeVisible();
-  await expect(panel.locator('.command-snippet code')).toHaveText(desktopCommand);
+  await expect(panel.locator('.install-command-row .command-snippet code')).toHaveText(desktopCommand);
   await page.getByRole('button', { name: 'Light', exact: true }).click();
   await expect(guide).toHaveCSS('color', 'rgb(22, 25, 43)');
   await page.getByRole('button', { name: 'Dark', exact: true }).click();
