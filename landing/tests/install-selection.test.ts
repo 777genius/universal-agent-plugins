@@ -106,6 +106,34 @@ test('ChatGPT Web needs signed app binding; Desktop shares Codex without project
   state.stop();
 });
 
+test('Web picker uses the eligible signed release rather than a de-duplicated target policy', () => {
+  setActivePinia(createPinia());
+  const plugin = data();
+  const older = plugin.distributions[0]!.releases[0]!;
+  older.targets.push({
+    client: 'chatgpt',
+    scopes: ['user'],
+    delivery: 'manual_activation',
+    authentication: 'unknown',
+  });
+  // Reachable target summaries collapse identical client/authentication pairs.
+  // An earlier unbound release must not hide the later signed Web binding.
+  const newer = structuredClone(toRaw(older));
+  newer.release_sequence = older.release_sequence + 1;
+  newer.targets.find((target) => target.client === 'chatgpt')!.app_binding = {
+    app_key: 'context7',
+    id: 'asdk_app_verified_test',
+    mcp_server: 'context7',
+  };
+  plugin.distributions[0]!.releases = [older, newer];
+  const state = mount(plugin);
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgptweb'));
+  state.updateTargets(['chatgptweb']);
+  state.updateAutoDetect(false);
+  assert.equal(state.resolution.value.distribution?.release_sequence, newer.release_sequence);
+  state.stop();
+});
+
 test('project defaults to CLI detection and preserves manual project targets', () => {
   setActivePinia(createPinia());
   const state = mount(data());
