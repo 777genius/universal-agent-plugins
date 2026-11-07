@@ -2199,12 +2199,12 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
     def test_windows_qoder_cache_and_log_paths_are_passive_but_settings_are_not(self):
         audit = load_audit()
         for relative in (
-                "plugins\\\\cache\\\\local\\\\atlassian\\\\0.1.0\\\\plugin.json",
-                "logs\\\\runs\\\\session-1\\\\manifest.json",
+                "plugins\\cache\\local\\atlassian\\0.1.0\\plugin.json",
+                "logs\\runs\\session-1\\manifest.json",
                 "plugins/cache/local/atlassian/0.1.0/plugin.json"):
             self.assertTrue(audit.passive_native_path("qoder", relative), relative)
-        self.assertTrue(audit.passive_native_path("codex", "plugins\\\\cache\\\\example.json"))
-        for relative in ("settings.json", "plugins\\\\installed_plugins_v2.json",
+        self.assertTrue(audit.passive_native_path("codex", "plugins\\cache\\example.json"))
+        for relative in ("settings.json", "plugins\\installed_plugins_v2.json",
                          "plugins/installed_plugins_v2.json"):
             self.assertFalse(audit.passive_native_path("qoder", relative), relative)
 
