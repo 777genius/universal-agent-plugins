@@ -86,6 +86,16 @@ test('extra unsupported sibling does not revoke signed-v1 Project selection', ()
     'npx -y universal-agent-plugins add gitlab --target codex --scope project');
 });
 
+test('signed-v2 canonical closure cannot fall back from User to ungranted Project', () => {
+  const plugin = reviewed();
+  const target = plugin.distributions[0]!.releases[0]!.targets.find(x => x.client === 'codex')!;
+  target.scopes = ['user'];
+  target.canonical_closure = { eligible: true, closure_digest: 'sha256:' + 'a'.repeat(64) };
+  assert.equal(projectCatalogSelection(plugin, ['codex']).resolution.distribution, undefined);
+  target.scopes = ['user', 'project'];
+  assert.ok(projectCatalogSelection(plugin, ['codex']).resolution.distribution);
+});
+
 test('signed user source and original target scope are unchanged by selection', () => {
   const plugin = reviewed();
   assert.deepEqual(plugin.distributions[0]!.releases[0]!.targets.find(x => x.client === 'codex')!.scopes, ['user']);
