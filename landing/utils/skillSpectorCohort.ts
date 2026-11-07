@@ -164,7 +164,8 @@ function validateRecords(release: Json, pointer: Json): VerifiedCohort {
         raw.kind !== 'plugin_skill' || raw.plugin_path !== '' ||
         raw.status !== 'complete' || coverage.status !== 'complete' ||
         !same(raw.scanner, expectedScanner) || !same(raw.profile, expectedProfile) ||
-        source.repository !== expected[0] || !expected[1].includes(String(source.revision)) ||
+        source.repository !== expected[0] || typeof source.revision !== 'string' ||
+        !expected[1].includes(source.revision) ||
         source.path !== expected[2] || !digestPattern.test(String(source.content_digest)) ||
         pin.id !== raw.id ||
         !/^community:[0-9a-f]{32}$/.test(String(pin.signed_package_id)) ||
