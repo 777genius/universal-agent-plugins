@@ -1126,7 +1126,16 @@ def initialize_project_skill_git_root(project, env, case_root):
     marker = project / ".git"
     if marker.exists() or marker.is_symlink():
         raise RuntimeError("disposable project Git metadata must be initially absent")
-    result = call([GIT_EXECUTABLE, "-c", "core.hooksPath=/dev/null",
+    # Git for Windows has no POSIX /dev/null. Disable hooks with an empty,
+    # case-owned directory on every OS, never through host Git config.
+    disabled_hooks = case_root / "empty-git-hooks"
+    if disabled_hooks.is_symlink():
+        raise RuntimeError("disposable Git hooks directory is redirected")
+    disabled_hooks.mkdir(exist_ok=True)
+    if (not disabled_hooks.is_dir() or disabled_hooks.is_symlink()
+            or not disabled_hooks.resolve().is_relative_to(case_root.resolve())):
+        raise RuntimeError("disposable Git hooks directory escaped its case")
+    result = call([GIT_EXECUTABLE, "-c", f"core.hooksPath={disabled_hooks.resolve()}",
                    "init", "--quiet"], env, project, 30)
     if (result["exit_code"] != 0 or not marker.is_dir() or marker.is_symlink()
             or not marker.resolve().is_relative_to(project.resolve())):
