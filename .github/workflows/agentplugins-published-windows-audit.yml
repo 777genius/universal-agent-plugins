@@ -67,7 +67,7 @@ jobs:
       matrix:
         # 5 native clients on every relevant PR; 9 clients (including Cline,
         # Kimi, Qoder and genuine Pi project Skills) weekly/manually.
-        target: ${{ fromJSON(github.event_name == 'pull_request' && '["codex","claude","opencode","gemini","copilot"]' || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
+        target: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.draft && '["codex","claude","opencode","gemini","copilot"]' || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
         kind: [plugin, skill]
         exclude:
           - target: pi
