@@ -350,7 +350,7 @@ def host_containment_refusal(diagnostic):
 
 def passive_native_path(target, relative):
     """Downloaded caches and run logs are not active native registrations."""
-    normalized = relative.replace("\\", "/")
+    normalized = "/".join(Path(relative).parts)
     return ((target == "codex" and normalized.startswith("plugins/cache/"))
             or (target == "qoder" and normalized.startswith(("plugins/cache/", "logs/runs/"))))
 
@@ -507,7 +507,7 @@ def native_identity_residuals(native_roots, identity, observed_paths, target,
             try:
                 mode = file.lstat().st_mode
                 if stat.S_ISLNK(mode):
-                    if (target != "qoder" or relative.replace("\\", "/") != "logs/latest"
+                    if (target != "qoder" or "/".join(Path(relative).parts) != "logs/latest"
                             or not qoder_passive_latest_log_link(root, file)):
                         leftover.append(observed + ": symlink")
                 elif not stat.S_ISREG(mode):

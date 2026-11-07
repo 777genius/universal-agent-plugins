@@ -2198,15 +2198,38 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
 
     def test_windows_qoder_cache_and_log_paths_are_passive_but_settings_are_not(self):
         audit = load_audit()
-        for relative in (
-                "plugins\\cache\\local\\atlassian\\0.1.0\\plugin.json",
-                "logs\\runs\\session-1\\manifest.json",
-                "plugins/cache/local/atlassian/0.1.0/plugin.json"):
+        for relative in ("plugins/cache/local/atlassian/0.1.0/plugin.json",
+                         "logs/runs/session-1/manifest.json"):
             self.assertTrue(audit.passive_native_path("qoder", relative), relative)
-        self.assertTrue(audit.passive_native_path("codex", "plugins\\cache\\example.json"))
-        for relative in ("settings.json", "plugins\\installed_plugins_v2.json",
+        # Only Windows treats backslashes as path separators. A POSIX
+        # literal-backslash filename is not a passive managed cache.
+        for relative in (r"plugins\cache\local\atlassian\0.1.0\plugin.json",
+                         r"logs\runs\session-1\manifest.json"):
+            self.assertEqual(audit.passive_native_path("qoder", relative),
+                             os.name == "nt", relative)
+        self.assertEqual(
+            audit.passive_native_path("codex", r"plugins\cache\example.json"),
+            os.name == "nt")
+        for relative in ("settings.json", r"plugins\installed_plugins_v2.json",
                          "plugins/installed_plugins_v2.json"):
             self.assertFalse(audit.passive_native_path("qoder", relative), relative)
+
+    def test_posix_literal_backslashes_cannot_hide_active_qoder_state(self):
+        if os.name == "nt":
+            self.skipTest("Windows cannot create literal backslash filenames")
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".qoder"
+            root.mkdir()
+            disguised = root / r"plugins\cache\managed.json"
+            disguised.write_text('{"plugins":{"atlassian":{"enabled":true}}}',
+                                 encoding="utf-8")
+            observed = f"{root.name}/{disguised.name}"
+            self.assertFalse(audit.passive_native_path("qoder", disguised.name))
+            self.assertEqual(
+                audit.native_identity_residuals(
+                    [root], "atlassian", [observed], "qoder"),
+                [observed])
 
     def test_qoder_profile_requires_same_canonical_disposable_root(self):
         audit = load_audit()
