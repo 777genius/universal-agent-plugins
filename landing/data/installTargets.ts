@@ -33,3 +33,9 @@ export function canonicalInstallTarget(id: InstallTargetID): ClientID {
 export function canonicalInstallTargets(targets: readonly InstallTargetID[]): ClientID[] {
   return [...new Set(targets.map(canonicalInstallTarget))];
 }
+
+// Express surface intent in user-facing CLI commands. Existing --target chatgpt
+// and codex flags remain valid for previously installed configurations.
+export function cliInstallTargets(targets: readonly InstallTargetID[]): string[] {
+  return targets.map((target) => target === 'chatgpt' ? 'chatgpt-web' : target);
+}
