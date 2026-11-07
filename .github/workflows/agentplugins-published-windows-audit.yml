@@ -129,17 +129,19 @@ jobs:
           }
           $nativePackage = $nativePackages[$env:NATIVE_TARGET]
           if (-not $nativePackage) { throw "Unreviewed target $env:NATIVE_TARGET" }
-          if ($env:NATIVE_TARGET -eq 'kimi' -and $env:NATIVE_KIND -eq 'skill') {
-            $nativePackage = '@moonshot-ai/kimi-code@2.3.2'
-          }
           npm.cmd install --global "universal-agent-plugins@$env:UAP_VERSION"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if ($env:NATIVE_TARGET -eq 'pi') {
+          if ($env:NATIVE_TARGET -eq 'kimi' -and $env:NATIVE_KIND -eq 'skill') {
+            # The published Kimi adapter requires an actual pinned 2.3.2
+            # native executable; npm's Windows .cmd shim cannot qualify.
+            Write-Host 'Using the independently pinned official Kimi Windows binary'
+          } elseif ($env:NATIVE_TARGET -eq 'pi') {
             npm.cmd install --global --ignore-scripts "$nativePackage"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } else {
             npm.cmd install --global "$nativePackage"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $uap = (Get-Command agentplugins.cmd -CommandType Application -ErrorAction Stop).Source
           $observed = (& $uap version | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or $observed -ne "agentplugins $env:UAP_VERSION") {
@@ -168,6 +170,29 @@ jobs:
             $program | python - "$nativeBin"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             $native = Join-Path $nativeBin 'opencode.exe'
+            "$nativeBin" | Out-File -FilePath "$env:GITHUB_PATH" -Encoding utf8 -Append
+          } elseif ($env:NATIVE_TARGET -eq 'kimi' -and $env:NATIVE_KIND -eq 'skill') {
+            # Reuse the existing no-symlink, no-archive-traversal verified
+            # extractor. The release ZIP SHA-256 is pinned separately from UAP.
+            $nativeBin = Join-Path "$env:RUNNER_TEMP" 'verified-kimi'
+            New-Item -ItemType Directory -Force -Path $nativeBin | Out-Null
+            $program = @'
+          import importlib.util
+          from pathlib import Path
+          import sys
+          source = Path("scripts/run-native-client-matrix.py").resolve()
+          spec = importlib.util.spec_from_file_location("native_matrix_pins", source)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          target = Path(sys.argv[1])
+          binary, evidence = module.provision(module.PINS["windows-amd64"]["kimi"], target, "kimi")
+          if binary != target / "kimi.exe" or evidence["version"] != "@moonshot-ai/kimi-code@2.3.2":
+              raise RuntimeError("verified native Kimi 2.3.2 provenance mismatch")
+          print("Verified genuine Kimi 2.3.2 Windows executable, sha256 pinned")
+          '@
+            $program | python - "$nativeBin"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $native = Join-Path $nativeBin 'kimi.exe'
             "$nativeBin" | Out-File -FilePath "$env:GITHUB_PATH" -Encoding utf8 -Append
           } else {
             $nativeName = if ($env:NATIVE_TARGET -eq 'qoder') { 'qodercli' } else { $env:NATIVE_TARGET }
