@@ -17,7 +17,12 @@ export function dependencySaveMode(source: string, targets: readonly string[]): 
   const github = isPinnedGitSource(source);
   const directory = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(source) && !source.startsWith('.');
   if (!github && !directory) return 'noSave';
-  return targets.every((target) => savedDependencyTargets.has(target)) ? 'saved' : 'noSave';
+  // The Desktop surface uses the same saved Codex dependency; no duplicate
+  // native plugin identity or special no-save route is introduced.
+  return targets.every((target) =>
+    savedDependencyTargets.has(target === 'chatgpt-desktop' ? 'codex' : target))
+    ? 'saved'
+    : 'noSave';
 }
 
 export function dependencyAddFlag(mode: DependencySaveMode, released: boolean): string {
