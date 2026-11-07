@@ -17,7 +17,7 @@ const PROJECT_COMPONENTS: Partial<Record<ClientID, ReadonlySet<string>>> = {
   kiro: new Set(['skills', 'mcp']),
   vscode: new Set(['skills', 'mcp']),
   pi: new Set(['skills', 'mcp', 'extensions']),
-  qoder: new Set(['skills', 'mcp']),
+  qoder: new Set(['skills']), // native Project MCP is unsupported; preparation is skills-only
   windsurf: new Set(['skills']), // legacy Cascade has no qualified Project MCP
   grok: new Set(['skills']),
 };
