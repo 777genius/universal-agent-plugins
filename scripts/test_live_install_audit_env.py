@@ -2153,5 +2153,24 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 response, item, relative, project, output)), 1)
 
 
+    def test_genuine_project_git_init_uses_empty_hooks_inside_case(self):
+        # Windows has no POSIX /dev/null; never use ambient hooks or config.
+        audit = load_audit()
+        if not audit.GIT_EXECUTABLE:
+            self.skipTest("Git binary unavailable")
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve() / "case"
+            home, data, project = (case / "home", case / "uap-data", case / "project")
+            for folder in (home, data, project):
+                folder.mkdir(parents=True)
+            env = audit.isolated_client_env(home, case, data)
+            audit.initialize_project_skill_git_root(project, env, case)
+            hooks = case / "empty-git-hooks"
+            self.assertTrue(hooks.is_dir())
+            self.assertFalse(hooks.is_symlink())
+            self.assertTrue(hooks.resolve().is_relative_to(case.resolve()))
+            self.assertTrue((project / ".git").is_dir())
+
+
 if __name__ == "__main__":
     unittest.main()
