@@ -129,6 +129,16 @@ def call(argv, env, cwd, timeout=105):
         return {"exit_code": None, "stdout_tail": "", "stderr_tail": str(e)[-1800:], "timeout": False}
 
 
+def install_case_timeout(target, kind, item):
+    # The frozen Firebase Windows runtime can finish durable registration
+    # while a cold native runtime setup still holds the original add process.
+    # Stay bounded: a timeout or any surviving registration still FAILS E2E.
+    if (sys.platform == "win32" and kind == "plugin"
+            and item == "firebase"):
+        return 180
+    return 105
+
+
 def version_evidence(argv, env, cwd):
     """Record a short, observable version; a successful path alone is not proof."""
     observed = call(argv, env, cwd, 25)
@@ -1279,7 +1289,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         scope = ["--scope", "project", "--project-root", str(project)]
     copilot_before = (copilot_settings_sanitized_shape(home, case_root, identity)
                       if kind == "plugin" and target == "copilot" else None)
-    output = audited_call([cli, *args], env, project)
+    add_timeout = install_case_timeout(target, kind, item)
+    output = audited_call([cli, *args], env, project, add_timeout)
     added_json = output.pop("_json", None)
     native_components = (native_components_from_add(added_json)
                          if kind == "plugin" else ())
@@ -1351,7 +1362,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 for path in lock_paths
             )
         before_repeat_lock = lock_state()
-        repeat_add = audited_call([cli, *args], env, project)
+        repeat_add = audited_call([cli, *args], env, project, add_timeout)
         repeat_add.pop("_json", None)
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)

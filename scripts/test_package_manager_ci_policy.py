@@ -71,6 +71,18 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
                 self.assertIn("scripts/live-install-audit.py", body)
                 self.assertNotIn("universal-agent-plugins@0.1.101", body)
 
+    def test_deep_macos_docker_hub_has_genuine_cli_prerequisite(self):
+        macos = (WORKFLOW.parent / "agentplugins-published-macos-audit.yml").read_text(
+            encoding="utf-8")
+        # Docker Hub's frozen manifest demands an actual docker executable.
+        # Never use a synthetic shim or treat failed bootstrap as native success.
+        self.assertIn(
+            "if: ${{ github.event_name != 'pull_request' && matrix.kind == 'plugin' }}", macos)
+        self.assertIn("brew install docker", macos)
+        self.assertIn("command -v docker", macos)
+        self.assertIn("docker --version", macos)
+        self.assertNotIn("continue-on-error: true", macos)
+
     def test_draft_only_runs_disposable_harness_preflight(self):
         self.assertIn("github.event_name == 'pull_request' && github.event.pull_request.draft", self.body)
         self.assertIn("name: draft evidence preflight", self.body)
