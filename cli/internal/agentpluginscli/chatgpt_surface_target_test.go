@@ -60,7 +60,7 @@ func TestChatGPTDesktopAliasUsesCodexLifecycleWithoutSecondBinding(t *testing.T)
 	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
 		t.Fatalf("expected one canonical installation and client binding, got %+v", state.Installations)
 	}
-	if _, ok := state.Installations[0].Clients[domain.ClientCodex]; !ok {
+	if _, ok := state.Installations[0].Clients[string(domain.ClientCodex)]; !ok {
 		t.Fatal("Desktop alias did not retain the canonical Codex-owned client binding")
 	}
 
