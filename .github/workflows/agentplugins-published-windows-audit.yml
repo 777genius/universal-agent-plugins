@@ -184,7 +184,7 @@ jobs:
           AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
           AUDIT_TARGET: ${{ matrix.target }}
           AUDIT_KIND: ${{ matrix.kind }}
-          AUDIT_LIMIT: ${{ github.event_name == 'pull_request' && '2' || github.event_name == 'schedule' && '20' || inputs.cases || '20' }}
+          AUDIT_LIMIT: ${{ github.event_name == 'pull_request' && '2' || github.event_name == 'push' && '30' || github.event_name == 'schedule' && '20' || inputs.cases || '20' }}
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\published-windows-proof" | Out-Null
