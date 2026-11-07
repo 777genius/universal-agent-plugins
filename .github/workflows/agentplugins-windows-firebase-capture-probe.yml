@@ -66,7 +66,11 @@ jobs:
           cli = shutil.which('agentplugins.cmd')
           assert cli is not None
           report = Path(os.environ['RUNNER_TEMP']) / 'published-firebase-claude.json'
-          with tempfile.TemporaryDirectory(prefix='uap-firebase-', dir=os.environ['RUNNER_TEMP']) as root:
+          # Reproduce the original long Windows TEMP profile, unlike the
+          # shorter RUNNER_TEMP positive control from the previous run.
+          with tempfile.TemporaryDirectory(prefix='uap-live-30x30-') as root:
+              case_root_chars = len(str(Path(root) / 'plugin-06'))
+              assert case_root_chars >= 65, 'Original Windows TEMP profile was not reproduced'
               row = audit.do_case(str(Path(cli).resolve()), 'claude', 'plugin', 'firebase',
                                   6, Path(root), doc['plugin_declared_names'],
                                   doc['signed_release_pins'])
@@ -74,6 +78,7 @@ jobs:
                   'source_sha': os.environ.get('GITHUB_SHA'),
                   'published_cli': 'agentplugins 0.1.101',
                   'target': 'claude', 'kind': 'plugin', 'case_index': 6,
+                  'temp_profile': 'original-windows-default', 'case_root_chars': case_root_chars,
                   'case': row
               }, indent=2) + '\n', encoding='utf-8')
               print(json.dumps({'status': row.get('status'),
