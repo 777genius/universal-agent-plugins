@@ -21,7 +21,7 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 		return writeJSONResult(cmd.OutOrStdout(), "add", overall, struct {
 			addMultiResult
 			Environment map[string]any `json:"environment"`
-		}{result, map[string]any{"saved": false, "reason": opts.environmentReason}})
+		}{result, map[string]any{"saved": false, "scope": opts.scope, "scope_selection_reason": scopeSelectionReason(cmd, opts), "reason": opts.environmentReason}})
 	}
 	if result.Status == "preflight_failed" {
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Nothing was installed: a selected client could not pass the checks before installation. See the error below; there is no new configuration to activate."); err != nil {

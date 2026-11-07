@@ -55,11 +55,12 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 		},
 	}
 	command.Flags().BoolVar(&all, "all", false, "update saved dependencies and eligible tracked installations after one complete preflight")
+	command.Flags().BoolVar(&opts.yes, "yes", false, "accept the complete preflighted update plan")
 	return command
 }
 
 func newRepairCommand(app App, opts *options) *cobra.Command {
-	return &cobra.Command{
+	command := &cobra.Command{
 		Use: "repair <name-or-installation-id>", Short: "Explicitly restore a missing or modified managed package",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -95,6 +96,8 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 			return runRepairMany(cmd.Context(), cmd, operationApp, opts, args[0], targets)
 		},
 	}
+	command.Flags().BoolVar(&opts.yes, "yes", false, "accept the preflighted repair plan")
+	return command
 }
 
 func newRemoveCommand(app App, opts *options) *cobra.Command {
@@ -109,6 +112,9 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
+			}
+			if opts.yes && strings.TrimSpace(opts.target) == "" && !opts.purgeData {
+				return CLIUsageError{Code: "TARGET_REQUIRED", Message: "remove --yes requires explicit --target"}
 			}
 			if handled, err := runSavedLifecycle(cmd, app, opts, args[0], "remove"); handled || err != nil {
 				return err
@@ -134,6 +140,7 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 	}
 	command.Flags().BoolVar(&opts.externalUninstalled, "external-uninstalled", false, "confirm the selected client plugin was uninstalled manually or was never activated/imported")
 	command.Flags().BoolVar(&opts.purgeData, "purge-data", false, "permanently delete ownership-verified plugin data after removal")
+	command.Flags().BoolVar(&opts.yes, "yes", false, "accept the preflighted removal plan (never implies --purge-data)")
 	return command
 }
 

@@ -105,6 +105,8 @@ type options struct {
 	projectRoot          string
 	scope                string
 	dryRun               bool
+	yes                  bool
+	scopeInferred        bool
 	format               string
 	plain                bool
 	externalUninstalled  bool

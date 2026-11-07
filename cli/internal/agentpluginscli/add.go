@@ -23,6 +23,7 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 			return executeAddCommand(cmd, app, opts, args[0], activationComplete, authComplete)
 		},
 	}
+	command.Flags().BoolVar(&opts.yes, "yes", false, "accept the preflighted installation plan without a confirmation prompt")
 	command.Flags().BoolVar(&opts.noSave, "no-save", false, "install without saving portable dependency intent")
 	command.Flags().StringVar(&opts.alias, "alias", "", "saved dependency alias")
 	command.Flags().StringVar(&opts.chatGPTAppID, "chatgpt-app-id", "", "personal Context7 registration ID copied from ChatGPT Developer Mode")
@@ -46,6 +47,9 @@ func addCommandArgs(opts *options) cobra.PositionalArgs {
 func executeAddCommand(cmd *cobra.Command, app App, opts *options, source string, activationComplete, authComplete bool) error {
 	if err := validateCommonOptions(opts); err != nil {
 		return err
+	}
+	if opts.yes && strings.TrimSpace(opts.target) == "" {
+		return CLIUsageError{Code: "TARGET_REQUIRED", Message: "add --yes requires explicit --target to avoid interactive selection"}
 	}
 	if opts.chatGPTAppID != "" {
 		if err := domain.ValidateChatGPTAppID(opts.chatGPTAppID); err != nil {
@@ -80,7 +84,7 @@ func executeAddCommand(cmd *cobra.Command, app App, opts *options, source string
 		return err
 	}
 	if len(targets) == 0 {
-		return fmt.Errorf("automated installation requires --target")
+		return CLIUsageError{Code: "TARGET_REQUIRED", Message: "automated installation requires --target"}
 	}
 	return runAddManyWithClients(cmd.Context(), cmd, app, opts, source, targets, activationComplete, authComplete, nil)
 }
