@@ -1,0 +1,96 @@
+package agentpluginscli
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+)
+
+func TestChatGPTSurfaceTargetParsingAndScope(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		raw  string
+		want []domain.ClientID
+	}{
+		{"chatgpt-desktop", []domain.ClientID{domain.ClientCodex}},
+		{"chatgpt-web", []domain.ClientID{domain.ClientChatGPT}},
+		{"CHATGPT-DESKTOP,CHATGPT-WEB", []domain.ClientID{domain.ClientCodex, domain.ClientChatGPT}},
+		{"codex,chatgpt", []domain.ClientID{domain.ClientCodex, domain.ClientChatGPT}},
+	} {
+		got, err := parseTargetOption(tc.raw)
+		if err != nil || !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("parseTargetOption(%q) = %v, %v; want %v", tc.raw, got, err, tc.want)
+		}
+	}
+	for _, raw := range []string{"codex,chatgpt-desktop", "chatgpt,chatgpt-web"} {
+		_, err := parseTargetOption(raw)
+		if err == nil || !strings.Contains(err.Error(), "duplicate client") {
+			t.Errorf("expected a duplicate backend refusal for %q; got %v", raw, err)
+		}
+	}
+	for _, scope := range []string{"project", "user"} {
+		for _, raw := range []string{" chatgpt-desktop ", "codex,CHATGPT-DESKTOP"} {
+			err := validateCommonOptions(&options{format: "human", scope: scope, target: raw})
+			if scope == "project" && err == nil {
+				t.Errorf("ChatGPT Desktop must refuse project scope, %q", raw)
+			}
+		}
+	}
+}
+
+func checkDesktopOnlyCodexBinding(t *testing.T, fixture cliFixture, receipts int) {
+	t.Helper()
+	state, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+		t.Fatalf("expected one canonical installation and binding, got %+v", state.Installations)
+	}
+	binding, ok := state.Installations[0].Clients[string(domain.ClientCodex)]
+	if !ok || binding.Materialization != domain.MaterializationMaterialized || len(binding.Receipts) != receipts {
+		t.Fatalf("Desktop alias must retain exactly the Codex binding and %d receipts: %+v", receipts, state.Installations[0].Clients)
+	}
+}
+
+func TestChatGPTDesktopAliasUsesCodexLifecycleWithoutSecondBinding(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCodex)})
+	plugin := writeCLIPlugin(t)
+
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt-desktop", "--format", "json"); err != nil {
+		t.Fatalf("Desktop alias add: %v", err)
+	}
+	checkDesktopOnlyCodexBinding(t, fixture, 1)
+
+	manifest := filepath.Join(plugin, "plugin.json")
+	body, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifest,
+		[]byte(strings.Replace(string(body), `"version": "1.0.0"`, `"version": "2.0.0"`, 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := fixture.execute(false, "update", "demo", "--target", "chatgpt-desktop", "--format", "json"); err != nil {
+		t.Fatalf("Desktop alias update: %v", err)
+	}
+	checkDesktopOnlyCodexBinding(t, fixture, 2)
+
+	if _, _, err := fixture.execute(false, "remove", "demo", "--target", "chatgpt-desktop", "--external-uninstalled", "--format", "json"); err != nil {
+		t.Fatalf("Desktop alias remove: %v", err)
+	}
+	state, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Installations) != 1 ||
+		len(state.Installations[0].Clients) != 0 ||
+		!state.Installations[0].DataRetained {
+		t.Fatalf("Desktop alias removal must retain data but no native client binding: %+v", state.Installations)
+	}
+}
