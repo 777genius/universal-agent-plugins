@@ -1,26 +1,27 @@
 import { pluginCommands } from './commands.ts';
+import capabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
 import { reachableTargetPolicies, resolveDistribution } from './registry.ts';
-import type { ClientID, DistributionResolution, RegistryPlugin } from '../types/registry.ts';
+import type { ClientID, ComponentID, DistributionResolution, RegistryPlugin } from '../types/registry.ts';
 
 // Published signed Directory v1 authenticates source identity. Released CLI
 // 0.1.101 separately checks explicit Project placement for every component
 // and mandatory dependency; User native evidence is NOT Project activation.
-const PROJECT_COMPONENTS: Partial<Record<ClientID, ReadonlySet<string>>> = {
-  claude: new Set(['skills', 'mcp']),
-  codex: new Set(['skills', 'mcp']),
-  opencode: new Set(['skills', 'mcp']),
-  cursor: new Set(['skills', 'mcp']),
-  gemini: new Set(['skills', 'mcp']),
-  copilot: new Set(['skills', 'mcp']),
-  kimi: new Set(['skills', 'mcp']),
-  cline: new Set(['skills', 'mcp']),
-  kiro: new Set(['skills', 'mcp']),
-  vscode: new Set(['skills', 'mcp']),
-  pi: new Set(['skills', 'mcp', 'extensions']),
-  qoder: new Set(['skills']), // native Project MCP is unsupported; preparation is skills-only
-  windsurf: new Set(['skills']), // legacy Cascade has no qualified Project MCP
-  grok: new Set(['skills']),
-};
+// One generated adapter-derived Project matrix. This is potential component
+// delivery, NOT exact MCP-transport approval or runtime/activation evidence.
+// The released CLI checks actual package bytes, dependencies and native policy.
+const projectCapabilities = new Map(capabilities.map((client) =>
+  [client.id, 'project' in client ? client.project : undefined] as const,
+));
+
+export function projectComponentSupported(client: ClientID, component: ComponentID): boolean {
+  const scoped = projectCapabilities.get(client);
+  if (!scoped) return false;
+  if (component === 'skills') return scoped.skill_support !== 'unsupported';
+  if (component === 'extensions') return scoped.extension_support !== 'unsupported';
+  return scoped.mcp_transports.stdio !== 'unsupported' ||
+    scoped.mcp_transports['streamable-http'] !== 'unsupported';
+}
+
 const GIT_REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const FULL_REVISION = /^[0-9a-f]{40}$/;
 
@@ -40,10 +41,9 @@ function projectCompatible(
         (part) => !/^[A-Za-z0-9._-]+$/.test(part) || part === '.' || part === '..',
       )))) return false;
   return targets.every((client) => {
-    const allowed = PROJECT_COMPONENTS[client];
     const target = dist.targets.find((candidate) => candidate.client === client);
-    return Boolean(allowed && target && !target.app_binding &&
-      dist.components.every((component) => allowed.has(component)));
+    return Boolean(target && !target.app_binding &&
+      dist.components.some((component) => projectComponentSupported(client, component)));
   });
 }
 
@@ -54,7 +54,15 @@ export function projectCatalogSelection(
   const signedProject = resolveDistribution(plugin, targets, 'project');
   // Honor explicit project-scoped policy if present. Signed v1 User grants
   // also authenticate sources for the owner's explicit Project request.
-  const selected = signedProject.distribution ? signedProject : resolveDistribution(plugin, targets, 'user');
+  // A signed-v2 scoped closure must never be downgraded into v1's
+  // user-grant-as-source behavior. Its explicit Project policy is authoritative.
+  const hasCanonicalClosure = plugin.distributions.some((distribution) =>
+    distribution.releases.some((release) =>
+      release.targets.some((target) =>
+        targets.includes(target.client) && target.canonical_closure !== undefined)));
+  const selected = signedProject.distribution || hasCanonicalClosure
+    ? signedProject
+    : resolveDistribution(plugin, targets, 'user');
   if (!projectCompatible(plugin, targets, selected, Boolean(signedProject.distribution))) {
     return { resolution: { ...signedProject, distribution: undefined } };
   }
