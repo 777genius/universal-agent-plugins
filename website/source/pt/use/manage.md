@@ -38,9 +38,9 @@ autenticação.
 | O cliente precisa de confiança, ativação ou acesso à conta | Siga as instruções do cliente indicadas para o destino. |
 | O pacote local falha na validação | Entregue ao autor o relatório do pacote e as [orientações de verificação](../build/checks). |
 
-## API local de gerenciamento (CLI 0.1.95) {#local-management-api}
+## API local de gerenciamento  {#local-management-api}
 
-A [CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
+A [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 adiciona `agentplugins manage serve` para aplicativos que incorporam o instalador
 e `agentplugins manage discover` para descobrir clientes e perfis locais sem
 alterá-los. A descoberta não executa clientes, não consulta suas versões,

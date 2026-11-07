@@ -59,6 +59,9 @@ body,
   min-height: 100%;
 }
 .registry-surface {
+  /* Clip decorative and animated overflow without hiding horizontal table scrollers. */
+  position: relative;
+  overflow-x: clip;
   color: var(--text);
   line-height: 1.6;
 }
@@ -1081,6 +1084,11 @@ img {
   }
 }
 
+/* Keep catalog card widths comfortable without widening the rest of the site. */
+.catalog-wrap.container,
+.directory-page > .container {
+  --max-width: 1480px;
+}
 .catalog-wrap {
   padding-block: 90px;
 }
@@ -1949,13 +1957,12 @@ img {
     ),
     var(--surface);
   transition:
-    transform 0.22s ease,
     border-color 0.22s ease,
     box-shadow 0.22s ease;
 }
+/* Keep plugin cards stationary; border and shadow already provide hover feedback. */
 .plugin-card:hover {
   z-index: 1;
-  transform: translateY(-4px);
   border-color: color-mix(in srgb, var(--primary) 48%, var(--line));
   box-shadow: 0 20px 45px rgba(0, 0, 0, 0.16);
 }

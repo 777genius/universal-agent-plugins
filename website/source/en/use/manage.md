@@ -35,9 +35,9 @@ remote service is healthy or that a client has completed authentication.
 | Client needs trust, activation or sign-in | Follow the target's reported client instructions. |
 | Local package fails validation | Give the author the package report and [check guidance](../build/checks). |
 
-## Local management API (CLI 0.1.95) {#local-management-api}
+## Local management API {#local-management-api}
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) adds
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) adds
 `agentplugins manage serve` for applications embedding the installer and
 `agentplugins manage discover` for read-only local client/profile discovery.
 Discovery does not execute clients, probe their versions, fetch sources or

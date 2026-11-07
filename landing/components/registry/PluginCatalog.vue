@@ -55,7 +55,7 @@ function restoreFilters() {
 restoreFilters();
 watch(() => route.query, restoreFilters);
 const mobileFiltersOpen = ref(false);
-const pageSize = 48;
+const pageSize = 15;
 const catalogUi = useCatalogUiStore();
 const family = computed(() =>
   /\/plugins\/?$/.test(route.path) ? ('catalog' as const) : ('home' as const),
@@ -385,7 +385,7 @@ watch([query, category, component, source, trust, client, authentication, owner]
         </p>
       </div>
     </div>
-    <div v-if="visible.length" class="plugin-grid">
+    <div v-if="visible.length" class="plugin-grid plugin-grid--plugins">
       <RegistryPluginCard
         v-for="group in displayed"
         :key="group.primary.install_source"

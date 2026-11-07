@@ -350,7 +350,7 @@ async function copyDiagnostics() {
               <span class="skillspector__status-dot" aria-hidden="true"></span>
               {{ t('registryUi.skillSpector.title') }} · {{ label }}
             </p>
-            <p>{{ t('registryUi.skillSpector.statusExplanation') }}</p>
+            <p v-if="displayStatus === 'incomplete'">{{ t('registryUi.skillSpector.statusExplanation') }}</p>
             <p
               class="skillspector__copy-feedback"
               :class="{ 'skillspector__copy-feedback--empty': copyState === 'idle' }"
@@ -384,6 +384,17 @@ async function copyDiagnostics() {
         <div class="skillspector__details" :aria-busy="reportStatus === 'loading'">
       <section class="skillspector__advice">
         <strong>{{ t('registryUi.skillSpector.installAdvice') }}</strong>
+        <p v-if="scannedSkills !== undefined">
+          {{
+            t(
+              `registryUi.skillSpector.${assessment.inventoryKnown ? 'fullyChecked' : 'selectedFullyChecked'}`,
+              {
+                checked: n(scannedSkills),
+                total: n(assessment.selected ?? 0),
+              },
+            )
+          }}
+        </p>
         <p>
           {{ t(`registryUi.skillSpector.${scope === 'plugin' ? 'pluginScope' : 'skillScope'}`) }}
         </p>
@@ -406,17 +417,6 @@ async function copyDiagnostics() {
         >
           {{ t('registryUi.skillSpector.retryLoad') }}
         </button>
-        <p v-if="scannedSkills !== undefined">
-          {{
-            t(
-              `registryUi.skillSpector.${assessment.inventoryKnown ? 'fullyChecked' : 'selectedFullyChecked'}`,
-              {
-                checked: n(scannedSkills),
-                total: n(assessment.selected ?? 0),
-              },
-            )
-          }}
-        </p>
         <section v-if="assessment.pendingIds?.length" class="skillspector__waiting">
           <h3>{{ t('registryUi.skillSpector.awaitingList') }}</h3>
           <p>{{ t('registryUi.skillSpector.awaitingExplanation') }}</p>
@@ -881,7 +881,7 @@ async function copyDiagnostics() {
 }
 .skillspector__dialog-intro {
   min-width: 0;
-  flex: 1 1 320px;
+  flex: 1 1 auto;
 }
 .skillspector__dialog-actions {
   display: flex;
@@ -1124,7 +1124,7 @@ async function copyDiagnostics() {
     max-height: calc(100dvh - 12px);
   }
   .skillspector__dialog-frame { max-height: calc(100dvh - 12px); }
-  .skillspector__dialog-header { padding: 14px; gap: 10px; flex-direction: column; }
+  .skillspector__dialog-header { padding: 14px; gap: 10px; flex-direction: column; align-items: stretch; }
   .skillspector__dialog-actions { width: 100%; flex-wrap: nowrap; }
   .skillspector__copy { flex: 1 1 auto; min-width: 0; text-align: center; white-space: normal; line-height: 1.35; }
   .skillspector__copy svg { flex: 0 0 16px; }

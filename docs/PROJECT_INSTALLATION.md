@@ -42,13 +42,13 @@ the final feature-source native run; each client's activation limits still apply
 ## Signed Directory and direct sources in Project
 
 The Directory uses **one signed schema-1 source authority**. Its published
-scope rows remain User-only for existing readers, but the installer in current
-`main` can independently admit **explicit Project placement** for an eligible
+scope rows remain User-only for existing readers, but the current stable CLI can independently admit **explicit Project placement** for an eligible
 signed root and each mandatory dependency. It enforces exact source pins,
 revocations, source integrity, selected native Project capabilities and
 ownership. User runtime evidence is never reused as Project activation proof.
 
-Build the current source (PR #725 and later) to use a short Directory name:
+Use the current stable CLI to preview a short Directory name for an eligible
+Project package (all required dependencies must also qualify):
 
 ```sh
 cd /path/to/project
@@ -60,8 +60,9 @@ can have separate installations in User, Project A and Project B. A denied
 Project request must not silently install into User. See the
 [client matrix](PROJECT_CLIENT_SUPPORT.md) for supported components.
 
-**Release boundary:** Published CLI 0.1.95 predates this capability.
-For that released installer, use a reviewed full-SHA direct Git source:
+**Alternative: exact Git pin.** The published stable CLI supports signed
+Directory short names in eligible Project scope. For a reproducible direct Git
+source, use the reviewed full commit SHA:
 
 ```sh
 agentplugins add github:OWNER/REPOSITORY@FULL_COMMIT_SHA//PACKAGE_PATH \
