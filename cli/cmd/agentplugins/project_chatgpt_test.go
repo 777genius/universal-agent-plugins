@@ -46,6 +46,34 @@ func TestProjectChatGPTCLIRefusesAllTargetedIntentsBeforeEffects(t *testing.T) {
 	projectChatGPTAssertNoEffects(t, spy, user, a)
 }
 
+// The public chatgpt spelling means Desktop; unlike canonical chatgpt Web,
+// it must fail before project acquisition rather than fall through to Codex.
+func TestPublicChatGPTDesktopProjectAliasRefusesBeforeEffects(t *testing.T) {
+	app, user, project, _ := projectCompositionFixture(t)
+	spy := &projectChatGPTBoundaries{}
+	app = projectChatGPTApp(app, spy)
+	source := filepath.Join(t.TempDir(), "package")
+	projectChatGPTWrite(t, filepath.Join(source, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"chatgpt-desktop-scope-proof"}`)
+	before := securityFixtureTree(t, project)
+	for _, args := range [][]string{
+		{"add", source, "--no-save", "--target", "chatgpt"},
+		{"install", source, "--no-save", "--target", "chatgpt"},
+		{"update", "missing", "--target", "chatgpt"},
+		{"repair", "missing", "--target", "chatgpt"},
+		{"remove", "missing", "--target", "chatgpt"},
+		{"skills", "add", "https://invalid.example/no-acquisition", "--skill", "docs", "--target", "chatgpt", "--yes"},
+	} {
+		out, err := projectChatGPTExecute(app, project, args...)
+		if err == nil || !strings.Contains(err.Error(), "chatgpt (Desktop) supports only --scope user") || strings.Contains(out, "success") {
+			t.Fatalf("Desktop project alias must refuse before effects %v: %s %v", args, out, err)
+		}
+	}
+	if !reflect.DeepEqual(before, securityFixtureTree(t, project)) {
+		t.Fatal("Desktop project alias changed project files")
+	}
+	projectChatGPTAssertNoEffects(t, spy, user, project)
+}
+
 func TestProjectChatGPTSavedTargetRefusesBeforeLockAndAcquisition(t *testing.T) {
 	for _, args := range [][]string{{"deps", "lock"}, {"deps", "update", "docs"}, {"deps", "sync", "--yes"}, {"install", "--yes"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
