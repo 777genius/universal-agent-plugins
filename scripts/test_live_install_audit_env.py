@@ -1213,7 +1213,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             home = Path(temporary) / "home"
             profile = home / ".qoder"
             profile.mkdir(parents=True)
-            env = {"QODER_CONFIG_DIR": str(profile)}
+            # macOS /var may resolve to /private/var; the production probe
+            # requires the same canonical directory as isolated_client_env.
+            env = {"QODER_CONFIG_DIR": str(profile.resolve(strict=True))}
             native = str(Path(temporary) / "trusted-qodercli")
             def probe(rows, code=0):
                 return {"exit_code": code, "_json": rows}
