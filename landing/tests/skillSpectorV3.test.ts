@@ -929,7 +929,7 @@ describe('SkillSpector v3 exact producer contract', () => {
         record.findings.some((finding) => finding.review_status === 'false_positive'),
       );
       assert.ok(annotatedRecord);
-      annotatedRecord.profile.digest = profile.digest;
+      annotatedRecord.profile = { ...profile };
       const annotations = annotatedRecord.findings.filter(
         (finding: { review_status: string }) => finding.review_status === 'false_positive',
       );
