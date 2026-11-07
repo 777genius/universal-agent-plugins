@@ -2441,6 +2441,15 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                 self.assertIsNone(actual["exit_code"])
                 self.assertIsNone(actual["_json"])
                 self.assertEqual(actual["stderr_tail"], "native add success JSON unavailable")
+            def rejected(*_args, **kwargs):
+                kwargs["stdout"].write(b'{"result":"failed"}')
+                kwargs["stderr"].write(b"provider refused immutable source")
+                return subprocess.CompletedProcess(["agentplugins"], 1)
+            with patch.object(audit.subprocess, "run", side_effect=rejected):
+                actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
+                                    capture_files=True)
+            self.assertEqual(actual["exit_code"], 1)
+            self.assertEqual(actual["stderr_tail"], "provider refused immutable source")
         with patch.object(audit.subprocess, "run",
                           return_value=subprocess.CompletedProcess(
                               ["agentplugins"], 0, stdout='{"result":"success"}',
