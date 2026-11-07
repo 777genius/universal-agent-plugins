@@ -81,7 +81,7 @@ jobs:
       matrix:
         # The full source-built graph/repair catalog already covers 4 OSs
         # on relevant PRs. Weekly/manual add both ARM64 hosted runners.
-        os: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '["ubuntu-24.04","ubuntu-24.04-arm","windows-2025","windows-11-arm","macos-15","macos-15-intel"]' || '["ubuntu-24.04","windows-2025","macos-15","macos-15-intel"]') }}
+        os: ${{ fromJSON((github.event_name != 'pull_request') && '["ubuntu-24.04","ubuntu-24.04-arm","windows-2025","windows-11-arm","macos-15","macos-15-intel"]' || '["ubuntu-24.04","windows-2025","macos-15","macos-15-intel"]') }}
     env:
       GOMAXPROCS: '3'
     steps:
