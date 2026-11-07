@@ -362,9 +362,9 @@ for (const width of [1440, 390]) {
     const detail = page.locator('.install-panel');
     await expect(detail.locator('.install-outcome [data-component="skills"]')).toHaveAttribute('data-support', 'supported');
     await expect(detail.locator('.install-outcome [data-component="mcp"]')).toHaveAttribute('data-support', 'unsupported');
-    await expect(detail.locator('.command-snippet--add code')).toContainText('--scope project');
+    await expect(detail.locator('.install-command-row .command-snippet--add code')).toContainText('--scope project');
     await detail.getByRole('button', { name: 'This computer', exact: true }).click();
-    await expect(detail.locator('.command-snippet--add code')).not.toContainText('--scope project');
+    await expect(detail.locator('.install-command-row .command-snippet--add code')).not.toContainText('--scope project');
     await expect(detail.locator('.install-outcome [data-support]')).toHaveCount(0);
     expect(errors).toEqual([]);
   });
