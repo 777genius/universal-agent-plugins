@@ -1317,8 +1317,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # Keep the original strict add/list/repeat/remove evidence; only avoid
     # inherited Windows Firebase child pipe handles masking parent exit.
     file_capture = (sys.platform == "win32" and kind == "plugin" and item == "firebase")
-    output = audited_call([cli, *args], env, project, add_timeout,
-                          capture_files=file_capture)
+    capture_option = {"capture_files": True} if file_capture else {}
+    output = audited_call([cli, *args], env, project, add_timeout, **capture_option)
     added_json = output.pop("_json", None)
     native_components = (native_components_from_add(added_json)
                          if kind == "plugin" else ())
@@ -1391,7 +1391,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             )
         before_repeat_lock = lock_state()
         repeat_add = audited_call([cli, *args], env, project, add_timeout,
-                                  capture_files=file_capture)
+                                  **capture_option)
         repeat_add.pop("_json", None)
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
