@@ -220,6 +220,9 @@ test('header exposes the documentation entrypoint on desktop and mobile', async 
 
 
 test('header keeps primary links at laptop width and GitHub icon follows theme', async ({ page }) => {
+  // Two full theme reloads plus four real route/anchor navigations can exceed
+  // the default 30-second budget on loaded CI; keep every assertion intact.
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1024, height: 850 });
   await page.goto('./');
   await expect(page.locator('.app-header__nav')).toBeVisible();
