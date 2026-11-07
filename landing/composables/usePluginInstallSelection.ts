@@ -23,7 +23,10 @@ export function usePluginInstallSelection(
   const availableClients = computed(() => {
     const policies = reachableTargetPolicies(plugin().distributions);
     return installTargets.filter((client) =>
-      policies.some((policy) => policy.client === canonicalInstallTarget(client.id)),
+      policies.some((policy) =>
+        policy.client === canonicalInstallTarget(client.id) &&
+        (client.id !== 'chatgpt' || Boolean(policy.app_binding)),
+      ),
     );
   });
   const select = (selected: InstallTargetID[]): DistributionResolution => {
@@ -31,9 +34,19 @@ export function usePluginInstallSelection(
     if (scope.value === 'project' && selected.includes('chatgpt-desktop'))
       return { unavailable_reason: 'ChatGPT Desktop supports only This computer; select Codex for a project install.' };
     const canonical = canonicalInstallTargets(selected);
-    return scope.value === 'project'
+    const resolved = scope.value === 'project'
       ? projectCatalogSelection(plugin(), canonical).resolution
       : resolveDistribution(plugin(), canonical, 'user');
+    // A signed ChatGPT Web target is meaningful only with its registered app
+    // identity. Older/preview projections must not enable a cloud install.
+    if (selected.includes('chatgpt') &&
+        !resolved.distribution?.targets.some((target) =>
+          target.client === 'chatgpt' && Boolean(target.app_binding))) {
+      return {
+        unavailable_reason: 'ChatGPT Web needs a verified app binding in this release.',
+      };
+    }
+    return resolved;
   };
   const targetDistributions = computed(
     () =>
