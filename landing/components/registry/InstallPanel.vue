@@ -4,6 +4,7 @@ import {
   installTargets,
   canonicalInstallTarget,
   canonicalInstallTargets,
+  cliInstallTargets,
   type InstallTargetID,
 } from '~/data/installTargets';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
@@ -85,8 +86,8 @@ const commands = computed(() =>
   canUseSource.value &&
   (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
     ? (scope.value === 'project'
-        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : targets.value)
-        : pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
+        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
+        : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
       )
     : undefined,
 );
