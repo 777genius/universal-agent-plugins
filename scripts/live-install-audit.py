@@ -1607,7 +1607,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "sentinels_preserved": sentinels_preserved}
 
 
-def expected_negative_coverage(row):
+def expected_negative_coverage(row, cli_version=None):
     """Accept only verified *non-native* outcomes, never relabel them PASS.
 
     The published release has frozen unsupported target combinations, and
@@ -1651,6 +1651,7 @@ def expected_negative_coverage(row):
             "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e",
         }
         if (row.get("status") == "package-installed-native-unqualified"
+                and cli_version == "agentplugins 0.1.101"
                 and row.get("prepared_components_only") is False
                 and native_files == []
                 and row.get("source") in non_native_direct_sources):
@@ -1798,7 +1799,10 @@ def main():
     report["passed"] = passed
     report["prepared_lifecycle_passed"] = sum(
         r["status"] == "prepared-lifecycle-passed" for r in report["results"])
-    accepted_negatives = [r for r in report["results"] if expected_negative_coverage(r)]
+    accepted_negatives = [
+        r for r in report["results"]
+        if expected_negative_coverage(r, report["cli_version"].get("value"))
+    ]
     report["verified_negative_coverage"] = len(accepted_negatives)
     report["full_coverage"] = args.limit == 30 and report["cases_attempted"] == 30
     save()
