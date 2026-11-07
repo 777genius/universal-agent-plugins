@@ -55,7 +55,7 @@ function restoreFilters() {
 restoreFilters();
 watch(() => route.query, restoreFilters);
 const mobileFiltersOpen = ref(false);
-const pageSize = 48;
+const pageSize = 15;
 const catalogUi = useCatalogUiStore();
 const family = computed(() =>
   /\/plugins\/?$/.test(route.path) ? ('catalog' as const) : ('home' as const),
