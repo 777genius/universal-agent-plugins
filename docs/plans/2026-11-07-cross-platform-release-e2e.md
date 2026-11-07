@@ -19,7 +19,7 @@ Increase confidence in the **published** `universal-agent-plugins` installer and
 
 ### Actual event-based coverage tiers
 
-- **On relevant PRs:** the established five-agent Windows/macOS ARM64 matrices use 2 fixed real sources per agent/kind; the package-manager catalog runs on four OSs when ready, and the native binary scripts verify all six.
+- **On relevant PRs:** draft Windows/macOS ARM64 matrices use the five established agents × 2 frozen sources; Ready-for-Review expands to nine pinned agents (Pi Skills only) × 2 sources. Source-built Project/User update/repair catalog runs on four OSs when ready; native installer verifies all six.
 - **On merge to `main` of these exact workflows/fixtures:** Windows/macOS ARM64 expand to nine real agents (Pi Skills only), **all 30 frozen sources** in each supported lane. The package-manager graph/update/repair catalog covers all six OSs; Linux npm qualification retains its own 17-source-backed lanes.
 - **Weekly:** Windows/macOS ARM64 test 20 signed Directory sources per lane (including Marketing Kit and negative target-policy cases), with 9 clients; full source-built graph tests run on all six OSs. Linux's 17 published npm lanes retain their original 30/12/15 pinned source counts, and existing native client local-MCP runtime remains weekly.
 - **Manual:** `workflow_dispatch` for Windows/macOS accepts 2, 20 or 30 real sources and a validated exact stable release version; six-platform native installer can also validate any exact prior public stable tag. The default uses the latest public stable.
