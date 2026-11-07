@@ -382,7 +382,7 @@ test('unsupported-only Project does not show a misleading scope switch, but the 
   expect(errors).toEqual([]);
 });
 
-test('Project MCP-only is allowed for Qoder, while extension-only requires Pi', async ({ page }) => {
+test('Project MCP-only is allowed for Qoder', async ({ page }) => {
   const errors = await offline(page);
   await projections(page, partialComponentsFixture(['mcp'], ['qoder']));
   await navigate(page, '/', 'en', '?q=i18n-state-00');

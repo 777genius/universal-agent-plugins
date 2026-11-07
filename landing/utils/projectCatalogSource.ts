@@ -13,6 +13,8 @@ const projectCapabilities = new Map(capabilities.map((client) =>
   [client.id, 'project' in client ? client.project : undefined] as const,
 ));
 
+// Broad capability preview only: the signed release does not expose which MCP
+// transports a package needs (including SSE-only). The CLI decides exact fit.
 export function projectComponentSupported(client: ClientID, component: ComponentID): boolean {
   const scoped = projectCapabilities.get(client);
   if (!scoped) return false;
