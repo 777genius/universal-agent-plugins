@@ -242,9 +242,48 @@ def codex_owned_native_config(path, identity, case_root):
     return False
 
 
-def attributable_native_changes(native_roots, changes, identity, target):
+def native_components_from_add(parsed):
+    """Read exact natively supported component identities from the released CLI.
+
+    Metadata is a candidate list only; each name still needs independent,
+    changed on-disk native evidence inside the disposable client profile.
+    """
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("data"), dict):
+        return ()
+    actions = parsed["data"].get("actions")
+    if not isinstance(actions, list):
+        return ()
+    names = set()
+    for action in actions:
+        if not isinstance(action, dict) or not isinstance(action.get("component_support"), list):
+            continue
+        for component in action["component_support"]:
+            if not isinstance(component, dict) or component.get("support") != "native":
+                continue
+            name = component.get("name")
+            if isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", name):
+                names.add(name)
+    return tuple(sorted(names))
+
+
+def prepared_only_add(parsed):
+    """Never call a prepared-only package a native installation."""
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("data"), dict):
+        return False
+    actions = parsed["data"].get("actions")
+    if not isinstance(actions, list) or not actions:
+        return False
+    support = [c["support"] for a in actions if isinstance(a, dict)
+               for c in a.get("component_support", [])
+               if isinstance(c, dict) and isinstance(c.get("support"), str)]
+    return bool(support) and all(value == "prepared" for value in support)
+
+
+def attributable_native_changes(native_roots, changes, identity, target, component_names=()):
     """Credit only identity-attributed active native state, not cached downloads."""
     found = []
+    identities = tuple(dict.fromkeys((identity, *component_names)))
+    normalized = {name.casefold() for name in identities}
     for root in native_roots:
         if not root.is_dir() or root.is_symlink():
             continue
@@ -262,17 +301,20 @@ def attributable_native_changes(native_roots, changes, identity, target):
                 # A complete name component (or file stem) is an attributable
                 # managed native path; arbitrary substring matches are not.
                 owned_path = any(
-                    component.casefold() == identity.casefold()
-                    or Path(component).stem.casefold() == identity.casefold()
+                    component.casefold() in normalized
+                    or Path(component).stem.casefold() in normalized
                     for component in Path(relative).parts
                 )
                 # Larger files without an attributable path stay unqualified.
-                owned_content = (not owned_path and leaf.stat().st_size <= 1024 * 1024
-                                 and (codex_owned_native_config(leaf, identity, root.parent.parent)
-                                      if target == "codex" and relative == "config.toml"
-                                      else exact_native_identity(
-                                          leaf.read_text(encoding="utf-8", errors="replace"),
-                                          identity)))
+                owned_content = False
+                if not owned_path and leaf.stat().st_size <= 1024 * 1024:
+                    if target == "codex" and relative == "config.toml":
+                        owned_content = codex_owned_native_config(
+                            leaf, identity, root.parent.parent)
+                    else:
+                        content = leaf.read_text(encoding="utf-8", errors="replace")
+                        owned_content = any(exact_native_identity(content, name)
+                                            for name in identities)
                 if owned_path or owned_content:
                     found.append(relpath)
             except OSError:
@@ -431,13 +473,16 @@ def copilot_disabled_preference_only(before, after_add, after_remove,
             and after_remove.get("match_counts") == expected_after)
 
 
-def native_identity_residuals(native_roots, identity, observed_paths, target):
+def native_identity_residuals(native_roots, identity, observed_paths, target,
+                              component_names=()):
     """After remove, reject any remaining named native file/config entry.
 
     Codex may retain its downloaded source cache after its native plugin and
     marketplace are removed; that cache is not active client configuration.
     """
     leftover = []
+    identities = tuple(dict.fromkeys((identity, *component_names)))
+    normalized = {name.casefold() for name in identities}
     for root in native_roots:
         prefix = root.name + "/"
         if root.is_symlink():
@@ -464,11 +509,11 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
                 elif passive_native_path(target, relative):
                     continue
                 elif any(
-                        part.casefold() == identity.casefold()
-                        or Path(part).stem.casefold() == identity.casefold()
-                        or re.fullmatch(
-                            re.escape(identity) + r"@agentplugins-[0-9a-f]{12}",
-                            Path(part).stem, re.IGNORECASE)
+                        part.casefold() in normalized
+                        or Path(part).stem.casefold() in normalized
+                        or any(re.fullmatch(
+                            re.escape(name) + r"@agentplugins-[0-9a-f]{12}",
+                            Path(part).stem, re.IGNORECASE) for name in identities)
                         for part in Path(relative).parts):
                     leftover.append(observed)
                 elif file.stat().st_size > 1024 * 1024:
@@ -476,11 +521,12 @@ def native_identity_residuals(native_roots, identity, observed_paths, target):
                     leftover.append(observed + ": unscanned-too-large")
                 else:
                     contents = file.read_text(encoding="utf-8", errors="replace")
-                    qualified = re.search(
-                        r"(?<![A-Za-z0-9_./:-])" + re.escape(identity)
+                    qualified = any(re.search(
+                        r"(?<![A-Za-z0-9_./:-])" + re.escape(name)
                         + r"@agentplugins-[0-9a-f]{12}(?![A-Za-z0-9_./-])",
-                        contents, re.IGNORECASE)
-                    if exact_native_identity(contents, identity) or qualified:
+                        contents, re.IGNORECASE) for name in identities)
+                    if qualified or any(exact_native_identity(contents, name)
+                                        for name in identities):
                         leftover.append(observed)
             except FileNotFoundError:
                 continue
@@ -1193,11 +1239,16 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     copilot_before = (copilot_settings_sanitized_shape(home, case_root, identity)
                       if kind == "plugin" and target == "copilot" else None)
     output = audited_call([cli, *args], env, project)
-    output.pop("_json", None)
+    added_json = output.pop("_json", None)
+    native_components = (native_components_from_add(added_json)
+                         if kind == "plugin" else ())
+    prepared_components_only = (prepared_only_add(added_json)
+                                if kind == "plugin" else False)
     copilot_after_add = (copilot_settings_sanitized_shape(home, case_root, identity)
                          if copilot_before is not None else None)
     changed = set(snapshot(native_roots).items()) - set(before.items())
-    native_attribution = attributable_native_changes(native_roots, changed, identity, target)
+    native_attribution = attributable_native_changes(
+        native_roots, changed, identity, target, native_components)
     skill_path = skill_file_present(project, target, identity) if kind == "skill" else None
     locked = (project / "uap.toml").is_file() and (project / "uap.lock").is_file()
     lock_contains = locked and identity in (project / "uap.lock").read_text(encoding="utf-8")
@@ -1368,7 +1419,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         native_identity_residuals(
             native_roots, identity,
             sorted(set(snapshot(native_roots)) | set(native_attribution) | set(unsafe_paths)),
-            target)
+            target, native_components)
         if cleanup and cleanup["exit_code"] == 0 else []
     )
     # Preserve truthful disk-state evidence without equating passive cached
@@ -1413,7 +1464,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     elif target == "chatgpt" and kind == "plugin" and installed and removal_verified and sentinels_preserved and repeat_verified:
         status = "manual-setup-prepared"
     elif installed and removal_verified and sentinels_preserved and repeat_verified:
-        status = ("package-installed-native-unqualified" if (
+        status = ("prepared-lifecycle-passed" if (
+                       kind == "plugin" and prepared_components_only
+                       and not native_attribution)
+                  else "package-installed-native-unqualified" if (
                        kind == "plugin" and (
                            (target == "qoder" and
                             (qoder_native_before_remove is None or
@@ -1471,7 +1525,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "source": item if kind == "plugin" else item["source"],
             "status": status, "install": output, "list": listed,
             "native_file_delta": len(changed),
-            "native_identity_files": native_attribution, "skill_path": skill_path,
+            "native_identity_files": native_attribution,
+            "native_component_candidates": list(native_components),
+            "prepared_components_only": prepared_components_only,
+            "skill_path": skill_path,
             "lock_written": bool(locked), "lock_contains_identity": bool(lock_contains),
             "lock_exact_source_pinned": lock_pinned, "skill_bytes_match": bool(skill_bytes_match),
             "listed_identity": listed_identity, "prepared_binding": prepared_binding,
@@ -1505,6 +1562,39 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "post_list_schema_valid": post_list_schema_valid,
             "post_remove_identity_registered": post_remove_identity_registered,
             "sentinels_preserved": sentinels_preserved}
+
+
+def expected_negative_coverage(row):
+    """Green audit means independently verified outcome, not all installs PASS.
+
+    The pinned release deliberately refuses Marketing Kit on these four
+    clients, and OpenCode's Docker Hub MCP binding is prepared-only. Never
+    promote other errors or missing native proof into accepted coverage.
+    """
+    if not row.get("sentinels_preserved") or row.get("failed_install_residue"):
+        return False
+    if (row.get("status") == "prepared-lifecycle-passed"
+            and row.get("kind") == "plugin" and row.get("target") == "opencode"
+            and row.get("source") == "docker-hub"
+            and row.get("prepared_components_only")
+            and not row.get("native_identity_files")
+            and row.get("repeat_verified") and row.get("removal_verified")):
+        return True
+    target = row.get("target")
+    return bool(
+        row.get("status") == "documented-or-source-unsupported"
+        and row.get("kind") == "plugin" and row.get("source") == "marketing-kit"
+        and target in ("cline", "copilot", "kimi", "qoder")
+        and row.get("native_file_delta") == 0
+        and not row.get("native_identity_files")
+        and not row.get("listed_identity")
+        and not row.get("failed_install_registered")
+        and isinstance(row.get("install"), dict)
+        and row["install"].get("exit_code") not in (0, None)
+        and "release does not support complete target set" in
+            row["install"].get("stderr_tail", "")
+        and ("missing " + target) in row["install"].get("stderr_tail", "")
+    )
 
 
 def unexecuted_source_rows(selected, kind, target, status, declared_names):
@@ -1622,10 +1712,12 @@ def main():
     report["passed"] = passed
     report["prepared_lifecycle_passed"] = sum(
         r["status"] == "prepared-lifecycle-passed" for r in report["results"])
+    accepted_negatives = [r for r in report["results"] if expected_negative_coverage(r)]
+    report["verified_negative_coverage"] = len(accepted_negatives)
     report["full_coverage"] = args.limit == 30 and report["cases_attempted"] == 30
     save()
     print(f'{args.target} {args.kind}: {passed}/{args.limit} passed; attempted={report["cases_attempted"]}')
-    return 0 if passed == args.limit else 1
+    return 0 if passed + len(accepted_negatives) == args.limit else 1
 
 
 if __name__ == "__main__":
