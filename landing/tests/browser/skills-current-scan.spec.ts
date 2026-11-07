@@ -206,6 +206,9 @@ test('explicit filter retry recovers a newly published v3 after fulfilled legacy
 });
 
 test('contradictory duplicate source states fail both filters closed at the verified manifest boundary', async ({ page }) => {
+  // Verification of the forged index is asynchronous; keep the fail-closed
+  // assertion, but allow the same bounded load used by other evidence tests.
+  test.setTimeout(90_000);
   const fixture = await prepare(page);
   const forged = structuredClone(fixture.manifest);
   forged.source_states.push({ ...structuredClone(forged.source_states[0]!),
@@ -215,7 +218,7 @@ test('contradictory duplicate source states fail both filters closed at the veri
   for (const query of ['skillScan=scanned', 'skillRemarks=none']) {
     await page.goto(`plugins/?tab=skills&${query}`);
     // CI can hydrate verified shard data after the default 5s assertion window.
-    await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
+    await expect(page.locator('.skills-catalog')).toHaveAttribute('aria-busy', 'false', { timeout: 30_000 });
     await expect(cards(page)).toHaveCount(0);
     await expect(page.getByText('Some scan reports could not be verified. Those Skills were excluded.')).toBeVisible();
   }

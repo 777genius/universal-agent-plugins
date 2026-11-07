@@ -1087,7 +1087,7 @@ img {
   }
 }
 
-/* Widen only the catalogs so five cards remain readable. */
+/* Keep catalog card widths comfortable without widening the rest of the site. */
 .catalog-wrap.container,
 .directory-page > .container {
   --max-width: 1480px;
@@ -1943,9 +1943,6 @@ img {
   align-items: start;
   gap: 12px;
 }
-.plugin-grid--plugins {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
 .plugin-card {
   position: relative;
   min-height: 238px;
@@ -1963,13 +1960,12 @@ img {
     ),
     var(--surface);
   transition:
-    transform 0.22s ease,
     border-color 0.22s ease,
     box-shadow 0.22s ease;
 }
+/* Keep plugin cards stationary; border and shadow already provide hover feedback. */
 .plugin-card:hover {
   z-index: 1;
-  transform: translateY(-4px);
   border-color: color-mix(in srgb, var(--primary) 48%, var(--line));
   box-shadow: 0 20px 45px rgba(0, 0, 0, 0.16);
 }
@@ -3077,12 +3073,6 @@ img {
 }
 .error-page .button {
   margin-top: 20px;
-}
-
-@media (max-width: 1279px) {
-  .plugin-grid--plugins {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 980px) {

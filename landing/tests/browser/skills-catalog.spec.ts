@@ -60,8 +60,8 @@ test('Skills search reveals install choices, copies the exact command and surviv
   await catalog.getByRole('searchbox', { name: 'Search Skills', exact: true }).fill('frontend');
   await expect.poll(() => requests.some((query) => query.includes('q=frontend'))).toBe(true);
   await expect(page).toHaveURL(/tab=skills.*q=frontend/);
-  await expect(catalog.locator('.catalog-count')).toHaveText('Showing 1 search results');
-  await expect(catalog.locator('.skill-card .skillspector')).toHaveCount(1);
+  await expect(catalog.locator('.catalog-count')).toHaveText('Showing 2 search results');
+  await expect(catalog.locator('.skill-card .skillspector')).toHaveCount(2);
   // Provider ranking metadata must never create a competitor outbound link.
   await expect(catalog.locator('a[href*="skills.sh"]')).toHaveCount(0);
   const card = catalog.locator('.skill-card').first();
@@ -146,7 +146,7 @@ test('Skills renders in 48-item increments and requests the next upstream page o
   expect(pages).toEqual([0, 1]);
 });
 
-test('unresolvable external Skills are hidden without fetching SkillSpector reports', async ({ page }) => {
+test('unresolvable external Skills remain visible without install authority or scan claims', async ({ page }) => {
   const reports: string[] = [];
   page.on('request', request => {
     if (request.url().includes('/reports/skillspector/')) reports.push(request.url());
@@ -161,8 +161,11 @@ test('unresolvable external Skills are hidden without fetching SkillSpector repo
     } }),
   );
   await page.goto('plugins/?tab=skills&skillScan=all');
-  await expect(page.locator('.skills-catalog .skill-card')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'No matching Skills' })).toBeVisible();
+  const card = page.locator('.skills-catalog .skill-card');
+  await expect(card).toHaveCount(1);
+  await expect(card).toContainText('No verified install source');
+  await expect(card.getByRole('button', { name: /Install/ })).toHaveCount(0);
+  await expect(card.locator('.skillspector')).toContainText('Not checked');
   expect(reports).toEqual([]);
 });
 
@@ -214,7 +217,9 @@ test('legacy API website publisher offers safe Install while malformed sources r
 
   await page.goto('plugins/?tab=skills&skillScan=all');
   const cards = page.locator('.skills-catalog .skill-card');
-  await expect(cards).toHaveCount(1);
+  await expect(cards).toHaveCount(3);
+  await expect(cards.nth(1).getByRole('button', { name: /Install/ })).toHaveCount(0);
+  await expect(cards.nth(2).getByRole('button', { name: /Install/ })).toHaveCount(0);
   const recovered = cards.first();
   await expect(recovered.getByRole('link', { name: 'Publisher source' })).toHaveAttribute(
     'href', 'https://uizze.com',
@@ -232,7 +237,7 @@ test('legacy API website publisher offers safe Install while malformed sources r
   );
 });
 
-test('known non-installable Feishu sources are hidden even with canonical HTTPS URLs', async ({ page }) => {
+test('known non-installable Feishu sources stay visible with Install disabled', async ({ page }) => {
   await page.route('https://api.universal-agent-plugins.com/v1/skills**', route =>
     route.fulfill({ json: {
       items: ['open.feishu.cn', 'open.feishu.cn/lark-cli/skills/regular'].map(source => ({
@@ -247,8 +252,10 @@ test('known non-installable Feishu sources are hidden even with canonical HTTPS 
     } }),
   );
   await page.goto('plugins/?tab=skills&skillScan=all');
-  await expect(page.locator('.skills-catalog .skill-card')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'No matching Skills' })).toBeVisible();
+  const cards = page.locator('.skills-catalog .skill-card');
+  await expect(cards).toHaveCount(2);
+  await expect(cards.getByRole('button', { name: /Install/ })).toHaveCount(0);
+  await expect(cards.first().locator('.plugin-card__unavailable')).toContainText('An exact Skill name is needed');
 });
 
 test('malformed publisher deep link degrades without crashing document rendering', async ({ page }) => {
@@ -416,7 +423,7 @@ test('A deep-linked Skill renders source instructions without relying on bounded
 });
 
 
-test('catalog backfills 48 installable Skills across real upstream pages', async ({ page }) => {
+test('catalog preserves upstream ordering even for non-installable Skills', async ({ page }) => {
   const requested: number[] = [];
   await page.route('https://api.universal-agent-plugins.com/v1/skills**', route => {
     const pageNumber = Number(new URL(route.request().url()).searchParams.get('page'));
@@ -436,10 +443,19 @@ test('catalog backfills 48 installable Skills across real upstream pages', async
   await page.goto('plugins/?tab=skills&skillScan=all');
   const cards = page.locator('.skills-catalog .skill-card');
   await expect(cards).toHaveCount(48);
-  expect(requested).toEqual([0, 1]);
+  expect(requested).toEqual([0]);
   await expect(page.locator('.catalog-count')).toHaveText('Showing 48 Skills');
-  await expect(cards.filter({ hasText: 'External source' })).toHaveCount(0);
-  await expect(cards.first().getByRole('button', { name: /Install/ })).toHaveCount(1);
+  await expect(cards.filter({ hasText: 'External source' })).toHaveCount(48);
+  await expect(cards.first().getByRole('button', { name: /Install/ })).toHaveCount(0);
+  for (const count of [96, 144, 192, 200]) {
+    await page.getByRole('button', { name: /Show more Skills/ }).last().click();
+    await expect(cards).toHaveCount(count);
+  }
+  await expect(cards.nth(175).getByRole('button', { name: /Install/ })).toHaveCount(1);
+  expect(requested).toEqual([0]);
+  await page.getByRole('button', { name: /Show more Skills/ }).last().click();
+  await expect(cards).toHaveCount(248);
+  expect(requested).toEqual([0, 1]);
 });
 
 

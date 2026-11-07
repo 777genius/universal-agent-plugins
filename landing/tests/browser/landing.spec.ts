@@ -39,6 +39,16 @@ async function waitForFullDirectory(page: import('@playwright/test').Page) {
     .toBe(true);
 }
 
+// Smaller batches can place a reviewed or community plugin on the next page.
+async function revealCatalogCard(page: import('@playwright/test').Page, selector: string) {
+  const card = page.locator(selector).first();
+  for (let batch = 0; batch < 3 && (await card.count()) === 0; batch++) {
+    await page.locator('.catalog-more button').click();
+  }
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  return card;
+}
+
 const optionalManifest = (url: string) => url.endsWith('/reports/skillspector/v3/index.json');
 
 const parseJsonLd = async (page: import('@playwright/test').Page) => {
@@ -95,8 +105,8 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect(page.locator('.client-strip li')).toHaveCount(clientLandingPages.length);
   await expect(page.getByRole('contentinfo')).toHaveCount(1);
   await expect(page.locator('.plugin-card').first()).toBeVisible();
-  const securityBadge = page.locator('.plugin-card__security').first();
-  await expect(securityBadge).toBeVisible({ timeout: 15_000 });
+  await hydrated(page);
+  const securityBadge = await revealCatalogCard(page, '.plugin-card__security');
   await expect(securityBadge).toContainText(
     /Automated review: (?:no blocking findings|\d+ notes?|\d+ blocking findings?)/,
   );
@@ -215,6 +225,9 @@ test('header exposes the documentation entrypoint on desktop and mobile', async 
 
 
 test('header keeps primary links at laptop width and GitHub icon follows theme', async ({ page }) => {
+  // Two full theme reloads plus four real route/anchor navigations can exceed
+  // the default 30-second budget on loaded CI; keep every assertion intact.
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1024, height: 850 });
   await page.goto('./');
   await expect(page.locator('.app-header__nav')).toBeVisible();
@@ -250,12 +263,28 @@ test('header keeps primary links at laptop width and GitHub icon follows theme',
   await expect(page.locator('#faq')).toBeInViewport();
 });
 
-test('plugin grid defaults to five columns on desktop and stays responsive', async ({ page }) => {
+test('plugin grid defaults to three columns and five rows on desktop and stays responsive', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('./');
   const grid = page.locator('.plugin-grid--plugins').first();
   await expect(grid).toBeVisible();
-  for (const [width, expected] of [[1440, 5], [1100, 3], [800, 2], [390, 1]]) {
+  const cards = grid.locator(':scope > .plugin-card');
+  await expect(cards).toHaveCount(15);
+  const rowCount = await cards.evaluateAll((elements) =>
+    new Set(elements.map((element) => Math.round(element.getBoundingClientRect().top))).size,
+  );
+  expect(rowCount).toBe(5);
+  const firstCard = cards.first();
+  await firstCard.scrollIntoViewIfNeeded();
+  const initialBorderColor = await firstCard.evaluate(
+    (element) => getComputedStyle(element).borderTopColor,
+  );
+  await firstCard.hover();
+  await expect
+    .poll(() => firstCard.evaluate((element) => getComputedStyle(element).borderTopColor))
+    .not.toBe(initialBorderColor);
+  expect(await firstCard.evaluate((element) => getComputedStyle(element).transform)).toBe('none');
+  for (const [width, expected] of [[1440, 3], [1100, 3], [800, 2], [390, 1]]) {
     await page.setViewportSize({ width, height: 900 });
     const count = await grid.evaluate((element) =>
       getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length,
@@ -269,7 +298,10 @@ test('plugin grid defaults to five columns on desktop and stays responsive', asy
   const directoryColumns = await page.locator('.plugin-grid--plugins').first().evaluate((element) =>
     getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length,
   );
-  expect(directoryColumns).toBe(5);
+  expect(directoryColumns).toBe(3);
+  await expect(
+    page.locator('.plugin-grid--plugins').first().locator(':scope > .plugin-card'),
+  ).toHaveCount(15);
 });
 
 test('homepage omits the counter when discovery cannot load', async ({ page }) => {
@@ -517,8 +549,8 @@ test('community plugin titles open an installable plugin page instead of GitHub'
   page,
 }) => {
   await page.goto('./');
-  const communityCard = page.locator('.plugin-card[data-trust="community"]').first();
-  await expect(communityCard).toBeVisible({ timeout: 15_000 });
+  await hydrated(page);
+  const communityCard = await revealCatalogCard(page, '.plugin-card[data-trust="community"]');
   const title = communityCard.locator('.plugin-card__title-link');
   const pluginName = (await title.textContent())?.trim();
   await expect(title).toHaveAttribute('href', /\/plugins\/community\/\?source=/);
@@ -538,8 +570,7 @@ test('security badges explain the exact checked revision and open full findings'
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
     timeout: 15_000,
   });
-  const badge = page.locator('.plugin-card__security--warnings').first();
-  await expect(badge).toBeVisible({ timeout: 15_000 });
+  const badge = await revealCatalogCard(page, '.plugin-card__security--warnings');
   await expect(badge).not.toHaveAttribute('title');
   await badge.scrollIntoViewIfNeeded();
   // Smooth scrolling can dismiss a focused tooltip. Wait for the badge's actual
