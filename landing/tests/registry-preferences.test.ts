@@ -17,6 +17,7 @@ import {
   installTargets,
   canonicalInstallTarget,
   canonicalInstallTargets,
+  cliInstallTargets,
 } from '../data/installTargets.ts';
 import * as registryDomain from '../utils/registry.ts';
 import * as filters from '../utils/filter.ts';
@@ -47,6 +48,7 @@ const common = {
   installTargets,
   canonicalInstallTarget,
   canonicalInstallTargets,
+  cliInstallTargets,
   ...registryDomain,
   authenticationIndicator,
   ...filters,
@@ -110,6 +112,7 @@ test('Desktop has its own picker command, shares Codex backend, and keeps Web se
   assert.deepEqual(Array.from(instance.state.targets.value), ['chatgpt-desktop']);
   assert.match(instance.state.command.value, /--target chatgpt-desktop$/);
   instance.stop();
+  assert.deepEqual(cliInstallTargets(['chatgpt', 'chatgpt-desktop']), ['chatgpt-web', 'chatgpt-desktop']);
   assert.equal(canonicalInstallTarget('chatgpt'), 'chatgpt');
   assert.equal(canonicalInstallTarget('chatgpt-desktop'), 'codex');
   assert.equal(installTargets.find((x) => x.id === 'chatgpt')?.name, 'ChatGPT Web');
