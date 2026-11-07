@@ -19,6 +19,8 @@
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
+  /* Keep blurred animated orbs out of the document's scrollable overflow. */
+  contain: paint;
 }
 
 /* Grid overlay */

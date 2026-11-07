@@ -202,9 +202,9 @@
     "specLink": "اقرأ مواصفة Agent Plugins 1.0",
     "compatibilityLink": "توافق العملاء (بالإنجليزية)",
     "limitations": "يختلف التوافق بحسب الحزمة. لا يثبت التحقق من المخطط نجاح التشغيل أو OAuth أو التفعيل. لا يدعم Codex نقل MCP المعلن عبر SSE؛ ويظل stdio وStreamable HTTP مدعومين عبر المحوّلات الحالية.",
-    "versions": "المثبّت الأصلي المتحقق منه: CLI 0.1.95؛ اسم حزمة npm هو universal-agent-plugins؛ وسوم إصدارات GitHub: agentplugins-v*.",
+    "versions": "أحدث مثبّت أصلي مستقر: GitHub Releases؛ حزمة npm: universal-agent-plugins؛ وسوم إصدارات GitHub: agentplugins-v*.",
     "availability": "حزم يدوية وأدوات تأليف مبنية من المصدر",
-    "releaseScope": "توفّر GitHub Releases الإصدار CLI 0.1.95، الذي يضيف واجهة API للإدارة المحلية وامتدادات Pi الأصلية ضمن نطاق المستخدم، ولا يتضمن agentplugins author. قد تتأخر إصدارات Homebrew وnpm؛ تحقّق باستخدام agentplugins version. تتطلب أوامر دليل البناء نسخة مبنية من المصدر مع تفعيل التأليف. يحتفظ مرجع API المولّد بمصدره التاريخي المرتبط بـ0.1.65؛ ولا يصف المثبّت الحالي.",
+    "releaseScope": "توفّر GitHub Releases أحدث CLI مستقر مع API للإدارة المحلية وامتدادات Pi الأصلية المدعومة، ولا يتضمن agentplugins author. قد تتأخر إصدارات npm وHomebrew؛ تحقّق عبر agentplugins version. تتطلب أوامر author في دليل البناء نسخة مبنية من المصدر مع تفعيل التأليف. يحتفظ مرجع API المولّد بمصدره التاريخي المرتبط بـ0.1.65 ولا يصف المثبّت الحالي.",
     "buildGuideLink": "افتح دليل الإنشاء"
   },
   "shell": {
@@ -746,8 +746,8 @@
         "project": "هذا المشروع",
         "projectHint": "شغّل هذه الأوامر من مجلد مشروعك. قد يطلب منك الوكيل الوثوق بالمشروع أو تفعيله.",
         "projectUnavailable": "التثبيت داخل مشروع غير متاح لهذه الحزمة.",
-        "marketingKitProjectUnavailable": "حزمة Marketing Kit غير متاحة حاليًا لنطاق Project: يلزم إصدار CLI أحدث من 0.1.95، ويجب تأهيل كل اعتماد إلزامي من Notion وHubSpot وPlaywright للتثبيت في Project بصورة مستقلة.",
-        "pinnedGitFallbackInfo": "يستخدم إصدار CLI 0.1.95 المنشور مصدر Git المثبّت هذا. تعمل أسماء Directory الموقّعة المختصرة لنطاق Project في الشيفرة الحالية، لكنها لم تُنشر بعد.",
+        "marketingKitProjectUnavailable": "حزمة Marketing Kit غير متاحة حاليًا لنطاق Project: يجب أن تدعم كل اعتماد إلزامي من Notion وHubSpot وPlaywright التثبيت ضمن Project.",
+        "pinnedGitFallbackInfo": "مصدر Git المُراجع والمثبّت إلى commit محدد بديل قابل لإعادة الإنتاج. يقبل CLI المنشور أيضًا الأسماء المختصرة من Directory الموقّع ضمن Project عندما يكون العميل وجميع المكوّنات المطلوبة مؤهّلين.",
         "selectionUnavailable": "هذه المجموعة من الوكلاء وموقع التثبيت غير متاحة. اختر وكيلاً أو موقعًا آخر."
       },
       "outcome": {
@@ -1029,7 +1029,7 @@
     "title": "استخدام المكونات الإضافية / بناء المكونات الإضافية",
     "subtitle": "ثبّت الحزم القياسية وأدرها، أو اكتب حزمة plugin.json خاصة بك وافحصها بالأدوات المناسبة.",
     "use": {
-      "badge": "CLI 0.1.95",
+      "badge": "CLI مستقر",
       "title": "استخدام المكونات الإضافية",
       "description": "ابحث عن الحزم وعاينها وثبّتها وأدرها باستخدام المثبّت المنشور.",
       "cta": "فتح دليل الاستخدام"
