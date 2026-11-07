@@ -392,8 +392,8 @@ removed. If manual external uninstall is still pending, repeat `remove` with
 manifest table has gone. Package data and the content store remain retained.
 
 Saved targets must be registered local clients supported by the typed installer.
-In user scope, ChatGPT mixed with local targets is rejected before source acquisition: prepare
-ChatGPT separately, or explicitly choose the imperative `--no-save` flow. Explicit local paths, discovery sources,
+In user scope, ChatGPT Web mixed with local targets is rejected before source acquisition: prepare
+ChatGPT Web separately, or explicitly choose the imperative `--no-save` flow. Explicit local paths, discovery sources,
 ChatGPT Web-only preparation and `--no-save` keep the imperative flow; JSON reports
 `environment.saved=false` and its reason. `--no-save` never overrides an existing
 environment owner receipt.
@@ -407,7 +407,7 @@ reconciliation. An external editor can still race a rename; the session rechecks
 published bytes before applying each binding and refuses a changed plan.
 
 
-In user scope, ChatGPT uses the existing manual preparation path, separate from reproducible
+In user scope, ChatGPT Web uses the existing manual preparation path, separate from reproducible
 local profile installation: `agentplugins add <source> --target chatgptweb` prepares
 an eligible package and marketplace without saving a dependency. App bindings
 must come from signed Directory evidence or the verified personal mapping path.

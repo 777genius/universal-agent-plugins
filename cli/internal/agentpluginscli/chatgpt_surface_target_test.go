@@ -36,6 +36,17 @@ func TestCanonicalClientRecoveryCommandsRemainPubliclyExecutable(t *testing.T) {
 	}
 }
 
+// A canonical Web ID in saved-add failures must never become the public Desktop flag.
+func TestSavedAddRetryUsesExecutableWebTargetName(t *testing.T) {
+	t.Parallel()
+	_, err := validateSavedAddTargets(App{}, &options{target: string(domain.ClientChatGPT), scope: "user"}, "context7", []domain.ClientID{domain.ClientChatGPT})
+	if err == nil || !strings.Contains(err.Error(), "target chatgptweb cannot be saved") ||
+		!strings.Contains(err.Error(), "add context7 --target chatgptweb --no-save") ||
+		strings.Contains(err.Error(), "--target chatgpt --no-save") {
+		t.Fatalf("saved Web retry must use public chatgptweb, got: %v", err)
+	}
+}
+
 func TestPublicChatGPTNamesStaySeparateFromCanonicalIDs(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ input, want string }{
