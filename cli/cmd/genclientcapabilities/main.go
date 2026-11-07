@@ -54,8 +54,8 @@ func generate() ([]byte, error) {
 				extensions = scoped.ExtensionSupport
 			}
 			project = &projectCapability{
-				SkillSupport: scoped.SkillSupport,
-				MCPTransports: scoped.MCPTransports,
+				SkillSupport:     scoped.SkillSupport,
+				MCPTransports:    scoped.MCPTransports,
 				ExtensionSupport: extensions,
 			}
 		}
