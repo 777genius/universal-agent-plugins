@@ -2343,5 +2343,46 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
         self.assertNotIn("$nativePackage = '@moonshot-ai/kimi-code@2.3.2'", workflow)
 
 
+    def test_codex_windows_cache_is_not_native_proof_but_real_uninstall_is(self):
+        audit = load_audit()
+        source = "github:example/agent-plugin@" + ("a" * 40)
+        matched = [{"name": "atlassian", "installation_id": "one",
+                    "clients": [{"client_id": "codex",
+                                 "verification": "installation_verified"}]}]
+        for native_removed in (False, True):
+            with self.subTest(native_removed=native_removed), TemporaryDirectory() as temp:
+                runroot = Path(temp).resolve()
+                cache = (runroot / "plugin-00/home/.codex/plugins/cache/agentplugins-123"
+                         / "atlassian/0.1.0/plugin.json")
+                installed = {"value": False}
+
+                def simulate(argv, _env, _cwd, timeout=105):
+                    command = argv[1]
+                    if command == "add":
+                        if not installed["value"]:
+                            cache.parent.mkdir(parents=True, exist_ok=True)
+                            cache.write_text('{"name": "atlassian"}')
+                        installed["value"] = True
+                    elif command == "remove":
+                        installed["value"] = False
+                    return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                            "timeout": False,
+                            "_json": {"data": {"installations":
+                                              matched if installed["value"] else []}}}
+
+                with (patch.object(audit, "call", side_effect=simulate),
+                      patch.object(audit, "matching_installations", return_value=matched),
+                      patch.object(audit, "uninstall_native_codex_plugin",
+                                   return_value={"completed": native_removed})):
+                    row = audit.do_case(
+                        "/unused/agentplugins", "codex", "plugin", source, 0,
+                        runroot, {source: "atlassian"})
+                self.assertEqual(row["native_identity_files"], [])
+                self.assertTrue(row["repeat_verified"])
+                self.assertTrue(row["removal_verified"])
+                self.assertEqual(row["status"], "passed" if native_removed
+                                 else "package-installed-native-unqualified")
+
+
 if __name__ == "__main__":
     unittest.main()
