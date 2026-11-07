@@ -19,15 +19,15 @@ func TestProjectChatGPTCLIRefusesAllTargetedIntentsBeforeEffects(t *testing.T) {
 	}
 	before := []map[string]string{securityFixtureTree(t, app.UserHome), securityFixtureTree(t, a), securityFixtureTree(t, b)}
 	for _, args := range [][]string{
-		{"add", "acme/docs", "--target", "chatgpt"},
-		{"add", source, "--no-save", "--target", "chatgpt"},
-		{"add", "context7", "--target", "chatgpt", "--chatgpt-app-id", "plugin_asdk_app_0123456789abcdef0123456789abcdef"},
-		{"add", source, "--no-save", "--target", "chatgpt", "--activation-complete", "--auth-complete"},
-		{"add", source, "--no-save", "--target", "gemini,chatgpt"},
-		{"install", source, "--no-save", "--target", "chatgpt"},
-		{"update", "00000000-0000-4000-8000-000000000001", "--target", "chatgpt"},
-		{"repair", "00000000-0000-4000-8000-000000000001", "--target", "chatgpt"},
-		{"remove", "00000000-0000-4000-8000-000000000001", "--target", "chatgpt", "--external-uninstalled"},
+		{"add", "acme/docs", "--target", "chatgptweb"},
+		{"add", source, "--no-save", "--target", "chatgptweb"},
+		{"add", "context7", "--target", "chatgptweb", "--chatgpt-app-id", "plugin_asdk_app_0123456789abcdef0123456789abcdef"},
+		{"add", source, "--no-save", "--target", "chatgptweb", "--activation-complete", "--auth-complete"},
+		{"add", source, "--no-save", "--target", "gemini,chatgptweb"},
+		{"install", source, "--no-save", "--target", "chatgptweb"},
+		{"update", "00000000-0000-4000-8000-000000000001", "--target", "chatgptweb"},
+		{"repair", "00000000-0000-4000-8000-000000000001", "--target", "chatgptweb"},
+		{"remove", "00000000-0000-4000-8000-000000000001", "--target", "chatgptweb", "--external-uninstalled"},
 	} {
 		output, err := projectChatGPTExecute(app, a, args...)
 		if err == nil || err.Error() != "chatgpt does not support project scope" || strings.Contains(output, "success") {
@@ -35,7 +35,7 @@ func TestProjectChatGPTCLIRefusesAllTargetedIntentsBeforeEffects(t *testing.T) {
 		}
 	}
 	t.Chdir(a)
-	if _, err := projectChatGPTExecute(app, "", "add", source, "--target", "chatgpt", "--no-save"); err == nil || err.Error() != "chatgpt does not support project scope" {
+	if _, err := projectChatGPTExecute(app, "", "add", source, "--target", "chatgptweb", "--no-save"); err == nil || err.Error() != "chatgpt does not support project scope" {
 		t.Fatalf("invocation-directory default bypassed project refusal: %v", err)
 	}
 	for index, root := range []string{app.UserHome, a, b} {
