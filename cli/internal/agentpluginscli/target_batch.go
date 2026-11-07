@@ -26,6 +26,26 @@ type batchTargetResult struct {
 // Public --target names describe products. Durable receipts and signed Directory
 // records retain canonical IDs: codex (local) and chatgpt (remote Web).
 // Normalize only actual CLI flag input, never state-derived canonical targets.
+// Public target names are not persistent client IDs. Keep this conversion
+// at user-facing command boundaries and never apply it to state/Directory IDs.
+func canonicalPublicTargetName(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "chatgpt", "chatgpt-desktop":
+		return "codex"
+	case "chatgptweb", "chatgpt-web":
+		return "chatgpt"
+	default:
+		return raw
+	}
+}
+
+func publicCLITargetName(id domain.ClientID) string {
+	if id == domain.ClientChatGPT {
+		return "chatgptweb"
+	}
+	return string(id)
+}
+
 type targetFlagValue struct {
 	target *string
 	input  *string
@@ -47,12 +67,7 @@ func (flag targetFlagValue) Set(raw string) error {
 	*flag.input = raw
 	parts := strings.Split(raw, ",")
 	for i, part := range parts {
-		switch strings.ToLower(strings.TrimSpace(part)) {
-		case "chatgpt", "chatgpt-desktop":
-			parts[i] = "codex"
-		case "chatgptweb", "chatgpt-web":
-			parts[i] = "chatgpt"
-		}
+		parts[i] = canonicalPublicTargetName(part)
 	}
 	*flag.target = strings.Join(parts, ",")
 	return nil
