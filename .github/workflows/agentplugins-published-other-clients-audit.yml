@@ -1,13 +1,25 @@
-name: Published npm 0.1.101 additional native client audit
+name: Published npm stable additional native clients audit
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/agentplugins-published-other-clients-audit.yml'
+      - '.github/workflows/agentplugins-published-version.yml'
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_components.py'
+  workflow_run:
+    workflows: ['Agentplugins NPM Publish']
+    types: [completed]
+  schedule:
+    - cron: '29 3 * * 6'
   workflow_dispatch:
+    inputs:
+      version:
+        description: Exact public stable version (empty = latest)
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -17,8 +29,15 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  resolve-release:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/agentplugins-published-version.yml
+    with:
+      version: ${{ inputs.version }}
+
   published-additional-clients:
-    name: npm 0.1.101 / ${{ matrix.target }} / ${{ matrix.kind }} (${{ matrix.limit }} sources)
+    needs: resolve-release
+    name: npm stable / ${{ matrix.target }} / ${{ matrix.kind }} (${{ matrix.limit }} sources)
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     strategy:
@@ -57,18 +76,19 @@ jobs:
       - name: Install released UAP and genuine pinned native client
         id: bootstrap
         env:
+          UAP_VERSION: ${{ needs.resolve-release.outputs.version }}
           NATIVE_PACKAGE: ${{ matrix.native_package }}
           TARGET: ${{ matrix.target }}
         shell: bash
         run: |
           set -euo pipefail
-          npm install --global universal-agent-plugins@0.1.101
+          npm install --global "universal-agent-plugins@$UAP_VERSION"
           if [[ "$TARGET" == pi ]]; then
             npm install --global --ignore-scripts "$NATIVE_PACKAGE"
           else
             npm install --global "$NATIVE_PACKAGE"
           fi
-          test "$(agentplugins version)" = "agentplugins 0.1.101"
+          test "$(agentplugins version)" = "agentplugins $UAP_VERSION"
           native="$TARGET"
           if [[ "$TARGET" == qoder ]]; then native="qodercli"; fi
           command -v "$native"
@@ -101,7 +121,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: published-0.1.101-${{ matrix.target }}-${{ matrix.kind }}
+          name: published-${{ needs.resolve-release.outputs.version }}-${{ matrix.target }}-${{ matrix.kind }}
           path: ${{ runner.temp }}/published-additional-proof/
           if-no-files-found: warn
           retention-days: 14
