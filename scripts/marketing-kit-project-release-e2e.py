@@ -98,7 +98,7 @@ def execute(cli, env, project, label, *args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--target", required=True, choices=["codex", "cursor", "claude", "gemini", "opencode"])
+    parser.add_argument("--target", required=True, choices=["codex", "cursor", "claude", "gemini", "opencode", "copilot"])
     parser.add_argument("--report", required=True)
     parser.add_argument("--cli", default="agentplugins")
     options = parser.parse_args()
