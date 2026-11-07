@@ -27,6 +27,8 @@ const cases = [
 for (const theme of ['dark', 'light'] as const) {
   for (const [locale, width] of cases) {
     test(`marketing-kit restore ${locale} ${theme} at ${width}px`, async ({ page, context }, testInfo) => {
+      // Two mode transitions, visual evidence, and geometry checks can exceed 30s on shared CI.
+      if (locale === 'en' && theme === 'dark' && width === 1440) testInfo.setTimeout(60_000);
       await page.setViewportSize({ width, height: 1000 });
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await context.addInitScript((value) => {

@@ -431,15 +431,15 @@
       }
     },
     "seo": {
-      "indexTitle": "Universal Agent Plugins CLI {'|'} Installer Agent Plugins 1.0",
-      "indexDescription": "Installez, mettez à jour, réparez et supprimez des paquets Agent Plugins 1.0 sur les agents IA compatibles avec une seule CLI.",
+      "indexTitle": "Plugins et Skills pour agents IA {'|'} Universal Agent Plugins",
+      "indexDescription": "Installez Agent Plugins 1.0, Agent Skills et les outils MCP pour Codex, Claude Code, Cursor, Gemini CLI et d’autres. Gérez-les globalement ou par projet avec une CLI.",
       "downloadTitle": "Télécharger Universal Agent Plugins CLI",
       "downloadDescription": "Installez la CLI Universal Agent Plugins sur macOS, Linux ou Windows et gérez Agent Plugins 1.0 à partir d’une seule commande.",
       "applicationSubCategory": "Gestionnaire de plugins d'agent",
       "softwareRequirements": "CLI native pour macOS, Linux et Windows ; ou Node.js 22+ pour npx",
-      "featureList": "Installer, inspecter, mettre à jour, réparer, changer de source et supprimer des paquets Agent Plugins 1.0",
-      "imageAlt": "Universal Agent Plugins : installez des plugins sur vos agents IA avec une seule CLI",
-      "organizationDescription": "Programme d'installation multi-agents open source et gestionnaire de cycle de vie pour Agent Plugins 1.0."
+      "featureList": "Installer, inspecter, mettre à jour, réparer et supprimer Agent Plugins 1.0 et Agent Skills globalement ou par projet.",
+      "imageAlt": "Universal Agent Plugins : une CLI pour les plugins, Skills et outils MCP de plusieurs agents IA.",
+      "organizationDescription": "CLI multiagent open source pour installer et gérer Agent Plugins 1.0, Agent Skills et les outils MCP."
     },
     "hero": {
       "autoLabel": "Choisir les agents dans le terminal",
