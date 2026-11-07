@@ -46,15 +46,34 @@ jobs:
           else
             tag="agentplugins-v$requested"
           fi
-          [[ "$tag" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 2
+          [[ "$tag" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::Public release tag '$tag' is not an agentplugins stable tag" >&2
+            exit 2
+          }
           visibility="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq 'if .draft == false and .prerelease == false then "public" else "private" end')"
-          [[ "$visibility" == "public" ]] || { echo "::error::Release is not public stable"; exit 2; }
+          [[ "$visibility" == "public" ]] || { echo "::error::Release is not public stable" >&2; exit 2; }
           version="${tag#agentplugins-v}"
-          published="$(npm view "universal-agent-plugins@$version" version)"
-          [[ "$published" == "$version" ]] || { echo "::error::Exact npm release missing"; exit 2; }
-          if [[ -z "$requested" ]]; then
-            current="$(npm view universal-agent-plugins dist-tags.latest)"
-            [[ "$current" == "$version" ]] || { echo "::error::npm latest $current differs from public $version"; exit 2; }
+          # npm publication and CDN metadata may lag GitHub Actions by seconds.
+          # Bound retries; a mismatch is NEVER treated as a qualified release.
+          published=""
+          current=""
+          for attempt in 1 2 3 4 5 6; do
+            published="$(npm view "universal-agent-plugins@$version" version 2>/dev/null || true)"
+            if [[ -n "$requested" ]]; then
+              [[ "$published" == "$version" ]] && break
+            else
+              current="$(npm view universal-agent-plugins dist-tags.latest 2>/dev/null || true)"
+              [[ "$published" == "$version" && "$current" == "$version" ]] && break
+            fi
+            if [[ "$attempt" != 6 ]]; then sleep 10; fi
+          done
+          [[ "$published" == "$version" ]] || {
+            echo "::error::Published npm package '$version' missing or stale (got '$published')" >&2
+            exit 2
+          }
+          if [[ -z "$requested" && "$current" != "$version" ]]; then
+            echo "::error::npm latest '$current' differs from public release '$version'" >&2
+            exit 2
           fi
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
           echo "Qualified UAP npm @$version / $tag"
