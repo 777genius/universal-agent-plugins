@@ -58,7 +58,6 @@ func (flag targetFlagValue) Set(raw string) error {
 	return nil
 }
 
-
 func parseTargetOption(value string) ([]domain.ClientID, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
