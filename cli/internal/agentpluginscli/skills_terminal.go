@@ -230,9 +230,9 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 			}
 			if applied > 0 {
 				if _, err := fmt.Fprintf(writer,
-					"Files: %d of %d target results installed or already up to date; other targets need attention.\\n"+
-						"Agent discovery: not verified by this Skills flow.\\n"+
-						"Activation: not verified.\\n", applied, len(result.Items)); err != nil {
+					"Files: %d of %d target results installed or already up to date; other targets need attention.\n"+
+						"Agent discovery: not verified by this Skills flow.\n"+
+						"Activation: not verified.\n", applied, len(result.Items)); err != nil {
 					return err
 				}
 			}
