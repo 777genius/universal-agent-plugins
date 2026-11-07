@@ -1,0 +1,59 @@
+name: Published Marketing Kit Project E2E
+
+on:
+  pull_request:
+    paths:
+      - 'landing/**'
+      - 'scripts/marketing-kit-project-release-e2e.py'
+      - '.github/workflows/marketing-kit-project-release-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-marketing-project-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  marketing-kit-project:
+    name: npm 0.1.101 / ${{ matrix.target }} / real Project lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - { target: codex, package: '@openai/codex@0.153.4' }
+          - { target: claude, package: '@anthropic-ai/claude-code@2.1.263' }
+          - { target: gemini, package: '@google/gemini-cli@0.66.0' }
+          - { target: opencode, package: 'opencode-ai@1.18.34' }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install real released UAP and native client
+        env:
+          NATIVE_PACKAGE: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          npm install --global universal-agent-plugins@0.1.101 "$NATIVE_PACKAGE"
+          test "$(agentplugins version)" = 'agentplugins 0.1.101'
+      - name: Exercise actual signed Marketing Kit and three mandatory dependencies
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)"             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
+      - name: Preserve factual outcomes including failures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: marketing-kit-0.1.101-${{ matrix.target }}
+          path: ${{ runner.temp }}/marketing-kit-project/
+          if-no-files-found: warn
+          retention-days: 14
