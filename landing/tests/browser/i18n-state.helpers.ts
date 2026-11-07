@@ -156,6 +156,9 @@ export async function targets(page: Page, scope: Locator, names: string[]) {
   for (const name of names) {
     const checkbox = page.getByRole('checkbox', { name: new RegExp(`^${name}(?:\\s|$)`) });
     const checked = await checkbox.isChecked();
+    // The tall popover may flip above/below the trigger while Playwright
+    // scrolls a checkbox into view. Settle that positioning without input first.
+    await checkbox.click({ trial: true });
     await checkbox.click();
     await expect(checkbox).toBeChecked({ checked: !checked });
   }
