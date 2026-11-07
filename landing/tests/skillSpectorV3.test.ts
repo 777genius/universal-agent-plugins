@@ -913,41 +913,51 @@ describe('SkillSpector v3 exact producer contract', () => {
     current.records[0].freshness = 'current';
     assert.throws(() => decodeSkillSpectorShardV3(current, index, part), /invalid/);
   });
-  it('recognizes the exact republished Cloudflare annotation under its new pinned profile', () => {
-    // The production registry retained the identical two annotated E4 matches
-    // after the extended v3 policy digest changed. Other evidence stays pinned.
-    const currentDigest = 'sha256:255c72648dd6a6e6b93ea75f5ad51553826692c60dd8222c7fb55613cf5766ba';
-    const newestManifest = structuredClone(manifest);
-    newestManifest.profiles = newestManifest.profiles.map((entry) =>
-      entry.id === 'static-extended-v3' ? { ...entry, digest: currentDigest } : entry,
-    );
-    const newestShard = structuredClone(shard);
-    const annotatedRecord = newestShard.records.find((record: SkillSpectorRecord) =>
-      record.findings.some((finding) => finding.review_status === 'false_positive'),
-    );
-    assert.ok(annotatedRecord);
-    annotatedRecord.profile.digest = currentDigest;
-    const annotations = annotatedRecord.findings.filter(
-      (finding: { review_status: string }) => finding.review_status === 'false_positive',
-    );
-    assert.equal(annotations.length, 2);
-    for (const finding of annotations) finding.exception.profile_digest = currentDigest;
-    // The other twelve fixture records still have old policy digests.
-    // Verify only the republished annotated record; do not rewrite unrelated evidence.
-    newestShard.records = [annotatedRecord];
-    const annotatedDescriptor = { ...descriptor, record_count: 1 };
-    assert.equal(
-      decodeSkillSpectorShardV3(newestShard, newestManifest, annotatedDescriptor).length,
-      1,
-    );
+  it('accepts exact Cloudflare annotations under three published profiles', () => {
+    // The previously reviewed E4 matches keep their exact source and snippet
+    // digests across three separately pinned production scanner profiles.
+    for (const profile of [
+      { id: 'static-extended-v3', digest: 'sha256:255c72648dd6a6e6b93ea75f5ad51553826692c60dd8222c7fb55613cf5766ba' },
+      { id: 'static-standard-v3', digest: 'sha256:3a6bac66327c0285edb6012e58fad74604c9d4bd6d3c6dfb0b25d7dcc8f59faf' },
+      { id: 'static-extended-v3', digest: 'sha256:091ca0575d0cedca4218cc0e05fdd3ed8921bb190e0e2c2a91ea8c6622c0aaee' },
+    ]) {
+      const newestManifest = structuredClone(manifest);
+      newestManifest.profiles = newestManifest.profiles.map((entry) =>
+        entry.id === profile.id ? { ...entry, digest: profile.digest } : entry,
+      );
+      const newestShard = structuredClone(shard);
+      const annotatedRecord = newestShard.records.find((record: SkillSpectorRecord) =>
+        record.findings.some((finding) => finding.review_status === 'false_positive'),
+      );
+      assert.ok(annotatedRecord);
+      annotatedRecord.profile = { ...profile };
+      const annotations = annotatedRecord.findings.filter(
+        (finding: { review_status: string }) => finding.review_status === 'false_positive',
+      );
+      assert.equal(annotations.length, 2);
+      for (const finding of annotations) finding.exception.profile_digest = profile.digest;
+      // Only decode the exact annotated source, never rewrite other records.
+      newestShard.records = [annotatedRecord];
+      const annotatedDescriptor = { ...descriptor, record_count: 1 };
+      assert.equal(
+        decodeSkillSpectorShardV3(newestShard, newestManifest, annotatedDescriptor).length,
+        1,
+      );
 
-    // An exact profile match alone does not authorize tampered exception metadata.
-    const forged = structuredClone(newestShard);
-    const forgedFinding = forged.records.flatMap((record: SkillSpectorRecord) => record.findings)
-      .find((finding: { review_status: string }) => finding.review_status === 'false_positive');
-    assert.ok(forgedFinding);
-    forgedFinding.exception!.source_content_digest = `sha256:${'0'.repeat(64)}`;
-    assert.throws(() => decodeSkillSpectorShardV3(forged, newestManifest, annotatedDescriptor), /invalid/);
+      // Profile approval alone does not authorize modified source or annotation.
+      const forgedSource = structuredClone(newestShard);
+      const forgedFinding = forgedSource.records.flatMap((record: SkillSpectorRecord) => record.findings)
+        .find((finding: { review_status: string }) => finding.review_status === 'false_positive');
+      assert.ok(forgedFinding);
+      forgedFinding.exception!.source_content_digest = `sha256:${'0'.repeat(64)}`;
+      assert.throws(() => decodeSkillSpectorShardV3(forgedSource, newestManifest, annotatedDescriptor), /invalid/);
+      const forgedProfile = structuredClone(newestShard);
+      const annotation = forgedProfile.records.flatMap((record: SkillSpectorRecord) => record.findings)
+        .find((finding: { review_status: string }) => finding.review_status === 'false_positive');
+      assert.ok(annotation);
+      annotation.exception!.profile_digest = `sha256:${'f'.repeat(64)}`;
+      assert.throws(() => decodeSkillSpectorShardV3(forgedProfile, newestManifest, annotatedDescriptor), /invalid/);
+    }
   });
   it('preserves and verifies the two content-bound registry false-positive annotations', () => {
     const decoded = decodeSkillSpectorShardV3(shard, manifest, descriptor);

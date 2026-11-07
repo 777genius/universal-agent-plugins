@@ -7,6 +7,7 @@ on:
       - install.sh
       - install.ps1
       - repotests/agentplugins_native_install_integration_test.go
+      - .github/workflows/agentplugins-published-version.yml
       - .github/workflows/agentplugins-native-install.yml
   pull_request:
     branches: [main]
@@ -14,13 +15,22 @@ on:
       - install.sh
       - install.ps1
       - repotests/agentplugins_native_install_integration_test.go
+      - .github/workflows/agentplugins-published-version.yml
       - .github/workflows/agentplugins-native-install.yml
+  # Requalify all six native installers when a public npm publication
+  # finishes successfully; scheduled runs also catch later platform drift.
+  workflow_run:
+    workflows: ['Agentplugins NPM Publish']
+    types: [completed]
+  # Weekly six-platform smoke, without a new PR for each release.
+  schedule:
+    - cron: '19 5 * * 2'
   workflow_dispatch:
     inputs:
       version:
-        description: Published Agentplugins version to install
-        required: true
-        default: 0.1.44
+        description: Exact public stable version (empty = latest)
+        required: false
+        default: ''
         type: string
 
 permissions:
@@ -32,7 +42,14 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
+  release-version:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/agentplugins-published-version.yml
+    with:
+      version: ${{ inputs.version }}
+
   unix:
+    needs: release-version
     name: native install (${{ matrix.target }})
     strategy:
       fail-fast: false
@@ -54,7 +71,7 @@ jobs:
           persist-credentials: false
       - name: Install the published native binary without Node.js
         env:
-          AGENTPLUGINS_VERSION: ${{ inputs.version || '0.1.44' }}
+          AGENTPLUGINS_VERSION: ${{ needs.release-version.outputs.version }}
           AGENTPLUGINS_BIN_DIR: ${{ runner.temp }}/agentplugins-bin
           AGENTPLUGINS_OUTPUT_FILE: ${{ runner.temp }}/agentplugins-install.outputs
         shell: bash
@@ -69,6 +86,7 @@ jobs:
           grep -Eq '^sha256=[0-9a-f]{64}$' "${AGENTPLUGINS_OUTPUT_FILE}"
 
   windows:
+    needs: release-version
     name: native install (${{ matrix.target }})
     strategy:
       fail-fast: false
@@ -89,7 +107,7 @@ jobs:
         env:
           AGENTPLUGINS_OUTPUT_FILE: ${{ runner.temp }}\agentplugins-install.outputs
         run: |
-          $version = "${{ inputs.version || '0.1.44' }}"
+          $version = "${{ needs.release-version.outputs.version }}"
           $resolvedVersion = $version -replace '^agentplugins-v', '' -replace '^v', ''
           $binDir = Join-Path "${{ runner.temp }}" "agentplugins-bin"
           & ./install.ps1 -Version $version -BinDir $binDir -Command "version"
