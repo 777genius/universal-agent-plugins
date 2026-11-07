@@ -29,10 +29,12 @@ const { docsUrl, docsLabel } = useDocsLinks();
 const homePath = computed(() => localePath('/'));
 const homeHref = computed(() => router.resolve(homePath.value).href);
 
-// Two primary destinations stay directly visible on desktop.
+// The two primary destinations remain visible on narrower laptops.
 const navItems = computed(() => [
   { id: 'demo', label: t('shell.navigation.demo'), href: sectionHref('demo') },
-  { id: 'plugins', label: t('shell.navigation.plugins'), href: localePath('/plugins/') },
+  { id: 'plugins', label: t('shell.navigation.plugins'), href: router.resolve(localePath('/plugins/')).href },
+  { id: 'agents', label: t('shell.navigation.agents'), href: sectionHref('agent-support') },
+  { id: 'faq', label: t('shell.navigation.faq'), href: sectionHref('faq') },
 ]);
 
 const normalizePath = (value: string) => (value !== '/' ? value.replace(/\/+$/, '') : '/');
@@ -52,7 +54,13 @@ onMounted(() => {
     <v-container class="app-header__inner">
       <AppLogo />
       <nav class="app-header__nav">
-        <v-btn v-for="item in navItems" :key="item.id" variant="text" :href="item.href">
+        <v-btn
+          v-for="item in navItems"
+          :key="item.id"
+          variant="text"
+          :href="item.href"
+          :class="{ 'app-header__nav-secondary': item.id === 'agents' || item.id === 'faq' }"
+        >
           {{ item.label }}
         </v-btn>
       </nav>
@@ -243,6 +251,12 @@ onMounted(() => {
 
 .app-header__mobile-actions {
   display: none;
+}
+
+@media (min-width: 960px) and (max-width: 1279px) {
+  .app-header__nav :deep(.app-header__nav-secondary) {
+    display: none;
+  }
 }
 
 @media (max-width: 959px) {

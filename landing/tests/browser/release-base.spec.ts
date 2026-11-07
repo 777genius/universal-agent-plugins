@@ -82,8 +82,7 @@ for (const locale of publishedLocales) {
       localizedPath('/download/', locale),
     );
     await expect(page).toHaveURL(new URL(localizedPath('/download/', locale).slice(1), base).href);
-    // URL changes before the lazy page finishes mounting on loaded CI runners.
-    // Wait for the real component and release metadata, never stub the API.
+    // Lazy SPA route can mount after the URL changes under loaded CI.
     await expect(page.locator('.download-page .download-section')).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('.download-section__release-info a')).toHaveText(
       `v${version}`, { timeout: 15_000 },
