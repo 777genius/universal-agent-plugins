@@ -43,9 +43,13 @@ func TestProjectComposedPureComponentLifecycleAcrossUserAndProjects(t *testing.T
 		t.Run(kind, func(t *testing.T) {
 			transport := newProjectJourneyTransport(t, "git")
 			if kind == "skills-only" {
-				if err := os.Remove(filepath.Join(transport.repo, "mcp.json")); err != nil { t.Fatal(err) }
+				if err := os.Remove(filepath.Join(transport.repo, "mcp.json")); err != nil {
+					t.Fatal(err)
+				}
 			} else {
-				if err := os.RemoveAll(filepath.Join(transport.repo, "skills")); err != nil { t.Fatal(err) }
+				if err := os.RemoveAll(filepath.Join(transport.repo, "skills")); err != nil {
+					t.Fatal(err)
+				}
 			}
 			projectJourneyGit(t, transport.repo, "add", "-A")
 			projectJourneyGit(t, transport.repo, "commit", "-m", "select "+kind)
