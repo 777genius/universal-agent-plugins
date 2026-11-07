@@ -11,6 +11,16 @@ on:
       - 'scripts/test_live_install_audit_components.py'
       - 'scripts/run-native-client-matrix.py'
       - 'tests/live-install/fixtures.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/agentplugins-published-windows-audit.yml'
+      - '.github/workflows/agentplugins-published-version.yml'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/test_live_install_audit_components.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'tests/live-install/fixtures.json'
   # Broad native/client coverage weekly; only five known-safe clients and
   # two source cases are needed on ordinary pull requests.
   # Newly published npm releases are requalified after the publisher completes.
