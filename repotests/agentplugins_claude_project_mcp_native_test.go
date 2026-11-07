@@ -528,10 +528,10 @@ func claudeUserManagedMCPCall(t *testing.T) {
 	t.Helper()
 	f := newClaudeProjectNativeFixture(t)
 	stages := map[string]nativeStage{
-		"user_install": {Status: "not_evaluated", Reason: "not reached"},
+		"user_install":   {Status: "not_evaluated", Reason: "not reached"},
 		"project_A_call": {Status: "not_evaluated", Reason: "not reached"},
 		"project_B_call": {Status: "not_evaluated", Reason: "not reached"},
-		"user_remove": {Status: "not_evaluated", Reason: "not reached"},
+		"user_remove":    {Status: "not_evaluated", Reason: "not reached"},
 	}
 	evidence := claudeProjectNativeIdentity(t, f)
 	evidence["project_contract"] = "managed_user_stdio_visible_in_two_projects_v1"
@@ -539,7 +539,7 @@ func claudeUserManagedMCPCall(t *testing.T) {
 	defer f.writeEvidence(t, evidence, stages)
 
 	trust, err := json.Marshal(map[string]any{"projects": map[string]any{
-		filepath.ToSlash(f.project): map[string]any{"hasTrustDialogAccepted": true},
+		filepath.ToSlash(f.project):      map[string]any{"hasTrustDialogAccepted": true},
 		filepath.ToSlash(f.otherProject): map[string]any{"hasTrustDialogAccepted": true},
 	}})
 	if err != nil {
