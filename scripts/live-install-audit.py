@@ -273,10 +273,15 @@ def prepared_only_add(parsed):
     actions = parsed["data"].get("actions")
     if not isinstance(actions, list) or not actions:
         return False
-    support = [c["support"] for a in actions if isinstance(a, dict)
-               for c in a.get("component_support", [])
-               if isinstance(c, dict) and isinstance(c.get("support"), str)]
-    return bool(support) and all(value == "prepared" for value in support)
+    found = False
+    for action in actions:
+        if not isinstance(action, dict) or not isinstance(action.get("component_support"), list):
+            return False
+        for component in action["component_support"]:
+            if not isinstance(component, dict) or component.get("support") != "prepared":
+                return False
+            found = True
+    return found
 
 
 def attributable_native_changes(native_roots, changes, identity, target, component_names=()):

@@ -5,6 +5,8 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/agentplugins-published-other-clients-audit.yml'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_components.py'
   workflow_dispatch:
 
 permissions:
@@ -48,6 +50,9 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+
+      - name: Check native-component attribution and expected negative proofs
+        run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
 
       - name: Install released UAP and genuine pinned native client
         id: bootstrap

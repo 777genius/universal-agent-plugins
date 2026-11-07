@@ -5,6 +5,8 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/agentplugins-published-catalog-audit.yml'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_components.py'
   workflow_dispatch:
 
 permissions:
@@ -43,6 +45,9 @@ jobs:
       # These are the public npm bytes, not a CLI built from the pull request.
       # The only test inputs from this repository are the existing immutable
       # 30-plugin/30-Skill fixture and its isolated lifecycle verification.
+      - name: Check native-component attribution and expected negative proofs
+        run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
+
       - name: Install public npm CLI and real client
         id: bootstrap
         env:
