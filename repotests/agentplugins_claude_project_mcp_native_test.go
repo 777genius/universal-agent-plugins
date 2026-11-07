@@ -17,6 +17,7 @@ import (
 )
 
 const claudeProjectTool = "mcp__uap_project_fixture__uap_ping"
+const claudeManagedProjectTool = "mcp__plugin_uap-commands-fixture_uap_project_fixture__uap_ping"
 const claudeProjectToolCallID = "uap_claude_project_call_1"
 
 // Only one inert model exists in this fixture. Match Anthropic's Models API
@@ -29,12 +30,13 @@ type claudeProjectScriptedModel struct {
 	server                                        *httptest.Server
 	mu                                            sync.Mutex
 	requests, advertised, calls, results, invalid int
+	toolName                                      string
 	invalidKinds                                  []string
 }
 
 func newClaudeProjectScriptedModel(t *testing.T) *claudeProjectScriptedModel {
 	t.Helper()
-	m := &claudeProjectScriptedModel{}
+	m := &claudeProjectScriptedModel{toolName: claudeProjectTool}
 	m.server = httptest.NewServer(http.HandlerFunc(m.respond))
 	t.Cleanup(m.server.Close)
 	return m
@@ -117,7 +119,7 @@ func (m *claudeProjectScriptedModel) respond(w http.ResponseWriter, r *http.Requ
 	}
 	found, resultSeen := false, false
 	for _, tool := range input.Tools {
-		if tool.Name == claudeProjectTool {
+		if tool.Name == m.toolName {
 			found = true
 		}
 	}
@@ -178,7 +180,7 @@ func (m *claudeProjectScriptedModel) respond(w http.ResponseWriter, r *http.Requ
 	delta := map[string]any{"type": "text_delta", "text": "Local project MCP E2E complete."}
 	stop := "end_turn"
 	if call {
-		block = map[string]any{"type": "tool_use", "id": claudeProjectToolCallID, "name": claudeProjectTool, "input": map[string]any{}}
+		block = map[string]any{"type": "tool_use", "id": claudeProjectToolCallID, "name": m.toolName, "input": map[string]any{}}
 		delta = map[string]any{"type": "input_json_delta", "partial_json": "{}"}
 		stop = "tool_use"
 	}
@@ -194,7 +196,13 @@ func (m *claudeProjectScriptedModel) respond(w http.ResponseWriter, r *http.Requ
 
 func claudeProjectRunScripted(t *testing.T, f *claudeProjectNativeFixture, project string, wantCall bool) {
 	t.Helper()
+	claudeProjectRunScriptedForTool(t, f, project, claudeProjectTool, wantCall)
+}
+
+func claudeProjectRunScriptedForTool(t *testing.T, f *claudeProjectNativeFixture, project, toolName string, wantCall bool) {
+	t.Helper()
 	model := newClaudeProjectScriptedModel(t)
+	model.toolName = toolName
 	env := append(f.base.env(filepath.Dir(f.client)),
 		"ANTHROPIC_BASE_URL="+model.server.URL,
 		"ANTHROPIC_AUTH_TOKEN=uap-disposable-fixture-token",
@@ -353,4 +361,164 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	}
 	stages["remove_foreign_retention"] = nativeStage{Status: "passed", Reason: "UAP removal preserved byte-exact foreign project MCP; independent fresh Claude session still called it"}
 	t.Log("Claude genuine trusted project MCP native tools/call qualified using foreign project config and local model; UAP-managed project MCP and vendor auth unqualified")
+
+	// The existing foreign-server proof remains unchanged. The separate
+	// disposable subtest below must prove that the *UAP-installed plugin*,
+	// not a pre-existing project .mcp.json, actually serves the native call.
+	t.Run("uap-managed-project-mcp", claudeProjectManagedMCPCall)
+}
+
+func claudeProjectManagedMCPCall(t *testing.T) {
+	t.Helper()
+	f := newClaudeProjectNativeFixture(t)
+	stages := map[string]nativeStage{
+		"managed_install":     {Status: "not_evaluated", Reason: "not reached"},
+		"managed_native_call": {Status: "not_evaluated", Reason: "not reached"},
+		"project_B_no_leak":   {Status: "not_evaluated", Reason: "not reached"},
+		"managed_remove":      {Status: "not_evaluated", Reason: "not reached"},
+	}
+	evidence := claudeProjectNativeIdentity(t, f)
+	evidence["project_contract"] = "trusted_uap_managed_project_mcp_call_v1"
+	evidence["native_surface"] = "requires real selected Claude plugin-bundled stdio MCP tools/call and local scripted model; no vendor auth"
+	defer f.writeEvidence(t, evidence, stages)
+	trust, err := json.Marshal(map[string]any{"projects": map[string]any{
+		filepath.ToSlash(f.project):      map[string]any{"hasTrustDialogAccepted": true},
+		filepath.ToSlash(f.otherProject): map[string]any{"hasTrustDialogAccepted": true},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeWrite(t, filepath.Join(f.base.ConfigDir, ".claude.json"), trust, 0600)
+	f.keep(t, filepath.Join(f.base.ConfigDir, "settings.json"),
+		`{"enableAllProjectMcpServers":true,"enabledPlugins":{"foreign-project-fixture@skills-dir":false}}`)
+	claudeTrustedInitializeProfile(t, f, trust)
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := filepath.Join(f.base.Root, "managed-claude-mcp-methods.log")
+	copyTree(t, commandsFixtureSource(t), f.base.PackageRoot)
+	// Portable stdio commands must be package-relative; an absolute host test
+	// binary is invalid at the MCP server boundary and would be silently
+	// excluded from the delivery plan. Bundle the genuine test responder.
+	bundled := filepath.Join(f.base.PackageRoot, "bin", filepath.Base(executable))
+	if err := os.MkdirAll(filepath.Dir(bundled), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := linkOrCopyFile(executable, bundled); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(bundled, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	portableCommand := "./" + filepath.ToSlash(filepath.Join("bin", filepath.Base(executable)))
+	// The canonical portable mcp.json is part of the UAP-installed source.
+	// No project .mcp.json or pre-registered foreign server is authored.
+	nativeJSON(t, filepath.Join(f.base.PackageRoot, "mcp.json"), map[string]any{
+		"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+		"mcpServers": map[string]any{"uap_project_fixture": map[string]any{
+			"type": "stdio", "command": portableCommand,
+			"args": []string{"-test.run=^TestOpenCodeV2MCPStdioResponder$"},
+			"env": map[string]string{
+				"UAP_OPENCODE_V2_MCP_HELPER": "1",
+				"UAP_OPENCODE_V2_MCP_EVENTS": events,
+			},
+		}},
+	})
+	c := commandsNativeClient{target: "claude", pkg: f.base.PackageRoot, run: f.run}
+	added := c.succeed(t, "managed-mcp-add", "add", c.pkg)
+	outcome, err := commandsTargetOutcome(claudePreparedEnvelope(added))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, _ := outcome["plan"].(map[string]any)
+	physical, _ := plan["physical_artifact_id"].(string)
+	if plan["client_id"] != "claude" || plan["scope"] != "project" || physical == "" {
+		t.Fatal("UAP-managed MCP did not retain exact Claude project identity")
+	}
+	managed := filepath.Join(f.project, ".claude", "skills", physical)
+	nativeRequireContained(t, f.project, managed)
+	manifestBody, err := os.ReadFile(filepath.Join(managed, ".claude-plugin", "plugin.json"))
+	if err != nil {
+		t.Fatal("UAP-managed Claude plugin manifest missing", err)
+	}
+	var manifest map[string]any
+	if json.Unmarshal(manifestBody, &manifest) != nil || manifest["mcpServers"] != "./.mcp.json" {
+		t.Fatal("installed Claude plugin does not reference its owned MCP definition")
+	}
+	mcpBody, err := os.ReadFile(filepath.Join(managed, ".mcp.json"))
+	if err != nil {
+		t.Fatal("UAP-managed Claude MCP definition missing", err)
+	}
+	var mcp map[string]map[string]any
+	if json.Unmarshal(mcpBody, &mcp) != nil || len(mcp) != 1 {
+		t.Fatal("UAP-managed Claude MCP selection is not exact")
+	}
+	server, ok := mcp["uap_project_fixture"]
+	if !ok {
+		t.Fatal("UAP-managed Claude MCP server is not selected")
+	}
+	command, _ := server["command"].(string)
+	if !filepath.IsAbs(command) {
+		t.Fatal("managed MCP launcher is not an absolute executable")
+	}
+	nativeRequireContained(t, managed, command)
+	if _, err := os.Lstat(filepath.Join(f.project, ".mcp.json")); !os.IsNotExist(err) {
+		t.Fatal("managed plugin test inadvertently authored a foreign project MCP config")
+	}
+	f.requireForeign(t)
+	stages["managed_install"] = nativeStage{Status: "passed", Reason: "public UAP CLI installed exact owned Claude plugin manifest, scoped MCP entry and managed stdio launcher"}
+
+	claudeProjectRunScriptedForTool(t, f, f.project, claudeManagedProjectTool, true)
+	methods, err := os.ReadFile(events)
+	if err != nil || len(methods) > 2048 {
+		t.Fatal("real managed MCP subprocess did not emit bounded events", err)
+	}
+	counts := map[string]int{}
+	for _, method := range strings.Fields(string(methods)) {
+		counts[method]++
+	}
+	if counts["initialize"] == 0 || counts["tools/list"] == 0 || counts["tools/call"] != 1 || len(strings.Fields(string(methods))) > 24 {
+		t.Fatalf("UAP-managed Claude real tools/call not observed: initialize=%d list=%d call=%d",
+			counts["initialize"], counts["tools/list"], counts["tools/call"])
+	}
+	stages["managed_native_call"] = nativeStage{Status: "passed", Reason: "genuine pinned Claude process dispatched owned plugin stdio tools/call and returned uap-pong through scripted local model"}
+
+	claudeProjectRunScriptedForTool(t, f, f.otherProject, claudeManagedProjectTool, false)
+	afterB, err := os.ReadFile(events)
+	if err != nil || !bytes.Equal(afterB, methods) {
+		t.Fatal("project B started UAP-managed project A MCP child")
+	}
+	stages["project_B_no_leak"] = nativeStage{Status: "passed", Reason: "fresh trusted B session did not discover/call A managed MCP or start its child"}
+
+	// Genuine Claude may update its own trusted profile. Verify that trust
+	// is unchanged, then treat the exact post-native bytes as foreign baseline
+	// for the installer's remove operation.
+	profilePath := filepath.Join(f.base.ConfigDir, ".claude.json")
+	profile, err := readClaudeTrustedProfile(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var actual struct {
+		Projects map[string]struct {
+			Trusted bool `json:"hasTrustDialogAccepted"`
+		} `json:"projects"`
+	}
+	if json.Unmarshal(profile, &actual) != nil ||
+		!actual.Projects[filepath.ToSlash(f.project)].Trusted ||
+		!actual.Projects[filepath.ToSlash(f.otherProject)].Trusted {
+		t.Fatal("native Claude session lost authored A/B trust")
+	}
+	f.foreign[profilePath] = nativeSHA(t, profilePath)
+	c.succeed(t, "managed-mcp-remove", "remove", commandsPluginName)
+	if _, err := os.Lstat(managed); !os.IsNotExist(err) {
+		t.Fatal("UAP-managed plugin survived scoped removal", err)
+	}
+	f.requireForeign(t)
+	claudeProjectRunScriptedForTool(t, f, f.project, claudeManagedProjectTool, false)
+	afterRemove, err := os.ReadFile(events)
+	if err != nil || !bytes.Equal(afterRemove, methods) {
+		t.Fatal("removed UAP-managed MCP child was restarted or invoked")
+	}
+	stages["managed_remove"] = nativeStage{Status: "passed", Reason: "UAP scoped remove deleted only owned plugin and fresh A session could not call removed tool"}
 }
