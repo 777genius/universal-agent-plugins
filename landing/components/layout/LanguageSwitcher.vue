@@ -67,7 +67,7 @@ const onChange = async (value: unknown) => {
     return;
   }
   retryLocale.value = value;
-  // Close the overlay before route navigation can reuse or remount the header.
+  // Close before navigation; the URL may update before switchLocale settles.
   menuOpen.value = false;
   await switchLocale(value);
   returnFocus();

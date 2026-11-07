@@ -431,15 +431,15 @@
       }
     },
     "seo": {
-      "indexTitle": "Universal Agent Plugins CLI {'|'} 安装 Agent Plugins 1.0",
-      "indexDescription": "通过同一个 CLI，在受支持的 AI 客户端中安装、更新、修复和移除 Agent Plugins 1.0 软件包。",
+      "indexTitle": "AI 智能体插件与 Skills {'|'} Universal Agent Plugins",
+      "indexDescription": "使用一个 CLI，为 Codex、Claude Code、Cursor、Gemini CLI 等客户端安装和管理 Agent Plugins 1.0、Agent Skills 和 MCP 工具，支持全局与项目范围。",
       "downloadTitle": "下载 Universal Agent Plugins CLI",
       "downloadDescription": "在 macOS、Linux 或 Windows 上安装 Universal Agent Plugins CLI，并通过一个命令管理 Agent Plugins 1.0。",
       "applicationSubCategory": "代理插件管理器",
       "softwareRequirements": "适用于 macOS、Linux 和 Windows 的本机 CLI；或适用于 npx 的 Node.js 22+",
-      "featureList": "安装、检查、更新、修复、切换来源和移除 Agent Plugins 1.0 软件包",
-      "imageAlt": "Universal Agent Plugins：用同一个 CLI 为 AI 客户端安装插件",
-      "organizationDescription": "Agent Plugins 1.0 的开源多代理安装程序和生命周期管理器。"
+      "featureList": "在全局或项目范围安装、检查、更新、修复和卸载 Agent Plugins 1.0 与 Agent Skills。",
+      "imageAlt": "Universal Agent Plugins：使用一个 CLI 管理多个 AI 客户端的插件、Skills 与 MCP 工具。",
+      "organizationDescription": "面向多个 AI 客户端的开源 CLI，可安装和管理 Agent Plugins 1.0、Agent Skills 和 MCP 工具。"
     },
     "hero": {
       "autoLabel": "在终端中选择代理",

@@ -431,15 +431,15 @@
       }
     },
     "seo": {
-      "indexTitle": "Universal Agent Plugins CLI {'|'} Встановлення Agent Plugins 1.0",
-      "indexDescription": "Встановлюйте, оновлюйте, відновлюйте й вилучайте Agent Plugins 1.0 для підтримуваних AI-агентів за допомогою одного CLI.",
+      "indexTitle": "Плагіни та Skills для AI-агентів {'|'} Universal Agent Plugins",
+      "indexDescription": "Встановлюйте Agent Plugins 1.0, Agent Skills і MCP-інструменти для Codex, Claude Code, Cursor, Gemini CLI та інших — глобально або для проєкту через один CLI.",
       "downloadTitle": "Завантажити Universal Agent Plugins CLI",
       "downloadDescription": "Встановіть Universal Agent Plugins CLI на macOS, Linux або Windows і керуйте Agent Plugins 1.0 однією командою.",
       "applicationSubCategory": "Менеджер плагінів для агентів",
       "softwareRequirements": "Нативний CLI для macOS, Linux і Windows; або Node.js 22+ для npx",
-      "featureList": "Встановлюйте, перевіряйте, оновлюйте, відновлюйте, змінюйте джерело й вилучайте Agent Plugins 1.0",
-      "imageAlt": "Universal Agent Plugins — встановлюйте плагіни для AI-агентів одним CLI",
-      "organizationDescription": "Відкритий багатоагентний інсталятор і менеджер життєвого циклу для Agent Plugins 1.0."
+      "featureList": "Встановлення, перевірка, оновлення, відновлення та видалення Agent Plugins 1.0 і Agent Skills глобально або в проєкті.",
+      "imageAlt": "Universal Agent Plugins — один CLI для Agent Plugins 1.0, Skills, MCP і різних AI-агентів.",
+      "organizationDescription": "Відкритий CLI для встановлення та керування Agent Plugins 1.0, Agent Skills і MCP-інструментами для різних AI-агентів."
     },
     "hero": {
       "autoLabel": "Вибрати агентів у терміналі",
