@@ -1,6 +1,8 @@
 package agentpluginscli
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -37,5 +39,54 @@ func TestChatGPTSurfaceTargetParsingAndScope(t *testing.T) {
 				t.Errorf("ChatGPT Desktop must refuse project scope, %q", raw)
 			}
 		}
+	}
+}
+
+func TestChatGPTDesktopAliasUsesCodexLifecycleWithoutSecondBinding(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, []domain.DetectedClient{
+		fixtureClient(t, domain.ClientCodex),
+	})
+	plugin := writeCLIPlugin(t)
+
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt-desktop", "--format", "json"); err != nil {
+		t.Fatalf("Desktop alias add: %v", err)
+	}
+	assertClientBindings(t, fixture, domain.MaterializationMaterialized, 1)
+	state, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+		t.Fatalf("expected one canonical installation and client binding, got %+v", state.Installations)
+	}
+	if _, ok := state.Installations[0].Clients[domain.ClientCodex]; !ok {
+		t.Fatal("Desktop alias did not retain the canonical Codex-owned client binding")
+	}
+
+	manifest := filepath.Join(plugin, "plugin.json")
+	body, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifest,
+		[]byte(strings.Replace(string(body), `"version": "1.0.0"`, `"version": "2.0.0"`, 1)),
+		0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := fixture.execute(false, "update", "demo", "--target", "chatgpt-desktop", "--format", "json"); err != nil {
+		t.Fatalf("Desktop alias update: %v", err)
+	}
+	assertClientBindings(t, fixture, domain.MaterializationMaterialized, 2)
+
+	if _, _, err := fixture.execute(false, "remove", "demo", "--target", "chatgpt-desktop", "--external-uninstalled", "--format", "json"); err != nil {
+		t.Fatalf("Desktop alias remove: %v", err)
+	}
+	state, err = fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Installations) != 0 {
+		t.Fatalf("Desktop alias left an independent installation: %+v", state.Installations)
 	}
 }
