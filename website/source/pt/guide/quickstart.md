@@ -41,8 +41,8 @@ não precisa de Node.js, embora plugins individuais possam precisar de seus
 próprios ambientes de execução. Confira `npx universal-agent-plugins version`
 ao usar npm: um canal de gerenciador de pacotes ainda pode fornecer uma CLI
 mais antiga. A seleção automática abaixo exige 0.1.94; o instalador nativo
-fornece a versão verificada. Os comandos explícitos de projeto deste guia também
-funcionam com a 0.1.93.
+fornece a versão verificada. O comando Project com fonte Git fixada por SHA completo funciona desde a
+0.1.93; nomes curtos do Directory em Project exigem a CLI estável atual.
 
 A [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 mantém o escopo de projeto explícito e a seleção automática de `install`,

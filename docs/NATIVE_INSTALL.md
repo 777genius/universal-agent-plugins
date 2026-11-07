@@ -75,11 +75,12 @@ plus a standard SHA-256 utility on Unix, or PowerShell on Windows.
 
 Only for reproducible builds or audits, pin a **published** stable version
 from [release history](https://github.com/777genius/universal-agent-plugins/releases).
-Replace `X.Y.Z` with the verified version before running:
+Download the installer as shown above, then replace `X.Y.Z` with the verified
+version before running:
 
 ```bash
 VERSION="X.Y.Z"  # replace with a published release version
-AGENTPLUGINS_VERSION="$VERSION" sh ./install.sh
+AGENTPLUGINS_VERSION="$VERSION" sh /tmp/agentplugins-install.sh
 ```
 
 For ordinary installation, omit `AGENTPLUGINS_VERSION` to select the latest

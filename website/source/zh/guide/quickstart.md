@@ -52,7 +52,7 @@ npx universal-agent-plugins add github:777genius/universal-agent-plugins@2ddbb99
 
 各分发渠道的版本可能不同。使用 0.1.94 的自动项目选择前，先运行 `agentplugins version` 或
 `npx universal-agent-plugins version`。若所选渠道仍较旧，可使用[原生安装器](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)，
-或继续使用 0.1.93 已支持的显式项目范围命令。
+或使用 0.1.93 已支持的完整 SHA 固定 Git 来源项目命令；签名 Directory 短名称的项目安装需使用当前稳定版 CLI。
 
 检查计划后再去掉 `--dry-run`。写入包文件不等于客户端已发现、授予信任、完成认证或成功调用 MCP。
 

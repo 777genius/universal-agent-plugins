@@ -38,8 +38,8 @@ also provides macOS, Linux and Windows executables. The native manager needs no
 Node.js, although individual plugins may require their own runtimes. Check
 `npx universal-agent-plugins version` when using npm: a package-manager channel
 can still provide an older CLI. The automatic selection below requires 0.1.94;
-use the native installer for the verified release. The explicit project commands
-in this guide also work with 0.1.93.
+use the native installer for the verified release. The commit-pinned Git Project command below also works with 0.1.93;
+signed Directory short-name Project installs require the current stable CLI.
 
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 retains explicit project scope and the automatic `install` selection introduced

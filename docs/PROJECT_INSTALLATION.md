@@ -42,13 +42,13 @@ the final feature-source native run; each client's activation limits still apply
 ## Signed Directory and direct sources in Project
 
 The Directory uses **one signed schema-1 source authority**. Its published
-scope rows remain User-only for existing readers, but the installer in current
-`main` can independently admit **explicit Project placement** for an eligible
+scope rows remain User-only for existing readers, but the current stable CLI can independently admit **explicit Project placement** for an eligible
 signed root and each mandatory dependency. It enforces exact source pins,
 revocations, source integrity, selected native Project capabilities and
 ownership. User runtime evidence is never reused as Project activation proof.
 
-Build the current source (PR #725 and later) to use a short Directory name:
+Use the current stable CLI to preview a short Directory name for an eligible
+Project package (all required dependencies must also qualify):
 
 ```sh
 cd /path/to/project
