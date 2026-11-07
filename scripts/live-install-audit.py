@@ -1602,18 +1602,26 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
 def expected_negative_coverage(row):
     """Green audit means independently verified outcome, not all installs PASS.
 
-    The pinned release deliberately refuses Marketing Kit on these four
-    clients, and OpenCode's Docker Hub MCP binding is prepared-only. Never
-    promote other errors or missing native proof into accepted coverage.
+    The pinned release deliberately refuses Marketing Kit on four clients.
+    OpenCode can complete a *prepared* package lifecycle without activating any
+    native component; a safe generic opencode.json write never upgrades that to
+    native PASS. Count only the independently verified prepared lifecycle as
+    an explicit non-native outcome. Never accept arbitrary files or failures.
     """
     if not row.get("sentinels_preserved") or row.get("failed_install_residue"):
         return False
     if (row.get("status") == "prepared-lifecycle-passed"
             and row.get("kind") == "plugin" and row.get("target") == "opencode"
-            and row.get("source") == "docker-hub"
             and row.get("prepared_components_only")
-            and not row.get("native_identity_files")
-            and row.get("repeat_verified") and row.get("removal_verified")):
+            and row.get("native_component_candidates") == []
+            and row.get("native_identity_files") in ([], ["opencode/opencode.json"])
+            and row.get("listed_identity")
+            and row.get("repeat_verified") and row.get("removal_verified")
+            and row.get("native_residuals") == []
+            and isinstance(row.get("install"), dict)
+            and row["install"].get("exit_code") == 0
+            and isinstance(row.get("cleanup"), dict)
+            and row["cleanup"].get("exit_code") == 0):
         return True
     target = row.get("target")
     return bool(
