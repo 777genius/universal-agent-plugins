@@ -99,9 +99,9 @@ const command = computed(() =>
 const showDesktopGuide = computed(() =>
   scope.value === 'user' &&
   !autoDetect.value &&
-  targets.value.includes('chatgpt-desktop') &&
+  targets.value.includes('chatgpt') &&
   canChooseInstall.value &&
-  Boolean(targetDistributions.value.get('chatgpt-desktop')),
+  Boolean(targetDistributions.value.get('chatgpt')),
 );
 const vendorInstall = computed(() => vendorInstallSource(props.plugin));
 const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
@@ -132,11 +132,11 @@ const targetOptions = computed(() =>
       const target = source?.targets.find(
         (item) => item.client === canonicalInstallTarget(client.id),
       );
-      if (client.id === 'chatgpt-desktop')
+      if (client.id === 'chatgpt')
         return target
           ? t('registryUi.desktopGuide.description')
           : t('registryUi.card.notInstallableFromAnActiveRelease');
-      if (client.id === 'chatgpt')
+      if (client.id === 'chatgptweb')
         return target?.app_binding
           ? t('registryUi.card.verifiedConnectionFinishSetupInChatgpt')
           : t('registryUi.card.notAvailableForChatgpt');

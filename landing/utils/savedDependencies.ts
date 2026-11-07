@@ -12,7 +12,7 @@ export type DependencySaveMode = 'saved' | 'noSave' | 'local' | 'discovery' | 'c
 export function dependencySaveMode(source: string, targets: readonly string[]): DependencySaveMode {
   if (/^(?:\.{1,2}[\\/]|[\\/]|~[\\/]|[A-Za-z]:[\\/])/.test(source)) return 'local';
   if (source.startsWith('discovery:')) return 'discovery';
-  if (targets.length === 1 && (targets[0] === 'chatgpt' || targets[0] === 'chatgpt-web'))
+  if (targets.length === 1 && targets[0] === 'chatgptweb')
     return 'chatgpt';
   // Community selectors are already validated and may be shell-quoted paths.
   const github = isPinnedGitSource(source);
@@ -21,7 +21,7 @@ export function dependencySaveMode(source: string, targets: readonly string[]): 
   // The Desktop surface uses the same saved Codex dependency; no duplicate
   // native plugin identity or special no-save route is introduced.
   return targets.every((target) =>
-    savedDependencyTargets.has(target === 'chatgpt-desktop' ? 'codex' : target))
+    savedDependencyTargets.has(target === 'chatgpt' ? 'codex' : target))
     ? 'saved'
     : 'noSave';
 }

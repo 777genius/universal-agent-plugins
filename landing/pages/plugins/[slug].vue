@@ -50,7 +50,7 @@ const clientGroups = computed(() =>
 );
 const initialTarget =
   supportedClients.find((client) => client.id === 'cursor')?.id ?? supportedClients[0]?.id;
-const targets = ref<InstallTargetID[]>(initialTarget ? [initialTarget] : []);
+const targets = ref<InstallTargetID[]>(initialTarget ? [initialTarget === 'chatgpt' ? 'chatgptweb' : initialTarget] : []);
 const autoDetect = ref(true);
 const installAvailable = computed(
   () =>

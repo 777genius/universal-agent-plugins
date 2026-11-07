@@ -25,14 +25,14 @@ export function usePluginInstallSelection(
     return installTargets.filter((client) =>
       policies.some((policy) =>
         policy.client === canonicalInstallTarget(client.id) &&
-        (client.id !== 'chatgpt' ||
+        (client.id !== 'chatgptweb' ||
           (plugin().trust_state !== 'conformant_unreviewed' && Boolean(policy.app_binding))),
       ),
     );
   });
   const select = (selected: InstallTargetID[]): DistributionResolution => {
     // A local Desktop plugin belongs to the Codex user profile, not a project.
-    if (scope.value === 'project' && selected.includes('chatgpt-desktop'))
+    if (scope.value === 'project' && selected.includes('chatgpt'))
       return { unavailable_reason: 'ChatGPT Desktop supports only This computer; select Codex for a project install.' };
     const canonical = canonicalInstallTargets(selected);
     const resolved = scope.value === 'project'
@@ -40,12 +40,12 @@ export function usePluginInstallSelection(
       : resolveDistribution(plugin(), canonical, 'user');
     // Unreviewed community metadata is not an authority for an account-bound
     // ChatGPT Web app, even when it advertises an app_binding object.
-    if (selected.includes('chatgpt') && plugin().trust_state === 'conformant_unreviewed') {
+    if (selected.includes('chatgptweb') && plugin().trust_state === 'conformant_unreviewed') {
       return { unavailable_reason: 'ChatGPT Web needs a reviewed signed Directory release.' };
     }
     // A signed ChatGPT Web target is meaningful only with its registered app
     // identity. Older/preview projections must not enable a cloud install.
-    if (selected.includes('chatgpt') &&
+    if (selected.includes('chatgptweb') &&
         !resolved.distribution?.targets.some((target) =>
           target.client === 'chatgpt' && Boolean(target.app_binding))) {
       return {
@@ -140,12 +140,12 @@ export function usePluginInstallSelection(
     const selected = [...new Set(next)];
     // Codex CLI and Desktop are two product surfaces backed by one local install.
     // Avoid generating a duplicate target request from a multi-select choice.
-    if (selected.includes('codex') && selected.includes('chatgpt-desktop')) {
+    if (selected.includes('codex') && selected.includes('chatgpt')) {
       const added = selected.find((id) =>
-        (id === 'codex' || id === 'chatgpt-desktop') && !targets.value.includes(id),
+        (id === 'codex' || id === 'chatgpt') && !targets.value.includes(id),
       );
-      const keep = added ?? (targets.value.includes('chatgpt-desktop') ? 'chatgpt-desktop' : 'codex');
-      selected.splice(selected.indexOf(keep === 'codex' ? 'chatgpt-desktop' : 'codex'), 1);
+      const keep = added ?? (targets.value.includes('chatgpt') ? 'chatgpt' : 'codex');
+      selected.splice(selected.indexOf(keep === 'codex' ? 'chatgpt' : 'codex'), 1);
     }
     targets.value = selected;
     saveUnboundChoice();

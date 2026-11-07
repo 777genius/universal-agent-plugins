@@ -42,10 +42,10 @@ function mount(plugin: RegistryPlugin) {
 
 test('mixed ChatGPT Web and Codex/Desktop commands use the imperative no-save path', () => {
   const plugin = data();
-  const oldCommand = pluginCommands(plugin, ['codex', 'chatgpt-web']).add;
-  const splitCommand = pluginCommands(plugin, ['chatgpt-desktop', 'chatgpt-web']).add;
-  assert.match(oldCommand, /--target codex,chatgpt-web --no-save$/);
-  assert.match(splitCommand, /--target chatgpt-desktop,chatgpt-web --no-save$/);
+  const oldCommand = pluginCommands(plugin, ['codex', 'chatgptweb']).add;
+  const splitCommand = pluginCommands(plugin, ['chatgpt', 'chatgptweb']).add;
+  assert.match(oldCommand, /--target codex,chatgptweb --no-save$/);
+  assert.match(splitCommand, /--target chatgpt,chatgptweb --no-save$/);
   assert.doesNotMatch(pluginCommands(plugin, ['codex']).add, /--no-save/);
 });
 
@@ -61,10 +61,10 @@ test('unreviewed community app metadata cannot authorize a ChatGPT Web connectio
     app_binding: { app_key: 'spoofed', id: 'untrusted_app', mcp_server: 'untrusted' },
   });
   const state = mount(plugin);
-  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgpt-desktop'));
-  assert.equal(state.availableClients.value.some((client) => client.id === 'chatgpt'), false);
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgptweb'));
+  assert.equal(state.availableClients.value.some((client) => client.id === 'chatgptweb'), false);
   // Exercise an invalid persisted choice as well as the ordinary picker.
-  state.targets.value = ['chatgpt'];
+  state.targets.value = ['chatgptweb'];
   assert.equal(state.resolution.value.distribution, undefined);
   assert.match(state.resolution.value.unavailable_reason ?? '', /reviewed signed Directory/);
   state.stop();
@@ -81,20 +81,20 @@ test('ChatGPT Web needs signed app binding; Desktop shares Codex without project
     authentication: 'unknown',
   });
   const state = mount(plugin);
-  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgpt-desktop'));
-  assert.equal(state.availableClients.value.some((client) => client.id === 'chatgpt'), false);
-  assert.equal(state.targetDistributions.value.get('chatgpt'), undefined);
-  assert.ok(state.targetDistributions.value.get('chatgpt-desktop'));
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgptweb'));
+  assert.equal(state.availableClients.value.some((client) => client.id === 'chatgptweb'), false);
+  assert.equal(state.targetDistributions.value.get('chatgptweb'), undefined);
+  assert.ok(state.targetDistributions.value.get('chatgpt'));
   release.targets[release.targets.length - 1]!.app_binding = {
     app_key: 'context7',
     id: 'asdk_app_verified_test',
     mcp_server: 'context7',
   };
-  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgpt'));
-  state.updateTargets(['chatgpt']);
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgptweb'));
+  state.updateTargets(['chatgptweb']);
   state.updateAutoDetect(false);
   assert.ok(state.resolution.value.distribution?.targets.some((target) => target.client === 'chatgpt'));
-  state.updateTargets(['chatgpt-desktop']);
+  state.updateTargets(['chatgpt']);
   assert.equal(state.resolution.value.distribution?.id, plugin.distributions[0]!.id);
   state.updateScope('project');
   assert.equal(state.scope.value, 'project');

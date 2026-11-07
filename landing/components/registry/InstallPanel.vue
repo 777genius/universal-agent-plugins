@@ -57,11 +57,11 @@ const targetOptions = computed(() =>
       const target = source?.targets.find(
         (item) => item.client === canonicalInstallTarget(client.id),
       );
-      if (client.id === 'chatgpt-desktop')
+      if (client.id === 'chatgpt')
         return target
           ? t('registryUi.desktopGuide.description')
           : t('registryUi.install.noActiveReleaseSupportsThisClient');
-      if (client.id === 'chatgpt')
+      if (client.id === 'chatgptweb')
         return target?.app_binding
           ? t('registryUi.install.verifiedConnectionFinishSetupInChatgpt')
           : t('registryUi.install.notAvailableForChatgpt');
@@ -73,11 +73,11 @@ const targetOptions = computed(() =>
 const showDesktopGuide = computed(() =>
   scope.value === 'user' &&
   !autoDetect.value &&
-  targets.value.includes('chatgpt-desktop') &&
+  targets.value.includes('chatgpt') &&
   canUseSource.value &&
   props.plugin.installable &&
   !isFullyRetired(props.plugin) &&
-  Boolean(targetDistributions.value.get('chatgpt-desktop')),
+  Boolean(targetDistributions.value.get('chatgpt')),
 );
 const commands = computed(() =>
   (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&

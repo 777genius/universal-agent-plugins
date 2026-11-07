@@ -100,23 +100,24 @@ function card(props = packageProps()) {
 test('Desktop has its own picker command, shares Codex backend, and keeps Web separate', () => {
   setActivePinia(createPinia());
   const instance = card();
-  instance.state.updateTargets(['chatgpt-desktop']);
+  instance.state.updateTargets(['chatgpt']);
   instance.state.updateAutoDetect(false);
   assert.deepEqual(Array.from(canonicalInstallTargets(instance.state.targets.value)), ['codex']);
-  assert.match(instance.state.command.value, /--target chatgpt-desktop$/);
+  assert.match(instance.state.command.value, /--target chatgpt$/);
   assert.equal(instance.state.deliverySummary.value.includes('1 automatic setup'), true);
-  instance.state.updateTargets(['chatgpt-desktop', 'codex']);
+  instance.state.updateTargets(['chatgpt', 'codex']);
   assert.deepEqual(Array.from(instance.state.targets.value), ['codex']);
   assert.match(instance.state.command.value, /--target codex$/);
-  instance.state.updateTargets(['codex', 'chatgpt-desktop']);
-  assert.deepEqual(Array.from(instance.state.targets.value), ['chatgpt-desktop']);
-  assert.match(instance.state.command.value, /--target chatgpt-desktop$/);
+  instance.state.updateTargets(['codex', 'chatgpt']);
+  assert.deepEqual(Array.from(instance.state.targets.value), ['chatgpt']);
+  assert.match(instance.state.command.value, /--target chatgpt$/);
   instance.stop();
-  assert.deepEqual(cliInstallTargets(['chatgpt', 'chatgpt-desktop']), ['chatgpt-web', 'chatgpt-desktop']);
-  assert.equal(canonicalInstallTarget('chatgpt'), 'chatgpt');
-  assert.equal(canonicalInstallTarget('chatgpt-desktop'), 'codex');
-  assert.equal(installTargets.find((x) => x.id === 'chatgpt')?.name, 'ChatGPT Web');
-  assert.equal(installTargets.find((x) => x.id === 'chatgpt-desktop')?.name, 'ChatGPT Desktop');
+  assert.deepEqual(cliInstallTargets(['chatgptweb', 'chatgpt']), ['chatgptweb', 'chatgpt']);
+  assert.equal(canonicalInstallTarget('chatgptweb'), 'chatgpt');
+  assert.equal(canonicalInstallTarget('chatgpt'), 'codex');
+  assert.equal(installTargets.find((x) => x.id === 'chatgptweb')?.name, 'ChatGPT Web');
+  assert.equal(installTargets.find((x) => x.id === 'chatgpt')?.name, 'ChatGPT Desktop');
+  assert.equal(installTargets.find((x) => x.id === 'codex')?.name, 'Codex CLI');
 });
 
 test('explicit card delivery summary follows the winning scoped release rather than default aggregate', () => {
