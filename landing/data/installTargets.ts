@@ -6,7 +6,7 @@ import type { ClientID, ClientTarget } from '../types/registry.ts';
 export type InstallTargetID = ClientID | 'chatgpt-desktop';
 export type InstallTargetOption = Omit<ClientTarget, 'id'> & { id: InstallTargetID };
 
-export const installTargets: InstallTargetOption[] = clients.flatMap((client) =>
+export const installTargets: InstallTargetOption[] = clients.flatMap<InstallTargetOption>((client) =>
   client.id === 'chatgpt'
     ? [
         {
