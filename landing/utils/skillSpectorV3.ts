@@ -281,12 +281,30 @@ export function decodeSkillSpectorManifestV3(
     fail();
   if (profile(m.profile).id !== 'static-policy-v3') fail();
   if (!Array.isArray(m.profiles) || !m.profiles.length || m.profiles.length > 8) fail();
+  // The new signed producer policy can retain verified old observations while
+  // new scans use a distinct digest. Profile IDs repeat only across those two
+  // exact generations, never for arbitrary or conflicting report metadata.
   const profiles = new Set<string>();
   for (const p of m.profiles) {
     profile(p);
-    if (profiles.has(p.id) || !['static-standard-v3', 'static-extended-v3'].includes(p.id)) fail();
-    profiles.add(p.id);
+    if (!['static-standard-v3', 'static-extended-v3'].includes(p.id)) fail();
+    const identity = `${p.id}:${p.digest}`;
+    if (profiles.has(identity)) fail();
+    profiles.add(identity);
   }
+  if (m.profiles.length === 4) {
+    const ids = m.profiles.map((p: { id: string }) => p.id);
+    if (JSON.stringify(ids) !== JSON.stringify([
+      'static-standard-v3', 'static-extended-v3',
+      'static-standard-v3', 'static-extended-v3',
+    ])) fail();
+    if (
+      m.profiles[0].digest !== 'sha256:33e3822d74ce72625cc5b479f4473b515f693890a3818366206a4dbc2b8f509c' ||
+      m.profiles[1].digest !== 'sha256:255c72648dd6a6e6b93ea75f5ad51553826692c60dd8222c7fb55613cf5766ba' ||
+      m.profiles[2].digest === m.profiles[0].digest ||
+      m.profiles[3].digest === m.profiles[1].digest
+    ) fail();
+  } else if (new Set(m.profiles.map((p: { id: string }) => p.id)).size !== m.profiles.length) fail();
   const c = coverage(m.coverage);
   if (
     !Array.isArray(m.shards) ||

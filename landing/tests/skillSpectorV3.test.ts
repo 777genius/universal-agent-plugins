@@ -82,6 +82,29 @@ describe('SkillSpector v3 exact producer contract', () => {
     await client.coverageSummary();
     assert.equal(requests.length, 3);
   });
+  it('retains exact old and new signed scan profiles without accepting ambiguous duplicates', () => {
+    const updated = structuredClone(manifest);
+    const legacy = [
+      { id: 'static-standard-v3', digest: 'sha256:33e3822d74ce72625cc5b479f4473b515f693890a3818366206a4dbc2b8f509c' },
+      { id: 'static-extended-v3', digest: 'sha256:255c72648dd6a6e6b93ea75f5ad51553826692c60dd8222c7fb55613cf5766ba' },
+    ];
+    updated.profiles = [...legacy,
+      { id: 'static-standard-v3', digest: 'sha256:' + 'a'.repeat(64) },
+      { id: 'static-extended-v3', digest: 'sha256:' + 'b'.repeat(64) },
+    ];
+    assert.deepEqual(decodeSkillSpectorManifestV3(updated).profiles, updated.profiles);
+    for (const change of [
+      (value: typeof updated) => { value.profiles[0]!.digest = 'sha256:' + 'c'.repeat(64); },
+      (value: typeof updated) => { value.profiles[2] = structuredClone(value.profiles[0]!); },
+      (value: typeof updated) => { value.profiles.reverse(); },
+      (value: typeof updated) => { value.profiles.pop(); },
+      (value: typeof updated) => { value.profiles.push(structuredClone(value.profiles[0]!)); },
+    ]) {
+      const invalid = structuredClone(updated);
+      change(invalid);
+      assert.throws(() => decodeSkillSpectorManifestV3(invalid), /invalid/);
+    }
+  });
   it('rejects duplicate source IDs even when their resolution states disagree', () => {
     for (const contradictory of [false, true]) {
       const forged = structuredClone(manifest);
