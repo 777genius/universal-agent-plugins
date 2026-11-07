@@ -25,7 +25,8 @@ export function usePluginInstallSelection(
     return installTargets.filter((client) =>
       policies.some((policy) =>
         policy.client === canonicalInstallTarget(client.id) &&
-        (client.id !== 'chatgpt' || Boolean(policy.app_binding)),
+        (client.id !== 'chatgpt' ||
+          (plugin().trust_state !== 'conformant_unreviewed' && Boolean(policy.app_binding))),
       ),
     );
   });
@@ -37,6 +38,11 @@ export function usePluginInstallSelection(
     const resolved = scope.value === 'project'
       ? projectCatalogSelection(plugin(), canonical).resolution
       : resolveDistribution(plugin(), canonical, 'user');
+    // Unreviewed community metadata is not an authority for an account-bound
+    // ChatGPT Web app, even when it advertises an app_binding object.
+    if (selected.includes('chatgpt') && plugin().trust_state === 'conformant_unreviewed') {
+      return { unavailable_reason: 'ChatGPT Web needs a reviewed signed Directory release.' };
+    }
     // A signed ChatGPT Web target is meaningful only with its registered app
     // identity. Older/preview projections must not enable a cloud install.
     if (selected.includes('chatgpt') &&
