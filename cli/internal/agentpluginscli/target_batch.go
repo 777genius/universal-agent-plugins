@@ -88,7 +88,7 @@ func parseTargetOption(value string) ([]domain.ClientID, error) {
 			return nil, fmt.Errorf("--target all is not supported; choose clients explicitly")
 		}
 		if strings.EqualFold(raw, "openai") {
-			return nil, fmt.Errorf("target %q is ambiguous; use codex, chatgpt, or both", raw)
+			return nil, fmt.Errorf("target %q is ambiguous; use codex, chatgpt (Desktop), or chatgptweb (Web)", raw)
 		}
 
 		target := normalizeTarget(raw)
