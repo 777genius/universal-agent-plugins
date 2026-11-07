@@ -1,0 +1,95 @@
+name: Published npm 0.1.101 catalog installation audit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/agentplugins-published-catalog-audit.yml'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_components.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-catalog-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  published-install-lifecycle:
+    name: npm 0.1.101 / ${{ matrix.client }} / ${{ matrix.kind }} (${{ matrix.limit }} sources)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - { client: codex, kind: plugin, limit: 30, native_package: '@openai/codex@0.153.4' }
+          - { client: codex, kind: skill, limit: 30, native_package: '@openai/codex@0.153.4' }
+          - { client: claude, kind: plugin, limit: 12, native_package: '@anthropic-ai/claude-code@2.1.263' }
+          - { client: claude, kind: skill, limit: 12, native_package: '@anthropic-ai/claude-code@2.1.263' }
+          - { client: opencode, kind: plugin, limit: 12, native_package: 'opencode-ai@1.18.34' }
+          - { client: opencode, kind: skill, limit: 12, native_package: 'opencode-ai@1.18.34' }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      # These are the public npm bytes, not a CLI built from the pull request.
+      # The only test inputs from this repository are the existing immutable
+      # 30-plugin/30-Skill fixture and its isolated lifecycle verification.
+      - name: Check native-component attribution and expected negative proofs
+        run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
+
+      - name: Install public npm CLI and real client
+        id: bootstrap
+        env:
+          NATIVE_PACKAGE: ${{ matrix.native_package }}
+        run: |
+          set -euo pipefail
+          npm install --global universal-agent-plugins@0.1.101 "$NATIVE_PACKAGE"
+          agentplugins version
+          agentplugins version | grep -F '0.1.101'
+          case "${{ matrix.client }}" in
+            codex) codex --version ;;
+            claude) claude --version ;;
+            opencode) opencode --version ;;
+          esac
+          # Preserve actual transitive versions; global npm installs do not have a shared lockfile.
+          mkdir -p "$RUNNER_TEMP/released-catalog-proof"
+          npm ls --global --all --json > "$RUNNER_TEMP/released-catalog-proof/npm-global-dependencies.json" \
+            2> "$RUNNER_TEMP/released-catalog-proof/npm-global-dependencies-stderr.txt" || true
+
+      - name: Attempt real install, repeat, remove, and native cleanup
+        if: ${{ !cancelled() }}
+        env:
+          # Pull request checkout is a synthetic merge commit; attest the exact PR tip.
+          AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
+          AUDIT_KIND: ${{ matrix.kind }}
+          AUDIT_TARGET: ${{ matrix.client }}
+          AUDIT_LIMIT: ${{ matrix.limit }}
+        run: |
+          set -euo pipefail
+          [[ "$AUDIT_PR_HEAD_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'PR head attestation missing'; exit 2; }
+          python3 scripts/live-install-audit.py \
+            --cli "$(command -v agentplugins)" \
+            --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" \
+            --limit "$AUDIT_LIMIT" \
+            --report-dir "$RUNNER_TEMP/released-catalog-proof"
+
+      - name: Preserve per-source outcomes (including failures and refusals)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: published-0.1.101-${{ matrix.client }}-${{ matrix.kind }}
+          path: ${{ runner.temp }}/released-catalog-proof/
+          if-no-files-found: warn
+          retention-days: 14
