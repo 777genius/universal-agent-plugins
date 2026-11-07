@@ -906,6 +906,27 @@ def grok_prepared_source_survives(response, item, prior_name, prior_uid):
                or (isinstance(n.get("name"), str) and n["name"].startswith(prior_name[:51]))
                for n in nodes)
 
+def codex_marketplace_source_in_case(source, case_root):
+    """Prove physical containment, including Windows extended-length path aliases.
+
+    Compare real directory identity; never permit a lexical prefix or an
+    unresolved source to authorize native plugin removal.
+    """
+    if not source.is_absolute():
+        return False
+    try:
+        root = case_root.resolve(strict=True)
+        selected = source.resolve(strict=True)
+        if selected.is_relative_to(root):
+            return True
+        # Go/Codex may write \\?\-prefixed Windows paths into TOML while
+        # Python's temporary root is spelled as a normal drive path.
+        return any(os.path.samefile(parent, root)
+                   for parent in (selected, *selected.parents))
+    except (OSError, ValueError, RuntimeError):
+        return False
+
+
 def uninstall_native_codex_plugin(identity, home, case_root, env, cwd):
     """Perform the documented *actual* Codex uninstall before attestation.
 
@@ -931,7 +952,7 @@ def uninstall_native_codex_plugin(identity, home, case_root, env, cwd):
         if not isinstance(entry, dict) or entry.get("source_type", "local") != "local":
             return {"completed": False, "reason": "managed local marketplace cannot be verified"}
         source = Path(entry.get("source", ""))
-        if not source.is_absolute() or not source.resolve().is_relative_to(case_root.resolve()):
+        if not codex_marketplace_source_in_case(source, case_root):
             return {"completed": False, "reason": "marketplace source outside disposable case"}
     except (OSError, TypeError, ValueError):
         return {"completed": False, "reason": "cannot parse owned Codex config"}
