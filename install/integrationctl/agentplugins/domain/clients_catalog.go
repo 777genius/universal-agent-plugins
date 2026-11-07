@@ -259,14 +259,14 @@ func IsSupportedClient(id ClientID) bool {
 }
 
 var clientAliases = map[string]ClientID{
-	"github-copilot": ClientCopilot,
-	"vs-code":        ClientVSCode,
-	"claude-code":    ClientClaude,
-	"gemini-cli":     ClientGemini,
-	"open-code":      ClientOpenCode,
-	"devin":          ClientWindsurf,
-	"grok-build":     ClientGrok,
-	"kimi-code":      ClientKimi,
+	"github-copilot":  ClientCopilot,
+	"vs-code":         ClientVSCode,
+	"claude-code":     ClientClaude,
+	"gemini-cli":      ClientGemini,
+	"open-code":       ClientOpenCode,
+	"devin":           ClientWindsurf,
+	"grok-build":      ClientGrok,
+	"kimi-code":       ClientKimi,
 	"qoder-cli":       ClientQoder,
 	"qoder-desktop":   ClientQoder,
 	"chatgpt-desktop": ClientCodex,
