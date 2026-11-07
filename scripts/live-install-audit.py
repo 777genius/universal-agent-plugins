@@ -134,7 +134,7 @@ def install_case_timeout(target, kind, item):
     # while a cold native runtime setup still holds the original add process.
     # Stay bounded: a timeout or any surviving registration still FAILS E2E.
     if (sys.platform == "win32" and kind == "plugin"
-            and item == "firebase" and target in ("codex", "claude")):
+            and item == "firebase"):
         return 180
     return 105
 
