@@ -1,31 +1,57 @@
 import { computed, ref, watch, type Ref } from 'vue';
-import { clients } from '../data/clients.ts';
+import {
+  installTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+  type InstallTargetID,
+} from '../data/installTargets.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { reachableTargetPolicies, resolveDistribution } from '../utils/registry.ts';
 import { projectCatalogAutomaticSelection, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
-import type { ClientID, InstallScope, RegistryPlugin } from '../types/registry';
+import type { DistributionResolution, InstallScope, RegistryPlugin } from '../types/registry';
 
 /** Card and detail share one selection/persistence policy; no machine detection occurs here. */
 export function usePluginInstallSelection(
   plugin: () => RegistryPlugin,
-  models: { targets?: Ref<ClientID[]>; autoDetect?: Ref<boolean> } = {},
+  models: { targets?: Ref<InstallTargetID[]>; autoDetect?: Ref<boolean> } = {},
 ) {
   const preferences = useInstallPreferencesStore();
-  const targets = models.targets ?? ref<ClientID[]>([]);
+  const targets = models.targets ?? ref<InstallTargetID[]>([]);
   const autoDetect = models.autoDetect ?? ref(true);
   const installExpanded = ref(false);
   const scope = ref<InstallScope>('user');
   const availableClients = computed(() => {
     const policies = reachableTargetPolicies(plugin().distributions);
-    return clients.filter((client) => policies.some((policy) => policy.client === client.id));
+    return installTargets.filter((client) =>
+      policies.some((policy) =>
+        policy.client === canonicalInstallTarget(client.id) &&
+        (client.id !== 'chatgpt' || Boolean(policy.app_binding)),
+      ),
+    );
   });
-  const select = (selected: ClientID[]) => scope.value === 'project'
-    ? projectCatalogSelection(plugin(), selected).resolution
-    : resolveDistribution(plugin(), selected, 'user');
+  const select = (selected: InstallTargetID[]): DistributionResolution => {
+    // A local Desktop plugin belongs to the Codex user profile, not a project.
+    if (scope.value === 'project' && selected.includes('chatgpt-desktop'))
+      return { unavailable_reason: 'ChatGPT Desktop supports only This computer; select Codex for a project install.' };
+    const canonical = canonicalInstallTargets(selected);
+    const resolved = scope.value === 'project'
+      ? projectCatalogSelection(plugin(), canonical).resolution
+      : resolveDistribution(plugin(), canonical, 'user');
+    // A signed ChatGPT Web target is meaningful only with its registered app
+    // identity. Older/preview projections must not enable a cloud install.
+    if (selected.includes('chatgpt') &&
+        !resolved.distribution?.targets.some((target) =>
+          target.client === 'chatgpt' && Boolean(target.app_binding))) {
+      return {
+        unavailable_reason: 'ChatGPT Web needs a verified app binding in this release.',
+      };
+    }
+    return resolved;
+  };
   const targetDistributions = computed(
     () =>
       new Map(
-        clients.map((client) => [client.id, select([client.id]).distribution]),
+        installTargets.map((client) => [client.id, select([client.id]).distribution]),
       ),
   );
   // One authorized project source is enough to offer CLI-side target discovery.
@@ -63,7 +89,7 @@ export function usePluginInstallSelection(
         availableClients.value.find((client) => client.id === 'cursor') ??
         availableClients.value[0];
       targets.value = saved.targetIds.length
-        ? (saved.targetIds as ClientID[])
+        ? (saved.targetIds as InstallTargetID[])
         : initial
           ? [initial.id]
           : [];
@@ -98,14 +124,24 @@ export function usePluginInstallSelection(
   });
   function updateTargets(values: string[]) {
     const next = values.filter(
-      (value): value is ClientID =>
-        clients.some((client) => client.id === value) &&
-        (Boolean(targetDistributions.value.get(value as ClientID)) ||
-          targets.value.includes(value as ClientID)),
+      (value): value is InstallTargetID =>
+        installTargets.some((client) => client.id === value) &&
+        (Boolean(targetDistributions.value.get(value as InstallTargetID)) ||
+          targets.value.includes(value as InstallTargetID)),
     );
     if (!next.length) return;
     choicePending = true;
-    targets.value = [...new Set(next)];
+    const selected = [...new Set(next)];
+    // Codex CLI and Desktop are two product surfaces backed by one local install.
+    // Avoid generating a duplicate target request from a multi-select choice.
+    if (selected.includes('codex') && selected.includes('chatgpt-desktop')) {
+      const added = selected.find((id) =>
+        (id === 'codex' || id === 'chatgpt-desktop') && !targets.value.includes(id),
+      );
+      const keep = added ?? (targets.value.includes('chatgpt-desktop') ? 'chatgpt-desktop' : 'codex');
+      selected.splice(selected.indexOf(keep === 'codex' ? 'chatgpt-desktop' : 'codex'), 1);
+    }
+    targets.value = selected;
     saveUnboundChoice();
   }
   function updateAutoDetect(value: boolean) {

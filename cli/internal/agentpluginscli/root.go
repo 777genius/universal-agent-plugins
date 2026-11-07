@@ -1,6 +1,8 @@
 package agentpluginscli
 
 import (
+	"strings"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/spf13/cobra"
 )
@@ -65,6 +67,18 @@ func validateCommonOptions(opts *options) error {
 	}
 	if _, err := parseTargetOption(opts.target); err != nil {
 		return err
+	}
+	// Desktop's local Work/Codex marketplace is a user-profile installation.
+	// Do not silently reinterpret a Desktop request as a Codex project install.
+	if opts.scope == "project" {
+		for _, target := range strings.Split(opts.target, ",") {
+			if strings.EqualFold(strings.TrimSpace(target), "chatgpt-desktop") {
+				return CLIUsageError{
+					Code:    "INVALID_SCOPE",
+					Message: "chatgpt-desktop supports only --scope user; use --target codex for project installation",
+				}
+			}
+		}
 	}
 	return nil
 }

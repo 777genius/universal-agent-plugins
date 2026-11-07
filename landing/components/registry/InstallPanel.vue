@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
-import type { RegistryDiagnostic, ClientID, RegistryPlugin } from '~/types/registry';
+import {
+  installTargets,
+  canonicalInstallTarget,
+  canonicalInstallTargets,
+  cliInstallTargets,
+  type InstallTargetID,
+} from '~/data/installTargets';
+import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { pluginCommands } from '~/utils/commands';
 import { projectCatalogCommands } from '~/utils/projectCatalogSource';
 import { isFullyRetired } from '~/utils/filter';
@@ -8,7 +15,7 @@ import { vendorInstallSource } from '~/utils/registry';
 const { t } = useI18n();
 
 const props = defineProps<{ plugin: RegistryPlugin }>();
-const targets = defineModel<ClientID[]>('targets', { required: true });
+const targets = defineModel<InstallTargetID[]>('targets', { required: true });
 const autoDetect = defineModel<boolean>('autoDetect', { required: true });
 const { asset, sourceUrl } = useSite();
 const { current, expired, published } = useDirectoryStatus();
@@ -30,7 +37,7 @@ const autoOption = computed(() => ({
   description: t('registryUi.install.detectedWhenYouRunTheCommand'),
 }));
 const targetOptions = computed(() =>
-  clients.map((client) => ({
+  installTargets.map((client) => ({
     value: client.id,
     label: client.name,
     icon: asset(`client-icons/${client.icon}`),
@@ -47,7 +54,13 @@ const targetOptions = computed(() =>
         return t('registryUi.install.unavailableReviewDataIsNotInstallationAuthority');
       if (expired.value) return t('registryUi.install.unavailableSignedDirectorySnapshotExpired');
       const source = targetDistributions.value.get(client.id);
-      const target = source?.targets.find((item) => item.client === client.id);
+      const target = source?.targets.find(
+        (item) => item.client === canonicalInstallTarget(client.id),
+      );
+      if (client.id === 'chatgpt-desktop')
+        return target
+          ? t('registryUi.desktopGuide.description')
+          : t('registryUi.install.noActiveReleaseSupportsThisClient');
       if (client.id === 'chatgpt')
         return target?.app_binding
           ? t('registryUi.install.verifiedConnectionFinishSetupInChatgpt')
@@ -57,15 +70,14 @@ const targetOptions = computed(() =>
     })(),
   })),
 );
-const desktopCodexCommand = computed(() =>
+const showDesktopGuide = computed(() =>
   scope.value === 'user' &&
-  !isDiscovered.value &&
+  !autoDetect.value &&
+  targets.value.includes('chatgpt-desktop') &&
   canUseSource.value &&
   props.plugin.installable &&
   !isFullyRetired(props.plugin) &&
-  Boolean(targetDistributions.value.get('codex'))
-    ? pluginCommands(props.plugin, ['codex']).add
-    : '',
+  Boolean(targetDistributions.value.get('chatgpt-desktop')),
 );
 const commands = computed(() =>
   (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
@@ -74,8 +86,8 @@ const commands = computed(() =>
   canUseSource.value &&
   (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
     ? (scope.value === 'project'
-        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : targets.value)
-        : pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
+        ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
+        : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
       )
     : undefined,
 );
@@ -103,7 +115,8 @@ const expectedSourceLabel = computed(() =>
 const hasCompleteSource = computed(() => Boolean(expectedSource.value));
 const selectedTargets = computed(
   () =>
-    expectedSource.value?.targets.filter((target) => targets.value.includes(target.client)) ?? [],
+    expectedSource.value?.targets.filter((target) =>
+      canonicalInstallTargets(targets.value).includes(target.client)) ?? [],
 );
 const chatgptSelected = computed(
   () =>
@@ -204,7 +217,7 @@ const vendorInstall = computed(() =>
           :command="commands.add"
         />
       </div>
-      <ChatGPTDesktopGuide v-if="desktopCodexCommand" :command="desktopCodexCommand" />
+      <ChatGPTDesktopGuide v-if="showDesktopGuide" />
       <InstallOutcome
         v-if="commands && !autoDetect && expectedSource"
         :distribution="expectedSource"

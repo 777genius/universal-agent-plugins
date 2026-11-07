@@ -286,7 +286,7 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 | <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> **Kiro** | Skills, MCP | Skills, MCP | Guided | Sign in, approve access, and restart Kiro if prompted. |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> **Grok Build** | Skills, MCP | Skills only | Guided | Reload Grok; review project Skills and any CLI setup hint. |
 | <img src="landing/public/client-icons/vscode.svg" width="24" height="24" alt="" align="middle"> **VS Code** | Copilot-backed package | Skills, MCP (prepared) | Prepared | Open and trust the folder; review and enable MCP servers. |
-| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **ChatGPT** | Personal app setup | Not supported | Manual | Enable Developer Mode, connect the app, and select it in a new chat. |
+| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **ChatGPT** | Desktop local plugins; Web connected apps | Not supported | Guided | Desktop: local install via Codex CLI; Web: connect or install in ChatGPT. |
 
 <!-- AGENT_SUPPORT_MATRIX_END -->
 

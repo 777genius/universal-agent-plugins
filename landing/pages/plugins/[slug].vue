@@ -6,7 +6,7 @@ import { clientLandingById } from '~/data/clients';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '~/utils/seo';
 import { isFullyRetired } from '~/utils/filter';
 import { resolveDistribution, vendorInstallSource } from '~/utils/registry';
-import type { ClientID } from '~/types/registry';
+import type { InstallTargetID } from '~/data/installTargets';
 const { t, locale } = useI18n();
 const localePath = useLocalePath();
 
@@ -50,7 +50,7 @@ const clientGroups = computed(() =>
 );
 const initialTarget =
   supportedClients.find((client) => client.id === 'cursor')?.id ?? supportedClients[0]?.id;
-const targets = ref<ClientID[]>(initialTarget ? [initialTarget] : []);
+const targets = ref<InstallTargetID[]>(initialTarget ? [initialTarget] : []);
 const autoDetect = ref(true);
 const installAvailable = computed(
   () =>

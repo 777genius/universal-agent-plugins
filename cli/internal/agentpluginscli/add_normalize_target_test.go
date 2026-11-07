@@ -7,7 +7,7 @@ import (
 )
 
 // TestNormalizeTargetContract pins the exact --target vocabulary: fifteen
-// canonical ids, ten aliases, case and whitespace folding, and the lenient
+// canonical ids, documented aliases, case and whitespace folding, and the lenient
 // pass-through that turns an unknown name into a lowercased ClientID instead of
 // an error. Part 10 replaces this function with domain.ParseClientID, which has
 // to keep all four properties.
@@ -40,16 +40,18 @@ func TestNormalizeTargetContract(t *testing.T) {
 	}
 
 	aliases := map[string]domain.ClientID{
-		"github-copilot": domain.ClientCopilot,
-		"vs-code":        domain.ClientVSCode,
-		"claude-code":    domain.ClientClaude,
-		"gemini-cli":     domain.ClientGemini,
-		"open-code":      domain.ClientOpenCode,
-		"devin":          domain.ClientWindsurf,
-		"grok-build":     domain.ClientGrok,
-		"kimi-code":      domain.ClientKimi,
-		"qoder-cli":      domain.ClientQoder,
-		"qoder-desktop":  domain.ClientQoder,
+		"github-copilot":  domain.ClientCopilot,
+		"vs-code":         domain.ClientVSCode,
+		"claude-code":     domain.ClientClaude,
+		"gemini-cli":      domain.ClientGemini,
+		"open-code":       domain.ClientOpenCode,
+		"devin":           domain.ClientWindsurf,
+		"grok-build":      domain.ClientGrok,
+		"kimi-code":       domain.ClientKimi,
+		"qoder-cli":       domain.ClientQoder,
+		"qoder-desktop":   domain.ClientQoder,
+		"chatgpt-desktop": domain.ClientCodex,
+		"chatgpt-web":     domain.ClientChatGPT,
 	}
 	for input, want := range aliases {
 		if got := normalizeTarget(input); got != want {
@@ -58,10 +60,12 @@ func TestNormalizeTargetContract(t *testing.T) {
 	}
 
 	folding := map[string]domain.ClientID{
-		"  cursor  ":      domain.ClientCursor,
-		"CURSOR":          domain.ClientCursor,
-		"Claude-Code":     domain.ClientClaude,
-		" GitHub-Copilot": domain.ClientCopilot,
+		"  cursor  ":        domain.ClientCursor,
+		"CURSOR":            domain.ClientCursor,
+		"Claude-Code":       domain.ClientClaude,
+		" GitHub-Copilot":   domain.ClientCopilot,
+		" ChatGPT-DESKTOP ": domain.ClientCodex,
+		" ChatGPT-WEB ":     domain.ClientChatGPT,
 	}
 	for input, want := range folding {
 		if got := normalizeTarget(input); got != want {

@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { clients } from '~/data/clients';
-import type { ClientID, DistributionView } from '~/types/registry';
-const props = defineProps<{ distribution: DistributionView; targets: readonly ClientID[] }>();
+import { installTargets, canonicalInstallTarget, type InstallTargetID } from '~/data/installTargets';
+import type { DistributionView } from '~/types/registry';
+const props = defineProps<{ distribution: DistributionView; targets: readonly InstallTargetID[] }>();
 const { t } = useI18n();
 const selected = computed(() =>
   props.targets.map((id) => ({
-    name: clients.find((client) => client.id === id)?.name ?? id,
-    policy: props.distribution.targets.find((target) => target.client === id),
+    name: installTargets.find((client) => client.id === id)?.name ?? id,
+    policy: props.distribution.targets.find((target) =>
+      target.client === canonicalInstallTarget(id)),
   })),
 );
 </script>

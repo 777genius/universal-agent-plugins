@@ -39,6 +39,52 @@ function mount(plugin: RegistryPlugin) {
   return { ...selection, stop: () => lifetime.stop() };
 }
 
+
+test('mixed ChatGPT Web and Codex/Desktop commands use the imperative no-save path', () => {
+  const plugin = data();
+  const oldCommand = pluginCommands(plugin, ['codex', 'chatgpt-web']).add;
+  const splitCommand = pluginCommands(plugin, ['chatgpt-desktop', 'chatgpt-web']).add;
+  assert.match(oldCommand, /--target codex,chatgpt-web --no-save$/);
+  assert.match(splitCommand, /--target chatgpt-desktop,chatgpt-web --no-save$/);
+  assert.doesNotMatch(pluginCommands(plugin, ['codex']).add, /--no-save/);
+});
+
+test('ChatGPT Web needs signed app binding; Desktop shares Codex without project fallback', () => {
+  setActivePinia(createPinia());
+  const plugin = data();
+  const release = plugin.distributions[0]!.releases[0]!;
+  release.targets.push({
+    client: 'chatgpt',
+    scopes: ['user'],
+    delivery: 'manual_activation',
+    authentication: 'unknown',
+  });
+  const state = mount(plugin);
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgpt-desktop'));
+  assert.equal(state.availableClients.value.some((client) => client.id === 'chatgpt'), false);
+  assert.equal(state.targetDistributions.value.get('chatgpt'), undefined);
+  assert.ok(state.targetDistributions.value.get('chatgpt-desktop'));
+  release.targets[release.targets.length - 1]!.app_binding = {
+    app_key: 'context7',
+    id: 'asdk_app_verified_test',
+    mcp_server: 'context7',
+  };
+  assert.ok(state.availableClients.value.some((client) => client.id === 'chatgpt'));
+  state.updateTargets(['chatgpt']);
+  state.updateAutoDetect(false);
+  assert.ok(state.resolution.value.distribution?.targets.some((target) => target.client === 'chatgpt'));
+  state.updateTargets(['chatgpt-desktop']);
+  assert.equal(state.resolution.value.distribution?.id, plugin.distributions[0]!.id);
+  state.updateScope('project');
+  assert.equal(state.scope.value, 'project');
+  state.updateAutoDetect(false);
+  assert.equal(state.resolution.value.distribution, undefined);
+  state.updateScope('user');
+  assert.equal(state.scope.value, 'user');
+  assert.ok(state.resolution.value.distribution);
+  state.stop();
+});
+
 test('project defaults to CLI detection and preserves manual project targets', () => {
   setActivePinia(createPinia());
   const state = mount(data());
