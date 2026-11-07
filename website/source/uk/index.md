@@ -54,9 +54,9 @@ CLI запитає, які сумісні агенти використовув�
 
 ## Що доступно зараз {#what-is-available}
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95)
-— поточний нативний випуск інсталятора від 29 жовтня 2026 року. Він додає
-локальний API керування та нативні розширення Pi в області користувача.
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
+— поточний нативний випуск інсталятора. Він додає
+локальний API керування та нативні розширення Pi в області користувача та сумісного проєкту.
 Див. [локальне керування](./use/manage#local-management-api) та
 [сумісність із Pi](./reference/client-compatibility#pi-native-extensions).
 

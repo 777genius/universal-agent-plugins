@@ -206,7 +206,7 @@ test('reviewed user-only v1 catalog generates exact pinned project Git commands'
   await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(
     `npx -y universal-agent-plugins add ${exact} --scope project`,
   );
-  await expect(card).toContainText('Published CLI 0.1.95 uses this pinned Git source');
+  await expect(card).toContainText('This reviewed exact-commit Git source is a reproducible alternative.');
   await targets(page, card, ['Codex']);
   const expected = `npx -y universal-agent-plugins add ${exact} --target codex --scope project`;
   await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(expected);
@@ -268,7 +268,7 @@ test('Marketing Kit does not advertise unsupported signed project scope or force
   await expect(computer).toHaveAttribute('aria-pressed', 'true');
   await expect(project).toBeDisabled();
   await expect(card.locator('.marketing-kit-project')).toHaveCount(0);
-  await expect(card).toContainText('Marketing Kit is not yet available for Project: it needs a CLI release newer than 0.1.95, and its required Notion, HubSpot and Playwright dependencies must each qualify for Project installation.');
+  await expect(card).toContainText('Marketing Kit is not yet available for Project: its required Notion, HubSpot and Playwright dependencies must each qualify for Project installation.');
   await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
     'npx -y universal-agent-plugins add marketing-kit',
   );

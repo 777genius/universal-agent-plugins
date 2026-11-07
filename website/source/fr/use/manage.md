@@ -31,9 +31,9 @@ agentplugins outdated --all
 | Le client demande confiance, activation ou connexion | Suivez les instructions indiquées pour cette cible. |
 | Un paquet local échoue à la validation | Transmettez à l’auteur le rapport et le [guide des vérifications](../build/checks). |
 
-## API de gestion locale (CLI 0.1.95) {#local-management-api}
+## API de gestion locale  {#local-management-api}
 
-[CLI 0.1.95](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.95) ajoute `agentplugins manage serve` pour les applications qui intègrent l’installateur et `agentplugins manage discover` pour la découverte en lecture seule des clients et profils locaux. Cette découverte n’exécute pas les clients, ne sonde pas leurs versions, ne récupère pas de sources et ne modifie aucun fichier.
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) ajoute `agentplugins manage serve` pour les applications qui intègrent l’installateur et `agentplugins manage discover` pour la découverte en lecture seule des clients et profils locaux. Cette découverte n’exécute pas les clients, ne sonde pas leurs versions, ne récupère pas de sources et ne modifie aucun fichier.
 
 `manage serve` est un processus dont l’application hôte gère le cycle de vie. Il capture son contexte au démarrage et expose une API privée authentifiée sur la boucle locale IPv4. L’hôte fournit du JSON sur stdin et garde privés l’URL d’amorçage et le jeton d’autorisation bearer. Consultez l’aide des commandes avant l’intégration :
 
