@@ -269,15 +269,19 @@ export async function readVerifiedSkillSpectorCohort(
   return validateRecords(release, pointer);
 }
 
-/** Replace only byte-identical current old-v3 Partial roots, preserving others. */
+/** Promote only byte-identical, currently resolved sources from an Ed25519 release. */
 export function applyVerifiedSkillSpectorCohort(
   report: SkillSpectorDisplayReport,
   manifestDigest: string | undefined,
   cohort: VerifiedCohort | undefined,
   now: Date = new Date(),
 ): SkillSpectorDisplayReport {
+  // The signed base-manifest digest remains part of the release provenance.
+  // Later v3 publications can change unrelated shards; don't invalidate the
+  // signed source pins when the current report still matches each exact
+  // repository/revision/path/content digest and resolved source/plugin states.
   if (!cohort || cohort.expiresAt <= now.getTime() ||
-      !manifestDigest || manifestDigest !== cohort.manifestDigest ||
+      !manifestDigest || !digestPattern.test(manifestDigest) ||
       report.schema_version !== 3) return report;
   const records = report.records.map(old => {
     const updated = cohort.records.get(old.id);

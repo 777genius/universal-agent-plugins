@@ -73,11 +73,3 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
     <RegistryFaq :items="registryFaqItems" />
   </div>
 </template>
-
-<style scoped>
-.unified-home {
-  /* Contain the absolutely positioned background within the clipped home surface. */
-  position: relative;
-  overflow-x: clip;
-}
-</style>

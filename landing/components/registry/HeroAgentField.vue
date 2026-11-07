@@ -88,16 +88,14 @@ onBeforeUnmount(() => {
 <template>
   <span ref="anchor" class="hero-agent-field-anchor" aria-hidden="true" />
   <Teleport v-if="position" to=".unified-home">
-    <div class="hero-agent-field-viewport" aria-hidden="true">
-      <div
-        ref="field"
-        class="hero-agent-field hero-agent-field--fixed"
-        :class="{ 'hero-agent-field--active': inView && pageVisible }"
-        :style="position"
-        aria-hidden="true"
-      >
-        <HeroAgentOrbit />
-      </div>
+    <div
+      ref="field"
+      class="hero-agent-field hero-agent-field--fixed"
+      :class="{ 'hero-agent-field--active': inView && pageVisible }"
+      :style="position"
+      aria-hidden="true"
+    >
+      <HeroAgentOrbit />
     </div>
   </Teleport>
   <div v-else ref="field" class="hero-agent-field" aria-hidden="true">

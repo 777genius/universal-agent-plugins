@@ -16,7 +16,7 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
 <template>
   <section
     id="agent-support"
-    class="registry-client-support container"
+    class="registry-client-support container anchor-offset"
     aria-labelledby="agent-support-title"
     lang="en"
     dir="ltr"
@@ -104,8 +104,6 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
 <style scoped lang="scss">
 .registry-client-support {
   padding-block: 64px 72px;
-  // Keep the wide table's scrollable overflow inside its own region, not the page.
-  overflow-x: clip;
 
   .section-heading {
     max-width: 760px;
@@ -232,7 +230,10 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
   }
 }
 
-:global(.v-theme--dark) .registry-client-support__icon--contrast {
+// Scope contrast to monochrome agent icons only. A partial :global selector
+// compiles to ".v-theme--dark { filter: ... }" and filters the entire app,
+// creating a containing block that breaks the fixed orbit and viewport width.
+:global(.v-theme--dark .registry-client-support__icon--contrast) {
   filter: brightness(0) invert(1);
 }
 
