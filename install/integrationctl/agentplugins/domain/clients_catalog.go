@@ -288,6 +288,16 @@ func ParseClientID(value string) (ClientID, bool) {
 	return normalized, false
 }
 
+// PublicTargetFlagName is the user-facing --target spelling for a canonical
+// client ID. Signed Directory and state receipts keep their canonical IDs.
+// A Web recovery command must never silently select the local Desktop backend.
+func PublicTargetFlagName(id ClientID) string {
+	if id == ClientChatGPT {
+		return "chatgptweb"
+	}
+	return string(id)
+}
+
 // BackendSiblings returns the other clients installed through the same backend,
 // in registry order. Copilot and VS Code are the only pair today: a package
 // installed through the Copilot CLI is what VS Code then discovers.

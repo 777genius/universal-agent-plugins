@@ -40,10 +40,7 @@ func canonicalPublicTargetName(raw string) string {
 }
 
 func publicCLITargetName(id domain.ClientID) string {
-	if id == domain.ClientChatGPT {
-		return "chatgptweb"
-	}
-	return string(id)
+	return domain.PublicTargetFlagName(id)
 }
 
 type targetFlagValue struct {
