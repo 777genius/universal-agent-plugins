@@ -505,7 +505,7 @@
       "appearance": "外观"
     },
     "navigation": {
-      "demo": "演示",
+      "demo": "视频",
       "plugins": "插件",
       "why": "为什么它有效",
       "faq": "常见问题解答",
@@ -513,7 +513,8 @@
       "close": "关闭导航菜单",
       "title": "导航菜单",
       "description": "打开演示、插件目录、文档或 GitHub。",
-      "appearance": "外观"
+      "appearance": "外观",
+      "agents": "支持的智能体"
     }
   },
   "registryUi": {
