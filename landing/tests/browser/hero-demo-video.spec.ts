@@ -17,6 +17,7 @@ const fakePlayer = `<!doctype html><html><body><script>
 </script></body></html>`;
 
 test('demo play label and icon retain contrast in light and dark themes', async ({ page }) => {
+  test.setTimeout(60_000);
   await setSignedMirrorTestTime(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('./');

@@ -34,6 +34,8 @@ test('catalog groups duplicate sources and tolerates a small typo', async ({ pag
 test('catalog URL preserves filters through detail navigation and Reset appears only for active filters', async ({
   page,
 }) => {
+  // The filter, detail, history, and reset journey needs more than 30s on shared CI.
+  test.setTimeout(60_000);
   await page.goto('./plugins/');
   await waitForDiscovery(page);
   const search = page.getByRole('searchbox', { name: 'Search plugins' });

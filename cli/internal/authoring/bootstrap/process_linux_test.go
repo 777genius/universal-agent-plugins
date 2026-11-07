@@ -514,7 +514,13 @@ func TestDefaultRunnerCancellationStopsDescendants(t *testing.T) {
 	for time.Now().Before(deadline) {
 		body, readErr := os.ReadFile(pidFile)
 		if readErr == nil {
-			pid, parseErr := strconv.Atoi(strings.TrimSpace(string(body)))
+			pidText := strings.TrimSpace(string(body))
+			// The shell creates the redirected PID file before echo writes it.
+			if pidText == "" {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			pid, parseErr := strconv.Atoi(pidText)
 			if parseErr != nil {
 				t.Fatal(parseErr)
 			}

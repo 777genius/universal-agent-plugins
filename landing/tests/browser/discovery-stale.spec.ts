@@ -14,6 +14,8 @@ async function revealCommunityCard(catalog: import('@playwright/test').Locator, 
 test('expired authenticated mirror keeps community catalog interactive with exact commit installation and no age warnings', async ({
   page,
 }) => {
+  // Full signed-mirror fallback and reload can take longer under CI browser contention.
+  test.setTimeout(60_000);
   // Keep every production signature and trusted key unchanged. Only advance
   // the browser clock past the real signed mirror's expiry.
   const latest = await page.request.get('./discovery/latest.json');

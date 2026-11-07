@@ -12,10 +12,10 @@ test.describe.configure({ mode: 'parallel' });
 for (const locale of publishedLocales) {
   for (const family of ['/', '/plugins/', '/plugins/context7/', '/agents/github-copilot-cli/', '/download/', '/create-plugin/', '/plugins/community/']) {
     test(`${locale} direct static ${family}`, async ({ page, request }) => {
-      // Root includes the full restore UI and reload; loaded CI can exceed 30 seconds.
+      // Homepage hydration and restoration interactions need extra time under CI load.
       if (family === '/') test.setTimeout(60_000);
       const url = `.${localizedPath(family, locale)}`;
-      // Retry one transient localhost connection reset without relaxing the HTTP/content assertions.
+      // Retry one transient localhost connection reset without weakening content checks.
       const response = await request.get(url, { maxRetries: 1 });
       expect(response.status()).toBe(200);
       expect(response.headers()['content-type']).toContain('text/html');
@@ -106,8 +106,9 @@ test('root remains EN regardless of language preference', async ({ page, context
 for (const target of ['ru', 'uk'] as const)
   for (const width of [390, 1440]) {
     test(`${target} navigation preserves query/hash and browser history at ${width}px`, async ({ page, baseURL }) => {
-      test.setTimeout(60_000); // Locale transitions and history traversal are slow on loaded CI runners.
       test.skip(!(publishedLocales as readonly KnownLocale[]).includes(target), 'Production publishes EN only; full transition gate activates with reviewed locales');
+      // Full keyboard, focus and back/forward navigation can exceed the default timeout on CI.
+      test.setTimeout(60_000);
       await page.setViewportSize({ width, height: 900 });
       const suffix = '?q=context7&tag=one&tag=two&extra=kept#catalog';
       const initialUrl = new URL(`./plugins/${suffix}`, baseURL!).href;

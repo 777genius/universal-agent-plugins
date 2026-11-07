@@ -39,6 +39,7 @@ export function InstallActions({ controller, request }: { controller: Installati
   const safe = !!plan && plan.confirmable && !plan.conflicts.length && plan.actions.every((action) => ['install', 'update', 'unchanged'].includes(action.action));
   const expired = !!plan && (deadlinePassed || Date.parse(plan.expiresAt) <= Date.now());
   const previousOperation = !!operation.data && !active && request.selectedIds.length > 0 && operation.data.planId !== plan?.planId;
+  const appliedItems = operation.data?.items.filter((item) => item.status === 'succeeded' || item.status === 'unchanged') ?? [];
   return <>
     <div className="install-action"><button className="primary" disabled={locked || !request.selectedIds.length || !request.targetIds.length} onClick={(event) => controller.prepareReview(event.currentTarget)}>
       {prepare.isPending ? <Busy>Checking installation…</Busy> : <>Review installation <ArrowRight size={16}/></>}</button>
@@ -52,8 +53,8 @@ export function InstallActions({ controller, request }: { controller: Installati
       <h2>{operation.data.state === 'succeeded' ? <><CheckCircle2 size={18}/> Installation applied</> : operation.data.state === 'partial' || operation.data.state === 'failed' ? <><AlertTriangle size={18}/> Installation needs attention</> : <Busy>{operation.data.phase || 'Installing…'}</Busy>}</h2>
       <progress max={Math.max(1, operation.data.total)} value={operation.data.completed}/>
       <p className="muted">{operation.data.completed} / {operation.data.total} · {operation.data.state}</p>
-      {operation.data.state === 'succeeded' && <div className="notice" role="status" aria-label="Skills readiness">
-        <p><strong>Files:</strong> Installed or already up to date.</p>
+      {(operation.data.state === 'succeeded' || (operation.data.state === 'partial' && appliedItems.length > 0)) && <div className="notice" role="status" aria-label="Skills readiness">
+        <p><strong>Files:</strong> {operation.data.state === 'partial' ? `${appliedItems.length} of ${operation.data.items.length} targets installed or already up to date; others need attention.` : 'Installed or already up to date.'}</p>
         <p><strong>Agent discovery:</strong> Not verified by this Skills flow.</p>
         <p><strong>Activation:</strong> Not verified. Open each agent, complete any trust/sign-in/reload step, and confirm the Skill is visible.</p>
       </div>}
