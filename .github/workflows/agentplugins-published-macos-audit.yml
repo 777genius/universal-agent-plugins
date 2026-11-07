@@ -93,12 +93,12 @@ jobs:
             scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_codex_marketplace_containment_follows_physical_directory_identity -v
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
 
-      # Docker Hub's published MCP manifest has an explicit Docker CLI
-      # prerequisite. Real full-source Codex/Claude tests must install that
-      # dependency, not turn a missing executable into a native PASS.
-      # This is only the CLI, not a Docker daemon or a qualified MCP invocation.
+      # Docker Hub is selected in every deep published plugin matrix. Its
+      # actual MCP manifest requires a Docker CLI on PATH. Qualify that real
+      # prerequisite for all plugin targets, never by a synthetic stub.
+      # No Docker daemon or authenticated MCP execution is claimed here.
       - name: Install real Docker CLI for published Docker Hub source
-        if: ${{ github.event_name != 'pull_request' && matrix.kind == 'plugin' && (matrix.target == 'codex' || matrix.target == 'claude') }}
+        if: ${{ github.event_name != 'pull_request' && matrix.kind == 'plugin' }}
         shell: bash
         run: |
           set -euo pipefail
