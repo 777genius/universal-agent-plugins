@@ -301,7 +301,7 @@ func TestDirectoryChatGPTDryRunPreparesManualActivationWithoutState(t *testing.T
 	directory := &fixedDirectoryClient{bundle: directoryv1.VerifiedBundle{Snapshot: snapshot, Digest: "sha256:" + strings.Repeat("c", 64)}}
 	acquirer := &localBackedSourceAcquirer{delegate: fixture.app.SourceAcquirer, root: plugin}
 	fixture.app.DirectoryClient, fixture.app.SourceAcquirer = directory, acquirer
-	stdout, _, err := fixture.execute(false, "add", "demo", "--target", "chatgpt", "--dry-run", "--format", "json")
+	stdout, _, err := fixture.execute(false, "add", "demo", "--target", "chatgptweb", "--dry-run", "--format", "json")
 	if err != nil {
 		t.Fatal(err)
 	}

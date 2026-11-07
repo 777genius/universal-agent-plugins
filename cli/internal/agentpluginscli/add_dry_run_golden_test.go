@@ -40,7 +40,7 @@ func TestAddDryRunGolden(t *testing.T) {
 	}{
 		{name: "cursor_manifest_only", clients: []domain.ClientID{domain.ClientCursor}, target: "cursor", plugin: writeCLIPlugin},
 		{name: "codex_and_cursor_remote_mcp", clients: []domain.ClientID{domain.ClientCodex, domain.ClientCursor}, target: "codex,cursor", plugin: writeCLIPluginWithMCP},
-		{name: "chatgpt_official_app", clients: []domain.ClientID{domain.ClientChatGPT}, target: "chatgpt", plugin: writeCLIOfficialAppPlugin},
+		{name: "chatgpt_official_app", clients: []domain.ClientID{domain.ClientChatGPT}, target: "chatgptweb", plugin: writeCLIOfficialAppPlugin},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

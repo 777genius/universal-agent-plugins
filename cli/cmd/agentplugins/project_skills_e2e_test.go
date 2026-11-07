@@ -257,7 +257,7 @@ func TestQoderRawSkillProjectLifecycle(t *testing.T) {
 func TestProjectSkillsRejectUnsupportedBeforeAcquisition(t *testing.T) {
 	app, user, a, _ := projectCompositionFixture(t)
 	journey := projectJourney{app: app}
-	if _, err := journey.execute(a, "skills", "add", "https://invalid.example/never-acquire", "--skill", "docs", "--target", "chatgpt", "--yes"); err == nil || !strings.Contains(err.Error(), "does not support project scope") {
+	if _, err := journey.execute(a, "skills", "add", "https://invalid.example/never-acquire", "--skill", "docs", "--target", "chatgptweb", "--yes"); err == nil || !strings.Contains(err.Error(), "does not support project scope") {
 		t.Fatalf("unsupported raw Skills boundary: %v", err)
 	}
 	selected, err := app.ForScope(domain.ScopeProject, a)

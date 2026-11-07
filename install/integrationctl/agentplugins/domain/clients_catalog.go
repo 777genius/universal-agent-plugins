@@ -259,16 +259,19 @@ func IsSupportedClient(id ClientID) bool {
 }
 
 var clientAliases = map[string]ClientID{
-	"github-copilot": ClientCopilot,
-	"vs-code":        ClientVSCode,
-	"claude-code":    ClientClaude,
-	"gemini-cli":     ClientGemini,
-	"open-code":      ClientOpenCode,
-	"devin":          ClientWindsurf,
-	"grok-build":     ClientGrok,
-	"kimi-code":      ClientKimi,
-	"qoder-cli":      ClientQoder,
-	"qoder-desktop":  ClientQoder,
+	"github-copilot":  ClientCopilot,
+	"vs-code":         ClientVSCode,
+	"claude-code":     ClientClaude,
+	"gemini-cli":      ClientGemini,
+	"open-code":       ClientOpenCode,
+	"devin":           ClientWindsurf,
+	"grok-build":      ClientGrok,
+	"kimi-code":       ClientKimi,
+	"qoder-cli":       ClientQoder,
+	"qoder-desktop":   ClientQoder,
+	"chatgpt-desktop": ClientCodex,
+	"chatgpt-web":     ClientChatGPT,
+	"chatgptweb":      ClientChatGPT,
 }
 
 // ParseClientID folds case and whitespace, maps known aliases onto canonical
@@ -283,6 +286,16 @@ func ParseClientID(value string) (ClientID, bool) {
 		return normalized, true
 	}
 	return normalized, false
+}
+
+// PublicTargetFlagName is the user-facing --target spelling for a canonical
+// client ID. Signed Directory and state receipts keep their canonical IDs.
+// A Web recovery command must never silently select the local Desktop backend.
+func PublicTargetFlagName(id ClientID) string {
+	if id == ClientChatGPT {
+		return "chatgptweb"
+	}
+	return string(id)
 }
 
 // BackendSiblings returns the other clients installed through the same backend,

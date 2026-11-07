@@ -309,7 +309,7 @@ func validateDependencyTargetScopes(app App, requirements environment.Requiremen
 			return fmt.Errorf("%s does not support project scope", target)
 		}
 		if definition, ok := domain.ClientDefinitionFor(domain.ClientID(target)); ok && (definition.PlansWithoutHostPresence || definition.Traits.RequiresPersonalMappingForPrepare) {
-			return fmt.Errorf("%s is prepared manually and cannot be a saved dependency target; use agentplugins add <source> --target %s (not saved)", definition.DisplayName, target)
+			return fmt.Errorf("%s is prepared manually and cannot be a saved dependency target; use agentplugins add <source> --target %s (not saved)", definition.DisplayName, publicCLITargetName(domain.ClientID(target)))
 		}
 		if !supported {
 			return fmt.Errorf("unsupported dependency target %q in %s scope", target, app.scope())
