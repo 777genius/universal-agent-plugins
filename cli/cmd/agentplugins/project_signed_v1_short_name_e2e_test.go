@@ -354,6 +354,15 @@ func TestProjectSignedV1ShortNameMarketingClosureAndColdRestore(t *testing.T) {
 		replayedNative := projectJourneyRead(t, filepath.Join(journey.nativeRoot(root), "settings.json"))
 		assertSignedV1NativeMCPServers(t, replayedNative, foreignSentinel(journey, root), "foreign", "notion", "hubspot", "playwright")
 	}
+	// Advance the mutable Git branch after signed installs. Repair and cold
+	// locked restore must still use the original signed revision, not its tip.
+	projectJourneyWrite(t, filepath.Join(transport.repo, "kit", "skills", "campaign-planning", "SKILL.md"),
+		strings.Replace(campaignSkill, "Local test fixture", "Unsigned branch mutation", 1))
+	projectJourneyGit(t, transport.repo, "add", "kit/skills/campaign-planning/SKILL.md")
+	projectJourneyGit(t, transport.repo, "commit", "-m", "advance branch after signed installs")
+	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
+	// The original signed revision is now reachable but no longer the tip.
+	projectJourneyGit(t, transport.remote, "config", "uploadpack.allowReachableSHA1InWant", "true")
 	// Repair a missing owned Skill through the public CLI using the original
 	// signed root pin. It must leave the required MCP children, exact lock and
 	// both unrelated scopes intact, not re-resolve a moving unsigned source.
