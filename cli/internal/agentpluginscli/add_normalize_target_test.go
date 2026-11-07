@@ -50,6 +50,8 @@ func TestNormalizeTargetContract(t *testing.T) {
 		"kimi-code":      domain.ClientKimi,
 		"qoder-cli":      domain.ClientQoder,
 		"qoder-desktop":  domain.ClientQoder,
+		"chatgpt-desktop": domain.ClientCodex,
+		"chatgpt-web":     domain.ClientChatGPT,
 	}
 	for input, want := range aliases {
 		if got := normalizeTarget(input); got != want {
@@ -62,6 +64,8 @@ func TestNormalizeTargetContract(t *testing.T) {
 		"CURSOR":          domain.ClientCursor,
 		"Claude-Code":     domain.ClientClaude,
 		" GitHub-Copilot": domain.ClientCopilot,
+		" ChatGPT-DESKTOP ": domain.ClientCodex,
+		" ChatGPT-WEB ": domain.ClientChatGPT,
 	}
 	for input, want := range folding {
 		if got := normalizeTarget(input); got != want {
