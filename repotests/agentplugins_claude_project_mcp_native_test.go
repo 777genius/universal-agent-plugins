@@ -382,7 +382,7 @@ func claudeProjectManagedMCPCall(t *testing.T) {
 	evidence["native_surface"] = "requires real selected Claude plugin-bundled stdio MCP tools/call and local scripted model; no vendor auth"
 	defer f.writeEvidence(t, evidence, stages)
 	trust, err := json.Marshal(map[string]any{"projects": map[string]any{
-		filepath.ToSlash(f.project): map[string]any{"hasTrustDialogAccepted": true},
+		filepath.ToSlash(f.project):      map[string]any{"hasTrustDialogAccepted": true},
 		filepath.ToSlash(f.otherProject): map[string]any{"hasTrustDialogAccepted": true},
 	}})
 	if err != nil {
