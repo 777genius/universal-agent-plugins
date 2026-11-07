@@ -350,8 +350,9 @@ def host_containment_refusal(diagnostic):
 
 def passive_native_path(target, relative):
     """Downloaded caches and run logs are not active native registrations."""
-    return ((target == "codex" and relative.startswith("plugins/cache/"))
-            or (target == "qoder" and relative.startswith(("plugins/cache/", "logs/runs/"))))
+    normalized = relative.replace("\\", "/")
+    return ((target == "codex" and normalized.startswith("plugins/cache/"))
+            or (target == "qoder" and normalized.startswith(("plugins/cache/", "logs/runs/"))))
 
 
 def qoder_passive_latest_log_link(root, file):
@@ -383,7 +384,7 @@ def qoder_native_plugin_state(home, env, cwd, identity, expected_version=None):
     if (not executable or not Path(executable).is_absolute()
             or not profile.is_dir() or profile.is_symlink()
             or not path_inside_case(profile, home)
-            or env.get("QODER_CONFIG_DIR") != str(profile)):
+            or env.get("QODER_CONFIG_DIR") != str(profile.resolve(strict=True))):
         return {"status": "unqualified-prerequisites"}
     observed = call([executable, "--config-dir", str(profile),
                      "plugins", "list", "--json"], env, cwd, 30)
@@ -506,7 +507,7 @@ def native_identity_residuals(native_roots, identity, observed_paths, target,
             try:
                 mode = file.lstat().st_mode
                 if stat.S_ISLNK(mode):
-                    if (target != "qoder" or relative != "logs/latest"
+                    if (target != "qoder" or relative.replace("\\", "/") != "logs/latest"
                             or not qoder_passive_latest_log_link(root, file)):
                         leftover.append(observed + ": symlink")
                 elif not stat.S_ISREG(mode):
@@ -1500,8 +1501,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         status = "manual-setup-prepared"
     elif installed and removal_verified and sentinels_preserved and repeat_verified:
         status = ("prepared-lifecycle-passed" if (
-                       kind == "plugin" and prepared_components_only
-                       and not native_attribution)
+                       kind == "plugin" and prepared_components_only)
                   else "package-installed-native-unqualified" if (
                        kind == "plugin" and (
                            (target == "qoder" and
