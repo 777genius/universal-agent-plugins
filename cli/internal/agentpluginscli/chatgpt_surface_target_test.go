@@ -10,6 +10,46 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// The public CLI flag is normalized once. Canonical state/Directory identifiers
+// must still parse with chatgpt meaning the remote Web client.
+func TestPublicChatGPTNamesStaySeparateFromCanonicalIDs(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ input, want string }{
+		{"codex", "codex"},
+		{"chatgpt", "codex"},
+		{"chatgptweb", "chatgpt"},
+		{"codex,chatgptweb", "codex,chatgpt"},
+		{"chatgpt,chatgptweb", "codex,chatgpt"},
+		{"codex,chatgpt", "codex,codex"},
+	} {
+		var canonical, raw string
+		flag := targetFlagValue{target: &canonical, input: &raw}
+		if err := flag.Set(tc.input); err != nil || canonical != tc.want || raw != tc.input {
+			t.Errorf("target %q => %q / %q, %v; want %q", tc.input, canonical, raw, err, tc.want)
+		}
+	}
+	var normalized, input string
+	flag := targetFlagValue{target: &normalized, input: &input}
+	if err := flag.Set("codex,chatgpt"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseTargetOption(normalized); err == nil || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("two local names must not duplicate one native plugin: %v", err)
+	}
+	if err := flag.Set("chatgpt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateCommonOptions(&options{target: normalized, targetInput: input, scope: "project", format: "human"}); err == nil || !strings.Contains(err.Error(), "only --scope user") {
+		t.Fatalf("ChatGPT Desktop project request was not refused: %v", err)
+	}
+	if err := flag.Set("chatgptweb"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := parseTargetOption(normalized); err != nil || !reflect.DeepEqual(got, []domain.ClientID{domain.ClientChatGPT}) {
+		t.Fatalf("remote Web mapped away from canonical ChatGPT: %v %v", got, err)
+	}
+}
+
 func TestChatGPTSurfaceTargetParsingAndScope(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -33,10 +73,18 @@ func TestChatGPTSurfaceTargetParsingAndScope(t *testing.T) {
 		}
 	}
 	for _, scope := range []string{"project", "user"} {
-		for _, raw := range []string{" chatgpt-desktop ", "codex,CHATGPT-DESKTOP"} {
-			err := validateCommonOptions(&options{format: "human", scope: scope, target: raw})
+		for _, raw := range []string{" chatgpt ", "CHATGPT", "codex,chatgpt", " chatgpt-desktop ", "codex,CHATGPT-DESKTOP"} {
+			var canonical, input string
+			flag := targetFlagValue{target: &canonical, input: &input}
+			if err := flag.Set(raw); err != nil {
+				t.Fatal(err)
+			}
+			err := validateCommonOptions(&options{format: "human", scope: scope, target: canonical, targetInput: input})
 			if scope == "project" && err == nil {
-				t.Errorf("ChatGPT Desktop must refuse project scope, %q", raw)
+				t.Errorf("ChatGPT Desktop must refuse project scope before mutation, %q", raw)
+			}
+			if scope == "user" && raw == "chatgpt" && err != nil {
+				t.Errorf("ChatGPT Desktop user scope must remain available: %v", err)
 			}
 		}
 	}
@@ -63,7 +111,7 @@ func TestChatGPTDesktopAliasUsesCodexLifecycleWithoutSecondBinding(t *testing.T)
 	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCodex)})
 	plugin := writeCLIPlugin(t)
 
-	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt-desktop", "--format", "json"); err != nil {
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "chatgpt", "--format", "json"); err != nil {
 		t.Fatalf("Desktop alias add: %v", err)
 	}
 	checkDesktopOnlyCodexBinding(t, fixture, 1)
@@ -77,12 +125,12 @@ func TestChatGPTDesktopAliasUsesCodexLifecycleWithoutSecondBinding(t *testing.T)
 		[]byte(strings.Replace(string(body), `"version": "1.0.0"`, `"version": "2.0.0"`, 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := fixture.execute(false, "update", "demo", "--target", "chatgpt-desktop", "--format", "json"); err != nil {
+	if _, _, err := fixture.execute(false, "update", "demo", "--target", "chatgpt", "--format", "json"); err != nil {
 		t.Fatalf("Desktop alias update: %v", err)
 	}
 	checkDesktopOnlyCodexBinding(t, fixture, 2)
 
-	if _, _, err := fixture.execute(false, "remove", "demo", "--target", "chatgpt-desktop", "--external-uninstalled", "--format", "json"); err != nil {
+	if _, _, err := fixture.execute(false, "remove", "demo", "--target", "chatgpt", "--external-uninstalled", "--format", "json"); err != nil {
 		t.Fatalf("Desktop alias remove: %v", err)
 	}
 	state, err := fixture.store.Load()
