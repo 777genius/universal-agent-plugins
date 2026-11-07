@@ -144,6 +144,13 @@ def call(argv, env, cwd, timeout=105, capture_files=False):
             parsed_json = json.loads(stdout)
         except ValueError:
             parsed_json = None
+        if capture_files and (not isinstance(parsed_json, dict)
+                              or parsed_json.get("result") != "success"):
+            # An inherited child may append to the file after UAP exits.
+            # Never promote a truncated/corrupt add response to native PASS.
+            return {"exit_code": None, "stdout_tail": stdout[-1800:],
+                    "stderr_tail": "native add success JSON unavailable",
+                    "timeout": False, "_json": None}
         return {"exit_code": p.returncode, "stdout_tail": stdout[-1800:],
                 "stderr_tail": stderr[-1800:], "timeout": False,
                 "_json": parsed_json}
