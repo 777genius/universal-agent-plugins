@@ -190,8 +190,15 @@ jobs:
               raise RuntimeError("verified native Kimi 2.3.2 provenance mismatch")
           print("Verified genuine Kimi 2.3.2 Windows executable, sha256 pinned")
           '@
-            $program | python - "$nativeBin"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            # Only the verified release downloader gets GitHub read-only auth;
+            # earlier third-party npm install scripts never inherit this token.
+            $env:GH_TOKEN = '${{ github.token }}'
+            try {
+              $program | python - "$nativeBin"
+              if ($LASTEXITCODE -ne 0) { throw "Verified native Kimi download failed" }
+            } finally {
+              Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
+            }
             $native = Join-Path $nativeBin 'kimi.exe'
             "$nativeBin" | Out-File -FilePath "$env:GITHUB_PATH" -Encoding utf8 -Append
           } else {
