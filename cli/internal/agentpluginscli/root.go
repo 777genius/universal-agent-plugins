@@ -21,7 +21,7 @@ func NewRoot(app App) *cobra.Command {
 	root.SetOut(app.output())
 	root.SetErr(app.errorOutput())
 	flags := root.PersistentFlags()
-	flags.StringVar(&opts.target, "target", "", "target client(s), comma-separated: "+supportedTargetHelp())
+	flags.Var(targetFlagValue{target: &opts.target, input: &opts.targetInput}, "target", "target client(s), comma-separated: "+supportedTargetHelp())
 	flags.StringVar(&opts.scope, "scope", "user", "installation scope: user or project")
 	flags.StringVar(&opts.projectRoot, "project-root", "", "existing project directory (project scope only; default: current directory)")
 	flags.BoolVar(&opts.dryRun, "dry-run", false, "show the exact plan without changes")
@@ -72,10 +72,11 @@ func validateCommonOptions(opts *options) error {
 	// Do not silently reinterpret a Desktop request as a Codex project install.
 	if opts.scope == "project" {
 		for _, target := range strings.Split(opts.target, ",") {
-			if strings.EqualFold(strings.TrimSpace(target), "chatgpt-desktop") {
+			if strings.EqualFold(strings.TrimSpace(target), "chatgpt-desktop") ||
+				(opts.targetInput != "" && strings.EqualFold(strings.TrimSpace(target), "chatgpt")) {
 				return CLIUsageError{
 					Code:    "INVALID_SCOPE",
-					Message: "chatgpt-desktop supports only --scope user; use --target codex for project installation",
+					Message: "chatgpt (Desktop) supports only --scope user; use --target codex for project installation",
 				}
 			}
 		}

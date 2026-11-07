@@ -28,7 +28,11 @@ func chatGPTRegistrationResumeAction(cmd *cobra.Command, source string, targets 
 func clientIDStrings(targets []domain.ClientID) []string {
 	values := make([]string, len(targets))
 	for i, target := range targets {
-		values[i] = string(target)
+		if target == domain.ClientChatGPT {
+			values[i] = "chatgptweb"
+		} else {
+			values[i] = string(target)
+		}
 	}
 	return values
 }

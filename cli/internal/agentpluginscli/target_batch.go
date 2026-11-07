@@ -23,6 +23,42 @@ type batchTargetResult struct {
 	Error  string `json:"error,omitempty"`
 }
 
+// Public --target names describe products. Durable receipts and signed Directory
+// records retain canonical IDs: codex (local) and chatgpt (remote Web).
+// Normalize only actual CLI flag input, never state-derived canonical targets.
+type targetFlagValue struct {
+	target *string
+	input  *string
+}
+
+func (flag targetFlagValue) String() string {
+	if flag.input == nil {
+		return ""
+	}
+	return *flag.input
+}
+
+func (targetFlagValue) Type() string { return "string" }
+
+func (flag targetFlagValue) Set(raw string) error {
+	if flag.target == nil || flag.input == nil {
+		return fmt.Errorf("target flag is not initialized")
+	}
+	*flag.input = raw
+	parts := strings.Split(raw, ",")
+	for i, part := range parts {
+		switch strings.ToLower(strings.TrimSpace(part)) {
+		case "chatgpt", "chatgpt-desktop":
+			parts[i] = "codex"
+		case "chatgptweb", "chatgpt-web":
+			parts[i] = "chatgpt"
+		}
+	}
+	*flag.target = strings.Join(parts, ",")
+	return nil
+}
+
+
 func parseTargetOption(value string) ([]domain.ClientID, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
@@ -87,7 +123,7 @@ func supportedTargetHelp() string {
 	for index, id := range ids {
 		values[index] = string(id)
 	}
-	return strings.Join(values, ", ") + " (aliases: chatgpt-desktop, chatgpt-web)"
+	return strings.Join(values, ", ") + ", chatgptweb (chatgpt=Desktop, chatgptweb=Web)"
 }
 
 func joinTargets(targets []domain.ClientID) string {
