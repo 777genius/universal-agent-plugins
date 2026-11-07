@@ -124,7 +124,7 @@ func runDependencySyncApply(cmd *cobra.Command, app App, opts *options, request 
 
 func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependencyAction, dryRun bool) error {
 	if opts.format == "json" {
-		data := map[string]any{"actions": dependencyActionOutput(actions, opts.dependencyComponents), "dry_run": dryRun}
+		data := map[string]any{"schema_version": outputSchemaVersion, "command": cmd.CommandPath(), "result": outputResultSuccess, "actions": dependencyActionOutput(actions, opts.dependencyComponents), "dry_run": dryRun, "scope": opts.scope, "scope_selection_reason": scopeSelectionReason(cmd, opts)}
 		if opts.installSelection != nil {
 			data["selection"] = opts.installSelection
 		}

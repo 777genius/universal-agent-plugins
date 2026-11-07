@@ -58,6 +58,12 @@ body,
 #__nuxt {
   min-height: 100%;
 }
+:root,
+body {
+  /* Clip document overflow on all catalog routes while preserving horizontal
+     scrolling inside the agent-support table and other local scroll regions. */
+  overflow-x: clip;
+}
 .registry-surface {
   /* Clip decorative and animated overflow without hiding horizontal table scrollers. */
   position: relative;

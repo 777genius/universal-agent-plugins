@@ -28,6 +28,8 @@ type dependencyStatusFact struct {
 	InstallationID   string                    `json:"installation_id,omitempty"`
 	BindingID        string                    `json:"binding_id,omitempty"`
 	NextActions      []dependencyNextActionDTO `json:"next_actions,omitempty"`
+	Readiness        string                    `json:"readiness,omitempty"`
+	AgentActions     []AgentAction             `json:"agent_actions,omitempty"`
 	Owner            string                    `json:"owner,omitempty"`
 	Revision         string                    `json:"revision,omitempty"`
 	PackageDigest    string                    `json:"package_digest,omitempty"`
@@ -43,8 +45,9 @@ type dependencyExcludedTarget struct {
 type dependencyStatus struct {
 	Diagnostics      []dependencyCheckResult    `json:"diagnostics,omitempty"`
 	ExcludedTargets  []dependencyExcludedTarget `json:"excluded_targets"`
-	Scope            string                     `json:"scope"`
-	ManifestPath     string                     `json:"manifest_path"`
+	Scope                string                     `json:"scope"`
+	ScopeSelectionReason string                     `json:"scope_selection_reason"`
+	ManifestPath         string                     `json:"manifest_path"`
 	LockPath         string                     `json:"lock_path"`
 	SupportedTargets []string                   `json:"supported_targets"`
 	ManifestDigest   string                     `json:"manifest_digest,omitempty"`
@@ -56,7 +59,7 @@ type dependencyStatus struct {
 
 func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 	manifestPath, lockPath := app.dependencyPaths()
-	status := dependencyStatus{Scope: string(app.scope()), ManifestPath: manifestPath, LockPath: lockPath, SupportedTargets: supportedDependencyTargets(app), Facts: []dependencyStatusFact{}}
+	status := dependencyStatus{Scope: string(app.scope()), ScopeSelectionReason: scopeSelectionReason(cmd, opts), ManifestPath: manifestPath, LockPath: lockPath, SupportedTargets: supportedDependencyTargets(app), Facts: []dependencyStatusFact{}}
 	status.ExcludedTargets = []dependencyExcludedTarget{}
 	for _, definition := range domain.ClientDefinitions() {
 		reason := installer.ClientSupportExclusionReason(app.ClientRegistry, string(definition.ID))
@@ -294,6 +297,20 @@ func runDependencyRecover(cmd *cobra.Command, app App, opts *options, yes bool) 
 }
 
 func renderDependencyStatus(cmd *cobra.Command, opts *options, status dependencyStatus) error {
+	for i := range status.Facts {
+		fact := &status.Facts[i]
+		fact.Readiness = deriveDependencyReadiness(fact.Facts)
+		fact.AgentActions = dependencyAgentActions(fact.NextActions)
+		if status.PendingRecovery {
+			if fact.Readiness == "ready" {
+				fact.Readiness = "needs_action"
+			}
+			fact.AgentActions = append([]AgentAction{{
+				Code: "inspect_recovery", Actor: "agent",
+				Message: "Inspect the pending recovery with agentplugins deps recover --dry-run in the selected scope before changing anything.",
+			}}, fact.AgentActions...)
+		}
+	}
 	sort.SliceStable(status.Facts, func(i, j int) bool {
 		if status.Facts[i].Alias != status.Facts[j].Alias {
 			return status.Facts[i].Alias < status.Facts[j].Alias

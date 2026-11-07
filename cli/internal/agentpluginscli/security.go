@@ -27,20 +27,8 @@ func authorizeSecurityAssessment(cmd *cobra.Command, app App, opts *options, loa
 	}
 	assessment := *loaded.security
 	if opts.format == "human" {
-		writer := cmd.OutOrStdout()
-		if app.Terminal && assessment.Counts.Blocking > 0 && !opts.dryRun && !opts.acceptSecurityRisk {
-			var err error
-			writer, err = promptio.VisibleOutput(writer, cmd.ErrOrStderr())
-			if err != nil {
-				return prompt.NormalizeIOError(err)
-			}
-		}
-		checked := &planWriter{writer: writer}
-		display := &cobra.Command{}
-		display.SetOut(checked)
-		renderSecurityAssessment(display, assessment, opts.securityDetails)
-		if checked.err != nil {
-			return checked.err
+		if err := renderAuthorizationSecurityReview(cmd, app, opts, assessment); err != nil {
+			return err
 		}
 	}
 	if assessment.Counts.Blocking == 0 || opts.dryRun {
@@ -54,7 +42,7 @@ func authorizeSecurityAssessment(cmd *cobra.Command, app App, opts *options, loa
 		loaded.securityAuthorized = true
 		return nil
 	}
-	if opts.format != "human" || !app.Terminal {
+	if opts.format != "human" || !app.Terminal || opts.yes {
 		if opts.format == "json" {
 			if err := writeJSONResult(cmd.OutOrStdout(), cmd.Name(), outputResultFailure, map[string]any{
 				"status": "blocked_by_security_review", "security": assessment,
@@ -74,6 +62,24 @@ func authorizeSecurityAssessment(cmd *cobra.Command, app App, opts *options, loa
 	}
 	loaded.securityAuthorized = true
 	return nil
+}
+
+// renderAuthorizationSecurityReview preserves visible TTY security warnings and
+// propagates output failures before any installation is authorized.
+func renderAuthorizationSecurityReview(cmd *cobra.Command, app App, opts *options, assessment domain.SecurityAssessment) error {
+	writer := cmd.OutOrStdout()
+	if app.Terminal && assessment.Counts.Blocking > 0 && !opts.dryRun && !opts.acceptSecurityRisk && !opts.yes {
+		var err error
+		writer, err = promptio.VisibleOutput(writer, cmd.ErrOrStderr())
+		if err != nil {
+			return prompt.NormalizeIOError(err)
+		}
+	}
+	checked := &planWriter{writer: writer}
+	display := &cobra.Command{}
+	display.SetOut(checked)
+	renderSecurityAssessment(display, assessment, opts.securityDetails)
+	return checked.err
 }
 
 func renderSecurityAssessment(cmd *cobra.Command, assessment domain.SecurityAssessment, showAll bool) {

@@ -30,7 +30,7 @@ func newSkillsCommand(app App, opts *options) *cobra.Command {
 	add.Flags().BoolVar(&selection.yes, "yes", false, "accept the reviewed terminal plan without prompting")
 	add.Flags().BoolVar(&selection.ui, "ui", false, "open the bundled browser picker (interactive terminal only)")
 	add.Flags().BoolVar(&selection.noUI, "no-ui", false, "select and review Skills in the terminal")
-	root.AddCommand(add)
+	root.AddCommand(add, newSkillsListCommand(app, opts))
 	return root
 }
 func (selection *skillsAddOptions) validate(opts *options, interactive bool) error {
