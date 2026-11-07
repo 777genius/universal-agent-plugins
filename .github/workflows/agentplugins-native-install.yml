@@ -17,6 +17,11 @@ on:
       - repotests/agentplugins_native_install_integration_test.go
       - .github/workflows/agentplugins-published-version.yml
       - .github/workflows/agentplugins-native-install.yml
+  # Requalify all six native installers when a public npm publication
+  # finishes successfully; scheduled runs also catch later platform drift.
+  workflow_run:
+    workflows: ['Agentplugins NPM Publish']
+    types: [completed]
   # Weekly six-platform smoke, without a new PR for each release.
   schedule:
     - cron: '19 5 * * 2'
@@ -38,6 +43,7 @@ concurrency:
 
 jobs:
   release-version:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
       version: ${{ inputs.version }}
