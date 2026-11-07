@@ -77,8 +77,7 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         # Docker Hub's frozen manifest demands an actual docker executable.
         # Never use a synthetic shim or treat failed bootstrap as native success.
         self.assertIn(
-            "if: ${{ github.event_name != 'pull_request' && matrix.kind == 'plugin' && "
-            "(matrix.target == 'codex' || matrix.target == 'claude') }}", macos)
+            "if: ${{ github.event_name != 'pull_request' && matrix.kind == 'plugin' }}", macos)
         self.assertIn("brew install docker", macos)
         self.assertIn("command -v docker", macos)
         self.assertIn("docker --version", macos)
